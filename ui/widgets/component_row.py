@@ -79,11 +79,13 @@ class ComponentRow(QWidget):
     removed = pyqtSignal(QWidget)
 
     def __init__(self, catalog_fn, child_type: str = "raw",
-                 child_id=None, qty: float = 1.0,
-                 raw_total_qty: float = None,
-                 parent=None):
+             child_id=None, qty: float = 1.0,
+             raw_total_qty: float = None,
+             show_total_qty: bool = False,   # ← جديد
+             parent=None):
         super().__init__(parent)
         self._catalog_fn    = catalog_fn
+        self._show_total_qty = show_total_qty    # ← جديد
         self._is_orphan     = False
         self._orphan_id     = None
         self._orphan_type   = None
@@ -91,7 +93,7 @@ class ComponentRow(QWidget):
 
         self._pinned_type     = child_type
         self._pinned_id       = child_id
-        self._pinned_total_qty = raw_total_qty  # القيمة المحفوظة في الـ BOM
+        self._pinned_total_qty = raw_total_qty
 
         self._build(child_type, child_id, qty, raw_total_qty)
         QTimer.singleShot(0, self._connect_signal)
@@ -159,8 +161,15 @@ class ComponentRow(QWidget):
         layout.addWidget(self.cmb_type)
         layout.addWidget(self.cmb_item, stretch=1)
         layout.addWidget(self.qty_edit)
-        layout.addWidget(self.lbl_total_qty)
-        layout.addWidget(self.total_qty_edit)
+        
+        if self._show_total_qty:
+            layout.addWidget(self.lbl_total_qty)
+            layout.addWidget(self.total_qty_edit)
+        else:
+            self.lbl_total_qty.setVisible(False)
+            self.total_qty_edit.setVisible(False)
+        
+        
         layout.addWidget(del_btn)
 
         # تحديد النوع
@@ -182,7 +191,7 @@ class ComponentRow(QWidget):
     # ══════════════════════════════════════════════════════════
 
     def _update_total_qty_visibility(self, child_type: str):
-        visible = (child_type == "raw")
+        visible = (child_type == "raw") and self._show_total_qty
         self.total_qty_edit.setVisible(visible)
         self.lbl_total_qty.setVisible(visible)
 
