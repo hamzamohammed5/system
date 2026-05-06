@@ -285,8 +285,8 @@ class _FormPanel(QWidget):
             replace_bom(self.conn, self._editing_id, rows)
         else:
             pid = insert_item(self.conn, name, self.product_type, 0,
-                              category_id=self.cmb_category.get_category())
-            for ct, cid, qty in rows:
+                            category_id=self.cmb_category.get_category())
+            for ct, cid, qty, _raw_total_qty in rows:   # ← 4 عناصر
                 insert_bom_row(self.conn, pid, ct, cid, qty)
 
         self.conn.commit()

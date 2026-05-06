@@ -112,9 +112,10 @@ def delete_bom_row(conn, parent_id: int, child_type: str, child_id: int):
     conn.commit()
 
 
-def replace_bom(conn, parent_id: int, rows: list[tuple[str, int, float]]):
+def replace_bom(conn, parent_id: int, rows: list[tuple]):
     conn.execute("DELETE FROM bom WHERE parent_id=?", (parent_id,))
-    for ct, cid, qty in rows:
+    for row in rows:
+        ct, cid, qty = row[0], row[1], row[2]   # نأخد أول 3 عناصر فقط
         name = _resolve_name(conn, ct, cid)
         conn.execute(
             """INSERT INTO bom (parent_id, child_type, child_id, qty, child_name)
