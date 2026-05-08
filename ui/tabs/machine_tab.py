@@ -270,7 +270,6 @@ class _MachineOpForm(QWidget, EditModeMixin):
         # ── اختيار الماكينة ──
         self.cmb_machine = QComboBox()
         self.cmb_machine.setMinimumHeight(30)
-        self._refresh_machines()
         self.cmb_machine.currentIndexChanged.connect(self._update_preview)
 
         # ── وضع الحساب ──
@@ -302,6 +301,9 @@ class _MachineOpForm(QWidget, EditModeMixin):
             "color:#1a6e1a; font-weight:bold;"
             "background:#f0faf0; border:1px solid #b2dfb2; border-radius:4px; padding:4px 8px;"
         )
+
+        # نملأ الماكينات هنا بعد تعريف lbl_cost
+        self._refresh_machines()
 
         form.addRow("اسم العملية :", self.inp_name)
         form.addRow("الماكينة :",    self.cmb_machine)
@@ -340,6 +342,8 @@ class _MachineOpForm(QWidget, EditModeMixin):
         self._lbl_value.setText("دقيقة" if self.rdo_time.isChecked() else "وحدة")
 
     def _update_preview(self):
+        if not hasattr(self, 'lbl_cost'):
+            return
         machine_id = self.cmb_machine.currentData()
         if machine_id is None:
             self.lbl_cost.setText("─")
