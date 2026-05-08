@@ -1,9 +1,9 @@
 """
-ui/tabs/labor_tab.py
+ui/tabs/labor_tab.py  (النسخة المعدَّلة — مع زر الاستبدال الشامل)
 ====================
 تبويب العمالة — تبويبات متداخلة:
   ① إعدادات العمالة
-  ② عمليات العمالة
+  ② عمليات العمالة  (مع زر "استبدال شامل")
   ③ تصنيفات العمالة
 """
 
@@ -25,6 +25,7 @@ from ui.helpers import (
     section_label, confirm_delete, danger_button,
 )
 from ui.widgets.category_manager import CategoryCombo, CategoryManager
+from ui.widgets.bulk_replace_dialog import BulkReplaceDialog
 from ui.events import bus
 
 _SPLITTER_STYLE = """
@@ -166,7 +167,6 @@ class _LaborOpForm(QWidget, EditModeMixin):
         self.sp_minutes = _spin(99999, 2)
         self.sp_minutes.valueChanged.connect(self._update_preview)
 
-        # ── التصنيف ──
         self.cmb_category = CategoryCombo(self.conn, scope="labor")
 
         self.lbl_cost = QLabel("─")
@@ -273,23 +273,35 @@ class _LaborOpTable(QWidget):
         self.table.setAlternatingRowColors(True)
         root.addWidget(self.table)
 
-        btn_edit = QPushButton("✏️  تعديل")
-        btn_del  = danger_button("🗑️  حذف")
-        for btn in (btn_edit, btn_del):
+        btn_edit    = QPushButton("✏️  تعديل")
+        btn_del     = danger_button("🗑️  حذف")
+        btn_replace = QPushButton("🔄  استبدال شامل")
+        btn_replace.setStyleSheet(
+            "QPushButton { background:#e65100; color:white; border-radius:4px;"
+            "padding:4px 10px; font-weight:bold; }"
+            "QPushButton:hover { background:#bf360c; }"
+        )
+
+        for btn in (btn_edit, btn_del, btn_replace):
             btn.setMinimumHeight(30)
+
         btn_edit.clicked.connect(self._edit)
         btn_del.clicked.connect(self._delete)
-        root.addLayout(buttons_row(btn_edit, btn_del))
+        btn_replace.clicked.connect(self._bulk_replace)
+        root.addLayout(buttons_row(btn_edit, btn_del, btn_replace))
+
+    def _selected_row(self):
+        return self.table.currentRow()
 
     def _edit(self):
-        row = self.table.currentRow()
+        row = self._selected_row()
         if row == -1:
             QMessageBox.information(self, "تنبيه", "اختر عملية أولاً")
             return
         self._form.load_for_edit(int(self.table.item(row, 0).text()))
 
     def _delete(self):
-        row = self.table.currentRow()
+        row = self._selected_row()
         if row == -1:
             QMessageBox.information(self, "تنبيه", "اختر عملية أولاً")
             return
@@ -300,6 +312,22 @@ class _LaborOpTable(QWidget):
         if confirm_delete(self, op_name):
             delete_labor_op(self.conn, op_id)
             bus.data_changed.emit()
+
+    def _bulk_replace(self):
+        row = self._selected_row()
+        if row == -1:
+            QMessageBox.information(self, "تنبيه", "اختر عملية أولاً")
+            return
+        op_id   = int(self.table.item(row, 0).text())
+        op_name = self.table.item(row, 1).text()
+        dlg = BulkReplaceDialog(
+            conn       = self.conn,
+            child_type = "labor_op",
+            child_id   = op_id,
+            child_name = op_name,
+            parent     = self,
+        )
+        dlg.exec_()
 
     def _load(self):
         rate = self._settings.get_hourly_rate()

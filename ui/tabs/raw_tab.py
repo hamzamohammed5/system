@@ -1,10 +1,10 @@
 """
-ui/tabs/raw_tab.py  (النسخة المعدَّلة — نهائية)
+ui/tabs/raw_tab.py  (النسخة المعدَّلة — مع زر الاستبدال الشامل)
 ==================
 التغييرات:
   • فورم الخامة: حقل "الكمية الإجمالية" جديد
   • جدول الخامات: عمودان جديدان "الكمية الكلية" و"سعر الوحدة"
-  • component_row مفيش تغيير فيه — الصف بيفضل زي ما هو
+  • زر "🔄 استبدال شامل" يفتح BulkReplaceDialog للخامة المحددة
 """
 
 from PyQt5.QtCore    import Qt
@@ -26,6 +26,7 @@ from ui.helpers import (
     section_label, confirm_delete, danger_button,
 )
 from ui.widgets.category_manager import CategoryCombo, CategoryManager
+from ui.widgets.bulk_replace_dialog import BulkReplaceDialog
 from ui.events import bus
 
 _SPLITTER_STYLE = """
@@ -81,12 +82,10 @@ class _InputPanel(QWidget, EditModeMixin):
         self.inp_price.setPlaceholderText("0.00")
         self.inp_price.setFixedWidth(120)
 
-        # ── الكمية الإجمالية (جديد) ──
         self.inp_total_qty = QLineEdit()
         self.inp_total_qty.setPlaceholderText("اتركه فارغاً لو السعر بالوحدة")
         self.inp_total_qty.setFixedWidth(120)
 
-        # hint يتحدث تلقائياً لما يكتب في الحقلين
         self.lbl_hint = QLabel()
         self.lbl_hint.setStyleSheet(
             "color: #1565c0; font-size: 10px;"
@@ -120,8 +119,6 @@ class _InputPanel(QWidget, EditModeMixin):
         root.addWidget(grp)
         root.addStretch()
 
-    # ── تحديث الـ hint ────────────────────────────────────────────────
-
     def _update_hint(self):
         try:
             price = float(self.inp_price.text() or "0")
@@ -145,8 +142,6 @@ class _InputPanel(QWidget, EditModeMixin):
                 "💡 بدون كمية إجمالية: السعر المسجل = سعر الوحدة مباشرة"
             )
 
-    # ── تحميل للتعديل ─────────────────────────────────────────────────
-
     def load_for_edit(self, item_id: int):
         item = fetch_item(self.conn, item_id)
         if not item:
@@ -158,8 +153,6 @@ class _InputPanel(QWidget, EditModeMixin):
         self.cmb_category.set_category(item["category_id"])
         self.inp_name.setFocus()
         self.enter_edit_mode(item_id, f"─── تعديل: {item['name']} ───")
-
-    # ── حفظ / تعديل / إلغاء ──────────────────────────────────────────
 
     def _add(self):
         name, price, total_qty = self._collect()
@@ -253,40 +246,72 @@ class _TablePanel(QWidget):
         self.table.setAlternatingRowColors(True)
         root.addWidget(self.table)
 
-        btn_edit = QPushButton("✏️  تعديل المحدد")
-        btn_del  = danger_button("🗑️  حذف المحدد")
-        for btn in (btn_edit, btn_del):
+        # ── أزرار التحكم ──
+        btn_edit    = QPushButton("✏️  تعديل المحدد")
+        btn_del     = danger_button("🗑️  حذف المحدد")
+        btn_replace = QPushButton("🔄  استبدال شامل")
+        btn_replace.setStyleSheet(
+            "QPushButton { background:#e65100; color:white; border-radius:4px;"
+            "padding:4px 10px; font-weight:bold; }"
+            "QPushButton:hover { background:#bf360c; }"
+            "QPushButton:disabled { background:#bdbdbd; }"
+        )
+
+        for btn in (btn_edit, btn_del, btn_replace):
             btn.setMinimumHeight(30)
+
         btn_edit.clicked.connect(self._edit)
         btn_del.clicked.connect(self._delete)
-        root.addLayout(buttons_row(btn_edit, btn_del))
+        btn_replace.clicked.connect(self._bulk_replace)
+
+        root.addLayout(buttons_row(btn_edit, btn_del, btn_replace))
+
+    def _selected_id_and_name(self):
+        row = self.table.currentRow()
+        if row == -1:
+            return None, None
+        return (
+            int(self.table.item(row, 0).text()),
+            self.table.item(row, 1).text(),
+        )
 
     def _edit(self):
-        row = self.table.currentRow()
-        if row == -1:
+        item_id, _ = self._selected_id_and_name()
+        if item_id is None:
             QMessageBox.information(self, "تنبيه", "اختر خامة من الجدول أولاً")
             return
-        self._input_panel.load_for_edit(int(self.table.item(row, 0).text()))
+        self._input_panel.load_for_edit(item_id)
 
     def _delete(self):
-        row = self.table.currentRow()
-        if row == -1:
+        item_id, item_name = self._selected_id_and_name()
+        if item_id is None:
             QMessageBox.information(self, "تنبيه", "اختر خامة أولاً")
             return
-        item_id   = int(self.table.item(row, 0).text())
-        item_name = self.table.item(row, 1).text()
         if self._input_panel.is_editing and self._input_panel._editing_id == item_id:
             self._input_panel._reset()
         if confirm_delete(self, item_name):
             delete_item(self.conn, item_id)
             bus.data_changed.emit()
 
+    def _bulk_replace(self):
+        item_id, item_name = self._selected_id_and_name()
+        if item_id is None:
+            QMessageBox.information(self, "تنبيه", "اختر خامة من الجدول أولاً")
+            return
+        dlg = BulkReplaceDialog(
+            conn       = self.conn,
+            child_type = "raw",
+            child_id   = item_id,
+            child_name = item_name,
+            parent     = self,
+        )
+        dlg.exec_()
+
     def _load(self):
         self.table.setRowCount(0)
         for r, row in enumerate(fetch_items_by_type(self.conn, "raw")):
             tq    = row["total_qty"]
             price = row["price"]
-            # raw_unit_price تحسب سعر الوحدة مع مراعاة total_qty
             unit  = raw_unit_price(row)
 
             self.table.insertRow(r)
