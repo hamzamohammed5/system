@@ -1,28 +1,19 @@
 """
 db/schema.py
 ============
-إنشاء الجداول والقيم الافتراضية — يُستدعى مرة واحدة عند التشغيل.
-
-الجداول:
-  items        — الخامات / نصف مصنع / نهائي
-  machines     — الماكينات وتكاليفها
-  labor_ops    — عمليات العمالة
-  machine_ops  — عمليات التشغيل
-  bom          — مكونات المنتج
-  settings     — إعدادات النظام
-  categories   — تصنيفات مشتركة (scope يحدد القسم)
-  pricing      — أسعار المنتجات النهائية
+إنشاء الجداول والقيم الافتراضية.
+يُستدعى مرة واحدة عند التشغيل من main.py.
 """
 
-from db.connection  import get_connection
+from db.connection  import get_connection, get_accounting_connection, get_inventory_connection
 from db.migrations  import run_migrations
 
 
 def init_db():
+    # ── 1. قاعدة التكاليف (erp.db) ──
     conn = get_connection()
     cur  = conn.cursor()
 
-    # ── إنشاء الجداول الأساسية (لا تشمل categories/pricing — تعالجها migrations) ──
     cur.executescript("""
         CREATE TABLE IF NOT EXISTS items (
             id          INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -72,7 +63,6 @@ def init_db():
         );
     """)
 
-    # ── القيم الافتراضية لإعدادات العمالة ──
     cur.executemany(
         "INSERT OR IGNORE INTO settings (key, value) VALUES (?, ?)",
         [
@@ -84,9 +74,18 @@ def init_db():
             ("font_size",           11.0),
         ]
     )
-
     conn.commit()
-
-    # ── migrations تضيف: categories, pricing, category_id columns, child_name ──
     run_migrations(conn)
     conn.close()
+
+    # ── 2. قاعدة الحسابات (accounting.db) ──
+    acc_conn = get_accounting_connection()
+    from db.accounting_schema import create_accounting_tables
+    create_accounting_tables(acc_conn)
+    acc_conn.close()
+
+    # ── 3. قاعدة المخزن (inventory.db) ──
+    inv_conn = get_inventory_connection()
+    from db.inventory_schema import create_inventory_tables
+    create_inventory_tables(inv_conn)
+    inv_conn.close()

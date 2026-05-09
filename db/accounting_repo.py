@@ -15,32 +15,38 @@ def fetch_all_accounts(conn, acc_type: str = None):
     if acc_type:
         return conn.execute("""
             SELECT a.id, a.code, a.name, a.type, a.subtype,
-                   a.parent_id, a.is_leaf,
+                   a.parent_id, a.is_leaf, a.group_id,
                    p.name AS parent_name,
+                   g.name AS group_name, g.color AS group_color,
                    (SELECT COALESCE(SUM(jl.debit)-SUM(jl.credit),0)
                     FROM journal_lines jl WHERE jl.account_id = a.id) AS balance
             FROM accounts a
             LEFT JOIN accounts p ON p.id = a.parent_id
+            LEFT JOIN account_groups g ON g.id = a.group_id
             WHERE a.type = ?
             ORDER BY a.code
         """, (acc_type,)).fetchall()
     return conn.execute("""
         SELECT a.id, a.code, a.name, a.type, a.subtype,
-               a.parent_id, a.is_leaf,
+               a.parent_id, a.is_leaf, a.group_id,
                p.name AS parent_name,
+               g.name AS group_name, g.color AS group_color,
                (SELECT COALESCE(SUM(jl.debit)-SUM(jl.credit),0)
                 FROM journal_lines jl WHERE jl.account_id = a.id) AS balance
         FROM accounts a
         LEFT JOIN accounts p ON p.id = a.parent_id
+        LEFT JOIN account_groups g ON g.id = a.group_id
         ORDER BY a.code
     """).fetchall()
 
 
 def fetch_account(conn, account_id: int):
     return conn.execute("""
-        SELECT a.*, p.name AS parent_name
+        SELECT a.*, p.name AS parent_name,
+               g.name AS group_name, g.color AS group_color
         FROM accounts a
         LEFT JOIN accounts p ON p.id = a.parent_id
+        LEFT JOIN account_groups g ON g.id = a.group_id
         WHERE a.id = ?
     """, (account_id,)).fetchone()
 
@@ -55,34 +61,39 @@ def fetch_leaf_accounts(conn, acc_type: str = None):
     """الحسابات النهائية فقط (قابلة للترحيل)."""
     if acc_type:
         return conn.execute("""
-            SELECT id, code, name, type, subtype
+            SELECT id, code, name, type,
+                   COALESCE(subtype, '') AS subtype,
+                   group_id
             FROM accounts WHERE is_leaf=1 AND type=?
             ORDER BY code
         """, (acc_type,)).fetchall()
     return conn.execute("""
-        SELECT id, code, name, type, subtype
+        SELECT id, code, name, type,
+               COALESCE(subtype, '') AS subtype,
+               group_id
         FROM accounts WHERE is_leaf=1
         ORDER BY code
     """).fetchall()
 
 
 def insert_account(conn, code: str, name: str, acc_type: str,
-                   subtype: str = None, parent_id: int = None,
-                   notes: str = None) -> int:
+                   parent_id: int = None, group_id: int = None,
+                   subtype: str = None, notes: str = None) -> int:
     if parent_id:
         conn.execute("UPDATE accounts SET is_leaf=0 WHERE id=?", (parent_id,))
     cur = conn.execute("""
-        INSERT INTO accounts (code, name, type, subtype, parent_id, is_leaf, notes)
-        VALUES (?, ?, ?, ?, ?, 1, ?)
-    """, (code, name, acc_type, subtype, parent_id, notes))
+        INSERT INTO accounts (code, name, type, subtype, parent_id, is_leaf, group_id, notes)
+        VALUES (?, ?, ?, ?, ?, 1, ?, ?)
+    """, (code, name, acc_type, subtype, parent_id, group_id, notes))
     conn.commit()
     return cur.lastrowid
 
 
-def update_account(conn, account_id: int, name: str, notes: str = None):
+def update_account(conn, account_id: int, name: str,
+                   group_id: int = None, notes: str = None):
     conn.execute(
-        "UPDATE accounts SET name=?, notes=? WHERE id=?",
-        (name, notes, account_id)
+        "UPDATE accounts SET name=?, group_id=?, notes=? WHERE id=?",
+        (name, group_id, notes, account_id)
     )
     conn.commit()
 
@@ -98,6 +109,34 @@ def get_account_balance(conn, account_id: int) -> float:
         FROM journal_lines WHERE account_id=?
     """, (account_id,)).fetchone()
     return row["bal"] if row else 0.0
+
+
+def get_account_natural_balance(conn, account_id: int) -> float:
+    """الرصيد بالإشارة الطبيعية حسب نوع الحساب."""
+    acc = fetch_account(conn, account_id)
+    if not acc:
+        return 0.0
+    bal = get_account_balance(conn, account_id)
+    nb  = get_normal_balance(acc["type"])
+    return bal if nb == "dr" else -bal
+
+
+def get_normal_balance(acc_type: str) -> str:
+    """يرجع 'dr' أو 'cr' حسب نوع الحساب."""
+    return "dr" if acc_type in ("asset", "expense", "drawings") else "cr"
+
+
+def calc_signed_amount(acc_type: str, increase: bool, amount: float) -> tuple:
+    """
+    يحسب (debit, credit) بناءً على نوع الحساب والعملية.
+    increase=True  → زيادة الحساب بـ رصيده الطبيعي
+    increase=False → نقص الحساب
+    """
+    nb = get_normal_balance(acc_type)
+    if nb == "dr":
+        return (amount, 0.0) if increase else (0.0, amount)
+    else:
+        return (0.0, amount) if increase else (amount, 0.0)
 
 
 def get_balances_by_type(conn) -> dict:
@@ -117,6 +156,95 @@ def get_balances_by_type(conn) -> dict:
             "balance": r["total_debit"] - r["total_credit"],
         }
     return result
+
+
+# ══════════════════════════════════════════════════════════
+# تصنيفات الحسابات (account_groups)
+# ══════════════════════════════════════════════════════════
+
+def fetch_all_groups(conn, acc_type: str = None):
+    if acc_type:
+        return conn.execute("""
+            SELECT id, name, acc_type, parent_id,
+                   COALESCE(color, '#607d8b') AS color, notes
+            FROM account_groups WHERE acc_type=?
+            ORDER BY parent_id NULLS FIRST, name
+        """, (acc_type,)).fetchall()
+    return conn.execute("""
+        SELECT id, name, acc_type, parent_id,
+               COALESCE(color, '#607d8b') AS color, notes
+        FROM account_groups
+        ORDER BY acc_type, parent_id NULLS FIRST, name
+    """).fetchall()
+
+
+def fetch_group(conn, group_id: int):
+    return conn.execute(
+        "SELECT * FROM account_groups WHERE id=?", (group_id,)
+    ).fetchone()
+
+
+def insert_group(conn, name: str, acc_type: str,
+                 parent_id: int = None, color: str = "#607d8b") -> int:
+    cur = conn.execute(
+        "INSERT INTO account_groups (name, acc_type, parent_id, color) VALUES (?, ?, ?, ?)",
+        (name, acc_type, parent_id, color)
+    )
+    conn.commit()
+    return cur.lastrowid
+
+
+def update_group(conn, group_id: int, name: str,
+                 parent_id: int = None, color: str = "#607d8b"):
+    conn.execute(
+        "UPDATE account_groups SET name=?, parent_id=?, color=? WHERE id=?",
+        (name, parent_id, color, group_id)
+    )
+    conn.commit()
+
+
+def delete_group(conn, group_id: int):
+    conn.execute("UPDATE accounts SET group_id=NULL WHERE group_id=?", (group_id,))
+    conn.execute("DELETE FROM account_groups WHERE id=?", (group_id,))
+    conn.commit()
+
+
+def _get_group_descendants(conn, group_id: int) -> set:
+    """يرجع كل أبناء وأحفاد تصنيف (شامل نفسه)."""
+    result = set()
+    queue  = [group_id]
+    while queue:
+        current = queue.pop()
+        if current in result:
+            continue
+        result.add(current)
+        children = conn.execute(
+            "SELECT id FROM account_groups WHERE parent_id=?", (current,)
+        ).fetchall()
+        queue.extend(r["id"] for r in children)
+    return result
+
+
+def build_group_tree(rows) -> list:
+    nodes = {
+        r["id"]: {
+            "id":       r["id"],
+            "name":     r["name"],
+            "acc_type": r["acc_type"],
+            "parent_id":r["parent_id"],
+            "color":    r["color"],
+            "children": [],
+        }
+        for r in rows
+    }
+    roots = []
+    for node in nodes.values():
+        pid = node["parent_id"]
+        if pid and pid in nodes:
+            nodes[pid]["children"].append(node)
+        else:
+            roots.append(node)
+    return roots
 
 
 # ══════════════════════════════════════════════════════════
@@ -232,7 +360,6 @@ def trial_balance(conn) -> list:
 # ══════════════════════════════════════════════════════════
 
 def income_statement(conn) -> dict:
-    """قائمة الدخل: الإيرادات - المصروفات = صافي الربح."""
     rev_rows = conn.execute("""
         SELECT a.code, a.name,
                COALESCE(SUM(jl.credit)-SUM(jl.debit), 0) AS amount
@@ -256,16 +383,15 @@ def income_statement(conn) -> dict:
     net_income = total_rev - total_exp
 
     return {
-        "revenues":    [dict(r) for r in rev_rows],
-        "expenses":    [dict(r) for r in exp_rows],
-        "total_rev":   total_rev,
-        "total_exp":   total_exp,
-        "net_income":  net_income,
+        "revenues":   [dict(r) for r in rev_rows],
+        "expenses":   [dict(r) for r in exp_rows],
+        "total_rev":  total_rev,
+        "total_exp":  total_exp,
+        "net_income": net_income,
     }
 
 
 def balance_sheet(conn) -> dict:
-    """الميزانية العمومية: الأصول = الخصوم + حقوق الملكية."""
     def _fetch(acc_type):
         return conn.execute("""
             SELECT a.code, a.name,
@@ -276,21 +402,25 @@ def balance_sheet(conn) -> dict:
             GROUP BY a.id ORDER BY a.code
         """, (acc_type,)).fetchall()
 
-    assets     = _fetch("asset")
-    liab       = _fetch("liability")
-    equity_acc = _fetch("equity")
+    assets   = _fetch("asset")
+    liab     = _fetch("liability")
+    capital  = _fetch("capital")
+    drawings = _fetch("drawings")
 
-    inc = income_statement(conn)
+    inc        = income_statement(conn)
     net_income = inc["net_income"]
 
-    total_assets = sum(r["amount"] for r in assets)
-    total_liab   = sum(r["amount"] for r in liab)
-    total_equity = sum(r["amount"] for r in equity_acc) + net_income
+    total_assets  = sum(r["amount"] for r in assets)
+    total_liab    = sum(r["amount"] for r in liab)
+    total_capital = sum(r["amount"] for r in capital)
+    total_draw    = sum(r["amount"] for r in drawings)
+    total_equity  = total_capital - total_draw + net_income
 
     return {
         "assets":        [dict(r) for r in assets],
         "liabilities":   [dict(r) for r in liab],
-        "equity":        [dict(r) for r in equity_acc],
+        "capital":       [dict(r) for r in capital],
+        "drawings":      [dict(r) for r in drawings],
         "net_income":    net_income,
         "total_assets":  total_assets,
         "total_liab":    total_liab,
@@ -299,24 +429,37 @@ def balance_sheet(conn) -> dict:
 
 
 def owners_equity_statement(conn) -> dict:
-    """قائمة حقوق الملكية."""
-    rows = conn.execute("""
+    capital_rows = conn.execute("""
+        SELECT a.code, a.name,
+               COALESCE(SUM(jl.credit)-SUM(jl.debit), 0) AS amount
+        FROM accounts a
+        LEFT JOIN journal_lines jl ON jl.account_id = a.id
+        WHERE a.type = 'capital' AND a.is_leaf = 1
+        GROUP BY a.id ORDER BY a.code
+    """).fetchall()
+
+    drawings_rows = conn.execute("""
         SELECT a.code, a.name,
                COALESCE(SUM(jl.debit)-SUM(jl.credit), 0) AS amount
         FROM accounts a
         LEFT JOIN journal_lines jl ON jl.account_id = a.id
-        WHERE a.type = 'equity' AND a.is_leaf = 1
+        WHERE a.type = 'drawings' AND a.is_leaf = 1
         GROUP BY a.id ORDER BY a.code
     """).fetchall()
 
-    inc = income_statement(conn)
-    net_income   = inc["net_income"]
-    total_equity = sum(r["amount"] for r in rows) + net_income
+    inc           = income_statement(conn)
+    net_income    = inc["net_income"]
+    total_capital = sum(r["amount"] for r in capital_rows)
+    total_draw    = sum(r["amount"] for r in drawings_rows)
+    total_equity  = total_capital - total_draw + net_income
 
     return {
-        "accounts":    [dict(r) for r in rows],
-        "net_income":  net_income,
-        "total":       total_equity,
+        "capital_accounts":  [dict(r) for r in capital_rows],
+        "drawings_accounts": [dict(r) for r in drawings_rows],
+        "net_income":        net_income,
+        "total_capital":     total_capital,
+        "total_drawings":    total_draw,
+        "total_equity":      total_equity,
     }
 
 
@@ -325,7 +468,6 @@ def owners_equity_statement(conn) -> dict:
 # ══════════════════════════════════════════════════════════
 
 def fetch_t_account(conn, account_id: int) -> dict:
-    """يرجع كل حركات حساب معين للعرض كـ T-Account."""
     acc = fetch_account(conn, account_id)
     if not acc:
         return {}
@@ -342,28 +484,26 @@ def fetch_t_account(conn, account_id: int) -> dict:
     total_debit  = sum(l["debit"]  for l in lines)
     total_credit = sum(l["credit"] for l in lines)
     balance      = total_debit - total_credit
+    nb           = get_normal_balance(acc["type"])
 
     return {
-        "account":       dict(acc),
-        "lines":         [dict(l) for l in lines],
-        "total_debit":   total_debit,
-        "total_credit":  total_credit,
-        "balance":       balance,
+        "account":        dict(acc),
+        "lines":          [dict(l) for l in lines],
+        "total_debit":    total_debit,
+        "total_credit":   total_credit,
+        "balance":        balance,
+        "normal_balance": nb,
     }
 
 
 # ══════════════════════════════════════════════════════════
-# عملية شراء مخزن مع قيد محاسبي (للاستخدام من inventory)
+# عملية شراء مخزن مع قيد محاسبي
 # ══════════════════════════════════════════════════════════
 
 def purchase_inventory(inv_conn, acc_conn,
                        inv_id: int, qty: float, unit_cost: float,
                        date: str, payment_account_id: int,
                        notes: str = None) -> tuple:
-    """
-    يسجل شراء في المخزن وينشئ قيد محاسبي.
-    يرجع (entry_id, move_id).
-    """
     from db.inventory_repo import fetch_inventory_item, record_inventory_move
 
     inv = fetch_inventory_item(inv_conn, inv_id)
@@ -375,11 +515,9 @@ def purchase_inventory(inv_conn, acc_conn,
     inv_unit   = inv["unit"]
     acc_code   = inv.get("account_code") or "114"
 
-    # القيد
     desc     = f"شراء {qty:.4g} {inv_unit} من «{inv_name}»"
     entry_id = insert_entry(acc_conn, date, desc, entry_type="purchase", notes=notes)
 
-    # حساب المخزون
     inv_account = fetch_account_by_code(acc_conn, acc_code)
     inv_acc_id  = inv_account["id"] if inv_account else None
     if not inv_acc_id:
@@ -389,10 +527,8 @@ def purchase_inventory(inv_conn, acc_conn,
         inv_acc_id = row["id"] if row else None
 
     lines = [
-        {"account_id": inv_acc_id,        "debit": total_cost, "credit": 0,
-         "description": desc},
-        {"account_id": payment_account_id, "debit": 0, "credit": total_cost,
-         "description": desc},
+        {"account_id": inv_acc_id,        "debit": total_cost, "credit": 0,          "description": desc},
+        {"account_id": payment_account_id, "debit": 0,          "credit": total_cost, "description": desc},
     ]
     add_entry_lines(acc_conn, entry_id, lines)
 

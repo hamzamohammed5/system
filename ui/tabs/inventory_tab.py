@@ -2,12 +2,6 @@
 ui/tabs/inventory_tab.py
 ========================
 تبويب المخزن — إدارة الأصناف والحركات مع ربط محاسبي تلقائي.
-
-التبويبات الداخلية:
-  📦 الأصناف       — قائمة المخزن
-  🔄 حركة الوارد  — استلام / شراء
-  📤 حركة الصادر  — صرف / استهلاك
-  📊 تقرير المخزن — ملخص وتحليل
 """
 
 from PyQt5.QtWidgets import (
@@ -21,12 +15,15 @@ from PyQt5.QtWidgets import (
 from PyQt5.QtCore import Qt, QDate
 from PyQt5.QtGui  import QColor
 
-from db.connection      import get_connection
-from db.accounting_repo import (
+from db.connection      import get_connection, get_accounting_connection, get_inventory_connection
+from db.inventory_repo  import (
     fetch_all_inventory, fetch_inventory_item,
     insert_inventory_item, update_inventory_item, delete_inventory_item,
     fetch_inventory_moves, record_inventory_move,
-    purchase_inventory, fetch_leaf_accounts,
+    purchase_with_journal,
+)
+from db.accounting_repo import (
+    fetch_leaf_accounts, purchase_inventory,
 )
 from db.items_repo      import fetch_items_by_type
 from ui.helpers import (
@@ -45,14 +42,24 @@ def _spin(max_=999999999, dec=4):
     return s
 
 
+def _safe_subtype(acc_row) -> str:
+    """يرجع subtype بأمان من sqlite3.Row أو dict."""
+    try:
+        val = acc_row["subtype"]
+        return val if val else ""
+    except (IndexError, KeyError):
+        return ""
+
+
 # ══════════════════════════════════════════════════════════
 # فورم إضافة / تعديل صنف مخزن
 # ══════════════════════════════════════════════════════════
 
 class _ItemForm(QWidget, EditModeMixin):
-    def __init__(self, conn, parent=None):
+    def __init__(self, inv_conn, acc_conn, parent=None):
         super().__init__(parent)
-        self.conn = conn
+        self.inv_conn = inv_conn
+        self.acc_conn = acc_conn
         self._build()
         self.init_edit_mode(self.btn_add, self.btn_save, self.btn_cancel, self.lbl_mode)
 
@@ -61,7 +68,7 @@ class _ItemForm(QWidget, EditModeMixin):
         root.setContentsMargins(12, 10, 12, 10)
         root.setSpacing(8)
 
-        grp  = QGroupBox("بيانات الصنف")
+        grp = QGroupBox("بيانات الصنف")
         grp.setStyleSheet("""
             QGroupBox { font-weight:bold; color:#1565c0; border:1px solid #e0e0e0;
                         border-radius:8px; margin-top:8px; padding-top:8px; }
@@ -93,14 +100,14 @@ class _ItemForm(QWidget, EditModeMixin):
         self.cmb_item = QComboBox()
         self.cmb_item.setMinimumHeight(28)
         self.cmb_item.addItem("— لا يوجد ربط —", None)
-        for item in fetch_items_by_type(conn, "raw"):
+        for item in fetch_items_by_type(get_connection(), "raw"):
             self.cmb_item.addItem(f"🧱 {item['name']}", item["id"])
 
         # ربط بحساب محاسبي
         self.cmb_account = QComboBox()
         self.cmb_account.setMinimumHeight(28)
         self.cmb_account.addItem("— حساب المخزون الافتراضي —", None)
-        for acc in fetch_leaf_accounts(conn, "asset"):
+        for acc in fetch_leaf_accounts(self.acc_conn, "asset"):
             self.cmb_account.addItem(f"{acc['code']} — {acc['name']}", acc["id"])
 
         self.inp_notes = QLineEdit()
@@ -155,7 +162,7 @@ class _ItemForm(QWidget, EditModeMixin):
         data = self._collect()
         if not data:
             return
-        insert_inventory_item(self.conn, **data)
+        insert_inventory_item(self.inv_conn, **data)
         self._reset()
         bus.data_changed.emit()
 
@@ -163,7 +170,7 @@ class _ItemForm(QWidget, EditModeMixin):
         data = self._collect()
         if not data:
             return
-        update_inventory_item(self.conn, self._editing_id,
+        update_inventory_item(self.inv_conn, self._editing_id,
                               data["name"], data["unit"],
                               data["qty_min"], data["account_id"],
                               data["notes"])
@@ -174,13 +181,12 @@ class _ItemForm(QWidget, EditModeMixin):
         self._reset()
 
     def load_for_edit(self, inv_id: int):
-        inv = fetch_inventory_item(self.conn, inv_id)
+        inv = fetch_inventory_item(self.inv_conn, inv_id)
         if not inv:
             return
         self.inp_name.setText(inv["name"])
         self.inp_unit.setText(inv["unit"])
         self.sp_qty_min.setValue(inv["qty_min"])
-        # اختيار الحساب
         for i in range(self.cmb_account.count()):
             if self.cmb_account.itemData(i) == inv["account_id"]:
                 self.cmb_account.setCurrentIndex(i)
@@ -203,10 +209,10 @@ class _ItemForm(QWidget, EditModeMixin):
 # ══════════════════════════════════════════════════════════
 
 class _ItemsTable(QWidget):
-    def __init__(self, conn, form: _ItemForm, on_select, parent=None):
+    def __init__(self, inv_conn, form: _ItemForm, on_select, parent=None):
         super().__init__(parent)
-        self.conn      = conn
-        self._form     = form
+        self.inv_conn   = inv_conn
+        self._form      = form
         self._on_select = on_select
         self._build()
         self._load()
@@ -247,19 +253,17 @@ class _ItemsTable(QWidget):
         return int(self.table.item(row, 0).text())
 
     def _load(self):
-        rows = fetch_all_inventory(self.conn)
+        rows = fetch_all_inventory(self.inv_conn)
         self.table.setRowCount(0)
         for inv in rows:
             r = self.table.rowCount()
             self.table.insertRow(r)
             self.table.setItem(r, 0, QTableWidgetItem(str(inv["id"])))
-
             name_item = QTableWidgetItem(inv["name"])
             name_item.setToolTip(inv["name"])
             self.table.setItem(r, 1, name_item)
             self.table.setItem(r, 2, QTableWidgetItem(inv["unit"]))
 
-            # تنبيه لو تحت الحد
             qty_item = QTableWidgetItem(f"{inv['qty_on_hand']:,.4g}")
             if inv["qty_on_hand"] <= inv["qty_min"]:
                 qty_item.setForeground(QColor("#c62828"))
@@ -282,9 +286,9 @@ class _ItemsTable(QWidget):
         if not inv_id:
             QMessageBox.information(self, "تنبيه", "اختر صنفاً أولاً")
             return
-        inv = fetch_inventory_item(self.conn, inv_id)
+        inv = fetch_inventory_item(self.inv_conn, inv_id)
         if confirm_delete(self, inv["name"]):
-            delete_inventory_item(self.conn, inv_id)
+            delete_inventory_item(self.inv_conn, inv_id)
             bus.data_changed.emit()
 
 
@@ -293,13 +297,13 @@ class _ItemsTable(QWidget):
 # ══════════════════════════════════════════════════════════
 
 class _ItemsTab(QWidget):
-    def __init__(self, conn, on_select, parent=None):
+    def __init__(self, inv_conn, acc_conn, on_select, parent=None):
         super().__init__(parent)
         splitter = QSplitter(Qt.Horizontal)
         splitter.setHandleWidth(6)
 
-        form  = _ItemForm(conn)
-        table = _ItemsTable(conn, form, on_select)
+        form  = _ItemForm(inv_conn, acc_conn)
+        table = _ItemsTable(inv_conn, form, on_select)
 
         splitter.addWidget(form)
         splitter.addWidget(table)
@@ -316,10 +320,10 @@ class _ItemsTab(QWidget):
 # ══════════════════════════════════════════════════════════
 
 class _InboundTab(QWidget):
-    def __init__(self, conn, parent=None):
+    def __init__(self, inv_conn, acc_conn, parent=None):
         super().__init__(parent)
-        self.conn = conn
-        self._selected_inv_id = None
+        self.inv_conn = inv_conn
+        self.acc_conn = acc_conn
         self._build()
         bus.data_changed.connect(self._reload_items)
 
@@ -328,7 +332,6 @@ class _InboundTab(QWidget):
         root.setContentsMargins(12, 10, 12, 10)
         root.setSpacing(10)
 
-        # ── فورم الشراء ──
         grp = QGroupBox("📥  استلام / شراء مخزن")
         grp.setStyleSheet("""
             QGroupBox { font-weight:bold; color:#2e7d32; border:1px solid #c8e6c9;
@@ -345,7 +348,7 @@ class _InboundTab(QWidget):
         self._reload_items()
         self.cmb_item.currentIndexChanged.connect(self._on_item_changed)
 
-        self.sp_qty      = _spin(dec=4)
+        self.sp_qty       = _spin(dec=4)
         self.sp_qty.setValue(1)
         self.sp_unit_cost = _spin(dec=4)
 
@@ -359,17 +362,24 @@ class _InboundTab(QWidget):
         self.dt_date.setDisplayFormat("yyyy-MM-dd")
         self.dt_date.setFixedWidth(130)
 
-        # حساب الدفع (صندوق / بنك / موردون)
+        # حساب الدفع — نجيب الخصوم + الأصول النقدية/البنكية بأمان
         self.cmb_payment = QComboBox()
         self.cmb_payment.setMinimumHeight(28)
-        for acc in fetch_leaf_accounts(conn, "liability"):
+
+        # الخصوم (موردون/دائنون)
+        for acc in fetch_leaf_accounts(self.acc_conn, "liability"):
             self.cmb_payment.addItem(f"{acc['code']} — {acc['name']}", acc["id"])
-        for acc in fetch_leaf_accounts(conn, "asset"):
-            if acc.get("subtype") in ("cash", "bank"):
+
+        # الأصول النقدية والبنكية
+        for acc in fetch_leaf_accounts(self.acc_conn, "asset"):
+            subtype = _safe_subtype(acc)
+            if subtype in ("cash", "bank"):
                 self.cmb_payment.addItem(f"{acc['code']} — {acc['name']}", acc["id"])
-        # اختار الموردين افتراضياً
+
+        # اختار الموردين افتراضياً (كود 211)
         for i in range(self.cmb_payment.count()):
-            if "مورد" in (self.cmb_payment.itemText(i) or "").lower() or "211" in (self.cmb_payment.itemText(i) or ""):
+            text = self.cmb_payment.itemText(i) or ""
+            if "211" in text or "مورد" in text.lower():
                 self.cmb_payment.setCurrentIndex(i)
                 break
 
@@ -397,7 +407,6 @@ class _InboundTab(QWidget):
 
         root.addWidget(grp)
 
-        # ── جدول آخر حركات الوارد ──
         root.addWidget(section_label("─── آخر حركات الوارد ───"))
         self.table = make_table(
             ["التاريخ", "الصنف", "الكمية", "سعر الوحدة", "الإجمالي", "رقم القيد"],
@@ -418,7 +427,7 @@ class _InboundTab(QWidget):
         self.cmb_item.blockSignals(True)
         self.cmb_item.clear()
         self.cmb_item.addItem("— اختر الصنف —", None)
-        for inv in fetch_all_inventory(self.conn):
+        for inv in fetch_all_inventory(self.inv_conn):
             self.cmb_item.addItem(
                 f"{inv['name']}  ({inv['qty_on_hand']:,.4g} {inv['unit']})",
                 inv["id"]
@@ -433,7 +442,7 @@ class _InboundTab(QWidget):
     def _on_item_changed(self):
         inv_id = self.cmb_item.currentData()
         if inv_id:
-            inv = fetch_inventory_item(self.conn, inv_id)
+            inv = fetch_inventory_item(self.inv_conn, inv_id)
             if inv and inv["avg_cost"] > 0:
                 self.sp_unit_cost.setValue(inv["avg_cost"])
         self._update_total()
@@ -459,28 +468,30 @@ class _InboundTab(QWidget):
         date  = self.dt_date.date().toString("yyyy-MM-dd")
         notes = self.inp_notes.text().strip() or None
         try:
-            entry_id, move_id = purchase_inventory(
-                self.conn, inv_id, qty, unit_cost, date, pay_acc, notes
+            purchase_inventory(
+                self.inv_conn, self.acc_conn,
+                inv_id, qty, unit_cost, date, pay_acc, notes
             )
             self.inp_notes.clear()
             bus.data_changed.emit()
-            QMessageBox.information(self, "تم",
-                f"✅ تم تسجيل الاستلام وإنشاء قيد محاسبي رقم JE")
+            QMessageBox.information(self, "تم", "✅ تم تسجيل الاستلام وإنشاء قيد محاسبي")
         except Exception as e:
             QMessageBox.critical(self, "خطأ", str(e))
 
     def _load_moves(self):
-        # آخر 100 حركة وارد
-        rows = self.conn.execute("""
-            SELECT im.date, inv.name, im.qty, im.unit_cost, im.total_cost,
-                   je.ref_no
-            FROM inventory_moves im
-            JOIN inventory_items inv ON inv.id = im.inventory_id
-            LEFT JOIN journal_entries je ON je.id = im.ref_entry_id
-            WHERE im.move_type = 'in'
-            ORDER BY im.date DESC, im.id DESC
-            LIMIT 100
-        """).fetchall()
+        try:
+            rows = self.inv_conn.execute("""
+                SELECT im.date, inv.name, im.qty, im.unit_cost, im.total_cost,
+                       im.ref_entry_no
+                FROM inventory_moves im
+                JOIN inventory_items inv ON inv.id = im.inventory_id
+                WHERE im.move_type = 'in'
+                ORDER BY im.date DESC, im.id DESC
+                LIMIT 100
+            """).fetchall()
+        except Exception:
+            rows = []
+
         self.table.setRowCount(0)
         for r in rows:
             row = self.table.rowCount()
@@ -492,7 +503,8 @@ class _InboundTab(QWidget):
             self.table.setItem(row, 2, QTableWidgetItem(f"{r['qty']:,.4g}"))
             self.table.setItem(row, 3, QTableWidgetItem(f"{r['unit_cost']:,.4f}"))
             self.table.setItem(row, 4, QTableWidgetItem(f"{r['total_cost']:,.2f}"))
-            self.table.setItem(row, 5, QTableWidgetItem(r["ref_no"] or "—"))
+            ref = r["ref_entry_no"] if "ref_entry_no" in r.keys() else "—"
+            self.table.setItem(row, 5, QTableWidgetItem(ref or "—"))
 
 
 # ══════════════════════════════════════════════════════════
@@ -500,9 +512,9 @@ class _InboundTab(QWidget):
 # ══════════════════════════════════════════════════════════
 
 class _OutboundTab(QWidget):
-    def __init__(self, conn, parent=None):
+    def __init__(self, inv_conn, parent=None):
         super().__init__(parent)
-        self.conn = conn
+        self.inv_conn = inv_conn
         self._build()
         bus.data_changed.connect(self._reload_items)
 
@@ -526,7 +538,7 @@ class _OutboundTab(QWidget):
         self._reload_items()
         self.cmb_item.currentIndexChanged.connect(self._on_item_changed)
 
-        self.sp_qty  = _spin(dec=4)
+        self.sp_qty = _spin(dec=4)
         self.sp_qty.setValue(1)
         self.lbl_available = QLabel("الرصيد: —")
         self.lbl_available.setStyleSheet("color:#1565c0; font-weight:bold;")
@@ -577,7 +589,7 @@ class _OutboundTab(QWidget):
         self.cmb_item.blockSignals(True)
         self.cmb_item.clear()
         self.cmb_item.addItem("— اختر الصنف —", None)
-        for inv in fetch_all_inventory(self.conn):
+        for inv in fetch_all_inventory(self.inv_conn):
             self.cmb_item.addItem(
                 f"{inv['name']}  ({inv['qty_on_hand']:,.4g} {inv['unit']})",
                 inv["id"]
@@ -592,7 +604,7 @@ class _OutboundTab(QWidget):
     def _on_item_changed(self):
         inv_id = self.cmb_item.currentData()
         if inv_id:
-            inv = fetch_inventory_item(self.conn, inv_id)
+            inv = fetch_inventory_item(self.inv_conn, inv_id)
             if inv:
                 self.lbl_available.setText(
                     f"الرصيد: {inv['qty_on_hand']:,.4g} {inv['unit']}"
@@ -609,21 +621,25 @@ class _OutboundTab(QWidget):
         date  = self.dt_date.date().toString("yyyy-MM-dd")
         notes = self.inp_notes.text().strip() or None
         try:
-            record_inventory_move(self.conn, inv_id, "out", qty, 0, date, notes)
+            record_inventory_move(self.inv_conn, inv_id, "out", qty, 0, date, notes)
             self.inp_notes.clear()
             bus.data_changed.emit()
         except ValueError as e:
             QMessageBox.critical(self, "خطأ", str(e))
 
     def _load_moves(self):
-        rows = self.conn.execute("""
-            SELECT im.date, inv.name, im.qty, im.unit_cost, im.total_cost, im.notes
-            FROM inventory_moves im
-            JOIN inventory_items inv ON inv.id = im.inventory_id
-            WHERE im.move_type = 'out'
-            ORDER BY im.date DESC, im.id DESC
-            LIMIT 100
-        """).fetchall()
+        try:
+            rows = self.inv_conn.execute("""
+                SELECT im.date, inv.name, im.qty, im.unit_cost, im.total_cost, im.notes
+                FROM inventory_moves im
+                JOIN inventory_items inv ON inv.id = im.inventory_id
+                WHERE im.move_type = 'out'
+                ORDER BY im.date DESC, im.id DESC
+                LIMIT 100
+            """).fetchall()
+        except Exception:
+            rows = []
+
         self.table.setRowCount(0)
         for r in rows:
             row = self.table.rowCount()
@@ -645,9 +661,9 @@ class _OutboundTab(QWidget):
 # ══════════════════════════════════════════════════════════
 
 class _ReportTab(QWidget):
-    def __init__(self, conn, parent=None):
+    def __init__(self, inv_conn, parent=None):
         super().__init__(parent)
-        self.conn = conn
+        self.inv_conn = inv_conn
         self._build()
         self._load()
         bus.data_changed.connect(self._load)
@@ -657,7 +673,6 @@ class _ReportTab(QWidget):
         root.setContentsMargins(12, 10, 12, 12)
         root.setSpacing(10)
 
-        # ── بطاقات الملخص ──
         cards_row = QHBoxLayout()
         cards_row.setSpacing(10)
 
@@ -674,7 +689,7 @@ class _ReportTab(QWidget):
             lay = QVBoxLayout(f)
             lay.setContentsMargins(12, 8, 12, 8)
             lbl_t = QLabel(label)
-            lbl_t.setStyleSheet(f"font-size:10px; color:#888; background:transparent; border:none;")
+            lbl_t.setStyleSheet("font-size:10px; color:#888; background:transparent; border:none;")
             lbl_v = QLabel("─")
             lbl_v.setStyleSheet(f"font-size:16px; font-weight:bold; color:{color}; background:transparent; border:none;")
             lay.addWidget(lbl_t)
@@ -682,14 +697,13 @@ class _ReportTab(QWidget):
             cards_row.addWidget(f, stretch=1)
             return lbl_v
 
-        self.lbl_total_items  = _card("عدد الأصناف", "#1565c0")
-        self.lbl_total_value  = _card("إجمالي قيمة المخزن", "#2e7d32")
-        self.lbl_low_stock    = _card("أصناف تحت الحد الأدنى", "#c62828")
-        self.lbl_zero_stock   = _card("أصناف نفدت", "#e65100")
+        self.lbl_total_items = _card("عدد الأصناف",              "#1565c0")
+        self.lbl_total_value = _card("إجمالي قيمة المخزن",       "#2e7d32")
+        self.lbl_low_stock   = _card("أصناف تحت الحد الأدنى",    "#c62828")
+        self.lbl_zero_stock  = _card("أصناف نفدت",               "#e65100")
 
         root.addLayout(cards_row)
 
-        # ── جدول التقرير ──
         root.addWidget(section_label("─── تقرير مخزن تفصيلي ───"))
         self.table = make_table(
             ["الصنف", "الوحدة", "الرصيد", "الحد الأدنى", "متوسط التكلفة", "القيمة الإجمالية", "الحالة"],
@@ -703,7 +717,7 @@ class _ReportTab(QWidget):
         root.addWidget(self.table, stretch=1)
 
     def _load(self):
-        rows = fetch_all_inventory(self.conn)
+        rows = fetch_all_inventory(self.inv_conn)
         self.table.setRowCount(0)
         total_val = 0.0
         low_count = zero_count = 0
@@ -721,7 +735,6 @@ class _ReportTab(QWidget):
             self.table.setItem(r, 4, QTableWidgetItem(f"{inv['avg_cost']:,.4f}"))
             self.table.setItem(r, 5, QTableWidgetItem(f"{inv['total_value']:,.2f}"))
 
-            # الحالة
             if inv["qty_on_hand"] == 0:
                 status = "❌ نفد"
                 color  = QColor("#c62828")
@@ -750,10 +763,10 @@ class _ReportTab(QWidget):
 # ══════════════════════════════════════════════════════════
 
 class _MovesPanel(QWidget):
-    def __init__(self, conn, parent=None):
+    def __init__(self, inv_conn, parent=None):
         super().__init__(parent)
-        self.conn   = conn
-        self._inv_id = None
+        self.inv_conn = inv_conn
+        self._inv_id  = None
         self._build()
 
     def _build(self):
@@ -778,14 +791,16 @@ class _MovesPanel(QWidget):
 
     def load(self, inv_id: int):
         self._inv_id = inv_id
-        inv = fetch_inventory_item(self.conn, inv_id)
+        inv = fetch_inventory_item(self.inv_conn, inv_id)
         if not inv:
             return
-        self.lbl_title.setText(f"📦  حركات: {inv['name']}  (رصيد: {inv['qty_on_hand']:,.4g} {inv['unit']})")
-        moves = fetch_inventory_moves(self.conn, inv_id)
+        self.lbl_title.setText(
+            f"📦  حركات: {inv['name']}  (رصيد: {inv['qty_on_hand']:,.4g} {inv['unit']})"
+        )
+        moves = fetch_inventory_moves(self.inv_conn, inv_id)
         self.table.setRowCount(0)
-        type_ar = {"in": "📥 وارد", "out": "📤 صادر", "adjust": "⚖️ تسوية"}
-        type_color = {"in": "#2e7d32", "out": "#c62828", "adjust": "#1565c0"}
+        type_ar    = {"in": "📥 وارد", "out": "📤 صادر", "adjust": "⚖️ تسوية"}
+        type_color = {"in": "#2e7d32",  "out": "#c62828",  "adjust": "#1565c0"}
         for m in moves:
             r = self.table.rowCount()
             self.table.insertRow(r)
@@ -796,7 +811,8 @@ class _MovesPanel(QWidget):
             self.table.setItem(r, 2, QTableWidgetItem(f"{m['qty']:,.4g}"))
             self.table.setItem(r, 3, QTableWidgetItem(f"{m['unit_cost']:,.4f}"))
             self.table.setItem(r, 4, QTableWidgetItem(f"{m['total_cost']:,.2f}"))
-            self.table.setItem(r, 5, QTableWidgetItem(m["ref_no"] or "—"))
+            ref = m["ref_entry_no"] if "ref_entry_no" in m.keys() else "—"
+            self.table.setItem(r, 5, QTableWidgetItem(ref or "—"))
             notes_item = QTableWidgetItem(m["notes"] or "—")
             notes_item.setToolTip(m["notes"] or "")
             self.table.setItem(r, 6, notes_item)
@@ -813,7 +829,8 @@ class _MovesPanel(QWidget):
 class InventoryTab(QWidget):
     def __init__(self, parent=None):
         super().__init__(parent)
-        self.conn = get_connection()
+        self.inv_conn     = get_inventory_connection()
+        self.acc_conn     = get_accounting_connection()
         self._moves_panel = None
         self._build()
 
@@ -821,19 +838,21 @@ class InventoryTab(QWidget):
         root = QVBoxLayout(self)
         root.setContentsMargins(0, 0, 0, 0)
 
-        self._moves_panel = _MovesPanel(self.conn)
+        self._moves_panel = _MovesPanel(self.inv_conn)
 
         tabs = QTabWidget()
         tabs.setStyleSheet("""
             QTabBar::tab:selected { color:#2e7d32; border-top:2px solid #2e7d32; }
         """)
 
-        # تبويب الأصناف يمرر الـ on_select
-        tabs.addTab(_ItemsTab(self.conn, self._on_item_selected),  "📦  الأصناف")
-        tabs.addTab(_InboundTab(self.conn),                         "📥  وارد / شراء")
-        tabs.addTab(_OutboundTab(self.conn),                        "📤  صادر / صرف")
-        tabs.addTab(_ReportTab(self.conn),                          "📊  تقرير المخزن")
-        tabs.addTab(self._moves_panel,                              "🔄  حركات الصنف")
+        tabs.addTab(
+            _ItemsTab(self.inv_conn, self.acc_conn, self._on_item_selected),
+            "📦  الأصناف"
+        )
+        tabs.addTab(_InboundTab(self.inv_conn, self.acc_conn), "📥  وارد / شراء")
+        tabs.addTab(_OutboundTab(self.inv_conn),               "📤  صادر / صرف")
+        tabs.addTab(_ReportTab(self.inv_conn),                 "📊  تقرير المخزن")
+        tabs.addTab(self._moves_panel,                         "🔄  حركات الصنف")
 
         root.addWidget(tabs)
 
@@ -842,5 +861,6 @@ class InventoryTab(QWidget):
             self._moves_panel.load(inv_id)
 
     def closeEvent(self, event):
-        self.conn.close()
+        self.inv_conn.close()
+        self.acc_conn.close()
         super().closeEvent(event)
