@@ -1,16 +1,18 @@
 """
-ui/tabs/accounting_tab.py
-=========================
-تبويب الحسابات — Assets / Liabilities / Owner's Equity
+ui/tabs/accounting_tab.py (محدَّث)
+=====================================
+تبويب الحسابات — يستخدم accounting.db منفصل.
 
 التبويبات الداخلية:
-  📊 لوحة التحكم   — ملخص المعادلة المحاسبية
-  🏦 الأصول        — Assets
-  📋 الخصوم        — Liabilities
-  👑 حقوق الملكية  — Owner's Equity
-  📒 دفتر اليومية  — Journal Entries
+  📊 لوحة التحكم       — ملخص المعادلة المحاسبية
+  🌳 شجرة الحسابات     — كل الحسابات هرمياً
+  🏦 الأصول
+  📋 الخصوم
+  👑 حقوق الملكية
+  💹 الإيرادات
+  📤 المصروفات
+  📒 دفتر اليومية      — إضافة/عرض القيود
   ⚖️ ميزان المراجعة
-  🌳 شجرة الحسابات
 """
 
 from PyQt5.QtWidgets import (
@@ -25,7 +27,7 @@ from PyQt5.QtWidgets import (
 from PyQt5.QtCore import Qt, QDate
 from PyQt5.QtGui  import QColor, QFont
 
-from db.connection      import get_connection
+from db.connection      import get_accounting_connection
 from db.accounting_repo import (
     fetch_all_accounts, fetch_leaf_accounts,
     fetch_all_entries, fetch_entry, fetch_entry_lines,
@@ -33,11 +35,14 @@ from db.accounting_repo import (
     validate_entry_balance, get_balances_by_type,
     trial_balance, insert_account, update_account,
     get_account_balance, fetch_account,
-    purchase_inventory,
 )
 from ui.helpers import (
     make_table, setup_table_columns, buttons_row,
     section_label, danger_button, confirm_delete,
+)
+from ui.widgets.flexible_text import (
+    make_flexible_table, FlexItem, WrapDelegate,
+    set_flexible_columns, refresh_tooltips,
 )
 from ui.events import bus
 
@@ -68,7 +73,7 @@ def _spin(max_=999999999, dec=2):
 
 
 # ══════════════════════════════════════════════════════════
-# بطاقة ملخص المعادلة
+# بطاقة المعادلة المحاسبية
 # ══════════════════════════════════════════════════════════
 
 class _EquationCard(QFrame):
@@ -103,55 +108,54 @@ class _EquationCard(QFrame):
                     background: {color}18;
                     border: 2px solid {color};
                     border-radius: 8px;
-                    padding: 8px;
                 }}
             """)
             lay = QVBoxLayout(f)
             lay.setContentsMargins(12, 10, 12, 10)
             lay.setSpacing(4)
-            lbl_title = QLabel(label)
-            lbl_title.setAlignment(Qt.AlignCenter)
-            lbl_title.setStyleSheet(
-                f"color:{color}; font-size:11px; font-weight:bold; background:transparent; border:none;"
+            lbl_t = QLabel(label)
+            lbl_t.setAlignment(Qt.AlignCenter)
+            lbl_t.setStyleSheet(
+                f"color:{color}; font-size:11px; font-weight:bold;"
+                "background:transparent; border:none;"
             )
-            lbl_val = QLabel("0.00  ج")
-            lbl_val.setAlignment(Qt.AlignCenter)
-            lbl_val.setStyleSheet(
-                f"color:{color}; font-size:18px; font-weight:bold; background:transparent; border:none;"
+            lbl_v = QLabel("0.00  ج")
+            lbl_v.setAlignment(Qt.AlignCenter)
+            lbl_v.setStyleSheet(
+                f"color:{color}; font-size:18px; font-weight:bold;"
+                "background:transparent; border:none;"
             )
-            lay.addWidget(lbl_title)
-            lay.addWidget(lbl_val)
-            return f, lbl_val
+            lay.addWidget(lbl_t)
+            lay.addWidget(lbl_v)
+            return f, lbl_v
 
-        f_assets, self.lbl_assets         = _box("الأصول", "#1565c0")
-        f_liab,   self.lbl_liabilities    = _box("الخصوم", "#c62828")
-        f_equity, self.lbl_equity         = _box("حقوق الملكية", "#2e7d32")
+        f_a, self.lbl_assets      = _box("الأصول",          "#1565c0")
+        f_l, self.lbl_liabilities = _box("الخصوم",          "#c62828")
+        f_e, self.lbl_equity      = _box("حقوق الملكية",    "#2e7d32")
 
-        lbl_eq1 = QLabel("=")
-        lbl_eq1.setStyleSheet("font-size:24px; font-weight:bold; color:#555;")
-        lbl_eq1.setAlignment(Qt.AlignCenter)
+        lbl_eq   = QLabel("=")
         lbl_plus = QLabel("+")
-        lbl_plus.setStyleSheet("font-size:24px; font-weight:bold; color:#555;")
-        lbl_plus.setAlignment(Qt.AlignCenter)
+        for lbl in (lbl_eq, lbl_plus):
+            lbl.setStyleSheet("font-size:24px; font-weight:bold; color:#555;")
+            lbl.setAlignment(Qt.AlignCenter)
 
-        eq_row.addWidget(f_assets, stretch=3)
-        eq_row.addWidget(lbl_eq1)
-        eq_row.addWidget(f_liab, stretch=3)
+        eq_row.addWidget(f_a, stretch=3)
+        eq_row.addWidget(lbl_eq)
+        eq_row.addWidget(f_l, stretch=3)
         eq_row.addWidget(lbl_plus)
-        eq_row.addWidget(f_equity, stretch=3)
+        eq_row.addWidget(f_e, stretch=3)
         root.addLayout(eq_row)
 
-        # مؤشر التوازن
         self.lbl_balance = QLabel("✅  المعادلة متوازنة")
         self.lbl_balance.setAlignment(Qt.AlignCenter)
         self.lbl_balance.setStyleSheet(
-            "font-size:12px; font-weight:bold; color:#2e7d32; background:transparent; border:none;"
+            "font-size:12px; font-weight:bold; color:#2e7d32;"
+            "background:transparent; border:none;"
         )
         root.addWidget(self.lbl_balance)
 
     def refresh(self, conn):
-        bal = get_balances_by_type(conn)
-
+        bal        = get_balances_by_type(conn)
         assets     = bal.get("asset",     {}).get("balance", 0)
         liab       = bal.get("liability", {}).get("balance", 0)
         revenue    = bal.get("revenue",   {}).get("balance", 0)
@@ -168,12 +172,14 @@ class _EquationCard(QFrame):
         if diff < 0.01:
             self.lbl_balance.setText("✅  المعادلة متوازنة")
             self.lbl_balance.setStyleSheet(
-                "font-size:12px; font-weight:bold; color:#2e7d32; background:transparent; border:none;"
+                "font-size:12px; font-weight:bold; color:#2e7d32;"
+                "background:transparent; border:none;"
             )
         else:
             self.lbl_balance.setText(f"⚠️  فرق: {diff:,.2f} ج — راجع القيود")
             self.lbl_balance.setStyleSheet(
-                "font-size:12px; font-weight:bold; color:#c62828; background:transparent; border:none;"
+                "font-size:12px; font-weight:bold; color:#c62828;"
+                "background:transparent; border:none;"
             )
 
 
@@ -186,6 +192,7 @@ class _DashboardPanel(QWidget):
         super().__init__(parent)
         self.conn = conn
         self._build()
+        bus.data_changed.connect(self.refresh)
 
     def _build(self):
         root = QVBoxLayout(self)
@@ -195,7 +202,6 @@ class _DashboardPanel(QWidget):
         self._eq_card = _EquationCard()
         root.addWidget(self._eq_card)
 
-        # ── بطاقات الملخص ──
         cards_row = QHBoxLayout()
         cards_row.setSpacing(10)
 
@@ -211,18 +217,23 @@ class _DashboardPanel(QWidget):
             lay = QVBoxLayout(f)
             lay.setContentsMargins(12, 8, 12, 8)
             lbl_t = QLabel(label)
-            lbl_t.setStyleSheet(f"font-size:10px; color:#888; background:transparent; border:none;")
+            lbl_t.setStyleSheet(
+                f"font-size:10px; color:#888; background:transparent; border:none;"
+            )
             lbl_v = QLabel("0.00  ج")
-            lbl_v.setStyleSheet(f"font-size:15px; font-weight:bold; color:{color}; background:transparent; border:none;")
+            lbl_v.setStyleSheet(
+                f"font-size:15px; font-weight:bold; color:{color};"
+                "background:transparent; border:none;"
+            )
             lay.addWidget(lbl_t)
             lay.addWidget(lbl_v)
             cards_row.addWidget(f, stretch=1)
             return lbl_v
 
-        self.lbl_revenue = _mini("إجمالي الإيرادات", "#6a1b9a")
-        self.lbl_expense = _mini("إجمالي المصروفات", "#e65100")
-        self.lbl_net     = _mini("صافي الربح / الخسارة", "#1b5e20")
-        self.lbl_cash    = _mini("رصيد الصندوق + البنك", "#1565c0")
+        self.lbl_revenue = _mini("إجمالي الإيرادات",        "#6a1b9a")
+        self.lbl_expense = _mini("إجمالي المصروفات",        "#e65100")
+        self.lbl_net     = _mini("صافي الربح / الخسارة",   "#1b5e20")
+        self.lbl_cash    = _mini("رصيد الصندوق + البنك",   "#1565c0")
 
         root.addLayout(cards_row)
         root.addStretch()
@@ -233,17 +244,15 @@ class _DashboardPanel(QWidget):
         root.addWidget(btn_refresh)
 
         self.refresh()
-        bus.data_changed.connect(self.refresh)
 
     def refresh(self):
         self._eq_card.refresh(self.conn)
         bal = get_balances_by_type(self.conn)
 
-        rev  = bal.get("revenue", {}).get("balance", 0)
-        exp  = bal.get("expense", {}).get("balance", 0)
-        net  = rev - exp
+        rev = bal.get("revenue", {}).get("balance", 0)
+        exp = bal.get("expense", {}).get("balance", 0)
+        net = rev - exp
 
-        # رصيد الصندوق + البنك
         cash_row = self.conn.execute("""
             SELECT COALESCE(SUM(jl.debit - jl.credit), 0) AS bal
             FROM journal_lines jl
@@ -254,16 +263,18 @@ class _DashboardPanel(QWidget):
 
         self.lbl_revenue.setText(f"{rev:,.2f}  ج")
         self.lbl_expense.setText(f"{exp:,.2f}  ج")
+
         color_net = "#1b5e20" if net >= 0 else "#c62828"
         self.lbl_net.setText(f"{net:,.2f}  ج")
         self.lbl_net.setStyleSheet(
-            f"font-size:15px; font-weight:bold; color:{color_net}; background:transparent; border:none;"
+            f"font-size:15px; font-weight:bold; color:{color_net};"
+            "background:transparent; border:none;"
         )
         self.lbl_cash.setText(f"{cash:,.2f}  ج")
 
 
 # ══════════════════════════════════════════════════════════
-# شجرة الحسابات
+# شجرة الحسابات — مع عرض flexible
 # ══════════════════════════════════════════════════════════
 
 class _AccountsTree(QWidget):
@@ -280,25 +291,34 @@ class _AccountsTree(QWidget):
         root.setContentsMargins(12, 8, 12, 12)
         root.setSpacing(8)
 
-        root.addWidget(section_label(
+        title = (
             f"─── شجرة {_TYPE_AR.get(self.acc_type, 'الحسابات')} ───"
             if self.acc_type else "─── كل الحسابات ───"
-        ))
+        )
+        root.addWidget(section_label(title))
 
         self.tree = QTreeWidget()
         self.tree.setHeaderLabels(["الكود", "اسم الحساب", "النوع", "الرصيد"])
+        self.tree.setWordWrap(True)
+        self.tree.setUniformRowHeights(False)   # ← مهم لـ word-wrap
+
         hh = self.tree.header()
         hh.setSectionResizeMode(0, QHeaderView.Interactive)
-        hh.setSectionResizeMode(1, QHeaderView.Stretch)
+        hh.setSectionResizeMode(1, QHeaderView.Stretch)          # ← يتمدد
         hh.setSectionResizeMode(2, QHeaderView.Interactive)
         hh.setSectionResizeMode(3, QHeaderView.Interactive)
         hh.setMinimumSectionSize(60)
         self.tree.setColumnWidth(0, 70)
         self.tree.setColumnWidth(2, 100)
         self.tree.setColumnWidth(3, 110)
+
         self.tree.setAlternatingRowColors(True)
-        self.tree.setWordWrap(True)
         self.tree.setHorizontalScrollMode(QAbstractItemView.ScrollPerPixel)
+
+        # ← WrapDelegate على عمود الاسم
+        from ui.widgets.flexible_text import WrapDelegate
+        self.tree.setItemDelegateForColumn(1, WrapDelegate(self.tree, min_row_height=28))
+
         root.addWidget(self.tree, stretch=1)
 
         # فورم إضافة حساب
@@ -315,21 +335,21 @@ class _AccountsTree(QWidget):
         self.inp_code.setPlaceholderText("مثال: 1141")
         self.inp_code.setMinimumHeight(28)
 
-        self.inp_name = QLineEdit()
-        self.inp_name.setPlaceholderText("اسم الحساب...")
-        self.inp_name.setMinimumHeight(28)
+        self.inp_name_acc = QLineEdit()
+        self.inp_name_acc.setPlaceholderText("اسم الحساب...")
+        self.inp_name_acc.setMinimumHeight(28)
 
         form_lay.addRow("الكود:", self.inp_code)
-        form_lay.addRow("الاسم:", self.inp_name)
+        form_lay.addRow("الاسم:", self.inp_name_acc)
 
         btn_add = QPushButton("➕  إضافة")
         btn_add.setMinimumHeight(30)
         btn_add.clicked.connect(self._add_account)
         form_lay.addRow(btn_add)
-
         root.addWidget(grp)
 
     def _load(self):
+        # حفظ العناصر المفتوحة
         expanded = set()
         def _collect(item):
             if item.isExpanded():
@@ -340,9 +360,7 @@ class _AccountsTree(QWidget):
             _collect(self.tree.topLevelItem(i))
 
         self.tree.clear()
-        rows = fetch_all_accounts(self.conn, self.acc_type)
-
-        # بناء شجرة
+        rows  = fetch_all_accounts(self.conn, self.acc_type)
         nodes = {r["id"]: dict(r) for r in rows}
         roots = []
         for nid, node in nodes.items():
@@ -367,12 +385,17 @@ class _AccountsTree(QWidget):
             item.setText(3, f"{bal:,.2f}")
             item.setData(0, Qt.UserRole, node["id"])
 
-            item.setToolTip(0, node["code"])
-            item.setToolTip(1, node["name"])
-            item.setToolTip(3, f"الرصيد: {bal:,.2f}")
+            # tooltip بالنص الكامل
+            for col, tip in enumerate([
+                node["code"], node["name"],
+                _TYPE_AR.get(node["type"], ""), f"الرصيد: {bal:,.2f}"
+            ]):
+                item.setToolTip(col, tip)
 
             item.setForeground(0, QColor(color))
-            item.setForeground(1, QColor(color) if not node.get("is_leaf") else QColor("#333"))
+            item.setForeground(
+                1, QColor(color) if not node.get("is_leaf", 1) else QColor("#333")
+            )
 
             if not node.get("is_leaf", 1):
                 font = item.font(1)
@@ -397,12 +420,11 @@ class _AccountsTree(QWidget):
 
     def _add_account(self):
         code = self.inp_code.text().strip()
-        name = self.inp_name.text().strip()
+        name = self.inp_name_acc.text().strip()
         if not code or not name:
             QMessageBox.warning(self, "تنبيه", "أدخل الكود والاسم")
             return
 
-        # تحديد الأب من الكود
         parent_code = code[:-1] if len(code) > 1 else None
         parent_id   = None
         if parent_code:
@@ -411,7 +433,6 @@ class _AccountsTree(QWidget):
             ).fetchone()
             parent_id = row["id"] if row else None
 
-        # نوع الحساب من الرقم الأول
         type_map = {"1": "asset", "2": "liability", "3": "equity",
                     "4": "revenue", "5": "expense"}
         acc_type = self.acc_type or type_map.get(code[0], "asset")
@@ -419,21 +440,20 @@ class _AccountsTree(QWidget):
         try:
             insert_account(self.conn, code, name, acc_type, parent_id=parent_id)
             self.inp_code.clear()
-            self.inp_name.clear()
+            self.inp_name_acc.clear()
             bus.data_changed.emit()
         except Exception as e:
             QMessageBox.warning(self, "خطأ", str(e))
 
 
 # ══════════════════════════════════════════════════════════
-# دفتر اليومية (Journal Entries)
+# دفتر اليومية — فورم القيد
 # ══════════════════════════════════════════════════════════
 
 class _JournalLineWidget(QFrame):
-    """صف واحد في القيد: حساب + مدين/دائن."""
     def __init__(self, conn, on_remove, parent=None):
         super().__init__(parent)
-        self.conn = conn
+        self.conn       = conn
         self._on_remove = on_remove
         self._build()
 
@@ -454,8 +474,6 @@ class _JournalLineWidget(QFrame):
         self.sp_credit = _spin()
         self.sp_debit.setFixedWidth(110)
         self.sp_credit.setFixedWidth(110)
-        self.sp_debit.setPlaceholderText("مدين")
-        self.sp_credit.setPlaceholderText("دائن")
 
         self.inp_desc = QLineEdit()
         self.inp_desc.setPlaceholderText("بيان...")
@@ -483,7 +501,7 @@ class _JournalLineWidget(QFrame):
         for acc in fetch_leaf_accounts(self.conn):
             self.cmb_account.addItem(f"{acc['code']} — {acc['name']}", acc["id"])
 
-    def get_values(self) -> dict | None:
+    def get_values(self):
         acc_id = self.cmb_account.currentData()
         if not acc_id:
             return None
@@ -507,7 +525,6 @@ class _JournalForm(QWidget):
         root.setContentsMargins(12, 10, 12, 10)
         root.setSpacing(8)
 
-        # ── معلومات القيد ──
         header = QFrame()
         header.setStyleSheet("""
             QFrame { background:white; border:1px solid #e0e0e0; border-radius:8px; }
@@ -536,9 +553,10 @@ class _JournalForm(QWidget):
         self.cmb_type = QComboBox()
         self.cmb_type.setMinimumHeight(30)
         self.cmb_type.setFixedWidth(130)
-        for key, label in [("manual","يدوي"),("purchase","شراء"),
-                            ("sale","بيع"),("payment","دفع"),
-                            ("receipt","تحصيل"),("adjustment","تسوية")]:
+        for key, label in [
+            ("manual","يدوي"), ("purchase","شراء"), ("sale","بيع"),
+            ("payment","دفع"), ("receipt","تحصيل"), ("adjustment","تسوية")
+        ]:
             self.cmb_type.addItem(label, key)
 
         info_row.addWidget(QLabel("التاريخ:"))
@@ -562,28 +580,21 @@ class _JournalForm(QWidget):
         summary_row.addWidget(self.lbl_diff)
         summary_row.addStretch()
         h_lay.addLayout(summary_row)
-
         root.addWidget(header)
 
-        # ── رؤوس الأعمدة ──
+        # رؤوس
         ch = QWidget()
         ch_lay = QHBoxLayout(ch)
         ch_lay.setContentsMargins(8, 0, 8, 0)
         ch_lay.setSpacing(8)
-        def _hdr(t, w=None, stretch=0):
+        for t, w, s in [("الحساب",None,2),("مدين",110,0),("دائن",110,0),("بيان",None,1),("",28,0)]:
             l = QLabel(t)
             l.setStyleSheet("font-size:9px; font-weight:bold; color:#888; background:transparent;")
-            if w:
-                l.setFixedWidth(w)
-            ch_lay.addWidget(l, stretch=stretch)
-        _hdr("الحساب", stretch=2)
-        _hdr("مدين", 110)
-        _hdr("دائن", 110)
-        _hdr("بيان", stretch=1)
-        _hdr("", 28)
+            if w: l.setFixedWidth(w)
+            ch_lay.addWidget(l, stretch=s)
         root.addWidget(ch)
 
-        # ── منطقة السطور ──
+        # سطور القيد
         self._rows_container = QWidget()
         self._rows_container.setStyleSheet("background:transparent;")
         self._rows_layout = QVBoxLayout(self._rows_container)
@@ -601,7 +612,6 @@ class _JournalForm(QWidget):
         """)
         root.addWidget(scroll, stretch=1)
 
-        # ── أزرار ──
         btn_add_line = QPushButton("➕  إضافة سطر")
         btn_add_line.setMinimumHeight(30)
         btn_add_line.setStyleSheet("""
@@ -626,16 +636,15 @@ class _JournalForm(QWidget):
 
         root.addLayout(buttons_row(btn_add_line, self.btn_save, self.btn_cancel))
 
-        # صفان افتراضيان
         self._add_line()
         self._add_line()
 
     def _add_line(self):
-        widget = _JournalLineWidget(self.conn, self._remove_line)
-        self._line_widgets.append(widget)
-        self._rows_layout.insertWidget(self._rows_layout.count() - 1, widget)
-        widget.sp_debit.valueChanged.connect(self._update_totals)
-        widget.sp_credit.valueChanged.connect(self._update_totals)
+        w = _JournalLineWidget(self.conn, self._remove_line)
+        self._line_widgets.append(w)
+        self._rows_layout.insertWidget(self._rows_layout.count() - 1, w)
+        w.sp_debit.valueChanged.connect(self._update_totals)
+        w.sp_credit.valueChanged.connect(self._update_totals)
 
     def _remove_line(self, widget):
         if widget in self._line_widgets:
@@ -648,7 +657,6 @@ class _JournalForm(QWidget):
         total_d = sum(w.sp_debit.value()  for w in self._line_widgets)
         total_c = sum(w.sp_credit.value() for w in self._line_widgets)
         diff    = abs(total_d - total_c)
-
         self.lbl_total_debit.setText(f"مدين: {total_d:,.2f}")
         self.lbl_total_credit.setText(f"دائن: {total_c:,.2f}")
         if diff < 0.001:
@@ -664,17 +672,15 @@ class _JournalForm(QWidget):
             QMessageBox.warning(self, "تنبيه", "أضف سطرين على الأقل")
             return
         if not validate_entry_balance(lines):
-            QMessageBox.warning(self, "خطأ",
-                "مجموع المدين ≠ مجموع الدائن\nالقيد يجب أن يكون متوازناً")
+            QMessageBox.warning(self, "خطأ", "مجموع المدين ≠ مجموع الدائن")
             return
         desc = self.inp_desc.text().strip()
         if not desc:
             QMessageBox.warning(self, "تنبيه", "أدخل وصف القيد")
             return
-
-        date_str  = self.dt_date.date().toString("yyyy-MM-dd")
-        etype     = self.cmb_type.currentData()
-        entry_id  = insert_entry(self.conn, date_str, desc, etype)
+        date_str = self.dt_date.date().toString("yyyy-MM-dd")
+        etype    = self.cmb_type.currentData()
+        entry_id = insert_entry(self.conn, date_str, desc, etype)
         add_entry_lines(self.conn, entry_id, lines)
         self._reset()
         bus.data_changed.emit()
@@ -692,6 +698,10 @@ class _JournalForm(QWidget):
         self._update_totals()
 
 
+# ══════════════════════════════════════════════════════════
+# جدول القيود — مع flexible text
+# ══════════════════════════════════════════════════════════
+
 class _JournalTable(QWidget):
     def __init__(self, conn, parent=None):
         super().__init__(parent)
@@ -706,9 +716,11 @@ class _JournalTable(QWidget):
         root.setSpacing(6)
         root.addWidget(section_label("─── القيود المحاسبية ───"))
 
-        self.table = make_table(
+        # ← make_flexible_table مع wrap على عمود البيان
+        self.table = make_flexible_table(
             ["#", "رقم القيد", "التاريخ", "النوع", "البيان", "مدين", "دائن"],
-            stretch_col=4
+            stretch_col=4,
+            wrap_cols=[4],      # ← عمود البيان يتعمل wrap
         )
         setup_table_columns(self.table,
             widths={0:40, 1:90, 2:90, 3:80, 5:90, 6:90},
@@ -725,20 +737,20 @@ class _JournalTable(QWidget):
     def _load(self):
         entries = fetch_all_entries(self.conn)
         self.table.setRowCount(0)
-        type_ar = {"manual":"يدوي","purchase":"شراء","sale":"بيع",
-                   "payment":"دفع","receipt":"تحصيل","adjustment":"تسوية"}
+        type_ar = {
+            "manual":"يدوي", "purchase":"شراء", "sale":"بيع",
+            "payment":"دفع", "receipt":"تحصيل", "adjustment":"تسوية"
+        }
         for e in entries:
             r = self.table.rowCount()
             self.table.insertRow(r)
-            self.table.setItem(r, 0, QTableWidgetItem(str(e["id"])))
-            self.table.setItem(r, 1, QTableWidgetItem(e["ref_no"]))
-            self.table.setItem(r, 2, QTableWidgetItem(e["date"]))
-            self.table.setItem(r, 3, QTableWidgetItem(type_ar.get(e["type"], e["type"])))
-            desc_item = QTableWidgetItem(e["description"])
-            desc_item.setToolTip(e["description"])
-            self.table.setItem(r, 4, desc_item)
-            self.table.setItem(r, 5, QTableWidgetItem(f"{e['total_debit']:,.2f}"))
-            self.table.setItem(r, 6, QTableWidgetItem(f"{e['total_credit']:,.2f}"))
+            self.table.setItem(r, 0, FlexItem(str(e["id"])))
+            self.table.setItem(r, 1, FlexItem(e["ref_no"]))
+            self.table.setItem(r, 2, FlexItem(e["date"]))
+            self.table.setItem(r, 3, FlexItem(type_ar.get(e["type"], e["type"])))
+            self.table.setItem(r, 4, FlexItem(e["description"]))   # ← wrap
+            self.table.setItem(r, 5, FlexItem(f"{e['total_debit']:,.2f}"))
+            self.table.setItem(r, 6, FlexItem(f"{e['total_credit']:,.2f}"))
 
     def _delete(self):
         row = self.table.currentRow()
@@ -767,7 +779,7 @@ class _JournalTab(QWidget):
 
 
 # ══════════════════════════════════════════════════════════
-# ميزان المراجعة
+# ميزان المراجعة — مع flexible text
 # ══════════════════════════════════════════════════════════
 
 class _TrialBalanceTab(QWidget):
@@ -784,9 +796,10 @@ class _TrialBalanceTab(QWidget):
         root.setSpacing(8)
         root.addWidget(section_label("─── ميزان المراجعة ───"))
 
-        self.table = make_table(
+        self.table = make_flexible_table(
             ["الكود", "اسم الحساب", "النوع", "مجموع المدين", "مجموع الدائن", "الرصيد"],
-            stretch_col=1
+            stretch_col=1,
+            wrap_cols=[1],    # ← اسم الحساب يتعمل wrap
         )
         setup_table_columns(self.table,
             widths={0:70, 2:100, 3:120, 4:120, 5:110},
@@ -795,11 +808,9 @@ class _TrialBalanceTab(QWidget):
         self.table.setAlternatingRowColors(True)
         root.addWidget(self.table, stretch=1)
 
-        # صف الإجماليات
         totals = QFrame()
         totals.setStyleSheet("""
-            QFrame { background:#f0f4ff; border:1px solid #c5cae9;
-                     border-radius:6px; }
+            QFrame { background:#f0f4ff; border:1px solid #c5cae9; border-radius:6px; }
         """)
         t_lay = QHBoxLayout(totals)
         t_lay.setContentsMargins(12, 8, 12, 8)
@@ -823,14 +834,12 @@ class _TrialBalanceTab(QWidget):
         for row in rows:
             r = self.table.rowCount()
             self.table.insertRow(r)
-            self.table.setItem(r, 0, QTableWidgetItem(row["code"]))
-            name_item = QTableWidgetItem(row["name"])
-            name_item.setToolTip(row["name"])
-            self.table.setItem(r, 1, name_item)
-            self.table.setItem(r, 2, QTableWidgetItem(_TYPE_AR.get(row["type"], row["type"])))
-            self.table.setItem(r, 3, QTableWidgetItem(f"{row['total_debit']:,.2f}"))
-            self.table.setItem(r, 4, QTableWidgetItem(f"{row['total_credit']:,.2f}"))
-            bal_item = QTableWidgetItem(f"{row['balance']:,.2f}")
+            self.table.setItem(r, 0, FlexItem(row["code"]))
+            self.table.setItem(r, 1, FlexItem(row["name"]))
+            self.table.setItem(r, 2, FlexItem(_TYPE_AR.get(row["type"], row["type"])))
+            self.table.setItem(r, 3, FlexItem(f"{row['total_debit']:,.2f}"))
+            self.table.setItem(r, 4, FlexItem(f"{row['total_credit']:,.2f}"))
+            bal_item = FlexItem(f"{row['balance']:,.2f}")
             if row["balance"] < 0:
                 bal_item.setForeground(QColor("#c62828"))
             self.table.setItem(r, 5, bal_item)
@@ -849,30 +858,13 @@ class _TrialBalanceTab(QWidget):
 
 
 # ══════════════════════════════════════════════════════════
-# تبويب الأصول / الخصوم / حقوق الملكية
-# ══════════════════════════════════════════════════════════
-
-class _AccountTypeTab(QWidget):
-    def __init__(self, conn, acc_type: str, parent=None):
-        super().__init__(parent)
-        self.conn     = conn
-        self.acc_type = acc_type
-        self._build()
-
-    def _build(self):
-        root = QVBoxLayout(self)
-        root.setContentsMargins(0, 0, 0, 0)
-        root.addWidget(_AccountsTree(self.conn, self.acc_type))
-
-
-# ══════════════════════════════════════════════════════════
-# التبويب الرئيسي للحسابات
+# تبويب رئيسي للحسابات
 # ══════════════════════════════════════════════════════════
 
 class AccountingTab(QWidget):
     def __init__(self, parent=None):
         super().__init__(parent)
-        self.conn = get_connection()
+        self.conn = get_accounting_connection()
         self._build()
 
     def _build(self):
@@ -885,14 +877,14 @@ class AccountingTab(QWidget):
         """)
 
         tabs.addTab(_DashboardPanel(self.conn),              "📊  لوحة التحكم")
-        tabs.addTab(_AccountTypeTab(self.conn, "asset"),     "🏦  الأصول")
-        tabs.addTab(_AccountTypeTab(self.conn, "liability"), "📋  الخصوم")
-        tabs.addTab(_AccountTypeTab(self.conn, "equity"),    "👑  حقوق الملكية")
-        tabs.addTab(_AccountTypeTab(self.conn, "revenue"),   "💹  الإيرادات")
-        tabs.addTab(_AccountTypeTab(self.conn, "expense"),   "📤  المصروفات")
+        tabs.addTab(_AccountsTree(self.conn),                "🌳  كل الحسابات")
+        tabs.addTab(_AccountsTree(self.conn, "asset"),       "🏦  الأصول")
+        tabs.addTab(_AccountsTree(self.conn, "liability"),   "📋  الخصوم")
+        tabs.addTab(_AccountsTree(self.conn, "equity"),      "👑  حقوق الملكية")
+        tabs.addTab(_AccountsTree(self.conn, "revenue"),     "💹  الإيرادات")
+        tabs.addTab(_AccountsTree(self.conn, "expense"),     "📤  المصروفات")
         tabs.addTab(_JournalTab(self.conn),                  "📒  دفتر اليومية")
         tabs.addTab(_TrialBalanceTab(self.conn),             "⚖️  ميزان المراجعة")
-        tabs.addTab(_AccountsTree(self.conn),                "🌳  كل الحسابات")
 
         root.addWidget(tabs)
 

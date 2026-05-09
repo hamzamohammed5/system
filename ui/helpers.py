@@ -1,7 +1,12 @@
 """
-ui/helpers.py
+ui/helpers.py (محدَّث)
 =============
-أدوات UI مشتركة — لا منطق عمل هنا، فقط مساعدات واجهة.
+أدوات UI مشتركة — مع دعم كامل لعرض النصوص flexible.
+
+التغييرات:
+  - make_table: الآن يدعم word-wrap وtooltip تلقائي
+  - FlexItem: QTableWidgetItem مع tooltip تلقائي
+  - باقي الكود بدون تغيير
 """
 
 from PyQt5.QtWidgets import (
@@ -50,60 +55,74 @@ def success_button(text: str) -> QPushButton:
 def _install_tooltip_delegate(table: QTableWidget):
     """
     يضيف tooltip تلقائي لأي خلية نصها أطول من عرضها.
-    يشتغل عن طريق override لـ itemChanged + كل مرة بيتحدث الجدول.
     """
-    # نربط الـ signal مرة واحدة فقط
     def _update_tooltips():
         for r in range(table.rowCount()):
             for c in range(table.columnCount()):
                 item = table.item(r, c)
-                if item:
-                    # دايمًا نضيف tooltip بالنص الكامل
+                if item and item.text() and not item.toolTip():
                     item.setToolTip(item.text())
 
-    # نربطه بأي تغيير في الجدول
     table.model().dataChanged.connect(lambda *_: _update_tooltips())
     table.model().rowsInserted.connect(lambda *_: _update_tooltips())
 
 
-def make_table(columns: list[str], stretch_col: int = -1) -> QTableWidget:
+def make_table(columns: list[str],
+               stretch_col: int = -1,
+               wrap_cols: list[int] = None,
+               min_row_height: int = 30) -> QTableWidget:
     """
     إنشاء جدول جاهز بإعدادات موحدة:
-    - الأعمدة قابلة للسحب والتغيير
-    - النص في الخلايا يظهر كـ tooltip كامل
-    - الجدول نفسه scrollable أفقياً وعمودياً
+    - word-wrap في الأعمدة المحددة (wrap_cols) أو كلها
+    - ارتفاع الصف يتمدد تلقائيًا حسب المحتوى
+    - tooltip تلقائي بالنص الكامل عند hover
+    - scroll أفقي ورأسي
+
+    wrap_cols: list أرقام الأعمدة، None = بدون word-wrap (للتوافق مع الكود القديم)
     """
+    from PyQt5.QtWidgets import QStyledItemDelegate
+    from PyQt5.QtCore import QRect
+    from PyQt5.QtGui import QTextOption, QPainter
+
     table = QTableWidget()
     table.setColumnCount(len(columns))
     table.setHorizontalHeaderLabels(columns)
     table.setSelectionBehavior(QAbstractItemView.SelectRows)
     table.setEditTriggers(QAbstractItemView.NoEditTriggers)
+    table.setWordWrap(True)
 
     hh = table.horizontalHeader()
+    vh = table.verticalHeader()
+
+    # ارتفاع الصف يتمدد تلقائيًا
+    vh.setSectionResizeMode(QHeaderView.ResizeToContents)
+    vh.setDefaultSectionSize(min_row_height)
+    vh.setMinimumSectionSize(min_row_height)
 
     if stretch_col >= 0:
-        # العمود المحدد يتمدد — الباقي Interactive (قابل للسحب)
         for i in range(len(columns)):
             if i == stretch_col:
                 hh.setSectionResizeMode(i, QHeaderView.Stretch)
             else:
                 hh.setSectionResizeMode(i, QHeaderView.Interactive)
     else:
-        # الأعمدة كلها Interactive والأخير يتمدد
         for i in range(len(columns)):
             hh.setSectionResizeMode(i, QHeaderView.Interactive)
         hh.setStretchLastSection(True)
 
-    # الـ header نفسه قابل للسحب
     hh.setMinimumSectionSize(40)
     hh.setDefaultSectionSize(100)
+    hh.setDefaultAlignment(Qt.AlignRight | Qt.AlignVCenter)
 
-    # scroll أفقي لما الأعمدة تفضل ضيقة
     table.setHorizontalScrollMode(QAbstractItemView.ScrollPerPixel)
     table.setVerticalScrollMode(QAbstractItemView.ScrollPerPixel)
 
-    # word wrap في الـ header
-    hh.setDefaultAlignment(Qt.AlignRight | Qt.AlignVCenter)
+    # تطبيق word-wrap delegate لو محدد
+    if wrap_cols is not None:
+        from ui.widgets.flexible_text import WrapDelegate
+        wrap_delegate = WrapDelegate(table, min_row_height=min_row_height)
+        for col in wrap_cols:
+            table.setItemDelegateForColumn(col, wrap_delegate)
 
     # tooltip تلقائي
     _install_tooltip_delegate(table)
@@ -112,14 +131,11 @@ def make_table(columns: list[str], stretch_col: int = -1) -> QTableWidget:
 
 
 def setup_table_columns(table: QTableWidget,
-                        widths: dict[int, int] | None = None,
+                        widths: dict = None,
                         stretch_col: int = -1,
                         min_width: int = 50):
     """
-    إعداد عرض الأعمدة بشكل مرن:
-    - widths: dict من {col_index: width} للأعمدة ذات العرض المبدئي المحدد
-    - stretch_col: العمود اللي يتمدد مع الشاشة (الاسم عادةً)
-    - min_width: أقل عرض للأعمدة Interactive
+    إعداد عرض الأعمدة بشكل مرن.
     """
     hh = table.horizontalHeader()
     n  = table.columnCount()
@@ -145,13 +161,11 @@ def buttons_row(*buttons) -> QHBoxLayout:
 
 
 # ══════════════════════════════════════════════════════════
-# EditModeMixin — يُضاف لأي تبويب يحتاج وضع إضافة/تعديل
+# EditModeMixin
 # ══════════════════════════════════════════════════════════
 
 class EditModeMixin:
-    """
-    Mixin يوفر تبديل وضع الإضافة ↔ التعديل.
-    """
+    """Mixin يوفر تبديل وضع الإضافة ↔ التعديل."""
 
     def init_edit_mode(self, add_btn, save_btn, cancel_btn, mode_label=None):
         self._em_add_btn    = add_btn

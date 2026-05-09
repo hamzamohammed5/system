@@ -1,7 +1,7 @@
 """
-db/accounting_schema.py
-=======================
-جداول نظام الحسابات والمخزن — تُضاف عبر migrations.
+db/accounting_schema.py (محدَّث)
+==================================
+جداول نظام الحسابات في accounting.db.
 
 مبادئ المحاسبة:
   Assets = Liabilities + Owner's Equity
@@ -10,8 +10,6 @@ db/accounting_schema.py
   accounts          — شجرة الحسابات (Chart of Accounts)
   journal_entries   — القيود المحاسبية (Journal Entries)
   journal_lines     — سطور كل قيد (مدين / دائن)
-  inventory_items   — أصناف المخزن
-  inventory_moves   — حركات المخزن (وارد / صادر)
 """
 
 
@@ -30,9 +28,9 @@ def create_accounting_tables(conn):
                     'revenue',      -- إيرادات
                     'expense'       -- مصروفات
                 )),
-            subtype     TEXT,       -- مثال: current_asset, fixed_asset, bank, cash
+            subtype     TEXT,
             parent_id   INTEGER REFERENCES accounts(id) ON DELETE CASCADE,
-            is_leaf     INTEGER NOT NULL DEFAULT 1,  -- 1 = حساب نهائي قابل للترحيل
+            is_leaf     INTEGER NOT NULL DEFAULT 1,
             notes       TEXT,
             created_at  TEXT    NOT NULL DEFAULT (datetime('now'))
         );
@@ -40,22 +38,18 @@ def create_accounting_tables(conn):
         -- ══ القيود المحاسبية ═════════════════════════════════
         CREATE TABLE IF NOT EXISTS journal_entries (
             id          INTEGER PRIMARY KEY AUTOINCREMENT,
-            ref_no      TEXT    NOT NULL UNIQUE,    -- رقم القيد
+            ref_no      TEXT    NOT NULL UNIQUE,
             date        TEXT    NOT NULL,
             description TEXT    NOT NULL,
             type        TEXT    NOT NULL DEFAULT 'manual'
                 CHECK(type IN (
-                    'manual',       -- قيد يدوي
-                    'purchase',     -- شراء مخزن
-                    'sale',         -- بيع
-                    'payment',      -- دفع
-                    'receipt',      -- تحصيل
-                    'adjustment'    -- تسوية
+                    'manual', 'purchase', 'sale',
+                    'payment', 'receipt', 'adjustment'
                 )),
             status      TEXT    NOT NULL DEFAULT 'posted'
                 CHECK(status IN ('draft', 'posted', 'reversed')),
-            ref_id      INTEGER,    -- ربط بأي سجل خارجي (مثلاً inventory_move_id)
-            ref_type    TEXT,       -- نوع السجل الخارجي
+            ref_id      INTEGER,
+            ref_type    TEXT,
             notes       TEXT,
             created_at  TEXT    NOT NULL DEFAULT (datetime('now'))
         );
@@ -71,43 +65,8 @@ def create_accounting_tables(conn):
             CHECK(debit >= 0 AND credit >= 0),
             CHECK(NOT (debit > 0 AND credit > 0))
         );
-
-        -- ══ أصناف المخزن ══════════════════════════════════════
-        CREATE TABLE IF NOT EXISTS inventory_items (
-            id              INTEGER PRIMARY KEY AUTOINCREMENT,
-            item_id         INTEGER REFERENCES items(id) ON DELETE SET NULL,
-            name            TEXT    NOT NULL,
-            unit            TEXT    NOT NULL DEFAULT 'قطعة',
-            qty_on_hand     REAL    NOT NULL DEFAULT 0,
-            qty_min         REAL    NOT NULL DEFAULT 0,   -- حد الطلب
-            avg_cost        REAL    NOT NULL DEFAULT 0,   -- متوسط التكلفة
-            account_id      INTEGER REFERENCES accounts(id),  -- حساب المخزن
-            notes           TEXT,
-            created_at      TEXT    NOT NULL DEFAULT (datetime('now'))
-        );
-
-        -- ══ حركات المخزن ══════════════════════════════════════
-        CREATE TABLE IF NOT EXISTS inventory_moves (
-            id              INTEGER PRIMARY KEY AUTOINCREMENT,
-            inventory_id    INTEGER NOT NULL REFERENCES inventory_items(id) ON DELETE CASCADE,
-            move_type       TEXT    NOT NULL
-                CHECK(move_type IN (
-                    'in',       -- وارد (شراء / إنتاج)
-                    'out',      -- صادر (استهلاك / بيع)
-                    'adjust'    -- تسوية جرد
-                )),
-            qty             REAL    NOT NULL,
-            unit_cost       REAL    NOT NULL DEFAULT 0,
-            total_cost      REAL    NOT NULL DEFAULT 0,
-            date            TEXT    NOT NULL,
-            ref_entry_id    INTEGER REFERENCES journal_entries(id),
-            notes           TEXT,
-            created_at      TEXT    NOT NULL DEFAULT (datetime('now'))
-        );
     """)
     conn.commit()
-
-    # القيود الافتراضية لشجرة الحسابات
     _seed_default_accounts(conn)
 
 
@@ -173,12 +132,10 @@ def _seed_default_accounts(conn):
             ).fetchone()
             if row:
                 parent_id = row["id"]
-                # الأب مش leaf
                 conn.execute(
                     "UPDATE accounts SET is_leaf=0 WHERE id=?", (parent_id,)
                 )
 
-        # الحسابات ذات كود من رقم واحد مش leaf
         is_leaf = 0 if len(code) <= 2 else 1
 
         conn.execute("""
