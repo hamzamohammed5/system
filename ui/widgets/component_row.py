@@ -1,0 +1,564 @@
+"""
+ui/widgets/component_row.py — مع بحث داخل dropdown المكوّن
+"""
+
+from PyQt5.QtWidgets import (
+    QWidget, QHBoxLayout, QComboBox, QLineEdit,
+    QPushButton, QSizePolicy, QLabel, QCompleter,
+    QAbstractItemView, QListView,
+)
+from PyQt5.QtCore import pyqtSignal, Qt, QTimer, QSortFilterProxyModel, QStringListModel
+from PyQt5.QtGui  import QColor, QFont, QStandardItemModel, QStandardItem
+from ui.events import bus
+
+_TYPES = [
+    ("raw",        "🧱 خامة"),
+    ("semi",       "🔧 نصف مصنع"),
+    ("labor_op",   "👷 عملية عمالة"),
+    ("machine_op", "⚙️ عملية تشغيل"),
+]
+
+_STYLE_NORMAL = ""
+_STYLE_ORPHAN = """
+    QWidget { background-color: #fff3e0; border-radius: 4px; }
+    QComboBox, QLineEdit {
+        background-color: #fff3e0;
+        border: 1.5px solid #e65100;
+        border-radius: 4px;
+    }
+"""
+
+_SEPARATOR_DATA = ("__sep__", None)
+
+
+def _build_grouped_items(items: list[tuple]) -> list[tuple]:
+    groups: dict[str, list[tuple]] = {}
+    NO_CAT = "__no_category__"
+
+    for entry in items:
+        item_id  = entry[0]
+        name     = entry[1]
+        cat_name = entry[3] if len(entry) > 3 and entry[3] else NO_CAT
+        if cat_name not in groups:
+            groups[cat_name] = []
+        groups[cat_name].append((item_id, name))
+
+    result = []
+    for cat_name, members in groups.items():
+        if cat_name == NO_CAT:
+            continue
+        result.append((f"─── {cat_name} ───", _SEPARATOR_DATA, True))
+        for item_id, name in members:
+            result.append((f"{item_id} — {name}", (None, item_id), False))
+
+    if NO_CAT in groups:
+        if result:
+            result.append(("─── بدون تصنيف ───", _SEPARATOR_DATA, True))
+        for item_id, name in groups[NO_CAT]:
+            result.append((f"{item_id} — {name}", (None, item_id), False))
+
+    return result
+
+
+# ══════════════════════════════════════════════════════════
+# SearchableCombo — Combo مع بحث نصي
+# ══════════════════════════════════════════════════════════
+
+class _SearchableCombo(QWidget):
+    """
+    عنصر مركب: QLineEdit للبحث + QComboBox للاختيار.
+    - يعرض كل العناصر في الـ combo
+    - لما المستخدم يكتب في البحث، الـ combo يتفلتر
+    - عند الاختيار يُبلَّغ الخارج عبر item_selected signal
+    """
+    item_selected = pyqtSignal(object)   # يرسل userData
+
+    def __init__(self, parent=None):
+        super().__init__(parent)
+        self._all_items: list[tuple] = []   # (display_text, user_data, is_separator)
+        self._build()
+
+    def _build(self):
+        lay = QHBoxLayout(self)
+        lay.setContentsMargins(0, 0, 0, 0)
+        lay.setSpacing(4)
+
+        # ── حقل البحث ──
+        self.inp_search = QLineEdit()
+        self.inp_search.setPlaceholderText("🔍 بحث...")
+        self.inp_search.setFixedWidth(90)
+        self.inp_search.setMinimumHeight(28)
+        self.inp_search.setStyleSheet("""
+            QLineEdit {
+                background: #f0f4ff;
+                border: 1px solid #c5cae9;
+                border-radius: 4px;
+                padding: 2px 6px;
+                font-size: 11px;
+            }
+            QLineEdit:focus { border-color: #1565c0; background: white; }
+        """)
+        self.inp_search.textChanged.connect(self._on_search)
+
+        # ── زر مسح ──
+        self.btn_clear = QPushButton("✖")
+        self.btn_clear.setFixedSize(20, 20)
+        self.btn_clear.setStyleSheet(
+            "QPushButton { background:transparent; border:none; color:#aaa; font-size:10px; }"
+            "QPushButton:hover { color:#e53935; }"
+        )
+        self.btn_clear.clicked.connect(self._clear_search)
+        self.btn_clear.setVisible(False)
+
+        # ── الـ combo ──
+        self.cmb = QComboBox()
+        self.cmb.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Fixed)
+        self.cmb.setMinimumWidth(150)
+        self.cmb.setSizeAdjustPolicy(QComboBox.AdjustToContents)
+        self.cmb.currentIndexChanged.connect(self._on_combo_changed)
+
+        lay.addWidget(self.inp_search)
+        lay.addWidget(self.btn_clear)
+        lay.addWidget(self.cmb, stretch=1)
+
+    def _on_search(self, text: str):
+        self.btn_clear.setVisible(bool(text))
+        self._rebuild_combo(filter_text=text.strip().lower())
+
+    def _clear_search(self):
+        self.inp_search.blockSignals(True)
+        self.inp_search.clear()
+        self.inp_search.blockSignals(False)
+        self.btn_clear.setVisible(False)
+        self._rebuild_combo(filter_text="")
+
+    def _on_combo_changed(self, idx: int):
+        data = self.cmb.itemData(idx)
+        if data and data != _SEPARATOR_DATA and data[0] not in ("__sep__", "__orphan__"):
+            self.item_selected.emit(data)
+
+    def populate(self, items: list[tuple]):
+        """
+        items: list of (display_text, user_data, is_separator)
+        """
+        self._all_items = items
+        self._rebuild_combo(filter_text=self.inp_search.text().strip().lower())
+
+    def _rebuild_combo(self, filter_text: str = ""):
+        prev_data = self.cmb.currentData()
+        self.cmb.blockSignals(True)
+        self.cmb.clear()
+
+        for display_text, user_data, is_separator in self._all_items:
+            # لو فلتر موجود
+            if filter_text and not is_separator:
+                # نبحث في النص بدون رقم الـ ID
+                name_part = display_text.split("—", 1)[-1].strip().lower() if "—" in display_text else display_text.lower()
+                if filter_text not in name_part and filter_text not in display_text.lower():
+                    continue
+            elif filter_text and is_separator:
+                # نشوف لو في أعضاء بيطابقوا قبل ما نضيف الفاصل
+                cat_label = display_text.replace("───", "").strip()
+                has_match = any(
+                    filter_text in (t.split("—", 1)[-1].strip().lower() if "—" in t else t.lower())
+                    for t, d, s in self._all_items
+                    if not s and d and d != _SEPARATOR_DATA
+                )
+                # بسيطة: نضيف الفاصل دايما لو في فلتر (مش مشكلة)
+                # الأحسن: skip الفاصل لو مفيش نتايج تحته
+                # هنعمل approach تانية — نشيل الفواصل الفاضية بعد البناء
+                pass
+
+            self.cmb.addItem(display_text, userData=user_data)
+            idx = self.cmb.count() - 1
+
+            if is_separator:
+                self.cmb.setItemData(idx, QColor("#78909c"), Qt.ForegroundRole)
+                font = QFont()
+                font.setBold(True)
+                font.setPointSize(font.pointSize() - 1)
+                self.cmb.setItemData(idx, font, Qt.FontRole)
+                model = self.cmb.model()
+                item  = model.item(idx)
+                if item:
+                    item.setFlags(item.flags() & ~Qt.ItemIsEnabled & ~Qt.ItemIsSelectable)
+
+            elif user_data and user_data[0] == "__orphan__":
+                self.cmb.setItemData(idx, QColor("#e53935"), Qt.ForegroundRole)
+
+        # تنظيف الفواصل الفاضية في الآخر أو المتتالية
+        self._remove_empty_separators()
+
+        self.cmb.blockSignals(False)
+
+        # استعادة الاختيار
+        self._restore_selection(prev_data)
+
+    def _remove_empty_separators(self):
+        """يحذف الفواصل المتتالية أو الأخيرة."""
+        to_remove = []
+        count = self.cmb.count()
+        for i in range(count):
+            d = self.cmb.itemData(i)
+            if d == _SEPARATOR_DATA or (d and isinstance(d, tuple) and d[0] == "__sep__"):
+                # فاصل — شيك على التالي
+                next_is_real = False
+                for j in range(i + 1, count):
+                    nd = self.cmb.itemData(j)
+                    if nd == _SEPARATOR_DATA or (nd and isinstance(nd, tuple) and nd[0] == "__sep__"):
+                        break
+                    if nd and isinstance(nd, tuple) and nd[0] not in ("__sep__",):
+                        next_is_real = True
+                        break
+                if not next_is_real:
+                    to_remove.append(i)
+
+        for i in reversed(to_remove):
+            self.cmb.removeItem(i)
+
+    def _restore_selection(self, prev_data):
+        if prev_data is None:
+            self._select_first_real()
+            return
+        for i in range(self.cmb.count()):
+            d = self.cmb.itemData(i)
+            if d == prev_data:
+                self.cmb.setCurrentIndex(i)
+                return
+        self._select_first_real()
+
+    def _select_first_real(self):
+        for i in range(self.cmb.count()):
+            d = self.cmb.itemData(i)
+            if d and d != _SEPARATOR_DATA and isinstance(d, tuple) and d[0] not in ("__sep__", "__orphan__"):
+                self.cmb.setCurrentIndex(i)
+                return
+
+    # ── API خارجي ──
+    def current_data(self):
+        return self.cmb.currentData()
+
+    def set_selection(self, user_data):
+        for i in range(self.cmb.count()):
+            if self.cmb.itemData(i) == user_data:
+                self.cmb.setCurrentIndex(i)
+                return
+
+    def block_signals(self, val: bool):
+        self.cmb.blockSignals(val)
+
+    def count(self) -> int:
+        return self.cmb.count()
+
+    def item_data(self, idx: int):
+        return self.cmb.itemData(idx)
+
+    def set_item_text(self, idx: int, text: str):
+        self.cmb.setItemText(idx, text)
+
+    def add_item_at_start(self, text: str, data):
+        self.cmb.insertItem(0, text, data)
+        self.cmb.setItemData(0, QColor("#e53935"), Qt.ForegroundRole)
+
+
+# ══════════════════════════════════════════════════════════
+# ComponentRow
+# ══════════════════════════════════════════════════════════
+
+class ComponentRow(QWidget):
+    removed = pyqtSignal(QWidget)
+
+    def __init__(self, catalog_fn, child_type: str = "raw",
+             child_id=None, qty: float = 1.0,
+             raw_total_qty: float = None,
+             show_total_qty: bool = False,
+             parent=None):
+        super().__init__(parent)
+        self._catalog_fn     = catalog_fn
+        self._show_total_qty = show_total_qty
+        self._is_orphan      = False
+        self._orphan_id      = None
+        self._orphan_type    = None
+        self._orphan_name    = None
+
+        self._pinned_type      = child_type
+        self._pinned_id        = child_id
+        self._pinned_total_qty = raw_total_qty
+
+        self._build(child_type, child_id, qty, raw_total_qty)
+        QTimer.singleShot(0, self._connect_signal)
+
+    def _connect_signal(self):
+        bus.data_changed.connect(
+            lambda: QTimer.singleShot(0, self._on_catalog_changed)
+        )
+
+    # ══════════════════════════════════════════════════════
+    # بناء الواجهة
+    # ══════════════════════════════════════════════════════
+
+    def _build(self, child_type, child_id, qty, raw_total_qty):
+        layout = QHBoxLayout(self)
+        layout.setContentsMargins(0, 2, 0, 2)
+        layout.setSpacing(6)
+
+        # ── النوع ──
+        self.cmb_type = QComboBox()
+        self.cmb_type.setSizePolicy(QSizePolicy.Preferred, QSizePolicy.Fixed)
+        self.cmb_type.setMinimumContentsLength(10)
+        self.cmb_type.setSizeAdjustPolicy(QComboBox.AdjustToContents)
+        for key, label in _TYPES:
+            self.cmb_type.addItem(label, key)
+
+        # ── العنصر (searchable) ──
+        self._item_combo = _SearchableCombo()
+        self._item_combo.item_selected.connect(self._on_item_selected)
+
+        # ── الكمية المستهلكة ──
+        self.qty_edit = QLineEdit()
+        self.qty_edit.setPlaceholderText("الكمية")
+        self.qty_edit.setSizePolicy(QSizePolicy.Preferred, QSizePolicy.Fixed)
+        self.qty_edit.setMinimumWidth(60)
+        self.qty_edit.setMaximumWidth(100)
+        self.qty_edit.setText(str(qty) if qty else "")
+
+        # ── الكمية الكلية (raw فقط) ──
+        self.total_qty_edit = QLineEdit()
+        self.total_qty_edit.setPlaceholderText("الكلي")
+        self.total_qty_edit.setSizePolicy(QSizePolicy.Preferred, QSizePolicy.Fixed)
+        self.total_qty_edit.setMinimumWidth(60)
+        self.total_qty_edit.setMaximumWidth(90)
+        self.total_qty_edit.setToolTip(
+            "الكمية الكلية للخامة (مثلاً طول البكرة).\n"
+            "سعر الوحدة = السعر الكلي ÷ هذا الرقم.\n"
+            "اتركه فارغاً لو السعر هو سعر الوحدة مباشرة."
+        )
+        if raw_total_qty is not None:
+            self.total_qty_edit.setText(str(raw_total_qty))
+
+        self.lbl_total_qty = QLabel("÷")
+        self.lbl_total_qty.setStyleSheet("color: #888; font-size: 11px;")
+        self.lbl_total_qty.setFixedWidth(14)
+
+        # ── حذف ──
+        del_btn = QPushButton("❌")
+        del_btn.setSizePolicy(QSizePolicy.Fixed, QSizePolicy.Fixed)
+        del_btn.setFixedWidth(32)
+        del_btn.clicked.connect(lambda: self.removed.emit(self))
+
+        layout.addWidget(self.cmb_type)
+        layout.addWidget(self._item_combo, stretch=1)
+        layout.addWidget(self.qty_edit)
+
+        if self._show_total_qty:
+            layout.addWidget(self.lbl_total_qty)
+            layout.addWidget(self.total_qty_edit)
+        else:
+            self.lbl_total_qty.setVisible(False)
+            self.total_qty_edit.setVisible(False)
+
+        layout.addWidget(del_btn)
+
+        # تحديد النوع
+        self.cmb_type.blockSignals(True)
+        idx = next((i for i, (k, _) in enumerate(_TYPES) if k == child_type), 0)
+        self.cmb_type.setCurrentIndex(idx)
+        self.cmb_type.blockSignals(False)
+
+        self._fill_items(child_type, selected_id=child_id)
+        self._update_total_qty_visibility(child_type)
+
+        self.cmb_type.currentIndexChanged.connect(self._on_type_changed)
+
+    # ══════════════════════════════════════════════════════
+    # إظهار/إخفاء حقل الكمية الكلية
+    # ══════════════════════════════════════════════════════
+
+    def _update_total_qty_visibility(self, child_type: str):
+        visible = (child_type == "raw") and self._show_total_qty
+        self.total_qty_edit.setVisible(visible)
+        self.lbl_total_qty.setVisible(visible)
+
+    # ══════════════════════════════════════════════════════
+    # Auto-fill الكمية الكلية
+    # ══════════════════════════════════════════════════════
+
+    def _auto_fill_total_qty(self):
+        if self.cmb_type.currentData() != "raw":
+            return
+        data = self._item_combo.current_data()
+        if not data or data[0] in ("__sep__", "__orphan__") or data[1] is None:
+            return
+        child_id  = data[1]
+        catalog   = self._catalog_fn()
+        raw_items = catalog.get("raw", [])
+        for entry in raw_items:
+            if entry[0] == child_id:
+                tq = entry[4] if len(entry) > 4 else None
+                if tq is not None:
+                    self.total_qty_edit.setText(str(tq))
+                else:
+                    self.total_qty_edit.clear()
+                return
+        self.total_qty_edit.clear()
+
+    # ══════════════════════════════════════════════════════
+    # API خارجي
+    # ══════════════════════════════════════════════════════
+
+    def set_orphan_name(self, name: str | None):
+        if not self._is_orphan:
+            return
+        self._orphan_name = name
+        display = self._orphan_display()
+        self._item_combo.block_signals(True)
+        self._item_combo.set_item_text(0, display)
+        self._item_combo.block_signals(False)
+
+    def _orphan_display(self) -> str:
+        if self._orphan_name:
+            return f"⚠️  {self._orphan_name}  (ID: {self._orphan_id})"
+        return f"⚠️  محذوف  (ID: {self._orphan_id})"
+
+    # ══════════════════════════════════════════════════════
+    # ملء قايمة العناصر
+    # ══════════════════════════════════════════════════════
+
+    def _fill_items(self, child_type: str, selected_id=None):
+        catalog  = self._catalog_fn()
+        items    = catalog.get(child_type, [])
+        item_ids = {entry[0] for entry in items}
+
+        grouped = []
+
+        if selected_id is not None and selected_id not in item_ids:
+            self._mark_orphan(child_type, selected_id)
+            display = self._orphan_display()
+            grouped.append((display, ("__orphan__", selected_id), False))
+        else:
+            self._clear_orphan()
+
+        grouped += _build_grouped_items(items)
+
+        self._item_combo.populate(grouped)
+
+        # اختيار العنصر المحدد
+        if selected_id is not None:
+            if self._is_orphan and self._orphan_id == selected_id:
+                self._item_combo.cmb.setCurrentIndex(0)
+            else:
+                for i in range(self._item_combo.count()):
+                    d = self._item_combo.item_data(i)
+                    if d and d[0] not in ("__sep__", "__orphan__") and d[1] == selected_id:
+                        self._item_combo.cmb.setCurrentIndex(i)
+                        break
+        else:
+            self._item_combo._select_first_real()
+
+    def refresh_catalog(self, _new_catalog: dict = None):
+        self._refresh_items()
+
+    # ══════════════════════════════════════════════════════
+    # Orphan state
+    # ══════════════════════════════════════════════════════
+
+    def _mark_orphan(self, child_type: str, child_id: int):
+        self._is_orphan   = True
+        self._orphan_id   = child_id
+        self._orphan_type = child_type
+        self.setStyleSheet(_STYLE_ORPHAN)
+        name_part = f" «{self._orphan_name}»" if self._orphan_name else ""
+        self.setToolTip(
+            f"⚠️ هذا المكون ({child_type}{name_part} ID:{child_id}) "
+            "تم حذفه من قاعدة البيانات.\n"
+            "اختر بديلاً من القايمة أو احذف هذا الصف."
+        )
+
+    def _clear_orphan(self):
+        self._is_orphan   = False
+        self._orphan_id   = None
+        self._orphan_type = None
+        self._orphan_name = None
+        self.setStyleSheet(_STYLE_NORMAL)
+        self.setToolTip("")
+
+    def is_orphan(self) -> bool:
+        return self._is_orphan
+
+    # ══════════════════════════════════════════════════════
+    # Signal handlers
+    # ══════════════════════════════════════════════════════
+
+    def _on_item_selected(self, data):
+        if data and data[0] not in ("__sep__", "__orphan__") and data[1] is not None:
+            self._pinned_id = data[1]
+            if self._is_orphan:
+                self._clear_orphan()
+                self.setStyleSheet(_STYLE_NORMAL)
+            self._auto_fill_total_qty()
+
+    def _on_catalog_changed(self):
+        valid_types = {k for k, _ in _TYPES}
+        if self._pinned_type not in valid_types:
+            from_combo = self.cmb_type.currentData()
+            if from_combo in valid_types:
+                self._pinned_type = from_combo
+            else:
+                return
+        if not self._is_orphan:
+            current_data = self._item_combo.current_data()
+            if current_data and current_data[0] not in ("__sep__", "__orphan__"):
+                self._pinned_id = current_data[1]
+        self._refresh_items()
+
+    def _refresh_items(self):
+        child_type  = self._pinned_type
+        selected_id = self._orphan_id if self._is_orphan else self._pinned_id
+        self._fill_items(child_type, selected_id=selected_id)
+
+    def _on_type_changed(self, _):
+        new_type = self.cmb_type.currentData()
+        if not isinstance(new_type, str):
+            return
+        self._pinned_type = new_type
+        self._pinned_id   = None
+        self._clear_orphan()
+        self._fill_items(new_type, selected_id=None)
+        self._update_total_qty_visibility(new_type)
+        if new_type != "raw":
+            self.total_qty_edit.clear()
+
+    # ══════════════════════════════════════════════════════
+    # جلب القيم
+    # ══════════════════════════════════════════════════════
+
+    def get_values(self) -> tuple | None:
+        try:
+            data = self._item_combo.current_data()
+            qty  = float(self.qty_edit.text())
+            if data is None:
+                return None
+            kind, child_id = data
+            if kind in ("__orphan__", "__sep__") or child_id is None:
+                return None
+            child_type = self.cmb_type.currentData()
+
+            raw_total_qty = None
+            if child_type == "raw":
+                tq_text = self.total_qty_edit.text().strip()
+                if tq_text:
+                    try:
+                        raw_total_qty = float(tq_text)
+                        if raw_total_qty <= 0:
+                            raw_total_qty = None
+                    except ValueError:
+                        raw_total_qty = None
+
+            return child_type, child_id, qty, raw_total_qty
+        except (ValueError, TypeError):
+            return None
+
+    # للتوافق مع الكود القديم اللي بيستخدم cmb_item
+    @property
+    def cmb_item(self):
+        return self._item_combo.cmb
