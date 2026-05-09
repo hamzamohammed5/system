@@ -190,7 +190,8 @@ class _OfferItemRow(QFrame):
             for i in range(self.cmb_product.count()):
                 if self.cmb_product.itemData(i) == prev_id:
                     self.cmb_product.setCurrentIndex(i)
-                    break
+                    return
+        # بعد تحميل المنتجات، نحدّث الإحصائيات فوراً
         self._on_product_changed()
 
     def _reload_products(self):
@@ -242,6 +243,8 @@ class _OfferItemRow(QFrame):
                 self.cmb_product.setCurrentIndex(i)
                 break
         self.sp_qty.setValue(qty)
+        # نحدّث الإحصائيات بعد تحديد القيم
+        self._on_product_changed()
 
 
 # ══════════════════════════════════════════════════════════
@@ -288,13 +291,14 @@ class _OfferForm(QWidget):
         self.inp_name.setPlaceholderText("مثال: عرض رمضان، باقة العيد...")
         self.inp_name.setMinimumHeight(30)
 
-        lbl_disc = QLabel("الخصم %:")
+        # ── الخصم % — الـ spinbox بدون suffix والـ % كـ label برا ──
+        lbl_disc = QLabel("الخصم:")
         lbl_disc.setStyleSheet("font-weight:bold;")
         self.sp_discount = _spin(100, 2)
-        self.sp_discount.setSuffix("  %")
         self.sp_discount.setValue(0)
-        self.sp_discount.setFixedWidth(110)
-        self.sp_discount.valueChanged.connect(self._update_totals)
+        self.sp_discount.setFixedWidth(90)
+        lbl_disc_pct = QLabel("%")
+        lbl_disc_pct.setStyleSheet("font-weight:bold; color:#e65100;")
 
         lbl_cat = QLabel("التصنيف:")
         lbl_cat.setStyleSheet("font-weight:bold;")
@@ -311,11 +315,15 @@ class _OfferForm(QWidget):
         info_row.addWidget(self.inp_name, stretch=2)
         info_row.addWidget(lbl_disc)
         info_row.addWidget(self.sp_discount)
+        info_row.addWidget(lbl_disc_pct)
         info_row.addWidget(lbl_cat)
         info_row.addWidget(self.cmb_category)
         info_row.addWidget(lbl_notes)
         info_row.addWidget(self.inp_notes, stretch=1)
         h_lay.addLayout(info_row)
+
+        # ── ربط sp_discount بعد بناء كل العناصر ──
+        self.sp_discount.valueChanged.connect(self._update_totals)
 
         # صناديق الإحصائيات
         stats_row = QHBoxLayout()
@@ -437,6 +445,7 @@ class _OfferForm(QWidget):
         self._rows_layout.insertWidget(self._rows_layout.count() - 1, row)
         if item_id is not None:
             row.set_values(item_id, qty)
+        # نحدّث الإجماليات بعد إضافة الصف مباشرة
         self._update_totals()
 
     def _remove_item_row(self, row_widget):
@@ -453,29 +462,31 @@ class _OfferForm(QWidget):
         self._item_rows.clear()
 
     # ══════════════════════════════════════════════════════
-    # حساب الإجماليات
+    # حساب الإجماليات — المنطق الرئيسي
     # ══════════════════════════════════════════════════════
 
     def _update_totals(self):
         total_listed = 0.0
         total_cost   = 0.0
+
         for row in self._item_rows:
             item_id = row.get_item_id()
             if item_id is None:
                 continue
             qty = row.get_qty()
-            # سعر التسعير
+
             pr = self.conn.execute(
                 "SELECT price FROM pricing WHERE item_id=?", (item_id,)
             ).fetchone()
             if pr:
                 total_listed += pr["price"] * qty
+
             total_cost += calc_cost(self.conn, item_id) * qty
 
-        disc_pct    = self.sp_discount.value() / 100.0
-        disc_amt    = total_listed * disc_pct
-        sell_price  = total_listed - disc_amt
-        profit      = sell_price - total_cost
+        disc_pct   = self.sp_discount.value() / 100.0
+        disc_amt   = total_listed * disc_pct
+        sell_price = total_listed - disc_amt
+        profit     = sell_price - total_cost
 
         self.lbl_total_listed.setText(f"{total_listed:.2f}  ج")
         self.lbl_discount_amt.setText(f"{disc_amt:.2f}  ج")
@@ -719,7 +730,6 @@ class _OffersTable(QWidget):
 
         root.addWidget(section_label("─── العروض المحفوظة ───"))
 
-        # FilterBar مع تصنيف العروض
         self._filter = FilterBar(self.conn, scope="all")
         self._filter.filter_changed.connect(self._apply_filter)
         root.addWidget(self._filter)
@@ -813,7 +823,6 @@ class OffersTab(QWidget):
             QTabBar::tab:selected { color: #e65100; border-top: 2px solid #e65100; }
         """)
 
-        # تبويب العروض الرئيسي
         main_widget = QWidget()
         main_lay = QVBoxLayout(main_widget)
         main_lay.setContentsMargins(0, 0, 0, 0)
