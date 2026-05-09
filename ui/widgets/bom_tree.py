@@ -1,17 +1,15 @@
 """
-ui/widgets/bom_tree.py  (النسخة المعدَّلة — نهائية)
+ui/widgets/bom_tree.py  — مع عرض نص كامل flexible
 ======================
-التغيير الوحيد: استخدام raw_unit_price من costing.py
-عند حساب تكلفة الخامة في عقدة الشجرة.
-
-باقي الكود — مفيش تغيير.
 """
 
 from PyQt5.QtWidgets import (
     QWidget, QVBoxLayout, QHBoxLayout, QLabel,
-    QTreeWidget, QTreeWidgetItem, QPushButton, QMessageBox
+    QTreeWidget, QTreeWidgetItem, QPushButton, QMessageBox,
+    QHeaderView, QAbstractItemView, QSizePolicy,
 )
 from PyQt5.QtCore import Qt
+from PyQt5.QtGui  import QFont, QColor
 
 from db.items_repo      import fetch_bom, fetch_item, delete_bom_row
 from db.operations_repo import fetch_labor_op, fetch_machine_op
@@ -26,6 +24,13 @@ _TYPE_LABELS = {
     "semi":       "🔧 نصف مصنع",
     "labor_op":   "👷 عملية عمالة",
     "machine_op": "⚙️ عملية تشغيل",
+}
+
+_TYPE_COLORS = {
+    "raw":        "#1565c0",
+    "semi":       "#6a1b9a",
+    "labor_op":   "#2e7d32",
+    "machine_op": "#e65100",
 }
 
 
@@ -63,17 +68,25 @@ class BomTree(QWidget):
         self.tree = QTreeWidget()
         self.tree.setHeaderLabels(["المكون", "الكمية", "التكلفة", "النوع"])
         self.tree.setSelectionMode(QTreeWidget.SingleSelection)
-        from PyQt5.QtWidgets import QHeaderView
+
         hh = self.tree.header()
+        # العمود الأول (الاسم) يتمدد
         hh.setSectionResizeMode(0, QHeaderView.Stretch)
-        hh.setSectionResizeMode(1, QHeaderView.Fixed)
-        hh.setSectionResizeMode(2, QHeaderView.Fixed)
-        hh.setSectionResizeMode(3, QHeaderView.Fixed)
+        # الباقي Interactive — قابل للسحب
+        hh.setSectionResizeMode(1, QHeaderView.Interactive)
+        hh.setSectionResizeMode(2, QHeaderView.Interactive)
+        hh.setSectionResizeMode(3, QHeaderView.Interactive)
+        hh.setMinimumSectionSize(50)
         self.tree.setColumnWidth(1, 70)
-        self.tree.setColumnWidth(2, 90)
-        self.tree.setColumnWidth(3, 130)
+        self.tree.setColumnWidth(2, 95)
+        self.tree.setColumnWidth(3, 140)
+
+        # scroll أفقي للأعمدة الضيقة
+        self.tree.setHorizontalScrollMode(QAbstractItemView.ScrollPerPixel)
         self.tree.setEditTriggers(QTreeWidget.NoEditTriggers)
         self.tree.setExpandsOnDoubleClick(True)
+        # word wrap في النص
+        self.tree.setWordWrap(True)
         self.tree.itemSelectionChanged.connect(self._on_selection)
 
         layout.addLayout(header)
@@ -114,7 +127,6 @@ class BomTree(QWidget):
             if not row:
                 return None
             name = row["name"]
-            # raw_unit_price يراعي total_qty تلقائياً
             cost = raw_unit_price(row) * qty
 
         elif child_type == "semi":
@@ -141,15 +153,27 @@ class BomTree(QWidget):
         else:
             return None
 
-        node = QTreeWidgetItem([
-            name, str(qty), f"{cost:.4f}", _TYPE_LABELS.get(child_type, "")
-        ])
+        qty_str  = str(qty) if qty == int(qty) else f"{qty:.4g}"
+        type_lbl = _TYPE_LABELS.get(child_type, "")
+
+        node = QTreeWidgetItem([name, qty_str, f"{cost:.4f}", type_lbl])
         node.setData(0, Qt.UserRole, (child_type, child_id))
+
+        # tooltip بالنص الكامل لكل عمود
+        node.setToolTip(0, name)
+        node.setToolTip(1, f"الكمية: {qty_str}")
+        node.setToolTip(2, f"التكلفة: {cost:.4f}")
+        node.setToolTip(3, type_lbl)
+
+        # لون حسب النوع
+        color = QColor(_TYPE_COLORS.get(child_type, "#333"))
+        node.setForeground(3, color)
 
         if child_type == "semi":
             font = node.font(0)
             font.setBold(True)
             node.setFont(0, font)
+            node.setForeground(0, QColor(_TYPE_COLORS["semi"]))
             for sub_type, sub_id, sub_qty in fetch_bom(self._conn, child_id):
                 child_node = self._build_node(sub_type, sub_id, sub_qty * qty)
                 if child_node:

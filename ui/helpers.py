@@ -6,9 +6,11 @@ ui/helpers.py
 
 from PyQt5.QtWidgets import (
     QPushButton, QLabel, QHBoxLayout, QWidget,
-    QTableWidget, QHeaderView, QMessageBox
+    QTableWidget, QHeaderView, QMessageBox,
+    QAbstractItemView, QSizePolicy,
 )
 from PyQt5.QtGui import QFont
+from PyQt5.QtCore import Qt
 
 
 # ══════════════════════════════════════════════════════════
@@ -41,19 +43,96 @@ def success_button(text: str) -> QPushButton:
     return btn
 
 
+# ══════════════════════════════════════════════════════════
+# الجداول — مع tooltip تلقائي وعرض مرن
+# ══════════════════════════════════════════════════════════
+
+def _install_tooltip_delegate(table: QTableWidget):
+    """
+    يضيف tooltip تلقائي لأي خلية نصها أطول من عرضها.
+    يشتغل عن طريق override لـ itemChanged + كل مرة بيتحدث الجدول.
+    """
+    # نربط الـ signal مرة واحدة فقط
+    def _update_tooltips():
+        for r in range(table.rowCount()):
+            for c in range(table.columnCount()):
+                item = table.item(r, c)
+                if item:
+                    # دايمًا نضيف tooltip بالنص الكامل
+                    item.setToolTip(item.text())
+
+    # نربطه بأي تغيير في الجدول
+    table.model().dataChanged.connect(lambda *_: _update_tooltips())
+    table.model().rowsInserted.connect(lambda *_: _update_tooltips())
+
+
 def make_table(columns: list[str], stretch_col: int = -1) -> QTableWidget:
-    """إنشاء جدول جاهز بإعدادات موحدة."""
-    from PyQt5.QtWidgets import QAbstractItemView
+    """
+    إنشاء جدول جاهز بإعدادات موحدة:
+    - الأعمدة قابلة للسحب والتغيير
+    - النص في الخلايا يظهر كـ tooltip كامل
+    - الجدول نفسه scrollable أفقياً وعمودياً
+    """
     table = QTableWidget()
     table.setColumnCount(len(columns))
     table.setHorizontalHeaderLabels(columns)
     table.setSelectionBehavior(QAbstractItemView.SelectRows)
     table.setEditTriggers(QAbstractItemView.NoEditTriggers)
+
+    hh = table.horizontalHeader()
+
     if stretch_col >= 0:
-        table.horizontalHeader().setSectionResizeMode(stretch_col, QHeaderView.Stretch)
+        # العمود المحدد يتمدد — الباقي Interactive (قابل للسحب)
+        for i in range(len(columns)):
+            if i == stretch_col:
+                hh.setSectionResizeMode(i, QHeaderView.Stretch)
+            else:
+                hh.setSectionResizeMode(i, QHeaderView.Interactive)
     else:
-        table.horizontalHeader().setStretchLastSection(True)
+        # الأعمدة كلها Interactive والأخير يتمدد
+        for i in range(len(columns)):
+            hh.setSectionResizeMode(i, QHeaderView.Interactive)
+        hh.setStretchLastSection(True)
+
+    # الـ header نفسه قابل للسحب
+    hh.setMinimumSectionSize(40)
+    hh.setDefaultSectionSize(100)
+
+    # scroll أفقي لما الأعمدة تفضل ضيقة
+    table.setHorizontalScrollMode(QAbstractItemView.ScrollPerPixel)
+    table.setVerticalScrollMode(QAbstractItemView.ScrollPerPixel)
+
+    # word wrap في الـ header
+    hh.setDefaultAlignment(Qt.AlignRight | Qt.AlignVCenter)
+
+    # tooltip تلقائي
+    _install_tooltip_delegate(table)
+
     return table
+
+
+def setup_table_columns(table: QTableWidget,
+                        widths: dict[int, int] | None = None,
+                        stretch_col: int = -1,
+                        min_width: int = 50):
+    """
+    إعداد عرض الأعمدة بشكل مرن:
+    - widths: dict من {col_index: width} للأعمدة ذات العرض المبدئي المحدد
+    - stretch_col: العمود اللي يتمدد مع الشاشة (الاسم عادةً)
+    - min_width: أقل عرض للأعمدة Interactive
+    """
+    hh = table.horizontalHeader()
+    n  = table.columnCount()
+
+    for i in range(n):
+        if i == stretch_col:
+            hh.setSectionResizeMode(i, QHeaderView.Stretch)
+        else:
+            hh.setSectionResizeMode(i, QHeaderView.Interactive)
+            if widths and i in widths:
+                table.setColumnWidth(i, widths[i])
+
+    hh.setMinimumSectionSize(min_width)
 
 
 def buttons_row(*buttons) -> QHBoxLayout:
@@ -72,17 +151,6 @@ def buttons_row(*buttons) -> QHBoxLayout:
 class EditModeMixin:
     """
     Mixin يوفر تبديل وضع الإضافة ↔ التعديل.
-
-    الاستخدام:
-        class MyTab(QWidget, EditModeMixin):
-            def __init__(self):
-                ...
-                self.init_edit_mode(
-                    add_btn    = self.btn_add,
-                    save_btn   = self.btn_save,
-                    cancel_btn = self.btn_cancel,
-                    mode_label = self.lbl_mode,   # اختياري
-                )
     """
 
     def init_edit_mode(self, add_btn, save_btn, cancel_btn, mode_label=None):
