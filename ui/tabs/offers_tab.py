@@ -4,9 +4,10 @@ ui/tabs/offers_tab.py
 تبويب العروض — تسعير مجموعة منتجات بخصم على سعر التسعير.
 
 المنطق:
-  السعر الأساسي  = سعر المنتج من جدول pricing × الكمية
-  سعر البيع      = الأساسي × (1 - خصم%)
-  الربح           = سعر البيع - إجمالي التكلفة
+  سعر الوحدة    = سعر المنتج من جدول pricing
+  إجمالي السطر  = سعر الوحدة × الكمية
+  سعر البيع     = إجمالي الأسعار × (1 - خصم%)
+  الربح          = سعر البيع - إجمالي التكلفة
 """
 
 from PyQt5.QtWidgets import (
@@ -49,15 +50,32 @@ def _spin(max_=999999, dec=2):
     return s
 
 
-def _stat_lbl(color="#1565c0"):
-    lbl = QLabel("─")
-    lbl.setStyleSheet(
-        f"font-size:13px; font-weight:bold; color:{color};"
-        "background:#f9f9f9; border:1px solid #e0e0e0;"
-        "border-radius:4px; padding:3px 10px;"
+def _stat_box(title: str, color: str = "#1565c0"):
+    """يرجع (QFrame, QLabel) — نفس ستايل تبويب التسعير."""
+    frame = QFrame()
+    frame.setStyleSheet("""
+        QFrame {
+            background: white;
+            border: 1px solid #e0e0e0;
+            border-radius: 6px;
+            padding: 4px;
+        }
+    """)
+    lay = QVBoxLayout(frame)
+    lay.setContentsMargins(10, 6, 10, 6)
+    lay.setSpacing(2)
+    lbl_t = QLabel(title)
+    lbl_t.setStyleSheet("font-size:10px; color:#888; background:transparent; border:none;")
+    lbl_t.setAlignment(Qt.AlignCenter)
+    lbl_v = QLabel("─")
+    lbl_v.setStyleSheet(
+        f"font-size:14px; font-weight:bold; color:{color};"
+        "background:transparent; border:none;"
     )
-    lbl.setAlignment(Qt.AlignCenter)
-    return lbl
+    lbl_v.setAlignment(Qt.AlignCenter)
+    lay.addWidget(lbl_t)
+    lay.addWidget(lbl_v)
+    return frame, lbl_v
 
 
 # ══════════════════════════════════════════════════════════
@@ -191,7 +209,6 @@ class _OfferItemRow(QFrame):
                 if self.cmb_product.itemData(i) == prev_id:
                     self.cmb_product.setCurrentIndex(i)
                     return
-        # بعد تحميل المنتجات، نحدّث الإحصائيات فوراً
         self._on_product_changed()
 
     def _reload_products(self):
@@ -243,7 +260,6 @@ class _OfferItemRow(QFrame):
                 self.cmb_product.setCurrentIndex(i)
                 break
         self.sp_qty.setValue(qty)
-        # نحدّث الإحصائيات بعد تحديد القيم
         self._on_product_changed()
 
 
@@ -291,7 +307,6 @@ class _OfferForm(QWidget):
         self.inp_name.setPlaceholderText("مثال: عرض رمضان، باقة العيد...")
         self.inp_name.setMinimumHeight(30)
 
-        # ── الخصم % — الـ spinbox بدون suffix والـ % كـ label برا ──
         lbl_disc = QLabel("الخصم:")
         lbl_disc.setStyleSheet("font-weight:bold;")
         self.sp_discount = _spin(100, 2)
@@ -322,34 +337,22 @@ class _OfferForm(QWidget):
         info_row.addWidget(self.inp_notes, stretch=1)
         h_lay.addLayout(info_row)
 
-        # ── ربط sp_discount بعد بناء كل العناصر ──
         self.sp_discount.valueChanged.connect(self._update_totals)
 
-        # صناديق الإحصائيات
+        # ── صناديق الإحصائيات — نفس ستايل التسعير ──
         stats_row = QHBoxLayout()
         stats_row.setSpacing(6)
 
-        def _stat(title, color):
-            col = QVBoxLayout()
-            col.setSpacing(1)
-            t = QLabel(title)
-            t.setStyleSheet(
-                "font-size:9px; color:#888; background:transparent; border:none;"
-            )
-            t.setAlignment(Qt.AlignCenter)
-            v = _stat_lbl(color)
-            col.addWidget(t)
-            col.addWidget(v)
-            stats_row.addLayout(col, stretch=1)
-            return v
+        f1, self.lbl_total_listed = _stat_box("إجمالي السعر قبل الخصم", "#1565c0")
+        f2, self.lbl_discount_amt = _stat_box("قيمة الخصم",             "#e53935")
+        f3, self.lbl_sell_price   = _stat_box("سعر البيع النهائي",      "#2e7d32")
+        f4, self.lbl_total_cost   = _stat_box("إجمالي التكلفة",         "#555555")
+        f5, self.lbl_profit       = _stat_box("الربح",                   "#1b5e20")
 
-        self.lbl_total_listed = _stat("إجمالي السعر قبل الخصم", "#1565c0")
-        self.lbl_discount_amt = _stat("قيمة الخصم", "#e53935")
-        self.lbl_sell_price   = _stat("سعر البيع النهائي", "#2e7d32")
-        self.lbl_total_cost   = _stat("إجمالي التكلفة", "#555")
-        self.lbl_profit       = _stat("الربح", "#1b5e20")
-
+        for f in (f1, f2, f3, f4, f5):
+            stats_row.addWidget(f, stretch=1)
         h_lay.addLayout(stats_row)
+
         root.addWidget(header)
 
         # ── رؤوس الأعمدة ──
@@ -445,7 +448,6 @@ class _OfferForm(QWidget):
         self._rows_layout.insertWidget(self._rows_layout.count() - 1, row)
         if item_id is not None:
             row.set_values(item_id, qty)
-        # نحدّث الإجماليات بعد إضافة الصف مباشرة
         self._update_totals()
 
     def _remove_item_row(self, row_widget):
@@ -462,7 +464,7 @@ class _OfferForm(QWidget):
         self._item_rows.clear()
 
     # ══════════════════════════════════════════════════════
-    # حساب الإجماليات — المنطق الرئيسي
+    # حساب الإجماليات
     # ══════════════════════════════════════════════════════
 
     def _update_totals(self):
@@ -496,9 +498,8 @@ class _OfferForm(QWidget):
         color = "#1b5e20" if profit >= 0 else "#b71c1c"
         self.lbl_profit.setText(f"{profit:.2f}  ج")
         self.lbl_profit.setStyleSheet(
-            f"font-size:13px; font-weight:bold; color:{color};"
-            "background:#f9f9f9; border:1px solid #e0e0e0;"
-            "border-radius:4px; padding:3px 10px;"
+            f"font-size:14px; font-weight:bold; color:{color};"
+            "background:transparent; border:none;"
         )
 
     # ══════════════════════════════════════════════════════
@@ -562,7 +563,7 @@ class _OfferForm(QWidget):
 
 
 # ══════════════════════════════════════════════════════════
-# لوحة تفاصيل العرض
+# لوحة تفاصيل العرض — بنفس ستايل التسعير
 # ══════════════════════════════════════════════════════════
 
 class _OfferDetails(QFrame):
@@ -583,6 +584,7 @@ class _OfferDetails(QFrame):
         root.setContentsMargins(12, 10, 12, 10)
         root.setSpacing(8)
 
+        # ── العنوان ──
         self.lbl_title = QLabel("اختر عرضاً لعرض تفاصيله")
         self.lbl_title.setStyleSheet(
             "font-weight:bold; color:#e65100; font-size:13px;"
@@ -591,64 +593,40 @@ class _OfferDetails(QFrame):
         self.lbl_title.setAlignment(Qt.AlignCenter)
         root.addWidget(self.lbl_title)
 
-        # جدول السطور
+        # ── صناديق الإحصائيات الكبيرة — نفس ستايل التسعير ──
+        stats_row = QHBoxLayout()
+        stats_row.setSpacing(6)
+
+        f1, self.sl_listed = _stat_box("إجمالي السعر قبل الخصم", "#1565c0")
+        f2, self.sl_disc   = _stat_box("قيمة الخصم",             "#e53935")
+        f3, self.sl_sell   = _stat_box("سعر البيع النهائي",      "#2e7d32")
+        f4, self.sl_cost   = _stat_box("إجمالي التكلفة",         "#555555")
+        f5, self.sl_profit = _stat_box("الربح",                   "#1b5e20")
+
+        for f in (f1, f2, f3, f4, f5):
+            stats_row.addWidget(f, stretch=1)
+        root.addLayout(stats_row)
+
+        # ── جدول تفاصيل السطور ──
         self.table = QTableWidget()
-        self.table.setColumnCount(6)
-        self.table.setHorizontalHeaderLabels(
-            ["المنتج", "التصنيف", "الكمية",
-             "تكلفة/و", "سعر/و", "إجمالي السطر"]
-        )
+        self.table.setColumnCount(7)
+        self.table.setHorizontalHeaderLabels([
+            "المنتج", "التصنيف", "الكمية",
+            "تكلفة/وحدة", "سعر/وحدة", "إجمالي السطر", "الربح/سطر"
+        ])
         self.table.setEditTriggers(QAbstractItemView.NoEditTriggers)
         self.table.setSelectionBehavior(QAbstractItemView.SelectRows)
         self.table.setAlternatingRowColors(True)
         hh = self.table.horizontalHeader()
         hh.setSectionResizeMode(0, QHeaderView.Stretch)
-        for i, w in enumerate([100, 60, 70, 70, 100], start=1):
-            hh.setSectionResizeMode(i, QHeaderView.Fixed)
-            self.table.setColumnWidth(i, w)
-        self.table.setMinimumHeight(100)
+        col_widths = {1: 90, 2: 55, 3: 80, 4: 75, 5: 90, 6: 80}
+        for col, w in col_widths.items():
+            hh.setSectionResizeMode(col, QHeaderView.Fixed)
+            self.table.setColumnWidth(col, w)
+        self.table.setMinimumHeight(120)
         root.addWidget(self.table, stretch=1)
 
-        # ملخص
-        summary = QFrame()
-        summary.setStyleSheet("""
-            QFrame {
-                background: #fff3e0;
-                border: 1px solid #ffcc80;
-                border-radius: 6px;
-            }
-        """)
-        s_lay = QHBoxLayout(summary)
-        s_lay.setContentsMargins(10, 8, 10, 8)
-        s_lay.setSpacing(14)
-
-        def _st(title, color="#e65100"):
-            col = QVBoxLayout()
-            col.setSpacing(1)
-            t = QLabel(title)
-            t.setStyleSheet(
-                "font-size:9px; color:#888; background:transparent; border:none;"
-            )
-            t.setAlignment(Qt.AlignCenter)
-            v = QLabel("─")
-            v.setStyleSheet(
-                f"font-size:12px; font-weight:bold; color:{color};"
-                "background:transparent; border:none;"
-            )
-            v.setAlignment(Qt.AlignCenter)
-            col.addWidget(t)
-            col.addWidget(v)
-            s_lay.addLayout(col, stretch=1)
-            return v
-
-        self.sl_listed  = _st("إجمالي السعر",     "#1565c0")
-        self.sl_disc    = _st("الخصم",             "#e53935")
-        self.sl_sell    = _st("سعر البيع",         "#2e7d32")
-        self.sl_cost    = _st("التكلفة",           "#555")
-        self.sl_profit  = _st("الربح",             "#1b5e20")
-
-        root.addWidget(summary)
-
+        # ── ملاحظات ──
         self.lbl_notes = QLabel("")
         self.lbl_notes.setStyleSheet(
             "font-size:10px; color:#999; background:transparent; border:none;"
@@ -661,25 +639,58 @@ class _OfferDetails(QFrame):
         if not s:
             return
 
+        # ── العنوان ──
+        cat_part = f"  │  🏷 {s['category_name']}" if s.get("category_name") else ""
         self.lbl_title.setText(
-            f"📋  {s['offer_name']}  —  {s['created_at']}"
-            + (f"  │  🏷 {s['category_name']}" if s.get('category_name') else "")
+            f"📋  {s['offer_name']}  —  خصم {s['discount']:.1f}%"
+            f"  │  {s['created_at']}{cat_part}"
         )
 
+        # ── جدول السطور ──
         self.table.setRowCount(0)
         for line in s["lines"]:
             r = self.table.rowCount()
             self.table.insertRow(r)
+
             icon = "🏭" if line["item_type"] == "final" else "🔧"
             self.table.setItem(r, 0, QTableWidgetItem(f"{icon} {line['item_name']}"))
             self.table.setItem(r, 1, QTableWidgetItem(line["category_name"] or "—"))
             self.table.setItem(r, 2, QTableWidgetItem(f"{line['qty']:.4g}"))
-            self.table.setItem(r, 3, QTableWidgetItem(f"{line['unit_cost']:.2f}"))
-            price_text = f"{line['unit_price']:.2f}" if line["has_pricing"] else "─ ⚠️"
-            self.table.setItem(r, 4, QTableWidgetItem(price_text))
-            listed_text = f"{line['line_listed']:.2f}" if line["has_pricing"] else "─"
-            self.table.setItem(r, 5, QTableWidgetItem(listed_text))
 
+            # تكلفة/وحدة
+            cost_item = QTableWidgetItem(f"{line['unit_cost']:.2f}")
+            cost_item.setForeground(QColor("#1565c0"))
+            self.table.setItem(r, 3, cost_item)
+
+            # سعر/وحدة
+            if line["has_pricing"]:
+                price_item = QTableWidgetItem(f"{line['unit_price']:.2f}")
+                price_item.setForeground(QColor("#2e7d32"))
+            else:
+                price_item = QTableWidgetItem("─ ⚠️")
+                price_item.setForeground(QColor("#e65100"))
+            self.table.setItem(r, 4, price_item)
+
+            # إجمالي السطر
+            if line["has_pricing"]:
+                line_item = QTableWidgetItem(f"{line['line_listed']:.2f}")
+                line_item.setForeground(QColor("#e65100"))
+            else:
+                line_item = QTableWidgetItem("─")
+            self.table.setItem(r, 5, line_item)
+
+            # ربح السطر = (سعر - تكلفة) × كمية
+            if line["has_pricing"]:
+                line_profit = (line["unit_price"] - line["unit_cost"]) * line["qty"]
+                lp_item = QTableWidgetItem(f"{line_profit:.2f}")
+                lp_item.setForeground(
+                    QColor("#1b5e20") if line_profit >= 0 else QColor("#b71c1c")
+                )
+                self.table.setItem(r, 6, lp_item)
+            else:
+                self.table.setItem(r, 6, QTableWidgetItem("─"))
+
+        # ── الإحصائيات الكبيرة ──
         disc_pct = s["discount"]
         disc_amt = s["total_listed"] - s["sell_price"]
 
@@ -692,7 +703,7 @@ class _OfferDetails(QFrame):
         color  = "#1b5e20" if profit >= 0 else "#b71c1c"
         self.sl_profit.setText(f"{profit:.2f}  ج")
         self.sl_profit.setStyleSheet(
-            f"font-size:12px; font-weight:bold; color:{color};"
+            f"font-size:14px; font-weight:bold; color:{color};"
             "background:transparent; border:none;"
         )
 
@@ -827,6 +838,7 @@ class OffersTab(QWidget):
         main_lay = QVBoxLayout(main_widget)
         main_lay.setContentsMargins(0, 0, 0, 0)
 
+        # ── splitter رأسي: فورم فوق، (جدول + تفاصيل) تحت ──
         splitter = QSplitter(Qt.Vertical)
         splitter.setHandleWidth(6)
         splitter.setStyleSheet(_SPLITTER_STYLE)
@@ -834,6 +846,7 @@ class OffersTab(QWidget):
         self._form = _OfferForm(self.conn)
         splitter.addWidget(self._form)
 
+        # ── splitter أفقي: جدول يسار، تفاصيل يمين ──
         bottom = QSplitter(Qt.Horizontal)
         bottom.setHandleWidth(6)
         bottom.setStyleSheet(_SPLITTER_STYLE)
@@ -847,10 +860,10 @@ class OffersTab(QWidget):
         self._details = _OfferDetails(self.conn)
         bottom.addWidget(self._offers_table)
         bottom.addWidget(self._details)
-        bottom.setSizes([520, 380])
+        bottom.setSizes([480, 420])
 
         splitter.addWidget(bottom)
-        splitter.setSizes([300, 500])
+        splitter.setSizes([320, 480])
         splitter.setCollapsible(0, True)
 
         main_lay.addWidget(splitter)

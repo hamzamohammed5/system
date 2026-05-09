@@ -5,7 +5,7 @@ ui/tabs/pricing_tab.py — مع عرض التكلفة والربح
 from PyQt5.QtWidgets import (
     QWidget, QVBoxLayout, QHBoxLayout, QFormLayout, QTabWidget,
     QPushButton, QTableWidgetItem, QLabel,
-    QDoubleSpinBox, QMessageBox, QHeaderView, QFrame,
+    QDoubleSpinBox, QMessageBox, QHeaderView, QFrame, QComboBox,
 )
 from PyQt5.QtCore import Qt
 from PyQt5.QtGui  import QColor
@@ -15,7 +15,7 @@ from db.items_repo    import fetch_items_by_type, fetch_item
 from db.pricing_repo  import fetch_all_pricing, upsert_pricing, delete_pricing
 from models.costing   import calc_cost
 from ui.helpers       import make_table, buttons_row, section_label, danger_button
-from ui.widgets.category_manager import CategoryManager, CategoryCombo
+from ui.widgets.category_manager import CategoryManager
 from ui.widgets.filter_bar       import FilterBar
 from ui.events import bus
 
@@ -29,21 +29,20 @@ def _spin(max_=9999999, dec=2):
 
 
 def _stat_box(label: str, color: str = "#1565c0") -> tuple:
-    """يرجع (QFrame, QLabel) لعرض إحصائية واحدة."""
     frame = QFrame()
-    frame.setStyleSheet(f"""
-        QFrame {{
+    frame.setStyleSheet("""
+        QFrame {
             background: white;
             border: 1px solid #e0e0e0;
             border-radius: 6px;
             padding: 4px;
-        }}
+        }
     """)
     lay = QVBoxLayout(frame)
     lay.setContentsMargins(10, 6, 10, 6)
     lay.setSpacing(2)
     lbl_title = QLabel(label)
-    lbl_title.setStyleSheet(f"font-size:10px; color:#888; background:transparent; border:none;")
+    lbl_title.setStyleSheet("font-size:10px; color:#888; background:transparent; border:none;")
     lbl_title.setAlignment(Qt.AlignCenter)
     lbl_val = QLabel("─")
     lbl_val.setStyleSheet(
@@ -56,10 +55,6 @@ def _stat_box(label: str, color: str = "#1565c0") -> tuple:
     return frame, lbl_val
 
 
-# ══════════════════════════════════════════════════════════
-# لوحة التسعير
-# ══════════════════════════════════════════════════════════
-
 class _PricingPanel(QWidget):
     def __init__(self, conn, parent=None):
         super().__init__(parent)
@@ -67,22 +62,36 @@ class _PricingPanel(QWidget):
         self._all_rows   = []
         self._editing_id = None
         self._build()
+        self._load_products_combo()
         self._load()
+        bus.data_changed.connect(self._load_products_combo)
         bus.data_changed.connect(self._load)
+
+    def _load_products_combo(self):
+        prev = self.cmb_product.currentData()
+        self.cmb_product.blockSignals(True)
+        self.cmb_product.clear()
+        self.cmb_product.addItem("— اختر منتجاً —", None)
+        for row in fetch_items_by_type(self.conn, "final"):
+            self.cmb_product.addItem(row["name"], row["id"])
+        restored = False
+        for i in range(self.cmb_product.count()):
+            if self.cmb_product.itemData(i) == prev:
+                self.cmb_product.setCurrentIndex(i)
+                restored = True
+                break
+        if not restored:
+            self.cmb_product.setCurrentIndex(0)
+        self.cmb_product.blockSignals(False)
 
     def _build(self):
         root = QVBoxLayout(self)
         root.setContentsMargins(12, 10, 12, 12)
         root.setSpacing(8)
 
-        # ══ فورم التسعير ══
         form_frame = QFrame()
         form_frame.setStyleSheet("""
-            QFrame {
-                background: white;
-                border: 1px solid #e0e0e0;
-                border-radius: 8px;
-            }
+            QFrame { background: white; border: 1px solid #e0e0e0; border-radius: 8px; }
         """)
         form_lay = QVBoxLayout(form_frame)
         form_lay.setContentsMargins(14, 12, 14, 12)
@@ -97,18 +106,24 @@ class _PricingPanel(QWidget):
 
         lbl_prod = QLabel("المنتج:")
         lbl_prod.setStyleSheet("font-weight:bold;")
-        self.cmb_product = CategoryCombo(self.conn, scope="final")
+
+        # ✅ QComboBox عادي — بيقرأ المنتجات مباشرة
+        self.cmb_product = QComboBox()
         self.cmb_product.setMinimumHeight(32)
         self.cmb_product.setMinimumWidth(200)
         self.cmb_product.currentIndexChanged.connect(self._on_product_selected)
 
-        lbl_margin = QLabel("هامش الربح %:")
+        lbl_margin = QLabel("هامش الربح:")
         lbl_margin.setStyleSheet("font-weight:bold;")
+
         self.sp_margin = _spin(1000, 2)
-        self.sp_margin.setSuffix("  %")
         self.sp_margin.setValue(30)
-        self.sp_margin.setFixedWidth(120)
+        self.sp_margin.setFixedWidth(110)
         self.sp_margin.valueChanged.connect(self._update_preview)
+
+        # ✅ علامة % برا المستطيل
+        lbl_pct = QLabel("%")
+        lbl_pct.setStyleSheet("font-weight:bold; color:#e65100; font-size:13px;")
 
         lbl_price = QLabel("السعر النهائي:")
         lbl_price.setStyleSheet("font-weight:bold;")
@@ -121,27 +136,24 @@ class _PricingPanel(QWidget):
         row1.addSpacing(8)
         row1.addWidget(lbl_margin)
         row1.addWidget(self.sp_margin)
+        row1.addWidget(lbl_pct)
         row1.addSpacing(8)
         row1.addWidget(lbl_price)
         row1.addWidget(self.sp_price)
         row1.addStretch()
         form_lay.addLayout(row1)
 
-        # ── صناديق الإحصائيات ──
         stats_row = QHBoxLayout()
         stats_row.setSpacing(8)
-
-        f1, self.lbl_stat_cost   = _stat_box("التكلفة", "#1565c0")
-        f2, self.lbl_stat_price  = _stat_box("سعر البيع المقترح", "#2e7d32")
-        f3, self.lbl_stat_manual = _stat_box("السعر اليدوي", "#e65100")
-        f4, self.lbl_stat_profit = _stat_box("الربح", "#1b5e20")
-        f5, self.lbl_stat_margin_pct = _stat_box("هامش الربح الفعلي %", "#6a1b9a")
-
+        f1, self.lbl_stat_cost        = _stat_box("التكلفة",              "#1565c0")
+        f2, self.lbl_stat_price       = _stat_box("سعر البيع المقترح",    "#2e7d32")
+        f3, self.lbl_stat_manual      = _stat_box("السعر اليدوي",         "#e65100")
+        f4, self.lbl_stat_profit      = _stat_box("الربح",                "#1b5e20")
+        f5, self.lbl_stat_margin_pct  = _stat_box("هامش الربح الفعلي %", "#6a1b9a")
         for f in (f1, f2, f3, f4, f5):
             stats_row.addWidget(f, stretch=1)
         form_lay.addLayout(stats_row)
 
-        # ── أزرار ──
         self.btn_save   = QPushButton("💾  حفظ السعر")
         self.btn_cancel = QPushButton("✖  إلغاء")
         self.btn_del    = danger_button("🗑️  حذف السعر")
@@ -156,7 +168,6 @@ class _PricingPanel(QWidget):
 
         root.addWidget(form_frame)
 
-        # ── فلتر + جدول ──
         root.addWidget(section_label("─── قائمة الأسعار ───"))
         self._filter = FilterBar(self.conn, scope="final")
         self._filter.filter_changed.connect(self._apply_filter)
@@ -186,41 +197,30 @@ class _PricingPanel(QWidget):
         btn_edit.clicked.connect(self._edit_selected)
         root.addLayout(buttons_row(btn_edit))
 
-    # ══════════════════════════════════════════════════════
-    # منطق
-    # ══════════════════════════════════════════════════════
-
     def _on_product_selected(self):
         self._update_preview()
 
     def _update_preview(self):
-        prod_id = self.cmb_product.get_category()
+        prod_id = self.cmb_product.currentData()
         if prod_id is None:
             for lbl in (self.lbl_stat_cost, self.lbl_stat_price,
                         self.lbl_stat_manual, self.lbl_stat_profit,
                         self.lbl_stat_margin_pct):
                 lbl.setText("─")
             return
-
         cost   = calc_cost(self.conn, prod_id)
         margin = self.sp_margin.value() / 100.0
         price  = cost * (1 + margin)
-
         self.lbl_stat_cost.setText(f"{cost:.2f}  ج")
-
         self.lbl_stat_price.setText(f"{price:.2f}  ج")
-
-        # نحدث السعر اليدوي تلقائياً لو مش في وضع تعديل
         if self._editing_id is None:
             self.sp_price.blockSignals(True)
             self.sp_price.setValue(price)
             self.sp_price.blockSignals(False)
-
         self._refresh_manual_stats(cost)
 
     def _update_profit_from_price(self):
-        """يُحدَّث عند تغيير السعر اليدوي يدوياً."""
-        prod_id = self.cmb_product.get_category()
+        prod_id = self.cmb_product.currentData()
         if prod_id is None:
             return
         cost = calc_cost(self.conn, prod_id)
@@ -230,7 +230,6 @@ class _PricingPanel(QWidget):
         manual = self.sp_price.value()
         profit = manual - cost
         margin_pct = ((manual - cost) / cost * 100) if cost > 0 else 0.0
-
         self.lbl_stat_manual.setText(f"{manual:.2f}  ج")
         color_profit = "#1b5e20" if profit >= 0 else "#b71c1c"
         self.lbl_stat_profit.setText(f"{profit:.2f}  ج")
@@ -241,7 +240,7 @@ class _PricingPanel(QWidget):
         self.lbl_stat_margin_pct.setText(f"{margin_pct:.1f} %")
 
     def _save(self):
-        prod_id = self.cmb_product.get_category()
+        prod_id = self.cmb_product.currentData()
         if prod_id is None:
             QMessageBox.warning(self, "تنبيه", "اختر منتجاً أولاً")
             return
@@ -249,8 +248,7 @@ class _PricingPanel(QWidget):
         if price <= 0:
             QMessageBox.warning(self, "تنبيه", "السعر يجب أن يكون أكبر من صفر")
             return
-        margin = self.sp_margin.value()
-        upsert_pricing(self.conn, prod_id, margin, price)
+        upsert_pricing(self.conn, prod_id, self.sp_margin.value(), price)
         self._reset_form()
         bus.data_changed.emit()
 
@@ -302,7 +300,10 @@ class _PricingPanel(QWidget):
         if not item:
             return
         self._editing_id = prod_id
-        self.cmb_product.set_category(prod_id)
+        for i in range(self.cmb_product.count()):
+            if self.cmb_product.itemData(i) == prod_id:
+                self.cmb_product.setCurrentIndex(i)
+                break
         cost = calc_cost(self.conn, prod_id)
         if pricing:
             self.sp_margin.setValue(pricing["margin"])
@@ -325,7 +326,6 @@ class _PricingPanel(QWidget):
         for row in self._all_rows:
             if not self._filter.match(row["name"], row["category_id"]):
                 continue
-
             cost   = calc_cost(self.conn, row["id"])
             has_p  = row["pricing_id"] is not None
             price  = row["price"]  if has_p else None
@@ -339,33 +339,16 @@ class _PricingPanel(QWidget):
             self.table.setItem(r, 1, QTableWidgetItem(row["name"]))
             self.table.setItem(r, 2, QTableWidgetItem(row["category_name"] or "—"))
             self.table.setItem(r, 3, QTableWidgetItem(f"{cost:.2f}"))
-            self.table.setItem(r, 4, QTableWidgetItem(
-                f"{margin:.1f} %" if margin is not None else "─"
-            ))
-            self.table.setItem(r, 5, QTableWidgetItem(
-                f"{price:.2f}" if price is not None else "─"
-            ))
-
-            profit_item = QTableWidgetItem(
-                f"{profit:.2f}" if profit is not None else "─"
-            )
+            self.table.setItem(r, 4, QTableWidgetItem(f"{margin:.1f} %" if margin is not None else "─"))
+            self.table.setItem(r, 5, QTableWidgetItem(f"{price:.2f}" if price is not None else "─"))
+            profit_item = QTableWidgetItem(f"{profit:.2f}" if profit is not None else "─")
             if profit is not None:
-                profit_item.setForeground(
-                    QColor("#1b5e20") if profit >= 0 else QColor("#b71c1c")
-                )
+                profit_item.setForeground(QColor("#1b5e20") if profit >= 0 else QColor("#b71c1c"))
             self.table.setItem(r, 6, profit_item)
-
-            self.table.setItem(r, 7, QTableWidgetItem(
-                f"{margin_actual:.1f} %" if margin_actual is not None else "─"
-            ))
-
+            self.table.setItem(r, 7, QTableWidgetItem(f"{margin_actual:.1f} %" if margin_actual is not None else "─"))
             shown += 1
         self._filter.set_count(shown, len(self._all_rows))
 
-
-# ══════════════════════════════════════════════════════════
-# التبويب الرئيسي
-# ══════════════════════════════════════════════════════════
 
 class PricingTab(QWidget):
     def __init__(self, parent=None):
