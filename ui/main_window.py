@@ -6,6 +6,8 @@ ui/main_window.py
 الأقسام:
   📊 حساب التكلفة  →  CostingSection
   💰 التسعير       →  PricingSection
+  🏦 الحسابات     →  AccountingTab
+  📦 المخزن        →  InventoryTab
   ⚙️ الإعدادات    →  SettingsDialog
 """
 
@@ -15,9 +17,11 @@ from PyQt5.QtWidgets import (
 )
 from PyQt5.QtCore import Qt
 
-from ui.tabs.costing_section import CostingSection
-from ui.tabs.pricing_section import PricingSection
-from ui.settings_dialog      import SettingsDialog
+from ui.tabs.costing_section  import CostingSection
+from ui.tabs.pricing_section  import PricingSection
+from ui.tabs.accounting_tab   import AccountingTab
+from ui.tabs.inventory_tab    import InventoryTab
+from ui.settings_dialog       import SettingsDialog
 
 
 # ══════════════════════════════════════════════════════════
@@ -126,6 +130,8 @@ class _Sidebar(QFrame):
         nav_items = [
             ("📊", "حساب\nالتكلفة", "costing"),
             ("💰", "التسعير",        "pricing"),
+            ("🏦", "الحسابات",       "accounting"),
+            ("📦", "المخزن",         "inventory"),
         ]
         for icon, label, key in nav_items:
             btn = _NavButton(icon, label)
@@ -189,6 +195,14 @@ class MainWindow(QMainWindow):
         self._pricing = PricingSection()
         self._stack.addWidget(self._pricing)
 
+        # index 2 → الحسابات
+        self._accounting = AccountingTab()
+        self._stack.addWidget(self._accounting)
+
+        # index 3 → المخزن
+        self._inventory = InventoryTab()
+        self._stack.addWidget(self._inventory)
+
         main_layout.addWidget(self._stack, stretch=1)
 
         for btn in self._sidebar.get_buttons():
@@ -205,6 +219,10 @@ class MainWindow(QMainWindow):
             self._stack.setCurrentIndex(0)
         elif key == "pricing":
             self._stack.setCurrentIndex(1)
+        elif key == "accounting":
+            self._stack.setCurrentIndex(2)
+        elif key == "inventory":
+            self._stack.setCurrentIndex(3)
         elif key == "settings":
             clicked_btn.setChecked(False)
             SettingsDialog(self._app, parent=self).exec_()
