@@ -196,13 +196,23 @@ class _OfferItemRow(QFrame):
         self.cmb_product.blockSignals(True)
         self.cmb_product.clear()
         q = filter_text.lower()
+
+        # جيب فقط المنتجات اللي ليها سعر في جدول pricing
+        priced_ids = {
+            r["item_id"]
+            for r in self.conn.execute("SELECT item_id FROM pricing").fetchall()
+        }
+
         for item_type in ("final", "semi"):
             rows = fetch_items_by_type(self.conn, item_type)
             icon = "🏭" if item_type == "final" else "🔧"
             for row in rows:
+                if row["id"] not in priced_ids:
+                    continue
                 if q and q not in row["name"].lower():
                     continue
                 self.cmb_product.addItem(f"{icon} {row['name']}", row["id"])
+
         self.cmb_product.blockSignals(False)
         if prev_id is not None:
             for i in range(self.cmb_product.count()):
