@@ -1,10 +1,5 @@
 """
-ui/tabs/labor_tab.py  (النسخة المعدَّلة — مع زر الاستبدال الشامل)
-====================
-تبويب العمالة — تبويبات متداخلة:
-  ① إعدادات العمالة
-  ② عمليات العمالة  (مع زر "استبدال شامل")
-  ③ تصنيفات العمالة
+ui/tabs/labor_tab.py
 """
 
 from PyQt5.QtCore    import Qt
@@ -26,6 +21,7 @@ from ui.helpers import (
 )
 from ui.widgets.category_manager import CategoryCombo, CategoryManager
 from ui.widgets.bulk_replace_dialog import BulkReplaceDialog
+from ui.widgets.filter_bar import FilterBar
 from ui.events import bus
 
 _SPLITTER_STYLE = """
@@ -135,7 +131,7 @@ class _LaborSettingsPanel(QWidget):
 
 
 # ══════════════════════════════════════════════════════════
-# فورم العمليات
+# فورم + جدول العمليات
 # ══════════════════════════════════════════════════════════
 
 class _LaborOpForm(QWidget, EditModeMixin):
@@ -166,7 +162,6 @@ class _LaborOpForm(QWidget, EditModeMixin):
         self.inp_name.setMinimumHeight(30)
         self.sp_minutes = _spin(99999, 2)
         self.sp_minutes.valueChanged.connect(self._update_preview)
-
         self.cmb_category = CategoryCombo(self.conn, scope="labor")
 
         self.lbl_cost = QLabel("─")
@@ -239,16 +234,13 @@ class _LaborOpForm(QWidget, EditModeMixin):
         self.exit_edit_mode("─── إضافة عملية عمالة جديدة ───")
 
 
-# ══════════════════════════════════════════════════════════
-# جدول العمليات
-# ══════════════════════════════════════════════════════════
-
 class _LaborOpTable(QWidget):
     def __init__(self, conn, settings: _LaborSettingsPanel, form: _LaborOpForm, parent=None):
         super().__init__(parent)
         self.conn      = conn
         self._settings = settings
         self._form     = form
+        self._all_rows = []
         self._build()
         self._load()
         bus.data_changed.connect(self._load)
@@ -258,6 +250,10 @@ class _LaborOpTable(QWidget):
         root.setContentsMargins(12, 8, 12, 12)
         root.setSpacing(6)
         root.addWidget(section_label("─── عمليات العمالة المحفوظة ───"))
+
+        self._filter = FilterBar(self.conn, scope="labor")
+        self._filter.filter_changed.connect(self._apply_filter)
+        root.addWidget(self._filter)
 
         self.table = make_table(
             ["ID", "اسم العملية", "التصنيف", "الوقت (دقيقة)", "التكلفة / وحدة"],
@@ -281,7 +277,6 @@ class _LaborOpTable(QWidget):
             "padding:4px 10px; font-weight:bold; }"
             "QPushButton:hover { background:#bf360c; }"
         )
-
         for btn in (btn_edit, btn_del, btn_replace):
             btn.setMinimumHeight(30)
 
@@ -321,30 +316,33 @@ class _LaborOpTable(QWidget):
         op_id   = int(self.table.item(row, 0).text())
         op_name = self.table.item(row, 1).text()
         dlg = BulkReplaceDialog(
-            conn       = self.conn,
-            child_type = "labor_op",
-            child_id   = op_id,
-            child_name = op_name,
-            parent     = self,
+            conn=self.conn, child_type="labor_op",
+            child_id=op_id, child_name=op_name, parent=self,
         )
         dlg.exec_()
 
     def _load(self):
+        self._all_rows = list(fetch_all_labor_ops(self.conn))
+        self._apply_filter()
+
+    def _apply_filter(self):
         rate = self._settings.get_hourly_rate()
         self.table.setRowCount(0)
-        for r, op in enumerate(fetch_all_labor_ops(self.conn)):
+        shown = 0
+        for op in self._all_rows:
+            if not self._filter.match(op["name"], op["category_id"]):
+                continue
             cost = (op["minutes"] / 60.0) * rate
+            r = self.table.rowCount()
             self.table.insertRow(r)
             self.table.setItem(r, 0, QTableWidgetItem(str(op["id"])))
             self.table.setItem(r, 1, QTableWidgetItem(op["name"]))
-            self.table.setItem(r, 2, QTableWidgetItem(op["category_name"] if op["category_name"] else "—"))
+            self.table.setItem(r, 2, QTableWidgetItem(op["category_name"] or "—"))
             self.table.setItem(r, 3, QTableWidgetItem(f"{op['minutes']:.2f}"))
             self.table.setItem(r, 4, QTableWidgetItem(f"{cost:.2f} جنيه"))
+            shown += 1
+        self._filter.set_count(shown, len(self._all_rows))
 
-
-# ══════════════════════════════════════════════════════════
-# تبويب عمليات العمالة
-# ══════════════════════════════════════════════════════════
 
 class _LaborOpsTab(QWidget):
     def __init__(self, conn, settings, parent=None):
@@ -365,10 +363,6 @@ class _LaborOpsTab(QWidget):
         root.setContentsMargins(0, 0, 0, 0)
         root.addWidget(splitter)
 
-
-# ══════════════════════════════════════════════════════════
-# التبويب الرئيسي
-# ══════════════════════════════════════════════════════════
 
 class LaborTab(QWidget):
     def __init__(self, parent=None):

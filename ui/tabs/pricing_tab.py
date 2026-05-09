@@ -1,374 +1,299 @@
 """
-ui/tabs/pricing_tab.py
-======================
-تبويب التسعير — يحسب ويحفظ أسعار المنتجات النهائية.
-
-الهيكل:
-  ┌─────────────────────────────────────────┐
-  │  فورم التسعير                           │
-  │  [المنتج ▼]  [النسبة]  → السعر          │
-  ├─────────────────────────────────────────┤
-  │  جدول الأسعار المحفوظة                  │
-  │  [فلتر التصنيف ▼]                       │
-  └─────────────────────────────────────────┘
-
-التحديثات:
-  - PricingTab بات يحتوي على تبويبين داخليين:
-      ① الأسعار (الفورم + الجدول)
-      ② التصنيفات (CategoryManager بـ scope="pricing")
+ui/tabs/pricing_tab.py — مع FilterBar موحّد
 """
 
 from PyQt5.QtWidgets import (
-    QWidget, QVBoxLayout, QHBoxLayout, QFormLayout,
-    QSplitter, QComboBox, QDoubleSpinBox, QLabel,
-    QPushButton, QTableWidgetItem, QMessageBox,
-    QGroupBox, QHeaderView, QTabWidget,
+    QWidget, QVBoxLayout, QHBoxLayout, QFormLayout, QTabWidget,
+    QPushButton, QTableWidgetItem, QLabel,
+    QDoubleSpinBox, QMessageBox, QHeaderView, QFrame,
 )
 from PyQt5.QtCore import Qt
-from PyQt5.QtGui  import QColor
 
-from db.connection       import get_connection
-from db.items_repo       import fetch_items_by_type, fetch_item, update_item_category
-from db.pricing_repo     import fetch_all_pricing, fetch_pricing, upsert_pricing, delete_pricing
-from db.categories_repo  import fetch_all_categories
-from models.costing      import calc_cost
-from ui.helpers          import make_table, buttons_row, section_label, danger_button
+from db.connection    import get_connection
+from db.items_repo    import fetch_items_by_type, fetch_item
+from db.pricing_repo  import fetch_all_pricing, upsert_pricing, delete_pricing
+from models.costing   import calc_cost
+from ui.helpers       import make_table, buttons_row, section_label, danger_button
 from ui.widgets.category_manager import CategoryManager, CategoryCombo
-
+from ui.widgets.filter_bar       import FilterBar
 from ui.events import bus
 
-_SPLITTER_STYLE = """
-    QSplitter::handle { background:#e0e0e0; border-top:1px solid #ccc; }
-    QSplitter::handle:hover { background:#bbdefb; }
-"""
+
+def _spin(max_=9999999, dec=2):
+    s = QDoubleSpinBox()
+    s.setRange(0, max_)
+    s.setDecimals(dec)
+    s.setMinimumHeight(30)
+    return s
 
 
 # ══════════════════════════════════════════════════════════
-# فورم التسعير
+# لوحة التسعير
 # ══════════════════════════════════════════════════════════
 
-class _PricingForm(QWidget):
+class _PricingPanel(QWidget):
     def __init__(self, conn, parent=None):
         super().__init__(parent)
-        self.conn = conn
-        self._build()
-        bus.data_changed.connect(self._refresh_products)
-
-    def _build(self):
-        layout = QVBoxLayout(self)
-        layout.setSpacing(10)
-        layout.setContentsMargins(12, 12, 12, 12)
-
-        grp  = QGroupBox("احسب سعر منتج")
-        form = QFormLayout(grp)
-        form.setSpacing(12)
-        form.setLabelAlignment(Qt.AlignRight)
-
-        # ── تعريف كل الـ widgets أولاً ──
-
-        # المنتج
-        self.cmb_product = QComboBox()
-        self.cmb_product.setMinimumHeight(32)
-        self.cmb_product.currentIndexChanged.connect(self._on_product_changed)
-
-        # التصنيف
-        self.cmb_category = CategoryCombo(self.conn, scope="pricing")
-        self.cmb_category.setMinimumHeight(32)
-
-        # التكلفة (للعرض فقط)
-        self.lbl_cost = QLabel("—")
-        self.lbl_cost.setStyleSheet(
-            "color:#555; background:#f5f5f5; border:1px solid #ddd;"
-            "border-radius:4px; padding:4px 10px;"
-        )
-
-        # النسبة
-        self.sp_margin = QDoubleSpinBox()
-        self.sp_margin.setRange(0.01, 100.0)
-        self.sp_margin.setDecimals(2)
-        self.sp_margin.setValue(1.0)
-        self.sp_margin.setSingleStep(0.1)
-        self.sp_margin.setMinimumHeight(32)
-        self.sp_margin.setSuffix("×")
-        self.sp_margin.valueChanged.connect(self._update_preview)
-
-        # السعر الناتج
-        self.lbl_price = QLabel("—")
-        self.lbl_price.setStyleSheet(
-            "font-weight:bold; font-size:14px; color:#1a6e1a;"
-            "background:#f0faf0; border:1px solid #b2dfb2;"
-            "border-radius:4px; padding:6px 12px;"
-        )
-
-        # ── إضافة للفورم بعد تعريف الكل ──
-        form.addRow("المنتج :",           self.cmb_product)
-        form.addRow("التصنيف :",          self.cmb_category)
-        form.addRow("التكلفة المحسوبة :", self.lbl_cost)
-        form.addRow("نسبة التسعير :",     self.sp_margin)
-        form.addRow("➡  السعر النهائي :", self.lbl_price)
-        layout.addWidget(grp)
-
-        # ── شرح النسبة ──
-        hint = QLabel("مثال: 1.5 × التكلفة = ربح 50%  |  2.0 = ربح 100%")
-        hint.setStyleSheet("color:#888; font-size:10px;")
-        hint.setAlignment(Qt.AlignCenter)
-        layout.addWidget(hint)
-
-        # ── أزرار ──
-        self.btn_save = QPushButton("💾  حفظ السعر")
-        self.btn_save.setMinimumHeight(34)
-        self.btn_save.setStyleSheet(
-            "background:#1565c0; color:white; font-weight:bold; border-radius:4px;"
-        )
-        self.btn_save.clicked.connect(self._save)
-
-        self.btn_clear = QPushButton("✖  مسح")
-        self.btn_clear.setMinimumHeight(34)
-        self.btn_clear.clicked.connect(self._clear)
-
-        layout.addLayout(buttons_row(self.btn_save, self.btn_clear))
-        layout.addStretch()
-
-        self._refresh_products()
-
-    def _refresh_products(self):
-        prev = self.cmb_product.currentData()
-        self.cmb_product.blockSignals(True)
-        self.cmb_product.clear()
-        self.cmb_product.addItem("— اختر منتجاً —", None)
-        for row in fetch_items_by_type(self.conn, "final"):
-            self.cmb_product.addItem(row["name"], row["id"])
-        if prev:
-            for i in range(self.cmb_product.count()):
-                if self.cmb_product.itemData(i) == prev:
-                    self.cmb_product.setCurrentIndex(i)
-                    break
-        self.cmb_product.blockSignals(False)
-        self._on_product_changed()
-
-    def _on_product_changed(self):
-        pid = self.cmb_product.currentData()
-        if pid is None:
-            self.lbl_cost.setText("—")
-            self.lbl_price.setText("—")
-            self._cost = 0.0
-            return
-
-        self._cost = calc_cost(self.conn, pid)
-        self.lbl_cost.setText(f"{self._cost:.4f}  جنيه")
-
-        # ← جديد: حمّل تصنيف المنتج الحالي
-        item = fetch_item(self.conn, pid)
-        if item and item["category_id"]:
-            self.cmb_category.set_category(item["category_id"])
-        else:
-            self.cmb_category.setCurrentIndex(0)
-
-        pricing = fetch_pricing(self.conn, pid)
-        if pricing:
-            self.sp_margin.blockSignals(True)
-            self.sp_margin.setValue(pricing["margin"])
-            self.sp_margin.blockSignals(False)
-
-        self._update_preview()
-
-    def _update_preview(self):
-        if not hasattr(self, "_cost"):
-            return
-        price = self._cost * self.sp_margin.value()
-        self.lbl_price.setText(
-            f"{price:.2f}  جنيه   "
-            f"({self.sp_margin.value():.2f} × {self._cost:.4f})"
-        )
-
-    def _save(self):
-        pid = self.cmb_product.currentData()
-        if pid is None:
-            QMessageBox.warning(self, "تنبيه", "اختر منتجاً أولاً")
-            return
-
-        margin   = self.sp_margin.value()
-        price    = self._cost * margin
-        cat_id   = self.cmb_category.get_category()   # ← جديد
-
-        upsert_pricing(self.conn, pid, margin, price)
-
-        # ← جديد: احفظ التصنيف على المنتج
-        update_item_category(self.conn, pid, cat_id)
-
-        QMessageBox.information(self, "تم", f"✅ تم حفظ السعر: {price:.2f} جنيه")
-        bus.data_changed.emit()
-
-    def _clear(self):
-        self.cmb_product.setCurrentIndex(0)
-        self.sp_margin.setValue(1.0)
-
-    def load_product(self, item_id: int):
-        """تحميل منتج من الجدول عند الضغط على تعديل."""
-        for i in range(self.cmb_product.count()):
-            if self.cmb_product.itemData(i) == item_id:
-                self.cmb_product.setCurrentIndex(i)
-                return
-
-
-# ══════════════════════════════════════════════════════════
-# جدول الأسعار
-# ══════════════════════════════════════════════════════════
-
-class _PricingTable(QWidget):
-    def __init__(self, conn, form: _PricingForm, parent=None):
-        super().__init__(parent)
-        self.conn  = conn
-        self._form = form
-        self._filter_cat = None
+        self.conn      = conn
+        self._all_rows = []
+        self._editing_id = None
         self._build()
         self._load()
         bus.data_changed.connect(self._load)
 
     def _build(self):
         root = QVBoxLayout(self)
-        root.setContentsMargins(12, 8, 12, 12)
-        root.setSpacing(6)
+        root.setContentsMargins(12, 10, 12, 12)
+        root.setSpacing(8)
+
+        # ── فورم التسعير ──
+        form_frame = QFrame()
+        form_frame.setStyleSheet("""
+            QFrame {
+                background: white;
+                border: 1px solid #e0e0e0;
+                border-radius: 8px;
+            }
+        """)
+        form_lay = QVBoxLayout(form_frame)
+        form_lay.setContentsMargins(14, 12, 14, 12)
+        form_lay.setSpacing(10)
+
+        self.lbl_mode = QLabel("─── تسعير منتج ───")
+        self.lbl_mode.setStyleSheet("font-weight:bold; color:#e65100; font-size:12px;")
+        form_lay.addWidget(self.lbl_mode)
+
+        row1 = QHBoxLayout()
+        row1.setSpacing(12)
+
+        # اختيار المنتج
+        lbl_prod = QLabel("المنتج:")
+        lbl_prod.setStyleSheet("font-weight:bold;")
+        self.cmb_product = CategoryCombo(self.conn, scope="final")
+        self.cmb_product.setMinimumHeight(32)
+        self.cmb_product.setMinimumWidth(200)
+        self.cmb_product.currentIndexChanged.connect(self._on_product_selected)
+
+        # هامش الربح
+        lbl_margin = QLabel("هامش الربح %:")
+        lbl_margin.setStyleSheet("font-weight:bold;")
+        self.sp_margin = _spin(1000, 2)
+        self.sp_margin.setSuffix("  %")
+        self.sp_margin.setValue(30)
+        self.sp_margin.setFixedWidth(120)
+        self.sp_margin.valueChanged.connect(self._update_price_preview)
+
+        # السعر المقترح
+        self.lbl_suggested = QLabel("─")
+        self.lbl_suggested.setStyleSheet(
+            "color:#1a6e1a; font-weight:bold; font-size:12px;"
+            "background:#f0faf0; border:1px solid #b2dfb2;"
+            "border-radius:4px; padding:4px 10px;"
+        )
+
+        # السعر اليدوي
+        lbl_price = QLabel("السعر النهائي:")
+        lbl_price.setStyleSheet("font-weight:bold;")
+        self.sp_price = _spin()
+        self.sp_price.setFixedWidth(130)
+
+        row1.addWidget(lbl_prod)
+        row1.addWidget(self.cmb_product, stretch=2)
+        row1.addSpacing(8)
+        row1.addWidget(lbl_margin)
+        row1.addWidget(self.sp_margin)
+        row1.addWidget(QLabel("→"))
+        row1.addWidget(self.lbl_suggested)
+        row1.addSpacing(8)
+        row1.addWidget(lbl_price)
+        row1.addWidget(self.sp_price)
+        row1.addStretch()
+        form_lay.addLayout(row1)
+
+        # أزرار
+        self.btn_save   = QPushButton("💾  حفظ السعر")
+        self.btn_cancel = QPushButton("✖  إلغاء")
+        self.btn_del    = danger_button("🗑️  حذف السعر")
+        for btn in (self.btn_save, self.btn_cancel, self.btn_del):
+            btn.setMinimumHeight(30)
+        self.btn_cancel.setVisible(False)
+        self.btn_del.setVisible(False)
+        self.btn_save.clicked.connect(self._save)
+        self.btn_cancel.clicked.connect(self._reset_form)
+        self.btn_del.clicked.connect(self._delete)
+        form_lay.addLayout(buttons_row(self.btn_save, self.btn_cancel, self.btn_del))
+
+        root.addWidget(form_frame)
 
         # ── شريط الفلتر ──
-        filter_row = QHBoxLayout()
-        filter_row.addWidget(section_label("─── الأسعار المحفوظة ───"))
-        filter_row.addStretch()
-        filter_row.addWidget(QLabel("فلتر:"))
-        self.cmb_filter = CategoryCombo(self.conn, scope="pricing")
-        self.cmb_filter.setFixedWidth(160)
-        self.cmb_filter.currentIndexChanged.connect(self._on_filter_changed)
-        filter_row.addWidget(self.cmb_filter)
-        root.addLayout(filter_row)
+        root.addWidget(section_label("─── قائمة الأسعار ───"))
+        self._filter = FilterBar(self.conn, scope="final")
+        self._filter.filter_changed.connect(self._apply_filter)
+        root.addWidget(self._filter)
 
+        # ── جدول الأسعار ──
         self.table = make_table(
-            ["ID", "المنتج", "التصنيف", "التكلفة", "النسبة", "السعر"]
+            ["ID", "المنتج", "التصنيف", "التكلفة", "الهامش %", "السعر", "الربح"],
+            stretch_col=1
         )
         hh = self.table.horizontalHeader()
         hh.setSectionResizeMode(QHeaderView.Fixed)
         self.table.setColumnWidth(0, 40)
-        self.table.setColumnWidth(1, 200)
-        self.table.setColumnWidth(2, 100)
-        self.table.setColumnWidth(3, 100)
-        self.table.setColumnWidth(4, 70)
-        self.table.setColumnWidth(5, 110)
-        self.table.horizontalHeader().setSectionResizeMode(1, QHeaderView.Stretch)
+        self.table.setColumnWidth(1, 180)
+        self.table.setColumnWidth(2, 110)
+        self.table.setColumnWidth(3, 90)
+        self.table.setColumnWidth(4, 80)
+        self.table.setColumnWidth(5, 90)
+        self.table.setColumnWidth(6, 90)
         self.table.setAlternatingRowColors(True)
-        root.addWidget(self.table)
+        self.table.itemSelectionChanged.connect(self._on_table_select)
+        root.addWidget(self.table, stretch=1)
 
-        btn_edit = QPushButton("✏️  تعديل")
-        btn_del  = danger_button("🗑️  حذف السعر")
-        for btn in (btn_edit, btn_del):
-            btn.setMinimumHeight(30)
-        btn_edit.clicked.connect(self._edit)
-        btn_del.clicked.connect(self._delete)
-        root.addLayout(buttons_row(btn_edit, btn_del))
+        btn_edit = QPushButton("✏️  تعديل المحدد")
+        btn_edit.setMinimumHeight(30)
+        btn_edit.clicked.connect(self._edit_selected)
+        root.addLayout(buttons_row(btn_edit))
 
-    def _on_filter_changed(self):
-        self._filter_cat = self.cmb_filter.get_category()
-        self._load()
+    # ══════════════════════════════════════════════════════
+    # منطق
+    # ══════════════════════════════════════════════════════
 
-    def _edit(self):
-        row = self.table.currentRow()
-        if row == -1:
-            QMessageBox.information(self, "تنبيه", "اختر منتجاً أولاً")
+    def _on_product_selected(self):
+        self._update_price_preview()
+
+    def _update_price_preview(self):
+        prod_id = self.cmb_product.get_category()
+        if prod_id is None:
+            self.lbl_suggested.setText("─")
             return
-        item_id = int(self.table.item(row, 0).text())
-        self._form.load_product(item_id)
+        cost    = calc_cost(self.conn, prod_id)
+        margin  = self.sp_margin.value() / 100.0
+        price   = cost * (1 + margin)
+        self.lbl_suggested.setText(f"{price:.2f}  جنيه")
+        # نحدّث السعر اليدوي تلقائياً لو مش في وضع تعديل
+        if self._editing_id is None:
+            self.sp_price.setValue(price)
+
+    def _save(self):
+        prod_id = self.cmb_product.get_category()
+        if prod_id is None:
+            QMessageBox.warning(self, "تنبيه", "اختر منتجاً أولاً")
+            return
+        margin = self.sp_margin.value()
+        price  = self.sp_price.value()
+        if price <= 0:
+            QMessageBox.warning(self, "تنبيه", "السعر يجب أن يكون أكبر من صفر")
+            return
+        upsert_pricing(self.conn, prod_id, margin, price)
+        self._reset_form()
+        bus.data_changed.emit()
 
     def _delete(self):
-        row = self.table.currentRow()
-        if row == -1:
-            QMessageBox.information(self, "تنبيه", "اختر منتجاً أولاً")
+        if self._editing_id is None:
             return
-        item_id   = int(self.table.item(row, 0).text())
-        item_name = self.table.item(row, 1).text()
+        item = fetch_item(self.conn, self._editing_id)
+        name = item["name"] if item else f"ID:{self._editing_id}"
         if QMessageBox.question(
-            self, "تأكيد", f"حذف سعر «{item_name}»؟",
+            self, "تأكيد", f"حذف سعر «{name}»؟",
             QMessageBox.Yes | QMessageBox.No
         ) == QMessageBox.Yes:
-            delete_pricing(self.conn, item_id)
+            delete_pricing(self.conn, self._editing_id)
+            self._reset_form()
             bus.data_changed.emit()
 
-    def _load(self):
-        self.table.setRowCount(0)
-        for r, row in enumerate(fetch_all_pricing(self.conn)):
-            # فلترة بالتصنيف
-            if self._filter_cat is not None and row["category_id"] != self._filter_cat:
-                continue
-            # لو مفيش سعر محفوظ — احسبه ديناميكي
-            cost   = calc_cost(self.conn, row["id"])
-            margin = row["margin"] if row["pricing_id"] else None
-            price  = row["price"]  if row["pricing_id"] else None
+    def _reset_form(self):
+        self._editing_id = None
+        self.cmb_product.setCurrentIndex(0)
+        self.sp_margin.setValue(30)
+        self.sp_price.setValue(0)
+        self.lbl_suggested.setText("─")
+        self.lbl_mode.setText("─── تسعير منتج ───")
+        self.btn_cancel.setVisible(False)
+        self.btn_del.setVisible(False)
 
+    def _edit_selected(self):
+        row = self.table.currentRow()
+        if row == -1:
+            QMessageBox.information(self, "تنبيه", "اختر منتجاً من الجدول أولاً")
+            return
+        prod_id = int(self.table.item(row, 0).text())
+        self._load_for_edit(prod_id)
+
+    def _on_table_select(self):
+        row = self.table.currentRow()
+        if row == -1:
+            return
+        # double-click للتعديل — single click للمعاينة فقط
+        prod_id = int(self.table.item(row, 0).text())
+        cost = calc_cost(self.conn, prod_id)
+        self.lbl_suggested.setText(f"{cost:.2f}  جنيه (تكلفة)")
+
+    def _load_for_edit(self, prod_id: int):
+        from db.pricing_repo import fetch_pricing
+        pricing = fetch_pricing(self.conn, prod_id)
+        item    = fetch_item(self.conn, prod_id)
+        if not item:
+            return
+        self._editing_id = prod_id
+        self.cmb_product.set_category(prod_id)
+        if pricing:
+            self.sp_margin.setValue(pricing["margin"])
+            self.sp_price.setValue(pricing["price"])
+        else:
+            cost = calc_cost(self.conn, prod_id)
+            self.sp_margin.setValue(30)
+            self.sp_price.setValue(cost * 1.3)
+        self.lbl_mode.setText(f"─── تعديل سعر: {item['name']} ───")
+        self.btn_cancel.setVisible(True)
+        self.btn_del.setVisible(bool(pricing))
+        self._update_price_preview()
+
+    def _load(self):
+        self._all_rows = list(fetch_all_pricing(self.conn))
+        self._apply_filter()
+
+    def _apply_filter(self):
+        self.table.setRowCount(0)
+        shown = 0
+        for row in self._all_rows:
+            if not self._filter.match(row["name"], row["category_id"]):
+                continue
+            cost    = calc_cost(self.conn, row["id"])
+            margin  = row["margin"] if row["pricing_id"] else "─"
+            price   = row["price"]  if row["pricing_id"] else "─"
+            profit  = (row["price"] - cost) if row["pricing_id"] else "─"
+
+            r = self.table.rowCount()
             self.table.insertRow(r)
             self.table.setItem(r, 0, QTableWidgetItem(str(row["id"])))
             self.table.setItem(r, 1, QTableWidgetItem(row["name"]))
+            self.table.setItem(r, 2, QTableWidgetItem(row["category_name"] or "—"))
+            self.table.setItem(r, 3, QTableWidgetItem(f"{cost:.2f}"))
+            self.table.setItem(r, 4, QTableWidgetItem(
+                f"{margin:.1f} %" if isinstance(margin, float) else margin
+            ))
+            self.table.setItem(r, 5, QTableWidgetItem(
+                f"{price:.2f}" if isinstance(price, float) else price
+            ))
+            self.table.setItem(r, 6, QTableWidgetItem(
+                f"{profit:.2f}" if isinstance(profit, float) else profit
+            ))
 
-            # التصنيف (ملوّن)
-            cat_item = QTableWidgetItem(row["category_name"] or "—")
-            if row["category_color"]:
-                cat_item.setForeground(QColor(row["category_color"]))
-            self.table.setItem(r, 2, cat_item)
+            # لون الربح
+            if isinstance(profit, float):
+                color = "#1b5e20" if profit >= 0 else "#b71c1c"
+                item_w = self.table.item(r, 6)
+                item_w.setForeground(Qt.GlobalColor.darkGreen if profit >= 0 else Qt.GlobalColor.red)
 
-            self.table.setItem(r, 3, QTableWidgetItem(f"{cost:.4f}"))
-
-            if margin is not None:
-                self.table.setItem(r, 4, QTableWidgetItem(f"{margin:.2f}×"))
-                price_item = QTableWidgetItem(f"{price:.2f} جنيه")
-                price_item.setForeground(QColor("#1a6e1a"))
-                self.table.setItem(r, 5, price_item)
-            else:
-                self.table.setItem(r, 4, QTableWidgetItem("—"))
-                no_price = QTableWidgetItem("لم يُسعَّر بعد")
-                no_price.setForeground(QColor("#999"))
-                self.table.setItem(r, 5, no_price)
-
-
-# ══════════════════════════════════════════════════════════
-# اللوحة الرئيسية (فورم + جدول)
-# ══════════════════════════════════════════════════════════
-
-class _PricingMainPanel(QWidget):
-    """
-    اللوحة الرئيسية للتسعير:
-      - فورم الحساب والحفظ
-      - جدول الأسعار المحفوظة
-    """
-    def __init__(self, conn, parent=None):
-        super().__init__(parent)
-        self.conn = conn
-        self._build()
-
-    def _build(self):
-        root = QVBoxLayout(self)
-        root.setContentsMargins(0, 0, 0, 0)
-
-        splitter = QSplitter(Qt.Vertical)
-        splitter.setHandleWidth(6)
-        splitter.setStyleSheet(_SPLITTER_STYLE)
-
-        self._form  = _PricingForm(self.conn)
-        self._table = _PricingTable(self.conn, self._form)
-
-        splitter.addWidget(self._form)
-        splitter.addWidget(self._table)
-        splitter.setSizes([300, 400])
-        splitter.setCollapsible(0, True)
-
-        root.addWidget(splitter)
+            shown += 1
+        self._filter.set_count(shown, len(self._all_rows))
 
 
 # ══════════════════════════════════════════════════════════
-# تبويب التسعير الرئيسي — مع تبويب التصنيفات
+# التبويب الرئيسي
 # ══════════════════════════════════════════════════════════
 
 class PricingTab(QWidget):
-    """
-    يحتوي على تبويبين:
-      ① الأسعار (الفورم + الجدول)
-      ② التصنيفات (CategoryManager بـ scope="pricing")
-    """
     def __init__(self, parent=None):
         super().__init__(parent)
         self.conn = get_connection()
@@ -379,12 +304,8 @@ class PricingTab(QWidget):
         root.setContentsMargins(0, 0, 0, 0)
 
         tabs = QTabWidget()
-
-        # ① لوحة الأسعار الرئيسية
-        tabs.addTab(_PricingMainPanel(self.conn), "💰  الأسعار")
-
-        # ② تصنيفات التسعير
-        tabs.addTab(CategoryManager(self.conn, scope="pricing"), "🏷️  التصنيفات")
+        tabs.addTab(_PricingPanel(self.conn),                       "💰  الأسعار")
+        tabs.addTab(CategoryManager(self.conn, scope="final"),      "🏷️  التصنيفات")
 
         root.addWidget(tabs)
 

@@ -1,19 +1,16 @@
 """
 ui/tabs/pricing_section.py
 ==========================
-قسم "التسعير" — يحتوي على تبويبات داخلية:
-  💰 الأسعار الأساسية (وبداخله: الأسعار + التصنيفات)
-
-ملاحظة:
-  تبويب التصنيفات بات موجوداً داخل PricingTab مباشرة،
-  بنفس نمط ProductTab — لا يوجد تغيير مطلوب في هذا الملف
-  إلا لو أردت إضافة تبويبات جديدة على مستوى القسم.
+قسم "التسعير" — تبويبات داخلية:
+  💰 الأسعار الأساسية
+  🎁 العروض
 """
 
 from PyQt5.QtWidgets import QWidget, QVBoxLayout, QTabWidget, QLabel
 from PyQt5.QtCore    import Qt
 
 from ui.tabs.pricing_tab import PricingTab
+from ui.tabs.offers_tab  import OffersTab
 
 _TAB_STYLE = """
     QTabWidget::pane {
@@ -70,8 +67,7 @@ class PricingSection(QWidget):
         tabs.setTabPosition(QTabWidget.North)
         tabs.setStyleSheet(_TAB_STYLE)
 
-        # PricingTab نفسه بقى يحتوي على تبويبين داخليين:
-        #   ① الأسعار  ② التصنيفات
         tabs.addTab(PricingTab(), "💰  الأسعار الأساسية")
+        tabs.addTab(OffersTab(),  "🎁  العروض")
 
         layout.addWidget(tabs)

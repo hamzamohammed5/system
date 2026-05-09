@@ -1,7 +1,5 @@
 """
-ui/tabs/product_tab.py
-======================
-تبويب المنتجات (نصف مصنع أو نهائي) — ثلاثة أقسام قابلة للسحب.
+ui/tabs/product_tab.py — مع FilterBar على جدول المنتجات
 """
 
 from PyQt5.QtWidgets import (
@@ -28,6 +26,7 @@ from ui.helpers         import (
 from ui.widgets.component_row    import ComponentRow
 from ui.widgets.bom_tree         import BomTree
 from ui.widgets.category_manager import CategoryManager, CategoryCombo
+from ui.widgets.filter_bar       import FilterBar
 from ui.events import bus
 
 _TYPE_AR = {
@@ -56,42 +55,29 @@ _SPLITTER_STYLE = """
 # ══════════════════════════════════════════════════════════
 
 def _catalog_for_component_row(conn) -> dict:
-    """
-    يرجع dict بالشكل المتوافق مع component_row._build_grouped_items:
-      entry = (id, name, cat_id, cat_name)   ← entry[3] = cat_name
-    """
     result: dict[str, list] = {
         "raw": [], "semi": [], "labor_op": [], "machine_op": []
     }
-
     for row in fetch_items_by_type(conn, "raw"):
         result["raw"].append((
-            row["id"], row["name"],
-            row["category_id"],
+            row["id"], row["name"], row["category_id"],
             row["category_name"] or None,
         ))
-
     for row in fetch_items_by_type(conn, "semi"):
         result["semi"].append((
-            row["id"], row["name"],
-            row["category_id"],
+            row["id"], row["name"], row["category_id"],
             row["category_name"] or None,
         ))
-
     for op in fetch_all_labor_ops(conn):
         result["labor_op"].append((
-            op["id"], op["name"],
-            op["category_id"],
+            op["id"], op["name"], op["category_id"],
             op["category_name"] or None,
         ))
-
     for op in fetch_all_machine_ops(conn):
         result["machine_op"].append((
-            op["id"], op["name"],
-            op["category_id"],
+            op["id"], op["name"], op["category_id"],
             op["category_name"] or None,
         ))
-
     return result
 
 
@@ -150,7 +136,6 @@ class _FormPanel(QWidget):
         top.addWidget(self.btn_cancel)
         root.addLayout(top)
 
-        # رؤوس الأعمدة
         headers = QWidget()
         hlay = QHBoxLayout(headers)
         hlay.setContentsMargins(0, 0, 0, 0)
@@ -197,7 +182,6 @@ class _FormPanel(QWidget):
         )
         if row.is_orphan() and orphan_name:
             row.set_orphan_name(orphan_name)
-
         row.removed.connect(self._remove_row)
         self.rows_layout.insertWidget(self.rows_layout.count() - 1, row)
         QTimer.singleShot(0, row.refresh_catalog)
@@ -229,36 +213,25 @@ class _FormPanel(QWidget):
         item = fetch_item(self.conn, pid)
         if not item:
             return
-
         self.clear_rows()
         self.inp_name.setText(item["name"])
         self.cmb_category.set_category(item["category_id"])
-
         bom = fetch_bom(self.conn, pid)
-
         orphans_raw = fetch_orphan_bom_rows(self.conn, pid)
         orphan_names: dict[tuple, str | None] = {
             (o["child_type"], o["child_id"]): o["child_name"]
             for o in orphans_raw
         }
-
         for child_type, child_id, qty in (bom or []):
             o_name = orphan_names.get((child_type, child_id))
-            self._add_row(
-                child_type=child_type,
-                child_id=child_id,
-                qty=qty,
-                orphan_name=o_name,
-            )
-
+            self._add_row(child_type=child_type, child_id=child_id,
+                          qty=qty, orphan_name=o_name)
         if not bom:
             self._add_row()
-
         n = len(orphan_names)
         label = (
             f"─── تعديل: {item['name']}  ⚠️ {n} مكوّن ناقص ───"
-            if n else
-            f"─── تعديل: {item['name']} ───"
+            if n else f"─── تعديل: {item['name']} ───"
         )
         self.enter_edit_mode(pid, label)
         self.inp_name.setFocus()
@@ -286,9 +259,8 @@ class _FormPanel(QWidget):
         else:
             pid = insert_item(self.conn, name, self.product_type, 0,
                             category_id=self.cmb_category.get_category())
-            for ct, cid, qty, _raw_total_qty in rows:   # ← 4 عناصر
+            for ct, cid, qty, _raw_total_qty in rows:
                 insert_bom_row(self.conn, pid, ct, cid, qty)
-
         self.conn.commit()
         self.reset()
         QTimer.singleShot(0, bus.data_changed.emit)
@@ -310,7 +282,7 @@ class _FormPanel(QWidget):
 
 
 # ══════════════════════════════════════════════════════════
-# جدول المنتجات
+# جدول المنتجات — مع FilterBar
 # ══════════════════════════════════════════════════════════
 
 class _ProductTable(QWidget):
@@ -321,6 +293,8 @@ class _ProductTable(QWidget):
         self._on_select   = on_select
         self._on_edit     = on_edit
         self._on_delete   = on_delete
+        self._all_rows    = []
+        self._scope       = _PRODUCT_SCOPE.get(product_type, product_type)
         self._build()
         self._load()
         bus.data_changed.connect(self._load)
@@ -331,6 +305,11 @@ class _ProductTable(QWidget):
         root.setSpacing(6)
 
         root.addWidget(section_label("─── المنتجات المحفوظة ───"))
+
+        # ── شريط الفلتر ──
+        self._filter = FilterBar(self.conn, scope=self._scope)
+        self._filter.filter_changed.connect(self._apply_filter)
+        root.addWidget(self._filter)
 
         self.table = make_table(["ID", "الاسم", "التصنيف", "التكلفة"], stretch_col=1)
         hh = self.table.horizontalHeader()
@@ -357,10 +336,18 @@ class _ProductTable(QWidget):
         return int(self.table.item(row, 0).text()) if row >= 0 else None
 
     def _load(self):
+        self._all_rows = list(fetch_items_by_type(self.conn, self.product_type))
+        self._apply_filter()
+
+    def _apply_filter(self):
         prev = self.selected_pid()
         self.table.setRowCount(0)
-        for r, row in enumerate(fetch_items_by_type(self.conn, self.product_type)):
+        shown = 0
+        for row in self._all_rows:
+            if not self._filter.match(row["name"], row["category_id"]):
+                continue
             cost = calc_cost(self.conn, row["id"])
+            r = self.table.rowCount()
             self.table.insertRow(r)
             self.table.setItem(r, 0, QTableWidgetItem(str(row["id"])))
             self.table.setItem(r, 1, QTableWidgetItem(row["name"]))
@@ -368,6 +355,9 @@ class _ProductTable(QWidget):
                 row["category_name"] if row["category_name"] else "—"
             ))
             self.table.setItem(r, 3, QTableWidgetItem(f"{cost:.4f}"))
+            shown += 1
+        self._filter.set_count(shown, len(self._all_rows))
+        # استعادة التحديد
         if prev is not None:
             for r in range(self.table.rowCount()):
                 if int(self.table.item(r, 0).text()) == prev:
@@ -434,8 +424,8 @@ class _WarningBar(QFrame):
             return
         lines = []
         for o in orphans:
-            type_ar = _TYPE_AR.get(o["child_type"], o["child_type"])
-            display = o["child_name"] or f"ID: {o['child_id']}"
+            type_ar  = _TYPE_AR.get(o["child_type"], o["child_type"])
+            display  = o["child_name"] or f"ID: {o['child_id']}"
             lines.append(f"• {type_ar}: «{display}»")
         msg = f"«{product_name}» — {len(orphans)} مكوّن محذوف:\n" + "  ".join(lines)
         self._lbl.setText(msg)
@@ -537,8 +527,7 @@ class _ProductMainPanel(QWidget):
             return
         orphans = fetch_orphan_bom_rows(self.conn, pid)
         orphan_names = [
-            o["child_name"] or f"ID:{o['child_id']}"
-            for o in orphans
+            o["child_name"] or f"ID:{o['child_id']}" for o in orphans
         ]
         item = fetch_item(self.conn, pid)
         prod_name = item["name"] if item else f"ID {pid}"

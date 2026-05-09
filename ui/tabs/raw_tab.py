@@ -1,10 +1,6 @@
 """
-ui/tabs/raw_tab.py  (النسخة المعدَّلة — مع زر الاستبدال الشامل)
+ui/tabs/raw_tab.py
 ==================
-التغييرات:
-  • فورم الخامة: حقل "الكمية الإجمالية" جديد
-  • جدول الخامات: عمودان جديدان "الكمية الكلية" و"سعر الوحدة"
-  • زر "🔄 استبدال شامل" يفتح BulkReplaceDialog للخامة المحددة
 """
 
 from PyQt5.QtCore    import Qt
@@ -27,6 +23,7 @@ from ui.helpers import (
 )
 from ui.widgets.category_manager import CategoryCombo, CategoryManager
 from ui.widgets.bulk_replace_dialog import BulkReplaceDialog
+from ui.widgets.filter_bar import FilterBar
 from ui.events import bus
 
 _SPLITTER_STYLE = """
@@ -220,16 +217,22 @@ class _TablePanel(QWidget):
         super().__init__(parent)
         self.conn         = conn
         self._input_panel = input_panel
+        self._all_rows    = []
         self._build()
         self._load()
         bus.data_changed.connect(self._load)
 
     def _build(self):
         root = QVBoxLayout(self)
-        root.setSpacing(8)
+        root.setSpacing(6)
         root.setContentsMargins(12, 8, 12, 12)
 
         root.addWidget(section_label("─── الخامات المحفوظة ───"))
+
+        # ── شريط الفلتر ──
+        self._filter = FilterBar(self.conn, scope="raw")
+        self._filter.filter_changed.connect(self._apply_filter)
+        root.addWidget(self._filter)
 
         self.table = make_table(
             ["ID", "الاسم", "التصنيف", "السعر الكلي", "الكمية الكلية", "سعر الوحدة"]
@@ -246,7 +249,6 @@ class _TablePanel(QWidget):
         self.table.setAlternatingRowColors(True)
         root.addWidget(self.table)
 
-        # ── أزرار التحكم ──
         btn_edit    = QPushButton("✏️  تعديل المحدد")
         btn_del     = danger_button("🗑️  حذف المحدد")
         btn_replace = QPushButton("🔄  استبدال شامل")
@@ -254,16 +256,13 @@ class _TablePanel(QWidget):
             "QPushButton { background:#e65100; color:white; border-radius:4px;"
             "padding:4px 10px; font-weight:bold; }"
             "QPushButton:hover { background:#bf360c; }"
-            "QPushButton:disabled { background:#bdbdbd; }"
         )
-
         for btn in (btn_edit, btn_del, btn_replace):
             btn.setMinimumHeight(30)
 
         btn_edit.clicked.connect(self._edit)
         btn_del.clicked.connect(self._delete)
         btn_replace.clicked.connect(self._bulk_replace)
-
         root.addLayout(buttons_row(btn_edit, btn_del, btn_replace))
 
     def _selected_id_and_name(self):
@@ -299,36 +298,38 @@ class _TablePanel(QWidget):
             QMessageBox.information(self, "تنبيه", "اختر خامة من الجدول أولاً")
             return
         dlg = BulkReplaceDialog(
-            conn       = self.conn,
-            child_type = "raw",
-            child_id   = item_id,
-            child_name = item_name,
-            parent     = self,
+            conn=self.conn, child_type="raw",
+            child_id=item_id, child_name=item_name, parent=self,
         )
         dlg.exec_()
 
     def _load(self):
+        self._all_rows = list(fetch_items_by_type(self.conn, "raw"))
+        self._apply_filter()
+
+    def _apply_filter(self):
         self.table.setRowCount(0)
-        for r, row in enumerate(fetch_items_by_type(self.conn, "raw")):
+        shown = 0
+        for row in self._all_rows:
+            if not self._filter.match(row["name"], row["category_id"]):
+                continue
             tq    = row["total_qty"]
             price = row["price"]
             unit  = raw_unit_price(row)
-
+            r = self.table.rowCount()
             self.table.insertRow(r)
             self.table.setItem(r, 0, QTableWidgetItem(str(row["id"])))
             self.table.setItem(r, 1, QTableWidgetItem(row["name"]))
-            self.table.setItem(r, 2, QTableWidgetItem(
-                row["category_name"] if row["category_name"] else "—"
-            ))
+            self.table.setItem(r, 2, QTableWidgetItem(row["category_name"] or "—"))
             self.table.setItem(r, 3, QTableWidgetItem(f"{price:.2f}"))
-            self.table.setItem(r, 4, QTableWidgetItem(
-                str(tq) if tq is not None else "—"
-            ))
+            self.table.setItem(r, 4, QTableWidgetItem(str(tq) if tq is not None else "—"))
             self.table.setItem(r, 5, QTableWidgetItem(f"{unit:.4f}"))
+            shown += 1
+        self._filter.set_count(shown, len(self._all_rows))
 
 
 # ══════════════════════════════════════════════════════════
-# تبويب الخامات الرئيسي
+# التبويبات
 # ══════════════════════════════════════════════════════════
 
 class _RawItemsTab(QWidget):
@@ -352,10 +353,6 @@ class _RawItemsTab(QWidget):
         root.addWidget(splitter)
 
 
-# ══════════════════════════════════════════════════════════
-# التبويب الرئيسي
-# ══════════════════════════════════════════════════════════
-
 class RawTab(QWidget):
     def __init__(self, parent=None):
         super().__init__(parent)
@@ -370,7 +367,6 @@ class RawTab(QWidget):
         tabs = QTabWidget()
         tabs.addTab(_RawItemsTab(self.conn),                  "📦  الخامات")
         tabs.addTab(CategoryManager(self.conn, scope="raw"),  "🏷️  التصنيفات")
-
         root.addWidget(tabs)
 
     def closeEvent(self, event):

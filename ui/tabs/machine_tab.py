@@ -1,10 +1,5 @@
 """
 ui/tabs/machine_tab.py
-======================
-تبويب التشغيل — تبويبات متداخلة:
-  ① الماكينات
-  ② عمليات التشغيل  (مع زر "استبدال شامل")
-  ③ تصنيفات التشغيل
 """
 
 from PyQt5.QtCore    import Qt
@@ -12,7 +7,7 @@ from PyQt5.QtWidgets import (
     QWidget, QVBoxLayout, QHBoxLayout, QFormLayout, QTabWidget,
     QLineEdit, QPushButton, QTableWidgetItem, QSplitter,
     QDoubleSpinBox, QLabel, QMessageBox, QGroupBox,
-    QComboBox, QHeaderView, QRadioButton, QButtonGroup,
+    QComboBox, QHeaderView, QRadioButton,
 )
 
 from db.connection      import get_connection
@@ -29,6 +24,7 @@ from ui.helpers import (
 )
 from ui.widgets.category_manager import CategoryCombo, CategoryManager
 from ui.widgets.bulk_replace_dialog import BulkReplaceDialog
+from ui.widgets.filter_bar import FilterBar
 from ui.events import bus
 
 _SPLITTER_STYLE = """
@@ -151,8 +147,9 @@ class _MachineForm(QWidget, EditModeMixin):
 class _MachineTable(QWidget):
     def __init__(self, conn, form: _MachineForm, parent=None):
         super().__init__(parent)
-        self.conn  = conn
-        self._form = form
+        self.conn      = conn
+        self._form     = form
+        self._all_rows = []
         self._build()
         self._load()
         bus.data_changed.connect(self._load)
@@ -162,6 +159,10 @@ class _MachineTable(QWidget):
         root.setContentsMargins(12, 8, 12, 12)
         root.setSpacing(6)
         root.addWidget(section_label("─── الماكينات المحفوظة ───"))
+
+        self._filter = FilterBar(self.conn, scope="machine")
+        self._filter.filter_changed.connect(self._apply_filter)
+        root.addWidget(self._filter)
 
         self.table = make_table(
             ["ID", "الاسم", "التصنيف", "جنيه/ساعة", "جنيه/وحدة"],
@@ -206,14 +207,24 @@ class _MachineTable(QWidget):
             bus.data_changed.emit()
 
     def _load(self):
+        self._all_rows = list(fetch_all_machines(self.conn))
+        self._apply_filter()
+
+    def _apply_filter(self):
         self.table.setRowCount(0)
-        for r, m in enumerate(fetch_all_machines(self.conn)):
+        shown = 0
+        for m in self._all_rows:
+            if not self._filter.match(m["name"], m["category_id"]):
+                continue
+            r = self.table.rowCount()
             self.table.insertRow(r)
             self.table.setItem(r, 0, QTableWidgetItem(str(m["id"])))
             self.table.setItem(r, 1, QTableWidgetItem(m["name"]))
             self.table.setItem(r, 2, QTableWidgetItem(m["category_name"] or "—"))
             self.table.setItem(r, 3, QTableWidgetItem(f"{m['rate_per_hour']:.2f}"))
             self.table.setItem(r, 4, QTableWidgetItem(f"{m['rate_per_unit']:.2f}"))
+            shown += 1
+        self._filter.set_count(shown, len(self._all_rows))
 
 
 class _MachinesTab(QWidget):
@@ -222,15 +233,12 @@ class _MachinesTab(QWidget):
         splitter = QSplitter(Qt.Vertical)
         splitter.setHandleWidth(6)
         splitter.setStyleSheet(_SPLITTER_STYLE)
-
         form  = _MachineForm(conn)
         table = _MachineTable(conn, form)
-
         splitter.addWidget(form)
         splitter.addWidget(table)
         splitter.setSizes([260, 380])
         splitter.setCollapsible(0, True)
-
         root = QVBoxLayout(self)
         root.setContentsMargins(0, 0, 0, 0)
         root.addWidget(splitter)
@@ -267,12 +275,10 @@ class _MachineOpForm(QWidget, EditModeMixin):
         self.inp_name.setPlaceholderText("مثال: خياطة غرزة، كبس...")
         self.inp_name.setMinimumHeight(30)
 
-        # ── اختيار الماكينة ──
         self.cmb_machine = QComboBox()
         self.cmb_machine.setMinimumHeight(30)
         self.cmb_machine.currentIndexChanged.connect(self._update_preview)
 
-        # ── وضع الحساب ──
         mode_row = QHBoxLayout()
         self.rdo_time = QRadioButton("⏱ بالوقت (دقيقة)")
         self.rdo_unit = QRadioButton("📦 بالوحدة")
@@ -302,7 +308,7 @@ class _MachineOpForm(QWidget, EditModeMixin):
             "background:#f0faf0; border:1px solid #b2dfb2; border-radius:4px; padding:4px 8px;"
         )
 
-        # نملأ الماكينات هنا بعد تعريف lbl_cost
+        # نملأ الماكينات بعد تعريف lbl_cost
         self._refresh_machines()
 
         form.addRow("اسم العملية :", self.inp_name)
@@ -330,7 +336,6 @@ class _MachineOpForm(QWidget, EditModeMixin):
         self.cmb_machine.clear()
         for m in fetch_all_machines(self.conn):
             self.cmb_machine.addItem(f"{m['id']} — {m['name']}", m["id"])
-        # استعادة الاختيار السابق
         for i in range(self.cmb_machine.count()):
             if self.cmb_machine.itemData(i) == prev:
                 self.cmb_machine.setCurrentIndex(i)
@@ -366,7 +371,6 @@ class _MachineOpForm(QWidget, EditModeMixin):
         if not op:
             return
         self.inp_name.setText(op["name"])
-        # اختار الماكينة
         for i in range(self.cmb_machine.count()):
             if self.cmb_machine.itemData(i) == op["machine_id"]:
                 self.cmb_machine.setCurrentIndex(i)
@@ -428,8 +432,9 @@ class _MachineOpForm(QWidget, EditModeMixin):
 class _MachineOpTable(QWidget):
     def __init__(self, conn, form: _MachineOpForm, parent=None):
         super().__init__(parent)
-        self.conn  = conn
-        self._form = form
+        self.conn      = conn
+        self._form     = form
+        self._all_rows = []
         self._build()
         self._load()
         bus.data_changed.connect(self._load)
@@ -439,6 +444,10 @@ class _MachineOpTable(QWidget):
         root.setContentsMargins(12, 8, 12, 12)
         root.setSpacing(6)
         root.addWidget(section_label("─── عمليات التشغيل المحفوظة ───"))
+
+        self._filter = FilterBar(self.conn, scope="machine")
+        self._filter.filter_changed.connect(self._apply_filter)
+        root.addWidget(self._filter)
 
         self.table = make_table(
             ["ID", "اسم العملية", "التصنيف", "الماكينة", "الوضع", "القيمة", "التكلفة"],
@@ -464,7 +473,6 @@ class _MachineOpTable(QWidget):
             "padding:4px 10px; font-weight:bold; }"
             "QPushButton:hover { background:#bf360c; }"
         )
-
         for btn in (btn_edit, btn_del, btn_replace):
             btn.setMinimumHeight(30)
 
@@ -501,19 +509,24 @@ class _MachineOpTable(QWidget):
         op_id   = int(self.table.item(row, 0).text())
         op_name = self.table.item(row, 1).text()
         dlg = BulkReplaceDialog(
-            conn       = self.conn,
-            child_type = "machine_op",
-            child_id   = op_id,
-            child_name = op_name,
-            parent     = self,
+            conn=self.conn, child_type="machine_op",
+            child_id=op_id, child_name=op_name, parent=self,
         )
         dlg.exec_()
 
     def _load(self):
+        self._all_rows = list(fetch_all_machine_ops(self.conn))
+        self._apply_filter()
+
+    def _apply_filter(self):
         self.table.setRowCount(0)
-        for r, op in enumerate(fetch_all_machine_ops(self.conn)):
-            cost = calc_machine_op_cost(self.conn, op["id"])
+        shown = 0
+        for op in self._all_rows:
+            if not self._filter.match(op["name"], op["category_id"]):
+                continue
+            cost    = calc_machine_op_cost(self.conn, op["id"])
             mode_ar = "وقت" if op["mode"] == "time" else "وحدة"
+            r = self.table.rowCount()
             self.table.insertRow(r)
             self.table.setItem(r, 0, QTableWidgetItem(str(op["id"])))
             self.table.setItem(r, 1, QTableWidgetItem(op["name"]))
@@ -522,6 +535,8 @@ class _MachineOpTable(QWidget):
             self.table.setItem(r, 4, QTableWidgetItem(mode_ar))
             self.table.setItem(r, 5, QTableWidgetItem(f"{op['value']:.4f}"))
             self.table.setItem(r, 6, QTableWidgetItem(f"{cost:.2f} جنيه"))
+            shown += 1
+        self._filter.set_count(shown, len(self._all_rows))
 
 
 class _MachineOpsTab(QWidget):
@@ -530,23 +545,16 @@ class _MachineOpsTab(QWidget):
         splitter = QSplitter(Qt.Vertical)
         splitter.setHandleWidth(6)
         splitter.setStyleSheet(_SPLITTER_STYLE)
-
         form  = _MachineOpForm(conn)
         table = _MachineOpTable(conn, form)
-
         splitter.addWidget(form)
         splitter.addWidget(table)
         splitter.setSizes([300, 400])
         splitter.setCollapsible(0, True)
-
         root = QVBoxLayout(self)
         root.setContentsMargins(0, 0, 0, 0)
         root.addWidget(splitter)
 
-
-# ══════════════════════════════════════════════════════════
-# التبويب الرئيسي
-# ══════════════════════════════════════════════════════════
 
 class MachineTab(QWidget):
     def __init__(self, parent=None):
