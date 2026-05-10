@@ -6,7 +6,7 @@ LedgerTab — دفتر الأستاذ (حسابات T).
 
 from PyQt5.QtWidgets import (
     QWidget, QHBoxLayout, QVBoxLayout, QSplitter,
-    QTreeWidget, QTreeWidgetItem, QFrame,
+    QTreeWidget, QTreeWidgetItem, QTableWidgetItem, QFrame,  # ← أضف QTableWidgetItem هنا
     QLabel, QLineEdit, QHeaderView,
 )
 from PyQt5.QtCore import Qt
