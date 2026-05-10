@@ -260,6 +260,7 @@ class _LaborOpTable(QWidget):
             stretch_col=1
         )
         hh = self.table.horizontalHeader()
+        hh.setSectionResizeMode(QHeaderView.Fixed)
         self.table.setColumnWidth(0, 40)
         self.table.setColumnWidth(1, 160)
         self.table.setColumnWidth(2, 110)

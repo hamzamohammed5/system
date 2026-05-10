@@ -229,24 +229,22 @@ class _TablePanel(QWidget):
 
         root.addWidget(section_label("─── الخامات المحفوظة ───"))
 
-        # ── شريط الفلتر ──
         self._filter = FilterBar(self.conn, scope="raw")
         self._filter.filter_changed.connect(self._apply_filter)
         root.addWidget(self._filter)
 
+        # ✅ make_table بدون setSectionResizeMode(Fixed) بعده
         self.table = make_table(
-            ["ID", "الاسم", "التصنيف", "السعر الكلي", "الكمية الكلية", "سعر الوحدة"]
+            ["ID", "الاسم", "التصنيف", "السعر الكلي", "الكمية الكلية", "سعر الوحدة"],
+            stretch_col=1,
         )
-        hh = self.table.horizontalHeader()
-        hh.setSectionResizeMode(QHeaderView.Fixed)
-        self.table.setColumnWidth(0, 40)
-        self.table.setColumnWidth(1, 160)
-        self.table.setColumnWidth(2, 100)
-        self.table.setColumnWidth(3, 85)
-        self.table.setColumnWidth(4, 85)
-        self.table.setColumnWidth(5, 90)
-        hh.setSectionResizeMode(1, QHeaderView.Stretch)
-        self.table.setAlternatingRowColors(True)
+        # عرض الأعمدة بـ setColumnWidth فقط
+        self.table.setColumnWidth(0, 45)
+        self.table.setColumnWidth(2, 110)
+        self.table.setColumnWidth(3, 90)
+        self.table.setColumnWidth(4, 90)
+        self.table.setColumnWidth(5, 95)
+
         root.addWidget(self.table)
 
         btn_edit    = QPushButton("✏️  تعديل المحدد")

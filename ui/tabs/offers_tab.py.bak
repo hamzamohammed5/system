@@ -631,7 +631,7 @@ class _OfferDetails(QFrame):
         hh.setSectionResizeMode(0, QHeaderView.Stretch)
         col_widths = {1: 90, 2: 55, 3: 80, 4: 75, 5: 90, 6: 80}
         for col, w in col_widths.items():
-            hh.setSectionResizeMode(col, QHeaderView.Interactive)
+            hh.setSectionResizeMode(col, QHeaderView.Fixed)
             self.table.setColumnWidth(col, w)
         self.table.setMinimumHeight(120)
         root.addWidget(self.table, stretch=1)
@@ -761,6 +761,7 @@ class _OffersTable(QWidget):
             stretch_col=1
         )
         hh = self.table.horizontalHeader()
+        hh.setSectionResizeMode(QHeaderView.Fixed)
         self.table.setColumnWidth(0, 35)
         self.table.setColumnWidth(1, 140)
         self.table.setColumnWidth(2, 90)

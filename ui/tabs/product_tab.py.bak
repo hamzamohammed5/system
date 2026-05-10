@@ -313,6 +313,7 @@ class _ProductTable(QWidget):
 
         self.table = make_table(["ID", "الاسم", "التصنيف", "التكلفة"], stretch_col=1)
         hh = self.table.horizontalHeader()
+        hh.setSectionResizeMode(QHeaderView.Fixed)
         self.table.setColumnWidth(0, 45)
         self.table.setColumnWidth(1, 220)
         self.table.setColumnWidth(2, 110)

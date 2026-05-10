@@ -1389,13 +1389,13 @@ class _JournalTreeTable(QWidget):
 
         hh = self.table.horizontalHeader()
         # التاريخ عمود مستقل بعرض ثابت
-        hh.setSectionResizeMode(0, QHeaderView.Interactive)   # #
-        hh.setSectionResizeMode(1, QHeaderView.Interactive)   # التاريخ
-        hh.setSectionResizeMode(2, QHeaderView.Interactive)   # رقم القيد
+        hh.setSectionResizeMode(0, QHeaderView.Fixed)   # #
+        hh.setSectionResizeMode(1, QHeaderView.Fixed)   # التاريخ
+        hh.setSectionResizeMode(2, QHeaderView.Fixed)   # رقم القيد
         hh.setSectionResizeMode(3, QHeaderView.Stretch) # البيان
-        hh.setSectionResizeMode(4, QHeaderView.Interactive)   # DR
-        hh.setSectionResizeMode(5, QHeaderView.Interactive)   # CR
-        hh.setSectionResizeMode(6, QHeaderView.Interactive)   # الحالة
+        hh.setSectionResizeMode(4, QHeaderView.Fixed)   # DR
+        hh.setSectionResizeMode(5, QHeaderView.Fixed)   # CR
+        hh.setSectionResizeMode(6, QHeaderView.Fixed)   # الحالة
 
         self.table.setColumnWidth(0, 28)
         self.table.setColumnWidth(1, 92)   # التاريخ

@@ -1,21 +1,89 @@
 """
-ui/helpers.py (محدَّث)
+ui/helpers.py
 =============
-أدوات UI مشتركة — مع دعم كامل لعرض النصوص flexible.
+أدوات UI مشتركة — مع دعم كامل لعرض النصوص وتعديل عرض الأعمدة.
 
 التغييرات:
-  - make_table: الآن يدعم word-wrap وtooltip تلقائي
-  - FlexItem: QTableWidgetItem مع tooltip تلقائي
-  - باقي الكود بدون تغيير
+  - make_table: الأعمدة Interactive بالكامل (قابلة للسحب)، stretch_col فقط Stretch
+  - word-wrap حقيقي عبر WrapDelegate على كل الأعمدة
+  - tooltip تلقائي لأي نص أطول من عرض الخلية
+  - ارتفاع الصف يتمدد تلقائياً
 """
 
 from PyQt5.QtWidgets import (
     QPushButton, QLabel, QHBoxLayout, QWidget,
     QTableWidget, QHeaderView, QMessageBox,
     QAbstractItemView, QSizePolicy,
+    QStyledItemDelegate, QStyle, QApplication,
 )
-from PyQt5.QtGui import QFont
-from PyQt5.QtCore import Qt
+from PyQt5.QtGui import QFont, QTextOption, QFontMetrics
+from PyQt5.QtCore import Qt, QSize, QRect
+
+
+# ══════════════════════════════════════════════════════════
+# WrapDelegate — عرض النص بـ word-wrap مع tooltip تلقائي
+# ══════════════════════════════════════════════════════════
+
+class WrapDelegate(QStyledItemDelegate):
+    """
+    Delegate بيعمل word-wrap تلقائي في خلايا الجدول.
+    يُستخدم مع setItemDelegate لتطبيقه على الجدول كله.
+    """
+    def __init__(self, parent=None, min_row_height: int = 28, padding: int = 6):
+        super().__init__(parent)
+        self._min_row_height = min_row_height
+        self._padding        = padding
+
+    def paint(self, painter, option, index):
+        painter.save()
+        self.initStyleOption(option, index)
+        style = option.widget.style() if option.widget else QApplication.style()
+        style.drawPrimitive(QStyle.PE_PanelItemViewItem, option, painter, option.widget)
+
+        text = index.data(Qt.DisplayRole)
+        if text is None:
+            text = ""
+        text = str(text)
+
+        rect = option.rect.adjusted(self._padding, 2, -self._padding, -2)
+
+        if option.state & QStyle.State_Selected:
+            painter.setPen(option.palette.highlightedText().color())
+        else:
+            fg = index.data(Qt.ForegroundRole)
+            if fg:
+                try:
+                    painter.setPen(fg.color() if hasattr(fg, 'color') else fg)
+                except Exception:
+                    painter.setPen(option.palette.text().color())
+            else:
+                painter.setPen(option.palette.text().color())
+
+        painter.setFont(option.font)
+        painter.drawText(
+            QRect(rect),
+            Qt.AlignRight | Qt.AlignVCenter | Qt.TextWordWrap,
+            text
+        )
+        painter.restore()
+
+    def sizeHint(self, option, index):
+        text = index.data(Qt.DisplayRole)
+        if text is None:
+            text = ""
+        text = str(text)
+
+        fm        = QFontMetrics(option.font)
+        col_width = option.rect.width() if option.rect.isValid() else 150
+        text_width = max(col_width - self._padding * 2, 80)
+
+        text_rect = fm.boundingRect(
+            0, 0, text_width, 9999,
+            Qt.AlignRight | Qt.AlignTop | Qt.TextWordWrap,
+            text
+        )
+        height = max(self._min_row_height, text_rect.height() + 8)
+        return QSize(col_width, height)
 
 
 # ══════════════════════════════════════════════════════════
@@ -44,98 +112,88 @@ def danger_button(text: str) -> QPushButton:
 
 def success_button(text: str) -> QPushButton:
     btn = QPushButton(text)
-    btn.setStyleSheet("background:#27ae60; color:white; font-weight:bold; padding:4px 14px;")
+    btn.setStyleSheet(
+        "background:#27ae60; color:white; font-weight:bold; padding:4px 14px;"
+    )
     return btn
 
 
 # ══════════════════════════════════════════════════════════
-# الجداول — مع tooltip تلقائي وعرض مرن
+# make_table — الجدول الموحد
 # ══════════════════════════════════════════════════════════
 
-def _install_tooltip_delegate(table: QTableWidget):
-    """
-    يضيف tooltip تلقائي لأي خلية نصها أطول من عرضها.
-    """
-    def _update_tooltips():
-        for r in range(table.rowCount()):
-            for c in range(table.columnCount()):
-                item = table.item(r, c)
-                if item and item.text() and not item.toolTip():
-                    item.setToolTip(item.text())
-
-    table.model().dataChanged.connect(lambda *_: _update_tooltips())
-    table.model().rowsInserted.connect(lambda *_: _update_tooltips())
-
-
-def make_table(columns: list[str],
-               stretch_col: int = -1,
-               wrap_cols: list[int] = None,
-               min_row_height: int = 30) -> QTableWidget:
+def make_table(
+    columns: list,
+    stretch_col: int = -1,
+    min_row_height: int = 30,
+) -> QTableWidget:
     """
     إنشاء جدول جاهز بإعدادات موحدة:
-    - word-wrap في الأعمدة المحددة (wrap_cols) أو كلها
-    - ارتفاع الصف يتمدد تلقائيًا حسب المحتوى
-    - tooltip تلقائي بالنص الكامل عند hover
-    - scroll أفقي ورأسي
 
-    wrap_cols: list أرقام الأعمدة، None = بدون word-wrap (للتوافق مع الكود القديم)
+    - كل الأعمدة Interactive (قابلة للسحب يمين/يسار).
+    - stretch_col: العمود اللي يتمدد ليملأ المساحة الباقية (الاسم عادةً).
+    - word-wrap حقيقي في كل الخلايا عبر WrapDelegate.
+    - ارتفاع الصف يتمدد تلقائياً حسب المحتوى.
+    - tooltip تلقائي على كل خلية.
+    - scroll أفقي ورأسي.
+
+    ملاحظة: لا تستدعي setSectionResizeMode(Fixed) بعد make_table،
+    لأنها ستلغي إمكانية السحب.  استخدم setColumnWidth بدلاً.
     """
-    from PyQt5.QtWidgets import QStyledItemDelegate
-    from PyQt5.QtCore import QRect
-    from PyQt5.QtGui import QTextOption, QPainter
-
     table = QTableWidget()
     table.setColumnCount(len(columns))
     table.setHorizontalHeaderLabels(columns)
     table.setSelectionBehavior(QAbstractItemView.SelectRows)
     table.setEditTriggers(QAbstractItemView.NoEditTriggers)
     table.setWordWrap(True)
+    table.setAlternatingRowColors(True)
 
     hh = table.horizontalHeader()
     vh = table.verticalHeader()
 
-    # ارتفاع الصف يتمدد تلقائيًا
+    # ── ارتفاع الصف تلقائي ──
     vh.setSectionResizeMode(QHeaderView.ResizeToContents)
     vh.setDefaultSectionSize(min_row_height)
     vh.setMinimumSectionSize(min_row_height)
+    vh.setVisible(False)
 
-    if stretch_col >= 0:
-        for i in range(len(columns)):
-            if i == stretch_col:
-                hh.setSectionResizeMode(i, QHeaderView.Stretch)
-            else:
-                hh.setSectionResizeMode(i, QHeaderView.Interactive)
-    else:
-        for i in range(len(columns)):
+    # ── أعمدة Interactive مع stretch اختياري ──
+    for i in range(len(columns)):
+        if i == stretch_col:
+            hh.setSectionResizeMode(i, QHeaderView.Stretch)
+        else:
             hh.setSectionResizeMode(i, QHeaderView.Interactive)
+
+    if stretch_col < 0:
         hh.setStretchLastSection(True)
 
     hh.setMinimumSectionSize(40)
     hh.setDefaultSectionSize(100)
     hh.setDefaultAlignment(Qt.AlignRight | Qt.AlignVCenter)
 
+    # ── Scroll ──
     table.setHorizontalScrollMode(QAbstractItemView.ScrollPerPixel)
     table.setVerticalScrollMode(QAbstractItemView.ScrollPerPixel)
 
-    # تطبيق word-wrap delegate لو محدد
-    if wrap_cols is not None:
-        from ui.widgets.flexible_text import WrapDelegate
-        wrap_delegate = WrapDelegate(table, min_row_height=min_row_height)
-        for col in wrap_cols:
-            table.setItemDelegateForColumn(col, wrap_delegate)
-
-    # tooltip تلقائي
-    _install_tooltip_delegate(table)
+    # ── WrapDelegate على الجدول كله ──
+    delegate = WrapDelegate(table, min_row_height=min_row_height)
+    table.setItemDelegate(delegate)
 
     return table
 
 
-def setup_table_columns(table: QTableWidget,
-                        widths: dict = None,
-                        stretch_col: int = -1,
-                        min_width: int = 50):
+def setup_table_columns(
+    table: QTableWidget,
+    widths: dict = None,
+    stretch_col: int = -1,
+    min_width: int = 50,
+):
     """
-    إعداد عرض الأعمدة بشكل مرن.
+    إعداد عرض الأعمدة بعد إنشاء الجدول.
+    widths: {col_index: width_px}
+    stretch_col: العمود اللي يتمدد.
+
+    يحافظ على Interactive لباقي الأعمدة.
     """
     hh = table.horizontalHeader()
     n  = table.columnCount()

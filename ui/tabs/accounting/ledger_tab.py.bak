@@ -598,10 +598,10 @@ class _TAccountPanel(QWidget):
         tbl.setAlternatingRowColors(True)
 
         hh = tbl.horizontalHeader()
-        hh.setSectionResizeMode(0, QHeaderView.Interactive)
-        hh.setSectionResizeMode(1, QHeaderView.Interactive)
+        hh.setSectionResizeMode(0, QHeaderView.Fixed)
+        hh.setSectionResizeMode(1, QHeaderView.Fixed)
         hh.setSectionResizeMode(2, QHeaderView.Stretch)
-        hh.setSectionResizeMode(3, QHeaderView.Interactive)
+        hh.setSectionResizeMode(3, QHeaderView.Fixed)
         tbl.setColumnWidth(0, 90)   # التاريخ
         tbl.setColumnWidth(1, 80)   # رقم القيد
         tbl.setColumnWidth(3, 90)   # المبلغ
