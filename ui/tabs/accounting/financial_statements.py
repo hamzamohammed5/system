@@ -1,12 +1,9 @@
 """
 ui/tabs/accounting/financial_statements.py
 ==========================================
-القوائم المالية:
-  - TrialBalanceTab       — ميزان المراجعة
-  - IncomeStatementTab    — قائمة الدخل
-  - OwnersEquityTab       — قائمة حقوق الملكية
-  - BalanceSheetTab       — الميزانية العمومية
-  - FinancialStatementsTab — تبويب يجمعهم
+القوائم المالية — مع إصلاح ميزان المراجعة:
+  - الرصيد يُعرض بالقيمة المطلقة دائماً
+  - اللون يحدد الاتجاه: أزرق = مدين طبيعي، أحمر = دائن طبيعي
 """
 
 from PyQt5.QtWidgets import (
@@ -19,7 +16,7 @@ from PyQt5.QtGui  import QColor
 
 from db.accounting_repo import (
     trial_balance, income_statement, balance_sheet,
-    owners_equity_statement,
+    owners_equity_statement, get_normal_balance,
 )
 from ui.helpers import make_table, setup_table_columns, section_label
 from ui.events  import bus
@@ -44,12 +41,26 @@ class TrialBalanceTab(QWidget):
         root.setSpacing(8)
         root.addWidget(section_label("── ميزان المراجعة ──"))
 
+        # ── legend ──
+        legend = QLabel(
+            "  🔵 مدين (الرصيد الطبيعي DR)     🔴 دائن (الرصيد الطبيعي CR)   "
+            " — القيمة تُعرض دائماً موجبة"
+        )
+        legend.setStyleSheet(
+            "font-size:10px; color:#555; background:#f0f4ff;"
+            "border:1px solid #c5cae9; border-radius:4px; padding:4px 10px;"
+        )
+        root.addWidget(legend)
+
         self.table = make_table(
             ["الكود", "اسم الحساب", "النوع", "مجموع المدين", "مجموع الدائن", "الرصيد"],
-            stretch_col=1
+            stretch_col=1,
         )
-        setup_table_columns(self.table,
-            widths={0: 70, 2: 100, 3: 120, 4: 120, 5: 110}, stretch_col=1)
+        self.table.setColumnWidth(0, 70)
+        self.table.setColumnWidth(2, 100)
+        self.table.setColumnWidth(3, 120)
+        self.table.setColumnWidth(4, 120)
+        self.table.setColumnWidth(5, 110)
         self.table.setAlternatingRowColors(True)
         root.addWidget(self.table, stretch=1)
 
@@ -76,21 +87,45 @@ class TrialBalanceTab(QWidget):
         rows = trial_balance(self.conn)
         self.table.setRowCount(0)
         sd = sc = 0.0
+
         from db.accounting_schema import TYPE_AR
         for row in rows:
             r = self.table.rowCount()
             self.table.insertRow(r)
+
             self.table.setItem(r, 0, QTableWidgetItem(row["code"]))
             ni = QTableWidgetItem(row["name"])
             ni.setToolTip(row["name"])
             self.table.setItem(r, 1, ni)
-            self.table.setItem(r, 2, QTableWidgetItem(TYPE_AR.get(row["type"], row["type"])))
-            self.table.setItem(r, 3, QTableWidgetItem(f"{row['total_debit']:,.2f}"))
-            self.table.setItem(r, 4, QTableWidgetItem(f"{row['total_credit']:,.2f}"))
-            bi = QTableWidgetItem(f"{row['balance']:,.2f}")
-            if row["balance"] < 0:
-                bi.setForeground(QColor("#c62828"))
-            self.table.setItem(r, 5, bi)
+            self.table.setItem(r, 2, QTableWidgetItem(
+                TYPE_AR.get(row["type"], row["type"])
+            ))
+            self.table.setItem(r, 3, QTableWidgetItem(
+                f"{row['total_debit']:,.2f}"
+            ))
+            self.table.setItem(r, 4, QTableWidgetItem(
+                f"{row['total_credit']:,.2f}"
+            ))
+
+            # ── الرصيد: قيمة مطلقة + لون حسب الاتجاه الطبيعي ──
+            bal      = row["balance"]          # DR - CR (ممكن سالب)
+            abs_bal  = abs(bal)
+            nb       = get_normal_balance(row["type"])
+
+            # اللون: لو الرصيد في اتجاهه الطبيعي → أزرق (DR) أو أحمر (CR)
+            # لو عكس الطبيعي → برتقالي تحذير
+            if nb == "dr":
+                color = "#1565c0" if bal >= 0 else "#e65100"   # مدين / عكسي
+            else:
+                color = "#c62828" if bal <= 0 else "#e65100"   # دائن / عكسي
+
+            bal_item = QTableWidgetItem(f"{abs_bal:,.2f}")
+            bal_item.setForeground(QColor(color))
+            bal_item.setToolTip(
+                f"{'مدين' if bal >= 0 else 'دائن'}  {abs_bal:,.2f}"
+            )
+            self.table.setItem(r, 5, bal_item)
+
             sd += row["total_debit"]
             sc += row["total_credit"]
 
