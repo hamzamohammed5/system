@@ -1,5 +1,7 @@
 """
 db/investors_repo.py
+====================
+نظام إدارة المستثمرين — ربط كامل مع القيود المحاسبية.
 """
 
 from datetime import datetime
@@ -30,14 +32,13 @@ def create_investors_tables(conn):
 
 
 def _migrate_investors(conn):
-    """تأكد من وجود الجداول عند أي استدعاء."""
+    """تأكد من وجود الجداول وتحديثها."""
     try:
         conn.execute("SELECT 1 FROM investors LIMIT 1")
     except Exception:
         create_investors_tables(conn)
         return
 
-    # migration: إعادة بناء investor_entries بدون cross-db foreign keys
     try:
         sql = conn.execute(
             "SELECT sql FROM sqlite_master WHERE type='table' AND name='investor_entries'"
@@ -45,7 +46,6 @@ def _migrate_investors(conn):
         if sql and "REFERENCES journal_" in sql["sql"]:
             conn.executescript("""
                 PRAGMA foreign_keys = OFF;
-
                 CREATE TABLE IF NOT EXISTS _investor_entries_new (
                     id            INTEGER PRIMARY KEY AUTOINCREMENT,
                     investor_id   INTEGER NOT NULL REFERENCES investors(id) ON DELETE CASCADE,
@@ -56,14 +56,11 @@ def _migrate_investors(conn):
                     notes         TEXT,
                     created_at    TEXT    NOT NULL DEFAULT (datetime('now'))
                 );
-
                 INSERT INTO _investor_entries_new
                     SELECT id, investor_id, entry_id, line_id, move_type, amount, notes, created_at
                     FROM investor_entries;
-
                 DROP TABLE investor_entries;
                 ALTER TABLE _investor_entries_new RENAME TO investor_entries;
-
                 PRAGMA foreign_keys = ON;
             """)
             conn.commit()
@@ -144,16 +141,12 @@ def link_investor_to_line(conn, investor_id: int, entry_id: int,
     return cur.lastrowid
 
 
-def fetch_investor_entries(conn, investor_id: int,
-                           acc_conn=None) -> list:
+def fetch_investor_entries(conn, investor_id: int, acc_conn=None) -> list:
     """
-    يجيب حركات المستثمر.
-    acc_conn: اتصال accounting.db لجلب بيانات القيد (اختياري).
-    لو مش موجود، يرجع البيانات الأساسية فقط من erp.db.
+    يجيب حركات المستثمر مع بيانات القيود من accounting.db لو موجود.
     """
     _migrate_investors(conn)
 
-    # البيانات الأساسية من erp.db
     rows = conn.execute("""
         SELECT ie.id, ie.investor_id, ie.entry_id, ie.line_id,
                ie.move_type, ie.amount, ie.notes, ie.created_at
@@ -162,49 +155,28 @@ def fetch_investor_entries(conn, investor_id: int,
         ORDER  BY ie.created_at DESC
     """, (investor_id,)).fetchall()
 
-    if not acc_conn:
-        # رجّع بيانات بسيطة بدون تفاصيل القيد
-        result = []
-        for r in rows:
-            result.append({
-                "id":           r["id"],
-                "move_type":    r["move_type"],
-                "amount":       r["amount"],
-                "notes":        r["notes"],
-                "created_at":   r["created_at"],
-                "ref_no":       f"Entry#{r['entry_id']}",
-                "date":         "—",
-                "entry_desc":   "—",
-                "debit":        0,
-                "credit":       0,
-                "line_desc":    "",
-                "account_code": "—",
-                "account_name": "—",
-                "account_type": "—",
-            })
-        return result
-
-    # جلب تفاصيل القيد من accounting.db
     result = []
     for r in rows:
         entry_id = r["entry_id"]
         line_id  = r["line_id"]
-        try:
-            je = acc_conn.execute(
-                "SELECT ref_no, date, description FROM journal_entries WHERE id=?",
-                (entry_id,)
-            ).fetchone()
-            jl = acc_conn.execute("""
-                SELECT jl.debit, jl.credit, jl.description,
-                       a.code AS account_code, a.name AS account_name,
-                       a.type AS account_type
-                FROM journal_lines jl
-                JOIN accounts a ON a.id = jl.account_id
-                WHERE jl.id = ?
-            """, (line_id,)).fetchone()
-        except Exception:
-            je = None
-            jl = None
+        je = jl = None
+
+        if acc_conn:
+            try:
+                je = acc_conn.execute(
+                    "SELECT ref_no, date, description FROM journal_entries WHERE id=?",
+                    (entry_id,)
+                ).fetchone()
+                jl = acc_conn.execute("""
+                    SELECT jl.debit, jl.credit, jl.description,
+                           a.code AS account_code, a.name AS account_name,
+                           a.type AS account_type
+                    FROM journal_lines jl
+                    JOIN accounts a ON a.id = jl.account_id
+                    WHERE jl.id = ?
+                """, (line_id,)).fetchone()
+            except Exception:
+                pass
 
         result.append({
             "id":           r["id"],
@@ -226,6 +198,7 @@ def fetch_investor_entries(conn, investor_id: int,
 
 
 def fetch_entry_investor_links(conn, entry_id: int) -> list:
+    """يجيب كل المستثمرين المرتبطين بقيد معين."""
     _migrate_investors(conn)
     return conn.execute("""
         SELECT ie.*, inv.name AS investor_name
@@ -249,15 +222,13 @@ def delete_entry_investor_links(conn, entry_id: int):
 # تقارير
 # ══════════════════════════════════════════════════════════
 
-def calc_investor_summary(conn, investor_id: int,
-                          acc_conn=None) -> dict:
+def calc_investor_summary(conn, investor_id: int, acc_conn=None) -> dict:
     _migrate_investors(conn)
     inv = fetch_investor(conn, investor_id)
     if not inv:
         return {}
 
     entries = fetch_investor_entries(conn, investor_id, acc_conn)
-
     total_capital  = sum(e["amount"] for e in entries if e["move_type"] == "capital")
     total_drawings = sum(e["amount"] for e in entries if e["move_type"] == "drawings")
     net_investment = total_capital - total_drawings
