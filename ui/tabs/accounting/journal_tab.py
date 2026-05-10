@@ -1,8 +1,10 @@
 """
-ui/tabs/accounting/journal_tab.py  — مع ربط المستثمرين وتجميع حقوق الملكية
+ui/tabs/accounting/journal_tab.py  — مع فصل التاريخ وفلاتر محسّنة
 =========================================================
-التغيير: _AccountTreePopup يجمع capital/drawings/revenue/expense
-تحت "👑 حقوق الملكية" في الـ dropdown بدلاً من عرضهم مستقلين.
+التحديثات:
+  - التاريخ في عمود مستقل في جدول القيود
+  - شريط فلاتر متكامل: بحث + نوع القيد + نطاق التاريخ + التوازن
+  - واجهة محسّنة
 """
 
 from PyQt5.QtWidgets import (
@@ -47,7 +49,6 @@ _TYPE_ICONS = {
 
 _INVESTOR_TYPES = {"capital", "drawings"}
 
-# لون ورمز مجموعة حقوق الملكية
 _EQUITY_COLOR = "#2e7d32"
 _EQUITY_ICON  = "👑"
 _EQUITY_LABEL = "حقوق الملكية"
@@ -59,7 +60,208 @@ def _resolve_side(acc_type: str, is_increase: bool) -> str:
 
 
 # ══════════════════════════════════════════════════════════
-# Popup قائمة الحسابات — مع تجميع حقوق الملكية
+# شريط فلاتر القيود
+# ══════════════════════════════════════════════════════════
+
+class _JournalFilterBar(QFrame):
+    """شريط فلاتر متكامل لجدول القيود."""
+
+    def __init__(self, parent=None):
+        super().__init__(parent)
+        self.setStyleSheet("""
+            QFrame {
+                background: #f0f4ff;
+                border: 1px solid #c5cae9;
+                border-radius: 8px;
+            }
+        """)
+        self._build()
+
+    def _build(self):
+        # صفّان: الأول للبحث والنوع، الثاني للتاريخ
+        root = QVBoxLayout(self)
+        root.setContentsMargins(10, 8, 10, 8)
+        root.setSpacing(6)
+
+        row1 = QHBoxLayout()
+        row1.setSpacing(8)
+
+        # ── بحث ──
+        lbl_s = QLabel("🔍")
+        lbl_s.setStyleSheet("background:transparent; border:none; font-size:13px;")
+        lbl_s.setFixedWidth(20)
+
+        self.inp_search = QLineEdit()
+        self.inp_search.setPlaceholderText("بحث في الوصف أو رقم القيد...")
+        self.inp_search.setMinimumHeight(30)
+        self.inp_search.setStyleSheet("""
+            QLineEdit {
+                background: white; border: 1px solid #c5cae9;
+                border-radius: 5px; padding: 2px 8px; font-size: 12px;
+            }
+            QLineEdit:focus { border-color: #1565c0; }
+        """)
+
+        # ── فلتر نوع القيد ──
+        lbl_type = QLabel("النوع:")
+        lbl_type.setStyleSheet("background:transparent; border:none; font-weight:bold; font-size:11px; color:#555;")
+
+        self.cmb_type = QComboBox()
+        self.cmb_type.setMinimumHeight(30)
+        self.cmb_type.setFixedWidth(130)
+        self.cmb_type.addItem("كل الأنواع",    None)
+        self.cmb_type.addItem("يدوي",          "manual")
+        self.cmb_type.addItem("مشتريات",       "purchase")
+        self.cmb_type.addItem("مبيعات",        "sale")
+        self.cmb_type.addItem("دفع",           "payment")
+        self.cmb_type.addItem("استلام",        "receipt")
+        self.cmb_type.addItem("تسوية",         "adjustment")
+        self.cmb_type.setStyleSheet("""
+            QComboBox {
+                background: white; border: 1px solid #c5cae9;
+                border-radius: 5px; padding: 2px 8px; font-size: 11px;
+            }
+            QComboBox::drop-down { border: none; }
+        """)
+
+        # ── فلتر التوازن ──
+        lbl_bal = QLabel("الحالة:")
+        lbl_bal.setStyleSheet(lbl_type.styleSheet())
+
+        self.cmb_balance = QComboBox()
+        self.cmb_balance.setMinimumHeight(30)
+        self.cmb_balance.setFixedWidth(120)
+        self.cmb_balance.addItem("الكل",          None)
+        self.cmb_balance.addItem("✅ متوازن",      "balanced")
+        self.cmb_balance.addItem("⚠️ غير متوازن", "unbalanced")
+        self.cmb_balance.setStyleSheet(self.cmb_type.styleSheet())
+
+        row1.addWidget(lbl_s)
+        row1.addWidget(self.inp_search, stretch=2)
+        row1.addWidget(lbl_type)
+        row1.addWidget(self.cmb_type)
+        row1.addWidget(lbl_bal)
+        row1.addWidget(self.cmb_balance)
+        root.addLayout(row1)
+
+        row2 = QHBoxLayout()
+        row2.setSpacing(8)
+
+        # ── نطاق التاريخ ──
+        lbl_date = QLabel("📅")
+        lbl_date.setStyleSheet("background:transparent; border:none; font-size:13px;")
+        lbl_date.setFixedWidth(20)
+
+        lbl_from = QLabel("من:")
+        lbl_from.setStyleSheet(lbl_type.styleSheet())
+
+        self.dt_from = QDateEdit()
+        self.dt_from.setCalendarPopup(True)
+        self.dt_from.setDisplayFormat("yyyy-MM-dd")
+        self.dt_from.setDate(QDate(2000, 1, 1))
+        self.dt_from.setFixedWidth(115)
+        self.dt_from.setMinimumHeight(28)
+        self.dt_from.setStyleSheet("""
+            QDateEdit {
+                background: white; border: 1px solid #c5cae9;
+                border-radius: 5px; padding: 2px 6px; font-size: 11px;
+            }
+            QDateEdit::drop-down { border: none; }
+        """)
+
+        lbl_to = QLabel("إلى:")
+        lbl_to.setStyleSheet(lbl_type.styleSheet())
+
+        self.dt_to = QDateEdit()
+        self.dt_to.setCalendarPopup(True)
+        self.dt_to.setDisplayFormat("yyyy-MM-dd")
+        self.dt_to.setDate(QDate.currentDate())
+        self.dt_to.setFixedWidth(115)
+        self.dt_to.setMinimumHeight(28)
+        self.dt_to.setStyleSheet(self.dt_from.styleSheet())
+
+        sep = QLabel("│")
+        sep.setStyleSheet("color:#c5cae9; background:transparent; border:none; font-size:16px;")
+
+        btn_reset = QPushButton("↺ مسح الفلاتر")
+        btn_reset.setMinimumHeight(28)
+        btn_reset.setFixedWidth(95)
+        btn_reset.setStyleSheet("""
+            QPushButton {
+                background: #e8eaf6; border: 1px solid #c5cae9;
+                border-radius: 5px; color: #3949ab;
+                font-size: 11px; padding: 2px 8px;
+            }
+            QPushButton:hover { background: #c5cae9; }
+        """)
+        btn_reset.clicked.connect(self.reset)
+
+        self.lbl_count = QLabel("")
+        self.lbl_count.setStyleSheet(
+            "color:#1565c0; font-size:10px; font-weight:bold;"
+            "background:transparent; border:none; min-width:70px;"
+        )
+        self.lbl_count.setAlignment(Qt.AlignCenter)
+
+        row2.addWidget(lbl_date)
+        row2.addWidget(lbl_from)
+        row2.addWidget(self.dt_from)
+        row2.addWidget(lbl_to)
+        row2.addWidget(self.dt_to)
+        row2.addWidget(sep)
+        row2.addWidget(btn_reset)
+        row2.addStretch()
+        row2.addWidget(self.lbl_count)
+        root.addLayout(row2)
+
+    def reset(self):
+        self.inp_search.clear()
+        self.cmb_type.setCurrentIndex(0)
+        self.cmb_balance.setCurrentIndex(0)
+        self.dt_from.setDate(QDate(2000, 1, 1))
+        self.dt_to.setDate(QDate.currentDate())
+
+    def matches(self, entry: dict) -> bool:
+        q = self.inp_search.text().strip().lower()
+        if q:
+            desc   = (entry.get("description") or "").lower()
+            ref_no = (entry.get("ref_no") or "").lower()
+            if q not in desc and q not in ref_no:
+                return False
+
+        type_filt = self.cmb_type.currentData()
+        if type_filt and entry.get("type") != type_filt:
+            return False
+
+        bal_filt = self.cmb_balance.currentData()
+        if bal_filt:
+            diff = abs((entry.get("total_debit") or 0) - (entry.get("total_credit") or 0))
+            is_balanced = diff < 0.01
+            if bal_filt == "balanced" and not is_balanced:
+                return False
+            if bal_filt == "unbalanced" and is_balanced:
+                return False
+
+        date_str = entry.get("date", "")
+        if date_str:
+            try:
+                d = QDate.fromString(date_str, "yyyy-MM-dd")
+                if d < self.dt_from.date() or d > self.dt_to.date():
+                    return False
+            except Exception:
+                pass
+
+        return True
+
+    def set_count(self, shown: int, total: int):
+        if shown == total:
+            self.lbl_count.setText(f"({total} قيد)")
+        else:
+            self.lbl_count.setText(f"({shown} / {total})")
+
+
+# ══════════════════════════════════════════════════════════
+# Popup قائمة الحسابات
 # ══════════════════════════════════════════════════════════
 
 class _AccountTreePopup(QDialog):
@@ -70,7 +272,6 @@ class _AccountTreePopup(QDialog):
         self._selected_id   = None
         self._selected_name = None
         self._expanded: set = set()
-        # افتح كل المجموعات افتراضياً
         self._expanded.add("group:equity")
         for t in self.acc_types:
             self._expanded.add(f"type:{t}")
@@ -146,7 +347,6 @@ class _AccountTreePopup(QDialog):
     def _on_search(self, text):
         self._filter_text = text.strip().lower()
         if self._filter_text:
-            # افتح كل المجموعات عند البحث
             self._expanded.add("group:equity")
             for t in self.acc_types:
                 self._expanded.add(f"type:{t}")
@@ -157,7 +357,6 @@ class _AccountTreePopup(QDialog):
         self.list_widget.clear()
         q = self._filter_text
 
-        # ── تجميع الحسابات بالنوع ثم التصنيف ──
         by_type: dict = {}
         for acc in self._all_accounts:
             t = acc["type"]
@@ -170,11 +369,9 @@ class _AccountTreePopup(QDialog):
                 by_type[t][grp_full] = []
             by_type[t][grp_full].append(acc)
 
-        # ── فصل الأنواع: مستقلة vs حقوق الملكية ──
         standalone_types = [t for t in self.acc_types if t not in EQUITY_TYPES]
         equity_types     = [t for t in self.acc_types if t in EQUITY_TYPES]
 
-        # ─── عرض الأنواع المستقلة (asset, liability) ───
         for acc_type in standalone_types:
             if acc_type not in by_type:
                 continue
@@ -188,7 +385,6 @@ class _AccountTreePopup(QDialog):
                     continue
             self._render_type_section(acc_type, groups, by_type, q, indent=0)
 
-        # ─── عقدة "حقوق الملكية" الجامعة ───
         equity_has_match = False
         if equity_types:
             for t in equity_types:
@@ -223,7 +419,6 @@ class _AccountTreePopup(QDialog):
             self.list_widget.addItem(eq_item)
 
             if expanded:
-                # الترتيب المنطقي داخل حقوق الملكية
                 equity_order = ["capital", "drawings", "revenue", "expense"]
                 for acc_type in equity_order:
                     if acc_type not in equity_types or acc_type not in by_type:
@@ -239,7 +434,6 @@ class _AccountTreePopup(QDialog):
                     self._render_type_section(acc_type, groups, by_type, q, indent=1)
 
     def _render_type_section(self, acc_type, groups, by_type, q, indent=0):
-        """يرسم عقدة نوع واحد مع أبنائه."""
         from PyQt5.QtWidgets import QListWidgetItem
 
         type_key  = f"type:{acc_type}"
@@ -397,7 +591,6 @@ class _AccountPickerButton(QWidget):
         pos = self.btn.mapToGlobal(QPoint(0, self.btn.height()))
         popup.move(pos)
         popup.resize(max(self.width() + 60, 440), 460)
-        # افتح كل المجموعات
         popup._expanded.add("group:equity")
         for t in (self.acc_types or _TYPE_ORDER):
             popup._expanded.add(f"type:{t}")
@@ -471,7 +664,7 @@ class _AccountPickerButton(QWidget):
 
 
 # ══════════════════════════════════════════════════════════
-# صف ذكي واحد — مع ربط المستثمر
+# صف ذكي واحد
 # ══════════════════════════════════════════════════════════
 
 class _SmartLine(QFrame):
@@ -568,7 +761,6 @@ class _SmartLine(QFrame):
 
         lay.addLayout(main_row)
 
-        # ── صف ربط المستثمر ──
         self._investor_row = QFrame()
         self._investor_row.setStyleSheet(
             "QFrame { background:#fff8e1; border:1px solid #ffe082;"
@@ -1131,11 +1323,12 @@ class _JournalForm(QWidget):
 
 
 # ══════════════════════════════════════════════════════════
-# جدول القيود — شجري
+# جدول القيود — مع عمود التاريخ المستقل وفلاتر
 # ══════════════════════════════════════════════════════════
 
 class _JournalTreeTable(QWidget):
-    COLS = ["#", "رقم القيد", "التاريخ", "البيان / الحساب", "DR", "CR", "الحالة"]
+    # التاريخ الآن في عمود مستقل
+    COLS = ["#", "التاريخ", "رقم القيد", "البيان / الحساب", "DR", "CR", "الحالة"]
 
     def __init__(self, conn, parent=None):
         super().__init__(parent)
@@ -1154,6 +1347,21 @@ class _JournalTreeTable(QWidget):
 
         root.addWidget(section_label("── القيود المحاسبية المحفوظة ──"))
 
+        # ── شريط الفلاتر ──
+        self._filter = _JournalFilterBar()
+        self._filter.inp_search.textChanged.connect(self._apply_filter)
+        self._filter.cmb_type.currentIndexChanged.connect(self._apply_filter)
+        self._filter.cmb_balance.currentIndexChanged.connect(self._apply_filter)
+        self._filter.dt_from.dateChanged.connect(self._apply_filter)
+        self._filter.dt_to.dateChanged.connect(self._apply_filter)
+        orig_reset = self._filter.reset
+        def _reset_and_apply():
+            orig_reset()
+            self._apply_filter()
+        self._filter.reset = _reset_and_apply
+        root.addWidget(self._filter)
+
+        # ── أزرار ──
         btn_expand_all   = QPushButton("⊞ توسيع الكل")
         btn_collapse_all = QPushButton("⊟ طي الكل")
         btn_del          = danger_button("🗑️  حذف القيد المحدد")
@@ -1180,10 +1388,21 @@ class _JournalTreeTable(QWidget):
         self.table.verticalHeader().setVisible(False)
 
         hh = self.table.horizontalHeader()
-        hh.setSectionResizeMode(3, QHeaderView.Stretch)
-        for col, w in {0: 28, 1: 85, 2: 90, 4: 95, 5: 95, 6: 85}.items():
-            hh.setSectionResizeMode(col, QHeaderView.Fixed)
-            self.table.setColumnWidth(col, w)
+        # التاريخ عمود مستقل بعرض ثابت
+        hh.setSectionResizeMode(0, QHeaderView.Fixed)   # #
+        hh.setSectionResizeMode(1, QHeaderView.Fixed)   # التاريخ
+        hh.setSectionResizeMode(2, QHeaderView.Fixed)   # رقم القيد
+        hh.setSectionResizeMode(3, QHeaderView.Stretch) # البيان
+        hh.setSectionResizeMode(4, QHeaderView.Fixed)   # DR
+        hh.setSectionResizeMode(5, QHeaderView.Fixed)   # CR
+        hh.setSectionResizeMode(6, QHeaderView.Fixed)   # الحالة
+
+        self.table.setColumnWidth(0, 28)
+        self.table.setColumnWidth(1, 92)   # التاريخ
+        self.table.setColumnWidth(2, 85)   # رقم القيد
+        self.table.setColumnWidth(4, 95)
+        self.table.setColumnWidth(5, 95)
+        self.table.setColumnWidth(6, 85)
         hh.setDefaultAlignment(Qt.AlignRight | Qt.AlignVCenter)
         self.table.setWordWrap(False)
         self.table.cellClicked.connect(self._on_cell_clicked)
@@ -1204,13 +1423,21 @@ class _JournalTreeTable(QWidget):
                 "total_credit": e["total_credit"],
                 "lines":        [dict(l) for l in lines],
             })
-        self._render()
+        self._apply_filter()
 
-    def _render(self):
+    def _apply_filter(self):
+        filtered = [e for e in self._entries_data if self._filter.matches(e)]
+        self._filter.set_count(len(filtered), len(self._entries_data))
+        self._render(filtered)
+
+    def _render(self, entries=None):
+        if entries is None:
+            entries = self._entries_data
+
         self.table.setRowCount(0)
         self._row_meta = {}
 
-        for entry in self._entries_data:
+        for entry in entries:
             eid      = entry["id"]
             expanded = eid in self._expanded
             total_dr = entry["total_debit"]
@@ -1220,6 +1447,7 @@ class _JournalTreeTable(QWidget):
             self.table.insertRow(r)
             self._row_meta[r] = {"entry_id": eid, "is_parent": True, "is_child": False}
 
+            # عمود التوسيع
             toggle_item = QTableWidgetItem("▼" if expanded else "▶")
             toggle_item.setTextAlignment(Qt.AlignCenter)
             toggle_item.setForeground(QBrush(QColor("#1565c0")))
@@ -1228,9 +1456,21 @@ class _JournalTreeTable(QWidget):
             toggle_item.setFont(f)
             self.table.setItem(r, 0, toggle_item)
 
-            self.table.setItem(r, 1, self._bold_item(entry["ref_no"], "#1565c0"))
-            self.table.setItem(r, 2, self._bold_item(entry["date"]))
+            # التاريخ — عمود مستقل
+            date_item = QTableWidgetItem(entry["date"])
+            date_item.setTextAlignment(Qt.AlignCenter)
+            date_f = QFont()
+            date_f.setBold(True)
+            date_item.setFont(date_f)
+            date_item.setForeground(QBrush(QColor("#2e7d32")))
+            self.table.setItem(r, 1, date_item)
+
+            # رقم القيد
+            self.table.setItem(r, 2, self._bold_item(entry["ref_no"], "#1565c0"))
+
+            # البيان
             self.table.setItem(r, 3, self._bold_item(entry["description"]))
+
             self.table.setItem(r, 4, self._bold_item(f"{total_dr:,.2f}", "#1565c0"))
             self.table.setItem(r, 5, self._bold_item(f"{total_cr:,.2f}", "#c62828"))
 
@@ -1261,7 +1501,8 @@ class _JournalTreeTable(QWidget):
                     side_color = "#1565c0" if is_dr else "#c62828"
                     row_bg     = QColor("#f4f8ff") if is_dr else QColor("#fff4f4")
 
-                    for c in range(3):
+                    # أعمدة فارغة للصف الفرعي
+                    for c in range(4):
                         self.table.setItem(rc, c, QTableWidgetItem(""))
 
                     desc_item = QTableWidgetItem(desc_text)
@@ -1301,22 +1542,22 @@ class _JournalTreeTable(QWidget):
         meta = self._row_meta.get(row)
         if not meta or not meta["is_parent"]:
             return
-        if col not in (0, 1):
+        if col not in (0, 1, 2):
             return
         eid = meta["entry_id"]
         if eid in self._expanded:
             self._expanded.discard(eid)
         else:
             self._expanded.add(eid)
-        self._render()
+        self._apply_filter()
 
     def _expand_all(self):
         self._expanded = {e["id"] for e in self._entries_data}
-        self._render()
+        self._apply_filter()
 
     def _collapse_all(self):
         self._expanded.clear()
-        self._render()
+        self._apply_filter()
 
     def _selected_entry_id(self):
         row  = self.table.currentRow()
