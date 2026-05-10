@@ -2,12 +2,18 @@
 ui/tabs/accounting/account_combo.py
 =====================================
 _AccountCombo — Combo قابل للبحث والفلترة لاختيار الحسابات.
+
+الإصلاح:
+  1. ربط bus.data_changed بـ refresh() حتى يتحدث الـ combo تلقائياً
+     عند إضافة/حذف حسابات.
+  2. تعطيل السيباريتور بشكل صريح حتى لا يظهر كاختيار.
+  3. تنظيف السيباريتورات المتتالية أو الأخيرة.
 """
 
 from PyQt5.QtWidgets import (
     QWidget, QHBoxLayout, QComboBox, QLineEdit, QLabel,
 )
-from PyQt5.QtCore import Qt
+from PyQt5.QtCore import Qt, QTimer
 from PyQt5.QtGui  import QColor, QFont
 
 from db.accounting_repo import (
@@ -16,6 +22,7 @@ from db.accounting_repo import (
     get_normal_balance, _get_group_descendants,
 )
 from db.accounting_schema import TYPE_AR
+from ui.events import bus
 from .helpers import TYPE_COLORS
 
 
@@ -27,6 +34,12 @@ class _AccountCombo(QWidget):
         self._all_accs = []
         self._build()
         self.refresh()
+        # ✅ تحديث تلقائي عند أي تغيير في البيانات
+        bus.data_changed.connect(self._on_data_changed)
+
+    def _on_data_changed(self):
+        """نستخدم QTimer لتجنب refresh متكرر في نفس اللحظة."""
+        QTimer.singleShot(0, self.refresh)
 
     def _build(self):
         lay = QHBoxLayout(self)
@@ -110,31 +123,29 @@ class _AccountCombo(QWidget):
         self.cmb_account.clear()
         self.cmb_account.addItem("— اختر الحساب —", None)
 
-        last_type = None
+        last_type      = None
+        sep_index      = None   # نتتبع آخر سيباريتور أضفناه
+
         for acc in self._all_accs:
-            if gid is not None and acc["group_id"] != gid:
+            # ── فلتر التصنيف ──
+            if gid is not None:
                 desc = _get_group_descendants(self.conn, gid)
                 if acc["group_id"] not in desc:
                     continue
 
+            # ── فلتر البحث ──
             if q and q not in acc["name"].lower() and q not in acc["code"].lower():
                 continue
 
+            # ── سيباريتور النوع ──
             if acc["type"] != last_type:
                 sep_text = f"── {TYPE_AR.get(acc['type'], acc['type'])} ──"
                 self.cmb_account.addItem(sep_text, "__sep__")
-                idx   = self.cmb_account.count() - 1
-                model = self.cmb_account.model()
-                item  = model.item(idx)
-                if item:
-                    item.setFlags(item.flags() & ~Qt.ItemIsEnabled & ~Qt.ItemIsSelectable)
-                    item.setForeground(QColor("#78909c"))
-                    f = QFont()
-                    f.setBold(True)
-                    f.setPointSize(f.pointSize() - 1)
-                    item.setFont(f)
+                sep_index = self.cmb_account.count() - 1
+                self._disable_item(sep_index)
                 last_type = acc["type"]
 
+            # ── الحساب الفعلي ──
             color   = TYPE_COLORS.get(acc["type"], "#333")
             nb      = get_normal_balance(acc["type"])
             nb_text = "DR↑" if nb == "dr" else "CR↑"
@@ -142,15 +153,66 @@ class _AccountCombo(QWidget):
             self.cmb_account.addItem(label, acc["id"])
             idx2 = self.cmb_account.count() - 1
             self.cmb_account.setItemData(idx2, QColor(color), Qt.ForegroundRole)
+            sep_index = None   # يوجد عنصر حقيقي بعد السيباريتور
+
+        # ── احذف السيباريتورات الفاضية في الآخر ──
+        self._remove_trailing_separators()
 
         self.cmb_account.blockSignals(False)
 
+        # ── استعادة الاختيار السابق ──
         if prev_id is not None:
             for i in range(self.cmb_account.count()):
                 if self.cmb_account.itemData(i) == prev_id:
                     self.cmb_account.setCurrentIndex(i)
+                    self._update_nb_label()
                     return
+
+        # ── اختار أول حساب حقيقي لو مفيش اختيار سابق ──
+        self._select_first_real()
         self._update_nb_label()
+
+    def _disable_item(self, idx: int):
+        """يعطّل السيباريتور بحيث لا يكون قابلاً للاختيار."""
+        model = self.cmb_account.model()
+        item  = model.item(idx)
+        if item:
+            item.setFlags(item.flags() & ~Qt.ItemIsEnabled & ~Qt.ItemIsSelectable)
+            item.setForeground(QColor("#78909c"))
+            f = QFont()
+            f.setBold(True)
+            f.setPointSize(max(f.pointSize() - 1, 7))
+            item.setFont(f)
+
+    def _remove_trailing_separators(self):
+        """يحذف أي سيباريتور في الآخر أو سيباريتورات متتالية."""
+        changed = True
+        while changed:
+            changed = False
+            count = self.cmb_account.count()
+            for i in range(count - 1, -1, -1):
+                d = self.cmb_account.itemData(i)
+                if d == "__sep__":
+                    # لو آخر عنصر أو التالي سيباريتور كمان → احذفه
+                    if i == count - 1:
+                        self.cmb_account.removeItem(i)
+                        changed = True
+                        break
+                    next_d = self.cmb_account.itemData(i + 1)
+                    if next_d == "__sep__":
+                        self.cmb_account.removeItem(i)
+                        changed = True
+                        break
+
+    def _select_first_real(self):
+        """يختار أول حساب حقيقي (مش سيباريتور ومش placeholder)."""
+        for i in range(self.cmb_account.count()):
+            d = self.cmb_account.itemData(i)
+            if d is not None and d != "__sep__" and isinstance(d, int):
+                self.cmb_account.setCurrentIndex(i)
+                return
+        # لو مفيش حسابات — ارجع للأول (placeholder)
+        self.cmb_account.setCurrentIndex(0)
 
     def _update_nb_label(self):
         acc_id = self.current_account_id()
@@ -179,7 +241,10 @@ class _AccountCombo(QWidget):
 
     def current_account_id(self):
         data = self.cmb_account.currentData()
-        if data in (None, "__sep__"):
+        # ✅ تأكد إن المختار مش سيباريتور ومش None
+        if data is None or data == "__sep__":
+            return None
+        if not isinstance(data, int):
             return None
         return data
 

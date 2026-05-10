@@ -1,6 +1,8 @@
 """
-db/accounting_schema.py
+db/accounting_schema.py  — نسخة مصححة
 ==================================
+الإصلاح: إضافة _fix_is_leaf() في نهاية create_accounting_tables()
+لضمان صحة قيم is_leaf دائماً بعد أي migration أو seed.
 """
 
 TYPE_AR = {
@@ -141,6 +143,42 @@ def _table_exists(conn, table: str) -> bool:
         return False
 
 
+# ══════════════════════════════════════════════════════════
+# ✅ الإصلاح الرئيسي: دالة تصليح is_leaf
+# ══════════════════════════════════════════════════════════
+
+def _fix_is_leaf(conn):
+    """
+    يضمن صحة قيم is_leaf:
+      - أي حساب عنده أبناء → is_leaf = 0
+      - أي حساب مالوش أبناء → is_leaf = 1
+
+    يُستدعى دائماً في نهاية create_accounting_tables().
+    """
+    try:
+        # الحسابات الأب (لها أبناء) → is_leaf = 0
+        conn.execute("""
+            UPDATE accounts SET is_leaf = 0
+            WHERE id IN (
+                SELECT DISTINCT parent_id
+                FROM accounts
+                WHERE parent_id IS NOT NULL
+            )
+        """)
+        # الحسابات الورقية (مالهاش أبناء) → is_leaf = 1
+        conn.execute("""
+            UPDATE accounts SET is_leaf = 1
+            WHERE id NOT IN (
+                SELECT DISTINCT parent_id
+                FROM accounts
+                WHERE parent_id IS NOT NULL
+            )
+        """)
+        conn.commit()
+    except Exception as e:
+        print(f"[accounting_schema] _fix_is_leaf error: {e}")
+
+
 def _migrate_schema(conn):
     if _needs_migration(conn):
         try:
@@ -265,6 +303,9 @@ def create_accounting_tables(conn):
     except Exception as e:
         print(f"[accounting_schema] seed error: {e}")
 
+    # ✅ دائماً صلّح is_leaf في الآخر بعد الـ seed والـ migration
+    _fix_is_leaf(conn)
+
 
 def _account_exists(conn) -> bool:
     try:
@@ -325,16 +366,13 @@ def _seed_default_accounts(conn):
             ).fetchone()
             if row:
                 parent_id = row["id"]
-                conn.execute(
-                    "UPDATE accounts SET is_leaf=0 WHERE id=?", (parent_id,)
-                )
 
-        is_leaf = 0 if len(code) <= 2 else 1
-
+        # ✅ is_leaf مؤقت = 1 دائماً — سيتصحح بـ _fix_is_leaf() في الآخر
         conn.execute("""
             INSERT OR IGNORE INTO accounts
                 (code, name, type, subtype, parent_id, is_leaf)
-            VALUES (?, ?, ?, ?, ?, ?)
-        """, (code, name, acc_type, subtype, parent_id, is_leaf))
+            VALUES (?, ?, ?, ?, ?, 1)
+        """, (code, name, acc_type, subtype, parent_id))
 
     conn.commit()
+    # ✅ لا نحتاج UPDATE is_leaf هنا — _fix_is_leaf() ستتكفل بذلك

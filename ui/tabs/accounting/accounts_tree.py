@@ -2,9 +2,6 @@
 ui/tabs/accounting/accounts_tree.py
 =====================================
 AccountsTreePanel — شجرة الحسابات مع فورم الإضافة والتعديل.
-
-الإصلاح الرئيسي: كان فيه QVBoxLayout(self) مرتين في _build()
-مما كان يسبب إن كل الواجهة تبقى فاضية تماماً.
 """
 
 from PyQt5.QtWidgets import (
@@ -41,7 +38,6 @@ class AccountsTreePanel(QWidget):
         bus.data_changed.connect(self._load)
 
     def _build(self):
-        # ══ Layout وحيد على self ══
         main_layout = QVBoxLayout(self)
         main_layout.setContentsMargins(0, 0, 0, 0)
         main_layout.setSpacing(0)
@@ -49,9 +45,7 @@ class AccountsTreePanel(QWidget):
         splitter = QSplitter(Qt.Horizontal)
         splitter.setHandleWidth(5)
 
-        # ══════════════════════════════════════════════════
-        # يسار: الشجرة + فلتر + أزرار
-        # ══════════════════════════════════════════════════
+        # ══ يسار: الشجرة ══
         left = QWidget()
         ll   = QVBoxLayout(left)
         ll.setContentsMargins(10, 8, 6, 10)
@@ -93,9 +87,7 @@ class AccountsTreePanel(QWidget):
 
         splitter.addWidget(left)
 
-        # ══════════════════════════════════════════════════
-        # يمين: فورم الإضافة / التعديل
-        # ══════════════════════════════════════════════════
+        # ══ يمين: فورم ══
         right = QWidget()
         rl    = QVBoxLayout(right)
         rl.setContentsMargins(6, 8, 10, 10)
@@ -136,7 +128,6 @@ class AccountsTreePanel(QWidget):
         self.cmb_group.setMinimumHeight(28)
         fl.addRow("التصنيف:", self.cmb_group)
 
-        # ربط الـ signals بعد ما كل الـ widgets اتبنت
         self.cmb_type.currentIndexChanged.connect(self._on_type_changed)
 
         btn_add         = QPushButton("➕ إضافة")
@@ -165,14 +156,11 @@ class AccountsTreePanel(QWidget):
         splitter.addWidget(right)
         splitter.setSizes([420, 280])
 
-        # أضف الـ splitter للـ layout الوحيد
         main_layout.addWidget(splitter)
-
-        # حدّث combos التصنيفات
         self._refresh_group_combos()
 
     # ══════════════════════════════════════════════════════
-    # فلتر التصنيف
+    # فلتر
     # ══════════════════════════════════════════════════════
 
     def _on_filter_changed(self):
@@ -184,7 +172,7 @@ class AccountsTreePanel(QWidget):
         self._refresh_group_combo_for_type()
 
     # ══════════════════════════════════════════════════════
-    # تحديث combos التصنيفات
+    # combos التصنيفات
     # ══════════════════════════════════════════════════════
 
     def _refresh_group_combos(self):
@@ -204,16 +192,13 @@ class AccountsTreePanel(QWidget):
                 self.cmb_group_filter.setCurrentIndex(i)
                 break
         self.cmb_group_filter.blockSignals(False)
-
         self._refresh_group_combo_for_type()
 
     def _add_filter_nodes(self, nodes, depth):
         indent = "  " * depth
         arrow  = "↳ " if depth > 0 else ""
         for node in nodes:
-            self.cmb_group_filter.addItem(
-                f"{indent}{arrow}{node['name']}", node["id"]
-            )
+            self.cmb_group_filter.addItem(f"{indent}{arrow}{node['name']}", node["id"])
             self.cmb_group_filter.setItemData(
                 self.cmb_group_filter.count() - 1,
                 QColor(node["color"]), Qt.ForegroundRole
@@ -269,7 +254,7 @@ class AccountsTreePanel(QWidget):
 
     def _build_tree(self):
         self.tree.clear()
-        gid_filter = self.cmb_group_filter.currentData()
+        gid_filter   = self.cmb_group_filter.currentData()
         has_any_data = False
 
         for acc_type in self.acc_types:
@@ -282,7 +267,6 @@ class AccountsTreePanel(QWidget):
             if not rows:
                 continue
 
-            # بناء dict الـ nodes
             nodes = {}
             for r in rows:
                 try:
@@ -301,7 +285,6 @@ class AccountsTreePanel(QWidget):
                 except Exception as e:
                     print(f"[AccountsTreePanel] error reading row: {e}")
 
-            # بناء الشجرة
             roots = []
             for nid, node in nodes.items():
                 pid = node["parent_id"]
@@ -320,7 +303,6 @@ class AccountsTreePanel(QWidget):
 
             has_any_data = True
 
-            # header للنوع
             type_item = QTreeWidgetItem()
             type_item.setText(1, f"── {TYPE_AR.get(acc_type, acc_type)} ──")
             type_item.setForeground(1, QColor(TYPE_COLORS.get(acc_type, "#333")))
@@ -373,9 +355,10 @@ class AccountsTreePanel(QWidget):
             item.setText(2, f"{bal:,.2f}")
             item.setData(0, Qt.UserRole, node["id"])
             item.setForeground(0, QColor(color))
-            item.setToolTip(1, node.get("group_name") and
-                            f"{node['name']}  |  🏷 {node['group_name']}"
-                            or node["name"])
+            item.setToolTip(1, (
+                f"{node['name']}  |  🏷 {node['group_name']}"
+                if node.get("group_name") else node["name"]
+            ))
 
             if not node.get("is_leaf", 1):
                 f = item.font(1)
@@ -481,19 +464,58 @@ class AccountsTreePanel(QWidget):
         acc = fetch_account(self.conn, aid)
         if not acc:
             return
+
+        # ── جيب كل الأبناء بالتسلسل (recursive) ──
+        def get_all_descendants(account_id: int) -> list:
+            result = [account_id]
+            children = self.conn.execute(
+                "SELECT id FROM accounts WHERE parent_id=?", (account_id,)
+            ).fetchall()
+            for child in children:
+                result.extend(get_all_descendants(child["id"]))
+            return result
+
+        all_ids      = get_all_descendants(aid)
+        placeholders = ",".join("?" * len(all_ids))
+
+        # ── شيك على حركات في كل الأبناء ──
         try:
-            has = self.conn.execute(
-                "SELECT COUNT(*) as c FROM journal_lines WHERE account_id=?",
-                (aid,)
+            has_lines = self.conn.execute(
+                f"SELECT COUNT(*) as c FROM journal_lines "
+                f"WHERE account_id IN ({placeholders})",
+                all_ids
             ).fetchone()["c"]
         except Exception:
-            has = 0
-        if has:
+            has_lines = 0
+
+        if has_lines:
             QMessageBox.warning(
                 self, "تحذير",
-                f"الحساب «{acc['name']}» له {has} حركة — لا يمكن حذفه."
+                f"الحساب «{acc['name']}» أو أحد فروعه\n"
+                f"له {has_lines} حركة في القيود — لا يمكن حذفه."
             )
             return
-        if confirm_delete(self, acc["name"]):
-            delete_account(self.conn, aid)
+
+        # ── رسالة تأكيد ──
+        child_count = len(all_ids) - 1
+        if child_count:
+            msg = (
+                f"حذف حساب «{acc['name']}»؟\n"
+                f"⚠️ سيتم حذف {child_count} حساب فرعي معه."
+            )
+            if QMessageBox.question(
+                self, "تأكيد الحذف", msg,
+                QMessageBox.Yes | QMessageBox.No
+            ) != QMessageBox.Yes:
+                return
+        else:
+            if not confirm_delete(self, acc["name"]):
+                return
+
+        # ── احذف من الأعمق للأعلى ──
+        try:
+            for del_id in reversed(all_ids):
+                self.conn.execute("DELETE FROM accounts WHERE id=?", (del_id,))
             bus.data_changed.emit()
+        except Exception as e:
+            QMessageBox.critical(self, "خطأ", f"فشل الحذف:\n{e}")
