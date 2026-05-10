@@ -1,12 +1,11 @@
 """
-ui/tabs/accounting/journal_tab.py  — مع فلتر التصنيفات بدلاً من نوع القيد
+ui/tabs/accounting/journal_tab.py  — مع فلتر التصنيفات بشجرة expand/collapse
 =========================================================
 التحديثات:
-  - إزالة فلتر نوع القيد (manual/purchase/sale...)
-  - إضافة فلتر بالتصنيفات الهرمية للحسابات
-  - عند اختيار تصنيف، يُعرض كل قيد يحتوي على حساب ينتمي لهذا التصنيف
+  - فلتر التصنيفات يعرض شجرة هرمية قابلة للطي والتوسيع
+  - QComboBox مخصص مع QTreeView بدلاً من القائمة المسطحة
   - التاريخ في عمود مستقل
-  - فلاتر: بحث + تصنيف الحساب + نطاق التاريخ + التوازن
+  - فلاتر: بحث + تصنيف الحساب (شجرة) + نطاق التاريخ + التوازن
 """
 
 from PyQt5.QtWidgets import (
@@ -17,10 +16,10 @@ from PyQt5.QtWidgets import (
     QLineEdit, QComboBox, QDateEdit, QDoubleSpinBox,
     QScrollArea, QRadioButton, QButtonGroup,
     QDialog, QApplication,
-    QSizePolicy,
+    QSizePolicy, QTreeView, QStyledItemDelegate,
 )
-from PyQt5.QtCore import Qt, QDate, QTimer, QPoint
-from PyQt5.QtGui  import QColor, QFont, QBrush
+from PyQt5.QtCore import Qt, QDate, QTimer, QPoint, QSortFilterProxyModel, QModelIndex
+from PyQt5.QtGui  import QColor, QFont, QBrush, QStandardItemModel, QStandardItem
 
 from db.accounting_repo import (
     fetch_all_entries, fetch_entry_lines,
@@ -55,6 +54,10 @@ _EQUITY_COLOR = "#2e7d32"
 _EQUITY_ICON  = "👑"
 _EQUITY_LABEL = "حقوق الملكية"
 
+# ID خاص للعناصر غير القابلة للاختيار (رؤوس الأقسام)
+_ROLE_GROUP_ID   = Qt.UserRole + 1   # int | None
+_ROLE_IS_HEADER  = Qt.UserRole + 2   # bool
+
 
 def _resolve_side(acc_type: str, is_increase: bool) -> str:
     nb = NORMAL_BALANCE.get(acc_type, "dr")
@@ -66,10 +69,6 @@ def _resolve_side(acc_type: str, is_increase: bool) -> str:
 # ══════════════════════════════════════════════════════════
 
 def _get_entry_ids_by_group(conn, group_id: int) -> set:
-    """
-    يرجع مجموعة IDs القيود التي تحتوي على حساب ينتمي
-    للتصنيف المحدد أو أي تصنيف فرعي منه.
-    """
     desc_ids = _get_group_descendants(conn, group_id)
     if not desc_ids:
         return set()
@@ -84,16 +83,255 @@ def _get_entry_ids_by_group(conn, group_id: int) -> set:
 
 
 # ══════════════════════════════════════════════════════════
-# شريط فلاتر القيود — مع فلتر التصنيفات
+# TreeComboDelegate — يمنع اختيار العناصر الرأسية
 # ══════════════════════════════════════════════════════════
 
-class _JournalFilterBar(QFrame):
-    """شريط فلاتر متكامل لجدول القيود — بفلتر تصنيفات الحسابات."""
+class _NoSelectDelegate(QStyledItemDelegate):
+    """يجعل عناصر الرأس (غير القابلة للاختيار) تبدو بخط عريض ولون مختلف."""
+    def paint(self, painter, option, index):
+        is_header = index.data(_ROLE_IS_HEADER)
+        if is_header:
+            # أزل حالة التحديد لعناصر الرأس
+            from PyQt5.QtWidgets import QStyle
+            option.state &= ~QStyle.State_Selected
+        super().paint(painter, option, index)
+
+
+# ══════════════════════════════════════════════════════════
+# TreeGroupCombo — QComboBox مع QTreeView شجري
+# ══════════════════════════════════════════════════════════
+
+class _TreeGroupCombo(QComboBox):
+    """
+    QComboBox يعرض التصنيفات في شجرة هرمية:
+      ── 🏦 الأصول ──
+        ↳ مجموعة 1
+          ↳ مجموعة فرعية
+      ── 📋 الخصوم ──
+      ...
+
+    عناصر الرأس (أنواع الحسابات) غير قابلة للاختيار.
+    عناصر التصنيف قابلة للاختيار وتعيد group_id.
+    """
 
     def __init__(self, conn, parent=None):
         super().__init__(parent)
         self.conn = conn
-        self._group_entry_ids: set | None = None   # None = لا فلتر
+        self._group_entry_ids: set | None = None
+
+        # إنشاء النموذج الشجري
+        self._model = QStandardItemModel()
+        self.setModel(self._model)
+
+        # إنشاء الـ TreeView
+        self._tree_view = QTreeView(self)
+        self._tree_view.setHeaderHidden(True)
+        self._tree_view.setItemDelegate(_NoSelectDelegate(self._tree_view))
+        self._tree_view.setEditTriggers(QTreeView.NoEditTriggers)
+        self._tree_view.setSelectionBehavior(QTreeView.SelectRows)
+        self._tree_view.setStyleSheet("""
+            QTreeView {
+                border: 1px solid #c5cae9;
+                background: white;
+                outline: none;
+                font-size: 11px;
+            }
+            QTreeView::item {
+                padding: 3px 6px;
+                min-height: 24px;
+            }
+            QTreeView::item:selected {
+                background: #e3f2fd;
+                color: #1565c0;
+            }
+            QTreeView::item:hover:!selected {
+                background: #f5f5f5;
+            }
+            QTreeView::branch:has-children:!has-siblings:closed,
+            QTreeView::branch:closed:has-children:has-siblings {
+                image: url(none);
+                border-image: none;
+            }
+        """)
+        self.setView(self._tree_view)
+
+        # عند اختيار عنصر من الشجرة
+        self._tree_view.clicked.connect(self._on_tree_clicked)
+
+        self._populate()
+        bus.data_changed.connect(self._reload)
+
+    def _populate(self):
+        """يبني نموذج الشجرة من التصنيفات."""
+        prev_gid = self.currentData()
+
+        self._model.clear()
+
+        # عنصر "كل التصنيفات"
+        all_item = QStandardItem("— كل التصنيفات —")
+        all_item.setData(None, _ROLE_GROUP_ID)
+        all_item.setData(False, _ROLE_IS_HEADER)
+        all_item.setFlags(all_item.flags() | Qt.ItemIsEnabled | Qt.ItemIsSelectable)
+        f = QFont()
+        f.setItalic(True)
+        all_item.setFont(f)
+        all_item.setForeground(QColor("#555"))
+        self._model.appendRow(all_item)
+
+        type_order = ["asset", "liability", "capital", "drawings", "revenue", "expense"]
+        try:
+            all_groups = fetch_all_groups(self.conn)
+        except Exception:
+            all_groups = []
+
+        groups_by_type: dict[str, list] = {}
+        for g in all_groups:
+            t = g["acc_type"]
+            groups_by_type.setdefault(t, []).append(dict(g))
+
+        for acc_type in type_order:
+            if acc_type not in groups_by_type:
+                continue
+            type_rows = groups_by_type[acc_type]
+            tree = build_group_tree(type_rows)
+            if not tree:
+                continue
+
+            # رأس النوع — غير قابل للاختيار
+            icon = _TYPE_ICONS.get(acc_type, "📁")
+            type_label = f"{icon}  {TYPE_AR.get(acc_type, acc_type)}"
+            header_item = QStandardItem(type_label)
+            header_item.setData(None, _ROLE_GROUP_ID)
+            header_item.setData(True, _ROLE_IS_HEADER)
+            header_item.setFlags(Qt.ItemIsEnabled)   # قابل للعرض لكن غير قابل للاختيار
+            hf = QFont()
+            hf.setBold(True)
+            hf.setPointSize(hf.pointSize() + 1)
+            header_item.setFont(hf)
+            header_item.setForeground(QColor(TYPE_COLORS.get(acc_type, "#333")))
+            header_item.setBackground(QColor("#f0f4ff" if acc_type not in EQUITY_TYPES else "#f1f8e9"))
+            self._model.appendRow(header_item)
+
+            # أضف التصنيفات الفرعية
+            self._add_group_items(header_item, tree, acc_type)
+
+        # توسيع كل العناصر
+        self._tree_view.expandAll()
+
+        # استعادة الاختيار السابق
+        self._restore_selection(prev_gid)
+
+    def _add_group_items(self, parent_item: QStandardItem, nodes: list, acc_type: str):
+        """يضيف تصنيفات بشكل هرمي تحت عنصر أب."""
+        color = QColor(TYPE_COLORS.get(acc_type, "#333"))
+        for node in nodes:
+            item = QStandardItem(f"  {node['name']}")
+            item.setData(node["id"], _ROLE_GROUP_ID)
+            item.setData(False, _ROLE_IS_HEADER)
+            item.setFlags(item.flags() | Qt.ItemIsEnabled | Qt.ItemIsSelectable)
+            item.setForeground(QColor(node.get("color", TYPE_COLORS.get(acc_type, "#333"))))
+            parent_item.appendRow(item)
+
+            if node.get("children"):
+                self._add_group_items(item, node["children"], acc_type)
+
+    def _restore_selection(self, prev_gid):
+        """يستعيد الاختيار السابق بعد إعادة بناء النموذج."""
+        if prev_gid is None:
+            self.setCurrentIndex(0)
+            return
+        idx = self._find_index_by_gid(self._model.invisibleRootItem(), prev_gid)
+        if idx.isValid():
+            self.setRootModelIndex(QModelIndex())
+            self.setCurrentIndex(self._model_index_to_combo_index(idx))
+
+    def _find_index_by_gid(self, parent: QStandardItem, gid: int) -> QModelIndex:
+        """بحث recursive عن item بـ group_id معين."""
+        for row in range(parent.rowCount()):
+            child = parent.child(row)
+            if child and child.data(_ROLE_GROUP_ID) == gid:
+                return child.index()
+            if child and child.rowCount() > 0:
+                found = self._find_index_by_gid(child, gid)
+                if found.isValid():
+                    return found
+        return QModelIndex()
+
+    def _model_index_to_combo_index(self, index: QModelIndex) -> int:
+        """تحويل QModelIndex لرقم index في الـ combo (غير مستخدم مباشرة)."""
+        # للـ QComboBox مع QTreeView، الأسهل نستخدم setCurrentIndex(0) ونتحكم يدوياً
+        return 0
+
+    def _on_tree_clicked(self, index: QModelIndex):
+        """عند الضغط على عنصر في الشجرة."""
+        item = self._model.itemFromIndex(index)
+        if not item:
+            return
+
+        is_header = item.data(_ROLE_IS_HEADER)
+        if is_header:
+            # toggle expand/collapse للرأس
+            if self._tree_view.isExpanded(index):
+                self._tree_view.collapse(index)
+            else:
+                self._tree_view.expand(index)
+            return
+
+        # عنصر قابل للاختيار
+        gid = item.data(_ROLE_GROUP_ID)
+        self._update_selection(item, gid)
+        self.hidePopup()
+
+    def _update_selection(self, item: QStandardItem, gid):
+        """يحدّث النص الظاهر في الـ combo ويحسب entry_ids."""
+        if gid is None:
+            self.setCurrentText("— كل التصنيفات —")
+            self._group_entry_ids = None
+        else:
+            display = item.text().strip()
+            self.setCurrentText(display)
+            try:
+                self._group_entry_ids = _get_entry_ids_by_group(self.conn, gid)
+            except Exception:
+                self._group_entry_ids = None
+
+    def currentData(self, role=Qt.UserRole):
+        """يرجع group_id المختار حالياً (None = كل التصنيفات)."""
+        # نبحث عن العنصر المختار في الـ tree view
+        indexes = self._tree_view.selectedIndexes()
+        if not indexes:
+            return None
+        item = self._model.itemFromIndex(indexes[0])
+        if not item:
+            return None
+        return item.data(_ROLE_GROUP_ID)
+
+    def get_group_entry_ids(self) -> set | None:
+        """يرجع set من entry_ids أو None لو لا يوجد فلتر."""
+        return self._group_entry_ids
+
+    def _reload(self):
+        """يعيد بناء الشجرة عند تغيير البيانات."""
+        self._populate()
+        self._tree_view.expandAll()
+
+    def reset(self):
+        """يعيد الاختيار لـ 'كل التصنيفات'."""
+        self._tree_view.clearSelection()
+        self._group_entry_ids = None
+        self.setCurrentIndex(0)
+
+
+# ══════════════════════════════════════════════════════════
+# شريط فلاتر القيود — مع شجرة التصنيفات
+# ══════════════════════════════════════════════════════════
+
+class _JournalFilterBar(QFrame):
+    """شريط فلاتر متكامل لجدول القيود — بفلتر تصنيفات شجري."""
+
+    def __init__(self, conn, parent=None):
+        super().__init__(parent)
+        self.conn = conn
         self.setStyleSheet("""
             QFrame {
                 background: #f0f4ff;
@@ -102,15 +340,13 @@ class _JournalFilterBar(QFrame):
             }
         """)
         self._build()
-        # تحديث قائمة التصنيفات عند تغيير البيانات
-        bus.data_changed.connect(self._reload_groups)
 
     def _build(self):
         root = QVBoxLayout(self)
         root.setContentsMargins(10, 8, 10, 8)
         root.setSpacing(6)
 
-        # ══ الصف الأول: بحث + تصنيف الحساب + التوازن ══
+        # ══ الصف الأول: بحث + تصنيف الحساب (شجرة) + التوازن ══
         row1 = QHBoxLayout()
         row1.setSpacing(8)
 
@@ -130,25 +366,31 @@ class _JournalFilterBar(QFrame):
             QLineEdit:focus { border-color: #1565c0; }
         """)
 
-        # ── فلتر تصنيف الحساب ──
+        # ── فلتر تصنيف الحساب — شجرة ──
         lbl_grp = QLabel("🏷 التصنيف:")
         lbl_grp.setStyleSheet(
             "background:transparent; border:none; font-weight:bold;"
             "font-size:11px; color:#555;"
         )
 
-        self.cmb_group = QComboBox()
+        self.cmb_group = _TreeGroupCombo(self.conn)
         self.cmb_group.setMinimumHeight(30)
-        self.cmb_group.setMinimumWidth(180)
+        self.cmb_group.setMinimumWidth(200)
+        self.cmb_group.setMaximumWidth(280)
         self.cmb_group.setStyleSheet("""
             QComboBox {
                 background: white; border: 1px solid #c5cae9;
                 border-radius: 5px; padding: 2px 8px; font-size: 11px;
             }
-            QComboBox::drop-down { border: none; }
+            QComboBox::drop-down {
+                border: none;
+                width: 20px;
+            }
+            QComboBox::down-arrow {
+                width: 10px;
+                height: 10px;
+            }
         """)
-        self._reload_groups()
-        self.cmb_group.currentIndexChanged.connect(self._on_group_changed)
 
         # ── فلتر التوازن ──
         lbl_bal = QLabel("الحالة:")
@@ -160,7 +402,13 @@ class _JournalFilterBar(QFrame):
         self.cmb_balance.addItem("الكل",          None)
         self.cmb_balance.addItem("✅ متوازن",      "balanced")
         self.cmb_balance.addItem("⚠️ غير متوازن", "unbalanced")
-        self.cmb_balance.setStyleSheet(self.cmb_group.styleSheet())
+        self.cmb_balance.setStyleSheet("""
+            QComboBox {
+                background: white; border: 1px solid #c5cae9;
+                border-radius: 5px; padding: 2px 8px; font-size: 11px;
+            }
+            QComboBox::drop-down { border: none; }
+        """)
 
         row1.addWidget(lbl_s)
         row1.addWidget(self.inp_search, stretch=2)
@@ -240,92 +488,14 @@ class _JournalFilterBar(QFrame):
         row2.addWidget(self.lbl_count)
         root.addLayout(row2)
 
-    # ── تحميل التصنيفات الهرمية ──────────────────────────
-
-    def _reload_groups(self):
-        """يملأ combo التصنيفات بشكل هرمي مقسّم حسب نوع الحساب."""
-        prev = self.cmb_group.currentData()
-        self.cmb_group.blockSignals(True)
-        self.cmb_group.clear()
-        self.cmb_group.addItem("— كل التصنيفات —", None)
-
-        try:
-            all_groups = fetch_all_groups(self.conn)
-        except Exception:
-            all_groups = []
-
-        # نجمّع التصنيفات حسب نوع الحساب بالترتيب المنطقي
-        type_order = ["asset", "liability", "capital", "drawings", "revenue", "expense"]
-        groups_by_type: dict[str, list] = {}
-        for g in all_groups:
-            t = g["acc_type"]
-            groups_by_type.setdefault(t, []).append(dict(g))
-
-        for acc_type in type_order:
-            if acc_type not in groups_by_type:
-                continue
-            type_rows = groups_by_type[acc_type]
-            tree = build_group_tree(type_rows)
-            if not tree:
-                continue
-
-            # رأس النوع (غير قابل للاختيار)
-            type_label = TYPE_AR.get(acc_type, acc_type)
-            icon = _TYPE_ICONS.get(acc_type, "📁")
-            sep_text = f"── {icon} {type_label} ──"
-            self.cmb_group.addItem(sep_text, f"__sep__{acc_type}")
-            sep_idx = self.cmb_group.count() - 1
-            model = self.cmb_group.model()
-            item = model.item(sep_idx)
-            if item:
-                item.setFlags(item.flags() & ~Qt.ItemIsEnabled & ~Qt.ItemIsSelectable)
-                f = QFont()
-                f.setBold(True)
-                item.setFont(f)
-                item.setForeground(QColor(TYPE_COLORS.get(acc_type, "#555")))
-
-            # أضف تصنيفات هذا النوع
-            self._add_group_nodes(tree, depth=1)
-
-        self.cmb_group.blockSignals(False)
-
-        # استعادة الاختيار السابق
-        for i in range(self.cmb_group.count()):
-            if self.cmb_group.itemData(i) == prev:
-                self.cmb_group.setCurrentIndex(i)
-                break
-
-    def _add_group_nodes(self, nodes: list, depth: int):
-        indent = "    " * depth
-        arrow  = "↳ " if depth > 1 else ""
-        for node in nodes:
-            label = f"{indent}{arrow}{node['name']}"
-            self.cmb_group.addItem(label, node["id"])
-            idx = self.cmb_group.count() - 1
-            self.cmb_group.setItemData(idx, QColor(node["color"]), Qt.ForegroundRole)
-            if node.get("children"):
-                self._add_group_nodes(node["children"], depth + 1)
-
-    def _on_group_changed(self):
-        """عند تغيير التصنيف، احسب entry_ids المطابقة مسبقاً للأداء."""
-        gid = self.cmb_group.currentData()
-        if gid is None or (isinstance(gid, str) and gid.startswith("__sep__")):
-            self._group_entry_ids = None
-        else:
-            try:
-                self._group_entry_ids = _get_entry_ids_by_group(self.conn, gid)
-            except Exception:
-                self._group_entry_ids = None
-
     # ── API الفلترة ──────────────────────────────────────
 
     def reset(self):
         self.inp_search.clear()
-        self.cmb_group.setCurrentIndex(0)
+        self.cmb_group.reset()
         self.cmb_balance.setCurrentIndex(0)
         self.dt_from.setDate(QDate(2000, 1, 1))
         self.dt_to.setDate(QDate.currentDate())
-        self._group_entry_ids = None
 
     def matches(self, entry: dict) -> bool:
         """يتحقق إذا كان القيد يطابق الفلاتر الحالية."""
@@ -338,8 +508,9 @@ class _JournalFilterBar(QFrame):
                 return False
 
         # ── فلتر التصنيف ──
-        if self._group_entry_ids is not None:
-            if entry.get("id") not in self._group_entry_ids:
+        group_entry_ids = self.cmb_group.get_group_entry_ids()
+        if group_entry_ids is not None:
+            if entry.get("id") not in group_entry_ids:
                 return False
 
         # ── فلتر التوازن ──
@@ -1437,7 +1608,7 @@ class _JournalForm(QWidget):
 
 
 # ══════════════════════════════════════════════════════════
-# جدول القيود — مع عمود التاريخ المستقل وفلتر التصنيفات
+# جدول القيود — مع عمود التاريخ المستقل وفلتر التصنيفات الشجري
 # ══════════════════════════════════════════════════════════
 
 class _JournalTreeTable(QWidget):
@@ -1460,15 +1631,18 @@ class _JournalTreeTable(QWidget):
 
         root.addWidget(section_label("── القيود المحاسبية المحفوظة ──"))
 
-        # ── شريط الفلاتر (يمرر conn للتصنيفات) ──
+        # ── شريط الفلاتر (يمرر conn للتصنيفات الشجرية) ──
         self._filter = _JournalFilterBar(self.conn)
         self._filter.inp_search.textChanged.connect(self._apply_filter)
-        self._filter.cmb_group.currentIndexChanged.connect(self._apply_filter)
+        # فلتر التصنيف — نربطه عبر clicked في الشجرة
+        self._filter.cmb_group._tree_view.clicked.connect(
+            lambda _: QTimer.singleShot(50, self._apply_filter)
+        )
         self._filter.cmb_balance.currentIndexChanged.connect(self._apply_filter)
         self._filter.dt_from.dateChanged.connect(self._apply_filter)
         self._filter.dt_to.dateChanged.connect(self._apply_filter)
 
-        # ربط زر المسح بالتطبيق
+        # ربط زر المسح
         orig_reset = self._filter.reset
         def _reset_and_apply():
             orig_reset()
@@ -1592,7 +1766,6 @@ class _JournalTreeTable(QWidget):
                 if item:
                     item.setBackground(QBrush(QColor("#eef3fb")))
 
-            # ── عرض تفاصيل القيد عند التوسيع ──
             if expanded:
                 for line in entry["lines"]:
                     rc = self.table.rowCount()
@@ -1605,7 +1778,6 @@ class _JournalTreeTable(QWidget):
                     acc_code  = line.get("account_code", "")
                     acc_type  = line.get("account_type", "")
 
-                    # تمييز الحساب بلونه حسب نوعه
                     acc_color = TYPE_COLORS.get(acc_type, "#333")
                     prefix    = "    └─ "
                     desc_text = f"{prefix}{acc_code} — {acc_name}"
