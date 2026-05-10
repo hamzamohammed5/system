@@ -1,175 +1,312 @@
 """
 ui/tabs/accounting/journal_tab.py
 ===================================
-قيود اليومية — تصميم جديد:
-  - صفوف غير محدودة (DR و CR)
-  - إجمالي مدين / دائن في الأسفل مع indicator التوازن
-  - auto-fill: لو DR=1000 والصف التالي CR يقترح 1000 تلقائياً
-  - تقسيم: ممكن توزع المبلغ على أكتر من صف
+قيود اليومية — تصميم بعمودين منفصلين DR | CR:
+
+  - عمود DR على اليمين  وعمود CR على اليسار
+  - إضافة صفوف غير محدودة في كل جانب بشكل مستقل
+  - ترتيب الصفوف داخل كل جانب بأزرار ↑ ↓
+  - لا يوجد auto-fill — المستخدم يدخل الأرقام بنفسه
+  - شريط التوازن في الأسفل: إجمالي DR | إجمالي CR | الفرق | الحالة
+  - زر الحفظ معطَّل حتى يتحقق التوازن (DR == CR)
+  - كل الصفوف تُحفظ في Entry واحد
 """
 
 from PyQt5.QtWidgets import (
-    QWidget, QVBoxLayout, QHBoxLayout, QGridLayout,
+    QWidget, QVBoxLayout, QHBoxLayout,
     QLabel, QFrame, QSplitter, QPushButton,
     QTableWidgetItem, QMessageBox,
     QLineEdit, QComboBox, QDateEdit, QDoubleSpinBox,
-    QScrollArea, QSizePolicy,
+    QScrollArea,
 )
-from PyQt5.QtCore import Qt, QDate, QTimer
+from PyQt5.QtCore import Qt, QDate
 from PyQt5.QtGui  import QColor
 
 from db.accounting_repo import (
-    fetch_account,
     fetch_all_entries, insert_entry, add_entry_lines,
     delete_entry, validate_entry_balance,
-    fetch_leaf_accounts,
 )
 from ui.helpers import (
     make_table, setup_table_columns, buttons_row,
     section_label, danger_button, confirm_delete,
 )
 from ui.events import bus
-from .helpers      import _spin
 from .account_combo import _AccountCombo
 
 
 # ══════════════════════════════════════════════════════════
-# صف إدخال واحد (حساب + مبلغ + DR/CR)
+# صف إدخال واحد — يُستخدم في كلا العمودين
 # ══════════════════════════════════════════════════════════
 
-class _EntryLine(QFrame):
+class _SideLine(QFrame):
     """
-    صف واحد في القيد:
-      [حساب combo] [مبلغ] [DR / CR] [بيان] [حذف]
+    صف واحد داخل عمود DR أو CR:
+      [▲][▼]  [حساب combo]  [مبلغ]  [بيان]  [✖]
     """
-    def __init__(self, conn, side: str, on_change=None, on_remove=None, parent=None):
-        """
-        side: 'dr' أو 'cr' — يحدد الجانب الافتراضي
-        """
+    def __init__(self, conn, side: str, on_change, on_remove, on_move_up, on_move_down,
+                 parent=None):
         super().__init__(parent)
-        self.conn       = conn
-        self._side      = side          # 'dr' أو 'cr'
-        self._on_change = on_change
-        self._on_remove = on_remove
+        self.conn         = conn
+        self._side        = side
+        self._on_change   = on_change
+        self._on_remove   = on_remove
+        self._on_move_up  = on_move_up
+        self._on_move_dn  = on_move_down
         self._build()
 
     def _build(self):
-        self.setStyleSheet("""
-            QFrame {
-                background: #fafafa;
-                border: 1px solid #e8e8e8;
-                border-radius: 6px;
-            }
-        """)
+        self._apply_style()
         lay = QHBoxLayout(self)
-        lay.setContentsMargins(8, 6, 8, 6)
-        lay.setSpacing(6)
+        lay.setContentsMargins(6, 4, 6, 4)
+        lay.setSpacing(4)
 
-        # ── حساب ──
-        self._acc_combo = _AccountCombo(self.conn)
-        self._acc_combo.cmb_account.currentIndexChanged.connect(self._changed)
-        lay.addWidget(self._acc_combo, stretch=3)
+        # ── أزرار الترتيب ──
+        self.btn_up = QPushButton("▲")
+        self.btn_dn = QPushButton("▼")
+        for b in (self.btn_up, self.btn_dn):
+            b.setFixedSize(22, 22)
+            b.setStyleSheet(
+                "QPushButton { background:transparent; border:none; color:#aaa; font-size:9px; }"
+                "QPushButton:hover { color:#1565c0; }"
+            )
+        self.btn_up.clicked.connect(lambda: self._on_move_up(self))
+        self.btn_dn.clicked.connect(lambda: self._on_move_dn(self))
+
+        ord_col = QVBoxLayout()
+        ord_col.setSpacing(0)
+        ord_col.setContentsMargins(0, 0, 0, 0)
+        ord_col.addWidget(self.btn_up)
+        ord_col.addWidget(self.btn_dn)
+        lay.addLayout(ord_col)
+
+        # ── اختيار الحساب ──
+        self._acc = _AccountCombo(self.conn)
+        self._acc.cmb_account.currentIndexChanged.connect(self._changed)
+        lay.addWidget(self._acc, stretch=3)
 
         # ── المبلغ ──
         self.sp_amount = QDoubleSpinBox()
         self.sp_amount.setRange(0, 999_999_999)
         self.sp_amount.setDecimals(2)
-        self.sp_amount.setMinimumHeight(28)
-        self.sp_amount.setFixedWidth(120)
+        self.sp_amount.setMinimumHeight(26)
+        self.sp_amount.setFixedWidth(110)
         self.sp_amount.valueChanged.connect(self._changed)
         lay.addWidget(self.sp_amount)
 
-        # ── DR / CR toggle ──
-        self.btn_side = QPushButton("DR" if self._side == "dr" else "CR")
-        self.btn_side.setCheckable(True)
-        self.btn_side.setChecked(self._side == "dr")
-        self.btn_side.setFixedWidth(50)
-        self.btn_side.setMinimumHeight(28)
-        self._update_side_style()
-        self.btn_side.toggled.connect(self._on_side_toggled)
-        lay.addWidget(self.btn_side)
-
-        # ── بيان ──
+        # ── البيان ──
         self.inp_desc = QLineEdit()
         self.inp_desc.setPlaceholderText("بيان...")
-        self.inp_desc.setMinimumHeight(28)
-        self.inp_desc.setMinimumWidth(100)
+        self.inp_desc.setMinimumHeight(26)
         lay.addWidget(self.inp_desc, stretch=2)
 
         # ── حذف ──
         btn_del = QPushButton("✖")
-        btn_del.setFixedSize(28, 28)
+        btn_del.setFixedSize(24, 24)
         btn_del.setStyleSheet(
-            "QPushButton { background:transparent; border:none; color:#aaa; font-size:13px; }"
+            "QPushButton { background:transparent; border:none; color:#bbb; font-size:11px; }"
             "QPushButton:hover { color:#e53935; }"
         )
-        btn_del.clicked.connect(lambda: self._on_remove(self) if self._on_remove else None)
+        btn_del.clicked.connect(lambda: self._on_remove(self))
         lay.addWidget(btn_del)
 
-    def _on_side_toggled(self, checked):
-        self._side = "dr" if checked else "cr"
-        self.btn_side.setText("DR" if checked else "CR")
-        self._update_side_style()
-        self._changed()
-
-    def _update_side_style(self):
+    def _apply_style(self):
         if self._side == "dr":
-            self.btn_side.setStyleSheet("""
-                QPushButton {
-                    background: #e3f2fd; color: #1565c0;
-                    font-weight: bold; border: 1px solid #90caf9;
-                    border-radius: 4px;
+            self.setStyleSheet("""
+                QFrame {
+                    background: #f4f8ff;
+                    border: 1px solid #c5d8f7;
+                    border-right: 3px solid #1565c0;
+                    border-radius: 5px;
                 }
-                QPushButton:hover { background: #bbdefb; }
             """)
         else:
-            self.btn_side.setStyleSheet("""
-                QPushButton {
-                    background: #fdecea; color: #c62828;
-                    font-weight: bold; border: 1px solid #ef9a9a;
-                    border-radius: 4px;
+            self.setStyleSheet("""
+                QFrame {
+                    background: #fff4f4;
+                    border: 1px solid #f7c5c5;
+                    border-right: 3px solid #c62828;
+                    border-radius: 5px;
                 }
-                QPushButton:hover { background: #ffcdd2; }
             """)
 
     def _changed(self):
-        if self._on_change:
-            self._on_change()
+        self._on_change()
 
-    # ── API ──
+    # ── API ──────────────────────────────────────────────
     def get_values(self) -> dict | None:
-        acc_id = self._acc_combo.current_account_id()
+        acc_id = self._acc.current_account_id()
         amount = self.sp_amount.value()
         if not acc_id or amount == 0:
             return None
-        dr = amount if self._side == "dr" else 0.0
-        cr = amount if self._side == "cr" else 0.0
         return {
             "account_id":  acc_id,
-            "debit":       dr,
-            "credit":      cr,
+            "debit":       amount if self._side == "dr" else 0.0,
+            "credit":      amount if self._side == "cr" else 0.0,
             "description": self.inp_desc.text().strip(),
         }
-
-    def set_amount(self, amount: float):
-        self.sp_amount.setValue(amount)
-
-    def set_side(self, side: str):
-        self._side = side
-        self.btn_side.setChecked(side == "dr")
-        self.btn_side.setText("DR" if side == "dr" else "CR")
-        self._update_side_style()
 
     def get_amount(self) -> float:
         return self.sp_amount.value()
 
-    def get_side(self) -> str:
-        return self._side
 
-    def clear(self):
-        self._acc_combo.cmb_account.setCurrentIndex(0)
-        self.sp_amount.setValue(0)
-        self.inp_desc.clear()
+# ══════════════════════════════════════════════════════════
+# لوحة عمود واحد (DR أو CR) مع scroll وأزرار
+# ══════════════════════════════════════════════════════════
+
+class _SidePanel(QFrame):
+    """
+    لوحة عمود واحد: عنوان + scroll بالصفوف + زر إضافة + إجمالي
+    """
+    def __init__(self, conn, side: str, on_balance_changed, parent=None):
+        super().__init__(parent)
+        self.conn                = conn
+        self._side               = side
+        self._on_balance_changed = on_balance_changed
+        self._lines: list[_SideLine] = []
+        self._build()
+
+    def _build(self):
+        color     = "#1565c0" if self._side == "dr" else "#c62828"
+        bg_header = "#e3f2fd" if self._side == "dr" else "#fdecea"
+        title_txt = "📥  مدين  (DR)" if self._side == "dr" else "📤  دائن  (CR)"
+
+        self.setObjectName(f"side_{self._side}")
+        self.setStyleSheet(f"""
+            QFrame#side_{self._side} {{
+                border: 2px solid {color};
+                border-radius: 8px;
+                background: white;
+            }}
+        """)
+
+        root = QVBoxLayout(self)
+        root.setContentsMargins(0, 0, 0, 0)
+        root.setSpacing(0)
+
+        # ── رأس ──
+        hdr = QFrame()
+        hdr.setStyleSheet(f"background:{bg_header}; border-radius:6px 6px 0 0;")
+        hdr.setFixedHeight(36)
+        hdr_lay = QHBoxLayout(hdr)
+        hdr_lay.setContentsMargins(10, 4, 10, 4)
+
+        lbl_title = QLabel(title_txt)
+        lbl_title.setStyleSheet(
+            f"font-weight:bold; color:{color}; font-size:12px;"
+            "background:transparent; border:none;"
+        )
+        lbl_tot_label = QLabel("الإجمالي:")
+        lbl_tot_label.setStyleSheet("background:transparent; border:none; color:#555;")
+        self.lbl_total = QLabel("0.00")
+        self.lbl_total.setStyleSheet(
+            f"font-weight:bold; color:{color}; font-size:13px;"
+            "background:transparent; border:none;"
+        )
+
+        hdr_lay.addWidget(lbl_title)
+        hdr_lay.addStretch()
+        hdr_lay.addWidget(lbl_tot_label)
+        hdr_lay.addWidget(self.lbl_total)
+        root.addWidget(hdr)
+
+        # ── منطقة الصفوف ──
+        self._rows_w   = QWidget()
+        self._rows_w.setStyleSheet("background:transparent;")
+        self._rows_lay = QVBoxLayout(self._rows_w)
+        self._rows_lay.setSpacing(3)
+        self._rows_lay.setContentsMargins(6, 6, 6, 6)
+        self._rows_lay.addStretch()
+
+        scroll = QScrollArea()
+        scroll.setWidgetResizable(True)
+        scroll.setWidget(self._rows_w)
+        scroll.setMinimumHeight(120)
+        scroll.setStyleSheet("QScrollArea { border:none; background:transparent; }")
+        root.addWidget(scroll, stretch=1)
+
+        # ── زر إضافة ──
+        btn_add = QPushButton(
+            f"➕  إضافة صف {'مدين' if self._side == 'dr' else 'دائن'}"
+        )
+        btn_add.setMinimumHeight(28)
+        btn_add.setStyleSheet(f"""
+            QPushButton {{
+                background:{bg_header}; color:{color};
+                border:1px solid {color}; border-radius:4px;
+                font-weight:bold; padding:2px 10px; margin:4px 6px;
+            }}
+            QPushButton:hover {{ background:{color}; color:white; }}
+        """)
+        btn_add.clicked.connect(self.add_line)
+        root.addWidget(btn_add)
+
+    # ─────────────────────────────────────────────────────
+    def add_line(self) -> "_SideLine":
+        line = _SideLine(
+            conn         = self.conn,
+            side         = self._side,
+            on_change    = self._on_line_changed,
+            on_remove    = self._remove_line,
+            on_move_up   = self._move_up,
+            on_move_down = self._move_down,
+        )
+        self._lines.append(line)
+        self._rows_lay.insertWidget(self._rows_lay.count() - 1, line)
+        self._refresh_total()
+        return line
+
+    def _remove_line(self, line: "_SideLine"):
+        if len(self._lines) <= 1:
+            QMessageBox.information(None, "تنبيه", "لازم يكون في صف واحد على الأقل")
+            return
+        self._lines.remove(line)
+        self._rows_lay.removeWidget(line)
+        line.deleteLater()
+        self._on_line_changed()
+
+    def _move_up(self, line: "_SideLine"):
+        idx = self._lines.index(line)
+        if idx == 0:
+            return
+        self._lines[idx], self._lines[idx - 1] = self._lines[idx - 1], self._lines[idx]
+        self._rebuild_rows()
+
+    def _move_down(self, line: "_SideLine"):
+        idx = self._lines.index(line)
+        if idx >= len(self._lines) - 1:
+            return
+        self._lines[idx], self._lines[idx + 1] = self._lines[idx + 1], self._lines[idx]
+        self._rebuild_rows()
+
+    def _rebuild_rows(self):
+        while self._rows_lay.count() > 1:
+            item = self._rows_lay.takeAt(0)
+            if item and item.widget():
+                item.widget().setParent(None)
+        for line in self._lines:
+            self._rows_lay.insertWidget(self._rows_lay.count() - 1, line)
+
+    def _on_line_changed(self):
+        self._refresh_total()
+        self._on_balance_changed()
+
+    def _refresh_total(self):
+        total = sum(ln.get_amount() for ln in self._lines)
+        self.lbl_total.setText(f"{total:,.2f}")
+
+    # ── API ──────────────────────────────────────────────
+    def get_total(self) -> float:
+        return sum(ln.get_amount() for ln in self._lines)
+
+    def get_all_values(self) -> list:
+        return [v for ln in self._lines if (v := ln.get_values()) is not None]
+
+    def clear_lines(self):
+        for ln in list(self._lines):
+            self._rows_lay.removeWidget(ln)
+            ln.deleteLater()
+        self._lines.clear()
+        self._refresh_total()
 
 
 # ══════════════════════════════════════════════════════════
@@ -179,8 +316,7 @@ class _EntryLine(QFrame):
 class _JournalForm(QWidget):
     def __init__(self, conn, parent=None):
         super().__init__(parent)
-        self.conn        = conn
-        self._lines: list[_EntryLine] = []
+        self.conn = conn
         self._build()
 
     def _build(self):
@@ -188,7 +324,7 @@ class _JournalForm(QWidget):
         root.setContentsMargins(12, 10, 12, 10)
         root.setSpacing(8)
 
-        # ── رأس: تاريخ + نوع + وصف ──
+        # ── رأس ──
         self.lbl_mode = QLabel("── قيد يومية جديد ──")
         self.lbl_mode.setStyleSheet("font-weight:bold; color:#1565c0; font-size:12px;")
         root.addWidget(self.lbl_mode)
@@ -216,7 +352,7 @@ class _JournalForm(QWidget):
             self.cmb_type.addItem(label, key)
 
         self.inp_desc = QLineEdit()
-        self.inp_desc.setPlaceholderText("وصف القيد...")
+        self.inp_desc.setPlaceholderText("وصف القيد الإجمالي...")
         self.inp_desc.setMinimumHeight(30)
 
         info_row.addWidget(QLabel("التاريخ:"))
@@ -226,251 +362,139 @@ class _JournalForm(QWidget):
         info_row.addWidget(self.inp_desc, stretch=1)
         root.addLayout(info_row)
 
-        # ── رؤوس الأعمدة ──
-        hdr = QWidget()
-        hdr.setStyleSheet("background:transparent;")
-        hdr_lay = QHBoxLayout(hdr)
-        hdr_lay.setContentsMargins(8, 0, 8, 0)
-        hdr_lay.setSpacing(6)
-
-        def _h(text, stretch=0, w=None):
-            lbl = QLabel(text)
-            lbl.setStyleSheet(
-                "font-size:10px; font-weight:bold; color:#666;"
-                "border-bottom:1px solid #ddd; background:transparent;"
-            )
-            if w:
-                lbl.setFixedWidth(w)
-            hdr_lay.addWidget(lbl, stretch=stretch)
-
-        _h("الحساب",  stretch=3)
-        _h("المبلغ",  w=120)
-        _h("الجانب",  w=50)
-        _h("البيان",  stretch=2)
-        _h("",        w=28)
-        root.addWidget(hdr)
-
-        # ── منطقة الصفوف ──
-        self._rows_container = QWidget()
-        self._rows_container.setStyleSheet("background:transparent;")
-        self._rows_layout = QVBoxLayout(self._rows_container)
-        self._rows_layout.setSpacing(4)
-        self._rows_layout.setContentsMargins(0, 0, 4, 0)
-        self._rows_layout.addStretch()
-
-        scroll = QScrollArea()
-        scroll.setWidgetResizable(True)
-        scroll.setWidget(self._rows_container)
-        scroll.setMinimumHeight(140)
-        scroll.setMaximumHeight(320)
-        scroll.setStyleSheet("""
-            QScrollArea {
-                border: 1px solid #e0e0e0;
-                border-radius: 6px;
-                background: #f9f9f9;
-            }
-        """)
-        root.addWidget(scroll, stretch=1)
-
-        # ── أزرار الإضافة ──
-        add_row = QHBoxLayout()
-        add_row.setSpacing(8)
-
-        btn_add_dr = QPushButton("➕ إضافة صف مدين (DR)")
-        btn_add_dr.setMinimumHeight(28)
-        btn_add_dr.setStyleSheet("""
-            QPushButton {
-                background:#e3f2fd; color:#1565c0;
-                border:1px solid #90caf9; border-radius:4px;
-                font-weight:bold; padding:2px 10px;
-            }
-            QPushButton:hover { background:#bbdefb; }
-        """)
-        btn_add_dr.clicked.connect(lambda: self._add_line("dr"))
-
-        btn_add_cr = QPushButton("➕ إضافة صف دائن (CR)")
-        btn_add_cr.setMinimumHeight(28)
-        btn_add_cr.setStyleSheet("""
-            QPushButton {
-                background:#fdecea; color:#c62828;
-                border:1px solid #ef9a9a; border-radius:4px;
-                font-weight:bold; padding:2px 10px;
-            }
-            QPushButton:hover { background:#ffcdd2; }
-        """)
-        btn_add_cr.clicked.connect(lambda: self._add_line("cr"))
-
-        add_row.addWidget(btn_add_dr)
-        add_row.addWidget(btn_add_cr)
-        add_row.addStretch()
-        root.addLayout(add_row)
+        # ── العمودان DR | CR ──
+        cols = QHBoxLayout()
+        cols.setSpacing(10)
+        self._dr_panel = _SidePanel(self.conn, "dr", self._on_balance_changed)
+        self._cr_panel = _SidePanel(self.conn, "cr", self._on_balance_changed)
+        cols.addWidget(self._dr_panel, stretch=1)
+        cols.addWidget(self._cr_panel, stretch=1)
+        root.addLayout(cols, stretch=1)
 
         # ── شريط التوازن ──
-        balance_frame = QFrame()
-        balance_frame.setStyleSheet("""
+        bal_frame = QFrame()
+        bal_frame.setStyleSheet("""
             QFrame {
                 background: #f0f4ff;
                 border: 1px solid #c5cae9;
                 border-radius: 6px;
             }
         """)
-        bal_lay = QHBoxLayout(balance_frame)
-        bal_lay.setContentsMargins(12, 8, 12, 8)
-        bal_lay.setSpacing(20)
+        bal_lay = QHBoxLayout(bal_frame)
+        bal_lay.setContentsMargins(14, 8, 14, 8)
+        bal_lay.setSpacing(4)
 
-        lbl_dr_title = QLabel("إجمالي مدين (DR):")
-        lbl_dr_title.setStyleSheet("font-weight:bold; color:#1565c0;")
-        self.lbl_total_dr = QLabel("0.00")
-        self.lbl_total_dr.setStyleSheet(
+        def _bal_lbl(text, style=""):
+            l = QLabel(text)
+            if style:
+                l.setStyleSheet(style)
+            return l
+
+        def _sep():
+            s = QLabel("│")
+            s.setStyleSheet("color:#c5cae9; font-size:18px; margin:0 10px;")
+            return s
+
+        lbl_dr_t = _bal_lbl("إجمالي DR:", "font-weight:bold; color:#1565c0;")
+        self.lbl_sum_dr = _bal_lbl("0.00",
             "font-size:14px; font-weight:bold; color:#1565c0;"
-            "background:#e3f2fd; border-radius:4px; padding:4px 10px;"
-        )
+            "background:#e3f2fd; border-radius:4px; padding:3px 10px; margin-left:4px;")
 
-        lbl_cr_title = QLabel("إجمالي دائن (CR):")
-        lbl_cr_title.setStyleSheet("font-weight:bold; color:#c62828;")
-        self.lbl_total_cr = QLabel("0.00")
-        self.lbl_total_cr.setStyleSheet(
+        lbl_cr_t = _bal_lbl("إجمالي CR:", "font-weight:bold; color:#c62828;")
+        self.lbl_sum_cr = _bal_lbl("0.00",
             "font-size:14px; font-weight:bold; color:#c62828;"
-            "background:#fdecea; border-radius:4px; padding:4px 10px;"
-        )
+            "background:#fdecea; border-radius:4px; padding:3px 10px; margin-left:4px;")
 
-        self.lbl_diff = QLabel("الفرق: 0.00")
-        self.lbl_diff.setStyleSheet(
-            "font-size:13px; font-weight:bold; color:#2e7d32;"
-            "background:#f1f8e9; border-radius:4px; padding:4px 10px;"
-        )
+        lbl_diff_t = _bal_lbl("الفرق:", "font-weight:bold; color:#555;")
+        self.lbl_diff = _bal_lbl("0.00",
+            "font-size:14px; font-weight:bold; color:#888;"
+            "background:#f5f5f5; border-radius:4px; padding:3px 10px; margin-left:4px;")
 
-        self.lbl_status = QLabel("○ أضف صفوف")
-        self.lbl_status.setStyleSheet("font-size:12px; color:#888; font-weight:bold;")
+        self.lbl_status = _bal_lbl("○ أضف صفوف",
+            "font-size:12px; font-weight:bold; color:#888;")
 
-        bal_lay.addWidget(lbl_dr_title)
-        bal_lay.addWidget(self.lbl_total_dr)
-        bal_lay.addSpacing(8)
-        bal_lay.addWidget(lbl_cr_title)
-        bal_lay.addWidget(self.lbl_total_cr)
-        bal_lay.addSpacing(8)
-        bal_lay.addWidget(self.lbl_diff)
-        bal_lay.addWidget(self.lbl_status)
+        for w in (lbl_dr_t, self.lbl_sum_dr, _sep(),
+                  lbl_cr_t, self.lbl_sum_cr, _sep(),
+                  lbl_diff_t, self.lbl_diff, _sep(),
+                  self.lbl_status):
+            bal_lay.addWidget(w)
         bal_lay.addStretch()
-        root.addWidget(balance_frame)
+
+        root.addWidget(bal_frame)
 
         # ── أزرار الحفظ ──
-        self.btn_save   = QPushButton("💾 حفظ القيد")
-        self.btn_cancel = QPushButton("✖ إلغاء")
-        self.btn_save.setMinimumHeight(32)
-        self.btn_cancel.setMinimumHeight(32)
+        self.btn_save   = QPushButton("💾  حفظ القيد")
+        self.btn_cancel = QPushButton("✖  مسح")
+        self.btn_save.setMinimumHeight(34)
+        self.btn_cancel.setMinimumHeight(34)
+        self.btn_save.setEnabled(False)
         self.btn_save.setStyleSheet("""
-            QPushButton { background:#1565c0; color:white;
-                font-weight:bold; border-radius:6px; padding:0 18px; }
-            QPushButton:hover { background:#0d47a1; }
+            QPushButton {
+                background:#1565c0; color:white;
+                font-weight:bold; border-radius:6px; padding:0 20px;
+            }
+            QPushButton:hover  { background:#0d47a1; }
+            QPushButton:disabled { background:#b0bec5; color:#eceff1; }
         """)
-        self.btn_cancel.setVisible(False)
+        self.btn_cancel.setStyleSheet("""
+            QPushButton {
+                background:#f5f5f5; color:#555;
+                border:1px solid #ddd; border-radius:6px; padding:0 14px;
+            }
+            QPushButton:hover { background:#eeeeee; }
+        """)
         self.btn_save.clicked.connect(self._save)
         self.btn_cancel.clicked.connect(self._clear)
         root.addLayout(buttons_row(self.btn_save, self.btn_cancel))
 
-        # ── ابدأ بصفين افتراضيين ──
-        self._add_line("dr")
-        self._add_line("cr")
+        # ابدأ بصف واحد في كل جانب
+        self._dr_panel.add_line()
+        self._cr_panel.add_line()
 
     # ══════════════════════════════════════════════════════
-    # إدارة الصفوف
+    # التوازن — يُحسب ويُعرض فقط ولا يعدّل أي مدخل
     # ══════════════════════════════════════════════════════
 
-    def _add_line(self, side: str, amount: float = 0.0) -> _EntryLine:
-        line = _EntryLine(
-            self.conn,
-            side=side,
-            on_change=self._update_balance,
-            on_remove=self._remove_line,
-        )
-        if amount:
-            line.set_amount(amount)
-        self._lines.append(line)
-        self._rows_layout.insertWidget(self._rows_layout.count() - 1, line)
-        self._update_balance()
-        return line
+    def _on_balance_changed(self):
+        total_dr = self._dr_panel.get_total()
+        total_cr = self._cr_panel.get_total()
+        diff     = total_dr - total_cr
 
-    def _remove_line(self, line: _EntryLine):
-        if len(self._lines) <= 2:
-            QMessageBox.information(self, "تنبيه", "القيد يحتاج صفين على الأقل")
-            return
-        self._lines.remove(line)
-        self._rows_layout.removeWidget(line)
-        line.deleteLater()
-        self._update_balance()
-
-    def _clear_lines(self):
-        for line in list(self._lines):
-            self._rows_layout.removeWidget(line)
-            line.deleteLater()
-        self._lines.clear()
-
-    # ══════════════════════════════════════════════════════
-    # حساب التوازن
-    # ══════════════════════════════════════════════════════
-
-    def _update_balance(self):
-        total_dr = sum(
-            ln.get_amount() for ln in self._lines if ln.get_side() == "dr"
-        )
-        total_cr = sum(
-            ln.get_amount() for ln in self._lines if ln.get_side() == "cr"
-        )
-        diff = total_dr - total_cr
-
-        self.lbl_total_dr.setText(f"{total_dr:,.2f}")
-        self.lbl_total_cr.setText(f"{total_cr:,.2f}")
-        self.lbl_diff.setText(f"الفرق: {abs(diff):,.2f}")
+        self.lbl_sum_dr.setText(f"{total_dr:,.2f}")
+        self.lbl_sum_cr.setText(f"{total_cr:,.2f}")
+        self.lbl_diff.setText(f"{abs(diff):,.2f}")
 
         if total_dr == 0 and total_cr == 0:
             self.lbl_status.setText("○ أضف صفوف")
-            self.lbl_status.setStyleSheet("font-size:12px; color:#888; font-weight:bold;")
+            self.lbl_status.setStyleSheet("font-size:12px; font-weight:bold; color:#888;")
             self.lbl_diff.setStyleSheet(
-                "font-size:13px; font-weight:bold; color:#888;"
-                "background:#f5f5f5; border-radius:4px; padding:4px 10px;"
+                "font-size:14px; font-weight:bold; color:#888;"
+                "background:#f5f5f5; border-radius:4px; padding:3px 10px; margin-left:4px;"
             )
+            self.btn_save.setEnabled(False)
+
         elif abs(diff) < 0.001:
-            self.lbl_status.setText("✅ متوازن")
-            self.lbl_status.setStyleSheet("font-size:12px; color:#2e7d32; font-weight:bold;")
+            # ✅ متوازن
+            self.lbl_status.setText("✅  متوازن — يمكن الحفظ")
+            self.lbl_status.setStyleSheet("font-size:12px; font-weight:bold; color:#2e7d32;")
             self.lbl_diff.setStyleSheet(
-                "font-size:13px; font-weight:bold; color:#2e7d32;"
-                "background:#f1f8e9; border-radius:4px; padding:4px 10px;"
+                "font-size:14px; font-weight:bold; color:#2e7d32;"
+                "background:#f1f8e9; border-radius:4px; padding:3px 10px; margin-left:4px;"
             )
+            self.btn_save.setEnabled(True)
+
         else:
-            self.lbl_status.setText("⚠️ غير متوازن")
-            self.lbl_status.setStyleSheet("font-size:12px; color:#c62828; font-weight:bold;")
-            self.lbl_diff.setStyleSheet(
-                "font-size:13px; font-weight:bold; color:#c62828;"
-                "background:#fdecea; border-radius:4px; padding:4px 10px;"
+            # ⚠️ غير متوازن
+            side_ar = "DR أكبر" if diff > 0 else "CR أكبر"
+            self.lbl_status.setText(
+                f"⚠️  غير متوازن ({side_ar} بـ {abs(diff):,.2f}) — لا يمكن الحفظ"
             )
-
-        # ── auto-fill: لو عندنا DR بس → اقترح مبلغ CR المتبقي ──
-        self._auto_suggest_remaining()
-
-    def _auto_suggest_remaining(self):
-        """
-        لو في صف CR مبلغه صفر وإجمالي DR > 0،
-        ضع المبلغ المتبقي تلقائياً في أول صف CR فارغ.
-        """
-        total_dr = sum(
-            ln.get_amount() for ln in self._lines if ln.get_side() == "dr"
-        )
-        total_cr = sum(
-            ln.get_amount() for ln in self._lines if ln.get_side() == "cr"
-        )
-        remaining = total_dr - total_cr
-
-        if remaining <= 0:
-            return
-
-        # أول صف CR فارغ
-        for ln in self._lines:
-            if ln.get_side() == "cr" and ln.get_amount() == 0:
-                ln.sp_amount.blockSignals(True)
-                ln.set_amount(remaining)
-                ln.sp_amount.blockSignals(False)
-                break
+            self.lbl_status.setStyleSheet("font-size:12px; font-weight:bold; color:#c62828;")
+            self.lbl_diff.setStyleSheet(
+                "font-size:14px; font-weight:bold; color:#c62828;"
+                "background:#fdecea; border-radius:4px; padding:3px 10px; margin-left:4px;"
+            )
+            self.btn_save.setEnabled(False)
 
     # ══════════════════════════════════════════════════════
     # حفظ / مسح
@@ -482,29 +506,26 @@ class _JournalForm(QWidget):
             QMessageBox.warning(self, "تنبيه", "أدخل وصف القيد")
             return
 
-        lines = [ln.get_values() for ln in self._lines]
-        lines = [l for l in lines if l]   # ازل الفارغة
+        dr_lines  = self._dr_panel.get_all_values()
+        cr_lines  = self._cr_panel.get_all_values()
+        all_lines = dr_lines + cr_lines
 
-        if len(lines) < 2:
-            QMessageBox.warning(self, "تنبيه", "أضف صفين على الأقل بحسابات ومبالغ")
+        if not dr_lines:
+            QMessageBox.warning(self, "تنبيه", "أضف صفًا مدينًا (DR) واحدًا على الأقل")
+            return
+        if not cr_lines:
+            QMessageBox.warning(self, "تنبيه", "أضف صفًا دائنًا (CR) واحدًا على الأقل")
             return
 
-        if not validate_entry_balance(lines):
+        # guard نهائي
+        if not validate_entry_balance(all_lines):
+            td = sum(l["debit"]  for l in all_lines)
+            tc = sum(l["credit"] for l in all_lines)
             QMessageBox.warning(
                 self, "خطأ في التوازن",
-                "مجموع المدين ≠ مجموع الدائن\n"
-                "تأكد من أن إجمالي DR = إجمالي CR"
+                f"مجموع DR ({td:,.2f}) ≠ مجموع CR ({tc:,.2f})\n"
+                "تأكد من التوازن قبل الحفظ."
             )
-            return
-
-        # تحقق من عدم تكرار نفس الحساب في نفس الجانب
-        dr_accounts = [l["account_id"] for l in lines if l["debit"] > 0]
-        cr_accounts = [l["account_id"] for l in lines if l["credit"] > 0]
-        if len(dr_accounts) != len(set(dr_accounts)):
-            QMessageBox.warning(self, "تنبيه", "يوجد حساب مكرر في جانب المدين")
-            return
-        if len(cr_accounts) != len(set(cr_accounts)):
-            QMessageBox.warning(self, "تنبيه", "يوجد حساب مكرر في جانب الدائن")
             return
 
         entry_id = insert_entry(
@@ -513,22 +534,24 @@ class _JournalForm(QWidget):
             desc,
             self.cmb_type.currentData()
         )
-        add_entry_lines(self.conn, entry_id, lines)
+        add_entry_lines(self.conn, entry_id, all_lines)
+
         self._clear()
         bus.data_changed.emit()
-        QMessageBox.information(self, "تم", "✅ تم حفظ القيد")
+        QMessageBox.information(self, "تم", "✅ تم حفظ القيد بنجاح")
 
     def _clear(self):
-        self._clear_lines()
+        self._dr_panel.clear_lines()
+        self._cr_panel.clear_lines()
         self.inp_desc.clear()
         self.dt_date.setDate(QDate.currentDate())
         self.cmb_type.setCurrentIndex(0)
         self.lbl_mode.setText("── قيد يومية جديد ──")
-        self.btn_cancel.setVisible(False)
-        # أعد الصفين الافتراضيين
-        self._add_line("dr")
-        self._add_line("cr")
-        self._update_balance()
+        self.btn_save.setEnabled(False)
+        # أعد صفًا واحدًا في كل جانب
+        self._dr_panel.add_line()
+        self._cr_panel.add_line()
+        self._on_balance_changed()
 
 
 # ══════════════════════════════════════════════════════════
@@ -553,7 +576,6 @@ class JournalTab(QWidget):
             QSplitter::handle:hover { background:#bbdefb; }
         """)
 
-        # ── فورم القيد ──
         self._form = _JournalForm(self.conn)
         splitter.addWidget(self._form)
 
@@ -565,24 +587,23 @@ class JournalTab(QWidget):
         tl.addWidget(section_label("── القيود المحاسبية المحفوظة ──"))
 
         self.table = make_table(
-            ["#", "رقم القيد", "التاريخ", "النوع", "البيان", "مدين", "دائن"],
+            ["#", "رقم القيد", "التاريخ", "النوع", "البيان", "مجموع DR", "مجموع CR"],
             stretch_col=4
         )
         setup_table_columns(self.table,
-            widths={0: 40, 1: 90, 2: 90, 3: 80, 5: 90, 6: 90},
+            widths={0: 40, 1: 90, 2: 90, 3: 80, 5: 100, 6: 100},
             stretch_col=4
         )
         self.table.setAlternatingRowColors(True)
         tl.addWidget(self.table, stretch=1)
 
-        btn_del = danger_button("🗑️ حذف القيد المحدد")
+        btn_del = danger_button("🗑️  حذف القيد المحدد")
         btn_del.setMinimumHeight(30)
         btn_del.clicked.connect(self._delete_entry)
         tl.addLayout(buttons_row(btn_del))
 
         splitter.addWidget(table_w)
-        splitter.setSizes([420, 300])
-
+        splitter.setSizes([480, 280])
         root.addWidget(splitter)
         self._load_table()
 
