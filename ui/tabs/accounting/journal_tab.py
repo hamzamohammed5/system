@@ -2,12 +2,12 @@
 ui/tabs/accounting/journal_tab.py  — نسخة محدَّثة
 ===================================================
 التغييرات:
-  1. Smart routing  — بناءً على نوع الحساب والاتجاه (زيادة/نقص):
-       asset / expense / drawings  → زيادة = DR  |  نقص = CR
-       liability / capital / revenue → زيادة = CR  |  نقص = DR
-     المستخدم يختار "زيادة ✚" أو "نقص ✖" والنظام يوجّه تلقائياً.
-
-  2. جدول شجري — صف رئيسي (مجمل) + صفوف فرعية قابلة للطي.
+  1. Smart routing  — بناءً على نوع الحساب والاتجاه (زيادة/نقص)
+  2. حذف حقل "النوع" (يدوي/شراء...) من رأس القيد — يبقى التاريخ والوصف فقط
+  3. حذف مؤشر DR/CR من صفوف القيد — يبقى اسم الحساب فقط
+  4. عناوين جدول الصفوف متناسقة مع الخانات
+  5. Combo الحسابات يعرض تصنيفات قابلة للفتح/الطي (expand/collapse)
+     مع ترتيب: الأصول → الخصوم → حقوق الملكية → الإيرادات → المصروفات
 """
 
 from PyQt5.QtWidgets import (
@@ -17,23 +17,27 @@ from PyQt5.QtWidgets import (
     QMessageBox, QAbstractItemView,
     QLineEdit, QComboBox, QDateEdit, QDoubleSpinBox,
     QScrollArea, QRadioButton, QButtonGroup,
+    QListWidget, QListWidgetItem, QDialog, QApplication,
+    QSizePolicy,
 )
-from PyQt5.QtCore import Qt, QDate
-from PyQt5.QtGui  import QColor, QFont, QBrush
+from PyQt5.QtCore import Qt, QDate, QTimer, QPoint
+from PyQt5.QtGui  import QColor, QFont, QBrush, QIcon
 
 from db.accounting_repo import (
     fetch_all_entries, fetch_entry_lines,
     insert_entry, add_entry_lines,
     delete_entry, validate_entry_balance,
-    fetch_account,
+    fetch_account, fetch_all_accounts,
+    fetch_all_groups, build_group_tree,
+    get_normal_balance,
 )
-from db.accounting_schema import NORMAL_BALANCE
+from db.accounting_schema import NORMAL_BALANCE, TYPE_AR
 from ui.helpers import (
     make_table, setup_table_columns, buttons_row,
     section_label, danger_button, confirm_delete,
 )
 from ui.events import bus
-from .account_combo import _AccountCombo
+from .helpers   import TYPE_COLORS
 
 
 # ══════════════════════════════════════════════════════════
@@ -41,17 +45,7 @@ from .account_combo import _AccountCombo
 # ══════════════════════════════════════════════════════════
 
 def _resolve_side(acc_type: str, is_increase: bool) -> str:
-    """
-    يحدد الجانب الصحيح (dr أو cr) بناءً على نوع الحساب والاتجاه.
-
-    الرصيد الطبيعي:
-      DR: asset, expense, drawings
-      CR: liability, capital, revenue
-
-    زيادة الرصيد الطبيعي → نفس الجانب
-    نقص  الرصيد الطبيعي → الجانب الآخر
-    """
-    nb = NORMAL_BALANCE.get(acc_type, "dr")   # dr أو cr
+    nb = NORMAL_BALANCE.get(acc_type, "dr")
     if is_increase:
         return nb
     else:
@@ -59,13 +53,406 @@ def _resolve_side(acc_type: str, is_increase: bool) -> str:
 
 
 # ══════════════════════════════════════════════════════════
-# صف إدخال واحد — Smart
+# ترتيب أنواع الحسابات للعرض
+# ══════════════════════════════════════════════════════════
+
+_TYPE_ORDER = ["asset", "liability", "capital", "drawings", "revenue", "expense"]
+
+_TYPE_ICONS = {
+    "asset":     "🏦",
+    "liability": "📋",
+    "capital":   "👑",
+    "drawings":  "💸",
+    "revenue":   "💹",
+    "expense":   "📤",
+}
+
+
+# ══════════════════════════════════════════════════════════
+# Popup قائمة الحسابات القابلة للتوسع
+# ══════════════════════════════════════════════════════════
+
+class _AccountTreePopup(QDialog):
+    """
+    نافذة popup تعرض الحسابات مجمّعة بالنوع ثم التصنيف،
+    مع إمكانية فتح وطي كل مجموعة.
+    """
+
+    def __init__(self, conn, acc_types=None, parent=None):
+        super().__init__(parent, Qt.Popup | Qt.FramelessWindowHint)
+        self.conn      = conn
+        self.acc_types = acc_types or _TYPE_ORDER
+        self._selected_id   = None
+        self._selected_name = None
+
+        # حالة الفتح/الطي لكل عقدة (key = "type:id" أو "type")
+        self._expanded: set = set()
+        # فتح الأنواع افتراضياً
+        for t in self.acc_types:
+            self._expanded.add(f"type:{t}")
+
+        self._all_accounts = []
+        self._filter_text  = ""
+        self._build()
+        self._load_accounts()
+
+    def _build(self):
+        self.setMinimumWidth(420)
+        self.setMaximumHeight(480)
+        self.setStyleSheet("""
+            QDialog {
+                background: white;
+                border: 1px solid #c5cae9;
+                border-radius: 8px;
+            }
+        """)
+
+        root = QVBoxLayout(self)
+        root.setContentsMargins(6, 6, 6, 6)
+        root.setSpacing(4)
+
+        # ── بحث ──
+        self.inp_search = QLineEdit()
+        self.inp_search.setPlaceholderText("🔍 بحث بالاسم أو الكود...")
+        self.inp_search.setMinimumHeight(30)
+        self.inp_search.setStyleSheet("""
+            QLineEdit {
+                background: #f0f4ff;
+                border: 1px solid #c5cae9;
+                border-radius: 4px;
+                padding: 2px 8px;
+                font-size: 12px;
+            }
+            QLineEdit:focus { border-color: #1565c0; background: white; }
+        """)
+        self.inp_search.textChanged.connect(self._on_search)
+        root.addWidget(self.inp_search)
+
+        # ── القائمة ──
+        self.list_widget = QListWidget()
+        self.list_widget.setStyleSheet("""
+            QListWidget {
+                border: 1px solid #e0e0e0;
+                border-radius: 4px;
+                background: white;
+                outline: none;
+            }
+            QListWidget::item {
+                padding: 3px 6px;
+                border-bottom: 1px solid #f0f0f0;
+            }
+            QListWidget::item:selected {
+                background: #e3f2fd;
+                color: #1565c0;
+            }
+            QListWidget::item:hover:!selected {
+                background: #f5f5f5;
+            }
+        """)
+        self.list_widget.itemClicked.connect(self._on_item_clicked)
+        self.list_widget.itemDoubleClicked.connect(self._on_item_double_clicked)
+        root.addWidget(self.list_widget)
+
+        # ── hint ──
+        hint = QLabel("اضغط مرتين أو Enter للاختيار")
+        hint.setStyleSheet("font-size:9px; color:#aaa; background:transparent;")
+        hint.setAlignment(Qt.AlignCenter)
+        root.addWidget(hint)
+
+    def _load_accounts(self):
+        self._all_accounts = []
+        for acc_type in self.acc_types:
+            try:
+                rows = fetch_all_accounts(self.conn, acc_type)
+                for r in rows:
+                    if r["is_leaf"]:
+                        self._all_accounts.append({
+                            "id":       r["id"],
+                            "code":     r["code"],
+                            "name":     r["name"],
+                            "type":     r["type"],
+                            "group_id": r["group_id"],
+                            "group_name": r["group_name"] if "group_name" in r.keys() else None,
+                        })
+            except Exception:
+                pass
+        self._render()
+
+    def _on_search(self, text):
+        self._filter_text = text.strip().lower()
+        # لو في بحث، افتح كل شيء
+        if self._filter_text:
+            for t in self.acc_types:
+                self._expanded.add(f"type:{t}")
+        self._render()
+
+    def _render(self):
+        self.list_widget.clear()
+        q = self._filter_text
+
+        # جمّع الحسابات حسب النوع ثم التصنيف
+        by_type: dict[str, dict] = {}
+        for acc in self._all_accounts:
+            t = acc["type"]
+            if t not in by_type:
+                by_type[t] = {}
+            grp_key  = acc["group_name"] or "─── بدون تصنيف ───"
+            grp_id   = acc["group_id"]   or -1
+            grp_full = (grp_id, grp_key)
+            if grp_full not in by_type[t]:
+                by_type[t][grp_full] = []
+            by_type[t][grp_full].append(acc)
+
+        for acc_type in self.acc_types:
+            if acc_type not in by_type:
+                continue
+
+            groups = by_type[acc_type]
+
+            # فلتر البحث على مستوى النوع
+            if q:
+                # اتحقق إن في حسابات مطابقة
+                has_match = any(
+                    q in acc["name"].lower() or q in acc["code"].lower()
+                    for accs in groups.values()
+                    for acc in accs
+                )
+                if not has_match:
+                    continue
+
+            type_key  = f"type:{acc_type}"
+            expanded  = type_key in self._expanded
+            icon      = _TYPE_ICONS.get(acc_type, "📁")
+            type_label = TYPE_AR.get(acc_type, acc_type)
+            toggle    = "▼" if expanded else "▶"
+            color     = TYPE_COLORS.get(acc_type, "#333")
+
+            # ── صف النوع ──
+            type_item = QListWidgetItem(f"{toggle} {icon}  {type_label}")
+            type_item.setData(Qt.UserRole, {"kind": "type", "type": acc_type, "key": type_key})
+            font = QFont()
+            font.setBold(True)
+            font.setPointSize(font.pointSize() + 1)
+            type_item.setFont(font)
+            type_item.setForeground(QColor(color))
+            type_item.setBackground(QColor("#f0f4ff"))
+            self.list_widget.addItem(type_item)
+
+            if not expanded:
+                continue
+
+            # ── التصنيفات والحسابات ──
+            for (grp_id, grp_name), accs in sorted(groups.items(), key=lambda x: x[0][1]):
+                # فلتر البحث
+                matched_accs = accs
+                if q:
+                    matched_accs = [a for a in accs
+                                    if q in a["name"].lower() or q in a["code"].lower()]
+                if not matched_accs:
+                    continue
+
+                grp_key_full = f"grp:{acc_type}:{grp_id}"
+                grp_expanded = grp_key_full in self._expanded
+
+                toggle_g = "▼" if grp_expanded else "▶"
+
+                # ── صف التصنيف ──
+                grp_item = QListWidgetItem(f"    {toggle_g} 🏷  {grp_name}")
+                grp_item.setData(Qt.UserRole, {"kind": "group", "key": grp_key_full})
+                gfont = QFont()
+                gfont.setBold(True)
+                gfont.setItalic(True)
+                grp_item.setFont(gfont)
+                grp_item.setForeground(QColor("#546e7a"))
+                grp_item.setBackground(QColor("#fafbff"))
+                self.list_widget.addItem(grp_item)
+
+                if not grp_expanded and not q:
+                    continue
+
+                # ── الحسابات ──
+                for acc in sorted(matched_accs, key=lambda a: a["code"]):
+                    nb = get_normal_balance(acc["type"])
+                    nb_text = "DR↑" if nb == "dr" else "CR↑"
+                    label = f"        {acc['code']} — {acc['name']}  [{nb_text}]"
+                    acc_item = QListWidgetItem(label)
+                    acc_item.setData(Qt.UserRole, {
+                        "kind": "account",
+                        "id":   acc["id"],
+                        "name": f"{acc['code']} — {acc['name']}",
+                    })
+                    acc_item.setForeground(QColor(color))
+                    self.list_widget.addItem(acc_item)
+
+    def _on_item_clicked(self, item):
+        data = item.data(Qt.UserRole)
+        if not data:
+            return
+        kind = data.get("kind")
+        if kind == "type":
+            key = data["key"]
+            if key in self._expanded:
+                self._expanded.discard(key)
+            else:
+                self._expanded.add(key)
+            self._render()
+        elif kind == "group":
+            key = data["key"]
+            if key in self._expanded:
+                self._expanded.discard(key)
+            else:
+                self._expanded.add(key)
+            self._render()
+        # account → لا تختار بضغطة واحدة، فقط highlight
+
+    def _on_item_double_clicked(self, item):
+        data = item.data(Qt.UserRole)
+        if not data or data.get("kind") != "account":
+            return
+        self._selected_id   = data["id"]
+        self._selected_name = data["name"]
+        self.accept()
+
+    def keyPressEvent(self, event):
+        if event.key() in (Qt.Key_Return, Qt.Key_Enter):
+            current = self.list_widget.currentItem()
+            if current:
+                self._on_item_double_clicked(current)
+            return
+        if event.key() == Qt.Key_Escape:
+            self.reject()
+            return
+        super().keyPressEvent(event)
+
+    def get_selected(self):
+        return self._selected_id, self._selected_name
+
+
+# ══════════════════════════════════════════════════════════
+# زر اختيار الحساب مع popup
+# ══════════════════════════════════════════════════════════
+
+class _AccountPickerButton(QWidget):
+    """
+    زر يفتح popup لاختيار الحساب مع عرض هرمي expand/collapse.
+    """
+
+    def __init__(self, conn, acc_types=None, parent=None):
+        super().__init__(parent)
+        self.conn         = conn
+        self.acc_types    = acc_types
+        self._account_id  = None
+        self._account_name = None
+        self._build()
+
+    def _build(self):
+        lay = QHBoxLayout(self)
+        lay.setContentsMargins(0, 0, 0, 0)
+        lay.setSpacing(4)
+
+        self.btn = QPushButton("— اختر الحساب —")
+        self.btn.setMinimumHeight(30)
+        self.btn.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Fixed)
+        self.btn.setStyleSheet("""
+            QPushButton {
+                background: white;
+                border: 1px solid #c5cae9;
+                border-radius: 4px;
+                padding: 2px 10px;
+                text-align: right;
+                font-size: 11px;
+                color: #333;
+            }
+            QPushButton:hover { border-color: #1565c0; background: #f0f4ff; }
+            QPushButton:pressed { background: #e3f2fd; }
+        """)
+        self.btn.clicked.connect(self._open_popup)
+
+        self.lbl_nb = QLabel("")
+        self.lbl_nb.setFixedWidth(44)
+        self.lbl_nb.setAlignment(Qt.AlignCenter)
+        self.lbl_nb.setStyleSheet(
+            "font-size:10px; font-weight:bold; border-radius:3px; padding:2px 4px;"
+        )
+
+        lay.addWidget(self.btn, stretch=1)
+        lay.addWidget(self.lbl_nb)
+
+    def _open_popup(self):
+        popup = _AccountTreePopup(self.conn, self.acc_types, parent=self)
+        # ضع الـ popup تحت الزر
+        pos = self.btn.mapToGlobal(QPoint(0, self.btn.height()))
+        popup.move(pos)
+        popup.resize(max(self.width() + 60, 420), 420)
+
+        # افتح كل التصنيفات افتراضياً
+        for t in (self.acc_types or _TYPE_ORDER):
+            popup._expanded.add(f"type:{t}")
+        popup._render()
+
+        if popup.exec_() == QDialog.Accepted:
+            acc_id, acc_name = popup.get_selected()
+            if acc_id:
+                self._account_id   = acc_id
+                self._account_name = acc_name
+                self.btn.setText(acc_name)
+                self._update_nb_label()
+
+    def _update_nb_label(self):
+        if not self._account_id:
+            self.lbl_nb.setText("")
+            return
+        acc = fetch_account(self.conn, self._account_id)
+        if not acc:
+            return
+        nb = get_normal_balance(acc["type"])
+        if nb == "dr":
+            self.lbl_nb.setText("DR↑")
+            self.lbl_nb.setStyleSheet(
+                "font-size:10px; font-weight:bold; color:#1565c0;"
+                "background:#e3f2fd; border-radius:3px; padding:2px 4px;"
+            )
+        else:
+            self.lbl_nb.setText("CR↑")
+            self.lbl_nb.setStyleSheet(
+                "font-size:10px; font-weight:bold; color:#c62828;"
+                "background:#fdecea; border-radius:3px; padding:2px 4px;"
+            )
+
+    def current_account_id(self):
+        return self._account_id
+
+    def set_account(self, acc_id: int, acc_name: str = None):
+        self._account_id = acc_id
+        if acc_name:
+            self._account_name = acc_name
+            self.btn.setText(acc_name)
+        else:
+            acc = fetch_account(self.conn, acc_id)
+            if acc:
+                self._account_name = f"{acc['code']} — {acc['name']}"
+                self.btn.setText(self._account_name)
+        self._update_nb_label()
+
+    def reset(self):
+        self._account_id   = None
+        self._account_name = None
+        self.btn.setText("— اختر الحساب —")
+        self.lbl_nb.setText("")
+        self.lbl_nb.setStyleSheet(
+            "font-size:10px; font-weight:bold; border-radius:3px; padding:2px 4px;"
+        )
+
+
+# ══════════════════════════════════════════════════════════
+# صف إدخال واحد — Smart (بدون مؤشر DR/CR)
 # ══════════════════════════════════════════════════════════
 
 class _SmartLine(QFrame):
     """
     صف ذكي: المستخدم يختار الحساب والمبلغ واتجاه (زيادة/نقص)
     والنظام يحدد DR أو CR تلقائياً.
+    لا يظهر مؤشر DR/CR — يظهر اسم الحساب فقط.
     """
     def __init__(self, conn, on_change, on_remove, on_move_up, on_move_dn, parent=None):
         super().__init__(parent)
@@ -74,7 +461,7 @@ class _SmartLine(QFrame):
         self._on_remove  = on_remove
         self._on_move_up = on_move_up
         self._on_move_dn = on_move_dn
-        self._resolved_side = "dr"   # القيمة المحسوبة الأخيرة
+        self._resolved_side = "dr"
         self._build()
 
     def _build(self):
@@ -87,14 +474,14 @@ class _SmartLine(QFrame):
             QFrame:hover { border-color: #90aad4; }
         """)
         lay = QHBoxLayout(self)
-        lay.setContentsMargins(6, 5, 6, 5)
+        lay.setContentsMargins(6, 4, 6, 4)
         lay.setSpacing(6)
 
         # ── أزرار الترتيب ──
         self.btn_up = QPushButton("▲")
         self.btn_dn = QPushButton("▼")
         for b in (self.btn_up, self.btn_dn):
-            b.setFixedSize(20, 20)
+            b.setFixedSize(18, 18)
             b.setStyleSheet(
                 "QPushButton { background:transparent; border:none; color:#bbb; font-size:8px; }"
                 "QPushButton:hover { color:#1565c0; }"
@@ -108,9 +495,9 @@ class _SmartLine(QFrame):
         ord_col.addWidget(self.btn_dn)
         lay.addLayout(ord_col)
 
-        # ── اختيار الحساب ──
-        self._acc = _AccountCombo(self.conn)
-        self._acc.cmb_account.currentIndexChanged.connect(self._on_acc_changed)
+        # ── اختيار الحساب (الزر الجديد بدلاً من combo) ──
+        self._acc = _AccountPickerButton(self.conn)
+        self._acc.btn.clicked.connect(self._on_acc_changed_delayed)
         lay.addWidget(self._acc, stretch=4)
 
         # ── اتجاه العملية ──
@@ -118,10 +505,10 @@ class _SmartLine(QFrame):
         dir_frame.setStyleSheet("QFrame { background:transparent; border:none; }")
         dir_lay = QHBoxLayout(dir_frame)
         dir_lay.setContentsMargins(0, 0, 0, 0)
-        dir_lay.setSpacing(4)
+        dir_lay.setSpacing(3)
 
         self.rdo_inc = QRadioButton("زيادة ✚")
-        self.rdo_dec = QRadioButton("نقص  ✖")
+        self.rdo_dec = QRadioButton("نقص ✖")
         self.rdo_inc.setChecked(True)
         self.rdo_inc.setStyleSheet("font-size:10px; color:#2e7d32; font-weight:bold;")
         self.rdo_dec.setStyleSheet("font-size:10px; color:#c62828; font-weight:bold;")
@@ -132,24 +519,15 @@ class _SmartLine(QFrame):
 
         dir_lay.addWidget(self.rdo_inc)
         dir_lay.addWidget(self.rdo_dec)
+        dir_frame.setFixedWidth(130)
         lay.addWidget(dir_frame)
-
-        # ── مؤشر الجانب (DR/CR) ──
-        self.lbl_side = QLabel("DR")
-        self.lbl_side.setFixedWidth(34)
-        self.lbl_side.setAlignment(Qt.AlignCenter)
-        self.lbl_side.setStyleSheet(
-            "font-weight:bold; font-size:11px; border-radius:4px; padding:2px 4px;"
-            "background:#e3f2fd; color:#1565c0; border:1px solid #90caf9;"
-        )
-        lay.addWidget(self.lbl_side)
 
         # ── المبلغ ──
         self.sp_amount = QDoubleSpinBox()
         self.sp_amount.setRange(0, 999_999_999)
         self.sp_amount.setDecimals(2)
         self.sp_amount.setMinimumHeight(28)
-        self.sp_amount.setFixedWidth(120)
+        self.sp_amount.setFixedWidth(110)
         self.sp_amount.valueChanged.connect(self._on_change)
         lay.addWidget(self.sp_amount)
 
@@ -161,7 +539,7 @@ class _SmartLine(QFrame):
 
         # ── حذف ──
         btn_del = QPushButton("✖")
-        btn_del.setFixedSize(24, 24)
+        btn_del.setFixedSize(22, 22)
         btn_del.setStyleSheet(
             "QPushButton { background:transparent; border:none; color:#bbb; font-size:11px; }"
             "QPushButton:hover { color:#e53935; }"
@@ -169,8 +547,7 @@ class _SmartLine(QFrame):
         btn_del.clicked.connect(lambda: self._on_remove(self))
         lay.addWidget(btn_del)
 
-        # حدّث المؤشر مبدئياً
-        self._update_side_indicator()
+        self._update_side_style()
 
     # ── منطق التوجيه ─────────────────────────────────────
 
@@ -181,7 +558,7 @@ class _SmartLine(QFrame):
         acc = fetch_account(self.conn, acc_id)
         return acc["type"] if acc else None
 
-    def _update_side_indicator(self):
+    def _update_side_style(self):
         acc_type = self._get_acc_type()
         is_inc   = self.rdo_inc.isChecked()
 
@@ -189,11 +566,6 @@ class _SmartLine(QFrame):
             side = _resolve_side(acc_type, is_inc)
             self._resolved_side = side
             if side == "dr":
-                self.lbl_side.setText("DR")
-                self.lbl_side.setStyleSheet(
-                    "font-weight:bold; font-size:11px; border-radius:4px; padding:2px 4px;"
-                    "background:#e3f2fd; color:#1565c0; border:1px solid #90caf9;"
-                )
                 self.setStyleSheet("""
                     QFrame {
                         background: #f4f8ff;
@@ -203,11 +575,6 @@ class _SmartLine(QFrame):
                     }
                 """)
             else:
-                self.lbl_side.setText("CR")
-                self.lbl_side.setStyleSheet(
-                    "font-weight:bold; font-size:11px; border-radius:4px; padding:2px 4px;"
-                    "background:#fdecea; color:#c62828; border:1px solid #f7c5c5;"
-                )
                 self.setStyleSheet("""
                     QFrame {
                         background: #fff4f4;
@@ -218,11 +585,6 @@ class _SmartLine(QFrame):
                 """)
         else:
             self._resolved_side = "dr"
-            self.lbl_side.setText("─")
-            self.lbl_side.setStyleSheet(
-                "font-weight:bold; font-size:11px; border-radius:4px; padding:2px 4px;"
-                "background:#f5f5f5; color:#999; border:1px solid #ddd;"
-            )
             self.setStyleSheet("""
                 QFrame {
                     background: #fafbff;
@@ -231,12 +593,16 @@ class _SmartLine(QFrame):
                 }
             """)
 
+    def _on_acc_changed_delayed(self):
+        # نستخدم timer لإعطاء الـ popup وقت للإغلاق والاختيار
+        QTimer.singleShot(100, self._on_acc_changed)
+
     def _on_acc_changed(self):
-        self._update_side_indicator()
+        self._update_side_style()
         self._on_change()
 
     def _on_dir_changed(self):
-        self._update_side_indicator()
+        self._update_side_style()
         self._on_change()
 
     # ── API ──────────────────────────────────────────────
@@ -262,7 +628,7 @@ class _SmartLine(QFrame):
 
 
 # ══════════════════════════════════════════════════════════
-# لوحة الصفوف الذكية
+# لوحة الصفوف الذكية — عناوين متناسقة
 # ══════════════════════════════════════════════════════════
 
 class _LinesPanel(QFrame):
@@ -313,26 +679,29 @@ class _LinesPanel(QFrame):
         hl.addWidget(self.lbl_cr)
         root.addWidget(hdr)
 
-        # ── ترويسة الأعمدة ──
+        # ── ترويسة الأعمدة — متناسقة مع خانات الصف ──
         col_hdr = QWidget()
         col_hdr.setStyleSheet("background:#fafbff;")
         ch_lay = QHBoxLayout(col_hdr)
-        ch_lay.setContentsMargins(36, 2, 8, 2)
+        # المسافة البادئة = عرض أزرار الترتيب (18+18+6+6+6 ≈ 22px) + margins
+        ch_lay.setContentsMargins(28, 2, 8, 2)
         ch_lay.setSpacing(6)
 
         def _ch(text, w=None, stretch=0):
             l = QLabel(text)
-            l.setStyleSheet("font-size:9px; color:#888; font-weight:bold; background:transparent;")
+            l.setStyleSheet(
+                "font-size:9px; color:#888; font-weight:bold;"
+                "background:transparent; border:none;"
+            )
             if w:
                 l.setFixedWidth(w)
             ch_lay.addWidget(l, stretch=stretch)
 
-        _ch("الحساب", stretch=4)
-        _ch("الاتجاه", 95)
-        _ch("DR/CR", 34)
-        _ch("المبلغ", 120)
-        _ch("البيان", stretch=2)
-        _ch("", 24)
+        _ch("الحساب",   stretch=4)   # يطابق _acc stretch=4
+        _ch("الاتجاه",  w=130)       # يطابق dir_frame fixedWidth=130
+        _ch("المبلغ",   w=110)       # يطابق sp_amount fixedWidth=110
+        _ch("البيان",   stretch=2)   # يطابق inp_desc stretch=2
+        _ch("",         w=22)        # زر الحذف
         root.addWidget(col_hdr)
 
         # ── منطقة الصفوف ──
@@ -441,7 +810,7 @@ class _LinesPanel(QFrame):
 
 
 # ══════════════════════════════════════════════════════════
-# فورم القيد
+# فورم القيد — بدون حقل النوع
 # ══════════════════════════════════════════════════════════
 
 class _JournalForm(QWidget):
@@ -455,7 +824,7 @@ class _JournalForm(QWidget):
         root.setContentsMargins(12, 10, 12, 10)
         root.setSpacing(8)
 
-        # ── رأس القيد ──
+        # ── رأس القيد — التاريخ والوصف فقط ──
         self.lbl_mode = QLabel("── قيد يومية جديد ──")
         self.lbl_mode.setStyleSheet("font-weight:bold; color:#1565c0; font-size:12px;")
         root.addWidget(self.lbl_mode)
@@ -469,27 +838,14 @@ class _JournalForm(QWidget):
         self.dt_date.setFixedWidth(130)
         self.dt_date.setMinimumHeight(30)
 
-        self.cmb_type = QComboBox()
-        self.cmb_type.setMinimumHeight(30)
-        self.cmb_type.setFixedWidth(120)
-        for key, label in [
-            ("manual",     "يدوي"),
-            ("purchase",   "شراء"),
-            ("sale",       "بيع"),
-            ("payment",    "دفع"),
-            ("receipt",    "تحصيل"),
-            ("adjustment", "تسوية"),
-        ]:
-            self.cmb_type.addItem(label, key)
-
         self.inp_desc = QLineEdit()
         self.inp_desc.setPlaceholderText("وصف القيد الإجمالي...")
         self.inp_desc.setMinimumHeight(30)
 
         info_row.addWidget(QLabel("التاريخ:"))
         info_row.addWidget(self.dt_date)
-        info_row.addWidget(QLabel("النوع:"))
-        info_row.addWidget(self.cmb_type)
+        info_row.addSpacing(12)
+        info_row.addWidget(QLabel("الوصف:"))
         info_row.addWidget(self.inp_desc, stretch=1)
         root.addLayout(info_row)
 
@@ -575,7 +931,8 @@ class _JournalForm(QWidget):
         self.btn_cancel.clicked.connect(self._clear)
         root.addLayout(buttons_row(self.btn_save, self.btn_cancel))
 
-        # ابدأ بصف واحد
+        # ابدأ بصفين
+        self._lines_panel.add_line()
         self._lines_panel.add_line()
 
     # ══════════════════════════════════════════════════════
@@ -658,7 +1015,7 @@ class _JournalForm(QWidget):
             self.conn,
             self.dt_date.date().toString("yyyy-MM-dd"),
             desc,
-            self.cmb_type.currentData()
+            "manual"   # النوع ثابت داخلياً
         )
         add_entry_lines(self.conn, entry_id, all_lines)
 
@@ -670,9 +1027,9 @@ class _JournalForm(QWidget):
         self._lines_panel.clear_lines()
         self.inp_desc.clear()
         self.dt_date.setDate(QDate.currentDate())
-        self.cmb_type.setCurrentIndex(0)
         self.lbl_mode.setText("── قيد يومية جديد ──")
         self.btn_save.setEnabled(False)
+        self._lines_panel.add_line()
         self._lines_panel.add_line()
         self._on_balance_changed()
 
@@ -682,21 +1039,14 @@ class _JournalForm(QWidget):
 # ══════════════════════════════════════════════════════════
 
 class _JournalTreeTable(QWidget):
-    """
-    جدول يعرض القيود بشكل شجري:
-      ▶  JE-00001 | 2025-01-10 | شراء مواد | DR: 1000 | CR: 1000
-         ├─ بنك          | CR | 1000
-         └─ مخزون        | DR | 1000
-    """
-
-    # أعمدة الجدول
-    COLS = ["#", "رقم القيد", "التاريخ", "النوع", "البيان / الحساب", "DR", "CR", "الرصيد"]
+    COLS = ["#", "رقم القيد", "التاريخ", "البيان / الحساب", "DR", "CR", "الحالة"]
 
     def __init__(self, conn, parent=None):
         super().__init__(parent)
         self.conn = conn
-        self._expanded: set[int] = set()   # IDs المفتوحة
-        self._entries_data = []            # cache
+        self._expanded: set[int] = set()
+        self._entries_data = []
+        self._row_meta = {}
         self._build()
         self._load()
         bus.data_changed.connect(self._load)
@@ -705,10 +1055,6 @@ class _JournalTreeTable(QWidget):
         root = QVBoxLayout(self)
         root.setContentsMargins(0, 0, 0, 0)
         root.setSpacing(6)
-
-        # ── شريط أدوات ──
-        toolbar = QHBoxLayout()
-        toolbar.setContentsMargins(12, 6, 12, 0)
 
         root.addWidget(section_label("── القيود المحاسبية المحفوظة ──"))
 
@@ -719,12 +1065,13 @@ class _JournalTreeTable(QWidget):
         for btn in (btn_expand_all, btn_collapse_all, btn_del):
             btn.setMinimumHeight(26)
 
-        btn_expand_all.setStyleSheet(
+        _btn_style = (
             "QPushButton { background:#e8f4fd; color:#1565c0; border:1px solid #90caf9;"
             "border-radius:4px; padding:2px 10px; font-size:11px; }"
             "QPushButton:hover { background:#1565c0; color:white; }"
         )
-        btn_collapse_all.setStyleSheet(btn_expand_all.styleSheet())
+        btn_expand_all.setStyleSheet(_btn_style)
+        btn_collapse_all.setStyleSheet(_btn_style)
 
         btn_expand_all.clicked.connect(self._expand_all)
         btn_collapse_all.clicked.connect(self._collapse_all)
@@ -732,7 +1079,6 @@ class _JournalTreeTable(QWidget):
 
         root.addLayout(buttons_row(btn_expand_all, btn_collapse_all, btn_del))
 
-        # ── الجدول ──
         self.table = QTableWidget()
         self.table.setColumnCount(len(self.COLS))
         self.table.setHorizontalHeaderLabels(self.COLS)
@@ -742,8 +1088,9 @@ class _JournalTreeTable(QWidget):
         self.table.verticalHeader().setVisible(False)
 
         hh = self.table.horizontalHeader()
-        hh.setSectionResizeMode(4, QHeaderView.Stretch)
-        for col, w in {0:30, 1:85, 2:90, 3:70, 5:90, 6:90, 7:90}.items():
+        # عمود البيان/الحساب يتمدد
+        hh.setSectionResizeMode(3, QHeaderView.Stretch)
+        for col, w in {0: 28, 1: 85, 2: 90, 4: 95, 5: 95, 6: 85}.items():
             hh.setSectionResizeMode(col, QHeaderView.Fixed)
             self.table.setColumnWidth(col, w)
 
@@ -756,12 +1103,8 @@ class _JournalTreeTable(QWidget):
     # ── تحميل البيانات ────────────────────────────────────
 
     def _load(self):
-        from db.accounting_schema import TYPE_AR as _TYPE_AR
-        self._type_ar = _TYPE_AR
-
         entries = fetch_all_entries(self.conn)
         self._entries_data = []
-
         for e in entries:
             lines = fetch_entry_lines(self.conn, e["id"])
             self._entries_data.append({
@@ -774,34 +1117,23 @@ class _JournalTreeTable(QWidget):
                 "total_credit":e["total_credit"],
                 "lines":       [dict(l) for l in lines],
             })
-
         self._render()
 
     def _render(self):
         self.table.setRowCount(0)
-        self._row_meta = {}   # row_index → {"entry_id": ..., "is_parent": ..., "is_child": ...}
-
-        type_ar = {
-            "manual":     "يدوي",
-            "purchase":   "شراء",
-            "sale":       "بيع",
-            "payment":    "دفع",
-            "receipt":    "تحصيل",
-            "adjustment": "تسوية",
-        }
+        self._row_meta = {}
 
         for entry in self._entries_data:
-            eid       = entry["id"]
-            expanded  = eid in self._expanded
-            total_dr  = entry["total_debit"]
-            total_cr  = entry["total_credit"]
+            eid      = entry["id"]
+            expanded = eid in self._expanded
+            total_dr = entry["total_debit"]
+            total_cr = entry["total_credit"]
 
             # ── الصف الرئيسي ──
             r = self.table.rowCount()
             self.table.insertRow(r)
             self._row_meta[r] = {"entry_id": eid, "is_parent": True, "is_child": False}
 
-            # خلية الـ toggle
             toggle_text = "▼" if expanded else "▶"
             toggle_item = QTableWidgetItem(toggle_text)
             toggle_item.setTextAlignment(Qt.AlignCenter)
@@ -813,72 +1145,63 @@ class _JournalTreeTable(QWidget):
 
             self.table.setItem(r, 1, self._bold_item(entry["ref_no"], "#1565c0"))
             self.table.setItem(r, 2, self._bold_item(entry["date"]))
-            self.table.setItem(r, 3, QTableWidgetItem(type_ar.get(entry["type"], entry["type"])))
-            self.table.setItem(r, 4, self._bold_item(entry["description"]))
+            self.table.setItem(r, 3, self._bold_item(entry["description"]))
 
-            dr_item = self._bold_item(f"{total_dr:,.2f}", "#1565c0")
-            cr_item = self._bold_item(f"{total_cr:,.2f}", "#c62828")
-            self.table.setItem(r, 5, dr_item)
-            self.table.setItem(r, 6, cr_item)
+            self.table.setItem(r, 4, self._bold_item(f"{total_dr:,.2f}", "#1565c0"))
+            self.table.setItem(r, 5, self._bold_item(f"{total_cr:,.2f}", "#c62828"))
 
             diff = total_dr - total_cr
             bal_color = "#2e7d32" if abs(diff) < 0.01 else "#c62828"
             bal_text  = "✅ متوازن" if abs(diff) < 0.01 else f"⚠️ {abs(diff):,.2f}"
-            self.table.setItem(r, 7, self._bold_item(bal_text, bal_color))
+            self.table.setItem(r, 6, self._bold_item(bal_text, bal_color))
 
-            # لون خلفية الصف الرئيسي
             for c in range(self.table.columnCount()):
                 item = self.table.item(r, c)
                 if item:
                     item.setBackground(QBrush(QColor("#eef3fb")))
 
-            # ── الصفوف الفرعية (تظهر فقط لو مفتوح) ──
+            # ── الصفوف الفرعية ──
             if expanded:
                 for line in entry["lines"]:
                     rc = self.table.rowCount()
                     self.table.insertRow(rc)
                     self._row_meta[rc] = {"entry_id": eid, "is_parent": False, "is_child": True}
 
-                    # مسافة بادئة في عمود البيان/الحساب
-                    prefix = "    └─ "
                     acc_name = line.get("account_name", "")
                     acc_code = line.get("account_code", "")
-                    acc_type = line.get("account_type", "")
 
+                    # اسم الحساب فقط بدون DR/CR
+                    prefix    = "    └─ "
                     desc_text = f"{prefix}{acc_code} — {acc_name}"
                     if line.get("description"):
                         desc_text += f"  │  {line['description']}"
 
-                    side = "DR" if line["debit"] > 0 else "CR"
-                    side_color = "#1565c0" if side == "DR" else "#c62828"
+                    is_dr = line["debit"] > 0
+                    side_color = "#1565c0" if is_dr else "#c62828"
+                    row_bg     = QColor("#f4f8ff") if is_dr else QColor("#fff4f4")
 
-                    self.table.setItem(rc, 0, QTableWidgetItem(""))   # لا toggle
+                    self.table.setItem(rc, 0, QTableWidgetItem(""))
                     self.table.setItem(rc, 1, QTableWidgetItem(""))
                     self.table.setItem(rc, 2, QTableWidgetItem(""))
-                    self.table.setItem(rc, 3, QTableWidgetItem(side))
-                    self.table.item(rc, 3).setForeground(QBrush(QColor(side_color)))
 
                     desc_item = QTableWidgetItem(desc_text)
                     desc_item.setToolTip(f"{acc_code} — {acc_name}")
-                    self.table.setItem(rc, 4, desc_item)
+                    desc_item.setForeground(QBrush(QColor(side_color)))
+                    self.table.setItem(rc, 3, desc_item)
 
-                    if line["debit"] > 0:
-                        self.table.setItem(rc, 5, self._colored_item(f"{line['debit']:,.2f}", "#1565c0"))
-                        self.table.setItem(rc, 6, QTableWidgetItem(""))
-                    else:
+                    if is_dr:
+                        self.table.setItem(rc, 4, self._colored_item(f"{line['debit']:,.2f}", "#1565c0"))
                         self.table.setItem(rc, 5, QTableWidgetItem(""))
-                        self.table.setItem(rc, 6, self._colored_item(f"{line['credit']:,.2f}", "#c62828"))
+                    else:
+                        self.table.setItem(rc, 4, QTableWidgetItem(""))
+                        self.table.setItem(rc, 5, self._colored_item(f"{line['credit']:,.2f}", "#c62828"))
 
-                    self.table.setItem(rc, 7, QTableWidgetItem(""))
+                    self.table.setItem(rc, 6, QTableWidgetItem(""))
 
-                    # لون خلفية الصف الفرعي
-                    bg = QColor("#f4f8ff") if side == "DR" else QColor("#fff4f4")
                     for c in range(self.table.columnCount()):
                         item = self.table.item(rc, c)
                         if item:
-                            item.setBackground(QBrush(bg))
-
-        self.table.setRowCount(self.table.rowCount())
+                            item.setBackground(QBrush(row_bg))
 
     # ── مساعدات ──────────────────────────────────────────
 
@@ -896,13 +1219,10 @@ class _JournalTreeTable(QWidget):
         item.setForeground(QBrush(QColor(color)))
         return item
 
-    # ── التفاعل ──────────────────────────────────────────
-
     def _on_cell_clicked(self, row: int, col: int):
         meta = self._row_meta.get(row)
         if not meta or not meta["is_parent"]:
             return
-        # فقط كليك على عمود الـ toggle أو الـ ref_no يفتح/يغلق
         if col not in (0, 1):
             return
         eid = meta["entry_id"]
@@ -921,7 +1241,7 @@ class _JournalTreeTable(QWidget):
         self._render()
 
     def _selected_entry_id(self) -> int | None:
-        row = self.table.currentRow()
+        row  = self.table.currentRow()
         meta = self._row_meta.get(row)
         if not meta:
             return None
@@ -932,10 +1252,8 @@ class _JournalTreeTable(QWidget):
         if eid is None:
             QMessageBox.information(self, "تنبيه", "اختر قيداً أولاً")
             return
-        # ابحث عن الوصف
         entry_data = next((e for e in self._entries_data if e["id"] == eid), None)
         desc = entry_data["description"] if entry_data else f"ID:{eid}"
-
         if confirm_delete(self, desc):
             delete_entry(self.conn, eid)
             self._expanded.discard(eid)
@@ -963,8 +1281,8 @@ class JournalTab(QWidget):
             QSplitter::handle:hover { background:#bbdefb; }
         """)
 
-        self._form        = _JournalForm(self.conn)
-        self._tree_table  = _JournalTreeTable(self.conn)
+        self._form       = _JournalForm(self.conn)
+        self._tree_table = _JournalTreeTable(self.conn)
 
         splitter.addWidget(self._form)
         splitter.addWidget(self._tree_table)
