@@ -3,7 +3,8 @@ ui/tabs/accounting/accounts_tree.py
 =====================================
 AccountsTreePanel — شجرة الحسابات مع فورم الإضافة والتعديل.
 
-الإصلاح: منع الـ recursive calls بين _load و _refresh_group_combos
+الإصلاح الرئيسي: كان فيه QVBoxLayout(self) مرتين في _build()
+مما كان يسبب إن كل الواجهة تبقى فاضية تماماً.
 """
 
 from PyQt5.QtWidgets import (
@@ -34,31 +35,34 @@ class AccountsTreePanel(QWidget):
         self.acc_types   = acc_types
         self.title       = title
         self._editing_id = None
-        self._loading    = False   # ← flag لمنع الـ recursive calls
+        self._loading    = False
         self._build()
         self._load()
         bus.data_changed.connect(self._load)
 
     def _build(self):
-        root = QVBoxLayout(self)
-        root.setContentsMargins(0, 0, 0, 0)
-        root.setSpacing(0)
+        # ══ Layout وحيد على self ══
+        main_layout = QVBoxLayout(self)
+        main_layout.setContentsMargins(0, 0, 0, 0)
+        main_layout.setSpacing(0)
 
         splitter = QSplitter(Qt.Horizontal)
         splitter.setHandleWidth(5)
 
-        # ── يسار: الشجرة ──
+        # ══════════════════════════════════════════════════
+        # يسار: الشجرة + فلتر + أزرار
+        # ══════════════════════════════════════════════════
         left = QWidget()
         ll   = QVBoxLayout(left)
         ll.setContentsMargins(10, 8, 6, 10)
         ll.setSpacing(6)
+
         ll.addWidget(section_label(f"── {self.title} ──"))
 
         filter_row = QHBoxLayout()
         self.cmb_group_filter = QComboBox()
         self.cmb_group_filter.setMinimumHeight(26)
         self.cmb_group_filter.addItem("— كل التصنيفات —", None)
-        # ← نربط بـ _on_filter_changed مش _load مباشرة
         self.cmb_group_filter.currentIndexChanged.connect(self._on_filter_changed)
         filter_row.addWidget(QLabel("🏷"))
         filter_row.addWidget(self.cmb_group_filter, stretch=1)
@@ -86,9 +90,12 @@ class AccountsTreePanel(QWidget):
         btn_row.addWidget(btn_del)
         btn_row.addStretch()
         ll.addLayout(btn_row)
+
         splitter.addWidget(left)
 
-        # ── يمين: فورم الإضافة ──
+        # ══════════════════════════════════════════════════
+        # يمين: فورم الإضافة / التعديل
+        # ══════════════════════════════════════════════════
         right = QWidget()
         rl    = QVBoxLayout(right)
         rl.setContentsMargins(6, 8, 10, 10)
@@ -129,7 +136,7 @@ class AccountsTreePanel(QWidget):
         self.cmb_group.setMinimumHeight(28)
         fl.addRow("التصنيف:", self.cmb_group)
 
-        # ربط signal بعد ما cmb_group اتعمل
+        # ربط الـ signals بعد ما كل الـ widgets اتبنت
         self.cmb_type.currentIndexChanged.connect(self._on_type_changed)
 
         btn_add         = QPushButton("➕ إضافة")
@@ -151,24 +158,24 @@ class AccountsTreePanel(QWidget):
         bl.addWidget(self.btn_cancel)
         bl.addStretch()
         fl.addRow(btn_w)
+
         rl.addWidget(grp)
         rl.addStretch()
+
         splitter.addWidget(right)
         splitter.setSizes([420, 280])
 
-        main = QVBoxLayout(self)
-        main.setContentsMargins(0, 0, 0, 0)
-        main.addWidget(splitter)
+        # أضف الـ splitter للـ layout الوحيد
+        main_layout.addWidget(splitter)
 
-        # نحدّث الـ combos بعد بناء كل الـ widgets
+        # حدّث combos التصنيفات
         self._refresh_group_combos()
 
     # ══════════════════════════════════════════════════════
-    # فلتر التصنيف — منفصل عن _load
+    # فلتر التصنيف
     # ══════════════════════════════════════════════════════
 
     def _on_filter_changed(self):
-        """يُستدعى فقط لما المستخدم يغير الفلتر — مش من _load."""
         if self._loading:
             return
         self._build_tree()
@@ -181,24 +188,23 @@ class AccountsTreePanel(QWidget):
     # ══════════════════════════════════════════════════════
 
     def _refresh_group_combos(self):
-        """يحدّث combo الفلتر وcombo الفورم — بدون إطلاق signals."""
-        # ── فلتر الشجرة ──
         self.cmb_group_filter.blockSignals(True)
         prev = self.cmb_group_filter.currentData()
         self.cmb_group_filter.clear()
         self.cmb_group_filter.addItem("— كل التصنيفات —", None)
         for t in self.acc_types:
-            rows = fetch_all_groups(self.conn, t)
-            tree = build_group_tree(rows)
-            self._add_filter_nodes(tree, 0)
-        # استعادة الاختيار السابق
+            try:
+                rows = fetch_all_groups(self.conn, t)
+                tree = build_group_tree(rows)
+                self._add_filter_nodes(tree, 0)
+            except Exception as e:
+                print(f"[AccountsTreePanel] _refresh_group_combos error for {t}: {e}")
         for i in range(self.cmb_group_filter.count()):
             if self.cmb_group_filter.itemData(i) == prev:
                 self.cmb_group_filter.setCurrentIndex(i)
                 break
         self.cmb_group_filter.blockSignals(False)
 
-        # ── combo النوع في الفورم ──
         self._refresh_group_combo_for_type()
 
     def _add_filter_nodes(self, nodes, depth):
@@ -223,9 +229,12 @@ class AccountsTreePanel(QWidget):
         prev = self.cmb_group.currentData()
         self.cmb_group.clear()
         self.cmb_group.addItem("— بدون تصنيف —", None)
-        rows = fetch_all_groups(self.conn, acc_type)
-        tree = build_group_tree(rows)
-        self._add_group_nodes_to_combo(tree, 0)
+        try:
+            rows = fetch_all_groups(self.conn, acc_type)
+            tree = build_group_tree(rows)
+            self._add_group_nodes_to_combo(tree, 0)
+        except Exception as e:
+            print(f"[AccountsTreePanel] _refresh_group_combo_for_type error: {e}")
         for i in range(self.cmb_group.count()):
             if self.cmb_group.itemData(i) == prev:
                 self.cmb_group.setCurrentIndex(i)
@@ -249,7 +258,6 @@ class AccountsTreePanel(QWidget):
     # ══════════════════════════════════════════════════════
 
     def _load(self):
-        """يُستدعى عند التهيئة وعند bus.data_changed — يحدّث combos والشجرة."""
         if self._loading:
             return
         self._loading = True
@@ -260,67 +268,104 @@ class AccountsTreePanel(QWidget):
             self._loading = False
 
     def _build_tree(self):
-        """يبني الشجرة بناءً على الفلتر الحالي — بدون تحديث combos."""
         self.tree.clear()
         gid_filter = self.cmb_group_filter.currentData()
+        has_any_data = False
 
         for acc_type in self.acc_types:
             try:
                 rows = fetch_all_accounts(self.conn, acc_type)
-            except Exception:
+            except Exception as e:
+                print(f"[AccountsTreePanel] fetch_all_accounts({acc_type}) error: {e}")
                 rows = []
 
-            # بناء شجرة الحسابات
-            nodes = {r["id"]: dict(r) for r in rows}
+            if not rows:
+                continue
+
+            # بناء dict الـ nodes
+            nodes = {}
+            for r in rows:
+                try:
+                    nid = r["id"]
+                    nodes[nid] = {
+                        "id":         nid,
+                        "code":       r["code"],
+                        "name":       r["name"],
+                        "type":       r["type"],
+                        "parent_id":  r["parent_id"],
+                        "is_leaf":    r["is_leaf"],
+                        "group_id":   r["group_id"],
+                        "group_name": r["group_name"] if "group_name" in r.keys() else None,
+                        "children":   [],
+                    }
+                except Exception as e:
+                    print(f"[AccountsTreePanel] error reading row: {e}")
+
+            # بناء الشجرة
             roots = []
             for nid, node in nodes.items():
                 pid = node["parent_id"]
                 if pid and pid in nodes:
-                    nodes[pid].setdefault("children", []).append(node)
+                    nodes[pid]["children"].append(node)
                 else:
                     roots.append(node)
 
-            # فلتر بالتصنيف لو محدد
+            roots.sort(key=lambda n: n["code"])
+
             if gid_filter is not None:
                 roots = self._filter_by_group(roots, gid_filter)
 
             if not roots:
                 continue
 
+            has_any_data = True
+
+            # header للنوع
             type_item = QTreeWidgetItem()
             type_item.setText(1, f"── {TYPE_AR.get(acc_type, acc_type)} ──")
             type_item.setForeground(1, QColor(TYPE_COLORS.get(acc_type, "#333")))
             f = type_item.font(1)
             f.setBold(True)
             type_item.setFont(1, f)
+            type_item.setFlags(type_item.flags() & ~Qt.ItemIsSelectable)
             self.tree.addTopLevelItem(type_item)
+
             self._add_acc_nodes(roots, type_item)
             type_item.setExpanded(True)
 
         self.tree.expandToDepth(2)
 
-    def _filter_by_group(self, nodes: list, gid: int) -> list:
-        """يفلتر الحسابات اللي group_id بتاعها = gid أو أبناءه."""
-        from db.accounting_repo import _get_group_descendants
-        desc = _get_group_descendants(self.conn, gid)
+        if not has_any_data:
+            empty_item = QTreeWidgetItem()
+            empty_item.setText(1, "لا توجد حسابات — أضف من الفورم على اليمين")
+            empty_item.setForeground(1, QColor("#aaa"))
+            self.tree.addTopLevelItem(empty_item)
 
+    def _filter_by_group(self, nodes: list, gid: int) -> list:
+        from db.accounting_repo import _get_group_descendants
+        try:
+            desc = _get_group_descendants(self.conn, gid)
+        except Exception:
+            desc = {gid}
         result = []
         for node in nodes:
             if node.get("group_id") in desc:
                 result.append(node)
             elif node.get("children"):
-                filtered_children = self._filter_by_group(
-                    node["children"], gid
-                )
-                if filtered_children:
+                filtered = self._filter_by_group(node["children"], gid)
+                if filtered:
                     node = dict(node)
-                    node["children"] = filtered_children
+                    node["children"] = filtered
                     result.append(node)
         return result
 
     def _add_acc_nodes(self, nodes, parent):
-        for node in nodes:
-            bal   = get_account_balance(self.conn, node["id"])
+        for node in sorted(nodes, key=lambda n: n.get("code", "")):
+            try:
+                bal = get_account_balance(self.conn, node["id"])
+            except Exception:
+                bal = 0.0
+
             color = TYPE_COLORS.get(node["type"], "#333")
             item  = QTreeWidgetItem()
             item.setText(0, node["code"])
@@ -328,20 +373,25 @@ class AccountsTreePanel(QWidget):
             item.setText(2, f"{bal:,.2f}")
             item.setData(0, Qt.UserRole, node["id"])
             item.setForeground(0, QColor(color))
-            if node.get("group_name"):
-                item.setToolTip(1, f"{node['name']}  |  🏷 {node['group_name']}")
+            item.setToolTip(1, node.get("group_name") and
+                            f"{node['name']}  |  🏷 {node['group_name']}"
+                            or node["name"])
+
             if not node.get("is_leaf", 1):
                 f = item.font(1)
                 f.setBold(True)
                 item.setFont(1, f)
+
             if bal < 0:
                 item.setForeground(2, QColor("#c62828"))
             elif bal > 0:
                 item.setForeground(2, QColor("#2e7d32"))
+
             if parent:
                 parent.addChild(item)
             else:
                 self.tree.addTopLevelItem(item)
+
             if node.get("children"):
                 self._add_acc_nodes(node["children"], item)
 
@@ -361,10 +411,10 @@ class AccountsTreePanel(QWidget):
         if not code or not name:
             QMessageBox.warning(self, "تنبيه", "أدخل الكود والاسم")
             return
-        acc_type    = self.cmb_type.currentData()
-        group_id    = self.cmb_group.currentData()
+        acc_type  = self.cmb_type.currentData()
+        group_id  = self.cmb_group.currentData()
+        parent_id = None
         parent_code = code[:-1] if len(code) > 1 else None
-        parent_id   = None
         if parent_code:
             try:
                 row = self.conn.execute(
@@ -372,7 +422,7 @@ class AccountsTreePanel(QWidget):
                 ).fetchone()
                 parent_id = row["id"] if row else None
             except Exception:
-                parent_id = None
+                pass
         try:
             insert_account(self.conn, code, name, acc_type, parent_id, group_id)
             self.inp_code.clear()

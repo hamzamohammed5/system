@@ -11,29 +11,41 @@ from datetime import datetime
 # شجرة الحسابات
 # ══════════════════════════════════════════════════════════
 
+def _balance_subquery(conn) -> str:
+    """
+    يتحقق إن journal_lines موجودة ويرجع الـ subquery المناسبة.
+    لو الجدول مش موجود يرجع '0' عشان ميكسرش الـ query.
+    """
+    try:
+        conn.execute("SELECT 1 FROM journal_lines LIMIT 1")
+        return """(SELECT COALESCE(SUM(jl.debit)-SUM(jl.credit),0)
+                   FROM journal_lines jl WHERE jl.account_id = a.id)"""
+    except Exception:
+        return "0"
+
+
 def fetch_all_accounts(conn, acc_type: str = None):
     try:
+        bal_sq = _balance_subquery(conn)
         if acc_type:
-            return conn.execute("""
+            return conn.execute(f"""
                 SELECT a.id, a.code, a.name, a.type, a.subtype,
                        a.parent_id, a.is_leaf, a.group_id,
                        p.name AS parent_name,
                        g.name AS group_name, g.color AS group_color,
-                       (SELECT COALESCE(SUM(jl.debit)-SUM(jl.credit),0)
-                        FROM journal_lines jl WHERE jl.account_id = a.id) AS balance
+                       {bal_sq} AS balance
                 FROM accounts a
                 LEFT JOIN accounts p ON p.id = a.parent_id
                 LEFT JOIN account_groups g ON g.id = a.group_id
                 WHERE a.type = ?
                 ORDER BY a.code
             """, (acc_type,)).fetchall()
-        return conn.execute("""
+        return conn.execute(f"""
             SELECT a.id, a.code, a.name, a.type, a.subtype,
                    a.parent_id, a.is_leaf, a.group_id,
                    p.name AS parent_name,
                    g.name AS group_name, g.color AS group_color,
-                   (SELECT COALESCE(SUM(jl.debit)-SUM(jl.credit),0)
-                    FROM journal_lines jl WHERE jl.account_id = a.id) AS balance
+                   {bal_sq} AS balance
             FROM accounts a
             LEFT JOIN accounts p ON p.id = a.parent_id
             LEFT JOIN account_groups g ON g.id = a.group_id
@@ -176,9 +188,6 @@ def get_balances_by_type(conn) -> dict:
 # ══════════════════════════════════════════════════════════
 
 def fetch_all_groups(conn, acc_type: str = None):
-    """
-    يرجع كل التصنيفات — بدون NULLS FIRST للتوافق مع SQLite القديم.
-    """
     try:
         if acc_type:
             rows = conn.execute("""
@@ -197,7 +206,6 @@ def fetch_all_groups(conn, acc_type: str = None):
                 FROM account_groups
                 ORDER BY acc_type, name
             """).fetchall()
-        # ترتيب الآباء قبل الأبناء يدوياً
         return _sort_groups_parents_first(rows)
     except Exception as e:
         print(f"[accounting_repo] fetch_all_groups error: {e}")
@@ -205,7 +213,6 @@ def fetch_all_groups(conn, acc_type: str = None):
 
 
 def _sort_groups_parents_first(rows) -> list:
-    """يرتب الصفوف بحيث الآباء يجيوا قبل أبناءهم."""
     rows_list = [dict(r) for r in rows]
     id_map = {r["id"]: r for r in rows_list}
     result = []
