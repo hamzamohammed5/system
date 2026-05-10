@@ -1,13 +1,10 @@
 """
 ui/tabs/accounting/investors_tab.py
 =====================================
-تبويب المستثمرين — إدارة شاملة:
-
-① إضافة مستثمر جديد + تسجيل مبلغ رأس المال الأولي → قيد محاسبي تلقائي
-② إضافة استثمار إضافي (capital) → قيد محاسبي مع اختيار حساب الأصل
-③ تسجيل مسحوبات (drawings) → قيد محاسبي مع اختيار حساب الأصل
-④ عرض ملخص كل مستثمر (رأس المال / المسحوبات / الصافي / الحركات)
-⑤ حذف حركة مالية مع حذف القيد من الحسابات
+التغييرات:
+  1. _MovementDialog: قوائم الحسابات تتحدث تلقائياً عبر bus.data_changed
+  2. _InvestorForm: قوائم الحسابات تتحدث تلقائياً عبر bus.data_changed
+  3. كلاهما يستخدم دوال منفصلة لملء القوائم بدلاً من ملئها مرة واحدة في _build
 """
 
 from PyQt5.QtWidgets import (
@@ -106,6 +103,63 @@ def _fetch_asset_accounts(acc_conn):
         return []
 
 
+def _fill_asset_combo(cmb: QComboBox, acc_conn, prev_id=None):
+    """يملأ combo الأصول ويحاول يستعيد الاختيار السابق."""
+    cmb.blockSignals(True)
+    cmb.clear()
+    for acc in _fetch_asset_accounts(acc_conn):
+        sub = acc["subtype"] if "subtype" in acc.keys() else ""
+        icon = "🏦" if sub == "bank" else ("💵" if sub == "cash" else "📦")
+        cmb.addItem(f"{icon} {acc['code']} — {acc['name']}", acc["id"])
+
+    # استعادة الاختيار السابق
+    restored = False
+    if prev_id is not None:
+        for i in range(cmb.count()):
+            if cmb.itemData(i) == prev_id:
+                cmb.setCurrentIndex(i)
+                restored = True
+                break
+
+    # اختار نقدية/بنك افتراضياً لو مفيش اختيار سابق
+    if not restored:
+        for i in range(cmb.count()):
+            txt = cmb.itemText(i)
+            if "111" in txt or "112" in txt or "صندوق" in txt or "بنك" in txt:
+                cmb.setCurrentIndex(i)
+                break
+
+    cmb.blockSignals(False)
+
+
+def _fill_capital_combo(cmb: QComboBox, acc_conn, prev_id=None):
+    """يملأ combo رأس المال ويحاول يستعيد الاختيار السابق."""
+    cmb.blockSignals(True)
+    cmb.clear()
+    for acc in _fetch_capital_accounts(acc_conn):
+        cmb.addItem(f"{acc['code']} — {acc['name']}", acc["id"])
+    if prev_id is not None:
+        for i in range(cmb.count()):
+            if cmb.itemData(i) == prev_id:
+                cmb.setCurrentIndex(i)
+                break
+    cmb.blockSignals(False)
+
+
+def _fill_drawings_combo(cmb: QComboBox, acc_conn, prev_id=None):
+    """يملأ combo المسحوبات ويحاول يستعيد الاختيار السابق."""
+    cmb.blockSignals(True)
+    cmb.clear()
+    for acc in _fetch_drawings_accounts(acc_conn):
+        cmb.addItem(f"{acc['code']} — {acc['name']}", acc["id"])
+    if prev_id is not None:
+        for i in range(cmb.count()):
+            if cmb.itemData(i) == prev_id:
+                cmb.setCurrentIndex(i)
+                break
+    cmb.blockSignals(False)
+
+
 def _post_capital_entry(acc_conn, erp_conn, investor_id, investor_name,
                         capital_acc_id, asset_acc_id, amount, date, notes=None):
     desc = f"رأس مال — {investor_name}  {amount:,.2f} ج"
@@ -164,6 +218,8 @@ class _MovementDialog(QDialog):
         self.setModal(True)
         self.setLayoutDirection(Qt.RightToLeft)
         self._build()
+        # ✅ تحديث القوائم تلقائياً عند تغيير البيانات
+        bus.data_changed.connect(self._refresh_account_combos)
 
     def _build(self):
         root = QVBoxLayout(self)
@@ -205,29 +261,16 @@ class _MovementDialog(QDialog):
         self.cmb_equity_acc = QComboBox()
         self.cmb_equity_acc.setMinimumHeight(30)
         if is_cap:
-            for acc in _fetch_capital_accounts(self.acc_conn):
-                self.cmb_equity_acc.addItem(f"{acc['code']} — {acc['name']}", acc["id"])
+            _fill_capital_combo(self.cmb_equity_acc, self.acc_conn)
             form.addRow("حساب رأس المال:", self.cmb_equity_acc)
         else:
-            for acc in _fetch_drawings_accounts(self.acc_conn):
-                self.cmb_equity_acc.addItem(f"{acc['code']} — {acc['name']}", acc["id"])
+            _fill_drawings_combo(self.cmb_equity_acc, self.acc_conn)
             form.addRow("حساب المسحوبات:", self.cmb_equity_acc)
 
-        # حساب الأصل
+        # حساب الأصل ✅
         self.cmb_asset_acc = QComboBox()
         self.cmb_asset_acc.setMinimumHeight(30)
-        for acc in _fetch_asset_accounts(self.acc_conn):
-            sub = acc["subtype"] if "subtype" in acc.keys() else ""
-            icon_a = "🏦" if sub == "bank" else ("💵" if sub == "cash" else "📦")
-            self.cmb_asset_acc.addItem(
-                f"{icon_a} {acc['code']} — {acc['name']}", acc["id"]
-            )
-        # اختار نقدية/بنك افتراضياً
-        for i in range(self.cmb_asset_acc.count()):
-            txt = self.cmb_asset_acc.itemText(i)
-            if "111" in txt or "112" in txt or "صندوق" in txt or "بنك" in txt:
-                self.cmb_asset_acc.setCurrentIndex(i)
-                break
+        _fill_asset_combo(self.cmb_asset_acc, self.acc_conn)
 
         asset_lbl = "حساب الإيداع (أصل):" if is_cap else "حساب الصرف (أصل):"
         form.addRow(asset_lbl, self.cmb_asset_acc)
@@ -278,6 +321,19 @@ class _MovementDialog(QDialog):
         btn_row.addWidget(btn_cancel)
         btn_row.addWidget(btn_ok)
         root.addLayout(btn_row)
+
+    def _refresh_account_combos(self):
+        """✅ يحدث قوائم الحسابات تلقائياً مع الحفاظ على الاختيار الحالي."""
+        prev_equity = self.cmb_equity_acc.currentData()
+        prev_asset  = self.cmb_asset_acc.currentData()
+
+        if self.move_type == "capital":
+            _fill_capital_combo(self.cmb_equity_acc, self.acc_conn, prev_equity)
+        else:
+            _fill_drawings_combo(self.cmb_equity_acc, self.acc_conn, prev_equity)
+
+        _fill_asset_combo(self.cmb_asset_acc, self.acc_conn, prev_asset)
+        self._update_preview()
 
     def _update_preview(self):
         is_cap   = self.move_type == "capital"
@@ -341,6 +397,8 @@ class _InvestorForm(QWidget, EditModeMixin):
         self.erp_conn = erp_conn
         self._build()
         self.init_edit_mode(self.btn_add, self.btn_save, self.btn_cancel, self.lbl_mode)
+        # ✅ تحديث قوائم الحسابات تلقائياً
+        bus.data_changed.connect(self._refresh_account_combos)
 
     def _build(self):
         root = QVBoxLayout(self)
@@ -399,22 +457,13 @@ class _InvestorForm(QWidget, EditModeMixin):
 
         self.cmb_capital_acc = QComboBox()
         self.cmb_capital_acc.setMinimumHeight(28)
-        for acc in _fetch_capital_accounts(self.acc_conn):
-            self.cmb_capital_acc.addItem(f"{acc['code']} — {acc['name']}", acc["id"])
+        _fill_capital_combo(self.cmb_capital_acc, self.acc_conn)
         init_lay.addRow("حساب رأس المال:", self.cmb_capital_acc)
 
+        # ✅ حساب الإيداع
         self.cmb_asset_acc = QComboBox()
         self.cmb_asset_acc.setMinimumHeight(28)
-        for acc in _fetch_asset_accounts(self.acc_conn):
-            sub = acc["subtype"] if "subtype" in acc.keys() else ""
-            icon = "🏦" if sub == "bank" else ("💵" if sub == "cash" else "📦")
-            self.cmb_asset_acc.addItem(f"{icon} {acc['code']} — {acc['name']}", acc["id"])
-        # اختار نقدية/بنك افتراضياً
-        for i in range(self.cmb_asset_acc.count()):
-            txt = self.cmb_asset_acc.itemText(i)
-            if "111" in txt or "112" in txt or "صندوق" in txt or "بنك" in txt:
-                self.cmb_asset_acc.setCurrentIndex(i)
-                break
+        _fill_asset_combo(self.cmb_asset_acc, self.acc_conn)
         init_lay.addRow("حساب الإيداع:", self.cmb_asset_acc)
 
         # معاينة القيد الأولي
@@ -449,6 +498,14 @@ class _InvestorForm(QWidget, EditModeMixin):
         bl.addStretch()
         root.addWidget(btn_w)
         root.addStretch()
+
+    def _refresh_account_combos(self):
+        """✅ يحدث قوائم الحسابات مع الحفاظ على الاختيار الحالي."""
+        prev_cap   = self.cmb_capital_acc.currentData()
+        prev_asset = self.cmb_asset_acc.currentData()
+        _fill_capital_combo(self.cmb_capital_acc, self.acc_conn, prev_cap)
+        _fill_asset_combo(self.cmb_asset_acc, self.acc_conn, prev_asset)
+        self._update_init_preview()
 
     def _update_init_preview(self):
         amount   = self.sp_initial.value()
@@ -779,19 +836,16 @@ class _InvestorDetails(QWidget):
         if reply != QMessageBox.Yes:
             return
 
-        # اجيب entry_id من الـ repo
         try:
             link_row = self.erp_conn.execute(
                 "SELECT entry_id FROM investor_entries WHERE id=?", (link_id,)
             ).fetchone()
             if link_row:
                 entry_id = link_row["entry_id"]
-                # احذف القيد من الحسابات
                 try:
                     delete_entry(self.acc_conn, entry_id)
                 except Exception as e:
                     print(f"[InvestorDetails] could not delete acc entry: {e}")
-            # احذف الحركة من الـ repo
             delete_investor_link(self.erp_conn, link_id)
             bus.data_changed.emit()
         except Exception as e:

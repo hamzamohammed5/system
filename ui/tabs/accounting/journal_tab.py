@@ -418,6 +418,8 @@ class _SmartLine(QFrame):
         self._on_move_dn = on_move_dn
         self._resolved_side = "dr"
         self._build()
+        bus.data_changed.connect(self._reload_investors)
+
 
     def _build(self):
         self.setStyleSheet("""
