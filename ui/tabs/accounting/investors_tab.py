@@ -194,7 +194,7 @@ class _InvestorsTable(QWidget):
             self._on_select(inv_id)
 
     def _load(self):
-        summaries = calc_all_investors_summary(self.conn)
+        summaries = calc_all_investors_summary(self.conn, acc_conn=None)
         self.table.setRowCount(0)
         for s in summaries:
             r = self.table.rowCount()
@@ -387,7 +387,7 @@ class _InvestorDetails(QFrame):
 
     def load(self, investor_id: int):
         self._current_investor_id = investor_id
-        s = calc_investor_summary(self.conn, investor_id)
+        s = calc_investor_summary(self.conn, investor_id, acc_conn=self.acc_conn)
         if not s:
             return
         self.lbl_title.setText(f"👤  {s['investor_name']}  │  انضم: {s['joined_at']}")
