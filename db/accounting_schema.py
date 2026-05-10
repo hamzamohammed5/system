@@ -1,13 +1,6 @@
 """
-db/accounting_schema.py (إصلاح مشكلة CHECK constraint)
+db/accounting_schema.py
 ==================================
-المشكلة: جدول accounts موجود بـ CHECK constraint قديم يقبل فقط:
-  'asset', 'liability', 'equity', 'revenue', 'expense'
-
-الكود الجديد بيضيف أنواع: 'capital', 'drawings'
-→ SQLite يرفضها بـ IntegrityError
-
-الحل: migration يعيد بناء الجدول بالـ constraint الجديد بشكل آمن.
 """
 
 TYPE_AR = {
@@ -48,7 +41,6 @@ _ACCOUNTS_DDL = f"""
 
 
 def _get_current_type_constraint(conn) -> str:
-    """يرجع الـ CHECK constraint الموجود في جدول accounts."""
     row = conn.execute(
         "SELECT sql FROM sqlite_master WHERE type='table' AND name='accounts'"
     ).fetchone()
@@ -56,22 +48,15 @@ def _get_current_type_constraint(conn) -> str:
 
 
 def _needs_migration(conn) -> bool:
-    """يشيك لو الجدول محتاج migration (مش بيقبل الأنواع الجديدة)."""
     current_sql = _get_current_type_constraint(conn)
     if not current_sql:
-        return False  # الجدول مش موجود أصلاً
-    # لو 'capital' مش موجود في الـ constraint، محتاجين migration
+        return False
     return "'capital'" not in current_sql
 
 
 def _migrate_accounts_type_constraint(conn):
-    """
-    يعيد بناء جدول accounts بـ CHECK constraint جديد يقبل capital و drawings.
-    يحافظ على كل البيانات مع تحويل 'equity' → 'capital'.
-    """
     conn.execute("PRAGMA foreign_keys = OFF")
     try:
-        # 1. جدول مؤقت بالـ constraint الجديد
         conn.execute(f"""
             CREATE TABLE _accounts_new (
                 id          INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -88,10 +73,6 @@ def _migrate_accounts_type_constraint(conn):
             )
         """)
 
-        # 2. نقل البيانات مع تحويل 'equity' → 'capital'
-        #    (لو عندك بيانات قديمة type='equity')
-        #
-        #    نتحقق أول لو عمود group_id موجود في الجدول القديم
         old_cols = {r["name"] for r in conn.execute("PRAGMA table_info(accounts)").fetchall()}
         if "group_id" in old_cols:
             conn.execute(f"""
@@ -123,14 +104,12 @@ def _migrate_accounts_type_constraint(conn):
                 FROM accounts
             """)
 
-        # 3. احذف القديم وعيد التسمية
         conn.execute("DROP TABLE accounts")
         conn.execute("ALTER TABLE _accounts_new RENAME TO accounts")
         conn.commit()
 
     except Exception:
         conn.rollback()
-        # احذف الجدول المؤقت لو موجود
         try:
             conn.execute("DROP TABLE IF EXISTS _accounts_new")
             conn.commit()
@@ -146,26 +125,61 @@ def _column_exists(conn, table: str, col: str) -> bool:
     return any(r["name"] == col for r in rows)
 
 
+def _table_exists(conn, table: str) -> bool:
+    row = conn.execute(
+        "SELECT name FROM sqlite_master WHERE type='table' AND name=?", (table,)
+    ).fetchone()
+    return row is not None
+
+
 def _migrate_schema(conn):
-    # ── أولاً: إصلاح CHECK constraint ──
+    # ── إصلاح CHECK constraint ──
     if _needs_migration(conn):
         _migrate_accounts_type_constraint(conn)
 
-    # ── ثانياً: إضافة group_id لو ناقص ──
+    # ── إضافة group_id لو ناقص ──
     if not _column_exists(conn, "accounts", "group_id"):
         conn.execute("ALTER TABLE accounts ADD COLUMN group_id INTEGER")
         conn.commit()
 
-    # ── ثالثاً: إضافة notes لجدول account_groups لو ناقص ──
+    # ── إضافة notes لجدول account_groups لو ناقص ──
     if not _column_exists(conn, "account_groups", "notes"):
         conn.execute("ALTER TABLE account_groups ADD COLUMN notes TEXT")
+        conn.commit()
+
+    # ── إضافة جدول entry_templates لو ناقص ──
+    if not _table_exists(conn, "entry_templates"):
+        conn.execute("""
+            CREATE TABLE entry_templates (
+                id          INTEGER PRIMARY KEY AUTOINCREMENT,
+                name        TEXT    NOT NULL,
+                account_id  INTEGER NOT NULL REFERENCES accounts(id) ON DELETE CASCADE,
+                description TEXT,
+                created_at  TEXT    NOT NULL DEFAULT (datetime('now'))
+            )
+        """)
+        conn.commit()
+
+    # ── إضافة جدول sub_account_ledger لو ناقص (رأس مال الأفراد) ──
+    if not _table_exists(conn, "sub_account_ledger"):
+        conn.execute("""
+            CREATE TABLE sub_account_ledger (
+                id          INTEGER PRIMARY KEY AUTOINCREMENT,
+                account_id  INTEGER NOT NULL REFERENCES accounts(id) ON DELETE CASCADE,
+                person_name TEXT    NOT NULL,
+                move_type   TEXT    NOT NULL CHECK(move_type IN ('in','out')),
+                amount      REAL    NOT NULL DEFAULT 0,
+                notes       TEXT,
+                date        TEXT    NOT NULL,
+                created_at  TEXT    NOT NULL DEFAULT (datetime('now'))
+            )
+        """)
         conn.commit()
 
 
 def create_accounting_tables(conn):
     """يُستدعى من init_db — ينشئ الجداول ويشغّل الـ migrations."""
 
-    # ── جداول groups (تصنيفات الحسابات) ──
     conn.execute("""
         CREATE TABLE IF NOT EXISTS account_groups (
             id        INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -178,11 +192,9 @@ def create_accounting_tables(conn):
     """)
     conn.commit()
 
-    # ── جدول accounts — أنشئه لو مش موجود ──
     conn.executescript(_ACCOUNTS_DDL)
     conn.commit()
 
-    # ── جداول القيود ──
     conn.executescript("""
         CREATE TABLE IF NOT EXISTS journal_entries (
             id          INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -215,10 +227,7 @@ def create_accounting_tables(conn):
     """)
     conn.commit()
 
-    # ── شغّل migrations ──
     _migrate_schema(conn)
-
-    # ── بذر الحسابات الافتراضية ──
     _seed_default_accounts(conn)
 
 
@@ -228,12 +237,10 @@ def _account_exists(conn) -> bool:
 
 
 def _seed_default_accounts(conn):
-    """يضيف الحسابات الافتراضية لو الجدول فاضي."""
     if _account_exists(conn):
         return
 
     accounts = [
-        # ── أصول ────────────────────────────────────────────
         ("1",    "الأصول",                "asset",     None,             None),
         ("11",   "الأصول المتداولة",       "asset",     "current_asset",  "1"),
         ("111",  "الصندوق",               "asset",     "cash",           "11"),
@@ -245,7 +252,6 @@ def _seed_default_accounts(conn):
         ("121",  "المعدات والآلات",        "asset",     "equipment",      "12"),
         ("122",  "مجمع الاستهلاك",        "asset",     "depreciation",   "12"),
 
-        # ── خصوم ────────────────────────────────────────────
         ("2",    "الخصوم",                "liability", None,             None),
         ("21",   "الخصوم المتداولة",       "liability", "current",        "2"),
         ("211",  "الموردون / ذمم دائنة",  "liability", "payable",        "21"),
@@ -253,18 +259,15 @@ def _seed_default_accounts(conn):
         ("22",   "الخصوم طويلة الأجل",    "liability", "long_term",      "2"),
         ("221",  "قروض طويلة الأجل",      "liability", "loan",           "22"),
 
-        # ── حقوق الملكية (capital بدل equity) ───────────────
         ("3",    "حقوق الملكية",           "capital",   None,             None),
         ("31",   "رأس المال",              "capital",   "capital",        "3"),
         ("32",   "الأرباح المحتجزة",       "capital",   "retained",       "3"),
         ("33",   "السحوبات",              "drawings",  "drawings",       "3"),
 
-        # ── إيرادات ─────────────────────────────────────────
         ("4",    "الإيرادات",              "revenue",   None,             None),
         ("41",   "إيرادات المبيعات",       "revenue",   "sales",          "4"),
         ("42",   "إيرادات أخرى",          "revenue",   "other",          "4"),
 
-        # ── مصروفات ─────────────────────────────────────────
         ("5",    "المصروفات",              "expense",   None,             None),
         ("51",   "تكلفة البضاعة المباعة",  "expense",   "cogs",           "5"),
         ("52",   "مصروفات تشغيلية",       "expense",   "operating",      "5"),
