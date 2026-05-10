@@ -1,10 +1,12 @@
 """
-ui/tabs/accounting/journal_tab.py  — مع فصل التاريخ وفلاتر محسّنة
+ui/tabs/accounting/journal_tab.py  — مع فلتر التصنيفات بدلاً من نوع القيد
 =========================================================
 التحديثات:
-  - التاريخ في عمود مستقل في جدول القيود
-  - شريط فلاتر متكامل: بحث + نوع القيد + نطاق التاريخ + التوازن
-  - واجهة محسّنة
+  - إزالة فلتر نوع القيد (manual/purchase/sale...)
+  - إضافة فلتر بالتصنيفات الهرمية للحسابات
+  - عند اختيار تصنيف، يُعرض كل قيد يحتوي على حساب ينتمي لهذا التصنيف
+  - التاريخ في عمود مستقل
+  - فلاتر: بحث + تصنيف الحساب + نطاق التاريخ + التوازن
 """
 
 from PyQt5.QtWidgets import (
@@ -26,7 +28,7 @@ from db.accounting_repo import (
     delete_entry, validate_entry_balance,
     fetch_account, fetch_all_accounts,
     fetch_all_groups, build_group_tree,
-    get_normal_balance,
+    get_normal_balance, _get_group_descendants,
 )
 from db.accounting_schema import NORMAL_BALANCE, TYPE_AR, EQUITY_TYPES
 from ui.helpers import (
@@ -60,14 +62,38 @@ def _resolve_side(acc_type: str, is_increase: bool) -> str:
 
 
 # ══════════════════════════════════════════════════════════
-# شريط فلاتر القيود
+# دالة مساعدة: جلب entry_ids التي تحتوي على حساب في تصنيف معين
+# ══════════════════════════════════════════════════════════
+
+def _get_entry_ids_by_group(conn, group_id: int) -> set:
+    """
+    يرجع مجموعة IDs القيود التي تحتوي على حساب ينتمي
+    للتصنيف المحدد أو أي تصنيف فرعي منه.
+    """
+    desc_ids = _get_group_descendants(conn, group_id)
+    if not desc_ids:
+        return set()
+    placeholders = ",".join("?" * len(desc_ids))
+    rows = conn.execute(f"""
+        SELECT DISTINCT jl.entry_id
+        FROM journal_lines jl
+        JOIN accounts a ON a.id = jl.account_id
+        WHERE a.group_id IN ({placeholders})
+    """, list(desc_ids)).fetchall()
+    return {r["entry_id"] for r in rows}
+
+
+# ══════════════════════════════════════════════════════════
+# شريط فلاتر القيود — مع فلتر التصنيفات
 # ══════════════════════════════════════════════════════════
 
 class _JournalFilterBar(QFrame):
-    """شريط فلاتر متكامل لجدول القيود."""
+    """شريط فلاتر متكامل لجدول القيود — بفلتر تصنيفات الحسابات."""
 
-    def __init__(self, parent=None):
+    def __init__(self, conn, parent=None):
         super().__init__(parent)
+        self.conn = conn
+        self._group_entry_ids: set | None = None   # None = لا فلتر
         self.setStyleSheet("""
             QFrame {
                 background: #f0f4ff;
@@ -76,13 +102,15 @@ class _JournalFilterBar(QFrame):
             }
         """)
         self._build()
+        # تحديث قائمة التصنيفات عند تغيير البيانات
+        bus.data_changed.connect(self._reload_groups)
 
     def _build(self):
-        # صفّان: الأول للبحث والنوع، الثاني للتاريخ
         root = QVBoxLayout(self)
         root.setContentsMargins(10, 8, 10, 8)
         root.setSpacing(6)
 
+        # ══ الصف الأول: بحث + تصنيف الحساب + التوازن ══
         row1 = QHBoxLayout()
         row1.setSpacing(8)
 
@@ -102,31 +130,29 @@ class _JournalFilterBar(QFrame):
             QLineEdit:focus { border-color: #1565c0; }
         """)
 
-        # ── فلتر نوع القيد ──
-        lbl_type = QLabel("النوع:")
-        lbl_type.setStyleSheet("background:transparent; border:none; font-weight:bold; font-size:11px; color:#555;")
+        # ── فلتر تصنيف الحساب ──
+        lbl_grp = QLabel("🏷 التصنيف:")
+        lbl_grp.setStyleSheet(
+            "background:transparent; border:none; font-weight:bold;"
+            "font-size:11px; color:#555;"
+        )
 
-        self.cmb_type = QComboBox()
-        self.cmb_type.setMinimumHeight(30)
-        self.cmb_type.setFixedWidth(130)
-        self.cmb_type.addItem("كل الأنواع",    None)
-        self.cmb_type.addItem("يدوي",          "manual")
-        self.cmb_type.addItem("مشتريات",       "purchase")
-        self.cmb_type.addItem("مبيعات",        "sale")
-        self.cmb_type.addItem("دفع",           "payment")
-        self.cmb_type.addItem("استلام",        "receipt")
-        self.cmb_type.addItem("تسوية",         "adjustment")
-        self.cmb_type.setStyleSheet("""
+        self.cmb_group = QComboBox()
+        self.cmb_group.setMinimumHeight(30)
+        self.cmb_group.setMinimumWidth(180)
+        self.cmb_group.setStyleSheet("""
             QComboBox {
                 background: white; border: 1px solid #c5cae9;
                 border-radius: 5px; padding: 2px 8px; font-size: 11px;
             }
             QComboBox::drop-down { border: none; }
         """)
+        self._reload_groups()
+        self.cmb_group.currentIndexChanged.connect(self._on_group_changed)
 
         # ── فلتر التوازن ──
         lbl_bal = QLabel("الحالة:")
-        lbl_bal.setStyleSheet(lbl_type.styleSheet())
+        lbl_bal.setStyleSheet(lbl_grp.styleSheet())
 
         self.cmb_balance = QComboBox()
         self.cmb_balance.setMinimumHeight(30)
@@ -134,26 +160,26 @@ class _JournalFilterBar(QFrame):
         self.cmb_balance.addItem("الكل",          None)
         self.cmb_balance.addItem("✅ متوازن",      "balanced")
         self.cmb_balance.addItem("⚠️ غير متوازن", "unbalanced")
-        self.cmb_balance.setStyleSheet(self.cmb_type.styleSheet())
+        self.cmb_balance.setStyleSheet(self.cmb_group.styleSheet())
 
         row1.addWidget(lbl_s)
         row1.addWidget(self.inp_search, stretch=2)
-        row1.addWidget(lbl_type)
-        row1.addWidget(self.cmb_type)
+        row1.addWidget(lbl_grp)
+        row1.addWidget(self.cmb_group, stretch=1)
         row1.addWidget(lbl_bal)
         row1.addWidget(self.cmb_balance)
         root.addLayout(row1)
 
+        # ══ الصف الثاني: نطاق التاريخ + مسح ══
         row2 = QHBoxLayout()
         row2.setSpacing(8)
 
-        # ── نطاق التاريخ ──
         lbl_date = QLabel("📅")
         lbl_date.setStyleSheet("background:transparent; border:none; font-size:13px;")
         lbl_date.setFixedWidth(20)
 
         lbl_from = QLabel("من:")
-        lbl_from.setStyleSheet(lbl_type.styleSheet())
+        lbl_from.setStyleSheet(lbl_grp.styleSheet())
 
         self.dt_from = QDateEdit()
         self.dt_from.setCalendarPopup(True)
@@ -170,7 +196,7 @@ class _JournalFilterBar(QFrame):
         """)
 
         lbl_to = QLabel("إلى:")
-        lbl_to.setStyleSheet(lbl_type.styleSheet())
+        lbl_to.setStyleSheet(lbl_grp.styleSheet())
 
         self.dt_to = QDateEdit()
         self.dt_to.setCalendarPopup(True)
@@ -214,14 +240,96 @@ class _JournalFilterBar(QFrame):
         row2.addWidget(self.lbl_count)
         root.addLayout(row2)
 
+    # ── تحميل التصنيفات الهرمية ──────────────────────────
+
+    def _reload_groups(self):
+        """يملأ combo التصنيفات بشكل هرمي مقسّم حسب نوع الحساب."""
+        prev = self.cmb_group.currentData()
+        self.cmb_group.blockSignals(True)
+        self.cmb_group.clear()
+        self.cmb_group.addItem("— كل التصنيفات —", None)
+
+        try:
+            all_groups = fetch_all_groups(self.conn)
+        except Exception:
+            all_groups = []
+
+        # نجمّع التصنيفات حسب نوع الحساب بالترتيب المنطقي
+        type_order = ["asset", "liability", "capital", "drawings", "revenue", "expense"]
+        groups_by_type: dict[str, list] = {}
+        for g in all_groups:
+            t = g["acc_type"]
+            groups_by_type.setdefault(t, []).append(dict(g))
+
+        for acc_type in type_order:
+            if acc_type not in groups_by_type:
+                continue
+            type_rows = groups_by_type[acc_type]
+            tree = build_group_tree(type_rows)
+            if not tree:
+                continue
+
+            # رأس النوع (غير قابل للاختيار)
+            type_label = TYPE_AR.get(acc_type, acc_type)
+            icon = _TYPE_ICONS.get(acc_type, "📁")
+            sep_text = f"── {icon} {type_label} ──"
+            self.cmb_group.addItem(sep_text, f"__sep__{acc_type}")
+            sep_idx = self.cmb_group.count() - 1
+            model = self.cmb_group.model()
+            item = model.item(sep_idx)
+            if item:
+                item.setFlags(item.flags() & ~Qt.ItemIsEnabled & ~Qt.ItemIsSelectable)
+                f = QFont()
+                f.setBold(True)
+                item.setFont(f)
+                item.setForeground(QColor(TYPE_COLORS.get(acc_type, "#555")))
+
+            # أضف تصنيفات هذا النوع
+            self._add_group_nodes(tree, depth=1)
+
+        self.cmb_group.blockSignals(False)
+
+        # استعادة الاختيار السابق
+        for i in range(self.cmb_group.count()):
+            if self.cmb_group.itemData(i) == prev:
+                self.cmb_group.setCurrentIndex(i)
+                break
+
+    def _add_group_nodes(self, nodes: list, depth: int):
+        indent = "    " * depth
+        arrow  = "↳ " if depth > 1 else ""
+        for node in nodes:
+            label = f"{indent}{arrow}{node['name']}"
+            self.cmb_group.addItem(label, node["id"])
+            idx = self.cmb_group.count() - 1
+            self.cmb_group.setItemData(idx, QColor(node["color"]), Qt.ForegroundRole)
+            if node.get("children"):
+                self._add_group_nodes(node["children"], depth + 1)
+
+    def _on_group_changed(self):
+        """عند تغيير التصنيف، احسب entry_ids المطابقة مسبقاً للأداء."""
+        gid = self.cmb_group.currentData()
+        if gid is None or (isinstance(gid, str) and gid.startswith("__sep__")):
+            self._group_entry_ids = None
+        else:
+            try:
+                self._group_entry_ids = _get_entry_ids_by_group(self.conn, gid)
+            except Exception:
+                self._group_entry_ids = None
+
+    # ── API الفلترة ──────────────────────────────────────
+
     def reset(self):
         self.inp_search.clear()
-        self.cmb_type.setCurrentIndex(0)
+        self.cmb_group.setCurrentIndex(0)
         self.cmb_balance.setCurrentIndex(0)
         self.dt_from.setDate(QDate(2000, 1, 1))
         self.dt_to.setDate(QDate.currentDate())
+        self._group_entry_ids = None
 
     def matches(self, entry: dict) -> bool:
+        """يتحقق إذا كان القيد يطابق الفلاتر الحالية."""
+        # ── فلتر البحث النصي ──
         q = self.inp_search.text().strip().lower()
         if q:
             desc   = (entry.get("description") or "").lower()
@@ -229,19 +337,25 @@ class _JournalFilterBar(QFrame):
             if q not in desc and q not in ref_no:
                 return False
 
-        type_filt = self.cmb_type.currentData()
-        if type_filt and entry.get("type") != type_filt:
-            return False
+        # ── فلتر التصنيف ──
+        if self._group_entry_ids is not None:
+            if entry.get("id") not in self._group_entry_ids:
+                return False
 
+        # ── فلتر التوازن ──
         bal_filt = self.cmb_balance.currentData()
         if bal_filt:
-            diff = abs((entry.get("total_debit") or 0) - (entry.get("total_credit") or 0))
+            diff = abs(
+                (entry.get("total_debit") or 0) -
+                (entry.get("total_credit") or 0)
+            )
             is_balanced = diff < 0.01
             if bal_filt == "balanced" and not is_balanced:
                 return False
             if bal_filt == "unbalanced" and is_balanced:
                 return False
 
+        # ── فلتر التاريخ ──
         date_str = entry.get("date", "")
         if date_str:
             try:
@@ -436,13 +550,13 @@ class _AccountTreePopup(QDialog):
     def _render_type_section(self, acc_type, groups, by_type, q, indent=0):
         from PyQt5.QtWidgets import QListWidgetItem
 
-        type_key  = f"type:{acc_type}"
-        expanded  = type_key in self._expanded
-        icon      = _TYPE_ICONS.get(acc_type, "📁")
+        type_key   = f"type:{acc_type}"
+        expanded   = type_key in self._expanded
+        icon       = _TYPE_ICONS.get(acc_type, "📁")
         type_label = TYPE_AR.get(acc_type, acc_type)
-        toggle    = "▼" if expanded else "▶"
-        color     = TYPE_COLORS.get(acc_type, "#333")
-        pad       = "    " * indent
+        toggle     = "▼" if expanded else "▶"
+        color      = TYPE_COLORS.get(acc_type, "#333")
+        pad        = "    " * indent
 
         type_item = QListWidgetItem(f"{pad}{toggle} {icon}  {type_label}")
         type_item.setData(Qt.UserRole, {"kind": "type", "type": acc_type, "key": type_key})
@@ -470,7 +584,7 @@ class _AccountTreePopup(QDialog):
 
             grp_key_full = f"grp:{acc_type}:{grp_id}"
             grp_expanded = grp_key_full in self._expanded
-            toggle_g = "▼" if grp_expanded else "▶"
+            toggle_g  = "▼" if grp_expanded else "▶"
             inner_pad = "    " * (indent + 1)
 
             grp_item = QListWidgetItem(f"{inner_pad}{toggle_g} 🏷  {grp_name}")
@@ -550,11 +664,11 @@ class _AccountTreePopup(QDialog):
 class _AccountPickerButton(QWidget):
     def __init__(self, conn, acc_types=None, parent=None):
         super().__init__(parent)
-        self.conn          = conn
-        self.acc_types     = acc_types
-        self._account_id   = None
-        self._account_name = None
-        self._account_type = None
+        self.conn           = conn
+        self.acc_types      = acc_types
+        self._account_id    = None
+        self._account_name  = None
+        self._account_type  = None
         self._on_changed_cb = None
         self._build()
 
@@ -1284,9 +1398,9 @@ class _JournalForm(QWidget):
         if investor_links and self.erp_conn:
             from db.investors_repo import link_investor_to_line
             for link in investor_links:
-                inv_id   = link["investor_id"]
-                acc_type = link["acc_type"]
-                amount   = link["amount"]
+                inv_id    = link["investor_id"]
+                acc_type  = link["acc_type"]
+                amount    = link["amount"]
                 move_type = "capital" if acc_type == "capital" else "drawings"
                 if move_type == "capital":
                     line_row = self.conn.execute(
@@ -1323,11 +1437,10 @@ class _JournalForm(QWidget):
 
 
 # ══════════════════════════════════════════════════════════
-# جدول القيود — مع عمود التاريخ المستقل وفلاتر
+# جدول القيود — مع عمود التاريخ المستقل وفلتر التصنيفات
 # ══════════════════════════════════════════════════════════
 
 class _JournalTreeTable(QWidget):
-    # التاريخ الآن في عمود مستقل
     COLS = ["#", "التاريخ", "رقم القيد", "البيان / الحساب", "DR", "CR", "الحالة"]
 
     def __init__(self, conn, parent=None):
@@ -1347,13 +1460,15 @@ class _JournalTreeTable(QWidget):
 
         root.addWidget(section_label("── القيود المحاسبية المحفوظة ──"))
 
-        # ── شريط الفلاتر ──
-        self._filter = _JournalFilterBar()
+        # ── شريط الفلاتر (يمرر conn للتصنيفات) ──
+        self._filter = _JournalFilterBar(self.conn)
         self._filter.inp_search.textChanged.connect(self._apply_filter)
-        self._filter.cmb_type.currentIndexChanged.connect(self._apply_filter)
+        self._filter.cmb_group.currentIndexChanged.connect(self._apply_filter)
         self._filter.cmb_balance.currentIndexChanged.connect(self._apply_filter)
         self._filter.dt_from.dateChanged.connect(self._apply_filter)
         self._filter.dt_to.dateChanged.connect(self._apply_filter)
+
+        # ربط زر المسح بالتطبيق
         orig_reset = self._filter.reset
         def _reset_and_apply():
             orig_reset()
@@ -1388,18 +1503,17 @@ class _JournalTreeTable(QWidget):
         self.table.verticalHeader().setVisible(False)
 
         hh = self.table.horizontalHeader()
-        # التاريخ عمود مستقل بعرض ثابت
-        hh.setSectionResizeMode(0, QHeaderView.Interactive)   # #
-        hh.setSectionResizeMode(1, QHeaderView.Interactive)   # التاريخ
-        hh.setSectionResizeMode(2, QHeaderView.Interactive)   # رقم القيد
-        hh.setSectionResizeMode(3, QHeaderView.Stretch) # البيان
-        hh.setSectionResizeMode(4, QHeaderView.Interactive)   # DR
-        hh.setSectionResizeMode(5, QHeaderView.Interactive)   # CR
-        hh.setSectionResizeMode(6, QHeaderView.Interactive)   # الحالة
+        hh.setSectionResizeMode(0, QHeaderView.Interactive)
+        hh.setSectionResizeMode(1, QHeaderView.Interactive)
+        hh.setSectionResizeMode(2, QHeaderView.Interactive)
+        hh.setSectionResizeMode(3, QHeaderView.Stretch)
+        hh.setSectionResizeMode(4, QHeaderView.Interactive)
+        hh.setSectionResizeMode(5, QHeaderView.Interactive)
+        hh.setSectionResizeMode(6, QHeaderView.Interactive)
 
         self.table.setColumnWidth(0, 28)
-        self.table.setColumnWidth(1, 92)   # التاريخ
-        self.table.setColumnWidth(2, 85)   # رقم القيد
+        self.table.setColumnWidth(1, 92)
+        self.table.setColumnWidth(2, 85)
         self.table.setColumnWidth(4, 95)
         self.table.setColumnWidth(5, 95)
         self.table.setColumnWidth(6, 85)
@@ -1447,7 +1561,6 @@ class _JournalTreeTable(QWidget):
             self.table.insertRow(r)
             self._row_meta[r] = {"entry_id": eid, "is_parent": True, "is_child": False}
 
-            # عمود التوسيع
             toggle_item = QTableWidgetItem("▼" if expanded else "▶")
             toggle_item.setTextAlignment(Qt.AlignCenter)
             toggle_item.setForeground(QBrush(QColor("#1565c0")))
@@ -1456,7 +1569,6 @@ class _JournalTreeTable(QWidget):
             toggle_item.setFont(f)
             self.table.setItem(r, 0, toggle_item)
 
-            # التاريخ — عمود مستقل
             date_item = QTableWidgetItem(entry["date"])
             date_item.setTextAlignment(Qt.AlignCenter)
             date_f = QFont()
@@ -1465,12 +1577,8 @@ class _JournalTreeTable(QWidget):
             date_item.setForeground(QBrush(QColor("#2e7d32")))
             self.table.setItem(r, 1, date_item)
 
-            # رقم القيد
             self.table.setItem(r, 2, self._bold_item(entry["ref_no"], "#1565c0"))
-
-            # البيان
             self.table.setItem(r, 3, self._bold_item(entry["description"]))
-
             self.table.setItem(r, 4, self._bold_item(f"{total_dr:,.2f}", "#1565c0"))
             self.table.setItem(r, 5, self._bold_item(f"{total_cr:,.2f}", "#c62828"))
 
@@ -1484,38 +1592,49 @@ class _JournalTreeTable(QWidget):
                 if item:
                     item.setBackground(QBrush(QColor("#eef3fb")))
 
+            # ── عرض تفاصيل القيد عند التوسيع ──
             if expanded:
                 for line in entry["lines"]:
                     rc = self.table.rowCount()
                     self.table.insertRow(rc)
-                    self._row_meta[rc] = {"entry_id": eid, "is_parent": False, "is_child": True}
+                    self._row_meta[rc] = {
+                        "entry_id": eid, "is_parent": False, "is_child": True
+                    }
 
-                    acc_name = line.get("account_name", "")
-                    acc_code = line.get("account_code", "")
-                    prefix   = "    └─ "
+                    acc_name  = line.get("account_name", "")
+                    acc_code  = line.get("account_code", "")
+                    acc_type  = line.get("account_type", "")
+
+                    # تمييز الحساب بلونه حسب نوعه
+                    acc_color = TYPE_COLORS.get(acc_type, "#333")
+                    prefix    = "    └─ "
                     desc_text = f"{prefix}{acc_code} — {acc_name}"
                     if line.get("description"):
                         desc_text += f"  │  {line['description']}"
 
-                    is_dr      = line["debit"] > 0
-                    side_color = "#1565c0" if is_dr else "#c62828"
-                    row_bg     = QColor("#f4f8ff") if is_dr else QColor("#fff4f4")
+                    is_dr     = line["debit"] > 0
+                    row_bg    = QColor("#f4f8ff") if is_dr else QColor("#fff4f4")
 
-                    # أعمدة فارغة للصف الفرعي
                     for c in range(4):
                         self.table.setItem(rc, c, QTableWidgetItem(""))
 
                     desc_item = QTableWidgetItem(desc_text)
                     desc_item.setToolTip(f"{acc_code} — {acc_name}")
-                    desc_item.setForeground(QBrush(QColor(side_color)))
+                    desc_item.setForeground(QBrush(QColor(acc_color)))
                     self.table.setItem(rc, 3, desc_item)
 
                     if is_dr:
-                        self.table.setItem(rc, 4, self._colored_item(f"{line['debit']:,.2f}", "#1565c0"))
+                        self.table.setItem(
+                            rc, 4,
+                            self._colored_item(f"{line['debit']:,.2f}", "#1565c0")
+                        )
                         self.table.setItem(rc, 5, QTableWidgetItem(""))
                     else:
                         self.table.setItem(rc, 4, QTableWidgetItem(""))
-                        self.table.setItem(rc, 5, self._colored_item(f"{line['credit']:,.2f}", "#c62828"))
+                        self.table.setItem(
+                            rc, 5,
+                            self._colored_item(f"{line['credit']:,.2f}", "#c62828")
+                        )
 
                     self.table.setItem(rc, 6, QTableWidgetItem(""))
 
@@ -1571,7 +1690,9 @@ class _JournalTreeTable(QWidget):
         if eid is None:
             QMessageBox.information(self, "تنبيه", "اختر قيداً أولاً")
             return
-        entry_data = next((e for e in self._entries_data if e["id"] == eid), None)
+        entry_data = next(
+            (e for e in self._entries_data if e["id"] == eid), None
+        )
         desc = entry_data["description"] if entry_data else f"ID:{eid}"
         if confirm_delete(self, desc):
             delete_entry(self.conn, eid)
