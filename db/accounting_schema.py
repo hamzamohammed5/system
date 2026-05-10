@@ -3,6 +3,8 @@ db/accounting_schema.py  — نسخة مصححة
 ==================================
 الإصلاح: إضافة _fix_is_leaf() في نهاية create_accounting_tables()
 لضمان صحة قيم is_leaf دائماً بعد أي migration أو seed.
+
++ إضافة EQUITY_TYPES و TYPE_GROUP لتجميع الأنواع تحت "حقوق الملكية"
 """
 
 TYPE_AR = {
@@ -12,6 +14,26 @@ TYPE_AR = {
     "revenue":   "إيرادات",
     "expense":   "مصروفات",
     "drawings":  "مسحوبات",
+}
+
+# الأنواع التي تنتمي لحقوق الملكية
+EQUITY_TYPES = {"capital", "drawings", "revenue", "expense"}
+
+# تجميع كل نوع تحت مجموعته الكبرى
+TYPE_GROUP = {
+    "asset":     "asset",
+    "liability": "liability",
+    "capital":   "equity",
+    "drawings":  "equity",
+    "revenue":   "equity",
+    "expense":   "equity",
+}
+
+# عنوان المجموعة الكبرى
+GROUP_AR = {
+    "asset":     "الأصول",
+    "liability":  "الخصوم",
+    "equity":    "حقوق الملكية",
 }
 
 NORMAL_BALANCE = {
@@ -143,20 +165,8 @@ def _table_exists(conn, table: str) -> bool:
         return False
 
 
-# ══════════════════════════════════════════════════════════
-# ✅ الإصلاح الرئيسي: دالة تصليح is_leaf
-# ══════════════════════════════════════════════════════════
-
 def _fix_is_leaf(conn):
-    """
-    يضمن صحة قيم is_leaf:
-      - أي حساب عنده أبناء → is_leaf = 0
-      - أي حساب مالوش أبناء → is_leaf = 1
-
-    يُستدعى دائماً في نهاية create_accounting_tables().
-    """
     try:
-        # الحسابات الأب (لها أبناء) → is_leaf = 0
         conn.execute("""
             UPDATE accounts SET is_leaf = 0
             WHERE id IN (
@@ -165,7 +175,6 @@ def _fix_is_leaf(conn):
                 WHERE parent_id IS NOT NULL
             )
         """)
-        # الحسابات الورقية (مالهاش أبناء) → is_leaf = 1
         conn.execute("""
             UPDATE accounts SET is_leaf = 1
             WHERE id NOT IN (
@@ -235,8 +244,6 @@ def _migrate_schema(conn):
 
 
 def create_accounting_tables(conn):
-    """يُستدعى من init_db — ينشئ الجداول ويشغّل الـ migrations."""
-
     try:
         conn.execute("""
             CREATE TABLE IF NOT EXISTS account_groups (
@@ -303,7 +310,6 @@ def create_accounting_tables(conn):
     except Exception as e:
         print(f"[accounting_schema] seed error: {e}")
 
-    # ✅ دائماً صلّح is_leaf في الآخر بعد الـ seed والـ migration
     _fix_is_leaf(conn)
 
 
@@ -367,7 +373,6 @@ def _seed_default_accounts(conn):
             if row:
                 parent_id = row["id"]
 
-        # ✅ is_leaf مؤقت = 1 دائماً — سيتصحح بـ _fix_is_leaf() في الآخر
         conn.execute("""
             INSERT OR IGNORE INTO accounts
                 (code, name, type, subtype, parent_id, is_leaf)
@@ -375,4 +380,3 @@ def _seed_default_accounts(conn):
         """, (code, name, acc_type, subtype, parent_id))
 
     conn.commit()
-    # ✅ لا نحتاج UPDATE is_leaf هنا — _fix_is_leaf() ستتكفل بذلك

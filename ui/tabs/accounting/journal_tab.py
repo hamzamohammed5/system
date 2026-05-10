@@ -1,10 +1,8 @@
 """
-ui/tabs/accounting/journal_tab.py  — مع ربط المستثمرين
+ui/tabs/accounting/journal_tab.py  — مع ربط المستثمرين وتجميع حقوق الملكية
 =========================================================
-التغييرات عن النسخة السابقة:
-  1. _SmartLine: لما الحساب capital/drawings → يظهر combo اختيار المستثمر
-  2. _JournalForm._save: لما يحفظ القيد → يسجل ربط المستثمر تلقائياً
-  3. باقي الكود بدون تغيير جوهري
+التغيير: _AccountTreePopup يجمع capital/drawings/revenue/expense
+تحت "👑 حقوق الملكية" في الـ dropdown بدلاً من عرضهم مستقلين.
 """
 
 from PyQt5.QtWidgets import (
@@ -28,15 +26,13 @@ from db.accounting_repo import (
     fetch_all_groups, build_group_tree,
     get_normal_balance,
 )
-from db.accounting_schema import NORMAL_BALANCE, TYPE_AR
+from db.accounting_schema import NORMAL_BALANCE, TYPE_AR, EQUITY_TYPES
 from ui.helpers import (
     make_table, setup_table_columns, buttons_row,
     section_label, danger_button, confirm_delete,
 )
 from ui.events import bus
 from .helpers  import TYPE_COLORS
-
-# ── ثوابت ──────────────────────────────────────────────
 
 _TYPE_ORDER = ["asset", "liability", "capital", "drawings", "revenue", "expense"]
 
@@ -49,13 +45,13 @@ _TYPE_ICONS = {
     "expense":   "📤",
 }
 
-# الأنواع التي تستدعي ربط المستثمر
 _INVESTOR_TYPES = {"capital", "drawings"}
 
+# لون ورمز مجموعة حقوق الملكية
+_EQUITY_COLOR = "#2e7d32"
+_EQUITY_ICON  = "👑"
+_EQUITY_LABEL = "حقوق الملكية"
 
-# ══════════════════════════════════════════════════════════
-# منطق التوجيه التلقائي
-# ══════════════════════════════════════════════════════════
 
 def _resolve_side(acc_type: str, is_increase: bool) -> str:
     nb = NORMAL_BALANCE.get(acc_type, "dr")
@@ -63,7 +59,7 @@ def _resolve_side(acc_type: str, is_increase: bool) -> str:
 
 
 # ══════════════════════════════════════════════════════════
-# Popup قائمة الحسابات
+# Popup قائمة الحسابات — مع تجميع حقوق الملكية
 # ══════════════════════════════════════════════════════════
 
 class _AccountTreePopup(QDialog):
@@ -74,6 +70,8 @@ class _AccountTreePopup(QDialog):
         self._selected_id   = None
         self._selected_name = None
         self._expanded: set = set()
+        # افتح كل المجموعات افتراضياً
+        self._expanded.add("group:equity")
         for t in self.acc_types:
             self._expanded.add(f"type:{t}")
         self._all_accounts = []
@@ -82,8 +80,8 @@ class _AccountTreePopup(QDialog):
         self._load_accounts()
 
     def _build(self):
-        self.setMinimumWidth(420)
-        self.setMaximumHeight(480)
+        self.setMinimumWidth(440)
+        self.setMaximumHeight(520)
         self.setStyleSheet("""
             QDialog {
                 background: white;
@@ -148,6 +146,8 @@ class _AccountTreePopup(QDialog):
     def _on_search(self, text):
         self._filter_text = text.strip().lower()
         if self._filter_text:
+            # افتح كل المجموعات عند البحث
+            self._expanded.add("group:equity")
             for t in self.acc_types:
                 self._expanded.add(f"type:{t}")
         self._render()
@@ -157,6 +157,7 @@ class _AccountTreePopup(QDialog):
         self.list_widget.clear()
         q = self._filter_text
 
+        # ── تجميع الحسابات بالنوع ثم التصنيف ──
         by_type: dict = {}
         for acc in self._all_accounts:
             t = acc["type"]
@@ -169,7 +170,12 @@ class _AccountTreePopup(QDialog):
                 by_type[t][grp_full] = []
             by_type[t][grp_full].append(acc)
 
-        for acc_type in self.acc_types:
+        # ── فصل الأنواع: مستقلة vs حقوق الملكية ──
+        standalone_types = [t for t in self.acc_types if t not in EQUITY_TYPES]
+        equity_types     = [t for t in self.acc_types if t in EQUITY_TYPES]
+
+        # ─── عرض الأنواع المستقلة (asset, liability) ───
+        for acc_type in standalone_types:
             if acc_type not in by_type:
                 continue
             groups = by_type[acc_type]
@@ -180,72 +186,133 @@ class _AccountTreePopup(QDialog):
                 )
                 if not has_match:
                     continue
+            self._render_type_section(acc_type, groups, by_type, q, indent=0)
 
-            type_key  = f"type:{acc_type}"
-            expanded  = type_key in self._expanded
-            icon      = _TYPE_ICONS.get(acc_type, "📁")
-            type_label = TYPE_AR.get(acc_type, acc_type)
-            toggle    = "▼" if expanded else "▶"
-            color     = TYPE_COLORS.get(acc_type, "#333")
+        # ─── عقدة "حقوق الملكية" الجامعة ───
+        equity_has_match = False
+        if equity_types:
+            for t in equity_types:
+                if t not in by_type:
+                    continue
+                if q:
+                    for accs in by_type[t].values():
+                        for acc in accs:
+                            if q in acc["name"].lower() or q in acc["code"].lower():
+                                equity_has_match = True
+                                break
+                        if equity_has_match:
+                            break
+                else:
+                    equity_has_match = True
+                if equity_has_match:
+                    break
 
-            type_item = QListWidgetItem(f"{toggle} {icon}  {type_label}")
-            type_item.setData(Qt.UserRole, {"kind": "type", "type": acc_type, "key": type_key})
+        if equity_types and equity_has_match:
+            equity_key = "group:equity"
+            expanded   = equity_key in self._expanded
+            toggle     = "▼" if expanded else "▶"
+
+            eq_item = QListWidgetItem(f"{toggle} {_EQUITY_ICON}  {_EQUITY_LABEL}")
+            eq_item.setData(Qt.UserRole, {"kind": "equity_group", "key": equity_key})
             f = QFont()
             f.setBold(True)
             f.setPointSize(f.pointSize() + 1)
-            type_item.setFont(f)
-            type_item.setForeground(QColor(color))
-            type_item.setBackground(QColor("#f0f4ff"))
-            self.list_widget.addItem(type_item)
+            eq_item.setFont(f)
+            eq_item.setForeground(QColor(_EQUITY_COLOR))
+            eq_item.setBackground(QColor("#f1f8e9"))
+            self.list_widget.addItem(eq_item)
 
-            if not expanded:
+            if expanded:
+                # الترتيب المنطقي داخل حقوق الملكية
+                equity_order = ["capital", "drawings", "revenue", "expense"]
+                for acc_type in equity_order:
+                    if acc_type not in equity_types or acc_type not in by_type:
+                        continue
+                    groups = by_type[acc_type]
+                    if q:
+                        has_match = any(
+                            q in acc["name"].lower() or q in acc["code"].lower()
+                            for accs in groups.values() for acc in accs
+                        )
+                        if not has_match:
+                            continue
+                    self._render_type_section(acc_type, groups, by_type, q, indent=1)
+
+    def _render_type_section(self, acc_type, groups, by_type, q, indent=0):
+        """يرسم عقدة نوع واحد مع أبنائه."""
+        from PyQt5.QtWidgets import QListWidgetItem
+
+        type_key  = f"type:{acc_type}"
+        expanded  = type_key in self._expanded
+        icon      = _TYPE_ICONS.get(acc_type, "📁")
+        type_label = TYPE_AR.get(acc_type, acc_type)
+        toggle    = "▼" if expanded else "▶"
+        color     = TYPE_COLORS.get(acc_type, "#333")
+        pad       = "    " * indent
+
+        type_item = QListWidgetItem(f"{pad}{toggle} {icon}  {type_label}")
+        type_item.setData(Qt.UserRole, {"kind": "type", "type": acc_type, "key": type_key})
+        f = QFont()
+        f.setBold(True)
+        f.setPointSize(f.pointSize() + (0 if indent else 1))
+        type_item.setFont(f)
+        type_item.setForeground(QColor(color))
+        if indent == 0:
+            type_item.setBackground(QColor("#f0f4ff"))
+        else:
+            type_item.setBackground(QColor("#fafffe"))
+        self.list_widget.addItem(type_item)
+
+        if not expanded:
+            return
+
+        for (grp_id, grp_name), accs in sorted(groups.items(), key=lambda x: x[0][1]):
+            matched_accs = accs
+            if q:
+                matched_accs = [a for a in accs
+                                if q in a["name"].lower() or q in a["code"].lower()]
+            if not matched_accs:
                 continue
 
-            for (grp_id, grp_name), accs in sorted(groups.items(), key=lambda x: x[0][1]):
-                matched_accs = accs
-                if q:
-                    matched_accs = [a for a in accs
-                                    if q in a["name"].lower() or q in a["code"].lower()]
-                if not matched_accs:
-                    continue
+            grp_key_full = f"grp:{acc_type}:{grp_id}"
+            grp_expanded = grp_key_full in self._expanded
+            toggle_g = "▼" if grp_expanded else "▶"
+            inner_pad = "    " * (indent + 1)
 
-                grp_key_full = f"grp:{acc_type}:{grp_id}"
-                grp_expanded = grp_key_full in self._expanded
-                toggle_g = "▼" if grp_expanded else "▶"
+            grp_item = QListWidgetItem(f"{inner_pad}{toggle_g} 🏷  {grp_name}")
+            grp_item.setData(Qt.UserRole, {"kind": "group", "key": grp_key_full})
+            gf = QFont()
+            gf.setBold(True)
+            gf.setItalic(True)
+            grp_item.setFont(gf)
+            grp_item.setForeground(QColor("#546e7a"))
+            grp_item.setBackground(QColor("#fafbff"))
+            self.list_widget.addItem(grp_item)
 
-                grp_item = QListWidgetItem(f"    {toggle_g} 🏷  {grp_name}")
-                grp_item.setData(Qt.UserRole, {"kind": "group", "key": grp_key_full})
-                gf = QFont()
-                gf.setBold(True)
-                gf.setItalic(True)
-                grp_item.setFont(gf)
-                grp_item.setForeground(QColor("#546e7a"))
-                grp_item.setBackground(QColor("#fafbff"))
-                self.list_widget.addItem(grp_item)
+            if not grp_expanded and not q:
+                continue
 
-                if not grp_expanded and not q:
-                    continue
-
-                for acc in sorted(matched_accs, key=lambda a: a["code"]):
-                    nb = get_normal_balance(acc["type"])
-                    nb_text = "DR↑" if nb == "dr" else "CR↑"
-                    label = f"        {acc['code']} — {acc['name']}  [{nb_text}]"
-                    acc_item = QListWidgetItem(label)
-                    acc_item.setData(Qt.UserRole, {
-                        "kind": "account",
-                        "id":   acc["id"],
-                        "name": f"{acc['code']} — {acc['name']}",
-                        "type": acc["type"],
-                    })
-                    acc_item.setForeground(QColor(color))
-                    self.list_widget.addItem(acc_item)
+            acc_pad = "    " * (indent + 2)
+            for acc in sorted(matched_accs, key=lambda a: a["code"]):
+                nb = get_normal_balance(acc["type"])
+                nb_text = "DR↑" if nb == "dr" else "CR↑"
+                label = f"{acc_pad}{acc['code']} — {acc['name']}  [{nb_text}]"
+                acc_item = QListWidgetItem(label)
+                acc_item.setData(Qt.UserRole, {
+                    "kind": "account",
+                    "id":   acc["id"],
+                    "name": f"{acc['code']} — {acc['name']}",
+                    "type": acc["type"],
+                })
+                acc_item.setForeground(QColor(color))
+                self.list_widget.addItem(acc_item)
 
     def _on_item_clicked(self, item):
         data = item.data(Qt.UserRole)
         if not data:
             return
         kind = data.get("kind")
-        if kind in ("type", "group"):
+        if kind in ("type", "group", "equity_group"):
             key = data["key"]
             if key in self._expanded:
                 self._expanded.discard(key)
@@ -276,7 +343,6 @@ class _AccountTreePopup(QDialog):
         return self._selected_id, self._selected_name
 
     def get_selected_type(self):
-        """يرجع نوع الحساب المختار."""
         if not self._selected_id:
             return None
         acc = fetch_account(self.conn, self._selected_id)
@@ -330,7 +396,9 @@ class _AccountPickerButton(QWidget):
         popup = _AccountTreePopup(self.conn, self.acc_types, parent=self)
         pos = self.btn.mapToGlobal(QPoint(0, self.btn.height()))
         popup.move(pos)
-        popup.resize(max(self.width() + 60, 420), 420)
+        popup.resize(max(self.width() + 60, 440), 460)
+        # افتح كل المجموعات
+        popup._expanded.add("group:equity")
         for t in (self.acc_types or _TYPE_ORDER):
             popup._expanded.add(f"type:{t}")
         popup._render()
@@ -420,7 +488,6 @@ class _SmartLine(QFrame):
         self._build()
         bus.data_changed.connect(self._reload_investors)
 
-
     def _build(self):
         self.setStyleSheet("""
             QFrame {
@@ -434,11 +501,9 @@ class _SmartLine(QFrame):
         lay.setContentsMargins(6, 4, 6, 4)
         lay.setSpacing(4)
 
-        # ── الصف الرئيسي ──
         main_row = QHBoxLayout()
         main_row.setSpacing(6)
 
-        # أزرار الترتيب
         self.btn_up = QPushButton("▲")
         self.btn_dn = QPushButton("▼")
         for b in (self.btn_up, self.btn_dn):
@@ -456,12 +521,10 @@ class _SmartLine(QFrame):
         ord_col.addWidget(self.btn_dn)
         main_row.addLayout(ord_col)
 
-        # اختيار الحساب
         self._acc = _AccountPickerButton(self.conn)
         self._acc.set_on_changed(self._on_acc_changed)
         main_row.addWidget(self._acc, stretch=4)
 
-        # اتجاه العملية
         dir_frame = QFrame()
         dir_frame.setStyleSheet("QFrame { background:transparent; border:none; }")
         dir_lay = QHBoxLayout(dir_frame)
@@ -481,7 +544,6 @@ class _SmartLine(QFrame):
         dir_frame.setFixedWidth(130)
         main_row.addWidget(dir_frame)
 
-        # المبلغ
         self.sp_amount = QDoubleSpinBox()
         self.sp_amount.setRange(0, 999_999_999)
         self.sp_amount.setDecimals(2)
@@ -490,13 +552,11 @@ class _SmartLine(QFrame):
         self.sp_amount.valueChanged.connect(self._on_change)
         main_row.addWidget(self.sp_amount)
 
-        # البيان
         self.inp_desc = QLineEdit()
         self.inp_desc.setPlaceholderText("بيان...")
         self.inp_desc.setMinimumHeight(28)
         main_row.addWidget(self.inp_desc, stretch=2)
 
-        # حذف
         btn_del = QPushButton("✖")
         btn_del.setFixedSize(22, 22)
         btn_del.setStyleSheet(
@@ -508,7 +568,7 @@ class _SmartLine(QFrame):
 
         lay.addLayout(main_row)
 
-        # ── صف ربط المستثمر (يظهر عند capital/drawings) ──
+        # ── صف ربط المستثمر ──
         self._investor_row = QFrame()
         self._investor_row.setStyleSheet(
             "QFrame { background:#fff8e1; border:1px solid #ffe082;"
@@ -563,8 +623,6 @@ class _SmartLine(QFrame):
         except Exception:
             pass
 
-    # ── منطق التوجيه ──────────────────────────────────────
-
     def _get_acc_type(self) -> str | None:
         acc_id = self._acc.current_account_id()
         if not acc_id:
@@ -576,7 +634,6 @@ class _SmartLine(QFrame):
         acc_type = self._get_acc_type()
         is_inc   = self.rdo_inc.isChecked()
 
-        # إظهار/إخفاء صف المستثمر
         show_investor = acc_type in _INVESTOR_TYPES if acc_type else False
         self._investor_row.setVisible(show_investor)
         if show_investor:
@@ -621,8 +678,6 @@ class _SmartLine(QFrame):
         self._update_side_style()
         self._on_change()
 
-    # ── API ──────────────────────────────────────────────
-
     def get_values(self) -> dict | None:
         acc_id = self._acc.current_account_id()
         amount = self.sp_amount.value()
@@ -637,7 +692,6 @@ class _SmartLine(QFrame):
         }
 
     def get_investor_link(self) -> dict | None:
-        """يرجع بيانات ربط المستثمر لو موجودة."""
         if not self._investor_row.isVisible():
             return None
         inv_id = self.cmb_investor.currentData()
@@ -710,7 +764,6 @@ class _LinesPanel(QFrame):
         hl.addWidget(self.lbl_cr)
         root.addWidget(hdr)
 
-        # ترويسة أعمدة
         col_hdr = QWidget()
         col_hdr.setStyleSheet("background:#fafbff;")
         ch_lay = QHBoxLayout(col_hdr)
@@ -734,7 +787,6 @@ class _LinesPanel(QFrame):
         _ch("",        w=22)
         root.addWidget(col_hdr)
 
-        # منطقة الصفوف
         self._rows_w   = QWidget()
         self._rows_w.setStyleSheet("background:transparent;")
         self._rows_lay = QVBoxLayout(self._rows_w)
@@ -762,8 +814,6 @@ class _LinesPanel(QFrame):
         """)
         btn_add.clicked.connect(self.add_line)
         root.addWidget(btn_add)
-
-    # ── إدارة الصفوف ──────────────────────────────────────
 
     def add_line(self) -> _SmartLine:
         line = _SmartLine(
@@ -820,8 +870,6 @@ class _LinesPanel(QFrame):
         self.lbl_dr.setText(f"DR: {total_dr:,.2f}")
         self.lbl_cr.setText(f"CR: {total_cr:,.2f}")
 
-    # ── API ──────────────────────────────────────────────
-
     def get_total_dr(self) -> float:
         return sum(ln.get_amount() for ln in self._lines if ln.get_side() == "dr")
 
@@ -832,7 +880,6 @@ class _LinesPanel(QFrame):
         return [v for ln in self._lines if (v := ln.get_values()) is not None]
 
     def get_all_investor_links(self) -> list:
-        """يجيب كل ربط مستثمرين موجود في الصفوف."""
         links = []
         for ln in self._lines:
             link = ln.get_investor_link()
@@ -895,7 +942,6 @@ class _JournalForm(QWidget):
         )
         root.addWidget(self._lines_panel)
 
-        # شريط التوازن
         bal_frame = QFrame()
         bal_frame.setStyleSheet("""
             QFrame {
@@ -972,8 +1018,6 @@ class _JournalForm(QWidget):
         self._lines_panel.add_line()
         self._lines_panel.add_line()
 
-    # ── التوازن ──────────────────────────────────────────
-
     def _on_balance_changed(self):
         total_dr = self._lines_panel.get_total_dr()
         total_cr = self._lines_panel.get_total_cr()
@@ -1011,8 +1055,6 @@ class _JournalForm(QWidget):
             )
             self.btn_save.setEnabled(False)
 
-    # ── حفظ ──────────────────────────────────────────────
-
     def _save(self):
         desc = self.inp_desc.text().strip()
         if not desc:
@@ -1046,7 +1088,6 @@ class _JournalForm(QWidget):
         entry_id = insert_entry(self.conn, date, desc, "manual")
         add_entry_lines(self.conn, entry_id, all_lines)
 
-        # ── تسجيل ربط المستثمرين ──
         investor_links = self._lines_panel.get_all_investor_links()
         if investor_links and self.erp_conn:
             from db.investors_repo import link_investor_to_line
@@ -1055,7 +1096,6 @@ class _JournalForm(QWidget):
                 acc_type = link["acc_type"]
                 amount   = link["amount"]
                 move_type = "capital" if acc_type == "capital" else "drawings"
-                # اجيب line_id المناسب
                 if move_type == "capital":
                     line_row = self.conn.execute(
                         "SELECT id FROM journal_lines WHERE entry_id=? AND credit>0 LIMIT 1",

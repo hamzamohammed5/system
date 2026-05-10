@@ -1,7 +1,8 @@
 """
 ui/tabs/accounting_tab.py  — نسخة مصححة
 ==========================================
-الإصلاح: تمرير self.erp_conn لـ JournalTab حتى تظهر قائمة المستثمرين في القيود.
+التغيير: تبويب "حقوق الملكية" يعرض capital/drawings/revenue/expense
+مجمّعين في شجرة واحدة تحت "حقوق الملكية".
 """
 
 from PyQt5.QtWidgets import (
@@ -72,7 +73,6 @@ _INNER_TAB_STYLE = """
 
 
 def _make_inner_tabs(*tab_defs) -> QTabWidget:
-    """ينشئ QTabWidget داخلي بالستايل المناسب."""
     tabs = QTabWidget()
     tabs.setStyleSheet(_INNER_TAB_STYLE)
     for label, widget in tab_defs:
@@ -84,7 +84,7 @@ class AccountingTab(QWidget):
     def __init__(self, parent=None):
         super().__init__(parent)
         self.acc_conn = get_accounting_connection()
-        self.erp_conn = get_connection()          # لنظام المستثمرين
+        self.erp_conn = get_connection()
         self._init_schema()
         self._build()
 
@@ -108,19 +108,20 @@ class AccountingTab(QWidget):
         main_tabs.setStyleSheet(_TAB_STYLE)
 
         # ═══════════════════════════════════════════════════
-        # 1. الحسابات — شجرة الحسابات + التصنيفات
+        # 1. الحسابات — ثلاث تبويبات: أصول | خصوم | حقوق الملكية
         # ═══════════════════════════════════════════════════
         accounts_tabs = _make_inner_tabs(
             ("🏦  الأصول",
              _make_inner_tabs(
-                 ("📊 الحسابات",     AccountsTreePanel(self.acc_conn, ["asset"], "الأصول")),
-                 ("🏷️ التصنيفات",   _GroupManagerPanel(self.acc_conn, "asset")),
+                 ("📊 الحسابات",   AccountsTreePanel(self.acc_conn, ["asset"], "الأصول")),
+                 ("🏷️ التصنيفات", _GroupManagerPanel(self.acc_conn, "asset")),
              )),
             ("📋  الخصوم",
              _make_inner_tabs(
-                 ("📊 الحسابات",     AccountsTreePanel(self.acc_conn, ["liability"], "الخصوم")),
-                 ("🏷️ التصنيفات",   _GroupManagerPanel(self.acc_conn, "liability")),
+                 ("📊 الحسابات",   AccountsTreePanel(self.acc_conn, ["liability"], "الخصوم")),
+                 ("🏷️ التصنيفات", _GroupManagerPanel(self.acc_conn, "liability")),
              )),
+            # ✅ حقوق الملكية: الأربعة أنواع مجمّعة في شجرة واحدة
             ("👑  حقوق الملكية",
              self._build_equity_tab()),
         )
@@ -128,7 +129,6 @@ class AccountingTab(QWidget):
 
         # ═══════════════════════════════════════════════════
         # 2. القيود المحاسبية
-        # ✅ الإصلاح: تمرير self.erp_conn حتى تظهر قائمة المستثمرين
         # ═══════════════════════════════════════════════════
         main_tabs.addTab(
             JournalTab(self.acc_conn, self.erp_conn),
@@ -151,17 +151,21 @@ class AccountingTab(QWidget):
         main_tabs.addTab(TrialBalanceTab(self.acc_conn), "⚖️  ميزان المراجعة")
 
         # ═══════════════════════════════════════════════════
-        # 6. المستثمرون — مرتبط بـ erp.db + accounting.db
+        # 6. المستثمرون
         # ═══════════════════════════════════════════════════
-        investors_widget = InvestorsTab(self.erp_conn, self.acc_conn)
-        main_tabs.addTab(investors_widget, "👥  المستثمرون")
+        main_tabs.addTab(
+            InvestorsTab(self.erp_conn, self.acc_conn),
+            "👥  المستثمرون"
+        )
 
         root.addWidget(main_tabs)
 
     def _build_equity_tab(self) -> QWidget:
         """
-        تبويب حقوق الملكية: يجمع الحسابات (رأس مال، مسحوبات، إيرادات، مصروفات)
-        + التصنيفات لكل نوع.
+        تبويب حقوق الملكية:
+        - شجرة واحدة تجمع capital + drawings + revenue + expense
+          مع تقسيمها داخلياً (كل نوع تحت عقدة فرعية).
+        - التصنيفات لكل نوع في تبويبات منفصلة على اليمين.
         """
         widget = QWidget()
         root   = QVBoxLayout(widget)
@@ -171,23 +175,23 @@ class AccountingTab(QWidget):
         splitter.setHandleWidth(5)
         splitter.setStyleSheet("""
             QSplitter::handle { background: #e0e0e0; }
-            QSplitter::handle:hover { background: #bbdefb; }
+            QSplitter::handle:hover { background: #c8e6c9; }
         """)
 
-        # شجرة الحسابات (كل أنواع الملكية معاً)
+        # ── الشجرة الجامعة (كل أنواع الملكية) ──
         tree_panel = AccountsTreePanel(
             self.acc_conn,
             ["capital", "drawings", "revenue", "expense"],
-            "حقوق الملكية والإيرادات والمصروفات"
+            "حقوق الملكية"
         )
         splitter.addWidget(tree_panel)
 
-        # التصنيفات لكل نوع في تبويبات داخلية مدمجة
+        # ── التصنيفات: تبويب لكل نوع ──
         cat_tabs = _make_inner_tabs(
-            ("رأس المال",   _GroupManagerPanel(self.acc_conn, "capital")),
-            ("المسحوبات",  _GroupManagerPanel(self.acc_conn, "drawings")),
-            ("الإيرادات",  _GroupManagerPanel(self.acc_conn, "revenue")),
-            ("المصروفات",  _GroupManagerPanel(self.acc_conn, "expense")),
+            ("👑 رأس المال",   _GroupManagerPanel(self.acc_conn, "capital")),
+            ("💸 المسحوبات",  _GroupManagerPanel(self.acc_conn, "drawings")),
+            ("💹 الإيرادات",  _GroupManagerPanel(self.acc_conn, "revenue")),
+            ("📤 المصروفات",  _GroupManagerPanel(self.acc_conn, "expense")),
         )
         splitter.addWidget(cat_tabs)
         splitter.setSizes([600, 300])

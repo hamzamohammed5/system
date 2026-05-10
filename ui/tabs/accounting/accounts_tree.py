@@ -2,6 +2,9 @@
 ui/tabs/accounting/accounts_tree.py
 =====================================
 AccountsTreePanel — شجرة الحسابات مع فورم الإضافة والتعديل.
+
+التغيير: capital/drawings/revenue/expense تظهر مجمّعة تحت "حقوق الملكية"
+في الشجرة بدلاً من أن يكون كل نوع مستقلاً.
 """
 
 from PyQt5.QtWidgets import (
@@ -19,10 +22,13 @@ from db.accounting_repo import (
     get_account_balance, get_normal_balance,
     fetch_all_groups, build_group_tree,
 )
-from db.accounting_schema import TYPE_AR
+from db.accounting_schema import TYPE_AR, EQUITY_TYPES, GROUP_AR
 from ui.helpers import section_label, danger_button, confirm_delete
 from ui.events  import bus
 from .helpers   import TYPE_COLORS
+
+# لون مجموعة حقوق الملكية
+EQUITY_COLOR = "#2e7d32"
 
 
 class AccountsTreePanel(QWidget):
@@ -253,75 +259,130 @@ class AccountsTreePanel(QWidget):
             self._loading = False
 
     def _build_tree(self):
+        """
+        يبني الشجرة مع تجميع capital/drawings/revenue/expense
+        تحت عقدة "👑 حقوق الملكية" واحدة.
+        """
         self.tree.clear()
         gid_filter   = self.cmb_group_filter.currentData()
-        has_any_data = False
 
+        # ── جمع كل الحسابات مصنّفة ──
+        all_nodes_by_type: dict[str, list] = {}
         for acc_type in self.acc_types:
             try:
                 rows = fetch_all_accounts(self.conn, acc_type)
             except Exception as e:
                 print(f"[AccountsTreePanel] fetch_all_accounts({acc_type}) error: {e}")
                 rows = []
-
             if not rows:
                 continue
-
-            nodes = {}
-            for r in rows:
-                try:
-                    nid = r["id"]
-                    nodes[nid] = {
-                        "id":         nid,
-                        "code":       r["code"],
-                        "name":       r["name"],
-                        "type":       r["type"],
-                        "parent_id":  r["parent_id"],
-                        "is_leaf":    r["is_leaf"],
-                        "group_id":   r["group_id"],
-                        "group_name": r["group_name"] if "group_name" in r.keys() else None,
-                        "children":   [],
-                    }
-                except Exception as e:
-                    print(f"[AccountsTreePanel] error reading row: {e}")
-
-            roots = []
-            for nid, node in nodes.items():
-                pid = node["parent_id"]
-                if pid and pid in nodes:
-                    nodes[pid]["children"].append(node)
-                else:
-                    roots.append(node)
-
-            roots.sort(key=lambda n: n["code"])
-
+            nodes = self._rows_to_tree(rows)
             if gid_filter is not None:
-                roots = self._filter_by_group(roots, gid_filter)
+                nodes = self._filter_by_group(nodes, gid_filter)
+            if nodes:
+                all_nodes_by_type[acc_type] = nodes
 
-            if not roots:
-                continue
-
-            has_any_data = True
-
-            type_item = QTreeWidgetItem()
-            type_item.setText(1, f"── {TYPE_AR.get(acc_type, acc_type)} ──")
-            type_item.setForeground(1, QColor(TYPE_COLORS.get(acc_type, "#333")))
-            f = type_item.font(1)
-            f.setBold(True)
-            type_item.setFont(1, f)
-            type_item.setFlags(type_item.flags() & ~Qt.ItemIsSelectable)
-            self.tree.addTopLevelItem(type_item)
-
-            self._add_acc_nodes(roots, type_item)
-            type_item.setExpanded(True)
-
-        self.tree.expandToDepth(2)
-
-        if not has_any_data:
+        if not all_nodes_by_type:
             empty_item = QTreeWidgetItem()
             empty_item.setText(1, "لا توجد حسابات — أضف من الفورم على اليمين")
             empty_item.setForeground(1, QColor("#aaa"))
             self.tree.addTopLevelItem(empty_item)
+            return
+
+        # ── تحديد الترتيب: asset → liability → equity (مجمّع) ──
+        # الأنواع غير الـ equity تُضاف مباشرة
+        non_equity_types = [t for t in self.acc_types if t not in EQUITY_TYPES]
+        equity_types_present = [t for t in self.acc_types if t in EQUITY_TYPES
+                                 and t in all_nodes_by_type]
+
+        for acc_type in non_equity_types:
+            if acc_type not in all_nodes_by_type:
+                continue
+            self._add_type_header(acc_type, all_nodes_by_type[acc_type])
+
+        # ── عقدة "حقوق الملكية" الجامعة ──
+        if equity_types_present:
+            equity_item = QTreeWidgetItem()
+            equity_item.setText(0, "")
+            equity_item.setText(1, "👑  حقوق الملكية")
+            equity_item.setText(2, "")
+            equity_item.setFlags(equity_item.flags() & ~Qt.ItemIsSelectable)
+            f = equity_item.font(1)
+            f.setBold(True)
+            f.setPointSize(f.pointSize() + 1)
+            equity_item.setFont(1, f)
+            equity_item.setForeground(1, QColor(EQUITY_COLOR))
+            equity_item.setBackground(0, QColor("#f1f8e9"))
+            equity_item.setBackground(1, QColor("#f1f8e9"))
+            equity_item.setBackground(2, QColor("#f1f8e9"))
+            self.tree.addTopLevelItem(equity_item)
+
+            # الترتيب المنطقي داخل حقوق الملكية
+            equity_order = ["capital", "drawings", "revenue", "expense"]
+            for acc_type in equity_order:
+                if acc_type not in equity_types_present:
+                    continue
+                nodes = all_nodes_by_type[acc_type]
+                # عقدة فرعية لكل نوع
+                sub_item = QTreeWidgetItem()
+                sub_item.setText(0, "")
+                sub_item.setText(1, f"── {TYPE_AR.get(acc_type, acc_type)} ──")
+                sub_item.setFlags(sub_item.flags() & ~Qt.ItemIsSelectable)
+                sf = sub_item.font(1)
+                sf.setBold(True)
+                sub_item.setFont(1, sf)
+                color = TYPE_COLORS.get(acc_type, EQUITY_COLOR)
+                sub_item.setForeground(1, QColor(color))
+                equity_item.addChild(sub_item)
+                self._add_acc_nodes(nodes, sub_item)
+                sub_item.setExpanded(True)
+
+            equity_item.setExpanded(True)
+
+        self.tree.expandToDepth(2)
+
+    def _rows_to_tree(self, rows) -> list:
+        """يحوّل rows إلى شجرة nested مع children."""
+        nodes = {}
+        for r in rows:
+            try:
+                nid = r["id"]
+                nodes[nid] = {
+                    "id":         nid,
+                    "code":       r["code"],
+                    "name":       r["name"],
+                    "type":       r["type"],
+                    "parent_id":  r["parent_id"],
+                    "is_leaf":    r["is_leaf"],
+                    "group_id":   r["group_id"],
+                    "group_name": r["group_name"] if "group_name" in r.keys() else None,
+                    "children":   [],
+                }
+            except Exception as e:
+                print(f"[AccountsTreePanel] error reading row: {e}")
+
+        roots = []
+        for nid, node in nodes.items():
+            pid = node["parent_id"]
+            if pid and pid in nodes:
+                nodes[pid]["children"].append(node)
+            else:
+                roots.append(node)
+        roots.sort(key=lambda n: n["code"])
+        return roots
+
+    def _add_type_header(self, acc_type: str, nodes: list):
+        """يضيف عقدة رأسية لنوع مستقل (asset أو liability)."""
+        type_item = QTreeWidgetItem()
+        type_item.setText(1, f"── {TYPE_AR.get(acc_type, acc_type)} ──")
+        type_item.setForeground(1, QColor(TYPE_COLORS.get(acc_type, "#333")))
+        f = type_item.font(1)
+        f.setBold(True)
+        type_item.setFont(1, f)
+        type_item.setFlags(type_item.flags() & ~Qt.ItemIsSelectable)
+        self.tree.addTopLevelItem(type_item)
+        self._add_acc_nodes(nodes, type_item)
+        type_item.setExpanded(True)
 
     def _filter_by_group(self, nodes: list, gid: int) -> list:
         from db.accounting_repo import _get_group_descendants
@@ -465,7 +526,6 @@ class AccountsTreePanel(QWidget):
         if not acc:
             return
 
-        # ── جيب كل الأبناء بالتسلسل (recursive) ──
         def get_all_descendants(account_id: int) -> list:
             result = [account_id]
             children = self.conn.execute(
@@ -478,7 +538,6 @@ class AccountsTreePanel(QWidget):
         all_ids      = get_all_descendants(aid)
         placeholders = ",".join("?" * len(all_ids))
 
-        # ── شيك على حركات في كل الأبناء ──
         try:
             has_lines = self.conn.execute(
                 f"SELECT COUNT(*) as c FROM journal_lines "
@@ -496,7 +555,6 @@ class AccountsTreePanel(QWidget):
             )
             return
 
-        # ── رسالة تأكيد ──
         child_count = len(all_ids) - 1
         if child_count:
             msg = (
@@ -512,7 +570,6 @@ class AccountsTreePanel(QWidget):
             if not confirm_delete(self, acc["name"]):
                 return
 
-        # ── احذف من الأعمق للأعلى ──
         try:
             for del_id in reversed(all_ids):
                 self.conn.execute("DELETE FROM accounts WHERE id=?", (del_id,))
