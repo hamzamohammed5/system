@@ -1,28 +1,21 @@
 """
-ui/tabs/accounting_tab.py
-==========================
-التبويب الرئيسي للحسابات — يجمع الأجزاء المقسمة في مجلد accounting/.
-
-الهيكل:
-  ui/tabs/accounting/
-    __init__.py
-    helpers.py              — TYPE_COLORS, _spin, _money, _stat_card
-    account_combo.py        — _AccountCombo
-    accounts_tree.py        — AccountsTreePanel
-    group_manager.py        — _GroupManagerPanel
-    journal_tab.py          — JournalTab, _SmartEntryLine
-    ledger_tab.py           — LedgerTab
-    financial_statements.py — TrialBalanceTab, IncomeStatementTab,
-                              OwnersEquityTab, BalanceSheetTab,
-                              FinancialStatementsTab
+ui/tabs/accounting_tab.py  — نسخة مصححة
+==========================================
+التغييرات:
+  1. إزالة التداخل في التبويبات (nested QTabWidget مكثف)
+  2. دمج نظام المستثمرين مع ربطه بـ accounting.db و erp.db
+  3. تبويبات واضحة ومرتبة بدون تكرار
 """
 
-from PyQt5.QtWidgets import QWidget, QVBoxLayout, QTabWidget
-from PyQt5.QtCore    import Qt
+from PyQt5.QtWidgets import (
+    QWidget, QVBoxLayout, QHBoxLayout,
+    QTabWidget, QLabel, QFrame, QSplitter,
+)
+from PyQt5.QtCore import Qt
 
-from db.connection import get_accounting_connection
+from db.connection import get_connection, get_accounting_connection
 
-# ── الأجزاء المقسمة ──────────────────────────────────────
+# ── أجزاء الحسابات ──
 from ui.tabs.accounting.accounts_tree        import AccountsTreePanel
 from ui.tabs.accounting.group_manager        import _GroupManagerPanel
 from ui.tabs.accounting.journal_tab          import JournalTab
@@ -31,102 +24,183 @@ from ui.tabs.accounting.financial_statements import (
     TrialBalanceTab,
     FinancialStatementsTab,
 )
+# ── المستثمرون ──
+from ui.tabs.accounting.investors_tab import InvestorsTab
 
-from db.accounting_schema import TYPE_AR
+
+_TAB_STYLE = """
+    QTabWidget::pane {
+        border: none;
+        background: #f9f9f9;
+    }
+    QTabBar::tab {
+        background: #f0f0f0;
+        border: 1px solid #ddd;
+        border-bottom: none;
+        padding: 8px 16px;
+        margin-left: 2px;
+        font-size: 11px;
+        color: #555;
+    }
+    QTabBar::tab:selected {
+        background: #ffffff;
+        color: #1565c0;
+        font-weight: bold;
+        border-top: 2px solid #1565c0;
+    }
+    QTabBar::tab:hover:!selected {
+        background: #e8f0fe;
+        color: #1565c0;
+    }
+"""
+
+_INNER_TAB_STYLE = """
+    QTabWidget::pane { border: none; background: #fafafa; }
+    QTabBar::tab {
+        background: #f5f5f5;
+        border: 1px solid #e0e0e0;
+        border-bottom: none;
+        padding: 6px 12px;
+        font-size: 10px;
+        color: #666;
+    }
+    QTabBar::tab:selected {
+        background: white;
+        color: #1565c0;
+        font-weight: bold;
+        border-top: 2px solid #1565c0;
+    }
+    QTabBar::tab:hover:!selected { background: #eeeeee; }
+"""
+
+
+def _make_inner_tabs(*tab_defs) -> QTabWidget:
+    """ينشئ QTabWidget داخلي بالستايل المناسب."""
+    tabs = QTabWidget()
+    tabs.setStyleSheet(_INNER_TAB_STYLE)
+    for label, widget in tab_defs:
+        tabs.addTab(widget, label)
+    return tabs
 
 
 class AccountingTab(QWidget):
     def __init__(self, parent=None):
         super().__init__(parent)
-        self.conn = get_accounting_connection()
+        self.acc_conn = get_accounting_connection()
+        self.erp_conn = get_connection()          # لنظام المستثمرين
         self._init_schema()
         self._build()
 
     def _init_schema(self):
         try:
             from db.accounting_schema import create_accounting_tables
-            create_accounting_tables(self.conn)
+            create_accounting_tables(self.acc_conn)
         except Exception as e:
             print(f"[AccountingTab] schema init error: {e}")
+        try:
+            from db.investors_repo import create_investors_tables
+            create_investors_tables(self.erp_conn)
+        except Exception as e:
+            print(f"[AccountingTab] investors schema error: {e}")
 
     def _build(self):
         root = QVBoxLayout(self)
         root.setContentsMargins(0, 0, 0, 0)
 
-        tabs = QTabWidget()
-        tabs.setStyleSheet("""
-            QTabWidget::pane { border:none; background:#f9f9f9; }
-            QTabBar::tab {
-                background:#f0f0f0; border:1px solid #ddd;
-                border-bottom:none; padding:8px 14px;
-                margin-left:2px; font-size:11px; color:#555;
-            }
-            QTabBar::tab:selected {
-                background:#fff; color:#1565c0;
-                font-weight:bold; border-top:2px solid #1565c0;
-            }
-            QTabBar::tab:hover:!selected { background:#e8f0fe; color:#1565c0; }
+        main_tabs = QTabWidget()
+        main_tabs.setStyleSheet(_TAB_STYLE)
+
+        # ═══════════════════════════════════════════════════
+        # 1. الحسابات — شجرة الحسابات + التصنيفات
+        # ═══════════════════════════════════════════════════
+        accounts_tabs = _make_inner_tabs(
+            ("🏦  الأصول",
+             _make_inner_tabs(
+                 ("📊 الحسابات",     AccountsTreePanel(self.acc_conn, ["asset"], "الأصول")),
+                 ("🏷️ التصنيفات",   _GroupManagerPanel(self.acc_conn, "asset")),
+             )),
+            ("📋  الخصوم",
+             _make_inner_tabs(
+                 ("📊 الحسابات",     AccountsTreePanel(self.acc_conn, ["liability"], "الخصوم")),
+                 ("🏷️ التصنيفات",   _GroupManagerPanel(self.acc_conn, "liability")),
+             )),
+            ("👑  حقوق الملكية",
+             self._build_equity_tab()),
+        )
+        main_tabs.addTab(accounts_tabs, "🏦  الحسابات")
+
+        # ═══════════════════════════════════════════════════
+        # 2. القيود المحاسبية
+        # ═══════════════════════════════════════════════════
+        main_tabs.addTab(JournalTab(self.acc_conn), "📒  قيود اليومية")
+
+        # ═══════════════════════════════════════════════════
+        # 3. دفتر الأستاذ
+        # ═══════════════════════════════════════════════════
+        main_tabs.addTab(LedgerTab(self.acc_conn), "📘  دفتر الأستاذ")
+
+        # ═══════════════════════════════════════════════════
+        # 4. القوائم المالية
+        # ═══════════════════════════════════════════════════
+        main_tabs.addTab(FinancialStatementsTab(self.acc_conn), "📊  القوائم المالية")
+
+        # ═══════════════════════════════════════════════════
+        # 5. ميزان المراجعة
+        # ═══════════════════════════════════════════════════
+        main_tabs.addTab(TrialBalanceTab(self.acc_conn), "⚖️  ميزان المراجعة")
+
+        # ═══════════════════════════════════════════════════
+        # 6. المستثمرون — مرتبط بـ erp.db + accounting.db
+        # ═══════════════════════════════════════════════════
+        investors_widget = InvestorsTab(self.erp_conn, self.acc_conn)
+        main_tabs.addTab(investors_widget, "👥  المستثمرون")
+
+        root.addWidget(main_tabs)
+
+    def _build_equity_tab(self) -> QWidget:
+        """
+        تبويب حقوق الملكية: يجمع الحسابات (رأس مال، مسحوبات، إيرادات، مصروفات)
+        + التصنيفات لكل نوع.
+        """
+        widget = QWidget()
+        root   = QVBoxLayout(widget)
+        root.setContentsMargins(0, 0, 0, 0)
+
+        splitter = QSplitter(Qt.Horizontal)
+        splitter.setHandleWidth(5)
+        splitter.setStyleSheet("""
+            QSplitter::handle { background: #e0e0e0; }
+            QSplitter::handle:hover { background: #bbdefb; }
         """)
 
-        # ── أصول ──
-        asset_tab = QTabWidget()
-        asset_tab.addTab(
-            AccountsTreePanel(self.conn, ["asset"], "الأصول"),
-            "📊 الحسابات"
+        # شجرة الحسابات (كل أنواع الملكية معاً)
+        tree_panel = AccountsTreePanel(
+            self.acc_conn,
+            ["capital", "drawings", "revenue", "expense"],
+            "حقوق الملكية والإيرادات والمصروفات"
         )
-        asset_tab.addTab(
-            _GroupManagerPanel(self.conn, "asset"),
-            "🏷️ التصنيفات"
+        splitter.addWidget(tree_panel)
+
+        # التصنيفات لكل نوع في تبويبات داخلية مدمجة
+        cat_tabs = _make_inner_tabs(
+            ("رأس المال",   _GroupManagerPanel(self.acc_conn, "capital")),
+            ("المسحوبات",  _GroupManagerPanel(self.acc_conn, "drawings")),
+            ("الإيرادات",  _GroupManagerPanel(self.acc_conn, "revenue")),
+            ("المصروفات",  _GroupManagerPanel(self.acc_conn, "expense")),
         )
-        tabs.addTab(asset_tab, "🏦 الأصول")
+        splitter.addWidget(cat_tabs)
+        splitter.setSizes([600, 300])
 
-        # ── خصوم ──
-        liab_tab = QTabWidget()
-        liab_tab.addTab(
-            AccountsTreePanel(self.conn, ["liability"], "الخصوم"),
-            "📊 الحسابات"
-        )
-        liab_tab.addTab(
-            _GroupManagerPanel(self.conn, "liability"),
-            "🏷️ التصنيفات"
-        )
-        tabs.addTab(liab_tab, "📋 الخصوم")
-
-        # ── حقوق الملكية ──
-        eq_tab = QTabWidget()
-        eq_tab.addTab(
-            AccountsTreePanel(
-                self.conn,
-                ["capital", "drawings", "revenue", "expense"],
-                "حقوق الملكية"
-            ),
-            "📊 الحسابات"
-        )
-        eq_groups = QTabWidget()
-        eq_groups.addTab(_GroupManagerPanel(self.conn, "capital"),  "رأس المال")
-        eq_groups.addTab(_GroupManagerPanel(self.conn, "drawings"), "المسحوبات")
-        eq_groups.addTab(_GroupManagerPanel(self.conn, "revenue"),  "الإيرادات")
-        eq_groups.addTab(_GroupManagerPanel(self.conn, "expense"),  "المصروفات")
-        eq_tab.addTab(eq_groups, "🏷️ التصنيفات")
-        tabs.addTab(eq_tab, "👑 حقوق الملكية")
-
-        # ── القوائم المالية ──
-        tabs.addTab(FinancialStatementsTab(self.conn), "📊 القوائم المالية")
-
-        # ── قيود اليومية ──
-        tabs.addTab(JournalTab(self.conn), "📒 قيود اليومية")
-
-        # ── دفتر الأستاذ ──
-        tabs.addTab(LedgerTab(self.conn), "📘 دفتر الأستاذ")
-
-        # ── ميزان المراجعة ──
-        tabs.addTab(TrialBalanceTab(self.conn), "⚖️ ميزان المراجعة")
-
-        root.addWidget(tabs)
+        root.addWidget(splitter)
+        return widget
 
     def closeEvent(self, event):
         try:
-            self.conn.close()
+            self.acc_conn.close()
+        except Exception:
+            pass
+        try:
+            self.erp_conn.close()
         except Exception:
             pass
         super().closeEvent(event)
