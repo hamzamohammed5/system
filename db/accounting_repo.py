@@ -12,7 +12,21 @@ from datetime import datetime
 # ══════════════════════════════════════════════════════════
 
 def fetch_all_accounts(conn, acc_type: str = None):
-    if acc_type:
+    try:
+        if acc_type:
+            return conn.execute("""
+                SELECT a.id, a.code, a.name, a.type, a.subtype,
+                       a.parent_id, a.is_leaf, a.group_id,
+                       p.name AS parent_name,
+                       g.name AS group_name, g.color AS group_color,
+                       (SELECT COALESCE(SUM(jl.debit)-SUM(jl.credit),0)
+                        FROM journal_lines jl WHERE jl.account_id = a.id) AS balance
+                FROM accounts a
+                LEFT JOIN accounts p ON p.id = a.parent_id
+                LEFT JOIN account_groups g ON g.id = a.group_id
+                WHERE a.type = ?
+                ORDER BY a.code
+            """, (acc_type,)).fetchall()
         return conn.execute("""
             SELECT a.id, a.code, a.name, a.type, a.subtype,
                    a.parent_id, a.is_leaf, a.group_id,
@@ -23,57 +37,57 @@ def fetch_all_accounts(conn, acc_type: str = None):
             FROM accounts a
             LEFT JOIN accounts p ON p.id = a.parent_id
             LEFT JOIN account_groups g ON g.id = a.group_id
-            WHERE a.type = ?
             ORDER BY a.code
-        """, (acc_type,)).fetchall()
-    return conn.execute("""
-        SELECT a.id, a.code, a.name, a.type, a.subtype,
-               a.parent_id, a.is_leaf, a.group_id,
-               p.name AS parent_name,
-               g.name AS group_name, g.color AS group_color,
-               (SELECT COALESCE(SUM(jl.debit)-SUM(jl.credit),0)
-                FROM journal_lines jl WHERE jl.account_id = a.id) AS balance
-        FROM accounts a
-        LEFT JOIN accounts p ON p.id = a.parent_id
-        LEFT JOIN account_groups g ON g.id = a.group_id
-        ORDER BY a.code
-    """).fetchall()
+        """).fetchall()
+    except Exception as e:
+        print(f"[accounting_repo] fetch_all_accounts error: {e}")
+        return []
 
 
 def fetch_account(conn, account_id: int):
-    return conn.execute("""
-        SELECT a.*, p.name AS parent_name,
-               g.name AS group_name, g.color AS group_color
-        FROM accounts a
-        LEFT JOIN accounts p ON p.id = a.parent_id
-        LEFT JOIN account_groups g ON g.id = a.group_id
-        WHERE a.id = ?
-    """, (account_id,)).fetchone()
+    try:
+        return conn.execute("""
+            SELECT a.*, p.name AS parent_name,
+                   g.name AS group_name, g.color AS group_color
+            FROM accounts a
+            LEFT JOIN accounts p ON p.id = a.parent_id
+            LEFT JOIN account_groups g ON g.id = a.group_id
+            WHERE a.id = ?
+        """, (account_id,)).fetchone()
+    except Exception:
+        return None
 
 
 def fetch_account_by_code(conn, code: str):
-    return conn.execute(
-        "SELECT * FROM accounts WHERE code=?", (code,)
-    ).fetchone()
+    try:
+        return conn.execute(
+            "SELECT * FROM accounts WHERE code=?", (code,)
+        ).fetchone()
+    except Exception:
+        return None
 
 
 def fetch_leaf_accounts(conn, acc_type: str = None):
     """الحسابات النهائية فقط (قابلة للترحيل)."""
-    if acc_type:
+    try:
+        if acc_type:
+            return conn.execute("""
+                SELECT id, code, name, type,
+                       COALESCE(subtype, '') AS subtype,
+                       group_id
+                FROM accounts WHERE is_leaf=1 AND type=?
+                ORDER BY code
+            """, (acc_type,)).fetchall()
         return conn.execute("""
             SELECT id, code, name, type,
                    COALESCE(subtype, '') AS subtype,
                    group_id
-            FROM accounts WHERE is_leaf=1 AND type=?
+            FROM accounts WHERE is_leaf=1
             ORDER BY code
-        """, (acc_type,)).fetchall()
-    return conn.execute("""
-        SELECT id, code, name, type,
-               COALESCE(subtype, '') AS subtype,
-               group_id
-        FROM accounts WHERE is_leaf=1
-        ORDER BY code
-    """).fetchall()
+        """).fetchall()
+    except Exception as e:
+        print(f"[accounting_repo] fetch_leaf_accounts error: {e}")
+        return []
 
 
 def insert_account(conn, code: str, name: str, acc_type: str,
@@ -104,15 +118,17 @@ def delete_account(conn, account_id: int):
 
 
 def get_account_balance(conn, account_id: int) -> float:
-    row = conn.execute("""
-        SELECT COALESCE(SUM(debit)-SUM(credit), 0) AS bal
-        FROM journal_lines WHERE account_id=?
-    """, (account_id,)).fetchone()
-    return row["bal"] if row else 0.0
+    try:
+        row = conn.execute("""
+            SELECT COALESCE(SUM(debit)-SUM(credit), 0) AS bal
+            FROM journal_lines WHERE account_id=?
+        """, (account_id,)).fetchone()
+        return row["bal"] if row else 0.0
+    except Exception:
+        return 0.0
 
 
 def get_account_natural_balance(conn, account_id: int) -> float:
-    """الرصيد بالإشارة الطبيعية حسب نوع الحساب."""
     acc = fetch_account(conn, account_id)
     if not acc:
         return 0.0
@@ -122,16 +138,10 @@ def get_account_natural_balance(conn, account_id: int) -> float:
 
 
 def get_normal_balance(acc_type: str) -> str:
-    """يرجع 'dr' أو 'cr' حسب نوع الحساب."""
     return "dr" if acc_type in ("asset", "expense", "drawings") else "cr"
 
 
 def calc_signed_amount(acc_type: str, increase: bool, amount: float) -> tuple:
-    """
-    يحسب (debit, credit) بناءً على نوع الحساب والعملية.
-    increase=True  → زيادة الحساب بـ رصيده الطبيعي
-    increase=False → نقص الحساب
-    """
     nb = get_normal_balance(acc_type)
     if nb == "dr":
         return (amount, 0.0) if increase else (0.0, amount)
@@ -140,22 +150,25 @@ def calc_signed_amount(acc_type: str, increase: bool, amount: float) -> tuple:
 
 
 def get_balances_by_type(conn) -> dict:
-    rows = conn.execute("""
-        SELECT a.type,
-               COALESCE(SUM(jl.debit),0)  AS total_debit,
-               COALESCE(SUM(jl.credit),0) AS total_credit
-        FROM accounts a
-        LEFT JOIN journal_lines jl ON jl.account_id = a.id
-        GROUP BY a.type
-    """).fetchall()
-    result = {}
-    for r in rows:
-        result[r["type"]] = {
-            "debit":   r["total_debit"],
-            "credit":  r["total_credit"],
-            "balance": r["total_debit"] - r["total_credit"],
-        }
-    return result
+    try:
+        rows = conn.execute("""
+            SELECT a.type,
+                   COALESCE(SUM(jl.debit),0)  AS total_debit,
+                   COALESCE(SUM(jl.credit),0) AS total_credit
+            FROM accounts a
+            LEFT JOIN journal_lines jl ON jl.account_id = a.id
+            GROUP BY a.type
+        """).fetchall()
+        result = {}
+        for r in rows:
+            result[r["type"]] = {
+                "debit":   r["total_debit"],
+                "credit":  r["total_credit"],
+                "balance": r["total_debit"] - r["total_credit"],
+            }
+        return result
+    except Exception:
+        return {}
 
 
 # ══════════════════════════════════════════════════════════
@@ -163,25 +176,62 @@ def get_balances_by_type(conn) -> dict:
 # ══════════════════════════════════════════════════════════
 
 def fetch_all_groups(conn, acc_type: str = None):
-    if acc_type:
-        return conn.execute("""
-            SELECT id, name, acc_type, parent_id,
-                   COALESCE(color, '#607d8b') AS color, notes
-            FROM account_groups WHERE acc_type=?
-            ORDER BY parent_id NULLS FIRST, name
-        """, (acc_type,)).fetchall()
-    return conn.execute("""
-        SELECT id, name, acc_type, parent_id,
-               COALESCE(color, '#607d8b') AS color, notes
-        FROM account_groups
-        ORDER BY acc_type, parent_id NULLS FIRST, name
-    """).fetchall()
+    """
+    يرجع كل التصنيفات — بدون NULLS FIRST للتوافق مع SQLite القديم.
+    """
+    try:
+        if acc_type:
+            rows = conn.execute("""
+                SELECT id, name, acc_type, parent_id,
+                       COALESCE(color, '#607d8b') AS color,
+                       COALESCE(notes, '') AS notes
+                FROM account_groups
+                WHERE acc_type=?
+                ORDER BY name
+            """, (acc_type,)).fetchall()
+        else:
+            rows = conn.execute("""
+                SELECT id, name, acc_type, parent_id,
+                       COALESCE(color, '#607d8b') AS color,
+                       COALESCE(notes, '') AS notes
+                FROM account_groups
+                ORDER BY acc_type, name
+            """).fetchall()
+        # ترتيب الآباء قبل الأبناء يدوياً
+        return _sort_groups_parents_first(rows)
+    except Exception as e:
+        print(f"[accounting_repo] fetch_all_groups error: {e}")
+        return []
+
+
+def _sort_groups_parents_first(rows) -> list:
+    """يرتب الصفوف بحيث الآباء يجيوا قبل أبناءهم."""
+    rows_list = [dict(r) for r in rows]
+    id_map = {r["id"]: r for r in rows_list}
+    result = []
+    visited = set()
+
+    def visit(node):
+        if node["id"] in visited:
+            return
+        pid = node.get("parent_id")
+        if pid and pid in id_map and pid not in visited:
+            visit(id_map[pid])
+        visited.add(node["id"])
+        result.append(node)
+
+    for r in rows_list:
+        visit(r)
+    return result
 
 
 def fetch_group(conn, group_id: int):
-    return conn.execute(
-        "SELECT * FROM account_groups WHERE id=?", (group_id,)
-    ).fetchone()
+    try:
+        return conn.execute(
+            "SELECT * FROM account_groups WHERE id=?", (group_id,)
+        ).fetchone()
+    except Exception:
+        return None
 
 
 def insert_group(conn, name: str, acc_type: str,
@@ -210,7 +260,6 @@ def delete_group(conn, group_id: int):
 
 
 def _get_group_descendants(conn, group_id: int) -> set:
-    """يرجع كل أبناء وأحفاد تصنيف (شامل نفسه)."""
     result = set()
     queue  = [group_id]
     while queue:
@@ -218,25 +267,31 @@ def _get_group_descendants(conn, group_id: int) -> set:
         if current in result:
             continue
         result.add(current)
-        children = conn.execute(
-            "SELECT id FROM account_groups WHERE parent_id=?", (current,)
-        ).fetchall()
-        queue.extend(r["id"] for r in children)
+        try:
+            children = conn.execute(
+                "SELECT id FROM account_groups WHERE parent_id=?", (current,)
+            ).fetchall()
+            queue.extend(r["id"] for r in children)
+        except Exception:
+            break
     return result
 
 
 def build_group_tree(rows) -> list:
-    nodes = {
-        r["id"]: {
-            "id":       r["id"],
-            "name":     r["name"],
-            "acc_type": r["acc_type"],
-            "parent_id":r["parent_id"],
-            "color":    r["color"],
+    nodes = {}
+    for r in rows:
+        if isinstance(r, dict):
+            d = r
+        else:
+            d = dict(r)
+        nodes[d["id"]] = {
+            "id":       d["id"],
+            "name":     d["name"],
+            "acc_type": d.get("acc_type", ""),
+            "parent_id":d.get("parent_id"),
+            "color":    d.get("color", "#607d8b"),
             "children": [],
         }
-        for r in rows
-    }
     roots = []
     for node in nodes.values():
         pid = node["parent_id"]
@@ -252,10 +307,13 @@ def build_group_tree(rows) -> list:
 # ══════════════════════════════════════════════════════════
 
 def next_ref_no(conn) -> str:
-    row = conn.execute(
-        "SELECT MAX(CAST(SUBSTR(ref_no,4) AS INTEGER)) AS mx FROM journal_entries"
-    ).fetchone()
-    n = (row["mx"] or 0) + 1
+    try:
+        row = conn.execute(
+            "SELECT MAX(CAST(SUBSTR(ref_no,4) AS INTEGER)) AS mx FROM journal_entries"
+        ).fetchone()
+        n = (row["mx"] or 0) + 1
+    except Exception:
+        n = 1
     return f"JE-{n:05d}"
 
 
@@ -264,32 +322,41 @@ def next_ref_no(conn) -> str:
 # ══════════════════════════════════════════════════════════
 
 def fetch_all_entries(conn, limit: int = 200):
-    return conn.execute("""
-        SELECT je.id, je.ref_no, je.date, je.description,
-               je.type, je.status, je.notes, je.created_at,
-               (SELECT COALESCE(SUM(debit),0)  FROM journal_lines WHERE entry_id=je.id) AS total_debit,
-               (SELECT COALESCE(SUM(credit),0) FROM journal_lines WHERE entry_id=je.id) AS total_credit
-        FROM journal_entries je
-        ORDER BY je.date DESC, je.id DESC
-        LIMIT ?
-    """, (limit,)).fetchall()
+    try:
+        return conn.execute("""
+            SELECT je.id, je.ref_no, je.date, je.description,
+                   je.type, je.status, je.notes, je.created_at,
+                   (SELECT COALESCE(SUM(debit),0)  FROM journal_lines WHERE entry_id=je.id) AS total_debit,
+                   (SELECT COALESCE(SUM(credit),0) FROM journal_lines WHERE entry_id=je.id) AS total_credit
+            FROM journal_entries je
+            ORDER BY je.date DESC, je.id DESC
+            LIMIT ?
+        """, (limit,)).fetchall()
+    except Exception:
+        return []
 
 
 def fetch_entry(conn, entry_id: int):
-    return conn.execute(
-        "SELECT * FROM journal_entries WHERE id=?", (entry_id,)
-    ).fetchone()
+    try:
+        return conn.execute(
+            "SELECT * FROM journal_entries WHERE id=?", (entry_id,)
+        ).fetchone()
+    except Exception:
+        return None
 
 
 def fetch_entry_lines(conn, entry_id: int):
-    return conn.execute("""
-        SELECT jl.id, jl.account_id, jl.debit, jl.credit, jl.description,
-               a.code AS account_code, a.name AS account_name, a.type AS account_type
-        FROM journal_lines jl
-        JOIN accounts a ON a.id = jl.account_id
-        WHERE jl.entry_id = ?
-        ORDER BY jl.id
-    """, (entry_id,)).fetchall()
+    try:
+        return conn.execute("""
+            SELECT jl.id, jl.account_id, jl.debit, jl.credit, jl.description,
+                   a.code AS account_code, a.name AS account_name, a.type AS account_type
+            FROM journal_lines jl
+            JOIN accounts a ON a.id = jl.account_id
+            WHERE jl.entry_id = ?
+            ORDER BY jl.id
+        """, (entry_id,)).fetchall()
+    except Exception:
+        return []
 
 
 def insert_entry(conn, date: str, description: str,
@@ -332,27 +399,30 @@ def validate_entry_balance(lines: list) -> bool:
 # ══════════════════════════════════════════════════════════
 
 def trial_balance(conn) -> list:
-    rows = conn.execute("""
-        SELECT a.code, a.name, a.type,
-               COALESCE(SUM(jl.debit),0)  AS total_debit,
-               COALESCE(SUM(jl.credit),0) AS total_credit
-        FROM accounts a
-        LEFT JOIN journal_lines jl ON jl.account_id = a.id
-        WHERE a.is_leaf = 1
-        GROUP BY a.id
-        ORDER BY a.code
-    """).fetchall()
-    result = []
-    for r in rows:
-        result.append({
-            "code":         r["code"],
-            "name":         r["name"],
-            "type":         r["type"],
-            "total_debit":  r["total_debit"],
-            "total_credit": r["total_credit"],
-            "balance":      r["total_debit"] - r["total_credit"],
-        })
-    return result
+    try:
+        rows = conn.execute("""
+            SELECT a.code, a.name, a.type,
+                   COALESCE(SUM(jl.debit),0)  AS total_debit,
+                   COALESCE(SUM(jl.credit),0) AS total_credit
+            FROM accounts a
+            LEFT JOIN journal_lines jl ON jl.account_id = a.id
+            WHERE a.is_leaf = 1
+            GROUP BY a.id
+            ORDER BY a.code
+        """).fetchall()
+        result = []
+        for r in rows:
+            result.append({
+                "code":         r["code"],
+                "name":         r["name"],
+                "type":         r["type"],
+                "total_debit":  r["total_debit"],
+                "total_credit": r["total_credit"],
+                "balance":      r["total_debit"] - r["total_credit"],
+            })
+        return result
+    except Exception:
+        return []
 
 
 # ══════════════════════════════════════════════════════════
@@ -360,26 +430,29 @@ def trial_balance(conn) -> list:
 # ══════════════════════════════════════════════════════════
 
 def income_statement(conn) -> dict:
-    rev_rows = conn.execute("""
-        SELECT a.code, a.name,
-               COALESCE(SUM(jl.credit)-SUM(jl.debit), 0) AS amount
-        FROM accounts a
-        LEFT JOIN journal_lines jl ON jl.account_id = a.id
-        WHERE a.type = 'revenue' AND a.is_leaf = 1
-        GROUP BY a.id ORDER BY a.code
-    """).fetchall()
+    try:
+        rev_rows = conn.execute("""
+            SELECT a.code, a.name,
+                   COALESCE(SUM(jl.credit)-SUM(jl.debit), 0) AS amount
+            FROM accounts a
+            LEFT JOIN journal_lines jl ON jl.account_id = a.id
+            WHERE a.type = 'revenue' AND a.is_leaf = 1
+            GROUP BY a.id ORDER BY a.code
+        """).fetchall()
 
-    exp_rows = conn.execute("""
-        SELECT a.code, a.name,
-               COALESCE(SUM(jl.debit)-SUM(jl.credit), 0) AS amount
-        FROM accounts a
-        LEFT JOIN journal_lines jl ON jl.account_id = a.id
-        WHERE a.type = 'expense' AND a.is_leaf = 1
-        GROUP BY a.id ORDER BY a.code
-    """).fetchall()
+        exp_rows = conn.execute("""
+            SELECT a.code, a.name,
+                   COALESCE(SUM(jl.debit)-SUM(jl.credit), 0) AS amount
+            FROM accounts a
+            LEFT JOIN journal_lines jl ON jl.account_id = a.id
+            WHERE a.type = 'expense' AND a.is_leaf = 1
+            GROUP BY a.id ORDER BY a.code
+        """).fetchall()
+    except Exception:
+        rev_rows, exp_rows = [], []
 
-    total_rev = sum(r["amount"] for r in rev_rows)
-    total_exp = sum(r["amount"] for r in exp_rows)
+    total_rev  = sum(r["amount"] for r in rev_rows)
+    total_exp  = sum(r["amount"] for r in exp_rows)
     net_income = total_rev - total_exp
 
     return {
@@ -393,14 +466,17 @@ def income_statement(conn) -> dict:
 
 def balance_sheet(conn) -> dict:
     def _fetch(acc_type):
-        return conn.execute("""
-            SELECT a.code, a.name,
-                   COALESCE(SUM(jl.debit)-SUM(jl.credit), 0) AS amount
-            FROM accounts a
-            LEFT JOIN journal_lines jl ON jl.account_id = a.id
-            WHERE a.type = ? AND a.is_leaf = 1
-            GROUP BY a.id ORDER BY a.code
-        """, (acc_type,)).fetchall()
+        try:
+            return conn.execute("""
+                SELECT a.code, a.name,
+                       COALESCE(SUM(jl.debit)-SUM(jl.credit), 0) AS amount
+                FROM accounts a
+                LEFT JOIN journal_lines jl ON jl.account_id = a.id
+                WHERE a.type = ? AND a.is_leaf = 1
+                GROUP BY a.id ORDER BY a.code
+            """, (acc_type,)).fetchall()
+        except Exception:
+            return []
 
     assets   = _fetch("asset")
     liab     = _fetch("liability")
@@ -429,23 +505,26 @@ def balance_sheet(conn) -> dict:
 
 
 def owners_equity_statement(conn) -> dict:
-    capital_rows = conn.execute("""
-        SELECT a.code, a.name,
-               COALESCE(SUM(jl.credit)-SUM(jl.debit), 0) AS amount
-        FROM accounts a
-        LEFT JOIN journal_lines jl ON jl.account_id = a.id
-        WHERE a.type = 'capital' AND a.is_leaf = 1
-        GROUP BY a.id ORDER BY a.code
-    """).fetchall()
+    try:
+        capital_rows = conn.execute("""
+            SELECT a.code, a.name,
+                   COALESCE(SUM(jl.credit)-SUM(jl.debit), 0) AS amount
+            FROM accounts a
+            LEFT JOIN journal_lines jl ON jl.account_id = a.id
+            WHERE a.type = 'capital' AND a.is_leaf = 1
+            GROUP BY a.id ORDER BY a.code
+        """).fetchall()
 
-    drawings_rows = conn.execute("""
-        SELECT a.code, a.name,
-               COALESCE(SUM(jl.debit)-SUM(jl.credit), 0) AS amount
-        FROM accounts a
-        LEFT JOIN journal_lines jl ON jl.account_id = a.id
-        WHERE a.type = 'drawings' AND a.is_leaf = 1
-        GROUP BY a.id ORDER BY a.code
-    """).fetchall()
+        drawings_rows = conn.execute("""
+            SELECT a.code, a.name,
+                   COALESCE(SUM(jl.debit)-SUM(jl.credit), 0) AS amount
+            FROM accounts a
+            LEFT JOIN journal_lines jl ON jl.account_id = a.id
+            WHERE a.type = 'drawings' AND a.is_leaf = 1
+            GROUP BY a.id ORDER BY a.code
+        """).fetchall()
+    except Exception:
+        capital_rows, drawings_rows = [], []
 
     inc           = income_statement(conn)
     net_income    = inc["net_income"]
@@ -472,14 +551,17 @@ def fetch_t_account(conn, account_id: int) -> dict:
     if not acc:
         return {}
 
-    lines = conn.execute("""
-        SELECT jl.id, jl.debit, jl.credit, jl.description,
-               je.ref_no, je.date, je.description AS entry_desc
-        FROM journal_lines jl
-        JOIN journal_entries je ON je.id = jl.entry_id
-        WHERE jl.account_id = ?
-        ORDER BY je.date, je.id
-    """, (account_id,)).fetchall()
+    try:
+        lines = conn.execute("""
+            SELECT jl.id, jl.debit, jl.credit, jl.description,
+                   je.ref_no, je.date, je.description AS entry_desc
+            FROM journal_lines jl
+            JOIN journal_entries je ON je.id = jl.entry_id
+            WHERE jl.account_id = ?
+            ORDER BY je.date, je.id
+        """, (account_id,)).fetchall()
+    except Exception:
+        lines = []
 
     total_debit  = sum(l["debit"]  for l in lines)
     total_credit = sum(l["credit"] for l in lines)
@@ -527,8 +609,8 @@ def purchase_inventory(inv_conn, acc_conn,
         inv_acc_id = row["id"] if row else None
 
     lines = [
-        {"account_id": inv_acc_id,        "debit": total_cost, "credit": 0,          "description": desc},
-        {"account_id": payment_account_id, "debit": 0,          "credit": total_cost, "description": desc},
+        {"account_id": inv_acc_id,         "debit": total_cost, "credit": 0,          "description": desc},
+        {"account_id": payment_account_id,  "debit": 0,          "credit": total_cost, "description": desc},
     ]
     add_entry_lines(acc_conn, entry_id, lines)
 

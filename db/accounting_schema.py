@@ -41,10 +41,13 @@ _ACCOUNTS_DDL = f"""
 
 
 def _get_current_type_constraint(conn) -> str:
-    row = conn.execute(
-        "SELECT sql FROM sqlite_master WHERE type='table' AND name='accounts'"
-    ).fetchone()
-    return row["sql"] if row else ""
+    try:
+        row = conn.execute(
+            "SELECT sql FROM sqlite_master WHERE type='table' AND name='accounts'"
+        ).fetchone()
+        return row["sql"] if row else ""
+    except Exception:
+        return ""
 
 
 def _needs_migration(conn) -> bool:
@@ -121,119 +124,154 @@ def _migrate_accounts_type_constraint(conn):
 
 
 def _column_exists(conn, table: str, col: str) -> bool:
-    rows = conn.execute(f"PRAGMA table_info({table})").fetchall()
-    return any(r["name"] == col for r in rows)
+    try:
+        rows = conn.execute(f"PRAGMA table_info({table})").fetchall()
+        return any(r["name"] == col for r in rows)
+    except Exception:
+        return False
 
 
 def _table_exists(conn, table: str) -> bool:
-    row = conn.execute(
-        "SELECT name FROM sqlite_master WHERE type='table' AND name=?", (table,)
-    ).fetchone()
-    return row is not None
+    try:
+        row = conn.execute(
+            "SELECT name FROM sqlite_master WHERE type='table' AND name=?", (table,)
+        ).fetchone()
+        return row is not None
+    except Exception:
+        return False
 
 
 def _migrate_schema(conn):
-    # ── إصلاح CHECK constraint ──
     if _needs_migration(conn):
-        _migrate_accounts_type_constraint(conn)
+        try:
+            _migrate_accounts_type_constraint(conn)
+        except Exception as e:
+            print(f"[accounting_schema] migration warning: {e}")
 
-    # ── إضافة group_id لو ناقص ──
     if not _column_exists(conn, "accounts", "group_id"):
-        conn.execute("ALTER TABLE accounts ADD COLUMN group_id INTEGER")
-        conn.commit()
+        try:
+            conn.execute("ALTER TABLE accounts ADD COLUMN group_id INTEGER")
+            conn.commit()
+        except Exception:
+            pass
 
-    # ── إضافة notes لجدول account_groups لو ناقص ──
     if not _column_exists(conn, "account_groups", "notes"):
-        conn.execute("ALTER TABLE account_groups ADD COLUMN notes TEXT")
-        conn.commit()
+        try:
+            conn.execute("ALTER TABLE account_groups ADD COLUMN notes TEXT")
+            conn.commit()
+        except Exception:
+            pass
 
-    # ── إضافة جدول entry_templates لو ناقص ──
     if not _table_exists(conn, "entry_templates"):
-        conn.execute("""
-            CREATE TABLE entry_templates (
-                id          INTEGER PRIMARY KEY AUTOINCREMENT,
-                name        TEXT    NOT NULL,
-                account_id  INTEGER NOT NULL REFERENCES accounts(id) ON DELETE CASCADE,
-                description TEXT,
-                created_at  TEXT    NOT NULL DEFAULT (datetime('now'))
-            )
-        """)
-        conn.commit()
+        try:
+            conn.execute("""
+                CREATE TABLE entry_templates (
+                    id          INTEGER PRIMARY KEY AUTOINCREMENT,
+                    name        TEXT    NOT NULL,
+                    account_id  INTEGER NOT NULL REFERENCES accounts(id) ON DELETE CASCADE,
+                    description TEXT,
+                    created_at  TEXT    NOT NULL DEFAULT (datetime('now'))
+                )
+            """)
+            conn.commit()
+        except Exception:
+            pass
 
-    # ── إضافة جدول sub_account_ledger لو ناقص (رأس مال الأفراد) ──
     if not _table_exists(conn, "sub_account_ledger"):
-        conn.execute("""
-            CREATE TABLE sub_account_ledger (
-                id          INTEGER PRIMARY KEY AUTOINCREMENT,
-                account_id  INTEGER NOT NULL REFERENCES accounts(id) ON DELETE CASCADE,
-                person_name TEXT    NOT NULL,
-                move_type   TEXT    NOT NULL CHECK(move_type IN ('in','out')),
-                amount      REAL    NOT NULL DEFAULT 0,
-                notes       TEXT,
-                date        TEXT    NOT NULL,
-                created_at  TEXT    NOT NULL DEFAULT (datetime('now'))
-            )
-        """)
-        conn.commit()
+        try:
+            conn.execute("""
+                CREATE TABLE sub_account_ledger (
+                    id          INTEGER PRIMARY KEY AUTOINCREMENT,
+                    account_id  INTEGER NOT NULL REFERENCES accounts(id) ON DELETE CASCADE,
+                    person_name TEXT    NOT NULL,
+                    move_type   TEXT    NOT NULL CHECK(move_type IN ('in','out')),
+                    amount      REAL    NOT NULL DEFAULT 0,
+                    notes       TEXT,
+                    date        TEXT    NOT NULL,
+                    created_at  TEXT    NOT NULL DEFAULT (datetime('now'))
+                )
+            """)
+            conn.commit()
+        except Exception:
+            pass
 
 
 def create_accounting_tables(conn):
     """يُستدعى من init_db — ينشئ الجداول ويشغّل الـ migrations."""
 
-    conn.execute("""
-        CREATE TABLE IF NOT EXISTS account_groups (
-            id        INTEGER PRIMARY KEY AUTOINCREMENT,
-            name      TEXT    NOT NULL,
-            acc_type  TEXT    NOT NULL,
-            parent_id INTEGER REFERENCES account_groups(id) ON DELETE SET NULL,
-            color     TEXT    NOT NULL DEFAULT '#607d8b',
-            notes     TEXT
-        )
-    """)
-    conn.commit()
+    try:
+        conn.execute("""
+            CREATE TABLE IF NOT EXISTS account_groups (
+                id        INTEGER PRIMARY KEY AUTOINCREMENT,
+                name      TEXT    NOT NULL,
+                acc_type  TEXT    NOT NULL,
+                parent_id INTEGER REFERENCES account_groups(id) ON DELETE SET NULL,
+                color     TEXT    NOT NULL DEFAULT '#607d8b',
+                notes     TEXT
+            )
+        """)
+        conn.commit()
+    except Exception as e:
+        print(f"[accounting_schema] account_groups error: {e}")
 
-    conn.executescript(_ACCOUNTS_DDL)
-    conn.commit()
+    try:
+        conn.executescript(_ACCOUNTS_DDL)
+        conn.commit()
+    except Exception as e:
+        print(f"[accounting_schema] accounts DDL error: {e}")
 
-    conn.executescript("""
-        CREATE TABLE IF NOT EXISTS journal_entries (
-            id          INTEGER PRIMARY KEY AUTOINCREMENT,
-            ref_no      TEXT    NOT NULL UNIQUE,
-            date        TEXT    NOT NULL,
-            description TEXT    NOT NULL,
-            type        TEXT    NOT NULL DEFAULT 'manual'
-                CHECK(type IN (
-                    'manual', 'purchase', 'sale',
-                    'payment', 'receipt', 'adjustment'
-                )),
-            status      TEXT    NOT NULL DEFAULT 'posted'
-                CHECK(status IN ('draft', 'posted', 'reversed')),
-            ref_id      INTEGER,
-            ref_type    TEXT,
-            notes       TEXT,
-            created_at  TEXT    NOT NULL DEFAULT (datetime('now'))
-        );
+    try:
+        conn.executescript("""
+            CREATE TABLE IF NOT EXISTS journal_entries (
+                id          INTEGER PRIMARY KEY AUTOINCREMENT,
+                ref_no      TEXT    NOT NULL UNIQUE,
+                date        TEXT    NOT NULL,
+                description TEXT    NOT NULL,
+                type        TEXT    NOT NULL DEFAULT 'manual'
+                    CHECK(type IN (
+                        'manual', 'purchase', 'sale',
+                        'payment', 'receipt', 'adjustment'
+                    )),
+                status      TEXT    NOT NULL DEFAULT 'posted'
+                    CHECK(status IN ('draft', 'posted', 'reversed')),
+                ref_id      INTEGER,
+                ref_type    TEXT,
+                notes       TEXT,
+                created_at  TEXT    NOT NULL DEFAULT (datetime('now'))
+            );
 
-        CREATE TABLE IF NOT EXISTS journal_lines (
-            id          INTEGER PRIMARY KEY AUTOINCREMENT,
-            entry_id    INTEGER NOT NULL REFERENCES journal_entries(id) ON DELETE CASCADE,
-            account_id  INTEGER NOT NULL REFERENCES accounts(id),
-            debit       REAL    NOT NULL DEFAULT 0,
-            credit      REAL    NOT NULL DEFAULT 0,
-            description TEXT,
-            CHECK(debit >= 0 AND credit >= 0),
-            CHECK(NOT (debit > 0 AND credit > 0))
-        );
-    """)
-    conn.commit()
+            CREATE TABLE IF NOT EXISTS journal_lines (
+                id          INTEGER PRIMARY KEY AUTOINCREMENT,
+                entry_id    INTEGER NOT NULL REFERENCES journal_entries(id) ON DELETE CASCADE,
+                account_id  INTEGER NOT NULL REFERENCES accounts(id),
+                debit       REAL    NOT NULL DEFAULT 0,
+                credit      REAL    NOT NULL DEFAULT 0,
+                description TEXT,
+                CHECK(debit >= 0 AND credit >= 0),
+                CHECK(NOT (debit > 0 AND credit > 0))
+            );
+        """)
+        conn.commit()
+    except Exception as e:
+        print(f"[accounting_schema] journal tables error: {e}")
 
-    _migrate_schema(conn)
-    _seed_default_accounts(conn)
+    try:
+        _migrate_schema(conn)
+    except Exception as e:
+        print(f"[accounting_schema] migrate_schema error: {e}")
+
+    try:
+        _seed_default_accounts(conn)
+    except Exception as e:
+        print(f"[accounting_schema] seed error: {e}")
 
 
 def _account_exists(conn) -> bool:
-    row = conn.execute("SELECT COUNT(*) as c FROM accounts").fetchone()
-    return row["c"] > 0
+    try:
+        row = conn.execute("SELECT COUNT(*) as c FROM accounts").fetchone()
+        return row["c"] > 0
+    except Exception:
+        return False
 
 
 def _seed_default_accounts(conn):

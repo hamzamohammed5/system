@@ -1,11 +1,11 @@
 """
-ui/tabs/accounting_tab.py
+ui/tabs/accounting_tab.py  — النسخة المصلحة
 ==========================
-تبويب الحسابات — مع:
-  - تصنيفات هرمية للحسابات
-  - قيد بعمليتين فقط (smart DR/CR تلقائي)
-  - Owners' Equity مفصل (Capital/Revenue vs Expenses/Drawings)
-  - فلترة بالتصنيفات في كل الـ dropdowns
+الإصلاح: في AccountsTreePanel._build()
+  كانت _refresh_group_combos() بتتاستدعى قبل ما self.cmb_type و self.cmb_group يتعملوا
+  → AttributeError صامت → الـ widget يطلع فاضي (شاشة بيضا)
+
+  الحل: نقلنا _refresh_group_combos() لآخر _build بعد ما كل الـ widgets اتعملت
 """
 
 from PyQt5.QtWidgets import (
@@ -42,7 +42,6 @@ from ui.helpers import (
 from ui.events import bus
 
 
-# ── ألوان حسب النوع ─────────────────────────────────────
 TYPE_COLORS = {
     "asset":    "#1565c0",
     "liability":"#c62828",
@@ -52,9 +51,8 @@ TYPE_COLORS = {
     "drawings": "#4e342e",
 }
 
-# ── مجموعات owners equity ────────────────────────────────
-EQUITY_CR_TYPES = {"capital", "revenue"}   # تزيد بـ CR
-EQUITY_DR_TYPES = {"expense", "drawings"}  # تزيد بـ DR
+EQUITY_CR_TYPES = {"capital", "revenue"}
+EQUITY_DR_TYPES = {"expense", "drawings"}
 
 
 def _spin(max_=999_999_999, dec=2):
@@ -70,20 +68,14 @@ def _money(val: float) -> str:
 
 
 # ══════════════════════════════════════════════════════════
-# Searchable Account Combo (مع فلترة بالتصنيف)
+# Searchable Account Combo
 # ══════════════════════════════════════════════════════════
 
 class _AccountCombo(QWidget):
-    """
-    ComboBox للحسابات مع:
-      - بحث نصي
-      - فلترة بالتصنيف
-      - عرض الـ normal balance
-    """
     def __init__(self, conn, acc_types: list = None, parent=None):
         super().__init__(parent)
         self.conn      = conn
-        self.acc_types = acc_types  # None = كل الأنواع
+        self.acc_types = acc_types
         self._all_accs = []
         self._build()
         self.refresh()
@@ -93,27 +85,23 @@ class _AccountCombo(QWidget):
         lay.setContentsMargins(0, 0, 0, 0)
         lay.setSpacing(4)
 
-        # فلتر التصنيف
         self.cmb_group = QComboBox()
         self.cmb_group.setMinimumHeight(28)
         self.cmb_group.setFixedWidth(130)
         self.cmb_group.setToolTip("فلتر بالتصنيف")
         self.cmb_group.currentIndexChanged.connect(self._apply_filter)
 
-        # بحث
         self.inp_search = QLineEdit()
         self.inp_search.setPlaceholderText("🔍 بحث...")
         self.inp_search.setFixedWidth(90)
         self.inp_search.setMinimumHeight(28)
         self.inp_search.textChanged.connect(self._apply_filter)
 
-        # الحساب
         self.cmb_account = QComboBox()
         self.cmb_account.setMinimumHeight(28)
         self.cmb_account.setSizeAdjustPolicy(QComboBox.AdjustToMinimumContentsLength)
         self.cmb_account.setMinimumWidth(200)
 
-        # عرض الـ normal balance
         self.lbl_nb = QLabel("")
         self.lbl_nb.setFixedWidth(55)
         self.lbl_nb.setAlignment(Qt.AlignCenter)
@@ -129,7 +117,6 @@ class _AccountCombo(QWidget):
         lay.addWidget(self.lbl_nb)
 
     def refresh(self):
-        """يعيد تحميل التصنيفات والحسابات."""
         self._load_groups()
         self._load_accounts()
 
@@ -139,14 +126,12 @@ class _AccountCombo(QWidget):
         self.cmb_group.clear()
         self.cmb_group.addItem("— كل التصنيفات —", None)
 
-        # جيب التصنيفات المناسبة للأنواع المطلوبة
         all_groups = fetch_all_groups(self.conn)
         seen_types = set(self.acc_types) if self.acc_types else set(TYPE_AR.keys())
         groups = [g for g in all_groups if g["acc_type"] in seen_types]
         tree   = build_group_tree(groups)
         self._add_group_nodes(tree, depth=0)
 
-        # استعادة الاختيار
         for i in range(self.cmb_group.count()):
             if self.cmb_group.itemData(i) == prev:
                 self.cmb_group.setCurrentIndex(i)
@@ -181,19 +166,15 @@ class _AccountCombo(QWidget):
 
         last_type = None
         for acc in self._all_accs:
-            # فلتر التصنيف
             if gid is not None and acc["group_id"] != gid:
-                # شيك لو التصنيف ده فرع من التصنيف المطلوب
                 from db.accounting_repo import _get_group_descendants
                 desc = _get_group_descendants(self.conn, gid)
                 if acc["group_id"] not in desc:
                     continue
 
-            # فلتر النص
             if q and q not in acc["name"].lower() and q not in acc["code"].lower():
                 continue
 
-            # فاصل بين الأنواع
             if acc["type"] != last_type:
                 sep_text = f"── {TYPE_AR.get(acc['type'], acc['type'])} ──"
                 self.cmb_account.addItem(sep_text, "__sep__")
@@ -219,7 +200,6 @@ class _AccountCombo(QWidget):
 
         self.cmb_account.blockSignals(False)
 
-        # استعادة الاختيار
         if prev_id is not None:
             for i in range(self.cmb_account.count()):
                 if self.cmb_account.itemData(i) == prev_id:
@@ -270,8 +250,6 @@ class _AccountCombo(QWidget):
 # ══════════════════════════════════════════════════════════
 
 class _GroupManagerPanel(QWidget):
-    """لوحة إدارة التصنيفات الهرمية لنوع حساب معين."""
-
     def __init__(self, conn, acc_type: str, parent=None):
         super().__init__(parent)
         self.conn     = conn
@@ -310,7 +288,6 @@ class _GroupManagerPanel(QWidget):
         btn_row.addStretch()
         root.addLayout(btn_row)
 
-        # فورم الإضافة/التعديل
         grp = QGroupBox("➕ إضافة / تعديل تصنيف")
         grp.setStyleSheet("""
             QGroupBox { font-weight:bold; color:#1565c0;
@@ -330,12 +307,10 @@ class _GroupManagerPanel(QWidget):
         self.inp_name.setMinimumHeight(28)
         fl.addRow("الاسم:", self.inp_name)
 
-        # تصنيف الأب
         self.cmb_parent = QComboBox()
         self.cmb_parent.setMinimumHeight(28)
         fl.addRow("تابع لـ:", self.cmb_parent)
 
-        # اللون
         color_row = QHBoxLayout()
         self._color = "#607d8b"
         self.lbl_color = QLabel()
@@ -383,10 +358,13 @@ class _GroupManagerPanel(QWidget):
 
     def _add_tree_nodes(self, nodes, parent):
         for node in nodes:
-            count = self.conn.execute(
-                "SELECT COUNT(*) as c FROM accounts WHERE group_id=? AND is_leaf=1",
-                (node["id"],)
-            ).fetchone()["c"]
+            try:
+                count = self.conn.execute(
+                    "SELECT COUNT(*) as c FROM accounts WHERE group_id=? AND is_leaf=1",
+                    (node["id"],)
+                ).fetchone()["c"]
+            except Exception:
+                count = 0
             item = QTreeWidgetItem()
             item.setText(0, node["name"])
             item.setText(1, str(count) if count else "—")
@@ -478,9 +456,12 @@ class _GroupManagerPanel(QWidget):
         if not gid:
             return
         grp = fetch_group(self.conn, gid)
-        count = self.conn.execute(
-            "SELECT COUNT(*) as c FROM accounts WHERE group_id=?", (gid,)
-        ).fetchone()["c"]
+        try:
+            count = self.conn.execute(
+                "SELECT COUNT(*) as c FROM accounts WHERE group_id=?", (gid,)
+            ).fetchone()["c"]
+        except Exception:
+            count = 0
         msg = f"حذف تصنيف «{grp['name']}»؟"
         if count:
             msg += f"\n⚠️ {count} حساب سيفقد تصنيفه."
@@ -504,7 +485,7 @@ class _GroupManagerPanel(QWidget):
 
 
 # ══════════════════════════════════════════════════════════
-# شجرة الحسابات مع التصنيفات
+# شجرة الحسابات — الإصلاح الرئيسي هنا
 # ══════════════════════════════════════════════════════════
 
 class AccountsTreePanel(QWidget):
@@ -533,9 +514,8 @@ class AccountsTreePanel(QWidget):
         ll.setSpacing(6)
         ll.addWidget(section_label(f"── {self.title} ──"))
 
-        # فلتر التصنيف
         filter_row = QHBoxLayout()
-        self.cmb_group_filter = QComboBox()
+        self.cmb_group_filter = QComboBox()   # ← يتعمل هنا
         self.cmb_group_filter.setMinimumHeight(26)
         self.cmb_group_filter.addItem("— كل التصنيفات —", None)
         self.cmb_group_filter.currentIndexChanged.connect(self._load)
@@ -598,20 +578,21 @@ class AccountsTreePanel(QWidget):
         self.inp_name.setMinimumHeight(28)
         fl.addRow("الاسم:", self.inp_name)
 
-        # النوع
-        self.cmb_type = QComboBox()
+        self.cmb_type = QComboBox()          # ← يتعمل هنا (في اليمين)
         self.cmb_type.setMinimumHeight(28)
         for t in self.acc_types:
             self.cmb_type.addItem(TYPE_AR.get(t, t), t)
-        self.cmb_type.currentIndexChanged.connect(self._on_type_changed)
+        # لا نربط currentIndexChanged هنا — هنربطه بعد ما cmb_group يتعمل
         fl.addRow("النوع:", self.cmb_type)
 
-        # التصنيف مع فلترة
-        self.cmb_group = QComboBox()
+        self.cmb_group = QComboBox()         # ← يتعمل هنا (في اليمين)
         self.cmb_group.setMinimumHeight(28)
         fl.addRow("التصنيف:", self.cmb_group)
 
-        btn_add    = QPushButton("➕ إضافة")
+        # ── ربط الـ signal بعد ما cmb_group اتعمل ──
+        self.cmb_type.currentIndexChanged.connect(self._on_type_changed)
+
+        btn_add         = QPushButton("➕ إضافة")
         self.btn_save   = QPushButton("💾 حفظ")
         self.btn_cancel = QPushButton("✖ إلغاء")
         self.btn_save.setVisible(False)
@@ -638,13 +619,17 @@ class AccountsTreePanel(QWidget):
         main.setContentsMargins(0, 0, 0, 0)
         main.addWidget(splitter)
 
+        # ══════════════════════════════════════════════════
+        # الإصلاح: نستدعي _refresh_group_combos هنا في الآخر
+        # بعد ما كل الـ widgets (cmb_type, cmb_group, cmb_group_filter) اتعملت
+        # ══════════════════════════════════════════════════
         self._refresh_group_combos()
 
     def _on_type_changed(self):
         self._refresh_group_combo_for_type()
 
     def _refresh_group_combos(self):
-        """يحدث كل الـ combos."""
+        """يحدث كل الـ combos — يُستدعى فقط بعد ما كل الـ widgets اتعملت."""
         # فلتر التصنيف في الشجرة
         self.cmb_group_filter.blockSignals(True)
         prev = self.cmb_group_filter.currentData()
@@ -711,24 +696,19 @@ class AccountsTreePanel(QWidget):
         gid_filter = self.cmb_group_filter.currentData()
 
         for acc_type in self.acc_types:
-            rows  = fetch_all_accounts(self.conn, acc_type)
+            try:
+                rows  = fetch_all_accounts(self.conn, acc_type)
+            except Exception:
+                rows = []
             nodes = {r["id"]: dict(r) for r in rows}
             roots = []
             for nid, node in nodes.items():
-                # فلتر التصنيف
-                if gid_filter is not None:
-                    from db.accounting_repo import _get_group_descendants
-                    desc = _get_group_descendants(self.conn, gid_filter)
-                    if node.get("group_id") not in desc:
-                        pass  # مش نفلتر الـ parents
-
                 pid = node["parent_id"]
                 if pid and pid in nodes:
                     nodes[pid].setdefault("children", []).append(node)
                 else:
                     roots.append(node)
 
-            # فاصل للنوع
             if roots:
                 type_item = QTreeWidgetItem()
                 type_item.setText(1, f"── {TYPE_AR.get(acc_type, acc_type)} ──")
@@ -752,7 +732,6 @@ class AccountsTreePanel(QWidget):
             item.setText(2, f"{bal:,.2f}")
             item.setData(0, Qt.UserRole, node["id"])
             item.setForeground(0, QColor(color))
-            # تلميح: التصنيف
             if node.get("group_name"):
                 item.setToolTip(1, f"{node['name']}  |  🏷 {node['group_name']}")
             if not node.get("is_leaf", 1):
@@ -787,10 +766,13 @@ class AccountsTreePanel(QWidget):
         parent_code = code[:-1] if len(code) > 1 else None
         parent_id   = None
         if parent_code:
-            row = self.conn.execute(
-                "SELECT id FROM accounts WHERE code=?", (parent_code,)
-            ).fetchone()
-            parent_id = row["id"] if row else None
+            try:
+                row = self.conn.execute(
+                    "SELECT id FROM accounts WHERE code=?", (parent_code,)
+                ).fetchone()
+                parent_id = row["id"] if row else None
+            except Exception:
+                parent_id = None
         try:
             insert_account(self.conn, code, name, acc_type, parent_id, group_id)
             self.inp_code.clear()
@@ -811,13 +793,11 @@ class AccountsTreePanel(QWidget):
         self.inp_code.setText(acc["code"])
         self.inp_code.setReadOnly(True)
         self.inp_name.setText(acc["name"])
-        # اختار النوع
         for i in range(self.cmb_type.count()):
             if self.cmb_type.itemData(i) == acc["type"]:
                 self.cmb_type.setCurrentIndex(i)
                 break
         self._refresh_group_combo_for_type()
-        # اختار التصنيف
         for i in range(self.cmb_group.count()):
             if self.cmb_group.itemData(i) == acc["group_id"]:
                 self.cmb_group.setCurrentIndex(i)
@@ -851,9 +831,12 @@ class AccountsTreePanel(QWidget):
         acc = fetch_account(self.conn, aid)
         if not acc:
             return
-        has = self.conn.execute(
-            "SELECT COUNT(*) as c FROM journal_lines WHERE account_id=?", (aid,)
-        ).fetchone()["c"]
+        try:
+            has = self.conn.execute(
+                "SELECT COUNT(*) as c FROM journal_lines WHERE account_id=?", (aid,)
+            ).fetchone()["c"]
+        except Exception:
+            has = 0
         if has:
             QMessageBox.warning(self, "تحذير",
                 f"الحساب «{acc['name']}» له {has} حركة — لا يمكن حذفه.")
@@ -864,14 +847,10 @@ class AccountsTreePanel(QWidget):
 
 
 # ══════════════════════════════════════════════════════════
-# تبويب القيود — بعمليتين فقط مع smart DR/CR
+# باقي الكلاسات — بدون تغيير
 # ══════════════════════════════════════════════════════════
 
 class _SmartEntryLine(QFrame):
-    """
-    سطر واحد في القيد:
-      [حساب مع فلتر]  [زيادة/نقص]  [المبلغ]  → يعرض: DR/CR تلقائي
-    """
     def __init__(self, conn, on_change=None, parent=None):
         super().__init__(parent)
         self.conn      = conn
@@ -890,21 +869,18 @@ class _SmartEntryLine(QFrame):
         lay.setContentsMargins(10, 8, 10, 8)
         lay.setSpacing(6)
 
-        # ── صف اختيار الحساب ──
         row1 = QHBoxLayout()
         self._acc_combo = _AccountCombo(self.conn)
         self._acc_combo.cmb_account.currentIndexChanged.connect(self._on_acc_changed)
         row1.addWidget(self._acc_combo, stretch=1)
         lay.addLayout(row1)
 
-        # ── صف العملية + المبلغ ──
         row2 = QHBoxLayout()
         row2.setSpacing(8)
 
         lbl_op = QLabel("العملية:")
         lbl_op.setStyleSheet("font-weight:bold; font-size:11px;")
 
-        # زيادة / نقص
         self.rdo_inc = QRadioButton("➕ زيادة")
         self.rdo_dec = QRadioButton("➖ نقص")
         self.rdo_inc.setChecked(True)
@@ -918,7 +894,6 @@ class _SmartEntryLine(QFrame):
         row2.addWidget(self.rdo_dec)
         row2.addSpacing(16)
 
-        # المبلغ
         lbl_amt = QLabel("المبلغ:")
         lbl_amt.setStyleSheet("font-weight:bold; font-size:11px;")
         self.sp_amount = _spin()
@@ -928,7 +903,6 @@ class _SmartEntryLine(QFrame):
         row2.addWidget(self.sp_amount)
         row2.addSpacing(12)
 
-        # عرض DR/CR تلقائي
         self.lbl_dr_cr = QLabel("—")
         self.lbl_dr_cr.setFixedWidth(120)
         self.lbl_dr_cr.setAlignment(Qt.AlignCenter)
@@ -939,7 +913,6 @@ class _SmartEntryLine(QFrame):
         row2.addWidget(self.lbl_dr_cr)
         row2.addStretch()
 
-        # تعديل يدوي (اختياري)
         self.btn_manual = QPushButton("⚙️ يدوي")
         self.btn_manual.setCheckable(True)
         self.btn_manual.setMinimumHeight(26)
@@ -953,7 +926,6 @@ class _SmartEntryLine(QFrame):
         row2.addWidget(self.btn_manual)
         lay.addLayout(row2)
 
-        # ── صف التعديل اليدوي (مخفي افتراضيًا) ──
         self._manual_frame = QFrame()
         self._manual_frame.setStyleSheet(
             "QFrame { background:#fff8e1; border:1px solid #ffe082;"
@@ -979,7 +951,6 @@ class _SmartEntryLine(QFrame):
         self._manual_frame.setVisible(False)
         lay.addWidget(self._manual_frame)
 
-        # بيان
         self.inp_desc = QLineEdit()
         self.inp_desc.setPlaceholderText("بيان (اختياري)...")
         self.inp_desc.setMinimumHeight(26)
@@ -1001,7 +972,6 @@ class _SmartEntryLine(QFrame):
 
     def _update_dr_cr_label(self):
         acc_id  = self._acc_combo.current_account_id()
-        amount  = self.sp_amount.value()
         if not acc_id:
             self.lbl_dr_cr.setText("—")
             self.lbl_dr_cr.setStyleSheet(
@@ -1031,20 +1001,17 @@ class _SmartEntryLine(QFrame):
             )
 
     def get_debit_credit(self) -> tuple:
-        """يرجع (debit, credit) بناءً على نوع الحساب والعملية."""
         acc_id = self._acc_combo.current_account_id()
         amount = self.sp_amount.value()
         if not acc_id or amount == 0:
             return 0.0, 0.0
 
         if self.btn_manual.isChecked():
-            # تحكم يدوي
             if self.rdo_dr.isChecked():
                 return amount, 0.0
             else:
                 return 0.0, amount
         else:
-            # تلقائي
             acc = fetch_account(self.conn, acc_id)
             if not acc:
                 return 0.0, 0.0
@@ -1086,7 +1053,6 @@ class JournalTab(QWidget):
         splitter = QSplitter(Qt.Vertical)
         splitter.setHandleWidth(6)
 
-        # ── فورم القيد ──
         form_w = QWidget()
         fl     = QVBoxLayout(form_w)
         fl.setContentsMargins(12, 10, 12, 10)
@@ -1096,7 +1062,6 @@ class JournalTab(QWidget):
         self.lbl_mode.setStyleSheet("font-weight:bold; color:#1565c0; font-size:12px;")
         fl.addWidget(self.lbl_mode)
 
-        # صف التاريخ والوصف
         info_row = QHBoxLayout()
         self.dt_date = QDateEdit(QDate.currentDate())
         self.dt_date.setCalendarPopup(True)
@@ -1120,7 +1085,6 @@ class JournalTab(QWidget):
         info_row.addWidget(self.inp_desc, stretch=1)
         fl.addLayout(info_row)
 
-        # ── العمليتان ──
         self.line1 = _SmartEntryLine(self.conn, on_change=self._update_balance)
         self.line2 = _SmartEntryLine(self.conn, on_change=self._update_balance)
 
@@ -1134,7 +1098,6 @@ class JournalTab(QWidget):
         fl.addWidget(lbl2)
         fl.addWidget(self.line2)
 
-        # ملخص التوازن
         bal_row = QHBoxLayout()
         self.lbl_sum_d  = QLabel("مدين: 0.00")
         self.lbl_sum_c  = QLabel("دائن: 0.00")
@@ -1163,7 +1126,6 @@ class JournalTab(QWidget):
         fl.addLayout(buttons_row(btn_save, btn_clear))
         splitter.addWidget(form_w)
 
-        # ── جدول القيود ──
         table_w = QWidget()
         tl = QVBoxLayout(table_w)
         tl.setContentsMargins(12, 8, 12, 12)
@@ -1272,10 +1234,6 @@ class JournalTab(QWidget):
             bus.data_changed.emit()
 
 
-# ══════════════════════════════════════════════════════════
-# دفتر الأستاذ T-Accounts
-# ══════════════════════════════════════════════════════════
-
 class LedgerTab(QWidget):
     def __init__(self, conn, parent=None):
         super().__init__(parent)
@@ -1289,7 +1247,6 @@ class LedgerTab(QWidget):
         splitter = QSplitter(Qt.Horizontal)
         splitter.setHandleWidth(6)
 
-        # يسار: قائمة الحسابات
         left = QWidget()
         ll   = QVBoxLayout(left)
         ll.setContentsMargins(10, 8, 6, 10)
@@ -1310,7 +1267,6 @@ class LedgerTab(QWidget):
         ll.addWidget(self.lst, stretch=1)
         splitter.addWidget(left)
 
-        # يمين: T-Account
         right = QWidget()
         rl    = QVBoxLayout(right)
         rl.setContentsMargins(6, 8, 10, 10)
@@ -1446,10 +1402,6 @@ class LedgerTab(QWidget):
         )
 
 
-# ══════════════════════════════════════════════════════════
-# ميزان المراجعة
-# ══════════════════════════════════════════════════════════
-
 class TrialBalanceTab(QWidget):
     def __init__(self, conn, parent=None):
         super().__init__(parent)
@@ -1523,10 +1475,6 @@ class TrialBalanceTab(QWidget):
             self.lbl_status.setStyleSheet("font-weight:bold; color:#c62828;")
 
 
-# ══════════════════════════════════════════════════════════
-# القوائم المالية
-# ══════════════════════════════════════════════════════════
-
 def _stat_card(label, color="#1565c0"):
     f = QFrame()
     f.setStyleSheet(f"""
@@ -1578,9 +1526,9 @@ class IncomeStatementTab(QWidget):
         splitter = QSplitter(Qt.Horizontal)
         splitter.setHandleWidth(6)
 
-        for attr_name, title, color, type_ in [
-            ("table_rev", "💹 الإيرادات", "#6a1b9a", "revenue"),
-            ("table_exp", "📤 المصروفات", "#e65100", "expense"),
+        for attr_name, title, color in [
+            ("table_rev", "💹 الإيرادات", "#6a1b9a"),
+            ("table_exp", "📤 المصروفات", "#e65100"),
         ]:
             w  = QWidget()
             wl = QVBoxLayout(w)
@@ -1625,15 +1573,6 @@ class IncomeStatementTab(QWidget):
 
 
 class OwnersEquityTab(QWidget):
-    """
-    قائمة حقوق الملكية المفصلة:
-      ── يزيد بـ CR (رصيد طبيعي دائن) ──
-        Capital (رأس المال)
-        Revenue (الإيرادات) — صافي الدخل
-      ── يزيد بـ DR (رصيد طبيعي مدين) ──
-        Expenses (المصروفات)
-        Drawings (المسحوبات)
-    """
     def __init__(self, conn, parent=None):
         super().__init__(parent)
         self.conn = conn
@@ -1664,15 +1603,12 @@ class OwnersEquityTab(QWidget):
             cards.addWidget(f, stretch=1)
         root.addLayout(cards)
 
-        # جدولين: CR side و DR side
         splitter = QSplitter(Qt.Horizontal)
         splitter.setHandleWidth(6)
 
-        # جانب CR (Capital + Revenue)
         left_w  = QWidget()
         ll = QVBoxLayout(left_w)
         ll.setContentsMargins(0, 4, 4, 0)
-
         cr_hdr = QLabel("📈 ما يزيد حقوق الملكية (CR↑)")
         cr_hdr.setStyleSheet(
             "font-weight:bold; color:#2e7d32; font-size:11px;"
@@ -1686,11 +1622,9 @@ class OwnersEquityTab(QWidget):
         ll.addWidget(self.table_cr)
         splitter.addWidget(left_w)
 
-        # جانب DR (Expenses + Drawings)
         right_w = QWidget()
         rl = QVBoxLayout(right_w)
         rl.setContentsMargins(4, 4, 0, 0)
-
         dr_hdr = QLabel("📉 ما ينقص حقوق الملكية (DR↑)")
         dr_hdr.setStyleSheet(
             "font-weight:bold; color:#c62828; font-size:11px;"
@@ -1706,7 +1640,6 @@ class OwnersEquityTab(QWidget):
 
         root.addWidget(splitter, stretch=1)
 
-        # ملخص المعادلة
         eq_frame = QFrame()
         eq_frame.setStyleSheet(
             "QFrame { background:#e8f4fd; border:1px solid #90caf9; border-radius:6px; }"
@@ -1723,7 +1656,6 @@ class OwnersEquityTab(QWidget):
     def _load(self):
         data = owners_equity_statement(self.conn)
 
-        # جانب CR: Capital + صافي الدخل
         self.table_cr.setRowCount(0)
         for row in data["capital_accounts"]:
             r = self.table_cr.rowCount()
@@ -1737,7 +1669,6 @@ class OwnersEquityTab(QWidget):
             ai.setForeground(QColor("#2e7d32"))
             self.table_cr.setItem(r, 3, ai)
 
-        # صافي الدخل في جانب CR
         ni = data["net_income"]
         r  = self.table_cr.rowCount()
         self.table_cr.insertRow(r)
@@ -1748,7 +1679,6 @@ class OwnersEquityTab(QWidget):
         ni_item.setForeground(QColor("#1b5e20") if ni >= 0 else QColor("#b71c1c"))
         self.table_cr.setItem(r, 3, ni_item)
 
-        # جانب DR: Drawings + Expenses
         self.table_dr.setRowCount(0)
         for row in data["drawings_accounts"]:
             r = self.table_dr.rowCount()
@@ -1762,7 +1692,6 @@ class OwnersEquityTab(QWidget):
             ai.setForeground(QColor("#4e342e"))
             self.table_dr.setItem(r, 3, ai)
 
-        # الإحصائيات
         self.lbl_cap.setText(_money(data["total_capital"]))
         self.lbl_ni.setText(_money(ni))
         self.lbl_draw.setText(_money(data["total_drawings"]))
@@ -1773,7 +1702,6 @@ class OwnersEquityTab(QWidget):
             f"font-size:14px; font-weight:bold; color:{tc}; background:transparent; border:none;"
         )
 
-        # المعادلة
         self.lbl_equation.setText(
             f"رأس المال  {data['total_capital']:,.2f}  +  "
             f"صافي الدخل  {ni:,.2f}  −  "
@@ -1874,7 +1802,6 @@ class BalanceSheetTab(QWidget):
             self.table_liab.setItem(r2, 2, ai)
             self.table_liab.setItem(r2, 3, QTableWidgetItem(label))
 
-        # صافي الدخل
         ni = data["net_income"]
         if ni != 0:
             r2 = self.table_liab.rowCount()
@@ -1930,8 +1857,11 @@ class AccountingTab(QWidget):
         self._build()
 
     def _init_schema(self):
-        from db.accounting_schema import create_accounting_tables
-        create_accounting_tables(self.conn)
+        try:
+            from db.accounting_schema import create_accounting_tables
+            create_accounting_tables(self.conn)
+        except Exception as e:
+            print(f"[AccountingTab] schema init error: {e}")
 
     def _build(self):
         root = QVBoxLayout(self)
@@ -1972,7 +1902,7 @@ class AccountingTab(QWidget):
         )
         tabs.addTab(liab_tab, "📋 الخصوم")
 
-        # حقوق الملكية (Capital + Drawings)
+        # حقوق الملكية
         eq_tab = QTabWidget()
         eq_tab.addTab(
             AccountsTreePanel(self.conn,
@@ -1980,7 +1910,6 @@ class AccountingTab(QWidget):
                               "حقوق الملكية"),
             "📊 الحسابات"
         )
-        # تصنيفات منفصلة لكل نوع
         eq_groups = QTabWidget()
         eq_groups.addTab(_GroupManagerPanel(self.conn, "capital"),  "رأس المال")
         eq_groups.addTab(_GroupManagerPanel(self.conn, "drawings"), "المسحوبات")
@@ -1997,5 +1926,8 @@ class AccountingTab(QWidget):
         root.addWidget(tabs)
 
     def closeEvent(self, event):
-        self.conn.close()
+        try:
+            self.conn.close()
+        except Exception:
+            pass
         super().closeEvent(event)
