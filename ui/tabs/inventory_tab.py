@@ -20,7 +20,6 @@ from db.inventory_repo  import (
     fetch_all_inventory, fetch_inventory_item,
     insert_inventory_item, update_inventory_item, delete_inventory_item,
     fetch_inventory_moves, record_inventory_move,
-    purchase_with_journal,
 )
 from db.accounting_repo import (
     fetch_leaf_accounts, purchase_inventory,
