@@ -147,11 +147,6 @@ def _column_exists(conn, table: str, col: str) -> bool:
 
 
 def _migrate_schema(conn):
-    """
-    Migrations آمنة لجدول accounts:
-    1. إصلاح CHECK constraint لو محتاج
-    2. إضافة عمود group_id لو ناقص
-    """
     # ── أولاً: إصلاح CHECK constraint ──
     if _needs_migration(conn):
         _migrate_accounts_type_constraint(conn)
@@ -159,6 +154,11 @@ def _migrate_schema(conn):
     # ── ثانياً: إضافة group_id لو ناقص ──
     if not _column_exists(conn, "accounts", "group_id"):
         conn.execute("ALTER TABLE accounts ADD COLUMN group_id INTEGER")
+        conn.commit()
+
+    # ── ثالثاً: إضافة notes لجدول account_groups لو ناقص ──
+    if not _column_exists(conn, "account_groups", "notes"):
+        conn.execute("ALTER TABLE account_groups ADD COLUMN notes TEXT")
         conn.commit()
 
 
