@@ -1,5 +1,8 @@
 """
 ui/widgets/component_row.py — مع حقل نسبة الهادر (waste_pct)
+
+التغيير: _SearchableCombo و _build_grouped_items انتقلوا لـ searchable_combo.py
+         هنا بنستورد منهم بدل التكرار.
 """
 
 from PyQt5.QtWidgets import (
@@ -7,7 +10,10 @@ from PyQt5.QtWidgets import (
     QPushButton, QSizePolicy, QLabel, QDoubleSpinBox,
 )
 from PyQt5.QtCore import pyqtSignal, Qt, QTimer
-from PyQt5.QtGui  import QColor, QFont, QStandardItemModel, QStandardItem
+from PyQt5.QtGui  import QColor
+
+# ✅ استيراد من الملف المنفصل بدل التكرار
+from ui.widgets.searchable_combo import _SearchableCombo, _build_grouped_items
 from ui.events import bus
 
 _TYPES = [
@@ -26,207 +32,6 @@ _STYLE_ORPHAN = """
         border-radius: 4px;
     }
 """
-
-_SEPARATOR_DATA = ("__sep__", None)
-
-
-def _build_grouped_items(items: list[tuple]) -> list[tuple]:
-    groups: dict[str, list[tuple]] = {}
-    NO_CAT = "__no_category__"
-
-    for entry in items:
-        item_id  = entry[0]
-        name     = entry[1]
-        cat_name = entry[3] if len(entry) > 3 and entry[3] else NO_CAT
-        if cat_name not in groups:
-            groups[cat_name] = []
-        groups[cat_name].append((item_id, name))
-
-    result = []
-    for cat_name, members in groups.items():
-        if cat_name == NO_CAT:
-            continue
-        result.append((f"─── {cat_name} ───", _SEPARATOR_DATA, True))
-        for item_id, name in members:
-            result.append((f"{item_id} — {name}", (None, item_id), False))
-
-    if NO_CAT in groups:
-        if result:
-            result.append(("─── بدون تصنيف ───", _SEPARATOR_DATA, True))
-        for item_id, name in groups[NO_CAT]:
-            result.append((f"{item_id} — {name}", (None, item_id), False))
-
-    return result
-
-
-# ══════════════════════════════════════════════════════════
-# SearchableCombo — Combo مع بحث نصي
-# ══════════════════════════════════════════════════════════
-
-class _SearchableCombo(QWidget):
-    item_selected = pyqtSignal(object)
-
-    def __init__(self, parent=None):
-        super().__init__(parent)
-        self._all_items: list[tuple] = []
-        self._build()
-
-    def _build(self):
-        lay = QHBoxLayout(self)
-        lay.setContentsMargins(0, 0, 0, 0)
-        lay.setSpacing(4)
-
-        self.inp_search = QLineEdit()
-        self.inp_search.setPlaceholderText("🔍 بحث...")
-        self.inp_search.setFixedWidth(90)
-        self.inp_search.setMinimumHeight(28)
-        self.inp_search.setStyleSheet("""
-            QLineEdit {
-                background: #f0f4ff;
-                border: 1px solid #c5cae9;
-                border-radius: 4px;
-                padding: 2px 6px;
-                font-size: 11px;
-            }
-            QLineEdit:focus { border-color: #1565c0; background: white; }
-        """)
-        self.inp_search.textChanged.connect(self._on_search)
-
-        self.btn_clear = QPushButton("✖")
-        self.btn_clear.setFixedSize(20, 20)
-        self.btn_clear.setStyleSheet(
-            "QPushButton { background:transparent; border:none; color:#aaa; font-size:10px; }"
-            "QPushButton:hover { color:#e53935; }"
-        )
-        self.btn_clear.clicked.connect(self._clear_search)
-        self.btn_clear.setVisible(False)
-
-        self.cmb = QComboBox()
-        self.cmb.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Fixed)
-        self.cmb.setMinimumWidth(150)
-        self.cmb.setSizeAdjustPolicy(QComboBox.AdjustToContents)
-        self.cmb.currentIndexChanged.connect(self._on_combo_changed)
-
-        lay.addWidget(self.inp_search)
-        lay.addWidget(self.btn_clear)
-        lay.addWidget(self.cmb, stretch=1)
-
-    def _on_search(self, text: str):
-        self.btn_clear.setVisible(bool(text))
-        self._rebuild_combo(filter_text=text.strip().lower())
-
-    def _clear_search(self):
-        self.inp_search.blockSignals(True)
-        self.inp_search.clear()
-        self.inp_search.blockSignals(False)
-        self.btn_clear.setVisible(False)
-        self._rebuild_combo(filter_text="")
-
-    def _on_combo_changed(self, idx: int):
-        data = self.cmb.itemData(idx)
-        if data and data != _SEPARATOR_DATA and data[0] not in ("__sep__", "__orphan__"):
-            self.item_selected.emit(data)
-
-    def populate(self, items: list[tuple]):
-        self._all_items = items
-        self._rebuild_combo(filter_text=self.inp_search.text().strip().lower())
-
-    def _rebuild_combo(self, filter_text: str = ""):
-        prev_data = self.cmb.currentData()
-        self.cmb.blockSignals(True)
-        self.cmb.clear()
-
-        for display_text, user_data, is_separator in self._all_items:
-            if filter_text and not is_separator:
-                name_part = display_text.split("—", 1)[-1].strip().lower() if "—" in display_text else display_text.lower()
-                if filter_text not in name_part and filter_text not in display_text.lower():
-                    continue
-            elif filter_text and is_separator:
-                pass
-
-            self.cmb.addItem(display_text, userData=user_data)
-            idx = self.cmb.count() - 1
-
-            if is_separator:
-                self.cmb.setItemData(idx, QColor("#78909c"), Qt.ForegroundRole)
-                font = QFont()
-                font.setBold(True)
-                font.setPointSize(font.pointSize() - 1)
-                self.cmb.setItemData(idx, font, Qt.FontRole)
-                model = self.cmb.model()
-                item  = model.item(idx)
-                if item:
-                    item.setFlags(item.flags() & ~Qt.ItemIsEnabled & ~Qt.ItemIsSelectable)
-
-            elif user_data and user_data[0] == "__orphan__":
-                self.cmb.setItemData(idx, QColor("#e53935"), Qt.ForegroundRole)
-
-        self._remove_empty_separators()
-        self.cmb.blockSignals(False)
-        self._restore_selection(prev_data)
-
-    def _remove_empty_separators(self):
-        to_remove = []
-        count = self.cmb.count()
-        for i in range(count):
-            d = self.cmb.itemData(i)
-            if d == _SEPARATOR_DATA or (d and isinstance(d, tuple) and d[0] == "__sep__"):
-                next_is_real = False
-                for j in range(i + 1, count):
-                    nd = self.cmb.itemData(j)
-                    if nd == _SEPARATOR_DATA or (nd and isinstance(nd, tuple) and nd[0] == "__sep__"):
-                        break
-                    if nd and isinstance(nd, tuple) and nd[0] not in ("__sep__",):
-                        next_is_real = True
-                        break
-                if not next_is_real:
-                    to_remove.append(i)
-
-        for i in reversed(to_remove):
-            self.cmb.removeItem(i)
-
-    def _restore_selection(self, prev_data):
-        if prev_data is None:
-            self._select_first_real()
-            return
-        for i in range(self.cmb.count()):
-            d = self.cmb.itemData(i)
-            if d == prev_data:
-                self.cmb.setCurrentIndex(i)
-                return
-        self._select_first_real()
-
-    def _select_first_real(self):
-        for i in range(self.cmb.count()):
-            d = self.cmb.itemData(i)
-            if d and d != _SEPARATOR_DATA and isinstance(d, tuple) and d[0] not in ("__sep__", "__orphan__"):
-                self.cmb.setCurrentIndex(i)
-                return
-
-    def current_data(self):
-        return self.cmb.currentData()
-
-    def set_selection(self, user_data):
-        for i in range(self.cmb.count()):
-            if self.cmb.itemData(i) == user_data:
-                self.cmb.setCurrentIndex(i)
-                return
-
-    def block_signals(self, val: bool):
-        self.cmb.blockSignals(val)
-
-    def count(self) -> int:
-        return self.cmb.count()
-
-    def item_data(self, idx: int):
-        return self.cmb.itemData(idx)
-
-    def set_item_text(self, idx: int, text: str):
-        self.cmb.setItemText(idx, text)
-
-    def add_item_at_start(self, text: str, data):
-        self.cmb.insertItem(0, text, data)
-        self.cmb.setItemData(0, QColor("#e53935"), Qt.ForegroundRole)
 
 
 # ══════════════════════════════════════════════════════════
@@ -378,6 +183,10 @@ class ComponentRow(QWidget):
 
         self.cmb_type.currentIndexChanged.connect(self._on_type_changed)
 
+    # ══════════════════════════════════════════════════════
+    # waste_pct — ستايل ديناميكي
+    # ══════════════════════════════════════════════════════
+
     def _on_waste_changed(self, val: float):
         self._update_waste_style(val)
 
@@ -386,13 +195,13 @@ class ComponentRow(QWidget):
         if val > 0:
             self.lbl_waste.setVisible(True)
             if val >= 20:
-                color = "#ffcdd2"   # أحمر فاتح — هادر عالي
+                color = "#ffcdd2"
                 border = "#e53935"
             elif val >= 10:
-                color = "#ffe0b2"   # برتقالي — هادر متوسط
+                color = "#ffe0b2"
                 border = "#f57c00"
             else:
-                color = "#fff8e1"   # أصفر — هادر بسيط
+                color = "#fff8e1"
                 border = "#ffe082"
             self.waste_spin.setStyleSheet(f"""
                 QDoubleSpinBox {{
@@ -459,7 +268,7 @@ class ComponentRow(QWidget):
         self.total_qty_edit.clear()
 
     # ══════════════════════════════════════════════════════
-    # API خارجي
+    # API خارجي — Orphan state
     # ══════════════════════════════════════════════════════
 
     def set_orphan_name(self, name: str | None):
@@ -475,6 +284,9 @@ class ComponentRow(QWidget):
         if self._orphan_name:
             return f"⚠️  {self._orphan_name}  (ID: {self._orphan_id})"
         return f"⚠️  محذوف  (ID: {self._orphan_id})"
+
+    def is_orphan(self) -> bool:
+        return self._is_orphan
 
     # ══════════════════════════════════════════════════════
     # ملء قايمة العناصر
@@ -514,7 +326,7 @@ class ComponentRow(QWidget):
         self._refresh_items()
 
     # ══════════════════════════════════════════════════════
-    # Orphan state
+    # Orphan helpers
     # ══════════════════════════════════════════════════════
 
     def _mark_orphan(self, child_type: str, child_id: int):
@@ -536,9 +348,6 @@ class ComponentRow(QWidget):
         self._orphan_name = None
         self.setStyleSheet(_STYLE_NORMAL)
         self.setToolTip("")
-
-    def is_orphan(self) -> bool:
-        return self._is_orphan
 
     # ══════════════════════════════════════════════════════
     # Signal handlers
@@ -601,17 +410,6 @@ class ComponentRow(QWidget):
                 return None
             child_type = self.cmb_type.currentData()
             waste_pct  = self.waste_spin.value()
-
-            raw_total_qty = None
-            if child_type == "raw":
-                tq_text = self.total_qty_edit.text().strip()
-                if tq_text:
-                    try:
-                        raw_total_qty = float(tq_text)
-                        if raw_total_qty <= 0:
-                            raw_total_qty = None
-                    except ValueError:
-                        raw_total_qty = None
 
             return child_type, child_id, qty, waste_pct
 
