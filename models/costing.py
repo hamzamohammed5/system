@@ -1,15 +1,9 @@
 """
-models/costing.py  (النسخة المعدَّلة — نهائية)
+models/costing.py  — مع دعم waste_pct (نسبة الهادر)
 =================
-التغيير الوحيد: _raw_unit_cost — تحسب سعر الوحدة من total_qty.
-
 المعادلة:
-  لو total_qty محددة وأكبر من صفر:
-      unit_cost = price / total_qty
-  غير كده:
-      unit_cost = price   (السعر المسجل = سعر الوحدة مباشرة)
-
-باقي الكود — مفيش تغيير.
+  الكمية الفعلية = qty × (1 + waste_pct / 100)
+  مثال: qty=10م، waste_pct=10% → الفعلي = 10 × 1.10 = 11م
 """
 
 from db.items_repo      import fetch_item, fetch_bom
@@ -52,28 +46,36 @@ def calc_machine_op_cost(conn, op_id: int) -> float:
 
 
 # ══════════════════════════════════════════════════════════
-# سعر وحدة الخامة — الدالة الجديدة الوحيدة
+# سعر وحدة الخامة
 # ══════════════════════════════════════════════════════════
 
 def raw_unit_price(item_row) -> float:
     """
     يحسب سعر الوحدة الواحدة من الخامة.
-
-    item_row: صف من fetch_item — لازم يحتوي على price و total_qty.
-
-      لو total_qty محددة وأكبر من صفر:
-          unit_price = price / total_qty
-          مثال: بكرة بـ 500 جنيه وطولها 100م → 500/100 = 5 جنيه/م
-
-      غير كده:
-          unit_price = price
-          مثال: قطعة بـ 50 جنيه → 50 جنيه/قطعة
+    لو total_qty محددة وأكبر من صفر:
+        unit_price = price / total_qty
+    غير كده:
+        unit_price = price
     """
     price     = float(item_row["price"])
     total_qty = item_row["total_qty"]
     if total_qty and float(total_qty) > 0:
         return price / float(total_qty)
     return price
+
+
+# ══════════════════════════════════════════════════════════
+# حساب الكمية الفعلية مع الهادر
+# ══════════════════════════════════════════════════════════
+
+def effective_qty(qty: float, waste_pct: float) -> float:
+    """
+    الكمية الفعلية = qty × (1 + waste_pct / 100)
+    مثال: qty=10، waste_pct=10 → 10 × 1.10 = 11
+    """
+    if waste_pct and waste_pct > 0:
+        return qty * (1.0 + waste_pct / 100.0)
+    return qty
 
 
 # ══════════════════════════════════════════════════════════
@@ -92,15 +94,20 @@ def calc_cost(conn, item_id: int, _visited: set = None) -> float:
         return 0.0
 
     if item["type"] == "raw":
-        # لو بيتطلب كـ standalone — ارجع سعر الوحدة
         return raw_unit_price(item)
 
     total = 0.0
-    for child_type, child_id, qty in fetch_bom(conn, item_id):
+    for row in fetch_bom(conn, item_id):
+        child_type = row["child_type"]
+        child_id   = row["child_id"]
+        qty        = row["qty"]
+        waste_pct  = row["waste_pct"] if "waste_pct" in row.keys() else 0.0
+
+        # الكمية الفعلية بعد الهادر
+        eff_qty = effective_qty(qty, waste_pct)
 
         if child_type == "raw":
             child = fetch_item(conn, child_id)
-            # سعر الوحدة يراعي total_qty
             unit_cost = raw_unit_price(child) if child else 0.0
 
         elif child_type == "semi":
@@ -115,7 +122,7 @@ def calc_cost(conn, item_id: int, _visited: set = None) -> float:
         else:
             unit_cost = 0.0
 
-        total += unit_cost * qty
+        total += unit_cost * eff_qty
 
     return total
 
@@ -135,16 +142,22 @@ def calc_cost_breakdown(conn, item_id: int) -> dict:
 
     materials = labor = machine = 0.0
 
-    for child_type, child_id, qty in fetch_bom(conn, item_id):
+    for row in fetch_bom(conn, item_id):
+        child_type = row["child_type"]
+        child_id   = row["child_id"]
+        qty        = row["qty"]
+        waste_pct  = row["waste_pct"] if "waste_pct" in row.keys() else 0.0
+        eff_qty    = effective_qty(qty, waste_pct)
+
         if child_type == "raw":
             child = fetch_item(conn, child_id)
-            materials += (raw_unit_price(child) if child else 0.0) * qty
+            materials += (raw_unit_price(child) if child else 0.0) * eff_qty
         elif child_type == "semi":
-            materials += calc_cost(conn, child_id) * qty
+            materials += calc_cost(conn, child_id) * eff_qty
         elif child_type == "labor_op":
-            labor += calc_labor_op_cost(conn, child_id) * qty
+            labor += calc_labor_op_cost(conn, child_id) * eff_qty
         elif child_type == "machine_op":
-            machine += calc_machine_op_cost(conn, child_id) * qty
+            machine += calc_machine_op_cost(conn, child_id) * eff_qty
 
     return {
         "materials": materials,

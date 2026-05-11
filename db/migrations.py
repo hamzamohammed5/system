@@ -139,7 +139,7 @@ def run_migrations(conn):
     if not _column_exists(conn, "bom", "child_name"):
         conn.execute("ALTER TABLE bom ADD COLUMN child_name TEXT")
         conn.commit()
-    
+
     # ══ 8. عمود parent_id في categories ══════════════════════
     if not _column_exists(conn, "categories", "parent_id"):
         conn.execute(
@@ -147,9 +147,16 @@ def run_migrations(conn):
             "REFERENCES categories(id) ON DELETE SET NULL"
         )
         conn.commit()
+
     # ══ 9. عمود total_qty في items ══════════════════════
     if not _column_exists(conn, "items", "total_qty"):
         conn.execute("ALTER TABLE items ADD COLUMN total_qty REAL")
         conn.commit()
+
+    # ══ 10. عمود waste_pct في bom ═══════════════════════
+    # نسبة الهادر % — مثلاً 10 تعني 10% هادر → الكمية الفعلية = qty × (1 + 10/100)
+    if not _column_exists(conn, "bom", "waste_pct"):
+        conn.execute("ALTER TABLE bom ADD COLUMN waste_pct REAL NOT NULL DEFAULT 0")
+        conn.commit()
+
     create_offers_tables(conn)
-    

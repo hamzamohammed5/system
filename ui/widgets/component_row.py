@@ -1,13 +1,12 @@
 """
-ui/widgets/component_row.py — مع بحث داخل dropdown المكوّن
+ui/widgets/component_row.py — مع حقل نسبة الهادر (waste_pct)
 """
 
 from PyQt5.QtWidgets import (
     QWidget, QHBoxLayout, QComboBox, QLineEdit,
-    QPushButton, QSizePolicy, QLabel, QCompleter,
-    QAbstractItemView, QListView,
+    QPushButton, QSizePolicy, QLabel, QDoubleSpinBox,
 )
-from PyQt5.QtCore import pyqtSignal, Qt, QTimer, QSortFilterProxyModel, QStringListModel
+from PyQt5.QtCore import pyqtSignal, Qt, QTimer
 from PyQt5.QtGui  import QColor, QFont, QStandardItemModel, QStandardItem
 from ui.events import bus
 
@@ -65,17 +64,11 @@ def _build_grouped_items(items: list[tuple]) -> list[tuple]:
 # ══════════════════════════════════════════════════════════
 
 class _SearchableCombo(QWidget):
-    """
-    عنصر مركب: QLineEdit للبحث + QComboBox للاختيار.
-    - يعرض كل العناصر في الـ combo
-    - لما المستخدم يكتب في البحث، الـ combo يتفلتر
-    - عند الاختيار يُبلَّغ الخارج عبر item_selected signal
-    """
-    item_selected = pyqtSignal(object)   # يرسل userData
+    item_selected = pyqtSignal(object)
 
     def __init__(self, parent=None):
         super().__init__(parent)
-        self._all_items: list[tuple] = []   # (display_text, user_data, is_separator)
+        self._all_items: list[tuple] = []
         self._build()
 
     def _build(self):
@@ -83,7 +76,6 @@ class _SearchableCombo(QWidget):
         lay.setContentsMargins(0, 0, 0, 0)
         lay.setSpacing(4)
 
-        # ── حقل البحث ──
         self.inp_search = QLineEdit()
         self.inp_search.setPlaceholderText("🔍 بحث...")
         self.inp_search.setFixedWidth(90)
@@ -100,7 +92,6 @@ class _SearchableCombo(QWidget):
         """)
         self.inp_search.textChanged.connect(self._on_search)
 
-        # ── زر مسح ──
         self.btn_clear = QPushButton("✖")
         self.btn_clear.setFixedSize(20, 20)
         self.btn_clear.setStyleSheet(
@@ -110,7 +101,6 @@ class _SearchableCombo(QWidget):
         self.btn_clear.clicked.connect(self._clear_search)
         self.btn_clear.setVisible(False)
 
-        # ── الـ combo ──
         self.cmb = QComboBox()
         self.cmb.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Fixed)
         self.cmb.setMinimumWidth(150)
@@ -138,9 +128,6 @@ class _SearchableCombo(QWidget):
             self.item_selected.emit(data)
 
     def populate(self, items: list[tuple]):
-        """
-        items: list of (display_text, user_data, is_separator)
-        """
         self._all_items = items
         self._rebuild_combo(filter_text=self.inp_search.text().strip().lower())
 
@@ -150,23 +137,11 @@ class _SearchableCombo(QWidget):
         self.cmb.clear()
 
         for display_text, user_data, is_separator in self._all_items:
-            # لو فلتر موجود
             if filter_text and not is_separator:
-                # نبحث في النص بدون رقم الـ ID
                 name_part = display_text.split("—", 1)[-1].strip().lower() if "—" in display_text else display_text.lower()
                 if filter_text not in name_part and filter_text not in display_text.lower():
                     continue
             elif filter_text and is_separator:
-                # نشوف لو في أعضاء بيطابقوا قبل ما نضيف الفاصل
-                cat_label = display_text.replace("───", "").strip()
-                has_match = any(
-                    filter_text in (t.split("—", 1)[-1].strip().lower() if "—" in t else t.lower())
-                    for t, d, s in self._all_items
-                    if not s and d and d != _SEPARATOR_DATA
-                )
-                # بسيطة: نضيف الفاصل دايما لو في فلتر (مش مشكلة)
-                # الأحسن: skip الفاصل لو مفيش نتايج تحته
-                # هنعمل approach تانية — نشيل الفواصل الفاضية بعد البناء
                 pass
 
             self.cmb.addItem(display_text, userData=user_data)
@@ -186,22 +161,16 @@ class _SearchableCombo(QWidget):
             elif user_data and user_data[0] == "__orphan__":
                 self.cmb.setItemData(idx, QColor("#e53935"), Qt.ForegroundRole)
 
-        # تنظيف الفواصل الفاضية في الآخر أو المتتالية
         self._remove_empty_separators()
-
         self.cmb.blockSignals(False)
-
-        # استعادة الاختيار
         self._restore_selection(prev_data)
 
     def _remove_empty_separators(self):
-        """يحذف الفواصل المتتالية أو الأخيرة."""
         to_remove = []
         count = self.cmb.count()
         for i in range(count):
             d = self.cmb.itemData(i)
             if d == _SEPARATOR_DATA or (d and isinstance(d, tuple) and d[0] == "__sep__"):
-                # فاصل — شيك على التالي
                 next_is_real = False
                 for j in range(i + 1, count):
                     nd = self.cmb.itemData(j)
@@ -234,7 +203,6 @@ class _SearchableCombo(QWidget):
                 self.cmb.setCurrentIndex(i)
                 return
 
-    # ── API خارجي ──
     def current_data(self):
         return self.cmb.currentData()
 
@@ -262,17 +230,18 @@ class _SearchableCombo(QWidget):
 
 
 # ══════════════════════════════════════════════════════════
-# ComponentRow
+# ComponentRow — مع حقل waste_pct
 # ══════════════════════════════════════════════════════════
 
 class ComponentRow(QWidget):
     removed = pyqtSignal(QWidget)
 
     def __init__(self, catalog_fn, child_type: str = "raw",
-             child_id=None, qty: float = 1.0,
-             raw_total_qty: float = None,
-             show_total_qty: bool = False,
-             parent=None):
+                 child_id=None, qty: float = 1.0,
+                 waste_pct: float = 0.0,
+                 raw_total_qty: float = None,
+                 show_total_qty: bool = False,
+                 parent=None):
         super().__init__(parent)
         self._catalog_fn     = catalog_fn
         self._show_total_qty = show_total_qty
@@ -285,7 +254,7 @@ class ComponentRow(QWidget):
         self._pinned_id        = child_id
         self._pinned_total_qty = raw_total_qty
 
-        self._build(child_type, child_id, qty, raw_total_qty)
+        self._build(child_type, child_id, qty, raw_total_qty, waste_pct)
         QTimer.singleShot(0, self._connect_signal)
 
     def _connect_signal(self):
@@ -297,7 +266,7 @@ class ComponentRow(QWidget):
     # بناء الواجهة
     # ══════════════════════════════════════════════════════
 
-    def _build(self, child_type, child_id, qty, raw_total_qty):
+    def _build(self, child_type, child_id, qty, raw_total_qty, waste_pct=0.0):
         layout = QHBoxLayout(self)
         layout.setContentsMargins(0, 2, 0, 2)
         layout.setSpacing(6)
@@ -319,8 +288,45 @@ class ComponentRow(QWidget):
         self.qty_edit.setPlaceholderText("الكمية")
         self.qty_edit.setSizePolicy(QSizePolicy.Preferred, QSizePolicy.Fixed)
         self.qty_edit.setMinimumWidth(60)
-        self.qty_edit.setMaximumWidth(100)
+        self.qty_edit.setMaximumWidth(90)
         self.qty_edit.setText(str(qty) if qty else "")
+
+        # ── نسبة الهادر % ──
+        self.waste_spin = QDoubleSpinBox()
+        self.waste_spin.setRange(0, 100)
+        self.waste_spin.setDecimals(1)
+        self.waste_spin.setSuffix(" %")
+        self.waste_spin.setValue(waste_pct or 0.0)
+        self.waste_spin.setMinimumWidth(75)
+        self.waste_spin.setMaximumWidth(90)
+        self.waste_spin.setMinimumHeight(26)
+        self.waste_spin.setToolTip(
+            "نسبة الهادر %\n"
+            "مثال: 10% → الكمية الفعلية = الكمية × 1.10\n"
+            "يعني لو محتاج 10م وهادر 10%، ستشتري 11م"
+        )
+        self.waste_spin.setStyleSheet("""
+            QDoubleSpinBox {
+                background: #fff8e1;
+                border: 1px solid #ffe082;
+                border-radius: 4px;
+                padding: 1px 4px;
+                font-size: 11px;
+                color: #e65100;
+            }
+            QDoubleSpinBox:focus {
+                border-color: #ff8f00;
+                background: #fffde7;
+            }
+        """)
+
+        # label الهادر
+        self.lbl_waste = QLabel("⚠️")
+        self.lbl_waste.setFixedWidth(18)
+        self.lbl_waste.setStyleSheet("color: #e65100; font-size: 11px; background:transparent;")
+        self.lbl_waste.setToolTip("نسبة الهادر")
+        self.waste_spin.valueChanged.connect(self._on_waste_changed)
+        self._update_waste_style(waste_pct or 0.0)
 
         # ── الكمية الكلية (raw فقط) ──
         self.total_qty_edit = QLineEdit()
@@ -349,6 +355,8 @@ class ComponentRow(QWidget):
         layout.addWidget(self.cmb_type)
         layout.addWidget(self._item_combo, stretch=1)
         layout.addWidget(self.qty_edit)
+        layout.addWidget(self.lbl_waste)
+        layout.addWidget(self.waste_spin)
 
         if self._show_total_qty:
             layout.addWidget(self.lbl_total_qty)
@@ -369,6 +377,54 @@ class ComponentRow(QWidget):
         self._update_total_qty_visibility(child_type)
 
         self.cmb_type.currentIndexChanged.connect(self._on_type_changed)
+
+    def _on_waste_changed(self, val: float):
+        self._update_waste_style(val)
+
+    def _update_waste_style(self, val: float):
+        """يغيّر لون الخلفية حسب قيمة الهادر."""
+        if val > 0:
+            self.lbl_waste.setVisible(True)
+            if val >= 20:
+                color = "#ffcdd2"   # أحمر فاتح — هادر عالي
+                border = "#e53935"
+            elif val >= 10:
+                color = "#ffe0b2"   # برتقالي — هادر متوسط
+                border = "#f57c00"
+            else:
+                color = "#fff8e1"   # أصفر — هادر بسيط
+                border = "#ffe082"
+            self.waste_spin.setStyleSheet(f"""
+                QDoubleSpinBox {{
+                    background: {color};
+                    border: 1px solid {border};
+                    border-radius: 4px;
+                    padding: 1px 4px;
+                    font-size: 11px;
+                    color: #e65100;
+                    font-weight: bold;
+                }}
+                QDoubleSpinBox:focus {{
+                    border-color: #ff8f00;
+                }}
+            """)
+        else:
+            self.lbl_waste.setVisible(False)
+            self.waste_spin.setStyleSheet("""
+                QDoubleSpinBox {
+                    background: #f5f5f5;
+                    border: 1px solid #e0e0e0;
+                    border-radius: 4px;
+                    padding: 1px 4px;
+                    font-size: 11px;
+                    color: #999;
+                }
+                QDoubleSpinBox:focus {
+                    border-color: #ffe082;
+                    background: #fff8e1;
+                    color: #e65100;
+                }
+            """)
 
     # ══════════════════════════════════════════════════════
     # إظهار/إخفاء حقل الكمية الكلية
@@ -442,7 +498,6 @@ class ComponentRow(QWidget):
 
         self._item_combo.populate(grouped)
 
-        # اختيار العنصر المحدد
         if selected_id is not None:
             if self._is_orphan and self._orphan_id == selected_id:
                 self._item_combo.cmb.setCurrentIndex(0)
@@ -533,6 +588,9 @@ class ComponentRow(QWidget):
     # ══════════════════════════════════════════════════════
 
     def get_values(self) -> tuple | None:
+        """
+        يرجع: (child_type, child_id, qty, waste_pct)
+        """
         try:
             data = self._item_combo.current_data()
             qty  = float(self.qty_edit.text())
@@ -542,6 +600,7 @@ class ComponentRow(QWidget):
             if kind in ("__orphan__", "__sep__") or child_id is None:
                 return None
             child_type = self.cmb_type.currentData()
+            waste_pct  = self.waste_spin.value()
 
             raw_total_qty = None
             if child_type == "raw":
@@ -554,11 +613,15 @@ class ComponentRow(QWidget):
                     except ValueError:
                         raw_total_qty = None
 
-            return child_type, child_id, qty, raw_total_qty
+            return child_type, child_id, qty, waste_pct
+
         except (ValueError, TypeError):
             return None
 
-    # للتوافق مع الكود القديم اللي بيستخدم cmb_item
+    def get_waste_pct(self) -> float:
+        return self.waste_spin.value()
+
+    # للتوافق مع الكود القديم
     @property
     def cmb_item(self):
         return self._item_combo.cmb

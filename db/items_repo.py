@@ -1,10 +1,9 @@
 """
-db/items_repo.py  (النسخة المعدَّلة — نهائية)
+db/items_repo.py  (النسخة المعدَّلة — مع waste_pct)
 ================
-التغيير الوحيد عن النسخة الأصلية:
-  • insert_item / update_item يقبلان total_qty (اختياري، default=None)
-  • fetch_item / fetch_items_by_type يرجعان total_qty
-  • fetch_bom / bom table — مفيش تغيير خالص
+التغييرات:
+  • fetch_bom يرجع waste_pct
+  • insert_bom_row / replace_bom يقبلان waste_pct
 """
 
 
@@ -66,7 +65,7 @@ def delete_item(conn, item_id: int):
 
 
 # ══════════════════════════════════════════════════════════
-# BOM — مفيش تغيير
+# BOM — مع waste_pct
 # ══════════════════════════════════════════════════════════
 
 def _resolve_name(conn, child_type: str, child_id: int) -> str | None:
@@ -88,18 +87,24 @@ def _resolve_name(conn, child_type: str, child_id: int) -> str | None:
 
 
 def fetch_bom(conn, parent_id: int):
+    """
+    يرجع صفوف BOM مع waste_pct.
+    كل صف: (child_type, child_id, qty, waste_pct)
+    """
     return conn.execute(
-        "SELECT child_type, child_id, qty FROM bom WHERE parent_id=? ORDER BY id",
+        "SELECT child_type, child_id, qty, COALESCE(waste_pct, 0) as waste_pct "
+        "FROM bom WHERE parent_id=? ORDER BY id",
         (parent_id,)
     ).fetchall()
 
 
-def insert_bom_row(conn, parent_id: int, child_type: str, child_id: int, qty: float):
+def insert_bom_row(conn, parent_id: int, child_type: str, child_id: int,
+                   qty: float, waste_pct: float = 0.0):
     name = _resolve_name(conn, child_type, child_id)
     conn.execute(
-        """INSERT INTO bom (parent_id, child_type, child_id, qty, child_name)
-           VALUES (?, ?, ?, ?, ?)""",
-        (parent_id, child_type, child_id, qty, name)
+        """INSERT INTO bom (parent_id, child_type, child_id, qty, child_name, waste_pct)
+           VALUES (?, ?, ?, ?, ?, ?)""",
+        (parent_id, child_type, child_id, qty, name, waste_pct or 0.0)
     )
     conn.commit()
 
@@ -113,14 +118,18 @@ def delete_bom_row(conn, parent_id: int, child_type: str, child_id: int):
 
 
 def replace_bom(conn, parent_id: int, rows: list[tuple]):
+    """
+    rows: list of (child_type, child_id, qty, waste_pct) or (child_type, child_id, qty)
+    """
     conn.execute("DELETE FROM bom WHERE parent_id=?", (parent_id,))
     for row in rows:
-        ct, cid, qty = row[0], row[1], row[2]   # نأخد أول 3 عناصر فقط
+        ct, cid, qty = row[0], row[1], row[2]
+        waste_pct = float(row[3]) if len(row) > 3 and row[3] is not None else 0.0
         name = _resolve_name(conn, ct, cid)
         conn.execute(
-            """INSERT INTO bom (parent_id, child_type, child_id, qty, child_name)
-               VALUES (?, ?, ?, ?, ?)""",
-            (parent_id, ct, cid, qty, name)
+            """INSERT INTO bom (parent_id, child_type, child_id, qty, child_name, waste_pct)
+               VALUES (?, ?, ?, ?, ?, ?)""",
+            (parent_id, ct, cid, qty, name, waste_pct)
         )
     conn.commit()
 
@@ -131,7 +140,8 @@ def replace_bom(conn, parent_id: int, rows: list[tuple]):
 
 def fetch_orphan_bom_rows(conn, parent_id: int) -> list[dict]:
     rows = conn.execute(
-        "SELECT child_type, child_id, child_name, qty FROM bom WHERE parent_id=?",
+        "SELECT child_type, child_id, child_name, qty, COALESCE(waste_pct,0) as waste_pct "
+        "FROM bom WHERE parent_id=?",
         (parent_id,)
     ).fetchall()
 
@@ -161,6 +171,7 @@ def fetch_orphan_bom_rows(conn, parent_id: int) -> list[dict]:
                 "child_id":   cid,
                 "child_name": row["child_name"],
                 "qty":        row["qty"],
+                "waste_pct":  row["waste_pct"],
             })
     return orphans
 
