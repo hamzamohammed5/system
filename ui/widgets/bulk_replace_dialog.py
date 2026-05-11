@@ -6,7 +6,11 @@ ui/widgets/bulk_replace_dialog.py
 الوظيفة:
   - تعرض كل المنتجات التي تحتوي على العنصر المحدد
   - تتيح: ① إحلال العنصر بآخر  ② تعديل الكمية  ③ الاثنين معاً
-  - تتيح تصفية المنتجات بالتصنيف أو اختيار يدوي
+
+التقسيم الداخلي:
+  bulk_replace_helpers.py        → ProductRow + دوال مساعدة
+  bulk_replace_products_panel.py → _ProductsPanel (لوحة المنتجات)
+  bulk_replace_dialog.py         → BulkReplaceDialog (الـ Dialog)
 
 الاستخدام:
     from ui.widgets.bulk_replace_dialog import BulkReplaceDialog
@@ -15,10 +19,10 @@ ui/widgets/bulk_replace_dialog.py
 """
 
 from PyQt5.QtWidgets import (
-    QDialog, QVBoxLayout, QHBoxLayout, QFormLayout,
+    QDialog, QVBoxLayout, QHBoxLayout,
     QLabel, QComboBox, QDoubleSpinBox, QPushButton,
-    QCheckBox, QScrollArea, QWidget, QFrame,
-    QMessageBox, QRadioButton, QGroupBox,
+    QCheckBox, QFrame, QMessageBox,
+    QRadioButton, QGroupBox,
 )
 from PyQt5.QtCore import Qt
 from PyQt5.QtGui  import QColor, QFont
@@ -26,10 +30,8 @@ from PyQt5.QtGui  import QColor, QFont
 from db.items_repo  import fetch_item, replace_bom, fetch_bom
 from ui.events      import bus
 
-from .bulk_replace_helpers import (
-    get_element_name, fetch_candidates,
-    fetch_affected_products, ProductRow,
-)
+from .bulk_replace_helpers       import get_element_name, fetch_candidates
+from .bulk_replace_products_panel import _ProductsPanel
 
 
 class BulkReplaceDialog(QDialog):
@@ -43,16 +45,11 @@ class BulkReplaceDialog(QDialog):
         self.child_id   = child_id
         self.child_name = child_name or get_element_name(conn, child_type, child_id)
 
-        self._all_products  = []
-        self._product_rows  = []
-        self._filter_cat_id = None
-
         self.setWindowTitle("🔄  استبدال / تعديل شامل")
         self.setMinimumSize(750, 620)
         self.setModal(True)
         self.setLayoutDirection(Qt.RightToLeft)
         self._build()
-        self._load_products()
         self._load_candidates()
 
     # ══════════════════════════════════════════════════════
@@ -65,14 +62,24 @@ class BulkReplaceDialog(QDialog):
         root.setContentsMargins(0, 0, 0, 0)
 
         root.addWidget(self._build_header())
+
         body = QWidget()
         body.setStyleSheet("background: #f5f7fa;")
         body_lay = QVBoxLayout(body)
         body_lay.setContentsMargins(16, 14, 16, 14)
         body_lay.setSpacing(12)
+
         body_lay.addWidget(self._build_operation_section())
-        body_lay.addWidget(self._build_products_section(), stretch=1)
-        body_lay.addWidget(self._build_quick_bar())
+
+        # ── لوحة المنتجات ──
+        self._products_panel = _ProductsPanel(
+            self.conn, self.child_type, self.child_id
+        )
+        body_lay.addWidget(self._products_panel, stretch=1)
+
+        # تحديث زر التطبيق حسب وجود منتجات
+        self._update_apply_btn_state()
+
         body_lay.addLayout(self._build_action_buttons())
         root.addWidget(body, stretch=1)
 
@@ -142,6 +149,7 @@ class BulkReplaceDialog(QDialog):
             "QFrame { background:#f8fbff; border:1px solid #bbdefb;"
             "border-radius:6px; padding:4px; }"
         )
+        from PyQt5.QtWidgets import QFormLayout
         rf_lay = QFormLayout(self._replace_frame)
         rf_lay.setSpacing(8)
         rf_lay.setLabelAlignment(Qt.AlignRight)
@@ -178,101 +186,6 @@ class BulkReplaceDialog(QDialog):
             rdo.toggled.connect(self._update_op_ui)
         self._update_op_ui()
         return grp
-
-    def _update_op_ui(self):
-        show_replace = self._rdo_replace.isChecked() or self._rdo_both.isChecked()
-        self.cmb_replacement.setEnabled(show_replace)
-        if self._rdo_qty.isChecked():
-            self._replace_frame.setStyleSheet(
-                "QFrame { background:#f5f5f5; border:1px solid #e0e0e0;"
-                "border-radius:6px; padding:4px; }"
-            )
-        else:
-            self._replace_frame.setStyleSheet(
-                "QFrame { background:#f8fbff; border:1px solid #bbdefb;"
-                "border-radius:6px; padding:4px; }"
-            )
-
-    def _build_products_section(self) -> QWidget:
-        container = QWidget()
-        lay = QVBoxLayout(container)
-        lay.setContentsMargins(0, 0, 0, 0)
-        lay.setSpacing(8)
-
-        filter_row = QHBoxLayout()
-        filter_row.addWidget(QLabel("🏷  فلتر بالتصنيف:"))
-        self.cmb_cat_filter = QComboBox()
-        self.cmb_cat_filter.setMinimumHeight(30)
-        self.cmb_cat_filter.setFixedWidth(200)
-        self.cmb_cat_filter.addItem("— الكل —", None)
-        self._fill_category_filter()
-        self.cmb_cat_filter.currentIndexChanged.connect(self._apply_filter)
-
-        self.lbl_count = QLabel()
-        self.lbl_count.setStyleSheet(
-            "color:#1565c0; font-weight:bold; font-size:11px;"
-        )
-        filter_row.addWidget(self.cmb_cat_filter)
-        filter_row.addSpacing(16)
-        filter_row.addWidget(self.lbl_count)
-        filter_row.addStretch()
-        lay.addLayout(filter_row)
-
-        self._scroll_content = QWidget()
-        self._scroll_content.setStyleSheet("background: transparent;")
-        self._rows_layout = QVBoxLayout(self._scroll_content)
-        self._rows_layout.setSpacing(4)
-        self._rows_layout.setContentsMargins(0, 0, 4, 0)
-        self._rows_layout.addStretch()
-
-        scroll = QScrollArea()
-        scroll.setWidgetResizable(True)
-        scroll.setWidget(self._scroll_content)
-        scroll.setMinimumHeight(200)
-        scroll.setStyleSheet("""
-            QScrollArea {
-                border: 1px solid #e0e0e0;
-                border-radius: 8px;
-                background: #f9f9f9;
-            }
-        """)
-        lay.addWidget(scroll, stretch=1)
-        return container
-
-    def _build_quick_bar(self) -> QFrame:
-        bar = QFrame()
-        bar.setStyleSheet(
-            "QFrame { background:white; border:1px solid #e0e0e0;"
-            "border-radius:6px; padding:2px; }"
-        )
-        lay = QHBoxLayout(bar)
-        lay.setContentsMargins(8, 4, 8, 4)
-        lay.setSpacing(8)
-
-        lbl = QLabel("تحديد سريع:")
-        lbl.setStyleSheet("font-size:11px; color:#555;")
-        _style = (
-            "QPushButton { background:#f5f5f5; border:1px solid #ddd;"
-            "border-radius:4px; padding:2px 10px; font-size:11px; }"
-            "QPushButton:hover { background:#e3f2fd; border-color:#90caf9; }"
-        )
-        btn_all  = QPushButton("✅ الكل")
-        btn_none = QPushButton("☐ لا شيء")
-        btn_inv  = QPushButton("⇄ عكس")
-        for btn in (btn_all, btn_none, btn_inv):
-            btn.setMinimumHeight(26)
-            btn.setStyleSheet(_style)
-
-        btn_all.clicked.connect(lambda: self._select_all(True))
-        btn_none.clicked.connect(lambda: self._select_all(False))
-        btn_inv.clicked.connect(self._invert_selection)
-
-        lay.addWidget(lbl)
-        lay.addWidget(btn_all)
-        lay.addWidget(btn_none)
-        lay.addWidget(btn_inv)
-        lay.addStretch()
-        return bar
 
     def _build_action_buttons(self) -> QHBoxLayout:
         row = QHBoxLayout()
@@ -311,38 +224,6 @@ class BulkReplaceDialog(QDialog):
     # تحميل البيانات
     # ══════════════════════════════════════════════════════
 
-    def _load_products(self):
-        self._all_products = fetch_affected_products(
-            self.conn, self.child_type, self.child_id
-        )
-        self._rebuild_rows(self._all_products)
-
-    def _rebuild_rows(self, products: list):
-        # احذف الصفوف القديمة
-        while self._rows_layout.count() > 1:
-            item = self._rows_layout.takeAt(0)
-            if item and item.widget():
-                item.widget().deleteLater()
-        self._product_rows.clear()
-
-        if not products:
-            lbl = QLabel("⚠️  لا توجد منتجات مرتبطة بهذا العنصر")
-            lbl.setAlignment(Qt.AlignCenter)
-            lbl.setStyleSheet("color:#999; font-size:12px; padding:20px;")
-            self._rows_layout.insertWidget(0, lbl)
-            self.btn_apply.setEnabled(False)
-            self._update_count()
-            return
-
-        self.btn_apply.setEnabled(True)
-        for prod in products:
-            row = ProductRow(prod)
-            self._product_rows.append(row)
-            self._rows_layout.insertWidget(
-                self._rows_layout.count() - 1, row
-            )
-        self._update_count()
-
     def _load_candidates(self):
         """يملأ combo الاستبدال بالعناصر البديلة مجمّعة بالتصنيف."""
         candidates = fetch_candidates(self.conn, self.child_type, self.child_id)
@@ -354,7 +235,7 @@ class BulkReplaceDialog(QDialog):
             if cat_name != last_cat:
                 sep_text = f"─── {cat_name or 'بدون تصنيف'} ───"
                 self.cmb_replacement.addItem(sep_text, "__sep__")
-                idx = self.cmb_replacement.count() - 1
+                idx   = self.cmb_replacement.count() - 1
                 model = self.cmb_replacement.model()
                 item  = model.item(idx)
                 if item:
@@ -362,9 +243,8 @@ class BulkReplaceDialog(QDialog):
                     item.setFlags(
                         item.flags() & ~_Qt.ItemIsEnabled & ~_Qt.ItemIsSelectable
                     )
-                    from PyQt5.QtGui import QColor as _QColor, QFont as _QFont
-                    item.setForeground(_QColor("#78909c"))
-                    f = _QFont(); f.setBold(True)
+                    item.setForeground(QColor("#78909c"))
+                    f = QFont(); f.setBold(True)
                     f.setPointSize(f.pointSize() - 1)
                     item.setFont(f)
                 last_cat = cat_name
@@ -378,49 +258,33 @@ class BulkReplaceDialog(QDialog):
             self._rdo_replace.setEnabled(False)
             self._rdo_both.setEnabled(False)
 
-    def _fill_category_filter(self):
-        seen_cats: dict = {}
-        for prod in self._all_products:
-            cid   = prod["category_id"]
-            cname = prod["category_name"]
-            if cid not in seen_cats:
-                seen_cats[cid] = cname
-        for cid, cname in sorted(seen_cats.items(), key=lambda x: x[1] or ""):
-            self.cmb_cat_filter.addItem(cname, cid)
-
     # ══════════════════════════════════════════════════════
-    # الفلتر والتحديد
+    # منطق UI
     # ══════════════════════════════════════════════════════
 
-    def _apply_filter(self):
-        cat_id = self.cmb_cat_filter.currentData()
-        if cat_id is None:
-            filtered = self._all_products
+    def _update_op_ui(self):
+        show_replace = self._rdo_replace.isChecked() or self._rdo_both.isChecked()
+        self.cmb_replacement.setEnabled(show_replace)
+        if self._rdo_qty.isChecked():
+            self._replace_frame.setStyleSheet(
+                "QFrame { background:#f5f5f5; border:1px solid #e0e0e0;"
+                "border-radius:6px; padding:4px; }"
+            )
         else:
-            filtered = [
-                p for p in self._all_products if p["category_id"] == cat_id
-            ]
-        self._rebuild_rows(filtered)
+            self._replace_frame.setStyleSheet(
+                "QFrame { background:#f8fbff; border:1px solid #bbdefb;"
+                "border-radius:6px; padding:4px; }"
+            )
 
-    def _select_all(self, val: bool):
-        for row in self._product_rows:
-            row.set_selected(val)
-
-    def _invert_selection(self):
-        for row in self._product_rows:
-            row.set_selected(not row.is_selected)
-
-    def _update_count(self):
-        total    = len(self._product_rows)
-        selected = sum(1 for r in self._product_rows if r.is_selected)
-        self.lbl_count.setText(f"إجمالي: {total}  │  محدد: {selected}")
+    def _update_apply_btn_state(self):
+        self.btn_apply.setEnabled(self._products_panel.has_products())
 
     # ══════════════════════════════════════════════════════
     # تطبيق التعديل
     # ══════════════════════════════════════════════════════
 
     def _apply(self):
-        selected_rows = [r for r in self._product_rows if r.is_selected]
+        selected_rows = self._products_panel.get_selected_rows()
         if not selected_rows:
             QMessageBox.warning(self, "تنبيه", "اختر منتجاً واحداً على الأقل")
             return
@@ -462,7 +326,7 @@ class BulkReplaceDialog(QDialog):
         ) != QMessageBox.Yes:
             return
 
-        errors = []
+        errors  = []
         updated = 0
 
         for prod_row in selected_rows:
@@ -506,7 +370,4 @@ class BulkReplaceDialog(QDialog):
         if do_replace:
             self.accept()
         else:
-            self._all_products = fetch_affected_products(
-                self.conn, self.child_type, self.child_id
-            )
-            self._rebuild_rows(self._all_products)
+            self._products_panel.reload()
