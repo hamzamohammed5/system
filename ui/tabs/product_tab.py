@@ -151,10 +151,11 @@ class _FormPanel(QWidget):
                 lbl.setFixedWidth(w)
             hlay.addWidget(lbl, stretch=stretch)
 
-        _hdr("النوع",  150)
-        _hdr("العنصر", stretch=3)
-        _hdr("الكمية", 80)
-        _hdr("",       32)
+        _hdr("النوع",    150)
+        _hdr("العنصر",   stretch=3)
+        _hdr("الكمية",   80)
+        _hdr("الهادر %", 90)   # ← عنوان جديد
+        _hdr("",         32)
         root.addWidget(headers)
 
         self.rows_container = QWidget()
@@ -172,13 +173,18 @@ class _FormPanel(QWidget):
 
         self._add_row()
 
+    # ══════════════════════════════════════════════════════
+    # التعديل 1: إضافة waste_pct لـ _add_row
+    # ══════════════════════════════════════════════════════
+
     def _add_row(self, child_type="raw", child_id=None, qty=1.0,
-                 orphan_name: str | None = None):
+                 orphan_name: str | None = None, waste_pct: float = 0.0):
         row = ComponentRow(
             catalog_fn=self._catalog_fn,
             child_type=child_type,
             child_id=child_id,
-            qty=qty
+            qty=qty,
+            waste_pct=waste_pct,          # ← تمرير waste_pct
         )
         if row.is_orphan() and orphan_name:
             row.set_orphan_name(orphan_name)
@@ -209,6 +215,10 @@ class _FormPanel(QWidget):
             if item and item.widget():
                 item.widget().deleteLater()
 
+    # ══════════════════════════════════════════════════════
+    # التعديل 2: تحميل waste_pct من BOM عند التعديل
+    # ══════════════════════════════════════════════════════
+
     def load_product(self, pid: int):
         item = fetch_item(self.conn, pid)
         if not item:
@@ -222,10 +232,16 @@ class _FormPanel(QWidget):
             (o["child_type"], o["child_id"]): o["child_name"]
             for o in orphans_raw
         }
-        for child_type, child_id, qty in (bom or []):
+        # ← فك الـ tuple مع waste_pct (العمود الرابع)
+        for child_type, child_id, qty, waste_pct in (bom or []):
             o_name = orphan_names.get((child_type, child_id))
-            self._add_row(child_type=child_type, child_id=child_id,
-                          qty=qty, orphan_name=o_name)
+            self._add_row(
+                child_type=child_type,
+                child_id=child_id,
+                qty=qty,
+                orphan_name=o_name,
+                waste_pct=float(waste_pct) if waste_pct else 0.0,  # ← تمرير waste_pct
+            )
         if not bom:
             self._add_row()
         n = len(orphan_names)
@@ -243,6 +259,10 @@ class _FormPanel(QWidget):
         self._add_row()
         self.exit_edit_mode("─── منتج جديد ───")
 
+    # ══════════════════════════════════════════════════════
+    # التعديل 3: حفظ waste_pct في BOM
+    # ══════════════════════════════════════════════════════
+
     def save(self):
         name = self.inp_name.text().strip()
         if not name:
@@ -255,12 +275,13 @@ class _FormPanel(QWidget):
         if self.is_editing:
             update_item(self.conn, self._editing_id, name, 0,
                         category_id=self.cmb_category.get_category())
-            replace_bom(self.conn, self._editing_id, rows)
+            replace_bom(self.conn, self._editing_id, rows)   # rows = (ct, cid, qty, waste_pct)
         else:
             pid = insert_item(self.conn, name, self.product_type, 0,
                             category_id=self.cmb_category.get_category())
-            for ct, cid, qty, _raw_total_qty in rows:
-                insert_bom_row(self.conn, pid, ct, cid, qty)
+            # ← استخدام waste_pct (العنصر الرابع) عند الإدراج
+            for ct, cid, qty, waste_pct in rows:
+                insert_bom_row(self.conn, pid, ct, cid, qty, waste_pct)
         self.conn.commit()
         self.reset()
         QTimer.singleShot(0, bus.data_changed.emit)
