@@ -9,8 +9,8 @@ ui/tabs/pricing_section.py
 from PyQt5.QtWidgets import QWidget, QVBoxLayout, QTabWidget, QLabel
 from PyQt5.QtCore    import Qt
 
-from ui.tabs.pricing_tab import PricingTab
-from ui.tabs.offers import OffersTab
+from ui.tabs.pricing.pricing_tab import PricingTab
+from ui.tabs.pricing.offers import OffersTab
 
 _TAB_STYLE = """
     QTabWidget::pane {

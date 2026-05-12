@@ -19,8 +19,8 @@ from PyQt5.QtCore import Qt
 
 from ui.tabs.costing_section  import CostingSection
 from ui.tabs.pricing_section  import PricingSection
-from ui.tabs.accounting_tab   import AccountingTab
-from ui.tabs.inventory_tab    import InventoryTab
+from ui.tabs.accounting_section   import AccountingTab
+from ui.tabs.inventory_section    import InventoryTab
 from ui.settings_dialog       import SettingsDialog
 
 
