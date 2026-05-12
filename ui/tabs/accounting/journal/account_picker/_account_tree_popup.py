@@ -18,7 +18,7 @@ from db.accounting_repo import (
     get_normal_balance,
 )
 from db.accounting_schema import TYPE_AR, EQUITY_TYPES
-from ..helpers import TYPE_COLORS
+from ...helpers import TYPE_COLORS
 
 _TYPE_ORDER = ["asset", "liability", "capital", "drawings", "revenue", "expense"]
 
