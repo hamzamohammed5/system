@@ -1,5 +1,5 @@
 """
-ui/tabs/machine_tab.py
+ui/tabs/costing/machine_tab.py
 """
 
 from PyQt5.QtCore    import Qt

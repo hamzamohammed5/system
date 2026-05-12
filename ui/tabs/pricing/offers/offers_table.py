@@ -1,5 +1,5 @@
 """
-ui/tabs/offers/offers_table.py
+ui/tabs/pricing/offers/offers_table.py
 ================================
 _OffersTable — جدول العروض المحفوظة مع فلتر وأزرار تعديل/حذف.
 

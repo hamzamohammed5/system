@@ -1,5 +1,5 @@
 """
-ui/tabs/offers/offer_item_row.py
+ui/tabs/pricing/offers/offer_item_row.py
 =================================
 _OfferItemRow — صف منتج واحد داخل فورم العرض.
 

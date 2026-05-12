@@ -1,5 +1,5 @@
 """
-db/accounting_journal_repo.py
+db/accounting/accounting_journal_repo.py
 ==============================
 عمليات CRUD لجداول journal_entries و journal_lines.
 """

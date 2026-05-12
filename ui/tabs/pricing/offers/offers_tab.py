@@ -1,5 +1,5 @@
 """
-ui/tabs/offers/offers_tab.py
+ui/tabs/pricing/offers/offers_tab.py
 ==============================
 OffersTab — التبويب الرئيسي للعروض.
 

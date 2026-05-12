@@ -1,5 +1,5 @@
 """
-ui/tabs/inventory_report_tab.py
+ui/tabs/inventory/inventory_report_tab.py
 ================================
 تقرير المخزن وعرض حركات صنف محدد.
 

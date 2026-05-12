@@ -1,5 +1,5 @@
 """
-db/accounting_inventory_repo.py
+db/accounting/accounting_inventory_repo.py
 ================================
 عملية شراء مخزن مع قيد محاسبي تلقائي — ربط inventory بـ accounting.
 """

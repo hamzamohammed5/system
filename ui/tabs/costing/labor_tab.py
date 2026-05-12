@@ -1,5 +1,5 @@
 """
-ui/tabs/labor_tab.py
+ui/tabs/costing/labor_tab.py
 """
 
 from PyQt5.QtCore    import Qt

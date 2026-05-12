@@ -1,5 +1,5 @@
 """
-db/accounting_schema_seed.py
+db/accounting/accounting_schema_seed.py
 ==============================
 البيانات الافتراضية للحسابات — تُدرج مرة واحدة عند إنشاء قاعدة بيانات جديدة.
 """

@@ -1,5 +1,5 @@
 """
-ui/tabs/inventory_inbound_tab.py
+ui/tabs/inventory/inventory_inbound_tab.py
 ================================
 تبويب حركة الوارد (شراء / استلام مخزن) مع قيد محاسبي تلقائي.
 

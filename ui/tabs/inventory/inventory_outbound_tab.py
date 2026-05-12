@@ -1,5 +1,5 @@
 """
-ui/tabs/inventory_outbound_tab.py
+ui/tabs/inventory/inventory_outbound_tab.py
 =================================
 تبويب حركة الصادر (صرف / استهلاك مخزن).
 

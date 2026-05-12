@@ -1,5 +1,5 @@
 """
-ui/tabs/offers/offer_details.py
+ui/tabs/pricing/offers/offer_details.py
 ================================
 _OfferDetails — لوحة عرض تفاصيل العرض المختار.
 

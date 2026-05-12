@@ -1,5 +1,5 @@
 """
-db/accounting_accounts_repo.py
+db/accounting/accounting_accounts_repo.py
 ===============================
 عمليات CRUD لجدول accounts وتصنيفاتها (account_groups).
 """

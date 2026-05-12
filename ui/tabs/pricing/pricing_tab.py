@@ -1,5 +1,5 @@
 """
-ui/tabs/pricing_tab.py — مع عرض التكلفة والربح
+ui/tabs/pricing/pricing_tab.py — مع عرض التكلفة والربح
 """
 
 from PyQt5.QtWidgets import (

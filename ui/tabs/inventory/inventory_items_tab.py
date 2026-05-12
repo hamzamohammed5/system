@@ -1,5 +1,5 @@
 """
-ui/tabs/inventory_items_tab.py
+ui/tabs/inventory/inventory_items_tab.py
 ==============================
 فورم وجدول أصناف المخزن.
 

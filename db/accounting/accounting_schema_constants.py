@@ -1,5 +1,5 @@
 """
-db/accounting_schema_constants.py
+db/accounting/accounting_schema_constants.py
 ===================================
 ثوابت أنواع الحسابات المستخدمة في كل أنحاء التطبيق.
 """

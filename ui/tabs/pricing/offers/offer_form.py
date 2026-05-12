@@ -1,5 +1,5 @@
 """
-ui/tabs/offers/offer_form.py
+ui/tabs/pricing/offers/offer_form.py
 =============================
 _OfferForm — فورم إنشاء / تعديل العرض الكامل.
 

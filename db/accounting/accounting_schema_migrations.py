@@ -1,5 +1,5 @@
 """
-db/accounting_schema_migrations.py
+db/accounting/accounting_schema_migrations.py
 ====================================
 Migration helpers لقاعدة بيانات الحسابات.
 """

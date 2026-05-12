@@ -1,5 +1,5 @@
 """
-db/accounting_statements_repo.py
+db/accounting/accounting_statements_repo.py
 =================================
 القوائم المالية: ميزان المراجعة، قائمة الدخل، الميزانية، حقوق الملكية.
 """
