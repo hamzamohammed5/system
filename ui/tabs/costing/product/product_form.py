@@ -2,6 +2,7 @@
 ui/tabs/costing/product/product_form.py
 ================================
 _FormPanel — فورم إنشاء / تعديل المنتج (اسم + مكونات BOM).
+مع دعم variant_id للخامات.
 """
 
 from PyQt5.QtWidgets import (
@@ -72,7 +73,7 @@ class _FormPanel(QWidget):
         top.addWidget(self.btn_cancel)
         root.addLayout(top)
 
-        # رؤوس الأعمدة
+        # رؤوس الأعمدة — أضفنا "وحدة الإنتاج"
         headers = QWidget()
         hlay = QHBoxLayout(headers)
         hlay.setContentsMargins(0, 0, 0, 0)
@@ -88,11 +89,13 @@ class _FormPanel(QWidget):
                 lbl.setFixedWidth(w)
             hlay.addWidget(lbl, stretch=stretch)
 
-        _hdr("النوع",    150)
-        _hdr("العنصر",   stretch=3)
-        _hdr("الكمية",   80)
-        _hdr("الهادر %", 90)
-        _hdr("",         32)
+        _hdr("النوع",        150)
+        _hdr("العنصر",       stretch=3)
+        _hdr("وحدة الإنتاج", 130)   # ← جديد
+        _hdr("تكلفة/قطعة",  80)    # ← جديد (label cost)
+        _hdr("الكمية",       80)
+        _hdr("الهادر %",     90)
+        _hdr("",             32)
         root.addWidget(headers)
 
         self.rows_container = QWidget()
@@ -111,13 +114,15 @@ class _FormPanel(QWidget):
         self._add_row()
 
     def _add_row(self, child_type="raw", child_id=None, qty=1.0,
-                 orphan_name: str = None, waste_pct: float = 0.0):
+                 orphan_name: str = None, waste_pct: float = 0.0,
+                 variant_id: int = None):
         row = ComponentRow(
             catalog_fn=self._catalog_fn,
             child_type=child_type,
             child_id=child_id,
             qty=qty,
             waste_pct=waste_pct,
+            variant_id=variant_id,
         )
         if row.is_orphan() and orphan_name:
             row.set_orphan_name(orphan_name)
@@ -130,6 +135,10 @@ class _FormPanel(QWidget):
         widget.deleteLater()
 
     def collect_rows(self):
+        """
+        يجمع صفوف BOM.
+        كل صف: (child_type, child_id, qty, waste_pct, variant_id)
+        """
         result = []
         for i in range(self.rows_layout.count()):
             item = self.rows_layout.itemAt(i)
@@ -139,6 +148,9 @@ class _FormPanel(QWidget):
             if isinstance(w, ComponentRow):
                 val = w.get_values()
                 if val:
+                    # تأكد إن الـ tuple فيه 5 عناصر
+                    if len(val) == 4:
+                        val = val + (None,)
                     result.append(val)
         return result
 
@@ -161,14 +173,25 @@ class _FormPanel(QWidget):
             (o["child_type"], o["child_id"]): o["child_name"]
             for o in orphans_raw
         }
-        for child_type, child_id, qty, waste_pct in (bom or []):
+        for row_data in (bom or []):
+            child_type = row_data["child_type"]
+            child_id   = row_data["child_id"]
+            qty        = row_data["qty"]
+            waste_pct  = float(row_data["waste_pct"]) if row_data["waste_pct"] else 0.0
+            # variant_id
+            try:
+                variant_id = row_data["variant_id"]
+            except (IndexError, KeyError):
+                variant_id = None
+
             o_name = orphan_names.get((child_type, child_id))
             self._add_row(
                 child_type=child_type,
                 child_id=child_id,
                 qty=qty,
                 orphan_name=o_name,
-                waste_pct=float(waste_pct) if waste_pct else 0.0,
+                waste_pct=waste_pct,
+                variant_id=variant_id,
             )
         if not bom:
             self._add_row()
@@ -204,8 +227,13 @@ class _FormPanel(QWidget):
         else:
             pid = insert_item(self.conn, name, self.product_type, 0,
                               category_id=self.cmb_category.get_category())
-            for ct, cid, qty, waste_pct in rows:
-                insert_bom_row(self.conn, pid, ct, cid, qty, waste_pct)
+            for row_data in rows:
+                ct       = row_data[0]
+                cid      = row_data[1]
+                qty      = row_data[2]
+                waste_pct = row_data[3] if len(row_data) > 3 else 0.0
+                vid      = row_data[4] if len(row_data) > 4 else None
+                insert_bom_row(self.conn, pid, ct, cid, qty, waste_pct, vid)
         self.conn.commit()
         self.reset()
         QTimer.singleShot(0, bus.data_changed.emit)

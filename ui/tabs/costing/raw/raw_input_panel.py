@@ -1,18 +1,20 @@
 """
 ui/tabs/costing/raw/raw_input_panel.py
 =======================================
-_InputPanel — فورم إضافة / تعديل الخامة.
+_InputPanel — فورم إضافة / تعديل الخامة مع لوحة Variants.
 """
 
 from PyQt5.QtWidgets import (
     QWidget, QVBoxLayout, QHBoxLayout, QFormLayout,
     QLineEdit, QPushButton, QLabel, QGroupBox, QMessageBox,
+    QScrollArea,
 )
 from PyQt5.QtCore import Qt
 
 from db.items_repo import fetch_item, insert_item, update_item
 from ui.helpers import EditModeMixin, buttons_row
 from ui.widgets.category_manager import CategoryCombo
+from ui.widgets.raw_variants_panel import _RawVariantsPanel
 from ui.events import bus
 
 
@@ -36,9 +38,10 @@ class _InputPanel(QWidget, EditModeMixin):
 
     def _build(self):
         root = QVBoxLayout(self)
-        root.setSpacing(10)
+        root.setSpacing(8)
         root.setContentsMargins(12, 12, 12, 12)
 
+        # ── بيانات الخامة الأساسية ──
         grp = QGroupBox("بيانات الخامة")
         grp_layout = QVBoxLayout(grp)
         grp_layout.setSpacing(10)
@@ -71,7 +74,7 @@ class _InputPanel(QWidget, EditModeMixin):
         self.lbl_hint.setWordWrap(True)
         self._update_hint()
 
-        self.inp_price.textChanged.connect(lambda _: self._update_hint())
+        self.inp_price.textChanged.connect(lambda _: self._on_price_changed())
         self.inp_total_qty.textChanged.connect(lambda _: self._update_hint())
 
         self.cmb_category = CategoryCombo(self.conn, scope="raw")
@@ -94,7 +97,26 @@ class _InputPanel(QWidget, EditModeMixin):
         grp_layout.addLayout(buttons_row(self.btn_add, self.btn_save, self.btn_cancel))
 
         root.addWidget(grp)
+
+        # ── لوحة Variants ──
+        self._variants_panel = _RawVariantsPanel(self.conn)
+        root.addWidget(self._variants_panel)
+
         root.addStretch()
+
+    # ══════════════════════════════════════════════════════
+    # تحديث تلميح السعر
+    # ══════════════════════════════════════════════════════
+
+    def _on_price_changed(self):
+        self._update_hint()
+        # لو في خامة محددة، حدّث الـ variants panel بالسعر الجديد
+        if self._editing_id is not None:
+            try:
+                price = float(self.inp_price.text() or "0")
+                self._variants_panel.refresh_price(price)
+            except ValueError:
+                pass
 
     def _update_hint(self):
         try:
@@ -119,6 +141,10 @@ class _InputPanel(QWidget, EditModeMixin):
                 "💡 بدون كمية إجمالية: السعر المسجل = سعر الوحدة مباشرة"
             )
 
+    # ══════════════════════════════════════════════════════
+    # تحميل للتعديل
+    # ══════════════════════════════════════════════════════
+
     def load_for_edit(self, item_id: int):
         item = fetch_item(self.conn, item_id)
         if not item:
@@ -131,14 +157,31 @@ class _InputPanel(QWidget, EditModeMixin):
         self.inp_name.setFocus()
         self.enter_edit_mode(item_id, f"─── تعديل: {item['name']} ───")
 
+        # تحميل variants الخامة
+        try:
+            price = float(item["price"])
+        except (TypeError, ValueError):
+            price = 0.0
+        self._variants_panel.load_item(item_id, price)
+
+    # ══════════════════════════════════════════════════════
+    # CRUD
+    # ══════════════════════════════════════════════════════
+
     def _add(self):
         name, price, total_qty = self._collect()
         if name is None:
             return
-        insert_item(self.conn, name, "raw", price,
-                    category_id=self.cmb_category.get_category(),
-                    total_qty=total_qty)
-        self._reset()
+        new_id = insert_item(self.conn, name, "raw", price,
+                             category_id=self.cmb_category.get_category(),
+                             total_qty=total_qty)
+        # بعد الإضافة، افتح الـ variants panel على الخامة الجديدة
+        self._variants_panel.load_item(new_id, price)
+        self.enter_edit_mode(new_id, f"─── أضف وحدات إنتاج لـ: {name} ───")
+        # أخفِ زر الإضافة وأظهر حفظ/إلغاء
+        self.btn_add.setVisible(False)
+        self.btn_save.setVisible(True)
+        self.btn_cancel.setVisible(True)
         bus.data_changed.emit()
 
     def _save_edit(self):
@@ -185,4 +228,5 @@ class _InputPanel(QWidget, EditModeMixin):
         self.inp_total_qty.clear()
         self.cmb_category.setCurrentIndex(0)
         self._update_hint()
+        self._variants_panel.clear()
         self.exit_edit_mode("─── إضافة خامة جديدة ───")

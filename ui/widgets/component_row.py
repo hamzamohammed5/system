@@ -1,8 +1,9 @@
 """
-ui/widgets/component_row.py — مع حقل نسبة الهادر (waste_pct)
+ui/widgets/component_row.py — مع حقل نسبة الهادر (waste_pct) واختيار Variant للخامات
 
-التغيير: _SearchableCombo و _build_grouped_items انتقلوا لـ searchable_combo.py
-         هنا بنستورد منهم بدل التكرار.
+التغيير: إضافة QComboBox لاختيار variant الخامة (وحدة الإنتاج)
+         لما نختار خامة بيظهر combo بالـ variants المتاحة
+         لو مفيش variants يتخفى الـ combo
 """
 
 from PyQt5.QtWidgets import (
@@ -12,7 +13,6 @@ from PyQt5.QtWidgets import (
 from PyQt5.QtCore import pyqtSignal, Qt, QTimer
 from PyQt5.QtGui  import QColor
 
-# ✅ استيراد من الملف المنفصل بدل التكرار
 from ui.widgets.searchable_combo import _SearchableCombo, _build_grouped_items
 from ui.events import bus
 
@@ -34,10 +34,6 @@ _STYLE_ORPHAN = """
 """
 
 
-# ══════════════════════════════════════════════════════════
-# ComponentRow — مع حقل waste_pct
-# ══════════════════════════════════════════════════════════
-
 class ComponentRow(QWidget):
     removed = pyqtSignal(QWidget)
 
@@ -46,6 +42,7 @@ class ComponentRow(QWidget):
                  waste_pct: float = 0.0,
                  raw_total_qty: float = None,
                  show_total_qty: bool = False,
+                 variant_id: int = None,
                  parent=None):
         super().__init__(parent)
         self._catalog_fn     = catalog_fn
@@ -58,8 +55,9 @@ class ComponentRow(QWidget):
         self._pinned_type      = child_type
         self._pinned_id        = child_id
         self._pinned_total_qty = raw_total_qty
+        self._pinned_variant   = variant_id
 
-        self._build(child_type, child_id, qty, raw_total_qty, waste_pct)
+        self._build(child_type, child_id, qty, raw_total_qty, waste_pct, variant_id)
         QTimer.singleShot(0, self._connect_signal)
 
     def _connect_signal(self):
@@ -71,7 +69,7 @@ class ComponentRow(QWidget):
     # بناء الواجهة
     # ══════════════════════════════════════════════════════
 
-    def _build(self, child_type, child_id, qty, raw_total_qty, waste_pct=0.0):
+    def _build(self, child_type, child_id, qty, raw_total_qty, waste_pct=0.0, variant_id=None):
         layout = QHBoxLayout(self)
         layout.setContentsMargins(0, 2, 0, 2)
         layout.setSpacing(6)
@@ -87,6 +85,36 @@ class ComponentRow(QWidget):
         # ── العنصر (searchable) ──
         self._item_combo = _SearchableCombo()
         self._item_combo.item_selected.connect(self._on_item_selected)
+
+        # ── Variant الخامة ──
+        self.cmb_variant = QComboBox()
+        self.cmb_variant.setMinimumHeight(26)
+        self.cmb_variant.setMinimumWidth(130)
+        self.cmb_variant.setMaximumWidth(180)
+        self.cmb_variant.setToolTip("وحدة الإنتاج — تكلفة الوحدة = سعر الخامة ÷ عدد القطع")
+        self.cmb_variant.setStyleSheet("""
+            QComboBox {
+                background: #e8f5e9;
+                border: 1px solid #a5d6a7;
+                border-radius: 4px;
+                padding: 1px 6px;
+                font-size: 11px;
+                color: #2e7d32;
+            }
+            QComboBox:focus { border-color: #2e7d32; }
+            QComboBox::drop-down { border: none; }
+        """)
+        self.cmb_variant.setVisible(False)  # مخفي افتراضياً
+        self.cmb_variant.currentIndexChanged.connect(self._on_variant_changed)
+
+        # label الـ variant
+        self.lbl_variant_cost = QLabel()
+        self.lbl_variant_cost.setStyleSheet(
+            "font-size:10px; color:#2e7d32; font-weight:bold;"
+            "background:#f1f8e9; border:1px solid #c8e6c9;"
+            "border-radius:3px; padding:1px 5px;"
+        )
+        self.lbl_variant_cost.setVisible(False)
 
         # ── الكمية المستهلكة ──
         self.qty_edit = QLineEdit()
@@ -107,8 +135,7 @@ class ComponentRow(QWidget):
         self.waste_spin.setMinimumHeight(26)
         self.waste_spin.setToolTip(
             "نسبة الهادر %\n"
-            "مثال: 10% → الكمية الفعلية = الكمية × 1.10\n"
-            "يعني لو محتاج 10م وهادر 10%، ستشتري 11م"
+            "مثال: 10% → الكمية الفعلية = الكمية × 1.10"
         )
         self.waste_spin.setStyleSheet("""
             QDoubleSpinBox {
@@ -125,7 +152,6 @@ class ComponentRow(QWidget):
             }
         """)
 
-        # label الهادر
         self.lbl_waste = QLabel("⚠️")
         self.lbl_waste.setFixedWidth(18)
         self.lbl_waste.setStyleSheet("color: #e65100; font-size: 11px; background:transparent;")
@@ -140,9 +166,8 @@ class ComponentRow(QWidget):
         self.total_qty_edit.setMinimumWidth(60)
         self.total_qty_edit.setMaximumWidth(90)
         self.total_qty_edit.setToolTip(
-            "الكمية الكلية للخامة (مثلاً طول البكرة).\n"
-            "سعر الوحدة = السعر الكلي ÷ هذا الرقم.\n"
-            "اتركه فارغاً لو السعر هو سعر الوحدة مباشرة."
+            "الكمية الكلية للخامة.\n"
+            "سعر الوحدة = السعر الكلي ÷ هذا الرقم."
         )
         if raw_total_qty is not None:
             self.total_qty_edit.setText(str(raw_total_qty))
@@ -159,6 +184,8 @@ class ComponentRow(QWidget):
 
         layout.addWidget(self.cmb_type)
         layout.addWidget(self._item_combo, stretch=1)
+        layout.addWidget(self.cmb_variant)
+        layout.addWidget(self.lbl_variant_cost)
         layout.addWidget(self.qty_edit)
         layout.addWidget(self.lbl_waste)
         layout.addWidget(self.waste_spin)
@@ -183,6 +210,132 @@ class ComponentRow(QWidget):
 
         self.cmb_type.currentIndexChanged.connect(self._on_type_changed)
 
+        # تحميل variants لو في item محدد
+        if child_type == "raw" and child_id is not None:
+            QTimer.singleShot(50, lambda: self._load_variants(child_id, variant_id))
+
+    # ══════════════════════════════════════════════════════
+    # Variants — تحميل وعرض
+    # ══════════════════════════════════════════════════════
+
+    def _load_variants(self, item_id: int, selected_variant_id: int = None):
+        """يحمّل variants الخامة المختارة في الـ combo."""
+        if item_id is None:
+            self._hide_variants()
+            return
+
+        try:
+            from db.raw_variants_repo import fetch_variants_for_item
+            variants = fetch_variants_for_item(self._get_conn(), item_id)
+        except Exception:
+            self._hide_variants()
+            return
+
+        if not variants:
+            self._hide_variants()
+            return
+
+        # احسب سعر الخامة
+        item_price = self._get_item_price(item_id)
+
+        self.cmb_variant.blockSignals(True)
+        self.cmb_variant.clear()
+        self.cmb_variant.addItem("─ بدون variant ─", None)
+
+        for var in variants:
+            pieces = float(var["pieces"])
+            if pieces > 0 and item_price > 0:
+                unit_cost = item_price / pieces
+                label = f"📐 {var['name']}  ({pieces:.4g} قطعة → {unit_cost:.3f} ج/قطعة)"
+            else:
+                label = f"📐 {var['name']}  ({var['pieces']:.4g} قطعة)"
+            self.cmb_variant.addItem(label, var["id"])
+
+        # استعادة الاختيار السابق
+        if selected_variant_id is not None:
+            for i in range(self.cmb_variant.count()):
+                if self.cmb_variant.itemData(i) == selected_variant_id:
+                    self.cmb_variant.setCurrentIndex(i)
+                    break
+
+        self.cmb_variant.blockSignals(False)
+        self.cmb_variant.setVisible(True)
+        self._update_variant_cost_label()
+
+    def _hide_variants(self):
+        self.cmb_variant.setVisible(False)
+        self.lbl_variant_cost.setVisible(False)
+
+    def _on_variant_changed(self):
+        self._update_variant_cost_label()
+
+    def _update_variant_cost_label(self):
+        """يحدّث label تكلفة الوحدة بعد اختيار variant."""
+        variant_id = self.cmb_variant.currentData()
+        if variant_id is None:
+            self.lbl_variant_cost.setVisible(False)
+            return
+
+        item_id = self._get_current_raw_id()
+        if item_id is None:
+            self.lbl_variant_cost.setVisible(False)
+            return
+
+        try:
+            from db.raw_variants_repo import fetch_variant
+            var = fetch_variant(self._get_conn(), variant_id)
+            if not var:
+                self.lbl_variant_cost.setVisible(False)
+                return
+            item_price = self._get_item_price(item_id)
+            pieces = float(var["pieces"])
+            if pieces > 0 and item_price > 0:
+                unit_cost = item_price / pieces
+                self.lbl_variant_cost.setText(f"= {unit_cost:.3f} ج")
+                self.lbl_variant_cost.setVisible(True)
+            else:
+                self.lbl_variant_cost.setVisible(False)
+        except Exception:
+            self.lbl_variant_cost.setVisible(False)
+
+    def _get_conn(self):
+        """يجيب connection من الـ catalog_fn."""
+        try:
+            catalog = self._catalog_fn()
+            # الـ conn موجود في أول عنصر raw لو في بيانات
+            # بس الأسهل نستخدم get_connection
+            from db.connection import get_connection
+            return get_connection()
+        except Exception:
+            return None
+
+    def _get_item_price(self, item_id: int) -> float:
+        """يجيب سعر الخامة."""
+        try:
+            conn = self._get_conn()
+            if conn:
+                row = conn.execute(
+                    "SELECT price, total_qty FROM items WHERE id=?", (item_id,)
+                ).fetchone()
+                if row:
+                    price = float(row["price"])
+                    tq = row["total_qty"]
+                    if tq and float(tq) > 0:
+                        return price  # السعر الكلي (سيقسمه الـ variant على القطع)
+                    return price
+        except Exception:
+            pass
+        return 0.0
+
+    def _get_current_raw_id(self):
+        """يرجع item_id لو النوع raw."""
+        if self.cmb_type.currentData() != "raw":
+            return None
+        data = self._item_combo.current_data()
+        if data and data[0] not in ("__sep__", "__orphan__") and data[1] is not None:
+            return data[1]
+        return None
+
     # ══════════════════════════════════════════════════════
     # waste_pct — ستايل ديناميكي
     # ══════════════════════════════════════════════════════
@@ -191,7 +344,6 @@ class ComponentRow(QWidget):
         self._update_waste_style(val)
 
     def _update_waste_style(self, val: float):
-        """يغيّر لون الخلفية حسب قيمة الهادر."""
         if val > 0:
             self.lbl_waste.setVisible(True)
             if val >= 20:
@@ -213,9 +365,7 @@ class ComponentRow(QWidget):
                     color: #e65100;
                     font-weight: bold;
                 }}
-                QDoubleSpinBox:focus {{
-                    border-color: #ff8f00;
-                }}
+                QDoubleSpinBox:focus {{ border-color: #ff8f00; }}
             """)
         else:
             self.lbl_waste.setVisible(False)
@@ -361,6 +511,12 @@ class ComponentRow(QWidget):
                 self.setStyleSheet(_STYLE_NORMAL)
             self._auto_fill_total_qty()
 
+            # لو خامة، حمّل الـ variants
+            if self.cmb_type.currentData() == "raw":
+                QTimer.singleShot(50, lambda: self._load_variants(data[1]))
+            else:
+                self._hide_variants()
+
     def _on_catalog_changed(self):
         valid_types = {k for k, _ in _TYPES}
         if self._pinned_type not in valid_types:
@@ -386,11 +542,13 @@ class ComponentRow(QWidget):
             return
         self._pinned_type = new_type
         self._pinned_id   = None
+        self._pinned_variant = None
         self._clear_orphan()
         self._fill_items(new_type, selected_id=None)
         self._update_total_qty_visibility(new_type)
         if new_type != "raw":
             self.total_qty_edit.clear()
+            self._hide_variants()
 
     # ══════════════════════════════════════════════════════
     # جلب القيم
@@ -398,7 +556,7 @@ class ComponentRow(QWidget):
 
     def get_values(self) -> tuple | None:
         """
-        يرجع: (child_type, child_id, qty, waste_pct)
+        يرجع: (child_type, child_id, qty, waste_pct, variant_id)
         """
         try:
             data = self._item_combo.current_data()
@@ -411,13 +569,23 @@ class ComponentRow(QWidget):
             child_type = self.cmb_type.currentData()
             waste_pct  = self.waste_spin.value()
 
-            return child_type, child_id, qty, waste_pct
+            # variant_id — فقط لو النوع raw والـ combo ظاهر
+            variant_id = None
+            if child_type == "raw" and self.cmb_variant.isVisible():
+                variant_id = self.cmb_variant.currentData()
+
+            return child_type, child_id, qty, waste_pct, variant_id
 
         except (ValueError, TypeError):
             return None
 
     def get_waste_pct(self) -> float:
         return self.waste_spin.value()
+
+    def get_variant_id(self):
+        if self.cmb_type.currentData() == "raw" and self.cmb_variant.isVisible():
+            return self.cmb_variant.currentData()
+        return None
 
     # للتوافق مع الكود القديم
     @property
