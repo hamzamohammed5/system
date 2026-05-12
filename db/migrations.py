@@ -154,9 +154,32 @@ def run_migrations(conn):
         conn.commit()
 
     # ══ 10. عمود waste_pct في bom ═══════════════════════
-    # نسبة الهادر % — مثلاً 10 تعني 10% هادر → الكمية الفعلية = qty × (1 + 10/100)
     if not _column_exists(conn, "bom", "waste_pct"):
         conn.execute("ALTER TABLE bom ADD COLUMN waste_pct REAL NOT NULL DEFAULT 0")
+        conn.commit()
+
+    # ══ 11. جدول raw_variants ════════════════════════════
+    # variants الخامة: كل variant بيحدد عدد القطع اللي بتنتجها من الخامة
+    if not _table_exists(conn, "raw_variants"):
+        conn.execute("""
+            CREATE TABLE raw_variants (
+                id       INTEGER PRIMARY KEY AUTOINCREMENT,
+                item_id  INTEGER NOT NULL REFERENCES items(id) ON DELETE CASCADE,
+                name     TEXT    NOT NULL,
+                pieces   REAL    NOT NULL DEFAULT 1
+                    CHECK(pieces > 0),
+                notes    TEXT
+            )
+        """)
+        conn.commit()
+
+    # ══ 12. عمود variant_id في bom ══════════════════════
+    # يحفظ الـ variant المختار لكل صف خامة في الـ BOM
+    if not _column_exists(conn, "bom", "variant_id"):
+        conn.execute(
+            "ALTER TABLE bom ADD COLUMN variant_id INTEGER "
+            "REFERENCES raw_variants(id) ON DELETE SET NULL"
+        )
         conn.commit()
 
     create_offers_tables(conn)

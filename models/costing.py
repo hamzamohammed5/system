@@ -1,11 +1,7 @@
 """
-models/costing.py  — مع دعم waste_pct (نسبة الهادر)
+models/costing.py  — مع دعم waste_pct و variant_id
 =================
 Facade يُعيد تصدير الدوال الأساسية ويضيف calc_cost و calc_cost_breakdown.
-
-الملفات الفعلية:
-  costing_base.py → calc_worker_hourly_rate, raw_unit_price, effective_qty
-  costing_ops.py  → calc_labor_op_cost, calc_machine_op_cost
 """
 
 from models.costing_base import (
@@ -18,6 +14,31 @@ from models.costing_ops import (
     calc_machine_op_cost,
 )
 from db.items_repo import fetch_item, fetch_bom
+
+
+def _get_variant_id(row) -> int | None:
+    """يجيب variant_id من صف BOM بأمان."""
+    try:
+        return row["variant_id"]
+    except (IndexError, KeyError):
+        return None
+
+
+def _raw_cost_with_variant(conn, item_row, variant_id: int | None) -> float:
+    """
+    تكلفة وحدة الخامة مع مراعاة الـ variant.
+    الأولوية:
+      1. variant محدد → سعر الخامة ÷ pieces الخاصة بالـ variant
+      2. total_qty محددة → سعر ÷ total_qty  (السلوك الحالي)
+      3. غير كده → السعر مباشرة
+    """
+    if variant_id is not None:
+        var_row = conn.execute(
+            "SELECT pieces FROM raw_variants WHERE id=?", (variant_id,)
+        ).fetchone()
+        if var_row and float(var_row["pieces"]) > 0:
+            return float(item_row["price"]) / float(var_row["pieces"])
+    return raw_unit_price(item_row)
 
 
 # ══════════════════════════════════════════════════════════
@@ -44,12 +65,13 @@ def calc_cost(conn, item_id: int, _visited: set = None) -> float:
         child_id   = row["child_id"]
         qty        = row["qty"]
         waste_pct  = row["waste_pct"] if "waste_pct" in row.keys() else 0.0
+        variant_id = _get_variant_id(row)
 
         eff_qty = effective_qty(qty, waste_pct)
 
         if child_type == "raw":
             child = fetch_item(conn, child_id)
-            unit_cost = raw_unit_price(child) if child else 0.0
+            unit_cost = _raw_cost_with_variant(conn, child, variant_id) if child else 0.0
         elif child_type == "semi":
             unit_cost = calc_cost(conn, child_id, set(_visited))
         elif child_type == "labor_op":
@@ -84,11 +106,13 @@ def calc_cost_breakdown(conn, item_id: int) -> dict:
         child_id   = row["child_id"]
         qty        = row["qty"]
         waste_pct  = row["waste_pct"] if "waste_pct" in row.keys() else 0.0
+        variant_id = _get_variant_id(row)
         eff_qty    = effective_qty(qty, waste_pct)
 
         if child_type == "raw":
             child = fetch_item(conn, child_id)
-            materials += (raw_unit_price(child) if child else 0.0) * eff_qty
+            unit_cost = _raw_cost_with_variant(conn, child, variant_id) if child else 0.0
+            materials += unit_cost * eff_qty
         elif child_type == "semi":
             materials += calc_cost(conn, child_id) * eff_qty
         elif child_type == "labor_op":

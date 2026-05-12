@@ -1,9 +1,6 @@
 """
-db/items_repo.py  (النسخة المعدَّلة — مع waste_pct)
+db/items_repo.py  (مع دعم variant_id في BOM)
 ================
-التغييرات:
-  • fetch_bom يرجع waste_pct
-  • insert_bom_row / replace_bom يقبلان waste_pct
 """
 
 
@@ -65,7 +62,7 @@ def delete_item(conn, item_id: int):
 
 
 # ══════════════════════════════════════════════════════════
-# BOM — مع waste_pct
+# BOM — مع waste_pct و variant_id
 # ══════════════════════════════════════════════════════════
 
 def _resolve_name(conn, child_type: str, child_id: int) -> str | None:
@@ -88,24 +85,48 @@ def _resolve_name(conn, child_type: str, child_id: int) -> str | None:
 
 def fetch_bom(conn, parent_id: int):
     """
-    يرجع صفوف BOM مع waste_pct.
-    كل صف: (child_type, child_id, qty, waste_pct)
+    يرجع صفوف BOM مع waste_pct و variant_id.
+    كل صف: (child_type, child_id, qty, waste_pct, variant_id)
     """
-    return conn.execute(
-        "SELECT child_type, child_id, qty, COALESCE(waste_pct, 0) as waste_pct "
-        "FROM bom WHERE parent_id=? ORDER BY id",
-        (parent_id,)
-    ).fetchall()
+    # تحقق من وجود عمود variant_id
+    cols = {r["name"] for r in conn.execute("PRAGMA table_info(bom)").fetchall()}
+    if "variant_id" in cols:
+        return conn.execute(
+            "SELECT child_type, child_id, qty, "
+            "COALESCE(waste_pct, 0) as waste_pct, "
+            "variant_id "
+            "FROM bom WHERE parent_id=? ORDER BY id",
+            (parent_id,)
+        ).fetchall()
+    else:
+        # fallback بدون variant_id
+        return conn.execute(
+            "SELECT child_type, child_id, qty, "
+            "COALESCE(waste_pct, 0) as waste_pct "
+            "FROM bom WHERE parent_id=? ORDER BY id",
+            (parent_id,)
+        ).fetchall()
 
 
 def insert_bom_row(conn, parent_id: int, child_type: str, child_id: int,
-                   qty: float, waste_pct: float = 0.0):
+                   qty: float, waste_pct: float = 0.0,
+                   variant_id: int = None):
     name = _resolve_name(conn, child_type, child_id)
-    conn.execute(
-        """INSERT INTO bom (parent_id, child_type, child_id, qty, child_name, waste_pct)
-           VALUES (?, ?, ?, ?, ?, ?)""",
-        (parent_id, child_type, child_id, qty, name, waste_pct or 0.0)
-    )
+    cols = {r["name"] for r in conn.execute("PRAGMA table_info(bom)").fetchall()}
+    if "variant_id" in cols:
+        conn.execute(
+            """INSERT INTO bom
+               (parent_id, child_type, child_id, qty, child_name, waste_pct, variant_id)
+               VALUES (?, ?, ?, ?, ?, ?, ?)""",
+            (parent_id, child_type, child_id, qty, name,
+             waste_pct or 0.0, variant_id)
+        )
+    else:
+        conn.execute(
+            """INSERT INTO bom (parent_id, child_type, child_id, qty, child_name, waste_pct)
+               VALUES (?, ?, ?, ?, ?, ?)""",
+            (parent_id, child_type, child_id, qty, name, waste_pct or 0.0)
+        )
     conn.commit()
 
 
@@ -119,28 +140,43 @@ def delete_bom_row(conn, parent_id: int, child_type: str, child_id: int):
 
 def replace_bom(conn, parent_id: int, rows: list[tuple]):
     """
-    rows: list of (child_type, child_id, qty, waste_pct) or (child_type, child_id, qty)
+    rows: list of (child_type, child_id, qty, waste_pct) or
+          (child_type, child_id, qty, waste_pct, variant_id)
     """
     conn.execute("DELETE FROM bom WHERE parent_id=?", (parent_id,))
+    cols = {r["name"] for r in conn.execute("PRAGMA table_info(bom)").fetchall()}
+    has_variant = "variant_id" in cols
+
     for row in rows:
         ct, cid, qty = row[0], row[1], row[2]
-        waste_pct = float(row[3]) if len(row) > 3 and row[3] is not None else 0.0
+        waste_pct  = float(row[3]) if len(row) > 3 and row[3] is not None else 0.0
+        variant_id = int(row[4]) if len(row) > 4 and row[4] is not None else None
         name = _resolve_name(conn, ct, cid)
-        conn.execute(
-            """INSERT INTO bom (parent_id, child_type, child_id, qty, child_name, waste_pct)
-               VALUES (?, ?, ?, ?, ?, ?)""",
-            (parent_id, ct, cid, qty, name, waste_pct)
-        )
+
+        if has_variant:
+            conn.execute(
+                """INSERT INTO bom
+                   (parent_id, child_type, child_id, qty, child_name, waste_pct, variant_id)
+                   VALUES (?, ?, ?, ?, ?, ?, ?)""",
+                (parent_id, ct, cid, qty, name, waste_pct, variant_id)
+            )
+        else:
+            conn.execute(
+                """INSERT INTO bom (parent_id, child_type, child_id, qty, child_name, waste_pct)
+                   VALUES (?, ?, ?, ?, ?, ?)""",
+                (parent_id, ct, cid, qty, name, waste_pct)
+            )
     conn.commit()
 
 
 # ══════════════════════════════════════════════════════════
-# Orphans — مفيش تغيير
+# Orphans
 # ══════════════════════════════════════════════════════════
 
 def fetch_orphan_bom_rows(conn, parent_id: int) -> list[dict]:
     rows = conn.execute(
-        "SELECT child_type, child_id, child_name, qty, COALESCE(waste_pct,0) as waste_pct "
+        "SELECT child_type, child_id, child_name, qty, "
+        "COALESCE(waste_pct,0) as waste_pct "
         "FROM bom WHERE parent_id=?",
         (parent_id,)
     ).fetchall()
