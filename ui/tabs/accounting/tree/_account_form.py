@@ -1,5 +1,5 @@
 """
-ui/tabs/accounting/accounts_tree/_account_form.py
+ui/tabs/accounting/tree/_account_form.py
 ==================================================
 _AccountForm — فورم إضافة / تعديل حساب محاسبي.
 """

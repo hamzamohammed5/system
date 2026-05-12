@@ -1,5 +1,5 @@
 """
-ui/tabs/accounting/accounts_tree/_group_filter.py
+ui/tabs/accounting/tree/_group_filter.py
 ==================================================
 _GroupFilterCombo — Combo فلتر التصنيفات في شجرة الحسابات.
 """

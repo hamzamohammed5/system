@@ -1,5 +1,5 @@
 """
-ui/tabs/accounting/accounts_tree/_tree_builder.py
+ui/tabs/accounting/tree/_tree_builder.py
 ==================================================
 دوال مساعدة لبناء شجرة الحسابات وعرضها في QTreeWidget.
 """

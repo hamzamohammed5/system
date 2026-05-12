@@ -27,11 +27,11 @@ from db.accounting_schema import TYPE_AR, EQUITY_TYPES
 from ui.helpers import section_label, danger_button, confirm_delete
 from ui.events  import bus
 
-from .accounts_tree._tree_builder import (
+from .tree._tree_builder import (
     rows_to_tree, filter_by_group, add_acc_nodes, add_type_header, EQUITY_COLOR,
 )
-from .accounts_tree._account_form  import _AccountForm
-from .accounts_tree._group_filter  import _GroupFilterCombo
+from .tree._account_form  import _AccountForm
+from .tree._group_filter  import _GroupFilterCombo
 
 
 class AccountsTreePanel(QWidget):
