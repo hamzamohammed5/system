@@ -2,12 +2,14 @@
 ui/tabs/costing/machine/machine_op_form.py
 ==========================================
 _MachineOpForm — فورم إضافة / تعديل عملية تشغيل.
+مع scroll عمودي لما المساحة تكون ضيقة.
 """
 
 from PyQt5.QtWidgets import (
     QWidget, QVBoxLayout, QHBoxLayout, QFormLayout,
     QLineEdit, QPushButton, QDoubleSpinBox, QLabel,
     QMessageBox, QGroupBox, QComboBox, QRadioButton,
+    QSizePolicy,
 )
 from PyQt5.QtCore import Qt
 
@@ -18,6 +20,7 @@ from db.operations_repo import (
 )
 from ui.helpers import EditModeMixin, buttons_row
 from ui.widgets.category_manager import CategoryCombo
+from ui.widgets.scrollable_form import wrap_in_scroll
 from ui.events import bus
 
 
@@ -32,7 +35,7 @@ def _labeled(widget, unit: str) -> QWidget:
     return w
 
 
-def _spin(max_=999999, dec=4):
+def _spin(max_=99999, dec=4):
     s = QDoubleSpinBox()
     s.setRange(0, max_)
     s.setDecimals(dec)
@@ -50,7 +53,18 @@ class _MachineOpForm(QWidget, EditModeMixin):
         bus.data_changed.connect(self._update_preview)
 
     def _build(self):
-        root = QVBoxLayout(self)
+        outer = QVBoxLayout(self)
+        outer.setContentsMargins(0, 0, 0, 0)
+        outer.setSpacing(0)
+
+        self._inner = QWidget()
+        self._inner.setMinimumWidth(260)
+        self._inner.setSizePolicy(QSizePolicy.Preferred, QSizePolicy.Minimum)
+
+        scroll = wrap_in_scroll(self._inner)
+        outer.addWidget(scroll)
+
+        root = QVBoxLayout(self._inner)
         root.setSpacing(10)
         root.setContentsMargins(12, 12, 12, 12)
 
@@ -81,7 +95,7 @@ class _MachineOpForm(QWidget, EditModeMixin):
         self.rdo_time.toggled.connect(self._update_mode_label)
         self.rdo_time.toggled.connect(self._update_preview)
 
-        self.sp_value = _spin(99999, 4)
+        self.sp_value = _spin()
         self.sp_value.valueChanged.connect(self._update_preview)
 
         self._lbl_value = QLabel("دقيقة")

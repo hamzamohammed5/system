@@ -2,15 +2,18 @@
 ui/tabs/costing/labor/labor_settings.py
 ========================================
 _LaborSettingsPanel — لوحة إعدادات معايير حساب تكلفة العمالة.
+مع scroll عمودي لما المساحة تكون ضيقة.
 """
 
 from PyQt5.QtWidgets import (
     QWidget, QVBoxLayout, QHBoxLayout, QFormLayout,
     QDoubleSpinBox, QLabel, QGroupBox, QPushButton, QMessageBox,
+    QSizePolicy,
 )
 from PyQt5.QtCore import Qt
 
 from db.settings_repo import get_setting, set_setting
+from ui.widgets.scrollable_form import wrap_in_scroll
 from ui.events import bus
 
 
@@ -41,7 +44,18 @@ class _LaborSettingsPanel(QWidget):
         self._load()
 
     def _build(self):
-        layout = QVBoxLayout(self)
+        outer = QVBoxLayout(self)
+        outer.setContentsMargins(0, 0, 0, 0)
+        outer.setSpacing(0)
+
+        self._inner = QWidget()
+        self._inner.setMinimumWidth(260)
+        self._inner.setSizePolicy(QSizePolicy.Preferred, QSizePolicy.Minimum)
+
+        scroll = wrap_in_scroll(self._inner)
+        outer.addWidget(scroll)
+
+        layout = QVBoxLayout(self._inner)
         layout.setSpacing(12)
         layout.setContentsMargins(12, 12, 12, 12)
 

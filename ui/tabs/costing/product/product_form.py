@@ -2,12 +2,13 @@
 ui/tabs/costing/product/product_form.py
 ================================
 _FormPanel — فورم إنشاء / تعديل المنتج (اسم + مكونات BOM).
-مع دعم variant_id للخامات.
+مع scroll على الجزء العلوي (رأس الفورم) لما المساحة تكون ضيقة.
 """
 
 from PyQt5.QtWidgets import (
     QWidget, QVBoxLayout, QHBoxLayout,
     QLineEdit, QPushButton, QLabel, QScrollArea,
+    QSizePolicy,
 )
 from PyQt5.QtCore import Qt, QTimer
 
@@ -19,6 +20,7 @@ from db.items_repo import (
 from ui.helpers import success_button
 from ui.widgets.component_row    import ComponentRow
 from ui.widgets.category_manager import CategoryCombo
+from ui.widgets.scrollable_form  import wrap_in_scroll
 from ui.events import bus
 
 
@@ -35,24 +37,40 @@ class _FormPanel(QWidget):
 
     def _build(self):
         root = QVBoxLayout(self)
-        root.setContentsMargins(12, 10, 12, 10)
-        root.setSpacing(8)
+        root.setContentsMargins(0, 0, 0, 0)
+        root.setSpacing(0)
 
+        # ── الجزء العلوي: رأس الفورم (قابل للـ scroll لو ضاق) ──
+        header_inner = QWidget()
+        header_inner.setMinimumWidth(400)
+        header_inner.setSizePolicy(QSizePolicy.Preferred, QSizePolicy.Minimum)
+
+        header_scroll = wrap_in_scroll(header_inner)
+        header_scroll.setFixedHeight(110)   # ارتفاع ثابت للرأس
+
+        header_lay = QVBoxLayout(header_inner)
+        header_lay.setContentsMargins(12, 8, 12, 8)
+        header_lay.setSpacing(6)
+
+        # سطر العنوان + الاسم + التصنيف + الأزرار
         top = QHBoxLayout()
+        top.setSpacing(8)
+
         self.lbl_mode = QLabel("─── منتج جديد ───")
         self.lbl_mode.setStyleSheet("font-weight:bold; color:#1565c0; font-size:12px;")
+        self.lbl_mode.setMinimumWidth(160)
 
         self.inp_name = QLineEdit()
         self.inp_name.setPlaceholderText("اسم المنتج...")
         self.inp_name.setMinimumHeight(32)
 
-        self.btn_add_row = QPushButton("➕ مكون")
-        self.btn_add_row.setMinimumHeight(32)
-        self.btn_add_row.clicked.connect(lambda: self._add_row())
-
         self.cmb_category = CategoryCombo(self.conn, scope=self._scope)
         self.cmb_category.setMinimumHeight(32)
         self.cmb_category.setFixedWidth(160)
+
+        self.btn_add_row = QPushButton("➕ مكون")
+        self.btn_add_row.setMinimumHeight(32)
+        self.btn_add_row.clicked.connect(lambda: self._add_row())
 
         self.btn_save   = success_button("💾 حفظ")
         self.btn_cancel = QPushButton("✖ إلغاء")
@@ -71,9 +89,9 @@ class _FormPanel(QWidget):
         top.addWidget(self.btn_add_row)
         top.addWidget(self.btn_save)
         top.addWidget(self.btn_cancel)
-        root.addLayout(top)
+        header_lay.addLayout(top)
 
-        # رؤوس الأعمدة — أضفنا "وحدة الإنتاج"
+        # رؤوس الأعمدة
         headers = QWidget()
         hlay = QHBoxLayout(headers)
         hlay.setContentsMargins(0, 0, 0, 0)
@@ -91,17 +109,20 @@ class _FormPanel(QWidget):
 
         _hdr("النوع",        150)
         _hdr("العنصر",       stretch=3)
-        _hdr("وحدة الإنتاج", 130)   # ← جديد
-        _hdr("تكلفة/قطعة",  80)    # ← جديد (label cost)
+        _hdr("وحدة الإنتاج", 130)
+        _hdr("تكلفة/قطعة",  80)
         _hdr("الكمية",       80)
         _hdr("الهادر %",     90)
         _hdr("",             32)
-        root.addWidget(headers)
+        header_lay.addWidget(headers)
 
+        root.addWidget(header_scroll)
+
+        # ── منطقة صفوف المكونات (scroll منفصل) ──
         self.rows_container = QWidget()
         self.rows_layout    = QVBoxLayout(self.rows_container)
         self.rows_layout.setSpacing(2)
-        self.rows_layout.setContentsMargins(0, 0, 0, 0)
+        self.rows_layout.setContentsMargins(12, 4, 12, 4)
         self.rows_layout.addStretch()
 
         scroll = QScrollArea()
@@ -135,10 +156,6 @@ class _FormPanel(QWidget):
         widget.deleteLater()
 
     def collect_rows(self):
-        """
-        يجمع صفوف BOM.
-        كل صف: (child_type, child_id, qty, waste_pct, variant_id)
-        """
         result = []
         for i in range(self.rows_layout.count()):
             item = self.rows_layout.itemAt(i)
@@ -148,7 +165,6 @@ class _FormPanel(QWidget):
             if isinstance(w, ComponentRow):
                 val = w.get_values()
                 if val:
-                    # تأكد إن الـ tuple فيه 5 عناصر
                     if len(val) == 4:
                         val = val + (None,)
                     result.append(val)
@@ -178,12 +194,10 @@ class _FormPanel(QWidget):
             child_id   = row_data["child_id"]
             qty        = row_data["qty"]
             waste_pct  = float(row_data["waste_pct"]) if row_data["waste_pct"] else 0.0
-            # variant_id
             try:
                 variant_id = row_data["variant_id"]
             except (IndexError, KeyError):
                 variant_id = None
-
             o_name = orphan_names.get((child_type, child_id))
             self._add_row(
                 child_type=child_type,
@@ -228,11 +242,11 @@ class _FormPanel(QWidget):
             pid = insert_item(self.conn, name, self.product_type, 0,
                               category_id=self.cmb_category.get_category())
             for row_data in rows:
-                ct       = row_data[0]
-                cid      = row_data[1]
-                qty      = row_data[2]
+                ct        = row_data[0]
+                cid       = row_data[1]
+                qty       = row_data[2]
                 waste_pct = row_data[3] if len(row_data) > 3 else 0.0
-                vid      = row_data[4] if len(row_data) > 4 else None
+                vid       = row_data[4] if len(row_data) > 4 else None
                 insert_bom_row(self.conn, pid, ct, cid, qty, waste_pct, vid)
         self.conn.commit()
         self.reset()

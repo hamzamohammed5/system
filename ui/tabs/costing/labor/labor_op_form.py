@@ -2,11 +2,13 @@
 ui/tabs/costing/labor/labor_op_form.py
 =======================================
 _LaborOpForm — فورم إضافة / تعديل عملية عمالة.
+مع scroll عمودي لما المساحة تكون ضيقة.
 """
 
 from PyQt5.QtWidgets import (
     QWidget, QVBoxLayout, QHBoxLayout, QFormLayout,
     QLineEdit, QPushButton, QDoubleSpinBox, QLabel, QGroupBox, QMessageBox,
+    QSizePolicy,
 )
 from PyQt5.QtCore import Qt
 
@@ -15,6 +17,7 @@ from db.operations_repo import (
 )
 from ui.helpers import EditModeMixin, buttons_row
 from ui.widgets.category_manager import CategoryCombo
+from ui.widgets.scrollable_form import wrap_in_scroll
 from ui.events import bus
 
 
@@ -47,7 +50,18 @@ class _LaborOpForm(QWidget, EditModeMixin):
         bus.data_changed.connect(self._update_preview)
 
     def _build(self):
-        layout = QVBoxLayout(self)
+        outer = QVBoxLayout(self)
+        outer.setContentsMargins(0, 0, 0, 0)
+        outer.setSpacing(0)
+
+        self._inner = QWidget()
+        self._inner.setMinimumWidth(260)
+        self._inner.setSizePolicy(QSizePolicy.Preferred, QSizePolicy.Minimum)
+
+        scroll = wrap_in_scroll(self._inner)
+        outer.addWidget(scroll)
+
+        layout = QVBoxLayout(self._inner)
         layout.setSpacing(10)
         layout.setContentsMargins(12, 12, 12, 12)
 

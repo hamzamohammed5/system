@@ -2,12 +2,13 @@
 ui/tabs/costing/raw/raw_input_panel.py
 =======================================
 _InputPanel — فورم إضافة / تعديل الخامة مع لوحة Variants.
+مع scroll عمودي لما المساحة تكون ضيقة.
 """
 
 from PyQt5.QtWidgets import (
     QWidget, QVBoxLayout, QHBoxLayout, QFormLayout,
     QLineEdit, QPushButton, QLabel, QGroupBox, QMessageBox,
-    QScrollArea,
+    QScrollArea, QSizePolicy,
 )
 from PyQt5.QtCore import Qt
 
@@ -15,6 +16,7 @@ from db.items_repo import fetch_item, insert_item, update_item
 from ui.helpers import EditModeMixin, buttons_row
 from ui.widgets.category_manager import CategoryCombo
 from ui.widgets.raw_variants_panel import _RawVariantsPanel
+from ui.widgets.scrollable_form import wrap_in_scroll
 from ui.events import bus
 
 
@@ -37,7 +39,21 @@ class _InputPanel(QWidget, EditModeMixin):
         self.init_edit_mode(self.btn_add, self.btn_save, self.btn_cancel, self.lbl_mode)
 
     def _build(self):
-        root = QVBoxLayout(self)
+        # Layout خارجي — يحتوي فقط على الـ scroll area
+        outer = QVBoxLayout(self)
+        outer.setContentsMargins(0, 0, 0, 0)
+        outer.setSpacing(0)
+
+        # الحاوية الداخلية التي تُبنى عليها كل الـ widgets
+        self._inner = QWidget()
+        self._inner.setMinimumWidth(280)
+        self._inner.setSizePolicy(QSizePolicy.Preferred, QSizePolicy.Minimum)
+
+        scroll = wrap_in_scroll(self._inner)
+        outer.addWidget(scroll)
+
+        # بناء المحتوى داخل self._inner
+        root = QVBoxLayout(self._inner)
         root.setSpacing(8)
         root.setContentsMargins(12, 12, 12, 12)
 
@@ -110,7 +126,6 @@ class _InputPanel(QWidget, EditModeMixin):
 
     def _on_price_changed(self):
         self._update_hint()
-        # لو في خامة محددة، حدّث الـ variants panel بالسعر الجديد
         if self._editing_id is not None:
             try:
                 price = float(self.inp_price.text() or "0")
@@ -157,7 +172,6 @@ class _InputPanel(QWidget, EditModeMixin):
         self.inp_name.setFocus()
         self.enter_edit_mode(item_id, f"─── تعديل: {item['name']} ───")
 
-        # تحميل variants الخامة
         try:
             price = float(item["price"])
         except (TypeError, ValueError):
@@ -175,10 +189,8 @@ class _InputPanel(QWidget, EditModeMixin):
         new_id = insert_item(self.conn, name, "raw", price,
                              category_id=self.cmb_category.get_category(),
                              total_qty=total_qty)
-        # بعد الإضافة، افتح الـ variants panel على الخامة الجديدة
         self._variants_panel.load_item(new_id, price)
         self.enter_edit_mode(new_id, f"─── أضف وحدات إنتاج لـ: {name} ───")
-        # أخفِ زر الإضافة وأظهر حفظ/إلغاء
         self.btn_add.setVisible(False)
         self.btn_save.setVisible(True)
         self.btn_cancel.setVisible(True)

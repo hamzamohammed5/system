@@ -2,18 +2,20 @@
 ui/tabs/costing/machine/machine_form.py
 =======================================
 _MachineForm — فورم إضافة / تعديل الماكينة.
+مع scroll عمودي لما المساحة تكون ضيقة.
 """
 
 from PyQt5.QtWidgets import (
     QWidget, QVBoxLayout, QHBoxLayout, QFormLayout,
     QLineEdit, QPushButton, QDoubleSpinBox, QLabel,
-    QMessageBox, QGroupBox,
+    QMessageBox, QGroupBox, QSizePolicy,
 )
 from PyQt5.QtCore import Qt
 
 from db.operations_repo import fetch_machine, insert_machine, update_machine
 from ui.helpers import EditModeMixin, buttons_row
 from ui.widgets.category_manager import CategoryCombo
+from ui.widgets.scrollable_form import wrap_in_scroll
 from ui.events import bus
 
 
@@ -44,7 +46,18 @@ class _MachineForm(QWidget, EditModeMixin):
         self.init_edit_mode(self.btn_add, self.btn_save, self.btn_cancel, self.lbl_mode)
 
     def _build(self):
-        root = QVBoxLayout(self)
+        outer = QVBoxLayout(self)
+        outer.setContentsMargins(0, 0, 0, 0)
+        outer.setSpacing(0)
+
+        self._inner = QWidget()
+        self._inner.setMinimumWidth(260)
+        self._inner.setSizePolicy(QSizePolicy.Preferred, QSizePolicy.Minimum)
+
+        scroll = wrap_in_scroll(self._inner)
+        outer.addWidget(scroll)
+
+        root = QVBoxLayout(self._inner)
         root.setSpacing(10)
         root.setContentsMargins(12, 12, 12, 12)
 
