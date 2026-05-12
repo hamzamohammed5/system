@@ -1,5 +1,5 @@
 """
-ui/tabs/accounting/journal_group_combo.py
+ui/tabs/accounting/journal/journal_group_combo.py
 ==========================================
 _NoSelectDelegate  — يمنع اختيار عناصر الرأس في الشجرة
 _TreeGroupCombo    — QComboBox مع QTreeView شجري لعرض تصنيفات الحسابات
@@ -14,7 +14,7 @@ from PyQt5.QtGui  import QColor, QFont, QStandardItemModel, QStandardItem
 from db.accounting_repo import fetch_all_groups, build_group_tree
 from db.accounting_schema import TYPE_AR, EQUITY_TYPES
 from ui.events import bus
-from .helpers  import TYPE_COLORS
+from ..helpers  import TYPE_COLORS
 
 _TYPE_ORDER = ["asset", "liability", "capital", "drawings", "revenue", "expense"]
 

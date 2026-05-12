@@ -14,16 +14,16 @@ from PyQt5.QtCore import Qt
 from db.connection import get_connection, get_accounting_connection
 
 # ── أجزاء الحسابات ──
-from ui.tabs.accounting.accounts_tree        import AccountsTreePanel
-from ui.tabs.accounting.group_manager        import _GroupManagerPanel
-from ui.tabs.accounting.journal_tab          import JournalTab
-from ui.tabs.accounting.ledger_tab           import LedgerTab
-from ui.tabs.accounting.financial_statements import (
+from .accounting.accounts_tree        import AccountsTreePanel
+from .accounting.group_manager        import _GroupManagerPanel
+from .accounting.journal_tab          import JournalTab
+from .accounting.ledger_tab           import LedgerTab
+from .accounting.financial_statements import (
     TrialBalanceTab,
     FinancialStatementsTab,
 )
 # ── المستثمرون ──
-from ui.tabs.accounting.investors_tab import InvestorsTab
+from .accounting.investors_tab import InvestorsTab
 
 
 _TAB_STYLE = """

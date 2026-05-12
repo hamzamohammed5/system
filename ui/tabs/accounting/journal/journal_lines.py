@@ -1,5 +1,5 @@
 """
-ui/tabs/accounting/journal_lines.py
+ui/tabs/accounting/journal/journal_lines.py
 =====================================
 _SmartLine  — صف قيد ذكي واحد (حساب + اتجاه + مبلغ + بيان + ربط مستثمر)
 _LinesPanel — لوحة صفوف القيد كاملة مع scroll وإضافة/حذف/ترتيب

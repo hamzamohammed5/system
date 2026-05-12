@@ -14,10 +14,10 @@ from PyQt5.QtWidgets import QWidget, QVBoxLayout, QTabWidget
 
 from db.connection import get_accounting_connection, get_inventory_connection
 
-from ui.tabs.inventory.inventory_items_tab    import _ItemsTab
-from ui.tabs.inventory.inventory_inbound_tab  import _InboundTab
-from ui.tabs.inventory.inventory_outbound_tab import _OutboundTab
-from ui.tabs.inventory.inventory_report_tab   import _ReportTab, _MovesPanel
+from .inventory.inventory_items_tab    import _ItemsTab
+from .inventory.inventory_inbound_tab  import _InboundTab
+from .inventory.inventory_outbound_tab import _OutboundTab
+from .inventory.inventory_report_tab   import _ReportTab, _MovesPanel
 
 
 class InventoryTab(QWidget):

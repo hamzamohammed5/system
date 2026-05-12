@@ -1,5 +1,5 @@
 """
-ui/tabs/accounting/journal_account_picker.py
+ui/tabs/accounting/journal/journal_account_picker.py
 =============================================
 _AccountTreePopup   — نافذة popup شجرية لاختيار حساب
 _AccountPickerButton — زر يفتح الـ popup ويعرض الحساب المختار
@@ -21,7 +21,7 @@ from db.accounting_repo import (
 )
 from db.accounting_schema import TYPE_AR, EQUITY_TYPES
 from ui.events import bus
-from .helpers  import TYPE_COLORS
+from ..helpers  import TYPE_COLORS
 
 _TYPE_ORDER = ["asset", "liability", "capital", "drawings", "revenue", "expense"]
 

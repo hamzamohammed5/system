@@ -7,10 +7,10 @@ ui/tabs/costing_section.py
 
 from PyQt5.QtWidgets import QWidget, QVBoxLayout, QTabWidget, QLabel
 
-from ui.tabs.costing.raw_tab import RawTab
-from ui.tabs.costing.product_tab import ProductTab
-from ui.tabs.costing.labor_tab import LaborTab
-from ui.tabs.costing.machine_tab import MachineTab
+from .costing.raw_tab import RawTab
+from .costing.product_tab import ProductTab
+from .costing.labor_tab import LaborTab
+from .costing.machine_tab import MachineTab
 
 _TAB_STYLE = """
     QTabWidget::pane {

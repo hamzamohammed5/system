@@ -1,5 +1,5 @@
 """
-ui/tabs/accounting/journal_filter.py
+ui/tabs/accounting/journal/journal_filter.py
 ======================================
 _JournalFilterBar — شريط فلاتر القيود المحاسبية.
 

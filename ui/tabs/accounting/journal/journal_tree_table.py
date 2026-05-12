@@ -1,5 +1,5 @@
 """
-ui/tabs/accounting/journal_tree_table.py
+ui/tabs/accounting/journal/journal_tree_table.py
 =========================================
 _JournalTreeTable — جدول القيود المحاسبية مع expand/collapse وفلاتر متكاملة.
 JournalTab        — التبويب الرئيسي يجمع الفورم والجدول.
@@ -22,7 +22,7 @@ from ui.helpers import (
     danger_button, confirm_delete,
 )
 from ui.events import bus
-from .helpers  import TYPE_COLORS
+from ..helpers  import TYPE_COLORS
 from .journal_filter  import _JournalFilterBar
 from .journal_form    import _JournalForm
 

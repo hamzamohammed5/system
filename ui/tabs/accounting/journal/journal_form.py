@@ -1,5 +1,5 @@
 """
-ui/tabs/accounting/journal_form.py
+ui/tabs/accounting/journal/journal_form.py
 ====================================
 _JournalForm — فورم إدخال القيد اليومي الكامل.
 

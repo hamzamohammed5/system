@@ -12,5 +12,5 @@ ui/tabs/accounting/journal_tab.py
   journal_tree_table.py      → _JournalTreeTable, JournalTab
 """
 
-from .journal_tree_table import JournalTab, _JournalTreeTable  # noqa: F401
-from .journal_form       import _JournalForm                   # noqa: F401
+from .journal.journal_tree_table import JournalTab, _JournalTreeTable  # noqa: F401
+from .journal.journal_form       import _JournalForm                   # noqa: F401
