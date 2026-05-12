@@ -1,81 +1,23 @@
 """
 models/costing.py  — مع دعم waste_pct (نسبة الهادر)
 =================
-المعادلة:
-  الكمية الفعلية = qty × (1 + waste_pct / 100)
-  مثال: qty=10م، waste_pct=10% → الفعلي = 10 × 1.10 = 11م
+Facade يُعيد تصدير الدوال الأساسية ويضيف calc_cost و calc_cost_breakdown.
+
+الملفات الفعلية:
+  costing_base.py → calc_worker_hourly_rate, raw_unit_price, effective_qty
+  costing_ops.py  → calc_labor_op_cost, calc_machine_op_cost
 """
 
-from db.items_repo      import fetch_item, fetch_bom
-from db.operations_repo import fetch_labor_op, fetch_machine_op
-from db.settings_repo   import get_setting
-
-
-# ══════════════════════════════════════════════════════════
-# أجر العامل بالساعة
-# ══════════════════════════════════════════════════════════
-
-def calc_worker_hourly_rate(conn) -> float:
-    salary   = get_setting(conn, "monthly_salary",    3000.0)
-    w_days   = get_setting(conn, "working_days",        25.0)
-    h_days   = get_setting(conn, "holiday_days",         4.0)
-    h_per_d  = get_setting(conn, "working_hours_day",    8.0)
-    overhead = get_setting(conn, "overhead_factor",      1.10)
-    net_hours = max(w_days - h_days, 1) * max(h_per_d, 1)
-    return (salary / net_hours) * overhead if net_hours else 0.0
-
-
-# ══════════════════════════════════════════════════════════
-# تكلفة عملية واحدة
-# ══════════════════════════════════════════════════════════
-
-def calc_labor_op_cost(conn, op_id: int) -> float:
-    op = fetch_labor_op(conn, op_id)
-    if not op:
-        return 0.0
-    return (op["minutes"] / 60.0) * calc_worker_hourly_rate(conn)
-
-
-def calc_machine_op_cost(conn, op_id: int) -> float:
-    op = fetch_machine_op(conn, op_id)
-    if not op:
-        return 0.0
-    if op["mode"] == "time":
-        return (op["value"] / 60.0) * op["rate_per_hour"]
-    return op["value"] * op["rate_per_unit"]
-
-
-# ══════════════════════════════════════════════════════════
-# سعر وحدة الخامة
-# ══════════════════════════════════════════════════════════
-
-def raw_unit_price(item_row) -> float:
-    """
-    يحسب سعر الوحدة الواحدة من الخامة.
-    لو total_qty محددة وأكبر من صفر:
-        unit_price = price / total_qty
-    غير كده:
-        unit_price = price
-    """
-    price     = float(item_row["price"])
-    total_qty = item_row["total_qty"]
-    if total_qty and float(total_qty) > 0:
-        return price / float(total_qty)
-    return price
-
-
-# ══════════════════════════════════════════════════════════
-# حساب الكمية الفعلية مع الهادر
-# ══════════════════════════════════════════════════════════
-
-def effective_qty(qty: float, waste_pct: float) -> float:
-    """
-    الكمية الفعلية = qty × (1 + waste_pct / 100)
-    مثال: qty=10، waste_pct=10 → 10 × 1.10 = 11
-    """
-    if waste_pct and waste_pct > 0:
-        return qty * (1.0 + waste_pct / 100.0)
-    return qty
+from models.costing_base import (
+    calc_worker_hourly_rate,
+    raw_unit_price,
+    effective_qty,
+)
+from models.costing_ops import (
+    calc_labor_op_cost,
+    calc_machine_op_cost,
+)
+from db.items_repo import fetch_item, fetch_bom
 
 
 # ══════════════════════════════════════════════════════════
@@ -103,22 +45,17 @@ def calc_cost(conn, item_id: int, _visited: set = None) -> float:
         qty        = row["qty"]
         waste_pct  = row["waste_pct"] if "waste_pct" in row.keys() else 0.0
 
-        # الكمية الفعلية بعد الهادر
         eff_qty = effective_qty(qty, waste_pct)
 
         if child_type == "raw":
             child = fetch_item(conn, child_id)
             unit_cost = raw_unit_price(child) if child else 0.0
-
         elif child_type == "semi":
             unit_cost = calc_cost(conn, child_id, set(_visited))
-
         elif child_type == "labor_op":
             unit_cost = calc_labor_op_cost(conn, child_id)
-
         elif child_type == "machine_op":
             unit_cost = calc_machine_op_cost(conn, child_id)
-
         else:
             unit_cost = 0.0
 
@@ -165,3 +102,14 @@ def calc_cost_breakdown(conn, item_id: int) -> dict:
         "machine":   machine,
         "total":     materials + labor + machine,
     }
+
+
+__all__ = [
+    "calc_worker_hourly_rate",
+    "raw_unit_price",
+    "effective_qty",
+    "calc_labor_op_cost",
+    "calc_machine_op_cost",
+    "calc_cost",
+    "calc_cost_breakdown",
+]
