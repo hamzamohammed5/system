@@ -8,6 +8,11 @@ _FormPanel — فورم إنشاء / تعديل المنتج.
   - الحفظ يعمل على السيناريو الحالي
   - تحميل BOM حسب السيناريو
   - machine_op_row_id في الصفوف
+
+إصلاح دالة save():
+  - إزالة try/except الذي كان يخفي الأخطاء ويعمل fallback
+  - الـ fallback القديم كان يقطع الـ tuple على 5 عناصر فيخسر machine_op_row_id (العنصر السادس)
+  - replace_bom_for_scenario تعمل الآن مباشرة بدون try/except
 """
 
 from PyQt5.QtWidgets import (
@@ -304,7 +309,7 @@ class _FormPanel(QWidget):
         self.exit_edit_mode("─── منتج جديد ───")
 
     # ══════════════════════════════════════════════════════
-    # حفظ
+    # حفظ — ✅ مصلوحة: بدون try/except يخفي machine_op_row_id
     # ══════════════════════════════════════════════════════
 
     def save(self):
@@ -323,42 +328,24 @@ class _FormPanel(QWidget):
                 self.conn, self._editing_id, name, 0,
                 category_id=self.cmb_category.get_category()
             )
-            # تأكد من وجود سيناريو
             if self._current_scenario_id is None:
                 self._current_scenario_id = self._scenarios_panel.ensure_default_scenario(
                     self._editing_id
                 )
-
-            try:
-                replace_bom_for_scenario(
-                    self.conn, self._current_scenario_id, rows
-                )
-            except Exception:
-                # Fallback: استخدم replace_bom القديم مع السيناريو الأول
-                from db.items_repo import replace_bom
-                old_rows = [(r[0], r[1], r[2], r[3], r[4]) for r in rows]
-                replace_bom(self.conn, self._editing_id, old_rows)
+            # ✅ حفظ مباشر — بدون try/except يخفي المشاكل ويخسر machine_op_row_id
+            replace_bom_for_scenario(
+                self.conn, self._current_scenario_id, rows
+            )
         else:
             pid = insert_item(
                 self.conn, name, self.product_type, 0,
                 category_id=self.cmb_category.get_category()
             )
-            # إنشاء سيناريو default
             sc_id = insert_scenario(
                 self.conn, pid, "سيناريو 1", is_default=True
             )
-            try:
-                replace_bom_for_scenario(self.conn, sc_id, rows)
-            except Exception:
-                # Fallback
-                from db.items_repo import insert_bom_row
-                for row_data in rows:
-                    ct        = row_data[0]
-                    cid       = row_data[1]
-                    qty       = row_data[2]
-                    waste_pct = row_data[3] if len(row_data) > 3 else 0.0
-                    vid       = row_data[4] if len(row_data) > 4 else None
-                    insert_bom_row(self.conn, pid, ct, cid, qty, waste_pct, vid)
+            # ✅ حفظ مباشر — بدون try/except يخسر machine_op_row_id
+            replace_bom_for_scenario(self.conn, sc_id, rows)
 
         self.conn.commit()
         self.reset()
