@@ -2,13 +2,6 @@
 ui/main_window.py
 =================
 النافذة الرئيسية — Sidebar Navigation + Content Area.
-
-الأقسام:
-  📊 حساب التكلفة  →  CostingSection
-  💰 التسعير       →  PricingSection
-  🏦 الحسابات     →  AccountingTab
-  📦 المخزن        →  InventoryTab
-  ⚙️ الإعدادات    →  SettingsDialog
 """
 
 from PyQt5.QtWidgets import (
@@ -16,17 +9,22 @@ from PyQt5.QtWidgets import (
     QStackedWidget, QPushButton, QLabel, QFrame,
 )
 from PyQt5.QtCore import Qt
+from PyQt5.QtGui  import QFont
 
 from ui.tabs.costing_section  import CostingSection
 from ui.tabs.pricing_section  import PricingSection
 from ui.tabs.accounting_section   import AccountingTab
 from ui.tabs.inventory_section    import InventoryTab
 from ui.settings_dialog       import SettingsDialog
+from ui.app_settings import get_font_size
 
 
-# ══════════════════════════════════════════════════════════
-# زر الـ Sidebar
-# ══════════════════════════════════════════════════════════
+# ── ثوابت الـ Sidebar ──
+_SIDEBAR_WIDTH   = 148   # عرض ثابت مناسب
+_BTN_HEIGHT      = 72    # ارتفاع كل زر
+_ICON_SIZE_PT    = 22    # حجم الأيقونة بـ pt (لا يتأثر بالخط)
+_LABEL_SIZE_DELTA = 0    # حجم النص = base + هذا الرقم
+
 
 class _NavButton(QPushButton):
     def __init__(self, icon: str, label: str, parent=None):
@@ -34,53 +32,61 @@ class _NavButton(QPushButton):
         self._icon  = icon
         self._label = label
         self.setCheckable(True)
-        self.setMinimumHeight(64)
-        self.setFixedWidth(130)
+        self.setMinimumHeight(_BTN_HEIGHT)
+        self.setFixedWidth(_SIDEBAR_WIDTH)
         self.setCursor(Qt.PointingHandCursor)
-        self._update_style()
         self._build_content()
+        self._update_style()
 
     def _build_content(self):
         layout = QVBoxLayout(self)
-        layout.setContentsMargins(0, 8, 0, 8)
-        layout.setSpacing(4)
+        layout.setContentsMargins(0, 10, 0, 10)
+        layout.setSpacing(6)
         layout.setAlignment(Qt.AlignCenter)
 
         ico = QLabel(self._icon)
         ico.setAlignment(Qt.AlignCenter)
-        ico.setStyleSheet("font-size:22px; background:transparent; border:none;")
+        # الأيقونة بحجم ثابت كبير — لا تتأثر بإعداد الخط
+        ico.setStyleSheet(
+            f"font-size: {_ICON_SIZE_PT}pt;"
+            " background: transparent;"
+            " border: none;"
+        )
 
         lbl = QLabel(self._label)
         lbl.setAlignment(Qt.AlignCenter)
-        lbl.setStyleSheet("font-size:11px; background:transparent; border:none;")
         lbl.setWordWrap(True)
+        # النص يأخذ حجم الخط الأساسي من الـ stylesheet العام
+        lbl.setStyleSheet("background: transparent; border: none;")
 
         layout.addWidget(ico)
         layout.addWidget(lbl)
 
     def _update_style(self):
         if self.isChecked():
-            self.setStyleSheet("""
-                QPushButton {
+            self.setStyleSheet(f"""
+                QPushButton {{
                     background: #e8f4fd;
                     border: none;
-                    border-left: 3px solid #1565c0;
+                    border-left: 4px solid #1565c0;
                     border-radius: 0px;
                     color: #1565c0;
                     font-weight: bold;
-                }
-                QPushButton:hover { background: #d6ebfb; }
+                    min-width: {_SIDEBAR_WIDTH}px;
+                }}
+                QPushButton:hover {{ background: #d6ebfb; }}
             """)
         else:
-            self.setStyleSheet("""
-                QPushButton {
+            self.setStyleSheet(f"""
+                QPushButton {{
                     background: transparent;
                     border: none;
-                    border-left: 3px solid transparent;
+                    border-left: 4px solid transparent;
                     border-radius: 0px;
                     color: #555;
-                }
-                QPushButton:hover { background: #f5f5f5; color: #1565c0; }
+                    min-width: {_SIDEBAR_WIDTH}px;
+                }}
+                QPushButton:hover {{ background: #f5f5f5; color: #1565c0; }}
             """)
 
     def setChecked(self, checked):
@@ -88,14 +94,10 @@ class _NavButton(QPushButton):
         self._update_style()
 
 
-# ══════════════════════════════════════════════════════════
-# Sidebar
-# ══════════════════════════════════════════════════════════
-
 class _Sidebar(QFrame):
     def __init__(self, parent=None):
         super().__init__(parent)
-        self.setFixedWidth(130)
+        self.setFixedWidth(_SIDEBAR_WIDTH)
         self.setStyleSheet("""
             QFrame {
                 background: #ffffff;
@@ -110,23 +112,23 @@ class _Sidebar(QFrame):
         layout.setContentsMargins(0, 0, 0, 0)
         layout.setSpacing(0)
 
+        # ── هيدر ──
         header = QLabel("ERP\nالتكاليف")
         header.setAlignment(Qt.AlignCenter)
-        header.setFixedHeight(70)
+        header.setFixedHeight(74)
         header.setStyleSheet("""
             QLabel {
                 background: #1565c0;
                 color: white;
-                font-size: 14px;
+                font-size: 14pt;
                 font-weight: bold;
                 border: none;
                 padding: 8px;
             }
         """)
         layout.addWidget(header)
-        layout.addSpacing(8)
+        layout.addSpacing(6)
 
-        # ── أزرار التنقل ──
         nav_items = [
             ("📊", "حساب\nالتكلفة", "costing"),
             ("💰", "التسعير",        "pricing"),
@@ -154,10 +156,6 @@ class _Sidebar(QFrame):
     def get_buttons(self):
         return self._buttons
 
-
-# ══════════════════════════════════════════════════════════
-# النافذة الرئيسية
-# ══════════════════════════════════════════════════════════
 
 class MainWindow(QMainWindow):
     def __init__(self, app):
@@ -187,20 +185,14 @@ class MainWindow(QMainWindow):
         self._stack = QStackedWidget()
         self._stack.setStyleSheet("background: #f9f9f9;")
 
-        # index 0 → حساب التكلفة
-        self._costing = CostingSection()
-        self._stack.addWidget(self._costing)
-
-        # index 1 → التسعير
-        self._pricing = PricingSection()
-        self._stack.addWidget(self._pricing)
-
-        # index 2 → الحسابات
+        self._costing    = CostingSection()
+        self._pricing    = PricingSection()
         self._accounting = AccountingTab()
-        self._stack.addWidget(self._accounting)
+        self._inventory  = InventoryTab()
 
-        # index 3 → المخزن
-        self._inventory = InventoryTab()
+        self._stack.addWidget(self._costing)
+        self._stack.addWidget(self._pricing)
+        self._stack.addWidget(self._accounting)
         self._stack.addWidget(self._inventory)
 
         main_layout.addWidget(self._stack, stretch=1)
