@@ -1,41 +1,44 @@
 """
-db/bom_scenarios_repo.py  (نسخة مصلوحة)
+db/bom_scenarios_repo.py  (نسخة مصلوحة - إصلاح _bom_cols_cache)
 =========================
-الإصلاح: machine_op_row_id بيتحفظ ويتقرأ صح في كل الحالات.
-
-المشاكل اللي اتحلت:
-1. _get_bom_cols مع cache بدل PRAGMA في كل عملية
-2. _insert_bom_row بتحفظ machine_op_row_id صح
-3. fetch_bom_for_scenario بتقرأ machine_op_row_id دايماً
-4. replace_bom_for_scenario بتمرر machine_op_row_id صح
+الإصلاحات:
+1. إزالة _bom_cols_cache العالمي الخطير - كان يُسبب المشكلة الجذرية
+   لو اتحسب قبل ما migration يشتغل، كان بيحفظ قائمة أعمدة ناقصة
+   وكل الـ calls التالية كانت تعتقد إن machine_op_row_id مش موجود
+2. _get_bom_cols الآن بتعمل PRAGMA في كل call (أبطأ قليلاً لكن صح دايماً)
+3. machine_op_row_id بيتحفظ ويتقرأ صح في كل الحالات
 """
 
 from datetime import datetime
 
 
 # ══════════════════════════════════════════════════════════
-# مساعدات الأعمدة — مع cache
+# مساعدات الأعمدة — بدون cache عشان تكون دايماً محدثة
 # ══════════════════════════════════════════════════════════
 
-_bom_cols_cache = None
-
-
 def _get_bom_cols(conn) -> set:
-    """يجيب أعمدة جدول bom مع cache لتجنب PRAGMA في كل عملية."""
-    global _bom_cols_cache
-    if _bom_cols_cache is None:
-        _bom_cols_cache = {
+    """
+    يجيب أعمدة جدول bom.
+    ⚠️ لا نستخدم cache عشان لو migration اشتغل بعد أول call
+    نضمن إننا نشوف الأعمدة الجديدة.
+    """
+    try:
+        return {
             r["name"]
             for r in conn.execute("PRAGMA table_info(bom)").fetchall()
         }
-    return _bom_cols_cache
+    except Exception:
+        return set()
 
 
 def _col_exists(conn, table: str, col: str) -> bool:
     if table == "bom":
         return col in _get_bom_cols(conn)
-    rows = conn.execute(f"PRAGMA table_info({table})").fetchall()
-    return any(r["name"] == col for r in rows)
+    try:
+        rows = conn.execute(f"PRAGMA table_info({table})").fetchall()
+        return any(r["name"] == col for r in rows)
+    except Exception:
+        return False
 
 
 def _resolve_name(conn, child_type: str, child_id: int):
@@ -176,7 +179,7 @@ def clone_scenario(conn, scenario_id: int, new_name: str) -> int:
 
 
 # ══════════════════════════════════════════════════════════
-# ✅ _insert_bom_row المصلوحة
+# _insert_bom_row
 # ══════════════════════════════════════════════════════════
 
 def _insert_bom_row(conn, parent_id: int, child_type: str, child_id: int,
@@ -184,8 +187,9 @@ def _insert_bom_row(conn, parent_id: int, child_type: str, child_id: int,
                     variant_id, machine_op_row_id, scenario_id):
     """
     INSERT آمن في جدول bom — يتعامل مع وجود/غياب الأعمدة.
-    ✅ الإصلاح: بيحفظ machine_op_row_id في كل الحالات اللي بيكون فيها العمود موجود.
+    يحفظ machine_op_row_id في كل الحالات اللي بيكون فيها العمود موجود.
     """
+    # ⚠️ لا نستخدم cache هنا - نجيب الأعمدة الفعلية في كل مرة
     cols = _get_bom_cols(conn)
     has_variant  = "variant_id"        in cols
     has_row_id   = "machine_op_row_id" in cols
@@ -194,7 +198,7 @@ def _insert_bom_row(conn, parent_id: int, child_type: str, child_id: int,
     if child_name is None:
         child_name = _resolve_name(conn, child_type, child_id)
 
-    # ✅ الحالة الكاملة (الأكثر شيوعاً بعد run_migrations_v2)
+    # الحالة الكاملة (الأكثر شيوعاً بعد run_migrations_v2)
     if has_variant and has_row_id and has_scenario:
         conn.execute(
             "INSERT INTO bom "
@@ -250,14 +254,16 @@ def _insert_bom_row(conn, parent_id: int, child_type: str, child_id: int,
 
 
 # ══════════════════════════════════════════════════════════
-# ✅ fetch_bom_for_scenario المصلوحة
+# fetch_bom_for_scenario
 # ══════════════════════════════════════════════════════════
 
 def fetch_bom_for_scenario(conn, scenario_id: int) -> list:
     """
     يجيب صفوف BOM لسيناريو محدد.
-    ✅ دايماً بيرجع machine_op_row_id (NULL لو العمود مش موجود).
+    دايماً بيرجع machine_op_row_id (NULL لو العمود مش موجود).
+    ⚠️ لا نستخدم cache - نتحقق من الأعمدة الفعلية في كل مرة.
     """
+    # نجيب الأعمدة الفعلية الآن (بدون cache)
     cols = _get_bom_cols(conn)
     has_row_id  = "machine_op_row_id" in cols
     has_variant = "variant_id"        in cols
@@ -297,7 +303,7 @@ def fetch_bom_for_scenario(conn, scenario_id: int) -> list:
 
 
 # ══════════════════════════════════════════════════════════
-# ✅ replace_bom_for_scenario المصلوحة
+# replace_bom_for_scenario
 # ══════════════════════════════════════════════════════════
 
 def replace_bom_for_scenario(conn, scenario_id: int, rows):
@@ -305,7 +311,7 @@ def replace_bom_for_scenario(conn, scenario_id: int, rows):
     rows: list/tuple of:
       (child_type, child_id, qty, waste_pct, variant_id, machine_op_row_id)
 
-    ✅ بيضمن حفظ machine_op_row_id صح — بدون try/except يخفي الأخطاء.
+    يضمن حفظ machine_op_row_id صح.
     """
     sc = fetch_scenario(conn, scenario_id)
     if not sc:
@@ -319,7 +325,7 @@ def replace_bom_for_scenario(conn, scenario_id: int, rows):
         qty       = row[2]
         waste_pct = float(row[3]) if len(row) > 3 and row[3] is not None else 0.0
         vid       = row[4] if len(row) > 4 else None
-        # ✅ machine_op_row_id هو العنصر السادس (index 5)
+        # machine_op_row_id هو العنصر السادس (index 5)
         mor_id    = row[5] if len(row) > 5 else None
 
         _insert_bom_row(
