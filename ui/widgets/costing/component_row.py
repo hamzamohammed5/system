@@ -284,7 +284,6 @@ class ComponentRow(QWidget):
     # ══════════════════════════════════════════════════════
 
     def _load_op_rows(self, op_id: int, selected_row_id: int = None):
-        """يحمّل صفوف عملية التشغيل ويعرض السطر الفرعي."""
         try:
             if sip.isdeleted(self) or sip.isdeleted(self.cmb_op_row):
                 return
@@ -309,18 +308,20 @@ class ComponentRow(QWidget):
         self.cmb_op_row.blockSignals(True)
         self.cmb_op_row.clear()
 
-        # لو أكثر من صف نضيف placeholder للاختيار
-        if len(rows) > 1:
+        # ✅ نحفظ selected_row_id في _pinned_op_row_id
+        self._pinned_op_row_id = selected_row_id
+
+        # placeholder بس لو مفيش اختيار محدد وفيه أكثر من صف
+        has_placeholder = False
+        if len(rows) > 1 and selected_row_id is None:
             self.cmb_op_row.addItem("─ اختر صف ─", None)
+            has_placeholder = True
 
         for row in rows:
-            from db.machine_op_rows_repo import calc_op_row_cost
             conn = self._get_conn()
             cost = calc_op_row_cost(conn, row["id"])
             label = row["label"] or f"صف {row['id']}"
-            val_txt = f"{row['value']:.4g}"
-            cnt_txt = f"{row['count']:.4g}"
-            display = f"{label}  ({val_txt} ÷ {cnt_txt})  ≈ {cost:.3f} ج"
+            display = f"{label}  ({row['value']:.4g} ÷ {row['count']:.4g})  ≈ {cost:.3f} ج"
             self.cmb_op_row.addItem(display, row["id"])
 
         restored = False
@@ -331,17 +332,15 @@ class ComponentRow(QWidget):
                     restored = True
                     break
 
-        # لو صف واحد فقط → اختره تلقائياً
-        if not restored and len(rows) == 1:
-            # الـ index الأخير هو الصف الواحد
-            self.cmb_op_row.setCurrentIndex(self.cmb_op_row.count() - 1)
-        elif not restored and len(rows) > 1:
-            # ابدأ بالأول غير placeholder
-            self.cmb_op_row.setCurrentIndex(1)
+        if not restored:
+            # أول صف حقيقي (بعد الـ placeholder لو موجود)
+            first_real = 1 if has_placeholder else 0
+            if first_real < self.cmb_op_row.count():
+                self.cmb_op_row.setCurrentIndex(first_real)
+                # ✅ احفظ الاختيار التلقائي
+                self._pinned_op_row_id = self.cmb_op_row.itemData(first_real)
 
         self.cmb_op_row.blockSignals(False)
-
-        # أظهر السطر الفرعي
         self._sub_row_widget.setVisible(True)
         self._update_op_row_cost_label()
 
@@ -354,6 +353,10 @@ class ComponentRow(QWidget):
         self._sub_row_widget.setVisible(False)
 
     def _on_op_row_changed(self):
+        # ✅ احفظ الاختيار دايماً
+        row_id = self.cmb_op_row.currentData()
+        if row_id is not None:
+            self._pinned_op_row_id = row_id
         self._update_op_row_cost_label()
 
     def _update_op_row_cost_label(self):
@@ -724,17 +727,19 @@ class ComponentRow(QWidget):
 
             machine_op_row_id = None
             if child_type == "machine_op":
-                # نجيب الـ data مباشرة بدون الاعتماد على isVisible
                 row_id = self.cmb_op_row.currentData()
                 if row_id is not None:
                     machine_op_row_id = row_id
                 else:
-                    # لو مفيش اختيار، نأخذ أول صف حقيقي تلقائياً
+                    # أول صف حقيقي من الـ combo
                     for i in range(self.cmb_op_row.count()):
                         d = self.cmb_op_row.itemData(i)
                         if d is not None:
                             machine_op_row_id = d
                             break
+                    # ✅ fallback على الـ pinned value
+                    if machine_op_row_id is None and self._pinned_op_row_id is not None:
+                        machine_op_row_id = self._pinned_op_row_id
 
             return child_type, child_id, qty, waste_pct, variant_id, machine_op_row_id
 
