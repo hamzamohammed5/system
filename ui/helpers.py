@@ -4,10 +4,9 @@ ui/helpers.py
 أدوات UI مشتركة — مع دعم كامل لعرض النصوص وتعديل عرض الأعمدة.
 
 التغييرات:
-  - make_table: الأعمدة Interactive بالكامل (قابلة للسحب)، stretch_col فقط Stretch
-  - word-wrap حقيقي عبر WrapDelegate على كل الأعمدة
-  - tooltip تلقائي لأي نص أطول من عرض الخلية
-  - ارتفاع الصف يتمدد تلقائياً
+  - إزالة كل الـ font-size الـ hard-coded
+  - استخدام font_utils للأحجام النسبية
+  - make_table وباقي الدوال تعتمد على حجم الخط الديناميكي
 """
 
 from PyQt5.QtWidgets import (
@@ -16,7 +15,7 @@ from PyQt5.QtWidgets import (
     QAbstractItemView, QSizePolicy,
     QStyledItemDelegate, QStyle, QApplication,
 )
-from PyQt5.QtGui import QFont, QTextOption, QFontMetrics
+from PyQt5.QtGui import QFont, QFontMetrics
 from PyQt5.QtCore import Qt, QSize, QRect
 
 
@@ -25,10 +24,6 @@ from PyQt5.QtCore import Qt, QSize, QRect
 # ══════════════════════════════════════════════════════════
 
 class WrapDelegate(QStyledItemDelegate):
-    """
-    Delegate بيعمل word-wrap تلقائي في خلايا الجدول.
-    يُستخدم مع setItemDelegate لتطبيقه على الجدول كله.
-    """
     def __init__(self, parent=None, min_row_height: int = 28, padding: int = 6):
         super().__init__(parent)
         self._min_row_height = min_row_height
@@ -99,21 +94,27 @@ def bold_label(text: str) -> QLabel:
 
 
 def section_label(text: str) -> QLabel:
+    """عنوان قسم — الحجم يأتي من الـ stylesheet العام + bold."""
     lbl = QLabel(text)
-    lbl.setStyleSheet("font-weight:bold; font-size:13px; color:#333;")
+    lbl.setProperty("role", "section")
+    # نستخدم font bold فقط بدون تحديد حجم hard-coded
+    f = QFont()
+    f.setBold(True)
+    lbl.setFont(f)
+    lbl.setStyleSheet("color: #333;")
     return lbl
 
 
 def danger_button(text: str) -> QPushButton:
     btn = QPushButton(text)
-    btn.setStyleSheet("color:#c0392b;")
+    btn.setStyleSheet("color: #c0392b;")
     return btn
 
 
 def success_button(text: str) -> QPushButton:
     btn = QPushButton(text)
     btn.setStyleSheet(
-        "background:#27ae60; color:white; font-weight:bold; padding:4px 14px;"
+        "background: #27ae60; color: white; font-weight: bold; padding: 4px 14px;"
     )
     return btn
 
@@ -127,19 +128,6 @@ def make_table(
     stretch_col: int = -1,
     min_row_height: int = 30,
 ) -> QTableWidget:
-    """
-    إنشاء جدول جاهز بإعدادات موحدة:
-
-    - كل الأعمدة Interactive (قابلة للسحب يمين/يسار).
-    - stretch_col: العمود اللي يتمدد ليملأ المساحة الباقية (الاسم عادةً).
-    - word-wrap حقيقي في كل الخلايا عبر WrapDelegate.
-    - ارتفاع الصف يتمدد تلقائياً حسب المحتوى.
-    - tooltip تلقائي على كل خلية.
-    - scroll أفقي ورأسي.
-
-    ملاحظة: لا تستدعي setSectionResizeMode(Fixed) بعد make_table،
-    لأنها ستلغي إمكانية السحب.  استخدم setColumnWidth بدلاً.
-    """
     table = QTableWidget()
     table.setColumnCount(len(columns))
     table.setHorizontalHeaderLabels(columns)
@@ -151,13 +139,11 @@ def make_table(
     hh = table.horizontalHeader()
     vh = table.verticalHeader()
 
-    # ── ارتفاع الصف تلقائي ──
     vh.setSectionResizeMode(QHeaderView.ResizeToContents)
     vh.setDefaultSectionSize(min_row_height)
     vh.setMinimumSectionSize(min_row_height)
     vh.setVisible(False)
 
-    # ── أعمدة Interactive مع stretch اختياري ──
     for i in range(len(columns)):
         if i == stretch_col:
             hh.setSectionResizeMode(i, QHeaderView.Stretch)
@@ -171,11 +157,9 @@ def make_table(
     hh.setDefaultSectionSize(100)
     hh.setDefaultAlignment(Qt.AlignRight | Qt.AlignVCenter)
 
-    # ── Scroll ──
     table.setHorizontalScrollMode(QAbstractItemView.ScrollPerPixel)
     table.setVerticalScrollMode(QAbstractItemView.ScrollPerPixel)
 
-    # ── WrapDelegate على الجدول كله ──
     delegate = WrapDelegate(table, min_row_height=min_row_height)
     table.setItemDelegate(delegate)
 
@@ -188,13 +172,6 @@ def setup_table_columns(
     stretch_col: int = -1,
     min_width: int = 50,
 ):
-    """
-    إعداد عرض الأعمدة بعد إنشاء الجدول.
-    widths: {col_index: width_px}
-    stretch_col: العمود اللي يتمدد.
-
-    يحافظ على Interactive لباقي الأعمدة.
-    """
     hh = table.horizontalHeader()
     n  = table.columnCount()
 
@@ -210,7 +187,6 @@ def setup_table_columns(
 
 
 def buttons_row(*buttons) -> QHBoxLayout:
-    """صف أفقي من الأزرار مع stretch في النهاية."""
     row = QHBoxLayout()
     for btn in buttons:
         row.addWidget(btn)
@@ -223,8 +199,6 @@ def buttons_row(*buttons) -> QHBoxLayout:
 # ══════════════════════════════════════════════════════════
 
 class EditModeMixin:
-    """Mixin يوفر تبديل وضع الإضافة ↔ التعديل."""
-
     def init_edit_mode(self, add_btn, save_btn, cancel_btn, mode_label=None):
         self._em_add_btn    = add_btn
         self._em_save_btn   = save_btn

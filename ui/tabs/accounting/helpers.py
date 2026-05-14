@@ -2,12 +2,14 @@
 ui/tabs/accounting/helpers.py
 ==============================
 أدوات مساعدة صغيرة مشتركة بين تبويبات الحسابات.
+- stat cards بأحجام نسبية من حجم الخط الأساسي
 """
 
 from PyQt5.QtWidgets import QDoubleSpinBox, QFrame, QVBoxLayout, QLabel
 from PyQt5.QtCore    import Qt
 
 from db.accounting_schema import TYPE_AR, NORMAL_BALANCE
+from ui.font_utils import card_title_style, card_value_style
 
 
 TYPE_COLORS = {
@@ -24,7 +26,6 @@ def _spin(max_=999_999_999, dec=2) -> QDoubleSpinBox:
     s = QDoubleSpinBox()
     s.setRange(0, max_)
     s.setDecimals(dec)
-    s.setMinimumHeight(30)
     return s
 
 
@@ -33,20 +34,27 @@ def _money(val: float) -> str:
 
 
 def _stat_card(label: str, color: str = "#1565c0"):
-    """يرجع (QFrame, QLabel_value)."""
+    """يرجع (QFrame, QLabel_value) — بطاقة إحصائية بأحجام نسبية."""
     f = QFrame()
     f.setStyleSheet(f"""
-        QFrame {{ background:white; border-left:4px solid {color}; border-radius:6px; }}
+        QFrame {{
+            background: white;
+            border-left: 4px solid {color};
+            border-radius: 6px;
+        }}
     """)
     lay = QVBoxLayout(f)
     lay.setContentsMargins(12, 8, 12, 8)
+    lay.setSpacing(2)
+
     lt = QLabel(label)
-    lt.setStyleSheet("font-size:10px; color:#888; background:transparent; border:none;")
+    # حجم صغير للعنوان — يأتي من الـ stylesheet العام عبر card-title
+    lt.setStyleSheet(card_title_style())
+
     lv = QLabel("0.00  ج")
-    lv.setStyleSheet(
-        f"font-size:14px; font-weight:bold; color:{color};"
-        " background:transparent; border:none;"
-    )
+    # حجم أكبر للقيمة — نسبي
+    lv.setStyleSheet(card_value_style(color))
+
     lay.addWidget(lt)
     lay.addWidget(lv)
     return f, lv

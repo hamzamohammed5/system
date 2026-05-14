@@ -16,32 +16,29 @@ from ui.app_settings import get_font_size, set_font_size, apply_font
 class SettingsDialog(QDialog):
     def __init__(self, app, parent=None):
         super().__init__(parent)
-        self._app          = app
-        self._original_size = get_font_size()   # عشان نرجعه لو ضغط إلغاء
+        self._app           = app
+        self._original_size = get_font_size()
 
         self.setWindowTitle("⚙️  إعدادات الخط")
-        self.setFixedWidth(360)
+        self.setFixedWidth(380)
         self.setModal(True)
         self._build()
         self._slider.setValue(self._original_size)
 
-    # ══════════════════════════════════════════════════════
-    # بناء الواجهة
-    # ══════════════════════════════════════════════════════
-
     def _build(self):
         root = QVBoxLayout(self)
-        root.setSpacing(18)
+        root.setSpacing(16)
         root.setContentsMargins(20, 20, 20, 20)
 
         # ── عنوان ──
         title = QLabel("حجم الخط")
         title.setAlignment(Qt.AlignCenter)
-        title.setStyleSheet("font-weight: bold; font-size: 13pt;")
+        title.setStyleSheet("font-weight: bold;")
         root.addWidget(title)
 
         # ── Slider ──
         row = QHBoxLayout()
+        row.setSpacing(8)
 
         lbl_small = QLabel("أ")
         lbl_small.setStyleSheet("font-size: 9pt;")
@@ -53,10 +50,10 @@ class SettingsDialog(QDialog):
         self._slider.valueChanged.connect(self._on_change)
 
         lbl_big = QLabel("أ")
-        lbl_big.setStyleSheet("font-size: 16pt; font-weight: bold;")
+        lbl_big.setStyleSheet("font-size: 15pt; font-weight: bold;")
 
         self._lbl_val = QLabel("11 pt")
-        self._lbl_val.setFixedWidth(40)
+        self._lbl_val.setMinimumWidth(44)
         self._lbl_val.setAlignment(Qt.AlignCenter)
 
         row.addWidget(lbl_small)
@@ -82,18 +79,15 @@ class SettingsDialog(QDialog):
         btn_cancel.clicked.connect(self._cancel)
         root.addWidget(btns)
 
-    # ══════════════════════════════════════════════════════
-    # منطق
-    # ══════════════════════════════════════════════════════
-
     def _on_change(self, val: int):
         self._lbl_val.setText(f"{val} pt")
+        # معاينة مباشرة على التطبيق
+        apply_font(self._app, val)
+        # تحديث الـ preview label بحجم الخط الجديد
         self._preview.setStyleSheet(
             f"font-size: {val}pt; border: 1px solid #ccc; "
             "border-radius: 6px; padding: 12px;"
         )
-        # live preview على التطبيق كله
-        apply_font(self._app, val)
 
     def _save(self):
         size = self._slider.value()
@@ -102,6 +96,5 @@ class SettingsDialog(QDialog):
         self.accept()
 
     def _cancel(self):
-        # ارجع لحجم الخط الأصلي
         apply_font(self._app, self._original_size)
         self.reject()
