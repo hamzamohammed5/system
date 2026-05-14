@@ -1,10 +1,13 @@
 """
 ui/tabs/costing/product/product_form.py
-========================================
-إصلاح دالة save():
-- إزالة try/except الذي كان يعمل fallback ويقطع tuple على 5 عناصر
-  فيخسر machine_op_row_id (العنصر السادس index=5)
-- replace_bom_for_scenario تعمل مباشرة
+
+الإصلاح الجوهري:
+  _load_bom_for_scenario: بعد إنشاء كل ComponentRow،
+  لو كان النوع machine_op، نستدعي expose_load_op_rows مباشرة (synchronously)
+  بدل الاعتماد على الـ QTimer اللي ممكن يجي بعد ما get_values اتنادي.
+
+  هذا يضمن إن الـ cmb_op_row يكون ممتلئ بالصفوف والاختيار الصحيح محفوظ
+  قبل أي عملية حفظ.
 """
 
 from PyQt5.QtWidgets import (
@@ -162,6 +165,7 @@ class _FormPanel(QWidget):
         row.removed.connect(self._remove_row)
         self.rows_layout.insertWidget(self.rows_layout.count() - 1, row)
         QTimer.singleShot(0, row.refresh_catalog)
+        return row
 
     def _remove_row(self, widget):
         self.rows_layout.removeWidget(widget)
@@ -225,7 +229,17 @@ class _FormPanel(QWidget):
         self.inp_name.setFocus()
 
     def _load_bom_for_scenario(self, pid: int, scenario_id: int):
-        """تحميل مكونات BOM لسيناريو محدد مع machine_op_row_id."""
+        """
+        تحميل مكونات BOM لسيناريو محدد.
+
+        ✅ الإصلاح الجوهري:
+        بعد إنشاء كل ComponentRow من نوع machine_op،
+        نستدعي expose_load_op_rows مباشرة (synchronously)
+        لضمان إن الـ cmb_op_row ممتلئ والاختيار الصحيح محفوظ
+        قبل أي استدعاء لـ get_values().
+
+        هذا يحل مشكلة الـ race condition بين QTimer (50ms) وعملية الحفظ.
+        """
         self.clear_rows()
 
         orphan_map = {
@@ -260,7 +274,9 @@ class _FormPanel(QWidget):
                 machine_op_row_id = None
 
             o_name = orphan_map.get((child_type, child_id))
-            self._add_row(
+
+            # ✅ إنشاء الـ row مع تمرير machine_op_row_id للـ __init__
+            component_row = self._add_row(
                 child_type=child_type,
                 child_id=child_id,
                 qty=qty,
@@ -269,6 +285,11 @@ class _FormPanel(QWidget):
                 variant_id=variant_id,
                 machine_op_row_id=machine_op_row_id,
             )
+
+            # ✅ الإصلاح الجوهري: لو كان machine_op، نحمل الصفوف synchronously
+            # هذا يتجاوز مشكلة الـ QTimer race condition
+            if child_type == "machine_op" and child_id is not None:
+                component_row.expose_load_op_rows(child_id, machine_op_row_id)
 
         if not bom_rows:
             self._add_row()
@@ -293,7 +314,7 @@ class _FormPanel(QWidget):
         self.exit_edit_mode("منتج جديد")
 
     # ══════════════════════════════════════════════════════
-    # حفظ - بدون try/except يخسر machine_op_row_id
+    # حفظ
     # ══════════════════════════════════════════════════════
 
     def save(self):
@@ -315,7 +336,6 @@ class _FormPanel(QWidget):
                 self._current_scenario_id = self._scenarios_panel.ensure_default_scenario(
                     self._editing_id
                 )
-            # مباشر بدون try/except يخفي المشاكل او يقطع machine_op_row_id
             replace_bom_for_scenario(self.conn, self._current_scenario_id, rows)
         else:
             pid = insert_item(
@@ -323,7 +343,6 @@ class _FormPanel(QWidget):
                 category_id=self.cmb_category.get_category()
             )
             sc_id = insert_scenario(self.conn, pid, "سيناريو 1", is_default=True)
-            # مباشر بدون try/except
             replace_bom_for_scenario(self.conn, sc_id, rows)
 
         self.conn.commit()
