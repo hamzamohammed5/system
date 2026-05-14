@@ -1,24 +1,16 @@
 """
-ui/tabs/costing/product/product_form.py  (نسخة محدّثة)
-================================
-_FormPanel — فورم إنشاء / تعديل المنتج.
-
-التغييرات:
-  - دعم السيناريوهات المتعددة (_BomScenariosPanel)
-  - الحفظ يعمل على السيناريو الحالي
-  - تحميل BOM حسب السيناريو
-  - machine_op_row_id في الصفوف
-
+ui/tabs/costing/product/product_form.py
+========================================
 إصلاح دالة save():
-  - إزالة try/except الذي كان يخفي الأخطاء ويعمل fallback
-  - الـ fallback القديم كان يقطع الـ tuple على 5 عناصر فيخسر machine_op_row_id (العنصر السادس)
-  - replace_bom_for_scenario تعمل الآن مباشرة بدون try/except
+- إزالة try/except الذي كان يعمل fallback ويقطع tuple على 5 عناصر
+  فيخسر machine_op_row_id (العنصر السادس index=5)
+- replace_bom_for_scenario تعمل مباشرة
 """
 
 from PyQt5.QtWidgets import (
     QWidget, QVBoxLayout, QHBoxLayout,
     QLineEdit, QPushButton, QLabel, QScrollArea,
-    QSizePolicy,
+    QSizePolicy, QMessageBox,
 )
 from PyQt5.QtCore import Qt, QTimer
 
@@ -27,9 +19,8 @@ from db.items_repo import (
     fetch_orphan_bom_rows,
 )
 from db.bom_scenarios_repo import (
-    fetch_scenarios, fetch_default_scenario, insert_scenario,
+    fetch_default_scenario, insert_scenario,
     fetch_bom_for_scenario, replace_bom_for_scenario,
-    fetch_scenario,
 )
 from ui.helpers import success_button
 from ui.widgets.costing.component_row    import ComponentRow
@@ -56,7 +47,6 @@ class _FormPanel(QWidget):
         root.setContentsMargins(0, 0, 0, 0)
         root.setSpacing(0)
 
-        # ── الجزء العلوي (رأس الفورم) ──
         header_inner = QWidget()
         header_inner.setMinimumWidth(400)
         header_inner.setSizePolicy(QSizePolicy.Preferred, QSizePolicy.Minimum)
@@ -68,7 +58,6 @@ class _FormPanel(QWidget):
         header_lay.setContentsMargins(12, 8, 12, 8)
         header_lay.setSpacing(6)
 
-        # ── سطر العنوان + الاسم + التصنيف + الأزرار ──
         top = QHBoxLayout()
         top.setSpacing(8)
 
@@ -84,12 +73,12 @@ class _FormPanel(QWidget):
         self.cmb_category.setMinimumHeight(32)
         self.cmb_category.setFixedWidth(160)
 
-        self.btn_add_row = QPushButton("➕ مكون")
+        self.btn_add_row = QPushButton("+ مكون")
         self.btn_add_row.setMinimumHeight(32)
         self.btn_add_row.clicked.connect(lambda: self._add_row())
 
-        self.btn_save   = success_button("💾 حفظ")
-        self.btn_cancel = QPushButton("✖ إلغاء")
+        self.btn_save   = success_button("حفظ")
+        self.btn_cancel = QPushButton("X الغاء")
         self.btn_save.setMinimumHeight(32)
         self.btn_cancel.setMinimumHeight(32)
         self.btn_save.clicked.connect(self.save)
@@ -107,12 +96,10 @@ class _FormPanel(QWidget):
         top.addWidget(self.btn_cancel)
         header_lay.addLayout(top)
 
-        # ── لوحة السيناريوهات ──
         self._scenarios_panel = _BomScenariosPanel(self.conn)
         self._scenarios_panel.scenario_changed.connect(self._on_scenario_changed)
         header_lay.addWidget(self._scenarios_panel)
 
-        # رؤوس الأعمدة
         headers = QWidget()
         hlay = QHBoxLayout(headers)
         hlay.setContentsMargins(0, 0, 0, 0)
@@ -128,18 +115,17 @@ class _FormPanel(QWidget):
                 lbl.setFixedWidth(w)
             hlay.addWidget(lbl, stretch=stretch)
 
-        _hdr("النوع",         150)
-        _hdr("العنصر",        stretch=3)
+        _hdr("النوع",          150)
+        _hdr("العنصر",         stretch=3)
         _hdr("الصف / Variant", 160)
-        _hdr("تكلفة/قطعة",   80)
-        _hdr("الكمية",        80)
-        _hdr("الهادر %",      90)
-        _hdr("",              32)
+        _hdr("تكلفة/قطعة",    80)
+        _hdr("الكمية",         80)
+        _hdr("الهادر %",       90)
+        _hdr("",               32)
         header_lay.addWidget(headers)
 
         root.addWidget(header_scroll)
 
-        # ── منطقة صفوف المكونات ──
         self.rows_container = QWidget()
         self.rows_layout    = QVBoxLayout(self.rows_container)
         self.rows_layout.setSpacing(2)
@@ -182,7 +168,10 @@ class _FormPanel(QWidget):
         widget.deleteLater()
 
     def collect_rows(self):
-        """يجمع (child_type, child_id, qty, waste_pct, variant_id, machine_op_row_id)"""
+        """
+        يجمع (child_type, child_id, qty, waste_pct, variant_id, machine_op_row_id)
+        التأكد من 6 عناصر في كل tuple
+        """
         result = []
         for i in range(self.rows_layout.count()):
             item = self.rows_layout.itemAt(i)
@@ -192,7 +181,7 @@ class _FormPanel(QWidget):
             if isinstance(w, ComponentRow):
                 val = w.get_values()
                 if val:
-                    # تأكد من 6 عناصر
+                    val = tuple(val)
                     while len(val) < 6:
                         val = val + (None,)
                     result.append(val)
@@ -216,35 +205,29 @@ class _FormPanel(QWidget):
         self.inp_name.setText(item["name"])
         self.cmb_category.set_category(item["category_id"])
 
-        # تحميل لوحة السيناريوهات
         self._scenarios_panel.load_item(pid)
 
-        # تحديد السيناريو الـ default
         sc = fetch_default_scenario(self.conn, pid)
         if not sc:
-            # أنشئ سيناريو default لو مفيش
             sc_id = insert_scenario(self.conn, pid, "سيناريو 1", is_default=True)
         else:
             sc_id = sc["id"]
 
         self._current_scenario_id = sc_id
-
-        # تحميل BOM للسيناريو
         self._load_bom_for_scenario(pid, sc_id)
 
         n_orphans = len(fetch_orphan_bom_rows(self.conn, pid))
         label = (
-            f"─── تعديل: {item['name']}  ⚠️ {n_orphans} مكوّن ناقص ───"
-            if n_orphans else f"─── تعديل: {item['name']} ───"
+            f"تعديل: {item['name']}  {n_orphans} مكون ناقص"
+            if n_orphans else f"تعديل: {item['name']}"
         )
         self.enter_edit_mode(pid, label)
         self.inp_name.setFocus()
 
     def _load_bom_for_scenario(self, pid: int, scenario_id: int):
-        """تحميل مكونات BOM لسيناريو محدد."""
+        """تحميل مكونات BOM لسيناريو محدد مع machine_op_row_id."""
         self.clear_rows()
 
-        # قراءة orphans للسيناريو (نفس المنتج)
         orphan_map = {
             (o["child_type"], o["child_id"]): o["child_name"]
             for o in fetch_orphan_bom_rows(self.conn, pid)
@@ -253,7 +236,6 @@ class _FormPanel(QWidget):
         try:
             bom_rows = fetch_bom_for_scenario(self.conn, scenario_id)
         except Exception:
-            # fallback: السيناريوهات غير مطبقة بعد
             from db.items_repo import fetch_bom
             bom_rows = fetch_bom(self.conn, pid)
 
@@ -261,14 +243,17 @@ class _FormPanel(QWidget):
             child_type = row_data["child_type"]
             child_id   = row_data["child_id"]
             qty        = row_data["qty"]
+
             try:
                 waste_pct = float(row_data["waste_pct"]) if row_data["waste_pct"] else 0.0
             except (KeyError, TypeError):
                 waste_pct = 0.0
+
             try:
                 variant_id = row_data["variant_id"]
             except (KeyError, IndexError):
                 variant_id = None
+
             try:
                 machine_op_row_id = row_data["machine_op_row_id"]
             except (KeyError, IndexError):
@@ -289,7 +274,6 @@ class _FormPanel(QWidget):
             self._add_row()
 
     def _on_scenario_changed(self, scenario_id: int):
-        """عند تغيير السيناريو → تحميل BOM الجديد."""
         if self._editing_id is None:
             return
         self._current_scenario_id = scenario_id
@@ -306,21 +290,20 @@ class _FormPanel(QWidget):
         self._add_row()
         self._scenarios_panel.clear()
         self._current_scenario_id = None
-        self.exit_edit_mode("─── منتج جديد ───")
+        self.exit_edit_mode("منتج جديد")
 
     # ══════════════════════════════════════════════════════
-    # حفظ — ✅ مصلوحة: بدون try/except يخفي machine_op_row_id
+    # حفظ - بدون try/except يخسر machine_op_row_id
     # ══════════════════════════════════════════════════════
 
     def save(self):
-        from PyQt5.QtWidgets import QMessageBox
         name = self.inp_name.text().strip()
         if not name:
-            QMessageBox.warning(self, "تنبيه", "أدخل اسم المنتج أولاً")
+            QMessageBox.warning(self, "تنبيه", "ادخل اسم المنتج اولا")
             return
         rows = self.collect_rows()
         if not rows:
-            QMessageBox.warning(self, "تنبيه", "أضف مكوناً واحداً على الأقل")
+            QMessageBox.warning(self, "تنبيه", "اضف مكونا واحدا على الاقل")
             return
 
         if self.is_editing:
@@ -332,19 +315,15 @@ class _FormPanel(QWidget):
                 self._current_scenario_id = self._scenarios_panel.ensure_default_scenario(
                     self._editing_id
                 )
-            # ✅ حفظ مباشر — بدون try/except يخفي المشاكل ويخسر machine_op_row_id
-            replace_bom_for_scenario(
-                self.conn, self._current_scenario_id, rows
-            )
+            # مباشر بدون try/except يخفي المشاكل او يقطع machine_op_row_id
+            replace_bom_for_scenario(self.conn, self._current_scenario_id, rows)
         else:
             pid = insert_item(
                 self.conn, name, self.product_type, 0,
                 category_id=self.cmb_category.get_category()
             )
-            sc_id = insert_scenario(
-                self.conn, pid, "سيناريو 1", is_default=True
-            )
-            # ✅ حفظ مباشر — بدون try/except يخسر machine_op_row_id
+            sc_id = insert_scenario(self.conn, pid, "سيناريو 1", is_default=True)
+            # مباشر بدون try/except
             replace_bom_for_scenario(self.conn, sc_id, rows)
 
         self.conn.commit()

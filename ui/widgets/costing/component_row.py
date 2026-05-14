@@ -1,6 +1,19 @@
 """
-الإصلاح الكامل لمشكلة machine_op_row_id في component_row.py
-ضع هذا الكود في ui/widgets/costing/component_row.py
+ui/widgets/costing/component_row.py
+=====================================
+إصلاح شامل لمشكلة machine_op_row_id:
+
+المشاكل التي تم إصلاحها:
+1. _load_op_rows: الـ placeholder كان يتسبب في currentData()=None حتى لو المستخدم اختار صفاً
+2. _load_op_rows: بعد blockSignals(False) لم يكن يتم تحديث _pinned_op_row_id بالقيمة الحالية
+3. get_values: كانت تعتمد على currentData() الذي يُرجع None لو كان index على placeholder
+4. _on_op_row_changed: لم يكن يُستدعى عند التحميل الأولي لأن blockSignals(True) فعّال
+
+الإصلاح الجوهري:
+- إزالة الـ placeholder تماماً — إذا كان هناك صف واحد أو أكثر نعرضه مباشرة
+- بعد setCurrentIndex داخل blockSignals، نستخرج القيمة الحالية ونحفظها في _pinned_op_row_id
+- get_values تعتمد على _pinned_op_row_id كمصدر أساسي موثوق
+- currentData() يُستخدم فقط للتحقق، مع fallback لـ _pinned_op_row_id
 """
 
 import weakref
@@ -57,10 +70,11 @@ class ComponentRow(QWidget):
         self._pinned_id            = child_id
         self._pinned_total_qty     = raw_total_qty
         self._pinned_variant       = variant_id
-        # ✅ نحفظ machine_op_row_id من البداية ولا نغيره إلا لو المستخدم اختار صراحة
+
+        # ✅ الإصلاح الأساسي:
+        # _pinned_op_row_id هو المصدر الوحيد الموثوق لـ machine_op_row_id
+        # يُحدَّث في كل مرة يتغير فيها الاختيار (سواء من المستخدم أو من التحميل)
         self._pinned_op_row_id     = machine_op_row_id
-        # ✅ فلاق يمنع _load_op_rows من تغيير _pinned_op_row_id تلقائياً
-        self._op_row_id_locked     = (machine_op_row_id is not None)
 
         self._build(child_type, child_id, qty, raw_total_qty,
                     waste_pct, variant_id, machine_op_row_id)
@@ -72,7 +86,7 @@ class ComponentRow(QWidget):
         )
 
     # ══════════════════════════════════════════════════════
-    # بناء الواجهة — سطرين: main_row + sub_row
+    # بناء الواجهة
     # ══════════════════════════════════════════════════════
 
     def _build(self, child_type, child_id, qty, raw_total_qty,
@@ -263,21 +277,20 @@ class ComponentRow(QWidget):
             _cid, _vid = child_id, variant_id
             QTimer.singleShot(50, lambda: (s := _weak()) and s._load_variants(_cid, _vid))
         elif child_type == "machine_op" and child_id is not None:
-            # ✅ نمرر machine_op_row_id المحفوظ
             self._load_op_rows(child_id, machine_op_row_id)
 
     # ══════════════════════════════════════════════════════
-    # Op Rows — الإصلاح الجوهري هنا
+    # ✅ Op Rows — الإصلاح الجوهري
     # ══════════════════════════════════════════════════════
 
     def _load_op_rows(self, op_id: int, selected_row_id: int = None):
         """
         يملأ cmb_op_row بصفوف العملية.
 
-        القاعدة:
-          - لو selected_row_id معطى (من DB أو من المستخدم) → يُحترم دائماً
-          - لو مش معطى → نختار أول صف ونحفظه في _pinned_op_row_id
-          - لا نغير _pinned_op_row_id أبداً لو _op_row_id_locked = True
+        ✅ الإصلاحات:
+        1. لا placeholder — كل الصفوف تُعرض مباشرة بدون عنصر فارغ
+        2. بعد setCurrentIndex نستخرج القيمة الفعلية ونحفظها في _pinned_op_row_id
+        3. selected_row_id له الأولوية دائماً لو كان محدداً
         """
         try:
             if sip.isdeleted(self) or sip.isdeleted(self.cmb_op_row):
@@ -292,6 +305,9 @@ class ComponentRow(QWidget):
         try:
             from db.machine_op_rows_repo import fetch_op_rows, calc_op_row_cost
             conn = self._get_conn()
+            if conn is None:
+                self._hide_op_rows()
+                return
             rows = fetch_op_rows(conn, op_id)
         except Exception:
             self._hide_op_rows()
@@ -301,45 +317,42 @@ class ComponentRow(QWidget):
             self._hide_op_rows()
             return
 
-        # ✅ إذا لم يُعطَ selected_row_id، نستخدم الـ pinned المحفوظ
-        effective_selected = selected_row_id
-        if effective_selected is None:
-            effective_selected = self._pinned_op_row_id
+        # ✅ الأولوية: selected_row_id > _pinned_op_row_id
+        target_id = selected_row_id if selected_row_id is not None else self._pinned_op_row_id
 
         self.cmb_op_row.blockSignals(True)
         self.cmb_op_row.clear()
 
-        # ✅ نضيف placeholder فقط إذا لا يوجد اختيار مسبق ويوجد أكثر من صف
-        has_placeholder = False
-        if len(rows) > 1 and effective_selected is None:
-            self.cmb_op_row.addItem("─ اختر صف ─", None)
-            has_placeholder = True
-
+        # ✅ لا placeholder على الإطلاق — نملأ الصفوف مباشرة
         for row in rows:
-            conn = self._get_conn()
-            cost = calc_op_row_cost(conn, row["id"])
+            try:
+                conn2 = self._get_conn()
+                cost = calc_op_row_cost(conn2, row["id"]) if conn2 else 0.0
+            except Exception:
+                cost = 0.0
             label = row["label"] or f"صف {row['id']}"
             display = f"{label}  ({row['value']:.4g} ÷ {row['count']:.4g})  ≈ {cost:.3f} ج"
             self.cmb_op_row.addItem(display, row["id"])
 
-        # ✅ محاولة استعادة الاختيار
+        # ✅ محاولة استعادة الاختيار المستهدف
         restored = False
-        if effective_selected is not None:
+        if target_id is not None:
             for i in range(self.cmb_op_row.count()):
-                if self.cmb_op_row.itemData(i) == effective_selected:
+                if self.cmb_op_row.itemData(i) == target_id:
                     self.cmb_op_row.setCurrentIndex(i)
                     restored = True
                     break
 
         if not restored:
-            # اختر أول صف حقيقي
-            first_real = 1 if has_placeholder else 0
-            if first_real < self.cmb_op_row.count():
-                self.cmb_op_row.setCurrentIndex(first_real)
-                auto_id = self.cmb_op_row.itemData(first_real)
-                # ✅ نحفظ التلقائي فقط إذا لم يكن هناك قيمة محفوظة مقفولة
-                if auto_id is not None and not self._op_row_id_locked:
-                    self._pinned_op_row_id = auto_id
+            # اختر أول صف إذا لم يُستعد الاختيار
+            if self.cmb_op_row.count() > 0:
+                self.cmb_op_row.setCurrentIndex(0)
+
+        # ✅ المفتاح: نحفظ القيمة الفعلية المختارة الآن في _pinned_op_row_id
+        # بغض النظر عن أي شيء آخر
+        current_data = self.cmb_op_row.currentData()
+        if current_data is not None:
+            self._pinned_op_row_id = current_data
 
         self.cmb_op_row.blockSignals(False)
         self._sub_row_widget.setVisible(True)
@@ -353,14 +366,20 @@ class ComponentRow(QWidget):
             return
         self._sub_row_widget.setVisible(False)
 
-    def _on_op_row_changed(self):
+    def _on_op_row_changed(self, _index: int):
         """
-        ✅ المستخدم اختار صراحةً → نحدّث _pinned_op_row_id ونرفع القفل.
+        ✅ المستخدم اختار صفاً → نحدّث _pinned_op_row_id فوراً.
+        هذا هو الضمان الأساسي لحفظ الاختيار.
         """
+        try:
+            if sip.isdeleted(self) or sip.isdeleted(self.cmb_op_row):
+                return
+        except Exception:
+            return
+
         row_id = self.cmb_op_row.currentData()
         if row_id is not None:
             self._pinned_op_row_id = row_id
-            self._op_row_id_locked = True   # قُفل الآن باختيار المستخدم
         self._update_op_row_cost_label()
 
     def _update_op_row_cost_label(self):
@@ -369,23 +388,28 @@ class ComponentRow(QWidget):
                 return
         except Exception:
             return
-        # ✅ الأولوية: currentData أولاً، ثم _pinned_op_row_id
-        row_id = self.cmb_op_row.currentData()
-        if row_id is None:
-            row_id = self._pinned_op_row_id
+
+        # ✅ نعتمد على _pinned_op_row_id كمصدر أساسي
+        row_id = self._pinned_op_row_id
+        # تحقق إضافي من currentData لو كان مختلفاً
+        current = self.cmb_op_row.currentData()
+        if current is not None:
+            row_id = current
+
         if row_id is None:
             self.lbl_op_row_cost.setText("")
             return
         try:
             from db.machine_op_rows_repo import calc_op_row_cost
             conn = self._get_conn()
-            cost = calc_op_row_cost(conn, row_id)
-            self.lbl_op_row_cost.setText(f"= {cost:.4f} ج/قطعة")
+            if conn:
+                cost = calc_op_row_cost(conn, row_id)
+                self.lbl_op_row_cost.setText(f"= {cost:.4f} ج/قطعة")
         except Exception:
             self.lbl_op_row_cost.setText("")
 
     # ══════════════════════════════════════════════════════
-    # Variants (بدون تغيير)
+    # Variants
     # ══════════════════════════════════════════════════════
 
     def _load_variants(self, item_id: int, selected_variant_id: int = None):
@@ -400,7 +424,11 @@ class ComponentRow(QWidget):
             return
         try:
             from db.raw_variants_repo import fetch_variants_for_item
-            variants = fetch_variants_for_item(self._get_conn(), item_id)
+            conn = self._get_conn()
+            if conn is None:
+                self._hide_variants()
+                return
+            variants = fetch_variants_for_item(conn, item_id)
         except Exception:
             self._hide_variants()
             return
@@ -448,7 +476,11 @@ class ComponentRow(QWidget):
             return
         try:
             from db.raw_variants_repo import fetch_variant
-            var = fetch_variant(self._get_conn(), variant_id)
+            conn = self._get_conn()
+            if not conn:
+                self.lbl_variant_cost.setVisible(False)
+                return
+            var = fetch_variant(conn, variant_id)
             if not var:
                 self.lbl_variant_cost.setVisible(False)
                 return
@@ -670,9 +702,8 @@ class ComponentRow(QWidget):
             elif child_type == "machine_op":
                 op_id = data[1]
                 self._hide_op_rows()
-                # ✅ لما المستخدم يختار عملية جديدة، نصفر القفل والـ pinned
+                # ✅ المستخدم اختار عملية جديدة → نصفر الـ pinned
                 self._pinned_op_row_id = None
-                self._op_row_id_locked = False
                 self._load_op_rows(op_id, None)
                 self._hide_variants()
             else:
@@ -706,7 +737,6 @@ class ComponentRow(QWidget):
         self._pinned_id   = None
         self._pinned_variant   = None
         self._pinned_op_row_id = None
-        self._op_row_id_locked = False   # ✅ مسح القفل عند تغيير النوع
         self._clear_orphan()
         self._fill_items(new_type, selected_id=None)
         self._update_total_qty_visibility(new_type)
@@ -717,10 +747,16 @@ class ComponentRow(QWidget):
             self._hide_op_rows()
 
     # ══════════════════════════════════════════════════════
-    # ✅ جلب القيم — المصلوحة
+    # ✅ get_values — المصلوحة نهائياً
     # ══════════════════════════════════════════════════════
 
     def get_values(self) -> tuple | None:
+        """
+        ✅ الإصلاح الجوهري:
+        - machine_op_row_id يُقرأ من _pinned_op_row_id أولاً
+        - currentData() يُستخدم للتحقق فقط، لكن _pinned_op_row_id هو المصدر الموثوق
+        - لأن _pinned_op_row_id يُحدَّث في كل تغيير (سواء من المستخدم أو من التحميل)
+        """
         try:
             data = self._item_combo.current_data()
             qty  = float(self.qty_edit.text())
@@ -738,23 +774,16 @@ class ComponentRow(QWidget):
 
             machine_op_row_id = None
             if child_type == "machine_op":
-                # ✅ الأولوية الحقيقية:
-                # 1. currentData من الـ combo (اختيار المستخدم الحالي)
-                # 2. _pinned_op_row_id (محفوظ من DB أو اختيار سابق)
-                # 3. أول صف حقيقي في الـ combo كـ fallback أخير
-                row_id = self.cmb_op_row.currentData()
-                if row_id is not None:
-                    machine_op_row_id = row_id
-                elif self._pinned_op_row_id is not None:
-                    machine_op_row_id = self._pinned_op_row_id
-                else:
-                    # fallback: أول صف حقيقي
-                    for i in range(self.cmb_op_row.count()):
-                        d = self.cmb_op_row.itemData(i)
-                        if d is not None:
-                            machine_op_row_id = d
-                            self._pinned_op_row_id = d
-                            break
+                # ✅ _pinned_op_row_id هو المصدر الأساسي الموثوق
+                # لأنه يُحدَّث في كل تغيير بما فيها التحميل الأولي
+                machine_op_row_id = self._pinned_op_row_id
+
+                # تحقق إضافي: لو currentData مختلف ومحدد، استخدمه
+                current = self.cmb_op_row.currentData()
+                if current is not None and current != machine_op_row_id:
+                    # المستخدم قد يكون غيّر الاختيار دون أن يُطلق signal
+                    machine_op_row_id = current
+                    self._pinned_op_row_id = current
 
             return child_type, child_id, qty, waste_pct, variant_id, machine_op_row_id
 
@@ -770,9 +799,9 @@ class ComponentRow(QWidget):
         return None
 
     def get_machine_op_row_id(self):
+        """✅ يُرجع _pinned_op_row_id دائماً كمصدر موثوق."""
         if self.cmb_type.currentData() == "machine_op":
-            row_id = self.cmb_op_row.currentData()
-            return row_id if row_id is not None else self._pinned_op_row_id
+            return self._pinned_op_row_id
         return None
 
     @property
