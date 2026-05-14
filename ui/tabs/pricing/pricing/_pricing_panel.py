@@ -6,6 +6,7 @@ _PricingPanel — لوحة إدارة أسعار المنتجات النهائي
 تحتوي على:
   - فورم اختيار المنتج وضبط الهامش والسعر
   - بطاقات إحصائيات (تكلفة، سعر مقترح، سعر يدوي، ربح، هامش فعلي)
+  - ScenarioComparisonWidget — مقارنة تكلفة السيناريوهات
   - جدول قائمة الأسعار مع فلتر
 """
 
@@ -22,6 +23,7 @@ from db.pricing_repo  import fetch_all_pricing, upsert_pricing, delete_pricing
 from models.costing   import calc_cost
 from ui.helpers       import make_table, buttons_row, section_label, danger_button
 from ui.widgets.shared.filter_bar import FilterBar
+from ui.widgets.shared.scenario_comparison_widget import ScenarioComparisonWidget
 from ui.events import bus
 
 from ._stat_box import stat_box
@@ -119,6 +121,10 @@ class _PricingPanel(QWidget):
             stats_row.addWidget(f, stretch=1)
         form_lay.addLayout(stats_row)
 
+        # ── مقارنة السيناريوهات ──────────────────────────
+        self._scenario_comparison = ScenarioComparisonWidget(self.conn)
+        form_lay.addWidget(self._scenario_comparison)
+
         self.btn_save   = QPushButton("💾  حفظ السعر")
         self.btn_cancel = QPushButton("✖  إلغاء")
         self.btn_del    = danger_button("🗑️  حذف السعر")
@@ -187,6 +193,7 @@ class _PricingPanel(QWidget):
 
     def _on_product_selected(self):
         self._update_preview()
+        self._refresh_scenario_comparison()
 
     def _update_preview(self):
         prod_id = self.cmb_product.currentData()
@@ -213,6 +220,8 @@ class _PricingPanel(QWidget):
             return
         cost = calc_cost(self.conn, prod_id)
         self._refresh_manual_stats(cost)
+        # تحديث السعر في مقارنة السيناريوهات عند تغيير السعر اليدوي
+        self._scenario_comparison.update_price(self.sp_price.value())
 
     def _refresh_manual_stats(self, cost: float):
         manual = self.sp_price.value()
@@ -226,6 +235,15 @@ class _PricingPanel(QWidget):
             "background:transparent; border:none;"
         )
         self.lbl_stat_margin_pct.setText(f"{margin_pct:.1f} %")
+
+    def _refresh_scenario_comparison(self):
+        """تحديث widget مقارنة السيناريوهات بناءً على المنتج والسعر الحاليين."""
+        prod_id = self.cmb_product.currentData()
+        if prod_id is None:
+            self._scenario_comparison.clear()
+            return
+        current_price = self.sp_price.value()
+        self._scenario_comparison.load_product(prod_id, current_price)
 
     # ══════════════════════════════════════════════════════
     # CRUD
@@ -269,6 +287,8 @@ class _PricingPanel(QWidget):
         self.lbl_mode.setText("─── تسعير منتج ───")
         self.btn_cancel.setVisible(False)
         self.btn_del.setVisible(False)
+        # مسح مقارنة السيناريوهات
+        self._scenario_comparison.clear()
 
     def _edit_selected(self):
         row = self.table.currentRow()
@@ -307,6 +327,8 @@ class _PricingPanel(QWidget):
         self.btn_cancel.setVisible(True)
         self.btn_del.setVisible(bool(pricing))
         self._refresh_manual_stats(cost)
+        # تحميل مقارنة السيناريوهات بالسعر الحالي
+        self._scenario_comparison.load_product(prod_id, self.sp_price.value())
 
     # ══════════════════════════════════════════════════════
     # تحميل الجدول
