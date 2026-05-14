@@ -179,8 +179,9 @@ class _MachineOpForm(QWidget, EditModeMixin):
         self._update_cost_label()
 
     def _update_cost_label(self):
-        if self._editing_id is not None and self._editing_id > 0:
-            total = calc_op_total_cost(self.conn, self._editing_id)
+        editing_id = getattr(self, '_editing_id', None)
+        if editing_id is not None and editing_id > 0:
+            total = calc_op_total_cost(self.conn, editing_id)
             self.lbl_cost.setText(f"{total:.4f} جنيه / قطعة")
         else:
             self.lbl_cost.setText("─ (أضف العملية أولاً لتظهر الصفوف)")

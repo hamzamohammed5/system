@@ -162,7 +162,8 @@ class _OpRowsEditor(QGroupBox):
         self.table.setColumnWidth(3, 80)
         self.table.setColumnWidth(4, 110)
         self.table.verticalHeader().setVisible(False)
-        self.table.setDefaultAlignment(Qt.AlignRight)
+        self.table.horizontalHeader().setDefaultAlignment(Qt.AlignRight)
+
         root.addWidget(self.table)
 
         # ── مجموع التكلفة ──

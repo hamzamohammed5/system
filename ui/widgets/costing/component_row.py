@@ -8,6 +8,8 @@ ui/widgets/costing/component_row.py  (نسخة محدّثة)
   - waste_pct (كما كان)
 """
 
+import weakref
+
 from PyQt5.QtWidgets import (
     QWidget, QHBoxLayout, QComboBox, QLineEdit,
     QPushButton, QSizePolicy, QLabel, QDoubleSpinBox,
@@ -242,9 +244,13 @@ class ComponentRow(QWidget):
 
         # تحميل الـ combos الإضافية بعد اختيار العنصر
         if child_type == "raw" and child_id is not None:
-            QTimer.singleShot(50, lambda: self._load_variants(child_id, variant_id))
+            _weak = weakref.ref(self)
+            _cid, _vid = child_id, variant_id
+            QTimer.singleShot(50, lambda: (s := _weak()) and s._load_variants(_cid, _vid))
         elif child_type == "machine_op" and child_id is not None:
-            QTimer.singleShot(50, lambda: self._load_op_rows(child_id, machine_op_row_id))
+            _weak = weakref.ref(self)
+            _oid, _rid = child_id, machine_op_row_id
+            QTimer.singleShot(50, lambda: (s := _weak()) and s._load_op_rows(_oid, _rid))
 
     # ══════════════════════════════════════════════════════
     # Op Rows (صفوف العملية) — تحميل وعرض
@@ -327,6 +333,13 @@ class ComponentRow(QWidget):
     # ══════════════════════════════════════════════════════
 
     def _load_variants(self, item_id: int, selected_variant_id: int = None):
+        
+        try:
+            if not self.cmb_variant or not self.cmb_variant.parent():
+                return
+        except RuntimeError:
+            return
+
         if item_id is None:
             self._hide_variants()
             return
@@ -584,6 +597,8 @@ class ComponentRow(QWidget):
     # Signal handlers
     # ══════════════════════════════════════════════════════
 
+    
+
     def _on_item_selected(self, data):
         if data and data[0] not in ("__sep__", "__orphan__") and data[1] is not None:
             self._pinned_id = data[1]
@@ -595,10 +610,14 @@ class ComponentRow(QWidget):
 
             if child_type == "raw":
                 self._auto_fill_total_qty()
-                QTimer.singleShot(50, lambda: self._load_variants(data[1]))
+                item_id = data[1]
+                weak_self = weakref.ref(self)
+                QTimer.singleShot(50, lambda: (s := weak_self()) and s._load_variants(item_id))
                 self._hide_op_rows()
             elif child_type == "machine_op":
-                QTimer.singleShot(50, lambda: self._load_op_rows(data[1]))
+                op_id = data[1]
+                weak_self = weakref.ref(self)
+                QTimer.singleShot(50, lambda: (s := weak_self()) and s._load_op_rows(op_id))
                 self._hide_variants()
             else:
                 self._hide_variants()
