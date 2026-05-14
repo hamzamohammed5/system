@@ -1,5 +1,5 @@
 """
-ui/widgets/bulk_replace_dialog.py
+ui/widgets/costing/bulk_replace/bulk_replace_dialog.py
 ==================================
 نافذة "الاستبدال الشامل" — تُفتح من تبويبات الخامات / العمالة / التشغيل.
 

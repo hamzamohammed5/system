@@ -1,5 +1,5 @@
 """
-ui/widgets/bom_scenarios_panel.py
+ui/widgets/costing/bom_scenarios_panel.py
 ==================================
 _BomScenariosPanel — لوحة إدارة سيناريوهات BOM.
 

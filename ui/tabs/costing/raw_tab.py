@@ -13,7 +13,7 @@ from PyQt5.QtWidgets import QWidget, QVBoxLayout, QTabWidget, QSplitter
 from PyQt5.QtCore import Qt
 
 from db.connection import get_connection
-from ui.widgets.category_manager import CategoryManager
+from ui.widgets.shared.category_manager import CategoryManager
 
 from .raw.raw_input_panel import _InputPanel
 from .raw.raw_table_panel import _TablePanel

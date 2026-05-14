@@ -1,5 +1,5 @@
 """
-ui/widgets/category_combo.py
+ui/widgets/shared/category_combo.py
 =============================
 CategoryCombo — QComboBox يعرض التصنيفات بشكل هرمي (indent).
 """

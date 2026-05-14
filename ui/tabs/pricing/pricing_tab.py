@@ -12,7 +12,7 @@ PricingTab — التبويب الرئيسي للتسعير.
 from PyQt5.QtWidgets import QWidget, QVBoxLayout, QTabWidget
 
 from db.connection import get_connection
-from ui.widgets.category_manager import CategoryManager
+from ui.widgets.shared.category_manager import CategoryManager
 
 from .pricing._pricing_panel import _PricingPanel
 

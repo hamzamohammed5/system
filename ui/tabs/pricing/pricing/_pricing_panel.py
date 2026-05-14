@@ -21,7 +21,7 @@ from db.items_repo    import fetch_items_by_type, fetch_item
 from db.pricing_repo  import fetch_all_pricing, upsert_pricing, delete_pricing
 from models.costing   import calc_cost
 from ui.helpers       import make_table, buttons_row, section_label, danger_button
-from ui.widgets.filter_bar import FilterBar
+from ui.widgets.shared.filter_bar import FilterBar
 from ui.events import bus
 
 from ._stat_box import stat_box

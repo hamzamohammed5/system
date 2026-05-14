@@ -14,9 +14,9 @@ from PyQt5.QtCore import Qt
 
 from db.items_repo import fetch_item, insert_item, update_item
 from ui.helpers import EditModeMixin, buttons_row
-from ui.widgets.category_manager import CategoryCombo
-from ui.widgets.raw_variants_panel import _RawVariantsPanel
-from ui.widgets.scrollable_form import wrap_in_scroll
+from ui.widgets.shared.category_manager import CategoryCombo
+from ui.widgets.costing.raw_variants_panel import _RawVariantsPanel
+from ui.widgets.shared.scrollable_form import wrap_in_scroll
 from ui.events import bus
 
 

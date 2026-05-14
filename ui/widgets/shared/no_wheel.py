@@ -1,5 +1,5 @@
 """
-ui/widgets/no_wheel.py
+ui/widgets/shared/no_wheel.py
 ======================
 يمنع عجلة الماوس من تغيير قيمة أي input widget
 (QComboBox, QSpinBox, QDoubleSpinBox, QDateEdit, QTimeEdit, QSlider).

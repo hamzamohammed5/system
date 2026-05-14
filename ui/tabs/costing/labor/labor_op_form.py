@@ -16,8 +16,8 @@ from db.operations_repo import (
     fetch_labor_op, insert_labor_op, update_labor_op,
 )
 from ui.helpers import EditModeMixin, buttons_row
-from ui.widgets.category_manager import CategoryCombo
-from ui.widgets.scrollable_form import wrap_in_scroll
+from ui.widgets.shared.category_manager import CategoryCombo
+from ui.widgets.shared.scrollable_form import wrap_in_scroll
 from ui.events import bus
 
 

@@ -15,8 +15,8 @@ from db.items_repo import (
     cleanup_empty_products_after_orphan_fix,
 )
 from ui.helpers import confirm_delete
-from ui.widgets.component_row import ComponentRow
-from ui.widgets.bom_tree      import BomTree
+from ui.widgets.costing.component_row import ComponentRow
+from ui.widgets.costing.bom_tree      import BomTree
 from ui.events import bus
 
 from .product_form  import _FormPanel

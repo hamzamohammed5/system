@@ -1,5 +1,5 @@
 """
-ui/widgets/bulk_replace_helpers.py
+ui/widgets/costing/bulk_replace/bulk_replace_helpers.py
 ====================================
 دوال مساعدة وـ _ProductRow لنافذة الاستبدال الشامل.
 """

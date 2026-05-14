@@ -1,5 +1,5 @@
 """
-ui/widgets/searchable_combo.py
+ui/widgets/shared/searchable_combo.py
 ===============================
 _SearchableCombo  — QComboBox مع حقل بحث نصي مدمج.
 _build_grouped_items — دالة مساعدة تجمّع العناصر بالتصنيف.

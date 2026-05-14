@@ -1,5 +1,5 @@
 """
-ui/widgets/category_form.py
+ui/widgets/shared/category_form.py
 ============================
 _CategoryForm — QGroupBox لإضافة وتعديل التصنيفات الهرمية.
 """

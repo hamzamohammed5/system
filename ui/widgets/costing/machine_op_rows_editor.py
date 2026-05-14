@@ -1,5 +1,5 @@
 """
-ui/widgets/machine_op_rows_editor.py
+ui/widgets/costing/machine_op_rows_editor.py
 =====================================
 _OpRowsEditor — محرر صفوف عملية التشغيل.
 

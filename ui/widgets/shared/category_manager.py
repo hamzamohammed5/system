@@ -1,5 +1,5 @@
 """
-ui/widgets/category_manager.py
+ui/widgets/shared/category_manager.py
 ===============================
 CategoryManager — شجرة QTreeWidget لإدارة التصنيفات الهرمية.
 

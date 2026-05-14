@@ -14,8 +14,8 @@ from PyQt5.QtCore import Qt
 
 from db.operations_repo import fetch_machine, insert_machine, update_machine
 from ui.helpers import EditModeMixin, buttons_row
-from ui.widgets.category_manager import CategoryCombo
-from ui.widgets.scrollable_form import wrap_in_scroll
+from ui.widgets.shared.category_manager import CategoryCombo
+from ui.widgets.shared.scrollable_form import wrap_in_scroll
 from ui.events import bus
 
 

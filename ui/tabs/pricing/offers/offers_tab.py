@@ -22,7 +22,7 @@ from PyQt5.QtCore import Qt
 from db.connection  import get_connection
 from db.offers_repo import fetch_offer, delete_offer
 from ui.helpers     import confirm_delete
-from ui.widgets.category_manager import CategoryManager
+from ui.widgets.shared.category_manager import CategoryManager
 from ui.events      import bus
 
 from .offer_form    import _OfferForm

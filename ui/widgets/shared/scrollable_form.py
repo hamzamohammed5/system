@@ -1,5 +1,5 @@
 """
-ui/widgets/scrollable_form.py
+ui/widgets/shared/scrollable_form.py
 ==============================
 ScrollableForm — wrapper يلف أي QWidget جوه QScrollArea عمودي.
 

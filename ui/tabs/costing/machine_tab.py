@@ -15,7 +15,7 @@ from PyQt5.QtWidgets import QWidget, QVBoxLayout, QTabWidget, QSplitter
 from PyQt5.QtCore import Qt
 
 from db.connection import get_connection
-from ui.widgets.category_manager import CategoryManager
+from ui.widgets.shared.category_manager import CategoryManager
 
 from .machine.machine_form     import _MachineForm
 from .machine.machine_table    import _MachineTable

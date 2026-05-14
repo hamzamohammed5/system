@@ -1,5 +1,5 @@
 """
-ui/widgets/flexible_text.py
+ui/widgets/shared/flexible_text.py
 ============================
 أدوات عرض النصوص بشكل flexible في الجداول والشجر.
 

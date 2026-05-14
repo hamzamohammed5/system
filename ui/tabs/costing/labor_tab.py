@@ -14,7 +14,7 @@ from PyQt5.QtWidgets import QWidget, QVBoxLayout, QTabWidget, QSplitter
 from PyQt5.QtCore import Qt
 
 from db.connection import get_connection
-from ui.widgets.category_manager import CategoryManager
+from ui.widgets.shared.category_manager import CategoryManager
 
 from .labor.labor_settings import _LaborSettingsPanel
 from .labor.labor_op_form  import _LaborOpForm

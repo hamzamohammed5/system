@@ -28,11 +28,6 @@ def run_migrations_v2(conn):
     """تنفيذ Migrations الجديدة."""
 
     # ══ 1. جدول machine_op_rows ══════════════════════════════════
-    # صفوف (sub-rows) لكل عملية تشغيل
-    # - value  : نفس معنى machine_ops.value (دقائق أو وحدات)
-    # - count  : العدد — تكلفة الصف = (value × rate) ÷ count
-    # - label  : وصف اختياري للصف
-    # ملاحظة: mode (time/unit) يُحدد من الماكينة المرتبطة بالعملية
     if not _table_exists(conn, "machine_op_rows"):
         conn.execute("""
             CREATE TABLE machine_op_rows (
@@ -47,30 +42,33 @@ def run_migrations_v2(conn):
         """)
         conn.commit()
 
-        # ══ ترحيل البيانات الموجودة ══════════════════════════════
-        # كل عملية موجودة → ننشئ صف واحد بنفس value/count=1
-        existing_ops = conn.execute(
-            "SELECT id, value FROM machine_ops"
-        ).fetchall()
-        for op in existing_ops:
-            conn.execute(
-                "INSERT INTO machine_op_rows (op_id, label, value, count, sort_order)"
-                " VALUES (?, '', ?, 1, 0)",
-                (op["id"], op["value"])
-            )
-        conn.commit()
+        # ترحيل البيانات الموجودة: كل عملية → صف واحد بنفس value/count=1
+        try:
+            existing_ops = conn.execute(
+                "SELECT id, value FROM machine_ops"
+            ).fetchall()
+            for op in existing_ops:
+                conn.execute(
+                    "INSERT INTO machine_op_rows (op_id, label, value, count, sort_order)"
+                    " VALUES (?, '', ?, 1, 0)",
+                    (op["id"], op["value"])
+                )
+            conn.commit()
+        except Exception as e:
+            print(f"[migrations_v2] machine_op_rows migration warning: {e}")
 
-    # ══ 2. عمود row_id في bom ════════════════════════════════════
-    # يربط كل صف BOM من نوع machine_op بصف محدد في machine_op_rows
+    # ══ 2. عمود machine_op_row_id في bom ════════════════════════
     if not _column_exists(conn, "bom", "machine_op_row_id"):
-        conn.execute(
-            "ALTER TABLE bom ADD COLUMN machine_op_row_id INTEGER "
-            "REFERENCES machine_op_rows(id) ON DELETE SET NULL"
-        )
-        conn.commit()
+        try:
+            conn.execute(
+                "ALTER TABLE bom ADD COLUMN machine_op_row_id INTEGER "
+                "REFERENCES machine_op_rows(id) ON DELETE SET NULL"
+            )
+            conn.commit()
+        except Exception as e:
+            print(f"[migrations_v2] machine_op_row_id column warning: {e}")
 
     # ══ 3. جدول bom_scenarios ════════════════════════════════════
-    # لكل منتج (semi/final) ممكن يكون له أكثر من سيناريو BOM
     if not _table_exists(conn, "bom_scenarios"):
         conn.execute("""
             CREATE TABLE bom_scenarios (
@@ -84,38 +82,44 @@ def run_migrations_v2(conn):
         """)
         conn.commit()
 
-        # ══ ترحيل BOM الموجود → سيناريو default لكل منتج ═══════
-        products = conn.execute(
-            "SELECT DISTINCT parent_id FROM bom"
-        ).fetchall()
-        for p in products:
-            pid = p["parent_id"]
-            conn.execute(
-                "INSERT INTO bom_scenarios (item_id, name, is_default) VALUES (?, ?, 1)",
-                (pid, "سيناريو 1")
-            )
-        conn.commit()
+        # ترحيل BOM الموجود → سيناريو default لكل منتج
+        try:
+            products = conn.execute(
+                "SELECT DISTINCT parent_id FROM bom"
+            ).fetchall()
+            for p in products:
+                pid = p["parent_id"]
+                conn.execute(
+                    "INSERT INTO bom_scenarios (item_id, name, is_default) VALUES (?, ?, 1)",
+                    (pid, "سيناريو 1")
+                )
+            conn.commit()
+        except Exception as e:
+            print(f"[migrations_v2] bom_scenarios migration warning: {e}")
 
     # ══ 4. عمود scenario_id في bom ══════════════════════════════
     if not _column_exists(conn, "bom", "scenario_id"):
-        conn.execute(
-            "ALTER TABLE bom ADD COLUMN scenario_id INTEGER "
-            "REFERENCES bom_scenarios(id) ON DELETE CASCADE"
-        )
-        conn.commit()
+        try:
+            conn.execute(
+                "ALTER TABLE bom ADD COLUMN scenario_id INTEGER "
+                "REFERENCES bom_scenarios(id) ON DELETE CASCADE"
+            )
+            conn.commit()
 
-        # ربط الصفوف الموجودة بالسيناريو الـ default الخاص بمنتجها
-        bom_rows = conn.execute(
-            "SELECT id, parent_id FROM bom WHERE scenario_id IS NULL"
-        ).fetchall()
-        for row in bom_rows:
-            sc = conn.execute(
-                "SELECT id FROM bom_scenarios WHERE item_id=? AND is_default=1",
-                (row["parent_id"],)
-            ).fetchone()
-            if sc:
-                conn.execute(
-                    "UPDATE bom SET scenario_id=? WHERE id=?",
-                    (sc["id"], row["id"])
-                )
-        conn.commit()
+            # ربط الصفوف الموجودة بالسيناريو الـ default الخاص بمنتجها
+            bom_rows = conn.execute(
+                "SELECT id, parent_id FROM bom WHERE scenario_id IS NULL"
+            ).fetchall()
+            for row in bom_rows:
+                sc = conn.execute(
+                    "SELECT id FROM bom_scenarios WHERE item_id=? AND is_default=1",
+                    (row["parent_id"],)
+                ).fetchone()
+                if sc:
+                    conn.execute(
+                        "UPDATE bom SET scenario_id=? WHERE id=?",
+                        (sc["id"], row["id"])
+                    )
+            conn.commit()
+        except Exception as e:
+            print(f"[migrations_v2] scenario_id column warning: {e}")

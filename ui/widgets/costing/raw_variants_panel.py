@@ -1,5 +1,5 @@
 """
-ui/widgets/raw_variants_panel.py
+ui/widgets/costing/raw_variants_panel.py
 =================================
 _RawVariantsPanel — لوحة إدارة variants الخامة (صفوف الإنتاج).
 

@@ -1,5 +1,5 @@
 """
-ui/widgets/component_row.py  (نسخة محدّثة)
+ui/widgets/costing/component_row.py  (نسخة محدّثة)
 ============================================
 تغييرات:
   - لما نختار machine_op يظهر combo اختيار الصف (machine_op_row)
@@ -15,7 +15,7 @@ from PyQt5.QtWidgets import (
 from PyQt5.QtCore import pyqtSignal, Qt, QTimer
 from PyQt5.QtGui  import QColor
 
-from ui.widgets.searchable_combo import _SearchableCombo, _build_grouped_items
+from ui.widgets.shared.searchable_combo import _SearchableCombo, _build_grouped_items
 from ui.events import bus
 
 _TYPES = [

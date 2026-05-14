@@ -16,7 +16,7 @@ from models.costing import calc_cost
 from ui.helpers import (
     make_table, buttons_row, section_label, danger_button,
 )
-from ui.widgets.filter_bar import FilterBar
+from ui.widgets.shared.filter_bar import FilterBar
 from ui.events import bus
 
 _TYPE_AR = {

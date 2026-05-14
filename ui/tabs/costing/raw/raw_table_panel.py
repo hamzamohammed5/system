@@ -13,8 +13,8 @@ from models.costing import raw_unit_price
 from ui.helpers import (
     make_table, buttons_row, section_label, confirm_delete, danger_button,
 )
-from ui.widgets.bulk_replace_dialog import BulkReplaceDialog
-from ui.widgets.filter_bar import FilterBar
+from ui.widgets.costing.bulk_replace.bulk_replace_dialog import BulkReplaceDialog
+from ui.widgets.shared.filter_bar import FilterBar
 from ui.events import bus
 
 

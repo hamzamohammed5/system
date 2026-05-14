@@ -25,7 +25,7 @@ from db.offers_repo import (
 )
 from models.costing import calc_cost
 from ui.helpers     import buttons_row
-from ui.widgets.category_manager import CategoryCombo
+from ui.widgets.shared.category_manager import CategoryCombo
 from ui.events      import bus
 
 from .offer_item_row import _OfferItemRow

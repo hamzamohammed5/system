@@ -12,8 +12,8 @@ from db.operations_repo import fetch_all_labor_ops, delete_labor_op
 from ui.helpers import (
     make_table, buttons_row, section_label, confirm_delete, danger_button,
 )
-from ui.widgets.bulk_replace_dialog import BulkReplaceDialog
-from ui.widgets.filter_bar import FilterBar
+from ui.widgets.costing.bulk_replace.bulk_replace_dialog import BulkReplaceDialog
+from ui.widgets.shared.filter_bar import FilterBar
 from ui.events import bus
 
 

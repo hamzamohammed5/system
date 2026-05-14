@@ -1,5 +1,5 @@
 """
-ui/widgets/bulk_replace_products_panel.py
+ui/widgets/costing/bulk_replace/bulk_replace_products_panel.py
 ==========================================
 _ProductsPanel — لوحة عرض المنتجات المتأثرة في نافذة الاستبدال الشامل.
 

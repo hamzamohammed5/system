@@ -1,19 +1,18 @@
 """
-ui/tabs/costing/machine/machine_op_form.py  (نسخة محدّثة)
+ui/tabs/costing/machine/machine_op_form.py
 ==========================================
 _MachineOpForm — فورم إضافة / تعديل عملية تشغيل.
 
-التغييرات:
-  - وضع الحساب (time/unit) يُحدد من الماكينة تلقائياً ولا يُعرض اختياره
-  - بعد حفظ العملية يظهر _OpRowsEditor لإضافة الصفوف
-  - معاينة التكلفة تعتمد على إجمالي الصفوف
+- وضع الحساب (time/unit) يُحدد من الماكينة تلقائياً
+- بعد حفظ العملية يظهر _OpRowsEditor لإضافة الصفوف
+- معاينة التكلفة تعتمد على إجمالي الصفوف
 """
 
 from PyQt5.QtWidgets import (
     QWidget, QVBoxLayout, QHBoxLayout, QFormLayout,
-    QLineEdit, QPushButton, QDoubleSpinBox, QLabel,
+    QLineEdit, QPushButton, QLabel,
     QMessageBox, QGroupBox, QComboBox,
-    QSizePolicy, QFrame,
+    QSizePolicy,
 )
 from PyQt5.QtCore import Qt
 
@@ -24,9 +23,9 @@ from db.operations_repo import (
 )
 from db.machine_op_rows_repo import calc_op_total_cost
 from ui.helpers import EditModeMixin, buttons_row
-from ui.widgets.category_manager import CategoryCombo
-from ui.widgets.scrollable_form import wrap_in_scroll
-from ui.widgets.machine_op_rows_editor import _OpRowsEditor
+from ui.widgets.shared.category_manager import CategoryCombo
+from ui.widgets.shared.scrollable_form import wrap_in_scroll
+from ui.widgets.costing.machine_op_rows_editor import _OpRowsEditor
 from ui.events import bus
 
 
@@ -34,6 +33,7 @@ class _MachineOpForm(QWidget, EditModeMixin):
     def __init__(self, conn, parent=None):
         super().__init__(parent)
         self.conn = conn
+        self._rows_editor = None   # ← تُهيَّأ أولاً قبل أي استدعاء
         self._build()
         self.init_edit_mode(self.btn_add, self.btn_save, self.btn_cancel, self.lbl_mode)
         bus.data_changed.connect(self._refresh_machines)
@@ -70,7 +70,8 @@ class _MachineOpForm(QWidget, EditModeMixin):
 
         self.cmb_machine = QComboBox()
         self.cmb_machine.setMinimumHeight(30)
-        self.cmb_machine.currentIndexChanged.connect(self._on_machine_changed)
+        # ملاحظة: نربط الـ signal بعد إنشاء _rows_editor
+        # self.cmb_machine.currentIndexChanged.connect(self._on_machine_changed)
 
         # ── وضع الحساب (مقروء فقط، من الماكينة) ──
         self.lbl_machine_mode = QLabel("─")
@@ -93,12 +94,10 @@ class _MachineOpForm(QWidget, EditModeMixin):
             "background:#f0faf0; border:1px solid #b2dfb2; border-radius:4px; padding:4px 8px;"
         )
 
-        self._refresh_machines()
-
-        form.addRow("اسم العملية :", self.inp_name)
-        form.addRow("الماكينة :",    self.cmb_machine)
-        form.addRow("وضع الحساب :", self.lbl_machine_mode)
-        form.addRow("التصنيف :",     self.cmb_category)
+        form.addRow("اسم العملية :",     self.inp_name)
+        form.addRow("الماكينة :",        self.cmb_machine)
+        form.addRow("وضع الحساب :",      self.lbl_machine_mode)
+        form.addRow("التصنيف :",         self.cmb_category)
         form.addRow("إجمالي التكلفة :", self.lbl_cost)
         root.addWidget(grp)
 
@@ -114,10 +113,17 @@ class _MachineOpForm(QWidget, EditModeMixin):
         root.addLayout(buttons_row(self.btn_add, self.btn_save, self.btn_cancel))
 
         # ══ محرر الصفوف ══════════════════════════════════
+        # يُنشأ هنا قبل أي استدعاء لـ _on_machine_changed
         self._rows_editor = _OpRowsEditor(self.conn)
         root.addWidget(self._rows_editor)
 
         root.addStretch()
+
+        # ربط signal الماكينة بعد إنشاء _rows_editor
+        self.cmb_machine.currentIndexChanged.connect(self._on_machine_changed)
+
+        # الآن نملأ الماكينات بأمان
+        self._refresh_machines()
 
     # ══════════════════════════════════════════════════════
     # تحديث الماكينات والوضع
@@ -128,11 +134,8 @@ class _MachineOpForm(QWidget, EditModeMixin):
         self.cmb_machine.blockSignals(True)
         self.cmb_machine.clear()
         for m in fetch_all_machines(self.conn):
-            # عرض الماكينة مع وضع حسابها
-            mode_icon = "⏱" if m["rate_per_hour"] > 0 else "📦"
-            self.cmb_machine.addItem(
-                f"{m['id']} — {m['name']}", m["id"]
-            )
+            self.cmb_machine.addItem(f"{m['id']} — {m['name']}", m["id"])
+        # استعادة الاختيار السابق
         for i in range(self.cmb_machine.count()):
             if self.cmb_machine.itemData(i) == prev:
                 self.cmb_machine.setCurrentIndex(i)
@@ -145,15 +148,15 @@ class _MachineOpForm(QWidget, EditModeMixin):
         machine_id = self.cmb_machine.currentData()
         if machine_id is None:
             self.lbl_machine_mode.setText("─")
-            self._rows_editor.update_rates("time", 0.0, 0.0)
+            if self._rows_editor is not None:
+                self._rows_editor.update_rates("time", 0.0, 0.0)
             return
 
         m = fetch_machine(self.conn, machine_id)
         if not m:
             return
 
-        # تحديد الوضع: لو rate_per_hour > 0 → time، غير كده → unit
-        # لو الاثنين موجودين → time أولوية
+        # وضع الحساب: rate_per_hour > 0 → time، غير كده → unit
         if float(m["rate_per_hour"]) > 0:
             mode = "time"
             self.lbl_machine_mode.setText(
@@ -166,7 +169,7 @@ class _MachineOpForm(QWidget, EditModeMixin):
             )
 
         # تحديث محرر الصفوف
-        if self._rows_editor.isEnabled():
+        if self._rows_editor is not None and self._rows_editor.isEnabled():
             self._rows_editor.update_rates(
                 mode,
                 float(m["rate_per_hour"]),
@@ -228,10 +231,8 @@ class _MachineOpForm(QWidget, EditModeMixin):
         m = fetch_machine(self.conn, machine_id)
         if not m:
             return None
-        # الوضع من الماكينة
-        mode = "time" if float(m["rate_per_hour"]) > 0 else "unit"
-        # value = 0 (الصفوف تحمل القيم الحقيقية)
-        return name, machine_id, mode, 0.0
+        mode  = "time" if float(m["rate_per_hour"]) > 0 else "unit"
+        return name, machine_id, mode, 0.0   # value=0 الصفوف تحمل القيم
 
     def _add(self):
         result = self._collect()

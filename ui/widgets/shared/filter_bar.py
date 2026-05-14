@@ -1,5 +1,5 @@
 """
-ui/widgets/filter_bar.py
+ui/widgets/shared/filter_bar.py
 ========================
 FilterBar — شريط فلتر مشترك يُستخدم في كل التبويبات.
 
