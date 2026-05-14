@@ -1,12 +1,6 @@
 """
-ui/widgets/costing/component_row.py  (نسخة محدّثة)
-============================================
-تغييرات:
-  - لما نختار machine_op يظهر sub-row تحت الصف الأساسي لاختيار machine_op_row
-  - الـ sub-row منفصل عن سطر الكمية/الهادر عشان ما يبوظش الـ layout
-  - حفظ machine_op_row_id بشكل صحيح
-  - variant combo للخامات (كما كان)
-  - waste_pct (كما كان)
+الإصلاح الكامل لمشكلة machine_op_row_id في component_row.py
+ضع هذا الكود في ui/widgets/costing/component_row.py
 """
 
 import weakref
@@ -63,6 +57,7 @@ class ComponentRow(QWidget):
         self._pinned_id            = child_id
         self._pinned_total_qty     = raw_total_qty
         self._pinned_variant       = variant_id
+        # ✅ نحفظ machine_op_row_id من البداية
         self._pinned_op_row_id     = machine_op_row_id
 
         self._build(child_type, child_id, qty, raw_total_qty,
@@ -80,17 +75,14 @@ class ComponentRow(QWidget):
 
     def _build(self, child_type, child_id, qty, raw_total_qty,
                waste_pct=0.0, variant_id=None, machine_op_row_id=None):
-        # Layout عمودي للـ widget الكلي
         outer = QVBoxLayout(self)
         outer.setContentsMargins(0, 2, 0, 2)
         outer.setSpacing(2)
 
-        # ── السطر الرئيسي ──────────────────────────────
         main_row = QHBoxLayout()
         main_row.setContentsMargins(0, 0, 0, 0)
         main_row.setSpacing(6)
 
-        # ── النوع ──
         self.cmb_type = QComboBox()
         self.cmb_type.setSizePolicy(QSizePolicy.Preferred, QSizePolicy.Fixed)
         self.cmb_type.setMinimumContentsLength(10)
@@ -98,11 +90,9 @@ class ComponentRow(QWidget):
         for key, label in _TYPES:
             self.cmb_type.addItem(label, key)
 
-        # ── العنصر (searchable) ──
         self._item_combo = _SearchableCombo()
         self._item_combo.item_selected.connect(self._on_item_selected)
 
-        # ── Variant الخامة ──
         self.cmb_variant = QComboBox()
         self.cmb_variant.setMinimumHeight(26)
         self.cmb_variant.setMinimumWidth(130)
@@ -131,7 +121,6 @@ class ComponentRow(QWidget):
         )
         self.lbl_variant_cost.setVisible(False)
 
-        # ── الكمية المستهلكة ──
         self.qty_edit = QLineEdit()
         self.qty_edit.setPlaceholderText("الكمية")
         self.qty_edit.setSizePolicy(QSizePolicy.Preferred, QSizePolicy.Fixed)
@@ -139,7 +128,6 @@ class ComponentRow(QWidget):
         self.qty_edit.setMaximumWidth(90)
         self.qty_edit.setText(str(qty) if qty else "")
 
-        # ── نسبة الهادر % ──
         self.waste_spin = QDoubleSpinBox()
         self.waste_spin.setRange(0, 100)
         self.waste_spin.setDecimals(1)
@@ -167,7 +155,6 @@ class ComponentRow(QWidget):
         self.waste_spin.valueChanged.connect(self._on_waste_changed)
         self._update_waste_style(waste_pct or 0.0)
 
-        # ── الكمية الكلية (raw فقط) ──
         self.total_qty_edit = QLineEdit()
         self.total_qty_edit.setPlaceholderText("الكلي")
         self.total_qty_edit.setSizePolicy(QSizePolicy.Preferred, QSizePolicy.Fixed)
@@ -181,13 +168,11 @@ class ComponentRow(QWidget):
         self.lbl_total_qty.setStyleSheet("color: #888; font-size: 11px;")
         self.lbl_total_qty.setFixedWidth(14)
 
-        # ── حذف ──
         del_btn = QPushButton("❌")
         del_btn.setSizePolicy(QSizePolicy.Fixed, QSizePolicy.Fixed)
         del_btn.setFixedWidth(32)
         del_btn.clicked.connect(lambda: self.removed.emit(self))
 
-        # تجميع السطر الرئيسي
         main_row.addWidget(self.cmb_type)
         main_row.addWidget(self._item_combo, stretch=1)
         main_row.addWidget(self.cmb_variant)
@@ -206,7 +191,7 @@ class ComponentRow(QWidget):
         main_row.addWidget(del_btn)
         outer.addLayout(main_row)
 
-        # ── السطر الفرعي لصفوف عملية التشغيل ──────────
+        # ── السطر الفرعي لصفوف عملية التشغيل ──
         self._sub_row_widget = QFrame()
         self._sub_row_widget.setStyleSheet("""
             QFrame {
@@ -271,16 +256,16 @@ class ComponentRow(QWidget):
 
         self.cmb_type.currentIndexChanged.connect(self._on_type_changed)
 
-        # تحميل الـ combos الإضافية بعد اختيار العنصر
         if child_type == "raw" and child_id is not None:
             _weak = weakref.ref(self)
             _cid, _vid = child_id, variant_id
             QTimer.singleShot(50, lambda: (s := _weak()) and s._load_variants(_cid, _vid))
         elif child_type == "machine_op" and child_id is not None:
+            # ✅ نمرر machine_op_row_id المحفوظ مباشرة
             self._load_op_rows(child_id, machine_op_row_id)
 
     # ══════════════════════════════════════════════════════
-    # Op Rows — تحميل وعرض في السطر الفرعي
+    # Op Rows
     # ══════════════════════════════════════════════════════
 
     def _load_op_rows(self, op_id: int, selected_row_id: int = None):
@@ -308,10 +293,11 @@ class ComponentRow(QWidget):
         self.cmb_op_row.blockSignals(True)
         self.cmb_op_row.clear()
 
-        # ✅ نحفظ selected_row_id في _pinned_op_row_id
-        self._pinned_op_row_id = selected_row_id
+        # ✅ نحفظ selected_row_id مباشرة في _pinned_op_row_id
+        if selected_row_id is not None:
+            self._pinned_op_row_id = selected_row_id
 
-        # placeholder بس لو مفيش اختيار محدد وفيه أكثر من صف
+        # ✅ لا نضيف placeholder لو عندنا selected_row_id محدد
         has_placeholder = False
         if len(rows) > 1 and selected_row_id is None:
             self.cmb_op_row.addItem("─ اختر صف ─", None)
@@ -333,12 +319,14 @@ class ComponentRow(QWidget):
                     break
 
         if not restored:
-            # أول صف حقيقي (بعد الـ placeholder لو موجود)
+            # أول صف حقيقي
             first_real = 1 if has_placeholder else 0
             if first_real < self.cmb_op_row.count():
                 self.cmb_op_row.setCurrentIndex(first_real)
-                # ✅ احفظ الاختيار التلقائي
-                self._pinned_op_row_id = self.cmb_op_row.itemData(first_real)
+                # ✅ احفظ الاختيار التلقائي في _pinned_op_row_id
+                auto_id = self.cmb_op_row.itemData(first_real)
+                if auto_id is not None:
+                    self._pinned_op_row_id = auto_id
 
         self.cmb_op_row.blockSignals(False)
         self._sub_row_widget.setVisible(True)
@@ -353,7 +341,7 @@ class ComponentRow(QWidget):
         self._sub_row_widget.setVisible(False)
 
     def _on_op_row_changed(self):
-        # ✅ احفظ الاختيار دايماً
+        # ✅ احفظ الاختيار الجديد فوراً في _pinned_op_row_id
         row_id = self.cmb_op_row.currentData()
         if row_id is not None:
             self._pinned_op_row_id = row_id
@@ -367,6 +355,8 @@ class ComponentRow(QWidget):
             return
         row_id = self.cmb_op_row.currentData()
         if row_id is None:
+            row_id = self._pinned_op_row_id  # ✅ fallback
+        if row_id is None:
             self.lbl_op_row_cost.setText("")
             return
         try:
@@ -378,7 +368,7 @@ class ComponentRow(QWidget):
             self.lbl_op_row_cost.setText("")
 
     # ══════════════════════════════════════════════════════
-    # Variants — تحميل وعرض (كما كان)
+    # Variants
     # ══════════════════════════════════════════════════════
 
     def _load_variants(self, item_id: int, selected_variant_id: int = None):
@@ -663,7 +653,9 @@ class ComponentRow(QWidget):
             elif child_type == "machine_op":
                 op_id = data[1]
                 self._hide_op_rows()
-                self._load_op_rows(op_id)
+                # ✅ لما المستخدم يختار عملية جديدة، نصفر الـ pinned_op_row_id
+                self._pinned_op_row_id = None
+                self._load_op_rows(op_id, None)
                 self._hide_variants()
             else:
                 self._hide_variants()
@@ -706,7 +698,7 @@ class ComponentRow(QWidget):
             self._hide_op_rows()
 
     # ══════════════════════════════════════════════════════
-    # جلب القيم
+    # ✅ جلب القيم — الدالة المصلوحة
     # ══════════════════════════════════════════════════════
 
     def get_values(self) -> tuple | None:
@@ -727,19 +719,24 @@ class ComponentRow(QWidget):
 
             machine_op_row_id = None
             if child_type == "machine_op":
+                # ✅ الأولوية: currentData من الـ combo أولاً
                 row_id = self.cmb_op_row.currentData()
                 if row_id is not None:
                     machine_op_row_id = row_id
+                    # ✅ حدّث الـ pinned كمان
+                    self._pinned_op_row_id = row_id
                 else:
-                    # أول صف حقيقي من الـ combo
-                    for i in range(self.cmb_op_row.count()):
-                        d = self.cmb_op_row.itemData(i)
-                        if d is not None:
-                            machine_op_row_id = d
-                            break
-                    # ✅ fallback على الـ pinned value
-                    if machine_op_row_id is None and self._pinned_op_row_id is not None:
+                    # ✅ ثانياً: الـ _pinned_op_row_id (المحفوظ من أي تفاعل سابق)
+                    if self._pinned_op_row_id is not None:
                         machine_op_row_id = self._pinned_op_row_id
+                    else:
+                        # ✅ ثالثاً: أول صف حقيقي في الـ combo
+                        for i in range(self.cmb_op_row.count()):
+                            d = self.cmb_op_row.itemData(i)
+                            if d is not None:
+                                machine_op_row_id = d
+                                self._pinned_op_row_id = d
+                                break
 
             return child_type, child_id, qty, waste_pct, variant_id, machine_op_row_id
 
@@ -755,8 +752,10 @@ class ComponentRow(QWidget):
         return None
 
     def get_machine_op_row_id(self):
-        if self.cmb_type.currentData() == "machine_op" and self._sub_row_widget.isVisible():
-            return self.cmb_op_row.currentData()
+        # ✅ نرجع الـ pinned value لو الـ combo مش visible
+        if self.cmb_type.currentData() == "machine_op":
+            row_id = self.cmb_op_row.currentData()
+            return row_id if row_id is not None else self._pinned_op_row_id
         return None
 
     @property
