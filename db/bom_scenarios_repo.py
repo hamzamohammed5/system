@@ -51,7 +51,6 @@ def fetch_default_scenario(conn, item_id: int):
 def insert_scenario(conn, item_id: int, name: str,
                     is_default: bool = False, notes: str = "") -> int:
     if is_default:
-        # إلغاء الـ default من باقي السيناريوهات
         conn.execute(
             "UPDATE bom_scenarios SET is_default=0 WHERE item_id=?",
             (item_id,)
@@ -73,7 +72,6 @@ def update_scenario(conn, scenario_id: int, name: str, notes: str = ""):
 
 
 def set_default_scenario(conn, scenario_id: int):
-    """يجعل السيناريو المحدد هو الـ default ويلغي الباقيين."""
     sc = fetch_scenario(conn, scenario_id)
     if not sc:
         return
@@ -89,11 +87,6 @@ def set_default_scenario(conn, scenario_id: int):
 
 
 def delete_scenario(conn, scenario_id: int) -> bool:
-    """
-    يحذف السيناريو وكل صفوف BOM الخاصة به.
-    لا يسمح بحذف آخر سيناريو للمنتج.
-    يرجع True لو نجح، False لو رفض.
-    """
     sc = fetch_scenario(conn, scenario_id)
     if not sc:
         return False
@@ -104,17 +97,12 @@ def delete_scenario(conn, scenario_id: int) -> bool:
     ).fetchone()["c"]
 
     if count <= 1:
-        return False  # لا يمكن حذف آخر سيناريو
+        return False
 
-    conn.execute(
-        "DELETE FROM bom WHERE scenario_id=?", (scenario_id,)
-    )
-    conn.execute(
-        "DELETE FROM bom_scenarios WHERE id=?", (scenario_id,)
-    )
+    conn.execute("DELETE FROM bom WHERE scenario_id=?", (scenario_id,))
+    conn.execute("DELETE FROM bom_scenarios WHERE id=?", (scenario_id,))
     conn.commit()
 
-    # لو كان الـ default → اجعل أول سيناريو متبقٍ هو الـ default
     if sc["is_default"]:
         first = conn.execute(
             "SELECT id FROM bom_scenarios WHERE item_id=? ORDER BY id LIMIT 1",
@@ -130,10 +118,6 @@ def delete_scenario(conn, scenario_id: int) -> bool:
 
 
 def clone_scenario(conn, scenario_id: int, new_name: str) -> int:
-    """
-    ينسخ سيناريو موجود (مع كل صفوف BOM) بسيناريو جديد.
-    يرجع id السيناريو الجديد.
-    """
     sc = fetch_scenario(conn, scenario_id)
     if not sc:
         raise ValueError("السيناريو غير موجود")
@@ -142,7 +126,6 @@ def clone_scenario(conn, scenario_id: int, new_name: str) -> int:
         conn, sc["item_id"], new_name, is_default=False, notes=sc["notes"] or ""
     )
 
-    # نسخ صفوف BOM
     old_rows = conn.execute(
         "SELECT child_type, child_id, qty, child_name, "
         "COALESCE(waste_pct,0) as waste_pct, variant_id, machine_op_row_id "
@@ -150,27 +133,18 @@ def clone_scenario(conn, scenario_id: int, new_name: str) -> int:
         (scenario_id,)
     ).fetchall()
 
-    has_variant       = _col_exists(conn, "bom", "variant_id")
-    has_row_id        = _col_exists(conn, "bom", "machine_op_row_id")
-    has_scenario      = _col_exists(conn, "bom", "scenario_id")
+    has_variant  = _col_exists(conn, "bom", "variant_id")
+    has_row_id   = _col_exists(conn, "bom", "machine_op_row_id")
+    has_scenario = _col_exists(conn, "bom", "scenario_id")
 
     for r in old_rows:
-        if has_variant and has_row_id and has_scenario:
-            conn.execute(
-                "INSERT INTO bom (parent_id, child_type, child_id, qty, child_name,"
-                " waste_pct, variant_id, machine_op_row_id, scenario_id)"
-                " VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)",
-                (sc["item_id"], r["child_type"], r["child_id"], r["qty"],
-                 r["child_name"], r["waste_pct"],
-                 r["variant_id"], r["machine_op_row_id"], new_id)
-            )
-        else:
-            conn.execute(
-                "INSERT INTO bom (parent_id, child_type, child_id, qty, child_name,"
-                " waste_pct, scenario_id) VALUES (?, ?, ?, ?, ?, ?, ?)",
-                (sc["item_id"], r["child_type"], r["child_id"], r["qty"],
-                 r["child_name"], r["waste_pct"], new_id)
-            )
+        _insert_bom_row(
+            conn, sc["item_id"], r["child_type"], r["child_id"],
+            r["qty"], r["child_name"], r["waste_pct"],
+            r["variant_id"] if has_variant else None,
+            r["machine_op_row_id"] if has_row_id else None,
+            new_id if has_scenario else None,
+        )
     conn.commit()
     return new_id
 
@@ -178,59 +152,6 @@ def clone_scenario(conn, scenario_id: int, new_name: str) -> int:
 def _col_exists(conn, table: str, col: str) -> bool:
     rows = conn.execute(f"PRAGMA table_info({table})").fetchall()
     return any(r["name"] == col for r in rows)
-
-
-# ══════════════════════════════════════════════════════════
-# BOM حسب السيناريو
-# ══════════════════════════════════════════════════════════
-
-def fetch_bom_for_scenario(conn, scenario_id: int) -> list:
-    """صفوف BOM الخاصة بسيناريو معين فقط."""
-    return conn.execute(
-        "SELECT child_type, child_id, qty, "
-        "COALESCE(waste_pct,0) as waste_pct, "
-        "variant_id, machine_op_row_id "
-        "FROM bom WHERE scenario_id=? ORDER BY id",
-        (scenario_id,)
-    ).fetchall()
-
-
-def replace_bom_for_scenario(conn, scenario_id: int, rows: list[tuple]):
-    sc = fetch_scenario(conn, scenario_id)
-    if not sc:
-        return
-
-    # احذف rows الخاصة بهذا السيناريو فقط
-    conn.execute("DELETE FROM bom WHERE scenario_id=?", (scenario_id,))
-
-    has_variant  = _col_exists(conn, "bom", "variant_id")
-    has_row_id   = _col_exists(conn, "bom", "machine_op_row_id")
-    has_scenario = _col_exists(conn, "bom", "scenario_id")
-
-    for row in rows:
-        ct        = row[0]
-        cid       = row[1]
-        qty       = row[2]
-        waste_pct = float(row[3]) if len(row) > 3 and row[3] is not None else 0.0
-        vid       = row[4] if len(row) > 4 else None
-        row_id    = row[5] if len(row) > 5 else None
-        name      = _resolve_name(conn, ct, cid)
-
-        if has_variant and has_row_id and has_scenario:
-            conn.execute(
-                "INSERT INTO bom (parent_id, child_type, child_id, qty, child_name,"
-                " waste_pct, variant_id, machine_op_row_id, scenario_id)"
-                " VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)",
-                (sc["item_id"], ct, cid, qty, name,
-                 waste_pct, vid, row_id, scenario_id)
-            )
-        else:
-            conn.execute(
-                "INSERT INTO bom (parent_id, child_type, child_id, qty, child_name,"
-                " waste_pct, scenario_id) VALUES (?, ?, ?, ?, ?, ?, ?)",
-                (sc["item_id"], ct, cid, qty, name, waste_pct, scenario_id)
-            )
-    conn.commit()
 
 
 def _resolve_name(conn, child_type: str, child_id: int):
@@ -243,3 +164,116 @@ def _resolve_name(conn, child_type: str, child_id: int):
     else:
         return None
     return row["name"] if row else None
+
+
+def _insert_bom_row(conn, parent_id: int, child_type: str, child_id: int,
+                    qty: float, child_name, waste_pct: float,
+                    variant_id, machine_op_row_id, scenario_id):
+    """
+    INSERT آمن في جدول bom — يتعامل مع وجود/غياب الأعمدة الجديدة.
+    """
+    has_variant  = _col_exists(conn, "bom", "variant_id")
+    has_row_id   = _col_exists(conn, "bom", "machine_op_row_id")
+    has_scenario = _col_exists(conn, "bom", "scenario_id")
+
+    if has_variant and has_row_id and has_scenario:
+        conn.execute(
+            "INSERT INTO bom "
+            "(parent_id, child_type, child_id, qty, child_name,"
+            " waste_pct, variant_id, machine_op_row_id, scenario_id)"
+            " VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)",
+            (parent_id, child_type, child_id, qty, child_name,
+             waste_pct, variant_id, machine_op_row_id, scenario_id)
+        )
+    elif has_variant and has_scenario:
+        conn.execute(
+            "INSERT INTO bom "
+            "(parent_id, child_type, child_id, qty, child_name,"
+            " waste_pct, variant_id, scenario_id)"
+            " VALUES (?, ?, ?, ?, ?, ?, ?, ?)",
+            (parent_id, child_type, child_id, qty, child_name,
+             waste_pct, variant_id, scenario_id)
+        )
+    elif has_scenario:
+        conn.execute(
+            "INSERT INTO bom "
+            "(parent_id, child_type, child_id, qty, child_name,"
+            " waste_pct, scenario_id)"
+            " VALUES (?, ?, ?, ?, ?, ?, ?)",
+            (parent_id, child_type, child_id, qty, child_name,
+             waste_pct, scenario_id)
+        )
+    else:
+        conn.execute(
+            "INSERT INTO bom "
+            "(parent_id, child_type, child_id, qty, child_name, waste_pct)"
+            " VALUES (?, ?, ?, ?, ?, ?)",
+            (parent_id, child_type, child_id, qty, child_name, waste_pct)
+        )
+
+
+# ══════════════════════════════════════════════════════════
+# BOM حسب السيناريو
+# ══════════════════════════════════════════════════════════
+
+def fetch_bom_for_scenario(conn, scenario_id: int) -> list:
+    """
+    صفوف BOM الخاصة بسيناريو معين — دائماً يجيب machine_op_row_id.
+    """
+    has_row_id = _col_exists(conn, "bom", "machine_op_row_id")
+    has_variant = _col_exists(conn, "bom", "variant_id")
+
+    if has_row_id and has_variant:
+        return conn.execute(
+            "SELECT child_type, child_id, qty, "
+            "COALESCE(waste_pct,0) as waste_pct, "
+            "variant_id, machine_op_row_id "
+            "FROM bom WHERE scenario_id=? ORDER BY id",
+            (scenario_id,)
+        ).fetchall()
+    elif has_variant:
+        return conn.execute(
+            "SELECT child_type, child_id, qty, "
+            "COALESCE(waste_pct,0) as waste_pct, "
+            "variant_id, NULL as machine_op_row_id "
+            "FROM bom WHERE scenario_id=? ORDER BY id",
+            (scenario_id,)
+        ).fetchall()
+    else:
+        return conn.execute(
+            "SELECT child_type, child_id, qty, "
+            "COALESCE(waste_pct,0) as waste_pct, "
+            "NULL as variant_id, NULL as machine_op_row_id "
+            "FROM bom WHERE scenario_id=? ORDER BY id",
+            (scenario_id,)
+        ).fetchall()
+
+
+def replace_bom_for_scenario(conn, scenario_id: int, rows: list[tuple]):
+    """
+    rows: list of (child_type, child_id, qty, waste_pct, variant_id, machine_op_row_id)
+    يحذف BOM القديم للسيناريو ويكتب الجديد بشكل كامل.
+    """
+    sc = fetch_scenario(conn, scenario_id)
+    if not sc:
+        return
+
+    # احذف rows الخاصة بهذا السيناريو فقط
+    conn.execute("DELETE FROM bom WHERE scenario_id=?", (scenario_id,))
+
+    for row in rows:
+        ct        = row[0]
+        cid       = row[1]
+        qty       = row[2]
+        waste_pct = float(row[3]) if len(row) > 3 and row[3] is not None else 0.0
+        vid       = row[4] if len(row) > 4 else None
+        # machine_op_row_id — العنصر السادس (index 5)
+        mor_id    = row[5] if len(row) > 5 else None
+        name      = _resolve_name(conn, ct, cid)
+
+        _insert_bom_row(
+            conn, sc["item_id"], ct, cid, qty, name,
+            waste_pct, vid, mor_id, scenario_id
+        )
+
+    conn.commit()
