@@ -277,9 +277,7 @@ class ComponentRow(QWidget):
             _cid, _vid = child_id, variant_id
             QTimer.singleShot(50, lambda: (s := _weak()) and s._load_variants(_cid, _vid))
         elif child_type == "machine_op" and child_id is not None:
-            _weak = weakref.ref(self)
-            _oid, _rid = child_id, machine_op_row_id
-            QTimer.singleShot(50, lambda: (s := _weak()) and s._load_op_rows(_oid, _rid))
+            self._load_op_rows(child_id, machine_op_row_id)
 
     # ══════════════════════════════════════════════════════
     # Op Rows — تحميل وعرض في السطر الفرعي
@@ -661,10 +659,8 @@ class ComponentRow(QWidget):
                 self._hide_op_rows()
             elif child_type == "machine_op":
                 op_id = data[1]
-                # أخفِ أولاً ثم حمّل — بدون تأخير لأن القيم متاحة فوراً
                 self._hide_op_rows()
-                weak_self = weakref.ref(self)
-                QTimer.singleShot(0, lambda: (s := weak_self()) and s._load_op_rows(op_id))
+                self._load_op_rows(op_id)
                 self._hide_variants()
             else:
                 self._hide_variants()
