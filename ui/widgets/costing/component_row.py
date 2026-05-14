@@ -711,9 +711,6 @@ class ComponentRow(QWidget):
     # ══════════════════════════════════════════════════════
 
     def get_values(self) -> tuple | None:
-        """
-        يرجع: (child_type, child_id, qty, waste_pct, variant_id, machine_op_row_id)
-        """
         try:
             data = self._item_combo.current_data()
             qty  = float(self.qty_edit.text())
@@ -730,8 +727,18 @@ class ComponentRow(QWidget):
                 variant_id = self.cmb_variant.currentData()
 
             machine_op_row_id = None
-            if child_type == "machine_op" and self._sub_row_widget.isVisible():
-                machine_op_row_id = self.cmb_op_row.currentData()
+            if child_type == "machine_op":
+                # نجيب الـ data مباشرة بدون الاعتماد على isVisible
+                row_id = self.cmb_op_row.currentData()
+                if row_id is not None:
+                    machine_op_row_id = row_id
+                else:
+                    # لو مفيش اختيار، نأخذ أول صف حقيقي تلقائياً
+                    for i in range(self.cmb_op_row.count()):
+                        d = self.cmb_op_row.itemData(i)
+                        if d is not None:
+                            machine_op_row_id = d
+                            break
 
             return child_type, child_id, qty, waste_pct, variant_id, machine_op_row_id
 
