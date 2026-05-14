@@ -1,8 +1,13 @@
 """
-ui/tabs/costing/product/product_form.py
+ui/tabs/costing/product/product_form.py  (نسخة محدّثة)
 ================================
-_FormPanel — فورم إنشاء / تعديل المنتج (اسم + مكونات BOM).
-مع scroll على الجزء العلوي (رأس الفورم) لما المساحة تكون ضيقة.
+_FormPanel — فورم إنشاء / تعديل المنتج.
+
+التغييرات:
+  - دعم السيناريوهات المتعددة (_BomScenariosPanel)
+  - الحفظ يعمل على السيناريو الحالي
+  - تحميل BOM حسب السيناريو
+  - machine_op_row_id في الصفوف
 """
 
 from PyQt5.QtWidgets import (
@@ -14,13 +19,18 @@ from PyQt5.QtCore import Qt, QTimer
 
 from db.items_repo import (
     fetch_item, insert_item, update_item,
-    fetch_bom, insert_bom_row, replace_bom,
     fetch_orphan_bom_rows,
+)
+from db.bom_scenarios_repo import (
+    fetch_scenarios, fetch_default_scenario, insert_scenario,
+    fetch_bom_for_scenario, replace_bom_for_scenario,
+    fetch_scenario,
 )
 from ui.helpers import success_button
 from ui.widgets.component_row    import ComponentRow
 from ui.widgets.category_manager import CategoryCombo
 from ui.widgets.scrollable_form  import wrap_in_scroll
+from ui.widgets.bom_scenarios_panel import _BomScenariosPanel
 from ui.events import bus
 
 
@@ -33,6 +43,7 @@ class _FormPanel(QWidget):
         self._editing_id  = None
         self.is_editing   = False
         self._scope       = product_type
+        self._current_scenario_id = None
         self._build()
 
     def _build(self):
@@ -40,19 +51,19 @@ class _FormPanel(QWidget):
         root.setContentsMargins(0, 0, 0, 0)
         root.setSpacing(0)
 
-        # ── الجزء العلوي: رأس الفورم (قابل للـ scroll لو ضاق) ──
+        # ── الجزء العلوي (رأس الفورم) ──
         header_inner = QWidget()
         header_inner.setMinimumWidth(400)
         header_inner.setSizePolicy(QSizePolicy.Preferred, QSizePolicy.Minimum)
 
         header_scroll = wrap_in_scroll(header_inner)
-        header_scroll.setFixedHeight(110)   # ارتفاع ثابت للرأس
+        header_scroll.setFixedHeight(150)
 
         header_lay = QVBoxLayout(header_inner)
         header_lay.setContentsMargins(12, 8, 12, 8)
         header_lay.setSpacing(6)
 
-        # سطر العنوان + الاسم + التصنيف + الأزرار
+        # ── سطر العنوان + الاسم + التصنيف + الأزرار ──
         top = QHBoxLayout()
         top.setSpacing(8)
 
@@ -91,6 +102,11 @@ class _FormPanel(QWidget):
         top.addWidget(self.btn_cancel)
         header_lay.addLayout(top)
 
+        # ── لوحة السيناريوهات ──
+        self._scenarios_panel = _BomScenariosPanel(self.conn)
+        self._scenarios_panel.scenario_changed.connect(self._on_scenario_changed)
+        header_lay.addWidget(self._scenarios_panel)
+
         # رؤوس الأعمدة
         headers = QWidget()
         hlay = QHBoxLayout(headers)
@@ -107,18 +123,18 @@ class _FormPanel(QWidget):
                 lbl.setFixedWidth(w)
             hlay.addWidget(lbl, stretch=stretch)
 
-        _hdr("النوع",        150)
-        _hdr("العنصر",       stretch=3)
-        _hdr("وحدة الإنتاج", 130)
-        _hdr("تكلفة/قطعة",  80)
-        _hdr("الكمية",       80)
-        _hdr("الهادر %",     90)
-        _hdr("",             32)
+        _hdr("النوع",         150)
+        _hdr("العنصر",        stretch=3)
+        _hdr("الصف / Variant", 160)
+        _hdr("تكلفة/قطعة",   80)
+        _hdr("الكمية",        80)
+        _hdr("الهادر %",      90)
+        _hdr("",              32)
         header_lay.addWidget(headers)
 
         root.addWidget(header_scroll)
 
-        # ── منطقة صفوف المكونات (scroll منفصل) ──
+        # ── منطقة صفوف المكونات ──
         self.rows_container = QWidget()
         self.rows_layout    = QVBoxLayout(self.rows_container)
         self.rows_layout.setSpacing(2)
@@ -134,9 +150,13 @@ class _FormPanel(QWidget):
 
         self._add_row()
 
+    # ══════════════════════════════════════════════════════
+    # صفوف المكونات
+    # ══════════════════════════════════════════════════════
+
     def _add_row(self, child_type="raw", child_id=None, qty=1.0,
                  orphan_name: str = None, waste_pct: float = 0.0,
-                 variant_id: int = None):
+                 variant_id: int = None, machine_op_row_id: int = None):
         row = ComponentRow(
             catalog_fn=self._catalog_fn,
             child_type=child_type,
@@ -144,6 +164,7 @@ class _FormPanel(QWidget):
             qty=qty,
             waste_pct=waste_pct,
             variant_id=variant_id,
+            machine_op_row_id=machine_op_row_id,
         )
         if row.is_orphan() and orphan_name:
             row.set_orphan_name(orphan_name)
@@ -156,6 +177,7 @@ class _FormPanel(QWidget):
         widget.deleteLater()
 
     def collect_rows(self):
+        """يجمع (child_type, child_id, qty, waste_pct, variant_id, machine_op_row_id)"""
         result = []
         for i in range(self.rows_layout.count()):
             item = self.rows_layout.itemAt(i)
@@ -165,7 +187,8 @@ class _FormPanel(QWidget):
             if isinstance(w, ComponentRow):
                 val = w.get_values()
                 if val:
-                    if len(val) == 4:
+                    # تأكد من 6 عناصر
+                    while len(val) < 6:
                         val = val + (None,)
                     result.append(val)
         return result
@@ -176,6 +199,10 @@ class _FormPanel(QWidget):
             if item and item.widget():
                 item.widget().deleteLater()
 
+    # ══════════════════════════════════════════════════════
+    # تحميل المنتج للتعديل
+    # ══════════════════════════════════════════════════════
+
     def load_product(self, pid: int):
         item = fetch_item(self.conn, pid)
         if not item:
@@ -183,22 +210,66 @@ class _FormPanel(QWidget):
         self.clear_rows()
         self.inp_name.setText(item["name"])
         self.cmb_category.set_category(item["category_id"])
-        bom = fetch_bom(self.conn, pid)
-        orphans_raw = fetch_orphan_bom_rows(self.conn, pid)
-        orphan_names = {
+
+        # تحميل لوحة السيناريوهات
+        self._scenarios_panel.load_item(pid)
+
+        # تحديد السيناريو الـ default
+        sc = fetch_default_scenario(self.conn, pid)
+        if not sc:
+            # أنشئ سيناريو default لو مفيش
+            sc_id = insert_scenario(self.conn, pid, "سيناريو 1", is_default=True)
+        else:
+            sc_id = sc["id"]
+
+        self._current_scenario_id = sc_id
+
+        # تحميل BOM للسيناريو
+        self._load_bom_for_scenario(pid, sc_id)
+
+        n_orphans = len(fetch_orphan_bom_rows(self.conn, pid))
+        label = (
+            f"─── تعديل: {item['name']}  ⚠️ {n_orphans} مكوّن ناقص ───"
+            if n_orphans else f"─── تعديل: {item['name']} ───"
+        )
+        self.enter_edit_mode(pid, label)
+        self.inp_name.setFocus()
+
+    def _load_bom_for_scenario(self, pid: int, scenario_id: int):
+        """تحميل مكونات BOM لسيناريو محدد."""
+        self.clear_rows()
+
+        # قراءة orphans للسيناريو (نفس المنتج)
+        orphan_map = {
             (o["child_type"], o["child_id"]): o["child_name"]
-            for o in orphans_raw
+            for o in fetch_orphan_bom_rows(self.conn, pid)
         }
-        for row_data in (bom or []):
+
+        try:
+            bom_rows = fetch_bom_for_scenario(self.conn, scenario_id)
+        except Exception:
+            # fallback: السيناريوهات غير مطبقة بعد
+            from db.items_repo import fetch_bom
+            bom_rows = fetch_bom(self.conn, pid)
+
+        for row_data in (bom_rows or []):
             child_type = row_data["child_type"]
             child_id   = row_data["child_id"]
             qty        = row_data["qty"]
-            waste_pct  = float(row_data["waste_pct"]) if row_data["waste_pct"] else 0.0
+            try:
+                waste_pct = float(row_data["waste_pct"]) if row_data["waste_pct"] else 0.0
+            except (KeyError, TypeError):
+                waste_pct = 0.0
             try:
                 variant_id = row_data["variant_id"]
-            except (IndexError, KeyError):
+            except (KeyError, IndexError):
                 variant_id = None
-            o_name = orphan_names.get((child_type, child_id))
+            try:
+                machine_op_row_id = row_data["machine_op_row_id"]
+            except (KeyError, IndexError):
+                machine_op_row_id = None
+
+            o_name = orphan_map.get((child_type, child_id))
             self._add_row(
                 child_type=child_type,
                 child_id=child_id,
@@ -206,23 +277,35 @@ class _FormPanel(QWidget):
                 orphan_name=o_name,
                 waste_pct=waste_pct,
                 variant_id=variant_id,
+                machine_op_row_id=machine_op_row_id,
             )
-        if not bom:
+
+        if not bom_rows:
             self._add_row()
-        n = len(orphan_names)
-        label = (
-            f"─── تعديل: {item['name']}  ⚠️ {n} مكوّن ناقص ───"
-            if n else f"─── تعديل: {item['name']} ───"
-        )
-        self.enter_edit_mode(pid, label)
-        self.inp_name.setFocus()
+
+    def _on_scenario_changed(self, scenario_id: int):
+        """عند تغيير السيناريو → تحميل BOM الجديد."""
+        if self._editing_id is None:
+            return
+        self._current_scenario_id = scenario_id
+        self._load_bom_for_scenario(self._editing_id, scenario_id)
+
+    # ══════════════════════════════════════════════════════
+    # Reset
+    # ══════════════════════════════════════════════════════
 
     def reset(self):
         self.inp_name.clear()
         self.cmb_category.setCurrentIndex(0)
         self.clear_rows()
         self._add_row()
+        self._scenarios_panel.clear()
+        self._current_scenario_id = None
         self.exit_edit_mode("─── منتج جديد ───")
+
+    # ══════════════════════════════════════════════════════
+    # حفظ
+    # ══════════════════════════════════════════════════════
 
     def save(self):
         from PyQt5.QtWidgets import QMessageBox
@@ -234,20 +317,49 @@ class _FormPanel(QWidget):
         if not rows:
             QMessageBox.warning(self, "تنبيه", "أضف مكوناً واحداً على الأقل")
             return
+
         if self.is_editing:
-            update_item(self.conn, self._editing_id, name, 0,
-                        category_id=self.cmb_category.get_category())
-            replace_bom(self.conn, self._editing_id, rows)
+            update_item(
+                self.conn, self._editing_id, name, 0,
+                category_id=self.cmb_category.get_category()
+            )
+            # تأكد من وجود سيناريو
+            if self._current_scenario_id is None:
+                self._current_scenario_id = self._scenarios_panel.ensure_default_scenario(
+                    self._editing_id
+                )
+
+            try:
+                replace_bom_for_scenario(
+                    self.conn, self._current_scenario_id, rows
+                )
+            except Exception:
+                # Fallback: استخدم replace_bom القديم مع السيناريو الأول
+                from db.items_repo import replace_bom
+                old_rows = [(r[0], r[1], r[2], r[3], r[4]) for r in rows]
+                replace_bom(self.conn, self._editing_id, old_rows)
         else:
-            pid = insert_item(self.conn, name, self.product_type, 0,
-                              category_id=self.cmb_category.get_category())
-            for row_data in rows:
-                ct        = row_data[0]
-                cid       = row_data[1]
-                qty       = row_data[2]
-                waste_pct = row_data[3] if len(row_data) > 3 else 0.0
-                vid       = row_data[4] if len(row_data) > 4 else None
-                insert_bom_row(self.conn, pid, ct, cid, qty, waste_pct, vid)
+            pid = insert_item(
+                self.conn, name, self.product_type, 0,
+                category_id=self.cmb_category.get_category()
+            )
+            # إنشاء سيناريو default
+            sc_id = insert_scenario(
+                self.conn, pid, "سيناريو 1", is_default=True
+            )
+            try:
+                replace_bom_for_scenario(self.conn, sc_id, rows)
+            except Exception:
+                # Fallback
+                from db.items_repo import insert_bom_row
+                for row_data in rows:
+                    ct        = row_data[0]
+                    cid       = row_data[1]
+                    qty       = row_data[2]
+                    waste_pct = row_data[3] if len(row_data) > 3 else 0.0
+                    vid       = row_data[4] if len(row_data) > 4 else None
+                    insert_bom_row(self.conn, pid, ct, cid, qty, waste_pct, vid)
+
         self.conn.commit()
         self.reset()
         QTimer.singleShot(0, bus.data_changed.emit)
