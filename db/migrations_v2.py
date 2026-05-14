@@ -123,3 +123,71 @@ def run_migrations_v2(conn):
             conn.commit()
         except Exception as e:
             print(f"[migrations_v2] scenario_id column warning: {e}")
+    # ══ 5. تأكيد ربط كل BOM rows بسيناريو ══════════════
+    try:
+        orphan_bom = conn.execute(
+            "SELECT DISTINCT parent_id FROM bom WHERE scenario_id IS NULL"
+        ).fetchall()
+        for p in orphan_bom:
+            pid = p["parent_id"]
+            sc = conn.execute(
+                "SELECT id FROM bom_scenarios WHERE item_id=? AND is_default=1 LIMIT 1",
+                (pid,)
+            ).fetchone()
+            if not sc:
+                sc = conn.execute(
+                    "SELECT id FROM bom_scenarios WHERE item_id=? ORDER BY id LIMIT 1",
+                    (pid,)
+                ).fetchone()
+            if not sc:
+                # أنشئ سيناريو default جديد
+                cur = conn.execute(
+                    "INSERT INTO bom_scenarios (item_id, name, is_default) VALUES (?, ?, 1)",
+                    (pid, "سيناريو 1")
+                )
+                sc_id = cur.lastrowid
+            else:
+                sc_id = sc["id"]
+            conn.execute(
+                "UPDATE bom SET scenario_id=? WHERE parent_id=? AND scenario_id IS NULL",
+                (sc_id, pid)
+            )
+        conn.commit()
+    except Exception as e:
+        print(f"[migrations_v2] orphan bom fix warning: {e}")
+        
+    # ══ 5. ربط BOM rows المنفصلة بالـ default scenario ══
+    try:
+        orphans = conn.execute(
+            "SELECT DISTINCT parent_id FROM bom WHERE scenario_id IS NULL"
+        ).fetchall()
+        for p in orphans:
+            pid = p["parent_id"]
+            sc = conn.execute(
+                "SELECT id FROM bom_scenarios "
+                "WHERE item_id=? AND is_default=1 LIMIT 1",
+                (pid,)
+            ).fetchone()
+            if not sc:
+                sc = conn.execute(
+                    "SELECT id FROM bom_scenarios "
+                    "WHERE item_id=? ORDER BY id LIMIT 1",
+                    (pid,)
+                ).fetchone()
+            if not sc:
+                cur = conn.execute(
+                    "INSERT INTO bom_scenarios (item_id, name, is_default) "
+                    "VALUES (?, 'سيناريو 1', 1)",
+                    (pid,)
+                )
+                sc_id = cur.lastrowid
+            else:
+                sc_id = sc["id"]
+            conn.execute(
+                "UPDATE bom SET scenario_id=? "
+                "WHERE parent_id=? AND scenario_id IS NULL",
+                (sc_id, pid)
+            )
+        conn.commit()
+    except Exception as e:
+        print(f"[migrations_v2] orphan bom rows fix: {e}")

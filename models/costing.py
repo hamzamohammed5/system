@@ -44,6 +44,31 @@ def _raw_cost_with_variant(conn, item_row, variant_id: int | None) -> float:
 # ══════════════════════════════════════════════════════════
 # التكلفة الكاملة (متكررة عبر BOM)
 # ══════════════════════════════════════════════════════════
+def _fetch_bom_default(conn, item_id: int) -> list:
+    """يجيب BOM من الـ default scenario مع machine_op_row_id."""
+    try:
+        sc = conn.execute(
+            "SELECT id FROM bom_scenarios WHERE item_id=? AND is_default=1 LIMIT 1",
+            (item_id,)
+        ).fetchone()
+        if not sc:
+            sc = conn.execute(
+                "SELECT id FROM bom_scenarios WHERE item_id=? ORDER BY id LIMIT 1",
+                (item_id,)
+            ).fetchone()
+        if sc:
+            rows = conn.execute(
+                "SELECT child_type, child_id, qty, "
+                "COALESCE(waste_pct,0) as waste_pct, "
+                "variant_id, machine_op_row_id "
+                "FROM bom WHERE scenario_id=? ORDER BY id",
+                (sc["id"],)
+            ).fetchall()
+            if rows:
+                return rows
+    except Exception:
+        pass
+    return fetch_bom(conn, item_id)
 
 def calc_cost(conn, item_id: int, _visited: set = None) -> float:
     if _visited is None:
@@ -60,14 +85,19 @@ def calc_cost(conn, item_id: int, _visited: set = None) -> float:
         return raw_unit_price(item)
 
     total = 0.0
-    for row in fetch_bom(conn, item_id):
+    for row in _fetch_bom_default(conn, item_id):
         child_type = row["child_type"]
         child_id   = row["child_id"]
         qty        = row["qty"]
         waste_pct  = row["waste_pct"] if "waste_pct" in row.keys() else 0.0
         variant_id = _get_variant_id(row)
+        eff_qty    = effective_qty(qty, waste_pct)
 
-        eff_qty = effective_qty(qty, waste_pct)
+        # machine_op_row_id للحساب على صف محدد
+        try:
+            machine_op_row_id = row["machine_op_row_id"]
+        except (IndexError, KeyError):
+            machine_op_row_id = None
 
         if child_type == "raw":
             child = fetch_item(conn, child_id)
@@ -77,7 +107,7 @@ def calc_cost(conn, item_id: int, _visited: set = None) -> float:
         elif child_type == "labor_op":
             unit_cost = calc_labor_op_cost(conn, child_id)
         elif child_type == "machine_op":
-            unit_cost = calc_machine_op_cost(conn, child_id)
+            unit_cost = calc_machine_op_cost(conn, child_id, row_id=machine_op_row_id)
         else:
             unit_cost = 0.0
 
@@ -85,6 +115,36 @@ def calc_cost(conn, item_id: int, _visited: set = None) -> float:
 
     return total
 
+def _fetch_bom_default(conn, item_id: int) -> list:
+    """
+    يجيب BOM من الـ default scenario.
+    Fallback: لو مفيش scenarios → يرجع للـ fetch_bom القديم.
+    """
+    try:
+        # حاول تجيب الـ default scenario
+        sc = conn.execute(
+            "SELECT id FROM bom_scenarios WHERE item_id=? AND is_default=1 LIMIT 1",
+            (item_id,)
+        ).fetchone()
+        if not sc:
+            sc = conn.execute(
+                "SELECT id FROM bom_scenarios WHERE item_id=? ORDER BY id LIMIT 1",
+                (item_id,)
+            ).fetchone()
+        if sc:
+            rows = conn.execute(
+                "SELECT child_type, child_id, qty, "
+                "COALESCE(waste_pct,0) as waste_pct, "
+                "variant_id, machine_op_row_id "
+                "FROM bom WHERE scenario_id=? ORDER BY id",
+                (sc["id"],)
+            ).fetchall()
+            if rows:
+                return rows
+    except Exception:
+        pass
+    # Fallback: السلوك القديم
+    return fetch_bom(conn, item_id)
 
 # ══════════════════════════════════════════════════════════
 # تفصيل التكلفة للعرض
@@ -101,7 +161,10 @@ def calc_cost_breakdown(conn, item_id: int) -> dict:
 
     materials = labor = machine = 0.0
 
-    for row in fetch_bom(conn, item_id):
+    # ── جلب BOM من الـ default scenario ──
+    bom_rows = _fetch_bom_default(conn, item_id)
+
+    for row in bom_rows:
         child_type = row["child_type"]
         child_id   = row["child_id"]
         qty        = row["qty"]

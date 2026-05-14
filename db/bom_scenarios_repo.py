@@ -185,7 +185,7 @@ def _col_exists(conn, table: str, col: str) -> bool:
 # ══════════════════════════════════════════════════════════
 
 def fetch_bom_for_scenario(conn, scenario_id: int) -> list:
-    """صفوف BOM الخاصة بسيناريو معين."""
+    """صفوف BOM الخاصة بسيناريو معين فقط."""
     return conn.execute(
         "SELECT child_type, child_id, qty, "
         "COALESCE(waste_pct,0) as waste_pct, "
@@ -196,13 +196,11 @@ def fetch_bom_for_scenario(conn, scenario_id: int) -> list:
 
 
 def replace_bom_for_scenario(conn, scenario_id: int, rows: list[tuple]):
-    """
-    rows: list of (child_type, child_id, qty, waste_pct, variant_id, machine_op_row_id)
-    """
     sc = fetch_scenario(conn, scenario_id)
     if not sc:
         return
 
+    # احذف rows الخاصة بهذا السيناريو فقط
     conn.execute("DELETE FROM bom WHERE scenario_id=?", (scenario_id,))
 
     has_variant  = _col_exists(conn, "bom", "variant_id")
@@ -216,8 +214,7 @@ def replace_bom_for_scenario(conn, scenario_id: int, rows: list[tuple]):
         waste_pct = float(row[3]) if len(row) > 3 and row[3] is not None else 0.0
         vid       = row[4] if len(row) > 4 else None
         row_id    = row[5] if len(row) > 5 else None
-
-        name = _resolve_name(conn, ct, cid)
+        name      = _resolve_name(conn, ct, cid)
 
         if has_variant and has_row_id and has_scenario:
             conn.execute(

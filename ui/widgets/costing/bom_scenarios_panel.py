@@ -125,6 +125,23 @@ class _BomScenariosPanel(QFrame):
         self.btn_set_default.clicked.connect(self._set_default)
         lay.addWidget(self.btn_set_default)
 
+        
+        # أضف زر rename بجوار أزرار clone و add
+        btn_rename = QPushButton("✏️ تعديل")
+        btn_rename.setMinimumHeight(28)
+        btn_rename.setFixedWidth(80)
+        btn_rename.setStyleSheet("""
+            QPushButton {
+                background: #fff3e0; color: #e65100;
+                border: 1px solid #ffcc80; border-radius: 4px;
+                font-size: 10px; font-weight: bold; padding: 2px 6px;
+            }
+            QPushButton:hover { background: #ffe0b2; }
+        """)
+        btn_rename.setToolTip("تعديل اسم السيناريو الحالي")
+        btn_rename.clicked.connect(self._rename)
+        lay.addWidget(btn_rename)
+
         # زر نسخ
         btn_clone = QPushButton("📋 نسخ")
         btn_clone.setMinimumHeight(28)
@@ -278,6 +295,23 @@ class _BomScenariosPanel(QFrame):
         bus.data_changed.emit()
         self._reload()
 
+    
+    def _rename(self):
+        if self._current_id is None:
+            return
+        sc = fetch_scenario(self.conn, self._current_id)
+        if not sc:
+            return
+        name, ok = QInputDialog.getText(
+            self, "تعديل اسم السيناريو", "الاسم الجديد:",
+            text=sc["name"]
+        )
+        if not ok or not name.strip():
+            return
+        update_scenario(self.conn, self._current_id, name.strip())
+        bus.data_changed.emit()
+        self._reload()
+        
     def _clone(self):
         if self._current_id is None or self._item_id is None:
             return
