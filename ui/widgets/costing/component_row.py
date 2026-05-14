@@ -9,6 +9,7 @@ ui/widgets/costing/component_row.py  (نسخة محدّثة)
 """
 
 import weakref
+from PyQt5 import sip
 
 from PyQt5.QtWidgets import (
     QWidget, QHBoxLayout, QComboBox, QLineEdit,
@@ -252,12 +253,20 @@ class ComponentRow(QWidget):
             _oid, _rid = child_id, machine_op_row_id
             QTimer.singleShot(50, lambda: (s := _weak()) and s._load_op_rows(_oid, _rid))
 
+
     # ══════════════════════════════════════════════════════
     # Op Rows (صفوف العملية) — تحميل وعرض
     # ══════════════════════════════════════════════════════
 
     def _load_op_rows(self, op_id: int, selected_row_id: int = None):
         """يحمّل صفوف عملية التشغيل في الـ combo."""
+        # ── الفحص الآمن الوحيد: sip.isdeleted ──
+        try:
+            if sip.isdeleted(self) or sip.isdeleted(self.cmb_op_row):
+                return
+        except Exception:
+            return
+
         if op_id is None:
             self._hide_op_rows()
             return
@@ -276,7 +285,6 @@ class ComponentRow(QWidget):
         self.cmb_op_row.blockSignals(True)
         self.cmb_op_row.clear()
         if len(rows) > 1:
-            # لو أكثر من صف → نعرض "اختر صف"
             self.cmb_op_row.addItem("─ اختر صف ─", None)
 
         for row in rows:
@@ -284,13 +292,11 @@ class ComponentRow(QWidget):
             conn = self._get_conn()
             cost = calc_op_row_cost(conn, row["id"])
             label = row["label"] or f"صف {row['id']}"
-            # عرض: الوصف + القيمة/العدد + التكلفة
             val_txt = f"{row['value']:.4g}"
             cnt_txt = f"{row['count']:.4g}"
             display = f"{label}  ({val_txt} ÷ {cnt_txt})  ≈ {cost:.3f} ج"
             self.cmb_op_row.addItem(display, row["id"])
 
-        # استعادة الاختيار السابق
         restored = False
         if selected_row_id is not None:
             for i in range(self.cmb_op_row.count()):
@@ -299,7 +305,6 @@ class ComponentRow(QWidget):
                     restored = True
                     break
         if not restored and len(rows) == 1:
-            # لو صف واحد فقط → اختاره تلقائياً
             last_idx = self.cmb_op_row.count() - 1
             self.cmb_op_row.setCurrentIndex(last_idx)
 
@@ -308,6 +313,11 @@ class ComponentRow(QWidget):
         self._update_op_row_cost_label()
 
     def _hide_op_rows(self):
+        try:
+            if sip.isdeleted(self) or sip.isdeleted(self.cmb_op_row):
+                return
+        except Exception:
+            return
         self.cmb_op_row.setVisible(False)
         self.lbl_op_row_cost.setVisible(False)
 
@@ -315,6 +325,11 @@ class ComponentRow(QWidget):
         self._update_op_row_cost_label()
 
     def _update_op_row_cost_label(self):
+        try:
+            if sip.isdeleted(self) or sip.isdeleted(self.cmb_op_row):
+                return
+        except Exception:
+            return
         row_id = self.cmb_op_row.currentData()
         if row_id is None:
             self.lbl_op_row_cost.setVisible(False)
@@ -335,9 +350,9 @@ class ComponentRow(QWidget):
     def _load_variants(self, item_id: int, selected_variant_id: int = None):
         
         try:
-            if not self.cmb_variant or not self.cmb_variant.parent():
+            if sip.isdeleted(self) or sip.isdeleted(self.cmb_variant):
                 return
-        except RuntimeError:
+        except Exception:
             return
 
         if item_id is None:
