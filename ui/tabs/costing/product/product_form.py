@@ -2,12 +2,11 @@
 ui/tabs/costing/product/product_form.py
 
 الإصلاح الجوهري:
-  _load_bom_for_scenario: بعد إنشاء كل ComponentRow،
-  لو كان النوع machine_op، نستدعي expose_load_op_rows مباشرة (synchronously)
-  بدل الاعتماد على الـ QTimer اللي ممكن يجي بعد ما get_values اتنادي.
-
-  هذا يضمن إن الـ cmb_op_row يكون ممتلئ بالصفوف والاختيار الصحيح محفوظ
-  قبل أي عملية حفظ.
+  _load_bom_for_scenario:
+  1. بعد إنشاء كل ComponentRow من نوع machine_op، نستدعي expose_load_op_rows
+     مباشرة (synchronously) قبل أي processEvents أو تأخير.
+  2. expose_load_op_rows يضبط _skip_timer_load=True لمنع QTimer من التداخل.
+  3. هذا يضمن إن الـ cmb_op_row يكون ممتلئ بالصحيح قبل أي حفظ.
 """
 
 from PyQt5.QtWidgets import (
@@ -174,7 +173,7 @@ class _FormPanel(QWidget):
     def collect_rows(self):
         """
         يجمع (child_type, child_id, qty, waste_pct, variant_id, machine_op_row_id)
-        التأكد من 6 عناصر في كل tuple
+        دايماً 6 عناصر في كل tuple.
         """
         result = []
         for i in range(self.rows_layout.count()):
@@ -186,6 +185,7 @@ class _FormPanel(QWidget):
                 val = w.get_values()
                 if val:
                     val = tuple(val)
+                    # نضمن 6 عناصر دايماً
                     while len(val) < 6:
                         val = val + (None,)
                     result.append(val)
@@ -232,13 +232,13 @@ class _FormPanel(QWidget):
         """
         تحميل مكونات BOM لسيناريو محدد.
 
-        ✅ الإصلاح الجوهري:
-        بعد إنشاء كل ComponentRow من نوع machine_op،
-        نستدعي expose_load_op_rows مباشرة (synchronously)
-        لضمان إن الـ cmb_op_row ممتلئ والاختيار الصحيح محفوظ
-        قبل أي استدعاء لـ get_values().
-
-        هذا يحل مشكلة الـ race condition بين QTimer (50ms) وعملية الحفظ.
+        ✅ الترتيب الصحيح:
+        1. ننشئ ComponentRow مع machine_op_row_id في الـ __init__
+        2. نستدعي expose_load_op_rows فوراً (synchronously)
+           → هذا يضبط _skip_timer_load=True قبل أي QTimer يشتغل
+        3. QTimer(50ms) في ComponentRow.__init__ يرى _skip_timer_load=True
+           → يتجاهل إعادة التحميل
+        4. النتيجة: الاختيار الصحيح محفوظ دائماً
         """
         self.clear_rows()
 
@@ -275,7 +275,8 @@ class _FormPanel(QWidget):
 
             o_name = orphan_map.get((child_type, child_id))
 
-            # ✅ إنشاء الـ row مع تمرير machine_op_row_id للـ __init__
+            # ✅ الخطوة 1: ننشئ الـ row مع machine_op_row_id
+            # في هذه اللحظة QTimer لم يشتغل بعد (event loop مش شغّال)
             component_row = self._add_row(
                 child_type=child_type,
                 child_id=child_id,
@@ -286,8 +287,9 @@ class _FormPanel(QWidget):
                 machine_op_row_id=machine_op_row_id,
             )
 
-            # ✅ الإصلاح الجوهري: لو كان machine_op، نحمل الصفوف synchronously
-            # هذا يتجاوز مشكلة الـ QTimer race condition
+            # ✅ الخطوة 2: لو machine_op، نحمل الصفوف synchronously فوراً
+            # expose_load_op_rows يضبط _skip_timer_load=True
+            # → QTimer(50ms) الذي سيشتغل لاحقاً سيجد _skip_timer_load=True ويتوقف
             if child_type == "machine_op" and child_id is not None:
                 component_row.expose_load_op_rows(child_id, machine_op_row_id)
 
