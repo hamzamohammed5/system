@@ -4,9 +4,8 @@ ui/main_window.py
 النافذة الرئيسية — Sidebar Navigation + Content Area.
 
 التحديثات:
-  - أيقونة ونص الـ Sidebar أكبر
+  - أيقونة ونص الـ Sidebar أكبر — عبر setObjectName + stylesheet في app_settings
   - الـ Sidebar قابل للطي والفرد بزر Toggle (◀ / ▶)
-  - في وضع الطي تظهر الأيقونة فقط، في وضع الفرد تظهر الأيقونة + النص
 
 الأقسام:
   📊 حساب التكلفة  →  CostingSection
@@ -19,26 +18,19 @@ ui/main_window.py
 from PyQt5.QtWidgets import (
     QMainWindow, QWidget, QHBoxLayout, QVBoxLayout,
     QStackedWidget, QPushButton, QLabel, QFrame,
-    QSizePolicy,
 )
 from PyQt5.QtCore import Qt, QPropertyAnimation, QEasingCurve
 
-from ui.tabs.costing_section  import CostingSection
-from ui.tabs.pricing_section  import PricingSection
+from ui.tabs.costing_section      import CostingSection
+from ui.tabs.pricing_section      import PricingSection
 from ui.tabs.accounting_section   import AccountingTab
 from ui.tabs.inventory_section    import InventoryTab
-from ui.settings_dialog       import SettingsDialog
+from ui.settings_dialog           import SettingsDialog
 
 
-# ══════════════════════════════════════════════════════════
-# الأبعاد
-# ══════════════════════════════════════════════════════════
-
-SIDEBAR_EXPANDED_WIDTH  = 150   # عرض الـ sidebar مفرود
-SIDEBAR_COLLAPSED_WIDTH = 58    # عرض الـ sidebar مطوي (أيقونة فقط)
-BTN_HEIGHT              = 72    # ارتفاع كل زر تنقل
-ICON_FONT_SIZE          = 26    # حجم الأيقونة (pt)
-LABEL_FONT_SIZE         = 12    # حجم النص (pt)
+SIDEBAR_EXPANDED_WIDTH  = 155
+SIDEBAR_COLLAPSED_WIDTH = 60
+BTN_HEIGHT              = 76
 
 
 # ══════════════════════════════════════════════════════════
@@ -60,34 +52,27 @@ class _NavButton(QPushButton):
     def _build_content(self):
         layout = QVBoxLayout(self)
         layout.setContentsMargins(0, 10, 0, 10)
-        layout.setSpacing(6)
+        layout.setSpacing(5)
         layout.setAlignment(Qt.AlignCenter)
 
+        # objectName يسمح للـ stylesheet في app_settings يستهدفهم بدقة
         self._ico_lbl = QLabel(self._icon)
+        self._ico_lbl.setObjectName("nav_icon")
         self._ico_lbl.setAlignment(Qt.AlignCenter)
-        self._ico_lbl.setStyleSheet(
-            f"font-size:{ICON_FONT_SIZE}px; background:transparent; border:none;"
-        )
 
         self._txt_lbl = QLabel(self._label)
+        self._txt_lbl.setObjectName("nav_label")
         self._txt_lbl.setAlignment(Qt.AlignCenter)
-        self._txt_lbl.setStyleSheet(
-            f"font-size:{LABEL_FONT_SIZE}px; background:transparent; border:none;"
-        )
         self._txt_lbl.setWordWrap(True)
 
         layout.addWidget(self._ico_lbl)
         layout.addWidget(self._txt_lbl)
 
-    # ── إظهار/إخفاء النص حسب وضع الـ sidebar ──────────
-
     def set_collapsed(self, collapsed: bool):
-        """إخفاء النص في وضع الطي وإظهاره في وضع الفرد."""
         self._txt_lbl.setVisible(not collapsed)
-        new_width = SIDEBAR_COLLAPSED_WIDTH if collapsed else SIDEBAR_EXPANDED_WIDTH
-        self.setFixedWidth(new_width)
-
-    # ── الستايل ──────────────────────────────────────────
+        self.setFixedWidth(
+            SIDEBAR_COLLAPSED_WIDTH if collapsed else SIDEBAR_EXPANDED_WIDTH
+        )
 
     def _update_style(self):
         if self.isChecked():
@@ -124,12 +109,10 @@ class _NavButton(QPushButton):
 # ══════════════════════════════════════════════════════════
 
 class _ToggleButton(QPushButton):
-    """زر صغير في أسفل الـ sidebar لطيه وفرده."""
-
     def __init__(self, parent=None):
         super().__init__(parent)
         self._collapsed = False
-        self.setFixedHeight(36)
+        self.setFixedHeight(34)
         self.setCursor(Qt.PointingHandCursor)
         self._refresh()
         self.setStyleSheet("""
@@ -138,7 +121,7 @@ class _ToggleButton(QPushButton):
                 border: none;
                 border-top: 1px solid #e0e0e0;
                 color: #3949ab;
-                font-size: 14px;
+                font-size: 14pt;
                 font-weight: bold;
             }
             QPushButton:hover { background: #c5cae9; }
@@ -146,16 +129,14 @@ class _ToggleButton(QPushButton):
 
     def _refresh(self):
         self.setText("◀" if not self._collapsed else "▶")
-        self.setToolTip("طي الشريط الجانبي" if not self._collapsed else "فرد الشريط الجانبي")
+        self.setToolTip(
+            "طي الشريط الجانبي" if not self._collapsed
+            else "فرد الشريط الجانبي"
+        )
 
     def toggle_state(self) -> bool:
-        """يبدّل الحالة ويعيد True لو أصبح مطوياً."""
         self._collapsed = not self._collapsed
         self._refresh()
-        return self._collapsed
-
-    @property
-    def is_collapsed(self) -> bool:
         return self._collapsed
 
 
@@ -182,15 +163,15 @@ class _Sidebar(QFrame):
         layout.setContentsMargins(0, 0, 0, 0)
         layout.setSpacing(0)
 
-        # ── رأس الـ sidebar ──
         self._header = QLabel("ERP\nالتكاليف")
+        self._header.setObjectName("sidebar_header")
         self._header.setAlignment(Qt.AlignCenter)
-        self._header.setFixedHeight(70)
+        self._header.setFixedHeight(72)
         self._header.setStyleSheet("""
-            QLabel {
+            QLabel#sidebar_header {
                 background: #1565c0;
                 color: white;
-                font-size: 15px;
+                font-size: 15pt;
                 font-weight: bold;
                 border: none;
                 padding: 8px;
@@ -199,7 +180,6 @@ class _Sidebar(QFrame):
         layout.addWidget(self._header)
         layout.addSpacing(8)
 
-        # ── أزرار التنقل ──
         nav_items = [
             ("📊", "حساب\nالتكلفة", "costing"),
             ("💰", "التسعير",        "pricing"),
@@ -219,52 +199,47 @@ class _Sidebar(QFrame):
         sep.setStyleSheet("color: #e0e0e0;")
         layout.addWidget(sep)
 
-        # ── زر الإعدادات ──
         btn_settings = _NavButton("⚙️", "الإعدادات")
         btn_settings.setProperty("nav_key", "settings")
         self._buttons.append(btn_settings)
         layout.addWidget(btn_settings)
 
-        # ── زر الطي ──
         self._toggle_btn = _ToggleButton()
         self._toggle_btn.clicked.connect(self._on_toggle)
         layout.addWidget(self._toggle_btn)
 
-    # ── الطي / الفرد ──────────────────────────────────────
-
     def _on_toggle(self):
         self._collapsed = self._toggle_btn.toggle_state()
+        target = (
+            SIDEBAR_COLLAPSED_WIDTH if self._collapsed
+            else SIDEBAR_EXPANDED_WIDTH
+        )
 
-        # انيميشن على عرض الـ sidebar
-        target_width = SIDEBAR_COLLAPSED_WIDTH if self._collapsed else SIDEBAR_EXPANDED_WIDTH
+        self._anim_min = QPropertyAnimation(self, b"minimumWidth")
+        self._anim_min.setDuration(200)
+        self._anim_min.setEasingCurve(QEasingCurve.InOutQuad)
+        self._anim_min.setStartValue(self.width())
+        self._anim_min.setEndValue(target)
 
-        self._anim = QPropertyAnimation(self, b"minimumWidth")
-        self._anim.setDuration(180)
-        self._anim.setEasingCurve(QEasingCurve.InOutQuad)
-        self._anim.setStartValue(self.width())
-        self._anim.setEndValue(target_width)
+        self._anim_max = QPropertyAnimation(self, b"maximumWidth")
+        self._anim_max.setDuration(200)
+        self._anim_max.setEasingCurve(QEasingCurve.InOutQuad)
+        self._anim_max.setStartValue(self.width())
+        self._anim_max.setEndValue(target)
 
-        self._anim2 = QPropertyAnimation(self, b"maximumWidth")
-        self._anim2.setDuration(180)
-        self._anim2.setEasingCurve(QEasingCurve.InOutQuad)
-        self._anim2.setStartValue(self.width())
-        self._anim2.setEndValue(target_width)
+        self._anim_min.start()
+        self._anim_max.start()
 
-        self._anim.start()
-        self._anim2.start()
-
-        # إخفاء/إظهار النصوص في الأزرار
         for btn in self._buttons:
             btn.set_collapsed(self._collapsed)
 
-        # إخفاء/إظهار نص الرأس
         if self._collapsed:
             self._header.setText("ERP")
             self._header.setStyleSheet("""
-                QLabel {
+                QLabel#sidebar_header {
                     background: #1565c0;
                     color: white;
-                    font-size: 13px;
+                    font-size: 11pt;
                     font-weight: bold;
                     border: none;
                     padding: 4px;
@@ -273,10 +248,10 @@ class _Sidebar(QFrame):
         else:
             self._header.setText("ERP\nالتكاليف")
             self._header.setStyleSheet("""
-                QLabel {
+                QLabel#sidebar_header {
                     background: #1565c0;
                     color: white;
-                    font-size: 15px;
+                    font-size: 15pt;
                     font-weight: bold;
                     border: none;
                     padding: 8px;
@@ -319,20 +294,14 @@ class MainWindow(QMainWindow):
         self._stack = QStackedWidget()
         self._stack.setStyleSheet("background: #f9f9f9;")
 
-        # index 0 → حساب التكلفة
-        self._costing = CostingSection()
-        self._stack.addWidget(self._costing)
-
-        # index 1 → التسعير
-        self._pricing = PricingSection()
-        self._stack.addWidget(self._pricing)
-
-        # index 2 → الحسابات
+        self._costing    = CostingSection()
+        self._pricing    = PricingSection()
         self._accounting = AccountingTab()
-        self._stack.addWidget(self._accounting)
+        self._inventory  = InventoryTab()
 
-        # index 3 → المخزن
-        self._inventory = InventoryTab()
+        self._stack.addWidget(self._costing)
+        self._stack.addWidget(self._pricing)
+        self._stack.addWidget(self._accounting)
         self._stack.addWidget(self._inventory)
 
         main_layout.addWidget(self._stack, stretch=1)
