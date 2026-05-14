@@ -9,12 +9,24 @@ ui/widgets/costing/component_row.py
   - expose_load_op_rows يشتغل synchronously من product_form لكن الـ QTimer
     يلغي تأثيره بعد 50ms
 
-الإصلاح:
+الإصلاح الأصلي:
   1. _skip_timer_load: flag بيمنع QTimer من التشغيل لو expose_load_op_rows
      هو المسؤول عن التحميل (يُضبط قبل القراءة من DB)
   2. expose_load_op_rows: يضبط _skip_timer_load=True قبل التحميل
   3. _load_op_rows: يتحقق من _skip_timer_load قبل التنفيذ
   4. get_values: يعتمد على currentData() أولاً بشكل صارم
+
+إصلاح إضافي (هذا الإصلاح):
+  المشكلة: لما بيتم اختيار عملية تشغيل (machine_op) لأول مرة،
+  الـ _sub_row_widget (dropdown اختيار الصف) مش بيظهر على طول.
+  السبب: _fill_items بيكال وبيملى الـ combo لكن لو الـ index مش بيتغير
+  فالـ item_selected signal مش بيطلق → _load_op_rows مش بيتكال.
+
+  الحل:
+  5. في _fill_items: بعد ملء الـ combo، لو النوع machine_op، نستدعي
+     _ensure_machine_op_rows() مباشرة بدون انتظار signal.
+  6. _ensure_machine_op_rows(): دالة جديدة بتتحقق من النوع الحالي
+     وتحمل الصفوف فوراً.
 """
 
 import weakref
@@ -323,6 +335,32 @@ class ComponentRow(QWidget):
 
         # ✅ نحمل synchronously
         self._load_op_rows(op_id, selected_row_id)
+
+    # ══════════════════════════════════════════════════════
+    # ✅ _ensure_machine_op_rows — يضمن ظهور الصفوف فور الاختيار
+    # ══════════════════════════════════════════════════════
+
+    def _ensure_machine_op_rows(self):
+        """
+        يتحقق من النوع الحالي ولو كان machine_op يحمل الصفوف فوراً.
+        يُستدعى بعد _fill_items مباشرة لضمان الظهور التلقائي.
+        """
+        try:
+            if sip.isdeleted(self):
+                return
+        except Exception:
+            return
+
+        if self.cmb_type.currentData() != "machine_op":
+            return
+
+        data = self._item_combo.current_data()
+        if not data or data[0] in ("__sep__", "__orphan__") or data[1] is None:
+            return
+
+        op_id = data[1]
+        # نستخدم _pinned_op_row_id كـ selected_row_id
+        self._load_op_rows(op_id, self._pinned_op_row_id)
 
     # ══════════════════════════════════════════════════════
     # _load_op_rows - التحميل الفعلي لصفوف العملية
@@ -706,6 +744,13 @@ class ComponentRow(QWidget):
         else:
             self._item_combo._select_first_real()
 
+        # ✅ الإصلاح الجديد: بعد ملء الـ combo مباشرة،
+        # لو النوع machine_op نحمل الصفوف فوراً بدون انتظار signal
+        if child_type == "machine_op":
+            # نستخدم QTimer(0) عشان الـ widget يكمل بناءه الأول
+            _weak = weakref.ref(self)
+            QTimer.singleShot(0, lambda: (s := _weak()) and s._ensure_machine_op_rows())
+
     def refresh_catalog(self, _new_catalog: dict = None):
         self._refresh_items()
 
@@ -760,9 +805,8 @@ class ComponentRow(QWidget):
                 self._init_machine_op_row_id = None
                 # ✅ هنا نسمح للـ timer بالتشغيل (المستخدم اختار يدوياً)
                 self._skip_timer_load = False
-                _weak = weakref.ref(self)
-                _oid  = op_id
-                QTimer.singleShot(50, lambda: (s := _weak()) and s._load_op_rows(_oid, None))
+                # ✅ نحمل الصفوف فوراً بدون timer
+                self._load_op_rows(op_id, None)
                 self._hide_variants()
             else:
                 self._hide_variants()
