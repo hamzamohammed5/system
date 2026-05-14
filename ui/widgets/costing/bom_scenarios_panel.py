@@ -11,6 +11,11 @@ _BomScenariosPanel — لوحة إدارة سيناريوهات BOM.
   - حذف سيناريو
   - تحديد سيناريو كـ default
   - عند تغيير السيناريو → يُعاد تحميل BOM
+
+وضعان:
+  - in-memory mode (منتج جديد لم يُحفظ بعد): السيناريوهات محفوظة في
+    الذاكرة فقط، والمستخدم يقدر يسمي ويضيف سيناريوهات قبل الحفظ.
+  - DB mode (منتج موجود): السيناريوهات محفوظة في قاعدة البيانات.
 """
 
 from PyQt5.QtWidgets import (
@@ -35,17 +40,24 @@ class _BomScenariosPanel(QFrame):
 
     Signals:
         scenario_changed(scenario_id) — يُطلق عند تغيير السيناريو الحالي
+                                        (في الـ in-memory mode يُطلق بـ index سالب)
     """
 
     scenario_changed = pyqtSignal(int)
 
+    # ── هيكل السيناريو في الـ in-memory mode ──
+    # كل سيناريو: {"id": int (سالب مؤقت), "name": str, "is_default": bool}
+    _NEXT_TEMP_ID = -1  # ID مؤقت سالب لتجنب التعارض مع DB IDs
+
     def __init__(self, conn, parent=None):
         super().__init__(parent)
-        self.conn       = conn
-        self._item_id   = None
-        self._scenarios = []
+        self.conn        = conn
+        self._item_id    = None          # None = in-memory mode
+        self._scenarios  = []            # قايمة السيناريوهات (DB أو memory)
         self._current_id = None
+        self._in_memory  = True          # True = منتج جديد لم يُحفظ بعد
         self._build()
+        self._init_memory_scenario()     # ابدأ بسيناريو افتراضي في الذاكرة
 
     # ══════════════════════════════════════════════════════
     # بناء الواجهة
@@ -125,8 +137,7 @@ class _BomScenariosPanel(QFrame):
         self.btn_set_default.clicked.connect(self._set_default)
         lay.addWidget(self.btn_set_default)
 
-        
-        # أضف زر rename بجوار أزرار clone و add
+        # زر تعديل الاسم
         btn_rename = QPushButton("✏️ تعديل")
         btn_rename.setMinimumHeight(28)
         btn_rename.setFixedWidth(80)
@@ -191,27 +202,80 @@ class _BomScenariosPanel(QFrame):
         lay.addWidget(btn_del)
 
     # ══════════════════════════════════════════════════════
+    # In-Memory Mode — إدارة السيناريوهات في الذاكرة
+    # ══════════════════════════════════════════════════════
+
+    def _next_temp_id(self) -> int:
+        """يولّد ID مؤقت سالب فريد."""
+        _BomScenariosPanel._NEXT_TEMP_ID -= 1
+        return _BomScenariosPanel._NEXT_TEMP_ID
+
+    def _init_memory_scenario(self):
+        """يُنشئ سيناريو افتراضي في الذاكرة للمنتجات الجديدة."""
+        self._in_memory = True
+        self._item_id   = None
+        temp_id = self._next_temp_id()
+        self._scenarios = [{"id": temp_id, "name": "سيناريو 1", "is_default": True}]
+        self._current_id = temp_id
+        self._rebuild_combo()
+        self._sync_current()
+
+    def get_memory_scenarios(self) -> list:
+        """
+        يرجع السيناريوهات المحفوظة في الذاكرة.
+        يُستدعى من _FormPanel عند الحفظ لكتابة السيناريوهات في DB.
+        كل عنصر: {"id": int (temp), "name": str, "is_default": bool}
+        """
+        return list(self._scenarios)
+
+    def get_current_memory_index(self) -> int:
+        """
+        يرجع index السيناريو الحالي في قايمة الذاكرة.
+        يُستخدم لمعرفة أي سيناريو كان المستخدم عليه عند الحفظ.
+        """
+        for i, sc in enumerate(self._scenarios):
+            if sc["id"] == self._current_id:
+                return i
+        return 0
+
+    def switch_to_db_mode(self, item_id: int, current_scenario_index: int = 0):
+        """
+        التحويل من in-memory mode إلى DB mode بعد حفظ المنتج.
+        item_id: ID المنتج الجديد في DB
+        current_scenario_index: index السيناريو الحالي في DB
+        """
+        self._in_memory = False
+        self._item_id   = item_id
+        self._scenarios = []
+        self._current_id = None
+        self._reload()
+
+        # اختر السيناريو المناسب
+        if 0 <= current_scenario_index < len(self._scenarios):
+            target_sc = self._scenarios[current_scenario_index]
+            self._current_id = target_sc["id"]
+            self._rebuild_combo()
+            self._sync_current()
+
+    # ══════════════════════════════════════════════════════
     # API خارجي
     # ══════════════════════════════════════════════════════
 
     def load_item(self, item_id: int):
-        """تحميل سيناريوهات منتج معين."""
-        self._item_id = item_id
+        """تحميل سيناريوهات منتج موجود (DB mode)."""
+        self._in_memory = False
+        self._item_id   = item_id
         self._reload()
 
     def clear(self):
-        """مسح اللوحة."""
-        self._item_id   = None
-        self._current_id = None
-        self._scenarios  = []
-        self.cmb_scenarios.blockSignals(True)
-        self.cmb_scenarios.clear()
-        self.cmb_scenarios.blockSignals(False)
-        self.lbl_default_badge.setVisible(False)
-        self.btn_set_default.setEnabled(False)
+        """مسح اللوحة والرجوع لـ in-memory mode."""
+        self._init_memory_scenario()
 
     def current_scenario_id(self) -> int | None:
         return self._current_id
+
+    def is_in_memory(self) -> bool:
+        return self._in_memory
 
     def ensure_default_scenario(self, item_id: int) -> int:
         """
@@ -225,15 +289,38 @@ class _BomScenariosPanel(QFrame):
         return insert_scenario(self.conn, item_id, "سيناريو 1", is_default=True)
 
     # ══════════════════════════════════════════════════════
-    # تحميل
+    # تحميل (DB mode)
     # ══════════════════════════════════════════════════════
 
     def _reload(self):
+        """إعادة تحميل من DB."""
         if self._item_id is None:
             return
-        self._scenarios = list(fetch_scenarios(self.conn, self._item_id))
+        rows = fetch_scenarios(self.conn, self._item_id)
+        self._scenarios = [dict(r) for r in rows]
         prev_id = self._current_id
+        self._rebuild_combo()
 
+        # استعادة الاختيار السابق أو الـ default
+        restored = False
+        if prev_id is not None:
+            for sc in self._scenarios:
+                if sc["id"] == prev_id:
+                    self._current_id = prev_id
+                    restored = True
+                    break
+
+        if not restored:
+            for sc in self._scenarios:
+                if sc["is_default"]:
+                    self._current_id = sc["id"]
+                    break
+
+        self._rebuild_combo()
+        self._sync_current()
+
+    def _rebuild_combo(self):
+        """إعادة بناء الـ combo من self._scenarios."""
         self.cmb_scenarios.blockSignals(True)
         self.cmb_scenarios.clear()
 
@@ -241,31 +328,19 @@ class _BomScenariosPanel(QFrame):
             star = "⭐ " if sc["is_default"] else ""
             self.cmb_scenarios.addItem(f"{star}{sc['name']}", sc["id"])
 
-        # استعادة الاختيار السابق أو الـ default
-        restored = False
-        if prev_id is not None:
-            for i in range(self.cmb_scenarios.count()):
-                if self.cmb_scenarios.itemData(i) == prev_id:
-                    self.cmb_scenarios.setCurrentIndex(i)
-                    restored = True
-                    break
-
-        if not restored:
-            # اختر الـ default
-            for i, sc in enumerate(self._scenarios):
-                if sc["is_default"]:
-                    self.cmb_scenarios.setCurrentIndex(i)
-                    break
+        # اختر الحالي
+        for i, sc in enumerate(self._scenarios):
+            if sc["id"] == self._current_id:
+                self.cmb_scenarios.setCurrentIndex(i)
+                break
 
         self.cmb_scenarios.blockSignals(False)
-        self._sync_current()
 
     def _sync_current(self):
         """مزامنة الـ _current_id مع الـ combo."""
         sc_id = self.cmb_scenarios.currentData()
         self._current_id = sc_id
 
-        # تحديث badge ومظهر زر الـ default
         is_default = False
         for sc in self._scenarios:
             if sc["id"] == sc_id and sc["is_default"]:
@@ -285,55 +360,100 @@ class _BomScenariosPanel(QFrame):
             self.scenario_changed.emit(self._current_id)
 
     # ══════════════════════════════════════════════════════
-    # أزرار
+    # أزرار — تعمل في كلا الوضعين
     # ══════════════════════════════════════════════════════
 
     def _set_default(self):
         if self._current_id is None:
             return
-        set_default_scenario(self.conn, self._current_id)
-        bus.data_changed.emit()
-        self._reload()
 
-    
+        if self._in_memory:
+            # في الذاكرة: غيّر is_default في القايمة
+            for sc in self._scenarios:
+                sc["is_default"] = (sc["id"] == self._current_id)
+            self._rebuild_combo()
+            self._sync_current()
+        else:
+            # في DB
+            set_default_scenario(self.conn, self._current_id)
+            bus.data_changed.emit()
+            self._reload()
+
     def _rename(self):
         if self._current_id is None:
             return
-        sc = fetch_scenario(self.conn, self._current_id)
-        if not sc:
-            return
+
+        # ابحث عن الاسم الحالي
+        current_name = ""
+        for sc in self._scenarios:
+            if sc["id"] == self._current_id:
+                current_name = sc["name"]
+                break
+
         name, ok = QInputDialog.getText(
             self, "تعديل اسم السيناريو", "الاسم الجديد:",
-            text=sc["name"]
+            text=current_name
         )
         if not ok or not name.strip():
             return
-        update_scenario(self.conn, self._current_id, name.strip())
-        bus.data_changed.emit()
-        self._reload()
-        
+
+        if self._in_memory:
+            # في الذاكرة: عدّل الاسم مباشرة
+            for sc in self._scenarios:
+                if sc["id"] == self._current_id:
+                    sc["name"] = name.strip()
+                    break
+            self._rebuild_combo()
+            self._sync_current()
+        else:
+            # في DB
+            update_scenario(self.conn, self._current_id, name.strip())
+            bus.data_changed.emit()
+            self._reload()
+
     def _clone(self):
-        if self._current_id is None or self._item_id is None:
+        if self._current_id is None:
             return
-        sc = fetch_scenario(self.conn, self._current_id)
-        default_name = f"نسخة من {sc['name']}" if sc else "سيناريو جديد"
+
+        current_name = ""
+        for sc in self._scenarios:
+            if sc["id"] == self._current_id:
+                current_name = sc["name"]
+                break
+
+        default_name = f"نسخة من {current_name}" if current_name else "سيناريو جديد"
         name, ok = QInputDialog.getText(
             self, "نسخ السيناريو", "اسم السيناريو الجديد:",
             text=default_name
         )
         if not ok or not name.strip():
             return
-        try:
-            new_id = clone_scenario(self.conn, self._current_id, name.strip())
+
+        if self._in_memory:
+            # في الذاكرة: أضف سيناريو جديد (النسخ الفعلي للمكونات سيتم في FormPanel)
+            new_id = self._next_temp_id()
+            self._scenarios.append({
+                "id": new_id,
+                "name": name.strip(),
+                "is_default": False,
+                "_cloned_from": self._current_id,  # علامة للـ FormPanel يعرف يعمل clone
+            })
             self._current_id = new_id
-            bus.data_changed.emit()
-            self._reload()
-        except Exception as e:
-            QMessageBox.warning(self, "خطأ", str(e))
+            self._rebuild_combo()
+            self._sync_current()
+            # نطلق الـ signal عشان الـ FormPanel يعرف يعمل clone للمكونات
+            self.scenario_changed.emit(new_id)
+        else:
+            # في DB
+            try:
+                new_id = clone_scenario(self.conn, self._current_id, name.strip())
+                self._current_id = new_id
+                bus.data_changed.emit()
+                self._reload()
+            except Exception as e:
+                QMessageBox.warning(self, "خطأ", str(e))
 
     def _add_new(self):
-        if self._item_id is None:
-            return
         count = len(self._scenarios) + 1
         name, ok = QInputDialog.getText(
             self, "سيناريو جديد", "اسم السيناريو:",
@@ -341,39 +461,79 @@ class _BomScenariosPanel(QFrame):
         )
         if not ok or not name.strip():
             return
-        new_id = insert_scenario(
-            self.conn, self._item_id, name.strip(), is_default=False
-        )
-        self._current_id = new_id
-        bus.data_changed.emit()
-        self._reload()
-        self.scenario_changed.emit(new_id)
+
+        if self._in_memory:
+            # في الذاكرة: أضف سيناريو جديد فارغ
+            new_id = self._next_temp_id()
+            self._scenarios.append({
+                "id": new_id,
+                "name": name.strip(),
+                "is_default": False,
+            })
+            self._current_id = new_id
+            self._rebuild_combo()
+            self._sync_current()
+            self.scenario_changed.emit(new_id)
+        else:
+            # في DB
+            if self._item_id is None:
+                return
+            new_id = insert_scenario(
+                self.conn, self._item_id, name.strip(), is_default=False
+            )
+            self._current_id = new_id
+            bus.data_changed.emit()
+            self._reload()
+            self.scenario_changed.emit(new_id)
 
     def _delete(self):
         if self._current_id is None:
             return
-        sc = fetch_scenario(self.conn, self._current_id)
-        if not sc:
-            return
-
         if len(self._scenarios) <= 1:
             QMessageBox.warning(
                 self, "تنبيه",
-                "لا يمكن حذف السيناريو الوحيد للمنتج."
+                "لا يمكن حذف السيناريو الوحيد."
             )
             return
 
+        current_name = ""
+        for sc in self._scenarios:
+            if sc["id"] == self._current_id:
+                current_name = sc["name"]
+                break
+
         reply = QMessageBox.question(
             self, "تأكيد الحذف",
-            f"حذف السيناريو «{sc['name']}» وكل مكوناته؟",
+            f"حذف السيناريو «{current_name}»؟",
             QMessageBox.Yes | QMessageBox.No
         )
         if reply != QMessageBox.Yes:
             return
 
-        if delete_scenario(self.conn, self._current_id):
-            self._current_id = None
-            bus.data_changed.emit()
-            self._reload()
+        if self._in_memory:
+            # في الذاكرة: احذف من القايمة
+            was_default = False
+            for sc in self._scenarios:
+                if sc["id"] == self._current_id:
+                    was_default = sc["is_default"]
+                    break
+
+            self._scenarios = [sc for sc in self._scenarios if sc["id"] != self._current_id]
+
+            # لو كان default، اجعل الأول default
+            if was_default and self._scenarios:
+                self._scenarios[0]["is_default"] = True
+
+            self._current_id = self._scenarios[0]["id"] if self._scenarios else None
+            self._rebuild_combo()
+            self._sync_current()
+            if self._current_id is not None:
+                self.scenario_changed.emit(self._current_id)
         else:
-            QMessageBox.warning(self, "خطأ", "تعذر حذف السيناريو.")
+            # في DB
+            if delete_scenario(self.conn, self._current_id):
+                self._current_id = None
+                bus.data_changed.emit()
+                self._reload()
+            else:
+                QMessageBox.warning(self, "خطأ", "تعذر حذف السيناريو.")
