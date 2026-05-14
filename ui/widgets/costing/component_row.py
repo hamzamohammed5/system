@@ -2,8 +2,9 @@
 ui/widgets/costing/component_row.py  (نسخة محدّثة)
 ============================================
 تغييرات:
-  - لما نختار machine_op يظهر combo اختيار الصف (machine_op_row)
-  - التكلفة المحسوبة للصف = (value × rate) ÷ count
+  - لما نختار machine_op يظهر sub-row تحت الصف الأساسي لاختيار machine_op_row
+  - الـ sub-row منفصل عن سطر الكمية/الهادر عشان ما يبوظش الـ layout
+  - حفظ machine_op_row_id بشكل صحيح
   - variant combo للخامات (كما كان)
   - waste_pct (كما كان)
 """
@@ -12,8 +13,8 @@ import weakref
 from PyQt5 import sip
 
 from PyQt5.QtWidgets import (
-    QWidget, QHBoxLayout, QComboBox, QLineEdit,
-    QPushButton, QSizePolicy, QLabel, QDoubleSpinBox,
+    QWidget, QVBoxLayout, QHBoxLayout, QComboBox, QLineEdit,
+    QPushButton, QSizePolicy, QLabel, QDoubleSpinBox, QFrame,
 )
 from PyQt5.QtCore import pyqtSignal, Qt, QTimer
 from PyQt5.QtGui  import QColor
@@ -74,14 +75,20 @@ class ComponentRow(QWidget):
         )
 
     # ══════════════════════════════════════════════════════
-    # بناء الواجهة
+    # بناء الواجهة — سطرين: main_row + sub_row
     # ══════════════════════════════════════════════════════
 
     def _build(self, child_type, child_id, qty, raw_total_qty,
                waste_pct=0.0, variant_id=None, machine_op_row_id=None):
-        layout = QHBoxLayout(self)
-        layout.setContentsMargins(0, 2, 0, 2)
-        layout.setSpacing(6)
+        # Layout عمودي للـ widget الكلي
+        outer = QVBoxLayout(self)
+        outer.setContentsMargins(0, 2, 0, 2)
+        outer.setSpacing(2)
+
+        # ── السطر الرئيسي ──────────────────────────────
+        main_row = QHBoxLayout()
+        main_row.setContentsMargins(0, 0, 0, 0)
+        main_row.setSpacing(6)
 
         # ── النوع ──
         self.cmb_type = QComboBox()
@@ -94,39 +101,6 @@ class ComponentRow(QWidget):
         # ── العنصر (searchable) ──
         self._item_combo = _SearchableCombo()
         self._item_combo.item_selected.connect(self._on_item_selected)
-
-        # ── Combo اختيار صف العملية (machine_op_row) ──
-        self.cmb_op_row = QComboBox()
-        self.cmb_op_row.setMinimumHeight(26)
-        self.cmb_op_row.setMinimumWidth(160)
-        self.cmb_op_row.setMaximumWidth(220)
-        self.cmb_op_row.setToolTip(
-            "صف العملية — اختر الصف المطلوب\n"
-            "التكلفة = (قيمة × معدل التشغيل) ÷ العدد"
-        )
-        self.cmb_op_row.setStyleSheet("""
-            QComboBox {
-                background: #fce4ec;
-                border: 1px solid #f48fb1;
-                border-radius: 4px;
-                padding: 1px 6px;
-                font-size: 11px;
-                color: #880e4f;
-            }
-            QComboBox:focus { border-color: #880e4f; }
-            QComboBox::drop-down { border: none; }
-        """)
-        self.cmb_op_row.setVisible(False)
-        self.cmb_op_row.currentIndexChanged.connect(self._on_op_row_changed)
-
-        # label تكلفة صف العملية
-        self.lbl_op_row_cost = QLabel()
-        self.lbl_op_row_cost.setStyleSheet(
-            "font-size:10px; color:#880e4f; font-weight:bold;"
-            "background:#fce4ec; border:1px solid #f48fb1;"
-            "border-radius:3px; padding:1px 5px;"
-        )
-        self.lbl_op_row_cost.setVisible(False)
 
         # ── Variant الخامة ──
         self.cmb_variant = QComboBox()
@@ -213,24 +187,78 @@ class ComponentRow(QWidget):
         del_btn.setFixedWidth(32)
         del_btn.clicked.connect(lambda: self.removed.emit(self))
 
-        layout.addWidget(self.cmb_type)
-        layout.addWidget(self._item_combo, stretch=1)
-        layout.addWidget(self.cmb_op_row)
-        layout.addWidget(self.lbl_op_row_cost)
-        layout.addWidget(self.cmb_variant)
-        layout.addWidget(self.lbl_variant_cost)
-        layout.addWidget(self.qty_edit)
-        layout.addWidget(self.lbl_waste)
-        layout.addWidget(self.waste_spin)
+        # تجميع السطر الرئيسي
+        main_row.addWidget(self.cmb_type)
+        main_row.addWidget(self._item_combo, stretch=1)
+        main_row.addWidget(self.cmb_variant)
+        main_row.addWidget(self.lbl_variant_cost)
+        main_row.addWidget(self.qty_edit)
+        main_row.addWidget(self.lbl_waste)
+        main_row.addWidget(self.waste_spin)
 
         if self._show_total_qty:
-            layout.addWidget(self.lbl_total_qty)
-            layout.addWidget(self.total_qty_edit)
+            main_row.addWidget(self.lbl_total_qty)
+            main_row.addWidget(self.total_qty_edit)
         else:
             self.lbl_total_qty.setVisible(False)
             self.total_qty_edit.setVisible(False)
 
-        layout.addWidget(del_btn)
+        main_row.addWidget(del_btn)
+        outer.addLayout(main_row)
+
+        # ── السطر الفرعي لصفوف عملية التشغيل ──────────
+        self._sub_row_widget = QFrame()
+        self._sub_row_widget.setStyleSheet("""
+            QFrame {
+                background: #fce4ec;
+                border: 1px solid #f48fb1;
+                border-radius: 4px;
+                margin-right: 4px;
+            }
+        """)
+        sub_layout = QHBoxLayout(self._sub_row_widget)
+        sub_layout.setContentsMargins(8, 3, 8, 3)
+        sub_layout.setSpacing(8)
+
+        lbl_row_icon = QLabel("↳ صف العملية:")
+        lbl_row_icon.setStyleSheet(
+            "color:#880e4f; font-weight:bold; font-size:11px;"
+            "background:transparent; border:none;"
+        )
+        sub_layout.addWidget(lbl_row_icon)
+
+        self.cmb_op_row = QComboBox()
+        self.cmb_op_row.setMinimumHeight(26)
+        self.cmb_op_row.setMinimumWidth(280)
+        self.cmb_op_row.setToolTip(
+            "صف العملية — اختر الصف المطلوب\n"
+            "التكلفة = (قيمة × معدل التشغيل) ÷ العدد"
+        )
+        self.cmb_op_row.setStyleSheet("""
+            QComboBox {
+                background: white;
+                border: 1px solid #f48fb1;
+                border-radius: 4px;
+                padding: 1px 6px;
+                font-size: 11px;
+                color: #880e4f;
+            }
+            QComboBox:focus { border-color: #880e4f; }
+            QComboBox::drop-down { border: none; }
+        """)
+        self.cmb_op_row.currentIndexChanged.connect(self._on_op_row_changed)
+        sub_layout.addWidget(self.cmb_op_row, stretch=1)
+
+        self.lbl_op_row_cost = QLabel()
+        self.lbl_op_row_cost.setStyleSheet(
+            "font-size:11px; color:#880e4f; font-weight:bold;"
+            "background:transparent; border:none;"
+        )
+        sub_layout.addWidget(self.lbl_op_row_cost)
+        sub_layout.addStretch()
+
+        self._sub_row_widget.setVisible(False)
+        outer.addWidget(self._sub_row_widget)
 
         # تحديد النوع
         self.cmb_type.blockSignals(True)
@@ -253,14 +281,12 @@ class ComponentRow(QWidget):
             _oid, _rid = child_id, machine_op_row_id
             QTimer.singleShot(50, lambda: (s := _weak()) and s._load_op_rows(_oid, _rid))
 
-
     # ══════════════════════════════════════════════════════
-    # Op Rows (صفوف العملية) — تحميل وعرض
+    # Op Rows — تحميل وعرض في السطر الفرعي
     # ══════════════════════════════════════════════════════
 
     def _load_op_rows(self, op_id: int, selected_row_id: int = None):
-        """يحمّل صفوف عملية التشغيل في الـ combo."""
-        # ── الفحص الآمن الوحيد: sip.isdeleted ──
+        """يحمّل صفوف عملية التشغيل ويعرض السطر الفرعي."""
         try:
             if sip.isdeleted(self) or sip.isdeleted(self.cmb_op_row):
                 return
@@ -284,6 +310,8 @@ class ComponentRow(QWidget):
 
         self.cmb_op_row.blockSignals(True)
         self.cmb_op_row.clear()
+
+        # لو أكثر من صف نضيف placeholder للاختيار
         if len(rows) > 1:
             self.cmb_op_row.addItem("─ اختر صف ─", None)
 
@@ -304,22 +332,28 @@ class ComponentRow(QWidget):
                     self.cmb_op_row.setCurrentIndex(i)
                     restored = True
                     break
+
+        # لو صف واحد فقط → اختره تلقائياً
         if not restored and len(rows) == 1:
-            last_idx = self.cmb_op_row.count() - 1
-            self.cmb_op_row.setCurrentIndex(last_idx)
+            # الـ index الأخير هو الصف الواحد
+            self.cmb_op_row.setCurrentIndex(self.cmb_op_row.count() - 1)
+        elif not restored and len(rows) > 1:
+            # ابدأ بالأول غير placeholder
+            self.cmb_op_row.setCurrentIndex(1)
 
         self.cmb_op_row.blockSignals(False)
-        self.cmb_op_row.setVisible(True)
+
+        # أظهر السطر الفرعي
+        self._sub_row_widget.setVisible(True)
         self._update_op_row_cost_label()
 
     def _hide_op_rows(self):
         try:
-            if sip.isdeleted(self) or sip.isdeleted(self.cmb_op_row):
+            if sip.isdeleted(self) or sip.isdeleted(self._sub_row_widget):
                 return
         except Exception:
             return
-        self.cmb_op_row.setVisible(False)
-        self.lbl_op_row_cost.setVisible(False)
+        self._sub_row_widget.setVisible(False)
 
     def _on_op_row_changed(self):
         self._update_op_row_cost_label()
@@ -332,23 +366,21 @@ class ComponentRow(QWidget):
             return
         row_id = self.cmb_op_row.currentData()
         if row_id is None:
-            self.lbl_op_row_cost.setVisible(False)
+            self.lbl_op_row_cost.setText("")
             return
         try:
             from db.machine_op_rows_repo import calc_op_row_cost
             conn = self._get_conn()
             cost = calc_op_row_cost(conn, row_id)
             self.lbl_op_row_cost.setText(f"= {cost:.4f} ج/قطعة")
-            self.lbl_op_row_cost.setVisible(True)
         except Exception:
-            self.lbl_op_row_cost.setVisible(False)
+            self.lbl_op_row_cost.setText("")
 
     # ══════════════════════════════════════════════════════
     # Variants — تحميل وعرض (كما كان)
     # ══════════════════════════════════════════════════════
 
     def _load_variants(self, item_id: int, selected_variant_id: int = None):
-        
         try:
             if sip.isdeleted(self) or sip.isdeleted(self.cmb_variant):
                 return
@@ -612,8 +644,6 @@ class ComponentRow(QWidget):
     # Signal handlers
     # ══════════════════════════════════════════════════════
 
-    
-
     def _on_item_selected(self, data):
         if data and data[0] not in ("__sep__", "__orphan__") and data[1] is not None:
             self._pinned_id = data[1]
@@ -631,8 +661,10 @@ class ComponentRow(QWidget):
                 self._hide_op_rows()
             elif child_type == "machine_op":
                 op_id = data[1]
+                # أخفِ أولاً ثم حمّل — بدون تأخير لأن القيم متاحة فوراً
+                self._hide_op_rows()
                 weak_self = weakref.ref(self)
-                QTimer.singleShot(50, lambda: (s := weak_self()) and s._load_op_rows(op_id))
+                QTimer.singleShot(0, lambda: (s := weak_self()) and s._load_op_rows(op_id))
                 self._hide_variants()
             else:
                 self._hide_variants()
@@ -698,7 +730,7 @@ class ComponentRow(QWidget):
                 variant_id = self.cmb_variant.currentData()
 
             machine_op_row_id = None
-            if child_type == "machine_op" and self.cmb_op_row.isVisible():
+            if child_type == "machine_op" and self._sub_row_widget.isVisible():
                 machine_op_row_id = self.cmb_op_row.currentData()
 
             return child_type, child_id, qty, waste_pct, variant_id, machine_op_row_id
@@ -715,7 +747,7 @@ class ComponentRow(QWidget):
         return None
 
     def get_machine_op_row_id(self):
-        if self.cmb_type.currentData() == "machine_op" and self.cmb_op_row.isVisible():
+        if self.cmb_type.currentData() == "machine_op" and self._sub_row_widget.isVisible():
             return self.cmb_op_row.currentData()
         return None
 
