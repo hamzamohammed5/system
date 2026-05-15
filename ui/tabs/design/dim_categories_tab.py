@@ -1,15 +1,18 @@
 """
 ui/tabs/design/dim_categories_tab.py
 ======================================
-تبويب إدارة تصنيفات مجموعات المقاسات (scope='design').
+تبويب إدارة تصنيفات مجموعات المقاسات.
 
-يتيح:
-  - إنشاء / تعديل / حذف تصنيفات بـ scope='design'
-  - لكل تصنيف: اسم، لون، وحدة افتراضية
-  - لكل تصنيف: قائمة حقول افتراضية (القالب)
-    حيث كل حقل: مفتاح، تسمية، وحدة، نوع، مطلوب
+يعمل على designs.db مباشرة (جدول dim_set_categories + dim_set_category_fields).
 
-هذه الحقول تُنسخ تلقائياً لأي مجموعة مقاسات جديدة تختار هذا التصنيف.
+لكل تصنيف:
+  - اسم + لون + أيقونة + وحدة افتراضية
+  - قائمة حقول افتراضية (القالب): مفتاح، تسمية، وحدة، نوع، مطلوب
+    → تُنسخ تلقائياً لأي مجموعة مقاسات جديدة تختار هذا التصنيف
+
+الـ widgets المستخدمة من shared:
+  - WrapDelegate من ui/helpers.py  (للجداول)
+  - wrap_in_scroll من ui/widgets/shared/scrollable_form.py
 """
 
 import json
@@ -20,21 +23,32 @@ from PyQt5.QtWidgets import (
     QTableWidget, QTableWidgetItem, QHeaderView,
     QAbstractItemView, QGroupBox, QFormLayout,
     QMessageBox, QCheckBox, QColorDialog, QFrame,
+    QSizePolicy,
 )
-from PyQt5.QtCore import Qt
+from PyQt5.QtCore import Qt, QTimer
 from PyQt5.QtGui  import QColor, QFont
 
-from db.shared.categories_repo import (
-    fetch_categories_by_scope,
-    fetch_category,
-    insert_category,
-    update_category,
-    delete_category,
-    get_template_fields,
-    set_template_fields,
+from db.design.design_repo import (
+    fetch_all_dim_set_categories,
+    fetch_dim_set_category,
+    insert_dim_set_category,
+    update_dim_set_category,
+    delete_dim_set_category,
+    fetch_category_template_fields,
+    insert_category_template_field,
+    update_category_template_field,
+    delete_category_template_field,
+    reorder_category_template_fields,
+    apply_category_template_to_set,
 )
+from ui.helpers import make_table, WrapDelegate
+from ui.widgets.shared.scrollable_form import wrap_in_scroll
 from ui.events import bus
 
+
+# ══════════════════════════════════════════════════════════
+# ثوابت
+# ══════════════════════════════════════════════════════════
 
 _FIELD_TYPES = [
     ("number",  "🔢 رقم"),
@@ -51,46 +65,62 @@ _PRESET_COLORS = [
     "#00695c", "#37474f",
 ]
 
-_BTN_ADD = """
-    QPushButton { background:#e8f5e9; color:#2e7d32;
-        border:1px solid #a5d6a7; border-radius:5px;
-        padding:0 14px; font-weight:bold; }
-    QPushButton:hover { background:#c8e6c9; }
-"""
-_BTN_SAVE = """
-    QPushButton { background:#e3f2fd; color:#1565c0;
-        border:1px solid #90caf9; border-radius:5px;
-        padding:0 14px; font-weight:bold; }
-    QPushButton:hover { background:#bbdefb; }
-"""
-_BTN_DEL = """
-    QPushButton { background:#ffebee; color:#c62828;
-        border:1px solid #ef9a9a; border-radius:5px; padding:0 12px; }
-    QPushButton:hover { background:#ffcdd2; }
-"""
-_BTN_CANCEL = """
-    QPushButton { background:#f5f5f5; color:#555;
-        border:1px solid #ddd; border-radius:5px; padding:0 12px; }
-    QPushButton:hover { background:#eee; }
-"""
+_ICONS = ["📏", "🪵", "⚙️", "🧵", "🪟", "🔩", "🧱", "🪨", "🛠️", "🎨"]
 
+_S_ADD = ("QPushButton{background:#e8f5e9;color:#2e7d32;"
+          "border:1px solid #a5d6a7;border-radius:5px;"
+          "padding:0 14px;font-weight:bold;}"
+          "QPushButton:hover{background:#c8e6c9;}")
+_S_SAVE = ("QPushButton{background:#e3f2fd;color:#1565c0;"
+           "border:1px solid #90caf9;border-radius:5px;"
+           "padding:0 14px;font-weight:bold;}"
+           "QPushButton:hover{background:#bbdefb;}")
+_S_DEL = ("QPushButton{background:#ffebee;color:#c62828;"
+          "border:1px solid #ef9a9a;border-radius:5px;padding:0 12px;}"
+          "QPushButton:hover{background:#ffcdd2;}")
+_S_CANCEL = ("QPushButton{background:#f5f5f5;color:#555;"
+             "border:1px solid #ddd;border-radius:5px;padding:0 12px;}"
+             "QPushButton:hover{background:#eee;}")
+_S_NEUTRAL = ("QPushButton{background:#f5f5f5;border:1px solid #ddd;"
+              "border-radius:4px;}"
+              "QPushButton:hover{background:#e3f2fd;}")
+
+
+def _grp(title: str, color: str = "#1565c0",
+         border: str = "#90caf9", bg: str = "#f9f9f9") -> QGroupBox:
+    g = QGroupBox(title)
+    g.setStyleSheet(f"""
+        QGroupBox {{
+            font-weight:bold; color:{color};
+            border:1px solid {border}; border-radius:6px;
+            margin-top:8px; padding-top:8px; background:{bg};
+        }}
+        QGroupBox::title {{ subcontrol-origin:margin; padding:0 6px; }}
+    """)
+    return g
+
+
+# ══════════════════════════════════════════════════════════
+# DimCategoriesTab
+# ══════════════════════════════════════════════════════════
 
 class DimCategoriesTab(QWidget):
     """
     تبويب تصنيفات مجموعات المقاسات.
-    conn = erp.db (فيه جدول categories).
+    conn = designs.db  (dim_set_categories + dim_set_category_fields)
     """
 
     def __init__(self, conn, parent=None):
         super().__init__(parent)
-        self.conn         = conn   # erp.db
-        self._editing_id  = None
-        self._color       = "#607d8b"
-        self._editing_fld_idx = None   # index الحقل الذي يتم تعديله في القائمة
-        self._template_fields: list[dict] = []   # حقول التصنيف المحدد (في الذاكرة)
+        self.conn             = conn
+        self._editing_id      = None      # ID التصنيف قيد التعديل
+        self._color           = "#607d8b"
+        self._icon            = "📏"
+        self._editing_fld_id  = None      # ID الحقل قيد التعديل (من DB)
+        self._selected_cat_id = None      # التصنيف المحدد في الجدول
         self._build()
-        self._load()
-        bus.data_changed.connect(self._load)
+        self._load_cats()
+        bus.data_changed.connect(self._on_bus)
 
     # ══════════════════════════════════════════════════════
     # بناء الواجهة
@@ -103,17 +133,17 @@ class DimCategoriesTab(QWidget):
         splitter = QSplitter(Qt.Horizontal)
         splitter.setHandleWidth(4)
         splitter.setStyleSheet("""
-            QSplitter::handle { background:#e0e0e0; }
-            QSplitter::handle:hover { background:#90caf9; }
+            QSplitter::handle{background:#e0e0e0;}
+            QSplitter::handle:hover{background:#90caf9;}
         """)
-        splitter.addWidget(self._build_list_panel())
-        splitter.addWidget(self._build_detail_panel())
-        splitter.setSizes([360, 620])
+        splitter.addWidget(self._build_left())
+        splitter.addWidget(self._build_right())
+        splitter.setSizes([370, 610])
         root.addWidget(splitter)
 
-    # ── لوحة قائمة التصنيفات (يمين) ───────────────────────
+    # ── لوحة يمين: قائمة التصنيفات ────────────────────────
 
-    def _build_list_panel(self) -> QWidget:
+    def _build_left(self) -> QWidget:
         panel = QWidget()
         panel.setStyleSheet("background:#fafafa;")
         lay = QVBoxLayout(panel)
@@ -125,9 +155,9 @@ class DimCategoriesTab(QWidget):
         lay.addWidget(lbl)
 
         hint = QLabel(
-            "💡 كل تصنيف يحمل قالباً من الحقول الافتراضية.\n"
-            "عند إنشاء مجموعة مقاسات من تبويب \"المجموعات\"،\n"
-            "حقول القالب تُنسخ تلقائياً."
+            "💡 كل تصنيف يحمل قالب حقول افتراضية.\n"
+            "عند إنشاء مجموعة مقاسات وتختار تصنيف،\n"
+            "حقول القالب تُنسخ تلقائياً للمجموعة."
         )
         hint.setStyleSheet(
             "font-size:10px; color:#555; background:#e3f2fd;"
@@ -136,60 +166,34 @@ class DimCategoriesTab(QWidget):
         hint.setWordWrap(True)
         lay.addWidget(hint)
 
-        self.table = QTableWidget()
-        self.table.setColumnCount(4)
-        self.table.setHorizontalHeaderLabels(["ID", "التصنيف", "الوحدة", "الحقول"])
-        self.table.setColumnHidden(0, True)
-        self.table.setSelectionBehavior(QAbstractItemView.SelectRows)
-        self.table.setEditTriggers(QAbstractItemView.NoEditTriggers)
-        self.table.setAlternatingRowColors(True)
-        self.table.verticalHeader().setVisible(False)
-        hh = self.table.horizontalHeader()
-        hh.setSectionResizeMode(1, QHeaderView.Stretch)
-        hh.setSectionResizeMode(2, QHeaderView.Interactive)
-        hh.setSectionResizeMode(3, QHeaderView.Interactive)
-        self.table.setColumnWidth(2, 65)
-        self.table.setColumnWidth(3, 65)
-        hh.setDefaultAlignment(Qt.AlignRight | Qt.AlignVCenter)
-        self.table.selectionModel().selectionChanged.connect(self._on_select)
-        lay.addWidget(self.table, stretch=1)
+        # ── جدول التصنيفات ──
+        self.tbl_cats = make_table(
+            ["ID", "الأيقونة", "الاسم", "الوحدة", "الحقول"],
+            stretch_col=2
+        )
+        self.tbl_cats.setColumnHidden(0, True)
+        self.tbl_cats.setColumnWidth(1, 55)
+        self.tbl_cats.setColumnWidth(3, 65)
+        self.tbl_cats.setColumnWidth(4, 55)
+        self.tbl_cats.selectionModel().selectionChanged.connect(self._on_cat_selected)
+        lay.addWidget(self.tbl_cats, stretch=1)
 
-        self.lbl_count = QLabel()
-        self.lbl_count.setStyleSheet("color:#1565c0; font-size:10px;")
-        lay.addWidget(self.lbl_count)
+        self.lbl_cats_count = QLabel()
+        self.lbl_cats_count.setStyleSheet("color:#1565c0; font-size:10px;")
+        lay.addWidget(self.lbl_cats_count)
 
-        btn_del = QPushButton("🗑 حذف المحدد")
-        btn_del.setMinimumHeight(30)
-        btn_del.setStyleSheet(_BTN_DEL)
-        btn_del.clicked.connect(self._delete)
-        row = QHBoxLayout()
-        row.addStretch()
-        row.addWidget(btn_del)
-        lay.addLayout(row)
+        # ── فورم التصنيف (داخل scroll) ──
+        form_container = QWidget()
+        form_lay = QVBoxLayout(form_container)
+        form_lay.setContentsMargins(0, 0, 0, 0)
+        form_lay.setSpacing(0)
 
-        return panel
-
-    # ── لوحة التفاصيل (يسار) ────────────────────────────────
-
-    def _build_detail_panel(self) -> QWidget:
-        panel = QWidget()
-        panel.setStyleSheet("background:white;")
-        lay = QVBoxLayout(panel)
-        lay.setContentsMargins(8, 12, 12, 12)
-        lay.setSpacing(10)
-
-        # ── معلومات التصنيف ──
-        grp_info = QGroupBox("📋  بيانات التصنيف")
-        grp_info.setStyleSheet("""
-            QGroupBox { font-weight:bold; color:#1565c0;
-                border:1px solid #90caf9; border-radius:6px;
-                margin-top:6px; padding-top:6px; background:#f9f9f9; }
-            QGroupBox::title { subcontrol-origin:margin; padding:0 6px; }
-        """)
-        form = QFormLayout(grp_info)
+        grp = _grp("بيانات التصنيف")
+        form = QFormLayout(grp)
         form.setSpacing(8)
         form.setLabelAlignment(Qt.AlignRight)
 
+        # الاسم
         self.inp_name = QLineEdit()
         self.inp_name.setMinimumHeight(30)
         self.inp_name.setPlaceholderText("مثال: خشب، معدن، قماش...")
@@ -200,473 +204,619 @@ class DimCategoriesTab(QWidget):
         self.inp_unit = QLineEdit()
         self.inp_unit.setMinimumHeight(28)
         self.inp_unit.setText("mm")
-        self.inp_unit.setMaximumWidth(80)
+        self.inp_unit.setMaximumWidth(70)
         for u in _UNITS:
-            btn_u = QPushButton(u)
-            btn_u.setFixedHeight(26)
-            btn_u.setStyleSheet(
-                "QPushButton{border:1px solid #c5cae9; border-radius:3px;"
-                "background:#e8eaf6; padding:0 6px; font-size:10px;}"
+            b = QPushButton(u)
+            b.setFixedHeight(24)
+            b.setStyleSheet(
+                "QPushButton{border:1px solid #c5cae9;border-radius:3px;"
+                "background:#e8eaf6;padding:0 5px;font-size:10px;}"
                 "QPushButton:hover{background:#c5cae9;}"
             )
-            btn_u.clicked.connect(lambda _, u=u: self.inp_unit.setText(u))
-            unit_row.addWidget(btn_u)
+            b.clicked.connect(lambda _, u=u: self.inp_unit.setText(u))
+            unit_row.addWidget(b)
         unit_row.addStretch()
         form.addRow("الوحدة :", self.inp_unit)
         form.addRow("", unit_row)
 
+        # الأيقونة
+        icon_row = QHBoxLayout()
+        self.inp_icon_txt = QLineEdit()
+        self.inp_icon_txt.setMaximumWidth(50)
+        self.inp_icon_txt.setMinimumHeight(28)
+        self.inp_icon_txt.setText("📏")
+        for ico in _ICONS:
+            b = QPushButton(ico)
+            b.setFixedSize(28, 28)
+            b.setStyleSheet(
+                "QPushButton{border:1px solid #e0e0e0;border-radius:3px;"
+                "background:white;}"
+                "QPushButton:hover{background:#e3f2fd;}"
+            )
+            b.clicked.connect(lambda _, i=ico: self.inp_icon_txt.setText(i))
+            icon_row.addWidget(b)
+        icon_row.addStretch()
+        form.addRow("الأيقونة :", self.inp_icon_txt)
+        form.addRow("", icon_row)
+
         # اللون
         color_row = QHBoxLayout()
         self.lbl_color = QLabel()
-        self.lbl_color.setFixedSize(30, 30)
+        self.lbl_color.setFixedSize(28, 28)
         self._refresh_color_preview()
-        btn_color = QPushButton("اختر لون")
-        btn_color.setMinimumHeight(28)
-        btn_color.clicked.connect(self._pick_color)
-        # ألوان سريعة
+        btn_pick = QPushButton("اختر")
+        btn_pick.setMinimumHeight(26)
+        btn_pick.clicked.connect(self._pick_color)
         for c in _PRESET_COLORS:
-            btn_c = QPushButton()
-            btn_c.setFixedSize(20, 20)
-            btn_c.setStyleSheet(
+            bc = QPushButton()
+            bc.setFixedSize(20, 20)
+            bc.setStyleSheet(
                 f"QPushButton{{background:{c};border-radius:3px;"
                 "border:1px solid rgba(0,0,0,0.2);}}"
                 f"QPushButton:hover{{border:2px solid #333;}}"
             )
-            btn_c.clicked.connect(lambda _, col=c: self._set_color(col))
-            color_row.addWidget(btn_c)
+            bc.clicked.connect(lambda _, col=c: self._set_color(col))
+            color_row.addWidget(bc)
         color_row.addStretch()
         form.addRow("اللون :", self.lbl_color)
         form.addRow("", color_row)
 
-        self.lbl_mode = QLabel("— تصنيف جديد —")
-        self.lbl_mode.setStyleSheet("font-weight:bold; color:#1565c0; font-size:11px;")
-        form.addRow(self.lbl_mode)
+        # ملاحظات
+        self.inp_notes = QLineEdit()
+        self.inp_notes.setMinimumHeight(28)
+        self.inp_notes.setPlaceholderText("ملاحظات اختيارية...")
+        form.addRow("ملاحظات :", self.inp_notes)
 
+        # وضع النموذج
+        self.lbl_cat_mode = QLabel("— تصنيف جديد —")
+        self.lbl_cat_mode.setStyleSheet("font-weight:bold; color:#1565c0; font-size:10px;")
+        form.addRow(self.lbl_cat_mode)
+
+        # أزرار
         btn_row = QHBoxLayout()
-        self.btn_add    = QPushButton("➕ إضافة")
-        self.btn_save   = QPushButton("💾 حفظ")
-        self.btn_cancel = QPushButton("✖ إلغاء")
-        for b in (self.btn_add, self.btn_save, self.btn_cancel):
-            b.setMinimumHeight(30)
-        self.btn_add.setStyleSheet(_BTN_ADD)
-        self.btn_save.setStyleSheet(_BTN_SAVE)
-        self.btn_cancel.setStyleSheet(_BTN_CANCEL)
-        self.btn_save.setVisible(False)
-        self.btn_cancel.setVisible(False)
-        self.btn_add.clicked.connect(self._add)
-        self.btn_save.clicked.connect(self._save)
-        self.btn_cancel.clicked.connect(self._reset)
-        btn_row.addWidget(self.btn_add)
-        btn_row.addWidget(self.btn_save)
-        btn_row.addWidget(self.btn_cancel)
+        self.btn_cat_add    = QPushButton("➕ إضافة")
+        self.btn_cat_save   = QPushButton("💾 حفظ")
+        self.btn_cat_cancel = QPushButton("✖")
+        self.btn_cat_del    = QPushButton("🗑 حذف")
+        for b in (self.btn_cat_add, self.btn_cat_save,
+                  self.btn_cat_cancel, self.btn_cat_del):
+            b.setMinimumHeight(28)
+        self.btn_cat_add.setStyleSheet(_S_ADD)
+        self.btn_cat_save.setStyleSheet(_S_SAVE)
+        self.btn_cat_cancel.setStyleSheet(_S_CANCEL)
+        self.btn_cat_del.setStyleSheet(_S_DEL)
+        self.btn_cat_save.setVisible(False)
+        self.btn_cat_cancel.setVisible(False)
+
+        self.btn_cat_add.clicked.connect(self._add_cat)
+        self.btn_cat_save.clicked.connect(self._save_cat)
+        self.btn_cat_cancel.clicked.connect(self._reset_cat_form)
+        self.btn_cat_del.clicked.connect(self._delete_cat)
+
+        btn_row.addWidget(self.btn_cat_add)
+        btn_row.addWidget(self.btn_cat_save)
+        btn_row.addWidget(self.btn_cat_cancel)
         btn_row.addStretch()
+        btn_row.addWidget(self.btn_cat_del)
         form.addRow(btn_row)
-        lay.addWidget(grp_info)
 
-        # ── حقول القالب ──
-        grp_fields = QGroupBox("📐  حقول القالب الافتراضية")
-        grp_fields.setStyleSheet("""
-            QGroupBox { font-weight:bold; color:#e65100;
-                border:1px solid #ffcc80; border-radius:6px;
-                margin-top:6px; padding-top:6px; background:#fffde7; }
-            QGroupBox::title { subcontrol-origin:margin; padding:0 6px; }
-        """)
-        fields_lay = QVBoxLayout(grp_fields)
-        fields_lay.setSpacing(6)
+        form_lay.addWidget(grp)
+        lay.addWidget(wrap_in_scroll(form_container, min_height=0))
+        return panel
 
-        hint2 = QLabel(
-            "أضف الحقول التي ستظهر تلقائياً في أي مجموعة مقاسات تُنشأ من هذا التصنيف."
+    # ── لوحة يسار: حقول القالب ─────────────────────────────
+
+    def _build_right(self) -> QWidget:
+        panel = QWidget()
+        panel.setStyleSheet("background:white;")
+        lay = QVBoxLayout(panel)
+        lay.setContentsMargins(8, 12, 12, 12)
+        lay.setSpacing(8)
+
+        self.lbl_fields_title = QLabel("📐  حقول القالب الافتراضية")
+        self.lbl_fields_title.setStyleSheet(
+            "font-weight:bold; font-size:13px; color:#e65100;"
         )
-        hint2.setStyleSheet(
-            "font-size:10px; color:#e65100; background:transparent; border:none;"
-        )
-        hint2.setWordWrap(True)
-        fields_lay.addWidget(hint2)
+        lay.addWidget(self.lbl_fields_title)
 
-        # جدول الحقول
-        self.tbl_fields = QTableWidget()
-        self.tbl_fields.setColumnCount(5)
-        self.tbl_fields.setHorizontalHeaderLabels(
-            ["المفتاح", "التسمية", "الوحدة", "النوع", "مطلوب"]
+        hint = QLabel(
+            "💡 اختر تصنيفاً لعرض حقوله وتعديلها.\n"
+            "هذه الحقول تُنسخ تلقائياً عند إنشاء مجموعة مقاسات من هذا التصنيف."
         )
-        self.tbl_fields.setSelectionBehavior(QAbstractItemView.SelectRows)
-        self.tbl_fields.setEditTriggers(QAbstractItemView.NoEditTriggers)
-        self.tbl_fields.setAlternatingRowColors(True)
-        self.tbl_fields.verticalHeader().setVisible(False)
-        self.tbl_fields.setMaximumHeight(180)
-        hh2 = self.tbl_fields.horizontalHeader()
-        hh2.setSectionResizeMode(1, QHeaderView.Stretch)
-        for i in (0, 2, 3, 4):
-            hh2.setSectionResizeMode(i, QHeaderView.Interactive)
-        self.tbl_fields.setColumnWidth(0, 90)
-        self.tbl_fields.setColumnWidth(2, 60)
-        self.tbl_fields.setColumnWidth(3, 100)
-        self.tbl_fields.setColumnWidth(4, 55)
-        hh2.setDefaultAlignment(Qt.AlignRight | Qt.AlignVCenter)
-        self.tbl_fields.selectionModel().selectionChanged.connect(self._on_field_select)
-        fields_lay.addWidget(self.tbl_fields)
+        hint.setStyleSheet(
+            "font-size:10px; color:#e65100; background:#fff8e1;"
+            "border:1px solid #ffe082; border-radius:4px; padding:4px 8px;"
+        )
+        hint.setWordWrap(True)
+        lay.addWidget(hint)
 
-        # أزرار ترتيب + حذف
-        fld_ctrl_row = QHBoxLayout()
-        self.btn_fld_up   = QPushButton("▲")
-        self.btn_fld_down = QPushButton("▼")
-        self.btn_fld_del  = QPushButton("🗑 حذف الحقل")
-        for btn in (self.btn_fld_up, self.btn_fld_down):
-            btn.setFixedSize(30, 26)
-            btn.setStyleSheet(
-                "QPushButton{background:#f5f5f5;border:1px solid #ddd;"
-                "border-radius:4px;} QPushButton:hover{background:#e3f2fd;}"
-            )
-        self.btn_fld_del.setMinimumHeight(26)
-        self.btn_fld_del.setStyleSheet(_BTN_DEL)
+        # ── جدول الحقول ──
+        self.tbl_fields = make_table(
+            ["ID", "المفتاح", "التسمية", "الوحدة", "النوع", "مطلوب"],
+            stretch_col=2
+        )
+        self.tbl_fields.setColumnHidden(0, True)
+        self.tbl_fields.setColumnWidth(1, 100)
+        self.tbl_fields.setColumnWidth(3, 60)
+        self.tbl_fields.setColumnWidth(4, 120)
+        self.tbl_fields.setColumnWidth(5, 55)
+        self.tbl_fields.selectionModel().selectionChanged.connect(self._on_field_selected)
+        lay.addWidget(self.tbl_fields, stretch=1)
+
+        # أزرار ترتيب
+        ord_row = QHBoxLayout()
+        self.btn_fld_up   = QPushButton("▲ أعلى")
+        self.btn_fld_down = QPushButton("▼ أسفل")
+        for b in (self.btn_fld_up, self.btn_fld_down):
+            b.setMinimumHeight(26)
+            b.setStyleSheet(_S_NEUTRAL)
         self.btn_fld_up.clicked.connect(lambda: self._move_field(-1))
         self.btn_fld_down.clicked.connect(lambda: self._move_field(1))
-        self.btn_fld_del.clicked.connect(self._delete_field)
-        fld_ctrl_row.addWidget(self.btn_fld_up)
-        fld_ctrl_row.addWidget(self.btn_fld_down)
-        fld_ctrl_row.addStretch()
-        fld_ctrl_row.addWidget(self.btn_fld_del)
-        fields_lay.addLayout(fld_ctrl_row)
+        ord_row.addWidget(self.btn_fld_up)
+        ord_row.addWidget(self.btn_fld_down)
+        ord_row.addStretch()
+        self.lbl_flds_count = QLabel()
+        self.lbl_flds_count.setStyleSheet("color:#e65100; font-size:10px;")
+        ord_row.addWidget(self.lbl_flds_count)
+        lay.addLayout(ord_row)
 
-        # فورم إضافة/تعديل حقل
-        fld_form_grp = QGroupBox("إضافة / تعديل حقل")
-        fld_form_grp.setStyleSheet("""
-            QGroupBox { font-size:11px; color:#e65100;
-                border:1px solid #ffe082; border-radius:4px;
-                margin-top:4px; padding-top:4px; }
-        """)
-        fld_form = QFormLayout(fld_form_grp)
-        fld_form.setSpacing(6)
-        fld_form.setLabelAlignment(Qt.AlignRight)
+        # ── فورم الحقل ──
+        grp2 = _grp("بيانات الحقل", color="#e65100",
+                     border="#ffcc80", bg="#fffde7")
+        form2 = QFormLayout(grp2)
+        form2.setSpacing(8)
+        form2.setLabelAlignment(Qt.AlignRight)
 
-        fld_inline = QHBoxLayout()
+        # صف واحد يجمع المفتاح والتسمية والوحدة
+        inline = QHBoxLayout()
         self.inp_fld_name = QLineEdit()
         self.inp_fld_name.setPlaceholderText("مفتاح: length")
-        self.inp_fld_name.setMinimumHeight(26)
-        self.inp_fld_name.setMinimumWidth(90)
+        self.inp_fld_name.setMinimumHeight(28)
+
         self.inp_fld_label = QLineEdit()
         self.inp_fld_label.setPlaceholderText("تسمية: الطول")
-        self.inp_fld_label.setMinimumHeight(26)
-        self.inp_fld_unit_fld = QLineEdit()
-        self.inp_fld_unit_fld.setPlaceholderText("وحدة")
-        self.inp_fld_unit_fld.setMaximumWidth(60)
-        self.inp_fld_unit_fld.setMinimumHeight(26)
+        self.inp_fld_label.setMinimumHeight(28)
+
+        self.inp_fld_unit = QLineEdit()
+        self.inp_fld_unit.setPlaceholderText("وحدة")
+        self.inp_fld_unit.setMaximumWidth(65)
+        self.inp_fld_unit.setMinimumHeight(28)
+
+        inline.addWidget(self.inp_fld_name, 2)
+        inline.addWidget(self.inp_fld_label, 3)
+        inline.addWidget(self.inp_fld_unit, 1)
+        form2.addRow("المفتاح / التسمية / الوحدة :", inline)
+
+        # النوع + خيارات select
+        type_row = QHBoxLayout()
         self.cmb_fld_type = QComboBox()
-        self.cmb_fld_type.setMinimumHeight(26)
+        self.cmb_fld_type.setMinimumHeight(28)
         for key, lbl in _FIELD_TYPES:
             self.cmb_fld_type.addItem(lbl, key)
-        self.chk_fld_req = QCheckBox("مطلوب")
-        self.chk_fld_req.setChecked(True)
-        fld_inline.addWidget(self.inp_fld_name)
-        fld_inline.addWidget(self.inp_fld_label)
-        fld_inline.addWidget(self.inp_fld_unit_fld)
-        fld_inline.addWidget(self.cmb_fld_type)
-        fld_inline.addWidget(self.chk_fld_req)
-        fld_form.addRow(fld_inline)
+        self.cmb_fld_type.currentIndexChanged.connect(self._on_fld_type_changed)
 
+        self.inp_fld_options = QLineEdit()
+        self.inp_fld_options.setPlaceholderText("خيارات مفصولة بفاصلة: أ, ب, ج")
+        self.inp_fld_options.setMinimumHeight(28)
+        self.inp_fld_options.setVisible(False)
+
+        type_row.addWidget(self.cmb_fld_type, 1)
+        type_row.addWidget(self.inp_fld_options, 2)
+        form2.addRow("النوع :", type_row)
+
+        self.chk_required = QCheckBox("مطلوب (Required)")
+        self.chk_required.setChecked(True)
+        form2.addRow("", self.chk_required)
+
+        # وضع النموذج
+        self.lbl_fld_mode = QLabel("إضافة حقل")
+        self.lbl_fld_mode.setStyleSheet("color:#e65100; font-size:10px;")
+        form2.addRow(self.lbl_fld_mode)
+
+        # أزرار الحقل
         fld_btn_row = QHBoxLayout()
-        self.btn_fld_add_row  = QPushButton("➕ أضف حقل")
-        self.btn_fld_save_row = QPushButton("💾 حفظ التعديل")
-        self.btn_fld_cancel_row = QPushButton("✖")
-        self.btn_fld_add_row.setMinimumHeight(26)
-        self.btn_fld_save_row.setMinimumHeight(26)
-        self.btn_fld_cancel_row.setMinimumHeight(26)
-        self.btn_fld_add_row.setStyleSheet(_BTN_ADD)
-        self.btn_fld_save_row.setStyleSheet(_BTN_SAVE)
-        self.btn_fld_cancel_row.setStyleSheet(_BTN_CANCEL)
-        self.btn_fld_save_row.setVisible(False)
-        self.btn_fld_cancel_row.setVisible(False)
-        self.btn_fld_add_row.clicked.connect(self._add_field)
-        self.btn_fld_save_row.clicked.connect(self._save_field)
-        self.btn_fld_cancel_row.clicked.connect(self._reset_field_form)
-        fld_btn_row.addWidget(self.btn_fld_add_row)
-        fld_btn_row.addWidget(self.btn_fld_save_row)
-        fld_btn_row.addWidget(self.btn_fld_cancel_row)
+        self.btn_fld_add    = QPushButton("➕ إضافة حقل")
+        self.btn_fld_save   = QPushButton("💾 حفظ")
+        self.btn_fld_cancel = QPushButton("✖")
+        self.btn_fld_del    = QPushButton("🗑 حذف")
+        for b in (self.btn_fld_add, self.btn_fld_save,
+                  self.btn_fld_cancel, self.btn_fld_del):
+            b.setMinimumHeight(28)
+        self.btn_fld_add.setStyleSheet(_S_ADD)
+        self.btn_fld_save.setStyleSheet(_S_SAVE)
+        self.btn_fld_cancel.setStyleSheet(_S_CANCEL)
+        self.btn_fld_del.setStyleSheet(_S_DEL)
+        self.btn_fld_save.setVisible(False)
+        self.btn_fld_cancel.setVisible(False)
+
+        self.btn_fld_add.clicked.connect(self._add_field)
+        self.btn_fld_save.clicked.connect(self._save_field)
+        self.btn_fld_cancel.clicked.connect(self._reset_field_form)
+        self.btn_fld_del.clicked.connect(self._delete_field)
+
+        fld_btn_row.addWidget(self.btn_fld_add)
+        fld_btn_row.addWidget(self.btn_fld_save)
+        fld_btn_row.addWidget(self.btn_fld_cancel)
         fld_btn_row.addStretch()
-        fld_form.addRow(fld_btn_row)
+        fld_btn_row.addWidget(self.btn_fld_del)
+        form2.addRow(fld_btn_row)
 
-        fields_lay.addWidget(fld_form_grp)
-
-        # زر حفظ القالب
-        self.btn_save_template = QPushButton("💾  حفظ حقول القالب")
-        self.btn_save_template.setMinimumHeight(32)
-        self.btn_save_template.setStyleSheet(_BTN_SAVE)
-        self.btn_save_template.clicked.connect(self._save_template)
-        fields_lay.addWidget(self.btn_save_template)
-
-        lay.addWidget(grp_fields, stretch=1)
+        lay.addWidget(grp2)
         return panel
 
     # ══════════════════════════════════════════════════════
     # تحميل البيانات
     # ══════════════════════════════════════════════════════
 
-    def _load(self):
-        cats = fetch_categories_by_scope(self.conn, "design")
-        self.table.setRowCount(0)
+    def _load_cats(self):
+        cats = fetch_all_dim_set_categories(self.conn)
+        self.tbl_cats.setRowCount(0)
         for c in cats:
-            r = self.table.rowCount()
-            self.table.insertRow(r)
-            self.table.setItem(r, 0, QTableWidgetItem(str(c["id"])))
+            r = self.tbl_cats.rowCount()
+            self.tbl_cats.insertRow(r)
+            self.tbl_cats.setItem(r, 0, QTableWidgetItem(str(c["id"])))
+
+            ico = QTableWidgetItem(c["icon"] or "📏")
+            ico.setTextAlignment(Qt.AlignCenter)
+            self.tbl_cats.setItem(r, 1, ico)
 
             name_item = QTableWidgetItem(c["name"])
             name_item.setForeground(QColor(c["color"]))
             name_item.setFont(QFont("", -1, QFont.Bold))
-            self.table.setItem(r, 1, name_item)
+            self.tbl_cats.setItem(r, 2, name_item)
 
-            self.table.setItem(r, 2, QTableWidgetItem(c["default_unit"] or "mm"))
+            self.tbl_cats.setItem(r, 3, QTableWidgetItem(c["default_unit"] or "mm"))
 
             # عدد حقول القالب
-            fields = get_template_fields(self.conn, c["id"])
-            cnt_item = QTableWidgetItem(str(len(fields)) if fields else "—")
-            cnt_item.setTextAlignment(Qt.AlignCenter)
-            self.table.setItem(r, 3, cnt_item)
+            fields = fetch_category_template_fields(self.conn, c["id"])
+            cnt = QTableWidgetItem(str(len(fields)) if fields else "—")
+            cnt.setTextAlignment(Qt.AlignCenter)
+            self.tbl_cats.setItem(r, 4, cnt)
 
-        self.lbl_count.setText(f"({len(cats)} تصنيف)")
+        self.lbl_cats_count.setText(f"({len(cats)} تصنيف)")
 
-    def _load_fields_table(self):
-        """يعرض self._template_fields في الجدول."""
+        # إعادة تحديد التصنيف المحدد
+        if self._selected_cat_id is not None:
+            for r in range(self.tbl_cats.rowCount()):
+                if int(self.tbl_cats.item(r, 0).text()) == self._selected_cat_id:
+                    self.tbl_cats.selectRow(r)
+                    break
+
+    def _load_fields(self, cat_id: int):
+        self._selected_cat_id = cat_id
+        cat = fetch_dim_set_category(self.conn, cat_id)
+        if cat:
+            self.lbl_fields_title.setText(
+                f"📐  حقول القالب:  {cat['icon'] or ''} {cat['name']}"
+                f"  (وحدة: {cat['default_unit'] or 'mm'})"
+            )
+
+        fields = fetch_category_template_fields(self.conn, cat_id)
         self.tbl_fields.setRowCount(0)
-        for f in self._template_fields:
+        for f in fields:
             r = self.tbl_fields.rowCount()
             self.tbl_fields.insertRow(r)
-            self.tbl_fields.setItem(r, 0, QTableWidgetItem(f.get("name", "")))
-            label_item = QTableWidgetItem(f.get("label", ""))
-            label_item.setFont(QFont("", -1, QFont.Bold))
-            self.tbl_fields.setItem(r, 1, label_item)
-            self.tbl_fields.setItem(r, 2, QTableWidgetItem(f.get("unit", "")))
+            self.tbl_fields.setItem(r, 0, QTableWidgetItem(str(f["id"])))
+            self.tbl_fields.setItem(r, 1, QTableWidgetItem(f["name"] or ""))
+
+            lbl_item = QTableWidgetItem(f["label"] or "")
+            lbl_item.setFont(QFont("", -1, QFont.Bold))
+            self.tbl_fields.setItem(r, 2, lbl_item)
+
+            self.tbl_fields.setItem(r, 3, QTableWidgetItem(f["unit"] or ""))
 
             type_label = next(
-                (lbl for k, lbl in _FIELD_TYPES if k == f.get("field_type", "number")),
-                f.get("field_type", "")
+                (lbl for k, lbl in _FIELD_TYPES if k == f["field_type"]),
+                f["field_type"]
             )
             type_item = QTableWidgetItem(type_label)
             type_item.setForeground(QColor("#1565c0"))
-            self.tbl_fields.setItem(r, 3, type_item)
+            self.tbl_fields.setItem(r, 4, type_item)
 
-            req_item = QTableWidgetItem("✅" if f.get("required", True) else "—")
+            req_item = QTableWidgetItem("✅" if f["required"] else "—")
             req_item.setTextAlignment(Qt.AlignCenter)
-            self.tbl_fields.setItem(r, 4, req_item)
+            self.tbl_fields.setItem(r, 5, req_item)
+
+        self.lbl_flds_count.setText(f"({len(fields)} حقل)")
+        self._reset_field_form()
+
+    def _on_bus(self):
+        self._load_cats()
+        if self._selected_cat_id:
+            self._load_fields(self._selected_cat_id)
 
     # ══════════════════════════════════════════════════════
     # Signal handlers
     # ══════════════════════════════════════════════════════
 
-    def _on_select(self):
-        rows = self.table.selectionModel().selectedRows()
+    def _on_cat_selected(self):
+        rows = self.tbl_cats.selectionModel().selectedRows()
         if not rows:
             return
-        cat_id = int(self.table.item(rows[0].row(), 0).text())
-        cat = fetch_category(self.conn, cat_id)
-        if not cat:
-            return
-        self._editing_id = cat_id
-        self.inp_name.setText(cat["name"])
-        self.inp_unit.setText(cat["default_unit"] or "mm")
-        self._color = cat["color"] or "#607d8b"
-        self._refresh_color_preview()
-        self.lbl_mode.setText(f"تعديل: {cat['name']}")
-        self.btn_add.setVisible(False)
-        self.btn_save.setVisible(True)
-        self.btn_cancel.setVisible(True)
+        cat_id = int(self.tbl_cats.item(rows[0].row(), 0).text())
+        self._load_cat_to_form(cat_id)
+        self._load_fields(cat_id)
 
-        # تحميل الحقول
-        self._template_fields = list(get_template_fields(self.conn, cat_id))
-        self._editing_fld_idx = None
-        self._load_fields_table()
-        self._reset_field_form()
-
-    def _on_field_select(self):
+    def _on_field_selected(self):
         rows = self.tbl_fields.selectionModel().selectedRows()
         if not rows:
             return
-        idx = rows[0].row()
-        if idx >= len(self._template_fields):
-            return
-        self._editing_fld_idx = idx
-        f = self._template_fields[idx]
-        self.inp_fld_name.setText(f.get("name", ""))
-        self.inp_fld_label.setText(f.get("label", ""))
-        self.inp_fld_unit_fld.setText(f.get("unit", ""))
-        self.chk_fld_req.setChecked(bool(f.get("required", True)))
-        for i in range(self.cmb_fld_type.count()):
-            if self.cmb_fld_type.itemData(i) == f.get("field_type", "number"):
-                self.cmb_fld_type.setCurrentIndex(i)
-                break
-        self.btn_fld_add_row.setVisible(False)
-        self.btn_fld_save_row.setVisible(True)
-        self.btn_fld_cancel_row.setVisible(True)
+        fld_id = int(self.tbl_fields.item(rows[0].row(), 0).text())
+        self._load_field_to_form(fld_id)
+
+    def _on_fld_type_changed(self):
+        self.inp_fld_options.setVisible(
+            self.cmb_fld_type.currentData() == "select"
+        )
 
     # ══════════════════════════════════════════════════════
     # CRUD التصنيفات
     # ══════════════════════════════════════════════════════
 
-    def _add(self):
+    def _load_cat_to_form(self, cat_id: int):
+        cat = fetch_dim_set_category(self.conn, cat_id)
+        if not cat:
+            return
+        self._editing_id = cat_id
+        self.inp_name.setText(cat["name"])
+        self.inp_unit.setText(cat["default_unit"] or "mm")
+        self.inp_icon_txt.setText(cat["icon"] or "📏")
+        self.inp_notes.setText(cat["notes"] or "")
+        self._color = cat["color"] or "#607d8b"
+        self._refresh_color_preview()
+        self.lbl_cat_mode.setText(f"تعديل: {cat['name']}")
+        self.btn_cat_add.setVisible(False)
+        self.btn_cat_save.setVisible(True)
+        self.btn_cat_cancel.setVisible(True)
+
+    def _add_cat(self):
         name = self.inp_name.text().strip()
         if not name:
             QMessageBox.warning(self, "تنبيه", "أدخل اسم التصنيف")
             return
-        unit = self.inp_unit.text().strip() or "mm"
-        new_id = insert_category(
-            self.conn, name, scope="design",
-            color=self._color, default_unit=unit
+        new_id = insert_dim_set_category(
+            self.conn,
+            name=name,
+            description=self.inp_notes.text().strip(),
+            default_unit=self.inp_unit.text().strip() or "mm",
+            color=self._color,
+            icon=self.inp_icon_txt.text().strip() or "📏",
+            notes=self.inp_notes.text().strip(),
         )
-        self._editing_id = new_id
-        self._template_fields = []
-        self._load_fields_table()
-        self._reset()
-        self._load()
+        self._selected_cat_id = new_id
+        self._reset_cat_form()
         bus.data_changed.emit()
 
-    def _save(self):
+    def _save_cat(self):
         if not self._editing_id:
             return
         name = self.inp_name.text().strip()
         if not name:
             QMessageBox.warning(self, "تنبيه", "أدخل اسم التصنيف")
             return
-        unit = self.inp_unit.text().strip() or "mm"
-        update_category(
-            self.conn, self._editing_id, name,
-            scope="design", color=self._color, default_unit=unit
+        update_dim_set_category(
+            self.conn,
+            cat_id=self._editing_id,
+            name=name,
+            description=self.inp_notes.text().strip(),
+            default_unit=self.inp_unit.text().strip() or "mm",
+            color=self._color,
+            icon=self.inp_icon_txt.text().strip() or "📏",
+            notes=self.inp_notes.text().strip(),
         )
-        self._reset()
-        self._load()
+        self._reset_cat_form()
         bus.data_changed.emit()
 
-    def _delete(self):
-        rows = self.table.selectionModel().selectedRows()
+    def _delete_cat(self):
+        rows = self.tbl_cats.selectionModel().selectedRows()
         if not rows:
             QMessageBox.information(self, "تنبيه", "اختر تصنيفاً أولاً")
             return
-        cat_id = int(self.table.item(rows[0].row(), 0).text())
-        name   = self.table.item(rows[0].row(), 1).text()
+        cat_id = int(self.tbl_cats.item(rows[0].row(), 0).text())
+        cat = fetch_dim_set_category(self.conn, cat_id)
+        if not cat:
+            return
+
+        # عدد مجموعات المقاسات المرتبطة
+        linked = self.conn.execute(
+            "SELECT COUNT(*) as c FROM dimension_sets WHERE category_id=?",
+            (cat_id,)
+        ).fetchone()["c"]
+
+        msg = f"حذف تصنيف «{cat['name']}»؟\nسيتم حذف كل حقوله الافتراضية."
+        if linked:
+            msg += f"\n⚠️ {linked} مجموعة مقاسات مرتبطة — ستفقد تصنيفها."
+
         if QMessageBox.question(
-            self, "تأكيد", f"حذف تصنيف «{name}»؟",
-            QMessageBox.Yes | QMessageBox.No
+            self, "تأكيد", msg, QMessageBox.Yes | QMessageBox.No
         ) == QMessageBox.Yes:
-            delete_category(self.conn, cat_id)
-            self._reset()
-            self._template_fields = []
-            self._load_fields_table()
-            self._load()
+            delete_dim_set_category(self.conn, cat_id)
+            self._selected_cat_id = None
+            self.tbl_fields.setRowCount(0)
+            self.lbl_fields_title.setText("📐  حقول القالب الافتراضية")
+            self._reset_cat_form()
             bus.data_changed.emit()
 
-    def _reset(self):
+    def _reset_cat_form(self):
         self._editing_id = None
         self.inp_name.clear()
         self.inp_unit.setText("mm")
+        self.inp_icon_txt.setText("📏")
+        self.inp_notes.clear()
         self._color = "#607d8b"
         self._refresh_color_preview()
-        self.lbl_mode.setText("— تصنيف جديد —")
-        self.btn_add.setVisible(True)
-        self.btn_save.setVisible(False)
-        self.btn_cancel.setVisible(False)
-        self.table.clearSelection()
+        self.lbl_cat_mode.setText("— تصنيف جديد —")
+        self.btn_cat_add.setVisible(True)
+        self.btn_cat_save.setVisible(False)
+        self.btn_cat_cancel.setVisible(False)
 
     # ══════════════════════════════════════════════════════
-    # CRUD حقول القالب (في الذاكرة — تُحفظ بزر "حفظ القالب")
+    # CRUD حقول القالب
     # ══════════════════════════════════════════════════════
+
+    def _load_field_to_form(self, fld_id: int):
+        """يحمّل بيانات حقل من DB إلى الفورم."""
+        # نجيب الحقل من الجدول مباشرة
+        row = self.conn.execute(
+            "SELECT * FROM dim_set_category_fields WHERE id=?", (fld_id,)
+        ).fetchone()
+        if not row:
+            return
+        self._editing_fld_id = fld_id
+        self.inp_fld_name.setText(row["name"] or "")
+        self.inp_fld_label.setText(row["label"] or "")
+        self.inp_fld_unit.setText(row["unit"] or "")
+        self.chk_required.setChecked(bool(row["required"]))
+
+        # النوع
+        for i in range(self.cmb_fld_type.count()):
+            if self.cmb_fld_type.itemData(i) == row["field_type"]:
+                self.cmb_fld_type.setCurrentIndex(i)
+                break
+
+        # الخيارات
+        if row["field_type"] == "select" and row["options"]:
+            try:
+                opts = json.loads(row["options"])
+                self.inp_fld_options.setText(", ".join(str(o) for o in opts))
+            except Exception:
+                self.inp_fld_options.clear()
+            self.inp_fld_options.setVisible(True)
+        else:
+            self.inp_fld_options.clear()
+            self.inp_fld_options.setVisible(False)
+
+        self.lbl_fld_mode.setText(f"تعديل: {row['label']}")
+        self.btn_fld_add.setVisible(False)
+        self.btn_fld_save.setVisible(True)
+        self.btn_fld_cancel.setVisible(True)
 
     def _add_field(self):
+        if not self._selected_cat_id:
+            QMessageBox.information(self, "تنبيه", "اختر تصنيفاً أولاً")
+            return
         name  = self.inp_fld_name.text().strip()
         label = self.inp_fld_label.text().strip()
         if not name or not label:
             QMessageBox.warning(self, "تنبيه", "أدخل المفتاح والتسمية")
             return
-        # تحقق من التكرار
-        if any(f["name"] == name for f in self._template_fields):
+
+        # تحقق من التكرار في نفس التصنيف
+        dup = self.conn.execute(
+            "SELECT id FROM dim_set_category_fields "
+            "WHERE category_id=? AND name=?",
+            (self._selected_cat_id, name)
+        ).fetchone()
+        if dup:
             QMessageBox.warning(self, "تنبيه", f"المفتاح «{name}» موجود بالفعل")
             return
-        self._template_fields.append({
-            "name":       name,
-            "label":      label,
-            "unit":       self.inp_fld_unit_fld.text().strip(),
-            "field_type": self.cmb_fld_type.currentData(),
-            "required":   self.chk_fld_req.isChecked(),
-            "sort_order": len(self._template_fields),
-        })
-        self._load_fields_table()
+
+        sort_order = self.tbl_fields.rowCount()
+        insert_category_template_field(
+            self.conn,
+            cat_id=self._selected_cat_id,
+            name=name,
+            label=label,
+            unit=self.inp_fld_unit.text().strip(),
+            field_type=self.cmb_fld_type.currentData(),
+            options=self._parse_options(),
+            required=self.chk_required.isChecked(),
+            sort_order=sort_order,
+        )
         self._reset_field_form()
+        self._load_fields(self._selected_cat_id)
+        self._load_cats()  # تحديث عداد الحقول في الجدول
 
     def _save_field(self):
-        if self._editing_fld_idx is None:
+        if not self._editing_fld_id:
             return
         name  = self.inp_fld_name.text().strip()
         label = self.inp_fld_label.text().strip()
         if not name or not label:
             QMessageBox.warning(self, "تنبيه", "أدخل المفتاح والتسمية")
             return
-        idx = self._editing_fld_idx
-        self._template_fields[idx] = {
-            "name":       name,
-            "label":      label,
-            "unit":       self.inp_fld_unit_fld.text().strip(),
-            "field_type": self.cmb_fld_type.currentData(),
-            "required":   self.chk_fld_req.isChecked(),
-            "sort_order": idx,
-        }
-        self._load_fields_table()
+
+        # نجيب sort_order الحالي
+        row = self.conn.execute(
+            "SELECT sort_order FROM dim_set_category_fields WHERE id=?",
+            (self._editing_fld_id,)
+        ).fetchone()
+        sort_order = row["sort_order"] if row else 0
+
+        update_category_template_field(
+            self.conn,
+            field_id=self._editing_fld_id,
+            name=name,
+            label=label,
+            unit=self.inp_fld_unit.text().strip(),
+            field_type=self.cmb_fld_type.currentData(),
+            options=self._parse_options(),
+            required=self.chk_required.isChecked(),
+            sort_order=sort_order,
+        )
         self._reset_field_form()
+        self._load_fields(self._selected_cat_id)
 
     def _delete_field(self):
         rows = self.tbl_fields.selectionModel().selectedRows()
         if not rows:
+            QMessageBox.information(self, "تنبيه", "اختر حقلاً أولاً")
             return
-        idx = rows[0].row()
-        if idx < len(self._template_fields):
-            del self._template_fields[idx]
-            # إعادة ترقيم sort_order
-            for i, f in enumerate(self._template_fields):
-                f["sort_order"] = i
-            self._load_fields_table()
+        fld_id = int(self.tbl_fields.item(rows[0].row(), 0).text())
+        row = self.conn.execute(
+            "SELECT label FROM dim_set_category_fields WHERE id=?", (fld_id,)
+        ).fetchone()
+        name = row["label"] if row else str(fld_id)
+
+        if QMessageBox.question(
+            self, "تأكيد", f"حذف الحقل «{name}» من القالب؟",
+            QMessageBox.Yes | QMessageBox.No
+        ) == QMessageBox.Yes:
+            delete_category_template_field(self.conn, fld_id)
             self._reset_field_form()
+            self._load_fields(self._selected_cat_id)
+            self._load_cats()
 
     def _reset_field_form(self):
-        self._editing_fld_idx = None
+        self._editing_fld_id = None
         self.inp_fld_name.clear()
         self.inp_fld_label.clear()
-        self.inp_fld_unit_fld.clear()
+        self.inp_fld_unit.clear()
         self.cmb_fld_type.setCurrentIndex(0)
-        self.chk_fld_req.setChecked(True)
-        self.btn_fld_add_row.setVisible(True)
-        self.btn_fld_save_row.setVisible(False)
-        self.btn_fld_cancel_row.setVisible(False)
+        self.inp_fld_options.clear()
+        self.inp_fld_options.setVisible(False)
+        self.chk_required.setChecked(True)
+        self.lbl_fld_mode.setText("إضافة حقل")
+        self.btn_fld_add.setVisible(True)
+        self.btn_fld_save.setVisible(False)
+        self.btn_fld_cancel.setVisible(False)
 
     def _move_field(self, direction: int):
         rows = self.tbl_fields.selectionModel().selectedRows()
-        if not rows:
+        if not rows or not self._selected_cat_id:
             return
-        idx = rows[0].row()
-        new_idx = idx + direction
-        if new_idx < 0 or new_idx >= len(self._template_fields):
+        cur = rows[0].row()
+        nxt = cur + direction
+        if nxt < 0 or nxt >= self.tbl_fields.rowCount():
             return
-        self._template_fields[idx], self._template_fields[new_idx] = (
-            self._template_fields[new_idx], self._template_fields[idx]
-        )
-        for i, f in enumerate(self._template_fields):
-            f["sort_order"] = i
-        self._load_fields_table()
-        self.tbl_fields.selectRow(new_idx)
 
-    def _save_template(self):
-        """يحفظ حقول القالب في DB."""
-        if not self._editing_id:
-            QMessageBox.information(
-                self, "تنبيه",
-                "اختر تصنيفاً أولاً أو أضف تصنيفاً جديداً"
-            )
-            return
-        set_template_fields(self.conn, self._editing_id, self._template_fields)
-        self._load()
-        bus.data_changed.emit()
-        # تأكيد بصري بسيط
-        self.btn_save_template.setText("✅  تم الحفظ!")
-        from PyQt5.QtCore import QTimer
-        QTimer.singleShot(
-            1500,
-            lambda: self.btn_save_template.setText("💾  حفظ حقول القالب")
-        )
+        # نجيب IDs الحقول بالترتيب الحالي
+        ids = [
+            int(self.tbl_fields.item(r, 0).text())
+            for r in range(self.tbl_fields.rowCount())
+        ]
+        ids[cur], ids[nxt] = ids[nxt], ids[cur]
+        reorder_category_template_fields(self.conn, self._selected_cat_id, ids)
+        self._load_fields(self._selected_cat_id)
+        self.tbl_fields.selectRow(nxt)
+
+    def _parse_options(self):
+        if self.cmb_fld_type.currentData() != "select":
+            return None
+        text = self.inp_fld_options.text().strip()
+        if not text:
+            return None
+        return [o.strip() for o in text.split(",") if o.strip()]
 
     # ══════════════════════════════════════════════════════
     # اللون
@@ -683,5 +833,6 @@ class DimCategoriesTab(QWidget):
 
     def _refresh_color_preview(self):
         self.lbl_color.setStyleSheet(
-            f"background:{self._color}; border-radius:4px; border:1px solid #ccc;"
+            f"background:{self._color}; border-radius:4px;"
+            "border:1px solid #ccc;"
         )

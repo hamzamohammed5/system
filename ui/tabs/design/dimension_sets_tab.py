@@ -3,17 +3,16 @@ ui/tabs/design/dimension_sets_tab.py
 =====================================
 تبويب إدارة مجموعات المقاسات وحقولها.
 
-التغييرات الجديدة:
-  - إضافة Combo تصنيف (scope='design' من erp.db) في فورم المجموعة
+التغيير الرئيسي:
+  - التصنيفات تأتي من dim_set_categories في designs.db مباشرة
+    (بدل categories scope=design في erp.db)
   - لما تختار تصنيف عند إنشاء مجموعة جديدة:
-      → الوحدة الافتراضية تتعبى تلقائياً
-      → الحقول القالبية تتنسخ تلقائياً بعد الحفظ (بدون سؤال)
-  - التصنيف بيتحفظ في عمود category_id في dimension_sets (designs.db)
-    وفي نفس الوقت الـ erp.db بيحتفظ بالقالب
+      → الوحدة الافتراضية تتعبأ تلقائياً
+      → الحقول القالبية تُنسخ تلقائياً بعد الحفظ
+  - الـ category_id في dimension_sets يشير لـ dim_set_categories.id
 
-الربط بين DB-ين:
-  self.conn       → designs.db (الأشكال والمجموعات)
-  self.conn_erp   → erp.db     (التصنيفات والقوالب)
+الاتصالات:
+  self.conn  → designs.db  (كل العمليات)
 """
 
 import json
@@ -34,12 +33,11 @@ from db.design.design_repo import (
     fetch_fields_for_set, fetch_field,
     insert_dimension_field, update_dimension_field,
     delete_dimension_field, reorder_fields,
+    fetch_all_dim_set_categories,
+    fetch_category_template_fields,
+    apply_category_template_to_set,
 )
-from db.shared.categories_repo import (
-    fetch_categories_by_scope, get_template_fields,
-    apply_template_to_dimension_set,
-)
-from db.shared.connection import get_connection
+from ui.helpers import make_table
 from ui.events import bus
 
 
@@ -50,35 +48,26 @@ _FIELD_TYPES = [
     ("select",  "📋 قائمة اختيار"),
 ]
 
-_BTN_ADD = """
-    QPushButton { background:#e8f5e9; color:#2e7d32;
-        border:1px solid #a5d6a7; border-radius:5px;
-        padding:0 14px; font-weight:bold; }
-    QPushButton:hover { background:#c8e6c9; }
-"""
-_BTN_SAVE = """
-    QPushButton { background:#e3f2fd; color:#1565c0;
-        border:1px solid #90caf9; border-radius:5px;
-        padding:0 14px; font-weight:bold; }
-    QPushButton:hover { background:#bbdefb; }
-"""
-_BTN_DEL = """
-    QPushButton { background:#ffebee; color:#c62828;
-        border:1px solid #ef9a9a; border-radius:5px; padding:0 12px; }
-    QPushButton:hover { background:#ffcdd2; }
-"""
-_BTN_CANCEL = """
-    QPushButton { background:#f5f5f5; color:#555;
-        border:1px solid #ddd; border-radius:5px; padding:0 12px; }
-    QPushButton:hover { background:#eee; }
-"""
+_BTN_ADD = ("QPushButton{background:#e8f5e9;color:#2e7d32;"
+            "border:1px solid #a5d6a7;border-radius:5px;"
+            "padding:0 14px;font-weight:bold;}"
+            "QPushButton:hover{background:#c8e6c9;}")
+_BTN_SAVE = ("QPushButton{background:#e3f2fd;color:#1565c0;"
+             "border:1px solid #90caf9;border-radius:5px;"
+             "padding:0 14px;font-weight:bold;}"
+             "QPushButton:hover{background:#bbdefb;}")
+_BTN_DEL = ("QPushButton{background:#ffebee;color:#c62828;"
+            "border:1px solid #ef9a9a;border-radius:5px;padding:0 12px;}"
+            "QPushButton:hover{background:#ffcdd2;}")
+_BTN_CANCEL = ("QPushButton{background:#f5f5f5;color:#555;"
+               "border:1px solid #ddd;border-radius:5px;padding:0 12px;}"
+               "QPushButton:hover{background:#eee;}")
 
 
 class DimensionSetsTab(QWidget):
     def __init__(self, conn, parent=None):
         super().__init__(parent)
-        self.conn             = conn          # designs.db
-        self.conn_erp         = get_connection("costing")   # erp.db للتصنيفات
+        self.conn             = conn      # designs.db فقط
         self._editing_set_id  = None
         self._editing_fld_id  = None
         self._selected_set_id = None
@@ -99,8 +88,8 @@ class DimensionSetsTab(QWidget):
         splitter = QSplitter(Qt.Horizontal)
         splitter.setHandleWidth(4)
         splitter.setStyleSheet("""
-            QSplitter::handle { background:#e0e0e0; }
-            QSplitter::handle:hover { background:#90caf9; }
+            QSplitter::handle{background:#e0e0e0;}
+            QSplitter::handle:hover{background:#90caf9;}
         """)
         splitter.addWidget(self._build_sets_panel())
         splitter.addWidget(self._build_fields_panel())
@@ -121,21 +110,13 @@ class DimensionSetsTab(QWidget):
         lay.addWidget(lbl)
 
         # جدول المجموعات
-        self.tbl_sets = QTableWidget()
-        self.tbl_sets.setColumnCount(4)
-        self.tbl_sets.setHorizontalHeaderLabels(["ID", "الاسم", "الوحدة", "التصنيف"])
+        self.tbl_sets = make_table(
+            ["ID", "الاسم", "الوحدة", "التصنيف"],
+            stretch_col=1
+        )
         self.tbl_sets.setColumnHidden(0, True)
-        self.tbl_sets.setSelectionBehavior(QAbstractItemView.SelectRows)
-        self.tbl_sets.setEditTriggers(QAbstractItemView.NoEditTriggers)
-        self.tbl_sets.setAlternatingRowColors(True)
-        self.tbl_sets.verticalHeader().setVisible(False)
-        hh = self.tbl_sets.horizontalHeader()
-        hh.setSectionResizeMode(1, QHeaderView.Stretch)
-        hh.setSectionResizeMode(2, QHeaderView.Interactive)
-        hh.setSectionResizeMode(3, QHeaderView.Interactive)
         self.tbl_sets.setColumnWidth(2, 65)
-        self.tbl_sets.setColumnWidth(3, 120)
-        hh.setDefaultAlignment(Qt.AlignRight | Qt.AlignVCenter)
+        self.tbl_sets.setColumnWidth(3, 130)
         self.tbl_sets.selectionModel().selectionChanged.connect(self._on_set_selected)
         lay.addWidget(self.tbl_sets, stretch=1)
 
@@ -143,13 +124,13 @@ class DimensionSetsTab(QWidget):
         self.lbl_sets_count.setStyleSheet("color:#1565c0; font-size:10px;")
         lay.addWidget(self.lbl_sets_count)
 
-        # ── فورم إضافة/تعديل المجموعة ──
+        # ── فورم المجموعة ──
         grp = QGroupBox("بيانات المجموعة")
         grp.setStyleSheet("""
-            QGroupBox { font-weight:bold; color:#1565c0;
-                border:1px solid #90caf9; border-radius:6px;
-                margin-top:6px; padding-top:6px; background:white; }
-            QGroupBox::title { subcontrol-origin:margin; padding:0 6px; }
+            QGroupBox{font-weight:bold;color:#1565c0;
+                border:1px solid #90caf9;border-radius:6px;
+                margin-top:6px;padding-top:6px;background:white;}
+            QGroupBox::title{subcontrol-origin:margin;padding:0 6px;}
         """)
         form = QFormLayout(grp)
         form.setSpacing(8)
@@ -160,19 +141,19 @@ class DimensionSetsTab(QWidget):
         self.inp_set_name.setPlaceholderText("مثال: مقاسات خشب، مقاسات معدن...")
         form.addRow("الاسم :", self.inp_set_name)
 
-        # ── التصنيف (scope=design من erp.db) ──
+        # ── التصنيف (من dim_set_categories في designs.db) ──
         self.cmb_set_cat = QComboBox()
         self.cmb_set_cat.setMinimumHeight(30)
         self.cmb_set_cat.setStyleSheet("""
-            QComboBox { background:white; border:1px solid #90caf9;
-                border-radius:4px; padding:2px 8px; }
-            QComboBox:focus { border-color:#1565c0; }
-            QComboBox::drop-down { border:none; }
+            QComboBox{background:white;border:1px solid #90caf9;
+                border-radius:4px;padding:2px 8px;}
+            QComboBox:focus{border-color:#1565c0;}
+            QComboBox::drop-down{border:none;}
         """)
         self.cmb_set_cat.currentIndexChanged.connect(self._on_cat_selected)
         form.addRow("التصنيف :", self.cmb_set_cat)
 
-        # تلميح الحقول الافتراضية
+        # تلميح الحقول القالبية
         self.lbl_template_hint = QLabel()
         self.lbl_template_hint.setStyleSheet(
             "font-size:10px; color:#1565c0; background:#e3f2fd;"
@@ -205,12 +186,10 @@ class DimensionSetsTab(QWidget):
         for btn in (self.btn_set_add, self.btn_set_save,
                     self.btn_set_cancel, self.btn_set_del):
             btn.setMinimumHeight(28)
-
         self.btn_set_add.setStyleSheet(_BTN_ADD)
         self.btn_set_save.setStyleSheet(_BTN_SAVE)
         self.btn_set_cancel.setStyleSheet(_BTN_CANCEL)
         self.btn_set_del.setStyleSheet(_BTN_DEL)
-
         self.btn_set_save.setVisible(False)
         self.btn_set_cancel.setVisible(False)
 
@@ -253,25 +232,15 @@ class DimensionSetsTab(QWidget):
         lay.addWidget(hint)
 
         # جدول الحقول
-        self.tbl_fields = QTableWidget()
-        self.tbl_fields.setColumnCount(6)
-        self.tbl_fields.setHorizontalHeaderLabels(
-            ["ID", "المفتاح", "التسمية", "الوحدة", "النوع", "مطلوب"]
+        self.tbl_fields = make_table(
+            ["ID", "المفتاح", "التسمية", "الوحدة", "النوع", "مطلوب"],
+            stretch_col=2
         )
         self.tbl_fields.setColumnHidden(0, True)
-        self.tbl_fields.setSelectionBehavior(QAbstractItemView.SelectRows)
-        self.tbl_fields.setEditTriggers(QAbstractItemView.NoEditTriggers)
-        self.tbl_fields.setAlternatingRowColors(True)
-        self.tbl_fields.verticalHeader().setVisible(False)
-        hh2 = self.tbl_fields.horizontalHeader()
-        hh2.setSectionResizeMode(2, QHeaderView.Stretch)
-        for i in (1, 3, 4, 5):
-            hh2.setSectionResizeMode(i, QHeaderView.Interactive)
         self.tbl_fields.setColumnWidth(1, 100)
         self.tbl_fields.setColumnWidth(3, 65)
         self.tbl_fields.setColumnWidth(4, 120)
         self.tbl_fields.setColumnWidth(5, 60)
-        hh2.setDefaultAlignment(Qt.AlignRight | Qt.AlignVCenter)
         self.tbl_fields.selectionModel().selectionChanged.connect(self._on_field_selected)
         lay.addWidget(self.tbl_fields, stretch=1)
 
@@ -299,10 +268,10 @@ class DimensionSetsTab(QWidget):
         # فورم الحقل
         grp2 = QGroupBox("بيانات الحقل")
         grp2.setStyleSheet("""
-            QGroupBox { font-weight:bold; color:#e65100;
-                border:1px solid #ffcc80; border-radius:6px;
-                margin-top:6px; padding-top:6px; background:#fffde7; }
-            QGroupBox::title { subcontrol-origin:margin; padding:0 6px; }
+            QGroupBox{font-weight:bold;color:#e65100;
+                border:1px solid #ffcc80;border-radius:6px;
+                margin-top:6px;padding-top:6px;background:#fffde7;}
+            QGroupBox::title{subcontrol-origin:margin;padding:0 6px;}
         """)
         form2 = QFormLayout(grp2)
         form2.setSpacing(8)
@@ -354,12 +323,10 @@ class DimensionSetsTab(QWidget):
         for btn in (self.btn_fld_add, self.btn_fld_save,
                     self.btn_fld_cancel, self.btn_fld_del):
             btn.setMinimumHeight(28)
-
         self.btn_fld_add.setStyleSheet(_BTN_ADD)
         self.btn_fld_save.setStyleSheet(_BTN_SAVE)
         self.btn_fld_cancel.setStyleSheet(_BTN_CANCEL)
         self.btn_fld_del.setStyleSheet(_BTN_DEL)
-
         self.btn_fld_save.setVisible(False)
         self.btn_fld_cancel.setVisible(False)
 
@@ -383,19 +350,19 @@ class DimensionSetsTab(QWidget):
     # ══════════════════════════════════════════════════════
 
     def _load_category_combo(self):
-        """يحمّل تصنيفات scope='design' من erp.db."""
+        """يحمّل تصنيفات من dim_set_categories في designs.db."""
         prev = self.cmb_set_cat.currentData()
         self.cmb_set_cat.blockSignals(True)
         self.cmb_set_cat.clear()
         self.cmb_set_cat.addItem("— بدون تصنيف —", None)
 
         try:
-            cats = fetch_categories_by_scope(self.conn_erp, "design")
+            cats = fetch_all_dim_set_categories(self.conn)
             for c in cats:
-                # عدد الحقول القالبية
-                fields = get_template_fields(self.conn_erp, c["id"])
+                fields = fetch_category_template_fields(self.conn, c["id"])
                 suffix = f"  ({len(fields)} حقل)" if fields else ""
-                self.cmb_set_cat.addItem(f"{c['name']}{suffix}", c["id"])
+                label  = f"{c['icon'] or ''}  {c['name']}{suffix}"
+                self.cmb_set_cat.addItem(label, c["id"])
                 idx = self.cmb_set_cat.count() - 1
                 self.cmb_set_cat.setItemData(idx, QColor(c["color"]), Qt.ForegroundRole)
         except Exception as e:
@@ -406,7 +373,6 @@ class DimensionSetsTab(QWidget):
             if self.cmb_set_cat.itemData(i) == prev:
                 self.cmb_set_cat.setCurrentIndex(i)
                 break
-
         self.cmb_set_cat.blockSignals(False)
 
     def _on_cat_selected(self):
@@ -417,26 +383,19 @@ class DimensionSetsTab(QWidget):
             return
 
         try:
-            cat    = self.conn_erp.execute(
-                "SELECT default_unit, template_fields FROM categories WHERE id=?",
+            cat = self.conn.execute(
+                "SELECT default_unit FROM dim_set_categories WHERE id=?",
                 (cat_id,)
             ).fetchone()
             if not cat:
                 self.lbl_template_hint.setVisible(False)
                 return
 
-            # تعبئة الوحدة
-            unit = cat["default_unit"] or "mm"
-            self.inp_set_unit.setText(unit)
+            # تعبئة الوحدة تلقائياً
+            self.inp_set_unit.setText(cat["default_unit"] or "mm")
 
-            # معاينة الحقول
-            fields = []
-            if cat["template_fields"]:
-                try:
-                    fields = json.loads(cat["template_fields"])
-                except Exception:
-                    fields = []
-
+            # معاينة عدد الحقول
+            fields = fetch_category_template_fields(self.conn, cat_id)
             if fields:
                 names = "، ".join(f["label"] for f in fields[:6])
                 if len(fields) > 6:
@@ -446,7 +405,7 @@ class DimensionSetsTab(QWidget):
                 )
                 self.lbl_template_hint.setVisible(True)
             else:
-                self.lbl_template_hint.setText("ℹ️ هذا التصنيف لا يحتوي على حقول افتراضية")
+                self.lbl_template_hint.setText("ℹ️ هذا التصنيف لا يحتوي على حقول افتراضية بعد")
                 self.lbl_template_hint.setVisible(True)
         except Exception as e:
             print(f"[DimensionSetsTab] _on_cat_selected: {e}")
@@ -460,11 +419,11 @@ class DimensionSetsTab(QWidget):
         sets = fetch_all_dimension_sets(self.conn)
         self.tbl_sets.setRowCount(0)
 
-        # نبني map للتصنيفات من erp.db
+        # map التصنيفات
         cat_map = {}
         try:
-            cats = fetch_categories_by_scope(self.conn_erp, "design")
-            cat_map = {c["id"]: c for c in cats}
+            for c in fetch_all_dim_set_categories(self.conn):
+                cat_map[c["id"]] = dict(c)
         except Exception:
             pass
 
@@ -479,12 +438,11 @@ class DimensionSetsTab(QWidget):
             self.tbl_sets.setItem(r, 2, QTableWidgetItem(s["unit"] or ""))
 
             # التصنيف
-            cat_id   = s["category_id"] if "category_id" in s.keys() else None
-            cat_name = ""
+            cat_id = s["category_id"] if "category_id" in s.keys() else None
             if cat_id and cat_id in cat_map:
-                cat      = cat_map[cat_id]
-                cat_name = cat["name"]
-                cat_item = QTableWidgetItem(cat_name)
+                cat = cat_map[cat_id]
+                label = f"{cat.get('icon','') or ''}  {cat['name']}"
+                cat_item = QTableWidgetItem(label)
                 cat_item.setForeground(QColor(cat["color"]))
                 self.tbl_sets.setItem(r, 3, cat_item)
             else:
@@ -514,6 +472,7 @@ class DimensionSetsTab(QWidget):
             self.tbl_fields.insertRow(r)
             self.tbl_fields.setItem(r, 0, QTableWidgetItem(str(f["id"])))
             self.tbl_fields.setItem(r, 1, QTableWidgetItem(f["name"] or ""))
+
             label_item = QTableWidgetItem(f["label"] or "")
             label_item.setFont(QFont("", -1, QFont.Bold))
             self.tbl_fields.setItem(r, 2, label_item)
@@ -585,7 +544,7 @@ class DimensionSetsTab(QWidget):
                 self.cmb_set_cat.setCurrentIndex(i)
                 break
         self.cmb_set_cat.blockSignals(False)
-        self.lbl_template_hint.setVisible(False)  # عند التعديل مش بنعرض الهنت
+        self.lbl_template_hint.setVisible(False)
 
         self.lbl_set_mode.setText(f"تعديل: {s['name']}")
         self.btn_set_add.setVisible(False)
@@ -601,19 +560,17 @@ class DimensionSetsTab(QWidget):
         desc   = self.inp_set_desc.text().strip()
         cat_id = self.cmb_set_cat.currentData()
 
-        # إنشاء المجموعة
         new_id = insert_dimension_set(self.conn, name, desc, unit,
                                        category_id=cat_id)
         self._selected_set_id = new_id
 
-        # ═══ نسخ الحقول من القالب تلقائياً ═══
+        # نسخ حقول القالب تلقائياً من dim_set_categories
         if cat_id is not None:
-            copied = apply_template_to_dimension_set(
-                self.conn_erp, self.conn, cat_id, new_id
+            copied = apply_category_template_to_set(
+                self.conn, set_id=new_id, cat_id=cat_id
             )
             if copied:
-                # تحديث الـ UI مباشرة بدون رسالة
-                pass
+                pass  # تحديث صامت
 
         self._reset_set_form()
         bus.data_changed.emit()

@@ -3,17 +3,19 @@ ui/tabs/design_section.py
 ==========================
 قسم "التصميمات" — تبويبات داخلية:
   📐 الأشكال | 📏 المجموعات | 📂 التصنيفات | 🏷 تصنيفات الأشكال | 📊 الجدول المقارن
+
+التغيير: DimCategoriesTab الآن يعمل على designs.db فقط
+(dim_set_categories بدل categories scope=design في erp.db)
 """
 
 from PyQt5.QtWidgets import QWidget, QVBoxLayout, QLabel, QTabWidget
 from PyQt5.QtCore import Qt
 
 from db.design.design_schema import get_design_connection, create_design_tables
-from db.shared.connection import get_connection
 
 from ui.tabs.design.shapes_tab             import ShapesTab
 from ui.tabs.design.dimension_sets_tab     import DimensionSetsTab
-from ui.tabs.design.dim_categories_tab     import DimCategoriesTab       # ← جديد
+from ui.tabs.design.dim_categories_tab     import DimCategoriesTab
 from ui.tabs.design.design_categories_tab  import DesignCategoriesTab
 from ui.tabs.design.compare_tab            import CompareTab
 
@@ -36,24 +38,26 @@ _TAB_STYLE = """
 class DesignSection(QWidget):
     def __init__(self, parent=None):
         super().__init__(parent)
-        self._conn     = get_design_connection()
-        self._conn_erp = get_connection("costing")
+        self._conn = get_design_connection()
         create_design_tables(self._conn)
-        self._ensure_category_id_column()
+        self._ensure_migrations()
         self._build()
 
-    def _ensure_category_id_column(self):
-        """يضيف عمود category_id لجدول dimension_sets لو مش موجود."""
+    def _ensure_migrations(self):
+        """يضيف الأعمدة الناقصة بأمان."""
         try:
             cols = {r["name"] for r in
-                    self._conn.execute("PRAGMA table_info(dimension_sets)").fetchall()}
+                    self._conn.execute(
+                        "PRAGMA table_info(dimension_sets)"
+                    ).fetchall()}
             if "category_id" not in cols:
                 self._conn.execute(
-                    "ALTER TABLE dimension_sets ADD COLUMN category_id INTEGER"
+                    "ALTER TABLE dimension_sets ADD COLUMN category_id INTEGER "
+                    "REFERENCES dim_set_categories(id) ON DELETE SET NULL"
                 )
                 self._conn.commit()
         except Exception as e:
-            print(f"[DesignSection] ensure category_id: {e}")
+            print(f"[DesignSection] migration dimension_sets: {e}")
 
     def _build(self):
         layout = QVBoxLayout(self)
@@ -78,12 +82,13 @@ class DesignSection(QWidget):
         tabs.setElideMode(Qt.ElideNone)
         tabs.tabBar().setExpanding(False)
 
+        # كل التبويبات تستخدم self._conn (designs.db) فقط
         tabs.addTab(ShapesTab(self._conn),
                     "📐  الأشكال")
         tabs.addTab(DimensionSetsTab(self._conn),
                     "📏  مجموعات المقاسات")
-        tabs.addTab(DimCategoriesTab(self._conn_erp),
-                    "📂  تصنيفات المقاسات")     # ← جديد
+        tabs.addTab(DimCategoriesTab(self._conn),
+                    "📂  تصنيفات المقاسات")
         tabs.addTab(DesignCategoriesTab(self._conn),
                     "🏷  تصنيفات الأشكال")
         tabs.addTab(CompareTab(self._conn),
