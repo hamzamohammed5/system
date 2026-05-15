@@ -16,7 +16,7 @@ from PyQt5.QtWidgets import (
 from PyQt5.QtCore import Qt
 from PyQt5.QtGui  import QColor, QFont
 
-from db.design_repo import (
+from db.design.design_repo import (
     fetch_all_design_categories,
     insert_design_category, update_design_category, delete_design_category,
 )

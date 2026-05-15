@@ -21,7 +21,7 @@ from PyQt5.QtWidgets import (
 from PyQt5.QtCore import Qt
 from PyQt5.QtGui  import QColor, QFont
 
-from db.design_repo import (
+from db.design.design_repo import (
     fetch_all_dimension_sets, fetch_dimension_set,
     insert_dimension_set, update_dimension_set, delete_dimension_set,
     fetch_fields_for_set, fetch_field,

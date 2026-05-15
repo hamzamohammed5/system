@@ -10,7 +10,7 @@ from PyQt5.QtWidgets import (
 )
 from PyQt5.QtCore import Qt
 
-from db.design_schema import get_design_connection, create_design_tables
+from db.design.design_schema import get_design_connection, create_design_tables
 
 # ── Import التبويبات الداخلية ──
 from ui.tabs.design.shapes_tab        import ShapesTab

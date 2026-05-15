@@ -19,7 +19,7 @@ from PyQt5.QtWidgets import (
 from PyQt5.QtCore import Qt, pyqtSignal, QTimer
 from PyQt5.QtGui  import QColor, QFont
 
-from db.design_repo import (
+from db.design.design_repo import (
     fetch_all_shapes, fetch_shape, insert_shape, update_shape, delete_shape,
     fetch_all_design_categories, fetch_all_dimension_sets,
     fetch_fields_for_set, fetch_shape_dimensions,

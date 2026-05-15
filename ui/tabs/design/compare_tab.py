@@ -28,7 +28,7 @@ from PyQt5.QtWidgets import (
 from PyQt5.QtCore import Qt, QTimer
 from PyQt5.QtGui  import QColor, QFont, QBrush
 
-from db.design_repo import (
+from db.design.design_repo import (
     fetch_all_dimension_sets,
     fetch_all_design_categories,
     fetch_shapes_with_dimensions,
@@ -245,7 +245,7 @@ class CompareTab(QWidget):
             shapes = fetch_shapes_with_dimensions(self.conn, set_id, cat_id)
         else:
             # بدون تحديد مجموعة — اعرض كل الأشكال بدون أعمدة مقاسات
-            from db.design_repo import fetch_all_shapes
+            from db.design.design_repo import fetch_all_shapes
             raw = fetch_all_shapes(self.conn, category_id=cat_id)
             shapes = []
             for s in raw:
