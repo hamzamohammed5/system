@@ -1,0 +1,160 @@
+File Tree Snapshot
+Generated : 2026-05-15 11:41:30
+Source    : D:\My Workspace\Hg\Alhabaar\accountant\system
+Extensions: .py
+────────────────────────────────────────────────────────────
+system/
+├── db/
+│   ├── accounting/
+│   │   ├── accounting_accounts_repo.py
+│   │   ├── accounting_inventory_repo.py
+│   │   ├── accounting_journal_repo.py
+│   │   ├── accounting_schema_constants.py
+│   │   ├── accounting_schema_migrations.py
+│   │   ├── accounting_schema_seed.py
+│   │   └── accounting_statements_repo.py
+│   ├── accounting_repo.py
+│   ├── accounting_schema.py
+│   ├── bom_scenarios_repo.py
+│   ├── categories_repo.py
+│   ├── connection.py
+│   ├── inventory_repo.py
+│   ├── inventory_schema.py
+│   ├── investors_repo.py
+│   ├── items_repo.py
+│   ├── machine_op_rows_repo.py
+│   ├── migrations.py
+│   ├── migrations_v2.py
+│   ├── offers_repo.py
+│   ├── operations_repo.py
+│   ├── pricing_repo.py
+│   ├── raw_variants_repo.py
+│   ├── schema.py
+│   └── settings_repo.py
+├── models/
+│   ├── costing.py
+│   ├── costing_base.py
+│   └── costing_ops.py
+├── ui/
+│   ├── tabs/
+│   │   ├── accounting/
+│   │   │   ├── accounts_tree/
+│   │   │   ├── financial/
+│   │   │   │   ├── balance_sheet_tab.py
+│   │   │   │   ├── income_statement_tab.py
+│   │   │   │   ├── owners_equity_tab.py
+│   │   │   │   └── trial_balance_tab.py
+│   │   │   ├── investors/
+│   │   │   │   ├── _helpers.py
+│   │   │   │   ├── _investor_details.py
+│   │   │   │   ├── _investor_form.py
+│   │   │   │   ├── _investors_table.py
+│   │   │   │   ├── _link_to_entry_panel.py
+│   │   │   │   └── _movement_dialog.py
+│   │   │   ├── journal/
+│   │   │   │   ├── account_picker/
+│   │   │   │   │   ├── _account_picker_button.py
+│   │   │   │   │   └── _account_tree_popup.py
+│   │   │   │   ├── lines/
+│   │   │   │   │   ├── _lines_panel.py
+│   │   │   │   │   └── _smart_line.py
+│   │   │   │   ├── journal_account_picker.py
+│   │   │   │   ├── journal_filter.py
+│   │   │   │   ├── journal_form.py
+│   │   │   │   ├── journal_group_combo.py
+│   │   │   │   ├── journal_lines.py
+│   │   │   │   └── journal_tree_table.py
+│   │   │   ├── ledger/
+│   │   │   │   ├── ledger_accounts_panel.py
+│   │   │   │   ├── ledger_filter_bar.py
+│   │   │   │   ├── ledger_stat_cards.py
+│   │   │   │   └── ledger_t_account.py
+│   │   │   ├── tree/
+│   │   │   │   ├── _account_form.py
+│   │   │   │   ├── _group_filter.py
+│   │   │   │   └── _tree_builder.py
+│   │   │   ├── account_combo.py
+│   │   │   ├── accounts_tree.py
+│   │   │   ├── financial_statements.py
+│   │   │   ├── group_manager.py
+│   │   │   ├── helpers.py
+│   │   │   ├── investors_tab.py
+│   │   │   ├── journal_tab.py
+│   │   │   └── ledger_tab.py
+│   │   ├── costing/
+│   │   │   ├── labor/
+│   │   │   │   ├── labor_op_form.py
+│   │   │   │   ├── labor_op_table.py
+│   │   │   │   └── labor_settings.py
+│   │   │   ├── machine/
+│   │   │   │   ├── machine_form.py
+│   │   │   │   ├── machine_op_form.py
+│   │   │   │   ├── machine_op_table.py
+│   │   │   │   └── machine_table.py
+│   │   │   ├── product/
+│   │   │   │   ├── product_form.py
+│   │   │   │   ├── product_main_panel.py
+│   │   │   │   └── product_table.py
+│   │   │   ├── raw/
+│   │   │   │   ├── raw_input_panel.py
+│   │   │   │   └── raw_table_panel.py
+│   │   │   ├── labor_tab.py
+│   │   │   ├── machine_tab.py
+│   │   │   ├── product_tab.py
+│   │   │   └── raw_tab.py
+│   │   ├── costing_section/
+│   │   ├── inventory/
+│   │   │   ├── items/
+│   │   │   │   ├── _item_form.py
+│   │   │   │   ├── _items_tab.py
+│   │   │   │   └── _items_table.py
+│   │   │   ├── inventory_inbound_tab.py
+│   │   │   ├── inventory_items_tab.py
+│   │   │   ├── inventory_outbound_tab.py
+│   │   │   └── inventory_report_tab.py
+│   │   ├── offers/
+│   │   ├── pricing/
+│   │   │   ├── offers/
+│   │   │   │   ├── __init__.py
+│   │   │   │   ├── offer_details.py
+│   │   │   │   ├── offer_form.py
+│   │   │   │   ├── offer_item_row.py
+│   │   │   │   ├── offers_tab.py
+│   │   │   │   └── offers_table.py
+│   │   │   ├── pricing/
+│   │   │   │   ├── _pricing_panel.py
+│   │   │   │   └── _stat_box.py
+│   │   │   └── pricing_tab.py
+│   │   ├── accounting_section.py
+│   │   ├── costing_section.py
+│   │   ├── inventory_section.py
+│   │   └── pricing_section.py
+│   ├── widgets/
+│   │   ├── costing/
+│   │   │   ├── bulk_replace/
+│   │   │   │   ├── bulk_replace_dialog.py
+│   │   │   │   ├── bulk_replace_helpers.py
+│   │   │   │   └── bulk_replace_products_panel.py
+│   │   │   ├── bom_scenarios_panel.py
+│   │   │   ├── bom_tree.py
+│   │   │   ├── component_row.py
+│   │   │   ├── machine_op_rows_editor.py
+│   │   │   └── raw_variants_panel.py
+│   │   └── shared/
+│   │       ├── category_combo.py
+│   │       ├── category_form.py
+│   │       ├── category_manager.py
+│   │       ├── filter_bar.py
+│   │       ├── flexible_text.py
+│   │       ├── no_wheel.py
+│   │       ├── scenario_comparison_widget.py
+│   │       ├── scrollable_form.py
+│   │       └── searchable_combo.py
+│   ├── app_settings.py
+│   ├── events.py
+│   ├── font_utils.py
+│   ├── helpers.py
+│   ├── main_window.py
+│   └── settings_dialog.py
+├── app.py
+├── main.py
