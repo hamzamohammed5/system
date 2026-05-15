@@ -12,8 +12,8 @@ from PyQt5.QtWidgets import (
     QFrame, QVBoxLayout, QLabel, QDoubleSpinBox, QComboBox,
 )
 
-from db.accounting_repo import fetch_leaf_accounts, insert_entry, add_entry_lines
-from db.investors_repo  import link_investor_to_line
+from db.accounting.accounting_repo import fetch_leaf_accounts, insert_entry, add_entry_lines
+from db.inventory.investors_repo  import link_investor_to_line
 
 
 # ══════════════════════════════════════════════════════════

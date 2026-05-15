@@ -11,10 +11,10 @@ from PyQt5.QtWidgets import (
 from PyQt5.QtCore import Qt
 from PyQt5.QtGui  import QColor, QFont
 
-from db.investors_repo import (
+from db.inventory.investors_repo import (
     calc_investor_summary, delete_investor_link,
 )
-from db.accounting_repo import delete_entry
+from db.accounting.accounting_repo import delete_entry
 from ui.helpers import (
     make_table, setup_table_columns, buttons_row,
     section_label, danger_button,

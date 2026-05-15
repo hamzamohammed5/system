@@ -8,7 +8,7 @@ from PyQt5.QtWidgets import (
     QWidget, QVBoxLayout, QPushButton, QTableWidgetItem, QMessageBox,
 )
 
-from db.items_repo import fetch_items_by_type, delete_item
+from db.shared.items_repo import fetch_items_by_type, delete_item
 from models.costing import raw_unit_price
 from ui.helpers import (
     make_table, buttons_row, section_label, confirm_delete, danger_button,

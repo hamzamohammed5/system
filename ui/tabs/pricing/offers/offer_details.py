@@ -18,7 +18,7 @@ from PyQt5.QtWidgets import (
 from PyQt5.QtCore import Qt
 from PyQt5.QtGui  import QColor
 
-from db.offers_repo import calc_offer_summary
+from db.pricing.offers_repo import calc_offer_summary
 
 
 def _stat_box(title: str, color: str = "#1565c0"):

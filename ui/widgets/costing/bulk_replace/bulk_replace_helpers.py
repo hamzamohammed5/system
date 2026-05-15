@@ -10,8 +10,8 @@ from PyQt5.QtWidgets import (
 )
 from PyQt5.QtCore import Qt
 
-from db.items_repo      import fetch_items_by_type, fetch_item, fetch_bom
-from db.operations_repo import fetch_all_labor_ops, fetch_all_machine_ops
+from db.shared.items_repo      import fetch_items_by_type, fetch_item, fetch_bom
+from db.costing.operations_repo import fetch_all_labor_ops, fetch_all_machine_ops
 from models.costing     import calc_cost
 
 

@@ -11,7 +11,7 @@ from PyQt5.QtWidgets import (
 )
 from PyQt5.QtCore import Qt
 
-from db.items_repo  import fetch_items_by_type
+from db.shared.items_repo  import fetch_items_by_type
 from models.costing import calc_cost
 from ui.helpers import (
     make_table, buttons_row, section_label, danger_button,

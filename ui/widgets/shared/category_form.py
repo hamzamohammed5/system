@@ -11,7 +11,7 @@ from PyQt5.QtWidgets import (
 from PyQt5.QtCore import Qt
 from PyQt5.QtGui  import QColor
 
-from db.categories_repo import (
+from db.shared.categories_repo import (
     fetch_all_categories, fetch_category,
     insert_category, update_category,
     build_tree, fetch_descendants,

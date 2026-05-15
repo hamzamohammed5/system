@@ -18,8 +18,8 @@ from PyQt5.QtWidgets import (
 from PyQt5.QtCore import Qt
 from PyQt5.QtGui  import QColor
 
-from db.items_repo    import fetch_items_by_type, fetch_item
-from db.pricing_repo  import fetch_all_pricing, upsert_pricing, delete_pricing
+from db.shared.items_repo    import fetch_items_by_type, fetch_item
+from db.pricing.pricing_repo  import fetch_all_pricing, upsert_pricing, delete_pricing
 from models.costing   import calc_cost
 from ui.helpers       import make_table, buttons_row, section_label, danger_button
 from ui.widgets.shared.filter_bar import FilterBar
@@ -306,7 +306,7 @@ class _PricingPanel(QWidget):
         self.lbl_stat_cost.setText(f"{cost:.2f}  ج (تكلفة)")
 
     def _load_for_edit(self, prod_id: int):
-        from db.pricing_repo import fetch_pricing
+        from db.pricing.pricing_repo import fetch_pricing
         pricing = fetch_pricing(self.conn, prod_id)
         item    = fetch_item(self.conn, prod_id)
         if not item:

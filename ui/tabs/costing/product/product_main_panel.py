@@ -9,7 +9,7 @@ from PyQt5.QtWidgets import (
 )
 from PyQt5.QtCore import Qt
 
-from db.items_repo import (
+from db.shared.items_repo import (
     fetch_item, delete_item,
     fetch_orphan_bom_rows, delete_orphan_bom_rows,
     cleanup_empty_products_after_orphan_fix,
@@ -32,8 +32,8 @@ _SPLITTER_STYLE = """
 
 
 def _catalog_for_component_row(conn) -> dict:
-    from db.items_repo      import fetch_items_by_type
-    from db.operations_repo import fetch_all_labor_ops, fetch_all_machine_ops
+    from db.shared.items_repo      import fetch_items_by_type
+    from db.costing.operations_repo import fetch_all_labor_ops, fetch_all_machine_ops
 
     result: dict[str, list] = {
         "raw": [], "semi": [], "labor_op": [], "machine_op": []

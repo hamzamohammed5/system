@@ -11,7 +11,7 @@ from PyQt5.QtWidgets import (
 from PyQt5.QtCore import Qt
 from PyQt5.QtGui  import QColor
 
-from db.accounting_repo import balance_sheet
+from db.accounting.accounting_repo import balance_sheet
 from ui.helpers import make_table, section_label
 from ui.events  import bus
 from ui.tabs.accounting.helpers import _money, _stat_card

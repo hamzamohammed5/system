@@ -19,7 +19,7 @@ from PyQt5.QtWidgets import (
 from PyQt5.QtCore import Qt
 from PyQt5.QtGui  import QColor, QFont
 
-from db.machine_op_rows_repo import (
+from db.costing.machine_op_rows_repo import (
     fetch_op_rows, insert_op_row, update_op_row,
     delete_op_row, calc_op_row_cost, calc_op_total_cost,
 )
@@ -312,7 +312,7 @@ class _OpRowsEditor(QGroupBox):
         if row == -1:
             QMessageBox.information(self, "تنبيه", "اختر صفاً أولاً")
             return
-        from db.machine_op_rows_repo import fetch_op_row
+        from db.costing.machine_op_rows_repo import fetch_op_row
         rid = int(self.table.item(row, 0).text())
         r   = fetch_op_row(self.conn, rid)
         if not r:

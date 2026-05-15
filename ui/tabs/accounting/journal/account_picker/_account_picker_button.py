@@ -10,7 +10,7 @@ from PyQt5.QtWidgets import (
 )
 from PyQt5.QtCore import Qt, QPoint, QTimer
 
-from db.accounting_repo import fetch_account, get_normal_balance
+from db.accounting.accounting_repo import fetch_account, get_normal_balance
 from ._account_tree_popup import _AccountTreePopup, _TYPE_ORDER
 
 

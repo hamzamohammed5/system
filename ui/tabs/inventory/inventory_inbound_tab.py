@@ -16,11 +16,11 @@ from PyQt5.QtWidgets import (
 from PyQt5.QtCore import Qt, QDate
 from PyQt5.QtGui  import QColor
 
-from db.inventory_repo  import (
+from db.inventory.inventory_repo  import (
     fetch_all_inventory, fetch_inventory_item,
     record_inventory_move,
 )
-from db.accounting_repo import fetch_leaf_accounts, purchase_inventory
+from db.accounting.accounting_repo import fetch_leaf_accounts, purchase_inventory
 from ui.helpers import (
     make_table, setup_table_columns, section_label,
 )

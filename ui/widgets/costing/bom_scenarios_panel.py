@@ -26,7 +26,7 @@ from PyQt5.QtWidgets import (
 from PyQt5.QtCore import Qt, pyqtSignal
 from PyQt5.QtGui  import QColor, QFont
 
-from db.bom_scenarios_repo import (
+from db.costing.bom_scenarios_repo import (
     fetch_scenarios, fetch_scenario, insert_scenario,
     update_scenario, delete_scenario, set_default_scenario,
     clone_scenario, fetch_default_scenario,

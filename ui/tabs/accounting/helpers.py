@@ -8,7 +8,7 @@ ui/tabs/accounting/helpers.py
 from PyQt5.QtWidgets import QDoubleSpinBox, QFrame, QVBoxLayout, QLabel
 from PyQt5.QtCore    import Qt
 
-from db.accounting_schema import TYPE_AR, NORMAL_BALANCE
+from db.accounting.accounting_schema import TYPE_AR, NORMAL_BALANCE
 from ui.font_utils import card_title_style, card_value_style
 
 

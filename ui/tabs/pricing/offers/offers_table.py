@@ -15,7 +15,7 @@ from PyQt5.QtWidgets import (
 )
 from PyQt5.QtGui import QColor
 
-from db.offers_repo import fetch_all_offers, calc_offer_summary
+from db.pricing.offers_repo import fetch_all_offers, calc_offer_summary
 from ui.helpers     import (
     make_table, buttons_row, section_label, danger_button,
 )

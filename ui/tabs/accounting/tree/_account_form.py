@@ -12,11 +12,11 @@ from PyQt5.QtWidgets import (
 from PyQt5.QtCore import Qt
 from PyQt5.QtGui  import QColor
 
-from db.accounting_repo import (
+from db.accounting.accounting_repo import (
     fetch_account, insert_account, update_account,
     fetch_all_groups, build_group_tree,
 )
-from db.accounting_schema import TYPE_AR
+from db.accounting.accounting_schema import TYPE_AR
 from ui.helpers import danger_button
 from ui.events  import bus
 

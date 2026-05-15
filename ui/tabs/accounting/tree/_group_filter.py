@@ -8,7 +8,7 @@ from PyQt5.QtWidgets import QComboBox
 from PyQt5.QtCore import Qt
 from PyQt5.QtGui  import QColor
 
-from db.accounting_repo import fetch_all_groups, build_group_tree
+from db.accounting.accounting_repo import fetch_all_groups, build_group_tree
 from ui.tabs.accounting.helpers import TYPE_COLORS
 
 

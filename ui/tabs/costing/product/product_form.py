@@ -16,11 +16,11 @@ from PyQt5.QtWidgets import (
 )
 from PyQt5.QtCore import Qt, QTimer
 
-from db.items_repo import (
+from db.shared.items_repo import (
     fetch_item, insert_item, update_item,
     fetch_orphan_bom_rows,
 )
-from db.bom_scenarios_repo import (
+from db.costing.bom_scenarios_repo import (
     fetch_default_scenario, insert_scenario,
     fetch_bom_for_scenario, replace_bom_for_scenario,
 )
@@ -250,7 +250,7 @@ class _FormPanel(QWidget):
         try:
             bom_rows = fetch_bom_for_scenario(self.conn, scenario_id)
         except Exception:
-            from db.items_repo import fetch_bom
+            from db.shared.items_repo import fetch_bom
             bom_rows = fetch_bom(self.conn, pid)
 
         for row_data in (bom_rows or []):

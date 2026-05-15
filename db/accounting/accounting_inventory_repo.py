@@ -12,7 +12,7 @@ def purchase_inventory(inv_conn, acc_conn,
                        inv_id: int, qty: float, unit_cost: float,
                        date: str, payment_account_id: int,
                        notes: str = None) -> tuple:
-    from db.inventory_repo import fetch_inventory_item, record_inventory_move
+    from db.inventory.inventory_repo import fetch_inventory_item, record_inventory_move
 
     inv = fetch_inventory_item(inv_conn, inv_id)
     if not inv:

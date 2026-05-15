@@ -16,8 +16,8 @@ from PyQt5.QtWidgets import (
 from PyQt5.QtCore import Qt
 from PyQt5.QtGui  import QFont, QColor, QBrush
 
-from db.items_repo      import fetch_bom, fetch_item, delete_bom_row
-from db.operations_repo import fetch_labor_op, fetch_machine_op
+from db.shared.items_repo      import fetch_bom, fetch_item, delete_bom_row
+from db.costing.operations_repo import fetch_labor_op, fetch_machine_op
 from models.costing     import (
     calc_cost, calc_labor_op_cost, calc_machine_op_cost, raw_unit_price
 )

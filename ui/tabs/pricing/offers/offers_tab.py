@@ -19,8 +19,8 @@ from PyQt5.QtWidgets import (
 )
 from PyQt5.QtCore import Qt
 
-from db.connection  import get_connection
-from db.offers_repo import fetch_offer, delete_offer
+from db.shared.connection  import get_connection
+from db.pricing.offers_repo import fetch_offer, delete_offer
 from ui.helpers     import confirm_delete
 from ui.widgets.shared.category_manager import CategoryManager
 from ui.events      import bus

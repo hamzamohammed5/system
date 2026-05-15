@@ -7,7 +7,7 @@ models/costing_ops.py
 لو مفيش صفوف → fallback على value في machine_ops (السلوك القديم).
 """
 
-from db.operations_repo  import fetch_labor_op, fetch_machine_op
+from db.costing.operations_repo  import fetch_labor_op, fetch_machine_op
 from models.costing_base import calc_worker_hourly_rate
 
 
@@ -30,7 +30,7 @@ def calc_machine_op_cost(conn, op_id: int, row_id: int = None) -> float:
         return 0.0
 
     try:
-        from db.machine_op_rows_repo import calc_op_total_cost, calc_op_row_cost, fetch_op_rows
+        from db.costing.machine_op_rows_repo import calc_op_total_cost, calc_op_row_cost, fetch_op_rows
         rows = fetch_op_rows(conn, op_id)
         if rows:
             if row_id is not None:

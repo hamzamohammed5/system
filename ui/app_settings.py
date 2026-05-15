@@ -6,7 +6,7 @@ ui/app_settings.py
 
 from PyQt5.QtWidgets import QApplication
 from db.settings_repo import get_setting, set_setting
-from db.connection    import get_connection
+from db.shared.connection    import get_connection
 
 DEFAULT_FONT_SIZE = 11
 

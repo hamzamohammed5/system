@@ -10,7 +10,7 @@ from PyQt5.QtWidgets import (
 )
 from PyQt5.QtGui import QColor
 
-from db.accounting_repo import trial_balance, get_normal_balance
+from db.accounting.accounting_repo import trial_balance, get_normal_balance
 from ui.helpers import make_table, section_label
 from ui.events  import bus
 
@@ -75,7 +75,7 @@ class TrialBalanceTab(QWidget):
         self.table.setRowCount(0)
         sd = sc = 0.0
 
-        from db.accounting_schema import TYPE_AR
+        from db.accounting.accounting_schema import TYPE_AR
         for row in rows:
             r = self.table.rowCount()
             self.table.insertRow(r)

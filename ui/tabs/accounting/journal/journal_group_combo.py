@@ -11,8 +11,8 @@ from PyQt5.QtWidgets import (
 from PyQt5.QtCore import Qt, QModelIndex
 from PyQt5.QtGui  import QColor, QFont, QStandardItemModel, QStandardItem
 
-from db.accounting_repo import fetch_all_groups, build_group_tree
-from db.accounting_schema import TYPE_AR, EQUITY_TYPES
+from db.accounting.accounting_repo import fetch_all_groups, build_group_tree
+from db.accounting.accounting_schema import TYPE_AR, EQUITY_TYPES
 from ui.events import bus
 from ..helpers  import TYPE_COLORS
 
@@ -189,7 +189,7 @@ class _TreeGroupCombo(QComboBox):
         else:
             self.setCurrentText(item.text().strip())
             try:
-                from db.accounting_repo import _get_group_descendants
+                from db.accounting.accounting_repo import _get_group_descendants
                 desc_ids = _get_group_descendants(self.conn, gid)
                 if not desc_ids:
                     self._group_entry_ids = set()

@@ -18,7 +18,7 @@ from PyQt5.QtWidgets import (
 )
 from PyQt5.QtCore import Qt
 
-from db.investors_repo import _migrate_investors
+from db.inventory.investors_repo import _migrate_investors
 
 from .investors._investor_form       import _InvestorForm
 from .investors._investors_table     import _InvestorsTable

@@ -2,6 +2,7 @@
 ui/main_window.py
 =================
 النافذة الرئيسية — Sidebar Navigation + Content Area.
+[تحديث: إضافة قسم التصميمات]
 """
 
 from PyQt5.QtWidgets import (
@@ -14,6 +15,7 @@ from ui.tabs.costing_section      import CostingSection
 from ui.tabs.pricing_section      import PricingSection
 from ui.tabs.accounting_section   import AccountingTab
 from ui.tabs.inventory_section    import InventoryTab
+from ui.tabs.design_section       import DesignSection          # ← جديد
 from ui.settings_dialog           import SettingsDialog
 from ui.app_settings              import get_font_size
 
@@ -21,10 +23,6 @@ from ui.app_settings              import get_font_size
 SIDEBAR_EXPANDED_WIDTH  = 200
 SIDEBAR_COLLAPSED_WIDTH = 64
 
-
-# ══════════════════════════════════════════════════════════
-# زر الـ Sidebar
-# ══════════════════════════════════════════════════════════
 
 class _NavButton(QPushButton):
     def __init__(self, icon: str, label: str, parent=None):
@@ -43,13 +41,11 @@ class _NavButton(QPushButton):
         lay.setSpacing(10)
         lay.setAlignment(Qt.AlignVCenter)
 
-        # الأيقونة — على اليمين
         self._ico_lbl = QLabel(self._icon)
         self._ico_lbl.setObjectName("nav_icon")
         self._ico_lbl.setAlignment(Qt.AlignCenter)
         self._ico_lbl.setFixedWidth(32)
 
-        # النص — على اليسار من الأيقونة
         self._txt_lbl = QLabel(self._label.replace("\n", " "))
         self._txt_lbl.setObjectName("nav_label")
         self._txt_lbl.setAlignment(Qt.AlignRight | Qt.AlignVCenter)
@@ -59,11 +55,10 @@ class _NavButton(QPushButton):
         lay.addWidget(self._ico_lbl)
 
     def refresh_sizes(self):
-        """يُستدعى عند تغيير حجم الخط."""
         base     = get_font_size()
-        icon_pt  = base + 6          # الأيقونة أكبر من الخط بـ 6
-        label_pt = base              # النص بنفس حجم الخط
-        height   = icon_pt * 2 + 20  # ارتفاع مريح
+        icon_pt  = base + 6
+        label_pt = base
+        height   = icon_pt * 2 + 20
 
         self._ico_lbl.setStyleSheet(
             f"font-size: {icon_pt}pt;"
@@ -80,7 +75,6 @@ class _NavButton(QPushButton):
         self._txt_lbl.setVisible(not collapsed)
         if collapsed:
             self.setFixedWidth(SIDEBAR_COLLAPSED_WIDTH)
-            # في وضع الطي نضع الأيقونة في المنتصف
             lay = self.layout()
             if lay:
                 lay.setAlignment(Qt.AlignCenter)
@@ -120,10 +114,6 @@ class _NavButton(QPushButton):
         self._update_style()
 
 
-# ══════════════════════════════════════════════════════════
-# زر الطي / الفرد
-# ══════════════════════════════════════════════════════════
-
 class _ToggleButton(QPushButton):
     def __init__(self, parent=None):
         super().__init__(parent)
@@ -144,7 +134,6 @@ class _ToggleButton(QPushButton):
         """)
 
     def _refresh(self):
-        # الواجهة RTL فـ ◀ = طي (إخفاء)، ▶ = فرد (إظهار)
         self.setText("▶" if not self._collapsed else "◀")
         self.setToolTip(
             "طي الشريط الجانبي" if not self._collapsed
@@ -156,10 +145,6 @@ class _ToggleButton(QPushButton):
         self._refresh()
         return self._collapsed
 
-
-# ══════════════════════════════════════════════════════════
-# Sidebar
-# ══════════════════════════════════════════════════════════
 
 class _Sidebar(QFrame):
     def __init__(self, parent=None):
@@ -202,6 +187,7 @@ class _Sidebar(QFrame):
             ("💰", "التسعير",        "pricing"),
             ("🏦", "الحسابات",       "accounting"),
             ("📦", "المخزن",         "inventory"),
+            ("🎨", "التصميمات",      "design"),     # ← جديد
         ]
         for icon, label, key in nav_items:
             btn = _NavButton(icon, label)
@@ -226,7 +212,6 @@ class _Sidebar(QFrame):
         layout.addWidget(self._toggle_btn)
 
     def refresh_all_buttons(self):
-        """يُستدعى بعد تغيير حجم الخط."""
         for btn in self._buttons:
             btn.refresh_sizes()
             if self._collapsed:
@@ -261,34 +246,24 @@ class _Sidebar(QFrame):
             self._header.setText("ERP")
             self._header.setStyleSheet("""
                 QLabel#sidebar_header {
-                    background: #1565c0;
-                    color: white;
-                    font-size: 11pt;
-                    font-weight: bold;
-                    border: none;
-                    padding: 4px;
+                    background: #1565c0; color: white;
+                    font-size: 11pt; font-weight: bold;
+                    border: none; padding: 4px;
                 }
             """)
         else:
             self._header.setText("ERP\nالتكاليف")
             self._header.setStyleSheet("""
                 QLabel#sidebar_header {
-                    background: #1565c0;
-                    color: white;
-                    font-size: 15pt;
-                    font-weight: bold;
-                    border: none;
-                    padding: 8px;
+                    background: #1565c0; color: white;
+                    font-size: 15pt; font-weight: bold;
+                    border: none; padding: 8px;
                 }
             """)
 
     def get_buttons(self) -> list[_NavButton]:
         return self._buttons
 
-
-# ══════════════════════════════════════════════════════════
-# النافذة الرئيسية
-# ══════════════════════════════════════════════════════════
 
 class MainWindow(QMainWindow):
     def __init__(self, app):
@@ -322,11 +297,13 @@ class MainWindow(QMainWindow):
         self._pricing    = PricingSection()
         self._accounting = AccountingTab()
         self._inventory  = InventoryTab()
+        self._design     = DesignSection()          # ← جديد
 
-        self._stack.addWidget(self._costing)
-        self._stack.addWidget(self._pricing)
-        self._stack.addWidget(self._accounting)
-        self._stack.addWidget(self._inventory)
+        self._stack.addWidget(self._costing)        # index 0
+        self._stack.addWidget(self._pricing)        # index 1
+        self._stack.addWidget(self._accounting)     # index 2
+        self._stack.addWidget(self._inventory)      # index 3
+        self._stack.addWidget(self._design)         # index 4
 
         main_layout.addWidget(self._stack, stretch=1)
 
@@ -340,17 +317,17 @@ class MainWindow(QMainWindow):
         clicked_btn.setChecked(True)
 
         key = clicked_btn.property("nav_key")
-        if key == "costing":
-            self._stack.setCurrentIndex(0)
-        elif key == "pricing":
-            self._stack.setCurrentIndex(1)
-        elif key == "accounting":
-            self._stack.setCurrentIndex(2)
-        elif key == "inventory":
-            self._stack.setCurrentIndex(3)
+        index_map = {
+            "costing":    0,
+            "pricing":    1,
+            "accounting": 2,
+            "inventory":  3,
+            "design":     4,
+        }
+        if key in index_map:
+            self._stack.setCurrentIndex(index_map[key])
         elif key == "settings":
             clicked_btn.setChecked(False)
             dlg = SettingsDialog(self._app, parent=self)
             dlg.exec_()
-            # بعد تغيير الخط — أعد رسم أزرار الـ Sidebar
             self._sidebar.refresh_all_buttons()

@@ -9,7 +9,7 @@ from PyQt5.QtWidgets import (
 )
 from PyQt5.QtGui import QColor
 
-from db.inventory_repo import (
+from db.inventory.inventory_repo import (
     fetch_all_inventory, fetch_inventory_item, delete_inventory_item,
 )
 from ui.helpers import (

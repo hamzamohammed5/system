@@ -11,7 +11,7 @@ from PyQt5.QtWidgets import (
 )
 from PyQt5.QtCore import Qt
 
-from db.investors_repo import fetch_all_investors, link_investor_to_line
+from db.inventory.investors_repo import fetch_all_investors, link_investor_to_line
 from ui.events import bus
 from ._helpers import _spin
 

@@ -11,10 +11,10 @@ from PyQt5.QtWidgets import (
 )
 from PyQt5.QtCore import Qt
 
-from db.connection      import get_connection
-from db.inventory_repo  import fetch_inventory_item, insert_inventory_item, update_inventory_item
-from db.accounting_repo import fetch_leaf_accounts
-from db.items_repo      import fetch_items_by_type
+from db.shared.connection      import get_connection
+from db.inventory.inventory_repo  import fetch_inventory_item, insert_inventory_item, update_inventory_item
+from db.accounting.accounting_repo import fetch_leaf_accounts
+from db.shared.items_repo      import fetch_items_by_type
 from ui.helpers import EditModeMixin
 from ui.events  import bus
 

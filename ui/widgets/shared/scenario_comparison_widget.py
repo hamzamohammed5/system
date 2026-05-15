@@ -228,8 +228,8 @@ class ScenarioComparisonWidget(QFrame):
     def _calc_scenario_cost(self, scenario_id: int) -> float:
         """تكلفة سيناريو محدد — يحسب من صفوف الـ BOM مباشرة."""
         try:
-            from db.bom_scenarios_repo import fetch_bom_for_scenario
-            from db.items_repo import fetch_item
+            from db.costing.bom_scenarios_repo import fetch_bom_for_scenario
+            from db.shared.items_repo import fetch_item
             from models.costing_base import raw_unit_price, effective_qty
             from models.costing_ops import calc_labor_op_cost, calc_machine_op_cost
 

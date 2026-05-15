@@ -13,7 +13,7 @@ from models.costing_ops import (
     calc_labor_op_cost,
     calc_machine_op_cost,
 )
-from db.items_repo import fetch_item, fetch_bom
+from db.shared.items_repo import fetch_item, fetch_bom
 
 
 def _get_variant_id(row) -> int | None:

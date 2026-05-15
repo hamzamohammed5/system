@@ -8,7 +8,7 @@ from PyQt5.QtWidgets import (
     QWidget, QVBoxLayout, QPushButton, QTableWidgetItem, QMessageBox,
 )
 
-from db.operations_repo import fetch_all_labor_ops, delete_labor_op
+from db.costing.operations_repo import fetch_all_labor_ops, delete_labor_op
 from ui.helpers import (
     make_table, buttons_row, section_label, confirm_delete, danger_button,
 )

@@ -13,7 +13,7 @@ LaborTab — التبويب الرئيسي للعمالة.
 from PyQt5.QtWidgets import QWidget, QVBoxLayout, QTabWidget, QSplitter
 from PyQt5.QtCore import Qt
 
-from db.connection import get_connection
+from db.shared.connection import get_connection
 from ui.widgets.shared.category_manager import CategoryManager
 
 from .labor.labor_settings import _LaborSettingsPanel

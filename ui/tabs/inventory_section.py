@@ -12,7 +12,7 @@ ui/tabs/inventory_tab.py
 
 from PyQt5.QtWidgets import QWidget, QVBoxLayout, QTabWidget
 
-from db.connection import get_accounting_connection, get_inventory_connection
+from db.shared.connection import get_accounting_connection, get_inventory_connection
 
 from .inventory.inventory_items_tab    import _ItemsTab
 from .inventory.inventory_inbound_tab  import _InboundTab

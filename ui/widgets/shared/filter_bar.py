@@ -30,7 +30,7 @@ from PyQt5.QtWidgets import (
 from PyQt5.QtCore import pyqtSignal, Qt, QTimer
 from PyQt5.QtGui  import QColor
 
-from db.categories_repo import fetch_all_categories, build_tree
+from db.shared.categories_repo import fetch_all_categories, build_tree
 from ui.events import bus
 
 

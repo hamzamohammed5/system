@@ -12,7 +12,7 @@ from PyQt5.QtWidgets import (
 )
 from PyQt5.QtCore import Qt
 
-from db.operations_repo import (
+from db.costing.operations_repo import (
     fetch_labor_op, insert_labor_op, update_labor_op,
 )
 from ui.helpers import EditModeMixin, buttons_row

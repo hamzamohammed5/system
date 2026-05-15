@@ -1,5 +1,5 @@
 File Tree Snapshot
-Generated : 2026-05-15 13:45:01
+Generated : 2026-05-15 13:55:40
 Source    : D:\My Workspace\Hg\Alhabaar\accountant\system
 Extensions: .py
 ────────────────────────────────────────────────────────────
@@ -9,28 +9,32 @@ system/
 │   │   ├── accounting_accounts_repo.py
 │   │   ├── accounting_inventory_repo.py
 │   │   ├── accounting_journal_repo.py
+│   │   ├── accounting_repo.py
+│   │   ├── accounting_schema.py
 │   │   ├── accounting_schema_constants.py
 │   │   ├── accounting_schema_migrations.py
 │   │   ├── accounting_schema_seed.py
 │   │   └── accounting_statements_repo.py
-│   ├── accounting_repo.py
-│   ├── accounting_schema.py
-│   ├── bom_scenarios_repo.py
-│   ├── categories_repo.py
-│   ├── connection.py
+│   ├── costing/
+│   │   ├── bom_scenarios_repo.py
+│   │   ├── machine_op_rows_repo.py
+│   │   ├── operations_repo.py
+│   │   └── raw_variants_repo.py
+│   ├── inventory/
+│   │   ├── inventory_repo.py
+│   │   ├── inventory_schema.py
+│   │   └── investors_repo.py
+│   ├── pricing/
+│   │   ├── offers_repo.py
+│   │   └── pricing_repo.py
+│   ├── shared/
+│   │   ├── categories_repo.py
+│   │   ├── connection.py
+│   │   ├── items_repo.py
+│   │   ├── migrations.py
+│   │   └── migrations_v2.py
 │   ├── design_repo.py
 │   ├── design_schema.py
-│   ├── inventory_repo.py
-│   ├── inventory_schema.py
-│   ├── investors_repo.py
-│   ├── items_repo.py
-│   ├── machine_op_rows_repo.py
-│   ├── migrations.py
-│   ├── migrations_v2.py
-│   ├── offers_repo.py
-│   ├── operations_repo.py
-│   ├── pricing_repo.py
-│   ├── raw_variants_repo.py
 │   ├── schema.py
 │   └── settings_repo.py
 ├── models/
@@ -106,6 +110,9 @@ system/
 │   │   │   └── raw_tab.py
 │   │   ├── costing_section/
 │   │   ├── design/
+│   │   │   ├── compare_tab.py
+│   │   │   ├── design_categories_tab.py
+│   │   │   ├── dimension_sets_tab.py
 │   │   │   └── shapes_tab.py
 │   │   ├── inventory/
 │   │   │   ├── items/

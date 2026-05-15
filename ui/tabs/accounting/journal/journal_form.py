@@ -13,7 +13,7 @@ from PyQt5.QtWidgets import (
 )
 from PyQt5.QtCore import Qt, QDate
 
-from db.accounting_repo import (
+from db.accounting.accounting_repo import (
     insert_entry, add_entry_lines, validate_entry_balance,
 )
 from ui.helpers import buttons_row
@@ -222,7 +222,7 @@ class _JournalForm(QWidget):
         # ربط المستثمرين
         investor_links = self._lines_panel.get_all_investor_links()
         if investor_links and self.erp_conn:
-            from db.investors_repo import link_investor_to_line
+            from db.inventory.investors_repo import link_investor_to_line
             for link in investor_links:
                 inv_id    = link["investor_id"]
                 acc_type  = link["acc_type"]

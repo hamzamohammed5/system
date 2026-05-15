@@ -18,7 +18,7 @@ from PyQt5.QtWidgets import (
 )
 from PyQt5.QtCore import Qt
 
-from db.offers_repo import (
+from db.pricing.offers_repo import (
     fetch_offer, fetch_offer_items,
     insert_offer, update_offer,
     replace_offer_items,

@@ -8,7 +8,7 @@ from PyQt5.QtWidgets import QComboBox
 from PyQt5.QtCore    import Qt
 from PyQt5.QtGui     import QColor
 
-from db.categories_repo import fetch_all_categories, build_tree
+from db.shared.categories_repo import fetch_all_categories, build_tree
 from ui.events import bus
 
 

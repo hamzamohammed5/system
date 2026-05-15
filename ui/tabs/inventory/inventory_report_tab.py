@@ -15,7 +15,7 @@ from PyQt5.QtWidgets import (
 from PyQt5.QtCore import Qt
 from PyQt5.QtGui  import QColor
 
-from db.inventory_repo import (
+from db.inventory.inventory_repo import (
     fetch_all_inventory, fetch_inventory_item,
     fetch_inventory_moves,
 )

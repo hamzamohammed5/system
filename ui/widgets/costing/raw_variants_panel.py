@@ -21,7 +21,7 @@ from PyQt5.QtWidgets import (
 from PyQt5.QtCore import Qt
 from PyQt5.QtGui  import QColor
 
-from db.raw_variants_repo import (
+from db.costing.raw_variants_repo import (
     fetch_variants_for_item,
     insert_variant, update_variant, delete_variant,
     fetch_variant,

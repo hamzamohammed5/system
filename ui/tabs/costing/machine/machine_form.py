@@ -12,7 +12,7 @@ from PyQt5.QtWidgets import (
 )
 from PyQt5.QtCore import Qt
 
-from db.operations_repo import fetch_machine, insert_machine, update_machine
+from db.costing.operations_repo import fetch_machine, insert_machine, update_machine
 from ui.helpers import EditModeMixin, buttons_row
 from ui.widgets.shared.category_manager import CategoryCombo
 from ui.widgets.shared.scrollable_form import wrap_in_scroll

@@ -12,8 +12,8 @@ from PyQt5.QtWidgets import (
 from PyQt5.QtCore import Qt
 from PyQt5.QtGui  import QColor, QFont
 
-from db.accounting_repo import fetch_t_account
-from db.accounting_schema import TYPE_AR
+from db.accounting.accounting_repo import fetch_t_account
+from db.accounting.accounting_schema import TYPE_AR
 from ui.tabs.accounting.helpers import TYPE_COLORS
 from .ledger_filter_bar import _LedgerFilterBar
 from .ledger_stat_cards import _StatCards

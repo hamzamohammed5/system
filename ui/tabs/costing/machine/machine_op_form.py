@@ -16,12 +16,12 @@ from PyQt5.QtWidgets import (
 )
 from PyQt5.QtCore import Qt
 
-from db.operations_repo import (
+from db.costing.operations_repo import (
     fetch_machine, fetch_machine_op,
     fetch_all_machines,
     insert_machine_op, update_machine_op,
 )
-from db.machine_op_rows_repo import calc_op_total_cost
+from db.costing.machine_op_rows_repo import calc_op_total_cost
 from ui.helpers import EditModeMixin, buttons_row
 from ui.widgets.shared.category_manager import CategoryCombo
 from ui.widgets.shared.scrollable_form import wrap_in_scroll

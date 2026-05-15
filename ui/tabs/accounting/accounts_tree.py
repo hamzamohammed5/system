@@ -19,11 +19,11 @@ from PyQt5.QtWidgets import (
 from PyQt5.QtCore import Qt
 from PyQt5.QtGui  import QColor, QFont
 
-from db.accounting_repo import (
+from db.accounting.accounting_repo import (
     fetch_all_accounts, fetch_account, delete_account,
     fetch_all_groups, build_group_tree,
 )
-from db.accounting_schema import TYPE_AR, EQUITY_TYPES
+from db.accounting.accounting_schema import TYPE_AR, EQUITY_TYPES
 from ui.helpers import section_label, danger_button, confirm_delete
 from ui.events  import bus
 

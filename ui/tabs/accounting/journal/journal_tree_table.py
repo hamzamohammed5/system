@@ -13,7 +13,7 @@ from PyQt5.QtWidgets import (
 from PyQt5.QtCore import Qt, QTimer
 from PyQt5.QtGui  import QColor, QFont, QBrush
 
-from db.accounting_repo import (
+from db.accounting.accounting_repo import (
     fetch_all_entries, fetch_entry_lines,
     delete_entry,
 )

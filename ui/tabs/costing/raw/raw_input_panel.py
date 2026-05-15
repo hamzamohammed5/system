@@ -12,7 +12,7 @@ from PyQt5.QtWidgets import (
 )
 from PyQt5.QtCore import Qt
 
-from db.items_repo import fetch_item, insert_item, update_item
+from db.shared.items_repo import fetch_item, insert_item, update_item
 from ui.helpers import EditModeMixin, buttons_row
 from ui.widgets.shared.category_manager import CategoryCombo
 from ui.widgets.costing.raw_variants_panel import _RawVariantsPanel

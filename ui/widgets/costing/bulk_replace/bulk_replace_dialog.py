@@ -27,7 +27,7 @@ from PyQt5.QtWidgets import (
 from PyQt5.QtCore import Qt
 from PyQt5.QtGui  import QColor, QFont
 
-from db.items_repo  import fetch_item, replace_bom, fetch_bom
+from db.shared.items_repo  import fetch_item, replace_bom, fetch_bom
 from ui.events      import bus
 
 from .bulk_replace_helpers       import get_element_name, fetch_candidates

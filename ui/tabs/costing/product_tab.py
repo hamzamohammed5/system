@@ -12,7 +12,7 @@ ProductTab — التبويب الرئيسي للمنتجات (نصف مصنع /
 
 from PyQt5.QtWidgets import QWidget, QVBoxLayout, QTabWidget
 
-from db.connection import get_connection
+from db.shared.connection import get_connection
 from ui.widgets.shared.category_manager import CategoryManager
 
 from .product.product_main_panel import _ProductMainPanel

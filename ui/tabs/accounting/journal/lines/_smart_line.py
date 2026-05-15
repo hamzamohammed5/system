@@ -12,8 +12,8 @@ from PyQt5.QtWidgets import (
 )
 from PyQt5.QtCore import Qt
 
-from db.accounting_repo import fetch_account, get_normal_balance
-from db.accounting_schema import NORMAL_BALANCE
+from db.accounting.accounting_repo import fetch_account, get_normal_balance
+from db.accounting.accounting_schema import NORMAL_BALANCE
 from ui.events import bus
 from ..journal_account_picker import _AccountPickerButton
 
@@ -166,7 +166,7 @@ class _SmartLine(QFrame):
         if self.erp_conn is None:
             return
         try:
-            from db.investors_repo import fetch_all_investors
+            from db.inventory.investors_repo import fetch_all_investors
             prev = self.cmb_investor.currentData()
             self.cmb_investor.blockSignals(True)
             self.cmb_investor.clear()

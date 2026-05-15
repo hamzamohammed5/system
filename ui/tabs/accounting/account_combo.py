@@ -11,12 +11,12 @@ from PyQt5.QtWidgets import (
 from PyQt5.QtCore import Qt, QTimer
 from PyQt5.QtGui  import QColor, QFont
 
-from db.accounting_repo import (
+from db.accounting.accounting_repo import (
     fetch_leaf_accounts, fetch_account,
     fetch_all_groups, build_group_tree,
     get_normal_balance, _get_group_descendants,
 )
-from db.accounting_schema import TYPE_AR
+from db.accounting.accounting_schema import TYPE_AR
 from ui.events import bus
 from ui.font_utils import badge_style, badge_width
 from .helpers import TYPE_COLORS

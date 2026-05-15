@@ -18,7 +18,7 @@ from PyQt5.QtWidgets import (
 )
 from PyQt5.QtCore import Qt
 
-from db.items_repo  import fetch_items_by_type
+from db.shared.items_repo  import fetch_items_by_type
 from models.costing import calc_cost
 from ui.events      import bus
 

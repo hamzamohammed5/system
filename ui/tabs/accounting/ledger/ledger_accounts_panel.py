@@ -12,8 +12,8 @@ from PyQt5.QtWidgets import (
 from PyQt5.QtCore import Qt
 from PyQt5.QtGui  import QColor
 
-from db.accounting_repo import fetch_all_accounts
-from db.accounting_schema import TYPE_AR
+from db.accounting.accounting_repo import fetch_all_accounts
+from db.accounting.accounting_schema import TYPE_AR
 from ui.events import bus
 from ui.tabs.accounting.helpers import TYPE_COLORS
 

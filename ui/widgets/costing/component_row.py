@@ -387,7 +387,7 @@ class ComponentRow(QWidget):
             return
 
         try:
-            from db.machine_op_rows_repo import fetch_op_rows, calc_op_row_cost
+            from db.costing.machine_op_rows_repo import fetch_op_rows, calc_op_row_cost
             conn = self._get_conn()
             if conn is None:
                 self._hide_op_rows()
@@ -491,7 +491,7 @@ class ComponentRow(QWidget):
             return
 
         try:
-            from db.machine_op_rows_repo import calc_op_row_cost
+            from db.costing.machine_op_rows_repo import calc_op_row_cost
             conn = self._get_conn()
             if conn:
                 cost = calc_op_row_cost(conn, row_id)
@@ -514,7 +514,7 @@ class ComponentRow(QWidget):
             self._hide_variants()
             return
         try:
-            from db.raw_variants_repo import fetch_variants_for_item
+            from db.costing.raw_variants_repo import fetch_variants_for_item
             conn = self._get_conn()
             if conn is None:
                 self._hide_variants()
@@ -566,7 +566,7 @@ class ComponentRow(QWidget):
             self.lbl_variant_cost.setVisible(False)
             return
         try:
-            from db.raw_variants_repo import fetch_variant
+            from db.costing.raw_variants_repo import fetch_variant
             conn = self._get_conn()
             if not conn:
                 self.lbl_variant_cost.setVisible(False)
@@ -592,7 +592,7 @@ class ComponentRow(QWidget):
 
     def _get_conn(self):
         try:
-            from db.connection import get_connection
+            from db.shared.connection import get_connection
             return get_connection()
         except Exception:
             return None

@@ -11,7 +11,7 @@ from PyQt5.QtWidgets import (
 )
 from PyQt5.QtCore import Qt
 
-from db.connection import get_connection, get_accounting_connection
+from db.shared.connection import get_connection, get_accounting_connection
 
 # ── أجزاء الحسابات ──
 from .accounting.accounts_tree        import AccountsTreePanel
@@ -90,12 +90,12 @@ class AccountingTab(QWidget):
 
     def _init_schema(self):
         try:
-            from db.accounting_schema import create_accounting_tables
+            from db.accounting.accounting_schema import create_accounting_tables
             create_accounting_tables(self.acc_conn)
         except Exception as e:
             print(f"[AccountingTab] schema init error: {e}")
         try:
-            from db.investors_repo import create_investors_tables
+            from db.inventory.investors_repo import create_investors_tables
             create_investors_tables(self.erp_conn)
         except Exception as e:
             print(f"[AccountingTab] investors schema error: {e}")

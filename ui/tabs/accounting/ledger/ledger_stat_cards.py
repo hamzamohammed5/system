@@ -9,7 +9,7 @@ from PyQt5.QtWidgets import (
 )
 from PyQt5.QtCore import Qt
 
-from db.accounting_schema import TYPE_AR
+from db.accounting.accounting_schema import TYPE_AR
 
 
 class _StatCards(QFrame):

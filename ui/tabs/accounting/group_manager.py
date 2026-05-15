@@ -13,12 +13,12 @@ from PyQt5.QtWidgets import (
 from PyQt5.QtCore import Qt
 from PyQt5.QtGui  import QColor
 
-from db.accounting_repo import (
+from db.accounting.accounting_repo import (
     fetch_all_groups, fetch_group,
     insert_group, update_group, delete_group,
     build_group_tree,
 )
-from db.accounting_schema import TYPE_AR
+from db.accounting.accounting_schema import TYPE_AR
 from ui.helpers import section_label, danger_button
 from ui.events  import bus
 

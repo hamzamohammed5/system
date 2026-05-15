@@ -5,8 +5,8 @@ db/schema.py
 يُستدعى مرة واحدة عند التشغيل من main.py.
 """
 
-from db.connection  import get_connection, get_accounting_connection, get_inventory_connection
-from db.migrations  import run_migrations
+from db.shared.connection  import get_connection, get_accounting_connection, get_inventory_connection
+from db.shared.migrations  import run_migrations
 
 
 def init_db():
@@ -80,12 +80,12 @@ def init_db():
 
     # ── 2. قاعدة الحسابات (accounting.db) ──
     acc_conn = get_accounting_connection()
-    from db.accounting_schema import create_accounting_tables
+    from db.accounting.accounting_schema import create_accounting_tables
     create_accounting_tables(acc_conn)
     acc_conn.close()
 
     # ── 3. قاعدة المخزن (inventory.db) ──
     inv_conn = get_inventory_connection()
-    from db.inventory_schema import create_inventory_tables
+    from db.inventory.inventory_schema import create_inventory_tables
     create_inventory_tables(inv_conn)
     inv_conn.close()
