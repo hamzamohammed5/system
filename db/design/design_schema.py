@@ -30,6 +30,10 @@ def get_design_connection() -> sqlite3.Connection:
 
 
 def create_design_tables(conn):
+    # ══════════════════════════════════════════════════════
+    # الجداول الأساسية — بدون category_id في dimension_sets
+    # (يُضاف لاحقاً بـ migration آمن تحت)
+    # ══════════════════════════════════════════════════════
     conn.executescript("""
         -- ══════════════════════════════════════════════
         -- تصنيفات مجموعات المقاسات
@@ -46,7 +50,6 @@ def create_design_tables(conn):
         );
 
         -- الحقول الافتراضية (template) لكل تصنيف مقاسات
-        -- لما تنشئ مجموعة مقاسات من تصنيف معين، الحقول دي بتتنسخ تلقائياً
         CREATE TABLE IF NOT EXISTS dim_set_category_fields (
             id          INTEGER PRIMARY KEY AUTOINCREMENT,
             category_id INTEGER NOT NULL
@@ -62,7 +65,7 @@ def create_design_tables(conn):
         );
 
         -- ══════════════════════════════════════════════
-        -- تصنيفات التصميم (موجودة من قبل)
+        -- تصنيفات التصميم
         -- ══════════════════════════════════════════════
         CREATE TABLE IF NOT EXISTS design_categories (
             id         INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -73,14 +76,13 @@ def create_design_tables(conn):
             created_at TEXT    NOT NULL DEFAULT (datetime('now'))
         );
 
-        -- مجموعات المقاسات — أضفنا category_id
+        -- مجموعات المقاسات — بدون category_id (يُضاف بـ migration)
         CREATE TABLE IF NOT EXISTS dimension_sets (
             id          INTEGER PRIMARY KEY AUTOINCREMENT,
             name        TEXT    NOT NULL,
             description TEXT,
             unit        TEXT    NOT NULL DEFAULT 'mm',
             color       TEXT    NOT NULL DEFAULT '#1565c0',
-            category_id INTEGER REFERENCES dim_set_categories(id) ON DELETE SET NULL,
             created_at  TEXT    NOT NULL DEFAULT (datetime('now'))
         );
 
@@ -126,17 +128,33 @@ def create_design_tables(conn):
         CREATE INDEX IF NOT EXISTS idx_shapes_dimset     ON shapes(dim_set_id);
         CREATE INDEX IF NOT EXISTS idx_dimfields_set     ON dimension_fields(set_id);
         CREATE INDEX IF NOT EXISTS idx_shapedims_shape   ON shape_dimensions(shape_id);
-        CREATE INDEX IF NOT EXISTS idx_dimsets_category  ON dimension_sets(category_id);
         CREATE INDEX IF NOT EXISTS idx_dscfields_cat     ON dim_set_category_fields(category_id);
     """)
 
-    # Migration: أضف عمود category_id لو مش موجود (للـ DB القديمة)
+    # ══════════════════════════════════════════════════════
+    # Migration آمن: عمود category_id في dimension_sets
+    # يعمل مع DB جديدة وقديمة على حدٍّ سواء
+    # ══════════════════════════════════════════════════════
     try:
-        conn.execute("ALTER TABLE dimension_sets ADD COLUMN category_id INTEGER "
-                     "REFERENCES dim_set_categories(id) ON DELETE SET NULL")
+        conn.execute(
+            "ALTER TABLE dimension_sets ADD COLUMN category_id INTEGER "
+            "REFERENCES dim_set_categories(id) ON DELETE SET NULL"
+        )
         conn.commit()
     except Exception:
-        pass  # العمود موجود بالفعل
+        pass  # العمود موجود بالفعل — نتجاهل الخطأ
+
+    # ══════════════════════════════════════════════════════
+    # Migration آمن: فهرس category_id في dimension_sets
+    # ══════════════════════════════════════════════════════
+    try:
+        conn.execute(
+            "CREATE INDEX IF NOT EXISTS idx_dimsets_category "
+            "ON dimension_sets(category_id)"
+        )
+        conn.commit()
+    except Exception:
+        pass
 
     conn.commit()
     _seed_defaults(conn)
