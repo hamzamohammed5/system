@@ -1,5 +1,5 @@
 File Tree Snapshot
-Generated : 2026-05-15 14:24:14
+Generated : 2026-05-15 14:33:08
 Source    : D:\My Workspace\Hg\Alhabaar\accountant\system
 Extensions: .py
 ────────────────────────────────────────────────────────────
@@ -35,7 +35,8 @@ system/
 │   │   ├── connection.py
 │   │   ├── items_repo.py
 │   │   ├── migrations.py
-│   │   └── migrations_v2.py
+│   │   ├── migrations_v2.py
+│   │   └── migrations_v3.py
 │   ├── schema.py
 │   └── settings_repo.py
 ├── models/
@@ -113,6 +114,7 @@ system/
 │   │   ├── design/
 │   │   │   ├── compare_tab.py
 │   │   │   ├── design_categories_tab.py
+│   │   │   ├── dim_categories_tab.py
 │   │   │   ├── dimension_sets_tab.py
 │   │   │   └── shapes_tab.py
 │   │   ├── inventory/

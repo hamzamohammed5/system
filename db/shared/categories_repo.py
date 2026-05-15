@@ -1,8 +1,14 @@
 """
-db/categories_repo.py
+db/shared/categories_repo.py
 =====================
-عمليات قراءة/كتابة جدول categories — مع دعم التصنيفات الفرعية (شجرة).
+عمليات قراءة/كتابة جدول categories — مع دعم:
+  - التصنيفات الفرعية (شجرة)
+  - scope='design' للتصنيفات الخاصة بمجموعات المقاسات
+  - template_fields (JSON) لتخزين الحقول الافتراضية لكل تصنيف
+  - default_unit لتخزين الوحدة الافتراضية
 """
+
+import json
 
 SCOPES = {
     "all":     "الكل",
@@ -12,6 +18,7 @@ SCOPES = {
     "labor":   "العمالة",
     "machine": "التشغيل",
     "pricing": "التسعير",
+    "design":  "مجموعات المقاسات",
 }
 
 PRESET_COLORS = [
@@ -41,18 +48,29 @@ def fetch_all_categories(conn, scope: str = None):
     """).fetchall()
 
 
+def fetch_categories_by_scope(conn, scope: str):
+    """تصنيفات scope محدد فقط — بدون 'all'."""
+    return conn.execute("""
+        SELECT c.id, c.name, c.scope, c.color, c.parent_id,
+               c.template_fields, c.default_unit,
+               p.name AS parent_name
+        FROM   categories c
+        LEFT JOIN categories p ON p.id = c.parent_id
+        WHERE  c.scope = ?
+        ORDER  BY c.parent_id NULLS FIRST, c.name
+    """, (scope,)).fetchall()
+
+
 def fetch_category(conn, cat_id: int):
     return conn.execute(
-        "SELECT id, name, scope, color, parent_id FROM categories WHERE id=?",
+        """SELECT id, name, scope, color, parent_id,
+                  template_fields, default_unit
+           FROM categories WHERE id=?""",
         (cat_id,)
     ).fetchone()
 
 
 def fetch_descendants(conn, cat_id: int) -> list[int]:
-    """
-    يرجع IDs كل الأبناء والأحفاد (recursive) لتصنيف معين.
-    يشمل الـ cat_id نفسه.
-    """
     result = set()
     queue  = [cat_id]
     while queue:
@@ -68,25 +86,35 @@ def fetch_descendants(conn, cat_id: int) -> list[int]:
 
 
 def insert_category(conn, name: str, scope: str = "all",
-                    color: str = "#607d8b", parent_id: int = None) -> int:
+                    color: str = "#607d8b", parent_id: int = None,
+                    template_fields: list = None,
+                    default_unit: str = "mm") -> int:
+    fields_json = json.dumps(template_fields, ensure_ascii=False) if template_fields else None
     cur = conn.execute(
-        "INSERT INTO categories (name, scope, color, parent_id) VALUES (?, ?, ?, ?)",
-        (name, scope, color, parent_id)
+        """INSERT INTO categories
+           (name, scope, color, parent_id, template_fields, default_unit)
+           VALUES (?, ?, ?, ?, ?, ?)""",
+        (name, scope, color, parent_id, fields_json, default_unit or "mm")
     )
     conn.commit()
     return cur.lastrowid
 
 
 def update_category(conn, cat_id: int, name: str, scope: str,
-                    color: str, parent_id: int = None):
-    # منع التصنيف من أن يكون أبًا لنفسه أو لأحد أسلافه
+                    color: str, parent_id: int = None,
+                    template_fields: list = None,
+                    default_unit: str = "mm"):
     if parent_id is not None:
         descendants = fetch_descendants(conn, cat_id)
         if parent_id in descendants:
             raise ValueError("لا يمكن جعل تصنيف فرعياً لأحد أبنائه")
+    fields_json = json.dumps(template_fields, ensure_ascii=False) if template_fields else None
     conn.execute(
-        "UPDATE categories SET name=?, scope=?, color=?, parent_id=? WHERE id=?",
-        (name, scope, color, parent_id, cat_id)
+        """UPDATE categories
+           SET name=?, scope=?, color=?, parent_id=?,
+               template_fields=?, default_unit=?
+           WHERE id=?""",
+        (name, scope, color, parent_id, fields_json, default_unit or "mm", cat_id)
     )
     conn.commit()
 
@@ -97,29 +125,27 @@ def delete_category(conn, cat_id: int):
 
 
 def count_category_items(conn, cat_id: int) -> dict:
-    """كام عنصر في كل جدول بيستخدم التصنيف ده أو أي فرع منه."""
-    ids      = fetch_descendants(conn, cat_id)
+    ids          = fetch_descendants(conn, cat_id)
     placeholders = ",".join("?" * len(ids))
-    results  = {}
+    results      = {}
     for table, label in [
         ("items",       "عناصر"),
         ("labor_ops",   "عمليات عمالة"),
         ("machine_ops", "عمليات تشغيل"),
         ("machines",    "ماكينات"),
     ]:
-        row = conn.execute(
-            f"SELECT COUNT(*) as cnt FROM {table} "
-            f"WHERE category_id IN ({placeholders})", ids
-        ).fetchone()
-        results[label] = row["cnt"] if row else 0
+        try:
+            row = conn.execute(
+                f"SELECT COUNT(*) as cnt FROM {table} "
+                f"WHERE category_id IN ({placeholders})", ids
+            ).fetchone()
+            results[label] = row["cnt"] if row else 0
+        except Exception:
+            results[label] = 0
     return results
 
 
 def build_tree(rows) -> list[dict]:
-    """
-    يحوّل قايمة flat من التصنيفات لشجرة متداخلة.
-    كل node: {id, name, scope, color, parent_id, children: [...]}
-    """
     nodes = {
         r["id"]: {
             "id":        r["id"],
@@ -139,3 +165,80 @@ def build_tree(rows) -> list[dict]:
         else:
             roots.append(node)
     return roots
+
+
+# ══════════════════════════════════════════════════════════
+# Template Fields — حقول القالب الافتراضية للتصنيفات
+# (تُخزَّن كـ JSON في عمود template_fields)
+# ══════════════════════════════════════════════════════════
+
+def get_template_fields(conn, cat_id: int) -> list[dict]:
+    """
+    يرجع حقول القالب الافتراضية للتصنيف.
+    كل حقل: {name, label, unit, field_type, required, sort_order}
+    """
+    row = conn.execute(
+        "SELECT template_fields FROM categories WHERE id=?", (cat_id,)
+    ).fetchone()
+    if not row or not row["template_fields"]:
+        return []
+    try:
+        return json.loads(row["template_fields"])
+    except Exception:
+        return []
+
+
+def set_template_fields(conn, cat_id: int, fields: list[dict]):
+    """يحفظ حقول القالب الافتراضية للتصنيف."""
+    conn.execute(
+        "UPDATE categories SET template_fields=? WHERE id=?",
+        (json.dumps(fields, ensure_ascii=False), cat_id)
+    )
+    conn.commit()
+
+
+def apply_template_to_dimension_set(conn_erp, conn_design,
+                                     cat_id: int, set_id: int) -> int:
+    """
+    ينسخ حقول القالب من التصنيف (erp.db) إلى مجموعة المقاسات (designs.db).
+    يرجع عدد الحقول المنسوخة.
+    يتجاهل الحقول المكررة (نفس الـ name).
+
+    conn_erp    : connection لـ erp.db (فيه categories)
+    conn_design : connection لـ designs.db (فيه dimension_fields)
+    """
+    fields = get_template_fields(conn_erp, cat_id)
+    if not fields:
+        return 0
+
+    # الحقول الموجودة فعلاً في المجموعة
+    existing = {
+        r["name"] for r in conn_design.execute(
+            "SELECT name FROM dimension_fields WHERE set_id=?", (set_id,)
+        ).fetchall()
+    }
+
+    count = 0
+    for i, f in enumerate(fields):
+        name = f.get("name", "").strip()
+        if not name or name in existing:
+            continue
+        conn_design.execute(
+            """INSERT INTO dimension_fields
+               (set_id, name, label, unit, field_type, required, sort_order)
+               VALUES (?, ?, ?, ?, ?, ?, ?)""",
+            (
+                set_id,
+                name,
+                f.get("label", name),
+                f.get("unit", ""),
+                f.get("field_type", "number"),
+                1 if f.get("required", True) else 0,
+                f.get("sort_order", i),
+            )
+        )
+        existing.add(name)
+        count += 1
+
+    conn_design.commit()
+    return count

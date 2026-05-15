@@ -1,84 +1,76 @@
 """
 ui/tabs/design_section.py
 ==========================
-قسم "التصميمات" — يحتوي على تبويبات داخلية:
-  📐 الأشكال | 📏 المقاسات | 🏷 التصنيفات | 📊 الجدول المقارن
+قسم "التصميمات" — تبويبات داخلية:
+  📐 الأشكال | 📏 المجموعات | 📂 التصنيفات | 🏷 تصنيفات الأشكال | 📊 الجدول المقارن
 """
 
-from PyQt5.QtWidgets import (
-    QWidget, QVBoxLayout, QHBoxLayout, QLabel, QTabWidget,
-)
+from PyQt5.QtWidgets import QWidget, QVBoxLayout, QLabel, QTabWidget
 from PyQt5.QtCore import Qt
 
 from db.design.design_schema import get_design_connection, create_design_tables
+from db.shared.connection import get_connection
 
-# ── Import التبويبات الداخلية ──
-from ui.tabs.design.shapes_tab        import ShapesTab
-from ui.tabs.design.dimension_sets_tab import DimensionSetsTab
-from ui.tabs.design.design_categories_tab import DesignCategoriesTab
-from ui.tabs.design.compare_tab       import CompareTab
+from ui.tabs.design.shapes_tab             import ShapesTab
+from ui.tabs.design.dimension_sets_tab     import DimensionSetsTab
+from ui.tabs.design.dim_categories_tab     import DimCategoriesTab       # ← جديد
+from ui.tabs.design.design_categories_tab  import DesignCategoriesTab
+from ui.tabs.design.compare_tab            import CompareTab
 
 _TAB_STYLE = """
-    QTabWidget::pane {
-        border: none;
-        background: #f9f9f9;
-    }
-    QTabBar {
-        alignment: right;
-    }
+    QTabWidget::pane { border:none; background:#f9f9f9; }
+    QTabBar { alignment: right; }
     QTabBar::tab {
-        background: #f0f0f0;
-        border: 1px solid #ddd;
-        border-bottom: none;
-        padding: 8px 14px;
-        margin-left: 3px;
-        font-size: 12px;
-        color: #555;
-        min-width: 90px;
+        background:#f0f0f0; border:1px solid #ddd; border-bottom:none;
+        padding:8px 14px; margin-left:3px; font-size:12px; color:#555;
+        min-width:90px;
     }
     QTabBar::tab:selected {
-        background: #ffffff;
-        color: #6a1b9a;
-        font-weight: bold;
-        border-top: 3px solid #6a1b9a;
-        padding-top: 6px;
+        background:#ffffff; color:#1565c0; font-weight:bold;
+        border-top:3px solid #1565c0; padding-top:6px;
     }
-    QTabBar::tab:hover:!selected {
-        background: #f3e5f5;
-        color: #6a1b9a;
-    }
+    QTabBar::tab:hover:!selected { background:#e3f2fd; color:#1565c0; }
 """
 
 
 class DesignSection(QWidget):
     def __init__(self, parent=None):
         super().__init__(parent)
-        # تهيئة قاعدة البيانات
-        self._conn = get_design_connection()
+        self._conn     = get_design_connection()
+        self._conn_erp = get_connection("costing")
         create_design_tables(self._conn)
+        self._ensure_category_id_column()
         self._build()
+
+    def _ensure_category_id_column(self):
+        """يضيف عمود category_id لجدول dimension_sets لو مش موجود."""
+        try:
+            cols = {r["name"] for r in
+                    self._conn.execute("PRAGMA table_info(dimension_sets)").fetchall()}
+            if "category_id" not in cols:
+                self._conn.execute(
+                    "ALTER TABLE dimension_sets ADD COLUMN category_id INTEGER"
+                )
+                self._conn.commit()
+        except Exception as e:
+            print(f"[DesignSection] ensure category_id: {e}")
 
     def _build(self):
         layout = QVBoxLayout(self)
         layout.setContentsMargins(0, 0, 0, 0)
         layout.setSpacing(0)
 
-        # ── رأس القسم ──
         header = QLabel("  🎨  إدارة التصميمات")
         header.setFixedHeight(42)
         header.setStyleSheet("""
             QLabel {
-                background: #ffffff;
-                border-bottom: 1px solid #e0e0e0;
-                font-size: 14px;
-                font-weight: bold;
-                color: #6a1b9a;
-                padding-right: 16px;
+                background:#ffffff; border-bottom:1px solid #e0e0e0;
+                font-size:14px; font-weight:bold; color:#1565c0;
+                padding-right:16px;
             }
         """)
         layout.addWidget(header)
 
-        # ── التبويبات ──
         tabs = QTabWidget()
         tabs.setTabPosition(QTabWidget.North)
         tabs.setStyleSheet(_TAB_STYLE)
@@ -86,9 +78,15 @@ class DesignSection(QWidget):
         tabs.setElideMode(Qt.ElideNone)
         tabs.tabBar().setExpanding(False)
 
-        tabs.addTab(ShapesTab(self._conn),          "📐  الأشكال")
-        tabs.addTab(DimensionSetsTab(self._conn),   "📏  مجموعات المقاسات")
-        tabs.addTab(DesignCategoriesTab(self._conn),"🏷  التصنيفات")
-        tabs.addTab(CompareTab(self._conn),         "📊  الجدول المقارن")
+        tabs.addTab(ShapesTab(self._conn),
+                    "📐  الأشكال")
+        tabs.addTab(DimensionSetsTab(self._conn),
+                    "📏  مجموعات المقاسات")
+        tabs.addTab(DimCategoriesTab(self._conn_erp),
+                    "📂  تصنيفات المقاسات")     # ← جديد
+        tabs.addTab(DesignCategoriesTab(self._conn),
+                    "🏷  تصنيفات الأشكال")
+        tabs.addTab(CompareTab(self._conn),
+                    "📊  الجدول المقارن")
 
         layout.addWidget(tabs)
