@@ -84,42 +84,50 @@ def _open_gimp(xcf_path: str = None,
 
         if width_px and height_px:
             import tempfile
-            w = int(round(width_px))
-            h = int(round(height_px))
+            from PIL import Image
 
-            # GIMP 3 Script-Fu syntax
-            script_content = (
-                f"(let* ("
-                f"(image (car (gimp-image-new {w} {h} RGB)))"
-                f"(layer (car (gimp-layer-new image {w} {h} RGBA-IMAGE \"Background\" 100 LAYER-MODE-NORMAL-LEGACY)))"
-                f")"
-                f"(gimp-image-insert-layer image layer 0 -1)"
-                f"(gimp-display-new image)"
-                f")"
-            )
+            # تحويل الوحدات إلى px
+            DPI = 96
+            MM_TO_PX = DPI / 25.4
 
+            unit_lower = (unit or "px").lower().strip()
+
+            if unit_lower in ("mm", "مم"):
+                w = int(round(width_px  * MM_TO_PX))
+                h = int(round(height_px * MM_TO_PX))
+            elif unit_lower in ("cm", "سم"):
+                w = int(round(width_px  * MM_TO_PX * 10))
+                h = int(round(height_px * MM_TO_PX * 10))
+            elif unit_lower in ("in", "inch", "انش"):
+                w = int(round(width_px  * DPI))
+                h = int(round(height_px * DPI))
+            else:
+                # px — بدون تحويل
+                w = int(round(width_px))
+                h = int(round(height_px))
+
+            # طبقة شفافة
             tmp = tempfile.NamedTemporaryFile(
-                mode="w",
-                suffix=".scm",
-                delete=False,
-                encoding="utf-8"
+                suffix=".png",
+                delete=False
             )
-            tmp.write(script_content)
-            tmp.flush()
             tmp.close()
 
-            script_path = tmp.name.replace("\\", "/")
+            img = Image.new("RGBA", (w, h), (0, 0, 0, 0))
+            img.save(tmp.name)
 
-            subprocess.Popen([
-                gimp_exe,
-                "--no-splash",
-                "--batch-interpreter=plug-in-script-fu-eval",
-                "-b", f'(load "{script_path}")',
-            ])
+            subprocess.Popen([gimp_exe, tmp.name])
             return True
 
         subprocess.Popen([gimp_exe])
         return True
+
+    except ImportError:
+        QMessageBox.warning(
+            None, "مكتبة ناقصة",
+            "تحتاج تثبيت Pillow:\n\npip install Pillow"
+        )
+        return False
 
     except Exception as e:
         QMessageBox.critical(None, "خطأ", f"فشل فتح GIMP:\n{e}")
