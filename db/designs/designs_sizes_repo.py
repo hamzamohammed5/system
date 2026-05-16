@@ -26,6 +26,7 @@ def fetch_design_sizes(conn, design_id: int) -> list:
             ds.notes,
             ds.sort_order,
             ds.created_at,
+            COALESCE(ds.dpi, 300) AS dpi,
             dset.name   AS set_name,
             inst.name   AS instance_name,
             wf.label    AS width_label,
@@ -53,6 +54,7 @@ def fetch_design_size(conn, size_id: int):
             ds.xcf_path,
             ds.notes,
             ds.sort_order,
+            COALESCE(ds.dpi, 300) AS dpi,
             dset.name    AS set_name,
             inst.name    AS instance_name,
             wf.label     AS width_label,
@@ -73,7 +75,7 @@ def fetch_design_size(conn, size_id: int):
 def insert_design_size(conn, design_id: int, set_id: int, instance_id: int,
                        width_field_id: int = None, height_field_id: int = None,
                        xcf_path: str = None, notes: str = "",
-                       sort_order: int = None) -> int:
+                       sort_order: int = None, dpi: int = 300) -> int:
     if sort_order is None:
         cnt = conn.execute(
             "SELECT COUNT(*) as c FROM design_sizes WHERE design_id=?",
@@ -84,10 +86,10 @@ def insert_design_size(conn, design_id: int, set_id: int, instance_id: int,
     cur = conn.execute(
         """INSERT INTO design_sizes
            (design_id, set_id, instance_id, width_field_id, height_field_id,
-            xcf_path, notes, sort_order)
-           VALUES (?, ?, ?, ?, ?, ?, ?, ?)""",
+            xcf_path, notes, sort_order, dpi)
+           VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)""",
         (design_id, set_id, instance_id, width_field_id, height_field_id,
-         xcf_path or None, notes or "", sort_order)
+         xcf_path or None, notes or "", sort_order, dpi)
     )
     conn.commit()
     return cur.lastrowid
@@ -95,12 +97,12 @@ def insert_design_size(conn, design_id: int, set_id: int, instance_id: int,
 
 def update_design_size(conn, size_id: int,
                        width_field_id: int = None, height_field_id: int = None,
-                       xcf_path: str = None, notes: str = ""):
+                       xcf_path: str = None, notes: str = "", dpi: int = 300):
     conn.execute(
         """UPDATE design_sizes
-           SET width_field_id=?, height_field_id=?, xcf_path=?, notes=?
+           SET width_field_id=?, height_field_id=?, xcf_path=?, notes=?, dpi=?
            WHERE id=?""",
-        (width_field_id, height_field_id, xcf_path or None, notes or "", size_id)
+        (width_field_id, height_field_id, xcf_path or None, notes or "", dpi, size_id)
     )
     conn.commit()
 
@@ -125,7 +127,7 @@ def delete_design_size(conn, size_id: int):
 
 def fetch_canvas_size(conn, size_id: int) -> tuple[float | None, float | None]:
     """
-    يرجع (width_px, height_px) من قيم الـ instance.
+    يرجع (width_val, height_val) من قيم الـ instance.
     يرجع (None, None) لو الحقول غير محددة أو القيم ناقصة.
     """
     row = conn.execute(

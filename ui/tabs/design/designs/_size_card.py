@@ -35,25 +35,20 @@ _TEXT_MUTED = "#7a869a"
 # وحدات GIMP الداخلية (Script-Fu)
 # ══════════════════════════════════════════════════════════
 
-# GIMP يعرّف الوحدات داخلياً كأرقام صحيحة في Script-Fu:
-# UNIT-PIXEL = 0  /  UNIT-MM = 2  /  UNIT-CM = 3
-# UNIT-INCH  = 4  /  UNIT-PT = 5  /  UNIT-PICA = 6
 _GIMP_UNIT_MAP = {
-    "px":    0,   # UNIT-PIXEL — بكسل (fallback)
-    "mm":    2,   # UNIT-MM — مليمتر (مباشر بدون تحويل)
-    "cm":    3,   # UNIT-CM — سنتيمتر
-    "inch":  4,   # UNIT-INCH — بوصة
+    "px":    0,
+    "mm":    2,
+    "cm":    3,
+    "inch":  4,
     "in":    4,
-    "pt":    5,   # UNIT-PT — نقطة
-    "m":     2,   # متر → نُحوّله لـ mm قبل الإرسال
+    "pt":    5,
+    "m":     2,
 }
 
-# DPI المرجعي — يُستخدم فقط للـ px كـ fallback
 _GIMP_DPI = 96.0
 
 
 def _unit_is_native(unit: str) -> bool:
-    """هل الوحدة مدعومة مباشرة في GIMP Script-Fu بدون تحويل لـ px؟"""
     return unit.strip().lower() in ("mm", "cm", "inch", "in", "pt")
 
 
@@ -61,16 +56,10 @@ def _prepare_native_dims(value_w: float, value_h: float,
                           unit: str, dpi: float = 300.0) -> tuple[int, int, int, float]:
     """
     يُعيد (w_px, h_px, gimp_unit_id, dpi) للإرسال لـ Script-Fu.
-
-    - gimp-image-new يقبل pixels دائماً → نحوّل بالـ DPI المطلوب
-    - gimp-image-set-unit + gimp-image-set-resolution يضبطان العرض في GIMP
-      بحيث يظهر الـ ruler والخصائص بالوحدة الأصلية (mm/cm/inch)
-    - m → تُحوَّل لـ mm أولاً
     """
     u = unit.strip().lower()
 
     if u == "m":
-        # متر → mm أولاً
         value_w = value_w * 1000
         value_h = value_h * 1000
         u = "mm"
@@ -82,14 +71,7 @@ def _prepare_native_dims(value_w: float, value_h: float,
 
 
 def _to_px(value: float, unit: str, dpi: float = 300.0) -> int:
-    """
-    يحوّل قيمة من الوحدة المحددة إلى pixels بناءً على الـ DPI.
-
-    gimp-image-new يقبل pixels فقط — الوحدة تُضبط لاحقاً بـ gimp-image-set-unit
-    بحيث يعرض GIMP الأبعاد بالوحدة الأصلية في الـ ruler وخصائص الصورة.
-
-    dpi=300 مناسب للطباعة (يمكن تغييره حسب الحاجة).
-    """
+    """يحوّل قيمة من الوحدة المحددة إلى pixels بناءً على الـ DPI."""
     u = unit.strip().lower()
     if u == "px":
         return max(1, int(round(value)))
@@ -148,66 +130,15 @@ def _find_gimp() -> str | None:
     return None
 
 
-def _build_gimp_script(w_px: int, h_px: int,
-                        gimp_unit_id: int,
-                        dpi: float,
-                        save_path: str) -> tuple[str, str]:
-    """
-    يبني سكريبت Python-Fu لـ GIMP 3 (gi.repository.Gimp).
-    يرجع (interpreter, script).
-
-    GIMP 3 API:
-      - Gimp.image_new(w, h, Gimp.ImageBaseType.RGB)
-      - Gimp.Layer.new(image, name, w, h, type, opacity, mode)
-      - Gimp.file_overwrite_image / xcf_save
-    """
-    safe_path = save_path.replace("\\", "/")
-    dpi_int   = int(round(dpi))
-
-    # unit_expr: تحديد الوحدة حسب gimp_unit_id
-    unit_map = {
-        0: "Gimp.Unit.PIXEL",
-        2: "Gimp.Unit.MM",
-        3: "Gimp.Unit.CM",
-        4: "Gimp.Unit.INCH",
-        5: "Gimp.Unit.POINT",
-    }
-    unit_expr = unit_map.get(gimp_unit_id, "Gimp.Unit.MM")
-
-    script = (
-        "import gi; "
-        "gi.require_version('Gimp', '3.0'); "
-        "from gi.repository import Gimp, GLib, Gio; "
-        f"image = Gimp.image_new({w_px}, {h_px}, Gimp.ImageBaseType.RGB); "
-        f"image.set_unit({unit_expr}); "
-        f"image.set_resolution({dpi_int}, {dpi_int}); "
-        f"layer = Gimp.Layer.new(image, 'Background', {w_px}, {h_px}, "
-        f"Gimp.ImageType.RGBA_IMAGE, 100.0, Gimp.LayerMode.NORMAL); "
-        f"image.insert_layer(layer, None, -1); "
-        f"Gimp.edit_fill(layer, Gimp.FillType.TRANSPARENT); "
-        f"file = Gio.File.new_for_path('{safe_path}'); "
-        f"Gimp.xcf_save(0, image, layer, file); "
-        f"Gimp.exit(0)"
-    )
-    return "python-fu-eval", script
-    return script
-
-
 def _open_gimp(xcf_path: str = None,
                width_val: float = None, height_val: float = None,
-               unit: str = "px"):
+               unit: str = "px", dpi: float = 300.0):
     """
-    يفتح GIMP مع ملف موجود أو يُنشئ PNG مؤقت شفاف بالأبعاد المحددة.
+    يفتح GIMP مع ملف موجود أو يُنشئ PNG مؤقت شفاف بالأبعاد المحددة والـ DPI المختار.
 
-    الطريقة: PIL ينشئ PNG شفاف بالـ px المحسوبة من الوحدة والـ DPI،
-    مع ضبط الـ dpi metadata في الـ PNG نفسه بحيث GIMP يفتحه
-    بالأبعاد الحقيقية (mm/cm/inch) في الـ ruler.
-
-    - mm  → DPI=300 (طباعة)، px = mm/25.4*300
-    - cm  → DPI=300، px = cm/2.54*300
-    - inch→ DPI=300، px = inch*300
-    - m   → DPI=300، px = m/0.0254*300
-    - px  → DPI=96 (screen)، px = القيمة مباشرة
+    - dpi: الدقة المطلوبة للكانفاس الجديد (من إعداد المستخدم)
+    - mm/cm/inch/m → يحوّل لـ px بالـ dpi المحدد
+    - px → يستخدم القيمة مباشرة بغض النظر عن الـ dpi
     """
     gimp_exe = _find_gimp()
     if not gimp_exe:
@@ -231,22 +162,17 @@ def _open_gimp(xcf_path: str = None,
 
             u = unit.strip().lower()
 
-            # DPI حسب الوحدة
-            if u == "px":
-                dpi = 96.0
-            else:
-                dpi = 300.0  # دقة طباعة مناسبة لـ mm/cm/inch/m
+            # px لا يستفيد من الـ dpi — نستخدم القيمة مباشرة
+            actual_dpi = 96.0 if u == "px" else float(dpi)
 
-            # حساب الأبعاد بالـ px
-            w_px = _to_px(width_val,  unit, dpi)
-            h_px = _to_px(height_val, unit, dpi)
+            w_px = _to_px(width_val,  unit, actual_dpi)
+            h_px = _to_px(height_val, unit, actual_dpi)
 
-            # PNG مؤقت شفاف مع DPI metadata
             tmp = tempfile.NamedTemporaryFile(suffix=".png", delete=False)
             tmp.close()
 
             img = Image.new("RGBA", (w_px, h_px), (0, 0, 0, 0))
-            img.save(tmp.name, dpi=(dpi, dpi))
+            img.save(tmp.name, dpi=(actual_dpi, actual_dpi))
 
             subprocess.Popen([gimp_exe, tmp.name])
             return True
@@ -329,25 +255,15 @@ class _SizeCard(QFrame):
         lbl_name  = QLabel(f"<b>{inst_name}</b>  <span style='color:{_TEXT_MUTED}'>({set_name})</span>")
         lbl_name.setStyleSheet(f"font-size: 13px; color: {_TEXT}; background: transparent; border: none;")
 
-        # ── أبعاد الكانفاس مع الوحدة ──
+        # ── أبعاد الكانفاس مع الوحدة والـ DPI ──
         w, h  = fetch_canvas_size(self.conn, self._size_id)
         unit  = _unit_for_set(self.conn, self._data["set_id"])
+        dpi   = self._data["dpi"] if self._data["dpi"] else 300
 
         if w is not None and h is not None:
-            dims_txt = f"📐  {w:g} × {h:g} {unit}"
-
-            # نُظهر تحويل px فقط للوحدات غير الأصيلة (px نفسه)
-            # للـ mm/cm/inch لا نُظهر تحويلاً لأن الوحدة نفسها ستُستخدم في GIMP
-            if not _unit_is_native(unit):
-                # px أو وحدة غير معروفة → نُظهر العدد فقط
-                pass
-            else:
-                try:
-                    w_lbl = self._data["width_label"]
-                except (KeyError, IndexError):
-                    w_lbl = None
-                if w_lbl:
-                    dims_txt += f"  ({w_lbl} × {self._data['height_label']})"
+            w_px = _to_px(w, unit, dpi)
+            h_px = _to_px(h, unit, dpi)
+            dims_txt = f"📐  {w:g} × {h:g} {unit}  →  {w_px} × {h_px} px  @  {dpi} DPI"
         else:
             dims_txt = "📐  الأبعاد غير محددة"
 
@@ -474,6 +390,7 @@ class _SizeCard(QFrame):
     def _create_in_gimp(self):
         w, h  = fetch_canvas_size(self.conn, self._size_id)
         unit  = _unit_for_set(self.conn, self._data["set_id"])
+        dpi   = self._data["dpi"] if self._data["dpi"] else 300
 
         inst_name    = (self._data["instance_name"] or "design").replace(" ", "_")
         default_name = f"{inst_name}.xcf"
@@ -504,16 +421,19 @@ class _SizeCard(QFrame):
 
         # ── افتح GIMP مع رسالة توضيحية ──
         if w and h:
-            w_px, h_px, gimp_uid, dpi = _prepare_native_dims(w, h, unit)
+            u = unit.strip().lower()
+            actual_dpi = 96.0 if u == "px" else float(dpi)
 
-            if _unit_is_native(unit) or unit.lower() == "m":
+            w_px, h_px, gimp_uid, _ = _prepare_native_dims(w, h, unit, actual_dpi)
+
+            if _unit_is_native(unit) or u == "m":
                 dims_display = f"{w:g} × {h:g} {unit}"
-                if unit.lower() == "m":
+                if u == "m":
                     dims_display += f"  (→ {w*1000:g} × {h*1000:g} mm في GIMP)"
-                native_note = f"📌  الأبعاد بالبكسل: {w_px} × {h_px} px  @  {int(dpi)} DPI"
+                native_note = f"📌  الأبعاد بالبكسل: {w_px} × {h_px} px  @  {int(actual_dpi)} DPI"
             else:
                 dims_display = f"{w:g} × {h:g} {unit}"
-                native_note  = f"📌  الأبعاد: {w_px} × {h_px} px"
+                native_note  = f"📌  الأبعاد: {w_px} × {h_px} px  @  {int(actual_dpi)} DPI"
 
             msg = (
                 f"سيُنشئ GIMP كانفاساً شفافاً.\n\n"
@@ -525,10 +445,11 @@ class _SizeCard(QFrame):
             QMessageBox.information(self, "📐  إنشاء كانفاس في GIMP", msg)
 
             _open_gimp(
-                xcf_path  = save_path,
-                width_val = w,
-                height_val= h,
-                unit      = unit,
+                xcf_path   = save_path,
+                width_val  = w,
+                height_val = h,
+                unit       = unit,
+                dpi        = actual_dpi,
             )
         else:
             msg = (
