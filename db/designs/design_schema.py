@@ -33,7 +33,7 @@ def _table_exists(conn, table: str) -> bool:
 
 
 def _run_migrations(conn):
-    """Migrations آمنة على designs.db — تُضاف أعمدة جديدة بدون حذف بيانات."""
+    """Migrations آمنة على designs.db."""
 
     # ══ 1. source_set_id في dimension_field_deps ══
     if _table_exists(conn, "dimension_field_deps"):
@@ -77,12 +77,15 @@ def _run_migrations(conn):
     from db.designs.migrations_v5 import run_migrations_v5
     run_migrations_v5(conn)
 
+    # ══ 5. migration v6 — preview_image في designs ══
+    from db.designs.migrations_v6 import run_migrations_v6
+    run_migrations_v6(conn)
+
 
 def create_designs_tables(conn):
     """إنشاء كل جداول designs.db ثم تنفيذ الـ migrations."""
 
     conn.executescript("""
-        -- تصنيفات التصميمات
         CREATE TABLE IF NOT EXISTS design_categories (
             id              INTEGER PRIMARY KEY AUTOINCREMENT,
             name            TEXT    NOT NULL,
@@ -91,7 +94,6 @@ def create_designs_tables(conn):
             notes           TEXT
         );
 
-        -- مجموعات المقاسات
         CREATE TABLE IF NOT EXISTS dimension_sets (
             id              INTEGER PRIMARY KEY AUTOINCREMENT,
             name            TEXT    NOT NULL,
@@ -101,7 +103,6 @@ def create_designs_tables(conn):
             created_at      TEXT    NOT NULL DEFAULT (datetime('now'))
         );
 
-        -- حقول مجموعة المقاسات
         CREATE TABLE IF NOT EXISTS dimension_fields (
             id          INTEGER PRIMARY KEY AUTOINCREMENT,
             set_id      INTEGER NOT NULL REFERENCES dimension_sets(id) ON DELETE CASCADE,
@@ -114,7 +115,6 @@ def create_designs_tables(conn):
             sort_order  INTEGER NOT NULL DEFAULT 0
         );
 
-        -- اعتماديات حقل على حقل آخر (مع دعم cross-set)
         CREATE TABLE IF NOT EXISTS dimension_field_deps (
             id              INTEGER PRIMARY KEY AUTOINCREMENT,
             field_id        INTEGER NOT NULL
@@ -128,7 +128,6 @@ def create_designs_tables(conn):
             UNIQUE(field_id)
         );
 
-        -- instances مجموعة المقاسات (كل instance = مجموعة قيم مسماة)
         CREATE TABLE IF NOT EXISTS dimension_set_instances (
             id         INTEGER PRIMARY KEY AUTOINCREMENT,
             set_id     INTEGER NOT NULL
@@ -139,7 +138,6 @@ def create_designs_tables(conn):
             created_at TEXT    NOT NULL DEFAULT (datetime('now'))
         );
 
-        -- قيم الحقول لكل instance
         CREATE TABLE IF NOT EXISTS dimension_set_values (
             id          INTEGER PRIMARY KEY AUTOINCREMENT,
             set_id      INTEGER NOT NULL
@@ -153,17 +151,16 @@ def create_designs_tables(conn):
             UNIQUE(instance_id, field_id)
         );
 
-        -- التصميمات
         CREATE TABLE IF NOT EXISTS designs (
-            id          INTEGER PRIMARY KEY AUTOINCREMENT,
-            name        TEXT    NOT NULL,
-            category_id INTEGER REFERENCES design_categories(id) ON DELETE SET NULL,
-            notes       TEXT,
-            created_at  TEXT    NOT NULL DEFAULT (datetime('now')),
-            updated_at  TEXT    NOT NULL DEFAULT (datetime('now'))
+            id              INTEGER PRIMARY KEY AUTOINCREMENT,
+            name            TEXT    NOT NULL,
+            category_id     INTEGER REFERENCES design_categories(id) ON DELETE SET NULL,
+            notes           TEXT,
+            preview_image   TEXT,
+            created_at      TEXT    NOT NULL DEFAULT (datetime('now')),
+            updated_at      TEXT    NOT NULL DEFAULT (datetime('now'))
         );
 
-        -- ربط التصميم بالمقاسات الفعلية (instances) + مسار GIMP
         CREATE TABLE IF NOT EXISTS design_sizes (
             id              INTEGER PRIMARY KEY AUTOINCREMENT,
             design_id       INTEGER NOT NULL
@@ -183,7 +180,6 @@ def create_designs_tables(conn):
             UNIQUE(design_id, instance_id)
         );
 
-        -- جداول قديمة للتوافق (design_dimensions, design_dim_values) ══
         CREATE TABLE IF NOT EXISTS design_dimensions (
             id          INTEGER PRIMARY KEY AUTOINCREMENT,
             design_id   INTEGER NOT NULL REFERENCES designs(id) ON DELETE CASCADE,
@@ -206,5 +202,4 @@ def create_designs_tables(conn):
     """)
     conn.commit()
 
-    # تنفيذ الـ migrations على قواعد البيانات الموجودة
     _run_migrations(conn)
