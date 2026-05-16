@@ -1,53 +1,42 @@
 """
 ui/tabs/design/designs/_xcf_thumbnail.py
 =========================================
-استخراج thumbnail من ملفات XCF (GIMP) بطريقتين:
+استخراج thumbnail من ملفات XCF — نسخة مُصلَحة ومتينة.
 
-  1. القراءة المباشرة من ترويسة XCF — بدون أي أدوات خارجية
-     • XCF ≥ 2.10 يخزن thumbnail مدمج (IKON) في نهاية الملف
-     • نستخدم بنية الـ property list الموجودة في كل XCF
+الأولويات:
+  1. GIMP thumbnail cache (freedesktop standard PNG) — أسرع وأضمن
+  2. قراءة PROP_THUMBNAIL من XCF مباشرة — بدون أدوات خارجية
+  3. GIMP batch export — fallback أخير
 
-  2. Pillow كـ fallback:
-     • لو فشلت الطريقة الأولى نحاول قراءة الـ PNG thumbnail
-       المضمّن اللي GIMP يكتبه في بداية ملف XCF 2.10+
-
-  3. GIMP Script-Fu كـ fallback أخير:
-     • نستخدم GIMP بالـ batch mode لتصدير الـ thumbnail
-     • أبطأ لكنه يعمل مع أي إصدار
-
-الإخراج دائماً QPixmap جاهز للعرض، أو None لو فشل الاستخراج.
+Cache داخلي بالـ mtime لتجنب إعادة القراءة.
 """
 
 from __future__ import annotations
+
+import hashlib
 import os
 import struct
 import tempfile
 import subprocess
-from pathlib import Path
 
-from PyQt5.QtGui import QPixmap, QImage
+from PyQt5.QtGui  import QPixmap, QImage
 from PyQt5.QtCore import Qt
 
+# ── Cache: xcf_path → (mtime, QPixmap) ─────────────────
+_CACHE: dict[str, tuple[float, QPixmap]] = {}
 
-# ── ثوابت بنية XCF ──────────────────────────────────────
-_XCF_MAGIC        = b"gimp xcf "
-_PROP_THUMBNAIL   = 1028          # PROP_THUMBNAIL في XCF spec
-_PROP_END         = 0
-_THUMB_MAX        = 256           # الحد الأقصى لـ thumbnail في الذاكرة
-_CACHE: dict[str, tuple[float, QPixmap]] = {}   # path → (mtime, pixmap)
+# ── XCF constants ───────────────────────────────────────
+_XCF_MAGIC      = b"gimp xcf "
+_PROP_END       = 0
+_PROP_THUMBNAIL = 1028
+_MAX_PROPS      = 300
 
 
 # ════════════════════════════════════════════════════════
-# الدالة الرئيسية — Public API
+# Public API
 # ════════════════════════════════════════════════════════
 
-def get_xcf_thumbnail(xcf_path: str,
-                       size: int = 80) -> QPixmap | None:
-    """
-    يرجع QPixmap بحجم size×size من ملف XCF.
-    يستخدم cache لتجنب إعادة القراءة.
-    يرجع None لو الملف غير موجود أو فشل الاستخراج.
-    """
+def get_xcf_thumbnail(xcf_path: str, size: int = 80) -> "QPixmap | None":
     if not xcf_path or not os.path.exists(xcf_path):
         return None
 
@@ -56,14 +45,13 @@ def get_xcf_thumbnail(xcf_path: str,
     except OSError:
         return None
 
-    # ── cache hit ──
     cached = _CACHE.get(xcf_path)
     if cached and cached[0] == mtime:
         return _scale(cached[1], size)
 
     pixmap = (
-        _try_xcf_native(xcf_path)
-        or _try_pillow(xcf_path)
+        _try_gimp_cache(xcf_path)
+        or _try_xcf_native(xcf_path)
         or _try_gimp_batch(xcf_path)
     )
 
@@ -75,7 +63,6 @@ def get_xcf_thumbnail(xcf_path: str,
 
 
 def clear_cache(xcf_path: str = None):
-    """يمسح الـ cache لملف معين أو كله."""
     if xcf_path:
         _CACHE.pop(xcf_path, None)
     else:
@@ -83,190 +70,245 @@ def clear_cache(xcf_path: str = None):
 
 
 # ════════════════════════════════════════════════════════
-# طريقة 1 — قراءة XCF مباشرة
+# طريقة 1 — GIMP thumbnail cache (freedesktop standard)
 # ════════════════════════════════════════════════════════
 
-def _try_xcf_native(path: str) -> QPixmap | None:
-    """
-    يقرأ الـ thumbnail المدمج في XCF properties.
-    يعمل بدون أي مكتبات خارجية.
+def _xcf_uri(path: str) -> str:
+    """يبني URI صحيح من مسار الملف (Windows + Linux)."""
+    p = path.replace("\\", "/")
+    if len(p) >= 2 and p[1] == ":":
+        # Windows: C:/path → file:///C:/path
+        return "file:///" + p
+    elif p.startswith("/"):
+        return "file://" + p
+    return "file:///" + p
 
-    بنية XCF:
-      [9 bytes magic] [version 4 bytes] [0x00]
-      [width 4B] [height 4B] [base_type 4B]
-      [precision 4B — XCF 4+]
-      [properties ...]  ← نبحث عن PROP_THUMBNAIL هنا
+
+def _gimp_cache_paths(xcf_path: str) -> list:
+    """يبني قائمة بكل المسارات المحتملة لـ GIMP thumbnail cache."""
+    uris = [
+        _xcf_uri(xcf_path),
+        # بعض إصدارات GIMP على Windows تستخدم forward slash بدون encoding
+        "file:///" + xcf_path.replace("\\", "/").lstrip("/"),
+    ]
+
+    candidates = []
+    home = os.path.expanduser("~")
+    appdata = os.environ.get("APPDATA", "")
+
+    for uri in dict.fromkeys(uris):
+        md5 = hashlib.md5(uri.encode("utf-8")).hexdigest()
+
+        for size_dir in ("large", "normal", "x-large"):
+            # Freedesktop standard (Linux/Mac/GIMP on Windows)
+            candidates.append(
+                os.path.join(home, ".cache", "thumbnails", size_dir, md5 + ".png")
+            )
+            candidates.append(
+                os.path.join(home, ".thumbnails", size_dir, md5 + ".png")
+            )
+            # GIMP Windows cache
+            if appdata:
+                for ver in ("3.0", "2.99", "2.10", "2.8"):
+                    candidates.append(
+                        os.path.join(
+                            appdata, "GIMP", ver, "thumbnails",
+                            size_dir, md5 + ".png"
+                        )
+                    )
+
+    return candidates
+
+
+def _try_gimp_cache(xcf_path: str) -> "QPixmap | None":
+    for path in _gimp_cache_paths(xcf_path):
+        if os.path.exists(path):
+            px = QPixmap(path)
+            if not px.isNull():
+                return px
+    return None
+
+
+# ════════════════════════════════════════════════════════
+# طريقة 2 — قراءة XCF مباشرة (PROP_THUMBNAIL)
+# ════════════════════════════════════════════════════════
+
+def _try_xcf_native(xcf_path: str) -> "QPixmap | None":
+    """
+    يقرأ PROP_THUMBNAIL من XCF properties مباشرة.
+
+    بنية PROP_THUMBNAIL (من GIMP source xcf.c):
+      prop_type    uint32 = 1028
+      payload_len  uint32
+      [3 int32s: format/bpp, width, height — ترتيبهم يختلف بالإصدار]
+      data         raw bytes (RGB أو RGBA)
+
+    نحسب bpp من payload_len تلقائياً لتجنب الاعتماد على الترتيب.
     """
     try:
-        with open(path, "rb") as f:
-            header = f.read(14)
-            if not header.startswith(_XCF_MAGIC):
+        with open(xcf_path, "rb") as f:
+            if f.read(9) != _XCF_MAGIC:
                 return None
 
-            # تحديد إصدار XCF
-            version_str = header[9:13]
+            ver_raw = f.read(4)
+            f.read(1)   # NUL
+
             try:
-                xcf_ver = int(version_str.strip(b"\x00v"))
-            except ValueError:
+                xcf_ver = int(ver_raw.strip(b"\x00v"))
+            except (ValueError, TypeError):
                 xcf_ver = 0
 
-            # حجم الهيدر الأساسي
-            # magic(9) + version(4) + NUL(1) = 14 bytes قرأناهم
-            # width(4) + height(4) + base_type(4) = 12 bytes
-            dims = f.read(12)
-            if len(dims) < 12:
-                return None
+            # width, height, base_type
+            f.read(12)
 
-            # XCF 4+ له precision قبل properties
+            # precision — XCF v4+ (GIMP 2.10+)
             if xcf_ver >= 4:
-                f.read(4)   # precision
+                f.read(4)
 
-            # XCF 150+ له compression قبل properties  (GIMP 3.x)
-            # نحاول القراءة والتكيف تلقائياً
+            return _scan_for_thumbnail(f)
 
-            return _read_xcf_properties(f)
     except Exception:
         return None
 
 
-def _read_xcf_properties(f) -> QPixmap | None:
-    """يقرأ properties list ويبحث عن PROP_THUMBNAIL."""
-    MAX_PROPS = 200   # حماية من infinite loop
-    for _ in range(MAX_PROPS):
+def _scan_for_thumbnail(f) -> "QPixmap | None":
+    for _ in range(_MAX_PROPS):
         try:
-            prop_type_bytes = f.read(4)
-            if len(prop_type_bytes) < 4:
+            ptype_b = f.read(4)
+            if len(ptype_b) < 4:
                 break
-            prop_type = struct.unpack(">I", prop_type_bytes)[0]
-            prop_len  = struct.unpack(">I", f.read(4))[0]
+            ptype = struct.unpack(">I", ptype_b)[0]
+            plen  = struct.unpack(">I", f.read(4))[0]
         except struct.error:
             break
 
-        if prop_type == _PROP_END:
+        if ptype == _PROP_END:
             break
 
-        if prop_type == _PROP_THUMBNAIL:
-            # بنية الـ thumbnail property:
-            # [format: 0=RGB, 1=RGBA] [width 4B] [height 4B]
-            # [data_len 4B] [data ...]
-            try:
-                fmt      = struct.unpack(">I", f.read(4))[0]   # 0=RGB 1=RGBA
-                t_w      = struct.unpack(">I", f.read(4))[0]
-                t_h      = struct.unpack(">I", f.read(4))[0]
-                data_len = struct.unpack(">I", f.read(4))[0]
+        if ptype == _PROP_THUMBNAIL:
+            return _decode_thumbnail(f, plen)
 
-                if data_len > 10 * 1024 * 1024:   # أكبر من 10MB = خطأ
-                    break
-
-                raw = f.read(data_len)
-                if len(raw) < data_len:
-                    break
-
-                # بناء QImage من البيانات الخام
-                if fmt == 0:   # RGB
-                    img_fmt = QImage.Format_RGB888
-                    channels = 3
-                else:          # RGBA
-                    img_fmt = QImage.Format_RGBA8888
-                    channels = 4
-
-                expected = t_w * t_h * channels
-                if len(raw) >= expected and t_w > 0 and t_h > 0:
-                    img = QImage(raw[:expected], t_w, t_h, t_w * channels, img_fmt)
-                    if not img.isNull():
-                        return QPixmap.fromImage(img)
-            except Exception:
-                pass
+        try:
+            f.seek(plen, 1)
+        except Exception:
             break
-        else:
-            # تخطي الـ property
-            try:
-                f.seek(prop_len, 1)
-            except Exception:
-                break
 
     return None
 
 
-# ════════════════════════════════════════════════════════
-# طريقة 2 — Pillow
-# ════════════════════════════════════════════════════════
-
-def _try_pillow(path: str) -> QPixmap | None:
+def _decode_thumbnail(f, payload_len: int) -> "QPixmap | None":
     """
-    يحاول استخدام Pillow لقراءة ملف XCF.
-    Pillow لا تدعم XCF مباشرة لكن تدعم قراءة الـ PNG thumbnail
-    المضمّن في بعض إصدارات GIMP.
+    يحلل payload الـ PROP_THUMBNAIL بطريقة مرنة.
+
+    يقرأ أول 3 int32 (12 bytes) ثم يحسب bpp من الحجم المتبقي.
+    يجرب كل التفسيرات الممكنة لـ (a, b, c).
     """
     try:
-        from PIL import Image
-        # Pillow لا تدعم XCF مباشرة
-        # لكن نحاول بناء صورة placeholder من أبعاد الملف
-        img = Image.open(path)
-        img.thumbnail((_THUMB_MAX, _THUMB_MAX), Image.LANCZOS)
-        data = img.tobytes("raw", "RGBA" if img.mode == "RGBA" else "RGB")
-        fmt  = QImage.Format_RGBA8888 if img.mode == "RGBA" else QImage.Format_RGB888
-        ch   = 4 if img.mode == "RGBA" else 3
-        q_img = QImage(data, img.width, img.height, img.width * ch, fmt)
-        if not q_img.isNull():
-            return QPixmap.fromImage(q_img)
+        if payload_len < 12:
+            return None
+
+        a = struct.unpack(">i", f.read(4))[0]
+        b = struct.unpack(">i", f.read(4))[0]
+        c = struct.unpack(">i", f.read(4))[0]
+
+        data_len = payload_len - 12
+
+        if data_len <= 0 or data_len > 16 * 1024 * 1024:
+            if data_len > 0:
+                f.seek(min(data_len, 16 * 1024 * 1024), 1)
+            return None
+
+        raw = f.read(data_len)
+        if len(raw) < data_len:
+            return None
+
+        # نجرب كل التفسيرات الممكنة لـ (a, b, c)
+        # الهدف: نجد width و height يقسّمان data_len بـ 3 أو 4
+        for width, height in [(b, c), (a, b), (c, b), (a, c)]:
+            if not (1 <= width <= 4096 and 1 <= height <= 4096):
+                continue
+            total = width * height
+            if total == 0 or data_len % total != 0:
+                continue
+            bpp = data_len // total
+            if bpp not in (3, 4):
+                continue
+
+            fmt = QImage.Format_RGB888 if bpp == 3 else QImage.Format_RGBA8888
+            img = QImage(bytes(raw), width, height, width * bpp, fmt)
+            if not img.isNull():
+                return QPixmap.fromImage(img)
+
+        return None
+
     except Exception:
-        pass
-    return None
+        return None
 
 
 # ════════════════════════════════════════════════════════
-# طريقة 3 — GIMP Batch (Script-Fu)
+# طريقة 3 — GIMP Batch Script-Fu
 # ════════════════════════════════════════════════════════
 
-def _try_gimp_batch(path: str) -> QPixmap | None:
+def _try_gimp_batch(xcf_path: str) -> "QPixmap | None":
     """
-    يستخدم GIMP في الـ batch mode لتصدير thumbnail PNG مؤقت.
-    أبطأ (2-5 ثواني) لكن الأدق.
-    يُستخدم فقط لو الطرق الأخرى فشلت.
+    يشغّل GIMP في batch mode لتصدير thumbnail.
+    أبطأ لكن يعمل مع أي إصدار.
     """
-    try:
-        from ._size_card import _find_gimp
-        gimp_exe = _find_gimp()
-    except ImportError:
-        gimp_exe = _find_gimp_fallback()
-
+    gimp_exe = _find_gimp()
     if not gimp_exe:
         return None
 
+    tmp_path = None
     try:
         with tempfile.NamedTemporaryFile(suffix=".png", delete=False) as tmp:
             tmp_path = tmp.name
 
+        xcf_fwd  = xcf_path.replace("\\", "/")
+        tmp_fwd  = tmp_path.replace("\\", "/")
+        basename = os.path.basename(xcf_path)
+
+        # Script-Fu: تحميل الصورة، تصغيرها، حفظها PNG
         script = (
-            f'(let* ((image (car (gimp-file-load RUN-NONINTERACTIVE '
-            f'"{path.replace(chr(92), "/")}" "{os.path.basename(path)}"))) '
-            f'(drawable (car (gimp-image-get-active-drawable image)))) '
-            f'(file-png-save RUN-NONINTERACTIVE image drawable '
-            f'"{tmp_path.replace(chr(92), "/")}" "thumb" 0 9 1 1 1 1 1))'
+            f'(let* ('
+            f'  (image (car (gimp-file-load RUN-NONINTERACTIVE "{xcf_fwd}" "{basename}")))'
+            f'  (drawable (car (gimp-image-get-active-drawable image)))'
+            f'  (scaled (car (gimp-image-duplicate image)))'
+            f') '
+            f'  (gimp-image-scale-full scaled 256 256 INTERPOLATION-LINEAR)'
+            f'  (file-png-save RUN-NONINTERACTIVE scaled'
+            f'    (car (gimp-image-get-active-drawable scaled))'
+            f'    "{tmp_fwd}" "t" 0 9 1 1 1 1 1)'
+            f')'
         )
 
-        result = subprocess.run(
+        subprocess.run(
             [gimp_exe, "-i", "-b", script, "-b", "(gimp-quit 0)"],
-            timeout=15,
+            timeout=20,
             capture_output=True,
         )
 
-        if os.path.exists(tmp_path) and os.path.getsize(tmp_path) > 0:
-            pixmap = QPixmap(tmp_path)
-            os.unlink(tmp_path)
-            if not pixmap.isNull():
-                return pixmap
-        elif os.path.exists(tmp_path):
-            os.unlink(tmp_path)
+        if tmp_path and os.path.exists(tmp_path) and os.path.getsize(tmp_path) > 100:
+            px = QPixmap(tmp_path)
+            if not px.isNull():
+                return px
 
     except Exception:
         pass
+    finally:
+        if tmp_path and os.path.exists(tmp_path):
+            try:
+                os.unlink(tmp_path)
+            except Exception:
+                pass
 
     return None
 
 
-def _find_gimp_fallback() -> str | None:
+# ════════════════════════════════════════════════════════
+# مساعدات
+# ════════════════════════════════════════════════════════
+
+def _find_gimp() -> "str | None":
     import shutil, glob
     try:
         from db.shared.connection import get_connection
@@ -282,19 +324,17 @@ def _find_gimp_fallback() -> str | None:
         found = shutil.which(name)
         if found:
             return found
-    for pattern in [r"C:\Program Files\GIMP *\bin\gimp-*.exe"]:
+    for pattern in [
+        r"C:\Program Files\GIMP *\bin\gimp-*.exe",
+        r"C:\Program Files (x86)\GIMP *\bin\gimp-*.exe",
+    ]:
         matches = glob.glob(pattern)
         if matches:
             return sorted(matches)[-1]
     return None
 
 
-# ════════════════════════════════════════════════════════
-# مساعدات
-# ════════════════════════════════════════════════════════
-
 def _scale(pixmap: QPixmap, size: int) -> QPixmap:
-    """يعيد تحجيم الـ pixmap مع الحفاظ على النسبة."""
     return pixmap.scaled(
         size, size,
         Qt.KeepAspectRatio,
