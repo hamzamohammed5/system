@@ -22,7 +22,6 @@ class SettingsDialog(QDialog):
         super().__init__(parent)
         self._app           = app
         self._original_size = get_font_size()
-        self._conn          = get_connection()
 
         self.setWindowTitle("⚙️  إعدادات")
         self.setFixedWidth(480)
@@ -126,22 +125,29 @@ class SettingsDialog(QDialog):
 
         # ══ أزرار ══════════════════════════════════════════
         btns       = QDialogButtonBox()
-        btn_ok     = btns.addButton("✅  حفظ",   QDialogButtonBox.AcceptRole)
-        btn_cancel = btns.addButton("✖  إلغاء", QDialogButtonBox.RejectRole)
+        btn_ok     = btns.addButton("✅  حفظ",    QDialogButtonBox.AcceptRole)
+        btn_cancel = btns.addButton("✖  إلغاء",  QDialogButtonBox.RejectRole)
         btn_ok.setMinimumHeight(34)
         btn_cancel.setMinimumHeight(34)
         btn_ok.clicked.connect(self._save)
         btn_cancel.clicked.connect(self._cancel)
         root.addWidget(btns)
 
+    # ── تحميل الإعدادات المحفوظة ──────────────────────────
+
     def _load_settings(self):
         try:
-            path = get_setting(self._conn, "gimp_path", "")
+            conn = get_connection()
+            path = get_setting(conn, "gimp_path", "")
+            conn.close()
             self._inp_gimp.setText(path)
         except Exception:
             pass
 
+    # ── تصفح لملف GIMP ───────────────────────────────────
+
     def _browse_gimp(self):
+        # ابدأ من المسار الحالي لو موجود
         start = self._inp_gimp.text().strip()
         if start and os.path.exists(os.path.dirname(start)):
             start_dir = os.path.dirname(start)
@@ -157,6 +163,8 @@ class SettingsDialog(QDialog):
         if path:
             self._inp_gimp.setText(path)
 
+    # ── معاينة حجم الخط ──────────────────────────────────
+
     def _on_font_change(self, val: int):
         self._lbl_val.setText(f"{val} pt")
         apply_font(self._app, val)
@@ -165,13 +173,19 @@ class SettingsDialog(QDialog):
             "border-radius: 6px; padding: 12px;"
         )
 
+    # ── حفظ ───────────────────────────────────────────────
+
     def _save(self):
+        # حجم الخط
         size = self._slider.value()
         set_font_size(size)
         apply_font(self._app, size)
 
+        # مسار GIMP
         try:
-            set_setting(self._conn, "gimp_path", self._inp_gimp.text().strip())
+            conn = get_connection()
+            set_setting(conn, "gimp_path", self._inp_gimp.text().strip())
+            conn.close()
         except Exception:
             pass
 
@@ -180,10 +194,3 @@ class SettingsDialog(QDialog):
     def _cancel(self):
         apply_font(self._app, self._original_size)
         self.reject()
-
-    def closeEvent(self, event):
-        try:
-            self._conn.close()
-        except Exception:
-            pass
-        super().closeEvent(event)
