@@ -5,12 +5,11 @@ ui/tabs/design/designs/_size_dialog.py
 
 import os
 
-
 from PyQt5.QtWidgets import (
-    QWidget, QVBoxLayout, QHBoxLayout,
+    QVBoxLayout, QHBoxLayout,
     QPushButton, QLabel, QLineEdit,
     QComboBox, QMessageBox, QDialog, QDialogButtonBox,
-    QFileDialog, QFormLayout, QSpinBox,
+    QFileDialog, QFormLayout,
 )
 from PyQt5.QtCore import Qt
 
@@ -18,7 +17,6 @@ from db.designs.dimension_sets_repo import (
     fetch_all_dimension_sets,
     fetch_fields_for_set,
 )
-
 from db.designs.designs_sizes_repo import (
     insert_design_size, update_design_size,
     fetch_instances_for_set_with_values,
@@ -33,15 +31,6 @@ _GREEN      = "#2e7d32"
 _GREEN_LT   = "#e8f5e9"
 _GRAY_BG    = "#f8f9fc"
 
-# ── presets الدقة ──
-_DPI_PRESETS = [
-    (72,  "72 — شاشة"),
-    (96,  "96 — ويب"),
-    (150, "150 — متوسط"),
-    (300, "300 — طباعة"),
-    (600, "600 — طباعة عالية"),
-]
-
 
 # ══════════════════════════════════════════════════════════
 # Dialog — إضافة / تعديل مقاس للتصميم
@@ -50,15 +39,15 @@ _DPI_PRESETS = [
 class _SizeDialog(QDialog):
     """
     Dialog لإضافة أو تعديل مقاس واحد للتصميم.
-    يختار: مجموعة مقاسات → instance → حقل العرض → حقل الطول → DPI → مسار الملف
+    يختار: مجموعة مقاسات → instance → حقل العرض → حقل الطول → حقل الـ DPI → مسار الملف
     """
 
     def __init__(self, conn, design_id: int,
                  size_data=None, parent=None):
         super().__init__(parent)
-        self.conn      = conn
-        self.design_id = design_id
-        self.size_id   = size_data["id"] if size_data else None
+        self.conn       = conn
+        self.design_id  = design_id
+        self.size_id    = size_data["id"] if size_data else None
         self._size_data = size_data
 
         self.setWindowTitle("تعديل مقاس" if size_data else "إضافة مقاس جديد")
@@ -111,48 +100,11 @@ class _SizeDialog(QDialog):
         self.cmb_height.currentIndexChanged.connect(self._update_canvas_preview)
         form.addRow("حقل الطول :", self.cmb_height)
 
-        # ── الدقة (DPI) ──
-        dpi_row = QHBoxLayout()
-        dpi_row.setSpacing(8)
-
-        self.sp_dpi = QSpinBox()
-        self.sp_dpi.setRange(72, 1200)
-        self.sp_dpi.setValue(300)
-        self.sp_dpi.setSuffix("  DPI")
-        self.sp_dpi.setMinimumHeight(34)
-        self.sp_dpi.setStyleSheet(f"""
-            QSpinBox {{
-                background: white;
-                border: 1px solid {_BLUE_MID};
-                border-radius: 4px;
-                padding: 2px 8px;
-            }}
-            QSpinBox:focus {{ border-color: {_BLUE}; }}
-        """)
-        self.sp_dpi.valueChanged.connect(self._update_canvas_preview)
-
-        self.cmb_dpi_preset = QComboBox()
-        self.cmb_dpi_preset.setMinimumHeight(34)
-        self.cmb_dpi_preset.setMinimumWidth(160)
-        for val, label in _DPI_PRESETS:
-            self.cmb_dpi_preset.addItem(label, val)
-        # افتراضي: 300
-        self.cmb_dpi_preset.setCurrentIndex(3)
-        self.cmb_dpi_preset.currentIndexChanged.connect(self._on_dpi_preset_changed)
-        self.cmb_dpi_preset.setStyleSheet(f"""
-            QComboBox {{
-                background: white;
-                border: 1px solid {_BLUE_MID};
-                border-radius: 4px;
-                padding: 2px 8px;
-            }}
-            QComboBox:focus {{ border-color: {_BLUE}; }}
-            QComboBox::drop-down {{ border: none; }}
-        """)
-
-        dpi_row.addWidget(self.sp_dpi)
-        dpi_row.addWidget(self.cmb_dpi_preset)
-        form.addRow("الدقة (DPI) :", dpi_row)
+        # ── حقل الـ DPI ──
+        self.cmb_dpi = QComboBox()
+        self.cmb_dpi.setMinimumHeight(34)
+        self.cmb_dpi.currentIndexChanged.connect(self._update_canvas_preview)
+        form.addRow("حقل الدقة (DPI) :", self.cmb_dpi)
 
         # ── معاينة الكانفاس ──
         self.lbl_canvas = QLabel("─")
@@ -230,6 +182,7 @@ class _SizeDialog(QDialog):
         self.cmb_instance.clear()
         self.cmb_width.clear()
         self.cmb_height.clear()
+        self.cmb_dpi.clear()
         self.lbl_canvas.setText("─")
 
         if not set_id:
@@ -241,70 +194,77 @@ class _SizeDialog(QDialog):
             name = inst["name"].strip() or f"مقاس #{inst['id']}"
             self.cmb_instance.addItem(name, inst["id"])
 
-        # حقول رقمية للعرض والطول
+        # حقول رقمية للعرض والطول والـ DPI
         self.cmb_width.addItem("─ اختر حقل العرض ─", None)
         self.cmb_height.addItem("─ اختر حقل الطول ─", None)
+        self.cmb_dpi.addItem("─ اختياري: حقل الدقة (DPI) ─", None)
+
         for f in fetch_fields_for_set(self.conn, set_id):
             if f["field_type"] == "number":
                 label = f"{f['label']} ({f['unit'] or 'cm'})"
                 self.cmb_width.addItem(label, f["id"])
                 self.cmb_height.addItem(label, f["id"])
+                self.cmb_dpi.addItem(label, f["id"])
 
     def _on_instance_changed(self):
         self._update_canvas_preview()
 
-    def _on_dpi_preset_changed(self):
-        """عند اختيار preset جاهز → يحدث الـ spinbox."""
-        dpi = self.cmb_dpi_preset.currentData()
-        if dpi:
-            self.sp_dpi.blockSignals(True)
-            self.sp_dpi.setValue(dpi)
-            self.sp_dpi.blockSignals(False)
-            self._update_canvas_preview()
-
     def _update_canvas_preview(self):
         """يحسب ويعرض مقاس الكانفاس بناءً على الاختيارات الحالية."""
-        inst_id  = self.cmb_instance.currentData()
-        w_fid    = self.cmb_width.currentData()
-        h_fid    = self.cmb_height.currentData()
-        dpi      = self.sp_dpi.value()
+        inst_id = self.cmb_instance.currentData()
+        w_fid   = self.cmb_width.currentData()
+        h_fid   = self.cmb_height.currentData()
+        dpi_fid = self.cmb_dpi.currentData()
 
         if not inst_id or not w_fid or not h_fid:
             self.lbl_canvas.setText("─")
             return
 
-        w_val = h_val = None
-        if w_fid:
-            r = self.conn.execute(
-                "SELECT value_num FROM dimension_set_values WHERE instance_id=? AND field_id=?",
-                (inst_id, w_fid)
-            ).fetchone()
-            w_val = r["value_num"] if r else None
+        w_val = h_val = dpi_val = None
 
-        if h_fid:
+        # جلب قيمة العرض
+        r = self.conn.execute(
+            "SELECT value_num FROM dimension_set_values WHERE instance_id=? AND field_id=?",
+            (inst_id, w_fid)
+        ).fetchone()
+        w_val = r["value_num"] if r else None
+
+        # جلب قيمة الطول
+        r = self.conn.execute(
+            "SELECT value_num FROM dimension_set_values WHERE instance_id=? AND field_id=?",
+            (inst_id, h_fid)
+        ).fetchone()
+        h_val = r["value_num"] if r else None
+
+        # جلب قيمة الـ DPI لو محدد
+        if dpi_fid:
             r = self.conn.execute(
                 "SELECT value_num FROM dimension_set_values WHERE instance_id=? AND field_id=?",
-                (inst_id, h_fid)
+                (inst_id, dpi_fid)
             ).fetchone()
-            h_val = r["value_num"] if r else None
+            dpi_val = float(r["value_num"]) if r and r["value_num"] else None
 
         if w_val is not None and h_val is not None:
-            # حساب حجم الكانفاس بالـ px من الوحدة الأصلية
+            # جلب الوحدة الافتراضية للمجموعة
             set_id = self.cmb_set.currentData()
             unit = "cm"
             if set_id:
                 row = self.conn.execute(
-                    "SELECT default_unit FROM dimension_sets WHERE id=?",
-                    (set_id,)
+                    "SELECT default_unit FROM dimension_sets WHERE id=?", (set_id,)
                 ).fetchone()
                 if row:
                     unit = row["default_unit"] or "cm"
 
-            w_px = _to_px_preview(w_val, unit, dpi)
-            h_px = _to_px_preview(h_val, unit, dpi)
-            self.lbl_canvas.setText(
-                f"{w_val:g} × {h_val:g} {unit}  →  {w_px} × {h_px} px  @  {dpi} DPI"
-            )
+            if dpi_val:
+                w_px = _to_px_preview(w_val, unit, dpi_val)
+                h_px = _to_px_preview(h_val, unit, dpi_val)
+                self.lbl_canvas.setText(
+                    f"{w_val:g} × {h_val:g} {unit}  →  {w_px} × {h_px} px  @  {dpi_val:g} DPI"
+                )
+            else:
+                self.lbl_canvas.setText(
+                    f"{w_val:g} × {h_val:g} {unit}  (حدد حقل DPI لحساب الـ px)"
+                )
         else:
             self.lbl_canvas.setText("⚠️  القيم غير مكتملة في هذا المقاس")
 
@@ -332,7 +292,7 @@ class _SizeDialog(QDialog):
                 self.cmb_instance.setCurrentIndex(i)
                 break
 
-        # حقول العرض والطول
+        # حقول العرض والطول والـ DPI
         for i in range(self.cmb_width.count()):
             if self.cmb_width.itemData(i) == d["width_field_id"]:
                 self.cmb_width.setCurrentIndex(i)
@@ -342,33 +302,26 @@ class _SizeDialog(QDialog):
                 self.cmb_height.setCurrentIndex(i)
                 break
 
-        # DPI
-        saved_dpi = d["dpi"] if d["dpi"] else 300
-        self.sp_dpi.setValue(saved_dpi)
-        # مزامنة الـ preset
-        self._sync_dpi_preset(saved_dpi)
+        # حقل الـ DPI — اختياري
+        dpi_fid = d["dpi_field_id"] if d["dpi_field_id"] else None
+        if dpi_fid:
+            for i in range(self.cmb_dpi.count()):
+                if self.cmb_dpi.itemData(i) == dpi_fid:
+                    self.cmb_dpi.setCurrentIndex(i)
+                    break
 
         self.inp_path.setText(d["xcf_path"] or "")
         self.inp_notes.setText(d["notes"] or "")
         self._update_canvas_preview()
-
-    def _sync_dpi_preset(self, dpi: int):
-        """يحدد الـ preset المناسب بناءً على قيمة DPI."""
-        for i in range(self.cmb_dpi_preset.count()):
-            if self.cmb_dpi_preset.itemData(i) == dpi:
-                self.cmb_dpi_preset.blockSignals(True)
-                self.cmb_dpi_preset.setCurrentIndex(i)
-                self.cmb_dpi_preset.blockSignals(False)
-                return
 
     def _save(self):
         set_id    = self.cmb_set.currentData()
         inst_id   = self.cmb_instance.currentData()
         w_fid     = self.cmb_width.currentData()
         h_fid     = self.cmb_height.currentData()
+        dpi_fid   = self.cmb_dpi.currentData()          # اختياري — ممكن يكون None
         path      = self.inp_path.text().strip()
         notes     = self.inp_notes.text().strip()
-        dpi       = self.sp_dpi.value()
 
         if not set_id:
             QMessageBox.warning(self, "تنبيه", "اختر مجموعة مقاسات")
@@ -384,11 +337,14 @@ class _SizeDialog(QDialog):
             return
 
         if self.size_id:
-            update_design_size(self.conn, self.size_id, w_fid, h_fid, path, notes, dpi)
+            update_design_size(self.conn, self.size_id,
+                               w_fid, h_fid, path, notes,
+                               dpi_field_id=dpi_fid)
         else:
             self.size_id = insert_design_size(
                 self.conn, self.design_id, set_id, inst_id,
-                w_fid, h_fid, path, notes, dpi=dpi
+                w_fid, h_fid, path, notes,
+                dpi_field_id=dpi_fid
             )
         self.accept()
 
@@ -398,7 +354,7 @@ class _SizeDialog(QDialog):
 # ══════════════════════════════════════════════════════════
 
 def _to_px_preview(value: float, unit: str, dpi: float) -> int:
-    """تحويل القيمة لـ px للعرض في المعاينة فقط."""
+    """تحويل القيمة لـ px للعرض في المعاينة."""
     u = unit.strip().lower()
     if u == "px":
         return max(1, int(round(value)))
