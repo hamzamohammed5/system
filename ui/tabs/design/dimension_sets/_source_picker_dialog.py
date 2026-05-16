@@ -3,7 +3,7 @@ ui/tabs/design/dimension_sets/_source_picker_dialog.py
 =======================================================
 _SourcePickerDialog — dialog لاختيار الـ instance المصدر قبل الحساب التلقائي.
 
-يُستدعى من _InstancePopup عند الضغط على ⟳ لأي حقل تلقائي.
+يُستدعى من _InstancePopup عند الضغط على ⟳ لأي حقل تلقائي cross-set.
 
 يعرض:
   - اسم المجموعة المصدر
@@ -19,8 +19,8 @@ from PyQt5.QtWidgets import (
     QPushButton, QFrame, QScrollArea, QWidget,
     QButtonGroup, QRadioButton,
 )
-from PyQt5.QtCore import Qt, pyqtSignal
-from PyQt5.QtGui import QFont, QColor
+from PyQt5.QtCore import Qt
+from PyQt5.QtGui import QColor
 
 from db.designs.dimension_sets_repo import (
     fetch_instances_for_set,
@@ -75,6 +75,9 @@ class _SourcePickerDialog(QDialog):
         source_field_id  : ID الحقل المصدر
         offset           : قيمة الإضافة/الخصم
         target_field_label: اسم الحقل المستهدف (للعرض فقط)
+
+    ملاحظة: يظهر الـ dialog دايماً حتى لو instance واحد فقط —
+            المستخدم يجب أن يؤكد اختياره صراحةً.
     """
 
     def __init__(self, conn,
@@ -90,6 +93,9 @@ class _SourcePickerDialog(QDialog):
         self.offset           = offset
         self.target_label     = target_field_label
         self.selected_instance_id = None
+
+        # نخزن اسم كل instance هنا لاستخدامه في _on_instance_selected
+        self._instance_names: dict[int, str] = {}
 
         self.setWindowTitle("اختيار مصدر الحساب التلقائي")
         self.setMinimumWidth(480)
@@ -219,6 +225,13 @@ class _SourcePickerDialog(QDialog):
         else:
             for inst in instances:
                 self._add_instance_row(inst)
+            # لو instance واحد فقط → اختره تلقائياً لتسهيل التجربة
+            # لكن الـ dialog يظل مفتوح حتى يضغط المستخدم "تطبيق"
+            if len(instances) == 1:
+                first_btn = self._btn_group.button(instances[0]["id"])
+                if first_btn and first_btn.isEnabled():
+                    first_btn.setChecked(True)
+                    self._on_instance_selected(first_btn)
 
         self._list_lay.addStretch()
         scroll.setWidget(container)
@@ -273,6 +286,9 @@ class _SourcePickerDialog(QDialog):
         iid   = inst["id"]
         name  = inst["name"].strip() if inst["name"].strip() else f"مجموعة #{iid}"
 
+        # خزّن الاسم للاستخدام لاحقاً بدون الاعتماد على widget hierarchy
+        self._instance_names[iid] = name
+
         # جلب قيمة الحقل المصدر لهذا الـ instance
         values   = fetch_instance_values(self.conn, iid)
         val_info = values.get(self.source_field_id, {})
@@ -314,8 +330,14 @@ class _SourcePickerDialog(QDialog):
                 border-color: {_BLUE};
             }}
         """)
+        # نخزن البيانات كـ properties على الـ radio مباشرة
         radio.setProperty("instance_id", iid)
         radio.setProperty("src_val", src_val)
+
+        # لو مفيش قيمة → عطّل الـ radio
+        has_value = src_val is not None
+        radio.setEnabled(has_value)
+
         self._btn_group.addButton(radio, iid)
 
         # اسم الـ instance
@@ -323,13 +345,13 @@ class _SourcePickerDialog(QDialog):
         name_lbl.setStyleSheet(f"""
             font-weight: bold;
             font-size: 12px;
-            color: {_TEXT};
+            color: {_TEXT if has_value else _TEXT_MUTED};
             background: transparent;
             border: none;
         """)
 
-        # قيمة الحقل المصدر
-        if src_val is not None:
+        # قيمة الحقل المصدر + النتيجة
+        if has_value:
             val_txt = f"{src_val:g}  {self._src_field_unit}".strip()
             result  = src_val + self.offset
             sign    = f"+{self.offset:g}" if self.offset >= 0 else f"{self.offset:g}"
@@ -363,39 +385,48 @@ class _SourcePickerDialog(QDialog):
                 border: none;
             """)
             res_lbl = QLabel("—")
-            res_lbl.setStyleSheet(f"color: {_TEXT_MUTED}; background: transparent; border: none;")
-            radio.setEnabled(src_val is not None)
+            res_lbl.setStyleSheet(
+                f"color: {_TEXT_MUTED}; background: transparent; border: none;"
+            )
 
         row_lay.addWidget(radio)
         row_lay.addWidget(name_lbl, stretch=1)
         row_lay.addWidget(val_lbl)
         row_lay.addWidget(res_lbl)
 
-        # اضغط على الـ frame = تحديد الـ radio
-        row_frame.mousePressEvent = lambda e, r=radio: (
-            r.setChecked(True),
-            self._on_instance_selected(r)
-        )
+        # ضغط على الـ frame = تحديد الـ radio (لو مفعّل)
+        def _frame_click(event, r=radio):
+            if r.isEnabled():
+                r.setChecked(True)
+                self._on_instance_selected(r)
+
+        row_frame.mousePressEvent = _frame_click
 
         self._list_lay.addWidget(row_frame)
 
     def _on_instance_selected(self, btn):
         iid     = btn.property("instance_id")
         src_val = btn.property("src_val")
+
+        if iid is None or src_val is None:
+            return
+
         self.selected_instance_id = iid
         self.btn_ok.setEnabled(True)
 
-        if src_val is not None:
-            result = src_val + self.offset
-            sign   = f"+{self.offset:g}" if self.offset >= 0 else f"{self.offset:g}"
-            name   = btn.parent().findChildren(QLabel)[0].text() if btn.parent() else ""
-            txt = (
-                f"✓  النتيجة:  {src_val:g}  {sign}  =  {result:g}  {self._src_field_unit}"
-                if self.offset != 0
-                else f"✓  النتيجة:  {result:g}  {self._src_field_unit}"
-            ).strip()
-            self._preview_lbl.setText(txt)
-            self._preview_frame.setVisible(True)
+        # استرجاع الاسم من الـ dict بدلاً من widget hierarchy
+        inst_name = self._instance_names.get(iid, "")
+
+        result = src_val + self.offset
+        sign   = f"+{self.offset:g}" if self.offset >= 0 else f"{self.offset:g}"
+
+        if self.offset != 0:
+            txt = f"✓  {inst_name}:  {src_val:g}  {sign}  =  {result:g}  {self._src_field_unit}".strip()
+        else:
+            txt = f"✓  {inst_name}:  {result:g}  {self._src_field_unit}".strip()
+
+        self._preview_lbl.setText(txt)
+        self._preview_frame.setVisible(True)
 
     def get_selected(self) -> int | None:
         """يرجع instance_id المختار أو None."""
