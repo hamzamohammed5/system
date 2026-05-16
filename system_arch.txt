@@ -1,5 +1,5 @@
 File Tree Snapshot
-Generated : 2026-05-16 05:53:41
+Generated : 2026-05-16 06:05:14
 Source    : D:\My Workspace\Hg\Alhabaar\accountant\system
 Extensions: .py
 ────────────────────────────────────────────────────────────
@@ -20,6 +20,10 @@ system/
 │   │   ├── machine_op_rows_repo.py
 │   │   ├── operations_repo.py
 │   │   └── raw_variants_repo.py
+│   ├── designs/
+│   │   ├── design_schema.py
+│   │   ├── designs_repo.py
+│   │   └── dimension_sets_repo.py
 │   ├── inventory/
 │   │   ├── inventory_repo.py
 │   │   ├── inventory_schema.py
@@ -108,6 +112,9 @@ system/
 │   │   │   ├── product_tab.py
 │   │   │   └── raw_tab.py
 │   │   ├── costing_section/
+│   │   ├── design/
+│   │   │   ├── designs_tab.py
+│   │   │   └── dimension_sets_tab.py
 │   │   ├── inventory/
 │   │   │   ├── items/
 │   │   │   │   ├── _item_form.py
@@ -132,6 +139,7 @@ system/
 │   │   │   └── pricing_tab.py
 │   │   ├── accounting_section.py
 │   │   ├── costing_section.py
+│   │   ├── design_section.py
 │   │   ├── inventory_section.py
 │   │   └── pricing_section.py
 │   ├── widgets/
