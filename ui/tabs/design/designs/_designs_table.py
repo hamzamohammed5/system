@@ -1,31 +1,26 @@
 """
 ui/tabs/design/designs/_designs_table.py
-==============================
-جدول التصميمات مع فلتر بالاسم + التصنيف + مجموعة المقاسات.
-لما تتغير مجموعة المقاسات في الفلتر، signal set_filter_changed بيتبعت
-للوحة التفاصيل عشان تفلتر بطاقات المقاسات.
+==========================================
+جدول التصميمات — مع عمود thumbnail يعرض صورة من أول XCF متاح للتصميم.
 """
 
 from PyQt5.QtWidgets import (
     QWidget, QVBoxLayout, QHBoxLayout,
-    QTableWidgetItem,
+    QTableWidget, QTableWidgetItem, QHeaderView,
     QPushButton, QLabel, QLineEdit,
     QMessageBox, QFrame, QComboBox,
+    QAbstractItemView,
 )
-from PyQt5.QtCore import Qt, pyqtSignal
-from PyQt5.QtGui import QColor
+from PyQt5.QtCore  import Qt, pyqtSignal, QThread, pyqtSignal as Signal
+from PyQt5.QtGui   import QPixmap, QColor
 
-from db.designs.designs_repo import (
-    fetch_design, delete_design,
-)
-from db.designs.designs_sizes_repo import (
-    fetch_all_designs_summary,
-)
+from db.designs.designs_repo import fetch_design, delete_design
+from db.designs.designs_sizes_repo import fetch_all_designs_summary
 from db.designs.dimension_sets_repo import (
     fetch_all_design_categories, build_category_tree,
     fetch_all_dimension_sets, fetch_category_descendants,
 )
-from ui.helpers import make_table, danger_button, confirm_delete, buttons_row
+from ui.helpers import danger_button, confirm_delete, buttons_row
 
 from ._design_detail_panel import _DesignDetailPanel
 
@@ -35,8 +30,41 @@ _BLUE_MID   = "#bbdefb"
 _GREEN      = "#2e7d32"
 _ORANGE     = "#e65100"
 
+# حجم الـ thumbnail في الجدول
+_TABLE_THUMB = 56
+
+
+# ════════════════════════════════════════════════════════
+# Worker — تحميل الـ thumbnail في الخلفية
+# ════════════════════════════════════════════════════════
+
+class _RowThumbWorker(QThread):
+    """يحمّل thumbnail لصف واحد في الجدول."""
+    done = Signal(int, object)   # row_index, QPixmap|None
+
+    def __init__(self, row: int, xcf_path: str, size: int = _TABLE_THUMB):
+        super().__init__()
+        self._row  = row
+        self._path = xcf_path
+        self._size = size
+
+    def run(self):
+        try:
+            from ._xcf_thumbnail import get_xcf_thumbnail
+            px = get_xcf_thumbnail(self._path, self._size)
+        except Exception:
+            px = None
+        self.done.emit(self._row, px)
+
+
+# ════════════════════════════════════════════════════════
+# دالة جلب التصميمات المفلترة
+# ════════════════════════════════════════════════════════
 
 def _fetch_designs_filtered(conn, name_q="", category_id=None, set_id=None):
+    """
+    يجلب التصميمات مع أول XCF متاح (للـ thumbnail) وعدد المقاسات والملفات.
+    """
     sql = """
         SELECT d.id, d.name, d.category_id, d.notes,
                d.created_at, d.updated_at,
@@ -44,7 +72,14 @@ def _fetch_designs_filtered(conn, name_q="", category_id=None, set_id=None):
                COUNT(DISTINCT ds.id)                      AS sizes_count,
                SUM(CASE WHEN ds.xcf_path IS NOT NULL
                              AND ds.xcf_path != ''
-                        THEN 1 ELSE 0 END)                AS files_count
+                        THEN 1 ELSE 0 END)                AS files_count,
+               (SELECT ds2.xcf_path
+                FROM   design_sizes ds2
+                WHERE  ds2.design_id = d.id
+                  AND  ds2.xcf_path IS NOT NULL
+                  AND  ds2.xcf_path != ''
+                ORDER  BY ds2.sort_order, ds2.id
+                LIMIT  1)                                 AS first_xcf
         FROM   designs d
         LEFT JOIN design_categories dc ON dc.id = d.category_id
         LEFT JOIN design_sizes ds      ON ds.design_id = d.id
@@ -74,6 +109,20 @@ def _fetch_designs_filtered(conn, name_q="", category_id=None, set_id=None):
     return conn.execute(sql, params).fetchall()
 
 
+# ════════════════════════════════════════════════════════
+# جدول التصميمات
+# ════════════════════════════════════════════════════════
+
+# أعمدة الجدول
+_COL_THUMB    = 0
+_COL_ID       = 1
+_COL_NAME     = 2
+_COL_CATEGORY = 3
+_COL_SIZES    = 4
+_COL_FILES    = 5
+_COLS         = ["", "ID", "الاسم", "التصنيف", "المقاسات", "الملفات"]
+
+
 class _DesignsTable(QWidget):
     """
     Signals:
@@ -86,16 +135,15 @@ class _DesignsTable(QWidget):
     design_deleted     = pyqtSignal()
     set_filter_changed = pyqtSignal(object)
 
-    def __init__(self, conn, detail_panel, parent=None):
-        super().__init__(parent)
+    def __init__(self, conn, detail_panel: "_DesignDetailPanel", parent=None):
+        super().__init__(conn if False else parent)   # avoid type confusion
         self.conn   = conn
         self._panel = detail_panel
+        self._thumb_workers: list[_RowThumbWorker] = []
         self._build()
         self._load()
 
-    # ──────────────────────────────────────────────────────
-    # بناء الواجهة
-    # ──────────────────────────────────────────────────────
+    # ── بناء الواجهة ──────────────────────────────────
 
     def _build(self):
         root = QVBoxLayout(self)
@@ -184,15 +232,56 @@ class _DesignsTable(QWidget):
 
         root.addWidget(ff)
 
-        # ── جدول ──
-        self.table = make_table(
-            ["ID", "الاسم", "التصنيف", "المقاسات", "الملفات"],
-            stretch_col=1
-        )
-        self.table.setColumnWidth(0, 40)
-        self.table.setColumnWidth(2, 110)
-        self.table.setColumnWidth(3, 65)
-        self.table.setColumnWidth(4, 65)
+        # ── الجدول ──
+        self.table = QTableWidget()
+        self.table.setColumnCount(len(_COLS))
+        self.table.setHorizontalHeaderLabels(_COLS)
+        self.table.setSelectionBehavior(QAbstractItemView.SelectRows)
+        self.table.setEditTriggers(QAbstractItemView.NoEditTriggers)
+        self.table.setAlternatingRowColors(True)
+        self.table.verticalHeader().setVisible(False)
+        self.table.setShowGrid(False)
+        self.table.setStyleSheet(f"""
+            QTableWidget {{
+                border: none;
+                background: white;
+                alternate-background-color: #f9fbff;
+                outline: none;
+            }}
+            QTableWidget::item {{
+                padding: 4px 8px;
+                border-bottom: 1px solid #f0f0f0;
+            }}
+            QTableWidget::item:selected {{
+                background: {_BLUE_LIGHT};
+                color: {_BLUE};
+            }}
+            QHeaderView::section {{
+                background: #f5f7ff;
+                color: #555;
+                font-weight: bold;
+                font-size: 11px;
+                padding: 5px 8px;
+                border: none;
+                border-bottom: 2px solid {_BLUE_MID};
+            }}
+        """)
+
+        hh = self.table.horizontalHeader()
+        # عمود الـ thumbnail
+        hh.setSectionResizeMode(_COL_THUMB,    QHeaderView.Fixed)
+        self.table.setColumnWidth(_COL_THUMB,   _TABLE_THUMB + 8)
+        # باقي الأعمدة
+        hh.setSectionResizeMode(_COL_ID,        QHeaderView.Fixed)
+        self.table.setColumnWidth(_COL_ID,       36)
+        hh.setSectionResizeMode(_COL_NAME,      QHeaderView.Stretch)
+        hh.setSectionResizeMode(_COL_CATEGORY,  QHeaderView.Interactive)
+        self.table.setColumnWidth(_COL_CATEGORY, 110)
+        hh.setSectionResizeMode(_COL_SIZES,     QHeaderView.Fixed)
+        self.table.setColumnWidth(_COL_SIZES,    58)
+        hh.setSectionResizeMode(_COL_FILES,     QHeaderView.Fixed)
+        self.table.setColumnWidth(_COL_FILES,    58)
+
         self.table.itemSelectionChanged.connect(self._on_select)
         self.table.doubleClicked.connect(self._on_select)
         root.addWidget(self.table)
@@ -216,9 +305,7 @@ class _DesignsTable(QWidget):
             QComboBox::drop-down {{ border:none; }}
         """
 
-    # ──────────────────────────────────────────────────────
-    # Combo loaders
-    # ──────────────────────────────────────────────────────
+    # ── Combo loaders ──────────────────────────────────
 
     def _reload_category_combo(self):
         prev = self.cmb_category.currentData()
@@ -254,9 +341,7 @@ class _DesignsTable(QWidget):
                 break
         self.cmb_set.blockSignals(False)
 
-    # ──────────────────────────────────────────────────────
-    # فلترة
-    # ──────────────────────────────────────────────────────
+    # ── تحميل وفلترة ───────────────────────────────────
 
     def _load(self):
         self._reload_category_combo()
@@ -264,11 +349,15 @@ class _DesignsTable(QWidget):
         self._apply_filter()
 
     def _on_set_changed(self):
-        """تغيير فلتر المجموعة — فلتر الجدول + إبلاغ لوحة التفاصيل."""
         self._apply_filter()
         self.set_filter_changed.emit(self.cmb_set.currentData())
 
     def _apply_filter(self):
+        # إيقاف الـ workers القديمة
+        for w in self._thumb_workers:
+            w.quit()
+        self._thumb_workers.clear()
+
         name_q  = self.inp_search.text().strip()
         cat_id  = self.cmb_category.currentData()
         set_id  = self.cmb_set.currentData()
@@ -277,19 +366,56 @@ class _DesignsTable(QWidget):
         rows = _fetch_designs_filtered(self.conn, name_q, cat_id, set_id)
 
         self.table.setRowCount(0)
+
         for d in rows:
             r = self.table.rowCount()
             self.table.insertRow(r)
-            self.table.setItem(r, 0, QTableWidgetItem(str(d["id"])))
-            self.table.setItem(r, 1, QTableWidgetItem(d["name"]))
-            self.table.setItem(r, 2, QTableWidgetItem(d["category_name"] or "—"))
+            self.table.setRowHeight(r, _TABLE_THUMB + 8)
+
+            # ── عمود الـ thumbnail ──
+            thumb_lbl = QLabel()
+            thumb_lbl.setFixedSize(_TABLE_THUMB + 4, _TABLE_THUMB + 4)
+            thumb_lbl.setAlignment(Qt.AlignCenter)
+            thumb_lbl.setStyleSheet(f"""
+                background: #f0f4ff;
+                border: 1px solid #e0e7f3;
+                border-radius: 6px;
+                margin: 2px;
+            """)
+            thumb_lbl.setText("🖼")
+            self.table.setCellWidget(r, _COL_THUMB, thumb_lbl)
+
+            # ابدأ تحميل الـ thumbnail لو في XCF
+            xcf = d["first_xcf"]
+            if xcf:
+                import os
+                if os.path.exists(xcf):
+                    worker = _RowThumbWorker(r, xcf, _TABLE_THUMB)
+                    worker.done.connect(self._on_row_thumb_ready)
+                    worker.start()
+                    self._thumb_workers.append(worker)
+
+            # ── باقي الأعمدة ──
+            id_item = QTableWidgetItem(str(d["id"]))
+            id_item.setData(Qt.UserRole, d["id"])
+            id_item.setTextAlignment(Qt.AlignCenter)
+            self.table.setItem(r, _COL_ID, id_item)
+
+            name_item = QTableWidgetItem(d["name"])
+            name_item.setData(Qt.UserRole, d["id"])   # للبحث بـ UserRole
+            self.table.setItem(r, _COL_NAME, name_item)
+
+            self.table.setItem(
+                r, _COL_CATEGORY,
+                QTableWidgetItem(d["category_name"] or "—")
+            )
 
             sz = d["sizes_count"] or 0
             fl = d["files_count"] or 0
 
             i_sz = QTableWidgetItem(str(sz))
             i_sz.setTextAlignment(Qt.AlignCenter)
-            self.table.setItem(r, 3, i_sz)
+            self.table.setItem(r, _COL_SIZES, i_sz)
 
             i_fl = QTableWidgetItem(str(fl))
             i_fl.setTextAlignment(Qt.AlignCenter)
@@ -297,9 +423,7 @@ class _DesignsTable(QWidget):
                 i_fl.setForeground(QColor(_GREEN))
             elif fl > 0:
                 i_fl.setForeground(QColor(_ORANGE))
-            self.table.setItem(r, 4, i_fl)
-
-            self.table.item(r, 0).setData(Qt.UserRole, d["id"])
+            self.table.setItem(r, _COL_FILES, i_fl)
 
         shown = self.table.rowCount()
         if name_q or cat_id or set_id:
@@ -308,11 +432,40 @@ class _DesignsTable(QWidget):
         else:
             self.lbl_count.setText(f"({shown})")
 
+        # استعادة التحديد السابق
         if prev_id:
             for r in range(self.table.rowCount()):
-                if self.table.item(r, 0).data(Qt.UserRole) == prev_id:
+                item = self.table.item(r, _COL_ID)
+                if item and item.data(Qt.UserRole) == prev_id:
                     self.table.selectRow(r)
                     return
+
+    def _on_row_thumb_ready(self, row: int, pixmap):
+        """يُحدّث الـ thumbnail في الصف المحدد."""
+        if row >= self.table.rowCount():
+            return
+        widget = self.table.cellWidget(row, _COL_THUMB)
+        if not isinstance(widget, QLabel):
+            return
+
+        if pixmap and not pixmap.isNull():
+            widget.setText("")
+            widget.setPixmap(pixmap)
+            widget.setStyleSheet(f"""
+                background: #1a1a2e;
+                border: 1.5px solid {_BLUE_MID};
+                border-radius: 6px;
+                margin: 2px;
+            """)
+        else:
+            widget.setText("📄")
+            widget.setStyleSheet(f"""
+                background: #fafafa;
+                border: 1px dashed #c5cae9;
+                border-radius: 6px;
+                margin: 2px;
+                color: #9e9e9e;
+            """)
 
     def _reset_filters(self):
         for w in (self.inp_search, self.cmb_category, self.cmb_set):
@@ -325,13 +478,11 @@ class _DesignsTable(QWidget):
         self._apply_filter()
         self.set_filter_changed.emit(None)
 
-    # ──────────────────────────────────────────────────────
-    # تفاعل الجدول
-    # ──────────────────────────────────────────────────────
+    # ── تفاعل الجدول ───────────────────────────────────
 
     def _selected_id(self):
         row  = self.table.currentRow()
-        item = self.table.item(row, 0) if row >= 0 else None
+        item = self.table.item(row, _COL_ID) if row >= 0 else None
         return item.data(Qt.UserRole) if item else None
 
     def _on_select(self):
