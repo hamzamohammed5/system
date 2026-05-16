@@ -3,128 +3,54 @@ db/designs/dimension_sets_repo.py
 ==================================
 عمليات قراءة/كتابة مجموعات المقاسات وحقولها واعتمادياتها.
 
-ملاحظة: عمود source_set_id يُضاف في create_designs_tables (design_schema.py).
+التغييرات:
+  - حذف كل دوال design_categories واستبدالها بـ parent_set (تدرج هرمي بين المجموعات)
+  - إضافة دوال جلسات الإدخال المستقلة (dimension_value_sessions)
 """
 
 
 # ══════════════════════════════════════════════════════════
-# تصنيفات التصميمات
-# ══════════════════════════════════════════════════════════
-
-def fetch_all_design_categories(conn) -> list:
-    return conn.execute("""
-        SELECT c.id, c.name, c.color, c.parent_id, c.notes,
-               p.name AS parent_name
-        FROM   design_categories c
-        LEFT JOIN design_categories p ON p.id = c.parent_id
-        ORDER  BY c.parent_id NULLS FIRST, c.name
-    """).fetchall()
-
-
-def fetch_design_category(conn, cat_id: int):
-    return conn.execute(
-        "SELECT id, name, color, parent_id, notes FROM design_categories WHERE id=?",
-        (cat_id,)
-    ).fetchone()
-
-
-def insert_design_category(conn, name: str, color: str = "#1565c0",
-                            parent_id: int = None, notes: str = "") -> int:
-    cur = conn.execute(
-        "INSERT INTO design_categories (name, color, parent_id, notes) VALUES (?, ?, ?, ?)",
-        (name, color, parent_id, notes or "")
-    )
-    conn.commit()
-    return cur.lastrowid
-
-
-def update_design_category(conn, cat_id: int, name: str,
-                            color: str, parent_id: int = None, notes: str = ""):
-    conn.execute(
-        "UPDATE design_categories SET name=?, color=?, parent_id=?, notes=? WHERE id=?",
-        (name, color, parent_id, notes or "", cat_id)
-    )
-    conn.commit()
-
-
-def delete_design_category(conn, cat_id: int):
-    conn.execute("DELETE FROM design_categories WHERE id=?", (cat_id,))
-    conn.commit()
-
-
-def build_category_tree(rows) -> list:
-    nodes = {
-        r["id"]: {
-            "id": r["id"], "name": r["name"],
-            "color": r["color"], "parent_id": r["parent_id"],
-            "children": [],
-        }
-        for r in rows
-    }
-    roots = []
-    for node in nodes.values():
-        pid = node["parent_id"]
-        if pid and pid in nodes:
-            nodes[pid]["children"].append(node)
-        else:
-            roots.append(node)
-    return roots
-
-
-def fetch_category_descendants(conn, cat_id: int) -> list:
-    result, queue = set(), [cat_id]
-    while queue:
-        cur = queue.pop()
-        if cur in result:
-            continue
-        result.add(cur)
-        children = conn.execute(
-            "SELECT id FROM design_categories WHERE parent_id=?", (cur,)
-        ).fetchall()
-        queue.extend(r["id"] for r in children)
-    return list(result)
-
-
-# ══════════════════════════════════════════════════════════
-# مجموعات المقاسات
+# مجموعات المقاسات — مع دعم parent_set_id
 # ══════════════════════════════════════════════════════════
 
 def fetch_all_dimension_sets(conn) -> list:
     return conn.execute("""
-        SELECT ds.id, ds.name, ds.category_id, ds.default_unit, ds.notes,
-               dc.name AS category_name
+        SELECT ds.id, ds.name, ds.parent_set_id, ds.default_unit, ds.notes,
+               ps.name AS parent_set_name
         FROM   dimension_sets ds
-        LEFT JOIN design_categories dc ON dc.id = ds.category_id
-        ORDER  BY ds.name
+        LEFT JOIN dimension_sets ps ON ps.id = ds.parent_set_id
+        ORDER  BY ds.parent_set_id NULLS FIRST, ds.name
     """).fetchall()
 
 
 def fetch_dimension_set(conn, set_id: int):
     return conn.execute("""
-        SELECT ds.id, ds.name, ds.category_id, ds.default_unit, ds.notes,
-               dc.name AS category_name
+        SELECT ds.id, ds.name, ds.parent_set_id, ds.default_unit, ds.notes,
+               ps.name AS parent_set_name
         FROM   dimension_sets ds
-        LEFT JOIN design_categories dc ON dc.id = ds.category_id
+        LEFT JOIN dimension_sets ps ON ps.id = ds.parent_set_id
         WHERE  ds.id = ?
     """, (set_id,)).fetchone()
 
 
-def insert_dimension_set(conn, name: str, category_id: int = None,
+def insert_dimension_set(conn, name: str, parent_set_id: int = None,
                           default_unit: str = "cm", notes: str = "") -> int:
     cur = conn.execute(
-        "INSERT INTO dimension_sets (name, category_id, default_unit, notes) VALUES (?, ?, ?, ?)",
-        (name, category_id, default_unit or "cm", notes or "")
+        "INSERT INTO dimension_sets (name, parent_set_id, default_unit, notes)"
+        " VALUES (?, ?, ?, ?)",
+        (name, parent_set_id, default_unit or "cm", notes or "")
     )
     conn.commit()
     return cur.lastrowid
 
 
 def update_dimension_set(conn, set_id: int, name: str,
-                          category_id: int = None, default_unit: str = "cm",
+                          parent_set_id: int = None, default_unit: str = "cm",
                           notes: str = ""):
     conn.execute(
-        "UPDATE dimension_sets SET name=?, category_id=?, default_unit=?, notes=? WHERE id=?",
-        (name, category_id, default_unit or "cm", notes or "", set_id)
+        "UPDATE dimension_sets SET name=?, parent_set_id=?, default_unit=?, notes=?"
+        " WHERE id=?",
+        (name, parent_set_id, default_unit or "cm", notes or "", set_id)
     )
     conn.commit()
 
@@ -132,6 +58,44 @@ def update_dimension_set(conn, set_id: int, name: str,
 def delete_dimension_set(conn, set_id: int):
     conn.execute("DELETE FROM dimension_sets WHERE id=?", (set_id,))
     conn.commit()
+
+
+def build_sets_tree(rows) -> list:
+    """يبني شجرة هرمية من قائمة المجموعات."""
+    nodes = {
+        r["id"]: {
+            "id":            r["id"],
+            "name":          r["name"],
+            "parent_set_id": r["parent_set_id"],
+            "default_unit":  r["default_unit"],
+            "notes":         r["notes"] if "notes" in r.keys() else "",
+            "children":      [],
+        }
+        for r in rows
+    }
+    roots = []
+    for node in nodes.values():
+        pid = node["parent_set_id"]
+        if pid and pid in nodes:
+            nodes[pid]["children"].append(node)
+        else:
+            roots.append(node)
+    return roots
+
+
+def fetch_set_descendants(conn, set_id: int) -> list:
+    """يجيب كل أحفاد مجموعة (بشكل متكرر) بما فيها هي."""
+    result, queue = set(), [set_id]
+    while queue:
+        cur = queue.pop()
+        if cur in result:
+            continue
+        result.add(cur)
+        children = conn.execute(
+            "SELECT id FROM dimension_sets WHERE parent_set_id=?", (cur,)
+        ).fetchall()
+        queue.extend(r["id"] for r in children)
+    return list(result)
 
 
 # ══════════════════════════════════════════════════════════
@@ -158,26 +122,23 @@ def fetch_fields_for_set(conn, set_id: int) -> list:
 
 def fetch_all_fields_for_combo(conn, exclude_field_id: int = None) -> list:
     """
-    كل الحقول الرقمية من كل المجموعات مرتبة بالتصنيف ثم المجموعة.
-    كل صف: field_id, field_label, set_id, set_name, cat_id, cat_name
+    كل الحقول الرقمية من كل المجموعات مرتبة بالمجموعة.
+    كل صف: field_id, field_label, set_id, set_name
     """
     sql = """
         SELECT f.id      AS field_id,
                f.label   AS field_label,
                f.set_id,
-               ds.name   AS set_name,
-               COALESCE(dc.id, -1)                       AS cat_id,
-               COALESCE(dc.name, '— بدون تصنيف —')       AS cat_name
+               ds.name   AS set_name
         FROM   dimension_fields f
         JOIN   dimension_sets ds ON ds.id = f.set_id
-        LEFT JOIN design_categories dc ON dc.id = ds.category_id
         WHERE  f.field_type = 'number'
     """
     params = []
     if exclude_field_id is not None:
         sql += " AND f.id != ?"
         params.append(exclude_field_id)
-    sql += " ORDER BY cat_name, ds.name, f.sort_order, f.id"
+    sql += " ORDER BY ds.name, f.sort_order, f.id"
     return conn.execute(sql, params).fetchall()
 
 
@@ -297,28 +258,77 @@ def calc_auto_value(conn, field_id: int, link_id: int):
 
 
 # ══════════════════════════════════════════════════════════
-# قيم المجموعة المستقلة (للإدخال المباشر بدون تصميم)
+# جلسات الإدخال المستقلة
 # ══════════════════════════════════════════════════════════
 
-def fetch_standalone_values(conn, set_id: int) -> dict:
+def fetch_sessions_for_set(conn, set_id: int) -> list:
+    """كل جلسات الإدخال الخاصة بمجموعة معينة."""
+    return conn.execute("""
+        SELECT id, set_id, name, notes, created_at, updated_at
+        FROM   dimension_value_sessions
+        WHERE  set_id = ?
+        ORDER  BY updated_at DESC, id DESC
+    """, (set_id,)).fetchall()
+
+
+def fetch_session(conn, session_id: int):
+    return conn.execute(
+        "SELECT id, set_id, name, notes, created_at, updated_at "
+        "FROM dimension_value_sessions WHERE id=?",
+        (session_id,)
+    ).fetchone()
+
+
+def insert_session(conn, set_id: int, name: str, notes: str = "") -> int:
+    cur = conn.execute(
+        "INSERT INTO dimension_value_sessions (set_id, name, notes) VALUES (?, ?, ?)",
+        (set_id, name or "جلسة جديدة", notes or "")
+    )
+    conn.commit()
+    return cur.lastrowid
+
+
+def update_session(conn, session_id: int, name: str, notes: str = ""):
+    conn.execute(
+        "UPDATE dimension_value_sessions SET name=?, notes=?,"
+        " updated_at=datetime('now') WHERE id=?",
+        (name or "جلسة جديدة", notes or "", session_id)
+    )
+    conn.commit()
+
+
+def delete_session(conn, session_id: int):
+    conn.execute(
+        "DELETE FROM dimension_value_sessions WHERE id=?", (session_id,)
+    )
+    conn.commit()
+
+
+def fetch_session_values(conn, session_id: int) -> dict:
+    """يرجع {field_id: value_num} لجلسة معينة."""
     rows = conn.execute(
-        "SELECT field_id, value_num FROM dimension_set_values WHERE set_id=?",
-        (set_id,)
+        "SELECT field_id, value_num FROM dimension_set_values WHERE session_id=?",
+        (session_id,)
     ).fetchall()
     return {r["field_id"]: r["value_num"] for r in rows}
 
 
-def save_standalone_value(conn, set_id: int, field_id: int, value_num: float = None):
+def save_session_value(conn, session_id: int, set_id: int,
+                        field_id: int, value_num: float = None):
     conn.execute("""
-        INSERT INTO dimension_set_values (set_id, field_id, value_num)
-        VALUES (?, ?, ?)
-        ON CONFLICT(set_id, field_id) DO UPDATE SET value_num=excluded.value_num
-    """, (set_id, field_id, value_num))
+        INSERT INTO dimension_set_values (session_id, set_id, field_id, value_num)
+        VALUES (?, ?, ?, ?)
+        ON CONFLICT(session_id, field_id) DO UPDATE SET value_num=excluded.value_num
+    """, (session_id, set_id, field_id, value_num))
     conn.commit()
 
 
-def calc_standalone_cross_auto(conn, field_id: int, current_set_id: int):
-    """يحسب القيمة التلقائية في وضع الإدخال المستقل عبر dimension_set_values."""
+def calc_standalone_cross_auto(conn, field_id: int, current_set_id: int,
+                                session_id: int = None):
+    """
+    يحسب القيمة التلقائية في وضع الإدخال المستقل.
+    يبحث في dimension_set_values بالـ session_id أو بالـ set_id.
+    """
     dep = fetch_field_dep(conn, field_id)
     if not dep:
         return None
@@ -327,10 +337,25 @@ def calc_standalone_cross_auto(conn, field_id: int, current_set_id: int):
     source_set_id   = dep["source_set_id"] if dep["source_set_id"] else current_set_id
     offset          = float(dep["offset"])
 
-    val_row = conn.execute(
-        "SELECT value_num FROM dimension_set_values WHERE set_id=? AND field_id=?",
-        (source_set_id, source_field_id)
-    ).fetchone()
+    if session_id is not None:
+        # نبحث في نفس الجلسة أولاً
+        val_row = conn.execute(
+            "SELECT value_num FROM dimension_set_values "
+            "WHERE session_id=? AND field_id=?",
+            (session_id, source_field_id)
+        ).fetchone()
+        if val_row and val_row["value_num"] is not None:
+            return float(val_row["value_num"]) + offset
+
+    # fallback: أحدث قيمة للحقل المصدر في نفس المجموعة
+    val_row = conn.execute("""
+        SELECT dsv.value_num
+        FROM   dimension_set_values dsv
+        JOIN   dimension_value_sessions ses ON ses.id = dsv.session_id
+        WHERE  ses.set_id = ? AND dsv.field_id = ?
+        ORDER  BY ses.updated_at DESC
+        LIMIT  1
+    """, (source_set_id, source_field_id)).fetchone()
 
     if not val_row or val_row["value_num"] is None:
         return None
