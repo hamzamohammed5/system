@@ -1,14 +1,15 @@
 """
 ui/tabs/design/dimension_sets/_sets_panel.py
 =====================================
+قائمة اختيار مجموعات المقاسات فقط.
+كل إدارة المجموعات (إضافة/تعديل/حذف) انتقلت لـ _GroupsPanel.
 """
 
 from PyQt5.QtWidgets import (
     QWidget, QVBoxLayout, QHBoxLayout,
     QTableWidgetItem,
     QLabel, QLineEdit,
-    QComboBox
-
+    QComboBox,
 )
 from PyQt5.QtCore import Qt, pyqtSignal
 
@@ -16,18 +17,14 @@ from db.designs.dimension_sets_repo import (
     fetch_all_design_categories,
     build_category_tree,
     fetch_all_dimension_sets,
-
 )
 from ui.helpers import make_table
 
-# ══════════════════════════════════════════════════════════
-# لوحة مجموعات المقاسات (القائمة + الفورم)
-# ══════════════════════════════════════════════════════════
 
 class _SetsPanel(QWidget):
     """
-    قايمة اختيار مجموعات المقاسات فقط — بدون إضافة أو تعديل أو حذف.
-    كل إدارة المجموعات انتقلت لتبويب "المجموعات" (_GroupsPanel).
+    قايمة اختيار مجموعات المقاسات — بدون إضافة أو تعديل أو حذف.
+    كل إدارة المجموعات في تبويب 'المجموعات' (_GroupsPanel).
     """
 
     set_selected = pyqtSignal(int)
@@ -53,7 +50,7 @@ class _SetsPanel(QWidget):
         root.addWidget(hdr)
 
         # ── تلميح ──
-        hint = QLabel("💡 لإضافة أو تعديل المجموعات اذهب لتبويب «المجموعات»")
+        hint = QLabel("💡 لإضافة أو تعديل المجموعات والتصنيفات — اذهب لتبويب «المجموعات»")
         hint.setStyleSheet(
             "color: #555; font-size: 10px; background: #fff8e1;"
             "border: 1px solid #ffe082; border-radius: 4px; padding: 4px 8px;"
@@ -67,10 +64,12 @@ class _SetsPanel(QWidget):
         self.inp_search.setPlaceholderText("🔍 بحث...")
         self.inp_search.setMinimumHeight(28)
         self.inp_search.textChanged.connect(self._apply_filter)
+
         self.cmb_cat_filter = QComboBox()
         self.cmb_cat_filter.setMinimumHeight(28)
         self.cmb_cat_filter.setMinimumWidth(120)
         self.cmb_cat_filter.currentIndexChanged.connect(self._apply_filter)
+
         filter_row.addWidget(QLabel("🔍"))
         filter_row.addWidget(self.inp_search, stretch=1)
         filter_row.addWidget(QLabel("📁"))
@@ -160,4 +159,3 @@ class _SetsPanel(QWidget):
 
     def refresh(self):
         self._load()
-
