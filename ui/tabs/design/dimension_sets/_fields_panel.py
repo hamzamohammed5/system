@@ -7,24 +7,19 @@ from PyQt5.QtWidgets import (
     QWidget, QVBoxLayout, QHBoxLayout,
     QTableWidgetItem, QPushButton, QLabel,
     QMessageBox, QDialog,
-
 )
 from PyQt5.QtCore import Qt, pyqtSignal
 
 from db.designs.dimension_sets_repo import (
     fetch_fields_for_set, fetch_field,
     delete_field, reorder_fields,
-
 )
 from ._field_dialog import _FieldDialog
 from ui.helpers import make_table, confirm_delete, danger_button
 
-# ══════════════════════════════════════════════════════════
-# لوحة حقول المجموعة
-# ══════════════════════════════════════════════════════════
 
 class _FieldsPanel(QWidget):
-    """محرر حقول مجموعة مقاسات."""
+    """محرر حقول مجموعة مقاسات — إضافة / تعديل / حذف / ترتيب."""
 
     fields_changed = pyqtSignal()
     set_selected   = pyqtSignal(int)
@@ -108,16 +103,36 @@ class _FieldsPanel(QWidget):
             ))
             self.table.setItem(r, 5, QTableWidgetItem("✓" if f["required"] else ""))
 
+            # ── عمود الاعتمادية — sqlite3.Row لا يدعم .get() ──
             dep_text = ""
-            if f["source_field_id"]:
-                sign     = "+" if f["dep_offset"] >= 0 else ""
-                src_lbl  = f["source_label"] or ""
-                src_set  = f.get("source_set_name") or ""
+            try:
+                src_field_id = f["source_field_id"]
+            except Exception:
+                src_field_id = None
+
+            if src_field_id:
+                try:
+                    dep_offset = f["dep_offset"] or 0
+                except Exception:
+                    dep_offset = 0
+                sign    = "+" if dep_offset >= 0 else ""
+                src_lbl = ""
+                src_set = ""
+                try:
+                    src_lbl = f["source_label"] or ""
+                except Exception:
+                    pass
+                try:
+                    src_set = f["source_set_name"] or ""
+                except Exception:
+                    pass
+
                 dep_text = (
-                    f"{src_lbl} ({src_set}) {sign}{f['dep_offset']:g}"
+                    f"{src_lbl} ({src_set}) {sign}{dep_offset:g}"
                     if src_set else
-                    f"{src_lbl} {sign}{f['dep_offset']:g}"
+                    f"{src_lbl} {sign}{dep_offset:g}"
                 )
+
             self.table.setItem(r, 6, QTableWidgetItem(dep_text))
             self.table.item(r, 0).setData(Qt.UserRole, f["id"])
 
@@ -174,4 +189,3 @@ class _FieldsPanel(QWidget):
         self._refresh()
         self.table.selectRow(new_row)
         self.fields_changed.emit()
-

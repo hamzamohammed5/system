@@ -13,8 +13,21 @@ from PyQt5.QtCore import Qt
 from db.designs.dimension_sets_repo import (
     fetch_fields_for_set,
     fetch_standalone_values,
-    calc_standalone_cross_auto
+    calc_standalone_cross_auto,
 )
+
+
+def _row_val(row, key, default=None):
+    """
+    قراءة آمنة من sqlite3.Row — لا يدعم .get() مثل dict.
+    يرجع default لو العمود غير موجود أو قيمته None.
+    """
+    try:
+        v = row[key]
+        return v if v is not None else default
+    except (IndexError, KeyError):
+        return default
+
 
 # ══════════════════════════════════════════════════════════
 # لوحة إدخال القيم
@@ -69,12 +82,12 @@ class _ValuesPanel(QWidget):
                 l.setFixedWidth(width)
             return l, stretch
 
-        lbl_name,  s0 = _hdr_lbl("الاسم / التسمية", 110)
-        lbl_field, s1 = _hdr_lbl("الحقل", 100)
-        lbl_val,   s2 = _hdr_lbl("القيمة", 0, 1)
-        lbl_unit,  s3 = _hdr_lbl("الوحدة", 30)
-        lbl_ref,   s4 = _hdr_lbl("المرجع (المصدر)", 110)
-        lbl_act,   s5 = _hdr_lbl("", 52)
+        lbl_name,  _ = _hdr_lbl("الاسم / التسمية", 110)
+        lbl_field, _ = _hdr_lbl("الحقل", 100)
+        lbl_val,   _ = _hdr_lbl("القيمة", 0)
+        lbl_unit,  _ = _hdr_lbl("الوحدة", 30)
+        lbl_ref,   _ = _hdr_lbl("المرجع (المصدر)", 110)
+        lbl_act,   _ = _hdr_lbl("", 52)
 
         col_lay.addWidget(lbl_name)
         col_lay.addWidget(lbl_field)
@@ -165,7 +178,7 @@ class _ValuesPanel(QWidget):
         self._clear_fields()
         self._hint.setVisible(False)
 
-        fields = fetch_fields_for_set(self.conn, set_id)
+        fields     = fetch_fields_for_set(self.conn, set_id)
         num_fields = [f for f in fields if f["field_type"] == "number"]
 
         if not num_fields:
@@ -180,7 +193,7 @@ class _ValuesPanel(QWidget):
 
         self._col_header.setVisible(True)
         saved    = fetch_standalone_values(self.conn, set_id)
-        has_auto = any(bool(f["source_field_id"]) for f in num_fields)
+        has_auto = any(bool(_row_val(f, "source_field_id")) for f in num_fields)
 
         for f in num_fields:
             saved_info = saved.get(f["id"], {})
@@ -193,11 +206,15 @@ class _ValuesPanel(QWidget):
         self.lbl_status.setText("")
 
     def _build_row(self, field_data, saved_info: dict) -> QWidget:
-        fid        = field_data["id"]
-        has_dep    = bool(field_data["source_field_id"])
-        src_set_id = field_data.get("source_set_id")
-        src_fid    = field_data.get("source_field_id")
-        dep_offset = float(field_data.get("dep_offset") or 0)
+        fid = field_data["id"]
+
+        # قراءة آمنة من sqlite3.Row
+        has_dep    = bool(_row_val(field_data, "source_field_id"))
+        src_set_id = _row_val(field_data, "source_set_id")
+        src_fid    = _row_val(field_data, "source_field_id")
+        dep_offset = float(_row_val(field_data, "dep_offset") or 0)
+        src_label  = _row_val(field_data, "source_label", "")
+        src_set_nm = _row_val(field_data, "source_set_name", "")
 
         current_value = saved_info.get("value_num")
         saved_name    = saved_info.get("value_text") or ""
@@ -281,12 +298,10 @@ class _ValuesPanel(QWidget):
         lay.addWidget(ref_lbl)
 
         if has_dep and src_fid:
-            src_label   = field_data.get("source_label") or ""
-            src_set_nm  = field_data.get("source_set_name") or ""
+            actual_src_set = src_set_id if src_set_id else self._set_id
             tooltip_txt = f"يعتمد على: {src_label}"
             if src_set_nm:
                 tooltip_txt += f"\nمن مجموعة: {src_set_nm}"
-            actual_src_set = src_set_id if src_set_id else self._set_id
 
             btn_auto = QPushButton("⟳")
             btn_auto.setFixedSize(30, 28)
@@ -408,7 +423,6 @@ class _ValuesPanel(QWidget):
                 ON CONFLICT(set_id, field_id) DO UPDATE SET value_num=excluded.value_num
             """, (self._set_id, field_id, val))
             self.conn.commit()
-
             self.lbl_status.setText(f"✓ {val:.4g}")
             if ref_lbl:
                 self._refresh_ref_label(ref_lbl, source_field_id, source_set_id, offset)
@@ -428,7 +442,7 @@ class _ValuesPanel(QWidget):
         count  = 0
 
         for f in fields:
-            if f["field_type"] != "number" or not f["source_field_id"]:
+            if f["field_type"] != "number" or not _row_val(f, "source_field_id"):
                 continue
             fid = f["id"]
             if fid not in self._rows:
@@ -519,4 +533,3 @@ class _ValuesPanel(QWidget):
         self._set_buttons(False)
         self._hint.setVisible(True)
         self.lbl_status.setText("")
-
