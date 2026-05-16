@@ -1,5 +1,5 @@
 File Tree Snapshot
-Generated : 2026-05-16 11:09:03
+Generated : 2026-05-16 13:37:18
 Source    : D:\My Workspace\Hg\Alhabaar\accountant\system
 Extensions: .py
 ────────────────────────────────────────────────────────────
@@ -23,8 +23,10 @@ system/
 │   ├── designs/
 │   │   ├── design_schema.py
 │   │   ├── designs_repo.py
+│   │   ├── designs_sizes_repo.py
 │   │   ├── dimension_sets_repo.py
-│   │   └── migrations_v4.py
+│   │   ├── migrations_v4.py
+│   │   └── migrations_v5.py
 │   ├── inventory/
 │   │   ├── inventory_repo.py
 │   │   ├── inventory_schema.py
@@ -112,6 +114,11 @@ system/
 │   │   │   ├── product_tab.py
 │   │   │   └── raw_tab.py
 │   │   ├── design/
+│   │   │   ├── designs/
+│   │   │   │   ├── _design_detail_panel.py
+│   │   │   │   ├── _designs_table.py
+│   │   │   │   ├── _size_card.py
+│   │   │   │   └── _size_dialog.py
 │   │   │   ├── dimension_sets/
 │   │   │   │   ├── values_panel/
 │   │   │   │   │   ├── _instance_popup.py

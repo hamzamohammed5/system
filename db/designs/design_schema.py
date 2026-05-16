@@ -73,6 +73,10 @@ def _run_migrations(conn):
     from db.designs.migrations_v4 import run_migrations_v4
     run_migrations_v4(conn)
 
+    # ══ 4. migration v5 — design_sizes + GIMP integration ══
+    from db.designs.migrations_v5 import run_migrations_v5
+    run_migrations_v5(conn)
+
 
 def create_designs_tables(conn):
     """إنشاء كل جداول designs.db ثم تنفيذ الـ migrations."""
@@ -159,7 +163,27 @@ def create_designs_tables(conn):
             updated_at  TEXT    NOT NULL DEFAULT (datetime('now'))
         );
 
-        -- ربط التصميم بالمقاسات
+        -- ربط التصميم بالمقاسات الفعلية (instances) + مسار GIMP
+        CREATE TABLE IF NOT EXISTS design_sizes (
+            id              INTEGER PRIMARY KEY AUTOINCREMENT,
+            design_id       INTEGER NOT NULL
+                            REFERENCES designs(id) ON DELETE CASCADE,
+            set_id          INTEGER NOT NULL
+                            REFERENCES dimension_sets(id) ON DELETE RESTRICT,
+            instance_id     INTEGER NOT NULL
+                            REFERENCES dimension_set_instances(id) ON DELETE RESTRICT,
+            width_field_id  INTEGER
+                            REFERENCES dimension_fields(id) ON DELETE SET NULL,
+            height_field_id INTEGER
+                            REFERENCES dimension_fields(id) ON DELETE SET NULL,
+            xcf_path        TEXT,
+            notes           TEXT,
+            sort_order      INTEGER NOT NULL DEFAULT 0,
+            created_at      TEXT    NOT NULL DEFAULT (datetime('now')),
+            UNIQUE(design_id, instance_id)
+        );
+
+        -- جداول قديمة للتوافق (design_dimensions, design_dim_values) ══
         CREATE TABLE IF NOT EXISTS design_dimensions (
             id          INTEGER PRIMARY KEY AUTOINCREMENT,
             design_id   INTEGER NOT NULL REFERENCES designs(id) ON DELETE CASCADE,
@@ -168,7 +192,6 @@ def create_designs_tables(conn):
             sort_order  INTEGER NOT NULL DEFAULT 0
         );
 
-        -- قيم الحقول لكل ربط تصميم ↔ مقاسات
         CREATE TABLE IF NOT EXISTS design_dim_values (
             id          INTEGER PRIMARY KEY AUTOINCREMENT,
             link_id     INTEGER NOT NULL
