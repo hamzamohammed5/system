@@ -36,7 +36,6 @@ def _run_migrations(conn):
     """Migrations آمنة على designs.db — تُضاف أعمدة جديدة بدون حذف بيانات."""
 
     # ══ 1. source_set_id في dimension_field_deps ══
-    # يسمح بالاعتمادية على حقل من مجموعة مقاسات مختلفة (cross-set)
     if _table_exists(conn, "dimension_field_deps"):
         if not _column_exists(conn, "dimension_field_deps", "source_set_id"):
             try:
@@ -50,7 +49,6 @@ def _run_migrations(conn):
                 print(f"[design_schema] migration source_set_id: {e}")
 
     # ══ 2. جدول dimension_set_values ══
-    # قيم مستقلة لمجموعة المقاسات (بدون ربط بتصميم)
     if not _table_exists(conn, "dimension_set_values"):
         try:
             conn.execute("""
@@ -60,14 +58,20 @@ def _run_migrations(conn):
                                 REFERENCES dimension_sets(id) ON DELETE CASCADE,
                     field_id    INTEGER NOT NULL
                                 REFERENCES dimension_fields(id) ON DELETE CASCADE,
+                    instance_id INTEGER
+                                REFERENCES dimension_set_instances(id) ON DELETE CASCADE,
                     value_num   REAL,
                     value_text  TEXT,
-                    UNIQUE(set_id, field_id)
+                    UNIQUE(instance_id, field_id)
                 )
             """)
             conn.commit()
         except Exception as e:
             print(f"[design_schema] migration dimension_set_values: {e}")
+
+    # ══ 3. migration v4 — نظام الـ instances ══
+    from db.designs.migrations_v4 import run_migrations_v4
+    run_migrations_v4(conn)
 
 
 def create_designs_tables(conn):
@@ -120,16 +124,29 @@ def create_designs_tables(conn):
             UNIQUE(field_id)
         );
 
-        -- قيم مستقلة لمجموعة المقاسات (بدون ربط بتصميم)
+        -- instances مجموعة المقاسات (كل instance = مجموعة قيم مسماة)
+        CREATE TABLE IF NOT EXISTS dimension_set_instances (
+            id         INTEGER PRIMARY KEY AUTOINCREMENT,
+            set_id     INTEGER NOT NULL
+                       REFERENCES dimension_sets(id) ON DELETE CASCADE,
+            name       TEXT    NOT NULL DEFAULT '',
+            sort_order INTEGER NOT NULL DEFAULT 0,
+            notes      TEXT,
+            created_at TEXT    NOT NULL DEFAULT (datetime('now'))
+        );
+
+        -- قيم الحقول لكل instance
         CREATE TABLE IF NOT EXISTS dimension_set_values (
             id          INTEGER PRIMARY KEY AUTOINCREMENT,
             set_id      INTEGER NOT NULL
                         REFERENCES dimension_sets(id) ON DELETE CASCADE,
             field_id    INTEGER NOT NULL
                         REFERENCES dimension_fields(id) ON DELETE CASCADE,
+            instance_id INTEGER
+                        REFERENCES dimension_set_instances(id) ON DELETE CASCADE,
             value_num   REAL,
             value_text  TEXT,
-            UNIQUE(set_id, field_id)
+            UNIQUE(instance_id, field_id)
         );
 
         -- التصميمات
