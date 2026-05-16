@@ -64,8 +64,13 @@ class DimensionSetsTab(QWidget):
 
         # ══ تبويب 2: المجموعات ══
         self._groups_panel = _GroupsPanel(self.conn)
+
         # لما تتغير التصنيفات → نحدّث فلتر _SetsPanel
         self._groups_panel._cats_panel.changed.connect(self._sets_panel.refresh)
+
+        # ← جديد: لما تُضاف/تُعدَّل/تُحذف مجموعة → نحدّث _SetsPanel فوراً
+        self._groups_panel.sets_changed.connect(self._sets_panel.refresh)
+
         inner_tabs.addTab(self._groups_panel, "📋  المجموعات")
 
         inner_tabs.currentChanged.connect(self._on_tab_changed)

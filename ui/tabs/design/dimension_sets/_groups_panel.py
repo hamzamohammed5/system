@@ -14,7 +14,7 @@ from PyQt5.QtWidgets import (
     QLabel, QLineEdit, QComboBox, QGroupBox, QFormLayout,
     QPushButton, QMessageBox, QDialog,
 )
-from PyQt5.QtCore import Qt
+from PyQt5.QtCore import Qt, pyqtSignal
 
 from db.designs.dimension_sets_repo import (
     fetch_all_dimension_sets,
@@ -35,6 +35,8 @@ from ui.helpers import make_table, danger_button, buttons_row
 # ══════════════════════════════════════════════════════════
 
 class _SetsManagerPanel(QWidget):
+    sets_changed = pyqtSignal()   # ← جديد: يُطلق بعد أي إضافة/تعديل/حذف
+
     def __init__(self, conn, parent=None):
         super().__init__(parent)
         self.conn        = conn
@@ -283,6 +285,7 @@ class _SetsManagerPanel(QWidget):
             if self.table.item(r, 0).data(Qt.UserRole) == new_id:
                 self.table.selectRow(r)
                 break
+        self.sets_changed.emit()   # ← جديد
 
     def _edit_set(self):
         sid = self._selected_id()
@@ -323,6 +326,7 @@ class _SetsManagerPanel(QWidget):
         update_dimension_set(self.conn, self._editing_id, name, cat_id, unit, notes)
         self._reset_form()
         self._load()
+        self.sets_changed.emit()   # ← جديد
 
     def _delete_set(self):
         sid = self._selected_id()
@@ -360,6 +364,7 @@ class _SetsManagerPanel(QWidget):
             delete_dimension_set(self.conn, sid)
             self._reset_form()
             self._load()
+            self.sets_changed.emit()   # ← جديد
 
     def _reset_form(self):
         self._editing_id = None
@@ -388,6 +393,8 @@ class _SetsManagerPanel(QWidget):
 # ══════════════════════════════════════════════════════════
 
 class _GroupsPanel(QWidget):
+    sets_changed = pyqtSignal()   # ← جديد: يُمرَّر للخارج
+
     def __init__(self, conn, parent=None):
         super().__init__(parent)
         self.conn = conn
@@ -410,6 +417,7 @@ class _GroupsPanel(QWidget):
         splitter.addWidget(self._cats_panel)
 
         self._sets_manager = _SetsManagerPanel(self.conn)
+        self._sets_manager.sets_changed.connect(self.sets_changed.emit)  # ← جديد
         splitter.addWidget(self._sets_manager)
 
         splitter.setSizes([280, 720])
