@@ -7,7 +7,6 @@ ui/tabs/design_section.py
 """
 
 from PyQt5.QtWidgets import QWidget, QVBoxLayout, QTabWidget, QLabel
-from PyQt5.QtCore    import Qt
 
 from db.designs.design_schema import get_designs_connection, create_designs_tables
 

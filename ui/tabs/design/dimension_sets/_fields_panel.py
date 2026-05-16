@@ -1,0 +1,177 @@
+"""
+ui/tabs/design/dimension_sets/_fields_panel.py
+=====================================
+"""
+
+from PyQt5.QtWidgets import (
+    QWidget, QVBoxLayout, QHBoxLayout,
+    QTableWidgetItem, QPushButton, QLabel,
+    QMessageBox, QDialog,
+
+)
+from PyQt5.QtCore import Qt, pyqtSignal
+
+from db.designs.dimension_sets_repo import (
+    fetch_fields_for_set, fetch_field,
+    delete_field, reorder_fields,
+
+)
+from ._field_dialog import _FieldDialog
+from ui.helpers import make_table, confirm_delete, danger_button
+
+# ══════════════════════════════════════════════════════════
+# لوحة حقول المجموعة
+# ══════════════════════════════════════════════════════════
+
+class _FieldsPanel(QWidget):
+    """محرر حقول مجموعة مقاسات."""
+
+    fields_changed = pyqtSignal()
+    set_selected   = pyqtSignal(int)
+
+    def __init__(self, conn, parent=None):
+        super().__init__(parent)
+        self.conn    = conn
+        self._set_id = None
+        self._build()
+
+    def _build(self):
+        root = QVBoxLayout(self)
+        root.setContentsMargins(0, 0, 0, 0)
+        root.setSpacing(6)
+
+        hdr = QLabel("حقول المجموعة")
+        hdr.setStyleSheet("font-weight: bold; color: #1565c0; font-size: 12px;")
+        root.addWidget(hdr)
+
+        self.table = make_table(
+            ["الترتيب", "الاسم", "التسمية", "الوحدة", "النوع", "إلزامي", "يعتمد على"],
+            stretch_col=2
+        )
+        self.table.setColumnWidth(0, 60)
+        self.table.setColumnWidth(1, 90)
+        self.table.setColumnWidth(3, 60)
+        self.table.setColumnWidth(4, 55)
+        self.table.setColumnWidth(5, 55)
+        self.table.setColumnWidth(6, 180)
+        root.addWidget(self.table)
+
+        btn_add  = QPushButton("➕  إضافة حقل")
+        btn_edit = QPushButton("✏️  تعديل")
+        btn_del  = danger_button("🗑️  حذف")
+        btn_up   = QPushButton("▲")
+        btn_dn   = QPushButton("▼")
+        for btn in (btn_add, btn_edit, btn_del, btn_up, btn_dn):
+            btn.setMinimumHeight(28)
+        btn_up.setFixedWidth(34)
+        btn_dn.setFixedWidth(34)
+
+        btn_add.clicked.connect(self._add_field)
+        btn_edit.clicked.connect(self._edit_field)
+        btn_del.clicked.connect(self._del_field)
+        btn_up.clicked.connect(self._move_up)
+        btn_dn.clicked.connect(self._move_down)
+
+        btn_row = QHBoxLayout()
+        btn_row.addWidget(btn_add)
+        btn_row.addWidget(btn_edit)
+        btn_row.addWidget(btn_del)
+        btn_row.addStretch()
+        btn_row.addWidget(btn_up)
+        btn_row.addWidget(btn_dn)
+        root.addLayout(btn_row)
+
+    def load_set(self, set_id: int):
+        self._set_id = set_id
+        self._refresh()
+        self.set_selected.emit(set_id)
+
+    def clear(self):
+        self._set_id = None
+        self.table.setRowCount(0)
+
+    def _refresh(self):
+        if self._set_id is None:
+            self.table.setRowCount(0)
+            return
+        self.table.setRowCount(0)
+        fields = fetch_fields_for_set(self.conn, self._set_id)
+        for f in fields:
+            r = self.table.rowCount()
+            self.table.insertRow(r)
+            self.table.setItem(r, 0, QTableWidgetItem(str(f["sort_order"] + 1)))
+            self.table.setItem(r, 1, QTableWidgetItem(f["name"]))
+            self.table.setItem(r, 2, QTableWidgetItem(f["label"]))
+            self.table.setItem(r, 3, QTableWidgetItem(f["unit"] or "cm"))
+            self.table.setItem(r, 4, QTableWidgetItem(
+                "رقم" if f["field_type"] == "number" else "نص"
+            ))
+            self.table.setItem(r, 5, QTableWidgetItem("✓" if f["required"] else ""))
+
+            dep_text = ""
+            if f["source_field_id"]:
+                sign     = "+" if f["dep_offset"] >= 0 else ""
+                src_lbl  = f["source_label"] or ""
+                src_set  = f.get("source_set_name") or ""
+                dep_text = (
+                    f"{src_lbl} ({src_set}) {sign}{f['dep_offset']:g}"
+                    if src_set else
+                    f"{src_lbl} {sign}{f['dep_offset']:g}"
+                )
+            self.table.setItem(r, 6, QTableWidgetItem(dep_text))
+            self.table.item(r, 0).setData(Qt.UserRole, f["id"])
+
+    def _selected_field_id(self):
+        row  = self.table.currentRow()
+        item = self.table.item(row, 0) if row >= 0 else None
+        return item.data(Qt.UserRole) if item else None
+
+    def _add_field(self):
+        if self._set_id is None:
+            QMessageBox.information(self, "تنبيه", "اختر مجموعة مقاسات أولاً")
+            return
+        dlg = _FieldDialog(self.conn, self._set_id, parent=self)
+        if dlg.exec_() == QDialog.Accepted:
+            self._refresh()
+            self.fields_changed.emit()
+
+    def _edit_field(self):
+        fid = self._selected_field_id()
+        if fid is None:
+            QMessageBox.information(self, "تنبيه", "اختر حقلاً أولاً")
+            return
+        f = fetch_field(self.conn, fid)
+        dlg = _FieldDialog(self.conn, self._set_id, field_data=f, parent=self)
+        if dlg.exec_() == QDialog.Accepted:
+            self._refresh()
+            self.fields_changed.emit()
+
+    def _del_field(self):
+        fid = self._selected_field_id()
+        if fid is None:
+            QMessageBox.information(self, "تنبيه", "اختر حقلاً أولاً")
+            return
+        f = fetch_field(self.conn, fid)
+        if f and confirm_delete(self, f["label"]):
+            delete_field(self.conn, fid)
+            self._refresh()
+            self.fields_changed.emit()
+
+    def _move_up(self):   self._move(-1)
+    def _move_down(self): self._move(1)
+
+    def _move(self, direction: int):
+        row     = self.table.currentRow()
+        new_row = row + direction
+        if new_row < 0 or new_row >= self.table.rowCount():
+            return
+        ids = [
+            self.table.item(r, 0).data(Qt.UserRole)
+            for r in range(self.table.rowCount())
+        ]
+        ids[row], ids[new_row] = ids[new_row], ids[row]
+        reorder_fields(self.conn, self._set_id, ids)
+        self._refresh()
+        self.table.selectRow(new_row)
+        self.fields_changed.emit()
+

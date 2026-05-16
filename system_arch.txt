@@ -1,5 +1,5 @@
 File Tree Snapshot
-Generated : 2026-05-16 08:20:27
+Generated : 2026-05-16 08:55:59
 Source    : D:\My Workspace\Hg\Alhabaar\accountant\system
 Extensions: .py
 ────────────────────────────────────────────────────────────
@@ -47,7 +47,6 @@ system/
 ├── ui/
 │   ├── tabs/
 │   │   ├── accounting/
-│   │   │   ├── accounts_tree/
 │   │   │   ├── financial/
 │   │   │   │   ├── balance_sheet_tab.py
 │   │   │   │   ├── income_statement_tab.py
@@ -111,8 +110,14 @@ system/
 │   │   │   ├── machine_tab.py
 │   │   │   ├── product_tab.py
 │   │   │   └── raw_tab.py
-│   │   ├── costing_section/
 │   │   ├── design/
+│   │   │   ├── dimension_sets/
+│   │   │   │   ├── _categories_panel.py
+│   │   │   │   ├── _field_dialog.py
+│   │   │   │   ├── _fields_panel.py
+│   │   │   │   ├── _groups_panel.py
+│   │   │   │   ├── _sets_panel.py
+│   │   │   │   └── _values_panel.py
 │   │   │   ├── designs_tab.py
 │   │   │   └── dimension_sets_tab.py
 │   │   ├── inventory/
