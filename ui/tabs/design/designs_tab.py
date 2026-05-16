@@ -1,794 +1,313 @@
 """
-ui/tabs/design/dimension_sets_tab.py
-=====================================
-تبويب إدارة مجموعات المقاسات.
+ui/tabs/design/designs_tab.py
+==============================
+تبويب إدارة التصميمات.
 
-التغييرات:
-  1. حذف _CategoriesPanel وكل ما يتعلق بالتصنيفات
-  2. المجموعات أصبحت هرمية (parent_set_id) بدل category_id
-  3. إصلاح bug في _reload_source_fields (TypeError: 'int' not subscriptable)
-  4. _ValuesPanel يدعم الجلسات المسماة (كل جلسة لها اسم)
+يتضمن:
+  - جدول التصميمات مع فلتر متقدم (بالاسم + التصنيف + مجموعة المقاسات)
+  - فورم إضافة/تعديل التصميم
+  - لوحة ربط التصميم بمجموعات المقاسات + إدخال القيم
+  - حساب القيم التلقائية بناءً على الاعتماديات
 """
 
 from PyQt5.QtWidgets import (
     QWidget, QVBoxLayout, QHBoxLayout, QSplitter,
     QTabWidget, QTableWidget, QTableWidgetItem, QHeaderView,
     QAbstractItemView, QPushButton, QLabel, QLineEdit,
-    QComboBox, QDoubleSpinBox, QCheckBox, QGroupBox,
-    QFormLayout, QMessageBox, QDialog,
-    QDialogButtonBox, QTreeWidget, QTreeWidgetItem, QScrollArea,
-    QSizePolicy, QFrame, QInputDialog,
+    QComboBox, QDoubleSpinBox, QGroupBox, QFormLayout,
+    QMessageBox, QDialog, QDialogButtonBox, QScrollArea,
+    QSizePolicy, QFrame, QCheckBox,
 )
-from PyQt5.QtCore import Qt, pyqtSignal
+from PyQt5.QtCore import Qt, pyqtSignal, QTimer
 from PyQt5.QtGui import QColor, QFont
 
 from db.designs.dimension_sets_repo import (
     fetch_all_dimension_sets, fetch_dimension_set,
-    insert_dimension_set, update_dimension_set, delete_dimension_set,
-    build_sets_tree, fetch_set_descendants,
-    fetch_fields_for_set, fetch_field, fetch_all_fields_for_combo,
-    insert_field, update_field, delete_field, reorder_fields,
-    fetch_field_dep, set_field_dep, remove_field_dep,
-    fetch_sessions_for_set, fetch_session,
-    insert_session, update_session, delete_session,
-    fetch_session_values, save_session_value,
-    calc_standalone_cross_auto,
+    fetch_fields_for_set, fetch_field_dep,
+    fetch_all_design_categories, build_category_tree,
+)
+from db.designs.designs_repo import (
+    fetch_all_designs, fetch_design,
+    insert_design, update_design, delete_design,
+    fetch_design_links_for_design, fetch_link,
+    add_design_link, remove_design_link, update_design_link_label,
+    fetch_dim_values, set_dim_value, save_all_dim_values,
+    recalc_auto_values, fetch_full_design_data,
 )
 from ui.helpers import make_table, buttons_row, confirm_delete, danger_button
 
 
-def _spin(min_=None, max_=9999, dec=2):
-    s = QDoubleSpinBox()
-    s.setRange(min_ if min_ is not None else -99999, max_)
-    s.setDecimals(dec)
-    s.setMinimumHeight(30)
-    return s
-
-
 # ══════════════════════════════════════════════════════════
-# محرر حقل واحد — Dialog
+# لوحة إدخال قيم مجموعة مقاسات واحدة
 # ══════════════════════════════════════════════════════════
 
-class _FieldDialog(QDialog):
-    """نافذة إضافة/تعديل حقل مقاسات مع دعم cross-set deps."""
+class _DimValuesCard(QFrame):
+    """
+    بطاقة لإدخال قيم حقول مجموعة مقاسات واحدة.
+    تظهر داخل لوحة ربط المقاسات بالتصميم.
+    """
 
-    def __init__(self, conn, set_id: int, field_data=None, parent=None):
+    remove_requested = pyqtSignal(int)   # link_id
+    saved            = pyqtSignal()
+
+    def __init__(self, conn, link_id: int, parent=None):
         super().__init__(parent)
-        self.conn     = conn
-        self.set_id   = set_id
-        self.field_id = field_data["id"] if field_data else None
-        self.setWindowTitle("تعديل حقل" if field_data else "إضافة حقل جديد")
-        self.setMinimumWidth(480)
-        self.setModal(True)
+        self.conn    = conn
+        self.link_id = link_id
+        self._fields = []
+        self._spins  = {}   # field_id -> QDoubleSpinBox
+        self._auto_chks = {}  # field_id -> QCheckBox (is_auto)
         self._build()
-        if field_data:
-            self._load(field_data)
+        self._load_values()
 
     def _build(self):
+        self.setStyleSheet("""
+            QFrame {
+                background: white;
+                border: 1px solid #c5cae9;
+                border-radius: 8px;
+                margin: 4px;
+            }
+        """)
+
         root = QVBoxLayout(self)
-        root.setSpacing(12)
+        root.setContentsMargins(12, 10, 12, 12)
+        root.setSpacing(8)
 
-        form = QFormLayout()
-        form.setSpacing(10)
-        form.setLabelAlignment(Qt.AlignRight)
-
-        self.inp_name = QLineEdit()
-        self.inp_name.setPlaceholderText("مثال: length, width ...")
-        self.inp_name.setMinimumHeight(30)
-
-        self.inp_label = QLineEdit()
-        self.inp_label.setPlaceholderText("مثال: الطول، العرض ...")
-        self.inp_label.setMinimumHeight(30)
-
-        self.inp_unit = QLineEdit()
-        self.inp_unit.setPlaceholderText("cm / mm / m ...")
-        self.inp_unit.setText("cm")
-        self.inp_unit.setMinimumHeight(30)
-
-        self.cmb_type = QComboBox()
-        self.cmb_type.addItem("رقم", "number")
-        self.cmb_type.addItem("نص", "text")
-        self.cmb_type.setMinimumHeight(30)
-        self.cmb_type.currentIndexChanged.connect(self._on_type_changed)
-
-        self.chk_required = QCheckBox("حقل إلزامي")
-        self.chk_required.setChecked(True)
-
-        form.addRow("الاسم (إنجليزي) :", self.inp_name)
-        form.addRow("التسمية (عربي) :",  self.inp_label)
-        form.addRow("الوحدة :",           self.inp_unit)
-        form.addRow("النوع :",            self.cmb_type)
-        form.addRow("",                   self.chk_required)
-        root.addLayout(form)
-
-        # ── قسم الاعتمادية (cross-set) ──
-        self._dep_grp = QGroupBox("اعتماد على حقل آخر (اختياري)")
-        self._dep_grp.setCheckable(True)
-        self._dep_grp.setChecked(False)
-        dep_lay = QFormLayout(self._dep_grp)
-        dep_lay.setSpacing(8)
-        dep_lay.setLabelAlignment(Qt.AlignRight)
-
-        # فلتر المجموعة المصدر
-        self.cmb_source_set = QComboBox()
-        self.cmb_source_set.setMinimumHeight(28)
-        self.cmb_source_set.addItem("— كل المجموعات —", None)
-        for ds in fetch_all_dimension_sets(self.conn):
-            self.cmb_source_set.addItem(ds["name"], ds["id"])
-        self.cmb_source_set.currentIndexChanged.connect(self._reload_source_fields)
-
-        # الحقل المصدر
-        self.cmb_source = QComboBox()
-        self.cmb_source.setMinimumHeight(28)
-        self.cmb_source.setMinimumWidth(200)
-
-        self.sp_offset = _spin(min_=-9999, max_=9999, dec=4)
-        self.sp_offset.setValue(0)
-
-        dep_lay.addRow("المجموعة المصدر :",   self.cmb_source_set)
-        dep_lay.addRow("الحقل المصدر :",      self.cmb_source)
-        dep_lay.addRow("الإضافة / الخصم :",   self.sp_offset)
-
-        hint = QLabel("القيمة = قيمة الحقل المصدر + الإضافة (ممكن سالب للخصم)")
-        hint.setStyleSheet(
-            "color:#1565c0; font-size:10px;"
-            "background:#e8f0fe; border-radius:4px; padding:4px 8px;"
-        )
-        dep_lay.addRow(hint)
-
-        root.addWidget(self._dep_grp)
-        self._reload_source_fields()
-
-        # أزرار
-        btns = QDialogButtonBox(QDialogButtonBox.Ok | QDialogButtonBox.Cancel)
-        btns.button(QDialogButtonBox.Ok).setText("💾  حفظ")
-        btns.button(QDialogButtonBox.Cancel).setText("✖  إلغاء")
-        btns.accepted.connect(self._save)
-        btns.rejected.connect(self.reject)
-        root.addWidget(btns)
-
-    def _on_type_changed(self, idx):
-        is_number = self.cmb_type.currentData() == "number"
-        self._dep_grp.setEnabled(is_number)
-        if not is_number:
-            self._dep_grp.setChecked(False)
-
-    def _reload_source_fields(self):
-        """تحميل الحقول المتاحة — إصلاح bug الـ TypeError."""
-        filter_set_id = self.cmb_source_set.currentData()
-
-        all_fields = fetch_all_fields_for_combo(
-            self.conn,
-            exclude_field_id=self.field_id
-        )
-
-        # ── إصلاح: نحفظ الـ tuple كاملة ونقارنها كاملة ──
-        prev_data = self.cmb_source.currentData()
-
-        self.cmb_source.blockSignals(True)
-        self.cmb_source.clear()
-
-        current_group = None
-        for row in all_fields:
-            if filter_set_id is not None and row["set_id"] != filter_set_id:
-                continue
-
-            # عنوان المجموعة (مرة واحدة)
-            if row["set_id"] != current_group:
-                current_group = row["set_id"]
-                self.cmb_source.addItem(f"── {row['set_name']} ──", -1)
-                idx = self.cmb_source.count() - 1
-                self.cmb_source.setItemData(idx, QColor("#78909c"), Qt.ForegroundRole)
-                font = QFont()
-                font.setBold(True)
-                self.cmb_source.setItemData(idx, font, Qt.FontRole)
-                model = self.cmb_source.model()
-                item  = model.item(idx)
-                if item:
-                    item.setFlags(item.flags() & ~Qt.ItemIsEnabled & ~Qt.ItemIsSelectable)
-
-            marker = "↩ " if row["set_id"] == self.set_id else "↗ "
-            self.cmb_source.addItem(
-                f"{marker}{row['field_label']}",
-                (row["field_id"], row["set_id"])   # دايماً tuple
-            )
-
-        self.cmb_source.blockSignals(False)
-
-        # ── إصلاح: مقارنة الـ tuple كاملة بدل [0] ──
-        if prev_data is not None and isinstance(prev_data, tuple):
-            for i in range(self.cmb_source.count()):
-                d = self.cmb_source.itemData(i)
-                if isinstance(d, tuple) and d == prev_data:
-                    self.cmb_source.setCurrentIndex(i)
-                    break
-
-    def _load(self, field_data):
-        self.inp_name.setText(field_data["name"])
-        self.inp_label.setText(field_data["label"])
-        self.inp_unit.setText(field_data["unit"] or "cm")
-        idx = self.cmb_type.findData(field_data["field_type"])
-        if idx >= 0:
-            self.cmb_type.setCurrentIndex(idx)
-        self.chk_required.setChecked(bool(field_data["required"]))
-
-        if self.field_id:
-            dep = fetch_field_dep(self.conn, self.field_id)
-            if dep:
-                self._dep_grp.setChecked(True)
-                src_set_id = dep["source_set_id"]
-
-                if src_set_id:
-                    for i in range(self.cmb_source_set.count()):
-                        if self.cmb_source_set.itemData(i) == src_set_id:
-                            self.cmb_source_set.setCurrentIndex(i)
-                            break
-                    self._reload_source_fields()
-
-                # استعادة الحقل المصدر بالـ tuple كاملة
-                target = (dep["source_field_id"], src_set_id if src_set_id else self.set_id)
-                for i in range(self.cmb_source.count()):
-                    d = self.cmb_source.itemData(i)
-                    if isinstance(d, tuple) and d[0] == dep["source_field_id"]:
-                        self.cmb_source.setCurrentIndex(i)
-                        break
-                self.sp_offset.setValue(float(dep["offset"]))
-
-    def _save(self):
-        name  = self.inp_name.text().strip()
-        label = self.inp_label.text().strip()
-        if not name or not label:
-            QMessageBox.warning(self, "تنبيه", "أدخل الاسم والتسمية")
+        # ── رأس البطاقة ──
+        link = fetch_link(self.conn, self.link_id)
+        if not link:
             return
 
-        unit     = self.inp_unit.text().strip() or "cm"
-        ftype    = self.cmb_type.currentData()
-        required = self.chk_required.isChecked()
+        ds = fetch_dimension_set(self.conn, link["set_id"])
+        set_name = ds["name"] if ds else "مجموعة مقاسات"
+        label    = link["label"] or set_name
 
-        if self.field_id:
-            f = fetch_field(self.conn, self.field_id)
-            sort_order = f["sort_order"] if f else 0
-            update_field(self.conn, self.field_id, name, label,
-                         unit, ftype, required, sort_order)
-        else:
-            existing   = fetch_fields_for_set(self.conn, self.set_id)
-            sort_order = len(existing)
-            self.field_id = insert_field(
-                self.conn, self.set_id, name, label, unit, ftype, required, sort_order
-            )
+        hdr_row = QHBoxLayout()
+        icon = QLabel("📐")
+        icon.setStyleSheet("font-size:14px; background:transparent; border:none;")
+        self.inp_label = QLineEdit(label)
+        self.inp_label.setMinimumHeight(28)
+        self.inp_label.setPlaceholderText("تسمية هذه المقاسة (مثال: مقاس L)")
+        self.inp_label.setStyleSheet("""
+            QLineEdit {
+                font-weight: bold;
+                font-size: 12px;
+                color: #1565c0;
+                border: none;
+                border-bottom: 2px solid #c5cae9;
+                background: transparent;
+                padding: 2px 4px;
+            }
+            QLineEdit:focus { border-bottom-color: #1565c0; }
+        """)
+        self.inp_label.editingFinished.connect(self._save_label)
 
-        # الاعتمادية
-        if self._dep_grp.isChecked() and self._dep_grp.isEnabled():
-            d = self.cmb_source.currentData()
-            if isinstance(d, tuple):
-                src_field_id, src_set_id = d
-                actual_src_set = src_set_id if src_set_id != self.set_id else None
-                set_field_dep(
-                    self.conn, self.field_id, src_field_id,
-                    self.sp_offset.value(), "",
-                    source_set_id=actual_src_set
+        lbl_set = QLabel(f"({set_name})")
+        lbl_set.setStyleSheet("color:#888; font-size:10px; background:transparent; border:none;")
+
+        btn_remove = QPushButton("✖")
+        btn_remove.setFixedSize(24, 24)
+        btn_remove.setStyleSheet("""
+            QPushButton {
+                background: transparent;
+                border: none;
+                color: #bbb;
+                font-size: 11px;
+            }
+            QPushButton:hover { color: #e53935; }
+        """)
+        btn_remove.clicked.connect(lambda: self.remove_requested.emit(self.link_id))
+
+        hdr_row.addWidget(icon)
+        hdr_row.addWidget(self.inp_label, stretch=1)
+        hdr_row.addWidget(lbl_set)
+        hdr_row.addWidget(btn_remove)
+        root.addLayout(hdr_row)
+
+        # ── حقول الإدخال ──
+        self._fields = fetch_fields_for_set(self.conn, link["set_id"])
+        self._spins  = {}
+        self._auto_chks = {}
+
+        fields_widget = QWidget()
+        fields_widget.setStyleSheet("background:transparent; border:none;")
+        grid = QVBoxLayout(fields_widget)
+        grid.setSpacing(4)
+        grid.setContentsMargins(0, 0, 0, 0)
+
+        for f in self._fields:
+            row_w = QWidget()
+            row_w.setStyleSheet("background:transparent; border:none;")
+            row_lay = QHBoxLayout(row_w)
+            row_lay.setContentsMargins(0, 0, 0, 0)
+            row_lay.setSpacing(8)
+
+            lbl = QLabel(f["label"])
+            lbl.setFixedWidth(100)
+            lbl.setAlignment(Qt.AlignRight | Qt.AlignVCenter)
+            lbl.setStyleSheet("background:transparent; border:none;")
+
+            spin = QDoubleSpinBox()
+            spin.setRange(-99999, 99999)
+            spin.setDecimals(4)
+            spin.setMinimumHeight(28)
+            spin.setMinimumWidth(100)
+
+            unit_lbl = QLabel(f["unit"] or "")
+            unit_lbl.setFixedWidth(30)
+            unit_lbl.setStyleSheet("color:#888; background:transparent; border:none;")
+
+            # زر حساب تلقائي (يظهر فقط لو الحقل له اعتمادية)
+            dep = fetch_field_dep(self.conn, f["id"])
+            if dep:
+                btn_auto = QPushButton("⟳ حساب")
+                btn_auto.setFixedHeight(26)
+                btn_auto.setStyleSheet("""
+                    QPushButton {
+                        background: #e8f5e9;
+                        border: 1px solid #a5d6a7;
+                        border-radius: 4px;
+                        color: #2e7d32;
+                        font-size: 10px;
+                        padding: 2px 8px;
+                    }
+                    QPushButton:hover { background: #c8e6c9; }
+                """)
+                dep_captured = dep
+                spin_captured = spin
+                fid_captured = f["id"]
+                btn_auto.clicked.connect(
+                    lambda _, d=dep_captured, s=spin_captured, fid=fid_captured:
+                    self._calc_auto(d, s, fid)
                 )
+
+                chk_auto = QCheckBox("تلقائي")
+                chk_auto.setStyleSheet("color:#2e7d32; font-size:10px; background:transparent; border:none;")
+                self._auto_chks[f["id"]] = chk_auto
+                chk_auto.toggled.connect(lambda checked, s=spin, b=btn_auto:
+                                         (s.setReadOnly(checked),
+                                          s.setStyleSheet("background:#f1f8e9;" if checked else "")))
+
+                row_lay.addWidget(lbl)
+                row_lay.addWidget(spin, stretch=1)
+                row_lay.addWidget(unit_lbl)
+                row_lay.addWidget(btn_auto)
+                row_lay.addWidget(chk_auto)
+            else:
+                row_lay.addWidget(lbl)
+                row_lay.addWidget(spin, stretch=1)
+                row_lay.addWidget(unit_lbl)
+
+            self._spins[f["id"]] = spin
+            grid.addWidget(row_w)
+
+        root.addWidget(fields_widget)
+
+        # ── أزرار الحفظ ──
+        btn_save    = QPushButton("💾  حفظ المقاسات")
+        btn_save_all = QPushButton("⟳  حساب الكل تلقائياً")
+        btn_save.setMinimumHeight(30)
+        btn_save_all.setMinimumHeight(30)
+        btn_save.setStyleSheet("""
+            QPushButton {
+                background: #1565c0;
+                color: white;
+                border: none;
+                border-radius: 4px;
+                padding: 4px 12px;
+                font-weight: bold;
+            }
+            QPushButton:hover { background: #0d47a1; }
+        """)
+        btn_save_all.setStyleSheet("""
+            QPushButton {
+                background: #e8f5e9;
+                color: #2e7d32;
+                border: 1px solid #a5d6a7;
+                border-radius: 4px;
+                padding: 4px 12px;
+            }
+            QPushButton:hover { background: #c8e6c9; }
+        """)
+        btn_save.clicked.connect(self._save_values)
+        btn_save_all.clicked.connect(self._calc_all_auto)
+
+        btn_row = QHBoxLayout()
+        btn_row.addWidget(btn_save)
+        btn_row.addWidget(btn_save_all)
+        btn_row.addStretch()
+        root.addLayout(btn_row)
+
+    def _load_values(self):
+        values = fetch_dim_values(self.conn, self.link_id)
+        for fid, spin in self._spins.items():
+            info = values.get(fid, {})
+            val  = info.get("value_num")
+            if val is not None:
+                spin.setValue(float(val))
+            is_auto = bool(info.get("is_auto", False))
+            if fid in self._auto_chks:
+                self._auto_chks[fid].setChecked(is_auto)
+                spin.setReadOnly(is_auto)
+
+    def _save_label(self):
+        label = self.inp_label.text().strip()
+        update_design_link_label(self.conn, self.link_id, label)
+
+    def _calc_auto(self, dep, spin, field_id):
+        """حساب قيمة حقل واحد تلقائياً."""
+        # احفظ قيمة الحقل المصدر أولاً
+        self._save_values(silent=True)
+        from db.designs.dimension_sets_repo import calc_auto_value
+        val = calc_auto_value(self.conn, field_id, self.link_id)
+        if val is not None:
+            spin.setValue(val)
+            set_dim_value(self.conn, self.link_id, field_id, value_num=val, is_auto=True)
+            if field_id in self._auto_chks:
+                self._auto_chks[field_id].setChecked(True)
         else:
-            remove_field_dep(self.conn, self.field_id)
+            QMessageBox.information(self, "تنبيه", "أدخل قيمة الحقل المصدر أولاً")
 
-        self.accept()
+    def _calc_all_auto(self):
+        """حساب كل الحقول التلقائية."""
+        self._save_values(silent=True)
+        computed = recalc_auto_values(self.conn, self.link_id)
+        for fid, val in computed.items():
+            if fid in self._spins:
+                self._spins[fid].setValue(val)
+            if fid in self._auto_chks:
+                self._auto_chks[fid].setChecked(True)
+        self.saved.emit()
+
+    def _save_values(self, silent=False):
+        values    = {}
+        auto_flags = {}
+        for fid, spin in self._spins.items():
+            values[fid] = spin.value()
+            auto_flags[fid] = self._auto_chks.get(fid, QCheckBox()).isChecked()
+        save_all_dim_values(self.conn, self.link_id, values, auto_flags)
+        self._save_label()
+        if not silent:
+            self.saved.emit()
 
 
 # ══════════════════════════════════════════════════════════
-# لوحة إدخال القيم — مع الجلسات المسماة
+# لوحة ربط التصميم بالمقاسات
 # ══════════════════════════════════════════════════════════
 
-class _ValuesPanel(QWidget):
+class _DimLinksPanel(QWidget):
     """
-    لوحة إدخال قيم المقاسات مع جلسات مسماة.
+    لوحة لإضافة وإدارة روابط التصميم بمجموعات المقاسات.
+    """
 
-    كل مجموعة مقاسات ممكن يكون فيها أكثر من جلسة إدخال،
-    كل جلسة لها اسم (مثال: "مقاس L" أو "العميل أحمد").
-    """
+    changed = pyqtSignal()
 
     def __init__(self, conn, parent=None):
         super().__init__(parent)
         self.conn       = conn
-        self._set_id    = None
-        self._session_id = None
-        self._spins     = {}
-        self._auto_btns = {}
-        self._build()
-
-    def _build(self):
-        root = QVBoxLayout(self)
-        root.setContentsMargins(8, 8, 8, 8)
-        root.setSpacing(6)
-
-        # ── رأس ──
-        hdr = QLabel("📊  إدخال قيم المقاسات")
-        hdr.setStyleSheet("""
-            font-weight: bold; font-size: 13px; color: #1565c0;
-            background: #e8f0fe; border-radius: 6px; padding: 6px 12px;
-        """)
-        root.addWidget(hdr)
-
-        # ── شريط الجلسات ──
-        sessions_frame = QFrame()
-        sessions_frame.setStyleSheet("""
-            QFrame {
-                background: #f5f5f5;
-                border: 1px solid #e0e0e0;
-                border-radius: 6px;
-            }
-        """)
-        sessions_lay = QVBoxLayout(sessions_frame)
-        sessions_lay.setContentsMargins(8, 6, 8, 6)
-        sessions_lay.setSpacing(4)
-
-        # صف أول: عنوان + أزرار الجلسات
-        sess_hdr = QHBoxLayout()
-        lbl_sess = QLabel("الجلسة:")
-        lbl_sess.setStyleSheet("font-weight: bold; color: #333; background: transparent; border: none;")
-        lbl_sess.setFixedWidth(50)
-
-        self.cmb_sessions = QComboBox()
-        self.cmb_sessions.setMinimumHeight(28)
-        self.cmb_sessions.setMinimumWidth(180)
-        self.cmb_sessions.currentIndexChanged.connect(self._on_session_changed)
-
-        btn_new_sess = QPushButton("➕ جديد")
-        btn_new_sess.setFixedHeight(28)
-        btn_new_sess.setStyleSheet("""
-            QPushButton {
-                background: #e8f5e9; color: #2e7d32;
-                border: 1px solid #a5d6a7; border-radius: 4px;
-                padding: 2px 10px; font-size: 11px;
-            }
-            QPushButton:hover { background: #c8e6c9; }
-        """)
-        btn_new_sess.clicked.connect(self._new_session)
-
-        self.btn_rename_sess = QPushButton("✏️ تسمية")
-        self.btn_rename_sess.setFixedHeight(28)
-        self.btn_rename_sess.setEnabled(False)
-        self.btn_rename_sess.setStyleSheet("""
-            QPushButton {
-                background: #fff8e1; color: #f57f17;
-                border: 1px solid #ffe082; border-radius: 4px;
-                padding: 2px 10px; font-size: 11px;
-            }
-            QPushButton:hover { background: #fff3cd; }
-            QPushButton:disabled { background: #f5f5f5; color: #bbb; border-color: #ddd; }
-        """)
-        self.btn_rename_sess.clicked.connect(self._rename_session)
-
-        self.btn_del_sess = QPushButton("🗑️ حذف")
-        self.btn_del_sess.setFixedHeight(28)
-        self.btn_del_sess.setEnabled(False)
-        self.btn_del_sess.setStyleSheet("""
-            QPushButton {
-                background: #fdecea; color: #c62828;
-                border: 1px solid #ef9a9a; border-radius: 4px;
-                padding: 2px 10px; font-size: 11px;
-            }
-            QPushButton:hover { background: #ffcdd2; }
-            QPushButton:disabled { background: #f5f5f5; color: #bbb; border-color: #ddd; }
-        """)
-        self.btn_del_sess.clicked.connect(self._delete_session)
-
-        sess_hdr.addWidget(lbl_sess)
-        sess_hdr.addWidget(self.cmb_sessions, stretch=1)
-        sess_hdr.addWidget(btn_new_sess)
-        sess_hdr.addWidget(self.btn_rename_sess)
-        sess_hdr.addWidget(self.btn_del_sess)
-        sessions_lay.addLayout(sess_hdr)
-
-        root.addWidget(sessions_frame)
-
-        # hint لما مافيش مجموعة مختارة
-        self.lbl_hint = QLabel("اختر مجموعة مقاسات من القائمة على اليسار لبدء الإدخال")
-        self.lbl_hint.setStyleSheet("color: #888; font-size: 11px; padding: 4px;")
-        self.lbl_hint.setAlignment(Qt.AlignCenter)
-        root.addWidget(self.lbl_hint)
-
-        # ── منطقة الحقول ──
-        self._scroll_area = QScrollArea()
-        self._scroll_area.setWidgetResizable(True)
-        self._scroll_area.setStyleSheet("""
-            QScrollArea { border: 1px solid #e0e0e0; border-radius: 6px; background: white; }
-            QScrollBar:vertical { background:#f5f5f5; width:8px; border-radius:4px; }
-            QScrollBar::handle:vertical { background:#bdbdbd; border-radius:4px; min-height:30px; }
-            QScrollBar::handle:vertical:hover { background:#9e9e9e; }
-            QScrollBar::add-line:vertical, QScrollBar::sub-line:vertical { height:0px; }
-        """)
-        self._fields_widget = QWidget()
-        self._fields_widget.setStyleSheet("background: white;")
-        self._fields_layout = QVBoxLayout(self._fields_widget)
-        self._fields_layout.setSpacing(6)
-        self._fields_layout.setContentsMargins(12, 12, 12, 12)
-        self._fields_layout.addStretch()
-        self._scroll_area.setWidget(self._fields_widget)
-        root.addWidget(self._scroll_area, stretch=1)
-
-        # ── أزرار أسفل ──
-        btn_bar = QHBoxLayout()
-
-        self.btn_save = QPushButton("💾  حفظ القيم")
-        self.btn_save.setMinimumHeight(32)
-        self.btn_save.setEnabled(False)
-        self.btn_save.setStyleSheet("""
-            QPushButton {
-                background: #1565c0; color: white;
-                border: none; border-radius: 5px;
-                padding: 4px 18px; font-weight: bold;
-            }
-            QPushButton:hover { background: #0d47a1; }
-            QPushButton:disabled { background: #b0bec5; }
-        """)
-        self.btn_save.clicked.connect(self._save_values)
-
-        self.btn_calc_all = QPushButton("⟳  حساب الكل التلقائي")
-        self.btn_calc_all.setMinimumHeight(32)
-        self.btn_calc_all.setEnabled(False)
-        self.btn_calc_all.setStyleSheet("""
-            QPushButton {
-                background: #e8f5e9; color: #2e7d32;
-                border: 1px solid #a5d6a7; border-radius: 5px; padding: 4px 14px;
-            }
-            QPushButton:hover { background: #c8e6c9; }
-            QPushButton:disabled { background: #f5f5f5; color: #bbb; border-color: #ddd; }
-        """)
-        self.btn_calc_all.clicked.connect(self._calc_all_auto)
-
-        self.btn_reset = QPushButton("↺  مسح القيم")
-        self.btn_reset.setMinimumHeight(32)
-        self.btn_reset.setEnabled(False)
-        self.btn_reset.setStyleSheet("""
-            QPushButton {
-                background: #fff3e0; color: #e65100;
-                border: 1px solid #ffcc80; border-radius: 5px; padding: 4px 14px;
-            }
-            QPushButton:hover { background: #ffe0b2; }
-            QPushButton:disabled { background: #f5f5f5; color: #bbb; border-color: #ddd; }
-        """)
-        self.btn_reset.clicked.connect(self._reset_values)
-
-        self.lbl_status = QLabel("")
-        self.lbl_status.setStyleSheet("color: #2e7d32; font-size: 11px;")
-
-        btn_bar.addWidget(self.btn_save)
-        btn_bar.addWidget(self.btn_calc_all)
-        btn_bar.addWidget(self.btn_reset)
-        btn_bar.addStretch()
-        btn_bar.addWidget(self.lbl_status)
-        root.addLayout(btn_bar)
-
-    # ── إدارة الجلسات ──
-
-    def load_set(self, set_id: int):
-        """تحميل مجموعة وجلساتها."""
-        self._set_id     = set_id
-        self._session_id = None
-        self.lbl_hint.setVisible(False)
-        self._reload_sessions_combo()
-
-    def _reload_sessions_combo(self):
-        prev_id = self._session_id
-        self.cmb_sessions.blockSignals(True)
-        self.cmb_sessions.clear()
-
-        if self._set_id is None:
-            self.cmb_sessions.blockSignals(False)
-            return
-
-        sessions = fetch_sessions_for_set(self.conn, self._set_id)
-        for s in sessions:
-            self.cmb_sessions.addItem(s["name"], s["id"])
-
-        self.cmb_sessions.blockSignals(False)
-
-        if self.cmb_sessions.count() == 0:
-            # إنشاء جلسة افتراضية تلقائياً
-            sid = insert_session(self.conn, self._set_id, "الجلسة الافتراضية")
-            self.cmb_sessions.addItem("الجلسة الافتراضية", sid)
-
-        # استعادة الجلسة السابقة أو اختيار الأولى
-        restored = False
-        if prev_id is not None:
-            for i in range(self.cmb_sessions.count()):
-                if self.cmb_sessions.itemData(i) == prev_id:
-                    self.cmb_sessions.setCurrentIndex(i)
-                    restored = True
-                    break
-        if not restored:
-            self.cmb_sessions.setCurrentIndex(0)
-
-        self._load_current_session()
-
-    def _on_session_changed(self, _):
-        self._load_current_session()
-
-    def _load_current_session(self):
-        sid = self.cmb_sessions.currentData()
-        self._session_id = sid
-
-        has_session = sid is not None
-        self.btn_rename_sess.setEnabled(has_session)
-        self.btn_del_sess.setEnabled(has_session and self.cmb_sessions.count() > 1)
-
-        self._spins     = {}
-        self._auto_btns = {}
-        self._clear_fields()
-
-        if not has_session or self._set_id is None:
-            self._enable_buttons(False)
-            return
-
-        fields = fetch_fields_for_set(self.conn, self._set_id)
-        if not fields:
-            lbl = QLabel("هذه المجموعة ليس لها حقول — أضف حقولاً من قسم 'حقول المجموعة'")
-            lbl.setStyleSheet("color: #888; font-size: 11px; padding: 12px;")
-            lbl.setAlignment(Qt.AlignCenter)
-            lbl.setWordWrap(True)
-            self._fields_layout.insertWidget(0, lbl)
-            self._enable_buttons(False)
-            return
-
-        saved   = fetch_session_values(self.conn, sid)
-        has_auto = False
-
-        for f in fields:
-            if f["field_type"] != "number":
-                continue
-            row_w = self._build_field_row(f, saved.get(f["id"]))
-            self._fields_layout.insertWidget(self._fields_layout.count() - 1, row_w)
-            if f["source_field_id"]:
-                has_auto = True
-
-        self._enable_buttons(True, has_auto=has_auto)
-        self.lbl_status.setText("")
-
-    def _new_session(self):
-        if self._set_id is None:
-            return
-        name, ok = QInputDialog.getText(
-            self, "جلسة جديدة", "اسم الجلسة:",
-            text=f"جلسة {self.cmb_sessions.count() + 1}"
-        )
-        if ok and name.strip():
-            sid = insert_session(self.conn, self._set_id, name.strip())
-            self._session_id = sid
-            self._reload_sessions_combo()
-            # اختر الجلسة الجديدة
-            for i in range(self.cmb_sessions.count()):
-                if self.cmb_sessions.itemData(i) == sid:
-                    self.cmb_sessions.setCurrentIndex(i)
-                    break
-
-    def _rename_session(self):
-        sid = self._session_id
-        if sid is None:
-            return
-        current_name = self.cmb_sessions.currentText()
-        name, ok = QInputDialog.getText(
-            self, "إعادة تسمية", "الاسم الجديد:", text=current_name
-        )
-        if ok and name.strip():
-            update_session(self.conn, sid, name.strip())
-            self._reload_sessions_combo()
-
-    def _delete_session(self):
-        sid = self._session_id
-        if sid is None or self.cmb_sessions.count() <= 1:
-            return
-        name = self.cmb_sessions.currentText()
-        if QMessageBox.question(
-            self, "تأكيد الحذف",
-            f"حذف الجلسة «{name}» وكل قيمها؟",
-            QMessageBox.Yes | QMessageBox.No
-        ) == QMessageBox.Yes:
-            delete_session(self.conn, sid)
-            self._session_id = None
-            self._reload_sessions_combo()
-
-    # ── بناء حقل إدخال ──
-
-    def _build_field_row(self, field_data, current_value) -> QWidget:
-        fid     = field_data["id"]
-        has_dep = bool(field_data["source_field_id"])
-
-        row_w = QFrame()
-        row_w.setStyleSheet("""
-            QFrame {
-                background: #fafafa; border: 1px solid #e8eaf6; border-radius: 6px;
-            }
-            QFrame:hover { border-color: #90caf9; background: #f3f8ff; }
-        """)
-        row_lay = QHBoxLayout(row_w)
-        row_lay.setContentsMargins(10, 6, 10, 6)
-        row_lay.setSpacing(8)
-
-        lbl = QLabel(field_data["label"])
-        lbl.setFixedWidth(110)
-        lbl.setAlignment(Qt.AlignRight | Qt.AlignVCenter)
-        lbl.setStyleSheet(
-            "background: transparent; border: none; font-weight: bold; color: #333;"
-        )
-
-        spin = QDoubleSpinBox()
-        spin.setRange(-99999, 99999)
-        spin.setDecimals(4)
-        spin.setMinimumHeight(30)
-        spin.setMinimumWidth(120)
-        spin.setStyleSheet("""
-            QDoubleSpinBox {
-                border: 1px solid #c5cae9; border-radius: 4px;
-                padding: 2px 6px; background: white;
-            }
-            QDoubleSpinBox:focus { border-color: #1565c0; }
-        """)
-        if current_value is not None:
-            spin.setValue(float(current_value))
-
-        unit_lbl = QLabel(field_data["unit"] or "cm")
-        unit_lbl.setFixedWidth(35)
-        unit_lbl.setStyleSheet(
-            "color: #888; background: transparent; border: none; font-size: 11px;"
-        )
-
-        self._spins[fid] = spin
-        row_lay.addWidget(lbl)
-        row_lay.addWidget(spin, stretch=1)
-        row_lay.addWidget(unit_lbl)
-
-        if has_dep:
-            src_info = field_data["source_label"] or ""
-            if field_data.get("source_set_name"):
-                src_info = f"{src_info} ({field_data['source_set_name']})"
-
-            btn_auto = QPushButton("⟳")
-            btn_auto.setFixedSize(30, 30)
-            btn_auto.setToolTip(f"حساب تلقائي من: {src_info}")
-            btn_auto.setStyleSheet("""
-                QPushButton {
-                    background: #e8f5e9; border: 1px solid #a5d6a7;
-                    border-radius: 4px; color: #2e7d32;
-                    font-size: 13px; font-weight: bold;
-                }
-                QPushButton:hover { background: #c8e6c9; }
-            """)
-            btn_auto.clicked.connect(
-                lambda _, fid_=fid, sp_=spin: self._calc_one_auto(fid_, sp_)
-            )
-            self._auto_btns[fid] = btn_auto
-
-            dep_badge = QLabel("↗")
-            dep_badge.setFixedSize(20, 20)
-            dep_badge.setAlignment(Qt.AlignCenter)
-            dep_badge.setStyleSheet("""
-                background: #e8f5e9; border-radius: 3px;
-                color: #2e7d32; font-size: 11px; border: none;
-            """)
-            dep_badge.setToolTip(f"يعتمد حسابه على: {src_info}")
-
-            row_lay.addWidget(dep_badge)
-            row_lay.addWidget(btn_auto)
-        else:
-            spacer = QLabel("")
-            spacer.setFixedWidth(58)
-            spacer.setStyleSheet("background: transparent; border: none;")
-            row_lay.addWidget(spacer)
-
-        return row_w
-
-    def _clear_fields(self):
-        while self._fields_layout.count() > 1:
-            item = self._fields_layout.takeAt(0)
-            if item.widget():
-                item.widget().deleteLater()
-
-    def _enable_buttons(self, enabled: bool, has_auto: bool = False):
-        self.btn_save.setEnabled(enabled)
-        self.btn_calc_all.setEnabled(enabled and has_auto)
-        self.btn_reset.setEnabled(enabled)
-
-    def _calc_one_auto(self, field_id: int, spin: QDoubleSpinBox):
-        if self._set_id is None or self._session_id is None:
-            return
-        self._save_values(silent=True)
-        val = calc_standalone_cross_auto(
-            self.conn, field_id, self._set_id, self._session_id
-        )
-        if val is not None:
-            spin.setValue(val)
-            spin.setStyleSheet("""
-                QDoubleSpinBox {
-                    border: 2px solid #43a047; border-radius: 4px;
-                    padding: 2px 6px; background: #f1f8e9;
-                }
-            """)
-            self.lbl_status.setText(f"✓ تم حساب الحقل تلقائياً = {val:.4g}")
-        else:
-            QMessageBox.information(
-                self, "تنبيه",
-                "لا توجد قيمة للحقل المصدر بعد.\n"
-                "أدخل قيمة الحقل المصدر أولاً ثم احسب."
-            )
-
-    def _calc_all_auto(self):
-        if self._set_id is None or self._session_id is None:
-            return
-        self._save_values(silent=True)
-        count = 0
-        for fid, spin in self._spins.items():
-            if fid in self._auto_btns:
-                val = calc_standalone_cross_auto(
-                    self.conn, fid, self._set_id, self._session_id
-                )
-                if val is not None:
-                    spin.setValue(val)
-                    count += 1
-        self.lbl_status.setText(
-            f"✓ تم حساب {count} حقل تلقائياً" if count
-            else "⚠ لا توجد قيم مصدر كافية للحساب"
-        )
-
-    def _save_values(self, silent: bool = False):
-        if self._set_id is None or self._session_id is None:
-            return
-        for fid, spin in self._spins.items():
-            save_session_value(
-                self.conn, self._session_id, self._set_id, fid, spin.value()
-            )
-        # تحديث updated_at للجلسة
-        sess = fetch_session(self.conn, self._session_id)
-        if sess:
-            update_session(self.conn, self._session_id, sess["name"], sess["notes"] or "")
-        if not silent:
-            self.lbl_status.setText("✓ تم الحفظ")
-            for spin in self._spins.values():
-                spin.setStyleSheet("""
-                    QDoubleSpinBox {
-                        border: 1px solid #c5cae9; border-radius: 4px;
-                        padding: 2px 6px; background: white;
-                    }
-                    QDoubleSpinBox:focus { border-color: #1565c0; }
-                """)
-
-    def _reset_values(self):
-        if QMessageBox.question(
-            self, "تأكيد", "مسح كل القيم المدخلة في هذه الجلسة؟",
-            QMessageBox.Yes | QMessageBox.No
-        ) == QMessageBox.Yes:
-            for spin in self._spins.values():
-                spin.setValue(0.0)
-            self.lbl_status.setText("↺ تم المسح")
-
-    def clear(self):
-        self._set_id     = None
-        self._session_id = None
-        self._spins      = {}
-        self.cmb_sessions.blockSignals(True)
-        self.cmb_sessions.clear()
-        self.cmb_sessions.blockSignals(False)
-        self._clear_fields()
-        self._enable_buttons(False)
-        self.btn_rename_sess.setEnabled(False)
-        self.btn_del_sess.setEnabled(False)
-        self.lbl_hint.setVisible(True)
-        self.lbl_status.setText("")
-
-
-# ══════════════════════════════════════════════════════════
-# لوحة حقول المجموعة
-# ══════════════════════════════════════════════════════════
-
-class _FieldsPanel(QWidget):
-    """محرر حقول مجموعة مقاسات."""
-
-    fields_changed = pyqtSignal()
-    set_selected   = pyqtSignal(int)
-
-    def __init__(self, conn, parent=None):
-        super().__init__(parent)
-        self.conn    = conn
-        self._set_id = None
+        self._design_id = None
+        self._cards     = []
         self._build()
 
     def _build(self):
@@ -796,154 +315,307 @@ class _FieldsPanel(QWidget):
         root.setContentsMargins(0, 0, 0, 0)
         root.setSpacing(6)
 
-        hdr = QLabel("حقول المجموعة")
-        hdr.setStyleSheet("font-weight:bold; color:#1565c0; font-size:12px;")
-        root.addWidget(hdr)
+        # ── شريط الإضافة ──
+        add_row = QHBoxLayout()
+        lbl = QLabel("إضافة مجموعة مقاسات:")
+        lbl.setStyleSheet("font-weight:bold; color:#1565c0;")
+        self.cmb_set = QComboBox()
+        self.cmb_set.setMinimumHeight(30)
+        self.cmb_set.setMinimumWidth(200)
+        self.inp_link_label = QLineEdit()
+        self.inp_link_label.setPlaceholderText("التسمية (مثال: مقاس L) — اختياري")
+        self.inp_link_label.setMinimumHeight(30)
+        self.inp_link_label.setMinimumWidth(160)
+        btn_add = QPushButton("➕  إضافة")
+        btn_add.setMinimumHeight(30)
+        btn_add.setStyleSheet("""
+            QPushButton {
+                background: #1565c0;
+                color: white;
+                border: none;
+                border-radius: 4px;
+                padding: 4px 14px;
+                font-weight: bold;
+            }
+            QPushButton:hover { background: #0d47a1; }
+        """)
+        btn_add.clicked.connect(self._add_link)
 
-        self.table = make_table(
-            ["الترتيب", "الاسم", "التسمية", "الوحدة", "النوع", "إلزامي", "يعتمد على"],
-            stretch_col=2
-        )
-        self.table.setColumnWidth(0, 60)
-        self.table.setColumnWidth(1, 90)
-        self.table.setColumnWidth(3, 60)
-        self.table.setColumnWidth(4, 55)
-        self.table.setColumnWidth(5, 55)
-        self.table.setColumnWidth(6, 130)
-        root.addWidget(self.table)
+        add_row.addWidget(lbl)
+        add_row.addWidget(self.cmb_set, stretch=1)
+        add_row.addWidget(self.inp_link_label, stretch=1)
+        add_row.addWidget(btn_add)
+        root.addLayout(add_row)
 
-        btn_add  = QPushButton("➕  إضافة حقل")
-        btn_edit = QPushButton("✏️  تعديل")
-        btn_del  = danger_button("🗑️  حذف")
-        btn_up   = QPushButton("▲")
-        btn_dn   = QPushButton("▼")
-        for btn in (btn_add, btn_edit, btn_del, btn_up, btn_dn):
-            btn.setMinimumHeight(28)
-        btn_up.setFixedWidth(34)
-        btn_dn.setFixedWidth(34)
+        # ── منطقة البطاقات (scroll) ──
+        self._cards_widget = QWidget()
+        self._cards_widget.setStyleSheet("background: #f9f9f9; border:none;")
+        self._cards_layout = QVBoxLayout(self._cards_widget)
+        self._cards_layout.setSpacing(8)
+        self._cards_layout.setContentsMargins(0, 0, 0, 0)
+        self._cards_layout.addStretch()
 
-        btn_add.clicked.connect(self._add_field)
-        btn_edit.clicked.connect(self._edit_field)
-        btn_del.clicked.connect(self._del_field)
-        btn_up.clicked.connect(self._move_up)
-        btn_dn.clicked.connect(self._move_down)
+        scroll = QScrollArea()
+        scroll.setWidgetResizable(True)
+        scroll.setWidget(self._cards_widget)
+        scroll.setStyleSheet("QScrollArea { border: none; background: #f9f9f9; }")
+        root.addWidget(scroll, stretch=1)
 
-        btn_row = QHBoxLayout()
-        btn_row.addWidget(btn_add)
-        btn_row.addWidget(btn_edit)
-        btn_row.addWidget(btn_del)
-        btn_row.addStretch()
-        btn_row.addWidget(btn_up)
-        btn_row.addWidget(btn_dn)
-        root.addLayout(btn_row)
+        self._load_sets_combo()
 
-    def load_set(self, set_id: int):
-        self._set_id = set_id
-        self._refresh()
-        self.set_selected.emit(set_id)
+    def _load_sets_combo(self):
+        prev = self.cmb_set.currentData()
+        self.cmb_set.blockSignals(True)
+        self.cmb_set.clear()
+        for ds in fetch_all_dimension_sets(self.conn):
+            self.cmb_set.addItem(ds["name"], ds["id"])
+        for i in range(self.cmb_set.count()):
+            if self.cmb_set.itemData(i) == prev:
+                self.cmb_set.setCurrentIndex(i)
+                break
+        self.cmb_set.blockSignals(False)
+
+    def load_design(self, design_id: int):
+        self._design_id = design_id
+        self._refresh_cards()
+        self._load_sets_combo()
 
     def clear(self):
-        self._set_id = None
-        self.table.setRowCount(0)
+        self._design_id = None
+        self._clear_cards()
 
-    def _refresh(self):
-        if self._set_id is None:
-            self.table.setRowCount(0)
+    def _clear_cards(self):
+        for card in self._cards:
+            self._cards_layout.removeWidget(card)
+            card.deleteLater()
+        self._cards = []
+
+    def _refresh_cards(self):
+        self._clear_cards()
+        if self._design_id is None:
             return
-        self.table.setRowCount(0)
-        fields = fetch_fields_for_set(self.conn, self._set_id)
-        for f in fields:
-            r = self.table.rowCount()
-            self.table.insertRow(r)
-            self.table.setItem(r, 0, QTableWidgetItem(str(f["sort_order"] + 1)))
-            self.table.setItem(r, 1, QTableWidgetItem(f["name"]))
-            self.table.setItem(r, 2, QTableWidgetItem(f["label"]))
-            self.table.setItem(r, 3, QTableWidgetItem(f["unit"] or "cm"))
-            self.table.setItem(r, 4, QTableWidgetItem(
-                "رقم" if f["field_type"] == "number" else "نص"
-            ))
-            self.table.setItem(r, 5, QTableWidgetItem("✓" if f["required"] else ""))
+        links = fetch_design_links_for_design(self.conn, self._design_id)
+        for link in links:
+            self._add_card(link["id"])
 
-            dep_text = ""
-            if f["source_field_id"]:
-                sign     = "+" if f["dep_offset"] >= 0 else ""
-                src_label = f["source_label"] or ""
-                src_set   = f.get("source_set_name") or ""
-                dep_text = (
-                    f"{src_label} ({src_set}) {sign}{f['dep_offset']:g}"
-                    if src_set else
-                    f"{src_label} {sign}{f['dep_offset']:g}"
-                )
-            self.table.setItem(r, 6, QTableWidgetItem(dep_text))
-            self.table.item(r, 0).setData(Qt.UserRole, f["id"])
+    def _add_card(self, link_id: int):
+        card = _DimValuesCard(self.conn, link_id)
+        card.remove_requested.connect(self._remove_link)
+        card.saved.connect(self.changed.emit)
+        self._cards_layout.insertWidget(self._cards_layout.count() - 1, card)
+        self._cards.append(card)
 
-    def _selected_field_id(self):
-        row  = self.table.currentRow()
-        item = self.table.item(row, 0) if row >= 0 else None
-        return item.data(Qt.UserRole) if item else None
-
-    def _add_field(self):
-        if self._set_id is None:
-            QMessageBox.information(self, "تنبيه", "اختر مجموعة مقاسات أولاً")
+    def _add_link(self):
+        if self._design_id is None:
+            QMessageBox.information(self, "تنبيه", "احفظ التصميم أولاً")
             return
-        dlg = _FieldDialog(self.conn, self._set_id, parent=self)
-        if dlg.exec_() == QDialog.Accepted:
-            self._refresh()
-            self.fields_changed.emit()
-
-    def _edit_field(self):
-        fid = self._selected_field_id()
-        if fid is None:
-            QMessageBox.information(self, "تنبيه", "اختر حقلاً أولاً")
+        set_id = self.cmb_set.currentData()
+        if set_id is None:
+            QMessageBox.warning(self, "تنبيه", "اختر مجموعة مقاسات")
             return
-        f   = fetch_field(self.conn, fid)
-        dlg = _FieldDialog(self.conn, self._set_id, field_data=f, parent=self)
-        if dlg.exec_() == QDialog.Accepted:
-            self._refresh()
-            self.fields_changed.emit()
+        label = self.inp_link_label.text().strip()
+        # عدد الروابط الحالية كـ sort_order
+        current_count = len(fetch_design_links_for_design(self.conn, self._design_id))
+        link_id = add_design_link(
+            self.conn, self._design_id, set_id, label, current_count
+        )
+        self.inp_link_label.clear()
+        self._add_card(link_id)
+        self.changed.emit()
 
-    def _del_field(self):
-        fid = self._selected_field_id()
-        if fid is None:
-            QMessageBox.information(self, "تنبيه", "اختر حقلاً أولاً")
+    def _remove_link(self, link_id: int):
+        link = fetch_link(self.conn, link_id)
+        if not link:
             return
-        f = fetch_field(self.conn, fid)
-        if f and confirm_delete(self, f["label"]):
-            delete_field(self.conn, fid)
-            self._refresh()
-            self.fields_changed.emit()
-
-    def _move_up(self):   self._move(-1)
-    def _move_down(self): self._move(1)
-
-    def _move(self, direction: int):
-        row     = self.table.currentRow()
-        new_row = row + direction
-        if new_row < 0 or new_row >= self.table.rowCount():
-            return
-        ids = [self.table.item(r, 0).data(Qt.UserRole)
-               for r in range(self.table.rowCount())]
-        ids[row], ids[new_row] = ids[new_row], ids[row]
-        reorder_fields(self.conn, self._set_id, ids)
-        self._refresh()
-        self.table.selectRow(new_row)
-        self.fields_changed.emit()
+        if QMessageBox.question(
+            self, "تأكيد", "حذف هذه المقاسة من التصميم؟",
+            QMessageBox.Yes | QMessageBox.No
+        ) == QMessageBox.Yes:
+            remove_design_link(self.conn, link_id)
+            self._refresh_cards()
+            self.changed.emit()
 
 
 # ══════════════════════════════════════════════════════════
-# لوحة مجموعات المقاسات — بدون تصنيفات، مع parent_set
+# لوحة فورم التصميم
 # ══════════════════════════════════════════════════════════
 
-class _SetsPanel(QWidget):
-    """قائمة مجموعات المقاسات بشكل هرمي + فورم الإضافة/التعديل."""
+class _DesignFormPanel(QWidget):
+    """فورم إضافة/تعديل تصميم + ربط المقاسات."""
 
-    set_selected = pyqtSignal(int)
+    saved   = pyqtSignal()
+    cleared = pyqtSignal()
 
     def __init__(self, conn, parent=None):
         super().__init__(parent)
         self.conn        = conn
         self._editing_id = None
-        self._all_rows   = []
+        self._build()
+
+    def _build(self):
+        root = QVBoxLayout(self)
+        root.setContentsMargins(0, 0, 0, 0)
+        root.setSpacing(0)
+
+        # ── قسم بيانات التصميم الأساسية (ثابت في الأعلى) ──
+        top = QWidget()
+        top.setStyleSheet("background:#f0f4ff; border-bottom:1px solid #c5cae9;")
+        top_lay = QVBoxLayout(top)
+        top_lay.setContentsMargins(12, 10, 12, 10)
+        top_lay.setSpacing(8)
+
+        self.lbl_mode = QLabel("─── تصميم جديد ───")
+        self.lbl_mode.setStyleSheet("font-weight:bold; color:#1565c0; font-size:13px;")
+
+        # صف الاسم والتصنيف
+        info_row = QHBoxLayout()
+        info_row.setSpacing(8)
+        self.inp_name = QLineEdit()
+        self.inp_name.setPlaceholderText("اسم التصميم...")
+        self.inp_name.setMinimumHeight(32)
+
+        self.cmb_category = QComboBox()
+        self.cmb_category.setMinimumHeight(32)
+        self.cmb_category.setMinimumWidth(160)
+
+        self.inp_notes = QLineEdit()
+        self.inp_notes.setPlaceholderText("ملاحظات...")
+        self.inp_notes.setMinimumHeight(32)
+
+        info_row.addWidget(QLabel("الاسم:"))
+        info_row.addWidget(self.inp_name, stretch=2)
+        info_row.addWidget(QLabel("التصنيف:"))
+        info_row.addWidget(self.cmb_category)
+        info_row.addWidget(QLabel("ملاحظات:"))
+        info_row.addWidget(self.inp_notes, stretch=1)
+
+        # أزرار
+        self.btn_save   = QPushButton("💾  حفظ التصميم")
+        self.btn_cancel = QPushButton("✖  إلغاء")
+        self.btn_save.setMinimumHeight(32)
+        self.btn_cancel.setMinimumHeight(32)
+        self.btn_save.setStyleSheet("""
+            QPushButton {
+                background:#1565c0; color:white; border:none;
+                border-radius:4px; padding:4px 16px; font-weight:bold;
+            }
+            QPushButton:hover { background:#0d47a1; }
+        """)
+        self.btn_cancel.setVisible(False)
+        self.btn_save.clicked.connect(self._save)
+        self.btn_cancel.clicked.connect(self._cancel)
+
+        btn_row = QHBoxLayout()
+        btn_row.addWidget(self.btn_save)
+        btn_row.addWidget(self.btn_cancel)
+        btn_row.addStretch()
+
+        top_lay.addWidget(self.lbl_mode)
+        top_lay.addLayout(info_row)
+        top_lay.addLayout(btn_row)
+        root.addWidget(top)
+
+        # ── لوحة المقاسات ──
+        dim_lbl = QLabel("  📐  مقاسات التصميم")
+        dim_lbl.setStyleSheet("""
+            font-weight:bold; font-size:12px; color:#1565c0;
+            background:#e8f0fe; padding:6px 12px;
+            border-bottom:1px solid #c5cae9;
+        """)
+        root.addWidget(dim_lbl)
+
+        self._dim_panel = _DimLinksPanel(self.conn)
+        self._dim_panel.changed.connect(self.saved.emit)
+        root.addWidget(self._dim_panel, stretch=1)
+
+        self._reload_categories()
+
+    def _reload_categories(self):
+        prev = self.cmb_category.currentData()
+        self.cmb_category.blockSignals(True)
+        self.cmb_category.clear()
+        self.cmb_category.addItem("— بدون تصنيف —", None)
+        rows = fetch_all_design_categories(self.conn)
+        tree = build_category_tree(rows)
+        self._add_cat_nodes(tree, 0)
+        for i in range(self.cmb_category.count()):
+            if self.cmb_category.itemData(i) == prev:
+                self.cmb_category.setCurrentIndex(i)
+                break
+        self.cmb_category.blockSignals(False)
+
+    def _add_cat_nodes(self, nodes, depth):
+        indent = "    " * depth
+        arrow  = "↳ " if depth > 0 else ""
+        for node in nodes:
+            self.cmb_category.addItem(
+                f"{indent}{arrow}{node['name']}", node["id"]
+            )
+            if node["children"]:
+                self._add_cat_nodes(node["children"], depth + 1)
+
+    def load_design(self, design_id: int):
+        d = fetch_design(self.conn, design_id)
+        if not d:
+            return
+        self._editing_id = design_id
+        self.inp_name.setText(d["name"])
+        self.inp_notes.setText(d["notes"] or "")
+        for i in range(self.cmb_category.count()):
+            if self.cmb_category.itemData(i) == d["category_id"]:
+                self.cmb_category.setCurrentIndex(i)
+                break
+        self.lbl_mode.setText(f"تعديل: {d['name']}")
+        self.btn_cancel.setVisible(True)
+        self._dim_panel.load_design(design_id)
+
+    def reset(self):
+        self._editing_id = None
+        self.inp_name.clear()
+        self.inp_notes.clear()
+        self.cmb_category.setCurrentIndex(0)
+        self.lbl_mode.setText("─── تصميم جديد ───")
+        self.btn_cancel.setVisible(False)
+        self._dim_panel.clear()
+        self.cleared.emit()
+
+    def _save(self):
+        name = self.inp_name.text().strip()
+        if not name:
+            QMessageBox.warning(self, "تنبيه", "أدخل اسم التصميم")
+            return
+        cat_id = self.cmb_category.currentData()
+        notes  = self.inp_notes.text().strip()
+
+        if self._editing_id:
+            update_design(self.conn, self._editing_id, name, cat_id, notes)
+        else:
+            self._editing_id = insert_design(self.conn, name, cat_id, notes)
+            self.lbl_mode.setText(f"تعديل: {name}")
+            self.btn_cancel.setVisible(True)
+            self._dim_panel.load_design(self._editing_id)
+
+        self.saved.emit()
+
+    def _cancel(self):
+        self.reset()
+
+
+# ══════════════════════════════════════════════════════════
+# جدول التصميمات
+# ══════════════════════════════════════════════════════════
+
+class _DesignsTable(QWidget):
+    """جدول التصميمات مع فلتر متقدم."""
+
+    design_selected = pyqtSignal(int)    # design_id
+    design_deleted  = pyqtSignal()
+
+    def __init__(self, conn, form_panel: _DesignFormPanel, parent=None):
+        super().__init__(parent)
+        self.conn       = conn
+        self._form      = form_panel
+        self._all_rows  = []
         self._build()
         self._load()
 
@@ -952,142 +624,176 @@ class _SetsPanel(QWidget):
         root.setContentsMargins(0, 0, 0, 0)
         root.setSpacing(6)
 
-        # ── فلتر بحث ──
-        filter_row = QHBoxLayout()
+        # ── شريط الفلتر ──
+        filter_frame = QFrame()
+        filter_frame.setStyleSheet("""
+            QFrame {
+                background: #f0f4ff;
+                border: 1px solid #c5cae9;
+                border-radius: 6px;
+            }
+        """)
+        filter_lay = QVBoxLayout(filter_frame)
+        filter_lay.setContentsMargins(8, 6, 8, 6)
+        filter_lay.setSpacing(6)
+
+        # صف البحث
+        row1 = QHBoxLayout()
         self.inp_search = QLineEdit()
-        self.inp_search.setPlaceholderText("🔍 بحث...")
+        self.inp_search.setPlaceholderText("🔍 بحث بالاسم...")
         self.inp_search.setMinimumHeight(28)
         self.inp_search.textChanged.connect(self._apply_filter)
-        filter_row.addWidget(QLabel("🔍"))
-        filter_row.addWidget(self.inp_search, stretch=1)
-        root.addLayout(filter_row)
 
-        # ── جدول ──
+        row1.addWidget(QLabel("🔍"))
+        row1.addWidget(self.inp_search, stretch=1)
+
+        # صف التصنيف + المقاسات
+        row2 = QHBoxLayout()
+        self.cmb_cat_filter = QComboBox()
+        self.cmb_cat_filter.setMinimumHeight(28)
+        self.cmb_cat_filter.setMinimumWidth(140)
+        self.cmb_cat_filter.currentIndexChanged.connect(self._apply_filter)
+
+        self.cmb_set_filter = QComboBox()
+        self.cmb_set_filter.setMinimumHeight(28)
+        self.cmb_set_filter.setMinimumWidth(140)
+        self.cmb_set_filter.currentIndexChanged.connect(self._apply_filter)
+
+        btn_reset = QPushButton("↺ مسح")
+        btn_reset.setMinimumHeight(28)
+        btn_reset.setStyleSheet("""
+            QPushButton {
+                background: #e8eaf6; border: 1px solid #c5cae9;
+                border-radius: 4px; padding: 2px 10px;
+                color: #3949ab; font-size:11px;
+            }
+            QPushButton:hover { background: #c5cae9; }
+        """)
+        btn_reset.clicked.connect(self._reset_filter)
+
+        self.lbl_count = QLabel("")
+        self.lbl_count.setStyleSheet("color:#1565c0; font-size:10px; font-weight:bold; background:transparent; border:none;")
+
+        row2.addWidget(QLabel("📁"))
+        row2.addWidget(self.cmb_cat_filter)
+        row2.addWidget(QLabel("📐"))
+        row2.addWidget(self.cmb_set_filter)
+        row2.addWidget(btn_reset)
+        row2.addStretch()
+        row2.addWidget(self.lbl_count)
+
+        filter_lay.addLayout(row1)
+        filter_lay.addLayout(row2)
+        root.addWidget(filter_frame)
+
+        # ── الجدول ──
         self.table = make_table(
-            ["ID", "الاسم", "المجموعة الأب", "الوحدة", "عدد الحقول"],
+            ["ID", "الاسم", "التصنيف", "عدد المقاسات", "آخر تعديل"],
             stretch_col=1
         )
         self.table.setColumnWidth(0, 40)
         self.table.setColumnWidth(2, 120)
-        self.table.setColumnWidth(3, 60)
-        self.table.setColumnWidth(4, 70)
+        self.table.setColumnWidth(3, 90)
+        self.table.setColumnWidth(4, 120)
         self.table.itemSelectionChanged.connect(self._on_select)
         root.addWidget(self.table)
 
         # ── أزرار ──
         btn_edit = QPushButton("✏️  تعديل")
         btn_del  = danger_button("🗑️  حذف")
-        for b in (btn_edit, btn_del):
+        btn_view = QPushButton("👁  عرض تفاصيل")
+        for b in (btn_edit, btn_del, btn_view):
             b.setMinimumHeight(28)
         btn_edit.clicked.connect(self._edit)
         btn_del.clicked.connect(self._delete)
-        root.addLayout(buttons_row(btn_edit, btn_del))
+        btn_view.clicked.connect(self._view_details)
+        root.addLayout(buttons_row(btn_edit, btn_del, btn_view))
 
-        # ── فورم الإضافة/التعديل ──
-        grp  = QGroupBox("بيانات المجموعة")
-        form = QFormLayout(grp)
-        form.setSpacing(8)
-        form.setLabelAlignment(Qt.AlignRight)
+        self._reload_filter_combos()
 
-        self.lbl_mode = QLabel("─── مجموعة جديدة ───")
-        self.lbl_mode.setStyleSheet("font-weight:bold; color:#1565c0;")
-        form.addRow(self.lbl_mode)
-
-        self.inp_name = QLineEdit()
-        self.inp_name.setPlaceholderText("مثال: مقاسات الثوب، مقاسات البنطلون ...")
-        self.inp_name.setMinimumHeight(30)
-
-        # المجموعة الأب (بدل التصنيف)
-        self.cmb_parent_set = QComboBox()
-        self.cmb_parent_set.setMinimumHeight(28)
-
-        self.inp_unit = QLineEdit()
-        self.inp_unit.setText("cm")
-        self.inp_unit.setFixedWidth(80)
-        self.inp_unit.setMinimumHeight(28)
-
-        self.inp_notes = QLineEdit()
-        self.inp_notes.setPlaceholderText("ملاحظات...")
-        self.inp_notes.setMinimumHeight(28)
-
-        form.addRow("الاسم :",            self.inp_name)
-        form.addRow("المجموعة الأب :",    self.cmb_parent_set)
-        form.addRow("الوحدة الافتراضية :", self.inp_unit)
-        form.addRow("ملاحظات :",          self.inp_notes)
-
-        self.btn_add    = QPushButton("➕  إضافة")
-        self.btn_save   = QPushButton("💾  حفظ")
-        self.btn_cancel = QPushButton("✖  إلغاء")
-        self.btn_save.setVisible(False)
-        self.btn_cancel.setVisible(False)
-        for b in (self.btn_add, self.btn_save, self.btn_cancel):
-            b.setMinimumHeight(30)
-        self.btn_add.clicked.connect(self._add)
-        self.btn_save.clicked.connect(self._save)
-        self.btn_cancel.clicked.connect(self._reset)
-
-        btn_row = QHBoxLayout()
-        btn_row.addWidget(self.btn_add)
-        btn_row.addWidget(self.btn_save)
-        btn_row.addWidget(self.btn_cancel)
-        form.addRow(btn_row)
-        root.addWidget(grp)
-
-        self._reload_parent_combo()
-
-    def _reload_parent_combo(self, exclude_id=None):
-        """يملأ combo المجموعة الأب بشكل هرمي."""
-        prev = self.cmb_parent_set.currentData()
-        self.cmb_parent_set.blockSignals(True)
-        self.cmb_parent_set.clear()
-        self.cmb_parent_set.addItem("— بدون مجموعة أب —", None)
-
-        rows     = fetch_all_dimension_sets(self.conn)
-        tree     = build_sets_tree(rows)
-        excluded = set(fetch_set_descendants(self.conn, exclude_id)) if exclude_id else set()
-        self._add_set_nodes(self.cmb_parent_set, tree, 0, excluded)
-
-        for i in range(self.cmb_parent_set.count()):
-            if self.cmb_parent_set.itemData(i) == prev:
-                self.cmb_parent_set.setCurrentIndex(i)
+    def _reload_filter_combos(self):
+        # تصنيفات
+        prev_cat = self.cmb_cat_filter.currentData()
+        self.cmb_cat_filter.blockSignals(True)
+        self.cmb_cat_filter.clear()
+        self.cmb_cat_filter.addItem("— كل التصنيفات —", None)
+        rows = fetch_all_design_categories(self.conn)
+        tree = build_category_tree(rows)
+        self._add_cat_nodes_to_combo(self.cmb_cat_filter, tree, 0)
+        for i in range(self.cmb_cat_filter.count()):
+            if self.cmb_cat_filter.itemData(i) == prev_cat:
+                self.cmb_cat_filter.setCurrentIndex(i)
                 break
-        self.cmb_parent_set.blockSignals(False)
+        self.cmb_cat_filter.blockSignals(False)
 
-    def _add_set_nodes(self, combo, nodes, depth, excluded):
+        # مجموعات المقاسات
+        prev_set = self.cmb_set_filter.currentData()
+        self.cmb_set_filter.blockSignals(True)
+        self.cmb_set_filter.clear()
+        self.cmb_set_filter.addItem("— كل المقاسات —", None)
+        for ds in fetch_all_dimension_sets(self.conn):
+            self.cmb_set_filter.addItem(ds["name"], ds["id"])
+        for i in range(self.cmb_set_filter.count()):
+            if self.cmb_set_filter.itemData(i) == prev_set:
+                self.cmb_set_filter.setCurrentIndex(i)
+                break
+        self.cmb_set_filter.blockSignals(False)
+
+    def _add_cat_nodes_to_combo(self, combo, nodes, depth):
         indent = "    " * depth
         arrow  = "↳ " if depth > 0 else ""
         for node in nodes:
-            if node["id"] in excluded:
-                continue
             combo.addItem(f"{indent}{arrow}{node['name']}", node["id"])
             if node["children"]:
-                self._add_set_nodes(combo, node["children"], depth + 1, excluded)
+                self._add_cat_nodes_to_combo(combo, node["children"], depth + 1)
 
     def _load(self):
-        self._all_rows = list(fetch_all_dimension_sets(self.conn))
-        self._reload_parent_combo()
+        self._all_rows = list(fetch_all_designs(self.conn))
+        self._reload_filter_combos()
         self._apply_filter()
 
     def _apply_filter(self):
-        q    = self.inp_search.text().strip().lower()
-        prev = self._selected_id()
+        q      = self.inp_search.text().strip().lower()
+        cat_id = self.cmb_cat_filter.currentData()
+        set_id = self.cmb_set_filter.currentData()
+        prev   = self._selected_id()
         self.table.setRowCount(0)
+        shown  = 0
 
-        for ds in self._all_rows:
-            if q and q not in ds["name"].lower():
+        for d in self._all_rows:
+            if q and q not in d["name"].lower():
                 continue
-            cnt = self.conn.execute(
-                "SELECT COUNT(*) as c FROM dimension_fields WHERE set_id=?",
-                (ds["id"],)
+            if cat_id is not None and d["category_id"] != cat_id:
+                continue
+            if set_id is not None:
+                # تحقق إن التصميم مرتبط بهذه المجموعة
+                linked = self.conn.execute(
+                    "SELECT 1 FROM design_dimensions WHERE design_id=? AND set_id=?",
+                    (d["id"], set_id)
+                ).fetchone()
+                if not linked:
+                    continue
+            # عدد المقاسات
+            dim_cnt = self.conn.execute(
+                "SELECT COUNT(*) as c FROM design_dimensions WHERE design_id=?",
+                (d["id"],)
             ).fetchone()["c"]
+
             r = self.table.rowCount()
             self.table.insertRow(r)
-            self.table.setItem(r, 0, QTableWidgetItem(str(ds["id"])))
-            self.table.setItem(r, 1, QTableWidgetItem(ds["name"]))
-            self.table.setItem(r, 2, QTableWidgetItem(ds["parent_set_name"] or "—"))
-            self.table.setItem(r, 3, QTableWidgetItem(ds["default_unit"] or "cm"))
-            self.table.setItem(r, 4, QTableWidgetItem(str(cnt)))
-            self.table.item(r, 0).setData(Qt.UserRole, ds["id"])
+            self.table.setItem(r, 0, QTableWidgetItem(str(d["id"])))
+            self.table.setItem(r, 1, QTableWidgetItem(d["name"]))
+            self.table.setItem(r, 2, QTableWidgetItem(d["category_name"] or "—"))
+            self.table.setItem(r, 3, QTableWidgetItem(str(dim_cnt)))
+            updated = (d["updated_at"] or "")[:16].replace("T", " ")
+            self.table.setItem(r, 4, QTableWidgetItem(updated))
+            self.table.item(r, 0).setData(Qt.UserRole, d["id"])
+            shown += 1
+
+        if shown == len(self._all_rows):
+            self.lbl_count.setText(f"({shown})")
+        else:
+            self.lbl_count.setText(f"({shown} / {len(self._all_rows)})")
 
         if prev is not None:
             for r in range(self.table.rowCount()):
@@ -1095,118 +801,126 @@ class _SetsPanel(QWidget):
                     self.table.selectRow(r)
                     break
 
+    def _reset_filter(self):
+        self.inp_search.blockSignals(True)
+        self.cmb_cat_filter.blockSignals(True)
+        self.cmb_set_filter.blockSignals(True)
+        self.inp_search.clear()
+        self.cmb_cat_filter.setCurrentIndex(0)
+        self.cmb_set_filter.setCurrentIndex(0)
+        self.inp_search.blockSignals(False)
+        self.cmb_cat_filter.blockSignals(False)
+        self.cmb_set_filter.blockSignals(False)
+        self._apply_filter()
+
     def _selected_id(self):
-        row  = self.table.currentRow()
-        item = self.table.item(row, 0) if row >= 0 else None
+        row = self.table.currentRow()
+        if row < 0:
+            return None
+        item = self.table.item(row, 0)
         return item.data(Qt.UserRole) if item else None
 
     def _on_select(self):
-        sid = self._selected_id()
-        if sid:
-            self.set_selected.emit(sid)
-
-    def _add(self):
-        name = self.inp_name.text().strip()
-        if not name:
-            QMessageBox.warning(self, "تنبيه", "أدخل اسم المجموعة")
-            return
-        insert_dimension_set(
-            self.conn, name,
-            parent_set_id=self.cmb_parent_set.currentData(),
-            default_unit=self.inp_unit.text().strip() or "cm",
-            notes=self.inp_notes.text().strip()
-        )
-        self._reset()
-        self._load()
+        did = self._selected_id()
+        if did:
+            self.design_selected.emit(did)
 
     def _edit(self):
-        sid = self._selected_id()
-        if sid is None:
-            QMessageBox.information(self, "تنبيه", "اختر مجموعة أولاً")
+        did = self._selected_id()
+        if did is None:
+            QMessageBox.information(self, "تنبيه", "اختر تصميماً أولاً")
             return
-        ds = fetch_dimension_set(self.conn, sid)
-        if not ds:
-            return
-        self._editing_id = sid
-        self.inp_name.setText(ds["name"])
-        self.inp_unit.setText(ds["default_unit"] or "cm")
-        self.inp_notes.setText(ds["notes"] or "")
-        self._reload_parent_combo(exclude_id=sid)
-        for i in range(self.cmb_parent_set.count()):
-            if self.cmb_parent_set.itemData(i) == ds["parent_set_id"]:
-                self.cmb_parent_set.setCurrentIndex(i)
-                break
-        self.lbl_mode.setText(f"─── تعديل: {ds['name']} ───")
-        self.btn_add.setVisible(False)
-        self.btn_save.setVisible(True)
-        self.btn_cancel.setVisible(True)
-
-    def _save(self):
-        name = self.inp_name.text().strip()
-        if not name:
-            QMessageBox.warning(self, "تنبيه", "أدخل الاسم")
-            return
-        update_dimension_set(
-            self.conn, self._editing_id, name,
-            parent_set_id=self.cmb_parent_set.currentData(),
-            default_unit=self.inp_unit.text().strip() or "cm",
-            notes=self.inp_notes.text().strip()
-        )
-        self._reset()
-        self._load()
+        self._form.load_design(did)
 
     def _delete(self):
-        sid = self._selected_id()
-        if sid is None:
-            QMessageBox.information(self, "تنبيه", "اختر مجموعة أولاً")
+        did = self._selected_id()
+        if did is None:
+            QMessageBox.information(self, "تنبيه", "اختر تصميماً أولاً")
             return
-        ds = fetch_dimension_set(self.conn, sid)
-        if not ds:
+        d = fetch_design(self.conn, did)
+        if not d:
             return
-        used = self.conn.execute(
-            "SELECT COUNT(*) as c FROM design_dimensions WHERE set_id=?", (sid,)
-        ).fetchone()["c"]
-        if used:
-            QMessageBox.warning(
-                self, "تنبيه",
-                f"المجموعة «{ds['name']}» مستخدمة في {used} تصميم — لا يمكن حذفها."
-            )
-            return
-        if confirm_delete(self, ds["name"]):
-            delete_dimension_set(self.conn, sid)
+        if confirm_delete(self, d["name"]):
+            delete_design(self.conn, did)
+            self._form.reset()
             self._load()
+            self.design_deleted.emit()
 
-    def _reset(self):
-        self._editing_id = None
-        self.inp_name.clear()
-        self.inp_unit.setText("cm")
-        self.inp_notes.clear()
-        self.cmb_parent_set.setCurrentIndex(0)
-        self.lbl_mode.setText("─── مجموعة جديدة ───")
-        self.btn_add.setVisible(True)
-        self.btn_save.setVisible(False)
-        self.btn_cancel.setVisible(False)
-        self._reload_parent_combo()
+    def _view_details(self):
+        did = self._selected_id()
+        if did is None:
+            QMessageBox.information(self, "تنبيه", "اختر تصميماً أولاً")
+            return
+        data = fetch_full_design_data(self.conn, did)
+        if not data:
+            return
+
+        dlg = QDialog(self)
+        dlg.setWindowTitle(f"تفاصيل التصميم — {data['name']}")
+        dlg.setMinimumSize(600, 500)
+        lay = QVBoxLayout(dlg)
+
+        scroll = QScrollArea()
+        scroll.setWidgetResizable(True)
+        container = QWidget()
+        c_lay = QVBoxLayout(container)
+        c_lay.setSpacing(12)
+
+        # رأس
+        hdr = QLabel(f"🎨  {data['name']}")
+        hdr.setStyleSheet("font-size:16px; font-weight:bold; color:#1565c0;")
+        c_lay.addWidget(hdr)
+
+        if data.get("category_name"):
+            cat_lbl = QLabel(f"📁  {data['category_name']}")
+            cat_lbl.setStyleSheet("color:#666;")
+            c_lay.addWidget(cat_lbl)
+
+        if data.get("notes"):
+            notes_lbl = QLabel(f"📝  {data['notes']}")
+            notes_lbl.setWordWrap(True)
+            notes_lbl.setStyleSheet("color:#555; background:#f5f5f5; padding:6px; border-radius:4px;")
+            c_lay.addWidget(notes_lbl)
+
+        # المقاسات
+        for link in data.get("links", []):
+            grp = QGroupBox(f"📐  {link['label']}")
+            grp.setStyleSheet("QGroupBox { font-weight:bold; color:#1565c0; }")
+            g_lay = QFormLayout(grp)
+            g_lay.setLabelAlignment(Qt.AlignRight)
+            for f in link["fields"]:
+                val   = f["value"]
+                label = f["label"]
+                unit  = f["unit"] or ""
+                auto  = " 🔄" if f["is_auto"] else ""
+                val_str = f"{val:g} {unit}" if val is not None else "—"
+                val_lbl = QLabel(f"{val_str}{auto}")
+                val_lbl.setStyleSheet(
+                    "color:#2e7d32; font-weight:bold;" if f["is_auto"]
+                    else "color:#333;"
+                )
+                g_lay.addRow(f"{label}:", val_lbl)
+            c_lay.addWidget(grp)
+
+        c_lay.addStretch()
+        scroll.setWidget(container)
+        lay.addWidget(scroll)
+
+        btns = QDialogButtonBox(QDialogButtonBox.Close)
+        btns.rejected.connect(dlg.reject)
+        lay.addWidget(btns)
+        dlg.exec_()
 
     def refresh(self):
         self._load()
 
 
 # ══════════════════════════════════════════════════════════
-# التبويب الرئيسي — بدون تصنيفات
+# تبويب التصميمات الرئيسي
 # ══════════════════════════════════════════════════════════
 
-class DimensionSetsTab(QWidget):
-    """
-    التبويب الرئيسي لإدارة مجموعات المقاسات.
-
-    التخطيط:
-      Splitter أفقي:
-        ├── يسار: _SetsPanel (قائمة هرمية + فورم)
-        └── يمين: Splitter رأسي:
-              ├── أعلى: _FieldsPanel (الحقول)
-              └── أسفل: _ValuesPanel (إدخال قيم بجلسات مسماة)
-    """
+class DesignsTab(QWidget):
+    """التبويب الرئيسي لإدارة التصميمات."""
 
     def __init__(self, conn, parent=None):
         super().__init__(parent)
@@ -1217,42 +931,32 @@ class DimensionSetsTab(QWidget):
         root = QVBoxLayout(self)
         root.setContentsMargins(0, 0, 0, 0)
 
-        # Splitter أفقي رئيسي
-        h_splitter = QSplitter(Qt.Horizontal)
-        h_splitter.setHandleWidth(5)
-        h_splitter.setStyleSheet("""
+        splitter = QSplitter(Qt.Horizontal)
+        splitter.setHandleWidth(5)
+        splitter.setStyleSheet("""
             QSplitter::handle { background: #e0e0e0; }
             QSplitter::handle:hover { background: #bbdefb; }
         """)
 
-        self._sets_panel = _SetsPanel(self.conn)
+        # ── لوحة اليسار: الجدول + الفلتر ──
+        left = QWidget()
+        left_lay = QVBoxLayout(left)
+        left_lay.setContentsMargins(0, 0, 0, 0)
 
-        # Splitter رأسي (حقول + إدخال)
-        v_splitter = QSplitter(Qt.Vertical)
-        v_splitter.setHandleWidth(5)
-        v_splitter.setStyleSheet("""
-            QSplitter::handle { background: #e0e0e0; }
-            QSplitter::handle:hover { background: #bbdefb; }
-        """)
+        self._form = _DesignFormPanel(self.conn)
+        self._table = _DesignsTable(self.conn, self._form)
 
-        self._fields_panel = _FieldsPanel(self.conn)
-        self._values_panel = _ValuesPanel(self.conn)
+        self._form.saved.connect(self._table.refresh)
+        self._form.cleared.connect(self._table.refresh)
+        self._table.design_deleted.connect(self._table.refresh)
 
-        v_splitter.addWidget(self._fields_panel)
-        v_splitter.addWidget(self._values_panel)
-        v_splitter.setSizes([300, 380])
+        left_lay.addWidget(self._table)
 
-        h_splitter.addWidget(self._sets_panel)
-        h_splitter.addWidget(v_splitter)
-        h_splitter.setSizes([340, 660])
+        splitter.addWidget(left)
+        splitter.addWidget(self._form)
+        splitter.setSizes([380, 620])
 
-        # ربط الإشارات
-        self._sets_panel.set_selected.connect(self._fields_panel.load_set)
-        self._fields_panel.set_selected.connect(self._values_panel.load_set)
-        self._fields_panel.fields_changed.connect(self._on_fields_changed)
+        root.addWidget(splitter)
 
-        root.addWidget(h_splitter)
-
-    def _on_fields_changed(self):
-        if self._values_panel._set_id is not None:
-            self._values_panel.load_set(self._values_panel._set_id)
+    def refresh(self):
+        self._table.refresh()
