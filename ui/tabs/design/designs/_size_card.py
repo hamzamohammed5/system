@@ -1,7 +1,12 @@
 """
 ui/tabs/design/designs/_size_card.py
 ======================================
-بطاقة مقاس واحد — مع عرض thumbnail من ملف XCF.
+بطاقة مقاس واحد — مع auto-refresh عند تغيير ملف XCF.
+
+التغييرات في v2:
+  - يسجل الملف في XcfWatcher عند إنشاء البطاقة
+  - يلغي التسجيل عند الحذف (closeEvent / deleteLater)
+  - _on_xcf_changed يعمل refresh للـ thumbnail تلقائياً
 """
 
 import os
@@ -20,6 +25,7 @@ from db.designs.designs_sizes_repo import (
     fetch_canvas_size,
     fetch_canvas_dpi,
 )
+from ._xcf_thumbnail import get_xcf_thumbnail, get_watcher
 
 # ── ألوان ──
 _BLUE       = "#1565c0"
@@ -33,7 +39,7 @@ _TEXT       = "#1a2340"
 _TEXT_MUTED = "#7a869a"
 
 _DEFAULT_DPI  = 300.0
-_THUMB_SIZE   = 72      # حجم الـ thumbnail في البطاقة (px)
+_THUMB_SIZE   = 72
 
 
 # ════════════════════════════════════════════════════════
@@ -41,8 +47,7 @@ _THUMB_SIZE   = 72      # حجم الـ thumbnail في البطاقة (px)
 # ════════════════════════════════════════════════════════
 
 class _ThumbWorker(QThread):
-    """يستخرج الـ thumbnail في الخلفية ويُطلق signal بالنتيجة."""
-    done = Signal(object)   # QPixmap أو None
+    done = Signal(object)
 
     def __init__(self, xcf_path: str, size: int = _THUMB_SIZE):
         super().__init__()
@@ -50,13 +55,12 @@ class _ThumbWorker(QThread):
         self._size = size
 
     def run(self):
-        from ._xcf_thumbnail import get_xcf_thumbnail
-        pixmap = get_xcf_thumbnail(self._path, self._size)
-        self.done.emit(pixmap)
+        px = get_xcf_thumbnail(self._path, self._size)
+        self.done.emit(px)
 
 
 # ════════════════════════════════════════════════════════
-# وحدات GIMP الداخلية
+# وحدات GIMP
 # ════════════════════════════════════════════════════════
 
 _GIMP_UNIT_MAP = {
@@ -133,7 +137,6 @@ def _open_gimp(xcf_path=None, width_val=None, height_val=None,
         if xcf_path and os.path.exists(xcf_path):
             subprocess.Popen([gimp_exe, xcf_path])
             return True
-
         if width_val and height_val:
             import tempfile
             from PIL import Image
@@ -147,7 +150,6 @@ def _open_gimp(xcf_path=None, width_val=None, height_val=None,
             img.save(tmp.name, dpi=(actual_dpi, actual_dpi))
             subprocess.Popen([gimp_exe, tmp.name])
             return True
-
         subprocess.Popen([gimp_exe])
         return True
     except ImportError:
@@ -164,20 +166,24 @@ def _open_gimp(xcf_path=None, width_val=None, height_val=None,
 # ════════════════════════════════════════════════════════
 
 class _ThumbnailWidget(QLabel):
-    """
-    Label يعرض thumbnail من XCF أو placeholder.
-    يحمّل الصورة في thread منفصل لتجنب تجميد الواجهة.
-    """
-
-    # placeholder SVG-based colors
     _PLACEHOLDER_BG = "#f0f4ff"
     _PLACEHOLDER_FG = "#c5cae9"
 
     def __init__(self, xcf_path: str, size: int = _THUMB_SIZE, parent=None):
         super().__init__(parent)
-        self._size = size
+        self._size     = size
+        self._xcf_path = xcf_path
         self.setFixedSize(size, size)
         self.setAlignment(Qt.AlignCenter)
+        self._apply_placeholder_style()
+        self._show_loading()
+
+        if xcf_path and os.path.exists(xcf_path):
+            self._load_async(xcf_path)
+        else:
+            self._show_no_preview()
+
+    def _apply_placeholder_style(self):
         self.setStyleSheet(f"""
             QLabel {{
                 background: {self._PLACEHOLDER_BG};
@@ -185,15 +191,11 @@ class _ThumbnailWidget(QLabel):
                 border-radius: 6px;
             }}
         """)
-        self._show_placeholder()
 
-        if xcf_path and os.path.exists(xcf_path):
-            self._load_async(xcf_path)
-
-    def _show_placeholder(self):
-        self.setText("🖼")
+    def _show_loading(self):
+        self.setText("⏳")
         font = self.font()
-        font.setPointSize(self._size // 4)
+        font.setPointSize(self._size // 5)
         self.setFont(font)
 
     def _load_async(self, path: str):
@@ -229,13 +231,17 @@ class _ThumbnailWidget(QLabel):
             }}
         """)
 
-    def refresh(self, xcf_path: str):
-        """يعيد تحميل الـ thumbnail بعد تغيير المسار."""
+    def refresh(self, xcf_path: str = None):
+        """يعيد تحميل الـ thumbnail — يُستدعى عند تغيير الملف."""
         from ._xcf_thumbnail import clear_cache
-        clear_cache(xcf_path)
-        self._show_placeholder()
-        if xcf_path and os.path.exists(xcf_path):
-            self._load_async(xcf_path)
+        if xcf_path:
+            self._xcf_path = xcf_path
+        path = self._xcf_path
+        if path:
+            clear_cache(path)
+        self._show_loading()
+        if path and os.path.exists(path):
+            self._load_async(path)
         else:
             self._show_no_preview()
 
@@ -245,8 +251,6 @@ class _ThumbnailWidget(QLabel):
 # ════════════════════════════════════════════════════════
 
 class _SizeCard(QFrame):
-    """بطاقة تعرض مقاساً واحداً مع thumbnail + أزرار."""
-
     edit_requested   = pyqtSignal(int)
     delete_requested = pyqtSignal(int)
     path_changed     = pyqtSignal()
@@ -254,10 +258,38 @@ class _SizeCard(QFrame):
     def __init__(self, conn, size_data, parent=None):
         super().__init__(parent)
         self.conn     = conn
-        # تحويل sqlite3.Row لـ dict لدعم .get() والتعديل لاحقاً
         self._data    = dict(size_data)
         self._size_id = self._data["id"]
         self._build()
+
+        # ── مراقبة الملف تلقائياً ──
+        xcf = self._data.get("xcf_path") or ""
+        if xcf and os.path.exists(xcf):
+            get_watcher().watch(xcf)
+            get_watcher().file_changed.connect(self._on_xcf_changed)
+
+    def _on_xcf_changed(self, path: str):
+        """يُستدعى تلقائياً لما يتغير ملف XCF مراقب."""
+        xcf = os.path.normpath(self._data.get("xcf_path") or "")
+        if os.path.normpath(path) == xcf:
+            self._thumb.refresh(path)
+
+    def hideEvent(self, event):
+        """وقف المراقبة لما البطاقة تختفي."""
+        self._stop_watching()
+        super().hideEvent(event)
+
+    def closeEvent(self, event):
+        self._stop_watching()
+        super().closeEvent(event)
+
+    def _stop_watching(self):
+        xcf = self._data.get("xcf_path") or ""
+        if xcf:
+            try:
+                get_watcher().file_changed.disconnect(self._on_xcf_changed)
+            except Exception:
+                pass
 
     def _build(self):
         self.setStyleSheet(f"""
@@ -310,7 +342,6 @@ class _SizeCard(QFrame):
             f"font-size:13px; color:{_TEXT}; background:transparent; border:none;"
         )
 
-        # أبعاد الكانفاس
         w, h = fetch_canvas_size(self.conn, self._size_id)
         unit = _unit_for_set(self.conn, self._data["set_id"])
         dpi  = fetch_canvas_dpi(self.conn, self._size_id)
@@ -336,7 +367,6 @@ class _SizeCard(QFrame):
             f"font-size:11px; color:{_TEXT_MUTED}; background:transparent; border:none;"
         )
 
-        # مسار الملف
         if has_file:
             path_display = xcf_path
             if len(path_display) > 52:
@@ -435,6 +465,8 @@ class _SizeCard(QFrame):
     def _open_in_gimp(self):
         xcf = self._data["xcf_path"]
         if xcf and os.path.exists(xcf):
+            # تأكد إن الملف مراقب قبل الفتح
+            get_watcher().watch(xcf)
             _open_gimp(xcf_path=xcf)
         else:
             QMessageBox.warning(
@@ -469,6 +501,9 @@ class _SizeCard(QFrame):
         update_design_size_path(self.conn, self._size_id, save_path)
         self._data = dict(self._data)
         self._data["xcf_path"] = save_path
+
+        # ابدأ المراقبة للمسار الجديد
+        get_watcher().watch(save_path)
 
         if w and h:
             u = unit.strip().lower()
@@ -505,8 +540,17 @@ class _SizeCard(QFrame):
             start_dir, "GIMP Files (*.xcf);;All Files (*)"
         )
         if path:
+            # وقف مراقبة المسار القديم
+            old_path = self._data.get("xcf_path") or ""
+            if old_path:
+                get_watcher().unwatch(old_path)
+
             update_design_size_path(self.conn, self._size_id, path)
             self._data = dict(self._data)
             self._data["xcf_path"] = path
+
+            # ابدأ مراقبة المسار الجديد
+            get_watcher().watch(path)
+
             self._thumb.refresh(path)
             self.path_changed.emit()

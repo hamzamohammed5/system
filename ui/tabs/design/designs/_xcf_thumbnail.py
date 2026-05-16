@@ -1,14 +1,26 @@
 """
-ui/tabs/design/designs/_xcf_thumbnail.py
-=========================================
-استخراج thumbnail من ملفات XCF — نسخة مُصلَحة ومتينة.
+ui/tabs/design/designs/_xcf_thumbnail.py  — v3
+===============================================
+استخراج thumbnail من XCF + مراقبة تلقائية للتغييرات.
 
-الأولويات:
-  1. GIMP thumbnail cache (freedesktop standard PNG) — أسرع وأضمن
-  2. قراءة PROP_THUMBNAIL من XCF مباشرة — بدون أدوات خارجية
-  3. GIMP batch export — fallback أخير
+الجديد في v3:
+  - XcfWatcher: singleton يراقب ملفات XCF بـ QFileSystemWatcher
+  - debounce 1.5 ثانية عشان GIMP بيكتب الملف على مراحل
+  - signal file_changed(path) لما يتحدث الملف فعلاً
+  - clear_cache تلقائي عند كل تغيير
 
-Cache داخلي بالـ mtime لتجنب إعادة القراءة.
+الاستخدام في _size_card.py:
+    from ._xcf_thumbnail import get_xcf_thumbnail, get_watcher
+
+    # اشترك في التغييرات
+    get_watcher().file_changed.connect(self._on_xcf_changed)
+
+    # ابدأ المراقبة
+    get_watcher().watch(xcf_path)
+
+    def _on_xcf_changed(self, path):
+        if path == self._data.get("xcf_path"):
+            self._thumb.refresh(path)
 """
 
 from __future__ import annotations
@@ -19,8 +31,9 @@ import struct
 import tempfile
 import subprocess
 
-from PyQt5.QtGui  import QPixmap, QImage
-from PyQt5.QtCore import Qt
+from PyQt5.QtGui     import QPixmap, QImage, QPainter, QColor
+from PyQt5.QtCore    import Qt, QRect, QObject, pyqtSignal, QTimer, QFileSystemWatcher
+from PyQt5.QtWidgets import QApplication
 
 # ── Cache: xcf_path → (mtime, QPixmap) ─────────────────
 _CACHE: dict[str, tuple[float, QPixmap]] = {}
@@ -33,7 +46,122 @@ _MAX_PROPS      = 300
 
 
 # ════════════════════════════════════════════════════════
-# Public API
+# XcfWatcher — singleton لمراقبة ملفات XCF
+# ════════════════════════════════════════════════════════
+
+class XcfWatcher(QObject):
+    """
+    يراقب ملفات XCF ويطلق signal عند تغييرها.
+    Debounce 1.5 ثانية لأن GIMP يكتب الملف على مراحل.
+
+    الاستخدام:
+        watcher = get_watcher()
+        watcher.watch("/path/to/file.xcf")
+        watcher.file_changed.connect(my_slot)
+        watcher.unwatch("/path/to/file.xcf")   # عند إزالة البطاقة
+    """
+
+    file_changed = pyqtSignal(str)   # path الكامل للملف المتغير
+
+    _DEBOUNCE_MS = 1500   # انتظر 1.5 ثانية بعد آخر تغيير قبل الإشعار
+
+    def __init__(self, parent=None):
+        super().__init__(parent)
+        self._fs_watcher = QFileSystemWatcher(self)
+        self._fs_watcher.fileChanged.connect(self._on_raw_change)
+
+        # debounce: path → QTimer
+        self._timers: dict[str, QTimer] = {}
+
+        # مسارات نراقبها حالياً
+        self._watched: set[str] = set()
+
+    # ── API ──────────────────────────────────────────────
+
+    def watch(self, path: str):
+        """يضيف ملف للمراقبة."""
+        if not path or not os.path.exists(path):
+            return
+        path = os.path.normpath(path)
+        if path not in self._watched:
+            self._fs_watcher.addPath(path)
+            self._watched.add(path)
+
+    def unwatch(self, path: str):
+        """يوقف مراقبة ملف."""
+        if not path:
+            return
+        path = os.path.normpath(path)
+        if path in self._watched:
+            self._fs_watcher.removePath(path)
+            self._watched.discard(path)
+        # إلغاء الـ timer لو موجود
+        timer = self._timers.pop(path, None)
+        if timer:
+            timer.stop()
+            timer.deleteLater()
+
+    def unwatch_all(self):
+        """يوقف مراقبة كل الملفات."""
+        for path in list(self._watched):
+            self.unwatch(path)
+
+    # ── Handler داخلي ────────────────────────────────────
+
+    def _on_raw_change(self, path: str):
+        """
+        يُستدعى مباشرة من QFileSystemWatcher.
+        GIMP بيحذف الملف ويعيد كتابته (atomic save)،
+        فلازم نعيد إضافته للـ watcher بعد التغيير.
+        """
+        path = os.path.normpath(path)
+
+        # GIMP atomic save: الملف اتحذف مؤقتاً → أعد إضافته
+        if os.path.exists(path) and path not in self._fs_watcher.files():
+            self._fs_watcher.addPath(path)
+
+        # debounce — ريست الـ timer
+        if path in self._timers:
+            self._timers[path].stop()
+        else:
+            timer = QTimer(self)
+            timer.setSingleShot(True)
+            timer.timeout.connect(lambda p=path: self._emit_change(p))
+            self._timers[path] = timer
+
+        self._timers[path].start(self._DEBOUNCE_MS)
+
+    def _emit_change(self, path: str):
+        """يُطلق الـ signal بعد انتهاء الـ debounce."""
+        # تأكد إن الملف موجود فعلاً
+        if not os.path.exists(path):
+            return
+
+        # مسح الـ cache عشان يُعاد التحميل
+        clear_cache(path)
+
+        # تنظيف الـ timer
+        timer = self._timers.pop(path, None)
+        if timer:
+            timer.deleteLater()
+
+        self.file_changed.emit(path)
+
+
+# ── Singleton ────────────────────────────────────────────
+_watcher_instance: XcfWatcher | None = None
+
+
+def get_watcher() -> XcfWatcher:
+    """يرجع الـ singleton — يُنشئه أول مرة."""
+    global _watcher_instance
+    if _watcher_instance is None:
+        _watcher_instance = XcfWatcher()
+    return _watcher_instance
+
+
+# ════════════════════════════════════════════════════════
+# Public API — Thumbnail
 # ════════════════════════════════════════════════════════
 
 def get_xcf_thumbnail(xcf_path: str, size: int = 80) -> "QPixmap | None":
@@ -52,7 +180,9 @@ def get_xcf_thumbnail(xcf_path: str, size: int = 80) -> "QPixmap | None":
     pixmap = (
         _try_gimp_cache(xcf_path)
         or _try_xcf_native(xcf_path)
+        or _try_pillow(xcf_path)
         or _try_gimp_batch(xcf_path)
+        or _make_placeholder(xcf_path, size)
     )
 
     if pixmap and not pixmap.isNull():
@@ -70,103 +200,67 @@ def clear_cache(xcf_path: str = None):
 
 
 # ════════════════════════════════════════════════════════
-# طريقة 1 — GIMP thumbnail cache (freedesktop standard)
+# طريقة 1 — GIMP Cache
 # ════════════════════════════════════════════════════════
 
 def _xcf_uri(path: str) -> str:
-    """يبني URI صحيح من مسار الملف (Windows + Linux)."""
     p = path.replace("\\", "/")
     if len(p) >= 2 and p[1] == ":":
-        # Windows: C:/path → file:///C:/path
         return "file:///" + p
     elif p.startswith("/"):
         return "file://" + p
     return "file:///" + p
 
 
-def _gimp_cache_paths(xcf_path: str) -> list:
-    """يبني قائمة بكل المسارات المحتملة لـ GIMP thumbnail cache."""
-    uris = [
-        _xcf_uri(xcf_path),
-        # بعض إصدارات GIMP على Windows تستخدم forward slash بدون encoding
-        "file:///" + xcf_path.replace("\\", "/").lstrip("/"),
-    ]
-
-    candidates = []
-    home = os.path.expanduser("~")
+def _try_gimp_cache(xcf_path: str) -> "QPixmap | None":
+    home    = os.path.expanduser("~")
     appdata = os.environ.get("APPDATA", "")
 
-    for uri in dict.fromkeys(uris):
-        md5 = hashlib.md5(uri.encode("utf-8")).hexdigest()
+    path_fwd = xcf_path.replace("\\", "/")
+    uris = set()
+    for p in [path_fwd, path_fwd[0].lower() + path_fwd[1:]]:
+        uris.add("file:///" + p.lstrip("/"))
 
-        for size_dir in ("large", "normal", "x-large"):
-            # Freedesktop standard (Linux/Mac/GIMP on Windows)
-            candidates.append(
-                os.path.join(home, ".cache", "thumbnails", size_dir, md5 + ".png")
-            )
-            candidates.append(
-                os.path.join(home, ".thumbnails", size_dir, md5 + ".png")
-            )
-            # GIMP Windows cache
+    for uri in uris:
+        md5 = hashlib.md5(uri.encode("utf-8")).hexdigest()
+        for size_dir in ("large", "normal", "x-large", "xx-large"):
+            candidates = [
+                os.path.join(home, ".cache", "thumbnails", size_dir, md5 + ".png"),
+                os.path.join(home, ".thumbnails", size_dir, md5 + ".png"),
+            ]
             if appdata:
                 for ver in ("3.0", "2.99", "2.10", "2.8"):
                     candidates.append(
-                        os.path.join(
-                            appdata, "GIMP", ver, "thumbnails",
-                            size_dir, md5 + ".png"
-                        )
+                        os.path.join(appdata, "GIMP", ver, "thumbnails",
+                                     size_dir, md5 + ".png")
                     )
-
-    return candidates
-
-
-def _try_gimp_cache(xcf_path: str) -> "QPixmap | None":
-    for path in _gimp_cache_paths(xcf_path):
-        if os.path.exists(path):
-            px = QPixmap(path)
-            if not px.isNull():
-                return px
+            for p in candidates:
+                if os.path.exists(p):
+                    px = QPixmap(p)
+                    if not px.isNull():
+                        return px
     return None
 
 
 # ════════════════════════════════════════════════════════
-# طريقة 2 — قراءة XCF مباشرة (PROP_THUMBNAIL)
+# طريقة 2 — XCF Native (v1–v9)
 # ════════════════════════════════════════════════════════
 
 def _try_xcf_native(xcf_path: str) -> "QPixmap | None":
-    """
-    يقرأ PROP_THUMBNAIL من XCF properties مباشرة.
-
-    بنية PROP_THUMBNAIL (من GIMP source xcf.c):
-      prop_type    uint32 = 1028
-      payload_len  uint32
-      [3 int32s: format/bpp, width, height — ترتيبهم يختلف بالإصدار]
-      data         raw bytes (RGB أو RGBA)
-
-    نحسب bpp من payload_len تلقائياً لتجنب الاعتماد على الترتيب.
-    """
     try:
         with open(xcf_path, "rb") as f:
             if f.read(9) != _XCF_MAGIC:
                 return None
-
             ver_raw = f.read(4)
-            f.read(1)   # NUL
-
+            f.read(1)
             try:
                 xcf_ver = int(ver_raw.strip(b"\x00v"))
             except (ValueError, TypeError):
                 xcf_ver = 0
-
-            # width, height, base_type
             f.read(12)
-
-            # precision — XCF v4+ (GIMP 2.10+)
             if xcf_ver >= 4:
                 f.read(4)
-
             return _scan_for_thumbnail(f)
-
     except Exception:
         return None
 
@@ -181,49 +275,32 @@ def _scan_for_thumbnail(f) -> "QPixmap | None":
             plen  = struct.unpack(">I", f.read(4))[0]
         except struct.error:
             break
-
         if ptype == _PROP_END:
             break
-
         if ptype == _PROP_THUMBNAIL:
             return _decode_thumbnail(f, plen)
-
         try:
             f.seek(plen, 1)
         except Exception:
             break
-
     return None
 
 
 def _decode_thumbnail(f, payload_len: int) -> "QPixmap | None":
-    """
-    يحلل payload الـ PROP_THUMBNAIL بطريقة مرنة.
-
-    يقرأ أول 3 int32 (12 bytes) ثم يحسب bpp من الحجم المتبقي.
-    يجرب كل التفسيرات الممكنة لـ (a, b, c).
-    """
     try:
         if payload_len < 12:
             return None
-
         a = struct.unpack(">i", f.read(4))[0]
         b = struct.unpack(">i", f.read(4))[0]
         c = struct.unpack(">i", f.read(4))[0]
-
         data_len = payload_len - 12
-
         if data_len <= 0 or data_len > 16 * 1024 * 1024:
             if data_len > 0:
                 f.seek(min(data_len, 16 * 1024 * 1024), 1)
             return None
-
         raw = f.read(data_len)
         if len(raw) < data_len:
             return None
-
-        # نجرب كل التفسيرات الممكنة لـ (a, b, c)
-        # الهدف: نجد width و height يقسّمان data_len بـ 3 أو 4
         for width, height in [(b, c), (a, b), (c, b), (a, c)]:
             if not (1 <= width <= 4096 and 1 <= height <= 4096):
                 continue
@@ -233,27 +310,42 @@ def _decode_thumbnail(f, payload_len: int) -> "QPixmap | None":
             bpp = data_len // total
             if bpp not in (3, 4):
                 continue
-
             fmt = QImage.Format_RGB888 if bpp == 3 else QImage.Format_RGBA8888
             img = QImage(bytes(raw), width, height, width * bpp, fmt)
             if not img.isNull():
                 return QPixmap.fromImage(img)
-
         return None
-
     except Exception:
         return None
 
 
 # ════════════════════════════════════════════════════════
-# طريقة 3 — GIMP Batch Script-Fu
+# طريقة 3 — Pillow
+# ════════════════════════════════════════════════════════
+
+def _try_pillow(xcf_path: str) -> "QPixmap | None":
+    try:
+        from PIL import Image
+        img = Image.open(xcf_path)
+        img.thumbnail((256, 256), Image.LANCZOS)
+        if img.mode not in ("RGB", "RGBA"):
+            img = img.convert("RGBA")
+        bpp  = 4 if img.mode == "RGBA" else 3
+        fmt  = QImage.Format_RGBA8888 if img.mode == "RGBA" else QImage.Format_RGB888
+        data = img.tobytes("raw", img.mode)
+        qimg = QImage(data, img.width, img.height, img.width * bpp, fmt)
+        if not qimg.isNull():
+            return QPixmap.fromImage(qimg)
+    except Exception:
+        pass
+    return None
+
+
+# ════════════════════════════════════════════════════════
+# طريقة 4 — GIMP Batch
 # ════════════════════════════════════════════════════════
 
 def _try_gimp_batch(xcf_path: str) -> "QPixmap | None":
-    """
-    يشغّل GIMP في batch mode لتصدير thumbnail.
-    أبطأ لكن يعمل مع أي إصدار.
-    """
     gimp_exe = _find_gimp()
     if not gimp_exe:
         return None
@@ -267,31 +359,25 @@ def _try_gimp_batch(xcf_path: str) -> "QPixmap | None":
         tmp_fwd  = tmp_path.replace("\\", "/")
         basename = os.path.basename(xcf_path)
 
-        # Script-Fu: تحميل الصورة، تصغيرها، حفظها PNG
         script = (
             f'(let* ('
             f'  (image (car (gimp-file-load RUN-NONINTERACTIVE "{xcf_fwd}" "{basename}")))'
-            f'  (drawable (car (gimp-image-get-active-drawable image)))'
-            f'  (scaled (car (gimp-image-duplicate image)))'
             f') '
-            f'  (gimp-image-scale-full scaled 256 256 INTERPOLATION-LINEAR)'
-            f'  (file-png-save RUN-NONINTERACTIVE scaled'
-            f'    (car (gimp-image-get-active-drawable scaled))'
-            f'    "{tmp_fwd}" "t" 0 9 1 1 1 1 1)'
+            f'  (gimp-image-scale image 256 256)'
+            f'  (file-png-save RUN-NONINTERACTIVE image'
+            f'    (car (gimp-image-get-active-drawable image))'
+            f'    "{tmp_fwd}" "thumb" 0 9 1 1 1 1 1)'
+            f'  (gimp-image-delete image)'
             f')'
         )
-
         subprocess.run(
             [gimp_exe, "-i", "-b", script, "-b", "(gimp-quit 0)"],
-            timeout=20,
-            capture_output=True,
+            timeout=25, capture_output=True,
         )
-
         if tmp_path and os.path.exists(tmp_path) and os.path.getsize(tmp_path) > 100:
             px = QPixmap(tmp_path)
             if not px.isNull():
                 return px
-
     except Exception:
         pass
     finally:
@@ -300,8 +386,47 @@ def _try_gimp_batch(xcf_path: str) -> "QPixmap | None":
                 os.unlink(tmp_path)
             except Exception:
                 pass
-
     return None
+
+
+# ════════════════════════════════════════════════════════
+# طريقة 5 — Placeholder جميل (fallback دائم)
+# ════════════════════════════════════════════════════════
+
+def _make_placeholder(xcf_path: str, size: int = 80) -> QPixmap:
+    s    = max(size, 64)
+    name = os.path.splitext(os.path.basename(xcf_path))[0]
+    if len(name) > 10:
+        name = name[:9] + "…"
+
+    px = QPixmap(s, s)
+    px.fill(QColor("#1a1a2e"))
+
+    painter = QPainter(px)
+    painter.setRenderHint(QPainter.Antialiasing)
+
+    from PyQt5.QtGui import QLinearGradient
+    grad = QLinearGradient(0, 0, 0, s)
+    grad.setColorAt(0, QColor("#2d2d5e"))
+    grad.setColorAt(1, QColor("#1a1a2e"))
+    painter.fillRect(0, 0, s, s, grad)
+
+    painter.setPen(QColor("#5c6bc0"))
+    painter.drawRoundedRect(1, 1, s-2, s-2, 6, 6)
+
+    font = painter.font()
+    font.setPointSize(s // 3)
+    painter.setFont(font)
+    painter.setPen(QColor("#7986cb"))
+    painter.drawText(QRect(0, s//8, s, s//2), Qt.AlignCenter, "🎨")
+
+    font.setPointSize(max(6, s // 10))
+    painter.setFont(font)
+    painter.setPen(QColor("#9fa8da"))
+    painter.drawText(QRect(2, s*6//8, s-4, s//5), Qt.AlignCenter, name)
+
+    painter.end()
+    return px
 
 
 # ════════════════════════════════════════════════════════
