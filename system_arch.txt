@@ -1,5 +1,5 @@
 File Tree Snapshot
-Generated : 2026-05-16 10:19:07
+Generated : 2026-05-16 10:41:21
 Source    : D:\My Workspace\Hg\Alhabaar\accountant\system
 Extensions: .py
 ────────────────────────────────────────────────────────────
@@ -118,6 +118,7 @@ system/
 │   │   │   │   ├── _fields_panel.py
 │   │   │   │   ├── _groups_panel.py
 │   │   │   │   ├── _sets_panel.py
+│   │   │   │   ├── _source_picker_dialog.py
 │   │   │   │   └── _values_panel.py
 │   │   │   ├── designs_tab.py
 │   │   │   └── dimension_sets_tab.py
