@@ -1,7 +1,7 @@
 """
 ui/settings_dialog.py
 =====================
-نافذة الإعدادات — حجم الخط + مسار GIMP.
+نافذة الإعدادات — حجم الخط + مسار GIMP + إدارة وحدات القياس.
 """
 
 import os
@@ -10,11 +10,17 @@ from PyQt5.QtWidgets import (
     QDialog, QVBoxLayout, QHBoxLayout,
     QLabel, QPushButton, QSlider, QDialogButtonBox,
     QLineEdit, QFileDialog, QGroupBox,
+    QListWidget, QListWidgetItem, QMessageBox,
+    QInputDialog,
 )
 
 from ui.app_settings import get_font_size, set_font_size, apply_font
 from db.shared.connection import get_connection
 from db.settings_repo import get_setting, set_setting
+from ui.widgets.shared.unit_combo import (
+    load_units, add_unit, remove_unit,
+    reset_units_to_default, _DEFAULT_UNITS,
+)
 
 
 class SettingsDialog(QDialog):
@@ -24,7 +30,7 @@ class SettingsDialog(QDialog):
         self._original_size = get_font_size()
 
         self.setWindowTitle("⚙️  إعدادات")
-        self.setFixedWidth(480)
+        self.setMinimumWidth(520)
         self.setModal(True)
         self._build()
         self._slider.setValue(self._original_size)
@@ -32,7 +38,7 @@ class SettingsDialog(QDialog):
 
     def _build(self):
         root = QVBoxLayout(self)
-        root.setSpacing(16)
+        root.setSpacing(14)
         root.setContentsMargins(20, 20, 20, 20)
 
         # ══ قسم الخط ══════════════════════════════════════
@@ -123,6 +129,87 @@ class SettingsDialog(QDialog):
         gimp_lay.addWidget(lbl_hint)
         root.addWidget(gimp_group)
 
+        # ══ قسم وحدات القياس ══════════════════════════════
+        units_group = QGroupBox("وحدات القياس")
+        units_lay   = QVBoxLayout(units_group)
+        units_lay.setSpacing(6)
+
+        lbl_units_hint = QLabel(
+            "💡  هذه الوحدات تظهر في كل dropdown اختيار الوحدة في التطبيق.\n"
+            "الوحدات الافتراضية (px, mm, cm, m, inch) لا يمكن حذفها."
+        )
+        lbl_units_hint.setStyleSheet(
+            "color: #555; font-size: 10px; background: #fff8e1;"
+            "border: 1px solid #ffe082; border-radius: 4px; padding: 6px 8px;"
+        )
+        lbl_units_hint.setWordWrap(True)
+        units_lay.addWidget(lbl_units_hint)
+
+        # قائمة الوحدات
+        self._units_list = QListWidget()
+        self._units_list.setMaximumHeight(130)
+        self._units_list.setStyleSheet("""
+            QListWidget {
+                border: 1px solid #c5cae9;
+                border-radius: 4px;
+                font-size: 11px;
+            }
+            QListWidget::item { padding: 4px 8px; }
+            QListWidget::item:selected {
+                background: #e8f0fe;
+                color: #1565c0;
+            }
+        """)
+        units_lay.addWidget(self._units_list)
+
+        # أزرار إدارة الوحدات
+        units_btn_row = QHBoxLayout()
+        units_btn_row.setSpacing(6)
+
+        btn_add_unit = QPushButton("➕  إضافة وحدة")
+        btn_add_unit.setMinimumHeight(30)
+        btn_add_unit.setStyleSheet("""
+            QPushButton {
+                background: #e8f5e9; color: #2e7d32;
+                border: 1px solid #a5d6a7; border-radius: 4px;
+                padding: 3px 10px; font-size: 11px;
+            }
+            QPushButton:hover { background: #c8e6c9; }
+        """)
+        btn_add_unit.clicked.connect(self._add_unit)
+
+        btn_del_unit = QPushButton("🗑️  حذف المحدد")
+        btn_del_unit.setMinimumHeight(30)
+        btn_del_unit.setStyleSheet("""
+            QPushButton {
+                background: #fdecea; color: #c62828;
+                border: 1px solid #ef9a9a; border-radius: 4px;
+                padding: 3px 10px; font-size: 11px;
+            }
+            QPushButton:hover { background: #ffcdd2; }
+        """)
+        btn_del_unit.clicked.connect(self._del_unit)
+
+        btn_reset_units = QPushButton("↺  استعادة الافتراضية")
+        btn_reset_units.setMinimumHeight(30)
+        btn_reset_units.setStyleSheet("""
+            QPushButton {
+                background: #e8eaf6; color: #3949ab;
+                border: 1px solid #c5cae9; border-radius: 4px;
+                padding: 3px 10px; font-size: 11px;
+            }
+            QPushButton:hover { background: #c5cae9; }
+        """)
+        btn_reset_units.clicked.connect(self._reset_units)
+
+        units_btn_row.addWidget(btn_add_unit)
+        units_btn_row.addWidget(btn_del_unit)
+        units_btn_row.addStretch()
+        units_btn_row.addWidget(btn_reset_units)
+        units_lay.addLayout(units_btn_row)
+
+        root.addWidget(units_group)
+
         # ══ أزرار ══════════════════════════════════════════
         btns       = QDialogButtonBox()
         btn_ok     = btns.addButton("✅  حفظ",    QDialogButtonBox.AcceptRole)
@@ -133,7 +220,7 @@ class SettingsDialog(QDialog):
         btn_cancel.clicked.connect(self._cancel)
         root.addWidget(btns)
 
-    # ── تحميل الإعدادات المحفوظة ──────────────────────────
+    # ── تحميل الإعدادات ──────────────────────────────────
 
     def _load_settings(self):
         try:
@@ -143,11 +230,118 @@ class SettingsDialog(QDialog):
             self._inp_gimp.setText(path)
         except Exception:
             pass
+        self._reload_units_list()
+
+    def _reload_units_list(self):
+        """يعيد تحميل قائمة الوحدات."""
+        self._units_list.clear()
+        try:
+            conn = get_connection()
+            units = load_units(conn)
+            conn.close()
+        except Exception:
+            from ui.widgets.shared.unit_combo import _DEFAULT_UNITS
+            units = list(_DEFAULT_UNITS)
+
+        default_vals = {u[0] for u in _DEFAULT_UNITS}
+
+        for val, label in units:
+            item = QListWidgetItem(label)
+            item.setData(Qt.UserRole, val)
+            if val in default_vals:
+                item.setForeground(Qt.gray)
+                item.setToolTip("وحدة افتراضية — لا يمكن حذفها")
+            self._units_list.addItem(item)
+
+    # ── إدارة الوحدات ────────────────────────────────────
+
+    def _add_unit(self):
+        """يفتح input صغير لإضافة وحدة جديدة."""
+        # الاسم المختصر (value)
+        val, ok = QInputDialog.getText(
+            self, "إضافة وحدة",
+            "اكتب رمز الوحدة (مثال: ft, yd, pt):",
+        )
+        if not ok or not val.strip():
+            return
+
+        val = val.strip().lower()
+
+        # التسمية
+        label, ok2 = QInputDialog.getText(
+            self, "إضافة وحدة",
+            f"اكتب التسمية الكاملة للوحدة «{val}» (مثال: ft — قدم):",
+            text=val,
+        )
+        if not ok2 or not label.strip():
+            return
+
+        try:
+            conn = get_connection()
+            result = add_unit(conn, val, label.strip())
+            conn.close()
+        except Exception as e:
+            QMessageBox.warning(self, "خطأ", str(e))
+            return
+
+        if result:
+            self._reload_units_list()
+        else:
+            QMessageBox.information(
+                self, "تنبيه",
+                f"الوحدة «{val}» موجودة بالفعل."
+            )
+
+    def _del_unit(self):
+        """يحذف الوحدة المحددة."""
+        item = self._units_list.currentItem()
+        if not item:
+            QMessageBox.information(self, "تنبيه", "اختر وحدة أولاً")
+            return
+
+        val = item.data(Qt.UserRole)
+        default_vals = {u[0] for u in _DEFAULT_UNITS}
+
+        if val in default_vals:
+            QMessageBox.warning(
+                self, "تنبيه",
+                f"لا يمكن حذف الوحدة الافتراضية «{val}»."
+            )
+            return
+
+        if QMessageBox.question(
+            self, "تأكيد الحذف",
+            f"حذف الوحدة «{item.text()}»؟",
+            QMessageBox.Yes | QMessageBox.No
+        ) == QMessageBox.Yes:
+            try:
+                conn = get_connection()
+                remove_unit(conn, val)
+                conn.close()
+            except Exception as e:
+                QMessageBox.warning(self, "خطأ", str(e))
+                return
+            self._reload_units_list()
+
+    def _reset_units(self):
+        """يعيد الوحدات للافتراضية."""
+        if QMessageBox.question(
+            self, "استعادة الافتراضية",
+            "حذف كل الوحدات المضافة والرجوع للقائمة الافتراضية؟",
+            QMessageBox.Yes | QMessageBox.No
+        ) == QMessageBox.Yes:
+            try:
+                conn = get_connection()
+                reset_units_to_default(conn)
+                conn.close()
+            except Exception as e:
+                QMessageBox.warning(self, "خطأ", str(e))
+                return
+            self._reload_units_list()
 
     # ── تصفح لملف GIMP ───────────────────────────────────
 
     def _browse_gimp(self):
-        # ابدأ من المسار الحالي لو موجود
         start = self._inp_gimp.text().strip()
         if start and os.path.exists(os.path.dirname(start)):
             start_dir = os.path.dirname(start)

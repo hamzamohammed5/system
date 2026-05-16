@@ -1,5 +1,5 @@
 File Tree Snapshot
-Generated : 2026-05-16 14:32:40
+Generated : 2026-05-16 18:51:42
 Source    : D:\My Workspace\Hg\Alhabaar\accountant\system
 Extensions: .py
 ────────────────────────────────────────────────────────────
@@ -180,7 +180,8 @@ system/
 │   │       ├── no_wheel.py
 │   │       ├── scenario_comparison_widget.py
 │   │       ├── scrollable_form.py
-│   │       └── searchable_combo.py
+│   │       ├── searchable_combo.py
+│   │       └── unit_combo.py
 │   ├── app_settings.py
 │   ├── events.py
 │   ├── font_utils.py

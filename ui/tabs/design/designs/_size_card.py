@@ -30,6 +30,54 @@ _BORDER     = "#e0e7f3"
 _TEXT       = "#1a2340"
 _TEXT_MUTED = "#7a869a"
 
+
+# ══════════════════════════════════════════════════════════
+# تحويل الوحدات إلى بكسل
+# ══════════════════════════════════════════════════════════
+
+# DPI المرجعي لـ GIMP الافتراضي
+_GIMP_DPI = 96.0
+
+
+def _to_px(value: float, unit: str) -> int:
+    """
+    يحوّل قيمة من الوحدة المحددة إلى بكسل صحيح.
+
+    الوحدات المدعومة:
+        px   → بدون تحويل
+        mm   → value / 25.4 * DPI
+        cm   → value / 2.54  * DPI
+        m    → value / 0.0254 * DPI
+        inch → value * DPI
+    """
+    unit_lower = (unit or "px").strip().lower()
+
+    if unit_lower == "px":
+        return int(round(value))
+    elif unit_lower == "mm":
+        return int(round(value / 25.4 * _GIMP_DPI))
+    elif unit_lower == "cm":
+        return int(round(value / 2.54  * _GIMP_DPI))
+    elif unit_lower in ("m", "متر"):
+        return int(round(value / 0.0254 * _GIMP_DPI))
+    elif unit_lower in ("inch", "in", "انش", "بوصة"):
+        return int(round(value * _GIMP_DPI))
+    else:
+        # وحدة غير معروفة → نعاملها كـ px
+        return int(round(value))
+
+
+def _unit_for_set(conn, set_id: int) -> str:
+    """يجلب الوحدة الافتراضية لمجموعة المقاسات."""
+    try:
+        row = conn.execute(
+            "SELECT default_unit FROM dimension_sets WHERE id=?", (set_id,)
+        ).fetchone()
+        return row["default_unit"] if row and row["default_unit"] else "px"
+    except Exception:
+        return "px"
+
+
 # ══════════════════════════════════════════════════════════
 # مساعد فتح GIMP
 # ══════════════════════════════════════════════════════════
@@ -58,16 +106,22 @@ def _find_gimp() -> str | None:
 
     for pattern in [r"C:\Program Files\GIMP *\bin\gimp-*.exe",
                     r"C:\Program Files (x86)\GIMP *\bin\gimp-*.exe"]:
-        import glob
         matches = glob.glob(pattern)
         if matches:
             return sorted(matches)[-1]
 
     return None
 
+
 def _open_gimp(xcf_path: str = None,
-               width_px: float = None, height_px: float = None,
+               width_val: float = None, height_val: float = None,
                unit: str = "px"):
+    """
+    يفتح GIMP مع ملف موجود أو يُنشئ صورة شفافة بالأبعاد المحددة.
+
+    width_val / height_val : القيم بالوحدة المحددة (unit)
+    unit                   : الوحدة (px / mm / cm / m / inch)
+    """
     gimp_exe = _find_gimp()
     if not gimp_exe:
         QMessageBox.warning(
@@ -78,47 +132,38 @@ def _open_gimp(xcf_path: str = None,
         return False
 
     try:
+        # ── فتح ملف موجود ──
         if xcf_path and os.path.exists(xcf_path):
             subprocess.Popen([gimp_exe, xcf_path])
             return True
 
-        if width_px and height_px:
+        # ── إنشاء صورة شفافة بالأبعاد المحولة ──
+        if width_val and height_val:
             import tempfile
             from PIL import Image
 
-            # تحويل الوحدات إلى px
-            DPI = 96
-            MM_TO_PX = DPI / 25.4
+            # تحويل الأبعاد إلى بكسل
+            w_px = _to_px(width_val,  unit)
+            h_px = _to_px(height_val, unit)
 
-            unit_lower = (unit or "px").lower().strip()
+            # تأكد من حد أدنى معقول
+            w_px = max(1, w_px)
+            h_px = max(1, h_px)
 
-            if unit_lower in ("mm", "مم"):
-                w = int(round(width_px  * MM_TO_PX))
-                h = int(round(height_px * MM_TO_PX))
-            elif unit_lower in ("cm", "سم"):
-                w = int(round(width_px  * MM_TO_PX * 10))
-                h = int(round(height_px * MM_TO_PX * 10))
-            elif unit_lower in ("in", "inch", "انش"):
-                w = int(round(width_px  * DPI))
-                h = int(round(height_px * DPI))
-            else:
-                # px — بدون تحويل
-                w = int(round(width_px))
-                h = int(round(height_px))
-
-            # طبقة شفافة
+            # ── صورة شفافة (RGBA مع alpha=0) ──
             tmp = tempfile.NamedTemporaryFile(
                 suffix=".png",
                 delete=False
             )
             tmp.close()
 
-            img = Image.new("RGBA", (w, h), (0, 0, 0, 0))
+            img = Image.new("RGBA", (w_px, h_px), (0, 0, 0, 0))
             img.save(tmp.name)
 
             subprocess.Popen([gimp_exe, tmp.name])
             return True
 
+        # ── فتح GIMP بدون ملف ──
         subprocess.Popen([gimp_exe])
         return True
 
@@ -132,6 +177,7 @@ def _open_gimp(xcf_path: str = None,
     except Exception as e:
         QMessageBox.critical(None, "خطأ", f"فشل فتح GIMP:\n{e}")
         return False
+
 
 # ══════════════════════════════════════════════════════════
 # بطاقة مقاس واحد
@@ -166,7 +212,7 @@ class _SizeCard(QFrame):
         root.setSpacing(12)
 
         # ── أيقونة الحالة ──
-        has_file  = bool(self._data["xcf_path"])
+        has_file    = bool(self._data["xcf_path"])
         file_exists = has_file and os.path.exists(self._data["xcf_path"])
 
         if file_exists:
@@ -190,20 +236,27 @@ class _SizeCard(QFrame):
         info = QVBoxLayout()
         info.setSpacing(3)
 
-        # اسم المقاس + المجموعة
         inst_name = self._data["instance_name"] or f"مقاس #{self._data['instance_id']}"
         set_name  = self._data["set_name"]
         lbl_name  = QLabel(f"<b>{inst_name}</b>  <span style='color:{_TEXT_MUTED}'>({set_name})</span>")
         lbl_name.setStyleSheet(f"font-size: 13px; color: {_TEXT}; background: transparent; border: none;")
 
-        # أبعاد الكانفاس
+        # ── أبعاد الكانفاس مع الوحدة ──
         w, h = fetch_canvas_size(self.conn, self._size_id)
+        unit  = _unit_for_set(self.conn, self._data["set_id"])
+
         if w is not None and h is not None:
-            dims_txt = f"📐  {w:g} × {h:g}"
+            # عرض القيمة الأصلية + الوحدة + البكسل المحول
+            w_px = _to_px(w, unit)
+            h_px = _to_px(h, unit)
+            dims_txt = f"📐  {w:g} × {h:g} {unit}"
+            if unit != "px":
+                dims_txt += f"  ({w_px} × {h_px} px)"
             if self._data["width_label"]:
                 dims_txt += f"  ({self._data['width_label']} × {self._data['height_label']})"
         else:
             dims_txt = "📐  الأبعاد غير محددة"
+
         lbl_dims = QLabel(dims_txt)
         lbl_dims.setStyleSheet(
             f"font-size: 11px; color: {_TEXT_MUTED}; background: transparent; border: none;"
@@ -233,7 +286,6 @@ class _SizeCard(QFrame):
         btns = QVBoxLayout()
         btns.setSpacing(6)
 
-        # الزر الرئيسي: "فتح" لو الملف موجود، "إنشاء" لو مش موجود
         if file_exists:
             btn_main = QPushButton("🎨  فتح في GIMP")
             btn_main.setStyleSheet(f"""
@@ -260,7 +312,6 @@ class _SizeCard(QFrame):
         btn_main.setMinimumHeight(30)
         btn_main.setMinimumWidth(120)
 
-        # الزر الثانوي: "ربط ملف موجود" لو مفيش ملف، أو "فتح / ربط" لو الملف مش موجود
         if not file_exists:
             btn_link = QPushButton("📂  ربط ملف موجود")
             btn_link.setMinimumHeight(28)
@@ -309,13 +360,16 @@ class _SizeCard(QFrame):
         root.addLayout(info, stretch=1)
         root.addLayout(btns)
 
+    # ──────────────────────────────────────────────────────
+    # فتح GIMP
+    # ──────────────────────────────────────────────────────
+
     def _open_in_gimp(self):
         """فتح ملف .xcf موجود في GIMP."""
         xcf = self._data["xcf_path"]
         if xcf and os.path.exists(xcf):
             _open_gimp(xcf_path=xcf)
         else:
-            # الملف كان محفوظاً لكن اتحذف أو اتنقل
             QMessageBox.warning(
                 self, "الملف غير موجود",
                 f"الملف غير موجود في المسار المحفوظ:\n{xcf}\n\n"
@@ -325,8 +379,9 @@ class _SizeCard(QFrame):
 
     def _create_in_gimp(self):
         w, h = fetch_canvas_size(self.conn, self._size_id)
+        unit  = _unit_for_set(self.conn, self._data["set_id"])
 
-        inst_name  = (self._data["instance_name"] or "design").replace(" ", "_")
+        inst_name    = (self._data["instance_name"] or "design").replace(" ", "_")
         default_name = f"{inst_name}.xcf"
 
         start_dir = os.path.expanduser("~")
@@ -335,7 +390,7 @@ class _SizeCard(QFrame):
             if os.path.isdir(parent):
                 start_dir = parent
 
-        # ── اختر مكان الحفظ أولاً ──
+        # ── اختر مكان الحفظ ──
         save_path, _ = QFileDialog.getSaveFileName(
             self,
             "اختر مكان حفظ ملف GIMP",
@@ -348,24 +403,30 @@ class _SizeCard(QFrame):
         if not save_path.lower().endswith(".xcf"):
             save_path += ".xcf"
 
-        # ── احفظ المسار في الـ DB ──
+        # احفظ المسار في الـ DB
         update_design_size_path(self.conn, self._size_id, save_path)
         self._data = dict(self._data)
         self._data["xcf_path"] = save_path
 
         # ── افتح GIMP مع رسالة توضيحية ──
         if w and h:
+            w_px = _to_px(w, unit)
+            h_px = _to_px(h, unit)
+
+            # رسالة توضيحية تُظهر الوحدة الأصلية والبكسل المحول
+            if unit == "px":
+                dims_display = f"{w_px} × {h_px} px"
+            else:
+                dims_display = f"{w:g} × {h:g} {unit}  →  {w_px} × {h_px} px"
+
             msg = (
-                f"سيفتح GIMP الآن.\n\n"
-                f"1️⃣  من القائمة: File → New\n"
-                f"2️⃣  حدد الأبعاد:\n"
-                f"      العرض : {int(round(w))} px\n"
-                f"      الطول : {int(round(h))} px\n\n"
+                f"سيفتح GIMP الآن مع صورة شفافة.\n\n"
+                f"📐  الأبعاد: {dims_display}\n\n"
                 f"3️⃣  بعد الانتهاء احفظ الملف في:\n"
                 f"      {save_path}"
             )
             QMessageBox.information(self, "📐  تعليمات GIMP", msg)
-            _open_gimp(width_px=w, height_px=h)
+            _open_gimp(width_val=w, height_val=h, unit=unit)
         else:
             msg = (
                 f"سيفتح GIMP الآن.\n\n"
@@ -397,4 +458,3 @@ class _SizeCard(QFrame):
             self._data = dict(self._data)
             self._data["xcf_path"] = path
             self.path_changed.emit()
-

@@ -28,28 +28,7 @@ from db.designs.dimension_sets_repo import (
 from ._categories_panel import _CategoriesPanel
 from ._fields_panel      import _FieldsPanel
 from ui.helpers import make_table, danger_button, buttons_row
-
-# ── الوحدات المتاحة (موحّدة) ──
-UNIT_OPTIONS = [
-    ("px",   "px — بكسل"),
-    ("mm",   "mm — مليمتر"),
-    ("cm",   "cm — سنتيمتر"),
-    ("m",    "m  — متر"),
-    ("inch", "inch — بوصة"),
-]
-
-
-def _make_unit_combo(current: str = "cm") -> QComboBox:
-    """يبني QComboBox موحّد لاختيار الوحدة."""
-    cmb = QComboBox()
-    cmb.setMinimumHeight(28)
-    for val, label in UNIT_OPTIONS:
-        cmb.addItem(label, val)
-    for i in range(cmb.count()):
-        if cmb.itemData(i) == current:
-            cmb.setCurrentIndex(i)
-            break
-    return cmb
+from ui.widgets.shared.unit_combo import UnitCombo
 
 
 # ══════════════════════════════════════════════════════════
@@ -149,8 +128,13 @@ class _SetsManagerPanel(QWidget):
         self.cmb_category.setMinimumHeight(28)
         form.addRow("التصنيف :", self.cmb_category)
 
-        # ── الوحدة الافتراضية (dropdown موحّد) ──
-        self.cmb_unit = _make_unit_combo("cm")
+        # ── الوحدة الافتراضية — UnitCombo مع حفظ آخر اختيار ──
+        self.cmb_unit = UnitCombo(
+            conn     = self.conn,
+            last_key = "dim_sets_default_unit",
+            current  = "cm",
+        )
+        self.cmb_unit.setMinimumHeight(28)
         form.addRow("الوحدة الافتراضية :", self.cmb_unit)
 
         self.inp_notes = QLineEdit()
@@ -294,7 +278,7 @@ class _SetsManagerPanel(QWidget):
             QMessageBox.warning(self, "تنبيه", "أدخل اسم المجموعة")
             return
         cat_id = self.cmb_category.currentData()
-        unit   = self.cmb_unit.currentData() or "cm"
+        unit   = self.cmb_unit.current_unit()
         notes  = self.inp_notes.text().strip()
         new_id = insert_dimension_set(self.conn, name, cat_id, unit, notes)
         self._reset_form()
@@ -321,12 +305,8 @@ class _SetsManagerPanel(QWidget):
                 self.cmb_category.setCurrentIndex(i)
                 break
 
-        # اختيار الوحدة في الـ dropdown
-        current_unit = ds["default_unit"] or "cm"
-        for i in range(self.cmb_unit.count()):
-            if self.cmb_unit.itemData(i) == current_unit:
-                self.cmb_unit.setCurrentIndex(i)
-                break
+        # اختيار الوحدة الحالية في UnitCombo
+        self.cmb_unit.set_unit(ds["default_unit"] or "cm")
 
         self.lbl_mode.setText(f"─── تعديل: {ds['name']} ───")
         self.btn_add.setVisible(False)
@@ -341,7 +321,7 @@ class _SetsManagerPanel(QWidget):
             QMessageBox.warning(self, "تنبيه", "أدخل اسم المجموعة")
             return
         cat_id = self.cmb_category.currentData()
-        unit   = self.cmb_unit.currentData() or "cm"
+        unit   = self.cmb_unit.current_unit()
         notes  = self.inp_notes.text().strip()
         update_dimension_set(self.conn, self._editing_id, name, cat_id, unit, notes)
         self._reset_form()
@@ -391,11 +371,7 @@ class _SetsManagerPanel(QWidget):
         self.inp_name.clear()
         self.inp_notes.clear()
         self.cmb_category.setCurrentIndex(0)
-        # إعادة الوحدة للافتراضي (cm)
-        for i in range(self.cmb_unit.count()):
-            if self.cmb_unit.itemData(i) == "cm":
-                self.cmb_unit.setCurrentIndex(i)
-                break
+        # UnitCombo يرجع لآخر اختيار محفوظ تلقائياً
         self.lbl_mode.setText("─── مجموعة جديدة ───")
         self.btn_add.setVisible(True)
         self.btn_save.setVisible(False)
@@ -410,6 +386,10 @@ class _SetsManagerPanel(QWidget):
         self._load()
         if current_sid:
             self._fields_panel.load_set(current_sid)
+
+    def refresh_unit_combo(self):
+        """يُستدعى بعد إضافة وحدات جديدة من الإعدادات."""
+        self.cmb_unit.refresh()
 
 
 # ══════════════════════════════════════════════════════════
@@ -453,3 +433,7 @@ class _GroupsPanel(QWidget):
     def refresh(self):
         self._cats_panel.refresh()
         self._sets_manager.refresh()
+
+    def refresh_unit_combos(self):
+        """يُستدعى من SettingsDialog بعد تعديل الوحدات."""
+        self._sets_manager.refresh_unit_combo()
