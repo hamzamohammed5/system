@@ -4,10 +4,9 @@ ui/tabs/design/dimension_sets_tab.py
 تبويب إدارة مجموعات المقاسات.
 
 التغييرات:
-  1. تبويب "تصنيفات المقاسات" → "المجموعات" (_GroupsPanel)
-  2. _FieldDialog  — خانة الاعتمادية تختار مجموعة مقاسات + حقل منها (cross-set)
-  3. _ValuesPanel  — كل صف إدخال فيه اسم (label) + القيم تُحمَّل من المجموعة
-                     المحددة في الاعتمادية
+  1. _FieldDialog  — خانة الاعتمادية تختار مجموعة مقاسات + حقل منها (cross-set)
+  2. _ValuesPanel  — لما تختار مجموعة مصدر في الاعتمادية، القيم بتتحمل منها تلقائياً
+                     + حقل "الاسم" لكل صف يتحفظ في value_text
 """
 
 from PyQt5.QtWidgets import (
@@ -32,7 +31,7 @@ from db.designs.dimension_sets_repo import (
     insert_field, update_field, delete_field, reorder_fields,
     fetch_field_dep, set_field_dep, remove_field_dep,
     fetch_standalone_values, save_standalone_value,
-    calc_standalone_cross_auto,
+    calc_standalone_cross_auto, fetch_source_set_values,
 )
 from ui.helpers import make_table, buttons_row, confirm_delete, danger_button
 
@@ -105,7 +104,7 @@ class _FieldDialog(QDialog):
         root.addLayout(form)
 
         # ── قسم الاعتمادية (cross-set) ──
-        self._dep_grp = QGroupBox("اعتماد على حقل من مجموعة مقاسات أخرى (اختياري)")
+        self._dep_grp = QGroupBox("اعتماد على حقل من مجموعة مقاسات (اختياري)")
         self._dep_grp.setCheckable(True)
         self._dep_grp.setChecked(False)
         dep_lay = QFormLayout(self._dep_grp)
@@ -259,16 +258,17 @@ class _ValuesPanel(QWidget):
     """
     لوحة إدخال قيم المقاسات مباشرة على مجموعة محددة.
 
-    التغييرات:
-      - كل صف إدخال فيه حقل "الاسم" (label) يُحفظ مع القيم
-      - الحقول المعتمدة تعرض القيمة من المجموعة المصدر تلقائياً
+    الميزات:
+      - كل صف فيه حقل "الاسم" يُحفظ كـ value_text في dimension_set_values
+      - الحقول المعتمدة على مجموعة خارجية: يظهر زر "⟳" يجيب القيمة منها تلقائياً
+      - عند الحساب التلقائي تظهر قيمة المجموعة المصدر بجانب الخانة كـ reference
     """
 
     def __init__(self, conn, parent=None):
         super().__init__(parent)
         self.conn    = conn
         self._set_id = None
-        self._rows   = {}   # field_id → {"spin": QDoubleSpinBox, "name_inp": QLineEdit}
+        self._rows   = {}   # field_id → {"spin": QDoubleSpinBox, "name_inp": QLineEdit, "ref_lbl": QLabel|None}
         self._build()
 
     def _build(self):
@@ -379,7 +379,8 @@ class _ValuesPanel(QWidget):
             has_dep = bool(f["source_field_id"])
             if has_dep:
                 has_auto = True
-            row_w = self._build_row(f, saved.get(f["id"]))
+            saved_info = saved.get(f["id"], {})
+            row_w = self._build_row(f, saved_info)
             self._fields_lay.insertWidget(
                 self._fields_lay.count() - 1, row_w
             )
@@ -387,9 +388,15 @@ class _ValuesPanel(QWidget):
         self._set_buttons(True, has_auto)
         self.lbl_status.setText("")
 
-    def _build_row(self, field_data, current_value) -> QWidget:
-        fid     = field_data["id"]
-        has_dep = bool(field_data["source_field_id"])
+    def _build_row(self, field_data, saved_info: dict) -> QWidget:
+        """
+        saved_info: {"value_num": float|None, "value_text": str|None}
+        """
+        fid      = field_data["id"]
+        has_dep  = bool(field_data["source_field_id"])
+        src_set_id = field_data.get("source_set_id")   # None = نفس المجموعة
+        current_value = saved_info.get("value_num") if isinstance(saved_info, dict) else saved_info
+        saved_name    = saved_info.get("value_text", "") if isinstance(saved_info, dict) else ""
 
         frame = QFrame()
         frame.setStyleSheet("""
@@ -400,7 +407,7 @@ class _ValuesPanel(QWidget):
         lay.setContentsMargins(10, 6, 10, 6)
         lay.setSpacing(8)
 
-        # ── اسم الصف (label مخصص) ──
+        # ── اسم الصف (label مخصص يُحفظ كـ value_text) ──
         name_inp = QLineEdit()
         name_inp.setPlaceholderText("اسم / تسمية...")
         name_inp.setFixedWidth(110)
@@ -410,8 +417,6 @@ class _ValuesPanel(QWidget):
                 padding:2px 6px; background:white; font-size:11px; }
             QLineEdit:focus { border-color:#1565c0; }
         """)
-        # تحميل الاسم المحفوظ إن وجد
-        saved_name = self._load_row_name(fid)
         if saved_name:
             name_inp.setText(saved_name)
 
@@ -449,6 +454,28 @@ class _ValuesPanel(QWidget):
         lay.addWidget(spin, stretch=1)
         lay.addWidget(unit_lbl)
 
+        # ── label مرجعي لقيمة المصدر (cross-set) ──
+        ref_lbl = None
+        if has_dep and src_set_id:
+            # اجلب القيمة الحالية من المجموعة المصدر وعرضها
+            ref_lbl = QLabel("")
+            ref_lbl.setFixedWidth(90)
+            ref_lbl.setAlignment(Qt.AlignCenter)
+            ref_lbl.setStyleSheet("""
+                color:#1565c0; font-size:10px; background:#e8f0fe;
+                border:1px solid #bbdefb; border-radius:3px; padding:1px 4px;
+            """)
+            ref_lbl.setToolTip("القيمة الحالية في المجموعة المصدر")
+            # تحميل القيمة فوراً
+            self._refresh_ref_label(ref_lbl, field_data["source_field_id"], src_set_id, field_data["dep_offset"])
+            lay.addWidget(ref_lbl)
+        else:
+            # مساحة فارغة للمحاذاة
+            spacer = QLabel("")
+            spacer.setFixedWidth(90)
+            spacer.setStyleSheet("background:transparent; border:none;")
+            lay.addWidget(spacer)
+
         # ── زر الحساب التلقائي ──
         if has_dep:
             src_info = field_data.get("source_label") or ""
@@ -466,7 +493,11 @@ class _ValuesPanel(QWidget):
                 QPushButton:hover { background:#c8e6c9; }
             """)
             btn_auto.clicked.connect(
-                lambda _, fid_=fid, sp_=spin: self._calc_one(fid_, sp_)
+                lambda _, fid_=fid, sp_=spin, rl_=ref_lbl,
+                       src_fid=field_data["source_field_id"],
+                       src_sid=src_set_id,
+                       offset=field_data["dep_offset"]:
+                self._calc_one(fid_, sp_, rl_, src_fid, src_sid, offset)
             )
 
             badge = QLabel("↗")
@@ -481,25 +512,39 @@ class _ValuesPanel(QWidget):
             lay.addWidget(badge)
             lay.addWidget(btn_auto)
         else:
-            spacer = QLabel("")
-            spacer.setFixedWidth(52)
-            spacer.setStyleSheet("background:transparent; border:none;")
-            lay.addWidget(spacer)
+            spacer2 = QLabel("")
+            spacer2.setFixedWidth(52)
+            spacer2.setStyleSheet("background:transparent; border:none;")
+            lay.addWidget(spacer2)
 
-        self._rows[fid] = {"spin": spin, "name_inp": name_inp}
+        self._rows[fid] = {"spin": spin, "name_inp": name_inp, "ref_lbl": ref_lbl}
         return frame
 
-    def _load_row_name(self, field_id: int) -> str:
-        """جلب الاسم المحفوظ لصف من dimension_set_values."""
+    def _refresh_ref_label(self, ref_lbl: QLabel, source_field_id: int,
+                            source_set_id: int, offset: float):
+        """يحدّث الـ label المرجعي بالقيمة الحالية من المجموعة المصدر."""
         try:
             row = self.conn.execute(
-                "SELECT value_text FROM dimension_set_values "
-                "WHERE set_id=? AND field_id=?",
-                (self._set_id, field_id)
+                "SELECT value_num FROM dimension_set_values WHERE set_id=? AND field_id=?",
+                (source_set_id, source_field_id)
             ).fetchone()
-            return row["value_text"] if row and row["value_text"] else ""
+            if row and row["value_num"] is not None:
+                src_val = float(row["value_num"])
+                result  = src_val + float(offset)
+                sign    = "+" if offset >= 0 else ""
+                ref_lbl.setText(f"مصدر: {src_val:g} → {result:g}")
+                ref_lbl.setStyleSheet("""
+                    color:#1565c0; font-size:10px; background:#e8f0fe;
+                    border:1px solid #bbdefb; border-radius:3px; padding:1px 4px;
+                """)
+            else:
+                ref_lbl.setText("مصدر: —")
+                ref_lbl.setStyleSheet("""
+                    color:#aaa; font-size:10px; background:#f5f5f5;
+                    border:1px solid #e0e0e0; border-radius:3px; padding:1px 4px;
+                """)
         except Exception:
-            return ""
+            ref_lbl.setText("مصدر: —")
 
     def _clear_fields(self):
         while self._fields_lay.count() > 1:
@@ -512,10 +557,15 @@ class _ValuesPanel(QWidget):
         self.btn_calc.setEnabled(enabled and has_auto)
         self.btn_reset.setEnabled(enabled)
 
-    def _calc_one(self, field_id: int, spin: QDoubleSpinBox):
+    def _calc_one(self, field_id: int, spin: QDoubleSpinBox,
+                  ref_lbl, source_field_id: int, source_set_id,
+                  offset: float):
+        """يحسب قيمة حقل واحد من المجموعة المصدر."""
         if self._set_id is None:
             return
+        # احفظ أولاً
         self._save_values(silent=True)
+        # الحساب
         val = calc_standalone_cross_auto(self.conn, field_id, self._set_id)
         if val is not None:
             spin.setValue(val)
@@ -524,11 +574,14 @@ class _ValuesPanel(QWidget):
                     padding:2px 6px; background:#f1f8e9; }
             """)
             self.lbl_status.setText(f"✓ تم الحساب = {val:.4g}")
+            # تحديث الـ ref label بعد الحساب
+            if ref_lbl and source_set_id:
+                self._refresh_ref_label(ref_lbl, source_field_id, source_set_id, offset)
         else:
             QMessageBox.information(
                 self, "تنبيه",
                 "لا توجد قيمة للحقل المصدر بعد.\n"
-                "أدخل قيمة الحقل المصدر أولاً ثم احسب."
+                "أدخل قيمة الحقل المصدر في مجموعتها أولاً ثم احسب."
             )
 
     def _calc_all_auto(self):
@@ -536,22 +589,43 @@ class _ValuesPanel(QWidget):
             return
         self._save_values(silent=True)
         count = 0
-        for fid, row in self._rows.items():
+
+        # اجلب حقول المجموعة الحالية
+        fields = fetch_fields_for_set(self.conn, self._set_id)
+
+        for f in fields:
+            if f["field_type"] != "number" or not f["source_field_id"]:
+                continue
+            fid = f["id"]
+            if fid not in self._rows:
+                continue
             val = calc_standalone_cross_auto(self.conn, fid, self._set_id)
             if val is not None:
-                row["spin"].setValue(val)
+                self._rows[fid]["spin"].setValue(val)
+                self._rows[fid]["spin"].setStyleSheet("""
+                    QDoubleSpinBox { border:2px solid #43a047; border-radius:4px;
+                        padding:2px 6px; background:#f1f8e9; }
+                """)
+                # تحديث الـ ref label
+                ref_lbl = self._rows[fid].get("ref_lbl")
+                if ref_lbl and f.get("source_set_id"):
+                    self._refresh_ref_label(
+                        ref_lbl, f["source_field_id"],
+                        f["source_set_id"], f["dep_offset"]
+                    )
                 count += 1
+
         self.lbl_status.setText(
             f"✓ تم حساب {count} حقل" if count
-            else "⚠ لا توجد قيم مصدر كافية"
+            else "⚠ لا توجد قيم مصدر كافية — أدخل القيم في مجموعاتها أولاً"
         )
 
     def _save_values(self, silent: bool = False):
         if self._set_id is None:
             return
         for fid, row in self._rows.items():
-            val       = row["spin"].value()
-            row_name  = row["name_inp"].text().strip()
+            val      = row["spin"].value()
+            row_name = row["name_inp"].text().strip()
             # نحفظ الرقم في value_num والاسم في value_text
             self.conn.execute("""
                 INSERT INTO dimension_set_values (set_id, field_id, value_num, value_text)
@@ -581,6 +655,8 @@ class _ValuesPanel(QWidget):
             for row in self._rows.values():
                 row["spin"].setValue(0.0)
                 row["name_inp"].clear()
+                if row.get("ref_lbl"):
+                    row["ref_lbl"].setText("مصدر: —")
             self.lbl_status.setText("↺ تم المسح")
 
     def clear(self):
@@ -1013,14 +1089,13 @@ class _SetsPanel(QWidget):
 
 
 # ══════════════════════════════════════════════════════════
-# لوحة المجموعات (بديل تصنيفات المقاسات)
+# لوحة المجموعات (عرض كامل)
 # ══════════════════════════════════════════════════════════
 
 class _GroupsPanel(QWidget):
     """
     تبويب 'المجموعات' — يعرض مجموعات المقاسات كاملة
-    مع إمكانية البحث والتصفية والإضافة والتعديل.
-    بديل تبويب التصنيفات القديم.
+    مع إمكانية البحث والتصفية.
     """
 
     def __init__(self, conn, parent=None):
@@ -1040,7 +1115,6 @@ class _GroupsPanel(QWidget):
         """)
         root.addWidget(hdr)
 
-        # فلتر بحث
         search_row = QHBoxLayout()
         self.inp_search = QLineEdit()
         self.inp_search.setPlaceholderText("🔍 بحث باسم المجموعة...")
@@ -1050,10 +1124,8 @@ class _GroupsPanel(QWidget):
         search_row.addWidget(self.inp_search, stretch=1)
         root.addLayout(search_row)
 
-        # جدول المجموعات
         self.table = make_table(
-            ["ID", "اسم المجموعة", "التصنيف", "الوحدة", "عدد الحقول",
-             "الحقول"],
+            ["ID", "اسم المجموعة", "التصنيف", "الوحدة", "عدد الحقول", "الحقول"],
             stretch_col=1
         )
         self.table.setColumnWidth(0, 40)
@@ -1111,7 +1183,8 @@ class DimensionSetsTab(QWidget):
               ├── يسار:  _SetsPanel   (قائمة + فورم)
               └── يمين:  Splitter رأسي:
                     ├── أعلى: _FieldsPanel  (الحقول + اعتماديات cross-set)
-                    └── أسفل: _ValuesPanel  (إدخال قيم + اسم لكل صف)
+                    └── أسفل: _ValuesPanel  (إدخال قيم + اسم لكل صف +
+                                             ref label لقيم المجموعة المصدر)
       [تبويب: المجموعات]
         └── _GroupsPanel (عرض كامل لكل المجموعات وحقولها)
     """
@@ -1166,7 +1239,7 @@ class DimensionSetsTab(QWidget):
         sets_layout.addWidget(h_splitter)
         inner_tabs.addTab(sets_widget, "📐  مجموعات المقاسات")
 
-        # ── تبويب المجموعات (بديل التصنيفات) ──
+        # ── تبويب المجموعات (عرض كامل) ──
         self._groups_panel = _GroupsPanel(self.conn)
         inner_tabs.addTab(self._groups_panel, "📋  المجموعات")
 

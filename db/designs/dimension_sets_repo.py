@@ -2,8 +2,6 @@
 db/designs/dimension_sets_repo.py
 ==================================
 عمليات قراءة/كتابة مجموعات المقاسات وحقولها واعتمادياتها.
-
-ملاحظة: عمود source_set_id يُضاف في create_designs_tables (design_schema.py).
 """
 
 
@@ -157,17 +155,13 @@ def fetch_fields_for_set(conn, set_id: int) -> list:
 
 
 def fetch_all_fields_for_combo(conn, exclude_field_id: int = None) -> list:
-    """
-    كل الحقول الرقمية من كل المجموعات مرتبة بالتصنيف ثم المجموعة.
-    كل صف: field_id, field_label, set_id, set_name, cat_id, cat_name
-    """
     sql = """
         SELECT f.id      AS field_id,
                f.label   AS field_label,
                f.set_id,
                ds.name   AS set_name,
-               COALESCE(dc.id, -1)                       AS cat_id,
-               COALESCE(dc.name, '— بدون تصنيف —')       AS cat_name
+               COALESCE(dc.id, -1)                 AS cat_id,
+               COALESCE(dc.name, '— بدون تصنيف —') AS cat_name
         FROM   dimension_fields f
         JOIN   dimension_sets ds ON ds.id = f.set_id
         LEFT JOIN design_categories dc ON dc.id = ds.category_id
@@ -260,7 +254,7 @@ def remove_field_dep(conn, field_id: int):
 
 
 def calc_auto_value(conn, field_id: int, link_id: int):
-    """يحسب القيمة التلقائية مع دعم cross-set."""
+    """يحسب القيمة التلقائية في وضع التصميم (design_dim_values) مع دعم cross-set."""
     dep = fetch_field_dep(conn, field_id)
     if not dep:
         return None
@@ -301,29 +295,51 @@ def calc_auto_value(conn, field_id: int, link_id: int):
 # ══════════════════════════════════════════════════════════
 
 def fetch_standalone_values(conn, set_id: int) -> dict:
+    """
+    يرجع dict: {field_id: {"value_num": float|None, "value_text": str}}
+    يشمل القيمة الرقمية والاسم المخصص لكل صف.
+    """
     rows = conn.execute(
-        "SELECT field_id, value_num FROM dimension_set_values WHERE set_id=?",
+        "SELECT field_id, value_num, value_text "
+        "FROM dimension_set_values WHERE set_id=?",
         (set_id,)
     ).fetchall()
-    return {r["field_id"]: r["value_num"] for r in rows}
+    return {
+        r["field_id"]: {
+            "value_num":  r["value_num"],
+            "value_text": r["value_text"] or "",
+        }
+        for r in rows
+    }
 
 
-def save_standalone_value(conn, set_id: int, field_id: int, value_num: float = None):
+def save_standalone_value(conn, set_id: int, field_id: int,
+                           value_num: float = None, value_text: str = None):
     conn.execute("""
-        INSERT INTO dimension_set_values (set_id, field_id, value_num)
-        VALUES (?, ?, ?)
-        ON CONFLICT(set_id, field_id) DO UPDATE SET value_num=excluded.value_num
-    """, (set_id, field_id, value_num))
+        INSERT INTO dimension_set_values (set_id, field_id, value_num, value_text)
+        VALUES (?, ?, ?, ?)
+        ON CONFLICT(set_id, field_id) DO UPDATE SET
+            value_num=excluded.value_num,
+            value_text=excluded.value_text
+    """, (set_id, field_id, value_num, value_text))
     conn.commit()
 
 
 def calc_standalone_cross_auto(conn, field_id: int, current_set_id: int):
-    """يحسب القيمة التلقائية في وضع الإدخال المستقل عبر dimension_set_values."""
+    """
+    يحسب القيمة التلقائية في وضع الإدخال المستقل (dimension_set_values).
+
+    - source_set_id = None  → المصدر نفس المجموعة الحالية
+    - source_set_id != None → المصدر مجموعة مختلفة (cross-set)
+
+    يرجع float أو None لو القيمة المصدر غير موجودة.
+    """
     dep = fetch_field_dep(conn, field_id)
     if not dep:
         return None
 
     source_field_id = dep["source_field_id"]
+    # None = نفس المجموعة → نستخدم current_set_id
     source_set_id   = dep["source_set_id"] if dep["source_set_id"] else current_set_id
     offset          = float(dep["offset"])
 
@@ -336,3 +352,39 @@ def calc_standalone_cross_auto(conn, field_id: int, current_set_id: int):
         return None
 
     return float(val_row["value_num"]) + offset
+
+
+def get_source_ref(conn, field_id: int, current_set_id: int) -> dict | None:
+    """
+    يجيب بيانات المصدر لعرض الـ reference label في _ValuesPanel.
+
+    يرجع:
+      {"source_val": float, "result": float, "set_name": str, "offset": float}
+    أو None لو مفيش اعتمادية أو القيمة مش موجودة.
+    """
+    dep = fetch_field_dep(conn, field_id)
+    if not dep:
+        return None
+
+    source_field_id = dep["source_field_id"]
+    source_set_id   = dep["source_set_id"] if dep["source_set_id"] else current_set_id
+    offset          = float(dep["offset"])
+
+    row = conn.execute(
+        "SELECT dsv.value_num, ds.name AS set_name "
+        "FROM dimension_set_values dsv "
+        "JOIN dimension_sets ds ON ds.id = dsv.set_id "
+        "WHERE dsv.set_id=? AND dsv.field_id=?",
+        (source_set_id, source_field_id)
+    ).fetchone()
+
+    if not row or row["value_num"] is None:
+        return None
+
+    src = float(row["value_num"])
+    return {
+        "source_val": src,
+        "result":     src + offset,
+        "set_name":   row["set_name"],
+        "offset":     offset,
+    }
