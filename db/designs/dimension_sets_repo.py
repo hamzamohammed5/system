@@ -325,6 +325,31 @@ def save_standalone_value(conn, set_id: int, field_id: int,
     conn.commit()
 
 
+def fetch_source_set_values(conn, source_set_id: int) -> dict:
+    """
+    يجلب كل قيم مجموعة مقاسات محددة (المجموعة المصدر في الاعتماديات).
+    يُستخدم في _ValuesPanel لعرض قيم المصدر عند إدخال قيم مجموعة مرتبطة.
+
+    يرجع dict: {field_id: {"value_num": float|None, "value_text": str, "label": str}}
+    """
+    rows = conn.execute("""
+        SELECT dsv.field_id, dsv.value_num, dsv.value_text,
+               df.label, df.unit
+        FROM   dimension_set_values dsv
+        JOIN   dimension_fields df ON df.id = dsv.field_id
+        WHERE  dsv.set_id = ?
+    """, (source_set_id,)).fetchall()
+    return {
+        r["field_id"]: {
+            "value_num":  r["value_num"],
+            "value_text": r["value_text"] or "",
+            "label":      r["label"],
+            "unit":       r["unit"] or "",
+        }
+        for r in rows
+    }
+
+
 def calc_standalone_cross_auto(conn, field_id: int, current_set_id: int):
     """
     يحسب القيمة التلقائية في وضع الإدخال المستقل (dimension_set_values).
