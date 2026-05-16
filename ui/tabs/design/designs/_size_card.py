@@ -35,54 +35,68 @@ _TEXT_MUTED = "#7a869a"
 # ══════════════════════════════════════════════════════════
 
 def _find_gimp() -> str | None:
-    """يبحث عن GIMP في المسارات الشائعة."""
-    candidates = [
-        "gimp",                                          # PATH
-        r"C:\Program Files\GIMP 2\bin\gimp-2.10.exe",
-        r"C:\Program Files\GIMP 2\bin\gimp-2.99.exe",
-        r"C:\Program Files\GIMP 3\bin\gimp-3.0.exe",
-        "/usr/bin/gimp",
-        "/usr/local/bin/gimp",
-        "/Applications/GIMP.app/Contents/MacOS/gimp",
-    ]
-    for c in candidates:
-        if os.path.isabs(c):
-            if os.path.exists(c):
-                return c
-        else:
-            # بيبحث في PATH
-            import shutil
-            found = shutil.which(c)
-            if found:
-                return found
+    """يجلب مسار GIMP: من الإعدادات أولاً، ثم البحث التلقائي."""
+    import shutil, glob
+
+    # أولاً: المسار المحفوظ في الإعدادات
+    try:
+        from db.shared.connection import get_connection
+        from db.settings_repo import get_setting
+        conn  = get_connection()
+        saved = get_setting(conn, "gimp_path", "")
+        conn.close()
+        if saved and os.path.exists(saved):
+            return saved
+    except Exception:
+        pass
+
+    # ثانياً: بحث تلقائي
+    for name in ("gimp", "gimp-2.10", "gimp-2.99", "gimp-3.0"):
+        found = shutil.which(name)
+        if found:
+            return found
+
+    for pattern in [r"C:\Program Files\GIMP *\bin\gimp-*.exe",
+                    r"C:\Program Files (x86)\GIMP *\bin\gimp-*.exe"]:
+        import glob
+        matches = glob.glob(pattern)
+        if matches:
+            return sorted(matches)[-1]
+
     return None
 
 def _open_gimp(xcf_path: str = None,
                width_px: float = None, height_px: float = None,
                unit: str = "px"):
-    """
-    يفتح GIMP:
-      - لو xcf_path موجود → يفتح الملف مباشرة
-      - لو مفيش ملف → يفتح GIMP بكانفاس جديد بالأبعاد المحددة
-        عن طريق Script-Fu
-    """
     gimp_exe = _find_gimp()
     if not gimp_exe:
         QMessageBox.warning(
             None, "GIMP غير موجود",
             "لم يتم العثور على GIMP.\n"
-            "تأكد من تثبيته وإضافته لـ PATH، أو عدّل المسار في الكود."
+            "حدد مساره من ⚙️ الإعدادات."
         )
         return False
 
     try:
         if xcf_path and os.path.exists(xcf_path):
             subprocess.Popen([gimp_exe, xcf_path])
+
         elif width_px and height_px:
-            # Script-Fu لإنشاء كانفاس بالأبعاد المحددة
             w = int(round(width_px))
             h = int(round(height_px))
-            script = (
+
+            # GIMP 3 — constants جديدة
+            script_v3 = (
+                f"(let* ((image (car (gimp-image-new {w} {h} RGB)))"
+                f"       (layer (car (gimp-layer-new image {w} {h}"
+                f"                   RGBA-IMAGE \"Background\" 100 LAYER-MODE-NORMAL-LEGACY))))"
+                f"  (gimp-image-insert-layer image layer 0 -1)"
+                f"  (gimp-display-new image)"
+                f"  (gimp-displays-flush))"
+            )
+
+            # GIMP 2 — constants قديمة (fallback)
+            script_v2 = (
                 f"(let* ((image (car (gimp-image-new {w} {h} RGB)))"
                 f"       (layer (car (gimp-layer-new image {w} {h}"
                 f"                   RGBA-IMAGE \"Background\" 100 LAYER-MODE-NORMAL))))"
@@ -90,6 +104,14 @@ def _open_gimp(xcf_path: str = None,
                 f"  (gimp-display-new image)"
                 f"  (gimp-displays-flush))"
             )
+
+            # جرب GIMP 3 أولاً، لو فشل استخدم GIMP 2
+            gimp_exe_lower = gimp_exe.lower()
+            if "gimp-3" in gimp_exe_lower or "gimp 3" in gimp_exe_lower:
+                script = script_v3
+            else:
+                script = script_v2
+
             subprocess.Popen([
                 gimp_exe,
                 "--no-splash",
@@ -99,7 +121,9 @@ def _open_gimp(xcf_path: str = None,
             ])
         else:
             subprocess.Popen([gimp_exe])
+
         return True
+
     except Exception as e:
         QMessageBox.critical(None, "خطأ", f"فشل فتح GIMP:\n{e}")
         return False
