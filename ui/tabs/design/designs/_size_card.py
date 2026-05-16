@@ -80,48 +80,45 @@ def _open_gimp(xcf_path: str = None,
     try:
         if xcf_path and os.path.exists(xcf_path):
             subprocess.Popen([gimp_exe, xcf_path])
+            return True
 
-        elif width_px and height_px:
+        if width_px and height_px:
+            import tempfile
             w = int(round(width_px))
             h = int(round(height_px))
 
-            # GIMP 3 — constants جديدة
-            script_v3 = (
-                f"(let* ((image (car (gimp-image-new {w} {h} RGB)))"
-                f"       (layer (car (gimp-layer-new image {w} {h}"
-                f"                   RGBA-IMAGE \"Background\" 100 LAYER-MODE-NORMAL-LEGACY))))"
-                f"  (gimp-image-insert-layer image layer 0 -1)"
-                f"  (gimp-display-new image)"
-                f"  (gimp-displays-flush))"
+            # GIMP 3 Script-Fu syntax
+            script_content = (
+                f"(let* ("
+                f"(image (car (gimp-image-new {w} {h} RGB)))"
+                f"(layer (car (gimp-layer-new image {w} {h} RGBA-IMAGE \"Background\" 100 LAYER-MODE-NORMAL-LEGACY)))"
+                f")"
+                f"(gimp-image-insert-layer image layer 0 -1)"
+                f"(gimp-display-new image)"
+                f")"
             )
 
-            # GIMP 2 — constants قديمة (fallback)
-            script_v2 = (
-                f"(let* ((image (car (gimp-image-new {w} {h} RGB)))"
-                f"       (layer (car (gimp-layer-new image {w} {h}"
-                f"                   RGBA-IMAGE \"Background\" 100 LAYER-MODE-NORMAL))))"
-                f"  (gimp-image-insert-layer image layer 0 -1)"
-                f"  (gimp-display-new image)"
-                f"  (gimp-displays-flush))"
+            tmp = tempfile.NamedTemporaryFile(
+                mode="w",
+                suffix=".scm",
+                delete=False,
+                encoding="utf-8"
             )
+            tmp.write(script_content)
+            tmp.flush()
+            tmp.close()
 
-            # جرب GIMP 3 أولاً، لو فشل استخدم GIMP 2
-            gimp_exe_lower = gimp_exe.lower()
-            if "gimp-3" in gimp_exe_lower or "gimp 3" in gimp_exe_lower:
-                script = script_v3
-            else:
-                script = script_v2
+            script_path = tmp.name.replace("\\", "/")
 
             subprocess.Popen([
                 gimp_exe,
                 "--no-splash",
-                "--batch-interpreter", "plug-in-script-fu-eval",
-                "-b", script,
-                "-b", "(gimp-quit 0)"
+                "--batch-interpreter=plug-in-script-fu-eval",
+                "-b", f'(load "{script_path}")',
             ])
-        else:
-            subprocess.Popen([gimp_exe])
+            return True
 
+        subprocess.Popen([gimp_exe])
         return True
 
     except Exception as e:
@@ -319,57 +316,59 @@ class _SizeCard(QFrame):
             )
 
     def _create_in_gimp(self):
-        """
-        إنشاء ملف .xcf جديد:
-          1. يطلب مسار الحفظ (Save dialog)
-          2. يحفظ المسار في الـ DB
-          3. يفتح GIMP بكانفاس بالأبعاد الصح
-        """
         w, h = fetch_canvas_size(self.conn, self._size_id)
 
-        # اختر مجلد ومسار الحفظ
-        inst_name = (self._data["instance_name"] or "design").replace(" ", "_")
+        inst_name  = (self._data["instance_name"] or "design").replace(" ", "_")
         default_name = f"{inst_name}.xcf"
 
-        # ابدأ من مجلد الملف الحالي لو موجود
         start_dir = os.path.expanduser("~")
         if self._data["xcf_path"]:
             parent = os.path.dirname(self._data["xcf_path"])
             if os.path.isdir(parent):
                 start_dir = parent
 
+        # ── اختر مكان الحفظ أولاً ──
         save_path, _ = QFileDialog.getSaveFileName(
-            self, "اختر مكان حفظ ملف GIMP الجديد",
+            self,
+            "اختر مكان حفظ ملف GIMP",
             os.path.join(start_dir, default_name),
             "GIMP Files (*.xcf)"
         )
-
         if not save_path:
-            return   # المستخدم ألغى
+            return
 
-        # تأكد أن الامتداد .xcf
         if not save_path.lower().endswith(".xcf"):
             save_path += ".xcf"
 
-        # احفظ المسار في الـ DB
+        # ── احفظ المسار في الـ DB ──
         update_design_size_path(self.conn, self._size_id, save_path)
         self._data = dict(self._data)
         self._data["xcf_path"] = save_path
 
-        # افتح GIMP بكانفاس جديد
+        # ── افتح GIMP مع رسالة توضيحية ──
         if w and h:
+            msg = (
+                f"سيفتح GIMP الآن.\n\n"
+                f"1️⃣  من القائمة: File → New\n"
+                f"2️⃣  حدد الأبعاد:\n"
+                f"      العرض : {int(round(w))} px\n"
+                f"      الطول : {int(round(h))} px\n\n"
+                f"3️⃣  بعد الانتهاء احفظ الملف في:\n"
+                f"      {save_path}"
+            )
+            QMessageBox.information(self, "📐  تعليمات GIMP", msg)
             _open_gimp(width_px=w, height_px=h)
         else:
-            reply = QMessageBox.question(
-                self, "الأبعاد غير محددة",
-                "لم تُحدَّد حقول العرض والطول لهذا المقاس.\n"
-                "هل تريد فتح GIMP بكانفاس افتراضي؟",
-                QMessageBox.Yes | QMessageBox.No
+            msg = (
+                f"سيفتح GIMP الآن.\n\n"
+                f"1️⃣  من القائمة: File → New\n"
+                f"2️⃣  حدد الأبعاد المطلوبة\n\n"
+                f"3️⃣  بعد الانتهاء احفظ الملف في:\n"
+                f"      {save_path}"
             )
-            if reply == QMessageBox.Yes:
-                _open_gimp()
+            QMessageBox.information(self, "📐  تعليمات GIMP", msg)
+            _open_gimp()
 
-        # حدّث البطاقة لتعكس المسار الجديد
         self.path_changed.emit()
 
     def _set_path(self):
