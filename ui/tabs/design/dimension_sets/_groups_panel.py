@@ -29,13 +29,35 @@ from ._categories_panel import _CategoriesPanel
 from ._fields_panel      import _FieldsPanel
 from ui.helpers import make_table, danger_button, buttons_row
 
+# ── الوحدات المتاحة (موحّدة) ──
+UNIT_OPTIONS = [
+    ("px",   "px — بكسل"),
+    ("mm",   "mm — مليمتر"),
+    ("cm",   "cm — سنتيمتر"),
+    ("m",    "m  — متر"),
+    ("inch", "inch — بوصة"),
+]
+
+
+def _make_unit_combo(current: str = "cm") -> QComboBox:
+    """يبني QComboBox موحّد لاختيار الوحدة."""
+    cmb = QComboBox()
+    cmb.setMinimumHeight(28)
+    for val, label in UNIT_OPTIONS:
+        cmb.addItem(label, val)
+    for i in range(cmb.count()):
+        if cmb.itemData(i) == current:
+            cmb.setCurrentIndex(i)
+            break
+    return cmb
+
 
 # ══════════════════════════════════════════════════════════
 # لوحة إدارة المجموعات + حقولها (يمين)
 # ══════════════════════════════════════════════════════════
 
 class _SetsManagerPanel(QWidget):
-    sets_changed = pyqtSignal()   # ← جديد: يُطلق بعد أي إضافة/تعديل/حذف
+    sets_changed = pyqtSignal()
 
     def __init__(self, conn, parent=None):
         super().__init__(parent)
@@ -75,7 +97,7 @@ class _SetsManagerPanel(QWidget):
         filter_row.addWidget(self.cmb_cat_filter)
         root.addLayout(filter_row)
 
-        # ══ Splitter رأسي: جدول المجموعات + فورم ↕ حقول المجموعة ══
+        # ══ Splitter رأسي ══
         v_splitter = QSplitter(Qt.Vertical)
         v_splitter.setHandleWidth(5)
         v_splitter.setStyleSheet("""
@@ -95,12 +117,11 @@ class _SetsManagerPanel(QWidget):
         )
         self.table.setColumnWidth(0, 40)
         self.table.setColumnWidth(2, 130)
-        self.table.setColumnWidth(3, 60)
+        self.table.setColumnWidth(3, 80)
         self.table.setColumnWidth(4, 75)
         self.table.itemSelectionChanged.connect(self._on_set_select)
         top_lay.addWidget(self.table)
 
-        # أزرار المجموعة
         btn_edit_set = QPushButton("✏️  تعديل")
         btn_del_set  = danger_button("🗑️  حذف")
         for b in (btn_edit_set, btn_del_set):
@@ -128,11 +149,8 @@ class _SetsManagerPanel(QWidget):
         self.cmb_category.setMinimumHeight(28)
         form.addRow("التصنيف :", self.cmb_category)
 
-        self.cmb_unit = QComboBox()
-        self.cmb_unit.setEditable(True)
-        self.cmb_unit.setMinimumHeight(28)
-        for u in ["cm", "mm", "m", "inch"]:
-            self.cmb_unit.addItem(u, u)
+        # ── الوحدة الافتراضية (dropdown موحّد) ──
+        self.cmb_unit = _make_unit_combo("cm")
         form.addRow("الوحدة الافتراضية :", self.cmb_unit)
 
         self.inp_notes = QLineEdit()
@@ -159,7 +177,7 @@ class _SetsManagerPanel(QWidget):
         top_lay.addWidget(self._form_grp)
         v_splitter.addWidget(top_w)
 
-        # ── الجزء السفلي: _FieldsPanel للمجموعة المختارة ──
+        # ── الجزء السفلي: _FieldsPanel ──
         bot_w = QWidget()
         bot_lay = QVBoxLayout(bot_w)
         bot_lay.setContentsMargins(0, 0, 0, 0)
@@ -276,7 +294,7 @@ class _SetsManagerPanel(QWidget):
             QMessageBox.warning(self, "تنبيه", "أدخل اسم المجموعة")
             return
         cat_id = self.cmb_category.currentData()
-        unit   = self.cmb_unit.currentText().strip() or "cm"
+        unit   = self.cmb_unit.currentData() or "cm"
         notes  = self.inp_notes.text().strip()
         new_id = insert_dimension_set(self.conn, name, cat_id, unit, notes)
         self._reset_form()
@@ -285,7 +303,7 @@ class _SetsManagerPanel(QWidget):
             if self.table.item(r, 0).data(Qt.UserRole) == new_id:
                 self.table.selectRow(r)
                 break
-        self.sets_changed.emit()   # ← جديد
+        self.sets_changed.emit()
 
     def _edit_set(self):
         sid = self._selected_id()
@@ -302,12 +320,14 @@ class _SetsManagerPanel(QWidget):
             if self.cmb_category.itemData(i) == ds["category_id"]:
                 self.cmb_category.setCurrentIndex(i)
                 break
-        unit = ds["default_unit"] or "cm"
-        idx  = self.cmb_unit.findText(unit)
-        if idx >= 0:
-            self.cmb_unit.setCurrentIndex(idx)
-        else:
-            self.cmb_unit.setCurrentText(unit)
+
+        # اختيار الوحدة في الـ dropdown
+        current_unit = ds["default_unit"] or "cm"
+        for i in range(self.cmb_unit.count()):
+            if self.cmb_unit.itemData(i) == current_unit:
+                self.cmb_unit.setCurrentIndex(i)
+                break
+
         self.lbl_mode.setText(f"─── تعديل: {ds['name']} ───")
         self.btn_add.setVisible(False)
         self.btn_save.setVisible(True)
@@ -321,12 +341,12 @@ class _SetsManagerPanel(QWidget):
             QMessageBox.warning(self, "تنبيه", "أدخل اسم المجموعة")
             return
         cat_id = self.cmb_category.currentData()
-        unit   = self.cmb_unit.currentText().strip() or "cm"
+        unit   = self.cmb_unit.currentData() or "cm"
         notes  = self.inp_notes.text().strip()
         update_dimension_set(self.conn, self._editing_id, name, cat_id, unit, notes)
         self._reset_form()
         self._load()
-        self.sets_changed.emit()   # ← جديد
+        self.sets_changed.emit()
 
     def _delete_set(self):
         sid = self._selected_id()
@@ -364,14 +384,18 @@ class _SetsManagerPanel(QWidget):
             delete_dimension_set(self.conn, sid)
             self._reset_form()
             self._load()
-            self.sets_changed.emit()   # ← جديد
+            self.sets_changed.emit()
 
     def _reset_form(self):
         self._editing_id = None
         self.inp_name.clear()
         self.inp_notes.clear()
         self.cmb_category.setCurrentIndex(0)
-        self.cmb_unit.setCurrentIndex(0)
+        # إعادة الوحدة للافتراضي (cm)
+        for i in range(self.cmb_unit.count()):
+            if self.cmb_unit.itemData(i) == "cm":
+                self.cmb_unit.setCurrentIndex(i)
+                break
         self.lbl_mode.setText("─── مجموعة جديدة ───")
         self.btn_add.setVisible(True)
         self.btn_save.setVisible(False)
@@ -393,7 +417,7 @@ class _SetsManagerPanel(QWidget):
 # ══════════════════════════════════════════════════════════
 
 class _GroupsPanel(QWidget):
-    sets_changed = pyqtSignal()   # ← جديد: يُمرَّر للخارج
+    sets_changed = pyqtSignal()
 
     def __init__(self, conn, parent=None):
         super().__init__(parent)
@@ -417,7 +441,7 @@ class _GroupsPanel(QWidget):
         splitter.addWidget(self._cats_panel)
 
         self._sets_manager = _SetsManagerPanel(self.conn)
-        self._sets_manager.sets_changed.connect(self.sets_changed.emit)  # ← جديد
+        self._sets_manager.sets_changed.connect(self.sets_changed.emit)
         splitter.addWidget(self._sets_manager)
 
         splitter.setSizes([280, 720])

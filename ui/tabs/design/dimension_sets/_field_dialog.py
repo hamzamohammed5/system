@@ -22,6 +22,15 @@ from db.designs.dimension_sets_repo import (
 
 )
 
+# ── الوحدات المتاحة (موحّدة) ──
+UNIT_OPTIONS = [
+    ("px",   "px — بكسل"),
+    ("mm",   "mm — مليمتر"),
+    ("cm",   "cm — سنتيمتر"),
+    ("m",    "m  — متر"),
+    ("inch", "inch — بوصة"),
+]
+
 def _spin(min_=None, max_=9999, dec=2):
     s = QDoubleSpinBox()
     s.setRange(min_ if min_ is not None else -99999, max_)
@@ -29,6 +38,19 @@ def _spin(min_=None, max_=9999, dec=2):
     s.setMinimumHeight(30)
     return s
 
+
+def make_unit_combo(current: str = "cm") -> QComboBox:
+    """يبني QComboBox موحّد لاختيار الوحدة."""
+    cmb = QComboBox()
+    cmb.setMinimumHeight(30)
+    for val, label in UNIT_OPTIONS:
+        cmb.addItem(label, val)
+    # اختيار الوحدة الحالية
+    for i in range(cmb.count()):
+        if cmb.itemData(i) == current:
+            cmb.setCurrentIndex(i)
+            break
+    return cmb
 
 
 # ══════════════════════════════════════════════════════════
@@ -70,10 +92,8 @@ class _FieldDialog(QDialog):
         self.inp_label.setPlaceholderText("مثال: الطول، العرض ...")
         self.inp_label.setMinimumHeight(30)
 
-        self.inp_unit = QLineEdit()
-        self.inp_unit.setPlaceholderText("cm / mm / m ...")
-        self.inp_unit.setText("cm")
-        self.inp_unit.setMinimumHeight(30)
+        # ── وحدة الحقل (dropdown بدل QLineEdit) ──
+        self.cmb_unit = make_unit_combo("cm")
 
         self.cmb_type = QComboBox()
         self.cmb_type.addItem("رقم", "number")
@@ -86,7 +106,7 @@ class _FieldDialog(QDialog):
 
         form.addRow("الاسم (إنجليزي) :", self.inp_name)
         form.addRow("التسمية (عربي) :",  self.inp_label)
-        form.addRow("الوحدة :",           self.inp_unit)
+        form.addRow("الوحدة :",           self.cmb_unit)
         form.addRow("النوع :",            self.cmb_type)
         form.addRow("",                   self.chk_required)
         root.addLayout(form)
@@ -235,7 +255,14 @@ class _FieldDialog(QDialog):
     def _load(self, field_data):
         self.inp_name.setText(field_data["name"])
         self.inp_label.setText(field_data["label"])
-        self.inp_unit.setText(field_data["unit"] or "cm")
+
+        # اختيار الوحدة في الـ dropdown
+        unit = field_data["unit"] or "cm"
+        for i in range(self.cmb_unit.count()):
+            if self.cmb_unit.itemData(i) == unit:
+                self.cmb_unit.setCurrentIndex(i)
+                break
+
         idx = self.cmb_type.findData(field_data["field_type"])
         if idx >= 0:
             self.cmb_type.setCurrentIndex(idx)
@@ -269,7 +296,8 @@ class _FieldDialog(QDialog):
             QMessageBox.warning(self, "تنبيه", "أدخل الاسم والتسمية")
             return
 
-        unit     = self.inp_unit.text().strip() or "cm"
+        # الوحدة من الـ dropdown
+        unit     = self.cmb_unit.currentData() or "cm"
         ftype    = self.cmb_type.currentData()
         required = self.chk_required.isChecked()
 
@@ -300,4 +328,3 @@ class _FieldDialog(QDialog):
             remove_field_dep(self.conn, self.field_id)
 
         self.accept()
-
