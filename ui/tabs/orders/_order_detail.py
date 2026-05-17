@@ -226,7 +226,8 @@ class _OrderDetail(QWidget):
 
     def load_order(self, order_id: int):
         self._order_id   = order_id
-        self._order_data = fetch_order(self.conn, order_id)
+        row = fetch_order(self.conn, order_id)
+        self._order_data = dict(row) if row else None  # ← convert here
         if not self._order_data:
             return
         self._show_detail()
@@ -351,7 +352,7 @@ class _OrderDetail(QWidget):
             self.items_table.setItem(r, 6, total_item)
 
     def _fill_log(self):
-        logs = fetch_status_log(self.conn, self._order_id)
+        logs = [dict(r) for r in fetch_status_log(self.conn, self._order_id)]  # ← convert here
         self.log_table.setRowCount(0)
 
         for log in logs:
@@ -482,7 +483,8 @@ class _OrderDetail(QWidget):
     def _fill_header_amounts(self):
         if not self._order_id:
             return
-        self._order_data = fetch_order(self.conn, self._order_id)
+        row = fetch_order(self.conn, self._order_id)
+        self._order_data = dict(row) if row else None  # ← convert here
         if self._order_data:
             net    = self._order_data.get("net_amount")  or 0
             paid   = self._order_data.get("paid_amount") or 0
