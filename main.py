@@ -11,7 +11,7 @@ from db.shared.migrations_v2        import run_migrations_v2
 from db.shared.connection           import get_connection
 from ui.app_settings         import apply_font
 from ui.main_window          import MainWindow
-from ui.widgets.shared.no_wheel     import install_no_wheel_filter
+from ui.widgets.shared.no_wheel     import install_no_wheel_filter, install_shift_wheel_filter
 
 
 def main():
@@ -29,7 +29,8 @@ def main():
 
     # ✅ منع عجلة الماوس من تغيير قيم الـ inputs في كل التطبيق
     install_no_wheel_filter(qt_app)
-
+    install_shift_wheel_filter(qt_app) 
+    
     window = MainWindow(qt_app)
     window.show()
     sys.exit(qt_app.exec_())
