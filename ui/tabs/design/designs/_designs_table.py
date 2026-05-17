@@ -1,7 +1,12 @@
 """
-ui/tabs/design/designs/_designs_table.py  — v2
+ui/tabs/design/designs/_designs_table.py  — v3
 ===============================================
-قائمة التصميمات — تصميم Grid Cards بدل الجدول.
+قائمة التصميمات — Grid Cards بـ thumbnail يتغير حسب فلتر المجموعة.
+
+التغييرات عن v2:
+  - _fetch_designs_filtered: الـ first_xcf بيتحدد حسب set_id المفلتر
+  - _DesignCard: يستقبل set_id ويعرض الـ thumbnail المناسب
+  - _DesignsTable._on_set_changed: يبعت للـ cards تعمل update للـ thumbnail
 """
 
 from PyQt5.QtWidgets import (
@@ -22,7 +27,7 @@ from db.designs.dimension_sets_repo import (
     fetch_all_dimension_sets,
 )
 from ui.helpers import confirm_delete
-from ._xcf_thumbnail import get_xcf_thumbnail, get_watcher
+from ._xcf_thumbnail import get_xcf_thumbnail, get_watcher, clear_cache
 from ._design_detail_panel import _DesignDetailPanel
 
 import os
@@ -70,6 +75,48 @@ class _ThumbWorker(QThread):
 
 
 # ════════════════════════════════════════════════════════
+# جلب الـ xcf_path المناسب حسب المجموعة
+# ════════════════════════════════════════════════════════
+
+def _get_xcf_for_set(conn, design_id: int, set_id=None) -> str | None:
+    """
+    يجيب مسار الـ xcf المناسب للتصميم حسب الـ set_id:
+      - لو set_id محدد → أول ملف ينتمي لهذه المجموعة
+      - لو مفيش set_id  → أول ملف موجود عموماً
+    يرجع None لو مفيش ملف متاح.
+    """
+    if set_id is not None:
+        row = conn.execute(
+            """
+            SELECT xcf_path FROM design_sizes
+            WHERE design_id = ?
+              AND set_id    = ?
+              AND xcf_path IS NOT NULL
+              AND xcf_path != ''
+            ORDER BY sort_order, id
+            LIMIT 1
+            """,
+            (design_id, set_id),
+        ).fetchone()
+        if row and row["xcf_path"]:
+            return row["xcf_path"]
+
+    # fallback: أول ملف موجود بغض النظر عن المجموعة
+    row = conn.execute(
+        """
+        SELECT xcf_path FROM design_sizes
+        WHERE design_id = ?
+          AND xcf_path IS NOT NULL
+          AND xcf_path != ''
+        ORDER BY sort_order, id
+        LIMIT 1
+        """,
+        (design_id,),
+    ).fetchone()
+    return row["xcf_path"] if row and row["xcf_path"] else None
+
+
+# ════════════════════════════════════════════════════════
 # بطاقة تصميم واحد
 # ════════════════════════════════════════════════════════
 
@@ -77,12 +124,14 @@ class _DesignCard(QFrame):
     selected  = pyqtSignal(int)
     deleted   = pyqtSignal(int)
 
-    def __init__(self, conn, design_data, parent=None):
+    def __init__(self, conn, design_data, set_id=None, parent=None):
         super().__init__(parent)
         self.conn      = conn
-        self._data     = dict(design_data)   # ← تحويل sqlite3.Row لـ dict
+        self._data     = dict(design_data)
         self._did      = self._data["id"]
+        self._set_id   = set_id          # ← الجديد: فلتر المجموعة الحالي
         self._selected = False
+        self._worker   = None
         self.setCursor(Qt.PointingHandCursor)
         self.setFixedWidth(_CARD_W)
         self._build()
@@ -97,13 +146,13 @@ class _DesignCard(QFrame):
         self._thumb_lbl = QLabel()
         self._thumb_lbl.setFixedSize(_CARD_W, _CARD_THUMB)
         self._thumb_lbl.setAlignment(Qt.AlignCenter)
-        self._thumb_lbl.setStyleSheet(f"""
-            QLabel {{
+        self._thumb_lbl.setStyleSheet("""
+            QLabel {
                 background: #1e1b4b;
                 border-radius: 10px 10px 0 0;
                 font-size: 32px;
                 color: #4c1d95;
-            }}
+            }
         """)
         self._thumb_lbl.setText("🎨")
         root.addWidget(self._thumb_lbl)
@@ -172,12 +221,14 @@ class _DesignCard(QFrame):
             """)
 
     def set_thumbnail(self, pixmap):
+        """يعرض الـ pixmap في الـ thumbnail label."""
         if pixmap and not pixmap.isNull():
             self._thumb_lbl.setPixmap(
                 pixmap.scaled(_CARD_W, _CARD_THUMB,
                               Qt.KeepAspectRatioByExpanding,
                               Qt.SmoothTransformation)
             )
+            self._thumb_lbl.setText("")
             self._thumb_lbl.setStyleSheet("""
                 QLabel {
                     background: #0f0e17;
@@ -186,6 +237,43 @@ class _DesignCard(QFrame):
             """)
         else:
             self._thumb_lbl.setText("🎨")
+            self._thumb_lbl.setStyleSheet("""
+                QLabel {
+                    background: #1e1b4b;
+                    border-radius: 10px 10px 0 0;
+                    font-size: 32px;
+                    color: #4c1d95;
+                }
+            """)
+
+    def load_thumbnail(self, xcf_path: str = None):
+        """
+        يحمّل الـ thumbnail:
+          - لو xcf_path مُمرَّر → يستخدمه مباشرة
+          - لو لا → يحسبه من DB حسب _set_id
+        """
+        if xcf_path is None:
+            xcf_path = _get_xcf_for_set(self.conn, self._did, self._set_id)
+
+        if not xcf_path or not os.path.exists(xcf_path):
+            self.set_thumbnail(None)
+            return
+
+        # تشغيل worker للتحميل في الخلفية
+        if self._worker and self._worker.isRunning():
+            self._worker.quit()
+
+        self._worker = _ThumbWorker(xcf_path, _CARD_THUMB)
+        self._worker.done.connect(lambda _, px: self.set_thumbnail(px))
+        self._worker.start()
+
+    def update_set_filter(self, set_id):
+        """
+        يُستدعى لما يتغير فلتر المجموعة.
+        يعيد تحميل الـ thumbnail من المجموعة الجديدة.
+        """
+        self._set_id = set_id
+        self.load_thumbnail()   # بيحسب الـ xcf من DB
 
     def mousePressEvent(self, event):
         self.selected.emit(self._did)
@@ -197,15 +285,39 @@ class _DesignCard(QFrame):
 
 
 # ════════════════════════════════════════════════════════
-# جلب التصميمات مع فلترة — محدّث لـ item_category_id
+# جلب التصميمات مع فلترة
 # ════════════════════════════════════════════════════════
 
 def _fetch_designs_filtered(conn, name_q="", category_id=None, set_id=None):
     """
     جلب التصميمات مع فلترة.
-    category_id هنا = item_category_id (تصنيف التصميم المستقل).
+    - first_xcf: الآن يأخذ أولوية المجموعة المفلترة (set_id)،
+      وإلا أول ملف موجود عموماً.
     """
-    sql = """
+    # الـ subquery بتاعة first_xcf — تأخذ في الاعتبار set_id
+    if set_id is not None:
+        first_xcf_sql = """
+            (SELECT ds2.xcf_path
+             FROM   design_sizes ds2
+             WHERE  ds2.design_id = d.id
+               AND  ds2.set_id    = {set_id}
+               AND  ds2.xcf_path IS NOT NULL
+               AND  ds2.xcf_path != ''
+             ORDER  BY ds2.sort_order, ds2.id
+             LIMIT  1)
+        """.format(set_id=int(set_id))
+    else:
+        first_xcf_sql = """
+            (SELECT ds2.xcf_path
+             FROM   design_sizes ds2
+             WHERE  ds2.design_id = d.id
+               AND  ds2.xcf_path IS NOT NULL
+               AND  ds2.xcf_path != ''
+             ORDER  BY ds2.sort_order, ds2.id
+             LIMIT  1)
+        """
+
+    sql = f"""
         SELECT d.id, d.name, d.item_category_id, d.notes,
                d.created_at, d.updated_at,
                ic.name                              AS category_name,
@@ -214,13 +326,7 @@ def _fetch_designs_filtered(conn, name_q="", category_id=None, set_id=None):
                SUM(CASE WHEN ds.xcf_path IS NOT NULL
                              AND ds.xcf_path != ''
                         THEN 1 ELSE 0 END)          AS files_count,
-               (SELECT ds2.xcf_path
-                FROM   design_sizes ds2
-                WHERE  ds2.design_id = d.id
-                  AND  ds2.xcf_path IS NOT NULL
-                  AND  ds2.xcf_path != ''
-                ORDER  BY ds2.sort_order, ds2.id
-                LIMIT  1)                           AS first_xcf
+               {first_xcf_sql}                      AS first_xcf
         FROM   designs d
         LEFT JOIN design_item_categories ic ON ic.id = d.item_category_id
         LEFT JOIN design_sizes ds           ON ds.design_id = d.id
@@ -267,9 +373,9 @@ class _DesignsTable(QWidget):
         super().__init__(parent)
         self.conn          = conn
         self._panel        = detail_panel
-        self._cards        = {}
+        self._cards        = {}           # did → _DesignCard
         self._workers      = []
-        self._xcf_card_map = {}
+        self._xcf_card_map = {}           # norm_path → did
         self._active_did   = None
         self._cat_filter   = None
         self._set_filter   = None
@@ -444,9 +550,39 @@ class _DesignsTable(QWidget):
         self._apply_filter()
 
     def _on_set_changed(self):
-        self._set_filter = self.cmb_set.currentData()
-        self._apply_filter()
-        self.set_filter_changed.emit(self._set_filter)
+        """
+        لما يتغير فلتر المجموعة:
+          1. يحدث _set_filter
+          2. لو مفيش بحث/فلتر تاني → يحدث الـ thumbnails بدون إعادة بناء الكروت
+          3. لو فيه فلتر → يعيد البناء كامل (عشان التصميمات نفسها ممكن تتغير)
+        """
+        new_set = self.cmb_set.currentData()
+        old_set = self._set_filter
+        self._set_filter = new_set
+
+        # لو التصميمات مش هتتغير (مفيش فلتر set في الكروت قبل وبعد) →
+        # نحدث الـ thumbnails فقط بدون إعادة بناء
+        if old_set is None and new_set is None:
+            pass  # مفيش تغيير حقيقي
+        elif len(self._cards) > 0:
+            # نجرب نحدث الـ thumbnails أولاً بدون إعادة بناء
+            # لو الـ set_id مختلف، كل card تعمل reload للـ thumbnail
+            all_same_designs = True  # هنفترض إن التصميمات نفسها
+            # (لو set_filter موجود، ممكن يتفلتروا — بنعمل apply_filter عادي)
+            if new_set is not None or old_set is not None:
+                # لو تغير من/إلى فلتر set → إعادة بناء كاملة
+                self._apply_filter()
+                self.set_filter_changed.emit(new_set)
+                return
+
+        # تحديث الـ thumbnails في الكروت الموجودة بدون إعادة بناء
+        self._refresh_all_thumbnails()
+        self.set_filter_changed.emit(new_set)
+
+    def _refresh_all_thumbnails(self):
+        """يحدث الـ thumbnail في كل الكروت حسب الـ _set_filter الحالي."""
+        for did, card in self._cards.items():
+            card.update_set_filter(self._set_filter)
 
     def filter_by_category(self, cat_id):
         """يُستدعى من DesignsCategoriesPanel."""
@@ -454,10 +590,12 @@ class _DesignsTable(QWidget):
         self._apply_filter()
 
     def _apply_filter(self):
+        # إيقاف الـ workers القديمة
         for w in self._workers:
             w.quit()
         self._workers.clear()
 
+        # إيقاف مراقبة الملفات القديمة
         watcher = get_watcher()
         for path in list(self._xcf_card_map.keys()):
             watcher.unwatch(path)
@@ -468,6 +606,7 @@ class _DesignsTable(QWidget):
             self.conn, name_q, self._cat_filter, self._set_filter
         )
 
+        # حذف الكروت القديمة
         for card in self._cards.values():
             self._grid_layout.removeWidget(card)
             card.deleteLater()
@@ -490,7 +629,8 @@ class _DesignsTable(QWidget):
             row_i = idx // cols
             col_i = idx % cols
 
-            card = _DesignCard(self.conn, d)
+            # إنشاء الـ card مع تمرير set_id
+            card = _DesignCard(self.conn, d, set_id=self._set_filter)
             card.selected.connect(self._on_card_selected)
             if d["id"] == self._active_did:
                 card.set_selected(True)
@@ -498,6 +638,8 @@ class _DesignsTable(QWidget):
             self._grid_layout.addWidget(card, row_i, col_i)
             self._cards[d["id"]] = card
 
+            # تحديد الـ xcf المناسب:
+            # - الـ first_xcf في d يأتي من الـ SQL المعدَّل (يراعي set_id)
             xcf = d["first_xcf"]
             if xcf and os.path.exists(xcf):
                 norm = os.path.normpath(xcf)
@@ -507,6 +649,9 @@ class _DesignsTable(QWidget):
                 worker.done.connect(self._on_thumb_ready)
                 worker.start()
                 self._workers.append(worker)
+            else:
+                # لو مفيش صورة للمجموعة المفلترة → يعرض placeholder
+                card.set_thumbnail(None)
 
         self.lbl_count.setText(f"{len(rows)} تصميم")
 
@@ -520,7 +665,6 @@ class _DesignsTable(QWidget):
         norm = os.path.normpath(path)
         did  = self._xcf_card_map.get(norm)
         if did and did in self._cards:
-            from ._xcf_thumbnail import clear_cache
             clear_cache(path)
             worker = _ThumbWorker(path, _CARD_THUMB)
             worker.done.connect(self._on_thumb_ready)

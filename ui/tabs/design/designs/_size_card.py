@@ -1,13 +1,14 @@
 """
-ui/tabs/design/designs/_size_card.py
-======================================
-بطاقة مقاس واحد — تصميم Modern/Flat محسّن.
+ui/tabs/design/designs/_size_card.py  — v3
+==========================================
+بطاقة مقاس واحد — تصميم محسّن.
 
 التحسينات:
-  - layout أوضح: thumbnail كبير + معلومات منظّمة
-  - شريط حالة ملوّن أسفل كل بطاقة
-  - أزرار مرتّبة بـ hierarchy واضح
-  - ألوان وحدود خفيفة بدل الثقيلة
+  - Layout أوضح وأكثر تنظيماً
+  - أزرار أصغر وأنظف
+  - Status bar أجمل
+  - Thumbnail مع rounded corners
+  - ألوان Palette موحدة
 """
 
 import os
@@ -19,7 +20,7 @@ from PyQt5.QtWidgets import (
     QFrame, QFileDialog,
 )
 from PyQt5.QtCore import Qt, pyqtSignal, QThread, pyqtSignal as Signal
-from PyQt5.QtGui  import QPixmap, QColor
+from PyQt5.QtGui  import QPixmap, QFont
 
 from db.designs.designs_sizes_repo import (
     update_design_size_path,
@@ -28,47 +29,54 @@ from db.designs.designs_sizes_repo import (
 )
 from ._xcf_thumbnail import get_xcf_thumbnail, get_watcher
 
-# ── ألوان النظام الجديد ──
-_BG         = "#ffffff"
-_BG_SUBTLE  = "#f8fafc"
-_BORDER     = "#e2e8f0"
-_BORDER_MED = "#cbd5e1"
-_TEXT       = "#0f172a"
-_TEXT_MED   = "#475569"
-_TEXT_MUTED = "#94a3b8"
-_BLUE       = "#3b82f6"
-_BLUE_LT    = "#eff6ff"
-_BLUE_MED   = "#bfdbfe"
-_GREEN      = "#16a34a"
-_GREEN_LT   = "#f0fdf4"
-_GREEN_MED  = "#bbf7d0"
-_ORANGE     = "#ea580c"
-_ORANGE_LT  = "#fff7ed"
-_ORANGE_MED = "#fed7aa"
-_RED        = "#dc2626"
-_RED_LT     = "#fef2f2"
-_PURPLE     = "#7c3aed"
-_PURPLE_LT  = "#f5f3ff"
+# ── Palette ──────────────────────────────────────────────
+_BG          = "#FFFFFF"
+_BG_SURFACE  = "#F8F9FB"
+_BORDER      = "#E5E9F0"
+_BORDER_MED  = "#CDD3E0"
+_TEXT_PRI    = "#1A2035"
+_TEXT_SEC    = "#5A6680"
+_TEXT_MUT    = "#9BA5BE"
 
-_DEFAULT_DPI  = 300.0
-_THUMB_SIZE   = 80
+_ACCENT      = "#4F6EF7"
+_ACCENT_LT   = "#EEF2FF"
+_ACCENT_BDR  = "#C7D2FE"
+_ACCENT_DARK = "#3D5BEF"
+
+_SUCCESS     = "#16A34A"
+_SUCCESS_LT  = "#F0FDF4"
+_SUCCESS_BDR = "#BBF7D0"
+
+_WARNING     = "#D97706"
+_WARNING_LT  = "#FFFBEB"
+_WARNING_BDR = "#FDE68A"
+
+_DANGER      = "#DC2626"
+_DANGER_LT   = "#FEF2F2"
+_DANGER_BDR  = "#FECACA"
+
+_RADIUS      = "10px"
+_RADIUS_SM   = "6px"
+_RADIUS_XS   = "4px"
+
+_DEFAULT_DPI = 300.0
+_THUMB_SIZE  = 72
 
 
-# ── دوال مساعدة للـ stylesheet ──
-
-def _btn(bg, fg, border, hover_bg):
+def _btn_ss(bg, fg, bdr, hover_bg, height=28, radius=_RADIUS_SM):
     return (
-        f"QPushButton {{"
-        f"  background:{bg}; color:{fg}; border:1px solid {border};"
-        f"  border-radius:6px; padding:4px 12px; font-size:11px; font-weight:500;"
+        f"QPushButton{{"
+        f"  background:{bg}; color:{fg};"
+        f"  border:1px solid {bdr}; border-radius:{radius};"
+        f"  padding:0 10px; font-size:11px; min-height:{height}px;"
         f"}}"
-        f"QPushButton:hover {{ background:{hover_bg}; }}"
-        f"QPushButton:pressed {{ opacity:0.85; }}"
+        f"QPushButton:hover{{background:{hover_bg};}}"
+        f"QPushButton:pressed{{opacity:0.85;}}"
     )
 
 
 # ════════════════════════════════════════════════════════
-# Worker — استخراج الـ thumbnail
+# Thumbnail Worker
 # ════════════════════════════════════════════════════════
 
 class _ThumbWorker(QThread):
@@ -85,7 +93,7 @@ class _ThumbWorker(QThread):
 
 
 # ════════════════════════════════════════════════════════
-# وحدات GIMP
+# GIMP Utilities
 # ════════════════════════════════════════════════════════
 
 _GIMP_UNIT_MAP = {
@@ -99,16 +107,8 @@ def _to_px(value: float, unit: str, dpi: float = 300.0) -> int:
     if u == "mm":    return max(1, int(round(value / 25.4 * dpi)))
     if u == "cm":    return max(1, int(round(value / 2.54  * dpi)))
     if u in ("m", "متر"): return max(1, int(round(value / 0.0254 * dpi)))
-    if u in ("inch","in","انش","بوصة"): return max(1, int(round(value * dpi)))
+    if u in ("inch", "in", "انش", "بوصة"): return max(1, int(round(value * dpi)))
     return max(1, int(round(value)))
-
-
-def _prepare_native_dims(w, h, unit, dpi=300.0):
-    u = unit.strip().lower()
-    if u == "m":
-        w, h, u = w * 1000, h * 1000, "mm"
-    gimp_uid = _GIMP_UNIT_MAP.get(u, 0)
-    return _to_px(w, u, dpi), _to_px(h, u, dpi), gimp_uid, dpi
 
 
 def _unit_for_set(conn, set_id: int) -> str:
@@ -163,7 +163,7 @@ def _open_gimp(xcf_path=None, width_val=None, height_val=None,
             from PIL import Image
             u = unit.strip().lower()
             actual_dpi = 96.0 if u == "px" else float(dpi)
-            w_px = _to_px(width_val,  unit, actual_dpi)
+            w_px = _to_px(width_val, unit, actual_dpi)
             h_px = _to_px(height_val, unit, actual_dpi)
             tmp  = tempfile.NamedTemporaryFile(suffix=".png", delete=False)
             tmp.close()
@@ -183,7 +183,7 @@ def _open_gimp(xcf_path=None, width_val=None, height_val=None,
 
 
 # ════════════════════════════════════════════════════════
-# Widget الـ Thumbnail — مربع أكبر وأوضح
+# Thumbnail Widget
 # ════════════════════════════════════════════════════════
 
 class _ThumbnailWidget(QLabel):
@@ -193,20 +193,17 @@ class _ThumbnailWidget(QLabel):
         self._xcf_path = xcf_path
         self.setFixedSize(size, size)
         self.setAlignment(Qt.AlignCenter)
-        self._show_loading()
+        self._show_placeholder()
 
         if xcf_path and os.path.exists(xcf_path):
             self._load_async(xcf_path)
-        else:
-            self._show_no_preview()
 
-    def _show_loading(self):
-        self.setText("⏳")
+    def _show_placeholder(self):
+        self.setText("🎨")
         self.setStyleSheet(f"""
             QLabel {{
-                background: {_BG_SUBTLE};
-                border: 1px solid {_BORDER};
-                border-radius: 8px;
+                background: #1E1B4B;
+                border-radius: {_RADIUS_SM};
                 font-size: 20px;
             }}
         """)
@@ -219,28 +216,30 @@ class _ThumbnailWidget(QLabel):
     def _on_thumb_ready(self, pixmap):
         if pixmap and not pixmap.isNull():
             self.setText("")
-            self.setPixmap(pixmap)
+            scaled = pixmap.scaled(
+                self._size, self._size,
+                Qt.KeepAspectRatioByExpanding,
+                Qt.SmoothTransformation
+            )
+            self.setPixmap(scaled)
             self.setStyleSheet(f"""
                 QLabel {{
-                    background: #1e1b4b;
-                    border: 1px solid {_BLUE_MED};
-                    border-radius: 8px;
+                    background: #0F0E17;
+                    border-radius: {_RADIUS_SM};
+                    border: 1px solid {_ACCENT_BDR};
                 }}
             """)
         else:
-            self._show_no_preview()
-
-    def _show_no_preview(self):
-        self.setText("📄")
-        self.setStyleSheet(f"""
-            QLabel {{
-                background: {_BG_SUBTLE};
-                border: 1px dashed {_BORDER_MED};
-                border-radius: 8px;
-                font-size: 24px;
-                color: {_TEXT_MUTED};
-            }}
-        """)
+            self.setText("📄")
+            self.setStyleSheet(f"""
+                QLabel {{
+                    background: {_BG_SURFACE};
+                    border: 1px dashed {_BORDER_MED};
+                    border-radius: {_RADIUS_SM};
+                    font-size: 22px;
+                    color: {_TEXT_MUT};
+                }}
+            """)
 
     def refresh(self, xcf_path: str = None):
         from ._xcf_thumbnail import clear_cache
@@ -249,15 +248,13 @@ class _ThumbnailWidget(QLabel):
         path = self._xcf_path
         if path:
             clear_cache(path)
-        self._show_loading()
+        self._show_placeholder()
         if path and os.path.exists(path):
             self._load_async(path)
-        else:
-            self._show_no_preview()
 
 
 # ════════════════════════════════════════════════════════
-# بطاقة مقاس واحد — تصميم Modern/Flat
+# بطاقة مقاس — v3
 # ════════════════════════════════════════════════════════
 
 class _SizeCard(QFrame):
@@ -282,13 +279,13 @@ class _SizeCard(QFrame):
         if os.path.normpath(path) == xcf:
             self._thumb.refresh(path)
 
-    def hideEvent(self, event):
-        self._stop_watching()
-        super().hideEvent(event)
-
     def closeEvent(self, event):
         self._stop_watching()
         super().closeEvent(event)
+
+    def hideEvent(self, event):
+        self._stop_watching()
+        super().hideEvent(event)
 
     def _stop_watching(self):
         xcf = self._data.get("xcf_path") or ""
@@ -299,47 +296,53 @@ class _SizeCard(QFrame):
                 pass
 
     def _build(self):
-        # ── حالة الملف ──
         xcf_path    = self._data.get("xcf_path") or ""
         has_file    = bool(xcf_path)
         file_exists = has_file and os.path.exists(xcf_path)
 
-        # ── Frame الرئيسي ──
         self.setStyleSheet(f"""
             QFrame {{
                 background: {_BG};
                 border: 1px solid {_BORDER};
-                border-radius: 10px;
+                border-radius: {_RADIUS};
             }}
         """)
-        self.setMinimumHeight(100)
+        self.setMinimumHeight(90)
 
         root = QVBoxLayout(self)
         root.setContentsMargins(0, 0, 0, 0)
         root.setSpacing(0)
 
-        # ══ الجزء العلوي: thumbnail + معلومات + أزرار ══
-        top = QFrame()
-        top.setStyleSheet("QFrame { background: transparent; border: none; }")
-        top_lay = QHBoxLayout(top)
-        top_lay.setContentsMargins(14, 12, 14, 12)
-        top_lay.setSpacing(14)
+        # ── الجزء الرئيسي ──────────────────────────
+        main = QFrame()
+        main.setStyleSheet("QFrame{background:transparent;border:none;}")
+        m_lay = QHBoxLayout(main)
+        m_lay.setContentsMargins(12, 12, 12, 12)
+        m_lay.setSpacing(12)
 
-        # ── Thumbnail ──
+        # Thumbnail
         self._thumb = _ThumbnailWidget(xcf_path, size=_THUMB_SIZE)
-        top_lay.addWidget(self._thumb)
+        m_lay.addWidget(self._thumb)
 
-        # ── المعلومات ──
+        # معلومات
         info = QVBoxLayout()
-        info.setSpacing(4)
-        info.setContentsMargins(0, 2, 0, 2)
+        info.setSpacing(3)
+        info.setContentsMargins(0, 0, 0, 0)
 
-        # اسم المقاس
-        inst_name = self._data.get("instance_name") or f"مقاس #{self._data.get('instance_id', '')}"
+        # اسم المقاس + مجموعته
+        inst_name = (self._data.get("instance_name") or
+                     f"مقاس #{self._data.get('instance_id', '')}")
         set_name  = self._data.get("set_name", "")
-        lbl_name  = QLabel(f"{inst_name}  <span style='color:{_TEXT_MUTED}; font-weight:400'>({set_name})</span>")
-        lbl_name.setStyleSheet(f"color:{_TEXT}; font-size:13px; font-weight:600; background:transparent;")
-        lbl_name.setTextFormat(Qt.RichText)
+
+        lbl_name = QLabel(inst_name)
+        font_n = QFont()
+        font_n.setPointSize(11)
+        font_n.setWeight(QFont.Medium)
+        lbl_name.setFont(font_n)
+        lbl_name.setStyleSheet(f"color:{_TEXT_PRI}; background:transparent;")
+
+        lbl_set = QLabel(set_name)
+        lbl_set.setStyleSheet(f"color:{_TEXT_MUT}; font-size:10px; background:transparent;")
 
         # الأبعاد
         w, h = fetch_canvas_size(self.conn, self._size_id)
@@ -350,155 +353,145 @@ class _SizeCard(QFrame):
             if dpi:
                 w_px = _to_px(w, unit, dpi)
                 h_px = _to_px(h, unit, dpi)
-                dims_txt = f"📐  {w:g} × {h:g} {unit}  →  {w_px:,} × {h_px:,} px  @  {int(dpi)} DPI"
+                dims = f"{w:g} × {h:g} {unit}  →  {w_px:,} × {h_px:,} px"
             else:
-                dims_txt = f"📐  {w:g} × {h:g} {unit}"
+                dims = f"{w:g} × {h:g} {unit}"
         else:
-            dims_txt = "📐  الأبعاد غير محددة"
+            dims = "الأبعاد غير محددة"
 
-        lbl_dims = QLabel(dims_txt)
-        lbl_dims.setStyleSheet(f"color:{_TEXT_MED}; font-size:11px; background:transparent;")
-
-        # مسار الملف
-        if has_file:
-            path_display = xcf_path
-            if len(path_display) > 55:
-                path_display = "…" + path_display[-52:]
-            path_color = _GREEN if file_exists else _ORANGE
-            path_icon  = "📁" if file_exists else "⚠️"
-            lbl_path = QLabel(f"{path_icon}  {path_display}")
-        else:
-            path_color = _TEXT_MUTED
-            lbl_path = QLabel("📁  لا يوجد ملف — سيُفتح GIMP بكانفاس جديد")
-
-        lbl_path.setStyleSheet(f"color:{path_color}; font-size:10px; background:transparent;")
+        lbl_dims = QLabel(dims)
+        lbl_dims.setStyleSheet(f"color:{_TEXT_SEC}; font-size:10px; background:transparent;")
 
         info.addWidget(lbl_name)
+        info.addWidget(lbl_set)
         info.addWidget(lbl_dims)
-        info.addWidget(lbl_path)
         info.addStretch()
 
-        top_lay.addLayout(info, stretch=1)
+        m_lay.addLayout(info, stretch=1)
 
-        # ── الأزرار ──
+        # أزرار
         btns = QVBoxLayout()
-        btns.setSpacing(6)
+        btns.setSpacing(5)
         btns.setContentsMargins(0, 0, 0, 0)
 
-        # زر GIMP الرئيسي
+        # الزر الرئيسي (GIMP)
         if file_exists:
-            btn_main = QPushButton("🎨  فتح في GIMP")
-            btn_main.setStyleSheet(_btn(_BLUE, "#fff", _BLUE, "#2563eb"))
+            btn_main = QPushButton("فتح في GIMP")
+            btn_main.setStyleSheet(
+                _btn_ss(_ACCENT, "#fff", _ACCENT, _ACCENT_DARK, height=30)
+            )
+            btn_main.clicked.connect(self._open_in_gimp)
         else:
-            btn_main = QPushButton("✨  إنشاء في GIMP")
-            btn_main.setStyleSheet(_btn(_GREEN, "#fff", _GREEN, "#15803d"))
+            btn_main = QPushButton("إنشاء في GIMP")
+            btn_main.setStyleSheet(
+                _btn_ss(_SUCCESS_LT, _SUCCESS, _SUCCESS_BDR, "#DCFCE7", height=30)
+            )
+            btn_main.clicked.connect(self._create_in_gimp)
 
-        btn_main.setMinimumHeight(32)
-        btn_main.setMinimumWidth(130)
-        btn_main.clicked.connect(
-            self._open_in_gimp if file_exists else self._create_in_gimp
-        )
+        btn_main.setMinimumWidth(120)
+        btns.addWidget(btn_main)
 
         # صف أزرار الإجراءات
-        act_row = QHBoxLayout()
-        act_row.setSpacing(4)
+        act = QHBoxLayout()
+        act.setSpacing(4)
 
         if not file_exists:
-            btn_link = QPushButton("📂  ربط")
-            btn_link.setMinimumHeight(28)
-            btn_link.setStyleSheet(_btn(_BG, _BLUE, _BLUE_MED, _BLUE_LT))
+            btn_link = QPushButton("ربط ملف")
+            btn_link.setStyleSheet(
+                _btn_ss(_BG_SURFACE, _TEXT_SEC, _BORDER, _BG, height=26)
+            )
             btn_link.clicked.connect(self._set_path)
-            act_row.addWidget(btn_link)
+            act.addWidget(btn_link)
 
-        btn_edit = QPushButton("✏️")
-        btn_edit.setFixedSize(30, 30)
+        btn_edit = QPushButton("✏")
+        btn_edit.setFixedSize(28, 26)
         btn_edit.setToolTip("تعديل")
-        btn_edit.setStyleSheet(_btn(_BG_SUBTLE, _TEXT_MED, _BORDER, _BG))
+        btn_edit.setStyleSheet(
+            _btn_ss(_BG_SURFACE, _TEXT_SEC, _BORDER, _BG, height=26, radius=_RADIUS_XS)
+        )
         btn_edit.clicked.connect(lambda: self.edit_requested.emit(self._size_id))
 
-        btn_del = QPushButton("🗑️")
-        btn_del.setFixedSize(30, 30)
+        btn_del = QPushButton("🗑")
+        btn_del.setFixedSize(28, 26)
         btn_del.setToolTip("حذف")
-        btn_del.setStyleSheet(_btn(_RED_LT, _RED, "#fca5a5", "#fee2e2"))
+        btn_del.setStyleSheet(
+            _btn_ss(_DANGER_LT, _DANGER, _DANGER_BDR, "#FEE2E2", height=26, radius=_RADIUS_XS)
+        )
         btn_del.clicked.connect(lambda: self.delete_requested.emit(self._size_id))
 
-        act_row.addStretch()
-        act_row.addWidget(btn_edit)
-        act_row.addWidget(btn_del)
+        act.addStretch()
+        act.addWidget(btn_edit)
+        act.addWidget(btn_del)
 
-        btns.addWidget(btn_main)
-        btns.addLayout(act_row)
+        btns.addLayout(act)
         btns.addStretch()
 
-        top_lay.addLayout(btns)
-        root.addWidget(top)
+        m_lay.addLayout(btns)
+        root.addWidget(main)
 
-        # ══ شريط الحالة الملوّن ══
+        # ── شريط الحالة ────────────────────────────
         self._build_status_bar(root, file_exists, has_file, unit, dpi)
 
     def _build_status_bar(self, root, file_exists, has_file, unit, dpi):
-        """شريط أسفل البطاقة يعرض حالة الملف بشكل ملوّن."""
         bar = QFrame()
 
         if file_exists:
-            bar_bg     = _GREEN_LT
-            bar_border = _GREEN_MED
-            status_txt = "✓  الملف موجود"
-            status_col = _GREEN
+            bg     = _SUCCESS_LT
+            border = _SUCCESS_BDR
+            txt    = "الملف موجود"
+            col    = _SUCCESS
         elif has_file:
-            bar_bg     = _ORANGE_LT
-            bar_border = _ORANGE_MED
-            status_txt = "⚠  الملف غير موجود"
-            status_col = _ORANGE
+            bg     = _WARNING_LT
+            border = _WARNING_BDR
+            txt    = "الملف غير موجود"
+            col    = _WARNING
         else:
-            bar_bg     = _BG_SUBTLE
-            bar_border = _BORDER
-            status_txt = "—  لا يوجد ملف"
-            status_col = _TEXT_MUTED
+            bg     = _BG_SURFACE
+            border = _BORDER
+            txt    = "لا يوجد ملف"
+            col    = _TEXT_MUT
 
         bar.setStyleSheet(f"""
             QFrame {{
-                background: {bar_bg};
-                border-top: 1px solid {bar_border};
-                border-bottom-left-radius: 10px;
-                border-bottom-right-radius: 10px;
+                background: {bg};
+                border-top: 1px solid {border};
+                border-bottom-left-radius: {_RADIUS};
+                border-bottom-right-radius: {_RADIUS};
             }}
         """)
 
-        bar_lay = QHBoxLayout(bar)
-        bar_lay.setContentsMargins(14, 6, 14, 6)
-        bar_lay.setSpacing(10)
+        bl = QHBoxLayout(bar)
+        bl.setContentsMargins(12, 5, 12, 5)
+        bl.setSpacing(8)
 
-        lbl_status = QLabel(status_txt)
-        lbl_status.setStyleSheet(
-            f"color:{status_col}; font-size:11px; font-weight:500; background:transparent;"
+        lbl_s = QLabel(txt)
+        lbl_s.setStyleSheet(
+            f"color:{col}; font-size:10px; font-weight:600; background:transparent;"
         )
 
-        # وحدة + DPI كـ chips
-        chips_row = QHBoxLayout()
-        chips_row.setSpacing(6)
-
-        for txt in [unit, (f"{int(dpi)} DPI" if dpi else "بدون DPI")]:
-            chip = QLabel(txt)
+        chips = QHBoxLayout()
+        chips.setSpacing(4)
+        for chip_txt in [unit, (f"{int(dpi)} DPI" if dpi else "—")]:
+            chip = QLabel(chip_txt)
             chip.setStyleSheet(f"""
                 QLabel {{
                     background: {_BG};
-                    color: {_TEXT_MED};
+                    color: {_TEXT_SEC};
                     border: 1px solid {_BORDER_MED};
-                    border-radius: 4px;
-                    padding: 1px 8px;
-                    font-size: 10px;
+                    border-radius: 3px;
+                    padding: 1px 6px;
+                    font-size: 9px;
                 }}
             """)
-            chips_row.addWidget(chip)
+            chips.addWidget(chip)
 
-        bar_lay.addWidget(lbl_status)
-        bar_lay.addStretch()
-        bar_lay.addLayout(chips_row)
+        bl.addWidget(lbl_s)
+        bl.addStretch()
+        bl.addLayout(chips)
 
         root.addWidget(bar)
 
-    # ── فتح GIMP ──────────────────────────────────────
+    # ── GIMP Actions ───────────────────────────────────────
 
     def _open_in_gimp(self):
         xcf = self._data["xcf_path"]
@@ -508,7 +501,7 @@ class _SizeCard(QFrame):
         else:
             QMessageBox.warning(
                 self, "الملف غير موجود",
-                f"الملف غير موجود:\n{xcf}\n\nاستخدم «ربط ملف موجود» لتحديث المسار."
+                f"الملف:\n{xcf}\n\nاستخدم «ربط ملف» لتحديث المسار."
             )
 
     def _create_in_gimp(self):
@@ -519,6 +512,7 @@ class _SizeCard(QFrame):
         inst_name    = (self._data.get("instance_name") or "design").replace(" ", "_")
         default_name = f"{inst_name}.xcf"
         start_dir    = os.path.expanduser("~")
+
         if self._data.get("xcf_path"):
             parent = os.path.dirname(self._data["xcf_path"])
             if os.path.isdir(parent):
@@ -535,19 +529,19 @@ class _SizeCard(QFrame):
             save_path += ".xcf"
 
         update_design_size_path(self.conn, self._size_id, save_path)
-        self._data = dict(self._data)
         self._data["xcf_path"] = save_path
         get_watcher().watch(save_path)
 
         if w and h:
             u = unit.strip().lower()
             actual_dpi = 96.0 if u == "px" else float(dpi)
-            w_px, h_px, _, _ = _prepare_native_dims(w, h, unit, actual_dpi)
+            w_px = _to_px(w, unit, actual_dpi)
+            h_px = _to_px(h, unit, actual_dpi)
             QMessageBox.information(
-                self, "📐  إنشاء كانفاس في GIMP",
-                f"📐  الأبعاد: {w:g} × {h:g} {unit}\n"
-                f"📌  بالبكسل: {w_px:,} × {h_px:,} px  @  {int(actual_dpi)} DPI\n\n"
-                f"📁  الملف:\n      {save_path}"
+                self, "إنشاء كانفاس",
+                f"الأبعاد: {w:g} × {h:g} {unit}\n"
+                f"البكسل: {w_px:,} × {h_px:,} px  @  {int(actual_dpi)} DPI\n"
+                f"الملف: {save_path}"
             )
             _open_gimp(xcf_path=save_path, width_val=w, height_val=h,
                        unit=unit, dpi=actual_dpi)
@@ -569,12 +563,10 @@ class _SizeCard(QFrame):
             start_dir, "GIMP Files (*.xcf);;All Files (*)"
         )
         if path:
-            old_path = self._data.get("xcf_path") or ""
-            if old_path:
-                get_watcher().unwatch(old_path)
-
+            old = self._data.get("xcf_path") or ""
+            if old:
+                get_watcher().unwatch(old)
             update_design_size_path(self.conn, self._size_id, path)
-            self._data = dict(self._data)
             self._data["xcf_path"] = path
             get_watcher().watch(path)
             self._thumb.refresh(path)
