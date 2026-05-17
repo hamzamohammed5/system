@@ -4,7 +4,7 @@ models/costing_base.py
 الحسابات الأساسية: أجر العامل بالساعة، سعر وحدة الخامة، الكمية مع الهادر.
 """
 
-from db.settings_repo import get_setting
+from db.shared.settings_repo import get_setting
 
 
 def calc_worker_hourly_rate(conn) -> float:

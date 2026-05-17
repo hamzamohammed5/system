@@ -12,7 +12,7 @@ from PyQt5.QtWidgets import (
 )
 from PyQt5.QtCore import Qt
 
-from db.settings_repo import get_setting, set_setting
+from db.shared.settings_repo import get_setting, set_setting
 from ui.widgets.shared.scrollable_form import wrap_in_scroll
 from ui.events import bus
 

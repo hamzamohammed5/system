@@ -6,7 +6,7 @@ main.py
 
 import sys
 from PyQt5.QtWidgets import QApplication
-from db.schema               import init_db
+from db.costing.schema               import init_db
 from db.shared.migrations_v2        import run_migrations_v2
 from db.shared.connection           import get_connection
 from ui.app_settings         import apply_font

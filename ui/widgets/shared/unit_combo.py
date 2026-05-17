@@ -45,7 +45,7 @@ def load_units(conn) -> list[tuple[str, str]]:
     يرجع list of (value, label).
     """
     try:
-        from db.settings_repo import get_setting
+        from db.shared.settings_repo import get_setting
         raw = get_setting(conn, _UNITS_KEY, "")
         if raw:
             data = json.loads(raw)
@@ -59,7 +59,7 @@ def load_units(conn) -> list[tuple[str, str]]:
 def save_units(conn, units: list[tuple[str, str]]):
     """يحفظ قائمة الوحدات في settings."""
     try:
-        from db.settings_repo import set_setting
+        from db.shared.settings_repo import set_setting
         set_setting(conn, _UNITS_KEY, json.dumps(units, ensure_ascii=False))
     except Exception:
         pass
@@ -68,7 +68,7 @@ def save_units(conn, units: list[tuple[str, str]]):
 def get_last_unit(conn, key: str, fallback: str = "cm") -> str:
     """يجلب آخر وحدة تم اختيارها لـ key معين."""
     try:
-        from db.settings_repo import get_setting
+        from db.shared.settings_repo import get_setting
         val = get_setting(conn, f"last_unit_{key}", "")
         return val if val else fallback
     except Exception:
@@ -78,7 +78,7 @@ def get_last_unit(conn, key: str, fallback: str = "cm") -> str:
 def set_last_unit(conn, key: str, unit: str):
     """يحفظ آخر وحدة تم اختيارها."""
     try:
-        from db.settings_repo import set_setting
+        from db.shared.settings_repo import set_setting
         set_setting(conn, f"last_unit_{key}", unit)
     except Exception:
         pass

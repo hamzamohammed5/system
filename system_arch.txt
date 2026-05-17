@@ -1,5 +1,5 @@
 File Tree Snapshot
-Generated : 2026-05-17 10:27:06
+Generated : 2026-05-17 10:33:17
 Source    : D:\My Workspace\Hg\Alhabaar\accountant\system
 Extensions: .py
 ────────────────────────────────────────────────────────────
@@ -19,7 +19,8 @@ system/
 │   │   ├── bom_scenarios_repo.py
 │   │   ├── machine_op_rows_repo.py
 │   │   ├── operations_repo.py
-│   │   └── raw_variants_repo.py
+│   │   ├── raw_variants_repo.py
+│   │   └── schema.py
 │   ├── designs/
 │   │   ├── design_item_categories_repo.py
 │   │   ├── design_schema.py
@@ -47,9 +48,8 @@ system/
 │   │   ├── items_repo.py
 │   │   ├── migrations.py
 │   │   ├── migrations_v2.py
-│   │   └── migrations_v3.py
-│   ├── schema.py
-│   └── settings_repo.py
+│   │   ├── migrations_v3.py
+│   │   └── settings_repo.py
 ├── models/
 │   ├── costing.py
 │   ├── costing_base.py

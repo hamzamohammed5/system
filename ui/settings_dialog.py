@@ -16,7 +16,7 @@ from PyQt5.QtWidgets import (
 
 from ui.app_settings import get_font_size, set_font_size, apply_font
 from db.shared.connection import get_connection
-from db.settings_repo import get_setting, set_setting
+from db.shared.settings_repo import get_setting, set_setting
 from ui.widgets.shared.unit_combo import (
     load_units, add_unit, remove_unit,
     reset_units_to_default, _DEFAULT_UNITS,

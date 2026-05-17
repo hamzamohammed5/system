@@ -99,7 +99,7 @@ def _find_gimp() -> str | None:
     import shutil, glob
     try:
         from db.shared.connection import get_connection
-        from db.settings_repo import get_setting
+        from db.shared.settings_repo import get_setting
         conn  = get_connection()
         saved = get_setting(conn, "gimp_path", "")
         conn.close()
