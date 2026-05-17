@@ -1,9 +1,10 @@
 """
-ui/tabs/orders/customers_tab.py
+ui/tabs/orders/customers_tab.py  — نسخة محسّنة v2
 ================================
-تبويب إدارة العملاء:
-  يسار : قائمة العملاء مع بحث وفلتر
-  يمين : تفاصيل العميل + إحصائياته + طلباته
+تبويب إدارة العملاء باستخدام المكونات المشتركة:
+  - DetailHeader  من panels.py
+  - EmptyState    من panels.py
+  - make_compact_table من table_utils.py
 """
 
 from PyQt5.QtWidgets import (
@@ -24,36 +25,42 @@ from db.orders.customers_repo import (
 from db.orders.orders_repo import fetch_customer_orders
 from ui.tabs.orders._customer_form import _CustomerForm
 
+# مكونات مشتركة
+from ui.widgets.shared.panels import (
+    DetailHeader, EmptyState, StatCard,
+)
+from ui.widgets.shared.table_utils import (
+    make_compact_table, make_table_item,
+    color_item, bold_item, muted_item,
+    insert_row, ROW_HEIGHT_COMPACT, ROW_HEIGHT_NORMAL, ROW_HEIGHT_LARGE,
+)
+from ui.app_settings import _C
 
-# ── الـ stylesheet المشترك للجداول ──────────────────────
-_TABLE_SS = """
-    QTableWidget {
-        border: 1px solid #e5e9f0;
-        border-radius: 8px;
-        background: white;
-        outline: none;
-    }
-    QTableWidget::item { padding: 5px 8px; }
-    QTableWidget::item:selected { background: #dbeafe; color: #1e40af; }
-    QHeaderView::section {
-        background: #f8f9fb; color: #6b7280;
-        font-weight: bold;
-        padding: 5px 8px; border: none;
-        border-bottom: 1px solid #e5e9f0;
-        border-right: 1px solid #e5e9f0;
-    }
+# ── ثوابت ──
+_BG     = "#f8f9fb"
+_WHITE  = "#ffffff"
+_BLUE   = "#1565c0"
+_BORDER = "#e5e9f0"
+
+_COMBO_SS = f"""
+    QComboBox {{
+        background: {_BG}; border: 1px solid #cdd3e0;
+        border-radius: 5px; padding: 0 8px; min-height: 28px;
+    }}
+    QComboBox:focus {{ border-color: {_BLUE}; }}
+    QComboBox::drop-down {{ border: none; }}
 """
 
-_COMBO_SS = """
-    QComboBox {
-        background: #f8f9fb;
-        border: 1px solid #cdd3e0;
-        border-radius: 5px;
-        padding: 0 8px;
-    }
-    QComboBox:focus { border-color: #1565c0; }
-    QComboBox::drop-down { border: none; }
-"""
+STATUS_MAP = {
+    "pending":     "⏳ انتظار",  "confirmed":   "✅ مؤكد",
+    "in_progress": "🔧 تنفيذ",  "ready":       "📦 جاهز",
+    "delivered":   "🚚 مُسلَّم", "cancelled":   "❌ ملغي",
+    "on_hold":     "⏸ معلق",
+}
+PRIORITY_MAP = {
+    "low":    "⬇ منخفض", "normal": "➡ عادي",
+    "high":   "⬆ عالي",  "urgent": "🔴 عاجل",
+}
 
 
 # ══════════════════════════════════════════════════════════
@@ -80,39 +87,38 @@ class _CustomersListPanel(QWidget):
         root.setContentsMargins(0, 0, 0, 0)
         root.setSpacing(0)
 
+        # ── شريط الأدوات ──
         toolbar = QFrame()
-        toolbar.setStyleSheet("""
-            QFrame { background: #ffffff; border-bottom: 1px solid #e5e9f0; }
+        toolbar.setStyleSheet(f"""
+            QFrame {{ background: {_WHITE}; border-bottom: 1px solid {_BORDER}; }}
         """)
         tb = QVBoxLayout(toolbar)
-        tb.setContentsMargins(12, 10, 12, 10)
-        tb.setSpacing(8)
+        tb.setContentsMargins(10, 10, 10, 10)
+        tb.setSpacing(6)
 
         # صف البحث + زر جديد
         row1 = QHBoxLayout()
         self.inp_search = QLineEdit()
         self.inp_search.setPlaceholderText("بحث بالاسم أو الهاتف أو الكود...")
         self.inp_search.setMinimumHeight(34)
-        self.inp_search.setStyleSheet("""
-            QLineEdit {
-                background: #f8f9fb;
-                border: 1px solid #cdd3e0;
-                border-radius: 6px;
-                padding: 0 10px;
-            }
-            QLineEdit:focus { border-color: #1565c0; background: white; }
+        self.inp_search.setStyleSheet(f"""
+            QLineEdit {{
+                background: {_BG}; border: 1px solid #cdd3e0;
+                border-radius: 6px; padding: 0 10px; font-size: 12px;
+            }}
+            QLineEdit:focus {{ border-color: {_BLUE}; background: {_WHITE}; }}
         """)
         self.inp_search.textChanged.connect(lambda: self._timer.start())
 
-        btn_new = QPushButton("  + عميل جديد")
+        btn_new = QPushButton("＋  عميل جديد")
         btn_new.setMinimumHeight(34)
-        btn_new.setStyleSheet("""
-            QPushButton {
-                background: #1565c0; color: white;
+        btn_new.setStyleSheet(f"""
+            QPushButton {{
+                background: {_BLUE}; color: white;
                 border: none; border-radius: 6px;
-                padding: 0 14px; font-weight: bold;
-            }
-            QPushButton:hover { background: #0d47a1; }
+                padding: 0 14px; font-weight: bold; font-size: 12px;
+            }}
+            QPushButton:hover {{ background: #0d47a1; }}
         """)
         btn_new.clicked.connect(self.new_customer.emit)
         row1.addWidget(self.inp_search, stretch=1)
@@ -140,10 +146,9 @@ class _CustomersListPanel(QWidget):
         row2.addWidget(self.cmb_type, stretch=1)
         row2.addWidget(self.cmb_active, stretch=1)
         tb.addLayout(row2)
-
         root.addWidget(toolbar)
 
-        # الجدول
+        # ── الجدول ──
         self.table = QTableWidget()
         self.table.setColumnCount(5)
         self.table.setHorizontalHeaderLabels(
@@ -153,21 +158,17 @@ class _CustomersListPanel(QWidget):
         self.table.setEditTriggers(QAbstractItemView.NoEditTriggers)
         self.table.setAlternatingRowColors(True)
         self.table.verticalHeader().setVisible(False)
-        self.table.setStyleSheet("""
-            QTableWidget {
-                border: none; background: white;
-                alternate-background-color: #fafbff;
-                outline: none;
-            }
-            QTableWidget::item { padding: 6px 10px; }
-            QTableWidget::item:selected { background: #dbeafe; color: #1e40af; }
-            QHeaderView::section {
-                background: #f8f9fb; color: #6b7280;
-                font-weight: bold;
-                padding: 6px 10px; border: none;
-                border-bottom: 2px solid #e5e9f0;
-                border-right: 1px solid #e5e9f0;
-            }
+        self.table.setStyleSheet(f"""
+            QTableWidget {{
+                border: none; background: {_WHITE};
+                alternate-background-color: #fafbff; outline: none;
+            }}
+            QTableWidget::item {{ padding: 6px 10px; border-bottom: 1px solid {_BORDER}; }}
+            QTableWidget::item:selected {{ background: #dbeafe; color: #1e40af; }}
+            QHeaderView::section {{
+                background: {_BG}; color: {_BLUE}; font-weight: bold; font-size:11px;
+                padding: 6px 10px; border: none; border-bottom: 2px solid {_BORDER};
+            }}
         """)
         hh = self.table.horizontalHeader()
         hh.setSectionResizeMode(0, QHeaderView.ResizeToContents)
@@ -183,10 +184,10 @@ class _CustomersListPanel(QWidget):
         # شريط الحالة
         self._status_bar = QLabel("")
         self._status_bar.setAlignment(Qt.AlignCenter)
-        self._status_bar.setStyleSheet("""
-            background: #f8f9fb; color: #6b7280;
-            padding: 5px;
-            border-top: 1px solid #e5e9f0;
+        self._status_bar.setStyleSheet(f"""
+            background: {_BG}; color: #6b7280;
+            padding: 5px; font-size: 11px;
+            border-top: 1px solid {_BORDER};
         """)
         root.addWidget(self._status_bar)
 
@@ -199,40 +200,37 @@ class _CustomersListPanel(QWidget):
         typ    = self.cmb_type.currentData()
         active = self.cmb_active.currentData()
 
-        filtered = []
-        for r in self._all_rows:
-            if typ is not None and r["customer_type"] != typ:
-                continue
-            if active is not None and r["is_active"] != active:
-                continue
-            if q:
-                name  = (r["name"] or "").lower()
-                phone = (r["phone"] or "").lower()
-                code  = (r["code"] or "").lower()
-                if q not in name and q not in phone and q not in code:
-                    continue
-            filtered.append(r)
+        filtered = [
+            r for r in self._all_rows
+            if (typ is None or r["customer_type"] == typ)
+            and (active is None or r["is_active"] == active)
+            and (not q or q in (r["name"] or "").lower()
+                      or q in (r["phone"] or "").lower()
+                      or q in (r["code"] or "").lower())
+        ]
 
         self.table.setRowCount(0)
         for row in filtered:
             r = self.table.rowCount()
             self.table.insertRow(r)
-            self.table.setRowHeight(r, 40)
+            self.table.setRowHeight(r, ROW_HEIGHT_LARGE)
 
-            code_item = QTableWidgetItem(row["code"] or "")
-            code_item.setData(Qt.UserRole, row["id"])
+            code_item = make_table_item(row["code"] or "", user_data=row["id"])
+            muted_item(code_item)
             self.table.setItem(r, 0, code_item)
 
-            name_item = QTableWidgetItem(row["name"])
+            name_item = make_table_item(row["name"])
             if not row["is_active"]:
-                name_item.setForeground(QColor("#9ca3af"))
-            f = QFont(); f.setWeight(QFont.Medium)
-            name_item.setFont(f)
+                color_item(name_item, "#9ca3af")
+            else:
+                bold_item(name_item, also_medium=True)
             self.table.setItem(r, 1, name_item)
 
-            self.table.setItem(r, 2, QTableWidgetItem(row["phone"] or "—"))
-            self.table.setItem(r, 3, QTableWidgetItem(row["city"] or "—"))
-            self.table.setItem(r, 4, QTableWidgetItem(str(row["orders_count"] or 0)))
+            self.table.setItem(r, 2, muted_item(make_table_item(row["phone"] or "—")))
+            self.table.setItem(r, 3, muted_item(make_table_item(row["city"] or "—")))
+            cnt_item = make_table_item(str(row["orders_count"] or 0), align=Qt.AlignCenter)
+            color_item(cnt_item, _BLUE)
+            self.table.setItem(r, 4, cnt_item)
 
         cnt = len(filtered)
         total = len(self._all_rows)
@@ -263,38 +261,13 @@ class _CustomersListPanel(QWidget):
 # لوحة تفاصيل العميل (يمين)
 # ══════════════════════════════════════════════════════════
 
-def _stat_card(title, value="─", color="#1565c0"):
-    frame = QFrame()
-    frame.setStyleSheet("""
-        QFrame {
-            background: white;
-            border: 1px solid #e5e9f0;
-            border-radius: 8px;
-        }
-    """)
-    from PyQt5.QtWidgets import QVBoxLayout
-    lay = QVBoxLayout(frame)
-    lay.setContentsMargins(12, 8, 12, 8)
-    lay.setSpacing(2)
-    lt = QLabel(title)
-    lt.setStyleSheet("color:#9ba5be; background:transparent; border:none;")
-    lv = QLabel(value)
-    lv.setStyleSheet(
-        f"font-weight:bold; color:{color}; background:transparent; border:none;"
-    )
-    lv.setAlignment(Qt.AlignCenter)
-    lay.addWidget(lt)
-    lay.addWidget(lv)
-    return frame, lv
-
-
 class _CustomerDetailPanel(QWidget):
     edited  = pyqtSignal(int)
     deleted = pyqtSignal()
 
     def __init__(self, conn, parent=None):
         super().__init__(parent)
-        self.conn        = conn
+        self.conn         = conn
         self._customer_id = None
         self._build()
         self._show_empty()
@@ -304,186 +277,89 @@ class _CustomerDetailPanel(QWidget):
         root.setContentsMargins(0, 0, 0, 0)
         root.setSpacing(0)
 
-        # ── Header ──────────────────────────────────────────
-        self._hdr = QFrame()
-        self._hdr.setStyleSheet("""
-            QFrame { background: white; border-bottom: 1px solid #e5e9f0; }
-        """)
-        hdr_lay = QVBoxLayout(self._hdr)
-        hdr_lay.setContentsMargins(18, 14, 18, 14)
-        hdr_lay.setSpacing(10)
+        # ── Header موحد ──
+        self._hdr = DetailHeader()
 
-        title_row = QHBoxLayout()
-        self._lbl_name = QLabel("")
-        f = QFont()
-        f.setPointSize(13)
-        f.setBold(True)
-        self._lbl_name.setFont(f)
-        self._lbl_name.setStyleSheet("color:#1a2035; background:transparent;")
+        # بطاقات إحصائيات العميل
+        self._card_total_orders  = self._hdr.add_stat_card("📋", "إجمالي الطلبات", color=_BLUE)
+        self._card_active_orders = self._hdr.add_stat_card("🔧", "طلبات جارية",    color="#8b5cf6")
+        self._card_total_value   = self._hdr.add_stat_card("💰", "إجمالي القيمة",  color="#10b981")
+        self._card_balance       = self._hdr.add_stat_card("⚖️", "المتبقي",         color="#ef4444")
 
-        self._lbl_type = QLabel("")
-        self._lbl_type.setStyleSheet("""
-            font-weight:bold; padding:3px 10px;
-            border-radius:10px; background:#e8f0fe; color:#1565c0;
-        """)
-
-        self._lbl_code = QLabel("")
-        self._lbl_code.setStyleSheet(
-            "color:#9ba5be; background:transparent;"
-        )
-
-        title_row.addWidget(self._lbl_name)
-        title_row.addWidget(self._lbl_type)
-        title_row.addStretch()
-        title_row.addWidget(self._lbl_code)
-        hdr_lay.addLayout(title_row)
-
-        self._lbl_contact = QLabel("")
-        self._lbl_contact.setStyleSheet(
-            "color:#5a6680; background:transparent;"
-        )
-        hdr_lay.addWidget(self._lbl_contact)
-
-        # بطاقات الإحصائيات
-        stats_row = QHBoxLayout()
-        stats_row.setSpacing(8)
-        f1, self._lbl_total_orders  = _stat_card("إجمالي الطلبات",    color="#1565c0")
-        f2, self._lbl_active_orders = _stat_card("طلبات جارية",       color="#8b5cf6")
-        f3, self._lbl_total_value   = _stat_card("إجمالي القيمة",     color="#10b981")
-        f4, self._lbl_balance       = _stat_card("المتبقي",           color="#ef4444")
-        for ff in (f1, f2, f3, f4):
-            stats_row.addWidget(ff, stretch=1)
-        hdr_lay.addLayout(stats_row)
-
-        # أزرار الإجراءات
-        btn_row = QHBoxLayout()
-        btn_row.setSpacing(6)
-
-        self.btn_edit   = QPushButton("✏️  تعديل")
-        self.btn_del    = QPushButton("🗑️  حذف")
-        self.btn_toggle = QPushButton("⏸  تعطيل")
-
-        for btn in (self.btn_edit, self.btn_del, self.btn_toggle):
-            btn.setMinimumHeight(32)
-            btn.setStyleSheet("""
-                QPushButton {
-                    background: #f8f9fb; color: #374151;
-                    border: 1px solid #cdd3e0; border-radius: 6px;
-                    padding: 0 12px;
-                }
-                QPushButton:hover { background: #dbeafe; color: #1565c0; }
-            """)
-
-        self.btn_del.setStyleSheet("""
-            QPushButton {
-                background: #fef2f2; color: #dc2626;
-                border: 1px solid #fecaca; border-radius: 6px;
-                padding: 0 12px;
-            }
-            QPushButton:hover { background: #fee2e2; }
-        """)
-
-        self.btn_edit.clicked.connect(self._edit)
-        self.btn_del.clicked.connect(self._delete)
-        self.btn_toggle.clicked.connect(self._toggle_active)
-
-        btn_row.addWidget(self.btn_edit)
-        btn_row.addWidget(self.btn_toggle)
-        btn_row.addStretch()
-        btn_row.addWidget(self.btn_del)
-        hdr_lay.addLayout(btn_row)
+        # أزرار
+        self.btn_edit   = self._hdr.toolbar.add_action("✏️  تعديل",  "primary", self._edit)
+        self.btn_toggle = self._hdr.toolbar.add_action("⏸  تعطيل",  "ghost",   self._toggle_active)
+        self.btn_del    = self._hdr.toolbar.add_danger("🗑️  حذف",               self._delete)
 
         root.addWidget(self._hdr)
 
-        # ── محتوى قابل للتمرير ─────────────────────────────
+        # ── محتوى قابل للتمرير ──
         scroll = QScrollArea()
         scroll.setWidgetResizable(True)
         scroll.setHorizontalScrollBarPolicy(Qt.ScrollBarAlwaysOff)
-        scroll.setStyleSheet("""
-            QScrollArea { border: none; background: #f8f9fb; }
-            QScrollBar:vertical {
+        scroll.setStyleSheet(f"""
+            QScrollArea {{ border: none; background: {_BG}; }}
+            QScrollBar:vertical {{
                 background: #f0f0f0; width: 5px; border-radius: 2px;
-            }
-            QScrollBar::handle:vertical {
+            }}
+            QScrollBar::handle:vertical {{
                 background: #cdd3e0; border-radius: 2px; min-height: 20px;
-            }
-            QScrollBar::add-line:vertical, QScrollBar::sub-line:vertical { height:0; }
+            }}
+            QScrollBar::add-line:vertical, QScrollBar::sub-line:vertical {{ height:0; }}
         """)
 
         content = QWidget()
-        content.setStyleSheet("background:#f8f9fb;")
+        content.setStyleSheet(f"background:{_BG};")
         self._content_lay = QVBoxLayout(content)
-        self._content_lay.setContentsMargins(18, 14, 18, 14)
-        self._content_lay.setSpacing(14)
+        self._content_lay.setContentsMargins(16, 12, 16, 12)
+        self._content_lay.setSpacing(10)
 
         # جهات الاتصال
         self._lbl_contacts_hdr = QLabel("📞  جهات الاتصال")
         self._lbl_contacts_hdr.setStyleSheet(
-            "font-weight:bold; color:#374151; background:transparent;"
+            f"font-weight:bold; color:{_C['text_sec']}; background:transparent;"
         )
         self._content_lay.addWidget(self._lbl_contacts_hdr)
 
-        self.contacts_table = QTableWidget()
-        self.contacts_table.setColumnCount(4)
-        self.contacts_table.setHorizontalHeaderLabels(
-            ["الاسم", "الصفة", "الهاتف", "الإيميل"]
+        self.contacts_table = make_compact_table(
+            columns=["الاسم", "الصفة", "الهاتف", "الإيميل"],
+            stretch_col=0,
+            col_widths={1: 80, 2: 100, 3: 120},
+            max_height=140,
         )
-        self.contacts_table.setEditTriggers(QAbstractItemView.NoEditTriggers)
-        self.contacts_table.verticalHeader().setVisible(False)
-        self.contacts_table.setMaximumHeight(140)
-        self.contacts_table.setStyleSheet(_TABLE_SS)
-        hh = self.contacts_table.horizontalHeader()
-        for i in range(4):
-            hh.setSectionResizeMode(i, QHeaderView.Stretch)
-        hh.setDefaultAlignment(Qt.AlignRight | Qt.AlignVCenter)
         self._content_lay.addWidget(self.contacts_table)
 
         # آخر الطلبات
         self._lbl_orders_hdr = QLabel("📋  آخر الطلبات")
         self._lbl_orders_hdr.setStyleSheet(
-            "font-weight:bold; color:#374151; background:transparent;"
+            f"font-weight:bold; color:{_C['text_sec']}; background:transparent;"
         )
         self._content_lay.addWidget(self._lbl_orders_hdr)
 
-        self.orders_table = QTableWidget()
-        self.orders_table.setColumnCount(5)
-        self.orders_table.setHorizontalHeaderLabels(
-            ["رقم الطلب", "الحالة", "الأولوية", "الإجمالي", "التاريخ"]
+        self.orders_table = make_compact_table(
+            columns=["رقم الطلب", "الحالة", "الأولوية", "الإجمالي", "التاريخ"],
+            stretch_col=0,
+            col_widths={1: 90, 2: 70, 3: 80, 4: 90},
+            max_height=220,
         )
-        self.orders_table.setEditTriggers(QAbstractItemView.NoEditTriggers)
-        self.orders_table.verticalHeader().setVisible(False)
-        self.orders_table.setMaximumHeight(200)
-        self.orders_table.setStyleSheet(_TABLE_SS)
-        hh2 = self.orders_table.horizontalHeader()
-        hh2.setSectionResizeMode(0, QHeaderView.ResizeToContents)
-        hh2.setSectionResizeMode(1, QHeaderView.ResizeToContents)
-        hh2.setSectionResizeMode(2, QHeaderView.ResizeToContents)
-        hh2.setSectionResizeMode(3, QHeaderView.ResizeToContents)
-        hh2.setSectionResizeMode(4, QHeaderView.Stretch)
-        hh2.setDefaultAlignment(Qt.AlignRight | Qt.AlignVCenter)
         self._content_lay.addWidget(self.orders_table)
-
         self._content_lay.addStretch()
+
         scroll.setWidget(content)
         root.addWidget(scroll, stretch=1)
 
         # حالة فارغة
-        self._empty = QFrame()
-        self._empty.setStyleSheet("background:#f8f9fb; border:none;")
-        e_lay = QVBoxLayout(self._empty)
-        e_lay.setAlignment(Qt.AlignCenter)
-        for text, style in [
-            ("👤", "background:transparent;"),
-            ("اختر عميلاً من القائمة أو أضف عميلاً جديداً",
-             "color:#6b7280; background:transparent;"),
-        ]:
-            lbl = QLabel(text)
-            lbl.setAlignment(Qt.AlignCenter)
-            lbl.setStyleSheet(style)
-            e_lay.addWidget(lbl)
+        self._empty = EmptyState(
+            icon="👤",
+            title="اختر عميلاً من القائمة",
+            subtitle="أو أضف عميلاً جديداً بالضغط على ＋",
+            style="plain",
+            color="#6b7280",
+            min_height=200,
+        )
         root.addWidget(self._empty)
 
-    # ── API ────────────────────────────────────────────────
+    # ── API ──
 
     def load_customer(self, cid: int):
         self._customer_id = cid
@@ -492,70 +368,69 @@ class _CustomerDetailPanel(QWidget):
             return
         self._show_detail()
 
-        type_map = {"individual": "فرد", "company": "شركة"}
-        self._lbl_name.setText(c["name"])
-        self._lbl_code.setText(c["code"] or "")
-        self._lbl_type.setText(type_map.get(c["customer_type"], ""))
+        type_map = {"individual": "فرد", "company": "🏢 شركة"}
+        self._hdr.set_title(c["name"])
+        self._hdr.set_type_badge(type_map.get(c["customer_type"], ""))
+        self._hdr.set_status_badge(
+            c["code"] or "",
+            text_color="#6b7280", bg="transparent", border="transparent"
+        )
 
         parts = []
-        if c["phone"]:  parts.append(f"📞 {c['phone']}")
-        if c["city"]:   parts.append(f"📍 {c['city']}")
-        if c["email"]:  parts.append(f"✉️ {c['email']}")
-        self._lbl_contact.setText("   |   ".join(parts) if parts else "")
+        if c.get("phone"):   parts.append(f"📞 {c['phone']}")
+        if c.get("city"):    parts.append(f"📍 {c['city']}")
+        if c.get("email"):   parts.append(f"✉️ {c['email']}")
+        self._hdr.set_info(parts)
 
         # إحصائيات
         stats = fetch_customer_stats(self.conn, cid)
-        self._lbl_total_orders.setText(str(stats.get("total_orders") or 0))
-        self._lbl_active_orders.setText(str(stats.get("active") or 0))
-        self._lbl_total_value.setText(f"{(stats.get('total_value') or 0):,.0f} ج")
+        self._card_total_orders.set_value(str(stats.get("total_orders") or 0))
+        self._card_active_orders.set_value(str(stats.get("active") or 0))
+        self._card_total_value.set_value(f"{(stats.get('total_value') or 0):,.0f} ج")
         balance = (stats.get("total_value") or 0) - (stats.get("total_paid") or 0)
-        self._lbl_balance.setText(f"{balance:,.0f} ج")
+        self._card_balance.set_value(f"{balance:,.0f} ج")
+        self._card_balance.set_color("#ef4444" if balance > 0 else "#10b981")
 
         self.btn_toggle.setText("✅  تفعيل" if not c["is_active"] else "⏸  تعطيل")
 
         # جهات الاتصال
-        contacts = fetch_contacts(self.conn, cid)
+        contacts = list(fetch_contacts(self.conn, cid))
         self.contacts_table.setRowCount(0)
         for ct in contacts:
-            r = self.contacts_table.rowCount()
-            self.contacts_table.insertRow(r)
-            self.contacts_table.setRowHeight(r, 36)
-            self.contacts_table.setItem(r, 0, QTableWidgetItem(ct["name"]))
-            self.contacts_table.setItem(r, 1, QTableWidgetItem(ct["role"] or ""))
-            self.contacts_table.setItem(r, 2, QTableWidgetItem(ct["phone"] or ""))
-            self.contacts_table.setItem(r, 3, QTableWidgetItem(ct["email"] or ""))
+            r = insert_row(self.contacts_table, ROW_HEIGHT_COMPACT)
+            bold_item(make_table_item(ct["name"]))
+            self.contacts_table.setItem(r, 0, bold_item(make_table_item(ct["name"])))
+            self.contacts_table.setItem(r, 1, muted_item(make_table_item(ct.get("role") or "")))
+            self.contacts_table.setItem(r, 2, make_table_item(ct.get("phone") or ""))
+            self.contacts_table.setItem(r, 3, muted_item(make_table_item(ct.get("email") or "")))
 
         self._lbl_contacts_hdr.setVisible(bool(contacts))
         self.contacts_table.setVisible(bool(contacts))
 
         # آخر الطلبات
-        STATUS_MAP = {
-            "pending": "⏳ انتظار", "confirmed": "✅ مؤكد",
-            "in_progress": "🔧 تنفيذ", "ready": "📦 جاهز",
-            "delivered": "🚚 مُسلَّم", "cancelled": "❌ ملغي",
-            "on_hold": "⏸ معلق",
-        }
-        PRIORITY_MAP = {
-            "low": "⬇ منخفض", "normal": "➡ عادي",
-            "high": "⬆ عالي", "urgent": "🔴 عاجل",
-        }
         orders = fetch_customer_orders(self.conn, cid)
         self.orders_table.setRowCount(0)
         for o in orders[:20]:
-            r = self.orders_table.rowCount()
-            self.orders_table.insertRow(r)
-            self.orders_table.setRowHeight(r, 36)
-            self.orders_table.setItem(r, 0, QTableWidgetItem(o["order_number"]))
-            self.orders_table.setItem(r, 1, QTableWidgetItem(
-                STATUS_MAP.get(o["status"], o["status"])
+            r = insert_row(self.orders_table, ROW_HEIGHT_COMPACT)
+            num_item = make_table_item(o["order_number"])
+            bold_item(num_item, also_medium=True)
+            color_item(num_item, _BLUE)
+            self.orders_table.setItem(r, 0, num_item)
+
+            status_item = make_table_item(STATUS_MAP.get(o["status"], o["status"]))
+            self.orders_table.setItem(r, 1, status_item)
+
+            self.orders_table.setItem(r, 2, muted_item(
+                make_table_item(PRIORITY_MAP.get(o["priority"], ""))
             ))
-            self.orders_table.setItem(r, 2, QTableWidgetItem(
-                PRIORITY_MAP.get(o["priority"], "")
+
+            val_item = make_table_item(f"{(o['net_amount'] or 0):,.2f} ج", align=Qt.AlignCenter)
+            color_item(val_item, _BLUE)
+            self.orders_table.setItem(r, 3, val_item)
+
+            self.orders_table.setItem(r, 4, muted_item(
+                make_table_item(o.get("order_date") or "")
             ))
-            self.orders_table.setItem(r, 3, QTableWidgetItem(
-                f"{(o['net_amount'] or 0):,.2f} ج"
-            ))
-            self.orders_table.setItem(r, 4, QTableWidgetItem(o["order_date"] or ""))
 
     def _show_empty(self):
         self._empty.setVisible(True)
@@ -619,10 +494,10 @@ class CustomersTab(QWidget):
         root.setSpacing(0)
 
         splitter = QSplitter(Qt.Horizontal)
-        splitter.setHandleWidth(4)
-        splitter.setStyleSheet("""
-            QSplitter::handle { background: #e5e9f0; }
-            QSplitter::handle:hover { background: #bfdbfe; }
+        splitter.setHandleWidth(3)
+        splitter.setStyleSheet(f"""
+            QSplitter::handle {{ background: {_BORDER}; }}
+            QSplitter::handle:hover {{ background: #bfdbfe; }}
         """)
 
         self._list   = _CustomersListPanel(self.conn)
@@ -630,7 +505,7 @@ class CustomersTab(QWidget):
 
         splitter.addWidget(self._list)
         splitter.addWidget(self._detail)
-        splitter.setSizes([380, 680])
+        splitter.setSizes([340, 760])
         splitter.setCollapsible(0, False)
         splitter.setCollapsible(1, False)
 

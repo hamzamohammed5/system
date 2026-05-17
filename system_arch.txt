@@ -1,5 +1,5 @@
 File Tree Snapshot
-Generated : 2026-05-17 19:28:49
+Generated : 2026-05-17 22:21:35
 Source    : D:\My Workspace\Hg\Alhabaar\accountant\system
 Extensions: .py
 ────────────────────────────────────────────────────────────
@@ -202,9 +202,11 @@ system/
 │   │       ├── filter_bar.py
 │   │       ├── flexible_text.py
 │   │       ├── no_wheel.py
+│   │       ├── panels.py
 │   │       ├── scenario_comparison_widget.py
 │   │       ├── scrollable_form.py
 │   │       ├── searchable_combo.py
+│   │       ├── table_utils.py
 │   │       └── unit_combo.py
 │   ├── app_settings.py
 │   ├── events.py

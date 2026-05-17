@@ -1,11 +1,12 @@
 """
-ui/tabs/orders/_order_detail.py  — نسخة محسّنة UX
+ui/tabs/orders/_order_detail.py  — نسخة محسّنة UX v2
 ================================
 التحسينات:
-  - هيدر منظم: رقم + badge + عميل في صف، بطاقات في صف منفصل
-  - أزرار مُجمَّعة: إجراءات أساسية يسار / خطرة يمين
-  - بنود الطلب: رسالة واضحة لما الجدول فاضي + زر إضافة بارز
-  - سجل الحالة: compact أكثر
+  - DetailHeader من panels.py — هيدر موحد ومرتب
+  - make_detail_table من table_utils.py — جدول موحد
+  - CollapsibleCard للسجل — قابل للطي
+  - EmptyState واضح مع دعوة للإجراء
+  - ActionToolbar موحد — فصل أزرار أساسية وخطرة
 """
 
 from PyQt5.QtWidgets import (
@@ -13,7 +14,7 @@ from PyQt5.QtWidgets import (
     QFrame, QLabel, QPushButton, QTableWidget,
     QTableWidgetItem, QHeaderView, QAbstractItemView,
     QMessageBox, QDialog, QComboBox, QLineEdit,
-    QTextEdit, QSizePolicy,
+    QSizePolicy,
 )
 from PyQt5.QtCore import Qt, pyqtSignal
 from PyQt5.QtGui  import QColor, QFont
@@ -27,15 +28,26 @@ from db.orders.orders_repo import (
 from ui.tabs.orders._order_form import _OrderForm
 from ui.tabs.orders._item_form  import _ItemForm
 
+# مكونات مشتركة
+from ui.widgets.shared.panels import (
+    DetailHeader, StatCard, SectionHeader,
+    EmptyState, CollapsibleCard, ActionToolbar,
+)
+from ui.widgets.shared.table_utils import (
+    make_detail_table, make_compact_table,
+    make_table_item, color_item, bold_item, muted_item,
+    insert_row, ROW_HEIGHT_NORMAL, ROW_HEIGHT_COMPACT,
+)
+
 # ── ثوابت ──
 STATUS_LABELS = {
-    "pending":     ("⏳ انتظار",   "#f59e0b", "#fffbeb", "#fde68a"),
-    "confirmed":   ("✅ مؤكد",     "#3b82f6", "#eff6ff", "#bfdbfe"),
-    "in_progress": ("🔧 تنفيذ",   "#8b5cf6", "#f5f3ff", "#ddd6fe"),
-    "ready":       ("📦 جاهز",    "#10b981", "#ecfdf5", "#a7f3d0"),
-    "delivered":   ("🚚 مُسلَّم",  "#6b7280", "#f9fafb", "#e5e7eb"),
-    "cancelled":   ("❌ ملغي",    "#ef4444", "#fef2f2", "#fecaca"),
-    "on_hold":     ("⏸ معلق",    "#f97316", "#fff7ed", "#fed7aa"),
+    "pending":     ("⏳ انتظار",   "#b45309", "#fffbeb", "#fde68a"),
+    "confirmed":   ("✅ مؤكد",     "#1d4ed8", "#eff6ff", "#bfdbfe"),
+    "in_progress": ("🔧 تنفيذ",   "#6d28d9", "#f5f3ff", "#ddd6fe"),
+    "ready":       ("📦 جاهز",    "#065f46", "#ecfdf5", "#a7f3d0"),
+    "delivered":   ("🚚 مُسلَّم",  "#374151", "#f9fafb", "#e5e7eb"),
+    "cancelled":   ("❌ ملغي",    "#991b1b", "#fef2f2", "#fecaca"),
+    "on_hold":     ("⏸ معلق",    "#9a3412", "#fff7ed", "#fed7aa"),
 }
 
 STATUS_TRANSITIONS = {
@@ -49,10 +61,10 @@ STATUS_TRANSITIONS = {
 }
 
 PRIORITY_LABELS = {
-    "low":    ("⬇ منخفض",  "#9ca3af"),
-    "normal": ("➡ عادي",   "#6b7280"),
-    "high":   ("⬆ عالي",  "#f59e0b"),
-    "urgent": ("🔴 عاجل",  "#ef4444"),
+    "low":    ("⬇ منخفض", "#9ca3af"),
+    "normal": ("➡ عادي",  "#6b7280"),
+    "high":   ("⬆ عالي", "#f59e0b"),
+    "urgent": ("🔴 عاجل", "#ef4444"),
 }
 
 TYPE_LABELS = {
@@ -61,104 +73,12 @@ TYPE_LABELS = {
     "custom":  "⚙️ مخصص",
 }
 
-# ─── ألوان موحدة ────────────────────────────────────────
-_BG       = "#f8f9fb"
-_WHITE    = "#ffffff"
-_BORDER   = "#e5e9f0"
-_BLUE     = "#1565c0"
-_BLUE_LT  = "#e8f0fe"
-_RED      = "#dc2626"
-_RED_LT   = "#fef2f2"
-_RED_BD   = "#fecaca"
-_GREEN    = "#10b981"
-_GRAY     = "#6b7280"
-
-
-# ══════════════════════════════════════════════════════════
-# بطاقة إحصائية صغيرة
-# ══════════════════════════════════════════════════════════
-
-def _stat_card(icon: str, title: str, value: str = "─",
-               color: str = _BLUE) -> tuple:
-    frame = QFrame()
-    frame.setStyleSheet(f"""
-        QFrame {{
-            background: {_WHITE};
-            border: 1px solid {_BORDER};
-            border-radius: 8px;
-        }}
-    """)
-    lay = QVBoxLayout(frame)
-    lay.setContentsMargins(10, 8, 10, 8)
-    lay.setSpacing(2)
-
-    lbl_hdr = QLabel(f"{icon}  {title}")
-    lbl_hdr.setStyleSheet("color:#9ba5be; background:transparent; border:none;")
-    lbl_hdr.setAlignment(Qt.AlignCenter)
-
-    lbl_val = QLabel(value)
-    lbl_val.setStyleSheet(
-        f"font-weight:bold; color:{color}; background:transparent; border:none;"
-    )
-    lbl_val.setAlignment(Qt.AlignCenter)
-
-    lay.addWidget(lbl_hdr)
-    lay.addWidget(lbl_val)
-    return frame, lbl_val
-
-
-# ══════════════════════════════════════════════════════════
-# زر إجراء
-# ══════════════════════════════════════════════════════════
-
-def _action_btn(text: str, style: str = "normal") -> QPushButton:
-    btn = QPushButton(text)
-    btn.setMinimumHeight(32)
-    btn.setCursor(Qt.PointingHandCursor)
-
-    if style == "primary":
-        ss = f"""
-            QPushButton {{
-                background: {_BLUE_LT}; color: {_BLUE};
-                border: 1px solid #90caf9; border-radius: 6px;
-                padding: 0 14px; font-weight: bold;
-            }}
-            QPushButton:hover {{ background: #bbdefb; }}
-            QPushButton:disabled {{ background: #f5f5f5; color: #bbb; border-color: #e0e0e0; }}
-        """
-    elif style == "danger":
-        ss = f"""
-            QPushButton {{
-                background: {_RED_LT}; color: {_RED};
-                border: 1px solid {_RED_BD}; border-radius: 6px;
-                padding: 0 14px;
-            }}
-            QPushButton:hover {{ background: #fee2e2; }}
-            QPushButton:disabled {{ background: #f5f5f5; color: #bbb; border-color: #e0e0e0; }}
-        """
-    elif style == "ghost":
-        ss = f"""
-            QPushButton {{
-                background: {_WHITE}; color: #374151;
-                border: 1px solid #cdd3e0; border-radius: 6px;
-                padding: 0 14px;
-            }}
-            QPushButton:hover {{ background: {_BLUE_LT}; color: {_BLUE}; border-color: #90caf9; }}
-            QPushButton:disabled {{ background: #f5f5f5; color: #bbb; border-color: #e0e0e0; }}
-        """
-    else:  # normal
-        ss = f"""
-            QPushButton {{
-                background: {_BG}; color: #374151;
-                border: 1px solid #cdd3e0; border-radius: 6px;
-                padding: 0 14px;
-            }}
-            QPushButton:hover {{ background: {_BLUE_LT}; color: {_BLUE}; }}
-            QPushButton:disabled {{ background: #f5f5f5; color: #bbb; border-color: #e0e0e0; }}
-        """
-
-    btn.setStyleSheet(ss)
-    return btn
+# ألوان
+_BG     = "#f8f9fb"
+_WHITE  = "#ffffff"
+_BLUE   = "#1565c0"
+_GREEN  = "#10b981"
+_BORDER = "#e5e9f0"
 
 
 # ══════════════════════════════════════════════════════════
@@ -187,98 +107,21 @@ class _OrderDetail(QWidget):
         root.setContentsMargins(0, 0, 0, 0)
         root.setSpacing(0)
 
-        # ── Header ────────────────────────────────────────
-        self._hdr = QFrame()
-        self._hdr.setStyleSheet(f"""
-            QFrame {{
-                background: {_WHITE};
-                border-bottom: 2px solid {_BORDER};
-            }}
-        """)
-        hdr_lay = QVBoxLayout(self._hdr)
-        hdr_lay.setContentsMargins(16, 12, 16, 12)
-        hdr_lay.setSpacing(8)
+        # ── Header موحد ───────────────────────────────────
+        self._hdr = DetailHeader()
 
-        # ─ صف 1: رقم الطلب + badge الحالة + النوع ─
-        row_title = QHBoxLayout()
-        row_title.setSpacing(8)
+        # بطاقات الإحصائيات
+        self._card_total   = self._hdr.add_stat_card("💰", "الإجمالي",  color=_BLUE)
+        self._card_paid    = self._hdr.add_stat_card("✅", "المدفوع",   color=_GREEN)
+        self._card_balance = self._hdr.add_stat_card("⚖️", "المتبقي",   color="#ef4444")
+        self._card_due     = self._hdr.add_stat_card("📅", "التسليم",   color="#f59e0b")
 
-        self._lbl_order_num = QLabel("طلب جديد")
-        f = QFont()
-        f.setPointSize(13)
-        f.setBold(True)
-        self._lbl_order_num.setFont(f)
-        self._lbl_order_num.setStyleSheet(
-            "color:#1a2035; background:transparent; border:none;"
-        )
-
-        self._lbl_type_badge = QLabel("")
-        self._lbl_type_badge.setStyleSheet(
-            "padding:2px 8px; border-radius:8px;"
-            "background:transparent; border:none; color:#6b7280;"
-        )
-
-        self._lbl_status_badge = QLabel("")
-        self._lbl_status_badge.setStyleSheet(
-            "font-weight:bold; padding:3px 12px;"
-            "border-radius:10px; background:#f0f0f0; color:#555;"
-        )
-        self._lbl_status_badge.setAlignment(Qt.AlignCenter)
-
-        self._lbl_priority_badge = QLabel("")
-        self._lbl_priority_badge.setStyleSheet(
-            "padding:2px 8px; border-radius:8px;"
-            "background:transparent; border:none; color:#6b7280;"
-        )
-
-        row_title.addWidget(self._lbl_order_num)
-        row_title.addWidget(self._lbl_type_badge)
-        row_title.addStretch()
-        row_title.addWidget(self._lbl_priority_badge)
-        row_title.addWidget(self._lbl_status_badge)
-        hdr_lay.addLayout(row_title)
-
-        # ─ صف 2: بيانات العميل ─
-        self._lbl_customer = QLabel("")
-        self._lbl_customer.setStyleSheet(
-            "color:#5a6680; background:transparent; border:none;"
-        )
-        hdr_lay.addWidget(self._lbl_customer)
-
-        # ─ صف 3: بطاقات الأرقام ─
-        cards_row = QHBoxLayout()
-        cards_row.setSpacing(6)
-        f1, self._lbl_total    = _stat_card("💰", "الإجمالي",  color=_BLUE)
-        f2, self._lbl_paid     = _stat_card("✅", "المدفوع",  color=_GREEN)
-        f3, self._lbl_balance  = _stat_card("⚖️", "المتبقي",  color="#ef4444")
-        f4, self._lbl_due_date = _stat_card("📅", "التسليم",  color="#f59e0b")
-        for f in (f1, f2, f3, f4):
-            cards_row.addWidget(f, stretch=1)
-        hdr_lay.addLayout(cards_row)
-
-        # ─ صف 4: الأزرار ─
-        btns_row = QHBoxLayout()
-        btns_row.setSpacing(6)
-
-        self.btn_delete = _action_btn("🗑️  حذف", "danger")
-        self.btn_cancel = _action_btn("❌  إلغاء", "danger")
-
-        sep = QFrame()
-        sep.setFrameShape(QFrame.VLine)
-        sep.setStyleSheet("color:#e5e9f0;")
-
-        self.btn_edit    = _action_btn("✏️  تعديل", "primary")
-        self.btn_status  = _action_btn("🔄  تغيير الحالة", "ghost")
-        self.btn_reorder = _action_btn("📋  إعادة طلب", "ghost")
-
-        btns_row.addWidget(self.btn_edit)
-        btns_row.addWidget(self.btn_status)
-        btns_row.addWidget(self.btn_reorder)
-        btns_row.addStretch()
-        btns_row.addWidget(sep)
-        btns_row.addWidget(self.btn_cancel)
-        btns_row.addWidget(self.btn_delete)
-        hdr_lay.addLayout(btns_row)
+        # أزرار الإجراءات
+        self.btn_edit    = self._hdr.toolbar.add_action("✏️  تعديل",       "primary")
+        self.btn_status  = self._hdr.toolbar.add_action("🔄  تغيير الحالة","ghost")
+        self.btn_reorder = self._hdr.toolbar.add_action("📋  إعادة طلب",   "ghost")
+        self.btn_cancel  = self._hdr.toolbar.add_danger("❌  إلغاء")
+        self.btn_delete  = self._hdr.toolbar.add_danger("🗑️  حذف")
 
         self.btn_edit.clicked.connect(self._edit_order)
         self.btn_status.clicked.connect(self._change_status_dialog)
@@ -307,7 +150,7 @@ class _OrderDetail(QWidget):
         content.setStyleSheet(f"background:{_BG};")
         self._content_lay = QVBoxLayout(content)
         self._content_lay.setContentsMargins(16, 12, 16, 12)
-        self._content_lay.setSpacing(12)
+        self._content_lay.setSpacing(10)
 
         self._build_items_section()
         self._build_log_section()
@@ -317,151 +160,65 @@ class _OrderDetail(QWidget):
         root.addWidget(scroll, stretch=1)
 
         # ── حالة فارغة ─────────────────────────────────────
-        self._empty = QFrame()
-        self._empty.setStyleSheet(f"background:{_BG}; border:none;")
-        e_lay = QVBoxLayout(self._empty)
-        e_lay.setAlignment(Qt.AlignCenter)
-        e_lay.setSpacing(10)
-
-        lbl_icon = QLabel("📋")
-        lbl_icon.setAlignment(Qt.AlignCenter)
-        lbl_icon.setStyleSheet("background:transparent; border:none;")
-
-        lbl_msg = QLabel("اختر طلباً من القائمة\nأو أنشئ طلباً جديداً")
-        lbl_msg.setAlignment(Qt.AlignCenter)
-        lbl_msg.setStyleSheet(f"color:{_GRAY}; background:transparent; border:none;")
-
-        e_lay.addWidget(lbl_icon)
-        e_lay.addWidget(lbl_msg)
+        self._empty = EmptyState(
+            icon="📋",
+            title="اختر طلباً من القائمة",
+            subtitle="أو أنشئ طلباً جديداً بالضغط على ＋ طلب جديد",
+            style="plain",
+            color="#6b7280",
+            min_height=200,
+        )
         root.addWidget(self._empty)
 
     def _build_items_section(self):
-        items_hdr_row = QHBoxLayout()
+        # رأس القسم
+        items_hdr = SectionHeader("📦  بنود الطلب")
+        self.btn_add_item = items_hdr.add_button("＋  إضافة بند", self._add_item, "success")
+        self._content_lay.addWidget(items_hdr)
 
-        lbl_items = QLabel("📦  بنود الطلب")
-        lbl_items.setStyleSheet(
-            "font-weight:bold; color:#374151; background:transparent;"
+        # جدول البنود
+        self.items_table = make_detail_table(
+            columns=["البند", "الوصف", "الكمية", "الوحدة", "السعر", "الخصم%", "الإجمالي"],
+            stretch_col=0,
+            col_widths={2: 65, 3: 65, 4: 85, 5: 65, 6: 90},
+            max_height=260,
+            min_height=60,
+            row_height=ROW_HEIGHT_NORMAL,
         )
-
-        self.btn_add_item = QPushButton("＋  إضافة بند")
-        self.btn_add_item.setMinimumHeight(30)
-        self.btn_add_item.setCursor(Qt.PointingHandCursor)
-        self.btn_add_item.setStyleSheet("""
-            QPushButton {
-                background: #ecfdf5; color: #065f46;
-                border: 1px solid #a7f3d0; border-radius: 5px;
-                padding: 0 12px; font-weight: bold;
-            }
-            QPushButton:hover { background: #d1fae5; }
-        """)
-        self.btn_add_item.clicked.connect(self._add_item)
-
-        items_hdr_row.addWidget(lbl_items)
-        items_hdr_row.addStretch()
-        items_hdr_row.addWidget(self.btn_add_item)
-        self._content_lay.addLayout(items_hdr_row)
-
-        # ─ الـ stylesheet المشترك للجداول ─
-        _table_ss = f"""
-            QTableWidget {{
-                border: 1px solid {_BORDER};
-                border-radius: 8px;
-                background: {_WHITE};
-                outline: none;
-            }}
-            QTableWidget::item {{ padding: 6px 8px; }}
-            QTableWidget::item:selected {{ background: #dbeafe; color: #1e40af; }}
-            QHeaderView::section {{
-                background: {_BG}; color: {_GRAY};
-                font-weight: bold;
-                padding: 5px 8px; border: none;
-                border-bottom: 1px solid {_BORDER};
-                border-right: 1px solid {_BORDER};
-            }}
-        """
-
-        self.items_table = QTableWidget()
-        self.items_table.setColumnCount(7)
-        self.items_table.setHorizontalHeaderLabels([
-            "البند", "الوصف", "الكمية", "الوحدة", "السعر", "الخصم%", "الإجمالي"
-        ])
-        self.items_table.setSelectionBehavior(QAbstractItemView.SelectRows)
-        self.items_table.setEditTriggers(QAbstractItemView.NoEditTriggers)
-        self.items_table.verticalHeader().setVisible(False)
-        self.items_table.setMinimumHeight(120)
-        self.items_table.setMaximumHeight(240)
-        self.items_table.setStyleSheet(_table_ss)
-        hh = self.items_table.horizontalHeader()
-        hh.setSectionResizeMode(0, QHeaderView.Stretch)
-        hh.setSectionResizeMode(1, QHeaderView.Stretch)
-        for i in range(2, 7):
-            hh.setSectionResizeMode(i, QHeaderView.ResizeToContents)
-        hh.setDefaultAlignment(Qt.AlignRight | Qt.AlignVCenter)
         self._content_lay.addWidget(self.items_table)
 
-        # رسالة الجدول الفاضي
-        self._empty_items = QFrame()
-        self._empty_items.setStyleSheet("""
-            QFrame {
-                background: #f0fdf4;
-                border: 2px dashed #a7f3d0;
-                border-radius: 8px;
-            }
-        """)
-        self._empty_items.setMinimumHeight(80)
-        ei_lay = QVBoxLayout(self._empty_items)
-        ei_lay.setAlignment(Qt.AlignCenter)
-        lbl_ei = QLabel("لا توجد بنود — اضغط «＋ إضافة بند» لإضافة منتج")
-        lbl_ei.setAlignment(Qt.AlignCenter)
-        lbl_ei.setStyleSheet(
-            "color:#059669; background:transparent; border:none;"
+        # EmptyState للبنود
+        self._empty_items = EmptyState(
+            icon="📦",
+            title="لا توجد بنود في هذا الطلب",
+            subtitle="اضغط «＋ إضافة بند» لإضافة منتج",
+            style="dashed",
+            color="#10b981",
+            min_height=80,
         )
-        ei_lay.addWidget(lbl_ei)
+        self._empty_items.action_clicked.connect(self._add_item)
         self._content_lay.addWidget(self._empty_items)
 
-        item_btns = QHBoxLayout()
-        item_btns.setSpacing(6)
-        self.btn_edit_item = _action_btn("✏️  تعديل بند", "ghost")
-        self.btn_del_item  = _action_btn("🗑️  حذف بند", "danger")
+        # أزرار تعديل/حذف البند
+        item_toolbar = ActionToolbar()
+        self.btn_edit_item = item_toolbar.add_action("✏️  تعديل بند", "ghost", self._edit_item)
+        self.btn_del_item  = item_toolbar.add_danger("🗑️  حذف بند",            self._del_item)
         self.btn_edit_item.setMinimumHeight(28)
         self.btn_del_item.setMinimumHeight(28)
-        self.btn_edit_item.clicked.connect(self._edit_item)
-        self.btn_del_item.clicked.connect(self._del_item)
-        item_btns.addWidget(self.btn_edit_item)
-        item_btns.addWidget(self.btn_del_item)
-        item_btns.addStretch()
-        self._content_lay.addLayout(item_btns)
-
-        # حفظ stylesheet الجداول للـ log
-        self._table_ss = _table_ss
+        self._content_lay.addWidget(item_toolbar)
 
     def _build_log_section(self):
-        sep = QFrame()
-        sep.setFrameShape(QFrame.HLine)
-        sep.setStyleSheet(f"color:{_BORDER};")
-        self._content_lay.addWidget(sep)
+        # بطاقة قابلة للطي
+        self._log_card = CollapsibleCard("📜  سجل تغييرات الحالة", expanded=False)
 
-        log_hdr = QLabel("📜  سجل تغييرات الحالة")
-        log_hdr.setStyleSheet(
-            "font-weight:bold; color:#374151; background:transparent;"
+        self.log_table = make_compact_table(
+            columns=["من", "إلى", "الملاحظات", "الوقت"],
+            stretch_col=2,
+            col_widths={0: 90, 1: 90, 3: 120},
+            max_height=160,
         )
-        self._content_lay.addWidget(log_hdr)
-
-        self.log_table = QTableWidget()
-        self.log_table.setColumnCount(4)
-        self.log_table.setHorizontalHeaderLabels(["من", "إلى", "الملاحظات", "الوقت"])
-        self.log_table.setSelectionBehavior(QAbstractItemView.SelectRows)
-        self.log_table.setEditTriggers(QAbstractItemView.NoEditTriggers)
-        self.log_table.verticalHeader().setVisible(False)
-        self.log_table.setMaximumHeight(160)
-        self.log_table.setStyleSheet(self._table_ss)
-        hh2 = self.log_table.horizontalHeader()
-        hh2.setSectionResizeMode(0, QHeaderView.ResizeToContents)
-        hh2.setSectionResizeMode(1, QHeaderView.ResizeToContents)
-        hh2.setSectionResizeMode(2, QHeaderView.Stretch)
-        hh2.setSectionResizeMode(3, QHeaderView.ResizeToContents)
-        hh2.setDefaultAlignment(Qt.AlignRight | Qt.AlignVCenter)
-        self._content_lay.addWidget(self.log_table)
+        self._log_card.content_layout.addWidget(self.log_table)
+        self._content_lay.addWidget(self._log_card)
 
     # ══════════════════════════════════════════════════════
     # تحميل البيانات
@@ -490,53 +247,51 @@ class _OrderDetail(QWidget):
     def _show_empty(self):
         self._empty.setVisible(True)
         self._hdr.setVisible(False)
+        # إخفاء محتوى الـ scroll
+        self._log_card.setVisible(False)
+        self.items_table.setVisible(False)
+        self._empty_items.setVisible(False)
 
     def _show_detail(self):
         self._empty.setVisible(False)
         self._hdr.setVisible(True)
+        self._log_card.setVisible(True)
+
+    # ══════════════════════════════════════════════════════
+    # ملء البيانات
+    # ══════════════════════════════════════════════════════
 
     def _fill_header(self):
         d = self._order_data
 
-        self._lbl_order_num.setText(d['order_number'])
-        self._lbl_type_badge.setText(TYPE_LABELS.get(d['order_type'], ''))
+        # العنوان والشارات
+        self._hdr.set_title(d["order_number"])
+        self._hdr.set_type_badge(TYPE_LABELS.get(d["order_type"], ""))
 
         status_info = STATUS_LABELS.get(d["status"], (d["status"], "#555", "#fff", "#eee"))
-        status_lbl, status_color = status_info[0], status_info[1]
-        status_bg,  status_bd   = status_info[2], status_info[3]
-        self._lbl_status_badge.setText(status_lbl)
-        self._lbl_status_badge.setStyleSheet(
-            f"font-weight:bold; padding:3px 12px;"
-            f"border-radius:10px; color:{status_color};"
-            f"background:{status_bg}; border:1px solid {status_bd};"
-        )
+        self._hdr.set_status_badge(status_info[0], status_info[1], status_info[2], status_info[3])
 
-        pri_lbl, pri_color = PRIORITY_LABELS.get(d["priority"], ("", _GRAY))
-        self._lbl_priority_badge.setText(pri_lbl)
-        self._lbl_priority_badge.setStyleSheet(
-            f"color:{pri_color}; background:transparent; border:none;"
-        )
+        pri_lbl, pri_color = PRIORITY_LABELS.get(d["priority"], ("", "#6b7280"))
+        self._hdr.set_priority_badge(pri_lbl, pri_color)
 
+        # معلومات العميل
         parts = [f"👤  {d['customer_name']}  ({d['customer_code']})"]
-        if d["customer_phone"]: parts.append(f"📞 {d['customer_phone']}")
-        if d["customer_city"]:  parts.append(f"📍 {d['customer_city']}")
-        self._lbl_customer.setText("   |   ".join(parts))
+        if d.get("customer_phone"): parts.append(f"📞 {d['customer_phone']}")
+        if d.get("customer_city"):  parts.append(f"📍 {d['customer_city']}")
+        self._hdr.set_info(parts)
 
-        net    = d["net_amount"]  or 0
-        paid   = d["paid_amount"] or 0
+        # البطاقات الإحصائية
+        net    = d.get("net_amount")  or 0
+        paid   = d.get("paid_amount") or 0
         remain = net - paid
 
-        self._lbl_total.setText(f"{net:,.2f} ج")
-        self._lbl_paid.setText(f"{paid:,.2f} ج")
-        self._lbl_balance.setText(f"{remain:,.2f} ج")
-        balance_color = "#ef4444" if remain > 0 else _GREEN
-        self._lbl_balance.setStyleSheet(
-            f"font-weight:bold; color:{balance_color};"
-            "background:transparent; border:none;"
-        )
+        self._card_total.set_value(f"{net:,.2f} ج")
+        self._card_paid.set_value(f"{paid:,.2f} ج")
+        self._card_balance.set_value(f"{remain:,.2f} ج")
+        self._card_balance.set_color("#ef4444" if remain > 0 else _GREEN)
+        self._card_due.set_value(d.get("due_date") or "─")
 
-        self._lbl_due_date.setText(d["due_date"] or "─")
-
+        # تفعيل/تعطيل الأزرار
         status = d["status"]
         can_edit   = status not in ("delivered", "cancelled")
         can_cancel = status not in ("delivered", "cancelled")
@@ -560,55 +315,59 @@ class _OrderDetail(QWidget):
         self.btn_del_item.setVisible(has_items)
 
         for item in items:
-            r = self.items_table.rowCount()
-            self.items_table.insertRow(r)
-            self.items_table.setRowHeight(r, 38)
+            r = insert_row(self.items_table, ROW_HEIGHT_NORMAL)
 
-            name_item = QTableWidgetItem(item["item_name"])
-            name_item.setData(Qt.UserRole, item["id"])
-            f = QFont(); f.setWeight(QFont.Medium)
-            name_item.setFont(f)
+            # البند
+            name_item = make_table_item(item["item_name"], user_data=item["id"])
+            bold_item(name_item)
             self.items_table.setItem(r, 0, name_item)
-            self.items_table.setItem(r, 1, QTableWidgetItem(item["description"] or ""))
-            self.items_table.setItem(r, 2, QTableWidgetItem(f"{item['quantity']:g}"))
-            self.items_table.setItem(r, 3, QTableWidgetItem(item["unit"]))
-            self.items_table.setItem(r, 4, QTableWidgetItem(f"{item['unit_price']:,.2f}"))
-            self.items_table.setItem(r, 5, QTableWidgetItem(f"{item['discount_pct']:g}%"))
 
-            total_val = item['quantity'] * item['unit_price'] * (1 - item['discount_pct'] / 100)
-            total_item = QTableWidgetItem(f"{total_val:,.2f}")
-            total_item.setForeground(QColor(_BLUE))
-            f2 = QFont(); f2.setBold(True)
-            total_item.setFont(f2)
+            # الوصف
+            self.items_table.setItem(r, 1, make_table_item(item.get("description") or ""))
+
+            # الكمية
+            qty_item = make_table_item(f"{item['quantity']:g}", align=Qt.AlignCenter)
+            self.items_table.setItem(r, 2, qty_item)
+
+            # الوحدة
+            unit_item = make_table_item(item["unit"], align=Qt.AlignCenter)
+            muted_item(unit_item)
+            self.items_table.setItem(r, 3, unit_item)
+
+            # السعر
+            price_item = make_table_item(f"{item['unit_price']:,.2f}", align=Qt.AlignCenter)
+            self.items_table.setItem(r, 4, price_item)
+
+            # الخصم
+            disc_item = make_table_item(f"{item['discount_pct']:g}%", align=Qt.AlignCenter)
+            muted_item(disc_item)
+            self.items_table.setItem(r, 5, disc_item)
+
+            # الإجمالي
+            total_val  = item["quantity"] * item["unit_price"] * (1 - item["discount_pct"] / 100)
+            total_item = make_table_item(f"{total_val:,.2f}", align=Qt.AlignCenter)
+            bold_item(total_item)
+            color_item(total_item, _BLUE)
             self.items_table.setItem(r, 6, total_item)
-
-            for ci in range(2, 7):
-                item_w = self.items_table.item(r, ci)
-                if item_w:
-                    item_w.setTextAlignment(Qt.AlignCenter | Qt.AlignVCenter)
 
     def _fill_log(self):
         logs = fetch_status_log(self.conn, self._order_id)
         self.log_table.setRowCount(0)
-        for log in logs:
-            r = self.log_table.rowCount()
-            self.log_table.insertRow(r)
-            self.log_table.setRowHeight(r, 34)
 
-            old_lbl = STATUS_LABELS.get(log["old_status"] or "", ("—", "#555"))[0]
-            new_info = STATUS_LABELS.get(log["new_status"], (log["new_status"], "#555"))
+        for log in logs:
+            r = insert_row(self.log_table, ROW_HEIGHT_COMPACT)
+
+            old_lbl = STATUS_LABELS.get(log.get("old_status") or "", ("—",))[0]
+            new_info = STATUS_LABELS.get(log.get("new_status", ""), (log.get("new_status",""), "#555"))
             new_lbl, new_color = new_info[0], new_info[1]
 
-            self.log_table.setItem(r, 0, QTableWidgetItem(old_lbl))
-
-            new_item = QTableWidgetItem(new_lbl)
-            new_item.setForeground(QColor(new_color))
+            self.log_table.setItem(r, 0, muted_item(make_table_item(old_lbl)))
+            new_item = make_table_item(new_lbl)
+            color_item(new_item, new_color)
             self.log_table.setItem(r, 1, new_item)
-
-            self.log_table.setItem(r, 2, QTableWidgetItem(log["notes"] or ""))
-            self.log_table.setItem(r, 3, QTableWidgetItem(
-                log["changed_at"][:16] if log["changed_at"] else ""
-            ))
+            self.log_table.setItem(r, 2, make_table_item(log.get("notes") or ""))
+            time_str = (log.get("changed_at") or "")[:16]
+            self.log_table.setItem(r, 3, muted_item(make_table_item(time_str, align=Qt.AlignCenter)))
 
     # ══════════════════════════════════════════════════════
     # إجراءات
@@ -632,7 +391,6 @@ class _OrderDetail(QWidget):
         next_statuses = STATUS_TRANSITIONS.get(current, [])
         if not next_statuses:
             return
-
         dlg = _StatusDialog(current, next_statuses, parent=self)
         if dlg.exec_() == QDialog.Accepted:
             new_status, note = dlg.get_result()
@@ -726,12 +484,13 @@ class _OrderDetail(QWidget):
             return
         self._order_data = fetch_order(self.conn, self._order_id)
         if self._order_data:
-            net    = self._order_data["net_amount"]  or 0
-            paid   = self._order_data["paid_amount"] or 0
+            net    = self._order_data.get("net_amount")  or 0
+            paid   = self._order_data.get("paid_amount") or 0
             remain = net - paid
-            self._lbl_total.setText(f"{net:,.2f} ج")
-            self._lbl_paid.setText(f"{paid:,.2f} ج")
-            self._lbl_balance.setText(f"{remain:,.2f} ج")
+            self._card_total.set_value(f"{net:,.2f} ج")
+            self._card_paid.set_value(f"{paid:,.2f} ج")
+            self._card_balance.set_value(f"{remain:,.2f} ج")
+            self._card_balance.set_color("#ef4444" if remain > 0 else _GREEN)
 
 
 # ══════════════════════════════════════════════════════════
@@ -739,6 +498,9 @@ class _OrderDetail(QWidget):
 # ══════════════════════════════════════════════════════════
 
 STATUS_LABELS_SHORT = {k: v[0] for k, v in STATUS_LABELS.items()}
+
+_BG_DLG    = "#f8f9fb"
+_BORDER_DLG = "#cdd3e0"
 
 
 class _StatusDialog(QDialog):
@@ -751,19 +513,16 @@ class _StatusDialog(QDialog):
         self._build(current_status, next_statuses)
 
     def _build(self, current, nexts):
+        self.setStyleSheet(f"QDialog {{ background: {_BG_DLG}; }}")
         lay = QVBoxLayout(self)
         lay.setContentsMargins(18, 16, 18, 16)
-        lay.setSpacing(12)
+        lay.setSpacing(10)
 
         lbl = QLabel(
             f"الحالة الحالية:  <b>{STATUS_LABELS_SHORT.get(current, current)}</b>"
         )
         lbl.setStyleSheet("color:#374151;")
         lay.addWidget(lbl)
-
-        lbl2 = QLabel("تغيير إلى:")
-        lbl2.setStyleSheet("color:#6b7280;")
-        lay.addWidget(lbl2)
 
         self._cmb = QComboBox()
         self._cmb.setMinimumHeight(34)
@@ -798,10 +557,10 @@ class _StatusDialog(QDialog):
         btn_cancel.setStyleSheet(f"""
             QPushButton {{
                 background: white; color: #374151;
-                border: 1px solid #cdd3e0; border-radius: 6px;
+                border: 1px solid {_BORDER_DLG}; border-radius: 6px;
                 padding: 0 14px;
             }}
-            QPushButton:hover {{ background: {_BG}; }}
+            QPushButton:hover {{ background: {_BG_DLG}; }}
         """)
         btn_cancel.clicked.connect(self.reject)
 
