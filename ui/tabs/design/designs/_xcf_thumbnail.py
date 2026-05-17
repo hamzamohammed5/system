@@ -1,26 +1,16 @@
 """
-ui/tabs/design/designs/_xcf_thumbnail.py  — v3
+ui/tabs/design/designs/_xcf_thumbnail.py  — v5
 ===============================================
 استخراج thumbnail من XCF + مراقبة تلقائية للتغييرات.
 
-الجديد في v3:
-  - XcfWatcher: singleton يراقب ملفات XCF بـ QFileSystemWatcher
-  - debounce 1.5 ثانية عشان GIMP بيكتب الملف على مراحل
-  - signal file_changed(path) لما يتحدث الملف فعلاً
-  - clear_cache تلقائي عند كل تغيير
+الأولويات:
+  1. Wand (ImageMagick) ← الأسرع والأدق مع XCF
+  2. magick subprocess ← fallback لو Wand مش لاقي ImageMagick
+  3. GIMP cache
+  4. XCF native (v1-v9 فقط)
+  5. Placeholder جميل (fallback دائم)
 
-الاستخدام في _size_card.py:
-    from ._xcf_thumbnail import get_xcf_thumbnail, get_watcher
-
-    # اشترك في التغييرات
-    get_watcher().file_changed.connect(self._on_xcf_changed)
-
-    # ابدأ المراقبة
-    get_watcher().watch(xcf_path)
-
-    def _on_xcf_changed(self, path):
-        if path == self._data.get("xcf_path"):
-            self._thumb.refresh(path)
+XcfWatcher: singleton يراقب الملفات ويطلق signal عند التغيير.
 """
 
 from __future__ import annotations
@@ -31,129 +21,90 @@ import struct
 import tempfile
 import subprocess
 
-from PyQt5.QtGui     import QPixmap, QImage, QPainter, QColor
-from PyQt5.QtCore    import Qt, QRect, QObject, pyqtSignal, QTimer, QFileSystemWatcher
-from PyQt5.QtWidgets import QApplication
+from PyQt5.QtGui  import QPixmap, QImage, QPainter, QColor
+from PyQt5.QtCore import Qt, QRect, QObject, pyqtSignal, QTimer, QFileSystemWatcher
 
 # ── Cache: xcf_path → (mtime, QPixmap) ─────────────────
 _CACHE: dict[str, tuple[float, QPixmap]] = {}
 
-# ── XCF constants ───────────────────────────────────────
 _XCF_MAGIC      = b"gimp xcf "
 _PROP_END       = 0
 _PROP_THUMBNAIL = 1028
 _MAX_PROPS      = 300
 
+# مسار ImageMagick الثابت — يُحدَّث مرة واحدة عند أول استخدام
+_MAGICK_EXE: str | None = "UNSET"
+
 
 # ════════════════════════════════════════════════════════
-# XcfWatcher — singleton لمراقبة ملفات XCF
+# XcfWatcher — singleton
 # ════════════════════════════════════════════════════════
 
 class XcfWatcher(QObject):
     """
-    يراقب ملفات XCF ويطلق signal عند تغييرها.
-    Debounce 1.5 ثانية لأن GIMP يكتب الملف على مراحل.
-
-    الاستخدام:
-        watcher = get_watcher()
-        watcher.watch("/path/to/file.xcf")
-        watcher.file_changed.connect(my_slot)
-        watcher.unwatch("/path/to/file.xcf")   # عند إزالة البطاقة
+    يراقب ملفات XCF ويطلق file_changed(path) بعد debounce.
+    GIMP يكتب الملف على مراحل (atomic save) → debounce 1.5 ث.
     """
 
-    file_changed = pyqtSignal(str)   # path الكامل للملف المتغير
-
-    _DEBOUNCE_MS = 1500   # انتظر 1.5 ثانية بعد آخر تغيير قبل الإشعار
+    file_changed = pyqtSignal(str)
+    _DEBOUNCE_MS = 1500
 
     def __init__(self, parent=None):
         super().__init__(parent)
-        self._fs_watcher = QFileSystemWatcher(self)
-        self._fs_watcher.fileChanged.connect(self._on_raw_change)
-
-        # debounce: path → QTimer
+        self._fs   = QFileSystemWatcher(self)
+        self._fs.fileChanged.connect(self._on_raw)
         self._timers: dict[str, QTimer] = {}
-
-        # مسارات نراقبها حالياً
         self._watched: set[str] = set()
 
-    # ── API ──────────────────────────────────────────────
-
     def watch(self, path: str):
-        """يضيف ملف للمراقبة."""
         if not path or not os.path.exists(path):
             return
         path = os.path.normpath(path)
         if path not in self._watched:
-            self._fs_watcher.addPath(path)
+            self._fs.addPath(path)
             self._watched.add(path)
 
     def unwatch(self, path: str):
-        """يوقف مراقبة ملف."""
         if not path:
             return
         path = os.path.normpath(path)
         if path in self._watched:
-            self._fs_watcher.removePath(path)
+            self._fs.removePath(path)
             self._watched.discard(path)
-        # إلغاء الـ timer لو موجود
-        timer = self._timers.pop(path, None)
-        if timer:
-            timer.stop()
-            timer.deleteLater()
+        t = self._timers.pop(path, None)
+        if t:
+            t.stop()
+            t.deleteLater()
 
-    def unwatch_all(self):
-        """يوقف مراقبة كل الملفات."""
-        for path in list(self._watched):
-            self.unwatch(path)
-
-    # ── Handler داخلي ────────────────────────────────────
-
-    def _on_raw_change(self, path: str):
-        """
-        يُستدعى مباشرة من QFileSystemWatcher.
-        GIMP بيحذف الملف ويعيد كتابته (atomic save)،
-        فلازم نعيد إضافته للـ watcher بعد التغيير.
-        """
+    def _on_raw(self, path: str):
         path = os.path.normpath(path)
+        # atomic save: GIMP حذف الملف وأعاد كتابته
+        if os.path.exists(path) and path not in self._fs.files():
+            self._fs.addPath(path)
 
-        # GIMP atomic save: الملف اتحذف مؤقتاً → أعد إضافته
-        if os.path.exists(path) and path not in self._fs_watcher.files():
-            self._fs_watcher.addPath(path)
-
-        # debounce — ريست الـ timer
         if path in self._timers:
             self._timers[path].stop()
         else:
-            timer = QTimer(self)
-            timer.setSingleShot(True)
-            timer.timeout.connect(lambda p=path: self._emit_change(p))
-            self._timers[path] = timer
-
+            t = QTimer(self)
+            t.setSingleShot(True)
+            t.timeout.connect(lambda p=path: self._emit(p))
+            self._timers[path] = t
         self._timers[path].start(self._DEBOUNCE_MS)
 
-    def _emit_change(self, path: str):
-        """يُطلق الـ signal بعد انتهاء الـ debounce."""
-        # تأكد إن الملف موجود فعلاً
+    def _emit(self, path: str):
         if not os.path.exists(path):
             return
-
-        # مسح الـ cache عشان يُعاد التحميل
         clear_cache(path)
-
-        # تنظيف الـ timer
-        timer = self._timers.pop(path, None)
-        if timer:
-            timer.deleteLater()
-
+        t = self._timers.pop(path, None)
+        if t:
+            t.deleteLater()
         self.file_changed.emit(path)
 
 
-# ── Singleton ────────────────────────────────────────────
 _watcher_instance: XcfWatcher | None = None
 
 
 def get_watcher() -> XcfWatcher:
-    """يرجع الـ singleton — يُنشئه أول مرة."""
     global _watcher_instance
     if _watcher_instance is None:
         _watcher_instance = XcfWatcher()
@@ -161,13 +112,12 @@ def get_watcher() -> XcfWatcher:
 
 
 # ════════════════════════════════════════════════════════
-# Public API — Thumbnail
+# Public API
 # ════════════════════════════════════════════════════════
 
 def get_xcf_thumbnail(xcf_path: str, size: int = 80) -> "QPixmap | None":
     if not xcf_path or not os.path.exists(xcf_path):
         return None
-
     try:
         mtime = os.path.getmtime(xcf_path)
     except OSError:
@@ -178,10 +128,10 @@ def get_xcf_thumbnail(xcf_path: str, size: int = 80) -> "QPixmap | None":
         return _scale(cached[1], size)
 
     pixmap = (
-        _try_gimp_cache(xcf_path)
+        _try_wand(xcf_path)
+        or _try_magick_subprocess(xcf_path)
+        or _try_gimp_cache(xcf_path)
         or _try_xcf_native(xcf_path)
-        or _try_pillow(xcf_path)
-        or _try_gimp_batch(xcf_path)
         or _make_placeholder(xcf_path, size)
     )
 
@@ -200,23 +150,128 @@ def clear_cache(xcf_path: str = None):
 
 
 # ════════════════════════════════════════════════════════
-# طريقة 1 — GIMP Cache
+# مساعد: إيجاد magick.exe
 # ════════════════════════════════════════════════════════
 
-def _xcf_uri(path: str) -> str:
-    p = path.replace("\\", "/")
-    if len(p) >= 2 and p[1] == ":":
-        return "file:///" + p
-    elif p.startswith("/"):
-        return "file://" + p
-    return "file:///" + p
+def _find_magick() -> str | None:
+    global _MAGICK_EXE
+    if _MAGICK_EXE != "UNSET":
+        return _MAGICK_EXE
 
+    import glob
+    import shutil
+
+    # 1. المسار الثابت المعروف
+    for pattern in [
+        r"C:\Program Files\ImageMagick*\magick.exe",
+        r"C:\Program Files (x86)\ImageMagick*\magick.exe",
+    ]:
+        matches = glob.glob(pattern)
+        if matches:
+            _MAGICK_EXE = sorted(matches)[-1]
+            return _MAGICK_EXE
+
+    # 2. PATH
+    found = shutil.which("magick")
+    if found:
+        _MAGICK_EXE = found
+        return _MAGICK_EXE
+
+    # 3. convert.exe لكن مش Windows system32
+    found = shutil.which("convert")
+    if found and "system32" not in found.lower():
+        _MAGICK_EXE = found
+        return _MAGICK_EXE
+
+    _MAGICK_EXE = None
+    return None
+
+
+# ════════════════════════════════════════════════════════
+# طريقة 1 — Wand
+# ════════════════════════════════════════════════════════
+
+def _try_wand(xcf_path: str) -> "QPixmap | None":
+    try:
+        # إضافة مسار ImageMagick لـ PATH قبل import Wand
+        magick = _find_magick()
+        if magick:
+            magick_dir = os.path.dirname(magick)
+            if magick_dir not in os.environ.get("PATH", ""):
+                os.environ["PATH"] = magick_dir + os.pathsep + os.environ.get("PATH", "")
+            # Wand على Windows يحتاج MAGICK_HOME
+            os.environ.setdefault("MAGICK_HOME", magick_dir)
+
+        from wand.image import Image as WandImage
+
+        with WandImage(filename=xcf_path) as img:
+            img.merge_layers("flatten")
+            img.thumbnail(256, 256)
+            img.format = "png"
+            blob = img.make_blob()
+
+        if not blob:
+            return None
+
+        qimg = QImage()
+        qimg.loadFromData(blob, "PNG")
+        if not qimg.isNull():
+            return QPixmap.fromImage(qimg)
+
+    except Exception:
+        pass
+    return None
+
+
+# ════════════════════════════════════════════════════════
+# طريقة 2 — magick subprocess (fallback لو Wand فشل)
+# ════════════════════════════════════════════════════════
+
+def _try_magick_subprocess(xcf_path: str) -> "QPixmap | None":
+    magick = _find_magick()
+    if not magick:
+        return None
+
+    tmp_path = None
+    try:
+        with tempfile.NamedTemporaryFile(suffix=".png", delete=False) as tmp:
+            tmp_path = tmp.name
+
+        # xcf_path[0] = أول layer/frame
+        r = subprocess.run(
+            [magick, xcf_path + "[0]", "-thumbnail", "256x256",
+             "-background", "white", "-flatten", tmp_path],
+            capture_output=True,
+            timeout=20,
+        )
+
+        if (r.returncode == 0
+                and os.path.exists(tmp_path)
+                and os.path.getsize(tmp_path) > 100):
+            px = QPixmap(tmp_path)
+            if not px.isNull():
+                return px
+
+    except Exception:
+        pass
+    finally:
+        if tmp_path and os.path.exists(tmp_path):
+            try:
+                os.unlink(tmp_path)
+            except Exception:
+                pass
+    return None
+
+
+# ════════════════════════════════════════════════════════
+# طريقة 3 — GIMP Cache
+# ════════════════════════════════════════════════════════
 
 def _try_gimp_cache(xcf_path: str) -> "QPixmap | None":
-    home    = os.path.expanduser("~")
-    appdata = os.environ.get("APPDATA", "")
-
+    home     = os.path.expanduser("~")
+    appdata  = os.environ.get("APPDATA", "")
     path_fwd = xcf_path.replace("\\", "/")
+
     uris = set()
     for p in [path_fwd, path_fwd[0].lower() + path_fwd[1:]]:
         uris.add("file:///" + p.lstrip("/"))
@@ -243,7 +298,7 @@ def _try_gimp_cache(xcf_path: str) -> "QPixmap | None":
 
 
 # ════════════════════════════════════════════════════════
-# طريقة 2 — XCF Native (v1–v9)
+# طريقة 4 — XCF Native (v1–v9)
 # ════════════════════════════════════════════════════════
 
 def _try_xcf_native(xcf_path: str) -> "QPixmap | None":
@@ -320,77 +375,7 @@ def _decode_thumbnail(f, payload_len: int) -> "QPixmap | None":
 
 
 # ════════════════════════════════════════════════════════
-# طريقة 3 — Pillow
-# ════════════════════════════════════════════════════════
-
-def _try_pillow(xcf_path: str) -> "QPixmap | None":
-    try:
-        from PIL import Image
-        img = Image.open(xcf_path)
-        img.thumbnail((256, 256), Image.LANCZOS)
-        if img.mode not in ("RGB", "RGBA"):
-            img = img.convert("RGBA")
-        bpp  = 4 if img.mode == "RGBA" else 3
-        fmt  = QImage.Format_RGBA8888 if img.mode == "RGBA" else QImage.Format_RGB888
-        data = img.tobytes("raw", img.mode)
-        qimg = QImage(data, img.width, img.height, img.width * bpp, fmt)
-        if not qimg.isNull():
-            return QPixmap.fromImage(qimg)
-    except Exception:
-        pass
-    return None
-
-
-# ════════════════════════════════════════════════════════
-# طريقة 4 — GIMP Batch
-# ════════════════════════════════════════════════════════
-
-def _try_gimp_batch(xcf_path: str) -> "QPixmap | None":
-    gimp_exe = _find_gimp()
-    if not gimp_exe:
-        return None
-
-    tmp_path = None
-    try:
-        with tempfile.NamedTemporaryFile(suffix=".png", delete=False) as tmp:
-            tmp_path = tmp.name
-
-        xcf_fwd  = xcf_path.replace("\\", "/")
-        tmp_fwd  = tmp_path.replace("\\", "/")
-        basename = os.path.basename(xcf_path)
-
-        script = (
-            f'(let* ('
-            f'  (image (car (gimp-file-load RUN-NONINTERACTIVE "{xcf_fwd}" "{basename}")))'
-            f') '
-            f'  (gimp-image-scale image 256 256)'
-            f'  (file-png-save RUN-NONINTERACTIVE image'
-            f'    (car (gimp-image-get-active-drawable image))'
-            f'    "{tmp_fwd}" "thumb" 0 9 1 1 1 1 1)'
-            f'  (gimp-image-delete image)'
-            f')'
-        )
-        subprocess.run(
-            [gimp_exe, "-i", "-b", script, "-b", "(gimp-quit 0)"],
-            timeout=25, capture_output=True,
-        )
-        if tmp_path and os.path.exists(tmp_path) and os.path.getsize(tmp_path) > 100:
-            px = QPixmap(tmp_path)
-            if not px.isNull():
-                return px
-    except Exception:
-        pass
-    finally:
-        if tmp_path and os.path.exists(tmp_path):
-            try:
-                os.unlink(tmp_path)
-            except Exception:
-                pass
-    return None
-
-
-# ════════════════════════════════════════════════════════
-# طريقة 5 — Placeholder جميل (fallback دائم)
+# طريقة 5 — Placeholder جميل
 # ════════════════════════════════════════════════════════
 
 def _make_placeholder(xcf_path: str, size: int = 80) -> QPixmap:
@@ -401,7 +386,6 @@ def _make_placeholder(xcf_path: str, size: int = 80) -> QPixmap:
 
     px = QPixmap(s, s)
     px.fill(QColor("#1a1a2e"))
-
     painter = QPainter(px)
     painter.setRenderHint(QPainter.Antialiasing)
 
@@ -432,32 +416,6 @@ def _make_placeholder(xcf_path: str, size: int = 80) -> QPixmap:
 # ════════════════════════════════════════════════════════
 # مساعدات
 # ════════════════════════════════════════════════════════
-
-def _find_gimp() -> "str | None":
-    import shutil, glob
-    try:
-        from db.shared.connection import get_connection
-        from db.settings_repo import get_setting
-        conn  = get_connection()
-        saved = get_setting(conn, "gimp_path", "")
-        conn.close()
-        if saved and os.path.exists(saved):
-            return saved
-    except Exception:
-        pass
-    for name in ("gimp", "gimp-2.10", "gimp-2.99", "gimp-3.0"):
-        found = shutil.which(name)
-        if found:
-            return found
-    for pattern in [
-        r"C:\Program Files\GIMP *\bin\gimp-*.exe",
-        r"C:\Program Files (x86)\GIMP *\bin\gimp-*.exe",
-    ]:
-        matches = glob.glob(pattern)
-        if matches:
-            return sorted(matches)[-1]
-    return None
-
 
 def _scale(pixmap: QPixmap, size: int) -> QPixmap:
     return pixmap.scaled(

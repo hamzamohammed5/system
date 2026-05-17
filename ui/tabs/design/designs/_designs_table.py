@@ -1,7 +1,12 @@
 """
 ui/tabs/design/designs/_designs_table.py
 ==========================================
-جدول التصميمات — مع عمود thumbnail يعرض صورة من أول XCF متاح للتصميم.
+جدول التصميمات — مع auto-refresh للـ thumbnail عند تغيير ملف XCF.
+
+التغييرات:
+  - يسجل كل XCF في XcfWatcher عند تحميل الجدول
+  - _on_xcf_changed يحدث الـ thumbnail في الصف المناسب تلقائياً
+  - يلغي كل المراقبات عند إعادة تحميل الجدول
 """
 
 from PyQt5.QtWidgets import (
@@ -21,7 +26,7 @@ from db.designs.dimension_sets_repo import (
     fetch_all_dimension_sets, fetch_category_descendants,
 )
 from ui.helpers import danger_button, confirm_delete, buttons_row
-
+from ._xcf_thumbnail import get_xcf_thumbnail, get_watcher
 from ._design_detail_panel import _DesignDetailPanel
 
 _BLUE       = "#1565c0"
@@ -30,7 +35,6 @@ _BLUE_MID   = "#bbdefb"
 _GREEN      = "#2e7d32"
 _ORANGE     = "#e65100"
 
-# حجم الـ thumbnail في الجدول
 _TABLE_THUMB = 56
 
 
@@ -39,7 +43,6 @@ _TABLE_THUMB = 56
 # ════════════════════════════════════════════════════════
 
 class _RowThumbWorker(QThread):
-    """يحمّل thumbnail لصف واحد في الجدول."""
     done = Signal(int, object)   # row_index, QPixmap|None
 
     def __init__(self, row: int, xcf_path: str, size: int = _TABLE_THUMB):
@@ -50,7 +53,6 @@ class _RowThumbWorker(QThread):
 
     def run(self):
         try:
-            from ._xcf_thumbnail import get_xcf_thumbnail
             px = get_xcf_thumbnail(self._path, self._size)
         except Exception:
             px = None
@@ -58,13 +60,10 @@ class _RowThumbWorker(QThread):
 
 
 # ════════════════════════════════════════════════════════
-# دالة جلب التصميمات المفلترة
+# جلب التصميمات المفلترة
 # ════════════════════════════════════════════════════════
 
 def _fetch_designs_filtered(conn, name_q="", category_id=None, set_id=None):
-    """
-    يجلب التصميمات مع أول XCF متاح (للـ thumbnail) وعدد المقاسات والملفات.
-    """
     sql = """
         SELECT d.id, d.name, d.category_id, d.notes,
                d.created_at, d.updated_at,
@@ -110,10 +109,9 @@ def _fetch_designs_filtered(conn, name_q="", category_id=None, set_id=None):
 
 
 # ════════════════════════════════════════════════════════
-# جدول التصميمات
+# أعمدة الجدول
 # ════════════════════════════════════════════════════════
 
-# أعمدة الجدول
 _COL_THUMB    = 0
 _COL_ID       = 1
 _COL_NAME     = 2
@@ -123,23 +121,28 @@ _COL_FILES    = 5
 _COLS         = ["", "ID", "الاسم", "التصنيف", "المقاسات", "الملفات"]
 
 
+# ════════════════════════════════════════════════════════
+# جدول التصميمات
+# ════════════════════════════════════════════════════════
+
 class _DesignsTable(QWidget):
-    """
-    Signals:
-      design_selected(int)       — اختيار تصميم
-      design_deleted()           — بعد حذف
-      set_filter_changed(object) — تغيير فلتر المجموعة (int | None)
-    """
 
     design_selected    = pyqtSignal(int)
     design_deleted     = pyqtSignal()
     set_filter_changed = pyqtSignal(object)
 
     def __init__(self, conn, detail_panel: "_DesignDetailPanel", parent=None):
-        super().__init__(conn if False else parent)   # avoid type confusion
+        super().__init__(parent)
         self.conn   = conn
         self._panel = detail_panel
         self._thumb_workers: list[_RowThumbWorker] = []
+
+        # map: xcf_path → row index (للتحديث السريع)
+        self._xcf_row_map: dict[str, int] = {}
+
+        # اشترك في XcfWatcher مرة واحدة
+        get_watcher().file_changed.connect(self._on_xcf_changed)
+
         self._build()
         self._load()
 
@@ -268,10 +271,8 @@ class _DesignsTable(QWidget):
         """)
 
         hh = self.table.horizontalHeader()
-        # عمود الـ thumbnail
         hh.setSectionResizeMode(_COL_THUMB,    QHeaderView.Fixed)
         self.table.setColumnWidth(_COL_THUMB,   _TABLE_THUMB + 8)
-        # باقي الأعمدة
         hh.setSectionResizeMode(_COL_ID,        QHeaderView.Fixed)
         self.table.setColumnWidth(_COL_ID,       36)
         hh.setSectionResizeMode(_COL_NAME,      QHeaderView.Stretch)
@@ -358,6 +359,12 @@ class _DesignsTable(QWidget):
             w.quit()
         self._thumb_workers.clear()
 
+        # إلغاء مراقبة كل الملفات القديمة
+        watcher = get_watcher()
+        for path in list(self._xcf_row_map.keys()):
+            watcher.unwatch(path)
+        self._xcf_row_map.clear()
+
         name_q  = self.inp_search.text().strip()
         cat_id  = self.cmb_category.currentData()
         set_id  = self.cmb_set.currentData()
@@ -367,6 +374,7 @@ class _DesignsTable(QWidget):
 
         self.table.setRowCount(0)
 
+        import os
         for d in rows:
             r = self.table.rowCount()
             self.table.insertRow(r)
@@ -382,18 +390,22 @@ class _DesignsTable(QWidget):
                 border-radius: 6px;
                 margin: 2px;
             """)
-            thumb_lbl.setText("🖼")
+            thumb_lbl.setText("⏳")
             self.table.setCellWidget(r, _COL_THUMB, thumb_lbl)
 
-            # ابدأ تحميل الـ thumbnail لو في XCF
             xcf = d["first_xcf"]
-            if xcf:
-                import os
-                if os.path.exists(xcf):
-                    worker = _RowThumbWorker(r, xcf, _TABLE_THUMB)
-                    worker.done.connect(self._on_row_thumb_ready)
-                    worker.start()
-                    self._thumb_workers.append(worker)
+            if xcf and os.path.exists(xcf):
+                # سجّل في الـ watcher
+                watcher.watch(xcf)
+                self._xcf_row_map[os.path.normpath(xcf)] = r
+
+                # حمّل في الخلفية
+                worker = _RowThumbWorker(r, xcf, _TABLE_THUMB)
+                worker.done.connect(self._on_row_thumb_ready)
+                worker.start()
+                self._thumb_workers.append(worker)
+            else:
+                thumb_lbl.setText("🎨")
 
             # ── باقي الأعمدة ──
             id_item = QTableWidgetItem(str(d["id"]))
@@ -402,7 +414,7 @@ class _DesignsTable(QWidget):
             self.table.setItem(r, _COL_ID, id_item)
 
             name_item = QTableWidgetItem(d["name"])
-            name_item.setData(Qt.UserRole, d["id"])   # للبحث بـ UserRole
+            name_item.setData(Qt.UserRole, d["id"])
             self.table.setItem(r, _COL_NAME, name_item)
 
             self.table.setItem(
@@ -411,17 +423,17 @@ class _DesignsTable(QWidget):
             )
 
             sz = d["sizes_count"] or 0
-            fl = d["files_count"] or 0
+            fl_cnt = d["files_count"] or 0
 
             i_sz = QTableWidgetItem(str(sz))
             i_sz.setTextAlignment(Qt.AlignCenter)
             self.table.setItem(r, _COL_SIZES, i_sz)
 
-            i_fl = QTableWidgetItem(str(fl))
+            i_fl = QTableWidgetItem(str(fl_cnt))
             i_fl.setTextAlignment(Qt.AlignCenter)
-            if fl == sz and sz > 0:
+            if fl_cnt == sz and sz > 0:
                 i_fl.setForeground(QColor(_GREEN))
-            elif fl > 0:
+            elif fl_cnt > 0:
                 i_fl.setForeground(QColor(_ORANGE))
             self.table.setItem(r, _COL_FILES, i_fl)
 
@@ -440,8 +452,31 @@ class _DesignsTable(QWidget):
                     self.table.selectRow(r)
                     return
 
+    # ── Thumbnail handlers ──────────────────────────────
+
     def _on_row_thumb_ready(self, row: int, pixmap):
-        """يُحدّث الـ thumbnail في الصف المحدد."""
+        """يُحدّث الـ thumbnail في الصف عند انتهاء التحميل."""
+        self._set_row_thumb(row, pixmap)
+
+    def _on_xcf_changed(self, path: str):
+        """
+        يُستدعى تلقائياً من XcfWatcher عند تغيير ملف XCF.
+        يحدث thumbnail الصف المرتبط بالملف.
+        """
+        import os
+        norm = os.path.normpath(path)
+        row  = self._xcf_row_map.get(norm)
+        if row is None or row >= self.table.rowCount():
+            return
+
+        # حمّل الـ thumbnail الجديد في الخلفية
+        worker = _RowThumbWorker(row, path, _TABLE_THUMB)
+        worker.done.connect(self._on_row_thumb_ready)
+        worker.start()
+        self._thumb_workers.append(worker)
+
+    def _set_row_thumb(self, row: int, pixmap):
+        """يضع الـ pixmap في خلية الـ thumbnail."""
         if row >= self.table.rowCount():
             return
         widget = self.table.cellWidget(row, _COL_THUMB)
@@ -458,7 +493,7 @@ class _DesignsTable(QWidget):
                 margin: 2px;
             """)
         else:
-            widget.setText("📄")
+            widget.setText("🎨")
             widget.setStyleSheet(f"""
                 background: #fafafa;
                 border: 1px dashed #c5cae9;
@@ -466,6 +501,8 @@ class _DesignsTable(QWidget):
                 margin: 2px;
                 color: #9e9e9e;
             """)
+
+    # ── مساعدات ────────────────────────────────────────
 
     def _reset_filters(self):
         for w in (self.inp_search, self.cmb_category, self.cmb_set):
@@ -477,8 +514,6 @@ class _DesignsTable(QWidget):
             w.blockSignals(False)
         self._apply_filter()
         self.set_filter_changed.emit(None)
-
-    # ── تفاعل الجدول ───────────────────────────────────
 
     def _selected_id(self):
         row  = self.table.currentRow()
