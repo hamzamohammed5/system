@@ -240,7 +240,7 @@ class SettingsDialog(QDialog):
             units = load_units(conn)
             conn.close()
         except Exception:
-            from ui.widgets.shared.unit_combo import _DEFAULT_UNITS
+            # ← إزالة الـ local import — _DEFAULT_UNITS متعرّف في الأعلى
             units = list(_DEFAULT_UNITS)
 
         default_vals = {u[0] for u in _DEFAULT_UNITS}
@@ -257,7 +257,6 @@ class SettingsDialog(QDialog):
 
     def _add_unit(self):
         """يفتح input صغير لإضافة وحدة جديدة."""
-        # الاسم المختصر (value)
         val, ok = QInputDialog.getText(
             self, "إضافة وحدة",
             "اكتب رمز الوحدة (مثال: ft, yd, pt):",
@@ -267,7 +266,6 @@ class SettingsDialog(QDialog):
 
         val = val.strip().lower()
 
-        # التسمية
         label, ok2 = QInputDialog.getText(
             self, "إضافة وحدة",
             f"اكتب التسمية الكاملة للوحدة «{val}» (مثال: ft — قدم):",
@@ -370,12 +368,10 @@ class SettingsDialog(QDialog):
     # ── حفظ ───────────────────────────────────────────────
 
     def _save(self):
-        # حجم الخط
         size = self._slider.value()
         set_font_size(size)
         apply_font(self._app, size)
 
-        # مسار GIMP
         try:
             conn = get_connection()
             set_setting(conn, "gimp_path", self._inp_gimp.text().strip())
