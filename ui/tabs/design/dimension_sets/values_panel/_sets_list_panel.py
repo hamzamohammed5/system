@@ -1,14 +1,13 @@
 """
-ui/tabs/design/dimension_sets/values_panel/_setsList_panel.py
+ui/tabs/design/dimension_sets/values_panel/_sets_list_panel.py
 =====================================
-
+مع دعم تغيير حجم الخط ديناميكياً.
 """
 
 from PyQt5.QtWidgets import (
     QWidget, QVBoxLayout, QHBoxLayout,
     QLabel, QLineEdit,
-    QScrollArea, QFrame
-
+    QScrollArea, QFrame, QComboBox,
 )
 from PyQt5.QtCore import Qt, pyqtSignal
 
@@ -16,6 +15,7 @@ from db.designs.dimension_sets_repo import (
     fetch_all_dimension_sets,
     fetch_all_design_categories, build_category_tree,
 )
+from ui.app_settings import get_font_size, fs
 
 _BLUE       = "#1565c0"
 _BLUE_LIGHT = "#e8f0fe"
@@ -24,7 +24,6 @@ _GRAY_BG    = "#f8f9fc"
 _BORDER     = "#e0e7f3"
 _TEXT       = "#1a2340"
 _TEXT_MUTED = "#7a869a"
-
 
 _CARD_NORMAL = f"""
     QFrame {{
@@ -48,17 +47,17 @@ _CARD_SELECTED = f"""
 
 
 # ══════════════════════════════════════════════════════════
-# بطاقة مجموعة مقاسات (في القايمة اليسار)
+# بطاقة مجموعة مقاسات
 # ══════════════════════════════════════════════════════════
 
 class _SetCard(QFrame):
-    clicked = pyqtSignal(int)   # set_id
+    clicked = pyqtSignal(int)
 
     def __init__(self, set_id: int, name: str,
                  category: str, unit: str, fields_cnt: int,
                  instances_cnt: int, parent=None):
         super().__init__(parent)
-        self.set_id   = set_id
+        self.set_id    = set_id
         self._selected = False
         self.setCursor(Qt.PointingHandCursor)
         self.setStyleSheet(_CARD_NORMAL)
@@ -70,51 +69,78 @@ class _SetCard(QFrame):
         lay.setContentsMargins(14, 10, 14, 10)
         lay.setSpacing(10)
 
+        base = get_font_size()
+
         icon_lbl = QLabel("📐")
-        icon_lbl.setStyleSheet(f"font-size: 22px; background: transparent; border: none;")
+        icon_lbl.setStyleSheet(f"font-size: {fs(base,+4)}pt; background: transparent; border: none;")
         icon_lbl.setFixedWidth(34)
         icon_lbl.setAlignment(Qt.AlignCenter)
 
         text_col = QVBoxLayout()
         text_col.setSpacing(2)
 
-        name_lbl = QLabel(name)
-        name_lbl.setStyleSheet(f"""
+        self._name_lbl = QLabel(name)
+        self._name_lbl.setStyleSheet(f"""
             font-weight: bold;
-            font-size: 13px;
+            font-size: {fs(base,+1)}pt;
             color: {_TEXT};
             background: transparent;
             border: none;
         """)
 
-        meta_lbl = QLabel(
+        self._meta_lbl = QLabel(
             f"{category or '—'}  ·  {unit}  ·  {fields_cnt} حقل"
         )
-        meta_lbl.setStyleSheet(f"""
-            font-size: 10px;
+        self._meta_lbl.setStyleSheet(f"""
+            font-size: {fs(base,-1)}pt;
             color: {_TEXT_MUTED};
             background: transparent;
             border: none;
         """)
 
-        text_col.addWidget(name_lbl)
-        text_col.addWidget(meta_lbl)
+        text_col.addWidget(self._name_lbl)
+        text_col.addWidget(self._meta_lbl)
 
-        badge = QLabel(f"{instances_cnt} قيمة")
-        badge.setAlignment(Qt.AlignCenter)
-        badge.setFixedSize(58, 22)
-        badge.setStyleSheet(f"""
+        self._badge = QLabel(f"{instances_cnt} قيمة")
+        self._badge.setAlignment(Qt.AlignCenter)
+        self._badge.setFixedSize(58, 22)
+        self._badge.setStyleSheet(f"""
             background: {_BLUE_LIGHT};
             color: {_BLUE};
             border-radius: 11px;
-            font-size: 10px;
+            font-size: {fs(base,-1)}pt;
             font-weight: bold;
             border: none;
         """)
 
         lay.addWidget(icon_lbl)
         lay.addLayout(text_col, stretch=1)
-        lay.addWidget(badge)
+        lay.addWidget(self._badge)
+
+    def refresh_font(self):
+        """يُستدعى عند تغيير حجم الخط."""
+        base = get_font_size()
+        self._name_lbl.setStyleSheet(f"""
+            font-weight: bold;
+            font-size: {fs(base,+1)}pt;
+            color: {_TEXT};
+            background: transparent;
+            border: none;
+        """)
+        self._meta_lbl.setStyleSheet(f"""
+            font-size: {fs(base,-1)}pt;
+            color: {_TEXT_MUTED};
+            background: transparent;
+            border: none;
+        """)
+        self._badge.setStyleSheet(f"""
+            background: {_BLUE_LIGHT};
+            color: {_BLUE};
+            border-radius: 11px;
+            font-size: {fs(base,-1)}pt;
+            font-weight: bold;
+            border: none;
+        """)
 
     def set_selected(self, sel: bool):
         self._selected = sel
@@ -126,36 +152,72 @@ class _SetCard(QFrame):
 
 
 # ══════════════════════════════════════════════════════════
-# قايمة مجموعات المقاسات (يسار)
+# قائمة مجموعات المقاسات
 # ══════════════════════════════════════════════════════════
 
 class _SetsListPanel(QWidget):
-    set_selected = pyqtSignal(int)   # set_id
+    set_selected = pyqtSignal(int)
 
     def __init__(self, conn, parent=None):
         super().__init__(parent)
         self.conn       = conn
-        self._cards     = {}   # set_id → _SetCard
+        self._cards     = {}
         self._active_id = None
         self._all_rows  = []
         self._build()
         self._load()
 
-    def _build(self):
-        root = QVBoxLayout(self)
-        root.setContentsMargins(0, 0, 0, 0)
-        root.setSpacing(0)
-
-        hdr = QLabel("📐  مجموعات المقاسات")
-        hdr.setStyleSheet(f"""
+    def _on_font_changed(self, size: int):
+        """يُستدعى من _ValuesPanel عند تغيير حجم الخط."""
+        base = size
+        # تحديث الـ header
+        self._hdr_lbl.setStyleSheet(f"""
             font-weight: bold;
-            font-size: 13px;
+            font-size: {fs(base,+1)}pt;
             color: {_BLUE};
             background: {_BLUE_LIGHT};
             padding: 10px 16px;
             border-bottom: 1px solid {_BORDER};
         """)
-        root.addWidget(hdr)
+        # تحديث حقل البحث
+        self._search_inp.setStyleSheet(f"""
+            QLineEdit {{
+                border: 1.5px solid {_BORDER};
+                border-radius: 8px;
+                padding: 3px 10px;
+                font-size: {fs(base,0)}pt;
+                background: {_GRAY_BG};
+            }}
+            QLineEdit:focus {{ border-color: {_BLUE}; background: white; }}
+        """)
+        # تحديث عداد النتائج
+        self._count_lbl.setStyleSheet(f"""
+            color: {_TEXT_MUTED};
+            font-size: {fs(base,-1)}pt;
+            padding: 6px;
+            background: white;
+            border-top: 1px solid {_BORDER};
+        """)
+        # تحديث كل الكروت
+        for card in self._cards.values():
+            card.refresh_font()
+
+    def _build(self):
+        base = get_font_size()
+        root = QVBoxLayout(self)
+        root.setContentsMargins(0, 0, 0, 0)
+        root.setSpacing(0)
+
+        self._hdr_lbl = QLabel("📐  مجموعات المقاسات")
+        self._hdr_lbl.setStyleSheet(f"""
+            font-weight: bold;
+            font-size: {fs(base,+1)}pt;
+            color: {_BLUE};
+            background: {_BLUE_LIGHT};
+            padding: 10px 16px;
+            border-bottom: 1px solid {_BORDER};
+        """)
+        root.addWidget(self._hdr_lbl)
 
         search_frame = QFrame()
         search_frame.setStyleSheet(f"""
@@ -168,40 +230,39 @@ class _SetsListPanel(QWidget):
         s_lay.setContentsMargins(10, 8, 10, 8)
         s_lay.setSpacing(6)
 
-        self.inp_search = QLineEdit()
-        self.inp_search.setPlaceholderText("🔍  بحث...")
-        self.inp_search.setMinimumHeight(32)
-        self.inp_search.setStyleSheet(f"""
+        self._search_inp = QLineEdit()
+        self._search_inp.setPlaceholderText("🔍  بحث...")
+        self._search_inp.setMinimumHeight(32)
+        self._search_inp.setStyleSheet(f"""
             QLineEdit {{
                 border: 1.5px solid {_BORDER};
                 border-radius: 8px;
                 padding: 3px 10px;
-                font-size: 12px;
+                font-size: {fs(base,0)}pt;
                 background: {_GRAY_BG};
             }}
             QLineEdit:focus {{ border-color: {_BLUE}; background: white; }}
         """)
-        self.inp_search.textChanged.connect(self._apply_filter)
+        self._search_inp.textChanged.connect(self._apply_filter)
 
-        from PyQt5.QtWidgets import QComboBox
-        self.cmb_cat = QComboBox()
-        self.cmb_cat.setMinimumHeight(32)
-        self.cmb_cat.setMaximumWidth(130)
-        self.cmb_cat.setStyleSheet(f"""
+        self._cmb_cat = QComboBox()
+        self._cmb_cat.setMinimumHeight(32)
+        self._cmb_cat.setMaximumWidth(130)
+        self._cmb_cat.setStyleSheet(f"""
             QComboBox {{
                 border: 1.5px solid {_BORDER};
                 border-radius: 8px;
                 padding: 3px 8px;
-                font-size: 11px;
+                font-size: {fs(base,-1)}pt;
                 background: {_GRAY_BG};
             }}
             QComboBox:focus {{ border-color: {_BLUE}; }}
             QComboBox::drop-down {{ border: none; }}
         """)
-        self.cmb_cat.currentIndexChanged.connect(self._apply_filter)
+        self._cmb_cat.currentIndexChanged.connect(self._apply_filter)
 
-        s_lay.addWidget(self.inp_search, stretch=1)
-        s_lay.addWidget(self.cmb_cat)
+        s_lay.addWidget(self._search_inp, stretch=1)
+        s_lay.addWidget(self._cmb_cat)
         root.addWidget(search_frame)
 
         scroll = QScrollArea()
@@ -229,37 +290,36 @@ class _SetsListPanel(QWidget):
         scroll.setWidget(self._cards_widget)
         root.addWidget(scroll, stretch=1)
 
-        self.lbl_count = QLabel("")
-        self.lbl_count.setAlignment(Qt.AlignCenter)
-        self.lbl_count.setStyleSheet(f"""
+        self._count_lbl = QLabel("")
+        self._count_lbl.setAlignment(Qt.AlignCenter)
+        self._count_lbl.setStyleSheet(f"""
             color: {_TEXT_MUTED};
-            font-size: 10px;
+            font-size: {fs(base,-1)}pt;
             padding: 6px;
             background: white;
             border-top: 1px solid {_BORDER};
         """)
-        root.addWidget(self.lbl_count)
+        root.addWidget(self._count_lbl)
 
     def _reload_cat_filter(self):
-        from PyQt5.QtWidgets import QComboBox
-        prev = self.cmb_cat.currentData()
-        self.cmb_cat.blockSignals(True)
-        self.cmb_cat.clear()
-        self.cmb_cat.addItem("كل التصنيفات", None)
+        prev = self._cmb_cat.currentData()
+        self._cmb_cat.blockSignals(True)
+        self._cmb_cat.clear()
+        self._cmb_cat.addItem("كل التصنيفات", None)
         rows = fetch_all_design_categories(self.conn)
         tree = build_category_tree(rows)
         self._add_cat_nodes(tree, 0)
-        for i in range(self.cmb_cat.count()):
-            if self.cmb_cat.itemData(i) == prev:
-                self.cmb_cat.setCurrentIndex(i)
+        for i in range(self._cmb_cat.count()):
+            if self._cmb_cat.itemData(i) == prev:
+                self._cmb_cat.setCurrentIndex(i)
                 break
-        self.cmb_cat.blockSignals(False)
+        self._cmb_cat.blockSignals(False)
 
     def _add_cat_nodes(self, nodes, depth):
         indent = "  " * depth
         arrow  = "↳ " if depth > 0 else ""
         for node in nodes:
-            self.cmb_cat.addItem(f"{indent}{arrow}{node['name']}", node["id"])
+            self._cmb_cat.addItem(f"{indent}{arrow}{node['name']}", node["id"])
             if node["children"]:
                 self._add_cat_nodes(node["children"], depth + 1)
 
@@ -269,8 +329,8 @@ class _SetsListPanel(QWidget):
         self._apply_filter()
 
     def _apply_filter(self):
-        q      = self.inp_search.text().strip().lower()
-        cat_id = self.cmb_cat.currentData()
+        q      = self._search_inp.text().strip().lower()
+        cat_id = self._cmb_cat.currentData()
 
         for card in self._cards.values():
             self._cards_layout.removeWidget(card)
@@ -311,7 +371,7 @@ class _SetsListPanel(QWidget):
             shown += 1
 
         total = len(self._all_rows)
-        self.lbl_count.setText(
+        self._count_lbl.setText(
             f"{shown} مجموعة" if shown == total
             else f"{shown} من {total} مجموعة"
         )
@@ -331,4 +391,3 @@ class _SetsListPanel(QWidget):
 
     def refresh_card(self, set_id: int):
         self._load()
-

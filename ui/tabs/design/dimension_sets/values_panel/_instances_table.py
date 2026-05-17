@@ -1,17 +1,16 @@
 """
 ui/tabs/design/dimension_sets/values_panel/_instances_table.py
 =====================================
-
+مع دعم تغيير حجم الخط ديناميكياً.
 """
-
 
 from PyQt5.QtWidgets import (
     QWidget, QVBoxLayout, QHBoxLayout,
-    QPushButton, QLabel, 
+    QPushButton, QLabel,
     QMessageBox, QFrame,
     QInputDialog,
     QTableWidget, QTableWidgetItem, QHeaderView,
-    QAbstractItemView
+    QAbstractItemView,
 )
 from PyQt5.QtCore import Qt
 from PyQt5.QtGui import QFont, QColor
@@ -20,10 +19,10 @@ from db.designs.dimension_sets_repo import (
     fetch_fields_for_set,
     fetch_instances_for_set, fetch_instance,
     delete_instance, duplicate_instance,
-    fetch_instance_values
+    fetch_instance_values,
 )
 from ._instance_popup import _BTN_GHOST, _BTN_PRIMARY, _InstancePopup
-
+from ui.app_settings import get_font_size, fs
 
 _BLUE       = "#1565c0"
 _BLUE_LIGHT = "#e8f0fe"
@@ -35,27 +34,41 @@ _TEXT       = "#1a2340"
 _TEXT_MUTED = "#7a869a"
 
 
-_BTN_DANGER = f"""
-    QPushButton {{
-        background: {_RED_LT};
-        color: {_RED};
-        border: 1.5px solid #ef9a9a;
-        border-radius: 7px;
-        padding: 5px 14px;
-        font-size: 12px;
-    }}
-    QPushButton:hover {{ background: #ffcdd2; }}
-"""
-# ══════════════════════════════════════════════════════════
-# جدول الـ Instances (يمين)
-# ══════════════════════════════════════════════════════════
+def _btn_danger_ss(base: int) -> str:
+    return (
+        f"QPushButton {{"
+        f"  background: {_RED_LT}; color: {_RED};"
+        f"  border: 1.5px solid #ef9a9a; border-radius: 7px;"
+        f"  padding: 5px 14px; font-size: {fs(base,0)}pt;"
+        f"}}"
+        f"QPushButton:hover {{ background: #ffcdd2; }}"
+    )
+
+
+def _btn_ghost_ss(base: int) -> str:
+    return (
+        f"QPushButton {{"
+        f"  background: white; color: {_BLUE};"
+        f"  border: 1.5px solid {_BLUE_LIGHT}; border-radius: 7px;"
+        f"  padding: 5px 14px; font-size: {fs(base,0)}pt;"
+        f"}}"
+        f"QPushButton:hover {{ background: {_BLUE_LIGHT}; }}"
+    )
+
+
+def _btn_primary_ss(base: int) -> str:
+    return (
+        f"QPushButton {{"
+        f"  background: {_BLUE}; color: white;"
+        f"  border: none; border-radius: 7px;"
+        f"  padding: 6px 18px; font-weight: bold; font-size: {fs(base,0)}pt;"
+        f"}}"
+        f"QPushButton:hover  {{ background: #0d47a1; }}"
+        f"QPushButton:disabled {{ background: #b0bec5; }}"
+    )
+
 
 class _InstancesTable(QWidget):
-    """
-    يعرض instances المجموعة المختارة في جدول واضح.
-    الأعمدة: الاسم + قيمة كل حقل.
-    """
-
     def __init__(self, conn, parent=None):
         super().__init__(parent)
         self.conn    = conn
@@ -63,78 +76,45 @@ class _InstancesTable(QWidget):
         self._fields = []
         self._build()
 
-    def _build(self):
-        root = QVBoxLayout(self)
-        root.setContentsMargins(0, 0, 0, 0)
-        root.setSpacing(0)
+    def _on_font_changed(self, size: int):
+        """يُستدعى من _ValuesPanel عند تغيير حجم الخط."""
+        base = size
 
-        toolbar = QFrame()
-        toolbar.setStyleSheet(f"""
-            QFrame {{
-                background: white;
-                border-bottom: 1px solid {_BORDER};
-            }}
-        """)
-        t_lay = QHBoxLayout(toolbar)
-        t_lay.setContentsMargins(14, 10, 14, 10)
-        t_lay.setSpacing(10)
-
-        self.lbl_set_name = QLabel("اختر مجموعة مقاسات من القايمة")
-        self.lbl_set_name.setStyleSheet(f"""
+        # تحديث الـ toolbar label
+        self._lbl_set_name.setStyleSheet(f"""
             font-weight: bold;
-            font-size: 13px;
+            font-size: {fs(base,+1)}pt;
             color: {_TEXT};
             background: transparent;
         """)
 
-        t_lay.addWidget(self.lbl_set_name, stretch=1)
+        # تحديث الأزرار
+        self.btn_add.setStyleSheet(_btn_primary_ss(base))
+        self.btn_edit.setStyleSheet(_btn_ghost_ss(base))
+        self.btn_copy.setStyleSheet(_btn_ghost_ss(base))
+        self.btn_del.setStyleSheet(_btn_danger_ss(base))
 
-        self.btn_add = QPushButton("➕  إضافة قيمة")
-        self.btn_add.setStyleSheet(_BTN_PRIMARY)
-        self.btn_add.setMinimumHeight(34)
-        self.btn_add.setEnabled(False)
-        self.btn_add.clicked.connect(self._add_instance)
+        # تحديث الجدول
+        self.table.setStyleSheet(self._table_ss())
 
-        self.btn_edit = QPushButton("✏️  تعديل")
-        self.btn_edit.setStyleSheet(_BTN_GHOST)
-        self.btn_edit.setMinimumHeight(34)
-        self.btn_edit.setEnabled(False)
-        self.btn_edit.clicked.connect(self._edit_instance)
+        # تحديث الـ status bar
+        self._status_bar.setStyleSheet(f"""
+            background: {_GRAY_BG};
+            color: {_TEXT_MUTED};
+            font-size: {fs(base,-1)}pt;
+            padding: 6px;
+            border-top: 1px solid {_BORDER};
+        """)
 
-        self.btn_copy = QPushButton("📋  نسخ")
-        self.btn_copy.setStyleSheet(_BTN_GHOST)
-        self.btn_copy.setMinimumHeight(34)
-        self.btn_copy.setEnabled(False)
-        self.btn_copy.clicked.connect(self._copy_instance)
-
-        self.btn_del = QPushButton("🗑️  حذف")
-        self.btn_del.setStyleSheet(_BTN_DANGER)
-        self.btn_del.setMinimumHeight(34)
-        self.btn_del.setEnabled(False)
-        self.btn_del.clicked.connect(self._delete_instance)
-
-        t_lay.addWidget(self.btn_add)
-        t_lay.addWidget(self.btn_edit)
-        t_lay.addWidget(self.btn_copy)
-        t_lay.addWidget(self.btn_del)
-
-        root.addWidget(toolbar)
-
-        self.table = QTableWidget()
-        self.table.setSelectionBehavior(QAbstractItemView.SelectRows)
-        self.table.setEditTriggers(QAbstractItemView.NoEditTriggers)
-        self.table.setAlternatingRowColors(True)
-        self.table.setWordWrap(False)
-        self.table.verticalHeader().setVisible(False)
-        self.table.setShowGrid(True)
-        self.table.setGridStyle(Qt.SolidLine)
-        self.table.setStyleSheet(f"""
+    def _table_ss(self) -> str:
+        base = get_font_size()
+        return f"""
             QTableWidget {{
                 border: none;
                 background: white;
                 alternate-background-color: #fafbff;
                 gridline-color: {_BORDER};
-                font-size: 12px;
+                font-size: {fs(base,0)}pt;
                 color: {_TEXT};
                 outline: none;
             }}
@@ -149,13 +129,82 @@ class _InstancesTable(QWidget):
                 background: {_GRAY_BG};
                 color: {_TEXT_MUTED};
                 font-weight: bold;
-                font-size: 11px;
+                font-size: {fs(base,-1)}pt;
                 padding: 8px 12px;
                 border: none;
                 border-bottom: 2px solid {_BORDER};
                 border-right: 1px solid {_BORDER};
             }}
+        """
+
+    def _build(self):
+        base = get_font_size()
+        root = QVBoxLayout(self)
+        root.setContentsMargins(0, 0, 0, 0)
+        root.setSpacing(0)
+
+        # ── Toolbar ──
+        toolbar = QFrame()
+        toolbar.setStyleSheet(f"""
+            QFrame {{
+                background: white;
+                border-bottom: 1px solid {_BORDER};
+            }}
         """)
+        t_lay = QHBoxLayout(toolbar)
+        t_lay.setContentsMargins(14, 10, 14, 10)
+        t_lay.setSpacing(10)
+
+        self._lbl_set_name = QLabel("اختر مجموعة مقاسات من القايمة")
+        self._lbl_set_name.setStyleSheet(f"""
+            font-weight: bold;
+            font-size: {fs(base,+1)}pt;
+            color: {_TEXT};
+            background: transparent;
+        """)
+        t_lay.addWidget(self._lbl_set_name, stretch=1)
+
+        self.btn_add = QPushButton("➕  إضافة قيمة")
+        self.btn_add.setStyleSheet(_btn_primary_ss(base))
+        self.btn_add.setMinimumHeight(34)
+        self.btn_add.setEnabled(False)
+        self.btn_add.clicked.connect(self._add_instance)
+
+        self.btn_edit = QPushButton("✏️  تعديل")
+        self.btn_edit.setStyleSheet(_btn_ghost_ss(base))
+        self.btn_edit.setMinimumHeight(34)
+        self.btn_edit.setEnabled(False)
+        self.btn_edit.clicked.connect(self._edit_instance)
+
+        self.btn_copy = QPushButton("📋  نسخ")
+        self.btn_copy.setStyleSheet(_btn_ghost_ss(base))
+        self.btn_copy.setMinimumHeight(34)
+        self.btn_copy.setEnabled(False)
+        self.btn_copy.clicked.connect(self._copy_instance)
+
+        self.btn_del = QPushButton("🗑️  حذف")
+        self.btn_del.setStyleSheet(_btn_danger_ss(base))
+        self.btn_del.setMinimumHeight(34)
+        self.btn_del.setEnabled(False)
+        self.btn_del.clicked.connect(self._delete_instance)
+
+        t_lay.addWidget(self.btn_add)
+        t_lay.addWidget(self.btn_edit)
+        t_lay.addWidget(self.btn_copy)
+        t_lay.addWidget(self.btn_del)
+
+        root.addWidget(toolbar)
+
+        # ── الجدول ──
+        self.table = QTableWidget()
+        self.table.setSelectionBehavior(QAbstractItemView.SelectRows)
+        self.table.setEditTriggers(QAbstractItemView.NoEditTriggers)
+        self.table.setAlternatingRowColors(True)
+        self.table.setWordWrap(False)
+        self.table.verticalHeader().setVisible(False)
+        self.table.setShowGrid(True)
+        self.table.setGridStyle(Qt.SolidLine)
+        self.table.setStyleSheet(self._table_ss())
         self.table.horizontalHeader().setDefaultAlignment(Qt.AlignRight | Qt.AlignVCenter)
         self.table.horizontalHeader().setMinimumSectionSize(60)
         self.table.horizontalHeader().setStretchLastSection(True)
@@ -163,17 +212,19 @@ class _InstancesTable(QWidget):
         self.table.doubleClicked.connect(lambda: self._edit_instance())
         root.addWidget(self.table, stretch=1)
 
+        # ── Status Bar ──
         self._status_bar = QLabel("")
         self._status_bar.setAlignment(Qt.AlignCenter)
         self._status_bar.setStyleSheet(f"""
             background: {_GRAY_BG};
             color: {_TEXT_MUTED};
-            font-size: 10px;
+            font-size: {fs(base,-1)}pt;
             padding: 6px;
             border-top: 1px solid {_BORDER};
         """)
         root.addWidget(self._status_bar)
 
+        # ── Empty State ──
         self._empty_state = QFrame()
         self._empty_state.setStyleSheet("background: white; border: none;")
         e_lay = QVBoxLayout(self._empty_state)
@@ -183,10 +234,10 @@ class _InstancesTable(QWidget):
         e_lbl.setStyleSheet("font-size: 40px; background: transparent;")
         e_msg = QLabel("اختر مجموعة مقاسات لعرض قيمها")
         e_msg.setAlignment(Qt.AlignCenter)
-        e_msg.setStyleSheet(f"color: {_TEXT_MUTED}; font-size: 13px; background: transparent;")
+        e_msg.setStyleSheet(f"color: {_TEXT_MUTED}; font-size: {fs(base,+1)}pt; background: transparent;")
         e_hint = QLabel("اضغط على أي مجموعة من القايمة على اليسار")
         e_hint.setAlignment(Qt.AlignCenter)
-        e_hint.setStyleSheet(f"color: #b0bec5; font-size: 11px; background: transparent;")
+        e_hint.setStyleSheet(f"color: #b0bec5; font-size: {fs(base,-1)}pt; background: transparent;")
         e_lay.addWidget(e_lbl)
         e_lay.addSpacing(8)
         e_lay.addWidget(e_msg)
@@ -207,7 +258,7 @@ class _InstancesTable(QWidget):
             set_name = ds["name"] if ds else f"مجموعة #{set_id}"
         except Exception:
             set_name = f"مجموعة #{set_id}"
-        self.lbl_set_name.setText(f"📐  {set_name}")
+        self._lbl_set_name.setText(f"📐  {set_name}")
 
         self._fields = [
             f for f in fetch_fields_for_set(self.conn, set_id)
@@ -241,10 +292,11 @@ class _InstancesTable(QWidget):
             hh.setSectionResizeMode(len(col_labels) - 1, QHeaderView.Stretch)
 
         instances = fetch_instances_for_set(self.conn, self._set_id)
+        base = get_font_size()
         for inst in instances:
             r = self.table.rowCount()
             self.table.insertRow(r)
-            self.table.setRowHeight(r, 42)
+            self.table.setRowHeight(r, fs(base, 0) * 3 + 6)
 
             name = inst["name"].strip() if inst["name"].strip() else f"مجموعة #{inst['id']}"
             name_item = QTableWidgetItem(name)
@@ -258,10 +310,7 @@ class _InstancesTable(QWidget):
                 val_info = values.get(f["id"], {})
                 val = val_info.get("value_num")
                 unit = f["unit"] or ""
-                if val is not None:
-                    txt = f"{val:g}  {unit}".strip()
-                else:
-                    txt = "—"
+                txt  = f"{val:g}  {unit}".strip() if val is not None else "—"
                 item = QTableWidgetItem(txt)
                 item.setTextAlignment(Qt.AlignRight | Qt.AlignVCenter)
                 if val is None:
@@ -306,7 +355,7 @@ class _InstancesTable(QWidget):
         if not iid:
             return
         popup = _InstancePopup(self.conn, self._set_id,
-                                instance_id=iid, parent=self)
+                               instance_id=iid, parent=self)
         popup.saved.connect(self._on_saved)
         popup.exec_()
 
@@ -355,9 +404,8 @@ class _InstancesTable(QWidget):
         self.table.setVisible(False)
         self._status_bar.setVisible(False)
         self._empty_state.setVisible(True)
-        self.lbl_set_name.setText("اختر مجموعة مقاسات من القايمة")
+        self._lbl_set_name.setText("اختر مجموعة مقاسات من القايمة")
         self.btn_add.setEnabled(False)
         self.btn_edit.setEnabled(False)
         self.btn_copy.setEnabled(False)
         self.btn_del.setEnabled(False)
-

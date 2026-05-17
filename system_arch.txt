@@ -1,5 +1,5 @@
 File Tree Snapshot
-Generated : 2026-05-17 18:36:48
+Generated : 2026-05-17 18:47:39
 Source    : D:\My Workspace\Hg\Alhabaar\accountant\system
 Extensions: .py
 ────────────────────────────────────────────────────────────
@@ -138,7 +138,7 @@ system/
 │   │   │   │   ├── values_panel/
 │   │   │   │   │   ├── _instance_popup.py
 │   │   │   │   │   ├── _instances_table.py
-│   │   │   │   │   └── _setsList_panel.py
+│   │   │   │   │   └── _sets_list_panel.py
 │   │   │   │   ├── _categories_panel.py
 │   │   │   │   ├── _field_dialog.py
 │   │   │   │   ├── _fields_panel.py
@@ -146,6 +146,7 @@ system/
 │   │   │   │   ├── _sets_panel.py
 │   │   │   │   ├── _source_picker_dialog.py
 │   │   │   │   └── _values_panel.py
+│   │   │   ├── design_styles.py
 │   │   │   ├── designs_tab.py
 │   │   │   └── dimension_sets_tab.py
 │   │   ├── inventory/
