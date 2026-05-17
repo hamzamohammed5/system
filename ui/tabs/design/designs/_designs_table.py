@@ -1,12 +1,13 @@
 """
 ui/tabs/design/designs/_designs_table.py
 ==========================================
-جدول التصميمات — مع auto-refresh للـ thumbnail عند تغيير ملف XCF.
+جدول التصميمات — تصميم Modern/Flat محسّن.
 
-التغييرات:
-  - يسجل كل XCF في XcfWatcher عند تحميل الجدول
-  - _on_xcf_changed يحدث الـ thumbnail في الصف المناسب تلقائياً
-  - يلغي كل المراقبات عند إعادة تحميل الجدول
+التحسينات:
+  - شريط فلاتر نظيف في صف واحد
+  - جدول بـ row height مريحة وحدود خفيفة
+  - thumbnail أوضح مع placeholder مناسب
+  - عداد النتائج واضح
 """
 
 from PyQt5.QtWidgets import (
@@ -17,7 +18,7 @@ from PyQt5.QtWidgets import (
     QAbstractItemView,
 )
 from PyQt5.QtCore  import Qt, pyqtSignal, QThread, pyqtSignal as Signal
-from PyQt5.QtGui   import QPixmap, QColor
+from PyQt5.QtGui   import QPixmap, QColor, QFont
 
 from db.designs.designs_repo import fetch_design, delete_design
 from db.designs.designs_sizes_repo import fetch_all_designs_summary
@@ -29,13 +30,23 @@ from ui.helpers import danger_button, confirm_delete, buttons_row
 from ._xcf_thumbnail import get_xcf_thumbnail, get_watcher
 from ._design_detail_panel import _DesignDetailPanel
 
-_BLUE       = "#1565c0"
-_BLUE_LIGHT = "#e8f0fe"
-_BLUE_MID   = "#bbdefb"
-_GREEN      = "#2e7d32"
-_ORANGE     = "#e65100"
+# ── ألوان النظام ──
+_BG         = "#ffffff"
+_BG_SUBTLE  = "#f8fafc"
+_BORDER     = "#e2e8f0"
+_BORDER_MED = "#cbd5e1"
+_TEXT       = "#0f172a"
+_TEXT_MED   = "#475569"
+_TEXT_MUTED = "#94a3b8"
+_BLUE       = "#3b82f6"
+_BLUE_LT    = "#eff6ff"
+_BLUE_MED   = "#bfdbfe"
+_GREEN      = "#16a34a"
+_ORANGE     = "#ea580c"
+_RED        = "#dc2626"
+_RED_LT     = "#fef2f2"
 
-_TABLE_THUMB = 56
+_TABLE_THUMB = 52
 
 
 # ════════════════════════════════════════════════════════
@@ -43,7 +54,7 @@ _TABLE_THUMB = 56
 # ════════════════════════════════════════════════════════
 
 class _RowThumbWorker(QThread):
-    done = Signal(int, object)   # row_index, QPixmap|None
+    done = Signal(int, object)
 
     def __init__(self, row: int, xcf_path: str, size: int = _TABLE_THUMB):
         super().__init__()
@@ -118,7 +129,7 @@ _COL_NAME     = 2
 _COL_CATEGORY = 3
 _COL_SIZES    = 4
 _COL_FILES    = 5
-_COLS         = ["", "ID", "الاسم", "التصنيف", "المقاسات", "الملفات"]
+_COLS         = ["", "ID", "الاسم", "التصنيف", "مقاسات", "ملفات"]
 
 
 # ════════════════════════════════════════════════════════
@@ -136,11 +147,8 @@ class _DesignsTable(QWidget):
         self.conn   = conn
         self._panel = detail_panel
         self._thumb_workers: list[_RowThumbWorker] = []
-
-        # map: xcf_path → row index (للتحديث السريع)
         self._xcf_row_map: dict[str, int] = {}
 
-        # اشترك في XcfWatcher مرة واحدة
         get_watcher().file_changed.connect(self._on_xcf_changed)
 
         self._build()
@@ -151,89 +159,93 @@ class _DesignsTable(QWidget):
     def _build(self):
         root = QVBoxLayout(self)
         root.setContentsMargins(0, 0, 0, 0)
-        root.setSpacing(6)
+        root.setSpacing(0)
 
-        # ── شريط الفلتر ──
-        ff = QFrame()
-        ff.setStyleSheet(f"""
+        # ── شريط الفلاتر ──
+        filter_bar = QFrame()
+        filter_bar.setStyleSheet(f"""
             QFrame {{
-                background: {_BLUE_LIGHT};
-                border: 1px solid {_BLUE_MID};
-                border-radius: 6px;
+                background: {_BG};
+                border-bottom: 1px solid {_BORDER};
             }}
         """)
-        fl = QVBoxLayout(ff)
-        fl.setContentsMargins(8, 8, 8, 8)
-        fl.setSpacing(6)
+        fb_lay = QVBoxLayout(filter_bar)
+        fb_lay.setContentsMargins(12, 10, 12, 10)
+        fb_lay.setSpacing(8)
 
         # صف 1: بحث + زر جديد
-        r1 = QHBoxLayout()
+        row1 = QHBoxLayout()
+        row1.setSpacing(8)
+
         self.inp_search = QLineEdit()
         self.inp_search.setPlaceholderText("🔍  بحث بالاسم...")
-        self.inp_search.setMinimumHeight(28)
+        self.inp_search.setStyleSheet(self._input_ss())
+        self.inp_search.setMinimumHeight(32)
         self.inp_search.textChanged.connect(self._apply_filter)
+
+        btn_new = QPushButton("➕  جديد")
+        btn_new.setMinimumHeight(32)
+        btn_new.setStyleSheet(f"""
+            QPushButton {{
+                background:{_BLUE}; color:#fff; border:none;
+                border-radius:6px; padding:0 14px;
+                font-size:12px; font-weight:500;
+            }}
+            QPushButton:hover {{ background:#2563eb; }}
+        """)
+        btn_new.clicked.connect(self._new_design)
+
+        row1.addWidget(self.inp_search, stretch=1)
+        row1.addWidget(btn_new)
+        fb_lay.addLayout(row1)
+
+        # صف 2: فلاتر + عداد + ريست
+        row2 = QHBoxLayout()
+        row2.setSpacing(6)
+
+        self.cmb_category = QComboBox()
+        self.cmb_category.setMinimumHeight(28)
+        self.cmb_category.setStyleSheet(self._combo_ss())
+        self.cmb_category.currentIndexChanged.connect(self._apply_filter)
+
+        self.cmb_set = QComboBox()
+        self.cmb_set.setMinimumHeight(28)
+        self.cmb_set.setStyleSheet(self._combo_ss())
+        self.cmb_set.currentIndexChanged.connect(self._on_set_changed)
 
         self.lbl_count = QLabel("")
         self.lbl_count.setStyleSheet(
-            f"color:{_BLUE};font-size:10px;font-weight:bold;"
-            "background:transparent;border:none;"
+            f"color:{_TEXT_MUTED}; font-size:11px; background:transparent;"
         )
-
-        btn_new = QPushButton("➕  تصميم جديد")
-        btn_new.setMinimumHeight(28)
-        btn_new.setStyleSheet(f"""
-            QPushButton {{
-                background:{_BLUE}; color:white; border:none;
-                border-radius:4px; padding:2px 10px;
-                font-weight:bold; font-size:11px;
-            }}
-            QPushButton:hover {{ background:#0d47a1; }}
-        """)
-        btn_new.clicked.connect(self._new_design)
-        r1.addWidget(self.inp_search, stretch=1)
-        r1.addWidget(self.lbl_count)
-        r1.addWidget(btn_new)
-        fl.addLayout(r1)
-
-        # صف 2: فلتر تصنيف + فلتر مجموعة + ريست
-        r2 = QHBoxLayout()
-        r2.setSpacing(6)
-
-        for icon in ("📁", "📐"):
-            lbl = QLabel(icon)
-            lbl.setFixedWidth(18)
-            lbl.setStyleSheet("background:transparent;border:none;font-size:13px;")
-            r2.addWidget(lbl)
-            if icon == "📁":
-                self.cmb_category = QComboBox()
-                self.cmb_category.setMinimumHeight(28)
-                self.cmb_category.setMinimumWidth(130)
-                self.cmb_category.setStyleSheet(self._combo_ss())
-                self.cmb_category.currentIndexChanged.connect(self._apply_filter)
-                r2.addWidget(self.cmb_category, stretch=1)
-            else:
-                self.cmb_set = QComboBox()
-                self.cmb_set.setMinimumHeight(28)
-                self.cmb_set.setMinimumWidth(130)
-                self.cmb_set.setStyleSheet(self._combo_ss())
-                self.cmb_set.currentIndexChanged.connect(self._on_set_changed)
-                r2.addWidget(self.cmb_set, stretch=1)
 
         btn_rst = QPushButton("↺")
         btn_rst.setFixedSize(28, 28)
         btn_rst.setToolTip("مسح الفلاتر")
         btn_rst.setStyleSheet(f"""
             QPushButton {{
-                background:white; color:{_BLUE};
-                border:1px solid {_BLUE_MID}; border-radius:4px; font-size:14px;
+                background:{_BG_SUBTLE}; color:{_TEXT_MED};
+                border:1px solid {_BORDER_MED}; border-radius:6px; font-size:14px;
             }}
-            QPushButton:hover {{ background:{_BLUE_MID}; }}
+            QPushButton:hover {{ background:{_BG}; color:{_BLUE}; border-color:{_BLUE_MED}; }}
         """)
         btn_rst.clicked.connect(self._reset_filters)
-        r2.addWidget(btn_rst)
-        fl.addLayout(r2)
 
-        root.addWidget(ff)
+        row2.addWidget(QLabel("📁"))
+        row2.addWidget(self.cmb_category, stretch=1)
+        row2.addWidget(QLabel("📐"))
+        row2.addWidget(self.cmb_set, stretch=1)
+        row2.addWidget(self.lbl_count)
+        row2.addWidget(btn_rst)
+        fb_lay.addLayout(row2)
+
+        # تلوين labels الفلاتر
+        for lbl in filter_bar.findChildren(QLabel):
+            if lbl.text() in ("📁", "📐"):
+                lbl.setStyleSheet(
+                    f"font-size:14px; background:transparent; color:{_TEXT_MUTED};"
+                )
+
+        root.addWidget(filter_bar)
 
         # ── الجدول ──
         self.table = QTableWidget()
@@ -241,69 +253,109 @@ class _DesignsTable(QWidget):
         self.table.setHorizontalHeaderLabels(_COLS)
         self.table.setSelectionBehavior(QAbstractItemView.SelectRows)
         self.table.setEditTriggers(QAbstractItemView.NoEditTriggers)
-        self.table.setAlternatingRowColors(True)
+        self.table.setAlternatingRowColors(False)
         self.table.verticalHeader().setVisible(False)
         self.table.setShowGrid(False)
         self.table.setStyleSheet(f"""
             QTableWidget {{
                 border: none;
-                background: white;
-                alternate-background-color: #f9fbff;
+                background: {_BG};
                 outline: none;
+                font-size: 12px;
             }}
             QTableWidget::item {{
-                padding: 4px 8px;
-                border-bottom: 1px solid #f0f0f0;
+                padding: 6px 10px;
+                border-bottom: 1px solid {_BORDER};
+                color: {_TEXT};
             }}
             QTableWidget::item:selected {{
-                background: {_BLUE_LIGHT};
+                background: {_BLUE_LT};
                 color: {_BLUE};
             }}
             QHeaderView::section {{
-                background: #f5f7ff;
-                color: #555;
-                font-weight: bold;
+                background: {_BG_SUBTLE};
+                color: {_TEXT_MUTED};
                 font-size: 11px;
-                padding: 5px 8px;
+                font-weight: 500;
+                padding: 6px 10px;
                 border: none;
-                border-bottom: 2px solid {_BLUE_MID};
+                border-bottom: 1px solid {_BORDER_MED};
+                border-left: 1px solid {_BORDER};
+            }}
+            QHeaderView::section:first {{
+                border-left: none;
             }}
         """)
 
         hh = self.table.horizontalHeader()
         hh.setSectionResizeMode(_COL_THUMB,    QHeaderView.Fixed)
-        self.table.setColumnWidth(_COL_THUMB,   _TABLE_THUMB + 8)
+        self.table.setColumnWidth(_COL_THUMB,   _TABLE_THUMB + 12)
         hh.setSectionResizeMode(_COL_ID,        QHeaderView.Fixed)
         self.table.setColumnWidth(_COL_ID,       36)
         hh.setSectionResizeMode(_COL_NAME,      QHeaderView.Stretch)
         hh.setSectionResizeMode(_COL_CATEGORY,  QHeaderView.Interactive)
-        self.table.setColumnWidth(_COL_CATEGORY, 110)
+        self.table.setColumnWidth(_COL_CATEGORY, 100)
         hh.setSectionResizeMode(_COL_SIZES,     QHeaderView.Fixed)
-        self.table.setColumnWidth(_COL_SIZES,    58)
+        self.table.setColumnWidth(_COL_SIZES,    54)
         hh.setSectionResizeMode(_COL_FILES,     QHeaderView.Fixed)
-        self.table.setColumnWidth(_COL_FILES,    58)
+        self.table.setColumnWidth(_COL_FILES,    54)
 
         self.table.itemSelectionChanged.connect(self._on_select)
         self.table.doubleClicked.connect(self._on_select)
-        root.addWidget(self.table)
+        root.addWidget(self.table, stretch=1)
 
-        btn_del = danger_button("🗑️  حذف")
-        btn_del.setMinimumHeight(28)
+        # ── زر الحذف ──
+        bottom_bar = QFrame()
+        bottom_bar.setStyleSheet(f"""
+            QFrame {{
+                background: {_BG};
+                border-top: 1px solid {_BORDER};
+            }}
+        """)
+        bb_lay = QHBoxLayout(bottom_bar)
+        bb_lay.setContentsMargins(12, 6, 12, 6)
+
+        btn_del = QPushButton("🗑️  حذف التصميم")
+        btn_del.setMinimumHeight(30)
+        btn_del.setStyleSheet(f"""
+            QPushButton {{
+                background:{_BG}; color:{_RED};
+                border:1px solid #fca5a5; border-radius:6px;
+                padding:0 14px; font-size:11px;
+            }}
+            QPushButton:hover {{ background:{_RED_LT}; }}
+        """)
         btn_del.clicked.connect(self._delete)
-        root.addLayout(buttons_row(btn_del))
+        bb_lay.addWidget(btn_del)
+        bb_lay.addStretch()
+        root.addWidget(bottom_bar)
 
         self._reload_category_combo()
         self._reload_set_combo()
 
     @staticmethod
+    def _input_ss():
+        return f"""
+            QLineEdit {{
+                background:{_BG_SUBTLE}; border:1px solid {_BORDER_MED};
+                border-radius:6px; padding:0 10px;
+                font-size:12px; color:{_TEXT};
+            }}
+            QLineEdit:focus {{
+                border-color:{_BLUE}; background:{_BG};
+            }}
+        """
+
+    @staticmethod
     def _combo_ss():
         return f"""
             QComboBox {{
-                background:white; border:1px solid {_BLUE_MID};
-                border-radius:4px; padding:2px 6px; font-size:11px;
+                background:{_BG_SUBTLE}; border:1px solid {_BORDER_MED};
+                border-radius:6px; padding:0 8px;
+                font-size:11px; color:{_TEXT_MED};
             }}
             QComboBox:focus {{ border-color:{_BLUE}; }}
-            QComboBox::drop-down {{ border:none; }}
+            QComboBox::drop-down {{ border:none; width:18px; }}
         """
 
     # ── Combo loaders ──────────────────────────────────
@@ -312,7 +364,7 @@ class _DesignsTable(QWidget):
         prev = self.cmb_category.currentData()
         self.cmb_category.blockSignals(True)
         self.cmb_category.clear()
-        self.cmb_category.addItem("— كل التصنيفات —", None)
+        self.cmb_category.addItem("📁  كل التصنيفات", None)
         tree = build_category_tree(fetch_all_design_categories(self.conn))
         self._add_cat_nodes(tree, 0)
         for i in range(self.cmb_category.count()):
@@ -333,7 +385,7 @@ class _DesignsTable(QWidget):
         prev = self.cmb_set.currentData()
         self.cmb_set.blockSignals(True)
         self.cmb_set.clear()
-        self.cmb_set.addItem("— كل المجموعات —", None)
+        self.cmb_set.addItem("📐  كل المجموعات", None)
         for ds in fetch_all_dimension_sets(self.conn):
             self.cmb_set.addItem(ds["name"], ds["id"])
         for i in range(self.cmb_set.count()):
@@ -354,12 +406,10 @@ class _DesignsTable(QWidget):
         self.set_filter_changed.emit(self.cmb_set.currentData())
 
     def _apply_filter(self):
-        # إيقاف الـ workers القديمة
         for w in self._thumb_workers:
             w.quit()
         self._thumb_workers.clear()
 
-        # إلغاء مراقبة كل الملفات القديمة
         watcher = get_watcher()
         for path in list(self._xcf_row_map.keys()):
             watcher.unwatch(path)
@@ -371,80 +421,84 @@ class _DesignsTable(QWidget):
         prev_id = self._selected_id()
 
         rows = _fetch_designs_filtered(self.conn, name_q, cat_id, set_id)
-
         self.table.setRowCount(0)
 
         import os
         for d in rows:
             r = self.table.rowCount()
             self.table.insertRow(r)
-            self.table.setRowHeight(r, _TABLE_THUMB + 8)
+            self.table.setRowHeight(r, _TABLE_THUMB + 12)
 
-            # ── عمود الـ thumbnail ──
+            # ── Thumbnail ──
             thumb_lbl = QLabel()
             thumb_lbl.setFixedSize(_TABLE_THUMB + 4, _TABLE_THUMB + 4)
             thumb_lbl.setAlignment(Qt.AlignCenter)
             thumb_lbl.setStyleSheet(f"""
-                background: #f0f4ff;
-                border: 1px solid #e0e7f3;
-                border-radius: 6px;
-                margin: 2px;
+                background: {_BG_SUBTLE};
+                border: 1px solid {_BORDER};
+                border-radius: 8px;
+                margin: 4px;
+                font-size: 20px;
+                color: {_TEXT_MUTED};
             """)
-            thumb_lbl.setText("⏳")
+            thumb_lbl.setText("🎨")
             self.table.setCellWidget(r, _COL_THUMB, thumb_lbl)
 
             xcf = d["first_xcf"]
             if xcf and os.path.exists(xcf):
-                # سجّل في الـ watcher
                 watcher.watch(xcf)
                 self._xcf_row_map[os.path.normpath(xcf)] = r
-
-                # حمّل في الخلفية
                 worker = _RowThumbWorker(r, xcf, _TABLE_THUMB)
                 worker.done.connect(self._on_row_thumb_ready)
                 worker.start()
                 self._thumb_workers.append(worker)
-            else:
-                thumb_lbl.setText("🎨")
 
-            # ── باقي الأعمدة ──
+            # ── ID ──
             id_item = QTableWidgetItem(str(d["id"]))
             id_item.setData(Qt.UserRole, d["id"])
             id_item.setTextAlignment(Qt.AlignCenter)
+            id_item.setForeground(QColor(_TEXT_MUTED))
             self.table.setItem(r, _COL_ID, id_item)
 
+            # ── الاسم ──
             name_item = QTableWidgetItem(d["name"])
             name_item.setData(Qt.UserRole, d["id"])
+            f = QFont()
+            f.setWeight(QFont.Medium)
+            name_item.setFont(f)
             self.table.setItem(r, _COL_NAME, name_item)
 
-            self.table.setItem(
-                r, _COL_CATEGORY,
-                QTableWidgetItem(d["category_name"] or "—")
-            )
+            # ── التصنيف ──
+            cat_item = QTableWidgetItem(d["category_name"] or "—")
+            cat_item.setForeground(QColor(_TEXT_MED))
+            self.table.setItem(r, _COL_CATEGORY, cat_item)
 
-            sz = d["sizes_count"] or 0
+            # ── عدد المقاسات ──
+            sz    = d["sizes_count"] or 0
             fl_cnt = d["files_count"] or 0
 
             i_sz = QTableWidgetItem(str(sz))
             i_sz.setTextAlignment(Qt.AlignCenter)
             self.table.setItem(r, _COL_SIZES, i_sz)
 
+            # ── عدد الملفات ──
             i_fl = QTableWidgetItem(str(fl_cnt))
             i_fl.setTextAlignment(Qt.AlignCenter)
-            if fl_cnt == sz and sz > 0:
+            if fl_cnt > 0 and fl_cnt == sz:
                 i_fl.setForeground(QColor(_GREEN))
             elif fl_cnt > 0:
                 i_fl.setForeground(QColor(_ORANGE))
+            else:
+                i_fl.setForeground(QColor(_TEXT_MUTED))
             self.table.setItem(r, _COL_FILES, i_fl)
 
         shown = self.table.rowCount()
+        total = len(fetch_all_designs_summary(self.conn))
         if name_q or cat_id or set_id:
-            total = len(fetch_all_designs_summary(self.conn))
-            self.lbl_count.setText(f"({shown}/{total})")
+            self.lbl_count.setText(f"{shown} / {total}")
         else:
-            self.lbl_count.setText(f"({shown})")
+            self.lbl_count.setText(f"{shown} تصميم")
 
-        # استعادة التحديد السابق
         if prev_id:
             for r in range(self.table.rowCount()):
                 item = self.table.item(r, _COL_ID)
@@ -455,28 +509,20 @@ class _DesignsTable(QWidget):
     # ── Thumbnail handlers ──────────────────────────────
 
     def _on_row_thumb_ready(self, row: int, pixmap):
-        """يُحدّث الـ thumbnail في الصف عند انتهاء التحميل."""
         self._set_row_thumb(row, pixmap)
 
     def _on_xcf_changed(self, path: str):
-        """
-        يُستدعى تلقائياً من XcfWatcher عند تغيير ملف XCF.
-        يحدث thumbnail الصف المرتبط بالملف.
-        """
         import os
         norm = os.path.normpath(path)
         row  = self._xcf_row_map.get(norm)
         if row is None or row >= self.table.rowCount():
             return
-
-        # حمّل الـ thumbnail الجديد في الخلفية
         worker = _RowThumbWorker(row, path, _TABLE_THUMB)
         worker.done.connect(self._on_row_thumb_ready)
         worker.start()
         self._thumb_workers.append(worker)
 
     def _set_row_thumb(self, row: int, pixmap):
-        """يضع الـ pixmap في خلية الـ thumbnail."""
         if row >= self.table.rowCount():
             return
         widget = self.table.cellWidget(row, _COL_THUMB)
@@ -487,20 +533,13 @@ class _DesignsTable(QWidget):
             widget.setText("")
             widget.setPixmap(pixmap)
             widget.setStyleSheet(f"""
-                background: #1a1a2e;
-                border: 1.5px solid {_BLUE_MID};
-                border-radius: 6px;
-                margin: 2px;
+                background: #1e1b4b;
+                border: 1px solid {_BLUE_MED};
+                border-radius: 8px;
+                margin: 4px;
             """)
         else:
             widget.setText("🎨")
-            widget.setStyleSheet(f"""
-                background: #fafafa;
-                border: 1px dashed #c5cae9;
-                border-radius: 6px;
-                margin: 2px;
-                color: #9e9e9e;
-            """)
 
     # ── مساعدات ────────────────────────────────────────
 

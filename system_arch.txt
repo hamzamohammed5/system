@@ -1,5 +1,5 @@
 File Tree Snapshot
-Generated : 2026-05-17 06:23:55
+Generated : 2026-05-17 06:42:09
 Source    : D:\My Workspace\Hg\Alhabaar\accountant\system
 Extensions: .py
 ────────────────────────────────────────────────────────────
@@ -191,6 +191,4 @@ system/
 │   ├── main_window.py
 │   └── settings_dialog.py
 ├── app.py
-├── check_imagemagick.py
 ├── main.py
-└── test_xcf_debug.py
