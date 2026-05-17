@@ -1,5 +1,5 @@
 File Tree Snapshot
-Generated : 2026-05-17 08:33:31
+Generated : 2026-05-17 08:50:25
 Source    : D:\My Workspace\Hg\Alhabaar\accountant\system
 Extensions: .py
 ────────────────────────────────────────────────────────────
@@ -34,6 +34,10 @@ system/
 │   │   ├── inventory_repo.py
 │   │   ├── inventory_schema.py
 │   │   └── investors_repo.py
+│   ├── orders/
+│   │   ├── customers_repo.py
+│   │   ├── orders_repo.py
+│   │   └── orders_schema.py
 │   ├── pricing/
 │   │   ├── offers_repo.py
 │   │   └── pricing_repo.py
@@ -154,6 +158,10 @@ system/
 │   │   │   ├── inventory_outbound_tab.py
 │   │   │   └── inventory_report_tab.py
 │   │   ├── offers/
+│   │   ├── orders/
+│   │   │   ├── _order_detail.py
+│   │   │   ├── _order_form.py
+│   │   │   └── orders_tab.py
 │   │   ├── pricing/
 │   │   │   ├── offers/
 │   │   │   │   ├── __init__.py
@@ -170,6 +178,7 @@ system/
 │   │   ├── costing_section.py
 │   │   ├── design_section.py
 │   │   ├── inventory_section.py
+│   │   ├── orders_section.py
 │   │   └── pricing_section.py
 │   ├── widgets/
 │   │   ├── costing/
