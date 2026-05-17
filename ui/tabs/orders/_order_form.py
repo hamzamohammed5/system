@@ -192,13 +192,13 @@ def _fetch_offer_lines(offer_id: int):
 
 class _ItemRowWidget(QFrame):
     """
-    صف بند طلب واحد — يعرض:
-      [التصنيف/المنتج combo] [سعر] [كمية] [خصم%] [إجمالي] [ملاحظات] [حذف]
+    صف بند طلب واحد.
+    السعر والخصم يأتيان من التسعير — للعرض فقط (read-only).
+    المستخدم يغيّر الكمية فقط.
     """
     changed = pyqtSignal()
-    removed = pyqtSignal(object)   # يمرر self
+    removed = pyqtSignal(object)
 
-    # كاش المنتجات المسعّرة (يُحمَّل مرة واحدة)
     _products_cache: list = None
 
     @classmethod
@@ -213,10 +213,14 @@ class _ItemRowWidget(QFrame):
 
     def __init__(self, parent=None):
         super().__init__(parent)
-        self._db_item_id = None   # id من order_items لو كان موجوداً
+        self._db_item_id   = None
+        self._unit_price   = 0.0   # السعر المقفل من التسعير
+        self._discount_pct = 0.0   # الخصم المقفل من العرض
         self._build()
 
-    # ── بناء الواجهة ──────────────────────────────────────────────────────────
+    # ─────────────────────────────────────────────────────
+    # بناء الواجهة
+    # ─────────────────────────────────────────────────────
 
     def _build(self):
         self.setStyleSheet(f"""
@@ -225,21 +229,18 @@ class _ItemRowWidget(QFrame):
                 border: 1px solid #e5e9f0;
                 border-radius: 8px;
             }}
-            QFrame:hover {{
-                border-color: #93c5fd;
-            }}
+            QFrame:hover {{ border-color: #93c5fd; }}
         """)
         self.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Fixed)
 
         root = QVBoxLayout(self)
         root.setContentsMargins(10, 8, 10, 8)
-        root.setSpacing(6)
+        root.setSpacing(5)
 
-        # ── صف 1: اختيار المنتج + بحث ──
+        # ═══ صف 1: بحث + combo المنتج ═══════════════════
         row1 = QHBoxLayout()
         row1.setSpacing(6)
 
-        # بحث
         self.inp_search = QLineEdit()
         self.inp_search.setPlaceholderText("🔍 بحث...")
         self.inp_search.setFixedWidth(100)
@@ -253,7 +254,6 @@ class _ItemRowWidget(QFrame):
         """)
         self.inp_search.textChanged.connect(self._on_search)
 
-        # btn مسح البحث
         self.btn_clr = QPushButton("✖")
         self.btn_clr.setFixedSize(22, 22)
         self.btn_clr.setStyleSheet(
@@ -262,11 +262,8 @@ class _ItemRowWidget(QFrame):
         )
         self.btn_clr.clicked.connect(lambda: self.inp_search.clear())
         self.btn_clr.setVisible(False)
-        self.inp_search.textChanged.connect(
-            lambda t: self.btn_clr.setVisible(bool(t))
-        )
+        self.inp_search.textChanged.connect(lambda t: self.btn_clr.setVisible(bool(t)))
 
-        # combo المنتج
         self.cmb_product = QComboBox()
         self.cmb_product.setMinimumHeight(30)
         self.cmb_product.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Fixed)
@@ -278,44 +275,44 @@ class _ItemRowWidget(QFrame):
             QComboBox:focus {{ border-color: {_BLUE}; }}
             QComboBox::drop-down {{ border: none; width: 18px; }}
         """)
-        self._populate_combo()
         self.cmb_product.currentIndexChanged.connect(self._on_product_changed)
-
-        # السعر
-        lbl_price = QLabel("سعر:")
-        lbl_price.setStyleSheet(f"color:{_GRAY}; font-size:11px;")
-        self.sp_price = QDoubleSpinBox()
-        self.sp_price.setRange(0, 9_999_999)
-        self.sp_price.setDecimals(2)
-        self.sp_price.setMinimumHeight(30)
-        self.sp_price.setFixedWidth(100)
-        self.sp_price.setSuffix(" ج")
-        self.sp_price.valueChanged.connect(self._recalc)
 
         row1.addWidget(self.inp_search)
         row1.addWidget(self.btn_clr)
         row1.addWidget(self.cmb_product, stretch=1)
-        row1.addWidget(lbl_price)
-        row1.addWidget(self.sp_price)
         root.addLayout(row1)
 
-        # ── صف 2: كمية / خصم / وحدة / إجمالي / حذف ──
+        # ═══ صف 2: معلومات السعر (read-only) + كمية + إجمالي ══
         row2 = QHBoxLayout()
-        row2.setSpacing(6)
+        row2.setSpacing(8)
 
-        lbl_name = QLabel("اسم مخصص:")
-        lbl_name.setStyleSheet(f"color:{_GRAY}; font-size:11px;")
-        self.inp_name = QLineEdit()
-        self.inp_name.setPlaceholderText("اختياري — يُستخدم اسم المنتج افتراضياً")
-        self.inp_name.setMinimumHeight(30)
-        self.inp_name.setStyleSheet(f"""
-            QLineEdit {{
-                background: {_BG}; border: 1px solid {_BORDER};
-                border-radius: 5px; padding: 2px 8px; font-size: 11px;
-            }}
-            QLineEdit:focus {{ border-color: {_BLUE}; }}
-        """)
+        # ── السعر (read-only) ──
+        lbl_price_t = QLabel("سعر الوحدة:")
+        lbl_price_t.setStyleSheet(f"color:{_GRAY}; font-size:11px;")
+        self.lbl_price = QLabel("─")
+        self.lbl_price.setMinimumWidth(85)
+        self.lbl_price.setAlignment(Qt.AlignCenter)
+        self.lbl_price.setStyleSheet(
+            f"font-size:12px; font-weight:bold; color:{_GREEN};"
+            "background:#f0fdf4; border:1px solid #bbf7d0;"
+            "border-radius:5px; padding:3px 8px;"
+        )
+        self.lbl_price.setToolTip("السعر من جدول التسعير — غير قابل للتعديل")
 
+        # ── الخصم (read-only) ──
+        lbl_disc_t = QLabel("خصم:")
+        lbl_disc_t.setStyleSheet(f"color:{_GRAY}; font-size:11px;")
+        self.lbl_disc = QLabel("─")
+        self.lbl_disc.setMinimumWidth(60)
+        self.lbl_disc.setAlignment(Qt.AlignCenter)
+        self.lbl_disc.setStyleSheet(
+            "font-size:12px; font-weight:bold; color:#b45309;"
+            "background:#fffbeb; border:1px solid #fde68a;"
+            "border-radius:5px; padding:3px 8px;"
+        )
+        self.lbl_disc.setToolTip("الخصم من العرض — غير قابل للتعديل")
+
+        # ── الكمية (قابلة للتعديل) ──
         lbl_qty = QLabel("الكمية:")
         lbl_qty.setStyleSheet(f"color:{_GRAY}; font-size:11px;")
         self.sp_qty = QDoubleSpinBox()
@@ -323,42 +320,38 @@ class _ItemRowWidget(QFrame):
         self.sp_qty.setDecimals(3)
         self.sp_qty.setValue(1)
         self.sp_qty.setMinimumHeight(30)
-        self.sp_qty.setFixedWidth(80)
+        self.sp_qty.setFixedWidth(90)
+        self.sp_qty.setStyleSheet(f"""
+            QDoubleSpinBox {{
+                background: {_WHITE}; border: 2px solid {_BLUE};
+                border-radius: 5px; padding: 2px 6px;
+                font-size:12px; font-weight:bold; color:{_BLUE};
+            }}
+        """)
         self.sp_qty.valueChanged.connect(self._recalc)
 
-        lbl_unit = QLabel("وحدة:")
-        lbl_unit.setStyleSheet(f"color:{_GRAY}; font-size:11px;")
+        # ── الوحدة ──
         self.inp_unit = QLineEdit("قطعة")
-        self.inp_unit.setFixedWidth(60)
+        self.inp_unit.setFixedWidth(55)
         self.inp_unit.setMinimumHeight(30)
         self.inp_unit.setStyleSheet(f"""
             QLineEdit {{
                 background: {_BG}; border: 1px solid {_BORDER};
-                border-radius: 5px; padding: 2px 6px; font-size: 11px;
+                border-radius: 5px; padding: 2px 5px; font-size: 11px;
             }}
         """)
 
-        lbl_disc = QLabel("خصم:")
-        lbl_disc.setStyleSheet(f"color:{_GRAY}; font-size:11px;")
-        self.sp_disc = QDoubleSpinBox()
-        self.sp_disc.setRange(0, 100)
-        self.sp_disc.setDecimals(2)
-        self.sp_disc.setMinimumHeight(30)
-        self.sp_disc.setFixedWidth(70)
-        self.sp_disc.setSuffix(" %")
-        self.sp_disc.valueChanged.connect(self._recalc)
-
-        # الإجمالي
+        # ── الإجمالي ──
         self.lbl_total = QLabel("0.00 ج")
+        self.lbl_total.setMinimumWidth(95)
+        self.lbl_total.setAlignment(Qt.AlignCenter)
         self.lbl_total.setStyleSheet(
             f"font-size:13px; font-weight:bold; color:{_BLUE};"
-            f"background:#eff6ff; border:1px solid #bfdbfe;"
+            "background:#eff6ff; border:1px solid #bfdbfe;"
             "border-radius:5px; padding:3px 10px;"
         )
-        self.lbl_total.setMinimumWidth(90)
-        self.lbl_total.setAlignment(Qt.AlignCenter)
 
-        # ملاحظات
+        # ── ملاحظات ──
         lbl_note = QLabel("ملاحظات:")
         lbl_note.setStyleSheet(f"color:{_GRAY}; font-size:11px;")
         self.inp_notes = QLineEdit()
@@ -371,7 +364,7 @@ class _ItemRowWidget(QFrame):
             }}
         """)
 
-        # حذف
+        # ── حذف ──
         btn_del = QPushButton("🗑")
         btn_del.setFixedSize(30, 30)
         btn_del.setToolTip("حذف هذا البند")
@@ -382,21 +375,25 @@ class _ItemRowWidget(QFrame):
         """)
         btn_del.clicked.connect(lambda: self.removed.emit(self))
 
-        row2.addWidget(lbl_name)
-        row2.addWidget(self.inp_name, stretch=1)
+        row2.addWidget(lbl_price_t)
+        row2.addWidget(self.lbl_price)
+        row2.addWidget(lbl_disc_t)
+        row2.addWidget(self.lbl_disc)
         row2.addWidget(lbl_qty)
         row2.addWidget(self.sp_qty)
-        row2.addWidget(lbl_unit)
         row2.addWidget(self.inp_unit)
-        row2.addWidget(lbl_disc)
-        row2.addWidget(self.sp_disc)
         row2.addWidget(self.lbl_total)
         row2.addWidget(lbl_note)
         row2.addWidget(self.inp_notes, stretch=1)
         row2.addWidget(btn_del)
         root.addLayout(row2)
 
-    # ── ملء combo المنتجات ───────────────────────────────────────────────────
+        # ── بعد بناء كل الـ widgets نملأ الـ combo ──
+        self._populate_combo()
+
+    # ─────────────────────────────────────────────────────
+    # ملء combo المنتجات
+    # ─────────────────────────────────────────────────────
 
     def _populate_combo(self, filter_text: str = ""):
         prev = self.cmb_product.currentData()
@@ -413,15 +410,13 @@ class _ItemRowWidget(QFrame):
             if q and q not in name.lower():
                 continue
 
-            cat = p.get("category_name") or "بدون تصنيف"
+            cat  = p.get("category_name") or "بدون تصنيف"
             icon = "🏭" if p["type"] == "final" else "🔧"
 
-            # رأس التصنيف
             if cat != current_cat:
                 current_cat = cat
                 sep_idx = self.cmb_product.count()
                 self.cmb_product.addItem(f"── {cat} ──", f"__cat__{cat}")
-                # تعطيل السيباريتور
                 model = self.cmb_product.model()
                 item  = model.item(sep_idx)
                 if item:
@@ -435,7 +430,6 @@ class _ItemRowWidget(QFrame):
 
         self.cmb_product.blockSignals(False)
 
-        # استعادة الاختيار
         if prev and not isinstance(prev, str):
             for i in range(self.cmb_product.count()):
                 if self.cmb_product.itemData(i) == prev:
@@ -447,33 +441,46 @@ class _ItemRowWidget(QFrame):
     def _on_search(self, text: str):
         self._populate_combo(filter_text=text)
 
-    # ── منطق ──────────────────────────────────────────────────────────────────
+    # ─────────────────────────────────────────────────────
+    # منطق اختيار المنتج وحساب الإجمالي
+    # ─────────────────────────────────────────────────────
 
     def _on_product_changed(self):
         pid = self.cmb_product.currentData()
         if not pid or isinstance(pid, str):
-            self.sp_price.setValue(0)
+            self._unit_price   = 0.0
+            self._discount_pct = 0.0
+            self.lbl_price.setText("─")
+            self.lbl_disc.setText("─")
             self.lbl_total.setText("0.00 ج")
             self.changed.emit()
             return
+
         # جلب السعر من الكاش
         for p in self._get_products():
             if p["id"] == pid:
-                self.sp_price.blockSignals(True)
-                self.sp_price.setValue(p.get("price") or 0)
-                self.sp_price.blockSignals(False)
+                self._unit_price = p.get("price") or 0.0
                 break
+
+        self.lbl_price.setText(f"{self._unit_price:.2f} ج")
+        self.lbl_disc.setText(f"{self._discount_pct:.1f} %")
         self._recalc()
 
     def _recalc(self):
         qty   = self.sp_qty.value()
-        price = self.sp_price.value()
-        disc  = self.sp_disc.value()
-        total = qty * price * (1 - disc / 100)
+        total = qty * self._unit_price * (1 - self._discount_pct / 100)
         self.lbl_total.setText(f"{total:,.2f} ج")
         self.changed.emit()
 
-    # ── API ───────────────────────────────────────────────────────────────────
+    def set_offer_discount(self, discount_pct: float):
+        """يُطبِّق خصم العرض على هذا الصف (read-only)."""
+        self._discount_pct = discount_pct
+        self.lbl_disc.setText(f"{discount_pct:.1f} %")
+        self._recalc()
+
+    # ─────────────────────────────────────────────────────
+    # API خارجي
+    # ─────────────────────────────────────────────────────
 
     def get_product_id(self):
         pid = self.cmb_product.currentData()
@@ -482,9 +489,6 @@ class _ItemRowWidget(QFrame):
         return pid
 
     def get_product_name(self) -> str:
-        custom = self.inp_name.text().strip()
-        if custom:
-            return custom
         pid = self.get_product_id()
         if pid:
             for p in self._get_products():
@@ -501,48 +505,45 @@ class _ItemRowWidget(QFrame):
             "description":  "",
             "quantity":     self.sp_qty.value(),
             "unit":         self.inp_unit.text().strip() or "قطعة",
-            "unit_price":   self.sp_price.value(),
-            "discount_pct": self.sp_disc.value(),
+            "unit_price":   self._unit_price,
+            "discount_pct": self._discount_pct,
             "design_ref":   "",
             "notes":        self.inp_notes.text().strip(),
         }
 
     def get_total(self) -> float:
-        qty   = self.sp_qty.value()
-        price = self.sp_price.value()
-        disc  = self.sp_disc.value()
-        return qty * price * (1 - disc / 100)
+        return self.sp_qty.value() * self._unit_price * (1 - self._discount_pct / 100)
 
     def load_from_order_item(self, item: dict):
-        """تحميل بيانات بند موجود للتعديل."""
-        self._db_item_id = item["id"]
-        # البحث عن المنتج في الـ combo (لو كان مرتبطاً)
+        """تحميل بند موجود للتعديل — السعر والخصم read-only."""
+        self._db_item_id   = item["id"]
+        self._unit_price   = item["unit_price"]
+        self._discount_pct = item["discount_pct"]
+
+        # البحث عن المنتج بالاسم
         name = item["item_name"]
-        # نحاول نوجد المنتج بالاسم في الكاش
-        found = False
         for p in self._get_products():
             if p["name"] == name:
                 for i in range(self.cmb_product.count()):
                     if self.cmb_product.itemData(i) == p["id"]:
+                        self.cmb_product.blockSignals(True)
                         self.cmb_product.setCurrentIndex(i)
-                        found = True
+                        self.cmb_product.blockSignals(False)
                         break
-                if found:
-                    break
-        if not found:
-            # منتج يدوي — نكتب الاسم في الحقل المخصص
-            self.inp_name.setText(name)
+                break
 
-        self.sp_price.setValue(item["unit_price"])
+        # السعر والخصم يُعرضان كما هما محفوظان (من وقت إنشاء الطلب)
+        self.lbl_price.setText(f"{self._unit_price:.2f} ج")
+        self.lbl_disc.setText(f"{self._discount_pct:.1f} %")
         self.sp_qty.setValue(item["quantity"])
         self.inp_unit.setText(item["unit"] or "قطعة")
-        self.sp_disc.setValue(item["discount_pct"])
         self.inp_notes.setText(item["notes"] or "")
         self._recalc()
 
     @property
     def db_item_id(self):
         return self._db_item_id
+
 
 
 # ══════════════════════════════════════════════════════════════════════════════
@@ -873,6 +874,21 @@ class _OrderForm(QDialog):
         oid = self.cmb_offers.currentData()
         if not oid:
             return
+
+        # جلب بيانات العرض (الخصم) من erp.db
+        offer_discount = 0.0
+        try:
+            from db.shared.connection import get_costing_connection
+            conn_erp = get_costing_connection()
+            o = conn_erp.execute(
+                "SELECT discount FROM offers WHERE id=?", (oid,)
+            ).fetchone()
+            if o:
+                offer_discount = float(o["discount"])
+            conn_erp.close()
+        except Exception:
+            pass
+
         lines = _fetch_offer_lines(oid)
         if not lines:
             QMessageBox.information(self, "تنبيه", "هذا العرض لا يحتوي على بنود.")
@@ -884,30 +900,26 @@ class _OrderForm(QDialog):
                 self._remove_item_row(r)
 
         for line in lines:
-            fake_item = {
-                "id":           None,
-                "item_name":    line["item_name"],
-                "description":  "",
-                "quantity":     line["qty"],
-                "unit":         "قطعة",
-                "unit_price":   line.get("price") or 0,
-                "discount_pct": 0,
-                "design_ref":   "",
-                "notes":        "",
-            }
             row = self._add_item_row()
-            # البحث عن المنتج في الكاش بالـ id
             pid = line.get("item_id")
             if pid:
-                # حدد المنتج في الـ combo
                 cmb = row.cmb_product
                 for i in range(cmb.count()):
                     if cmb.itemData(i) == pid:
+                        cmb.blockSignals(True)
                         cmb.setCurrentIndex(i)
+                        cmb.blockSignals(False)
+                        # تطبيق السعر من الكاش يدوياً
+                        for p in _ItemRowWidget._get_products():
+                            if p["id"] == pid:
+                                row._unit_price = p.get("price") or 0.0
+                                row.lbl_price.setText(f"{row._unit_price:.2f} ج")
+                                break
                         break
+            # تطبيق الكمية من العرض
             row.sp_qty.setValue(line["qty"])
-            row.sp_price.setValue(line.get("price") or 0)
-            row._recalc()
+            # تطبيق خصم العرض (read-only)
+            row.set_offer_discount(offer_discount)
 
         self.cmb_offers.setCurrentIndex(0)
 
