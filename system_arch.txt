@@ -1,5 +1,5 @@
 File Tree Snapshot
-Generated : 2026-05-17 08:50:25
+Generated : 2026-05-17 08:58:09
 Source    : D:\My Workspace\Hg\Alhabaar\accountant\system
 Extensions: .py
 ────────────────────────────────────────────────────────────
@@ -159,8 +159,12 @@ system/
 │   │   │   └── inventory_report_tab.py
 │   │   ├── offers/
 │   │   ├── orders/
+│   │   │   ├── _customer_form.py
+│   │   │   ├── _item_form.py
 │   │   │   ├── _order_detail.py
 │   │   │   ├── _order_form.py
+│   │   │   ├── customers_tab.py
+│   │   │   ├── dashboard_tab.py
 │   │   │   └── orders_tab.py
 │   │   ├── pricing/
 │   │   │   ├── offers/

@@ -1,8 +1,7 @@
 """
-ui/main_window.py
+ui/main_window.py  (محدَّث — مع قسم الطلبات)
 =================
 النافذة الرئيسية — Sidebar Navigation + Content Area.
-[تحديث: إضافة قسم التصميمات]
 """
 
 from PyQt5.QtWidgets import (
@@ -15,7 +14,8 @@ from ui.tabs.costing_section      import CostingSection
 from ui.tabs.pricing_section      import PricingSection
 from ui.tabs.accounting_section   import AccountingTab
 from ui.tabs.inventory_section    import InventoryTab
-from ui.tabs.design_section       import DesignSection          # ← جديد
+from ui.tabs.design_section       import DesignSection
+from ui.tabs.orders_section       import OrdersSection          # ← جديد
 from ui.settings_dialog           import SettingsDialog
 from ui.app_settings              import get_font_size
 
@@ -187,7 +187,8 @@ class _Sidebar(QFrame):
             ("💰", "التسعير",        "pricing"),
             ("🏦", "الحسابات",       "accounting"),
             ("📦", "المخزن",         "inventory"),
-            ("🎨", "التصميمات",      "design"),     # ← جديد
+            ("🎨", "التصميمات",      "design"),
+            ("📋", "الطلبات",        "orders"),      # ← جديد
         ]
         for icon, label, key in nav_items:
             btn = _NavButton(icon, label)
@@ -271,7 +272,7 @@ class MainWindow(QMainWindow):
         self._app = app
 
         self.setWindowTitle("ERP — نظام إدارة التكاليف")
-        self.resize(1200, 800)
+        self.resize(1280, 800)
         self.setLayoutDirection(Qt.RightToLeft)
         self.setMinimumSize(900, 600)
 
@@ -297,13 +298,15 @@ class MainWindow(QMainWindow):
         self._pricing    = PricingSection()
         self._accounting = AccountingTab()
         self._inventory  = InventoryTab()
-        self._design     = DesignSection()          # ← جديد
+        self._design     = DesignSection()
+        self._orders     = OrdersSection()          # ← جديد
 
         self._stack.addWidget(self._costing)        # index 0
         self._stack.addWidget(self._pricing)        # index 1
         self._stack.addWidget(self._accounting)     # index 2
         self._stack.addWidget(self._inventory)      # index 3
         self._stack.addWidget(self._design)         # index 4
+        self._stack.addWidget(self._orders)         # index 5
 
         main_layout.addWidget(self._stack, stretch=1)
 
@@ -323,6 +326,7 @@ class MainWindow(QMainWindow):
             "accounting": 2,
             "inventory":  3,
             "design":     4,
+            "orders":     5,
         }
         if key in index_map:
             self._stack.setCurrentIndex(index_map[key])
