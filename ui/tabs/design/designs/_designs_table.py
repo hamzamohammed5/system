@@ -1,22 +1,25 @@
 """
 ui/tabs/design/designs/_designs_table.py  — v3
 ===============================================
-قائمة التصميمات — Grid Cards بـ thumbnail يتغير حسب فلتر المجموعة.
+قائمة التصميمات — Grid Cards محسّن.
 
-التغييرات عن v2:
-  - _fetch_designs_filtered: الـ first_xcf بيتحدد حسب set_id المفلتر
-  - _DesignCard: يستقبل set_id ويعرض الـ thumbnail المناسب
-  - _DesignsTable._on_set_changed: يبعت للـ cards تعمل update للـ thumbnail
+التحسينات:
+  - Cards أوضح مع معلومات منظّمة
+  - Toolbar أنظف مع فلتر أذكى
+  - ألوان متناسقة
+  - Placeholder أجمل للـ thumbnails
+  - selected state أوضح
+  - حالة فارغة مع call-to-action
 """
 
 from PyQt5.QtWidgets import (
     QWidget, QVBoxLayout, QHBoxLayout, QGridLayout,
     QPushButton, QLabel, QLineEdit,
     QMessageBox, QFrame, QComboBox,
-    QScrollArea, QAbstractItemView, QSizePolicy,
+    QScrollArea, QSizePolicy,
 )
 from PyQt5.QtCore  import Qt, pyqtSignal, QThread, pyqtSignal as Signal, QTimer
-from PyQt5.QtGui   import QPixmap, QColor, QFont, QPainter, QLinearGradient
+from PyQt5.QtGui   import QPixmap, QColor, QFont
 
 from db.designs.designs_repo import fetch_design, delete_design
 from db.designs.designs_sizes_repo import fetch_all_designs_summary
@@ -27,31 +30,47 @@ from db.designs.dimension_sets_repo import (
     fetch_all_dimension_sets,
 )
 from ui.helpers import confirm_delete
-from ._xcf_thumbnail import get_xcf_thumbnail, get_watcher, clear_cache
+from ._xcf_thumbnail import get_xcf_thumbnail, get_watcher
 from ._design_detail_panel import _DesignDetailPanel
 
 import os
 
-# ── ألوان ──
-_BG          = "#ffffff"
-_BG_SUBTLE   = "#f8fafc"
-_BG_CARD     = "#ffffff"
-_BORDER      = "#e2e8f0"
-_BORDER_MED  = "#cbd5e1"
-_TEXT        = "#0f172a"
-_TEXT_MED    = "#475569"
-_TEXT_MUTED  = "#94a3b8"
-_BLUE        = "#3b82f6"
-_BLUE_LT     = "#eff6ff"
-_BLUE_MED    = "#bfdbfe"
-_GREEN       = "#16a34a"
-_GREEN_LT    = "#f0fdf4"
-_ORANGE      = "#ea580c"
-_RED         = "#dc2626"
-_RED_LT      = "#fef2f2"
+# ── Palette ──────────────────────────────────────────────
+_BG          = "#FFFFFF"
+_BG_SURFACE  = "#F8F9FB"
+_BORDER      = "#E5E9F0"
+_BORDER_MED  = "#CDD3E0"
+_TEXT_PRI    = "#1A2035"
+_TEXT_SEC    = "#5A6680"
+_TEXT_MUT    = "#9BA5BE"
 
-_CARD_W      = 180
-_CARD_THUMB  = 140
+_ACCENT      = "#4F6EF7"
+_ACCENT_LT   = "#EEF2FF"
+_ACCENT_BDR  = "#C7D2FE"
+
+_SUCCESS     = "#16A34A"
+_SUCCESS_LT  = "#F0FDF4"
+_WARNING     = "#D97706"
+_WARNING_LT  = "#FFFBEB"
+_DANGER      = "#DC2626"
+_DANGER_LT   = "#FEF2F2"
+
+_CARD_W      = 172
+_CARD_THUMB  = 128
+_RADIUS      = "10px"
+_RADIUS_SM   = "6px"
+
+
+def _btn_ss(bg, fg, bdr, hover_bg, radius=_RADIUS_SM, height=32):
+    return (
+        f"QPushButton{{"
+        f"  background:{bg}; color:{fg};"
+        f"  border:1px solid {bdr}; border-radius:{radius};"
+        f"  padding:0 14px; font-size:12px; min-height:{height}px;"
+        f"}}"
+        f"QPushButton:hover{{background:{hover_bg};}}"
+        f"QPushButton:pressed{{opacity:0.85;}}"
+    )
 
 
 # ════════════════════════════════════════════════════════
@@ -59,7 +78,7 @@ _CARD_THUMB  = 140
 # ════════════════════════════════════════════════════════
 
 class _ThumbWorker(QThread):
-    done = Signal(str, object)  # xcf_path, QPixmap|None
+    done = Signal(str, object)
 
     def __init__(self, xcf_path: str, size: int = _CARD_THUMB):
         super().__init__()
@@ -75,63 +94,19 @@ class _ThumbWorker(QThread):
 
 
 # ════════════════════════════════════════════════════════
-# جلب الـ xcf_path المناسب حسب المجموعة
-# ════════════════════════════════════════════════════════
-
-def _get_xcf_for_set(conn, design_id: int, set_id=None) -> str | None:
-    """
-    يجيب مسار الـ xcf المناسب للتصميم حسب الـ set_id:
-      - لو set_id محدد → أول ملف ينتمي لهذه المجموعة
-      - لو مفيش set_id  → أول ملف موجود عموماً
-    يرجع None لو مفيش ملف متاح.
-    """
-    if set_id is not None:
-        row = conn.execute(
-            """
-            SELECT xcf_path FROM design_sizes
-            WHERE design_id = ?
-              AND set_id    = ?
-              AND xcf_path IS NOT NULL
-              AND xcf_path != ''
-            ORDER BY sort_order, id
-            LIMIT 1
-            """,
-            (design_id, set_id),
-        ).fetchone()
-        if row and row["xcf_path"]:
-            return row["xcf_path"]
-
-    # fallback: أول ملف موجود بغض النظر عن المجموعة
-    row = conn.execute(
-        """
-        SELECT xcf_path FROM design_sizes
-        WHERE design_id = ?
-          AND xcf_path IS NOT NULL
-          AND xcf_path != ''
-        ORDER BY sort_order, id
-        LIMIT 1
-        """,
-        (design_id,),
-    ).fetchone()
-    return row["xcf_path"] if row and row["xcf_path"] else None
-
-
-# ════════════════════════════════════════════════════════
-# بطاقة تصميم واحد
+# بطاقة تصميم واحد — محسّنة
 # ════════════════════════════════════════════════════════
 
 class _DesignCard(QFrame):
-    selected  = pyqtSignal(int)
-    deleted   = pyqtSignal(int)
+    selected = pyqtSignal(int)
+    deleted  = pyqtSignal(int)
 
-    def __init__(self, conn, design_data, set_id=None, parent=None):
+    def __init__(self, conn, design_data, parent=None):
         super().__init__(parent)
         self.conn      = conn
         self._data     = dict(design_data)
         self._did      = self._data["id"]
-        self._set_id   = set_id          # ← الجديد: فلتر المجموعة الحالي
         self._selected = False
-        self._worker   = None
         self.setCursor(Qt.PointingHandCursor)
         self.setFixedWidth(_CARD_W)
         self._build()
@@ -142,55 +117,93 @@ class _DesignCard(QFrame):
         root.setContentsMargins(0, 0, 0, 0)
         root.setSpacing(0)
 
-        # ── Thumbnail ──
-        self._thumb_lbl = QLabel()
+        # ── منطقة الـ Thumbnail ──
+        thumb_frame = QFrame()
+        thumb_frame.setFixedSize(_CARD_W, _CARD_THUMB)
+        thumb_frame.setStyleSheet(f"""
+            QFrame {{
+                background: #1E1B4B;
+                border-radius: {_RADIUS} {_RADIUS} 0 0;
+            }}
+        """)
+
+        self._thumb_lbl = QLabel(thumb_frame)
         self._thumb_lbl.setFixedSize(_CARD_W, _CARD_THUMB)
         self._thumb_lbl.setAlignment(Qt.AlignCenter)
-        self._thumb_lbl.setStyleSheet("""
-            QLabel {
-                background: #1e1b4b;
-                border-radius: 10px 10px 0 0;
-                font-size: 32px;
-                color: #4c1d95;
-            }
-        """)
+        self._thumb_lbl.setStyleSheet(
+            "background:transparent; font-size:28px; color:#6366F1;"
+        )
         self._thumb_lbl.setText("🎨")
-        root.addWidget(self._thumb_lbl)
 
-        # ── معلومات ──
+        # badge عدد المقاسات
+        sz_cnt = self._data.get("sizes_count") or 0
+        if sz_cnt:
+            badge = QLabel(f"{sz_cnt}", thumb_frame)
+            badge.setGeometry(_CARD_W - 30, 8, 22, 18)
+            badge.setAlignment(Qt.AlignCenter)
+            badge.setStyleSheet(
+                "background:rgba(0,0,0,0.55); color:#fff;"
+                f"border-radius:9px; font-size:9px; font-weight:700;"
+                "border:1px solid rgba(255,255,255,0.2);"
+            )
+
+        root.addWidget(thumb_frame)
+
+        # ── معلومات التصميم ──
         info = QFrame()
-        info.setStyleSheet("QFrame { background: transparent; border: none; }")
+        info.setStyleSheet(
+            f"QFrame{{background:transparent; border:none;}}"
+        )
         info_lay = QVBoxLayout(info)
         info_lay.setContentsMargins(10, 8, 10, 10)
         info_lay.setSpacing(3)
 
-        name = self._data["name"]
+        # اسم التصميم
+        name = self._data.get("name", "")
         lbl_name = QLabel(name)
         lbl_name.setWordWrap(True)
+        font_n = QFont()
+        font_n.setPointSize(10)
+        font_n.setWeight(QFont.Medium)
+        lbl_name.setFont(font_n)
         lbl_name.setStyleSheet(
-            f"font-size:12px; font-weight:600; color:{_TEXT};"
-            " background:transparent; border:none;"
+            f"color:{_TEXT_PRI}; background:transparent; border:none;"
         )
-        lbl_name.setFixedWidth(_CARD_W - 20)
         info_lay.addWidget(lbl_name)
 
+        # التصنيف
         cat = self._data.get("category_name") or ""
         if cat:
             lbl_cat = QLabel(cat)
+            font_c = QFont()
+            font_c.setPointSize(8)
+            lbl_cat.setFont(font_c)
             lbl_cat.setStyleSheet(
-                f"font-size:10px; color:{_TEXT_MUTED}; background:transparent; border:none;"
+                f"color:{_TEXT_MUT}; background:transparent; border:none;"
             )
             info_lay.addWidget(lbl_cat)
 
-        sz_cnt = self._data.get("sizes_count") or 0
+        # حالة الملفات
         fl_cnt = self._data.get("files_count") or 0
         if sz_cnt:
-            fl_color = _GREEN if fl_cnt == sz_cnt else (_ORANGE if fl_cnt else _TEXT_MUTED)
-            stats = QLabel(f"📐 {sz_cnt}  📁 {fl_cnt}")
-            stats.setStyleSheet(
-                f"font-size:10px; color:{fl_color}; background:transparent; border:none;"
+            if fl_cnt == sz_cnt:
+                status_col  = _SUCCESS
+                status_text = f"✓  {fl_cnt}/{sz_cnt} ملف"
+            elif fl_cnt > 0:
+                status_col  = _WARNING
+                status_text = f"⚡  {fl_cnt}/{sz_cnt} ملف"
+            else:
+                status_col  = _TEXT_MUT
+                status_text = f"○  {sz_cnt} مقاس — بدون ملفات"
+
+            lbl_status = QLabel(status_text)
+            font_s = QFont()
+            font_s.setPointSize(8)
+            lbl_status.setFont(font_s)
+            lbl_status.setStyleSheet(
+                f"color:{status_col}; background:transparent; border:none;"
             )
-            info_lay.addWidget(stats)
+            info_lay.addWidget(lbl_status)
 
         root.addWidget(info)
 
@@ -202,86 +215,39 @@ class _DesignCard(QFrame):
         if self._selected:
             self.setStyleSheet(f"""
                 QFrame {{
-                    background: {_BLUE_LT};
-                    border: 2px solid {_BLUE};
-                    border-radius: 10px;
+                    background: {_ACCENT_LT};
+                    border: 2px solid {_ACCENT};
+                    border-radius: {_RADIUS};
                 }}
             """)
         else:
             self.setStyleSheet(f"""
                 QFrame {{
-                    background: {_BG_CARD};
+                    background: {_BG};
                     border: 1px solid {_BORDER};
-                    border-radius: 10px;
+                    border-radius: {_RADIUS};
                 }}
                 QFrame:hover {{
-                    border-color: {_BLUE_MED};
-                    background: {_BLUE_LT};
+                    border-color: {_ACCENT_BDR};
+                    background: {_ACCENT_LT};
                 }}
             """)
 
     def set_thumbnail(self, pixmap):
-        """يعرض الـ pixmap في الـ thumbnail label."""
         if pixmap and not pixmap.isNull():
-            self._thumb_lbl.setPixmap(
-                pixmap.scaled(_CARD_W, _CARD_THUMB,
-                              Qt.KeepAspectRatioByExpanding,
-                              Qt.SmoothTransformation)
+            scaled = pixmap.scaled(
+                _CARD_W, _CARD_THUMB,
+                Qt.KeepAspectRatioByExpanding,
+                Qt.SmoothTransformation
             )
+            self._thumb_lbl.setPixmap(scaled)
             self._thumb_lbl.setText("")
-            self._thumb_lbl.setStyleSheet("""
-                QLabel {
-                    background: #0f0e17;
-                    border-radius: 10px 10px 0 0;
-                }
-            """)
         else:
             self._thumb_lbl.setText("🎨")
-            self._thumb_lbl.setStyleSheet("""
-                QLabel {
-                    background: #1e1b4b;
-                    border-radius: 10px 10px 0 0;
-                    font-size: 32px;
-                    color: #4c1d95;
-                }
-            """)
-
-    def load_thumbnail(self, xcf_path: str = None):
-        """
-        يحمّل الـ thumbnail:
-          - لو xcf_path مُمرَّر → يستخدمه مباشرة
-          - لو لا → يحسبه من DB حسب _set_id
-        """
-        if xcf_path is None:
-            xcf_path = _get_xcf_for_set(self.conn, self._did, self._set_id)
-
-        if not xcf_path or not os.path.exists(xcf_path):
-            self.set_thumbnail(None)
-            return
-
-        # تشغيل worker للتحميل في الخلفية
-        if self._worker and self._worker.isRunning():
-            self._worker.quit()
-
-        self._worker = _ThumbWorker(xcf_path, _CARD_THUMB)
-        self._worker.done.connect(lambda _, px: self.set_thumbnail(px))
-        self._worker.start()
-
-    def update_set_filter(self, set_id):
-        """
-        يُستدعى لما يتغير فلتر المجموعة.
-        يعيد تحميل الـ thumbnail من المجموعة الجديدة.
-        """
-        self._set_id = set_id
-        self.load_thumbnail()   # بيحسب الـ xcf من DB
 
     def mousePressEvent(self, event):
         self.selected.emit(self._did)
         super().mousePressEvent(event)
-
-    def mouseDoubleClickEvent(self, event):
-        self.selected.emit(self._did)
-        super().mouseDoubleClickEvent(event)
 
 
 # ════════════════════════════════════════════════════════
@@ -289,35 +255,7 @@ class _DesignCard(QFrame):
 # ════════════════════════════════════════════════════════
 
 def _fetch_designs_filtered(conn, name_q="", category_id=None, set_id=None):
-    """
-    جلب التصميمات مع فلترة.
-    - first_xcf: الآن يأخذ أولوية المجموعة المفلترة (set_id)،
-      وإلا أول ملف موجود عموماً.
-    """
-    # الـ subquery بتاعة first_xcf — تأخذ في الاعتبار set_id
-    if set_id is not None:
-        first_xcf_sql = """
-            (SELECT ds2.xcf_path
-             FROM   design_sizes ds2
-             WHERE  ds2.design_id = d.id
-               AND  ds2.set_id    = {set_id}
-               AND  ds2.xcf_path IS NOT NULL
-               AND  ds2.xcf_path != ''
-             ORDER  BY ds2.sort_order, ds2.id
-             LIMIT  1)
-        """.format(set_id=int(set_id))
-    else:
-        first_xcf_sql = """
-            (SELECT ds2.xcf_path
-             FROM   design_sizes ds2
-             WHERE  ds2.design_id = d.id
-               AND  ds2.xcf_path IS NOT NULL
-               AND  ds2.xcf_path != ''
-             ORDER  BY ds2.sort_order, ds2.id
-             LIMIT  1)
-        """
-
-    sql = f"""
+    sql = """
         SELECT d.id, d.name, d.item_category_id, d.notes,
                d.created_at, d.updated_at,
                ic.name                              AS category_name,
@@ -326,7 +264,13 @@ def _fetch_designs_filtered(conn, name_q="", category_id=None, set_id=None):
                SUM(CASE WHEN ds.xcf_path IS NOT NULL
                              AND ds.xcf_path != ''
                         THEN 1 ELSE 0 END)          AS files_count,
-               {first_xcf_sql}                      AS first_xcf
+               (SELECT ds2.xcf_path
+                FROM   design_sizes ds2
+                WHERE  ds2.design_id = d.id
+                  AND  ds2.xcf_path IS NOT NULL
+                  AND  ds2.xcf_path != ''
+                ORDER  BY ds2.sort_order, ds2.id
+                LIMIT  1)                           AS first_xcf
         FROM   designs d
         LEFT JOIN design_item_categories ic ON ic.id = d.item_category_id
         LEFT JOIN design_sizes ds           ON ds.design_id = d.id
@@ -373,15 +317,15 @@ class _DesignsTable(QWidget):
         super().__init__(parent)
         self.conn          = conn
         self._panel        = detail_panel
-        self._cards        = {}           # did → _DesignCard
+        self._cards        = {}
         self._workers      = []
-        self._xcf_card_map = {}           # norm_path → did
+        self._xcf_card_map = {}
         self._active_did   = None
         self._cat_filter   = None
         self._set_filter   = None
         self._search_timer = QTimer()
         self._search_timer.setSingleShot(True)
-        self._search_timer.setInterval(250)
+        self._search_timer.setInterval(280)
         self._search_timer.timeout.connect(self._apply_filter)
 
         get_watcher().file_changed.connect(self._on_xcf_changed)
@@ -394,7 +338,7 @@ class _DesignsTable(QWidget):
         root.setContentsMargins(0, 0, 0, 0)
         root.setSpacing(0)
 
-        # ── شريط الأدوات ──
+        # ── Toolbar ──────────────────────────────
         toolbar = QFrame()
         toolbar.setStyleSheet(f"""
             QFrame {{
@@ -403,7 +347,7 @@ class _DesignsTable(QWidget):
             }}
         """)
         tb_lay = QVBoxLayout(toolbar)
-        tb_lay.setContentsMargins(12, 10, 12, 10)
+        tb_lay.setContentsMargins(14, 10, 14, 10)
         tb_lay.setSpacing(8)
 
         # صف 1: بحث + زر جديد
@@ -411,71 +355,70 @@ class _DesignsTable(QWidget):
         row1.setSpacing(8)
 
         self.inp_search = QLineEdit()
-        self.inp_search.setPlaceholderText("🔍  بحث بالاسم...")
+        self.inp_search.setPlaceholderText("بحث بالاسم...")
         self.inp_search.setMinimumHeight(34)
         self.inp_search.setStyleSheet(f"""
             QLineEdit {{
-                background:{_BG_SUBTLE}; border:1px solid {_BORDER_MED};
-                border-radius:8px; padding:0 12px;
-                font-size:12px; color:{_TEXT};
+                background: {_BG_SURFACE};
+                border: 1px solid {_BORDER};
+                border-radius: {_RADIUS_SM};
+                padding: 0 12px;
+                font-size: 12px;
+                color: {_TEXT_PRI};
             }}
-            QLineEdit:focus {{ border-color:{_BLUE}; background:{_BG}; }}
+            QLineEdit:focus {{
+                border-color: {_ACCENT};
+                background: {_BG};
+            }}
         """)
         self.inp_search.textChanged.connect(lambda: self._search_timer.start())
 
-        self.btn_new = QPushButton("➕  تصميم جديد")
+        self.btn_new = QPushButton("  تصميم جديد  +")
         self.btn_new.setMinimumHeight(34)
-        self.btn_new.setStyleSheet(f"""
-            QPushButton {{
-                background:{_BLUE}; color:#fff; border:none;
-                border-radius:8px; padding:0 16px;
-                font-size:12px; font-weight:500;
-            }}
-            QPushButton:hover {{ background:#2563eb; }}
-        """)
+        self.btn_new.setStyleSheet(
+            _btn_ss(_ACCENT, "#fff", _ACCENT, "#3D5BEF", height=34)
+        )
         self.btn_new.clicked.connect(self._new_design)
 
         row1.addWidget(self.inp_search, stretch=1)
         row1.addWidget(self.btn_new)
         tb_lay.addLayout(row1)
 
-        # صف 2: فلتر مجموعات + عداد
+        # صف 2: فلتر مجموعة المقاسات + عداد + reset
         row2 = QHBoxLayout()
         row2.setSpacing(8)
 
-        lbl_set = QLabel("📐")
+        lbl_set = QLabel("المجموعة:")
         lbl_set.setStyleSheet(
-            f"font-size:14px; background:transparent; color:{_TEXT_MUTED};"
+            f"font-size:11px; color:{_TEXT_SEC}; background:transparent;"
         )
 
         self.cmb_set = QComboBox()
         self.cmb_set.setMinimumHeight(28)
         self.cmb_set.setStyleSheet(f"""
             QComboBox {{
-                background:{_BG_SUBTLE}; border:1px solid {_BORDER_MED};
-                border-radius:6px; padding:0 8px;
-                font-size:11px; color:{_TEXT_MED};
+                background: {_BG_SURFACE};
+                border: 1px solid {_BORDER};
+                border-radius: {_RADIUS_SM};
+                padding: 0 8px;
+                font-size: 11px;
+                color: {_TEXT_PRI};
             }}
-            QComboBox:focus {{ border-color:{_BLUE}; }}
-            QComboBox::drop-down {{ border:none; width:16px; }}
+            QComboBox:focus {{ border-color: {_ACCENT}; }}
+            QComboBox::drop-down {{ border: none; width: 16px; }}
         """)
         self.cmb_set.currentIndexChanged.connect(self._on_set_changed)
 
         self.lbl_count = QLabel("")
         self.lbl_count.setStyleSheet(
-            f"color:{_TEXT_MUTED}; font-size:11px; background:transparent;"
+            f"font-size:11px; color:{_TEXT_MUT}; background:transparent;"
         )
 
-        btn_rst = QPushButton("↺")
-        btn_rst.setFixedSize(28, 28)
-        btn_rst.setToolTip("مسح البحث")
-        btn_rst.setStyleSheet(f"""
-            QPushButton {{
-                background:{_BG_SUBTLE}; color:{_TEXT_MED};
-                border:1px solid {_BORDER_MED}; border-radius:6px; font-size:14px;
-            }}
-            QPushButton:hover {{ color:{_BLUE}; border-color:{_BLUE_MED}; }}
-        """)
+        btn_rst = QPushButton("↺  مسح")
+        btn_rst.setMinimumHeight(28)
+        btn_rst.setStyleSheet(
+            _btn_ss(_BG_SURFACE, _TEXT_SEC, _BORDER, _BG, height=28)
+        )
         btn_rst.clicked.connect(self._reset_filters)
 
         row2.addWidget(lbl_set)
@@ -486,47 +429,56 @@ class _DesignsTable(QWidget):
 
         root.addWidget(toolbar)
 
-        # ── منطقة الكروت ──
-        scroll = QScrollArea()
-        scroll.setWidgetResizable(True)
-        scroll.setHorizontalScrollBarPolicy(Qt.ScrollBarAlwaysOff)
-        scroll.setStyleSheet(f"""
-            QScrollArea {{ border:none; background:{_BG_SUBTLE}; }}
+        # ── منطقة الكروت ──────────────────────────
+        self._scroll = QScrollArea()
+        self._scroll.setWidgetResizable(True)
+        self._scroll.setHorizontalScrollBarPolicy(Qt.ScrollBarAlwaysOff)
+        self._scroll.setStyleSheet(f"""
+            QScrollArea {{ border: none; background: {_BG_SURFACE}; }}
             QScrollBar:vertical {{
-                background:#f0f0f0; width:6px; border-radius:3px;
+                background: {_BG_SURFACE}; width: 6px; border-radius: 3px;
             }}
             QScrollBar::handle:vertical {{
-                background:#c5cae9; border-radius:3px; min-height:20px;
+                background: {_BORDER_MED}; border-radius: 3px; min-height: 20px;
             }}
-            QScrollBar::add-line:vertical,
-            QScrollBar::sub-line:vertical {{ height:0; }}
+            QScrollBar::add-line:vertical, QScrollBar::sub-line:vertical {{ height: 0; }}
         """)
 
         self._grid_widget = QWidget()
-        self._grid_widget.setStyleSheet(f"background:{_BG_SUBTLE};")
+        self._grid_widget.setStyleSheet(f"background:{_BG_SURFACE};")
         self._grid_layout = QGridLayout(self._grid_widget)
-        self._grid_layout.setContentsMargins(12, 12, 12, 12)
+        self._grid_layout.setContentsMargins(14, 14, 14, 14)
         self._grid_layout.setSpacing(12)
+        self._grid_layout.setAlignment(Qt.AlignTop | Qt.AlignRight)
 
-        scroll.setWidget(self._grid_widget)
-        root.addWidget(scroll, stretch=1)
+        self._scroll.setWidget(self._grid_widget)
+        root.addWidget(self._scroll, stretch=1)
 
-        # ── حالة فارغة ──
+        # ── حالة فارغة ────────────────────────────
         self._empty_frame = QFrame()
-        self._empty_frame.setStyleSheet(f"background:{_BG_SUBTLE}; border:none;")
+        self._empty_frame.setStyleSheet(f"background:{_BG_SURFACE}; border:none;")
         ef_lay = QVBoxLayout(self._empty_frame)
         ef_lay.setAlignment(Qt.AlignCenter)
+        ef_lay.setSpacing(12)
+
         ef_icon = QLabel("🎨")
         ef_icon.setAlignment(Qt.AlignCenter)
-        ef_icon.setStyleSheet("font-size:52px; background:transparent;")
-        self._empty_msg = QLabel("لا توجد تصميمات بعد")
+        ef_icon.setStyleSheet("font-size:48px; background:transparent;")
+
+        self._empty_msg = QLabel("لا توجد تصميمات")
         self._empty_msg.setAlignment(Qt.AlignCenter)
         self._empty_msg.setStyleSheet(
-            f"color:{_TEXT_MUTED}; font-size:13px; background:transparent;"
+            f"color:{_TEXT_SEC}; font-size:14px; font-weight:600; background:transparent;"
         )
+        self._empty_sub = QLabel("اضغط «تصميم جديد» للبدء")
+        self._empty_sub.setAlignment(Qt.AlignCenter)
+        self._empty_sub.setStyleSheet(
+            f"color:{_TEXT_MUT}; font-size:12px; background:transparent;"
+        )
+
         ef_lay.addWidget(ef_icon)
-        ef_lay.addSpacing(12)
         ef_lay.addWidget(self._empty_msg)
+        ef_lay.addWidget(self._empty_sub)
         root.addWidget(self._empty_frame)
         self._empty_frame.setVisible(False)
 
@@ -536,7 +488,7 @@ class _DesignsTable(QWidget):
         prev = self.cmb_set.currentData()
         self.cmb_set.blockSignals(True)
         self.cmb_set.clear()
-        self.cmb_set.addItem("📐  كل المجموعات", None)
+        self.cmb_set.addItem("كل المجموعات", None)
         for ds in fetch_all_dimension_sets(self.conn):
             self.cmb_set.addItem(ds["name"], ds["id"])
         for i in range(self.cmb_set.count()):
@@ -550,52 +502,19 @@ class _DesignsTable(QWidget):
         self._apply_filter()
 
     def _on_set_changed(self):
-        """
-        لما يتغير فلتر المجموعة:
-          1. يحدث _set_filter
-          2. لو مفيش بحث/فلتر تاني → يحدث الـ thumbnails بدون إعادة بناء الكروت
-          3. لو فيه فلتر → يعيد البناء كامل (عشان التصميمات نفسها ممكن تتغير)
-        """
-        new_set = self.cmb_set.currentData()
-        old_set = self._set_filter
-        self._set_filter = new_set
-
-        # لو التصميمات مش هتتغير (مفيش فلتر set في الكروت قبل وبعد) →
-        # نحدث الـ thumbnails فقط بدون إعادة بناء
-        if old_set is None and new_set is None:
-            pass  # مفيش تغيير حقيقي
-        elif len(self._cards) > 0:
-            # نجرب نحدث الـ thumbnails أولاً بدون إعادة بناء
-            # لو الـ set_id مختلف، كل card تعمل reload للـ thumbnail
-            all_same_designs = True  # هنفترض إن التصميمات نفسها
-            # (لو set_filter موجود، ممكن يتفلتروا — بنعمل apply_filter عادي)
-            if new_set is not None or old_set is not None:
-                # لو تغير من/إلى فلتر set → إعادة بناء كاملة
-                self._apply_filter()
-                self.set_filter_changed.emit(new_set)
-                return
-
-        # تحديث الـ thumbnails في الكروت الموجودة بدون إعادة بناء
-        self._refresh_all_thumbnails()
-        self.set_filter_changed.emit(new_set)
-
-    def _refresh_all_thumbnails(self):
-        """يحدث الـ thumbnail في كل الكروت حسب الـ _set_filter الحالي."""
-        for did, card in self._cards.items():
-            card.update_set_filter(self._set_filter)
+        self._set_filter = self.cmb_set.currentData()
+        self._apply_filter()
+        self.set_filter_changed.emit(self._set_filter)
 
     def filter_by_category(self, cat_id):
-        """يُستدعى من DesignsCategoriesPanel."""
         self._cat_filter = cat_id
         self._apply_filter()
 
     def _apply_filter(self):
-        # إيقاف الـ workers القديمة
         for w in self._workers:
             w.quit()
         self._workers.clear()
 
-        # إيقاف مراقبة الملفات القديمة
         watcher = get_watcher()
         for path in list(self._xcf_card_map.keys()):
             watcher.unwatch(path)
@@ -613,33 +532,34 @@ class _DesignsTable(QWidget):
         self._cards = {}
 
         if not rows:
+            self._scroll.setVisible(False)
             self._empty_frame.setVisible(True)
             if name_q or self._cat_filter or self._set_filter:
-                self._empty_msg.setText("لا توجد نتائج للبحث الحالي")
+                self._empty_msg.setText("لا توجد نتائج")
+                self._empty_sub.setText("جرّب تغيير معايير البحث")
             else:
-                self._empty_msg.setText("لا توجد تصميمات بعد\nاضغط «تصميم جديد» للبدء")
-            self.lbl_count.setText("لا شيء")
+                self._empty_msg.setText("لا توجد تصميمات")
+                self._empty_sub.setText("اضغط «تصميم جديد +» للبدء")
+            self.lbl_count.setText("")
             return
 
         self._empty_frame.setVisible(False)
+        self._scroll.setVisible(True)
 
-        cols = max(2, (self.width() - 240) // (_CARD_W + 12))
+        cols = max(2, (self.width() - 28) // (_CARD_W + 12))
 
         for idx, d in enumerate(rows):
             row_i = idx // cols
             col_i = idx % cols
 
-            # إنشاء الـ card مع تمرير set_id
-            card = _DesignCard(self.conn, d, set_id=self._set_filter)
+            card = _DesignCard(self.conn, d)
             card.selected.connect(self._on_card_selected)
             if d["id"] == self._active_did:
                 card.set_selected(True)
 
-            self._grid_layout.addWidget(card, row_i, col_i)
+            self._grid_layout.addWidget(card, row_i, col_i, Qt.AlignTop)
             self._cards[d["id"]] = card
 
-            # تحديد الـ xcf المناسب:
-            # - الـ first_xcf في d يأتي من الـ SQL المعدَّل (يراعي set_id)
             xcf = d["first_xcf"]
             if xcf and os.path.exists(xcf):
                 norm = os.path.normpath(xcf)
@@ -649,11 +569,9 @@ class _DesignsTable(QWidget):
                 worker.done.connect(self._on_thumb_ready)
                 worker.start()
                 self._workers.append(worker)
-            else:
-                # لو مفيش صورة للمجموعة المفلترة → يعرض placeholder
-                card.set_thumbnail(None)
 
-        self.lbl_count.setText(f"{len(rows)} تصميم")
+        total = len(rows)
+        self.lbl_count.setText(f"{total} تصميم")
 
     def _on_thumb_ready(self, xcf_path: str, pixmap):
         norm = os.path.normpath(xcf_path)
@@ -665,6 +583,7 @@ class _DesignsTable(QWidget):
         norm = os.path.normpath(path)
         did  = self._xcf_card_map.get(norm)
         if did and did in self._cards:
+            from ._xcf_thumbnail import clear_cache
             clear_cache(path)
             worker = _ThumbWorker(path, _CARD_THUMB)
             worker.done.connect(self._on_thumb_ready)
@@ -699,15 +618,16 @@ class _DesignsTable(QWidget):
 
     def resizeEvent(self, event):
         super().resizeEvent(event)
-        QTimer.singleShot(50, self._reflow_grid)
+        QTimer.singleShot(60, self._reflow_grid)
 
     def _reflow_grid(self):
         if not self._cards:
             return
-        cols = max(2, (self.width() - 240) // (_CARD_W + 12))
-        for idx, (did, card) in enumerate(self._cards.items()):
+        cols = max(2, (self.width() - 28) // (_CARD_W + 12))
+        cards_list = list(self._cards.items())
+        for idx, (did, card) in enumerate(cards_list):
             self._grid_layout.removeWidget(card)
-            self._grid_layout.addWidget(card, idx // cols, idx % cols)
+            self._grid_layout.addWidget(card, idx // cols, idx % cols, Qt.AlignTop)
 
     def refresh(self):
         self._load()
