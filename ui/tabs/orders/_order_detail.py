@@ -352,7 +352,7 @@ class _OrderDetail(QWidget):
             self.items_table.setItem(r, 6, total_item)
 
     def _fill_log(self):
-        logs = [dict(r) for r in fetch_status_log(self.conn, self._order_id)]  # ← convert here
+        logs = [dict(r) for r in fetch_status_log(self.conn, self._order_id)]  # ← convert
         self.log_table.setRowCount(0)
 
         for log in logs:

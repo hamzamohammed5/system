@@ -11,7 +11,7 @@ ui/widgets/shared/no_wheel.py
   2. NoWheelCombo / NoWheelSpin / NoWheelDouble ← لو محتاج widget منفرد
 """
 
-from PyQt5.QtCore    import QEvent, QObject
+from PyQt5.QtCore    import QEvent, QObject, Qt 
 from PyQt5.QtWidgets import (
     QApplication, QComboBox, QSpinBox, QDoubleSpinBox,
     QDateEdit, QTimeEdit, QSlider, QAbstractSpinBox,
@@ -28,10 +28,13 @@ _BLOCKED_TYPES = (
 )
 
 
-class _NoWheelFilter(QObject):    # ← لازم يرث من QObject
+class _NoWheelFilter(QObject):
     def eventFilter(self, obj, event):
         if event.type() == QEvent.Wheel:
             if isinstance(obj, _BLOCKED_TYPES):
+                # لو Shift مضغوط، ابلوك تماماً — الـ ShiftWheelFilter هيتكلم
+                if event.modifiers() & Qt.ShiftModifier:
+                    return True
                 parent = obj.parentWidget()
                 if parent:
                     QApplication.sendEvent(parent, event)
@@ -42,12 +45,54 @@ class _NoWheelFilter(QObject):    # ← لازم يرث من QObject
 _filter_instance = None
 
 
+class _WheelFilter(QObject):
+    """
+    Filter واحد بيتعامل مع كل حالات الـ wheel:
+      - Shift + Wheel  → horizontal scroll في أقرب scroll area
+      - Wheel على input widget → يبعته للـ parent (vertical scroll)
+    """
+    def eventFilter(self, obj, event):
+        if event.type() != QEvent.Wheel:
+            return False
+
+        # ══ Shift + Wheel → Horizontal Scroll ══
+        if event.modifiers() & Qt.ShiftModifier:
+            target = obj
+            while target is not None:
+                if isinstance(target, QAbstractScrollArea):
+                    sb = target.horizontalScrollBar()
+                    if sb and sb.maximum() > 0:
+                        delta = event.angleDelta().y()
+                        sb.setValue(sb.value() - delta // 2)
+                        return True
+                if not hasattr(target, 'parentWidget'):
+                    break
+                target = target.parentWidget()
+            return True  # بلوك حتى لو مفيش horizontal scroll
+
+        # ══ Wheel على input widget → منع التغيير، vertical scroll للـ parent ══
+        if isinstance(obj, _BLOCKED_TYPES):
+            parent = obj.parentWidget()
+            if parent:
+                QApplication.sendEvent(parent, event)
+            return True
+
+        return False
+
+
+_wheel_filter_instance = None
+
+
 def install_no_wheel_filter(app: QApplication):
-    global _filter_instance
-    _filter_instance = _NoWheelFilter(app)   # app كـ parent عشان ميتحذفش
-    app.installEventFilter(_filter_instance)
+    """نفس الاسم القديم للتوافق — بس دلوقتي بيثبت الـ filter الموحد."""
+    global _wheel_filter_instance
+    _wheel_filter_instance = _WheelFilter(app)
+    app.installEventFilter(_wheel_filter_instance)
 
 
+def install_shift_wheel_filter(app: QApplication):
+    """مش محتاجها دلوقتي — موجودة للتوافق مع main.py."""
+    pass  # الـ filter الموحد بيتولى الاتنين
 # ══════════════════════════════════════════════════════════
 # Subclasses جاهزة — لو محتاج widget واحد بدون الفلتر العام
 # ══════════════════════════════════════════════════════════
@@ -87,13 +132,10 @@ class NoWheelSlider(QSlider):
 
 
 class _ShiftWheelFilter(QObject):
-    """
-    Shift + عجلة الماوس = scroll أفقي في أي scroll area.
-    """
     def eventFilter(self, obj, event):
         if event.type() == QEvent.Wheel:
             if event.modifiers() & Qt.ShiftModifier:
-                # نبحث عن أقرب scroll area للـ widget اللي تحت المؤشر
+                # نلاقي أقرب scroll area للـ widget اللي تحت المؤشر
                 target = obj
                 while target is not None:
                     if isinstance(target, QAbstractScrollArea):
@@ -101,8 +143,11 @@ class _ShiftWheelFilter(QObject):
                         if sb and sb.maximum() > 0:
                             delta = event.angleDelta().y()
                             sb.setValue(sb.value() - delta // 2)
-                            return True
+                            return True  # ← consume هنا، متوصلش لحد تاني
+                    if not hasattr(target, 'parentWidget'):
+                        break
                     target = target.parentWidget()
+                return True  # ← حتى لو مفيش horizontal scroll، ابلوك الـ event
         return False
 
 
