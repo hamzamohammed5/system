@@ -1,15 +1,7 @@
 """
 ui/tabs/design/designs/_designs_categories_panel.py
 ====================================================
-Sidebar تصنيفات التصميمات — تصميم محسّن v3.
-
-التحسينات:
-  - ألوان متناسقة وأكثر هدوءاً
-  - Typography أوضح مع hierarchy أحسن
-  - أيقونات Tabler بدل الإيموجي
-  - شريط بحث أنظف
-  - Hover/selected states أجمل
-  - فورم مدمج inline بشكل أسلس
+Sidebar تصنيفات التصميمات — مع دعم كامل لتغيير حجم الخط ديناميكياً.
 """
 
 from PyQt5.QtWidgets import (
@@ -20,45 +12,37 @@ from PyQt5.QtWidgets import (
 )
 from PyQt5.QtCore import Qt, pyqtSignal
 
-
 from db.designs.design_item_categories_repo import (
     fetch_all_item_categories,
     fetch_item_category,
-
     delete_item_category,
     build_item_category_tree,
     fetch_item_category_descendants,
     count_designs_per_category,
 )
+from ui.events import bus
+from ui.tabs.design.design_styles import get_styles
 
 _SIDEBAR_W = 230
 
-# ── Palette — هادئ ومتناسق ──
+# ── Palette ──────────────────────────────────────────────
 _BG          = "#FFFFFF"
 _BG_SURFACE  = "#F8F9FB"
 _BG_HOVER    = "#F1F4F9"
+_BG_SELECTED = "#EEF2FF"
 _BORDER      = "#E5E9F0"
 _BORDER_MED  = "#CDD3E0"
-
 _TEXT_PRI    = "#1A2035"
 _TEXT_SEC    = "#5A6680"
 _TEXT_MUT    = "#9BA5BE"
-
-_ACCENT      = "#4F6EF7"           # أزرق بنفسجي
-
-
+_ACCENT      = "#4F6EF7"
 _DANGER      = "#DC2626"
 _DANGER_LT   = "#FEF2F2"
 _DANGER_BDR  = "#FECACA"
-
 _RADIUS_SM   = "5px"
-
 
 from .designs_categories._row_and_form import _btn_ss, _CatForm, _CatRow
 
-# ══════════════════════════════════════════════════════════
-# Sidebar الرئيسي
-# ══════════════════════════════════════════════════════════
 
 class DesignsCategoriesPanel(QWidget):
     category_changed = pyqtSignal(object)
@@ -70,35 +54,59 @@ class DesignsCategoriesPanel(QWidget):
         self._items     = []
         self._build()
         self._load()
+        bus.font_changed.connect(self._on_font_changed)
+
+    def _on_font_changed(self, size: int):
+        self._apply_dynamic_styles()
+
+    def _apply_dynamic_styles(self):
+        s = get_styles()
+
+        # header
+        self._lbl_header.setStyleSheet(
+            f"font-size:{s.large}pt; font-weight:700; color:{_TEXT_PRI};"
+            "background:transparent; border:none;"
+        )
+        self._btn_add.setStyleSheet(
+            f"QPushButton{{"
+            f"  background:{_ACCENT}; color:#fff;"
+            f"  border:none; border-radius:{s.normal + 2}px;"
+            f"  font-size:{s.large}pt; font-weight:700;"
+            f"}}"
+            f"QPushButton:hover{{background:#3D5BEF;}}"
+        )
+        self._inp_search.setStyleSheet(s.input_search())
+
+        self.btn_edit.setStyleSheet(
+            s.btn(_BG, _TEXT_SEC, _BORDER_MED, _BG_HOVER)
+        )
+        self.btn_del.setStyleSheet(
+            s.btn(_DANGER_LT, _DANGER, _DANGER_BDR, "#FEE2E2")
+        )
 
     def _build(self):
+        s = get_styles()
         self.setFixedWidth(_SIDEBAR_W)
         self.setStyleSheet(
-            f"QWidget{{"
-            f"  background:{_BG};"
-            f"  border-left: 1px solid {_BORDER};"
-            f"}}"
+            f"QWidget{{ background:{_BG}; border-left:1px solid {_BORDER}; }}"
         )
         root = QVBoxLayout(self)
         root.setContentsMargins(0, 0, 0, 0)
         root.setSpacing(0)
 
-        # ── رأس ──────────────────────────────────
+        # ── رأس ──────────────────────────────────────
         hdr = QFrame()
         hdr.setFixedHeight(52)
         hdr.setStyleSheet(
-            f"QFrame{{"
-            f"  background:{_BG};"
-            f"  border-bottom:1px solid {_BORDER};"
-            f"}}"
+            f"QFrame{{ background:{_BG}; border-bottom:1px solid {_BORDER}; }}"
         )
         hdr_lay = QHBoxLayout(hdr)
         hdr_lay.setContentsMargins(14, 0, 10, 0)
         hdr_lay.setSpacing(8)
 
-        lbl = QLabel("التصنيفات")
-        lbl.setStyleSheet(
-            f"font-size:13px; font-weight:700; color:{_TEXT_PRI};"
+        self._lbl_header = QLabel("التصنيفات")
+        self._lbl_header.setStyleSheet(
+            f"font-size:{s.large}pt; font-weight:700; color:{_TEXT_PRI};"
             "background:transparent; border:none;"
         )
 
@@ -109,24 +117,20 @@ class DesignsCategoriesPanel(QWidget):
             f"QPushButton{{"
             f"  background:{_ACCENT}; color:#fff;"
             f"  border:none; border-radius:13px;"
-            f"  font-size:16px; font-weight:700; line-height:1;"
+            f"  font-size:{s.large}pt; font-weight:700;"
             f"}}"
             f"QPushButton:hover{{background:#3D5BEF;}}"
         )
         self._btn_add.clicked.connect(self._show_add_form)
 
-        hdr_lay.addWidget(lbl, stretch=1)
+        hdr_lay.addWidget(self._lbl_header, stretch=1)
         hdr_lay.addWidget(self._btn_add)
         root.addWidget(hdr)
 
-        # ── شريط البحث ──────────────────────────
+        # ── شريط البحث ──────────────────────────────
         search_frame = QFrame()
         search_frame.setStyleSheet(
-            f"QFrame{{"
-            f"  background:{_BG};"
-            f"  border-bottom:1px solid {_BORDER};"
-            f"  padding:8px 12px;"
-            f"}}"
+            f"QFrame{{ background:{_BG}; border-bottom:1px solid {_BORDER}; padding:8px 12px; }}"
         )
         sf_lay = QHBoxLayout(search_frame)
         sf_lay.setContentsMargins(0, 6, 0, 6)
@@ -135,29 +139,15 @@ class DesignsCategoriesPanel(QWidget):
         self._inp_search = QLineEdit()
         self._inp_search.setPlaceholderText("بحث في التصنيفات...")
         self._inp_search.setMinimumHeight(30)
-        self._inp_search.setStyleSheet(f"""
-            QLineEdit {{
-                background: {_BG_SURFACE};
-                border: 1px solid {_BORDER};
-                border-radius: {_RADIUS_SM};
-                padding: 0 10px 0 10px;
-                font-size: 11px;
-                color: {_TEXT_PRI};
-            }}
-            QLineEdit:focus {{
-                border-color: {_ACCENT};
-                background: {_BG};
-            }}
-        """)
+        self._inp_search.setStyleSheet(s.input_search())
         self._inp_search.textChanged.connect(self._on_search)
 
-        # زر مسح البحث
         self._btn_clear_search = QPushButton("✕")
         self._btn_clear_search.setFixedSize(22, 22)
         self._btn_clear_search.setVisible(False)
         self._btn_clear_search.setStyleSheet(
             f"QPushButton{{background:transparent;border:none;"
-            f"color:{_TEXT_MUT};font-size:10px;}}"
+            f"color:{_TEXT_MUT};}}"
             f"QPushButton:hover{{color:{_DANGER};}}"
         )
         self._btn_clear_search.clicked.connect(self._clear_search)
@@ -169,7 +159,7 @@ class DesignsCategoriesPanel(QWidget):
         sf_lay.addWidget(self._btn_clear_search)
         root.addWidget(search_frame)
 
-        # ── قائمة التصنيفات ──────────────────────
+        # ── قائمة التصنيفات ──────────────────────────
         scroll = QScrollArea()
         scroll.setWidgetResizable(True)
         scroll.setHorizontalScrollBarPolicy(Qt.ScrollBarAlwaysOff)
@@ -194,13 +184,10 @@ class DesignsCategoriesPanel(QWidget):
         scroll.setWidget(self._list_w)
         root.addWidget(scroll, stretch=1)
 
-        # ── شريط الإجراءات ──────────────────────
+        # ── شريط الإجراءات ──────────────────────────
         act = QFrame()
         act.setStyleSheet(
-            f"QFrame{{"
-            f"  background:{_BG_SURFACE};"
-            f"  border-top:1px solid {_BORDER};"
-            f"}}"
+            f"QFrame{{ background:{_BG_SURFACE}; border-top:1px solid {_BORDER}; }}"
         )
         ab = QHBoxLayout(act)
         ab.setContentsMargins(10, 8, 10, 8)
@@ -209,31 +196,27 @@ class DesignsCategoriesPanel(QWidget):
         self.btn_edit = QPushButton("تعديل")
         self.btn_edit.setMinimumHeight(28)
         self.btn_edit.setEnabled(False)
-        self.btn_edit.setStyleSheet(
-            _btn_ss(_BG, _TEXT_SEC, _BORDER_MED, _BG_HOVER)
-        )
+        self.btn_edit.setStyleSheet(s.btn(_BG, _TEXT_SEC, _BORDER_MED, _BG_HOVER))
         self.btn_edit.clicked.connect(self._show_edit_form)
 
         self.btn_del = QPushButton("حذف")
         self.btn_del.setMinimumHeight(28)
         self.btn_del.setEnabled(False)
-        self.btn_del.setStyleSheet(
-            _btn_ss(_DANGER_LT, _DANGER, _DANGER_BDR, "#FEE2E2")
-        )
+        self.btn_del.setStyleSheet(s.btn(_DANGER_LT, _DANGER, _DANGER_BDR, "#FEE2E2"))
         self.btn_del.clicked.connect(self._delete)
 
         ab.addWidget(self.btn_edit, stretch=1)
         ab.addWidget(self.btn_del)
         root.addWidget(act)
 
-        # ── فورم مدمج ────────────────────────────
+        # ── فورم مدمج ────────────────────────────────
         self._form = _CatForm(self.conn)
         self._form.setVisible(False)
         self._form.saved.connect(self._on_form_saved)
         self._form.canceled.connect(lambda: self._form.setVisible(False))
         root.addWidget(self._form)
 
-    # ── تحميل وعرض التصنيفات ──────────────────────────────
+    # ── تحميل التصنيفات ───────────────────────────────────
 
     def _load(self, query=""):
         for item in self._items:
@@ -241,14 +224,12 @@ class DesignsCategoriesPanel(QWidget):
             item.deleteLater()
         self._items = []
 
-        # عنصر "الكل"
         all_row = _CatRow(None, "كل التصميمات", _ACCENT, depth=0)
         all_row.clicked.connect(self._on_clicked)
         all_row.set_selected(self._active_id == "ALL")
         self._list_lay.insertWidget(self._list_lay.count() - 1, all_row)
         self._items.append(all_row)
 
-        # فاصل خفيف
         sep = QFrame()
         sep.setFrameShape(QFrame.HLine)
         sep.setFixedHeight(1)
@@ -260,7 +241,6 @@ class DesignsCategoriesPanel(QWidget):
         counts = count_designs_per_category(self.conn)
         self._add_tree(tree, 0, counts, query.lower())
 
-        # تفعيل/تعطيل الأزرار
         has_selection = self._active_id not in ("ALL", None)
         self.btn_edit.setEnabled(has_selection)
         self.btn_del.setEnabled(has_selection)
@@ -274,10 +254,8 @@ class DesignsCategoriesPanel(QWidget):
             desc = fetch_item_category_descendants(self.conn, node["id"])
             cnt  = sum(counts.get(d, 0) for d in desc)
 
-            row = _CatRow(
-                node["id"], node["name"], node["color"],
-                count=cnt, depth=depth
-            )
+            row = _CatRow(node["id"], node["name"], node["color"],
+                          count=cnt, depth=depth)
             row.clicked.connect(self._on_clicked)
             row.set_selected(self._active_id == node["id"])
             self._list_lay.insertWidget(self._list_lay.count() - 1, row)
@@ -341,16 +319,13 @@ class DesignsCategoriesPanel(QWidget):
             msg += f"\n⚠️ {total} تصميم سيفقد تصنيفه."
 
         if QMessageBox.question(
-            self, "تأكيد", msg,
-            QMessageBox.Yes | QMessageBox.No
+            self, "تأكيد", msg, QMessageBox.Yes | QMessageBox.No
         ) == QMessageBox.Yes:
             for d in sorted(desc, reverse=True):
                 delete_item_category(self.conn, d)
             self._active_id = "ALL"
             self._load()
             self.category_changed.emit(None)
-
-    # ── API خارجي ──────────────────────────────────────────
 
     def refresh(self):
         self._load(query=self._inp_search.text().strip())
