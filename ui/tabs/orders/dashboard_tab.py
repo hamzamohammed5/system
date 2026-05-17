@@ -51,17 +51,13 @@ def _stat_card(icon, title, value="─", sub="",
 
     row = QHBoxLayout()
     lbl_icon = QLabel(icon)
-    lbl_icon.setStyleSheet(
-        "font-size:22px; background:transparent; border:none;"
-    )
+    lbl_icon.setStyleSheet("background:transparent; border:none;")
     lbl_val = QLabel(value)
     f = QFont()
     f.setPointSize(18)
     f.setBold(True)
     lbl_val.setFont(f)
-    lbl_val.setStyleSheet(
-        f"color:{color}; background:transparent; border:none;"
-    )
+    lbl_val.setStyleSheet(f"color:{color}; background:transparent; border:none;")
     lbl_val.setAlignment(Qt.AlignLeft | Qt.AlignVCenter)
     row.addWidget(lbl_icon)
     row.addStretch()
@@ -70,16 +66,14 @@ def _stat_card(icon, title, value="─", sub="",
 
     lbl_t = QLabel(title)
     lbl_t.setStyleSheet(
-        f"font-size:11px; color:{color}; font-weight:600;"
+        f"color:{color}; font-weight:600;"
         "background:transparent; border:none;"
     )
     lay.addWidget(lbl_t)
 
     if sub:
         lbl_s = QLabel(sub)
-        lbl_s.setStyleSheet(
-            "font-size:10px; color:#6b7280; background:transparent; border:none;"
-        )
+        lbl_s.setStyleSheet("color:#6b7280; background:transparent; border:none;")
         lay.addWidget(lbl_s)
 
     return frame, lbl_val
@@ -99,12 +93,11 @@ def _status_chip(icon, label, count, color, bg, border):
     lay.setSpacing(8)
 
     lbl_icon = QLabel(icon)
-    lbl_icon.setStyleSheet("font-size:16px; background:transparent; border:none;")
+    lbl_icon.setStyleSheet("background:transparent; border:none;")
 
     lbl_lbl = QLabel(label)
     lbl_lbl.setStyleSheet(
-        f"font-size:11px; font-weight:600; color:{color};"
-        "background:transparent; border:none;"
+        f"font-weight:600; color:{color}; background:transparent; border:none;"
     )
 
     lbl_cnt = QLabel(str(count))
@@ -112,9 +105,7 @@ def _status_chip(icon, label, count, color, bg, border):
     f.setPointSize(14)
     f.setBold(True)
     lbl_cnt.setFont(f)
-    lbl_cnt.setStyleSheet(
-        f"color:{color}; background:transparent; border:none;"
-    )
+    lbl_cnt.setStyleSheet(f"color:{color}; background:transparent; border:none;")
 
     lay.addWidget(lbl_icon)
     lay.addWidget(lbl_lbl, stretch=1)
@@ -174,7 +165,7 @@ class OrdersDashboardTab(QWidget):
         # ── شبكة الحالات ─────────────────────────────────────
         lbl_status = QLabel("توزيع الطلبات حسب الحالة")
         lbl_status.setStyleSheet(
-            "font-size:13px; font-weight:bold; color:#374151; background:transparent;"
+            "font-weight:bold; color:#374151; background:transparent;"
         )
         lay.addWidget(lbl_status)
 
@@ -197,7 +188,7 @@ class OrdersDashboardTab(QWidget):
         recent_hdr = QHBoxLayout()
         lbl_recent = QLabel("آخر الطلبات")
         lbl_recent.setStyleSheet(
-            "font-size:13px; font-weight:bold; color:#374151; background:transparent;"
+            "font-weight:bold; color:#374151; background:transparent;"
         )
 
         btn_refresh = QPushButton("↺  تحديث")
@@ -206,7 +197,7 @@ class OrdersDashboardTab(QWidget):
             QPushButton {
                 background: #e8eaf6; color: #3949ab;
                 border: 1px solid #c5cae9; border-radius: 5px;
-                padding: 0 12px; font-size: 11px;
+                padding: 0 12px;
             }
             QPushButton:hover { background: #c5cae9; }
         """)
@@ -231,14 +222,14 @@ class OrdersDashboardTab(QWidget):
         self.recent_table.setStyleSheet("""
             QTableWidget {
                 border: 1px solid #e5e9f0; border-radius: 8px;
-                background: white; font-size: 12px; outline: none;
+                background: white; outline: none;
                 alternate-background-color: #fafbff;
             }
             QTableWidget::item { padding: 6px 10px; }
             QTableWidget::item:selected { background: #dbeafe; color: #1e40af; }
             QHeaderView::section {
                 background: #f8f9fb; color: #6b7280;
-                font-size: 11px; font-weight: bold;
+                font-weight: bold;
                 padding: 6px 10px; border: none;
                 border-bottom: 2px solid #e5e9f0;
                 border-right: 1px solid #e5e9f0;

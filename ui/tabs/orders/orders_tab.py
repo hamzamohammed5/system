@@ -91,7 +91,6 @@ class _StatusDelegate(QStyledItemDelegate):
 
         painter.setPen(QPen(QColor(fg)))
         f = painter.font()
-        f.setPointSize(f.pointSize() - 1)
         f.setBold(True)
         painter.setFont(f)
         painter.drawText(badge_rect, Qt.AlignCenter, text)
@@ -152,7 +151,6 @@ class _OrdersListPanel(QWidget):
                 border: 1px solid #cdd3e0;
                 border-radius: 6px;
                 padding: 0 10px;
-                font-size: 12px;
             }}
             QLineEdit:focus {{ border-color: {_BLUE}; background: {_WHITE}; }}
         """)
@@ -168,7 +166,6 @@ class _OrdersListPanel(QWidget):
                 border: none;
                 border-radius: 6px;
                 padding: 0 14px;
-                font-size: 12px;
                 font-weight: bold;
             }}
             QPushButton:hover {{ background: #0d47a1; }}
@@ -188,7 +185,6 @@ class _OrdersListPanel(QWidget):
                 border: 1px solid #cdd3e0;
                 border-radius: 5px;
                 padding: 0 8px;
-                font-size: 11px;
                 min-height: 28px;
             }}
             QComboBox:focus {{ border-color: {_BLUE}; }}
@@ -224,7 +220,6 @@ class _OrdersListPanel(QWidget):
             QPushButton {{
                 background: #e8eaf6; color: #3949ab;
                 border: 1px solid #c5cae9; border-radius: 5px;
-                font-size: 13px;
             }}
             QPushButton:hover {{ background: #c5cae9; }}
         """)
@@ -254,7 +249,6 @@ class _OrdersListPanel(QWidget):
                 border: none;
                 background: {_WHITE};
                 alternate-background-color: #fafbff;
-                font-size: 12px;
                 outline: none;
             }}
             QTableWidget::item {{
@@ -268,7 +262,6 @@ class _OrdersListPanel(QWidget):
             QHeaderView::section {{
                 background: {_BG};
                 color: {_BLUE};
-                font-size: 10px;
                 font-weight: bold;
                 padding: 5px 10px;
                 border: none;
@@ -302,10 +295,10 @@ class _OrdersListPanel(QWidget):
         nr_lay.setAlignment(Qt.AlignCenter)
         lbl_nr1 = QLabel("🔍")
         lbl_nr1.setAlignment(Qt.AlignCenter)
-        lbl_nr1.setStyleSheet("font-size:28px; background:transparent;")
+        lbl_nr1.setStyleSheet("background:transparent;")
         lbl_nr2 = QLabel("لا توجد طلبات مطابقة")
         lbl_nr2.setAlignment(Qt.AlignCenter)
-        lbl_nr2.setStyleSheet("font-size:12px; color:#9ca3af; background:transparent;")
+        lbl_nr2.setStyleSheet("color:#9ca3af; background:transparent;")
         nr_lay.addWidget(lbl_nr1)
         nr_lay.addWidget(lbl_nr2)
         root.addWidget(self._no_results)
@@ -316,7 +309,6 @@ class _OrdersListPanel(QWidget):
         self._status_bar.setStyleSheet(f"""
             background: {_BG};
             color: #6b7280;
-            font-size: 10px;
             padding: 5px;
             border-top: 1px solid {_BORDER};
         """)
@@ -422,7 +414,7 @@ class _OrdersListPanel(QWidget):
 
 class OrdersTab(QWidget):
     def __init__(self, conn, parent=None):
-        super().__init__(parent)
+        super().__init__(conn)
         self.conn = conn
         self._build()
 

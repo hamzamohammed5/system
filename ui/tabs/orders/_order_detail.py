@@ -93,15 +93,12 @@ def _stat_card(icon: str, title: str, value: str = "─",
     lay.setSpacing(2)
 
     lbl_hdr = QLabel(f"{icon}  {title}")
-    lbl_hdr.setStyleSheet(
-        f"font-size:10px; color:#9ba5be; background:transparent; border:none;"
-    )
+    lbl_hdr.setStyleSheet("color:#9ba5be; background:transparent; border:none;")
     lbl_hdr.setAlignment(Qt.AlignCenter)
 
     lbl_val = QLabel(value)
     lbl_val.setStyleSheet(
-        f"font-size:14px; font-weight:bold; color:{color};"
-        "background:transparent; border:none;"
+        f"font-weight:bold; color:{color}; background:transparent; border:none;"
     )
     lbl_val.setAlignment(Qt.AlignCenter)
 
@@ -124,7 +121,7 @@ def _action_btn(text: str, style: str = "normal") -> QPushButton:
             QPushButton {{
                 background: {_BLUE_LT}; color: {_BLUE};
                 border: 1px solid #90caf9; border-radius: 6px;
-                padding: 0 14px; font-size: 12px; font-weight: bold;
+                padding: 0 14px; font-weight: bold;
             }}
             QPushButton:hover {{ background: #bbdefb; }}
             QPushButton:disabled {{ background: #f5f5f5; color: #bbb; border-color: #e0e0e0; }}
@@ -134,7 +131,7 @@ def _action_btn(text: str, style: str = "normal") -> QPushButton:
             QPushButton {{
                 background: {_RED_LT}; color: {_RED};
                 border: 1px solid {_RED_BD}; border-radius: 6px;
-                padding: 0 14px; font-size: 12px;
+                padding: 0 14px;
             }}
             QPushButton:hover {{ background: #fee2e2; }}
             QPushButton:disabled {{ background: #f5f5f5; color: #bbb; border-color: #e0e0e0; }}
@@ -144,7 +141,7 @@ def _action_btn(text: str, style: str = "normal") -> QPushButton:
             QPushButton {{
                 background: {_WHITE}; color: #374151;
                 border: 1px solid #cdd3e0; border-radius: 6px;
-                padding: 0 14px; font-size: 12px;
+                padding: 0 14px;
             }}
             QPushButton:hover {{ background: {_BLUE_LT}; color: {_BLUE}; border-color: #90caf9; }}
             QPushButton:disabled {{ background: #f5f5f5; color: #bbb; border-color: #e0e0e0; }}
@@ -154,7 +151,7 @@ def _action_btn(text: str, style: str = "normal") -> QPushButton:
             QPushButton {{
                 background: {_BG}; color: #374151;
                 border: 1px solid #cdd3e0; border-radius: 6px;
-                padding: 0 14px; font-size: 12px;
+                padding: 0 14px;
             }}
             QPushButton:hover {{ background: {_BLUE_LT}; color: {_BLUE}; }}
             QPushButton:disabled {{ background: #f5f5f5; color: #bbb; border-color: #e0e0e0; }}
@@ -212,26 +209,25 @@ class _OrderDetail(QWidget):
         f.setBold(True)
         self._lbl_order_num.setFont(f)
         self._lbl_order_num.setStyleSheet(
-            f"color:#1a2035; background:transparent; border:none;"
+            "color:#1a2035; background:transparent; border:none;"
         )
 
         self._lbl_type_badge = QLabel("")
         self._lbl_type_badge.setStyleSheet(
-            "font-size:10px; padding:2px 8px; border-radius:8px;"
-            "background:#f3f4f6; color:#6b7280; border:1px solid #e5e7eb;"
-            "background:transparent; border:none;"
+            "padding:2px 8px; border-radius:8px;"
+            "background:transparent; border:none; color:#6b7280;"
         )
 
         self._lbl_status_badge = QLabel("")
         self._lbl_status_badge.setStyleSheet(
-            "font-size:11px; font-weight:bold; padding:3px 12px;"
+            "font-weight:bold; padding:3px 12px;"
             "border-radius:10px; background:#f0f0f0; color:#555;"
         )
         self._lbl_status_badge.setAlignment(Qt.AlignCenter)
 
         self._lbl_priority_badge = QLabel("")
         self._lbl_priority_badge.setStyleSheet(
-            "font-size:10px; padding:2px 8px; border-radius:8px;"
+            "padding:2px 8px; border-radius:8px;"
             "background:transparent; border:none; color:#6b7280;"
         )
 
@@ -245,7 +241,7 @@ class _OrderDetail(QWidget):
         # ─ صف 2: بيانات العميل ─
         self._lbl_customer = QLabel("")
         self._lbl_customer.setStyleSheet(
-            "color:#5a6680; font-size:11px; background:transparent; border:none;"
+            "color:#5a6680; background:transparent; border:none;"
         )
         hdr_lay.addWidget(self._lbl_customer)
 
@@ -261,20 +257,16 @@ class _OrderDetail(QWidget):
         hdr_lay.addLayout(cards_row)
 
         # ─ صف 4: الأزرار ─
-        # مُقسَّمة: إجراءات أساسية (يمين) | خطرة (يسار)
         btns_row = QHBoxLayout()
         btns_row.setSpacing(6)
 
-        # ── إجراءات خطرة (أقصى يمين الـ layout اللي RTL) ──
         self.btn_delete = _action_btn("🗑️  حذف", "danger")
         self.btn_cancel = _action_btn("❌  إلغاء", "danger")
 
-        # ── فاصل ──
         sep = QFrame()
         sep.setFrameShape(QFrame.VLine)
         sep.setStyleSheet("color:#e5e9f0;")
 
-        # ── إجراءات أساسية ──
         self.btn_edit    = _action_btn("✏️  تعديل", "primary")
         self.btn_status  = _action_btn("🔄  تغيير الحالة", "ghost")
         self.btn_reorder = _action_btn("📋  إعادة طلب", "ghost")
@@ -317,10 +309,7 @@ class _OrderDetail(QWidget):
         self._content_lay.setContentsMargins(16, 12, 16, 12)
         self._content_lay.setSpacing(12)
 
-        # ── قسم البنود ──────────────────────────────────────
         self._build_items_section()
-
-        # ── قسم سجل الحالة ─────────────────────────────────
         self._build_log_section()
 
         self._content_lay.addStretch()
@@ -336,25 +325,22 @@ class _OrderDetail(QWidget):
 
         lbl_icon = QLabel("📋")
         lbl_icon.setAlignment(Qt.AlignCenter)
-        lbl_icon.setStyleSheet(f"font-size:48px; background:transparent; border:none;")
+        lbl_icon.setStyleSheet("background:transparent; border:none;")
 
         lbl_msg = QLabel("اختر طلباً من القائمة\nأو أنشئ طلباً جديداً")
         lbl_msg.setAlignment(Qt.AlignCenter)
-        lbl_msg.setStyleSheet(
-            f"font-size:13px; color:{_GRAY}; background:transparent; border:none;"
-        )
+        lbl_msg.setStyleSheet(f"color:{_GRAY}; background:transparent; border:none;")
 
         e_lay.addWidget(lbl_icon)
         e_lay.addWidget(lbl_msg)
         root.addWidget(self._empty)
 
     def _build_items_section(self):
-        # ─ header البنود ─
         items_hdr_row = QHBoxLayout()
 
         lbl_items = QLabel("📦  بنود الطلب")
         lbl_items.setStyleSheet(
-            f"font-size:12px; font-weight:bold; color:#374151; background:transparent;"
+            "font-weight:bold; color:#374151; background:transparent;"
         )
 
         self.btn_add_item = QPushButton("＋  إضافة بند")
@@ -364,7 +350,7 @@ class _OrderDetail(QWidget):
             QPushButton {
                 background: #ecfdf5; color: #065f46;
                 border: 1px solid #a7f3d0; border-radius: 5px;
-                padding: 0 12px; font-size: 11px; font-weight: bold;
+                padding: 0 12px; font-weight: bold;
             }
             QPushButton:hover { background: #d1fae5; }
         """)
@@ -375,7 +361,25 @@ class _OrderDetail(QWidget):
         items_hdr_row.addWidget(self.btn_add_item)
         self._content_lay.addLayout(items_hdr_row)
 
-        # ─ جدول البنود ─
+        # ─ الـ stylesheet المشترك للجداول ─
+        _table_ss = f"""
+            QTableWidget {{
+                border: 1px solid {_BORDER};
+                border-radius: 8px;
+                background: {_WHITE};
+                outline: none;
+            }}
+            QTableWidget::item {{ padding: 6px 8px; }}
+            QTableWidget::item:selected {{ background: #dbeafe; color: #1e40af; }}
+            QHeaderView::section {{
+                background: {_BG}; color: {_GRAY};
+                font-weight: bold;
+                padding: 5px 8px; border: none;
+                border-bottom: 1px solid {_BORDER};
+                border-right: 1px solid {_BORDER};
+            }}
+        """
+
         self.items_table = QTableWidget()
         self.items_table.setColumnCount(7)
         self.items_table.setHorizontalHeaderLabels([
@@ -386,24 +390,7 @@ class _OrderDetail(QWidget):
         self.items_table.verticalHeader().setVisible(False)
         self.items_table.setMinimumHeight(120)
         self.items_table.setMaximumHeight(240)
-        self.items_table.setStyleSheet(f"""
-            QTableWidget {{
-                border: 1px solid {_BORDER};
-                border-radius: 8px;
-                background: {_WHITE};
-                font-size: 11px;
-                outline: none;
-            }}
-            QTableWidget::item {{ padding: 6px 8px; }}
-            QTableWidget::item:selected {{ background: #dbeafe; color: #1e40af; }}
-            QHeaderView::section {{
-                background: {_BG}; color: {_GRAY};
-                font-size: 10px; font-weight: bold;
-                padding: 5px 8px; border: none;
-                border-bottom: 1px solid {_BORDER};
-                border-right: 1px solid {_BORDER};
-            }}
-        """)
+        self.items_table.setStyleSheet(_table_ss)
         hh = self.items_table.horizontalHeader()
         hh.setSectionResizeMode(0, QHeaderView.Stretch)
         hh.setSectionResizeMode(1, QHeaderView.Stretch)
@@ -412,14 +399,14 @@ class _OrderDetail(QWidget):
         hh.setDefaultAlignment(Qt.AlignRight | Qt.AlignVCenter)
         self._content_lay.addWidget(self.items_table)
 
-        # ─ رسالة الجدول الفاضي ─
+        # رسالة الجدول الفاضي
         self._empty_items = QFrame()
-        self._empty_items.setStyleSheet(f"""
-            QFrame {{
+        self._empty_items.setStyleSheet("""
+            QFrame {
                 background: #f0fdf4;
                 border: 2px dashed #a7f3d0;
                 border-radius: 8px;
-            }}
+            }
         """)
         self._empty_items.setMinimumHeight(80)
         ei_lay = QVBoxLayout(self._empty_items)
@@ -427,12 +414,11 @@ class _OrderDetail(QWidget):
         lbl_ei = QLabel("لا توجد بنود — اضغط «＋ إضافة بند» لإضافة منتج")
         lbl_ei.setAlignment(Qt.AlignCenter)
         lbl_ei.setStyleSheet(
-            "font-size:11px; color:#059669; background:transparent; border:none;"
+            "color:#059669; background:transparent; border:none;"
         )
         ei_lay.addWidget(lbl_ei)
         self._content_lay.addWidget(self._empty_items)
 
-        # ─ أزرار تعديل/حذف البند ─
         item_btns = QHBoxLayout()
         item_btns.setSpacing(6)
         self.btn_edit_item = _action_btn("✏️  تعديل بند", "ghost")
@@ -446,8 +432,10 @@ class _OrderDetail(QWidget):
         item_btns.addStretch()
         self._content_lay.addLayout(item_btns)
 
+        # حفظ stylesheet الجداول للـ log
+        self._table_ss = _table_ss
+
     def _build_log_section(self):
-        # فاصل
         sep = QFrame()
         sep.setFrameShape(QFrame.HLine)
         sep.setStyleSheet(f"color:{_BORDER};")
@@ -455,7 +443,7 @@ class _OrderDetail(QWidget):
 
         log_hdr = QLabel("📜  سجل تغييرات الحالة")
         log_hdr.setStyleSheet(
-            "font-size:12px; font-weight:bold; color:#374151; background:transparent;"
+            "font-weight:bold; color:#374151; background:transparent;"
         )
         self._content_lay.addWidget(log_hdr)
 
@@ -466,7 +454,7 @@ class _OrderDetail(QWidget):
         self.log_table.setEditTriggers(QAbstractItemView.NoEditTriggers)
         self.log_table.verticalHeader().setVisible(False)
         self.log_table.setMaximumHeight(160)
-        self.log_table.setStyleSheet(self.items_table.styleSheet())
+        self.log_table.setStyleSheet(self._table_ss)
         hh2 = self.log_table.horizontalHeader()
         hh2.setSectionResizeMode(0, QHeaderView.ResizeToContents)
         hh2.setSectionResizeMode(1, QHeaderView.ResizeToContents)
@@ -474,13 +462,6 @@ class _OrderDetail(QWidget):
         hh2.setSectionResizeMode(3, QHeaderView.ResizeToContents)
         hh2.setDefaultAlignment(Qt.AlignRight | Qt.AlignVCenter)
         self._content_lay.addWidget(self.log_table)
-
-    def _section_header(self, text: str) -> QLabel:
-        lbl = QLabel(text)
-        lbl.setStyleSheet(
-            "font-size:12px; font-weight:bold; color:#374151; background:transparent;"
-        )
-        return lbl
 
     # ══════════════════════════════════════════════════════
     # تحميل البيانات
@@ -517,52 +498,45 @@ class _OrderDetail(QWidget):
     def _fill_header(self):
         d = self._order_data
 
-        # رقم الطلب + نوعه
         self._lbl_order_num.setText(d['order_number'])
         self._lbl_type_badge.setText(TYPE_LABELS.get(d['order_type'], ''))
 
-        # badge الحالة
         status_info = STATUS_LABELS.get(d["status"], (d["status"], "#555", "#fff", "#eee"))
         status_lbl, status_color = status_info[0], status_info[1]
         status_bg,  status_bd   = status_info[2], status_info[3]
         self._lbl_status_badge.setText(status_lbl)
         self._lbl_status_badge.setStyleSheet(
-            f"font-size:11px; font-weight:bold; padding:3px 12px;"
+            f"font-weight:bold; padding:3px 12px;"
             f"border-radius:10px; color:{status_color};"
             f"background:{status_bg}; border:1px solid {status_bd};"
         )
 
-        # badge الأولوية
         pri_lbl, pri_color = PRIORITY_LABELS.get(d["priority"], ("", _GRAY))
         self._lbl_priority_badge.setText(pri_lbl)
         self._lbl_priority_badge.setStyleSheet(
-            f"font-size:10px; color:{pri_color}; background:transparent; border:none;"
+            f"color:{pri_color}; background:transparent; border:none;"
         )
 
-        # معلومات العميل
         parts = [f"👤  {d['customer_name']}  ({d['customer_code']})"]
         if d["customer_phone"]: parts.append(f"📞 {d['customer_phone']}")
         if d["customer_city"]:  parts.append(f"📍 {d['customer_city']}")
         self._lbl_customer.setText("   |   ".join(parts))
 
-        # المبالغ
         net    = d["net_amount"]  or 0
         paid   = d["paid_amount"] or 0
         remain = net - paid
 
         self._lbl_total.setText(f"{net:,.2f} ج")
         self._lbl_paid.setText(f"{paid:,.2f} ج")
-
         self._lbl_balance.setText(f"{remain:,.2f} ج")
         balance_color = "#ef4444" if remain > 0 else _GREEN
         self._lbl_balance.setStyleSheet(
-            f"font-size:14px; font-weight:bold; color:{balance_color};"
+            f"font-weight:bold; color:{balance_color};"
             "background:transparent; border:none;"
         )
 
         self._lbl_due_date.setText(d["due_date"] or "─")
 
-        # تفعيل/تعطيل الأزرار
         status = d["status"]
         can_edit   = status not in ("delivered", "cancelled")
         can_cancel = status not in ("delivered", "cancelled")
@@ -592,8 +566,7 @@ class _OrderDetail(QWidget):
 
             name_item = QTableWidgetItem(item["item_name"])
             name_item.setData(Qt.UserRole, item["id"])
-            f = QFont()
-            f.setWeight(QFont.Medium)
+            f = QFont(); f.setWeight(QFont.Medium)
             name_item.setFont(f)
             self.items_table.setItem(r, 0, name_item)
             self.items_table.setItem(r, 1, QTableWidgetItem(item["description"] or ""))
@@ -785,11 +758,11 @@ class _StatusDialog(QDialog):
         lbl = QLabel(
             f"الحالة الحالية:  <b>{STATUS_LABELS_SHORT.get(current, current)}</b>"
         )
-        lbl.setStyleSheet("font-size:12px; color:#374151;")
+        lbl.setStyleSheet("color:#374151;")
         lay.addWidget(lbl)
 
         lbl2 = QLabel("تغيير إلى:")
-        lbl2.setStyleSheet("font-size:11px; color:#6b7280;")
+        lbl2.setStyleSheet("color:#6b7280;")
         lay.addWidget(lbl2)
 
         self._cmb = QComboBox()
@@ -799,7 +772,7 @@ class _StatusDialog(QDialog):
         lay.addWidget(self._cmb)
 
         lbl3 = QLabel("ملاحظات (اختياري):")
-        lbl3.setStyleSheet("font-size:11px; color:#6b7280;")
+        lbl3.setStyleSheet("color:#6b7280;")
         lay.addWidget(lbl3)
 
         self._note = QLineEdit()
