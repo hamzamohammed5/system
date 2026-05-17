@@ -1,18 +1,22 @@
 """
-ui/tabs/design/designs_tab.py
-==============================
-تبويب إدارة التصميمات.
-يربط signal تغيير فلتر المجموعة من الجدول بلوحة التفاصيل.
+ui/tabs/design/designs_tab.py  — v2
+======================================
+تبويب التصميمات — تصميم محسّن:
+
+  يسار (220px) : DesignsCategoriesPanel — تصنيفات مستقلة للتصميمات
+  وسط  (flex)  : _DesignsTable — كروت Grid بـ thumbnail كبير
+  يمين (flex)  : _DesignDetailPanel — تفاصيل + إضافة مقاسات
 """
 
-from PyQt5.QtWidgets import QWidget, QVBoxLayout, QSplitter
+from PyQt5.QtWidgets import (
+    QWidget, QVBoxLayout, QHBoxLayout,
+    QSplitter, QFrame, QLabel,
+)
 from PyQt5.QtCore import Qt
 
-from .designs._designs_table       import _DesignsTable
-from .designs._design_detail_panel import _DesignDetailPanel
-
-_BORDER  = "#e0e7f3"
-_BLUE_MID = "#bbdefb"
+from .designs._designs_table           import _DesignsTable
+from .designs._design_detail_panel     import _DesignDetailPanel
+from .designs._designs_categories_panel import DesignsCategoriesPanel
 
 
 class DesignsTab(QWidget):
@@ -22,36 +26,66 @@ class DesignsTab(QWidget):
         self._build()
 
     def _build(self):
-        root = QVBoxLayout(self)
+        root = QHBoxLayout(self)
         root.setContentsMargins(0, 0, 0, 0)
+        root.setSpacing(0)
 
+        # ══ 1. Sidebar التصنيفات ══════════════════════
+        self._cats_panel = DesignsCategoriesPanel(self.conn)
+
+        # ══ 2. Splitter: قائمة + تفاصيل ══════════════
         splitter = QSplitter(Qt.Horizontal)
-        splitter.setHandleWidth(5)
-        splitter.setStyleSheet(f"""
-            QSplitter::handle {{ background: {_BORDER}; }}
-            QSplitter::handle:hover {{ background: {_BLUE_MID}; }}
+        splitter.setHandleWidth(4)
+        splitter.setStyleSheet("""
+            QSplitter::handle {
+                background: #e2e8f0;
+            }
+            QSplitter::handle:hover {
+                background: #bfdbfe;
+            }
         """)
 
-        # لوحة التفاصيل أولاً (تحتاجها _DesignsTable)
+        # لوحة التفاصيل (تُنشأ أولاً لأن _DesignsTable تحتاجها)
         self._detail = _DesignDetailPanel(self.conn)
 
-        # جدول التصميمات
+        # قائمة الكروت
         self._table = _DesignsTable(self.conn, self._detail)
 
         # ── ربط الـ signals ──
-        self._detail.saved.connect(self._table.refresh)
+        self._detail.saved.connect(self._on_detail_saved)
         self._detail.cleared.connect(self._table.refresh)
         self._table.design_deleted.connect(self._table.refresh)
-
-        # فلتر مجموعة المقاسات → فلترة بطاقات لوحة التفاصيل
         self._table.set_filter_changed.connect(self._detail.filter_by_set)
+
+        # فلتر التصنيفات من الـ sidebar
+        self._cats_panel.category_changed.connect(self._on_category_changed)
 
         splitter.addWidget(self._table)
         splitter.addWidget(self._detail)
-        splitter.setSizes([340, 660])
+        splitter.setSizes([360, 640])
+        splitter.setCollapsible(0, False)
+        splitter.setCollapsible(1, False)
 
-        root.addWidget(splitter)
+        # ترتيب: sidebar | splitter
+        root.addWidget(self._cats_panel)
+
+        sep = QFrame()
+        sep.setFrameShape(QFrame.VLine)
+        sep.setStyleSheet("color: #e2e8f0;")
+        root.addWidget(sep)
+
+        root.addWidget(splitter, stretch=1)
+
+    def _on_category_changed(self, cat_id):
+        """عند اختيار تصنيف من الـ sidebar."""
+        self._table.filter_by_category(cat_id)
+
+    def _on_detail_saved(self):
+        """بعد حفظ التصميم — تحديث القائمة والـ sidebar."""
+        self._table.refresh()
+        self._cats_panel.refresh()
 
     def refresh(self):
         self._table.refresh()
         self._detail._reload_categories()
+        self._cats_panel.refresh()
