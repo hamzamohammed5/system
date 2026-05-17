@@ -212,6 +212,7 @@ def instance_already_used(conn, design_id: int, instance_id: int,
 def fetch_all_designs_summary(conn) -> list:
     """
     كل التصميمات مع عدد المقاسات وعدد الملفات الموجودة.
+    يستخدم item_category_id بدل category_id.
     """
     return conn.execute("""
         SELECT
@@ -220,13 +221,13 @@ def fetch_all_designs_summary(conn) -> list:
             d.notes,
             d.created_at,
             d.updated_at,
-            dc.name                                    AS category_name,
+            ic.name                                    AS category_name,
             COUNT(ds.id)                               AS sizes_count,
             SUM(CASE WHEN ds.xcf_path IS NOT NULL AND ds.xcf_path != '' THEN 1 ELSE 0 END)
                                                        AS files_count
         FROM   designs d
-        LEFT JOIN design_categories dc ON dc.id = d.category_id
-        LEFT JOIN design_sizes ds      ON ds.design_id = d.id
+        LEFT JOIN design_item_categories ic ON ic.id = d.item_category_id
+        LEFT JOIN design_sizes ds           ON ds.design_id = d.id
         GROUP  BY d.id
         ORDER  BY d.updated_at DESC, d.name
     """).fetchall()

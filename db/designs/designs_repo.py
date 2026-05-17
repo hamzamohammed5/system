@@ -2,6 +2,10 @@
 db/designs/designs_repo.py
 ===========================
 عمليات قراءة/كتابة التصميمات وربطها بالمقاسات.
+
+ملاحظة:
+  - item_category_id → تصنيف التصميم (design_item_categories) ← الجديد
+  - category_id      → تصنيف مجموعة المقاسات (design_categories) ← قديم/غير مستخدم
 """
 
 from db.designs.dimension_sets_repo import calc_auto_value
@@ -14,14 +18,16 @@ from db.designs.dimension_sets_repo import calc_auto_value
 def fetch_all_designs(conn, category_id: int = None,
                       set_id: int = None, name_q: str = "") -> list:
     """
-    جلب التصميمات مع فلترة اختيارية بالتصنيف والمجموعة والاسم.
+    جلب التصميمات مع فلترة اختيارية.
+    category_id هنا = item_category_id (تصنيف التصميم المستقل).
     """
     sql = """
-        SELECT DISTINCT d.id, d.name, d.category_id, d.notes,
+        SELECT DISTINCT d.id, d.name, d.item_category_id, d.notes,
                d.created_at, d.updated_at,
-               dc.name AS category_name
+               ic.name AS category_name,
+               ic.color AS category_color
         FROM   designs d
-        LEFT JOIN design_categories dc ON dc.id = d.category_id
+        LEFT JOIN design_item_categories ic ON ic.id = d.item_category_id
     """
     params = []
 
@@ -34,7 +40,7 @@ def fetch_all_designs(conn, category_id: int = None,
 
     conditions = []
     if category_id is not None:
-        conditions.append("d.category_id = ?")
+        conditions.append("d.item_category_id = ?")
         params.append(category_id)
     if name_q:
         conditions.append("d.name LIKE ?")
@@ -49,31 +55,32 @@ def fetch_all_designs(conn, category_id: int = None,
 
 def fetch_design(conn, design_id: int):
     return conn.execute("""
-        SELECT d.id, d.name, d.category_id, d.notes,
+        SELECT d.id, d.name, d.item_category_id, d.notes,
                d.created_at, d.updated_at,
-               dc.name AS category_name
+               ic.name AS category_name,
+               ic.color AS category_color
         FROM   designs d
-        LEFT JOIN design_categories dc ON dc.id = d.category_id
+        LEFT JOIN design_item_categories ic ON ic.id = d.item_category_id
         WHERE  d.id = ?
     """, (design_id,)).fetchone()
 
 
-def insert_design(conn, name: str, category_id: int = None,
+def insert_design(conn, name: str, item_category_id: int = None,
                   notes: str = "") -> int:
     cur = conn.execute(
-        "INSERT INTO designs (name, category_id, notes) VALUES (?, ?, ?)",
-        (name, category_id, notes or "")
+        "INSERT INTO designs (name, item_category_id, notes) VALUES (?, ?, ?)",
+        (name, item_category_id, notes or "")
     )
     conn.commit()
     return cur.lastrowid
 
 
 def update_design(conn, design_id: int, name: str,
-                  category_id: int = None, notes: str = ""):
+                  item_category_id: int = None, notes: str = ""):
     conn.execute(
-        "UPDATE designs SET name=?, category_id=?, notes=?, "
+        "UPDATE designs SET name=?, item_category_id=?, notes=?, "
         "updated_at=datetime('now') WHERE id=?",
-        (name, category_id, notes or "", design_id)
+        (name, item_category_id, notes or "", design_id)
     )
     conn.commit()
 
@@ -84,11 +91,10 @@ def delete_design(conn, design_id: int):
 
 
 # ══════════════════════════════════════════════════════════
-# ربط التصميم بالمقاسات
+# ربط التصميم بالمقاسات (design_dimensions) — legacy
 # ══════════════════════════════════════════════════════════
 
 def fetch_design_links(conn, design_id: int) -> list:
-    """كل روابط التصميم مع بيانات المجموعة."""
     return conn.execute("""
         SELECT dd.id, dd.design_id, dd.set_id, dd.label, dd.sort_order,
                ds.name AS set_name, ds.default_unit,
@@ -97,7 +103,7 @@ def fetch_design_links(conn, design_id: int) -> list:
         JOIN   dimension_sets ds ON ds.id = dd.set_id
         LEFT JOIN design_categories dc ON dc.id = ds.category_id
         ORDER  BY dd.sort_order, dd.id
-    """).fetchall()  # NOTE: لا فلترة بـ design_id هنا —  الـ WHERE في الاستدعاء
+    """).fetchall()
 
 
 def fetch_design_links_for_design(conn, design_id: int) -> list:
@@ -120,7 +126,6 @@ def fetch_link(conn, link_id: int):
 
 def add_design_link(conn, design_id: int, set_id: int,
                     label: str = "", sort_order: int = 0) -> int:
-    """يضيف ربط بين تصميم ومجموعة مقاسات."""
     cur = conn.execute(
         "INSERT INTO design_dimensions (design_id, set_id, label, sort_order)"
         " VALUES (?, ?, ?, ?)",
@@ -148,9 +153,6 @@ def update_design_link_label(conn, link_id: int, label: str):
 # ══════════════════════════════════════════════════════════
 
 def fetch_dim_values(conn, link_id: int) -> dict:
-    """
-    يرجع dict: {field_id: {"value_num": ..., "value_text": ..., "is_auto": ...}}
-    """
     rows = conn.execute(
         "SELECT field_id, value_num, value_text, is_auto "
         "FROM design_dim_values WHERE link_id=?",
@@ -169,7 +171,6 @@ def fetch_dim_values(conn, link_id: int) -> dict:
 def set_dim_value(conn, link_id: int, field_id: int,
                   value_num: float = None, value_text: str = None,
                   is_auto: bool = False):
-    """يحفظ أو يحدث قيمة حقل واحد."""
     conn.execute(
         """INSERT INTO design_dim_values (link_id, field_id, value_num, value_text, is_auto)
            VALUES (?, ?, ?, ?, ?)
@@ -185,14 +186,8 @@ def set_dim_value(conn, link_id: int, field_id: int,
 def save_all_dim_values(conn, link_id: int,
                         values: dict[int, float | str],
                         auto_flags: dict[int, bool] = None):
-    """
-    يحفظ كل قيم الحقول لربط واحد دفعة واحدة.
-    values: {field_id: value}
-    auto_flags: {field_id: is_auto}
-    """
     if auto_flags is None:
         auto_flags = {}
-
     for field_id, val in values.items():
         is_auto = auto_flags.get(field_id, False)
         if isinstance(val, str):
@@ -205,15 +200,9 @@ def save_all_dim_values(conn, link_id: int,
 
 
 def recalc_auto_values(conn, link_id: int) -> dict[int, float]:
-    """
-    يعيد حساب كل الحقول ذات الاعتماديات في ربط معين.
-    يرجع dict {field_id: computed_value} للحقول اللي اتحسبت.
-    """
-    # جلب الحقول ذات اعتماديات لهذا الـ link
     link = fetch_link(conn, link_id)
     if not link:
         return {}
-
     deps = conn.execute("""
         SELECT dep.field_id, dep.source_field_id, dep.offset
         FROM   dimension_field_deps dep
@@ -222,7 +211,6 @@ def recalc_auto_values(conn, link_id: int) -> dict[int, float]:
             SELECT set_id FROM design_dimensions WHERE id=?
         )
     """, (link_id,)).fetchall()
-
     computed = {}
     for dep in deps:
         val = calc_auto_value(conn, dep["field_id"], link_id)
@@ -230,19 +218,13 @@ def recalc_auto_values(conn, link_id: int) -> dict[int, float]:
             set_dim_value(conn, link_id, dep["field_id"],
                           value_num=val, is_auto=True)
             computed[dep["field_id"]] = val
-
     return computed
 
 
 def fetch_full_design_data(conn, design_id: int) -> dict:
-    """
-    يرجع بيانات التصميم الكاملة مع كل الروابط والقيم.
-    مفيد للعرض والتقارير.
-    """
     design = fetch_design(conn, design_id)
     if not design:
         return {}
-
     links = fetch_design_links_for_design(conn, design_id)
     result = {
         "id":            design["id"],
@@ -251,12 +233,10 @@ def fetch_full_design_data(conn, design_id: int) -> dict:
         "notes":         design["notes"],
         "links":         [],
     }
-
     for link in links:
         from db.designs.dimension_sets_repo import fetch_fields_for_set
         fields = fetch_fields_for_set(conn, link["set_id"])
         values = fetch_dim_values(conn, link["id"])
-
         link_data = {
             "link_id":  link["id"],
             "set_name": link["set_name"],
@@ -267,13 +247,11 @@ def fetch_full_design_data(conn, design_id: int) -> dict:
         for f in fields:
             val_info = values.get(f["id"], {})
             link_data["fields"].append({
-                "id":       f["id"],
-                "label":    f["label"],
-                "unit":     f["unit"],
-                "value":    val_info.get("value_num"),
-                "is_auto":  val_info.get("is_auto", False),
+                "id":      f["id"],
+                "label":   f["label"],
+                "unit":    f["unit"],
+                "value":   val_info.get("value_num"),
+                "is_auto": val_info.get("is_auto", False),
             })
-
         result["links"].append(link_data)
-
     return result

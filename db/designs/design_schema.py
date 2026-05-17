@@ -81,6 +81,10 @@ def _run_migrations(conn):
     from db.designs.migrations_v6 import run_migrations_v6
     run_migrations_v6(conn)
 
+    # ══ 6. migration v7 — design_item_categories المستقل ══
+    from db.designs.migrations_v7 import run_migrations_v7
+    run_migrations_v7(conn)
+
 
 def create_designs_tables(conn):
     """إنشاء كل جداول designs.db ثم تنفيذ الـ migrations."""
@@ -92,6 +96,15 @@ def create_designs_tables(conn):
             color           TEXT    NOT NULL DEFAULT '#1565c0',
             parent_id       INTEGER REFERENCES design_categories(id) ON DELETE SET NULL,
             notes           TEXT
+        );
+
+        CREATE TABLE IF NOT EXISTS design_item_categories (
+            id        INTEGER PRIMARY KEY AUTOINCREMENT,
+            name      TEXT    NOT NULL,
+            color     TEXT    NOT NULL DEFAULT '#7c3aed',
+            parent_id INTEGER
+                      REFERENCES design_item_categories(id) ON DELETE SET NULL,
+            notes     TEXT
         );
 
         CREATE TABLE IF NOT EXISTS dimension_sets (
@@ -152,13 +165,14 @@ def create_designs_tables(conn):
         );
 
         CREATE TABLE IF NOT EXISTS designs (
-            id              INTEGER PRIMARY KEY AUTOINCREMENT,
-            name            TEXT    NOT NULL,
-            category_id     INTEGER REFERENCES design_categories(id) ON DELETE SET NULL,
-            notes           TEXT,
-            preview_image   TEXT,
-            created_at      TEXT    NOT NULL DEFAULT (datetime('now')),
-            updated_at      TEXT    NOT NULL DEFAULT (datetime('now'))
+            id                 INTEGER PRIMARY KEY AUTOINCREMENT,
+            name               TEXT    NOT NULL,
+            category_id        INTEGER REFERENCES design_categories(id) ON DELETE SET NULL,
+            item_category_id   INTEGER REFERENCES design_item_categories(id) ON DELETE SET NULL,
+            notes              TEXT,
+            preview_image      TEXT,
+            created_at         TEXT    NOT NULL DEFAULT (datetime('now')),
+            updated_at         TEXT    NOT NULL DEFAULT (datetime('now'))
         );
 
         CREATE TABLE IF NOT EXISTS design_sizes (

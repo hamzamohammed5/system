@@ -1,5 +1,5 @@
 File Tree Snapshot
-Generated : 2026-05-17 06:52:32
+Generated : 2026-05-17 07:08:26
 Source    : D:\My Workspace\Hg\Alhabaar\accountant\system
 Extensions: .py
 ────────────────────────────────────────────────────────────
@@ -21,13 +21,15 @@ system/
 │   │   ├── operations_repo.py
 │   │   └── raw_variants_repo.py
 │   ├── designs/
+│   │   ├── design_item_categories_repo.py
 │   │   ├── design_schema.py
 │   │   ├── designs_repo.py
 │   │   ├── designs_sizes_repo.py
 │   │   ├── dimension_sets_repo.py
 │   │   ├── migrations_v4.py
 │   │   ├── migrations_v5.py
-│   │   └── migrations_v6.py
+│   │   ├── migrations_v6.py
+│   │   └── migrations_v7.py
 │   ├── inventory/
 │   │   ├── inventory_repo.py
 │   │   ├── inventory_schema.py

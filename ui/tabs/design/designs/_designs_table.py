@@ -2,13 +2,6 @@
 ui/tabs/design/designs/_designs_table.py  — v2
 ===============================================
 قائمة التصميمات — تصميم Grid Cards بدل الجدول.
-
-التحسينات:
-  - Grid كروت بـ thumbnail كبير (140px)
-  - بحث + فلتر مجموعات في شريط واحد نظيف
-  - تصنيفات مستقلة عبر DesignsCategoriesPanel
-  - thumbnail يُحمَّل في الخلفية مع skeleton loading
-  - انيميشن hover ناعم
 """
 
 from PyQt5.QtWidgets import (
@@ -22,9 +15,11 @@ from PyQt5.QtGui   import QPixmap, QColor, QFont, QPainter, QLinearGradient
 
 from db.designs.designs_repo import fetch_design, delete_design
 from db.designs.designs_sizes_repo import fetch_all_designs_summary
+from db.designs.design_item_categories_repo import (
+    fetch_item_category_descendants,
+)
 from db.designs.dimension_sets_repo import (
-    fetch_all_design_categories, build_category_tree,
-    fetch_all_dimension_sets, fetch_category_descendants,
+    fetch_all_dimension_sets,
 )
 from ui.helpers import confirm_delete
 from ._xcf_thumbnail import get_xcf_thumbnail, get_watcher
@@ -79,16 +74,14 @@ class _ThumbWorker(QThread):
 # ════════════════════════════════════════════════════════
 
 class _DesignCard(QFrame):
-    """بطاقة تصميم — thumbnail كبير + اسم + زر فتح."""
-
     selected  = pyqtSignal(int)
     deleted   = pyqtSignal(int)
 
     def __init__(self, conn, design_data, parent=None):
         super().__init__(parent)
-        self.conn    = conn
-        self._data   = design_data
-        self._did    = design_data["id"]
+        self.conn      = conn
+        self._data     = dict(design_data)   # ← تحويل sqlite3.Row لـ dict
+        self._did      = self._data["id"]
         self._selected = False
         self.setCursor(Qt.PointingHandCursor)
         self.setFixedWidth(_CARD_W)
@@ -132,7 +125,6 @@ class _DesignCard(QFrame):
         lbl_name.setFixedWidth(_CARD_W - 20)
         info_lay.addWidget(lbl_name)
 
-        # التصنيف
         cat = self._data.get("category_name") or ""
         if cat:
             lbl_cat = QLabel(cat)
@@ -141,7 +133,6 @@ class _DesignCard(QFrame):
             )
             info_lay.addWidget(lbl_cat)
 
-        # عداد المقاسات
         sz_cnt = self._data.get("sizes_count") or 0
         fl_cnt = self._data.get("files_count") or 0
         if sz_cnt:
@@ -206,28 +197,33 @@ class _DesignCard(QFrame):
 
 
 # ════════════════════════════════════════════════════════
-# جلب التصميمات مع فلترة
+# جلب التصميمات مع فلترة — محدّث لـ item_category_id
 # ════════════════════════════════════════════════════════
 
 def _fetch_designs_filtered(conn, name_q="", category_id=None, set_id=None):
+    """
+    جلب التصميمات مع فلترة.
+    category_id هنا = item_category_id (تصنيف التصميم المستقل).
+    """
     sql = """
-        SELECT d.id, d.name, d.category_id, d.notes,
+        SELECT d.id, d.name, d.item_category_id, d.notes,
                d.created_at, d.updated_at,
-               dc.name                               AS category_name,
-               COUNT(DISTINCT ds.id)                 AS sizes_count,
+               ic.name                              AS category_name,
+               ic.color                             AS category_color,
+               COUNT(DISTINCT ds.id)                AS sizes_count,
                SUM(CASE WHEN ds.xcf_path IS NOT NULL
                              AND ds.xcf_path != ''
-                        THEN 1 ELSE 0 END)           AS files_count,
+                        THEN 1 ELSE 0 END)          AS files_count,
                (SELECT ds2.xcf_path
                 FROM   design_sizes ds2
                 WHERE  ds2.design_id = d.id
                   AND  ds2.xcf_path IS NOT NULL
                   AND  ds2.xcf_path != ''
                 ORDER  BY ds2.sort_order, ds2.id
-                LIMIT  1)                            AS first_xcf
+                LIMIT  1)                           AS first_xcf
         FROM   designs d
-        LEFT JOIN design_categories dc ON dc.id = d.category_id
-        LEFT JOIN design_sizes ds      ON ds.design_id = d.id
+        LEFT JOIN design_item_categories ic ON ic.id = d.item_category_id
+        LEFT JOIN design_sizes ds           ON ds.design_id = d.id
     """
     conditions, params = [], []
 
@@ -237,12 +233,12 @@ def _fetch_designs_filtered(conn, name_q="", category_id=None, set_id=None):
 
     if category_id is not None:
         try:
-            desc = fetch_category_descendants(conn, category_id)
+            desc = fetch_item_category_descendants(conn, category_id)
             ph   = ",".join("?" * len(desc))
-            conditions.append(f"d.category_id IN ({ph})")
+            conditions.append(f"d.item_category_id IN ({ph})")
             params.extend(desc)
         except Exception:
-            conditions.append("d.category_id = ?")
+            conditions.append("d.item_category_id = ?")
             params.append(category_id)
 
     if set_id is not None:
@@ -263,23 +259,19 @@ def _fetch_designs_filtered(conn, name_q="", category_id=None, set_id=None):
 # ════════════════════════════════════════════════════════
 
 class _DesignsTable(QWidget):
-    """
-    قائمة التصميمات بشكل Grid كروت.
-    """
-
     design_selected    = pyqtSignal(int)
     design_deleted     = pyqtSignal()
-    set_filter_changed = pyqtSignal(object)  # set_id | None
+    set_filter_changed = pyqtSignal(object)
 
     def __init__(self, conn, detail_panel: _DesignDetailPanel, parent=None):
         super().__init__(parent)
         self.conn          = conn
         self._panel        = detail_panel
-        self._cards        = {}         # design_id → _DesignCard
+        self._cards        = {}
         self._workers      = []
-        self._xcf_card_map = {}         # xcf_path → design_id
+        self._xcf_card_map = {}
         self._active_did   = None
-        self._cat_filter   = None       # category_id من الـ sidebar
+        self._cat_filter   = None
         self._set_filter   = None
         self._search_timer = QTimer()
         self._search_timer.setSingleShot(True)
@@ -290,8 +282,6 @@ class _DesignsTable(QWidget):
 
         self._build()
         self._load()
-
-    # ── بناء الواجهة ──────────────────────────────────
 
     def _build(self):
         root = QVBoxLayout(self)
@@ -436,8 +426,6 @@ class _DesignsTable(QWidget):
 
         self._reload_set_combo()
 
-    # ── Data loaders ───────────────────────────────────
-
     def _reload_set_combo(self):
         prev = self.cmb_set.currentData()
         self.cmb_set.blockSignals(True)
@@ -460,20 +448,16 @@ class _DesignsTable(QWidget):
         self._apply_filter()
         self.set_filter_changed.emit(self._set_filter)
 
-    # ── الفلتر الرئيسي ────────────────────────────────
-
     def filter_by_category(self, cat_id):
         """يُستدعى من DesignsCategoriesPanel."""
         self._cat_filter = cat_id
         self._apply_filter()
 
     def _apply_filter(self):
-        # إيقاف الـ workers القديمة
         for w in self._workers:
             w.quit()
         self._workers.clear()
 
-        # إلغاء مراقبة الملفات
         watcher = get_watcher()
         for path in list(self._xcf_card_map.keys()):
             watcher.unwatch(path)
@@ -484,7 +468,6 @@ class _DesignsTable(QWidget):
             self.conn, name_q, self._cat_filter, self._set_filter
         )
 
-        # مسح الكروت القديمة
         for card in self._cards.values():
             self._grid_layout.removeWidget(card)
             card.deleteLater()
@@ -501,10 +484,7 @@ class _DesignsTable(QWidget):
 
         self._empty_frame.setVisible(False)
 
-        # حساب عدد الأعمدة حسب العرض
-        cols = max(1, (self.width() - 240) // (_CARD_W + 12))
-        if cols < 2:
-            cols = 2
+        cols = max(2, (self.width() - 240) // (_CARD_W + 12))
 
         for idx, d in enumerate(rows):
             row_i = idx // cols
@@ -518,7 +498,6 @@ class _DesignsTable(QWidget):
             self._grid_layout.addWidget(card, row_i, col_i)
             self._cards[d["id"]] = card
 
-            # تحميل الـ thumbnail
             xcf = d["first_xcf"]
             if xcf and os.path.exists(xcf):
                 norm = os.path.normpath(xcf)
@@ -529,11 +508,7 @@ class _DesignsTable(QWidget):
                 worker.start()
                 self._workers.append(worker)
 
-        # spacer في الأسفل
-        total = len(rows)
-        self.lbl_count.setText(f"{total} تصميم")
-
-    # ── Thumbnail callbacks ────────────────────────────
+        self.lbl_count.setText(f"{len(rows)} تصميم")
 
     def _on_thumb_ready(self, xcf_path: str, pixmap):
         norm = os.path.normpath(xcf_path)
@@ -552,16 +527,12 @@ class _DesignsTable(QWidget):
             worker.start()
             self._workers.append(worker)
 
-    # ── Selection ──────────────────────────────────────
-
     def _on_card_selected(self, did: int):
-        # رفع التحديد القديم
         if self._active_did and self._active_did in self._cards:
             self._cards[self._active_did].set_selected(False)
         self._active_did = did
         if did in self._cards:
             self._cards[did].set_selected(True)
-
         self._panel.load_design(did)
         self.design_selected.emit(did)
 
@@ -582,23 +553,17 @@ class _DesignsTable(QWidget):
         self._apply_filter()
         self.set_filter_changed.emit(None)
 
-    # ── Resize ────────────────────────────────────────
-
     def resizeEvent(self, event):
         super().resizeEvent(event)
-        # إعادة ترتيب الكروت عند تغيير الحجم
         QTimer.singleShot(50, self._reflow_grid)
 
     def _reflow_grid(self):
         if not self._cards:
             return
         cols = max(2, (self.width() - 240) // (_CARD_W + 12))
-        cards_list = list(self._cards.items())
-        for idx, (did, card) in enumerate(cards_list):
+        for idx, (did, card) in enumerate(self._cards.items()):
             self._grid_layout.removeWidget(card)
             self._grid_layout.addWidget(card, idx // cols, idx % cols)
-
-    # ── Public API ────────────────────────────────────
 
     def refresh(self):
         self._load()

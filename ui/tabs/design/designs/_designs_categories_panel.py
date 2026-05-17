@@ -3,27 +3,28 @@ ui/tabs/design/designs/_designs_categories_panel.py
 ====================================================
 لوحة إدارة تصنيفات التصميمات المستقلة — sidebar على يسار تبويب التصميمات.
 
-مستقلة تماماً عن تصنيفات مجموعات المقاسات (design_categories في designs.db).
-تعمل كـ sidebar filter لعرض التصميمات المصنّفة.
+تستخدم جدول design_item_categories المستقل تماماً عن
+design_categories الخاص بمجموعات المقاسات.
 """
 
 from PyQt5.QtWidgets import (
     QWidget, QVBoxLayout, QHBoxLayout,
-    QPushButton, QLabel, QLineEdit,
+    QPushButton, QLabel,
     QColorDialog, QMessageBox, QFrame,
-    QScrollArea, QInputDialog,
+    QScrollArea,
 )
 from PyQt5.QtCore import Qt, pyqtSignal
-from PyQt5.QtGui import QColor, QFont
+from PyQt5.QtGui import QColor
 
-from db.designs.dimension_sets_repo import (
-    fetch_all_design_categories,
-    fetch_design_category,
-    insert_design_category,
-    update_design_category,
-    delete_design_category,
-    build_category_tree,
-    fetch_category_descendants,
+from db.designs.design_item_categories_repo import (
+    fetch_all_item_categories,
+    fetch_item_category,
+    insert_item_category,
+    update_item_category,
+    delete_item_category,
+    build_item_category_tree,
+    fetch_item_category_descendants,
+    count_designs_per_category,
 )
 
 # ── ألوان ──
@@ -35,53 +36,47 @@ _BORDER_MED  = "#cbd5e1"
 _TEXT        = "#0f172a"
 _TEXT_MED    = "#475569"
 _TEXT_MUTED  = "#94a3b8"
-_BLUE        = "#3b82f6"
-_BLUE_LT     = "#eff6ff"
-_BLUE_MED    = "#bfdbfe"
+_PURPLE      = "#7c3aed"
+_PURPLE_LT   = "#f5f3ff"
+_PURPLE_MED  = "#ddd6fe"
 _RED         = "#dc2626"
 _RED_LT      = "#fef2f2"
-_GREEN       = "#16a34a"
 
 _SIDEBAR_W   = 220
 
 
-def _btn_ss(bg, fg, border, hover_bg, hover_fg=None):
-    hfg = hover_fg or fg
+def _btn_ss(bg, fg, border, hover_bg):
     return (
         f"QPushButton {{ background:{bg}; color:{fg}; border:1px solid {border};"
         f" border-radius:6px; padding:4px 10px; font-size:11px; }}"
-        f"QPushButton:hover {{ background:{hover_bg}; color:{hfg}; }}"
+        f"QPushButton:hover {{ background:{hover_bg}; }}"
     )
 
 
 # ══════════════════════════════════════════════════════════
-# بطاقة تصنيف واحد
+# عنصر تصنيف واحد
 # ══════════════════════════════════════════════════════════
 
 class _CategoryItem(QFrame):
-    """عنصر تصنيف في القائمة — قابل للنقر والتحديد."""
-
-    clicked = pyqtSignal(object)  # category_id أو None (الكل)
+    clicked = pyqtSignal(object)   # cat_id أو None
 
     def __init__(self, cat_id, name: str, color: str,
                  count: int = 0, depth: int = 0, parent=None):
         super().__init__(parent)
-        self.cat_id   = cat_id
+        self.cat_id    = cat_id
         self._selected = False
         self.setCursor(Qt.PointingHandCursor)
         self.setMinimumHeight(36)
 
         lay = QHBoxLayout(self)
-        indent = depth * 14
-        lay.setContentsMargins(10 + indent, 4, 10, 4)
+        lay.setContentsMargins(10 + depth * 14, 4, 10, 4)
         lay.setSpacing(8)
 
-        # لون التصنيف
         self._dot = QLabel("●")
         self._dot.setFixedWidth(14)
-        c = color if color else "#94a3b8"
         self._dot.setStyleSheet(
-            f"color:{c}; font-size:10px; background:transparent; border:none;"
+            f"color:{color or _PURPLE}; font-size:10px;"
+            " background:transparent; border:none;"
         )
 
         self._lbl = QLabel(name)
@@ -102,7 +97,6 @@ class _CategoryItem(QFrame):
         lay.addWidget(self._dot)
         lay.addWidget(self._lbl, stretch=1)
         lay.addWidget(self._cnt)
-
         self._update_style()
 
     def set_selected(self, sel: bool):
@@ -113,13 +107,13 @@ class _CategoryItem(QFrame):
         if self._selected:
             self.setStyleSheet(f"""
                 QFrame {{
-                    background: {_BLUE_LT};
-                    border-left: 3px solid {_BLUE};
+                    background: {_PURPLE_LT};
+                    border-left: 3px solid {_PURPLE};
                     border-radius: 6px;
                 }}
             """)
             self._lbl.setStyleSheet(
-                f"font-size:12px; color:{_BLUE}; font-weight:600;"
+                f"font-size:12px; color:{_PURPLE}; font-weight:600;"
                 " background:transparent; border:none;"
             )
         else:
@@ -141,23 +135,22 @@ class _CategoryItem(QFrame):
 
 
 # ══════════════════════════════════════════════════════════
-# Dialog إضافة / تعديل تصنيف
+# فورم إضافة / تعديل مدمج
 # ══════════════════════════════════════════════════════════
 
-class _CategoryDialog(QWidget):
-    """فورم مضمّن في أسفل الـ sidebar لإضافة / تعديل تصنيف."""
-
-    saved   = pyqtSignal()
+class _CategoryForm(QWidget):
+    saved    = pyqtSignal()
     canceled = pyqtSignal()
 
     def __init__(self, conn, parent=None):
         super().__init__(parent)
         self.conn        = conn
         self._editing_id = None
-        self._color      = "#3b82f6"
+        self._color      = _PURPLE
         self._build()
 
     def _build(self):
+        from PyQt5.QtWidgets import QLineEdit
         self.setStyleSheet(f"""
             QWidget {{
                 background: {_BG_SUBTLE};
@@ -170,7 +163,7 @@ class _CategoryDialog(QWidget):
 
         self._mode_lbl = QLabel("تصنيف جديد")
         self._mode_lbl.setStyleSheet(
-            f"font-size:11px; font-weight:600; color:{_BLUE};"
+            f"font-size:11px; font-weight:600; color:{_PURPLE};"
             " background:transparent; border:none;"
         )
         lay.addWidget(self._mode_lbl)
@@ -183,11 +176,30 @@ class _CategoryDialog(QWidget):
                 border: 1px solid {_BORDER_MED}; border-radius:6px;
                 padding: 3px 8px; font-size:11px; background:{_BG};
             }}
-            QLineEdit:focus {{ border-color:{_BLUE}; }}
+            QLineEdit:focus {{ border-color:{_PURPLE}; }}
         """)
         lay.addWidget(self.inp_name)
 
-        # لون
+        # اختيار التصنيف الأب
+        from PyQt5.QtWidgets import QComboBox
+        lbl_parent = QLabel("تابع لـ:")
+        lbl_parent.setStyleSheet(
+            f"font-size:11px; color:{_TEXT_MED}; background:transparent; border:none;"
+        )
+        self.cmb_parent = QComboBox()
+        self.cmb_parent.setMinimumHeight(28)
+        self.cmb_parent.setStyleSheet(f"""
+            QComboBox {{
+                border: 1px solid {_BORDER_MED}; border-radius:6px;
+                padding: 2px 8px; font-size:11px; background:{_BG};
+            }}
+            QComboBox:focus {{ border-color:{_PURPLE}; }}
+            QComboBox::drop-down {{ border:none; }}
+        """)
+        lay.addWidget(lbl_parent)
+        lay.addWidget(self.cmb_parent)
+
+        # اللون
         color_row = QHBoxLayout()
         color_row.setSpacing(6)
         lbl_c = QLabel("اللون:")
@@ -213,7 +225,7 @@ class _CategoryDialog(QWidget):
         btn_row.setSpacing(6)
         self.btn_save = QPushButton("💾  حفظ")
         self.btn_save.setMinimumHeight(28)
-        self.btn_save.setStyleSheet(_btn_ss(_BLUE, "#fff", _BLUE, "#2563eb"))
+        self.btn_save.setStyleSheet(_btn_ss(_PURPLE, "#fff", _PURPLE, "#6d28d9"))
         self.btn_save.clicked.connect(self._save)
 
         btn_cancel = QPushButton("إلغاء")
@@ -225,6 +237,28 @@ class _CategoryDialog(QWidget):
         btn_row.addWidget(btn_cancel)
         lay.addLayout(btn_row)
 
+    def _reload_parent_combo(self, exclude_id=None):
+        self.cmb_parent.blockSignals(True)
+        self.cmb_parent.clear()
+        self.cmb_parent.addItem("— بدون أب (رئيسي) —", None)
+        rows = fetch_all_item_categories(self.conn)
+        tree = build_item_category_tree(rows)
+        excluded = set()
+        if exclude_id is not None:
+            excluded = set(fetch_item_category_descendants(self.conn, exclude_id))
+        self._add_parent_nodes(tree, 0, excluded)
+        self.cmb_parent.blockSignals(False)
+
+    def _add_parent_nodes(self, nodes, depth, excluded):
+        indent = "    " * depth
+        arrow  = "↳ " if depth > 0 else ""
+        for node in nodes:
+            if node["id"] in excluded:
+                continue
+            self.cmb_parent.addItem(f"{indent}{arrow}{node['name']}", node["id"])
+            if node["children"]:
+                self._add_parent_nodes(node["children"], depth + 1, excluded)
+
     def _pick_color(self):
         col = QColorDialog.getColor(QColor(self._color), self, "لون التصنيف")
         if col.isValid():
@@ -235,58 +269,64 @@ class _CategoryDialog(QWidget):
 
     def load_new(self):
         self._editing_id = None
-        self._color      = "#3b82f6"
+        self._color      = _PURPLE
         self.inp_name.clear()
         self._color_dot.setStyleSheet(
             f"color:{self._color}; font-size:14px; background:transparent; border:none;"
         )
         self._mode_lbl.setText("تصنيف جديد")
+        self._reload_parent_combo()
 
     def load_edit(self, cat_id: int):
-        cat = fetch_design_category(self.conn, cat_id)
+        cat = fetch_item_category(self.conn, cat_id)
         if not cat:
             return
         self._editing_id = cat_id
-        self._color      = cat["color"] or "#3b82f6"
+        self._color      = cat["color"] or _PURPLE
         self.inp_name.setText(cat["name"])
         self._color_dot.setStyleSheet(
             f"color:{self._color}; font-size:14px; background:transparent; border:none;"
         )
         self._mode_lbl.setText(f"تعديل: {cat['name']}")
+        self._reload_parent_combo(exclude_id=cat_id)
+        for i in range(self.cmb_parent.count()):
+            if self.cmb_parent.itemData(i) == cat["parent_id"]:
+                self.cmb_parent.setCurrentIndex(i)
+                break
 
     def _save(self):
         name = self.inp_name.text().strip()
         if not name:
             return
-        if self._editing_id:
-            update_design_category(self.conn, self._editing_id, name, self._color)
-        else:
-            insert_design_category(self.conn, name, self._color)
-        self.saved.emit()
+        parent_id = self.cmb_parent.currentData()
+        try:
+            if self._editing_id:
+                update_item_category(self.conn, self._editing_id,
+                                     name, self._color, parent_id)
+            else:
+                insert_item_category(self.conn, name, self._color, parent_id)
+            self.saved.emit()
+        except ValueError as e:
+            QMessageBox.warning(self, "خطأ", str(e))
 
 
 # ══════════════════════════════════════════════════════════
-# Sidebar التصنيفات الرئيسي
+# Sidebar الرئيسي
 # ══════════════════════════════════════════════════════════
 
 class DesignsCategoriesPanel(QWidget):
     """
-    Sidebar يسار تبويب التصميمات:
-      - عرض كل التصنيفات هرمياً
-      - فلترة بالنقر
-      - إضافة / تعديل / حذف مدمج
-    
+    Sidebar يسار تبويب التصميمات — تصنيفات مستقلة (design_item_categories).
     Signal: category_changed(cat_id | None)
     """
 
-    category_changed = pyqtSignal(object)  # None = الكل
+    category_changed = pyqtSignal(object)   # None = الكل
 
     def __init__(self, conn, parent=None):
         super().__init__(parent)
         self.conn       = conn
-        self._active_id = "ALL"   # "ALL" = كل التصنيفات
-        self._items     = []      # list of _CategoryItem
-        self._form      = None
+        self._active_id = "ALL"
+        self._items     = []
         self._build()
         self._load()
 
@@ -325,10 +365,10 @@ class DesignsCategoriesPanel(QWidget):
         self._btn_add.setToolTip("تصنيف جديد")
         self._btn_add.setStyleSheet(f"""
             QPushButton {{
-                background:{_BLUE}; color:#fff; border:none;
+                background:{_PURPLE}; color:#fff; border:none;
                 border-radius:13px; font-size:16px; font-weight:bold;
             }}
-            QPushButton:hover {{ background:#2563eb; }}
+            QPushButton:hover {{ background:#6d28d9; }}
         """)
         self._btn_add.clicked.connect(self._show_add_form)
 
@@ -336,7 +376,7 @@ class DesignsCategoriesPanel(QWidget):
         hdr_lay.addWidget(self._btn_add)
         root.addWidget(hdr)
 
-        # ── قائمة التصنيفات ──
+        # ── قائمة ──
         scroll = QScrollArea()
         scroll.setWidgetResizable(True)
         scroll.setHorizontalScrollBarPolicy(Qt.ScrollBarAlwaysOff)
@@ -362,7 +402,7 @@ class DesignsCategoriesPanel(QWidget):
         scroll.setWidget(self._list_widget)
         root.addWidget(scroll, stretch=1)
 
-        # ── أزرار تعديل / حذف ──
+        # ── شريط الأزرار ──
         action_bar = QFrame()
         action_bar.setStyleSheet(f"""
             QFrame {{
@@ -390,27 +430,25 @@ class DesignsCategoriesPanel(QWidget):
         ab_lay.addWidget(self.btn_del)
         root.addWidget(action_bar)
 
-        # ── فورم الإضافة / التعديل (مخفي مبدئياً) ──
-        self._form = _CategoryDialog(self.conn)
+        # ── الفورم المدمج ──
+        self._form = _CategoryForm(self.conn)
         self._form.setVisible(False)
         self._form.saved.connect(self._on_form_saved)
         self._form.canceled.connect(lambda: self._form.setVisible(False))
         root.addWidget(self._form)
 
-    # ── تحميل التصنيفات ──────────────────────────────
+    # ── تحميل القائمة ────────────────────────────────
 
     def _load(self):
-        # مسح العناصر القديمة
         for item in self._items:
             self._list_layout.removeWidget(item)
             item.deleteLater()
         self._items = []
 
-        # عنصر "الكل"
-        all_item = _CategoryItem(None, "🎨  كل التصميمات", "#3b82f6", depth=0)
+        # "الكل"
+        all_item = _CategoryItem(None, "🎨  كل التصميمات", _PURPLE, depth=0)
         all_item.clicked.connect(self._on_item_clicked)
-        if self._active_id == "ALL":
-            all_item.set_selected(True)
+        all_item.set_selected(self._active_id == "ALL")
         self._list_layout.insertWidget(self._list_layout.count() - 1, all_item)
         self._items.append(all_item)
 
@@ -420,36 +458,18 @@ class DesignsCategoriesPanel(QWidget):
         sep.setStyleSheet(f"color:{_BORDER}; margin:2px 4px;")
         self._list_layout.insertWidget(self._list_layout.count() - 1, sep)
 
-        # التصنيفات
-        rows = fetch_all_design_categories(self.conn)
-        tree = build_category_tree(rows)
+        rows   = fetch_all_item_categories(self.conn)
+        tree   = build_item_category_tree(rows)
+        counts = count_designs_per_category(self.conn)
+        self._add_tree_items(tree, 0, counts)
 
-        # عداد التصميمات لكل تصنيف
-        counts = self._get_design_counts()
+        has_cat = (self._active_id != "ALL" and self._active_id is not None)
+        self.btn_edit.setEnabled(has_cat)
+        self.btn_del.setEnabled(has_cat)
 
-        self._add_tree_items(tree, depth=0, counts=counts)
-
-        # تحديث أزرار التعديل
-        has_cat_selected = (
-            self._active_id != "ALL" and self._active_id is not None
-        )
-        self.btn_edit.setEnabled(has_cat_selected)
-        self.btn_del.setEnabled(has_cat_selected)
-
-    def _get_design_counts(self) -> dict:
-        """عدد التصميمات لكل تصنيف."""
-        try:
-            rows = self.conn.execute(
-                "SELECT category_id, COUNT(*) as cnt FROM designs GROUP BY category_id"
-            ).fetchall()
-            return {r["category_id"]: r["cnt"] for r in rows if r["category_id"]}
-        except Exception:
-            return {}
-
-    def _add_tree_items(self, nodes, depth: int, counts: dict):
+    def _add_tree_items(self, nodes, depth, counts):
         for node in nodes:
-            # عدد التصميمات (مجموع الأبناء أيضاً)
-            desc = fetch_category_descendants(self.conn, node["id"])
+            desc = fetch_item_category_descendants(self.conn, node["id"])
             cnt  = sum(counts.get(d, 0) for d in desc)
 
             item = _CategoryItem(
@@ -457,8 +477,7 @@ class DesignsCategoriesPanel(QWidget):
                 count=cnt, depth=depth
             )
             item.clicked.connect(self._on_item_clicked)
-            if self._active_id == node["id"]:
-                item.set_selected(True)
+            item.set_selected(self._active_id == node["id"])
 
             self._list_layout.insertWidget(self._list_layout.count() - 1, item)
             self._items.append(item)
@@ -472,11 +491,9 @@ class DesignsCategoriesPanel(QWidget):
         self._active_id = "ALL" if cat_id is None else cat_id
         for item in self._items:
             item.set_selected(item.cat_id == cat_id)
-
         has_cat = (self._active_id != "ALL")
         self.btn_edit.setEnabled(has_cat)
         self.btn_del.setEnabled(has_cat)
-
         self.category_changed.emit(cat_id)
 
     def _show_add_form(self):
@@ -485,7 +502,7 @@ class DesignsCategoriesPanel(QWidget):
         self._form.inp_name.setFocus()
 
     def _show_edit_form(self):
-        if self._active_id == "ALL" or self._active_id is None:
+        if self._active_id in ("ALL", None):
             return
         self._form.load_edit(self._active_id)
         self._form.setVisible(True)
@@ -499,15 +516,14 @@ class DesignsCategoriesPanel(QWidget):
         )
 
     def _delete(self):
-        if self._active_id == "ALL" or self._active_id is None:
+        if self._active_id in ("ALL", None):
             return
-        cat = fetch_design_category(self.conn, self._active_id)
+        cat = fetch_item_category(self.conn, self._active_id)
         if not cat:
             return
 
-        # عدد التصميمات المتأثرة
-        desc   = fetch_category_descendants(self.conn, self._active_id)
-        counts = self._get_design_counts()
+        desc   = fetch_item_category_descendants(self.conn, self._active_id)
+        counts = count_designs_per_category(self.conn)
         total  = sum(counts.get(d, 0) for d in desc)
 
         msg = f"حذف تصنيف «{cat['name']}»؟"
@@ -522,7 +538,7 @@ class DesignsCategoriesPanel(QWidget):
             QMessageBox.Yes | QMessageBox.No
         ) == QMessageBox.Yes:
             for did in sorted(desc, reverse=True):
-                delete_design_category(self.conn, did)
+                delete_item_category(self.conn, did)
             self._active_id = "ALL"
             self._load()
             self.category_changed.emit(None)
