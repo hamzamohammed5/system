@@ -17,7 +17,8 @@ from PyQt5.QtWidgets import (
 )
 from PyQt5.QtGui import QFont, QFontMetrics
 from PyQt5.QtCore import Qt, QSize, QRect
-
+from PyQt5.QtWidgets import QScrollArea
+from PyQt5.QtCore    import Qt
 
 # ══════════════════════════════════════════════════════════
 # WrapDelegate — عرض النص بـ word-wrap مع tooltip تلقائي
@@ -238,3 +239,69 @@ def confirm_delete(parent, name: str) -> bool:
         parent, "تأكيد الحذف", f"هل تريد حذف «{name}»؟",
         QMessageBox.Yes | QMessageBox.No
     ) == QMessageBox.Yes
+    
+    
+ 
+_SCROLL_SS = """
+    QScrollArea {
+        border: none;
+        background: transparent;
+    }
+    QScrollBar:vertical {
+        background: #f5f5f5;
+        width: 8px;
+        border-radius: 4px;
+    }
+    QScrollBar::handle:vertical {
+        background: #bdbdbd;
+        border-radius: 4px;
+        min-height: 30px;
+    }
+    QScrollBar::handle:vertical:hover {
+        background: #9e9e9e;
+    }
+    QScrollBar::add-line:vertical,
+    QScrollBar::sub-line:vertical {
+        height: 0px;
+    }
+    QScrollBar:horizontal {
+        background: #f5f5f5;
+        height: 8px;
+        border-radius: 4px;
+    }
+    QScrollBar::handle:horizontal {
+        background: #bdbdbd;
+        border-radius: 4px;
+        min-width: 30px;
+    }
+    QScrollBar::handle:horizontal:hover {
+        background: #9e9e9e;
+    }
+    QScrollBar::add-line:horizontal,
+    QScrollBar::sub-line:horizontal {
+        width: 0px;
+    }
+"""
+ 
+ 
+def wrap_scroll(widget, min_width: int = 0, min_height: int = 0) -> QScrollArea:
+    """
+    يغلف أي widget بـ QScrollArea أفقي + عمودي.
+    يُستخدم في main_window.py عند إضافة الـ sections للـ QStackedWidget.
+ 
+    مثال:
+        self._stack.addWidget(wrap_scroll(self._orders))
+    """
+    scroll = QScrollArea()
+    scroll.setWidget(widget)
+    scroll.setWidgetResizable(True)
+    scroll.setHorizontalScrollBarPolicy(Qt.ScrollBarAsNeeded)
+    scroll.setVerticalScrollBarPolicy(Qt.ScrollBarAsNeeded)
+    scroll.setStyleSheet(_SCROLL_SS)
+ 
+    if min_width:
+        scroll.setMinimumWidth(min_width)
+    if min_height:
+        scroll.setMinimumHeight(min_height)
+ 
+    return scroll

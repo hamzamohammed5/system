@@ -110,9 +110,7 @@ class _OrdersListPanel(QWidget):
     new_order      = pyqtSignal()
 
     def __init__(self, conn, parent=None):
-        super().__init__(parent)   # ← التصحيح
-        self.conn = conn
-        self._build()
+        super().__init__(parent)
         self.conn      = conn
         self._all_rows = []
         self._timer    = QTimer()

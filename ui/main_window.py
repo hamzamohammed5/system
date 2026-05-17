@@ -1,5 +1,5 @@
 """
-ui/main_window.py  (محدَّث — مع قسم الطلبات)
+ui/main_window.py  (محدَّث — مع قسم الطلبات + scroll لكل الـ sections)
 =================
 النافذة الرئيسية — Sidebar Navigation + Content Area.
 """
@@ -7,6 +7,7 @@ ui/main_window.py  (محدَّث — مع قسم الطلبات)
 from PyQt5.QtWidgets import (
     QMainWindow, QWidget, QHBoxLayout, QVBoxLayout,
     QStackedWidget, QPushButton, QLabel, QFrame,
+    QScrollArea,
 )
 from PyQt5.QtCore import Qt, QPropertyAnimation, QEasingCurve
 
@@ -15,7 +16,7 @@ from ui.tabs.pricing_section      import PricingSection
 from ui.tabs.accounting_section   import AccountingTab
 from ui.tabs.inventory_section    import InventoryTab
 from ui.tabs.design_section       import DesignSection
-from ui.tabs.orders_section       import OrdersSection          # ← جديد
+from ui.tabs.orders_section       import OrdersSection
 from ui.settings_dialog           import SettingsDialog
 from ui.app_settings              import get_font_size
 
@@ -23,6 +24,70 @@ from ui.app_settings              import get_font_size
 SIDEBAR_EXPANDED_WIDTH  = 200
 SIDEBAR_COLLAPSED_WIDTH = 64
 
+
+# ══════════════════════════════════════════════════════════
+# Scroll wrapper — الحل المركزي
+# ══════════════════════════════════════════════════════════
+
+_SCROLL_SS = """
+    QScrollArea {
+        border: none;
+        background: transparent;
+    }
+    QScrollBar:vertical {
+        background: #f5f5f5;
+        width: 8px;
+        border-radius: 4px;
+    }
+    QScrollBar::handle:vertical {
+        background: #bdbdbd;
+        border-radius: 4px;
+        min-height: 30px;
+    }
+    QScrollBar::handle:vertical:hover {
+        background: #9e9e9e;
+    }
+    QScrollBar::add-line:vertical,
+    QScrollBar::sub-line:vertical {
+        height: 0px;
+    }
+    QScrollBar:horizontal {
+        background: #f5f5f5;
+        height: 8px;
+        border-radius: 4px;
+    }
+    QScrollBar::handle:horizontal {
+        background: #bdbdbd;
+        border-radius: 4px;
+        min-width: 30px;
+    }
+    QScrollBar::handle:horizontal:hover {
+        background: #9e9e9e;
+    }
+    QScrollBar::add-line:horizontal,
+    QScrollBar::sub-line:horizontal {
+        width: 0px;
+    }
+"""
+
+
+def _wrap_scroll(widget) -> QScrollArea:
+    """
+    يغلف أي section widget بـ QScrollArea أفقي + عمودي.
+    لما النافذة تصغر عن حجم المحتوى → يظهر scroll بدل ما يتضغط.
+    """
+    scroll = QScrollArea()
+    scroll.setWidget(widget)
+    scroll.setWidgetResizable(True)
+    scroll.setHorizontalScrollBarPolicy(Qt.ScrollBarAsNeeded)
+    scroll.setVerticalScrollBarPolicy(Qt.ScrollBarAsNeeded)
+    scroll.setStyleSheet(_SCROLL_SS)
+    return scroll
+
+
+# ══════════════════════════════════════════════════════════
+# _NavButton
+# ══════════════════════════════════════════════════════════
 
 class _NavButton(QPushButton):
     def __init__(self, icon: str, label: str, parent=None):
@@ -114,6 +179,10 @@ class _NavButton(QPushButton):
         self._update_style()
 
 
+# ══════════════════════════════════════════════════════════
+# _ToggleButton
+# ══════════════════════════════════════════════════════════
+
 class _ToggleButton(QPushButton):
     def __init__(self, parent=None):
         super().__init__(parent)
@@ -145,6 +214,10 @@ class _ToggleButton(QPushButton):
         self._refresh()
         return self._collapsed
 
+
+# ══════════════════════════════════════════════════════════
+# _Sidebar
+# ══════════════════════════════════════════════════════════
 
 class _Sidebar(QFrame):
     def __init__(self, parent=None):
@@ -188,7 +261,7 @@ class _Sidebar(QFrame):
             ("🏦", "الحسابات",       "accounting"),
             ("📦", "المخزن",         "inventory"),
             ("🎨", "التصميمات",      "design"),
-            ("📋", "الطلبات",        "orders"),      # ← جديد
+            ("📋", "الطلبات",        "orders"),
         ]
         for icon, label, key in nav_items:
             btn = _NavButton(icon, label)
@@ -266,6 +339,10 @@ class _Sidebar(QFrame):
         return self._buttons
 
 
+# ══════════════════════════════════════════════════════════
+# MainWindow
+# ══════════════════════════════════════════════════════════
+
 class MainWindow(QMainWindow):
     def __init__(self, app):
         super().__init__()
@@ -274,7 +351,7 @@ class MainWindow(QMainWindow):
         self.setWindowTitle("ERP — نظام إدارة التكاليف")
         self.resize(1280, 800)
         self.setLayoutDirection(Qt.RightToLeft)
-        self.setMinimumSize(900, 600)
+        self.setMinimumSize(600, 400)   # ← حد أدنى أصغر، الـ scroll يتولى الباقي
 
         self._build()
         self._sidebar.get_buttons()[0].setChecked(True)
@@ -294,19 +371,23 @@ class MainWindow(QMainWindow):
         self._stack = QStackedWidget()
         self._stack.setStyleSheet("background: #f9f9f9;")
 
+        # ── إنشاء الـ sections ──────────────────────────────
         self._costing    = CostingSection()
         self._pricing    = PricingSection()
         self._accounting = AccountingTab()
         self._inventory  = InventoryTab()
         self._design     = DesignSection()
-        self._orders     = OrdersSection()          # ← جديد
+        self._orders     = OrdersSection()
 
-        self._stack.addWidget(self._costing)        # index 0
-        self._stack.addWidget(self._pricing)        # index 1
-        self._stack.addWidget(self._accounting)     # index 2
-        self._stack.addWidget(self._inventory)      # index 3
-        self._stack.addWidget(self._design)         # index 4
-        self._stack.addWidget(self._orders)         # index 5
+        # ── إضافتها للـ stack مع wrap_scroll ─────────────────
+        # كل section مغلوف بـ QScrollArea → scroll أفقي + عمودي
+        # لما النافذة تصغر عن المحتوى يظهر scroll بدل ما يتضغط
+        self._stack.addWidget(_wrap_scroll(self._costing))       # index 0
+        self._stack.addWidget(_wrap_scroll(self._pricing))       # index 1
+        self._stack.addWidget(_wrap_scroll(self._accounting))    # index 2
+        self._stack.addWidget(_wrap_scroll(self._inventory))     # index 3
+        self._stack.addWidget(_wrap_scroll(self._design))        # index 4
+        self._stack.addWidget(_wrap_scroll(self._orders))        # index 5
 
         main_layout.addWidget(self._stack, stretch=1)
 
