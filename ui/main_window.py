@@ -1,7 +1,8 @@
 """
-ui/main_window.py  (محدَّث — sidebar محسّن + navigation منظم)
+ui/main_window.py — محسّن
 =================
 النافذة الرئيسية — Sidebar Navigation + Content Area.
+تصميم محسّن يستخدم ألوان app_settings._C للتناسق.
 """
 
 from PyQt5.QtWidgets import (
@@ -18,10 +19,9 @@ from ui.tabs.inventory_section    import InventoryTab
 from ui.tabs.design_section       import DesignSection
 from ui.tabs.orders_section       import OrdersSection
 from ui.settings_dialog           import SettingsDialog
-from ui.app_settings              import get_font_size
+from ui.app_settings              import get_font_size, _C
 
-
-SIDEBAR_EXPANDED_WIDTH  = 220
+SIDEBAR_EXPANDED_WIDTH  = 224
 SIDEBAR_COLLAPSED_WIDTH = 56
 
 
@@ -29,45 +29,45 @@ SIDEBAR_COLLAPSED_WIDTH = 56
 # Scroll wrapper
 # ══════════════════════════════════════════════════════════
 
-_SCROLL_SS = """
-    QScrollArea {
+_SCROLL_SS = f"""
+    QScrollArea {{
         border: none;
         background: transparent;
-    }
-    QScrollBar:vertical {
+    }}
+    QScrollBar:vertical {{
         background: transparent;
         width: 6px;
         border-radius: 3px;
-    }
-    QScrollBar::handle:vertical {
-        background: #D3D1C7;
+    }}
+    QScrollBar::handle:vertical {{
+        background: {_C['border_med']};
         border-radius: 3px;
         min-height: 30px;
-    }
-    QScrollBar::handle:vertical:hover {
-        background: #B4B2A9;
-    }
+    }}
+    QScrollBar::handle:vertical:hover {{
+        background: {_C['border_strong']};
+    }}
     QScrollBar::add-line:vertical,
-    QScrollBar::sub-line:vertical {
+    QScrollBar::sub-line:vertical {{
         height: 0px;
-    }
-    QScrollBar:horizontal {
+    }}
+    QScrollBar:horizontal {{
         background: transparent;
         height: 6px;
         border-radius: 3px;
-    }
-    QScrollBar::handle:horizontal {
-        background: #D3D1C7;
+    }}
+    QScrollBar::handle:horizontal {{
+        background: {_C['border_med']};
         border-radius: 3px;
         min-width: 30px;
-    }
-    QScrollBar::handle:horizontal:hover {
-        background: #B4B2A9;
-    }
+    }}
+    QScrollBar::handle:horizontal:hover {{
+        background: {_C['border_strong']};
+    }}
     QScrollBar::add-line:horizontal,
-    QScrollBar::sub-line:horizontal {
+    QScrollBar::sub-line:horizontal {{
         width: 0px;
-    }
+    }}
 """
 
 
@@ -82,28 +82,26 @@ def _wrap_scroll(widget) -> QScrollArea:
 
 
 # ══════════════════════════════════════════════════════════
-# _SectionLabel — عنوان القسم في الـ sidebar
+# _SectionLabel
 # ══════════════════════════════════════════════════════════
 
 class _SectionLabel(QLabel):
-    """عنوان فئة صغير داخل الـ sidebar (الإنتاج / المالية / العمل)."""
-
     def __init__(self, text: str, parent=None):
         super().__init__(text.upper(), parent)
         self._collapsed = False
         self._apply_style()
 
     def _apply_style(self):
-        self.setStyleSheet("""
-            QLabel {
-                color: #888780;
-                font-size: 9pt;
-                font-weight: bold;
-                letter-spacing: 1px;
-                padding: 10px 14px 4px 14px;
+        self.setStyleSheet(f"""
+            QLabel {{
+                color: {_C['sidebar_muted']};
+                font-size: 8pt;
+                font-weight: 700;
+                letter-spacing: 1.5px;
+                padding: 12px 16px 4px 16px;
                 background: transparent;
                 border: none;
-            }
+            }}
         """)
 
     def set_collapsed(self, collapsed: bool):
@@ -118,9 +116,9 @@ class _SectionLabel(QLabel):
 class _NavButton(QPushButton):
     def __init__(self, icon: str, label: str, badge: str = "", parent=None):
         super().__init__(parent)
-        self._icon    = icon
-        self._label   = label
-        self._badge   = badge
+        self._icon      = icon
+        self._label     = label
+        self._badge     = badge
         self._collapsed = False
         self.setCheckable(True)
         self.setCursor(Qt.PointingHandCursor)
@@ -136,30 +134,33 @@ class _NavButton(QPushButton):
         self._ico_lbl = QLabel(self._icon)
         self._ico_lbl.setFixedWidth(22)
         self._ico_lbl.setAlignment(Qt.AlignCenter)
-        self._ico_lbl.setStyleSheet("background:transparent; border:none; font-size:16pt;")
+        self._ico_lbl.setStyleSheet(
+            f"background:transparent; border:none; font-size:15pt; color:{_C['sidebar_text']};"
+        )
 
         self._txt_lbl = QLabel(self._label)
         self._txt_lbl.setAlignment(Qt.AlignRight | Qt.AlignVCenter)
         self._txt_lbl.setWordWrap(False)
-        self._txt_lbl.setStyleSheet("background:transparent; border:none;")
+        self._txt_lbl.setStyleSheet(
+            f"background:transparent; border:none; color:{_C['sidebar_text']};"
+        )
 
-        # badge (عدد الطلبات العاجلة مثلاً)
         self._badge_lbl = QLabel(self._badge)
         self._badge_lbl.setVisible(bool(self._badge))
         self._badge_lbl.setAlignment(Qt.AlignCenter)
-        self._badge_lbl.setStyleSheet("""
-            QLabel {
-                background: #F5C4B3;
-                color: #993C1D;
-                font-size: 9pt;
-                font-weight: bold;
-                padding: 0px 5px;
+        self._badge_lbl.setStyleSheet(f"""
+            QLabel {{
+                background: #C0392B;
+                color: #FFFFFF;
+                font-size: 8pt;
+                font-weight: 700;
+                padding: 1px 6px;
                 border-radius: 8px;
                 border: none;
-            }
+            }}
         """)
 
-        # RTL: النص أولاً ثم الأيقونة
+        # RTL
         lay.addWidget(self._txt_lbl, stretch=1)
         lay.addWidget(self._badge_lbl)
         lay.addWidget(self._ico_lbl)
@@ -178,48 +179,58 @@ class _NavButton(QPushButton):
             self.layout().setContentsMargins(0, 0, 0, 0)
             self.layout().setAlignment(Qt.AlignCenter)
         else:
-            self.setFixedWidth(SIDEBAR_EXPANDED_WIDTH)
+            self.setFixedWidth(SIDEBAR_EXPANDED_WIDTH - 16)
             self.layout().setContentsMargins(10, 0, 10, 0)
             self.layout().setAlignment(Qt.AlignVCenter)
 
     def _update_style(self):
         if self.isChecked():
-            self.setStyleSheet("""
-                QPushButton {
-                    background: #F1EFE8;
+            self.setStyleSheet(f"""
+                QPushButton {{
+                    background: {_C['sidebar_active']};
                     border: none;
+                    border-right: 2px solid {_C['accent']};
                     border-radius: 6px;
-                    color: #2C2C2A;
-                    font-weight: bold;
+                    color: {_C['sidebar_text']};
+                    font-weight: 600;
                     text-align: right;
                     padding: 0px;
-                    min-height: 36px;
-                }
-                QPushButton:hover { background: #D3D1C7; }
+                    min-height: 38px;
+                }}
             """)
+            self._ico_lbl.setStyleSheet(
+                f"background:transparent; border:none; font-size:15pt; color:{_C['accent_mid']};"
+            )
+            self._txt_lbl.setStyleSheet(
+                f"background:transparent; border:none; color:{_C['sidebar_text']}; font-weight:600;"
+            )
         else:
-            self.setStyleSheet("""
-                QPushButton {
+            self.setStyleSheet(f"""
+                QPushButton {{
                     background: transparent;
                     border: none;
                     border-radius: 6px;
-                    color: #5F5E5A;
+                    color: {_C['sidebar_text']};
                     text-align: right;
                     padding: 0px;
-                    min-height: 36px;
-                }
-                QPushButton:hover {
-                    background: #F1EFE8;
-                    color: #2C2C2A;
-                }
+                    min-height: 38px;
+                }}
+                QPushButton:hover {{
+                    background: {_C['sidebar_hover']};
+                }}
             """)
+            self._ico_lbl.setStyleSheet(
+                f"background:transparent; border:none; font-size:15pt; color:{_C['sidebar_muted']};"
+            )
+            self._txt_lbl.setStyleSheet(
+                f"background:transparent; border:none; color:{_C['sidebar_text']}; font-weight:400;"
+            )
 
     def setChecked(self, checked):
         super().setChecked(checked)
         self._update_style()
 
     def refresh_sizes(self):
-        """تحديث الأحجام عند تغيير حجم الخط."""
         base = get_font_size()
         self._ico_lbl.setStyleSheet(
             f"background:transparent; border:none; font-size:{base + 4}pt;"
@@ -227,14 +238,14 @@ class _NavButton(QPushButton):
         self._txt_lbl.setStyleSheet(
             f"background:transparent; border:none; font-size:{base}pt;"
         )
-        h = base * 2 + 10
-        self.setFixedHeight(max(36, h))
+        h = base * 2 + 14
+        self.setFixedHeight(max(38, h))
         if not self._collapsed:
-            self.setFixedWidth(SIDEBAR_EXPANDED_WIDTH)
+            self.setFixedWidth(SIDEBAR_EXPANDED_WIDTH - 16)
 
 
 # ══════════════════════════════════════════════════════════
-# _Divider — فاصل خفيف
+# _Divider
 # ══════════════════════════════════════════════════════════
 
 class _Divider(QFrame):
@@ -242,7 +253,7 @@ class _Divider(QFrame):
         super().__init__(parent)
         self.setFrameShape(QFrame.HLine)
         self.setFixedHeight(1)
-        self.setStyleSheet("background: #E8E6DF; border: none; margin: 4px 0;")
+        self.setStyleSheet(f"background: {_C['sidebar_border']}; border: none; margin: 4px 8px;")
 
 
 # ══════════════════════════════════════════════════════════
@@ -253,21 +264,21 @@ class _ToggleButton(QPushButton):
     def __init__(self, parent=None):
         super().__init__(parent)
         self._collapsed = False
-        self.setFixedHeight(32)
+        self.setFixedHeight(36)
         self.setCursor(Qt.PointingHandCursor)
         self._refresh()
-        self.setStyleSheet("""
-            QPushButton {
+        self.setStyleSheet(f"""
+            QPushButton {{
                 background: transparent;
                 border: none;
-                border-top: 1px solid #E8E6DF;
-                color: #888780;
-                font-size: 12pt;
-            }
-            QPushButton:hover {
-                background: #F1EFE8;
-                color: #444441;
-            }
+                border-top: 1px solid {_C['sidebar_border']};
+                color: {_C['sidebar_muted']};
+                font-size: 11pt;
+            }}
+            QPushButton:hover {{
+                background: {_C['sidebar_hover']};
+                color: {_C['sidebar_text']};
+            }}
         """)
 
     def _refresh(self):
@@ -292,13 +303,13 @@ class _Sidebar(QFrame):
         super().__init__(parent)
         self._collapsed = False
         self.setFixedWidth(SIDEBAR_EXPANDED_WIDTH)
-        self.setStyleSheet("""
-            QFrame {
-                background: #FAFAF8;
-                border-left: 1px solid #E8E6DF;
-            }
+        self.setStyleSheet(f"""
+            QFrame {{
+                background: {_C['sidebar_bg']};
+                border-left: 1px solid {_C['sidebar_border']};
+            }}
         """)
-        self._buttons: list[_NavButton]       = []
+        self._buttons: list[_NavButton]           = []
         self._section_labels: list[_SectionLabel] = []
         self._build()
 
@@ -307,73 +318,82 @@ class _Sidebar(QFrame):
         layout.setContentsMargins(0, 0, 0, 0)
         layout.setSpacing(0)
 
-        # ── Header / Brand ─────────────────────────────────
+        # ── Header ─────────────────────────────────────────
         header = QWidget()
-        header.setFixedHeight(60)
-        header.setStyleSheet("""
-            QWidget {
-                background: #2C2C2A;
-                border: none;
-            }
+        header.setFixedHeight(64)
+        header.setStyleSheet(f"""
+            QWidget {{
+                background: {_C['sidebar_bg']};
+                border-bottom: 1px solid {_C['sidebar_border']};
+            }}
         """)
         h_lay = QHBoxLayout(header)
         h_lay.setContentsMargins(14, 0, 14, 0)
         h_lay.setSpacing(10)
 
         self._brand_icon = QLabel("🏭")
-        self._brand_icon.setFixedWidth(28)
+        self._brand_icon.setFixedWidth(30)
         self._brand_icon.setAlignment(Qt.AlignCenter)
         self._brand_icon.setStyleSheet(
-            "font-size: 16pt; background: transparent; border: none;"
+            "font-size: 18pt; background: transparent; border: none;"
         )
 
         self._brand_text_widget = QWidget()
+        self._brand_text_widget.setStyleSheet("background:transparent;")
         bt_lay = QVBoxLayout(self._brand_text_widget)
         bt_lay.setContentsMargins(0, 0, 0, 0)
-        bt_lay.setSpacing(0)
+        bt_lay.setSpacing(1)
 
         self._brand_title = QLabel("ERP")
-        self._brand_title.setStyleSheet(
-            "color: #F1EFE8; font-size: 13pt; font-weight: bold;"
-            "background: transparent; border: none;"
-        )
+        self._brand_title.setStyleSheet(f"""
+            color: {_C['sidebar_text']};
+            font-size: 14pt;
+            font-weight: 700;
+            background: transparent;
+            border: none;
+            letter-spacing: 1px;
+        """)
+
         self._brand_sub = QLabel("إدارة التكاليف")
-        self._brand_sub.setStyleSheet(
-            "color: #888780; font-size: 9pt;"
-            "background: transparent; border: none;"
-        )
+        self._brand_sub.setStyleSheet(f"""
+            color: {_C['sidebar_muted']};
+            font-size: 8pt;
+            background: transparent;
+            border: none;
+            letter-spacing: 0.3px;
+        """)
+
         bt_lay.addWidget(self._brand_title)
         bt_lay.addWidget(self._brand_sub)
 
-        # RTL: نص أولاً ثم أيقونة
         h_lay.addWidget(self._brand_text_widget, stretch=1)
         h_lay.addWidget(self._brand_icon)
         layout.addWidget(header)
 
-        # ── Nav scroll area ────────────────────────────────
+        # ── Nav Scroll ─────────────────────────────────────
         nav_scroll = QScrollArea()
         nav_scroll.setWidgetResizable(True)
         nav_scroll.setHorizontalScrollBarPolicy(Qt.ScrollBarAlwaysOff)
         nav_scroll.setVerticalScrollBarPolicy(Qt.ScrollBarAsNeeded)
-        nav_scroll.setStyleSheet("""
-            QScrollArea { border: none; background: transparent; }
-            QScrollBar:vertical {
-                background: transparent; width: 4px; border-radius: 2px;
-            }
-            QScrollBar::handle:vertical {
-                background: #D3D1C7; border-radius: 2px; min-height: 20px;
-            }
+        nav_scroll.setStyleSheet(f"""
+            QScrollArea {{ border: none; background: transparent; }}
+            QScrollBar:vertical {{
+                background: transparent; width: 3px; border-radius: 1px;
+            }}
+            QScrollBar::handle:vertical {{
+                background: {_C['sidebar_border']}; border-radius: 1px; min-height: 20px;
+            }}
             QScrollBar::add-line:vertical,
-            QScrollBar::sub-line:vertical { height: 0px; }
+            QScrollBar::sub-line:vertical {{ height: 0px; }}
         """)
 
         nav_widget = QWidget()
         nav_widget.setStyleSheet("background: transparent;")
         nav_lay = QVBoxLayout(nav_widget)
         nav_lay.setContentsMargins(8, 8, 8, 8)
-        nav_lay.setSpacing(2)
+        nav_lay.setSpacing(1)
 
-        # ── تعريف المجموعات والأزرار ────────────────────────
+        # ── تعريف المجموعات ─────────────────────────────────
         nav_sections = [
             ("الإنتاج", [
                 ("📊", "حساب التكلفة", "costing",    ""),
@@ -398,6 +418,7 @@ class _Sidebar(QFrame):
                 btn = _NavButton(icon, label, badge)
                 btn.setProperty("nav_key", key)
                 btn.setFixedWidth(SIDEBAR_EXPANDED_WIDTH - 16)
+                btn.setFixedHeight(38)
                 self._buttons.append(btn)
                 nav_lay.addWidget(btn)
 
@@ -409,19 +430,26 @@ class _Sidebar(QFrame):
 
         # ── Footer ─────────────────────────────────────────
         footer = QWidget()
-        footer.setStyleSheet("""
-            QWidget {
+        footer.setStyleSheet(f"""
+            QWidget {{
                 background: transparent;
-                border-top: 1px solid #E8E6DF;
-            }
+            }}
         """)
         f_lay = QVBoxLayout(footer)
-        f_lay.setContentsMargins(8, 6, 8, 4)
-        f_lay.setSpacing(2)
+        f_lay.setContentsMargins(8, 4, 8, 4)
+        f_lay.setSpacing(1)
+
+        # فاصل قبل الإعدادات
+        div = QFrame()
+        div.setFrameShape(QFrame.HLine)
+        div.setFixedHeight(1)
+        div.setStyleSheet(f"background: {_C['sidebar_border']}; border: none; margin: 2px 4px;")
+        f_lay.addWidget(div)
 
         btn_settings = _NavButton("⚙️", "الإعدادات")
         btn_settings.setProperty("nav_key", "settings")
         btn_settings.setFixedWidth(SIDEBAR_EXPANDED_WIDTH - 16)
+        btn_settings.setFixedHeight(38)
         self._buttons.append(btn_settings)
         f_lay.addWidget(btn_settings)
 
@@ -440,14 +468,14 @@ class _Sidebar(QFrame):
         )
 
         self._anim_min = QPropertyAnimation(self, b"minimumWidth")
-        self._anim_min.setDuration(180)
-        self._anim_min.setEasingCurve(QEasingCurve.InOutQuad)
+        self._anim_min.setDuration(200)
+        self._anim_min.setEasingCurve(QEasingCurve.InOutCubic)
         self._anim_min.setStartValue(self.width())
         self._anim_min.setEndValue(target)
 
         self._anim_max = QPropertyAnimation(self, b"maximumWidth")
-        self._anim_max.setDuration(180)
-        self._anim_max.setEasingCurve(QEasingCurve.InOutQuad)
+        self._anim_max.setDuration(200)
+        self._anim_max.setEasingCurve(QEasingCurve.InOutCubic)
         self._anim_max.setStartValue(self.width())
         self._anim_max.setEndValue(target)
 
@@ -460,7 +488,6 @@ class _Sidebar(QFrame):
         for lbl in self._section_labels:
             lbl.set_collapsed(self._collapsed)
 
-        # تغيير الـ brand
         self._brand_text_widget.setVisible(not self._collapsed)
         self._toggle_btn.setFixedWidth(target)
 
@@ -484,9 +511,9 @@ class MainWindow(QMainWindow):
         self._app = app
 
         self.setWindowTitle("ERP — نظام إدارة التكاليف")
-        self.resize(1280, 800)
+        self.resize(1300, 820)
         self.setLayoutDirection(Qt.RightToLeft)
-        self.setMinimumSize(600, 400)
+        self.setMinimumSize(800, 500)
 
         self._build()
         self._sidebar.get_buttons()[0].setChecked(True)
@@ -503,8 +530,15 @@ class MainWindow(QMainWindow):
         self._sidebar = _Sidebar()
         main_layout.addWidget(self._sidebar)
 
+        # فاصل بين الـ sidebar والمحتوى
+        sep = QFrame()
+        sep.setFrameShape(QFrame.VLine)
+        sep.setFixedWidth(1)
+        sep.setStyleSheet(f"background: {_C['border']}; border: none;")
+        main_layout.addWidget(sep)
+
         self._stack = QStackedWidget()
-        self._stack.setStyleSheet("background: #F7F6F3;")
+        self._stack.setStyleSheet(f"background: {_C['bg_page']};")
 
         self._costing    = CostingSection()
         self._pricing    = PricingSection()
