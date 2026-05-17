@@ -14,8 +14,8 @@ from PyQt5.QtWidgets import (
 )
 from PyQt5.QtCore import Qt
 
-from .designs._designs_table           import _DesignsTable
-from .designs._design_detail_panel     import _DesignDetailPanel
+from .designs._designs_table            import _DesignsTable
+from .designs._design_detail_panel      import _DesignDetailPanel
 from .designs._designs_categories_panel import DesignsCategoriesPanel
 
 
@@ -59,6 +59,11 @@ class DesignsTab(QWidget):
 
         # فلتر التصنيفات من الـ sidebar
         self._cats_panel.category_changed.connect(self._on_category_changed)
+
+        # ── ربط تحديث combo التصنيف في لوحة التفاصيل ──
+        # لما يتضاف/يتعدل/يتحذف تصنيف من الـ sidebar،
+        # الـ combo في لوحة التفاصيل يتحدث تلقائياً
+        self._detail.connect_categories_panel(self._cats_panel)
 
         splitter.addWidget(self._table)
         splitter.addWidget(self._detail)
