@@ -42,7 +42,7 @@ class BaseListPanel(QWidget):
         self._timer.setInterval(250)
         self._timer.timeout.connect(self._apply_filter)
 
-        # Preferred عشان الـ splitter يقدر يتحرك
+        # Preferred عشان الـ splitter يقدر يتحرك بحرية
         self.setSizePolicy(QSizePolicy.Preferred, QSizePolicy.Expanding)
 
         self._build()
@@ -97,7 +97,8 @@ class BaseListPanel(QWidget):
             stretch_col=self.STRETCH_COL,
             col_widths=self.COL_WIDTHS,
         )
-        self.table.setHorizontalScrollBarPolicy(Qt.ScrollBarAlwaysOff)
+        # ✅ السماح بالـ horizontal scroll داخل الجدول لو الأعمدة كثيرة
+        self.table.setHorizontalScrollBarPolicy(Qt.ScrollBarAsNeeded)
         self.table.itemSelectionChanged.connect(self._on_select)
         root.addWidget(self.table, stretch=1)
 
@@ -183,8 +184,8 @@ class BaseListPanel(QWidget):
 
     def _auto_resize(self):
         """
-        يضبط عرض الأعمدة ويحدد الحد الأدنى والأقصى للـ panel.
-        لا يعمل setFixedWidth عشان الـ splitter يبقى حر الحركة.
+        يضبط عرض الأعمدة فقط.
+        يحدد حد أدنى بس — الحد الأقصى مفتوح عشان الـ splitter يتحرك بحرية.
         """
         all_cols = [i for i in range(self.table.columnCount())
                     if i != self.STRETCH_COL]
@@ -194,10 +195,8 @@ class BaseListPanel(QWidget):
             stretch_col=self.STRETCH_COL,
             min_width=40, max_width=300,
         )
-        w = calc_table_width(self.table, padding=12)
-        w = max(self.MIN_W, min(w, self.MAX_W))
-        # حد أدنى = العرض المحسوب، حد أقصى = MAX_W
-        self.setMinimumWidth(w)
+        # ✅ حد أدنى بس — مش بنقفل العرض
+        self.setMinimumWidth(self.MIN_W)
         self.setMaximumWidth(self.MAX_W)
 
     # ══════════════════════════════════════════════════════

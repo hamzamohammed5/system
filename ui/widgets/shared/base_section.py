@@ -4,15 +4,57 @@ ui/widgets/shared/base_section.py
 BaseSection — قاعدة مشتركة للأقسام اللي فيها list + detail.
 
 القاعدة:
-  - الـ list panel عرضه يتحدد مرة واحدة عند التحميل من _auto_resize
-  - الـ splitter قابل للسحب بحرية بعد كده
+  - الـ list panel عرضه يتحدد من الـ splitter بحرية كاملة
   - الـ detail panel يأخذ كل المساحة الزيادة عند تكبير النافذة
+  - لو الـ content أكبر من النافذة يظهر horizontal scrollbar
 """
 
-from PyQt5.QtWidgets import QWidget, QHBoxLayout, QSizePolicy, QSplitter
-from PyQt5.QtCore    import Qt, QTimer
+from PyQt5.QtWidgets import (
+    QWidget, QHBoxLayout, QVBoxLayout,
+    QSizePolicy, QSplitter, QScrollArea,
+)
+from PyQt5.QtCore import Qt, QTimer
 
 from ui.app_settings import _C
+
+_SCROLL_SS = f"""
+    QScrollArea {{
+        border: none;
+        background: transparent;
+    }}
+    QScrollBar:horizontal {{
+        background: transparent;
+        height: 8px;
+        border-radius: 4px;
+        margin: 0 2px;
+    }}
+    QScrollBar::handle:horizontal {{
+        background: {_C['border_med']};
+        border-radius: 4px;
+        min-width: 30px;
+    }}
+    QScrollBar::handle:horizontal:hover {{
+        background: {_C['border_strong']};
+    }}
+    QScrollBar::add-line:horizontal,
+    QScrollBar::sub-line:horizontal {{
+        width: 0px;
+    }}
+    QScrollBar:vertical {{
+        background: transparent;
+        width: 6px;
+        border-radius: 3px;
+    }}
+    QScrollBar::handle:vertical {{
+        background: {_C['border_med']};
+        border-radius: 3px;
+        min-height: 30px;
+    }}
+    QScrollBar::add-line:vertical,
+    QScrollBar::sub-line:vertical {{
+        height: 0px;
+    }}
+"""
 
 
 class BaseSection(QWidget):
@@ -45,59 +87,77 @@ class BaseSection(QWidget):
     # ══════════════════════════════════════════════════════
 
     def _build(self):
-        root = QHBoxLayout(self)
+        root = QVBoxLayout(self)
         root.setContentsMargins(0, 0, 0, 0)
         root.setSpacing(0)
 
+        # ✅ Scroll area أفقية تحيط بالكل
+        self._scroll = QScrollArea()
+        self._scroll.setWidgetResizable(True)
+        self._scroll.setHorizontalScrollBarPolicy(Qt.ScrollBarAsNeeded)
+        self._scroll.setVerticalScrollBarPolicy(Qt.ScrollBarAlwaysOff)
+        self._scroll.setStyleSheet(_SCROLL_SS)
+
+        # الـ container الداخلي
+        self._container = QWidget()
+        self._container.setStyleSheet(f"background:{_C['bg_page']};")
+        container_lay = QHBoxLayout(self._container)
+        container_lay.setContentsMargins(0, 0, 0, 0)
+        container_lay.setSpacing(0)
+
+        # ✅ الـ splitter بدون قيود
         self._splitter = QSplitter(Qt.Horizontal)
-        self._splitter.setHandleWidth(4)
+        self._splitter.setHandleWidth(5)
         self._splitter.setStyleSheet(f"""
-            QSplitter::handle {{ background: {_C['border']}; }}
-            QSplitter::handle:hover {{ background: {_C['accent_mid']}; }}
-            QSplitter::handle:pressed {{ background: {_C['accent']}; }}
+            QSplitter::handle {{
+                background: {_C['border']};
+            }}
+            QSplitter::handle:hover {{
+                background: {_C['accent_mid']};
+            }}
+            QSplitter::handle:pressed {{
+                background: {_C['accent']};
+            }}
         """)
 
         self._list   = self._create_list()
         self._detail = self._create_detail()
 
-        # رفع القيود عن الـ list عشان الـ splitter يتحرك بحرية
+        # ✅ الـ list: حد أدنى وأقصى فقط — الـ splitter يتحرك بحرية
         self._list.setMinimumWidth(self.LIST_MIN_W)
         self._list.setMaximumWidth(self.LIST_MAX_W)
         self._list.setSizePolicy(QSizePolicy.Preferred, QSizePolicy.Expanding)
 
+        # ✅ الـ detail: يأخذ كل المساحة الزيادة
         self._detail.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Expanding)
+        self._detail.setMinimumWidth(300)
 
         self._splitter.addWidget(self._list)
         self._splitter.addWidget(self._detail)
         self._splitter.setCollapsible(0, False)
         self._splitter.setCollapsible(1, False)
-        self._splitter.setStretchFactor(0, 0)
-        self._splitter.setStretchFactor(1, 1)
+        self._splitter.setStretchFactor(0, 0)   # الـ list لا يتمدد تلقائياً
+        self._splitter.setStretchFactor(1, 1)   # الـ detail يتمدد
 
-        root.addWidget(self._splitter)
+        container_lay.addWidget(self._splitter)
+        self._scroll.setWidget(self._container)
+        root.addWidget(self._scroll)
 
     # ══════════════════════════════════════════════════════
-    # ضبط الأحجام — مرة واحدة عند التحميل فقط
+    # ضبط الأحجام الابتدائية للـ splitter
     # ══════════════════════════════════════════════════════
 
     def _apply_sizes(self):
-        """يضبط الـ splitter مرة واحدة بناءً على عرض الـ list الفعلي."""
-        # اقرأ الـ fixed width اللي حدده _auto_resize
-        list_w = self._list.minimumSizeHint().width()
-        # لو الـ list له fixed width، استخدمه
-        if self._list.minimumWidth() == self._list.maximumWidth():
-            list_w = self._list.minimumWidth()
-        else:
-            list_w = self._list.width()
-            if list_w <= 0:
-                list_w = self.LIST_MIN_W
-
-        list_w = max(self.LIST_MIN_W, min(list_w, self.LIST_MAX_W))
-
-        total    = self._splitter.width()
+        """يضبط الـ splitter مرة واحدة عند التحميل."""
+        total = self._splitter.width()
         if total <= 0:
             total = self.width()
-        detail_w = max(400, total - list_w - self._splitter.handleWidth())
+        if total <= 0:
+            QTimer.singleShot(100, self._apply_sizes)
+            return
+
+        list_w   = max(self.LIST_MIN_W, min(self._list.width() or self.LIST_MIN_W, self.LIST_MAX_W))
+        detail_w = max(300, total - list_w - self._splitter.handleWidth())
         self._splitter.setSizes([list_w, detail_w])
 
     # ══════════════════════════════════════════════════════
