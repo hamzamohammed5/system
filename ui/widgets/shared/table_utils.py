@@ -1,12 +1,13 @@
 """
 ui/widgets/shared/table_utils.py
 ================================
-جداول بعرض ثابت مبني على المحتوى — مش بتتمدد مع النافذة.
+جداول بعرض مبني على المحتوى — مش بتتمدد مع النافذة.
 
 القاعدة الأساسية:
-  - كل الجداول SizePolicy = Fixed في الـ list panels
-  - عرض النافذة أقصى ما يكون على قد ما الـ horizontal scroll يختفي
-  - الجداول والأزرار حجمهم ثابت
+  - list tables  → SizePolicy Fixed   (عرض ثابت)
+  - detail tables → SizePolicy Preferred + setMaximumWidth على قد المحتوى
+  - كل الأعمدة Interactive ما عدا stretch_col واحد بس
+  - setStretchLastSection = False دايماً في الـ detail tables
 """
 
 from PyQt5.QtWidgets import (
@@ -123,25 +124,20 @@ def _build_table(columns: list,
     hh = table.horizontalHeader()
     vh = table.verticalHeader()
 
+    # ── عرض الأعمدة ──
+    # القاعدة: كل الأعمدة Interactive ما عدا stretch_col
+    # setStretchLastSection = False دايماً عشان الأعمدة ما تتمدد قسراً
+    hh.setStretchLastSection(False)
+
     if resizable:
         hh.setSectionsMovable(False)
-        hh.setSectionResizeMode(QHeaderView.Interactive)
-
-    _row_h = row_height or (
-        ROW_HEIGHT_COMPACT if variant == "compact"
-        else ROW_HEIGHT_LARGE if variant == "large"
-        else ROW_HEIGHT_NORMAL
-    )
-    vh.setDefaultSectionSize(_row_h)
-    vh.setMinimumSectionSize(_row_h - 4)
-    vh.setSectionResizeMode(QHeaderView.Fixed)
 
     if col_widths:
         for i in range(len(columns)):
             if i in col_widths:
                 hh.setSectionResizeMode(i, QHeaderView.Fixed)
                 table.setColumnWidth(i, col_widths[i])
-            elif i == stretch_col or (stretch_col < 0 and i == len(columns) - 1):
+            elif i == stretch_col:
                 hh.setSectionResizeMode(i, QHeaderView.Stretch)
             else:
                 hh.setSectionResizeMode(i, QHeaderView.Interactive)
@@ -151,8 +147,15 @@ def _build_table(columns: list,
                 hh.setSectionResizeMode(i, QHeaderView.Stretch)
             else:
                 hh.setSectionResizeMode(i, QHeaderView.Interactive)
-        if stretch_col < 0:
-            hh.setStretchLastSection(True)
+
+    _row_h = row_height or (
+        ROW_HEIGHT_COMPACT if variant == "compact"
+        else ROW_HEIGHT_LARGE if variant == "large"
+        else ROW_HEIGHT_NORMAL
+    )
+    vh.setDefaultSectionSize(_row_h)
+    vh.setMinimumSectionSize(_row_h - 4)
+    vh.setSectionResizeMode(QHeaderView.Fixed)
 
     hh.setDefaultAlignment(Qt.AlignRight | Qt.AlignVCenter)
     hh.setHighlightSections(False)
@@ -167,10 +170,10 @@ def _build_table(columns: list,
         table.setMinimumHeight(min_height)
 
     if fixed_size:
-        # الجداول في الـ list panels — عرض ثابت لا يتمدد
+        # list tables — عرض ثابت لا يتمدد
         table.setSizePolicy(QSizePolicy.Fixed, QSizePolicy.Expanding)
     else:
-        # الجداول في الـ detail panels — عرض مرن
+        # detail tables — عرض على قد المحتوى
         table.setSizePolicy(QSizePolicy.Preferred, QSizePolicy.Preferred)
 
     return table
@@ -200,7 +203,7 @@ def fit_table_to_content(table: QTableWidget,
                          min_w: int = 200,
                          max_w: int = 1200,
                          padding: int = _TOOLBAR_PAD):
-    total = calc_table_width(table, padding)
+    total   = calc_table_width(table, padding)
     clamped = max(min_w, min(total, max_w))
     table.setMaximumWidth(clamped)
     return clamped
@@ -226,7 +229,7 @@ def auto_fit_columns(table: QTableWidget,
         if col in cols_to_fit:
             table.resizeColumnToContents(col)
             current_w = table.columnWidth(col)
-            clamped = max(min_width, min(current_w, max_width))
+            clamped   = max(min_width, min(current_w, max_width))
             table.setColumnWidth(col, clamped)
             hh.setSectionResizeMode(col, QHeaderView.Interactive)
         else:
@@ -237,7 +240,7 @@ def auto_fit_all(table: QTableWidget,
                  stretch_col: int = -1,
                  min_width: int = 50,
                  max_width: int = 400):
-    n = table.columnCount()
+    n        = table.columnCount()
     all_cols = [i for i in range(n) if i != stretch_col]
     auto_fit_columns(table, fixed_cols=all_cols,
                      stretch_col=stretch_col,
@@ -301,13 +304,41 @@ def make_detail_table(columns: list,
                       min_height: int = 100,
                       row_height: int = ROW_HEIGHT_NORMAL,
                       resizable: bool = True) -> QTableWidget:
-    return _build_table(
+    """
+    جدول للـ detail panels:
+      - عرضه على قد المحتوى (Preferred) — مش بيتمدد
+      - كل الأعمدة قابلة للسحب (Interactive)
+      - stretch_col واحد بس لو محتاج
+    """
+    table = _build_table(
         columns, stretch_col, col_widths,
         variant="normal",
         max_height=max_height, min_height=min_height,
         row_height=row_height, resizable=resizable,
         fixed_size=False,
     )
+    # بعد ما يتبنى، نضبط العرض على قد الأعمدة
+    _set_initial_width(table)
+    return table
+
+
+def _set_initial_width(table: QTableWidget):
+    """
+    يضبط maximum width على قد مجموع الأعمدة + scrollbar.
+    بيتستدعى مرة بعد البناء — لو الـ col_widths متحدده يحسب منها.
+    """
+    # نحسب المجموع من col_widths اللي اتحددت
+    total = _SCROLLBAR_W + 4   # هامش بسيط
+    hh    = table.horizontalHeader()
+    for col in range(table.columnCount()):
+        mode = hh.sectionResizeMode(col)
+        if mode == QHeaderView.Stretch:
+            # الـ stretch column — نديه عرض افتراضي 150
+            total += 150
+        else:
+            w = table.columnWidth(col)
+            total += w if w > 0 else hh.defaultSectionSize()
+    table.setMaximumWidth(total + 20)   # هامش 20px للـ scrollbar لو ظهر
 
 
 # ══════════════════════════════════════════════════════════
@@ -319,7 +350,10 @@ def make_compact_table(columns: list,
                        col_widths: dict = None,
                        max_height: int = 200,
                        resizable: bool = True) -> QTableWidget:
-    return _build_table(
+    """
+    جدول compact للـ detail panels — نفس قواعد make_detail_table.
+    """
+    table = _build_table(
         columns, stretch_col, col_widths,
         variant="compact",
         max_height=max_height,
@@ -327,6 +361,8 @@ def make_compact_table(columns: list,
         resizable=resizable,
         fixed_size=False,
     )
+    _set_initial_width(table)
+    return table
 
 
 # ══════════════════════════════════════════════════════════
@@ -346,7 +382,7 @@ def make_list_table(columns: list,
         variant="normal",
         row_height=ROW_HEIGHT_LARGE,
         resizable=resizable,
-        fixed_size=True,   # ← المهم: عرض ثابت
+        fixed_size=True,
     )
     table.setStyleSheet(table.styleSheet() + """
         QTableWidget {
@@ -354,7 +390,6 @@ def make_list_table(columns: list,
             border-radius: 0;
         }
     """)
-    # منع الـ horizontal scroll في الـ list table
     table.setHorizontalScrollBarPolicy(Qt.ScrollBarAlwaysOff)
     return table
 

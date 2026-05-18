@@ -12,7 +12,7 @@ from ui.widgets.shared.panels import CollapsibleCard
 from ui.widgets.shared.table_utils import (
     make_compact_table,
     make_table_item, color_item, bold_item, muted_item,
-    insert_row, ROW_HEIGHT_COMPACT,
+    insert_row, auto_fit_columns, ROW_HEIGHT_COMPACT,
 )
 from ._status_config import STATUS_LABELS
 
@@ -25,7 +25,7 @@ def _build_log_section(detail):
     detail.log_table = make_compact_table(
         columns=["من", "إلى", "الملاحظات", "الوقت"],
         stretch_col=2,
-        col_widths={0: 95, 1: 95, 3: 130},
+        col_widths={0: 100, 1: 100, 3: 140},
         max_height=160,
     )
     detail._log_card.content_layout.addWidget(detail.log_table)
@@ -61,3 +61,13 @@ def _fill_log(detail):
                 (log.get("changed_at") or "")[:16], align=Qt.AlignCenter
             )
         ))
+
+    # ضبط عرض الأعمدة على قد المحتوى بعد الملء
+    if logs:
+        auto_fit_columns(
+            detail.log_table,
+            fixed_cols=[0, 1, 3],
+            stretch_col=2,
+            min_width=60,
+            max_width=200,
+        )

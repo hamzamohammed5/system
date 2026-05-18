@@ -2,6 +2,11 @@
 ui/helpers.py
 =============
 أدوات UI مشتركة — تستورد من widgets/shared وتُعيد تصديرها.
+
+الإصلاح: make_detail_scroll / set_detail_content
+  - الـ scroll بيقبل horizontal + vertical
+  - الـ inner container عنده setMinimumWidth
+  عشان لما النافذة تضيق يظهر scrollbar أفقي يشمل كل حاجة.
 """
 
 from PyQt5.QtWidgets import (
@@ -69,7 +74,10 @@ _SCROLL_SS = SCROLL_SS
 def make_detail_scroll(min_content_width: int = 520) -> QScrollArea:
     """
     QScrollArea للـ detail panels مع horizontal scroll حقيقي.
-    استخدم set_detail_content() لوضع المحتوى جواه.
+
+    المهم: بعد ما تعمل make_detail_scroll، استخدم set_detail_content()
+    لوضع المحتوى جواه — هو بيضبط setMinimumWidth على الـ content
+    عشان الـ horizontal scroll يظهر فعلاً لما النافذة تضيق.
     """
     scroll = QScrollArea()
     scroll.setWidgetResizable(True)

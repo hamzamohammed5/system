@@ -2,21 +2,61 @@
 ui/widgets/shared/base_detail_panel.py
 ========================================
 BaseDetailPanel — قاعدة مشتركة لكل لوحات التفاصيل.
+
+الإصلاح: الـ header والمحتوى كلهم جوا scroll area واحد
+عشان لما النافذة تضيق يظهر scrollbar أفقي يشمل كل حاجة.
 """
 
 from PyQt5.QtWidgets import (
-    QWidget, QVBoxLayout, QSizePolicy,
+    QWidget, QVBoxLayout, QScrollArea, QSizePolicy,
 )
-from PyQt5.QtCore import Qt, pyqtSignal
+from PyQt5.QtCore import Qt
+
+from PyQt5.QtCore import pyqtSignal
 
 from ui.widgets.shared.panels import DetailHeader, EmptyState
-from ui.helpers import make_detail_scroll, set_detail_content
 from ui.app_settings import _C
 
 _BG = "#f8f9fb"
 
-# الحد الأدنى لعرض الـ detail panel قبل ظهور الـ horizontal scroll
 DETAIL_MIN_WIDTH = 500
+
+_SCROLL_SS = f"""
+    QScrollArea {{
+        border: none;
+        background: transparent;
+    }}
+    QScrollBar:vertical {{
+        background: transparent;
+        width: 6px;
+        border-radius: 3px;
+    }}
+    QScrollBar::handle:vertical {{
+        background: {_C['border_med']};
+        border-radius: 3px;
+        min-height: 30px;
+    }}
+    QScrollBar::handle:vertical:hover {{
+        background: {_C['border_strong']};
+    }}
+    QScrollBar::add-line:vertical,
+    QScrollBar::sub-line:vertical {{ height: 0px; }}
+    QScrollBar:horizontal {{
+        background: transparent;
+        height: 6px;
+        border-radius: 3px;
+    }}
+    QScrollBar::handle:horizontal {{
+        background: {_C['border_med']};
+        border-radius: 3px;
+        min-width: 30px;
+    }}
+    QScrollBar::handle:horizontal:hover {{
+        background: {_C['border_strong']};
+    }}
+    QScrollBar::add-line:horizontal,
+    QScrollBar::sub-line:horizontal {{ width: 0px; }}
+"""
 
 
 class BaseDetailPanel(QWidget):
@@ -27,7 +67,6 @@ class BaseDetailPanel(QWidget):
     EMPTY_TITLE    : str = "اختر عنصراً من القائمة"
     EMPTY_SUBTITLE : str = ""
     HEADER_BG      : str = "#ffffff"
-    # اضبط هذا في الـ subclass لو المحتوى أعرض من 500px
     MIN_CONTENT_W  : int = DETAIL_MIN_WIDTH
 
     def __init__(self, conn=None, parent=None):
@@ -37,10 +76,13 @@ class BaseDetailPanel(QWidget):
         self._item_data = None
 
         self.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Expanding)
-        # حد أدنى للعرض — لما الـ splitter يضغط أقل منه يظهر الـ horizontal scroll
-        self.setMinimumWidth(DETAIL_MIN_WIDTH)
+        self.setMinimumWidth(300)
         self._build_base()
         self._show_empty()
+
+    # ══════════════════════════════════════════════════════
+    # override في الـ subclass
+    # ══════════════════════════════════════════════════════
 
     def _build_header_cards(self):
         pass
@@ -57,22 +99,41 @@ class BaseDetailPanel(QWidget):
     def _fill_data(self, data):
         pass
 
+    # ══════════════════════════════════════════════════════
+    # بناء الواجهة
+    # ══════════════════════════════════════════════════════
+
     def _build_base(self):
         self.setStyleSheet(f"background:{_BG};")
         root = QVBoxLayout(self)
         root.setContentsMargins(0, 0, 0, 0)
         root.setSpacing(0)
 
-        # ── Header (خارج الـ scroll — ثابت في الأعلى) ──
+        # ══ Scroll area يلف كل حاجة (header + content) ══
+        self._scroll = QScrollArea()
+        self._scroll.setWidgetResizable(True)
+        self._scroll.setHorizontalScrollBarPolicy(Qt.ScrollBarAsNeeded)
+        self._scroll.setVerticalScrollBarPolicy(Qt.ScrollBarAsNeeded)
+        self._scroll.setStyleSheet(_SCROLL_SS)
+
+        # الـ container الداخلي — له minimum width عشان الـ scroll يظهر
+        self._inner = QWidget()
+        self._inner.setMinimumWidth(self.MIN_CONTENT_W)
+        self._inner.setStyleSheet(f"background:{_BG};")
+
+        inner_lay = QVBoxLayout(self._inner)
+        inner_lay.setContentsMargins(0, 0, 0, 0)
+        inner_lay.setSpacing(0)
+
+        # ── Header (جوا الـ scroll) ──
         self._hdr = DetailHeader(bg=self.HEADER_BG)
         self._build_header_cards()
         self._build_header_buttons()
-        root.addWidget(self._hdr)
+        inner_lay.addWidget(self._hdr)
 
-        # ── Scroll + Content ──
-        scroll = make_detail_scroll(min_content_width=self.MIN_CONTENT_W)
-
+        # ── Content ──
         content = QWidget()
+        content.setStyleSheet(f"background:{_BG};")
         self._content_lay = QVBoxLayout(content)
         self._content_lay.setContentsMargins(16, 14, 16, 16)
         self._content_lay.setSpacing(12)
@@ -80,8 +141,10 @@ class BaseDetailPanel(QWidget):
         self._build_content(self._content_lay)
         self._content_lay.addStretch()
 
-        set_detail_content(scroll, content, bg=_BG)
-        root.addWidget(scroll, stretch=1)
+        inner_lay.addWidget(content, stretch=1)
+
+        self._scroll.setWidget(self._inner)
+        root.addWidget(self._scroll, stretch=1)
 
         # ── Empty State ──
         self._empty = EmptyState(
@@ -91,6 +154,10 @@ class BaseDetailPanel(QWidget):
             style="plain", color="#6b7280", min_height=200,
         )
         root.addWidget(self._empty)
+
+    # ══════════════════════════════════════════════════════
+    # public API
+    # ══════════════════════════════════════════════════════
 
     def load_item(self, item_id: int):
         self._item_id = item_id
@@ -107,9 +174,10 @@ class BaseDetailPanel(QWidget):
         self._show_empty()
 
     def _show_empty(self):
+        self._scroll.setVisible(False)
         self._empty.setVisible(True)
-        self._hdr.setVisible(False)
 
     def _show_detail(self):
         self._empty.setVisible(False)
+        self._scroll.setVisible(True)
         self._hdr.setVisible(True)

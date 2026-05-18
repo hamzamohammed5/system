@@ -2,10 +2,13 @@
 ui/tabs/orders/_order_detail.py
 ================================
 _OrderDetail — لوحة تفاصيل الطلب.
+
+الإصلاح: الـ header والمحتوى كلهم جوا scroll area واحد
+عشان لما النافذة تضيق يظهر scrollbar أفقي يشمل كل حاجة.
 """
 
 from PyQt5.QtWidgets import (
-    QWidget, QVBoxLayout, QDialog, QMessageBox,
+    QWidget, QVBoxLayout, QDialog, QMessageBox, QScrollArea,
 )
 from PyQt5.QtCore import Qt, pyqtSignal
 
@@ -16,7 +19,6 @@ from db.orders.orders_repo import (
 )
 
 from ui.widgets.shared.panels import DetailHeader, EmptyState
-from ui.helpers import make_detail_scroll, set_detail_content
 from ui.app_settings import _C
 
 from .order_detail._status_config import STATUS_TRANSITIONS, TYPE_LABELS
@@ -31,7 +33,44 @@ _BLUE  = "#1565c0"
 _GREEN = "#10b981"
 
 # الحد الأدنى لعرض المحتوى — لما الـ panel يضيق عنه يظهر الـ horizontal scroll
-_MIN_CONTENT_W = 500
+_MIN_CONTENT_W = 560
+
+_SCROLL_SS = f"""
+    QScrollArea {{
+        border: none;
+        background: transparent;
+    }}
+    QScrollBar:vertical {{
+        background: transparent;
+        width: 6px;
+        border-radius: 3px;
+    }}
+    QScrollBar::handle:vertical {{
+        background: {_C['border_med']};
+        border-radius: 3px;
+        min-height: 30px;
+    }}
+    QScrollBar::handle:vertical:hover {{
+        background: {_C['border_strong']};
+    }}
+    QScrollBar::add-line:vertical,
+    QScrollBar::sub-line:vertical {{ height: 0px; }}
+    QScrollBar:horizontal {{
+        background: transparent;
+        height: 6px;
+        border-radius: 3px;
+    }}
+    QScrollBar::handle:horizontal {{
+        background: {_C['border_med']};
+        border-radius: 3px;
+        min-width: 30px;
+    }}
+    QScrollBar::handle:horizontal:hover {{
+        background: {_C['border_strong']};
+    }}
+    QScrollBar::add-line:horizontal,
+    QScrollBar::sub-line:horizontal {{ width: 0px; }}
+"""
 
 
 class _OrderDetail(QWidget):
@@ -44,8 +83,7 @@ class _OrderDetail(QWidget):
         self.conn        = conn
         self._order_id   = None
         self._order_data = None
-        # حد أدنى للعرض — الـ splitter يضغط لحد هنا بس
-        self.setMinimumWidth(_MIN_CONTENT_W)
+        self.setMinimumWidth(300)
         self._build()
         self._show_empty()
 
@@ -55,7 +93,23 @@ class _OrderDetail(QWidget):
         root.setContentsMargins(0, 0, 0, 0)
         root.setSpacing(0)
 
-        # ── Header (خارج الـ scroll — ثابت في الأعلى) ──
+        # ══ Scroll area يلف كل حاجة ══
+        self._scroll = QScrollArea()
+        self._scroll.setWidgetResizable(True)
+        self._scroll.setHorizontalScrollBarPolicy(Qt.ScrollBarAsNeeded)
+        self._scroll.setVerticalScrollBarPolicy(Qt.ScrollBarAsNeeded)
+        self._scroll.setStyleSheet(_SCROLL_SS)
+
+        # الـ container الداخلي — له minimum width عشان الـ scroll يظهر
+        self._inner = QWidget()
+        self._inner.setMinimumWidth(_MIN_CONTENT_W)
+        self._inner.setStyleSheet(f"background:{_BG};")
+
+        inner_lay = QVBoxLayout(self._inner)
+        inner_lay.setContentsMargins(0, 0, 0, 0)
+        inner_lay.setSpacing(0)
+
+        # ── Header (جوا الـ scroll) ──
         self._hdr = DetailHeader(bg=_WHITE)
         self._card_total   = self._hdr.add_stat_card("💰", "الإجمالي",  color=_BLUE)
         self._card_paid    = self._hdr.add_stat_card("✅", "المدفوع",   color=_GREEN)
@@ -73,14 +127,12 @@ class _OrderDetail(QWidget):
         self.btn_reorder.clicked.connect(self._do_reorder)
         self.btn_cancel.clicked.connect(self._cancel_order)
         self.btn_delete.clicked.connect(self._delete_order)
-        root.addWidget(self._hdr)
+        inner_lay.addWidget(self._hdr)
 
-        # ── Scroll + Content ──
-        scroll = make_detail_scroll(min_content_width=_MIN_CONTENT_W)
-
-        from PyQt5.QtWidgets import QWidget as QW, QVBoxLayout as QVL
-        content = QW()
-        self._content_lay = QVL(content)
+        # ── Content ──
+        content = QWidget()
+        content.setStyleSheet(f"background:{_BG};")
+        self._content_lay = QVBoxLayout(content)
         self._content_lay.setContentsMargins(16, 14, 16, 16)
         self._content_lay.setSpacing(12)
 
@@ -88,10 +140,12 @@ class _OrderDetail(QWidget):
         _build_log_section(self)
 
         self._content_lay.addStretch()
-        set_detail_content(scroll, content, bg=_BG)
-        root.addWidget(scroll, stretch=1)
+        inner_lay.addWidget(content, stretch=1)
 
-        # ── Empty State ──
+        self._scroll.setWidget(self._inner)
+        root.addWidget(self._scroll, stretch=1)
+
+        # ── Empty State (خارج الـ scroll — يظهر بدل كل حاجة) ──
         self._empty = EmptyState(
             icon="📋",
             title="اختر طلباً من القائمة",
@@ -99,6 +153,10 @@ class _OrderDetail(QWidget):
             style="plain", color="#6b7280", min_height=200,
         )
         root.addWidget(self._empty)
+
+    # ══════════════════════════════════════════════════════
+    # public API
+    # ══════════════════════════════════════════════════════
 
     def load_order(self, order_id: int):
         self._order_id   = order_id
@@ -125,19 +183,23 @@ class _OrderDetail(QWidget):
         dlg.saved.connect(self._on_form_saved)
         dlg.exec_()
 
+    # ══════════════════════════════════════════════════════
+    # show / hide
+    # ══════════════════════════════════════════════════════
+
     def _show_empty(self):
+        self._scroll.setVisible(False)
         self._empty.setVisible(True)
-        self._hdr.setVisible(False)
-        self._log_card.setVisible(False)
-        self.items_table.setVisible(False)
-        self._empty_items.setVisible(False)
-        if hasattr(self, '_item_toolbar'):
-            self._item_toolbar.setVisible(False)
 
     def _show_detail(self):
         self._empty.setVisible(False)
+        self._scroll.setVisible(True)
         self._hdr.setVisible(True)
         self._log_card.setVisible(True)
+
+    # ══════════════════════════════════════════════════════
+    # actions
+    # ══════════════════════════════════════════════════════
 
     def _edit_order(self):
         if not self._order_id:
