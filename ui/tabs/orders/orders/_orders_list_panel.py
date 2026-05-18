@@ -2,6 +2,9 @@
 ui/tabs/orders/orders/_orders_list_panel.py
 ============================================
 لوحة قائمة الطلبات — ترث من BaseListPanel.
+
+✅ الجدول حجمه Fixed على قد البيانات — لا يتمدد مع النافذة
+✅ لا horizontal scroll في الـ panel
 """
 
 from PyQt5.QtWidgets import QSizePolicy, QVBoxLayout
@@ -40,9 +43,10 @@ class _OrdersListPanel(BaseListPanel):
     order_selected = pyqtSignal(int)
     new_order      = pyqtSignal()
 
+    # ✅ أعمدة بعرض ثابت — لا تتمدد
     COLUMNS     = ["رقم الطلب", "العميل", "الحالة", "⚑", "التاريخ"]
-    STRETCH_COL = -1
-    COL_WIDTHS  = {0: 130, 1: 150, 2: 95, 3: 32, 4: 90}
+    STRETCH_COL = -1          # لا يوجد stretch — كل الأعمدة Fixed
+    COL_WIDTHS  = {0: 130, 1: 150, 2: 100, 3: 32, 4: 90}
     MIN_W       = 280
     MAX_W       = 560
     EMPTY_ICON  = "📋"
@@ -105,6 +109,25 @@ class _OrdersListPanel(BaseListPanel):
 
         date_item = muted_item(make_table_item((row["order_date"] or "")[:10]))
         table.setItem(r, 4, date_item)
+
+    def _auto_resize(self):
+        """
+        ✅ يضبط عرض الجدول بالظبط على قد المحتوى.
+        الأعمدة Fixed — لا تتمدد مع النافذة.
+        """
+        from PyQt5.QtWidgets import QHeaderView
+        from ui.widgets.shared.table_utils import calc_table_width
+
+        hh = self.table.horizontalHeader()
+        # الأعمدة كلها Fixed من COL_WIDTHS
+        for i, w in self.COL_WIDTHS.items():
+            hh.setSectionResizeMode(i, QHeaderView.Fixed)
+            self.table.setColumnWidth(i, w)
+
+        # ضبط عرض الـ panel على قد الجدول
+        total_w = calc_table_width(self.table, extra_pad=4)
+        self.setMinimumWidth(max(self.MIN_W, total_w))
+        self.setMaximumWidth(min(self.MAX_W, total_w + 20))
 
     # ══════════════════════════════════════════════════════
     # API

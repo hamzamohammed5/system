@@ -2,6 +2,9 @@
 ui/tabs/orders/dashboard_tab.py
 ================================
 لوحة متابعة الطلبات — إحصائيات وملخص سريع.
+
+✅ الجدول حجمه Fixed على قد البيانات — لا يتمدد مع النافذة
+✅ الجدول بيأخذ عرضه الكامل من الأعمدة — بدون مساحة فاضية
 """
 
 from PyQt5.QtWidgets import (
@@ -15,8 +18,7 @@ from PyQt5.QtGui  import QFont, QColor
 
 from db.orders.orders_repo import fetch_orders_summary, fetch_all_orders
 
-
-# ── ثوابت الحالة ──────────────────────────────────────────
+# ── ثوابت الحالة ──
 STATUS_CONFIG = {
     "pending":     ("⏳", "انتظار",   "#f59e0b", "#fffbeb", "#fde68a"),
     "confirmed":   ("✅", "مؤكد",     "#3b82f6", "#eff6ff", "#bfdbfe"),
@@ -27,12 +29,9 @@ STATUS_CONFIG = {
     "on_hold":     ("⏸", "معلق",    "#f97316", "#fff7ed", "#fed7aa"),
 }
 
-PRIORITY_CONFIG = {
-    "urgent": ("🔴", "عاجل", "#ef4444"),
-    "high":   ("⬆",  "عالي", "#f59e0b"),
-    "normal": ("➡",  "عادي", "#6b7280"),
-    "low":    ("⬇",  "منخفض","#9ca3af"),
-}
+# ── أعمدة الجدول وعرضها ──
+_TABLE_COLS    = ["رقم الطلب", "العميل", "النوع", "الحالة", "الأولوية", "الإجمالي", "التاريخ"]
+_COL_WIDTHS    = {0: 130, 1: 160, 2: 80, 3: 100, 4: 75, 5: 100, 6: 90}
 
 
 def _stat_card(icon, title, value="─", sub="",
@@ -94,12 +93,10 @@ def _status_chip(icon, label, count, color, bg, border):
 
     lbl_icon = QLabel(icon)
     lbl_icon.setStyleSheet("background:transparent; border:none;")
-
     lbl_lbl = QLabel(label)
     lbl_lbl.setStyleSheet(
         f"font-weight:600; color:{color}; background:transparent; border:none;"
     )
-
     lbl_cnt = QLabel(str(count))
     f = QFont()
     f.setPointSize(14)
@@ -145,7 +142,7 @@ class OrdersDashboardTab(QWidget):
         lay.setContentsMargins(20, 16, 20, 20)
         lay.setSpacing(16)
 
-        # ── بطاقات الإجمالي ──────────────────────────────────
+        # ── بطاقات الإجمالي ──
         top_row = QHBoxLayout()
         top_row.setSpacing(12)
 
@@ -162,7 +159,7 @@ class OrdersDashboardTab(QWidget):
             top_row.addWidget(ff, stretch=1)
         lay.addLayout(top_row)
 
-        # ── شبكة الحالات ─────────────────────────────────────
+        # ── شبكة الحالات ──
         lbl_status = QLabel("توزيع الطلبات حسب الحالة")
         lbl_status.setStyleSheet(
             "font-weight:bold; color:#374151; background:transparent;"
@@ -171,7 +168,6 @@ class OrdersDashboardTab(QWidget):
 
         grid = QGridLayout()
         grid.setSpacing(10)
-
         self._status_chips = {}
         statuses = list(STATUS_CONFIG.keys())
         for idx, status in enumerate(statuses):
@@ -181,16 +177,14 @@ class OrdersDashboardTab(QWidget):
             col_i = idx % 4
             grid.addWidget(frame, row_i, col_i)
             self._status_chips[status] = cnt_lbl
-
         lay.addLayout(grid)
 
-        # ── آخر الطلبات ───────────────────────────────────────
+        # ── آخر الطلبات ──
         recent_hdr = QHBoxLayout()
         lbl_recent = QLabel("آخر الطلبات")
         lbl_recent.setStyleSheet(
             "font-weight:bold; color:#374151; background:transparent;"
         )
-
         btn_refresh = QPushButton("↺  تحديث")
         btn_refresh.setMinimumHeight(30)
         btn_refresh.setStyleSheet("""
@@ -202,13 +196,12 @@ class OrdersDashboardTab(QWidget):
             QPushButton:hover { background: #c5cae9; }
         """)
         btn_refresh.clicked.connect(self.refresh)
-
         recent_hdr.addWidget(lbl_recent)
         recent_hdr.addStretch()
         recent_hdr.addWidget(btn_refresh)
         lay.addLayout(recent_hdr)
 
-        # ── container الجدول — بيحتوي الجدول بعرضه الفعلي ──
+        # ✅ container الجدول — بيحتوي الجدول بعرضه الفعلي فقط
         self._table_container = QWidget()
         self._table_container.setStyleSheet("background:transparent;")
         table_lay = QHBoxLayout(self._table_container)
@@ -217,11 +210,8 @@ class OrdersDashboardTab(QWidget):
 
         # ── جدول آخر الطلبات ──
         self.recent_table = QTableWidget()
-        self.recent_table.setColumnCount(7)
-        self.recent_table.setHorizontalHeaderLabels([
-            "رقم الطلب", "العميل", "النوع", "الحالة",
-            "الأولوية", "الإجمالي", "التاريخ"
-        ])
+        self.recent_table.setColumnCount(len(_TABLE_COLS))
+        self.recent_table.setHorizontalHeaderLabels(_TABLE_COLS)
         self.recent_table.setSelectionBehavior(QAbstractItemView.SelectRows)
         self.recent_table.setEditTriggers(QAbstractItemView.NoEditTriggers)
         self.recent_table.setAlternatingRowColors(True)
@@ -245,24 +235,24 @@ class OrdersDashboardTab(QWidget):
         """)
 
         hh = self.recent_table.horizontalHeader()
-
-        # ✅ كل الأعمدة تأخذ عرضها من المحتوى — لا stretch لأي عمود
-        for i in range(7):
-            hh.setSectionResizeMode(i, QHeaderView.ResizeToContents)
+        # ✅ كل الأعمدة Fixed — لا تتمدد مع النافذة
+        for i, w in _COL_WIDTHS.items():
+            hh.setSectionResizeMode(i, QHeaderView.Fixed)
+            self.recent_table.setColumnWidth(i, w)
 
         hh.setStretchLastSection(False)
         hh.setDefaultAlignment(Qt.AlignRight | Qt.AlignVCenter)
         hh.setHighlightSections(False)
 
-        # ✅ بدون scroll أفقي — الجدول يأخذ عرضه الكامل
+        # ✅ لا horizontal scroll — الجدول يأخذ عرضه الكامل
         self.recent_table.setHorizontalScrollBarPolicy(Qt.ScrollBarAlwaysOff)
         self.recent_table.setVerticalScrollMode(QAbstractItemView.ScrollPerPixel)
 
-        # ✅ الجدول لا يتمدد — حجمه Fixed على قد البيانات
+        # ✅ الجدول Fixed — لا يتمدد
         self.recent_table.setSizePolicy(QSizePolicy.Fixed, QSizePolicy.Preferred)
 
         table_lay.addWidget(self.recent_table)
-        table_lay.addStretch()   # ✅ الـ stretch هنا مش في الجدول
+        table_lay.addStretch()  # ✅ الـ stretch هنا مش في الجدول
 
         lay.addWidget(self._table_container)
         lay.addStretch()
@@ -282,7 +272,6 @@ class OrdersDashboardTab(QWidget):
         for status, lbl in self._status_chips.items():
             lbl.setText(str(summary.get(status) or 0))
 
-        # آخر 20 طلب
         orders = fetch_all_orders(self.conn)[:20]
         STATUS_MAP = {
             "pending": "⏳ انتظار", "confirmed": "✅ مؤكد",
@@ -331,27 +320,13 @@ class OrdersDashboardTab(QWidget):
             ))
             self.recent_table.setItem(r, 6, QTableWidgetItem(o["order_date"] or ""))
 
-        # ✅ بعد ملء البيانات: اضبط عرض الجدول على قد المحتوى
+        # ✅ بعد ملء البيانات: اضبط عرض الجدول على قد الأعمدة
         self._fit_table_to_content()
 
     def _fit_table_to_content(self):
-        """يضبط عرض الجدول بالظبط على قد المحتوى — بدون مساحة فاضية."""
-        table = self.recent_table
-        hh    = table.horizontalHeader()
-
-        # خلي Qt يحسب العرض المثالي لكل عمود
-        hh.resizeSections(QHeaderView.ResizeToContents)
-
-        # اجمع عرض كل الأعمدة
-        total_w = sum(table.columnWidth(c) for c in range(table.columnCount()))
-
-        # أضف عرض الـ vertical header لو ظاهر
-        vh = table.verticalHeader()
-        if not vh.isHidden():
-            total_w += vh.width()
-
-        # أضف هامش صغير للـ border
-        total_w += 4
-
-        # اضبط عرض الجدول بالظبط
-        table.setFixedWidth(total_w)
+        """
+        ✅ يضبط عرض الجدول بالظبط على قد الأعمدة الثابتة.
+        الجدول لا يتمدد مع النافذة أبداً.
+        """
+        total_w = sum(_COL_WIDTHS.values()) + 4  # +4 للـ border
+        self.recent_table.setFixedWidth(total_w)

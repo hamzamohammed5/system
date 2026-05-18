@@ -1,7 +1,13 @@
 """
 ui/widgets/shared/panles_helper/action_toolbar.py
 ==================================================
-ActionToolbar — أزرار بحجم ثابت، مش بتتمدد ومش بتتضغط.
+ActionToolbar — أزرار بحجم ثابت، مش بتتمدد مع النافذة.
+
+القاعدة:
+  ✅ كل الأزرار SizePolicy = Fixed
+  ✅ الـ stretch في الـ layout هو اللي يملأ المساحة
+  ✅ الأزرار الخطرة (danger) على اليمين مفصولة بـ separator
+  ✅ الشريط كله لا يتمدد — يبقى على قد الأزرار
 """
 
 from PyQt5.QtWidgets import (
@@ -18,13 +24,13 @@ class ActionToolbar(QWidget):
         super().__init__(parent)
         self._spacing    = spacing
         self._has_danger = False
-        self._buttons    = []   # لتتبع الأزرار وحساب min width
         self._build()
 
     def _build(self):
         self.setStyleSheet("background:transparent;")
-        # ✅ لا يتضغط أفقياً — يحتفظ بحجمه الكامل
-        self.setSizePolicy(QSizePolicy.Preferred, QSizePolicy.Fixed)
+
+        # ✅ الـ toolbar نفسه Fixed في الارتفاع — مش بيتمدد عمودياً
+        self.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Fixed)
 
         lay = QHBoxLayout(self)
         lay.setContentsMargins(0, 4, 0, 4)
@@ -32,12 +38,14 @@ class ActionToolbar(QWidget):
 
         self._left_lay = QHBoxLayout()
         self._left_lay.setSpacing(self._spacing)
+        self._left_lay.setAlignment(Qt.AlignRight | Qt.AlignVCenter)
 
         self._right_lay = QHBoxLayout()
         self._right_lay.setSpacing(self._spacing)
+        self._right_lay.setAlignment(Qt.AlignRight | Qt.AlignVCenter)
 
         lay.addLayout(self._left_lay)
-        lay.addStretch()
+        lay.addStretch()  # ✅ الـ stretch هنا بس — الأزرار Fixed
 
         self._sep = QFrame()
         self._sep.setFrameShape(QFrame.VLine)
@@ -50,27 +58,20 @@ class ActionToolbar(QWidget):
 
         lay.addLayout(self._right_lay)
 
-    def _update_min_width(self):
-        """يحسب الحد الأدنى للعرض بناءً على مجموع أعراض الأزرار."""
-        total = sum(btn.minimumWidth() for btn in self._buttons)
-        total += self._spacing * max(0, len(self._buttons) - 1)
-        total += 8  # padding
-        self.setMinimumWidth(total)
-
     def add_action(self, text: str, style: str = "normal",
                    callback=None, enabled: bool = True) -> QPushButton:
+        """يضيف زر عادي على اليسار — حجمه ثابت."""
         btn = _make_btn(text, style)
         btn.setEnabled(enabled)
         btn.setSizePolicy(QSizePolicy.Fixed, QSizePolicy.Fixed)
         if callback:
             btn.clicked.connect(callback)
         self._left_lay.addWidget(btn)
-        self._buttons.append(btn)
-        self._update_min_width()
         return btn
 
     def add_danger(self, text: str, callback=None,
                    enabled: bool = True) -> QPushButton:
+        """يضيف زر خطر على اليمين — حجمه ثابت."""
         btn = _make_btn(text, "danger")
         btn.setEnabled(enabled)
         btn.setSizePolicy(QSizePolicy.Fixed, QSizePolicy.Fixed)
@@ -79,8 +80,6 @@ class ActionToolbar(QWidget):
         self._right_lay.addWidget(btn)
         self._sep.setVisible(True)
         self._has_danger = True
-        self._buttons.append(btn)
-        self._update_min_width()
         return btn
 
     def add_separator(self):
@@ -89,3 +88,7 @@ class ActionToolbar(QWidget):
         sep.setFixedWidth(1)
         sep.setStyleSheet(f"background:{_C['border']}; border:none; margin:4px 0;")
         self._left_lay.addWidget(sep)
+
+
+# ── import مطلوب ──
+from PyQt5.QtCore import Qt

@@ -2,6 +2,11 @@
 ui/widgets/shared/base_list_panel.py
 =====================================
 BaseListPanel — قاعدة مشتركة لكل لوحات القوائم.
+
+القاعدة:
+  ✅ الجدول حجمه Fixed على قد البيانات — لا يتمدد مع النافذة
+  ✅ لا horizontal scroll — عرض الـ panel يكفي دايماً
+  ✅ الـ splitter يتحرك بحرية بين MIN_W و MAX_W
 """
 
 from PyQt5.QtWidgets import (
@@ -12,6 +17,7 @@ from PyQt5.QtCore import Qt, pyqtSignal, QTimer
 
 from ui.widgets.shared.table_utils import (
     make_list_table, auto_fit_columns, calc_table_width,
+    fit_table_width,
     ROW_HEIGHT_LARGE,
 )
 from ui.widgets.shared.panels import EmptyState
@@ -42,7 +48,7 @@ class BaseListPanel(QWidget):
         self._timer.setInterval(250)
         self._timer.timeout.connect(self._apply_filter)
 
-        # Preferred عشان الـ splitter يقدر يتحرك بحرية
+        # ✅ Preferred عشان الـ splitter يقدر يتحرك بحرية
         self.setSizePolicy(QSizePolicy.Preferred, QSizePolicy.Expanding)
 
         self._build()
@@ -97,8 +103,8 @@ class BaseListPanel(QWidget):
             stretch_col=self.STRETCH_COL,
             col_widths=self.COL_WIDTHS,
         )
-        # ✅ السماح بالـ horizontal scroll داخل الجدول لو الأعمدة كثيرة
-        self.table.setHorizontalScrollBarPolicy(Qt.ScrollBarAsNeeded)
+        # ✅ لا horizontal scroll في الجدول — العرض يكفي دايماً
+        self.table.setHorizontalScrollBarPolicy(Qt.ScrollBarAlwaysOff)
         self.table.itemSelectionChanged.connect(self._on_select)
         root.addWidget(self.table, stretch=1)
 
@@ -184,8 +190,8 @@ class BaseListPanel(QWidget):
 
     def _auto_resize(self):
         """
-        يضبط عرض الأعمدة فقط.
-        يحدد حد أدنى بس — الحد الأقصى مفتوح عشان الـ splitter يتحرك بحرية.
+        ✅ يضبط عرض الأعمدة ثم يضبط حد أدنى للـ panel.
+        الجدول نفسه لا يتغير حجمه — الـ splitter يتحرك حوله.
         """
         all_cols = [i for i in range(self.table.columnCount())
                     if i != self.STRETCH_COL]

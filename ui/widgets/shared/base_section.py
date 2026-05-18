@@ -2,6 +2,12 @@
 ui/widgets/shared/base_section.py
 ===================================
 BaseSection — قاعدة مشتركة للأقسام اللي فيها list + detail.
+
+القاعدة:
+  ✅ عرض النافذة أقصى ما يكون = عرض الـ sidebar + عرض الـ content
+  ✅ الـ content عرضه يكفي بالضبط إن الـ horizontal scroll يختفي
+  ✅ الجداول والأزرار حجمهم ثابت ومش بيتمدد
+  ✅ الـ list panel عرضه ثابت على قد الجدول — الـ detail يأخذ الباقي
 """
 
 from PyQt5.QtWidgets import (
@@ -70,6 +76,8 @@ class BaseSection(QWidget):
         self._splitter.addWidget(self._detail)
         self._splitter.setCollapsible(0, False)
         self._splitter.setCollapsible(1, False)
+
+        # ✅ الـ list لا يتمدد — الـ detail يأخذ كل الزيادة
         self._splitter.setStretchFactor(0, 0)
         self._splitter.setStretchFactor(1, 1)
 
@@ -84,7 +92,10 @@ class BaseSection(QWidget):
             QTimer.singleShot(100, self._apply_sizes)
             return
 
-        list_w   = max(self.LIST_MIN_W, min(self._list.width() or self.LIST_MIN_W, self.LIST_MAX_W))
+        list_w   = max(self.LIST_MIN_W, min(
+            self._list.width() or self.LIST_MIN_W,
+            self.LIST_MAX_W
+        ))
         detail_w = max(300, total - list_w - self._splitter.handleWidth())
         self._splitter.setSizes([list_w, detail_w])
 

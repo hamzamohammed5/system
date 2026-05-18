@@ -4,9 +4,10 @@ ui/main_window.py
 النافذة الرئيسية — Sidebar + Content.
 
 القاعدة:
-  - عرض النافذة أقصى ما يكون = عرض الـ sidebar + عرض الـ content
-  - الـ content عرضه يكفي بالضبط إن الـ horizontal scroll يختفي
-  - الجداول والأزرار حجمهم ثابت ومش بيتمدد
+  ✅ عرض النافذة أقصى ما يكون = عرض الـ sidebar + عرض الـ content
+  ✅ الـ content عرضه يكفي بالضبط إن الـ horizontal scroll يختفي
+  ✅ الجداول والأزرار حجمهم ثابت ومش بيتمدد
+  ✅ الـ sidebar عرضه ثابت — لا يتمدد أبداً
 """
 
 from PyQt5.QtWidgets import (
@@ -30,7 +31,7 @@ SIDEBAR_COLLAPSED_WIDTH = 56
 
 
 # ══════════════════════════════════════════════════════════
-# Scroll wrapper — فقط للمحتوى العمودي
+# Scroll wrapper — للمحتوى اللي محتاج scroll
 # ══════════════════════════════════════════════════════════
 
 _SCROLL_SS = f"""
@@ -75,20 +76,6 @@ _SCROLL_SS = f"""
 """
 
 
-def _wrap_scroll(widget) -> QScrollArea:
-    """
-    يلف الـ widget في scroll area.
-    الـ horizontal scroll يظهر فقط لو الـ widget أكبر من المساحة.
-    """
-    scroll = QScrollArea()
-    scroll.setWidget(widget)
-    scroll.setWidgetResizable(True)
-    scroll.setHorizontalScrollBarPolicy(Qt.ScrollBarAsNeeded)
-    scroll.setVerticalScrollBarPolicy(Qt.ScrollBarAsNeeded)
-    scroll.setStyleSheet(_SCROLL_SS)
-    return scroll
-
-
 # ══════════════════════════════════════════════════════════
 # _SectionLabel
 # ══════════════════════════════════════════════════════════
@@ -130,7 +117,7 @@ class _NavButton(QPushButton):
         self._collapsed = False
         self.setCheckable(True)
         self.setCursor(Qt.PointingHandCursor)
-        # حجم ثابت — مش بيتمدد
+        # ✅ حجم ثابت — مش بيتمدد
         self.setSizePolicy(QSizePolicy.Fixed, QSizePolicy.Fixed)
         self._build_content()
         self._update_style()
@@ -166,7 +153,6 @@ class _NavButton(QPushButton):
             }
         """)
 
-        # RTL
         lay.addWidget(self._txt_lbl, stretch=1)
         lay.addWidget(self._badge_lbl)
         lay.addWidget(self._ico_lbl)
@@ -297,7 +283,7 @@ class _Sidebar(QFrame):
         super().__init__(parent)
         self._collapsed = False
         self.setFixedWidth(SIDEBAR_EXPANDED_WIDTH)
-        # الـ sidebar عرضه ثابت
+        # ✅ الـ sidebar عرضه ثابت دايماً
         self.setSizePolicy(QSizePolicy.Fixed, QSizePolicy.Expanding)
         self.setStyleSheet(f"""
             QFrame {{
@@ -305,8 +291,8 @@ class _Sidebar(QFrame):
                 border-left: 1px solid {_C['sidebar_border']};
             }}
         """)
-        self._buttons: list[_NavButton]           = []
-        self._section_labels: list[_SectionLabel] = []
+        self._buttons: list       = []
+        self._section_labels: list = []
         self._build()
 
     def _build(self):
@@ -345,13 +331,11 @@ class _Sidebar(QFrame):
             color: {_C['sidebar_text']}; font-size: 14pt; font-weight: 700;
             background: transparent; border: none; letter-spacing: 1px;
         """)
-
         self._brand_sub = QLabel("إدارة التكاليف")
         self._brand_sub.setStyleSheet(f"""
             color: {_C['sidebar_muted']}; font-size: 8pt;
             background: transparent; border: none; letter-spacing: 0.3px;
         """)
-
         bt_lay.addWidget(self._brand_title)
         bt_lay.addWidget(self._brand_sub)
 
@@ -467,7 +451,6 @@ class _Sidebar(QFrame):
 
         for btn in self._buttons:
             btn.set_collapsed(self._collapsed)
-
         for lbl in self._section_labels:
             lbl.set_collapsed(self._collapsed)
 
@@ -520,10 +503,9 @@ class MainWindow(QMainWindow):
         sep.setStyleSheet(f"background: {_C['border']}; border: none;")
         main_layout.addWidget(sep)
 
-        # ── الـ stack: يأخذ كل المساحة المتبقية ──
+        # ✅ الـ stack: يأخذ كل المساحة المتبقية — Expanding
         self._stack = QStackedWidget()
         self._stack.setStyleSheet(f"background: {_C['bg_page']};")
-        # Expanding: يكبر مع النافذة
         self._stack.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Expanding)
 
         self._costing    = CostingSection()
@@ -533,8 +515,6 @@ class MainWindow(QMainWindow):
         self._design     = DesignSection()
         self._orders     = OrdersSection()
 
-        # الأقسام اللي فيها list+detail: مش محتاجة wrap في scroll
-        # لأن الـ list panel بيضبط عرضه بنفسه
         self._stack.addWidget(self._costing)        # 0
         self._stack.addWidget(self._pricing)        # 1
         self._stack.addWidget(self._accounting)     # 2
