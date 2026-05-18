@@ -6,7 +6,7 @@ ui/widgets/shared/panels.py
 الاستيرادات المتوفرة:
   - DetailHeader    : هيدر موحد لصفحات التفاصيل
   - StatCard        : بطاقة إحصائية
-  - SectionHeader   : رأس قسم مع accent bar
+  - SectionHeader   : رأس قسم مع accent bar وأزرار
   - EmptyState      : حالة فارغة مع أيقونة وزر اختياري
   - CollapsibleCard : بطاقة قابلة للطي
   - ActionToolbar   : شريط أزرار (fixed size)

@@ -15,14 +15,22 @@ BaseDetailPanel — قاعدة مشتركة لكل لوحات التفاصيل.
         EMPTY_TITLE   = "اختر عنصراً"
         EMPTY_SUBTITLE= ""
 
+        def _build_header_cards(self):
+            self._card_name = self._hdr.add_stat_card("📌", "الاسم", color="#1565c0")
+
+        def _build_header_buttons(self):
+            self.btn_edit = self._hdr.toolbar.add_action("✏️ تعديل", "primary")
+            self.btn_edit.clicked.connect(self._on_edit)
+
         def _build_content(self, lay):
-            ...
+            self._table = make_detail_table(...)
+            lay.addWidget(self._table)
 
         def _fill_data(self, data: dict):
-            ...
+            self._card_name.set_value(data["name"])
 
         def _load_data(self, item_id: int) -> dict:
-            return fetch_item(self.conn, item_id)
+            return dict(fetch_item(self.conn, item_id))
 """
 
 from PyQt5.QtWidgets import (
@@ -58,9 +66,7 @@ class BaseDetailPanel(QWidget):
         self._item_id   = None
         self._item_data = None
 
-        # الـ detail panel يكبر مع النافذة
         self.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Expanding)
-
         self._build_base()
         self._show_empty()
 
@@ -69,18 +75,23 @@ class BaseDetailPanel(QWidget):
     # ══════════════════════════════════════════════════════
 
     def _build_header_cards(self):
+        """أضف stat cards للـ header هنا."""
         pass
 
     def _build_header_buttons(self):
+        """أضف أزرار الـ header هنا."""
         pass
 
     def _build_content(self, lay: QVBoxLayout):
+        """ابنِ محتوى التفاصيل هنا."""
         pass
 
     def _load_data(self, item_id: int):
+        """اجلب بيانات العنصر من DB."""
         return None
 
     def _fill_data(self, data):
+        """امل الـ UI ببيانات العنصر."""
         pass
 
     # ══════════════════════════════════════════════════════
@@ -102,7 +113,6 @@ class BaseDetailPanel(QWidget):
         # ── Scroll + Content ──
         scroll = QScrollArea()
         scroll.setWidgetResizable(True)
-        # الـ detail panel: vertical scroll فقط، horizontal معطّل
         scroll.setHorizontalScrollBarPolicy(Qt.ScrollBarAlwaysOff)
         scroll.setVerticalScrollBarPolicy(Qt.ScrollBarAsNeeded)
         scroll.setStyleSheet(SCROLL_SS)
@@ -133,7 +143,7 @@ class BaseDetailPanel(QWidget):
     # ══════════════════════════════════════════════════════
 
     def load_item(self, item_id: int):
-        self._item_id   = item_id
+        self._item_id = item_id
         data = self._load_data(item_id)
         self._item_data = dict(data) if data else None
         if not self._item_data:

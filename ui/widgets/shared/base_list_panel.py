@@ -4,7 +4,7 @@ ui/widgets/shared/base_list_panel.py
 BaseListPanel — قاعدة مشتركة لكل لوحات القوائم.
 
 توفر:
-  - toolbar فوق الجدول (بحث + أزرار)
+  - toolbar فوق الجدول (بحث + فلاتر + أزرار)
   - جدول بعرض ثابت من المحتوى (لا يتمدد مع النافذة)
   - status bar تحت الجدول
   - signal: item_selected(int id)
@@ -14,6 +14,7 @@ BaseListPanel — قاعدة مشتركة لكل لوحات القوائم.
     class MyListPanel(BaseListPanel):
         COLUMNS     = ["الكود", "الاسم", "الحالة"]
         STRETCH_COL = 1
+        COL_WIDTHS  = {0: 80, 2: 90}
 
         def _load_rows(self):
             return fetch_all_items(self.conn)
@@ -23,7 +24,7 @@ BaseListPanel — قاعدة مشتركة لكل لوحات القوائم.
             ...
 
         def _match_filter(self, row, q) -> bool:
-            return q in row["name"].lower()
+            return q in (row["name"] or "").lower()
 """
 
 from PyQt5.QtWidgets import (
@@ -37,6 +38,7 @@ from ui.widgets.shared.table_utils import (
     make_list_table, auto_fit_columns, calc_table_width,
     ROW_HEIGHT_LARGE,
 )
+from ui.widgets.shared.panels import EmptyState
 from ui.app_settings import _C
 
 _MIN_W = 260
@@ -50,6 +52,7 @@ class BaseListPanel(QWidget):
     Override:
       COLUMNS, STRETCH_COL, COL_WIDTHS
       _load_rows(), _fill_row(), _match_filter(), _get_row_id()
+      _build_extra_toolbar()  — لإضافة فلاتر إضافية
     """
 
     item_selected = pyqtSignal(int)
@@ -60,6 +63,8 @@ class BaseListPanel(QWidget):
     COL_WIDTHS  : dict = None
     MIN_W       : int  = _MIN_W
     MAX_W       : int  = _MAX_W
+    EMPTY_ICON  : str  = "📋"
+    EMPTY_TITLE : str  = "لا توجد بيانات"
 
     def __init__(self, conn=None, parent=None):
         super().__init__(parent)
@@ -90,9 +95,13 @@ class BaseListPanel(QWidget):
         return True
 
     def _get_row_id(self, row_data) -> int:
-        if isinstance(row_data, dict):
+        if hasattr(row_data, 'keys'):
             return row_data.get("id", 0)
         return 0
+
+    def _build_extra_toolbar(self, lay: QVBoxLayout):
+        """Override لإضافة فلاتر أو أزرار إضافية في الـ toolbar."""
+        pass
 
     # ══════════════════════════════════════════════════════
     # بناء الواجهة الأساسية
@@ -124,10 +133,21 @@ class BaseListPanel(QWidget):
             stretch_col=self.STRETCH_COL,
             col_widths=self.COL_WIDTHS,
         )
-        # الـ horizontal scroll معطّل دايماً في الـ list panel
         self.table.setHorizontalScrollBarPolicy(Qt.ScrollBarAlwaysOff)
         self.table.itemSelectionChanged.connect(self._on_select)
         root.addWidget(self.table, stretch=1)
+
+        # ── empty state ──
+        self._empty_state = EmptyState(
+            icon=self.EMPTY_ICON,
+            title=self.EMPTY_TITLE,
+            style="plain", color="#9ca3af", min_height=100,
+        )
+        self._empty_state.setStyleSheet(
+            f"QFrame {{ background:{_C['bg_input']}; border:none; }}"
+        )
+        self._empty_state.setVisible(False)
+        root.addWidget(self._empty_state)
 
         # ── status bar ──
         self._status_bar = QLabel("")
@@ -164,6 +184,9 @@ class BaseListPanel(QWidget):
         row.addWidget(self.inp_search, stretch=1)
         lay.addLayout(row)
 
+        # مساحة للفلاتر الإضافية من الـ subclass
+        self._build_extra_toolbar(lay)
+
     # ══════════════════════════════════════════════════════
     # تحميل وفلترة
     # ══════════════════════════════════════════════════════
@@ -185,6 +208,10 @@ class BaseListPanel(QWidget):
         self._status_bar.setText(
             f"{cnt}" if cnt == total else f"{cnt} / {total}"
         )
+
+        has_data = bool(filtered)
+        self.table.setVisible(has_data)
+        self._empty_state.setVisible(not has_data and bool(self._all_rows))
 
         if filtered:
             self._auto_resize()

@@ -21,7 +21,10 @@ class BaseSection(QWidget):
     قاعدة مشتركة للأقسام اللي فيها list + detail.
 
     Override:
-      _create_list(), _create_detail(), _connect_signals()
+      _create_list()       → يرجع list panel
+      _create_detail()     → يرجع detail panel
+      _connect_signals()   → يربط الـ signals
+      _get_list_table()    → يرجع الجدول الرئيسي في الـ list (اختياري)
       LIST_MIN_W, LIST_MAX_W
     """
 
@@ -49,6 +52,7 @@ class BaseSection(QWidget):
         pass
 
     def _get_list_table(self):
+        """يرجع الجدول الرئيسي في الـ list panel."""
         if hasattr(self._list, 'table'):
             return self._list.table
         return None
