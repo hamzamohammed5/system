@@ -2,23 +2,6 @@
 ui/widgets/shared/panels.py
 ============================
 مكونات UI مشتركة قابلة لإعادة الاستخدام في كل الأقسام.
-
-المكونات:
-  StatCard        — بطاقة إحصائية (أيقونة + عنوان + قيمة + تلوين ديناميكي)
-  SectionHeader   — رأس قسم أفقي مع عنوان وأزرار
-  EmptyState      — رسالة "لا توجد بيانات" مع أيقونة وزر اختياري
-  BadgeLabel      — شارة ملونة (حالة، أولوية، نوع)
-  ActionToolbar   — شريط أزرار إجراءات موحد
-  InfoRow         — صف معلومات أفقي (label: value)
-  CollapsibleCard — بطاقة قابلة للطي
-  DetailHeader    — هيدر صفحة التفاصيل الكاملة
-
-التحسينات في هذه النسخة:
-  - DetailHeader محسّن: تسلسل هرمي أوضح، padding منظم، ألوان متناسقة
-  - StatCard: حجم أكبر، قراءة أسهل، تمييز أفضل بين العنوان والقيمة
-  - ActionToolbar: فصل واضح بين أزرار الإجراءات والأزرار الخطرة
-  - BadgeLabel: أحجام موحدة ومناسبة
-  - EmptyState: تصميم أنيق مع دعوة واضحة للإجراء
 """
 
 from PyQt5.QtWidgets import (
@@ -31,67 +14,41 @@ from PyQt5.QtGui  import QFont, QColor
 from ui.app_settings import _C, get_font_size, fs
 
 
-# ══════════════════════════════════════════════════════════
-# ثوابت داخلية
-# ══════════════════════════════════════════════════════════
-
 def _base() -> int:
     return get_font_size()
 
 
-# ── لوحة ألوان البطاقات ──────────────────────────────────
-
 _CARD_PALETTE = {
-    # أزرق
     "#1565c0": ("#e8f0fe", "#90caf9"),
     "#0d47a1": ("#e3f2fd", "#64b5f6"),
     "#1d4ed8": ("#eff6ff", "#93c5fd"),
-    # أخضر
     "#10b981": ("#ecfdf5", "#6ee7b7"),
     "#2e7d32": ("#e8f5e9", "#a5d6a7"),
     "#065f46": ("#ecfdf5", "#a7f3d0"),
-    # أحمر
     "#ef4444": ("#fef2f2", "#fca5a5"),
     "#dc2626": ("#fef2f2", "#fca5a5"),
     "#c62828": ("#ffebee", "#ef9a9a"),
     "#991b1b": ("#fef2f2", "#fecaca"),
-    # برتقالي / أصفر
     "#f59e0b": ("#fffbeb", "#fcd34d"),
     "#e65100": ("#fff3e0", "#ffcc80"),
     "#b45309": ("#fffbeb", "#fde68a"),
-    # رمادي
     "#6b7280": ("#f9fafb", "#d1d5db"),
     "#374151": ("#f9fafb", "#e5e7eb"),
-    # بنفسجي
     "#8b5cf6": ("#f5f3ff", "#c4b5fd"),
     "#6d28d9": ("#f5f3ff", "#ddd6fe"),
     "#6a1b9a": ("#f3e5f5", "#ce93d8"),
 }
 
 
-def _card_colors(color: str) -> tuple[str, str]:
-    """يرجع (bg, border) للون محدد."""
+def _card_colors(color: str) -> tuple:
     return _CARD_PALETTE.get(color, ("#f5f5f5", "#e0e0e0"))
 
 
 # ══════════════════════════════════════════════════════════
-# StatCard — بطاقة إحصائية محسّنة
+# StatCard
 # ══════════════════════════════════════════════════════════
 
 class StatCard(QFrame):
-    """
-    بطاقة إحصائية بتصميم محسّن:
-      - أيقونة كبيرة في الخلفية (للتمييز البصري)
-      - قيمة كبيرة وواضحة
-      - عنوان صغير تحتها
-      - لون خلفية فاتح مشتق تلقائياً
-
-    المثال:
-        card = StatCard("💰", "الإجمالي", color="#1565c0")
-        card.set_value("1,200 ج")
-        card.set_color("#e53935")
-    """
-
     def __init__(self, icon: str = "", title: str = "",
                  value: str = "─", color: str = "#1565c0",
                  bg: str = None, border: str = None,
@@ -127,7 +84,6 @@ class StatCard(QFrame):
             lay.setContentsMargins(14, 12, 14, 12)
             lay.setSpacing(3)
 
-        # ── صف العنوان + الأيقونة ──
         top_row = QHBoxLayout()
         top_row.setSpacing(0)
 
@@ -149,7 +105,6 @@ class StatCard(QFrame):
 
         lay.addLayout(top_row)
 
-        # ── القيمة ──
         self._lbl_value = QLabel(value)
         f = QFont()
         val_size = fs(base, +1) if self._compact else fs(base, +3)
@@ -162,15 +117,12 @@ class StatCard(QFrame):
         self._lbl_value.setAlignment(Qt.AlignRight | Qt.AlignVCenter)
         lay.addWidget(self._lbl_value)
 
-        # حفظ label العنوان للتحديث لاحقاً
         self._lbl_title = lbl_title
 
     def set_value(self, text: str):
-        """تحديث القيمة المعروضة."""
         self._lbl_value.setText(text)
 
     def set_color(self, color: str):
-        """تغيير اللون ديناميكياً."""
         self._color = color
         self._lbl_value.setStyleSheet(
             f"color:{color}; background:transparent; border:none;"
@@ -185,31 +137,20 @@ class StatCard(QFrame):
 
 
 # ══════════════════════════════════════════════════════════
-# SectionHeader — رأس قسم محسّن
+# SectionHeader
 # ══════════════════════════════════════════════════════════
 
 class SectionHeader(QWidget):
-    """
-    رأس قسم أفقي مع خط فاصل وأزرار.
-
-    المثال:
-        hdr = SectionHeader("📦 بنود الطلب")
-        hdr.add_button("➕ إضافة", callback=self._add, style="success")
-    """
-
     def __init__(self, title: str = "", parent=None):
         super().__init__(parent)
         self._build(title)
 
     def _build(self, title):
-        self.setStyleSheet(
-            f"background:transparent;"
-        )
+        self.setStyleSheet("background:transparent;")
         lay = QHBoxLayout(self)
         lay.setContentsMargins(0, 6, 0, 6)
         lay.setSpacing(10)
 
-        # خط رأسي ملون
         accent = QFrame()
         accent.setFixedSize(3, 18)
         accent.setStyleSheet(
@@ -241,23 +182,10 @@ class SectionHeader(QWidget):
 
 
 # ══════════════════════════════════════════════════════════
-# EmptyState — رسالة "لا توجد بيانات" محسّنة
+# EmptyState
 # ══════════════════════════════════════════════════════════
 
 class EmptyState(QFrame):
-    """
-    رسالة "لا توجد بيانات" بتصميم أنيق.
-
-    المثال:
-        empty = EmptyState(
-            icon="📦",
-            title="لا توجد بنود",
-            subtitle="اضغط ＋ إضافة بند لبدء",
-            style="dashed",
-            color="#10b981",
-        )
-    """
-
     action_clicked = pyqtSignal()
 
     def __init__(self, icon: str = "📋",
@@ -327,19 +255,10 @@ class EmptyState(QFrame):
 
 
 # ══════════════════════════════════════════════════════════
-# BadgeLabel — شارة ملونة محسّنة
+# BadgeLabel
 # ══════════════════════════════════════════════════════════
 
 class BadgeLabel(QLabel):
-    """
-    شارة ملونة موحدة للحالات والأولويات والأنواع.
-
-    المثال:
-        badge = BadgeLabel()
-        badge.set_badge("✅ مؤكد", text_color="#1d4ed8",
-                        bg="#eff6ff", border="#bfdbfe")
-    """
-
     def __init__(self, parent=None):
         super().__init__(parent)
         self.setAlignment(Qt.AlignCenter)
@@ -364,14 +283,10 @@ class BadgeLabel(QLabel):
 
 
 # ══════════════════════════════════════════════════════════
-# InfoRow — صف معلومات محسّن
+# InfoRow
 # ══════════════════════════════════════════════════════════
 
 class InfoRow(QWidget):
-    """
-    صف أفقي لعرض بيانات ثانوية (هاتف، مدينة، ...).
-    """
-
     def __init__(self, separator: str = "  ·  ", parent=None):
         super().__init__(parent)
         self._separator = separator
@@ -398,19 +313,10 @@ class InfoRow(QWidget):
 
 
 # ══════════════════════════════════════════════════════════
-# ActionToolbar — شريط أزرار موحد محسّن
+# ActionToolbar
 # ══════════════════════════════════════════════════════════
 
 class ActionToolbar(QWidget):
-    """
-    شريط أزرار أفقي مع فصل واضح بين الأزرار الأساسية والخطرة.
-
-    المثال:
-        toolbar = ActionToolbar()
-        btn_edit = toolbar.add_action("✏️ تعديل", "primary", self._edit)
-        btn_del  = toolbar.add_danger("🗑️ حذف", self._delete)
-    """
-
     def __init__(self, spacing: int = 6, parent=None):
         super().__init__(parent)
         self._spacing = spacing
@@ -472,14 +378,10 @@ class ActionToolbar(QWidget):
 
 
 # ══════════════════════════════════════════════════════════
-# CollapsibleCard — بطاقة قابلة للطي محسّنة
+# CollapsibleCard
 # ══════════════════════════════════════════════════════════
 
 class CollapsibleCard(QFrame):
-    """
-    بطاقة مع رأس قابل للنقر لطي/فرد المحتوى.
-    """
-
     toggled = pyqtSignal(bool)
 
     def __init__(self, title: str = "", expanded: bool = True,
@@ -503,14 +405,12 @@ class CollapsibleCard(QFrame):
         root.setContentsMargins(0, 0, 0, 0)
         root.setSpacing(0)
 
-        # ── رأس قابل للنقر ──
         self._header_btn = QPushButton()
         self._header_btn.setCursor(Qt.PointingHandCursor)
         self._header_btn.clicked.connect(self._toggle)
         self._update_header_style()
         root.addWidget(self._header_btn)
 
-        # ── فاصل ──
         self._divider = QFrame()
         self._divider.setFrameShape(QFrame.HLine)
         self._divider.setFixedHeight(1)
@@ -520,7 +420,6 @@ class CollapsibleCard(QFrame):
         self._divider.setVisible(self._expanded)
         root.addWidget(self._divider)
 
-        # ── المحتوى ──
         self._content_widget = QWidget()
         self._content_widget.setStyleSheet("background:transparent;")
         self.content_layout = QVBoxLayout(self._content_widget)
@@ -559,7 +458,6 @@ class CollapsibleCard(QFrame):
         self._content_widget.setVisible(self._expanded)
         self._divider.setVisible(self._expanded)
         self._update_header_text()
-        # تحديث border-radius الرأس
         if self._expanded:
             self._header_btn.setStyleSheet(
                 self._header_btn.styleSheet().replace(
@@ -580,11 +478,10 @@ class CollapsibleCard(QFrame):
 
 
 # ══════════════════════════════════════════════════════════
-# دالة مساعدة لبناء الأزرار — محسّنة
+# دالة مساعدة لبناء الأزرار
 # ══════════════════════════════════════════════════════════
 
 def _make_btn(text: str, style: str = "normal") -> QPushButton:
-    """يبني زر بستايل موحد ومحسّن."""
     btn = QPushButton(text)
     btn.setCursor(Qt.PointingHandCursor)
     base = _base()
@@ -666,36 +563,15 @@ def _make_btn(text: str, style: str = "normal") -> QPushButton:
 
 
 # ══════════════════════════════════════════════════════════
-# DetailHeader — هيدر صفحة التفاصيل — محسّن جذرياً
+# DetailHeader — محسّن مع set_customer_name
 # ══════════════════════════════════════════════════════════
 
 class DetailHeader(QFrame):
     """
-    هيدر موحد لصفحات التفاصيل بتصميم احترافي محسّن.
+    هيدر موحد لصفحات التفاصيل.
 
-    الهيكل:
-      ┌─────────────────────────────────────────────────┐
-      │  [عنوان كبير]        [نوع]  [أولوية]  [حالة]  │  ← صف العنوان
-      │  [معلومات ثانوية: هاتف · مدينة · إيميل]       │  ← صف المعلومات
-      ├─────────────────────────────────────────────────┤
-      │  [💰 إجمالي]  [✅ مدفوع]  [⚖️ متبقي]  [📅 تسليم] │  ← بطاقات
-      ├─────────────────────────────────────────────────┤
-      │  [✏️ تعديل]  [🔄 حالة]  [📋 إعادة]  ||  [❌ إلغاء] [🗑️ حذف]  │
-      └─────────────────────────────────────────────────┘
-
-    المثال:
-        hdr = DetailHeader()
-        hdr.set_title("ORD-2026-0001")
-        hdr.set_type_badge("🆕 جديد")
-        hdr.set_status_badge("⏳ انتظار", "#b45309", "#fffbeb", "#fde68a")
-        hdr.set_priority_badge("🔴 عاجل", "#ef4444")
-        hdr.set_info(["👤 محمد أحمد", "📞 01234567", "📍 القاهرة"])
-
-        card = hdr.add_stat_card("💰", "الإجمالي", color="#1565c0")
-        card.set_value("1,200 ج")
-
-        btn = hdr.toolbar.add_action("✏️ تعديل", "primary", self._edit)
-        hdr.toolbar.add_danger("🗑️ حذف", self._delete)
+    الجديد: set_customer_name() — يعرض اسم العميل في سطر مخصص
+    تحت العنوان الرئيسي، بخط واضح ومع word-wrap.
     """
 
     def __init__(self, bg: str = None, parent=None):
@@ -717,12 +593,12 @@ class DetailHeader(QFrame):
         root.setContentsMargins(20, 14, 20, 0)
         root.setSpacing(0)
 
-        # ══ القسم العلوي: العنوان والشارات ══════════════
+        # ══ القسم العلوي ══
         top_section = QWidget()
         top_section.setStyleSheet("background:transparent;")
         top_lay = QVBoxLayout(top_section)
         top_lay.setContentsMargins(0, 0, 0, 12)
-        top_lay.setSpacing(6)
+        top_lay.setSpacing(4)
 
         # ── صف 1: العنوان + الشارات ──
         title_row = QHBoxLayout()
@@ -761,7 +637,17 @@ class DetailHeader(QFrame):
         title_row.addWidget(self._badge_status)
         top_lay.addLayout(title_row)
 
-        # ── صف 2: المعلومات الثانوية ──
+        # ── صف 2: اسم العميل — سطر مخصص، واسع ومقروء ──
+        self._lbl_customer = QLabel("")
+        self._lbl_customer.setWordWrap(True)
+        self._lbl_customer.setStyleSheet(
+            f"color:{_C['text_sec']}; font-size:{fs(base, +1)}pt; font-weight:600;"
+            "background:transparent; border:none;"
+        )
+        self._lbl_customer.setVisible(False)
+        top_lay.addWidget(self._lbl_customer)
+
+        # ── صف 3: التفاصيل الثانوية (هاتف · مدينة) ──
         self._info_row = InfoRow(separator="  ·  ")
         top_lay.addWidget(self._info_row)
 
@@ -771,7 +657,7 @@ class DetailHeader(QFrame):
         div1 = self._make_divider()
         root.addWidget(div1)
 
-        # ══ القسم الأوسط: البطاقات الإحصائية ══════════
+        # ══ البطاقات الإحصائية ══
         cards_section = QWidget()
         cards_section.setStyleSheet("background:transparent;")
         cards_lay = QVBoxLayout(cards_section)
@@ -788,7 +674,7 @@ class DetailHeader(QFrame):
         div2 = self._make_divider()
         root.addWidget(div2)
 
-        # ══ القسم السفلي: شريط الأزرار ══════════════
+        # ══ شريط الأزرار ══
         toolbar_section = QWidget()
         toolbar_section.setStyleSheet("background:transparent;")
         tb_lay = QVBoxLayout(toolbar_section)
@@ -832,12 +718,23 @@ class DetailHeader(QFrame):
             f"font-size:{fs(_base(),+1)}pt;"
         )
 
+    def set_customer_name(self, name: str):
+        """
+        يعرض اسم العميل في سطر مخصص تحت العنوان الرئيسي.
+        الاسم بيظهر كامل مع word-wrap — مش بيتقطع بنقط.
+        """
+        if name:
+            self._lbl_customer.setText(name)
+            self._lbl_customer.setVisible(True)
+        else:
+            self._lbl_customer.setVisible(False)
+
     def set_info(self, parts: list):
+        """التفاصيل الثانوية: هاتف، مدينة، إلخ."""
         self._info_row.set_parts(parts)
 
     def add_stat_card(self, icon: str, title: str, value: str = "─",
                       color: str = "#1565c0", compact: bool = True) -> StatCard:
-        """يضيف بطاقة إحصائية ويرجعها للتحديث لاحقاً."""
         card = StatCard(icon, title, value, color, compact=compact)
         self._cards_row.addWidget(card, stretch=1)
         self._stat_cards.append(card)

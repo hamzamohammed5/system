@@ -1,12 +1,6 @@
 """
 ui/tabs/orders/_order_detail.py  — نسخة UX v3 محسّنة
 ================================
-التحسينات:
-  - DetailHeader من panels.py المحسّن — هيدر واضح ومنظم
-  - make_detail_table من table_utils.py — جدول موحد
-  - CollapsibleCard للسجل — قابل للطي بتصميم محسّن
-  - EmptyState أنيق مع دعوة للإجراء
-  - ألوان متناسقة ومتسقة عبر كل الواجهة
 """
 
 from PyQt5.QtWidgets import (
@@ -80,7 +74,6 @@ _BLUE   = "#1565c0"
 _GREEN  = "#10b981"
 _BORDER = "#e5e9f0"
 
-# ── stylesheet الـ scroll ──────────────────────────────────
 _SCROLL_SS = f"""
     QScrollArea {{ border: none; background: {_BG}; }}
     QScrollBar:vertical {{
@@ -93,10 +86,6 @@ _SCROLL_SS = f"""
     QScrollBar::add-line:vertical, QScrollBar::sub-line:vertical {{ height: 0; }}
 """
 
-
-# ══════════════════════════════════════════════════════════
-# _OrderDetail
-# ══════════════════════════════════════════════════════════
 
 class _OrderDetail(QWidget):
     saved          = pyqtSignal(int)
@@ -111,10 +100,6 @@ class _OrderDetail(QWidget):
         self._build()
         self._show_empty()
 
-    # ══════════════════════════════════════════════════════
-    # بناء الواجهة
-    # ══════════════════════════════════════════════════════
-
     def _build(self):
         self.setStyleSheet(f"background:{_BG};")
 
@@ -122,16 +107,13 @@ class _OrderDetail(QWidget):
         root.setContentsMargins(0, 0, 0, 0)
         root.setSpacing(0)
 
-        # ── Header موحد ──────────────────────────────────
         self._hdr = DetailHeader(bg=_WHITE)
 
-        # بطاقات الإحصائيات
         self._card_total   = self._hdr.add_stat_card("💰", "الإجمالي",  color=_BLUE)
         self._card_paid    = self._hdr.add_stat_card("✅", "المدفوع",   color=_GREEN)
         self._card_balance = self._hdr.add_stat_card("⚖️", "المتبقي",   color="#ef4444")
         self._card_due     = self._hdr.add_stat_card("📅", "التسليم",   color="#f59e0b")
 
-        # أزرار الإجراءات
         self.btn_edit    = self._hdr.toolbar.add_action("✏️  تعديل",        "primary")
         self.btn_status  = self._hdr.toolbar.add_action("🔄  تغيير الحالة", "ghost")
         self.btn_reorder = self._hdr.toolbar.add_action("📋  إعادة طلب",    "ghost")
@@ -146,7 +128,6 @@ class _OrderDetail(QWidget):
 
         root.addWidget(self._hdr)
 
-        # ── محتوى قابل للتمرير ──────────────────────────
         scroll = QScrollArea()
         scroll.setWidgetResizable(True)
         scroll.setHorizontalScrollBarPolicy(Qt.ScrollBarAlwaysOff)
@@ -165,7 +146,6 @@ class _OrderDetail(QWidget):
         scroll.setWidget(content)
         root.addWidget(scroll, stretch=1)
 
-        # ── حالة فارغة ──────────────────────────────────
         self._empty = EmptyState(
             icon="📋",
             title="اختر طلباً من القائمة",
@@ -177,14 +157,12 @@ class _OrderDetail(QWidget):
         root.addWidget(self._empty)
 
     def _build_items_section(self):
-        # ── رأس القسم ──
         items_hdr = SectionHeader("بنود الطلب")
         self.btn_add_item = items_hdr.add_button(
             "＋  إضافة بند", self._add_item, "success"
         )
         self._content_lay.addWidget(items_hdr)
 
-        # ── جدول البنود ──
         self.items_table = make_detail_table(
             columns=["البند", "الوصف", "الكمية", "الوحدة", "السعر", "الخصم%", "الإجمالي"],
             stretch_col=0,
@@ -195,7 +173,6 @@ class _OrderDetail(QWidget):
         )
         self._content_lay.addWidget(self.items_table)
 
-        # ── EmptyState للبنود ──
         self._empty_items = EmptyState(
             icon="📦",
             title="لا توجد بنود في هذا الطلب",
@@ -207,7 +184,6 @@ class _OrderDetail(QWidget):
         self._empty_items.action_clicked.connect(self._add_item)
         self._content_lay.addWidget(self._empty_items)
 
-        # ── أزرار تعديل/حذف البند ──
         item_toolbar = QWidget()
         item_toolbar.setStyleSheet("background:transparent;")
         itb_lay = QHBoxLayout(item_toolbar)
@@ -238,10 +214,6 @@ class _OrderDetail(QWidget):
         )
         self._log_card.content_layout.addWidget(self.log_table)
         self._content_lay.addWidget(self._log_card)
-
-    # ══════════════════════════════════════════════════════
-    # تحميل البيانات
-    # ══════════════════════════════════════════════════════
 
     def load_order(self, order_id: int):
         self._order_id   = order_id
@@ -276,10 +248,6 @@ class _OrderDetail(QWidget):
         self._hdr.setVisible(True)
         self._log_card.setVisible(True)
 
-    # ══════════════════════════════════════════════════════
-    # ملء البيانات
-    # ══════════════════════════════════════════════════════
-
     def _fill_header(self):
         d = self._order_data
 
@@ -296,12 +264,17 @@ class _OrderDetail(QWidget):
         pri_lbl, pri_color = PRIORITY_LABELS.get(d["priority"], ("", "#6b7280"))
         self._hdr.set_priority_badge(pri_lbl, pri_color)
 
-        parts = [f"👤  {d['customer_name']}  ({d['customer_code']})"]
+        # ══ الإصلاح: اسم العميل في سطر منفصل — لا يتقطع ══
+        customer_line = f"👤  {d['customer_name']}  ({d['customer_code']})"
+        details = []
         if d.get("customer_phone"):
-            parts.append(f"📞 {d['customer_phone']}")
+            details.append(f"📞 {d['customer_phone']}")
         if d.get("customer_city"):
-            parts.append(f"📍 {d['customer_city']}")
-        self._hdr.set_info(parts)
+            details.append(f"📍 {d['customer_city']}")
+
+        # اسم العميل كسطر أول، والتفاصيل كسطر ثاني
+        self._hdr.set_customer_name(customer_line)
+        self._hdr.set_info(details)
 
         net    = d.get("net_amount")  or 0
         paid   = d.get("paid_amount") or 0
@@ -313,7 +286,6 @@ class _OrderDetail(QWidget):
         self._card_balance.set_color("#ef4444" if remain > 0 else _GREEN)
         self._card_due.set_value(d.get("due_date") or "─")
 
-        # تفعيل/تعطيل الأزرار
         status    = d["status"]
         can_edit  = status not in ("delivered", "cancelled")
         can_cancel= status not in ("delivered", "cancelled")
@@ -395,10 +367,6 @@ class _OrderDetail(QWidget):
             time_str = (log.get("changed_at") or "")[:16]
             self.log_table.setItem(r, 3,
                 muted_item(make_table_item(time_str, align=Qt.AlignCenter)))
-
-    # ══════════════════════════════════════════════════════
-    # إجراءات
-    # ══════════════════════════════════════════════════════
 
     def _edit_order(self):
         if not self._order_id:
@@ -524,14 +492,11 @@ class _OrderDetail(QWidget):
 
 
 # ══════════════════════════════════════════════════════════
-# Dialog تغيير الحالة — محسّن
+# Dialog تغيير الحالة
 # ══════════════════════════════════════════════════════════
 
 STATUS_LABELS_SHORT = {k: v[0] for k, v in STATUS_LABELS.items()}
-
-_STATUS_COLORS = {
-    k: (v[1], v[2], v[3]) for k, v in STATUS_LABELS.items()
-}
+_STATUS_COLORS = {k: (v[1], v[2], v[3]) for k, v in STATUS_LABELS.items()}
 
 
 class _StatusDialog(QDialog):
@@ -563,7 +528,6 @@ class _StatusDialog(QDialog):
         lay.setContentsMargins(20, 18, 20, 18)
         lay.setSpacing(12)
 
-        # ── العنوان ──
         lbl_hdr = QLabel("تغيير حالة الطلب")
         lbl_hdr.setStyleSheet(f"""
             font-size: 14px; font-weight: bold; color: {_C['accent_text']};
@@ -572,7 +536,6 @@ class _StatusDialog(QDialog):
         """)
         lay.addWidget(lbl_hdr)
 
-        # ── الحالة الحالية ──
         cur_info = _STATUS_COLORS.get(current, ("#555", "#f5f5f5", "#e0e0e0"))
         lbl_cur = QLabel(
             f"الحالة الحالية:  {STATUS_LABELS_SHORT.get(current, current)}"
@@ -584,7 +547,6 @@ class _StatusDialog(QDialog):
         )
         lay.addWidget(lbl_cur)
 
-        # ── اختيار الحالة الجديدة ──
         lbl_new = QLabel("الحالة الجديدة:")
         lbl_new.setStyleSheet(f"color:{_C['text_sec']}; font-size:11px;")
         lay.addWidget(lbl_new)
@@ -604,7 +566,6 @@ class _StatusDialog(QDialog):
             self._cmb.addItem(STATUS_LABELS_SHORT.get(s, s), s)
         lay.addWidget(self._cmb)
 
-        # ── الملاحظات ──
         lbl_note = QLabel("ملاحظات (اختياري):")
         lbl_note.setStyleSheet(f"color:{_C['text_sec']}; font-size:11px;")
         lay.addWidget(lbl_note)
@@ -613,7 +574,6 @@ class _StatusDialog(QDialog):
         self._note.setPlaceholderText("سبب التغيير...")
         lay.addWidget(self._note)
 
-        # ── الأزرار ──
         btns = QHBoxLayout()
         btn_cancel = QPushButton("إلغاء")
         btn_cancel.setMinimumHeight(38)
@@ -650,10 +610,6 @@ class _StatusDialog(QDialog):
     def get_result(self):
         return self._result
 
-
-# ══════════════════════════════════════════════════════════
-# مساعد: إدخال نص
-# ══════════════════════════════════════════════════════════
 
 def _get_text_input(parent, title, prompt):
     from PyQt5.QtWidgets import QInputDialog
