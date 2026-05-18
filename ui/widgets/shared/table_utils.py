@@ -311,3 +311,101 @@ def insert_row(table: QTableWidget,
     table.insertRow(r)
     table.setRowHeight(r, height)
     return r
+
+
+# ══════════════════════════════════════════════════════════
+# auto_fit_columns — يضبط عرض الأعمدة تلقائياً على المحتوى
+# ══════════════════════════════════════════════════════════
+ 
+def auto_fit_columns(table: QTableWidget,
+                     fixed_cols: list = None,
+                     stretch_col: int = -1,
+                     min_width: int = 40,
+                     max_width: int = 300):
+    """
+    يضبط عرض الأعمدة تلقائياً حسب المحتوى.
+ 
+    fixed_cols  : الأعمدة اللي هتتضبط عرضها (None = كل الأعمدة)
+    stretch_col : العمود اللي يتمدد ليملأ المساحة الزيادة
+    min_width   : الحد الأدنى لعرض أي عمود
+    max_width   : الحد الأقصى لعرض أي عمود
+    """
+    hh = table.horizontalHeader()
+    n  = table.columnCount()
+ 
+    cols = fixed_cols if fixed_cols is not None else list(range(n))
+ 
+    for col in cols:
+        if col == stretch_col:
+            continue
+        # حساب العرض المثالي من عنوان العمود + البيانات
+        hh.setSectionResizeMode(col, QHeaderView.ResizeToContents)
+        ideal = table.columnWidth(col)
+        ideal = max(min_width, min(ideal, max_width))
+        hh.setSectionResizeMode(col, QHeaderView.Fixed)
+        table.setColumnWidth(col, ideal)
+ 
+    if 0 <= stretch_col < n:
+        hh.setSectionResizeMode(stretch_col, QHeaderView.Stretch)
+ 
+ 
+# ══════════════════════════════════════════════════════════
+# calc_table_width — يحسب العرض الكلي المثالي للجدول
+# ══════════════════════════════════════════════════════════
+ 
+def calc_table_width(table: QTableWidget, extra_pad: int = 24) -> int:
+    """
+    يحسب العرض الكلي المثالي للجدول بناءً على عرض الأعمدة.
+ 
+    extra_pad : padding إضافي (scrollbar + borders)
+    يُستخدم عادةً لضبط عرض الـ panel الحاوية.
+    """
+    total = extra_pad
+    for col in range(table.columnCount()):
+        total += table.columnWidth(col)
+    vh = table.verticalHeader()
+    if not vh.isHidden():
+        total += vh.width()
+    return total
+ 
+ 
+# ══════════════════════════════════════════════════════════
+# fit_splitter_to_table — يضبط عرض الـ splitter على الجدول
+# ══════════════════════════════════════════════════════════
+ 
+def fit_splitter_to_table(splitter,
+                           list_index: int,
+                           table: QTableWidget,
+                           min_w: int = 280,
+                           max_w: int = 560,
+                           extra_pad: int = 24):
+    """
+    يضبط عرض الـ panel في الـ splitter بحيث يناسب عرض الجدول.
+ 
+    splitter   : QSplitter
+    list_index : رقم الـ widget في الـ splitter (عادة 0)
+    table      : الجدول اللي هنحسب عرضه
+    """
+    sizes = splitter.sizes()
+    if not sizes or len(sizes) <= list_index:
+        return
+ 
+    ideal  = calc_table_width(table, extra_pad)
+    target = max(min_w, min(ideal, max_w))
+    total  = sum(sizes)
+ 
+    if total <= 0:
+        return
+ 
+    new_sizes       = list(sizes)
+    new_sizes[list_index] = target
+ 
+    # توزيع الباقي على الأعمدة الأخرى
+    remaining = total - target
+    other_total = sum(s for i, s in enumerate(sizes) if i != list_index)
+    for i in range(len(sizes)):
+        if i != list_index:
+            ratio = sizes[i] / other_total if other_total > 0 else 1.0
+            new_sizes[i] = max(200, int(remaining * ratio))
+ 
+    splitter.setSizes(new_sizes)

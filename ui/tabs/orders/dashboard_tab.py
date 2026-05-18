@@ -8,9 +8,9 @@ from PyQt5.QtWidgets import (
     QWidget, QVBoxLayout, QHBoxLayout, QGridLayout,
     QFrame, QLabel, QPushButton, QScrollArea,
     QTableWidget, QTableWidgetItem, QHeaderView,
-    QAbstractItemView,
+    QAbstractItemView, QSizePolicy,
 )
-from PyQt5.QtCore import Qt
+from PyQt5.QtCore import Qt, QTimer
 from PyQt5.QtGui  import QFont, QColor
 
 from db.orders.orders_repo import fetch_orders_summary, fetch_all_orders
@@ -208,6 +208,13 @@ class OrdersDashboardTab(QWidget):
         recent_hdr.addWidget(btn_refresh)
         lay.addLayout(recent_hdr)
 
+        # ── container الجدول — بيحتوي الجدول بعرضه الفعلي ──
+        self._table_container = QWidget()
+        self._table_container.setStyleSheet("background:transparent;")
+        table_lay = QHBoxLayout(self._table_container)
+        table_lay.setContentsMargins(0, 0, 0, 0)
+        table_lay.setSpacing(0)
+
         # ── جدول آخر الطلبات ──
         self.recent_table = QTableWidget()
         self.recent_table.setColumnCount(7)
@@ -219,7 +226,6 @@ class OrdersDashboardTab(QWidget):
         self.recent_table.setEditTriggers(QAbstractItemView.NoEditTriggers)
         self.recent_table.setAlternatingRowColors(True)
         self.recent_table.verticalHeader().setVisible(False)
-        self.recent_table.setMaximumHeight(320)
         self.recent_table.setShowGrid(False)
         self.recent_table.setStyleSheet("""
             QTableWidget {
@@ -240,22 +246,25 @@ class OrdersDashboardTab(QWidget):
 
         hh = self.recent_table.horizontalHeader()
 
-        # كل الأعمدة تأخذ عرض مناسب للبيانات تلقائياً
+        # ✅ كل الأعمدة تأخذ عرضها من المحتوى — لا stretch لأي عمود
         for i in range(7):
             hh.setSectionResizeMode(i, QHeaderView.ResizeToContents)
 
-        # عمود العميل يتمدد ليملأ المساحة المتبقية
-        hh.setSectionResizeMode(1, QHeaderView.Stretch)
-
+        hh.setStretchLastSection(False)
         hh.setDefaultAlignment(Qt.AlignRight | Qt.AlignVCenter)
         hh.setHighlightSections(False)
 
-        # بدون scroll أفقي
+        # ✅ بدون scroll أفقي — الجدول يأخذ عرضه الكامل
         self.recent_table.setHorizontalScrollBarPolicy(Qt.ScrollBarAlwaysOff)
         self.recent_table.setVerticalScrollMode(QAbstractItemView.ScrollPerPixel)
 
-        lay.addWidget(self.recent_table)
+        # ✅ الجدول لا يتمدد — حجمه Fixed على قد البيانات
+        self.recent_table.setSizePolicy(QSizePolicy.Fixed, QSizePolicy.Preferred)
 
+        table_lay.addWidget(self.recent_table)
+        table_lay.addStretch()   # ✅ الـ stretch هنا مش في الجدول
+
+        lay.addWidget(self._table_container)
         lay.addStretch()
         scroll.setWidget(content)
         root.addWidget(scroll)
@@ -321,3 +330,28 @@ class OrdersDashboardTab(QWidget):
                 f"{(o['net_amount'] or 0):,.2f} ج"
             ))
             self.recent_table.setItem(r, 6, QTableWidgetItem(o["order_date"] or ""))
+
+        # ✅ بعد ملء البيانات: اضبط عرض الجدول على قد المحتوى
+        self._fit_table_to_content()
+
+    def _fit_table_to_content(self):
+        """يضبط عرض الجدول بالظبط على قد المحتوى — بدون مساحة فاضية."""
+        table = self.recent_table
+        hh    = table.horizontalHeader()
+
+        # خلي Qt يحسب العرض المثالي لكل عمود
+        hh.resizeSections(QHeaderView.ResizeToContents)
+
+        # اجمع عرض كل الأعمدة
+        total_w = sum(table.columnWidth(c) for c in range(table.columnCount()))
+
+        # أضف عرض الـ vertical header لو ظاهر
+        vh = table.verticalHeader()
+        if not vh.isHidden():
+            total_w += vh.width()
+
+        # أضف هامش صغير للـ border
+        total_w += 4
+
+        # اضبط عرض الجدول بالظبط
+        table.setFixedWidth(total_w)
