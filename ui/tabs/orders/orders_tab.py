@@ -7,6 +7,7 @@ ui/tabs/orders/orders_tab.py  — نسخة UX v3 محسّنة
   - قائمة الطلبات: صفوف أوضح مع تمييز بصري للأولوية
   - شريط الحالة: معلومات واضحة
   - EmptyState احترافي
+  - auto_fit_columns + resizable columns (NEW)
 """
 
 from PyQt5.QtWidgets import (
@@ -30,6 +31,7 @@ from ui.widgets.shared.panels import EmptyState, _make_btn
 from ui.widgets.shared.table_utils import (
     make_table_item, color_item, bold_item, muted_item,
     insert_row, ROW_HEIGHT_LARGE,
+    auto_fit_columns,          # ← NEW
 )
 from ui.app_settings import _C, get_font_size, fs
 
@@ -272,7 +274,7 @@ class _OrdersListPanel(QWidget):
     new_order      = pyqtSignal()
 
     def __init__(self, conn, parent=None):
-        super().__init__(conn, parent) if False else super().__init__(parent)
+        super().__init__(parent)
         self.conn      = conn
         self._all_rows = []
         self._build()
@@ -335,20 +337,44 @@ class _OrdersListPanel(QWidget):
             QHeaderView::section:last {{
                 border-right: none;
             }}
+            QHeaderView::section:hover {{
+                background: {_C['bg_hover']};
+                color: {_C['text_primary']};
+            }}
         """)
 
         self._status_delegate = _StatusDelegate(self.table)
         self.table.setItemDelegateForColumn(2, self._status_delegate)
 
         hh = self.table.horizontalHeader()
-        hh.setSectionResizeMode(0, QHeaderView.ResizeToContents)
+
+        # ── إعداد الأعمدة: Interactive بالكامل + أعمدة ثابتة العرض صغيرة ──
+        hh.setSectionsMovable(False)
+
+        # رقم الطلب — auto-fit لاحقاً
+        hh.setSectionResizeMode(0, QHeaderView.Interactive)
+        self.table.setColumnWidth(0, 130)
+
+        # العميل — Stretch يأخذ باقي المساحة
         hh.setSectionResizeMode(1, QHeaderView.Stretch)
+
+        # الحالة — Fixed
         hh.setSectionResizeMode(2, QHeaderView.Fixed)
-        self.table.setColumnWidth(2, 96)
+        self.table.setColumnWidth(2, 90)
+
+        # الأولوية — Fixed ضيق
         hh.setSectionResizeMode(3, QHeaderView.Fixed)
-        self.table.setColumnWidth(3, 32)
-        hh.setSectionResizeMode(4, QHeaderView.ResizeToContents)
+        self.table.setColumnWidth(3, 28)
+
+        # التاريخ — Interactive مع عرض ابتدائي
+        hh.setSectionResizeMode(4, QHeaderView.Interactive)
+        self.table.setColumnWidth(4, 82)
+
         hh.setDefaultAlignment(Qt.AlignRight | Qt.AlignVCenter)
+        hh.setMinimumSectionSize(40)
+
+        self.table.setHorizontalScrollMode(QAbstractItemView.ScrollPerPixel)
+        self.table.setVerticalScrollMode(QAbstractItemView.ScrollPerPixel)
 
         self.table.itemSelectionChanged.connect(self._on_select)
         self.table.doubleClicked.connect(self._on_select)
@@ -418,8 +444,12 @@ class _OrdersListPanel(QWidget):
             color_item(num_item, _C['accent'])
             self.table.setItem(r, 0, num_item)
 
-            # العميل
-            self.table.setItem(r, 1, make_table_item(row["customer_name"]))
+            # العميل — tooltip بالاسم الكامل لو اتقطع
+            cust_item = make_table_item(
+                row["customer_name"],
+                tooltip=row["customer_name"],
+            )
+            self.table.setItem(r, 1, cust_item)
 
             # الحالة — delegate يرسمها
             status_text = STATUS_LABELS.get(row["status"], (row["status"],))[0]
@@ -445,6 +475,18 @@ class _OrdersListPanel(QWidget):
         self._status_bar.setText(
             f"{cnt} طلب" if cnt == total else f"{cnt} من {total}"
         )
+
+        # ── auto-fit بعد ملء البيانات ──
+        # رقم الطلب (0) والتاريخ (4) يتضبطوا حسب المحتوى
+        # العميل (1) Stretch، الحالة (2) وأولوية (3) Fixed
+        if has_data:
+            auto_fit_columns(
+                self.table,
+                fixed_cols=[0, 4],   # auto-fit لهذين فقط
+                stretch_col=1,       # العميل يفضل Stretch
+                min_width=80,
+                max_width=200,
+            )
 
     def _on_select(self):
         row = self.table.currentRow()
@@ -481,13 +523,16 @@ class OrdersTab(QWidget):
         root.setSpacing(0)
 
         splitter = QSplitter(Qt.Horizontal)
-        splitter.setHandleWidth(2)
+        splitter.setHandleWidth(4)   # أوسع قليلاً → أسهل للسحب
         splitter.setStyleSheet(f"""
             QSplitter::handle {{
                 background: {_C['border']};
             }}
             QSplitter::handle:hover {{
                 background: {_C['accent_mid']};
+            }}
+            QSplitter::handle:pressed {{
+                background: {_C['accent']};
             }}
         """)
 
@@ -496,7 +541,9 @@ class OrdersTab(QWidget):
 
         splitter.addWidget(self._list)
         splitter.addWidget(self._detail)
-        splitter.setSizes([340, 780])
+
+        # ── عرض أوسع للقائمة عشان العميل يظهر كامل ──
+        splitter.setSizes([480, 640])
         splitter.setCollapsible(0, False)
         splitter.setCollapsible(1, False)
 

@@ -1,10 +1,7 @@
 """
-ui/tabs/orders/customers_tab.py  — نسخة محسّنة v2
+ui/tabs/orders/customers_tab.py  — نسخة محسّنة v3
 ================================
-تبويب إدارة العملاء باستخدام المكونات المشتركة:
-  - DetailHeader  من panels.py
-  - EmptyState    من panels.py
-  - make_compact_table من table_utils.py
+تبويب إدارة العملاء — auto_fit_columns + resizable columns (NEW)
 """
 
 from PyQt5.QtWidgets import (
@@ -25,7 +22,6 @@ from db.orders.customers_repo import (
 from db.orders.orders_repo import fetch_customer_orders
 from ui.tabs.orders._customer_form import _CustomerForm
 
-# مكونات مشتركة
 from ui.widgets.shared.panels import (
     DetailHeader, EmptyState, StatCard,
 )
@@ -33,10 +29,10 @@ from ui.widgets.shared.table_utils import (
     make_compact_table, make_table_item,
     color_item, bold_item, muted_item,
     insert_row, ROW_HEIGHT_COMPACT, ROW_HEIGHT_NORMAL, ROW_HEIGHT_LARGE,
+    auto_fit_columns,          # ← NEW
 )
 from ui.app_settings import _C
 
-# ── ثوابت ──
 _BG     = "#f8f9fb"
 _WHITE  = "#ffffff"
 _BLUE   = "#1565c0"
@@ -96,11 +92,11 @@ class _CustomersListPanel(QWidget):
         tb.setContentsMargins(10, 10, 10, 10)
         tb.setSpacing(6)
 
-        # صف البحث + زر جديد
         row1 = QHBoxLayout()
         self.inp_search = QLineEdit()
         self.inp_search.setPlaceholderText("بحث بالاسم أو الهاتف أو الكود...")
         self.inp_search.setMinimumHeight(34)
+        self.inp_search.setClearButtonEnabled(True)
         self.inp_search.setStyleSheet(f"""
             QLineEdit {{
                 background: {_BG}; border: 1px solid #cdd3e0;
@@ -125,7 +121,6 @@ class _CustomersListPanel(QWidget):
         row1.addWidget(btn_new)
         tb.addLayout(row1)
 
-        # فلتر النوع + الحالة
         row2 = QHBoxLayout()
         self.cmb_type = QComboBox()
         self.cmb_type.setMinimumHeight(28)
@@ -158,6 +153,7 @@ class _CustomersListPanel(QWidget):
         self.table.setEditTriggers(QAbstractItemView.NoEditTriggers)
         self.table.setAlternatingRowColors(True)
         self.table.verticalHeader().setVisible(False)
+        self.table.setShowGrid(False)
         self.table.setStyleSheet(f"""
             QTableWidget {{
                 border: none; background: {_WHITE};
@@ -165,18 +161,45 @@ class _CustomersListPanel(QWidget):
             }}
             QTableWidget::item {{ padding: 6px 10px; border-bottom: 1px solid {_BORDER}; }}
             QTableWidget::item:selected {{ background: #dbeafe; color: #1e40af; }}
+            QTableWidget::item:hover {{ background: {_C['bg_hover']}; }}
             QHeaderView::section {{
                 background: {_BG}; color: {_BLUE}; font-weight: bold; font-size:11px;
                 padding: 6px 10px; border: none; border-bottom: 2px solid {_BORDER};
+                border-right: 1px solid {_BORDER};
+            }}
+            QHeaderView::section:hover {{
+                background: {_C['bg_hover']}; color: {_C['text_primary']};
             }}
         """)
+
         hh = self.table.horizontalHeader()
-        hh.setSectionResizeMode(0, QHeaderView.ResizeToContents)
+        hh.setSectionsMovable(False)
+
+        # الكود — Interactive مع auto-fit لاحقاً
+        hh.setSectionResizeMode(0, QHeaderView.Interactive)
+        self.table.setColumnWidth(0, 80)
+
+        # الاسم — Stretch
         hh.setSectionResizeMode(1, QHeaderView.Stretch)
-        hh.setSectionResizeMode(2, QHeaderView.ResizeToContents)
-        hh.setSectionResizeMode(3, QHeaderView.ResizeToContents)
-        hh.setSectionResizeMode(4, QHeaderView.ResizeToContents)
+
+        # الهاتف — Interactive
+        hh.setSectionResizeMode(2, QHeaderView.Interactive)
+        self.table.setColumnWidth(2, 110)
+
+        # المدينة — Interactive
+        hh.setSectionResizeMode(3, QHeaderView.Interactive)
+        self.table.setColumnWidth(3, 80)
+
+        # الطلبات — Fixed ضيق
+        hh.setSectionResizeMode(4, QHeaderView.Fixed)
+        self.table.setColumnWidth(4, 55)
+
         hh.setDefaultAlignment(Qt.AlignRight | Qt.AlignVCenter)
+        hh.setMinimumSectionSize(40)
+
+        self.table.setHorizontalScrollMode(QAbstractItemView.ScrollPerPixel)
+        self.table.setVerticalScrollMode(QAbstractItemView.ScrollPerPixel)
+
         self.table.itemSelectionChanged.connect(self._on_select)
         self.table.doubleClicked.connect(self._on_select)
         root.addWidget(self.table, stretch=1)
@@ -215,28 +238,60 @@ class _CustomersListPanel(QWidget):
             self.table.insertRow(r)
             self.table.setRowHeight(r, ROW_HEIGHT_LARGE)
 
-            code_item = make_table_item(row["code"] or "", user_data=row["id"])
+            code_item = make_table_item(
+                row["code"] or "",
+                user_data=row["id"],
+                tooltip=row["code"] or "",
+            )
             muted_item(code_item)
             self.table.setItem(r, 0, code_item)
 
-            name_item = make_table_item(row["name"])
+            name_item = make_table_item(
+                row["name"],
+                tooltip=row["name"],
+            )
             if not row["is_active"]:
                 color_item(name_item, "#9ca3af")
             else:
                 bold_item(name_item, also_medium=True)
             self.table.setItem(r, 1, name_item)
 
-            self.table.setItem(r, 2, muted_item(make_table_item(row["phone"] or "—")))
-            self.table.setItem(r, 3, muted_item(make_table_item(row["city"] or "—")))
-            cnt_item = make_table_item(str(row["orders_count"] or 0), align=Qt.AlignCenter)
+            phone_item = muted_item(make_table_item(
+                row["phone"] or "—",
+                tooltip=row["phone"] or "",
+            ))
+            self.table.setItem(r, 2, phone_item)
+
+            city_item = muted_item(make_table_item(
+                row["city"] or "—",
+                tooltip=row["city"] or "",
+            ))
+            self.table.setItem(r, 3, city_item)
+
+            cnt_item = make_table_item(
+                str(row["orders_count"] or 0),
+                align=Qt.AlignCenter,
+            )
             color_item(cnt_item, _BLUE)
             self.table.setItem(r, 4, cnt_item)
 
-        cnt = len(filtered)
+        cnt   = len(filtered)
         total = len(self._all_rows)
         self._status_bar.setText(
             f"{cnt} عميل" if cnt == total else f"{cnt} من {total} عميل"
         )
+
+        # ── auto-fit بعد ملء البيانات ──
+        # الكود (0)، الهاتف (2)، المدينة (3) يتضبطوا حسب المحتوى
+        # الاسم (1) يفضل Stretch، الطلبات (4) Fixed
+        if filtered:
+            auto_fit_columns(
+                self.table,
+                fixed_cols=[0, 2, 3],
+                stretch_col=1,
+                min_width=55,
+                max_width=180,
+            )
 
     def _on_select(self):
         row = self.table.currentRow()
@@ -277,23 +332,19 @@ class _CustomerDetailPanel(QWidget):
         root.setContentsMargins(0, 0, 0, 0)
         root.setSpacing(0)
 
-        # ── Header موحد ──
         self._hdr = DetailHeader()
 
-        # بطاقات إحصائيات العميل
         self._card_total_orders  = self._hdr.add_stat_card("📋", "إجمالي الطلبات", color=_BLUE)
         self._card_active_orders = self._hdr.add_stat_card("🔧", "طلبات جارية",    color="#8b5cf6")
         self._card_total_value   = self._hdr.add_stat_card("💰", "إجمالي القيمة",  color="#10b981")
         self._card_balance       = self._hdr.add_stat_card("⚖️", "المتبقي",         color="#ef4444")
 
-        # أزرار
         self.btn_edit   = self._hdr.toolbar.add_action("✏️  تعديل",  "primary", self._edit)
         self.btn_toggle = self._hdr.toolbar.add_action("⏸  تعطيل",  "ghost",   self._toggle_active)
         self.btn_del    = self._hdr.toolbar.add_danger("🗑️  حذف",               self._delete)
 
         root.addWidget(self._hdr)
 
-        # ── محتوى قابل للتمرير ──
         scroll = QScrollArea()
         scroll.setWidgetResizable(True)
         scroll.setHorizontalScrollBarPolicy(Qt.ScrollBarAlwaysOff)
@@ -348,7 +399,6 @@ class _CustomerDetailPanel(QWidget):
         scroll.setWidget(content)
         root.addWidget(scroll, stretch=1)
 
-        # حالة فارغة
         self._empty = EmptyState(
             icon="👤",
             title="اختر عميلاً من القائمة",
@@ -358,8 +408,6 @@ class _CustomerDetailPanel(QWidget):
             min_height=200,
         )
         root.addWidget(self._empty)
-
-    # ── API ──
 
     def load_customer(self, cid: int):
         self._customer_id = cid
@@ -383,7 +431,6 @@ class _CustomerDetailPanel(QWidget):
         if c.get("email"):   parts.append(f"✉️ {c['email']}")
         self._hdr.set_info(parts)
 
-        # إحصائيات
         stats = fetch_customer_stats(self.conn, cid)
         self._card_total_orders.set_value(str(stats.get("total_orders") or 0))
         self._card_active_orders.set_value(str(stats.get("active") or 0))
@@ -394,13 +441,10 @@ class _CustomerDetailPanel(QWidget):
 
         self.btn_toggle.setText("✅  تفعيل" if not c["is_active"] else "⏸  تعطيل")
 
-        # جهات الاتصال
         contacts = [dict(ct) for ct in fetch_contacts(self.conn, cid)]
-
         self.contacts_table.setRowCount(0)
         for ct in contacts:
             r = insert_row(self.contacts_table, ROW_HEIGHT_COMPACT)
-            bold_item(make_table_item(ct["name"]))
             self.contacts_table.setItem(r, 0, bold_item(make_table_item(ct["name"])))
             self.contacts_table.setItem(r, 1, muted_item(make_table_item(ct.get("role") or "")))
             self.contacts_table.setItem(r, 2, make_table_item(ct.get("phone") or ""))
@@ -409,7 +453,6 @@ class _CustomerDetailPanel(QWidget):
         self._lbl_contacts_hdr.setVisible(bool(contacts))
         self.contacts_table.setVisible(bool(contacts))
 
-        # آخر الطلبات
         orders = fetch_customer_orders(self.conn, cid)
         self.orders_table.setRowCount(0)
         for o in orders[:20]:
@@ -433,6 +476,16 @@ class _CustomerDetailPanel(QWidget):
             self.orders_table.setItem(r, 4, muted_item(
                 make_table_item(o["order_date"] or "")
             ))
+
+        # auto-fit لجدول الطلبات في التفاصيل
+        if orders:
+            auto_fit_columns(
+                self.orders_table,
+                fixed_cols=[1, 2, 3, 4],
+                stretch_col=0,
+                min_width=55,
+                max_width=160,
+            )
 
     def _show_empty(self):
         self._empty.setVisible(True)
@@ -496,10 +549,11 @@ class CustomersTab(QWidget):
         root.setSpacing(0)
 
         splitter = QSplitter(Qt.Horizontal)
-        splitter.setHandleWidth(3)
+        splitter.setHandleWidth(4)
         splitter.setStyleSheet(f"""
             QSplitter::handle {{ background: {_BORDER}; }}
             QSplitter::handle:hover {{ background: #bfdbfe; }}
+            QSplitter::handle:pressed {{ background: {_BLUE}; }}
         """)
 
         self._list   = _CustomersListPanel(self.conn)
@@ -507,7 +561,9 @@ class CustomersTab(QWidget):
 
         splitter.addWidget(self._list)
         splitter.addWidget(self._detail)
-        splitter.setSizes([340, 760])
+
+        # ── عرض أوسع للقائمة ──
+        splitter.setSizes([420, 680])
         splitter.setCollapsible(0, False)
         splitter.setCollapsible(1, False)
 

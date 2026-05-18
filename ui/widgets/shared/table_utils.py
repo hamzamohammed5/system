@@ -12,16 +12,21 @@ ui/widgets/shared/table_utils.py
   color_item          — تلوين خلية
   bold_item           — تغليظ خلية
   make_table_item     — إنشاء خلية مع بيانات مخفية وتوسيط اختياري
+  auto_fit_columns    — ضبط عرض الأعمدة تلقائياً حسب المحتوى (NEW)
 
 الاستخدام:
     from ui.widgets.shared.table_utils import (
-        make_detail_table, make_table_item, color_item, bold_item
+        make_detail_table, make_table_item, color_item, bold_item,
+        auto_fit_columns,
     )
 
     table = make_detail_table(["البند", "الكمية", "السعر"], stretch_col=0)
     item = make_table_item("محصول أ", user_data=42)
     bold_item(item)
     table.setItem(0, 0, item)
+
+    # بعد ملء البيانات:
+    auto_fit_columns(table, fixed_cols=[0, 2, 4])
 """
 
 from PyQt5.QtWidgets import (
@@ -105,6 +110,9 @@ def _table_stylesheet(variant: str = "normal") -> str:
             background: {c['bg_hover']};
             color: {c['text_primary']};
         }}
+        QHeaderView::section:pressed {{
+            background: {c['bg_active']};
+        }}
     """
 
 
@@ -119,8 +127,14 @@ def _build_table(columns: list[str],
                  max_height: int = None,
                  min_height: int = None,
                  alternating: bool = True,
-                 row_height: int = None) -> QTableWidget:
-    """دالة بناء داخلية مشتركة."""
+                 row_height: int = None,
+                 resizable: bool = True) -> QTableWidget:
+    """
+    دالة بناء داخلية مشتركة.
+
+    resizable: لو True، كل الأعمدة (غير الـ Stretch وغير الـ Fixed)
+               تكون Interactive → المستخدم يسحبها بالماوس.
+    """
     table = QTableWidget()
     table.setColumnCount(len(columns))
     table.setHorizontalHeaderLabels(columns)
@@ -133,6 +147,11 @@ def _build_table(columns: list[str],
 
     hh = table.horizontalHeader()
     vh = table.verticalHeader()
+
+    # السماح بسحب فواصل الأعمدة
+    if resizable:
+        hh.setSectionsMovable(False)       # لا نسمح بإعادة ترتيب الأعمدة
+        hh.setSectionResizeMode(QHeaderView.Interactive)  # baseline
 
     # ارتفاع الصف الافتراضي
     _row_h = row_height or (
@@ -153,6 +172,7 @@ def _build_table(columns: list[str],
             elif i == stretch_col or (stretch_col < 0 and i == len(columns) - 1):
                 hh.setSectionResizeMode(i, QHeaderView.Stretch)
             else:
+                # Interactive → قابل للسحب
                 hh.setSectionResizeMode(i, QHeaderView.Interactive)
     else:
         for i in range(len(columns)):
@@ -179,6 +199,68 @@ def _build_table(columns: list[str],
 
 
 # ══════════════════════════════════════════════════════════
+# auto_fit_columns — الدالة الجديدة
+# ══════════════════════════════════════════════════════════
+
+def auto_fit_columns(table: QTableWidget,
+                     fixed_cols: list[int] = None,
+                     stretch_col: int = -1,
+                     min_width: int = 50,
+                     max_width: int = 400):
+    """
+    يضبط عرض الأعمدة تلقائياً حسب المحتوى (auto-fit)،
+    ثم يجعلها Interactive بحيث المستخدم يقدر يسحبها.
+
+    المعاملات:
+        fixed_cols  : أرقام الأعمدة اللي تتعمل auto-fit (None = كلهم)
+        stretch_col : العمود اللي يفضل Stretch (مش بيتعمله auto-fit)
+        min_width   : الحد الأدنى لعرض أي عمود بعد auto-fit
+        max_width   : الحد الأقصى لعرض أي عمود بعد auto-fit
+
+    الاستخدام:
+        # بعد ملء الجدول بالبيانات:
+        auto_fit_columns(self.table, fixed_cols=[0, 2, 3, 4])
+        # العمود 1 (العميل) هيفضل Stretch لأنه مش في fixed_cols
+    """
+    hh = table.horizontalHeader()
+    n  = table.columnCount()
+
+    cols_to_fit = fixed_cols if fixed_cols is not None else list(range(n))
+
+    for col in range(n):
+        if col == stretch_col:
+            hh.setSectionResizeMode(col, QHeaderView.Stretch)
+            continue
+
+        if col in cols_to_fit:
+            # احسب أوسع خلية في هذا العمود (هيدر + بيانات)
+            table.resizeColumnToContents(col)
+            current_w = table.columnWidth(col)
+            # طبّق الحدود
+            clamped = max(min_width, min(current_w, max_width))
+            table.setColumnWidth(col, clamped)
+            # Interactive → المستخدم يقدر يسحب بعد الـ auto-fit
+            hh.setSectionResizeMode(col, QHeaderView.Interactive)
+        else:
+            # أعمدة مش في القائمة → Interactive بدون auto-fit
+            hh.setSectionResizeMode(col, QHeaderView.Interactive)
+
+
+def auto_fit_all(table: QTableWidget,
+                 stretch_col: int = -1,
+                 min_width: int = 50,
+                 max_width: int = 400):
+    """
+    اختصار — auto-fit لكل الأعمدة ما عدا الـ stretch.
+    """
+    n = table.columnCount()
+    all_cols = [i for i in range(n) if i != stretch_col]
+    auto_fit_columns(table, fixed_cols=all_cols,
+                     stretch_col=stretch_col,
+                     min_width=min_width, max_width=max_width)
+
+
+# ══════════════════════════════════════════════════════════
 # make_detail_table — جدول تفاصيل داخل الصفحات
 # ══════════════════════════════════════════════════════════
 
@@ -187,7 +269,8 @@ def make_detail_table(columns: list[str],
                       col_widths: dict = None,
                       max_height: int = None,
                       min_height: int = 100,
-                      row_height: int = ROW_HEIGHT_NORMAL) -> QTableWidget:
+                      row_height: int = ROW_HEIGHT_NORMAL,
+                      resizable: bool = True) -> QTableWidget:
     """
     جدول تفاصيل موحد — للاستخدام داخل صفحات التفاصيل.
 
@@ -196,12 +279,13 @@ def make_detail_table(columns: list[str],
     col_widths  : {col_index: width_px} للأعمدة ذات العرض الثابت
     max_height  : الحد الأقصى للارتفاع (None = بلا حد)
     min_height  : الحد الأدنى للارتفاع
+    resizable   : السماح بسحب عرض الأعمدة (افتراضي True)
     """
     return _build_table(
         columns, stretch_col, col_widths,
         variant="normal",
         max_height=max_height, min_height=min_height,
-        row_height=row_height
+        row_height=row_height, resizable=resizable,
     )
 
 
@@ -212,13 +296,15 @@ def make_detail_table(columns: list[str],
 def make_compact_table(columns: list[str],
                        stretch_col: int = -1,
                        col_widths: dict = None,
-                       max_height: int = 200) -> QTableWidget:
+                       max_height: int = 200,
+                       resizable: bool = True) -> QTableWidget:
     """جدول صغير للـ sidebars والبطاقات والـ dialogs."""
     return _build_table(
         columns, stretch_col, col_widths,
         variant="compact",
         max_height=max_height,
-        row_height=ROW_HEIGHT_COMPACT
+        row_height=ROW_HEIGHT_COMPACT,
+        resizable=resizable,
     )
 
 
@@ -228,14 +314,15 @@ def make_compact_table(columns: list[str],
 
 def make_list_table(columns: list[str],
                     stretch_col: int = -1,
-                    col_widths: dict = None) -> QTableWidget:
+                    col_widths: dict = None,
+                    resizable: bool = True) -> QTableWidget:
     """جدول قائمة رئيسية (يسار الـ splitter)."""
     table = _build_table(
         columns, stretch_col, col_widths,
         variant="normal",
-        row_height=ROW_HEIGHT_LARGE
+        row_height=ROW_HEIGHT_LARGE,
+        resizable=resizable,
     )
-    # ستايل القائمة — بدون حدود وبخلفية نظيفة
     table.setStyleSheet(table.styleSheet() + """
         QTableWidget {
             border: none;
