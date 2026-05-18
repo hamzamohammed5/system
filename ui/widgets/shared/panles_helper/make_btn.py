@@ -96,7 +96,8 @@ def _make_btn(text: str, style: str = "normal") -> QPushButton:
     f.setPointSize(fs(base, 0))
     fm = QFontMetrics(f)
     text_w = fm.horizontalAdvance(text)
-    padding = 28 * 2  # 28px padding يمين + شمال
+    padding = 40 * 2  # 40px padding يمين + شمال (لدعم العربية)
+
 
     btn.setSizePolicy(QSizePolicy.Preferred, QSizePolicy.Fixed)
     btn.setMinimumWidth(text_w + padding)

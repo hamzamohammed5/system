@@ -110,6 +110,7 @@ class _FilterToolbar(QFrame):
         row0 = QHBoxLayout()
         self.btn_new = QPushButton("＋  طلب جديد")
         self.btn_new.setMinimumHeight(36)
+        self.btn_new.setMinimumWidth(130)
         self.btn_new.setCursor(Qt.PointingHandCursor)
         self.btn_new.setStyleSheet(f"""
             QPushButton {{
@@ -155,7 +156,7 @@ class _FilterToolbar(QFrame):
 
         btn_reset = QPushButton("↺")
         btn_reset.setToolTip("مسح الفلاتر")
-        btn_reset.setFixedSize(28, 28)
+        btn_reset.setFixedSize(32, 28)
         btn_reset.setCursor(Qt.PointingHandCursor)
         btn_reset.setStyleSheet(f"""
             QPushButton {{
