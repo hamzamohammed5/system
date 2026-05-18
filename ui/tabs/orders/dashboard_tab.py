@@ -2,29 +2,26 @@
 ui/tabs/orders/dashboard_tab.py
 ================================
 لوحة متابعة الطلبات — إحصائيات وملخص سريع.
-يستخدم مكونات panels.py و table_utils.py المشتركة.
 """
 
 from PyQt5.QtWidgets import (
     QWidget, QVBoxLayout, QHBoxLayout, QGridLayout,
-    QFrame, QLabel, QPushButton, QScrollArea,
+    QFrame, QLabel, QPushButton,
 )
 from PyQt5.QtCore import Qt
 from PyQt5.QtGui  import QFont
 
 from db.orders.orders_repo import fetch_orders_summary, fetch_all_orders
 
-from ui.widgets.shared.panels      import StatCard, SectionHeader
-from ui.widgets.shared.panels      import _make_btn
+from ui.widgets.shared.panels      import StatCard, SectionHeader, _make_btn
 from ui.widgets.shared.table_utils import (
     make_detail_table,
     make_table_item, color_item, bold_item, muted_item,
-    insert_row, ROW_HEIGHT_LARGE, ROW_HEIGHT_NORMAL,
+    insert_row, ROW_HEIGHT_NORMAL,
 )
-from ui.helpers import SCROLL_SS
+from ui.helpers import make_detail_scroll, set_detail_content
 from ui.app_settings import _C
 
-# ── ثوابت الحالة ──────────────────────────────────────────
 STATUS_CONFIG = {
     "pending":     ("⏳", "انتظار",   "#f59e0b", "#fffbeb", "#fde68a"),
     "confirmed":   ("✅", "مؤكد",     "#3b82f6", "#eff6ff", "#bfdbfe"),
@@ -34,52 +31,34 @@ STATUS_CONFIG = {
     "cancelled":   ("❌", "ملغي",    "#ef4444", "#fef2f2", "#fecaca"),
     "on_hold":     ("⏸", "معلق",    "#f97316", "#fff7ed", "#fed7aa"),
 }
-
 PRIORITY_CONFIG = {
     "urgent": ("🔴", "عاجل",  "#ef4444"),
     "high":   ("⬆",  "عالي",  "#f59e0b"),
     "normal": ("➡",  "عادي",  "#6b7280"),
     "low":    ("⬇",  "منخفض", "#9ca3af"),
 }
-
 STATUS_MAP   = {k: f"{v[0]} {v[1]}" for k, v in STATUS_CONFIG.items()}
 STATUS_COLOR = {k: v[2]             for k, v in STATUS_CONFIG.items()}
 TYPE_MAP     = {"new": "جديد", "reorder": "إعادة طلب", "custom": "مخصص"}
 PRIORITY_MAP = {k: f"{v[0]} {v[1]}" for k, v in PRIORITY_CONFIG.items()}
 
+_MIN_CONTENT_W = 500
 
-def _status_chip(icon: str, label: str, count: int,
-                 color: str, bg: str, border: str) -> tuple:
-    """بطاقة حالة صغيرة تعرض العدد — حجم ثابت."""
+
+def _status_chip(icon, label, count, color, bg, border):
     frame = QFrame()
-    frame.setStyleSheet(f"""
-        QFrame {{
-            background: {bg};
-            border: 1px solid {border};
-            border-radius: 8px;
-        }}
-    """)
+    frame.setStyleSheet(f"QFrame {{ background:{bg}; border:1px solid {border}; border-radius:8px; }}")
     lay = QHBoxLayout(frame)
     lay.setContentsMargins(12, 8, 12, 8)
     lay.setSpacing(8)
-
     lbl_icon = QLabel(icon)
     lbl_icon.setStyleSheet("background:transparent; border:none;")
-
     lbl_lbl = QLabel(label)
-    lbl_lbl.setStyleSheet(
-        f"font-weight:600; color:{color}; background:transparent; border:none;"
-    )
-
+    lbl_lbl.setStyleSheet(f"font-weight:600; color:{color}; background:transparent; border:none;")
     lbl_cnt = QLabel(str(count))
-    f = QFont()
-    f.setPointSize(14)
-    f.setBold(True)
+    f = QFont(); f.setPointSize(14); f.setBold(True)
     lbl_cnt.setFont(f)
-    lbl_cnt.setStyleSheet(
-        f"color:{color}; background:transparent; border:none;"
-    )
-
+    lbl_cnt.setStyleSheet(f"color:{color}; background:transparent; border:none;")
     lay.addWidget(lbl_icon)
     lay.addWidget(lbl_lbl, stretch=1)
     lay.addWidget(lbl_cnt)
@@ -97,18 +76,16 @@ class OrdersDashboardTab(QWidget):
         root.setContentsMargins(0, 0, 0, 0)
         root.setSpacing(0)
 
-        scroll = QScrollArea()
-        scroll.setWidgetResizable(True)
-        scroll.setHorizontalScrollBarPolicy(Qt.ScrollBarAlwaysOff)
-        scroll.setStyleSheet(SCROLL_SS + f"QScrollArea {{ background: {_C['bg_page']}; }}")
+        scroll = make_detail_scroll(min_content_width=_MIN_CONTENT_W)
+        scroll.setStyleSheet(
+            scroll.styleSheet() + f"\nQScrollArea {{ background: {_C['bg_page']}; }}"
+        )
 
         content = QWidget()
-        content.setStyleSheet(f"background: {_C['bg_page']};")
         lay = QVBoxLayout(content)
         lay.setContentsMargins(20, 16, 20, 20)
         lay.setSpacing(16)
 
-        # ── بطاقات الإجمالي — StatCard من panels.py ──────────
         top_row = QHBoxLayout()
         top_row.setSpacing(12)
         self._card_total       = StatCard("📋", "إجمالي الطلبات", color="#1565c0")
@@ -120,7 +97,6 @@ class OrdersDashboardTab(QWidget):
             top_row.addWidget(card, stretch=1)
         lay.addLayout(top_row)
 
-        # ── شبكة الحالات ──────────────────────────────────────
         status_hdr = SectionHeader("توزيع الطلبات حسب الحالة")
         lay.addWidget(status_hdr)
 
@@ -134,12 +110,10 @@ class OrdersDashboardTab(QWidget):
             self._status_chips[status] = cnt_lbl
         lay.addLayout(grid)
 
-        # ── آخر الطلبات — جدول detail (مش list) ──────────────
         recent_hdr = SectionHeader("آخر الطلبات")
-        btn_refresh = recent_hdr.add_button("↺  تحديث", self.refresh, "ghost")
+        recent_hdr.add_button("↺  تحديث", self.refresh, "ghost")
         lay.addWidget(recent_hdr)
 
-        # make_detail_table: HScrollBar = AsNeeded، مش Fixed
         self.recent_table = make_detail_table(
             columns=["رقم الطلب", "العميل", "النوع", "الحالة",
                      "الأولوية", "الإجمالي", "التاريخ"],
@@ -149,20 +123,17 @@ class OrdersDashboardTab(QWidget):
             row_height=ROW_HEIGHT_NORMAL,
         )
         lay.addWidget(self.recent_table)
-
         lay.addStretch()
-        scroll.setWidget(content)
+
+        set_detail_content(scroll, content, bg=_C['bg_page'])
         root.addWidget(scroll)
 
     def refresh(self):
         summary = fetch_orders_summary(self.conn)
-
         self._card_total.set_value(str(summary.get("total") or 0))
         self._card_urgent.set_value(str(summary.get("urgent") or 0))
-        self._card_total_value.set_value(
-            f"{summary.get('total_value') or 0:,.0f} ج")
-        self._card_total_paid.set_value(
-            f"{summary.get('total_paid') or 0:,.0f} ج")
+        self._card_total_value.set_value(f"{summary.get('total_value') or 0:,.0f} ج")
+        self._card_total_paid.set_value(f"{summary.get('total_paid') or 0:,.0f} ج")
 
         for status, lbl in self._status_chips.items():
             lbl.setText(str(summary.get(status) or 0))
@@ -171,35 +142,16 @@ class OrdersDashboardTab(QWidget):
         self.recent_table.setRowCount(0)
         for o in orders:
             r = insert_row(self.recent_table, ROW_HEIGHT_NORMAL)
-
             num_item = make_table_item(o["order_number"])
-            bold_item(num_item)
-            color_item(num_item, _C['accent'])
+            bold_item(num_item); color_item(num_item, _C['accent'])
             self.recent_table.setItem(r, 0, num_item)
-
-            self.recent_table.setItem(r, 1,
-                make_table_item(o["customer_name"],
-                                tooltip=o["customer_name"]))
-
-            self.recent_table.setItem(r, 2,
-                muted_item(make_table_item(
-                    TYPE_MAP.get(o["order_type"], o["order_type"]))))
-
-            status_item = make_table_item(
-                STATUS_MAP.get(o["status"], o["status"]),
-                align=Qt.AlignCenter)
-            color_item(status_item, STATUS_COLOR.get(o["status"], "#555"))
-            self.recent_table.setItem(r, 3, status_item)
-
-            self.recent_table.setItem(r, 4,
-                make_table_item(PRIORITY_MAP.get(o["priority"], ""),
-                                align=Qt.AlignCenter))
-
-            val_item = make_table_item(
-                f"{(o['net_amount'] or 0):,.2f} ج",
-                align=Qt.AlignCenter)
-            color_item(val_item, _C['accent'])
-            self.recent_table.setItem(r, 5, val_item)
-
-            self.recent_table.setItem(r, 6,
-                muted_item(make_table_item(o["order_date"] or "")))
+            self.recent_table.setItem(r, 1, make_table_item(o["customer_name"], tooltip=o["customer_name"]))
+            self.recent_table.setItem(r, 2, muted_item(make_table_item(TYPE_MAP.get(o["order_type"], o["order_type"]))))
+            s_item = make_table_item(STATUS_MAP.get(o["status"], o["status"]), align=Qt.AlignCenter)
+            color_item(s_item, STATUS_COLOR.get(o["status"], "#555"))
+            self.recent_table.setItem(r, 3, s_item)
+            self.recent_table.setItem(r, 4, make_table_item(PRIORITY_MAP.get(o["priority"], ""), align=Qt.AlignCenter))
+            v_item = make_table_item(f"{(o['net_amount'] or 0):,.2f} ج", align=Qt.AlignCenter)
+            color_item(v_item, _C['accent'])
+            self.recent_table.setItem(r, 5, v_item)
+            self.recent_table.setItem(r, 6, muted_item(make_table_item(o["order_date"] or "")))

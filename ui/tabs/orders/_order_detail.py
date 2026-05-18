@@ -2,11 +2,10 @@
 ui/tabs/orders/_order_detail.py
 ================================
 _OrderDetail — لوحة تفاصيل الطلب.
-يستخدم الملفات الفرعية في order_detail/ بدل تكرار الكود.
 """
 
 from PyQt5.QtWidgets import (
-    QWidget, QVBoxLayout, QScrollArea, QDialog, QMessageBox,
+    QWidget, QVBoxLayout, QDialog, QMessageBox,
 )
 from PyQt5.QtCore import Qt, pyqtSignal
 
@@ -16,10 +15,8 @@ from db.orders.orders_repo import (
     delete_order_item,
 )
 
-from ui.widgets.shared.panels import (
-    DetailHeader, EmptyState,
-)
-from ui.helpers import SCROLL_SS
+from ui.widgets.shared.panels import DetailHeader, EmptyState
+from ui.helpers import make_detail_scroll, set_detail_content
 from ui.app_settings import _C
 
 from .order_detail._status_config import STATUS_TRANSITIONS, TYPE_LABELS
@@ -33,6 +30,9 @@ _WHITE = "#ffffff"
 _BLUE  = "#1565c0"
 _GREEN = "#10b981"
 
+# الحد الأدنى لعرض المحتوى — لما الـ panel يضيق عنه يظهر الـ horizontal scroll
+_MIN_CONTENT_W = 500
+
 
 class _OrderDetail(QWidget):
     saved          = pyqtSignal(int)
@@ -44,10 +44,10 @@ class _OrderDetail(QWidget):
         self.conn        = conn
         self._order_id   = None
         self._order_data = None
+        # حد أدنى للعرض — الـ splitter يضغط لحد هنا بس
+        self.setMinimumWidth(_MIN_CONTENT_W)
         self._build()
         self._show_empty()
-
-    # ══ بناء الواجهة ══════════════════════════════════════
 
     def _build(self):
         self.setStyleSheet(f"background:{_BG};")
@@ -55,7 +55,7 @@ class _OrderDetail(QWidget):
         root.setContentsMargins(0, 0, 0, 0)
         root.setSpacing(0)
 
-        # ── Header ──
+        # ── Header (خارج الـ scroll — ثابت في الأعلى) ──
         self._hdr = DetailHeader(bg=_WHITE)
         self._card_total   = self._hdr.add_stat_card("💰", "الإجمالي",  color=_BLUE)
         self._card_paid    = self._hdr.add_stat_card("✅", "المدفوع",   color=_GREEN)
@@ -76,26 +76,19 @@ class _OrderDetail(QWidget):
         root.addWidget(self._hdr)
 
         # ── Scroll + Content ──
-        scroll = QScrollArea()
-        scroll.setWidgetResizable(True)
-        scroll.setHorizontalScrollBarPolicy(Qt.ScrollBarAlwaysOff)
-        scroll.setStyleSheet(SCROLL_SS)
+        scroll = make_detail_scroll(min_content_width=_MIN_CONTENT_W)
 
-        from PyQt5.QtWidgets import QWidget as QW
+        from PyQt5.QtWidgets import QWidget as QW, QVBoxLayout as QVL
         content = QW()
-        content.setStyleSheet(f"background:{_BG};")
-
-        from PyQt5.QtWidgets import QVBoxLayout as QVL
         self._content_lay = QVL(content)
         self._content_lay.setContentsMargins(16, 14, 16, 16)
         self._content_lay.setSpacing(12)
 
-        # بناء الأقسام عبر الملفات الفرعية
         _build_items_section(self)
         _build_log_section(self)
 
         self._content_lay.addStretch()
-        scroll.setWidget(content)
+        set_detail_content(scroll, content, bg=_BG)
         root.addWidget(scroll, stretch=1)
 
         # ── Empty State ──
@@ -106,8 +99,6 @@ class _OrderDetail(QWidget):
             style="plain", color="#6b7280", min_height=200,
         )
         root.addWidget(self._empty)
-
-    # ══ تحميل ══════════════════════════════════════════════
 
     def load_order(self, order_id: int):
         self._order_id   = order_id
@@ -126,7 +117,6 @@ class _OrderDetail(QWidget):
         self._show_empty()
 
     def new_order(self):
-        from ui.tabs.orders.order_form import _OrderForm  # noqa — fallback
         try:
             from ui.tabs.orders._order_form import _OrderForm
         except ImportError:
@@ -141,7 +131,6 @@ class _OrderDetail(QWidget):
         self._log_card.setVisible(False)
         self.items_table.setVisible(False)
         self._empty_items.setVisible(False)
-        # ← التعديل: إخفاء شريط أزرار البنود في الحالة الفارغة
         if hasattr(self, '_item_toolbar'):
             self._item_toolbar.setVisible(False)
 
@@ -149,8 +138,6 @@ class _OrderDetail(QWidget):
         self._empty.setVisible(False)
         self._hdr.setVisible(True)
         self._log_card.setVisible(True)
-
-    # ══ أحداث الأزرار ═════════════════════════════════════
 
     def _edit_order(self):
         if not self._order_id:

@@ -2,21 +2,17 @@
 ui/helpers.py
 =============
 أدوات UI مشتركة — تستورد من widgets/shared وتُعيد تصديرها.
-
-ملاحظة: كل التعريفات الحقيقية موجودة في widgets/shared.
-         هذا الملف للتوافق مع الكود القديم فقط.
 """
 
 from PyQt5.QtWidgets import (
     QPushButton, QLabel, QHBoxLayout, QWidget,
-    QTableWidget, QMessageBox,
+    QTableWidget, QMessageBox, QScrollArea,
 )
 from PyQt5.QtGui  import QFont, QColor
 from PyQt5.QtCore import Qt
 
 from ui.app_settings import _C, get_font_size, fs
 
-# ── إعادة تصدير من widgets/shared ──
 from ui.widgets.shared.flexible_text import WrapDelegate                    # noqa: F401
 from ui.widgets.shared.table_utils import (                                  # noqa: F401
     make_list_table as make_table,
@@ -25,11 +21,6 @@ from ui.widgets.shared.table_utils import (                                  # n
     ROW_HEIGHT_NORMAL, ROW_HEIGHT_COMPACT, ROW_HEIGHT_LARGE,
 )
 from ui.widgets.shared.scrollable_form import wrap_in_scroll as wrap_scroll  # noqa: F401
-
-
-# ══════════════════════════════════════════════════════════
-# Scroll stylesheet موحد — يُستورد من هنا في كل الملفات
-# ══════════════════════════════════════════════════════════
 
 SCROLL_SS = f"""
     QScrollArea {{
@@ -72,13 +63,34 @@ SCROLL_SS = f"""
     }}
 """
 
-# للتوافق مع الكود القديم الذي يستخدم _SCROLL_SS
 _SCROLL_SS = SCROLL_SS
 
 
-# ══════════════════════════════════════════════════════════
-# مساعدات إنشاء عناصر UI
-# ══════════════════════════════════════════════════════════
+def make_detail_scroll(min_content_width: int = 520) -> QScrollArea:
+    """
+    QScrollArea للـ detail panels مع horizontal scroll حقيقي.
+    استخدم set_detail_content() لوضع المحتوى جواه.
+    """
+    scroll = QScrollArea()
+    scroll.setWidgetResizable(True)
+    scroll.setVerticalScrollBarPolicy(Qt.ScrollBarAsNeeded)
+    scroll.setHorizontalScrollBarPolicy(Qt.ScrollBarAsNeeded)
+    scroll.setStyleSheet(SCROLL_SS)
+    scroll._min_content_width = min_content_width
+    return scroll
+
+
+def set_detail_content(scroll: QScrollArea, content: QWidget,
+                       bg: str = "#f8f9fb"):
+    """
+    يضع الـ content جوا الـ scroll مع ضبط minimum width
+    عشان الـ horizontal scroll يظهر لما المحتوى أعرض من الـ panel.
+    """
+    min_w = getattr(scroll, '_min_content_width', 520)
+    content.setStyleSheet(f"background:{bg};")
+    content.setMinimumWidth(min_w)
+    scroll.setWidget(content)
+
 
 def bold_label(text: str) -> QLabel:
     lbl = QLabel(text)
@@ -143,7 +155,6 @@ def setup_table_columns(
     from PyQt5.QtWidgets import QHeaderView
     hh = table.horizontalHeader()
     n  = table.columnCount()
-
     for i in range(n):
         if i == stretch_col:
             hh.setSectionResizeMode(i, QHeaderView.Stretch)
@@ -151,7 +162,6 @@ def setup_table_columns(
             hh.setSectionResizeMode(i, QHeaderView.Interactive)
             if widths and i in widths:
                 table.setColumnWidth(i, widths[i])
-
     hh.setMinimumSectionSize(min_width)
 
 
@@ -163,10 +173,6 @@ def buttons_row(*buttons) -> QHBoxLayout:
     row.addStretch()
     return row
 
-
-# ══════════════════════════════════════════════════════════
-# EditModeMixin
-# ══════════════════════════════════════════════════════════
 
 class EditModeMixin:
     def init_edit_mode(self, add_btn, save_btn, cancel_btn, mode_label=None):
@@ -198,10 +204,6 @@ class EditModeMixin:
     def is_editing(self) -> bool:
         return self._editing_id is not None
 
-
-# ══════════════════════════════════════════════════════════
-# تأكيد الحذف
-# ══════════════════════════════════════════════════════════
 
 def confirm_delete(parent, name: str) -> bool:
     return QMessageBox.question(

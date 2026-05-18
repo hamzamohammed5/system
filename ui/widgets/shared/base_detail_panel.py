@@ -2,24 +2,21 @@
 ui/widgets/shared/base_detail_panel.py
 ========================================
 BaseDetailPanel — قاعدة مشتركة لكل لوحات التفاصيل.
-
-توفر:
-  - DetailHeader مع stat cards وأزرار ثابتة الحجم
-  - scroll area للمحتوى (vertical + horizontal عند الحاجة)
-  - EmptyState لما ما في اختيار
-  - signals: saved(int), deleted()
 """
 
 from PyQt5.QtWidgets import (
-    QWidget, QVBoxLayout, QScrollArea, QSizePolicy,
+    QWidget, QVBoxLayout, QSizePolicy,
 )
 from PyQt5.QtCore import Qt, pyqtSignal
 
 from ui.widgets.shared.panels import DetailHeader, EmptyState
-from ui.helpers import SCROLL_SS
+from ui.helpers import make_detail_scroll, set_detail_content
 from ui.app_settings import _C
 
 _BG = "#f8f9fb"
+
+# الحد الأدنى لعرض الـ detail panel قبل ظهور الـ horizontal scroll
+DETAIL_MIN_WIDTH = 500
 
 
 class BaseDetailPanel(QWidget):
@@ -30,6 +27,8 @@ class BaseDetailPanel(QWidget):
     EMPTY_TITLE    : str = "اختر عنصراً من القائمة"
     EMPTY_SUBTITLE : str = ""
     HEADER_BG      : str = "#ffffff"
+    # اضبط هذا في الـ subclass لو المحتوى أعرض من 500px
+    MIN_CONTENT_W  : int = DETAIL_MIN_WIDTH
 
     def __init__(self, conn=None, parent=None):
         super().__init__(parent)
@@ -38,12 +37,10 @@ class BaseDetailPanel(QWidget):
         self._item_data = None
 
         self.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Expanding)
+        # حد أدنى للعرض — لما الـ splitter يضغط أقل منه يظهر الـ horizontal scroll
+        self.setMinimumWidth(DETAIL_MIN_WIDTH)
         self._build_base()
         self._show_empty()
-
-    # ══════════════════════════════════════════════════════
-    # override في الـ subclass
-    # ══════════════════════════════════════════════════════
 
     def _build_header_cards(self):
         pass
@@ -60,32 +57,22 @@ class BaseDetailPanel(QWidget):
     def _fill_data(self, data):
         pass
 
-    # ══════════════════════════════════════════════════════
-    # بناء الواجهة الأساسية
-    # ══════════════════════════════════════════════════════
-
     def _build_base(self):
         self.setStyleSheet(f"background:{_BG};")
         root = QVBoxLayout(self)
         root.setContentsMargins(0, 0, 0, 0)
         root.setSpacing(0)
 
-        # ── Header ──
+        # ── Header (خارج الـ scroll — ثابت في الأعلى) ──
         self._hdr = DetailHeader(bg=self.HEADER_BG)
         self._build_header_cards()
         self._build_header_buttons()
         root.addWidget(self._hdr)
 
         # ── Scroll + Content ──
-        scroll = QScrollArea()
-        scroll.setWidgetResizable(True)
-        # ✅ يظهر horizontal scroll تلقائياً لو المحتوى أعرض من النافذة
-        scroll.setHorizontalScrollBarPolicy(Qt.ScrollBarAsNeeded)
-        scroll.setVerticalScrollBarPolicy(Qt.ScrollBarAsNeeded)
-        scroll.setStyleSheet(SCROLL_SS)
+        scroll = make_detail_scroll(min_content_width=self.MIN_CONTENT_W)
 
         content = QWidget()
-        content.setStyleSheet(f"background:{_BG};")
         self._content_lay = QVBoxLayout(content)
         self._content_lay.setContentsMargins(16, 14, 16, 16)
         self._content_lay.setSpacing(12)
@@ -93,7 +80,7 @@ class BaseDetailPanel(QWidget):
         self._build_content(self._content_lay)
         self._content_lay.addStretch()
 
-        scroll.setWidget(content)
+        set_detail_content(scroll, content, bg=_BG)
         root.addWidget(scroll, stretch=1)
 
         # ── Empty State ──
@@ -104,10 +91,6 @@ class BaseDetailPanel(QWidget):
             style="plain", color="#6b7280", min_height=200,
         )
         root.addWidget(self._empty)
-
-    # ══════════════════════════════════════════════════════
-    # API خارجي
-    # ══════════════════════════════════════════════════════
 
     def load_item(self, item_id: int):
         self._item_id = item_id
@@ -122,10 +105,6 @@ class BaseDetailPanel(QWidget):
         self._item_id   = None
         self._item_data = None
         self._show_empty()
-
-    # ══════════════════════════════════════════════════════
-    # helpers
-    # ══════════════════════════════════════════════════════
 
     def _show_empty(self):
         self._empty.setVisible(True)
