@@ -2,7 +2,8 @@
 ui/tabs/orders/customers/customers_list_panel.py
 =================================================
 لوحة قائمة العملاء — ترث من BaseListPanel.
-عرض ثابت على المحتوى، لا يتمدد مع النافذة، بدون horizontal scroll.
+✅ الأعمدة Interactive — المستخدم يقدر يحرك عرضها
+✅ الـ splitter يتحرك بحرية بدون قيود MAX_W
 """
 
 from PyQt5.QtWidgets import (
@@ -32,14 +33,14 @@ _COMBO_SS = f"""
 
 
 class CustomersListPanel(BaseListPanel):
-    customer_selected = pyqtSignal(int)   # alias لـ item_selected
+    customer_selected = pyqtSignal(int)
     new_customer      = pyqtSignal()
 
     COLUMNS     = ["الكود", "الاسم", "الهاتف", "المدينة", "الطلبات"]
     STRETCH_COL = 1
     COL_WIDTHS  = {0: 80, 2: 110, 3: 80, 4: 55}
     MIN_W       = 280
-    MAX_W       = 560
+    MAX_W       = 16777215   # ✅ بلا حد — الـ splitter يتحرك بحرية
     EMPTY_ICON  = "👥"
     EMPTY_TITLE = "لا يوجد عملاء"
 
@@ -47,17 +48,15 @@ class CustomersListPanel(BaseListPanel):
         self._type_filter   = None
         self._active_filter = None
         super().__init__(conn=conn, parent=parent)
-        # ربط item_selected بـ customer_selected
         self.item_selected.connect(self.customer_selected.emit)
 
     # ══════════════════════════════════════════════════════
-    # toolbar إضافي — زر جديد + فلاتر
+    # toolbar إضافي
     # ══════════════════════════════════════════════════════
 
     def _build_toolbar(self, lay):
         from PyQt5.QtWidgets import QVBoxLayout as QVL, QHBoxLayout as QHL, QLineEdit
 
-        # صف 1: بحث + زر جديد
         row1 = QHL()
         self.inp_search = QLineEdit()
         self.inp_search.setPlaceholderText("بحث بالاسم أو الهاتف أو الكود...")
@@ -88,7 +87,6 @@ class CustomersListPanel(BaseListPanel):
         row1.addWidget(btn_new)
         lay.addLayout(row1)
 
-        # صف 2: فلاتر النوع والنشاط
         row2 = QHL()
         self.cmb_type = QComboBox()
         self.cmb_type.setMinimumHeight(28)

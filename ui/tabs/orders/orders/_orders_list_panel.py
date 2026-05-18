@@ -3,8 +3,8 @@ ui/tabs/orders/orders/_orders_list_panel.py
 ============================================
 لوحة قائمة الطلبات — ترث من BaseListPanel.
 
-✅ الجدول حجمه Fixed على قد البيانات — لا يتمدد مع النافذة
-✅ لا horizontal scroll في الـ panel
+✅ الأعمدة Interactive — المستخدم يقدر يحرك عرضها بحرية
+✅ الـ splitter يتحرك بحرية بدون قيود MAX_W
 """
 
 from PyQt5.QtWidgets import QSizePolicy, QVBoxLayout
@@ -43,12 +43,12 @@ class _OrdersListPanel(BaseListPanel):
     order_selected = pyqtSignal(int)
     new_order      = pyqtSignal()
 
-    # ✅ أعمدة بعرض ثابت — لا تتمدد
     COLUMNS     = ["رقم الطلب", "العميل", "الحالة", "⚑", "التاريخ"]
-    STRETCH_COL = -1          # لا يوجد stretch — كل الأعمدة Fixed
+    STRETCH_COL = -1
+    # ✅ عرض ابتدائي مناسب — Interactive يسمح بالتعديل بعدين
     COL_WIDTHS  = {0: 130, 1: 150, 2: 100, 3: 32, 4: 90}
     MIN_W       = 280
-    MAX_W       = 560
+    MAX_W       = 16777215   # ✅ بلا حد — الـ splitter يتحرك بحرية
     EMPTY_ICON  = "📋"
     EMPTY_TITLE = "لا توجد طلبات"
 
@@ -112,22 +112,23 @@ class _OrdersListPanel(BaseListPanel):
 
     def _auto_resize(self):
         """
-        ✅ يضبط عرض الجدول بالظبط على قد المحتوى.
-        الأعمدة Fixed — لا تتمدد مع النافذة.
+        ✅ الأعمدة Interactive — المستخدم يقدر يحرك عرضها.
+        ✅ الـ panel له حد أدنى فقط — الـ splitter يتحرك بحرية.
         """
         from PyQt5.QtWidgets import QHeaderView
-        from ui.widgets.shared.table_utils import calc_table_width
+        from ui.widgets.shared.table_utils import auto_fit_columns
 
-        hh = self.table.horizontalHeader()
-        # الأعمدة كلها Fixed من COL_WIDTHS
-        for i, w in self.COL_WIDTHS.items():
-            hh.setSectionResizeMode(i, QHeaderView.Fixed)
-            self.table.setColumnWidth(i, w)
+        # ضبط الأعمدة على عرضها المناسب (Interactive)
+        auto_fit_columns(
+            self.table,
+            fixed_cols=list(self.COL_WIDTHS.keys()),
+            stretch_col=self.STRETCH_COL,
+            min_width=30, max_width=300,
+        )
 
-        # ضبط عرض الـ panel على قد الجدول
-        total_w = calc_table_width(self.table, extra_pad=4)
-        self.setMinimumWidth(max(self.MIN_W, total_w))
-        self.setMaximumWidth(min(self.MAX_W, total_w + 20))
+        # ✅ حد أدنى فقط — بدون MAX_W يقيد الحركة
+        self.setMinimumWidth(self.MIN_W)
+        self.setMaximumWidth(16777215)
 
     # ══════════════════════════════════════════════════════
     # API

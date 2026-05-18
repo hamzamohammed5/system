@@ -4,9 +4,9 @@ ui/widgets/shared/base_list_panel.py
 BaseListPanel — قاعدة مشتركة لكل لوحات القوائم.
 
 القاعدة:
-  ✅ الجدول حجمه Fixed على قد البيانات — لا يتمدد مع النافذة
-  ✅ لا horizontal scroll — عرض الـ panel يكفي دايماً
-  ✅ الـ splitter يتحرك بحرية بين MIN_W و MAX_W
+  ✅ الأعمدة Interactive — المستخدم يقدر يحرك عرضها بحرية
+  ✅ الـ splitter يتحرك بحرية بين MIN_W وأي عرض
+  ✅ لا setMaximumWidth يقيد حركة الـ splitter
 """
 
 from PyQt5.QtWidgets import (
@@ -24,7 +24,7 @@ from ui.widgets.shared.panels import EmptyState
 from ui.app_settings import _C
 
 _MIN_W = 260
-_MAX_W = 580
+_MAX_W = 16777215   # ✅ بلا حد — الـ splitter يتحرك بحرية
 
 
 class BaseListPanel(QWidget):
@@ -103,8 +103,8 @@ class BaseListPanel(QWidget):
             stretch_col=self.STRETCH_COL,
             col_widths=self.COL_WIDTHS,
         )
-        # ✅ لا horizontal scroll في الجدول — العرض يكفي دايماً
-        self.table.setHorizontalScrollBarPolicy(Qt.ScrollBarAlwaysOff)
+        # ✅ scroll أفقي مرئي لما المستخدم يكبر الأعمدة
+        self.table.setHorizontalScrollBarPolicy(Qt.ScrollBarAsNeeded)
         self.table.itemSelectionChanged.connect(self._on_select)
         root.addWidget(self.table, stretch=1)
 
@@ -190,8 +190,8 @@ class BaseListPanel(QWidget):
 
     def _auto_resize(self):
         """
-        ✅ يضبط عرض الأعمدة ثم يضبط حد أدنى للـ panel.
-        الجدول نفسه لا يتغير حجمه — الـ splitter يتحرك حوله.
+        ✅ يضبط عرض الأعمدة على المحتوى (Interactive).
+        ✅ الـ panel له حد أدنى فقط — الـ splitter يتحرك بحرية.
         """
         all_cols = [i for i in range(self.table.columnCount())
                     if i != self.STRETCH_COL]
@@ -201,9 +201,10 @@ class BaseListPanel(QWidget):
             stretch_col=self.STRETCH_COL,
             min_width=40, max_width=300,
         )
-        # ✅ حد أدنى بس — مش بنقفل العرض
+        # ✅ حد أدنى فقط — بدون setMaximumWidth
         self.setMinimumWidth(self.MIN_W)
-        self.setMaximumWidth(self.MAX_W)
+        # ✅ إزالة أي حد أقصى سابق
+        self.setMaximumWidth(16777215)
 
     # ══════════════════════════════════════════════════════
     # selection

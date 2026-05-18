@@ -4,9 +4,9 @@ ui/widgets/shared/table_utils.py
 أدوات موحدة لإنشاء وإدارة الجداول في كل أقسام التطبيق.
 
 القاعدة:
-  - الجداول مستقلة عن عرض النافذة — عرضها Fixed على قد المحتوى
-  - الأعمدة بعرض ثابت لا تتمدد مع النافذة
-  - stretch_col هو العمود الوحيد اللي بيتمدد داخل الجدول نفسه
+  - الأعمدة Interactive — المستخدم يقدر يحرك عرضها بحرية
+  - stretch_col هو العمود الوحيد اللي بيتمدد تلقائياً
+  - الـ splitter يتحرك بحرية بين MIN_W و MAX_W
 
 الدوال:
   make_detail_table   — جدول تفاصيل موحد (بنود، سجل، ...)
@@ -18,7 +18,7 @@ ui/widgets/shared/table_utils.py
   bold_item           — تغليظ خلية
   muted_item          — تلوين خلية بلون خافت
   insert_row          — إضافة صف بارتفاع موحد
-  auto_fit_columns    — ضبط عرض الأعمدة تلقائياً
+  auto_fit_columns    — ضبط عرض الأعمدة تلقائياً (Interactive)
   calc_table_width    — حساب العرض الكلي المثالي للجدول
   fit_splitter_to_table — ضبط عرض الـ splitter على الجدول
 """
@@ -104,6 +104,9 @@ def _table_stylesheet(variant: str = "normal") -> str:
             background: {c['bg_hover']};
             color: {c['text_primary']};
         }}
+        QHeaderView::section {{
+            cursor: col-resize;
+        }}
     """
 
 
@@ -134,6 +137,10 @@ def _build_table(columns: list,
     hh = table.horizontalHeader()
     vh = table.verticalHeader()
 
+    # ✅ تفعيل تحريك الأعمدة بالماوس
+    hh.setSectionsMovable(False)
+    hh.setSectionsClickable(True)
+
     _row_h = row_height or (
         ROW_HEIGHT_COMPACT if variant == "compact"
         else ROW_HEIGHT_LARGE if variant == "large"
@@ -144,34 +151,34 @@ def _build_table(columns: list,
     vh.setSectionResizeMode(QHeaderView.Fixed)
 
     # ── عرض الأعمدة ──
+    # ✅ Interactive بدل Fixed/ResizeToContents — المستخدم يقدر يحرك العرض
     if col_widths:
         for i in range(len(columns)):
-            if i in col_widths:
-                hh.setSectionResizeMode(i, QHeaderView.Fixed)
-                table.setColumnWidth(i, col_widths[i])
-            elif i == stretch_col:
+            if i == stretch_col:
                 hh.setSectionResizeMode(i, QHeaderView.Stretch)
             else:
-                hh.setSectionResizeMode(i, QHeaderView.ResizeToContents)
+                hh.setSectionResizeMode(i, QHeaderView.Interactive)
+                w = col_widths.get(i, 100)
+                table.setColumnWidth(i, w)
     else:
         for i in range(len(columns)):
             if i == stretch_col:
                 hh.setSectionResizeMode(i, QHeaderView.Stretch)
             else:
-                hh.setSectionResizeMode(i, QHeaderView.ResizeToContents)
+                hh.setSectionResizeMode(i, QHeaderView.Interactive)
+                table.setColumnWidth(i, 100)
 
         if stretch_col < 0:
             hh.setStretchLastSection(True)
 
     hh.setDefaultAlignment(Qt.AlignRight | Qt.AlignVCenter)
     hh.setHighlightSections(False)
-    hh.setMinimumSectionSize(40)
+    hh.setMinimumSectionSize(30)
 
-    # ✅ الجدول لا يحتاج horizontal scroll داخلي
+    # ✅ scroll أفقي مرئي لما الأعمدة تكبر عن الجدول
     table.setHorizontalScrollMode(QAbstractItemView.ScrollPerPixel)
     table.setVerticalScrollMode(QAbstractItemView.ScrollPerPixel)
-    # ✅ لا horizontal scroll في الجداول — العرض يكفي دايماً
-    table.setHorizontalScrollBarPolicy(Qt.ScrollBarAlwaysOff)
+    table.setHorizontalScrollBarPolicy(Qt.ScrollBarAsNeeded)
 
     if max_height:
         table.setMaximumHeight(max_height)
@@ -193,7 +200,8 @@ def make_detail_table(columns: list,
                       row_height: int = ROW_HEIGHT_NORMAL) -> QTableWidget:
     """
     جدول تفاصيل موحد — للاستخدام داخل صفحات التفاصيل.
-    الأعمدة ذات العرض الثابت Fixed، stretch_col يتمدد ليملأ الباقي.
+    الأعمدة Interactive — المستخدم يقدر يحرك عرضها.
+    stretch_col يتمدد ليملأ الباقي.
     """
     return _build_table(
         columns, stretch_col, col_widths,
@@ -229,7 +237,8 @@ def make_list_table(columns: list,
                     col_widths: dict = None) -> QTableWidget:
     """
     جدول قائمة رئيسية (يسار الـ splitter).
-    ✅ حجمه ثابت على قد البيانات — لا يتمدد مع النافذة.
+    ✅ الأعمدة Interactive — المستخدم يقدر يحرك عرضها.
+    ✅ الـ splitter يتحرك بحرية.
     """
     table = _build_table(
         columns, stretch_col, col_widths,
@@ -260,8 +269,6 @@ def make_fixed_table(columns: list,
     ✅ كل الأعمدة Fixed — لا يوجد stretch
     ✅ عرض الجدول = مجموع عرض الأعمدة + 4 بالضبط
     ✅ لا يتمدد مع النافذة أبداً
-
-    col_widths: dict مطلوب — يحدد عرض كل عمود بالـ index
     """
     table = _build_table(
         columns, stretch_col=-1, col_widths=col_widths,
@@ -270,7 +277,7 @@ def make_fixed_table(columns: list,
         row_height=row_height
     )
 
-    # ✅ كل الأعمدة Fixed
+    # ✅ كل الأعمدة Fixed للـ dashboards فقط
     hh = table.horizontalHeader()
     for i in range(len(columns)):
         hh.setSectionResizeMode(i, QHeaderView.Fixed)
@@ -354,6 +361,7 @@ def auto_fit_columns(table: QTableWidget,
                      max_width: int = 300):
     """
     يضبط عرض الأعمدة تلقائياً حسب المحتوى.
+    ✅ Interactive بعد الضبط — المستخدم يقدر يحرك العرض يدوياً.
 
     fixed_cols  : الأعمدة اللي هتتضبط عرضها (None = كل الأعمدة)
     stretch_col : العمود اللي يتمدد ليملأ المساحة الزيادة
@@ -368,10 +376,12 @@ def auto_fit_columns(table: QTableWidget,
     for col in cols:
         if col == stretch_col:
             continue
+        # احسب العرض المثالي من المحتوى
         hh.setSectionResizeMode(col, QHeaderView.ResizeToContents)
         ideal = table.columnWidth(col)
         ideal = max(min_width, min(ideal, max_width))
-        hh.setSectionResizeMode(col, QHeaderView.Fixed)
+        # ✅ Interactive بدل Fixed — المستخدم يقدر يحرك العرض بعدين
+        hh.setSectionResizeMode(col, QHeaderView.Interactive)
         table.setColumnWidth(col, ideal)
 
     if 0 <= stretch_col < n:
@@ -386,7 +396,7 @@ def calc_table_width(table: QTableWidget, extra_pad: int = 4) -> int:
     """
     يحسب العرض الكلي المثالي للجدول بناءً على عرض الأعمدة.
 
-    extra_pad : padding إضافي (borders فقط — بدون scrollbar لأنه مخفي)
+    extra_pad : padding إضافي (borders + scrollbar احتمالي)
     """
     total = extra_pad
     for col in range(table.columnCount()):
@@ -406,14 +416,20 @@ def fit_table_width(table: QTableWidget,
                     max_w: int = 99999,
                     extra_pad: int = 4):
     """
-    يضبط عرض الجدول بالظبط على قد المحتوى — بدون مساحة فاضية.
-    ✅ الجدول لا يتمدد مع النافذة — حجمه ثابت.
+    يضبط عرض الجدول بالظبط على قد المحتوى.
+    ✅ يستخدم setMinimumWidth بدل setFixedWidth عشان الـ splitter يقدر يتحرك.
     """
     hh = table.horizontalHeader()
     hh.resizeSections(QHeaderView.ResizeToContents)
+    # بعد الحساب نرجع Interactive
+    for i in range(table.columnCount()):
+        if hh.sectionResizeMode(i) != QHeaderView.Stretch:
+            w = table.columnWidth(i)
+            hh.setSectionResizeMode(i, QHeaderView.Interactive)
+            table.setColumnWidth(i, w)
     total_w = calc_table_width(table, extra_pad)
     total_w = max(min_w, min(total_w, max_w))
-    table.setFixedWidth(total_w)
+    table.setMinimumWidth(total_w)
 
 
 # ══════════════════════════════════════════════════════════
