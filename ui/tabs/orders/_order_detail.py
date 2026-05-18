@@ -1,14 +1,10 @@
 """
 ui/tabs/orders/_order_detail.py
 ================================
-لوحة تفاصيل الطلب — تجمع مكونات منفصلة:
-  - order_detail/_header_fill.py    : ملء الـ header
-  - order_detail/_items_section.py  : قسم البنود
-  - order_detail/_log_section.py    : سجل الحالة
-  - order_detail/_status_dialog.py  : dialog تغيير الحالة
-  - order_detail/_status_config.py  : ثوابت الحالة
+لوحة تفاصيل الطلب.
 
-✅ الملف دا بيكون نقطة الدخول الوحيدة — يستدعي الأجزاء من مجلدها
+✅ الـ header والمحتوى كلهم جوا scroll واحد
+✅ الـ scroll بيحرك كل حاجة مع بعض
 """
 
 from PyQt5.QtWidgets import (
@@ -26,12 +22,10 @@ from db.orders.orders_repo import (
 from ui.tabs.orders._order_form import _OrderForm
 from ui.tabs.orders._item_form  import _ItemForm
 
-# ── مكونات مشتركة ──
 from ui.widgets.shared.panels import (
     DetailHeader, StatCard, EmptyState,
 )
 
-# ── مكونات الـ detail (منفصلة في مجلدها) ──
 from ui.tabs.orders.order_detail._items_section import (
     _build_items_section, _fill_items,
 )
@@ -42,20 +36,47 @@ from ui.tabs.orders.order_detail._header_fill import _fill_header
 from ui.tabs.orders.order_detail._status_config import STATUS_TRANSITIONS
 from ui.tabs.orders.order_detail._status_dialog import _StatusDialog
 
-# ── ألوان ──
+from ui.app_settings import _C
+
 _BG    = "#f8f9fb"
 _BLUE  = "#1565c0"
 _GREEN = "#10b981"
 
-_SCROLL_SS = """
-    QScrollArea { border: none; background: #f8f9fb; }
-    QScrollBar:vertical {
-        background: #f0f0f0; width: 5px; border-radius: 2px;
-    }
-    QScrollBar::handle:vertical {
-        background: #cdd3e0; border-radius: 2px; min-height: 20px;
-    }
-    QScrollBar::add-line:vertical, QScrollBar::sub-line:vertical { height:0; }
+_SCROLL_SS = f"""
+    QScrollArea {{
+        border: none;
+        background: {_BG};
+    }}
+    QScrollBar:vertical {{
+        background: transparent;
+        width: 6px;
+        border-radius: 3px;
+    }}
+    QScrollBar::handle:vertical {{
+        background: {_C['border_med']};
+        border-radius: 3px;
+        min-height: 20px;
+    }}
+    QScrollBar::handle:vertical:hover {{
+        background: {_C['border_strong']};
+    }}
+    QScrollBar::add-line:vertical,
+    QScrollBar::sub-line:vertical {{ height: 0; }}
+    QScrollBar:horizontal {{
+        background: transparent;
+        height: 6px;
+        border-radius: 3px;
+    }}
+    QScrollBar::handle:horizontal {{
+        background: {_C['border_med']};
+        border-radius: 3px;
+        min-width: 20px;
+    }}
+    QScrollBar::handle:horizontal:hover {{
+        background: {_C['border_strong']};
+    }}
+    QScrollBar::add-line:horizontal,
+    QScrollBar::sub-line:horizontal {{ width: 0; }}
 """
 
 
@@ -81,14 +102,29 @@ class _OrderDetail(QWidget):
         root.setContentsMargins(0, 0, 0, 0)
         root.setSpacing(0)
 
-        # ── Header موحد ──
+        # ══ Scroll يلف كل حاجة: header + content ══
+        self._scroll = QScrollArea()
+        self._scroll.setWidgetResizable(True)
+        self._scroll.setHorizontalScrollBarPolicy(Qt.ScrollBarAsNeeded)
+        self._scroll.setVerticalScrollBarPolicy(Qt.ScrollBarAsNeeded)
+        self._scroll.setStyleSheet(_SCROLL_SS)
+
+        # ── الـ inner container له min width عشان الـ horizontal scroll يظهر لما يضيق ──
+        self._inner = QWidget()
+        self._inner.setMinimumWidth(520)
+        self._inner.setStyleSheet(f"background:{_BG};")
+
+        inner_lay = QVBoxLayout(self._inner)
+        inner_lay.setContentsMargins(0, 0, 0, 0)
+        inner_lay.setSpacing(0)
+
+        # ── Header (جوا الـ scroll) ──
         self._hdr = DetailHeader()
         self._card_total   = self._hdr.add_stat_card("💰", "الإجمالي",  color=_BLUE)
         self._card_paid    = self._hdr.add_stat_card("✅", "المدفوع",   color=_GREEN)
         self._card_balance = self._hdr.add_stat_card("⚖️", "المتبقي",   color="#ef4444")
         self._card_due     = self._hdr.add_stat_card("📅", "التسليم",   color="#f59e0b")
 
-        # ✅ الأزرار بحجم ثابت من ActionToolbar
         self.btn_edit    = self._hdr.toolbar.add_action("✏️  تعديل",        "primary")
         self.btn_status  = self._hdr.toolbar.add_action("🔄  تغيير الحالة", "ghost")
         self.btn_reorder = self._hdr.toolbar.add_action("📋  إعادة طلب",    "ghost")
@@ -101,29 +137,25 @@ class _OrderDetail(QWidget):
         self.btn_cancel.clicked.connect(self._cancel_order)
         self.btn_delete.clicked.connect(self._delete_order)
 
-        root.addWidget(self._hdr)
+        inner_lay.addWidget(self._hdr)
 
-        # ── محتوى قابل للتمرير (عمودياً فقط) ──
-        scroll = QScrollArea()
-        scroll.setWidgetResizable(True)
-        scroll.setHorizontalScrollBarPolicy(Qt.ScrollBarAlwaysOff)
-        scroll.setStyleSheet(_SCROLL_SS)
-
+        # ── المحتوى ──
         content = QWidget()
         content.setStyleSheet(f"background:{_BG};")
         self._content_lay = QVBoxLayout(content)
         self._content_lay.setContentsMargins(16, 12, 16, 12)
         self._content_lay.setSpacing(10)
 
-        # ← يبني الأقسام من ملفاتها المنفصلة
         _build_items_section(self)
         _build_log_section(self)
 
         self._content_lay.addStretch()
-        scroll.setWidget(content)
-        root.addWidget(scroll, stretch=1)
+        inner_lay.addWidget(content, stretch=1)
 
-        # ── حالة فارغة ──
+        self._scroll.setWidget(self._inner)
+        root.addWidget(self._scroll, stretch=1)
+
+        # ── حالة فارغة (برّا الـ scroll) ──
         self._empty = EmptyState(
             icon="📋",
             title="اختر طلباً من القائمة",
@@ -160,19 +192,12 @@ class _OrderDetail(QWidget):
         dlg.exec_()
 
     def _show_empty(self):
+        self._scroll.setVisible(False)
         self._empty.setVisible(True)
-        self._hdr.setVisible(False)
-        if hasattr(self, '_log_card'):
-            self._log_card.setVisible(False)
-        if hasattr(self, 'items_table'):
-            self.items_table.setVisible(False)
-        if hasattr(self, '_empty_items'):
-            self._empty_items.setVisible(False)
-        if hasattr(self, '_item_toolbar'):
-            self._item_toolbar.setVisible(False)
 
     def _show_detail(self):
         self._empty.setVisible(False)
+        self._scroll.setVisible(True)
         self._hdr.setVisible(True)
         if hasattr(self, '_log_card'):
             self._log_card.setVisible(True)
@@ -195,7 +220,7 @@ class _OrderDetail(QWidget):
     def _change_status_dialog(self):
         if not self._order_id or not self._order_data:
             return
-        current      = self._order_data["status"]
+        current       = self._order_data["status"]
         next_statuses = STATUS_TRANSITIONS.get(current, [])
         if not next_statuses:
             return
