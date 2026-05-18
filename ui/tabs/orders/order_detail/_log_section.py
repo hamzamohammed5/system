@@ -25,7 +25,6 @@ def _build_log_section(detail):
     detail.log_table = make_compact_table(
         columns=["من", "إلى", "الملاحظات", "الوقت"],
         stretch_col=2,
-        col_widths={0: 100, 1: 100, 3: 140},
         max_height=160,
     )
     detail._log_card.content_layout.addWidget(detail.log_table)

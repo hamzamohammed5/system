@@ -160,6 +160,8 @@ def _build_table(columns: list,
     hh.setDefaultAlignment(Qt.AlignRight | Qt.AlignVCenter)
     hh.setHighlightSections(False)
     hh.setMinimumSectionSize(40)
+    hh.setSectionsMovable(False)
+    hh.setSectionsClickable(True)
 
     table.setHorizontalScrollMode(QAbstractItemView.ScrollPerPixel)
     table.setVerticalScrollMode(QAbstractItemView.ScrollPerPixel)
