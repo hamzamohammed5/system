@@ -366,6 +366,7 @@ class _CustomerDetailPanel(QWidget):
         c = fetch_customer(self.conn, cid)
         if not c:
             return
+        c = dict(c)
         self._show_detail()
 
         type_map = {"individual": "فرد", "company": "🏢 شركة"}
@@ -394,7 +395,8 @@ class _CustomerDetailPanel(QWidget):
         self.btn_toggle.setText("✅  تفعيل" if not c["is_active"] else "⏸  تعطيل")
 
         # جهات الاتصال
-        contacts = list(fetch_contacts(self.conn, cid))
+        contacts = [dict(ct) for ct in fetch_contacts(self.conn, cid)]
+
         self.contacts_table.setRowCount(0)
         for ct in contacts:
             r = insert_row(self.contacts_table, ROW_HEIGHT_COMPACT)
@@ -429,7 +431,7 @@ class _CustomerDetailPanel(QWidget):
             self.orders_table.setItem(r, 3, val_item)
 
             self.orders_table.setItem(r, 4, muted_item(
-                make_table_item(o.get("order_date") or "")
+                make_table_item(o["order_date"] or "")
             ))
 
     def _show_empty(self):

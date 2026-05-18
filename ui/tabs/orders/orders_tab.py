@@ -1,12 +1,12 @@
 """
-ui/tabs/orders/orders_tab.py  — نسخة محسّنة UX v2
+ui/tabs/orders/orders_tab.py  — نسخة UX v3 محسّنة
 =============================
 التحسينات:
-  - _StatusDelegate محسّن مع حجم badge أنسب
-  - FilterToolbar مرتب مع spacing موحد
-  - make_list_table من table_utils — جدول موحد
-  - EmptyState واضح من panels
-  - StatusBar واضح
+  - _StatusDelegate محسّن: badge أوضح وأكبر
+  - _FilterToolbar: تصميم نظيف مع spacing موحد
+  - قائمة الطلبات: صفوف أوضح مع تمييز بصري للأولوية
+  - شريط الحالة: معلومات واضحة
+  - EmptyState احترافي
 """
 
 from PyQt5.QtWidgets import (
@@ -16,7 +16,7 @@ from PyQt5.QtWidgets import (
     QComboBox, QAbstractItemView, QMessageBox,
     QDialog, QStyledItemDelegate, QStyle, QApplication,
 )
-from PyQt5.QtCore import Qt, pyqtSignal, QTimer, QRect
+from PyQt5.QtCore import Qt, pyqtSignal, QTimer, QRect, QSize
 from PyQt5.QtGui  import QColor, QFont, QPainter, QBrush, QPen
 
 from db.orders.orders_repo import (
@@ -26,13 +26,12 @@ from db.orders.orders_repo import (
 from ui.tabs.orders._order_form   import _OrderForm
 from ui.tabs.orders._order_detail import _OrderDetail
 
-# مكونات مشتركة
-from ui.widgets.shared.panels import EmptyState
+from ui.widgets.shared.panels import EmptyState, _make_btn
 from ui.widgets.shared.table_utils import (
     make_table_item, color_item, bold_item, muted_item,
     insert_row, ROW_HEIGHT_LARGE,
 )
-from ui.app_settings import _C
+from ui.app_settings import _C, get_font_size, fs
 
 # ── ثوابت الحالة ──
 STATUS_LABELS = {
@@ -60,16 +59,16 @@ TYPE_LABELS = {
 
 _BG     = "#f8f9fb"
 _WHITE  = "#ffffff"
-_BLUE   = "#1565c0"
-_BORDER = "#e5e9f0"
+_BLUE   = _C['accent']
+_BORDER = _C['border']
 
 
 # ══════════════════════════════════════════════════════════
-# Delegate لعرض badge الحالة
+# Delegate لعرض badge الحالة — محسّن
 # ══════════════════════════════════════════════════════════
 
 class _StatusDelegate(QStyledItemDelegate):
-    """يرسم badge ملون لخلية الحالة."""
+    """يرسم badge ملون وواضح لخلية الحالة."""
 
     def paint(self, painter: QPainter, option, index):
         painter.save()
@@ -82,33 +81,37 @@ class _StatusDelegate(QStyledItemDelegate):
         info = STATUS_LABELS.get(status_key, (text, "#555", "#f5f5f5", "#e0e0e0"))
         _, fg, bg, bd = info
 
-        rect = option.rect
-        badge_w = min(rect.width() - 10, 86)
-        badge_h = 22
+        rect   = option.rect
+        pad_v  = 7
+        pad_h  = 6
+        badge_w = min(rect.width() - pad_h * 2, 90)
+        badge_h = rect.height() - pad_v * 2
+        badge_h = max(badge_h, 22)
+        badge_h = min(badge_h, 28)
         badge_x = rect.x() + (rect.width() - badge_w) // 2
         badge_y = rect.y() + (rect.height() - badge_h) // 2
         badge_rect = QRect(badge_x, badge_y, badge_w, badge_h)
 
         painter.setRenderHint(QPainter.Antialiasing)
         painter.setBrush(QBrush(QColor(bg)))
-        painter.setPen(QPen(QColor(bd), 1))
-        painter.drawRoundedRect(badge_rect, 8, 8)
+        painter.setPen(QPen(QColor(bd), 1.2))
+        painter.drawRoundedRect(badge_rect, 10, 10)
 
         painter.setPen(QPen(QColor(fg)))
         f = painter.font()
         f.setBold(True)
-        f.setPointSize(max(8, f.pointSize() - 1))
+        base = get_font_size()
+        f.setPointSize(max(8, fs(base, -1)))
         painter.setFont(f)
         painter.drawText(badge_rect, Qt.AlignCenter, text)
         painter.restore()
 
     def sizeHint(self, option, index):
-        from PyQt5.QtCore import QSize
         return QSize(100, ROW_HEIGHT_LARGE)
 
 
 # ══════════════════════════════════════════════════════════
-# شريط فلتر القائمة
+# شريط فلتر القائمة — محسّن
 # ══════════════════════════════════════════════════════════
 
 class _FilterToolbar(QFrame):
@@ -116,17 +119,40 @@ class _FilterToolbar(QFrame):
 
     changed = pyqtSignal()
 
+    _INPUT_SS = f"""
+        QLineEdit {{
+            background: {_C['bg_input']};
+            border: 1.5px solid {_C['border_med']};
+            border-radius: 6px;
+            padding: 0 10px;
+            font-size: 12px;
+            color: {_C['text_primary']};
+        }}
+        QLineEdit:focus {{
+            border-color: {_C['accent']};
+            background: white;
+        }}
+    """
+
     _COMBO_SS = f"""
         QComboBox {{
-            background: {_BG};
-            border: 1px solid #cdd3e0;
+            background: {_C['bg_surface_2']};
+            border: 1px solid {_C['border']};
             border-radius: 5px;
             padding: 0 8px;
             min-height: 28px;
             font-size: 11px;
+            color: {_C['text_primary']};
         }}
-        QComboBox:focus {{ border-color: {_BLUE}; }}
+        QComboBox:focus {{ border-color: {_C['accent']}; }}
         QComboBox::drop-down {{ border: none; width: 16px; }}
+        QComboBox QAbstractItemView {{
+            background: {_C['bg_input']};
+            border: 1px solid {_C['border_med']};
+            selection-background-color: {_C['accent_light']};
+            selection-color: {_C['accent_text']};
+            outline: none;
+        }}
     """
 
     def __init__(self, parent=None):
@@ -141,69 +167,56 @@ class _FilterToolbar(QFrame):
         self.setStyleSheet(f"""
             QFrame {{
                 background: {_WHITE};
+                border: none;
                 border-bottom: 1px solid {_BORDER};
             }}
         """)
 
         root = QVBoxLayout(self)
-        root.setContentsMargins(10, 10, 10, 10)
-        root.setSpacing(6)
+        root.setContentsMargins(12, 12, 12, 10)
+        root.setSpacing(8)
 
-        # صف 1: بحث + زر جديد
-        row1 = QHBoxLayout()
-        row1.setSpacing(6)
+        # ── صف 1: زر جديد ──
+        row0 = QHBoxLayout()
+        self.btn_new = QPushButton("＋  طلب جديد")
+        self.btn_new.setMinimumHeight(36)
+        self.btn_new.setCursor(Qt.PointingHandCursor)
+        self.btn_new.setStyleSheet(f"""
+            QPushButton {{
+                background: {_C['accent']}; color: white;
+                border: none; border-radius: 8px;
+                padding: 0 16px; font-weight: 700; font-size: 12px;
+                letter-spacing: 0.3px;
+            }}
+            QPushButton:hover {{ background: {_C['accent_hover']}; }}
+        """)
+        row0.addWidget(self.btn_new)
+        row0.addStretch()
+        root.addLayout(row0)
 
+        # ── صف 2: البحث ──
         self.inp_search = QLineEdit()
         self.inp_search.setPlaceholderText("🔍  بحث برقم الطلب أو اسم العميل...")
         self.inp_search.setMinimumHeight(34)
         self.inp_search.setClearButtonEnabled(True)
-        self.inp_search.setStyleSheet(f"""
-            QLineEdit {{
-                background: {_BG};
-                border: 1px solid #cdd3e0;
-                border-radius: 6px;
-                padding: 0 10px;
-                font-size: 12px;
-            }}
-            QLineEdit:focus {{ border-color: {_BLUE}; background: {_WHITE}; }}
-        """)
+        self.inp_search.setStyleSheet(self._INPUT_SS)
         self.inp_search.textChanged.connect(lambda: self._timer.start())
+        root.addWidget(self.inp_search)
 
-        self.btn_new = QPushButton("＋  طلب جديد")
-        self.btn_new.setMinimumHeight(34)
-        self.btn_new.setCursor(Qt.PointingHandCursor)
-        self.btn_new.setStyleSheet(f"""
-            QPushButton {{
-                background: {_BLUE}; color: white;
-                border: none; border-radius: 6px;
-                padding: 0 14px; font-weight: bold; font-size: 12px;
-            }}
-            QPushButton:hover {{ background: #0d47a1; }}
-        """)
-
-        row1.addWidget(self.inp_search, stretch=1)
-        row1.addWidget(self.btn_new)
-        root.addLayout(row1)
-
-        # صف 2: فلاتر
+        # ── صف 3: فلاتر ──
         row2 = QHBoxLayout()
         row2.setSpacing(6)
 
         self.cmb_status = QComboBox()
+        self.cmb_status.setMinimumHeight(28)
         self.cmb_status.setStyleSheet(self._COMBO_SS)
         self.cmb_status.addItem("كل الحالات", None)
         for k, (lbl, *_) in STATUS_LABELS.items():
             self.cmb_status.addItem(lbl, k)
         self.cmb_status.currentIndexChanged.connect(self.changed.emit)
 
-        self.cmb_type = QComboBox()
-        self.cmb_type.setStyleSheet(self._COMBO_SS)
-        self.cmb_type.addItem("كل الأنواع", None)
-        for k, v in TYPE_LABELS.items():
-            self.cmb_type.addItem(v, k)
-        self.cmb_type.currentIndexChanged.connect(self.changed.emit)
-
         self.cmb_priority = QComboBox()
+        self.cmb_priority.setMinimumHeight(28)
         self.cmb_priority.setStyleSheet(self._COMBO_SS)
         self.cmb_priority.addItem("كل الأولويات", None)
         for k, (icon, _) in PRIORITY_LABELS.items():
@@ -216,20 +229,21 @@ class _FilterToolbar(QFrame):
         btn_reset.setCursor(Qt.PointingHandCursor)
         btn_reset.setStyleSheet(f"""
             QPushButton {{
-                background: #e8eaf6; color: #3949ab;
-                border: 1px solid #c5cae9; border-radius: 5px;
+                background: {_C['bg_surface_2']}; color: {_C['text_muted']};
+                border: 1px solid {_C['border']}; border-radius: 5px;
+                font-size: 13px;
             }}
-            QPushButton:hover {{ background: #c5cae9; }}
+            QPushButton:hover {{
+                background: {_C['bg_hover']};
+                color: {_C['text_primary']};
+            }}
         """)
         btn_reset.clicked.connect(self.reset)
 
-        row2.addWidget(self.cmb_status, stretch=2)
-        row2.addWidget(self.cmb_type, stretch=1)
-        row2.addWidget(self.cmb_priority, stretch=1)
+        row2.addWidget(self.cmb_status, stretch=3)
+        row2.addWidget(self.cmb_priority, stretch=2)
         row2.addWidget(btn_reset)
         root.addLayout(row2)
-
-    # ── properties ──
 
     @property
     def search_text(self) -> str:
@@ -240,22 +254,17 @@ class _FilterToolbar(QFrame):
         return self.cmb_status.currentData()
 
     @property
-    def type_filter(self):
-        return self.cmb_type.currentData()
-
-    @property
     def priority_filter(self):
         return self.cmb_priority.currentData()
 
     def reset(self):
         self.cmb_status.setCurrentIndex(0)
-        self.cmb_type.setCurrentIndex(0)
         self.cmb_priority.setCurrentIndex(0)
         self.inp_search.clear()
 
 
 # ══════════════════════════════════════════════════════════
-# لوحة قائمة الطلبات (يسار)
+# لوحة قائمة الطلبات — محسّنة
 # ══════════════════════════════════════════════════════════
 
 class _OrdersListPanel(QWidget):
@@ -263,29 +272,31 @@ class _OrdersListPanel(QWidget):
     new_order      = pyqtSignal()
 
     def __init__(self, conn, parent=None):
-        super().__init__(parent)
+        super().__init__(conn, parent) if False else super().__init__(parent)
         self.conn      = conn
         self._all_rows = []
         self._build()
         self._load()
 
     def _build(self):
+        self.setStyleSheet(f"background:{_WHITE};")
+
         root = QVBoxLayout(self)
         root.setContentsMargins(0, 0, 0, 0)
         root.setSpacing(0)
 
-        # شريط الفلتر
+        # ── شريط الفلتر ──
         self._filter_bar = _FilterToolbar()
         self._filter_bar.btn_new.clicked.connect(self.new_order.emit)
         self._filter_bar.changed.connect(self._apply_filter)
         root.addWidget(self._filter_bar)
 
-        # جدول الطلبات
+        # ── جدول الطلبات ──
         self.table = QTableWidget()
         self.table.setColumnCount(5)
-        self.table.setHorizontalHeaderLabels([
-            "رقم الطلب", "العميل", "الحالة", "الأولوية", "التاريخ"
-        ])
+        self.table.setHorizontalHeaderLabels(
+            ["رقم الطلب", "العميل", "الحالة", "⚑", "التاريخ"]
+        )
         self.table.setSelectionBehavior(QAbstractItemView.SelectRows)
         self.table.setEditTriggers(QAbstractItemView.NoEditTriggers)
         self.table.setAlternatingRowColors(True)
@@ -295,25 +306,34 @@ class _OrdersListPanel(QWidget):
             QTableWidget {{
                 border: none;
                 background: {_WHITE};
-                alternate-background-color: #fafbff;
+                alternate-background-color: {_C['bg_surface']};
                 outline: none;
             }}
             QTableWidget::item {{
                 padding: 4px 10px;
-                border-bottom: 1px solid {_BORDER};
+                border-bottom: 1px solid {_C['border']};
+                color: {_C['text_primary']};
             }}
             QTableWidget::item:selected {{
-                background: #dbeafe;
-                color: #1e40af;
+                background: {_C['accent_light']};
+                color: {_C['accent_text']};
+            }}
+            QTableWidget::item:hover {{
+                background: {_C['bg_hover']};
             }}
             QHeaderView::section {{
-                background: {_BG};
-                color: {_BLUE};
-                font-weight: bold;
-                font-size: 11px;
-                padding: 5px 10px;
+                background: {_C['bg_surface_2']};
+                color: {_C['text_muted']};
+                font-weight: 700;
+                font-size: 10px;
+                letter-spacing: 0.5px;
+                padding: 6px 10px;
                 border: none;
-                border-bottom: 2px solid {_BORDER};
+                border-bottom: 2px solid {_C['border_med']};
+                border-right: 1px solid {_C['border']};
+            }}
+            QHeaderView::section:last {{
+                border-right: none;
             }}
         """)
 
@@ -326,7 +346,7 @@ class _OrdersListPanel(QWidget):
         hh.setSectionResizeMode(2, QHeaderView.Fixed)
         self.table.setColumnWidth(2, 96)
         hh.setSectionResizeMode(3, QHeaderView.Fixed)
-        self.table.setColumnWidth(3, 44)
+        self.table.setColumnWidth(3, 32)
         hh.setSectionResizeMode(4, QHeaderView.ResizeToContents)
         hh.setDefaultAlignment(Qt.AlignRight | Qt.AlignVCenter)
 
@@ -334,14 +354,14 @@ class _OrdersListPanel(QWidget):
         self.table.doubleClicked.connect(self._on_select)
         root.addWidget(self.table, stretch=1)
 
-        # حالة لا توجد نتائج
+        # ── حالة لا توجد نتائج ──
         self._no_results = EmptyState(
             icon="🔍",
             title="لا توجد طلبات مطابقة",
-            subtitle="جرب تعديل معايير البحث أو الفلتر",
+            subtitle="جرّب تعديل معايير البحث",
             style="plain",
             color="#9ca3af",
-            min_height=120,
+            min_height=100,
         )
         self._no_results.setStyleSheet(
             f"QFrame {{ background:{_WHITE}; border:none; }}"
@@ -349,15 +369,17 @@ class _OrdersListPanel(QWidget):
         self._no_results.setVisible(False)
         root.addWidget(self._no_results)
 
-        # شريط الحالة
+        # ── شريط الحالة ──
         self._status_bar = QLabel("")
         self._status_bar.setAlignment(Qt.AlignCenter)
         self._status_bar.setStyleSheet(f"""
-            background: {_BG};
-            color: #6b7280;
-            padding: 5px;
-            font-size: 11px;
+            background: {_C['bg_surface_2']};
+            color: {_C['text_muted']};
+            padding: 5px 10px;
+            font-size: 10px;
+            font-weight: 600;
             border-top: 1px solid {_BORDER};
+            letter-spacing: 0.3px;
         """)
         root.addWidget(self._status_bar)
 
@@ -368,25 +390,22 @@ class _OrdersListPanel(QWidget):
     def _apply_filter(self):
         q        = self._filter_bar.search_text
         status   = self._filter_bar.status_filter
-        typ      = self._filter_bar.type_filter
         priority = self._filter_bar.priority_filter
 
         filtered = []
         for r in self._all_rows:
-            if status   and r["status"]     != status:   continue
-            if typ      and r["order_type"] != typ:      continue
-            if priority and r["priority"]   != priority: continue
+            if status   and r["status"]   != status:   continue
+            if priority and r["priority"] != priority: continue
             if q and q not in r["order_number"].lower() \
                  and q not in r["customer_name"].lower(): continue
             filtered.append(r)
 
         self.table.setRowCount(0)
-        has_data    = bool(filtered)
-        has_any     = bool(self._all_rows)
-        is_filtered = not has_data and has_any
+        has_data = bool(filtered)
+        has_any  = bool(self._all_rows)
 
         self.table.setVisible(has_data)
-        self._no_results.setVisible(is_filtered)
+        self._no_results.setVisible(not has_data and has_any)
 
         for row in filtered:
             r = self.table.rowCount()
@@ -396,7 +415,7 @@ class _OrdersListPanel(QWidget):
             # رقم الطلب
             num_item = make_table_item(row["order_number"], user_data=row["id"])
             bold_item(num_item)
-            color_item(num_item, _BLUE)
+            color_item(num_item, _C['accent'])
             self.table.setItem(r, 0, num_item)
 
             # العميل
@@ -417,17 +436,15 @@ class _OrdersListPanel(QWidget):
             self.table.setItem(r, 3, pri_item)
 
             # التاريخ
-            date_item = muted_item(
-                make_table_item((row["order_date"] or "")[:10])
-            )
+            date_str = (row["order_date"] or "")[:10]
+            date_item = muted_item(make_table_item(date_str))
             self.table.setItem(r, 4, date_item)
 
         cnt   = len(filtered)
         total = len(self._all_rows)
-        if cnt == total:
-            self._status_bar.setText(f"{cnt} طلب")
-        else:
-            self._status_bar.setText(f"عرض {cnt} من {total} طلب")
+        self._status_bar.setText(
+            f"{cnt} طلب" if cnt == total else f"{cnt} من {total}"
+        )
 
     def _on_select(self):
         row = self.table.currentRow()
@@ -464,10 +481,14 @@ class OrdersTab(QWidget):
         root.setSpacing(0)
 
         splitter = QSplitter(Qt.Horizontal)
-        splitter.setHandleWidth(3)
+        splitter.setHandleWidth(2)
         splitter.setStyleSheet(f"""
-            QSplitter::handle {{ background: {_BORDER}; }}
-            QSplitter::handle:hover {{ background: #bfdbfe; }}
+            QSplitter::handle {{
+                background: {_C['border']};
+            }}
+            QSplitter::handle:hover {{
+                background: {_C['accent_mid']};
+            }}
         """)
 
         self._list   = _OrdersListPanel(self.conn)
@@ -475,7 +496,7 @@ class OrdersTab(QWidget):
 
         splitter.addWidget(self._list)
         splitter.addWidget(self._detail)
-        splitter.setSizes([340, 760])
+        splitter.setSizes([340, 780])
         splitter.setCollapsible(0, False)
         splitter.setCollapsible(1, False)
 
