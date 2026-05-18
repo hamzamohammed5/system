@@ -2,6 +2,11 @@
 ui/widgets/shared/panles_helper/action_toolbar.py
 ==================================================
 ActionToolbar — أزرار بحجم ثابت، مش بتتمدد مع النافذة.
+
+القاعدة:
+  - كل الأزرار SizePolicy = Fixed
+  - الـ stretch في الـ layout هو اللي يملأ المساحة
+  - الأزرار الخطرة (danger) على اليمين مفصولة بـ separator
 """
 
 from PyQt5.QtWidgets import (
@@ -16,7 +21,7 @@ from .make_btn import _make_btn
 class ActionToolbar(QWidget):
     def __init__(self, spacing: int = 6, parent=None):
         super().__init__(parent)
-        self._spacing = spacing
+        self._spacing    = spacing
         self._has_danger = False
         self._build()
 
@@ -33,7 +38,7 @@ class ActionToolbar(QWidget):
         self._right_lay.setSpacing(self._spacing)
 
         lay.addLayout(self._left_lay)
-        lay.addStretch()   # الـ stretch هنا بس — مش في الأزرار
+        lay.addStretch()   # الـ stretch هنا بس — الأزرار Fixed
 
         self._sep = QFrame()
         self._sep.setFrameShape(QFrame.VLine)
@@ -50,7 +55,6 @@ class ActionToolbar(QWidget):
                    callback=None, enabled: bool = True) -> QPushButton:
         btn = _make_btn(text, style)
         btn.setEnabled(enabled)
-        # حجم ثابت — مش Expanding
         btn.setSizePolicy(QSizePolicy.Fixed, QSizePolicy.Fixed)
         if callback:
             btn.clicked.connect(callback)

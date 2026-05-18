@@ -1,24 +1,22 @@
 """
 ui/helpers.py
 =============
-أدوات UI مشتركة — محسّنة ومتناسقة مع app_settings._C
+أدوات UI مشتركة — تستورد من widgets/shared وتُعيد تصديرها.
 
-ملاحظة: هذا الملف يستورد من widgets/shared ولا يُعيد تعريف ما هو موجود هناك.
-  - WrapDelegate        ← من ui/widgets/shared/flexible_text.py
-  - make_table          ← من ui/widgets/shared/table_utils.py
-  - wrap_scroll         ← من ui/widgets/shared/scrollable_form.py
+ملاحظة: كل التعريفات الحقيقية موجودة في widgets/shared.
+         هذا الملف للتوافق مع الكود القديم فقط.
 """
 
 from PyQt5.QtWidgets import (
     QPushButton, QLabel, QHBoxLayout, QWidget,
-    QTableWidget, QMessageBox, QScrollArea,
+    QTableWidget, QMessageBox,
 )
-from PyQt5.QtGui import QFont, QColor
+from PyQt5.QtGui  import QFont, QColor
 from PyQt5.QtCore import Qt
 
 from ui.app_settings import _C, get_font_size, fs
 
-# ── إعادة تصدير من widgets/shared للتوافق مع الكود القديم ──
+# ── إعادة تصدير من widgets/shared ──
 from ui.widgets.shared.flexible_text import WrapDelegate                    # noqa: F401
 from ui.widgets.shared.table_utils import (                                  # noqa: F401
     make_list_table as make_table,

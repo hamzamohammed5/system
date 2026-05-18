@@ -1,14 +1,14 @@
 """
 ui/tabs/orders/customers/customers_list_panel.py
 =================================================
-لوحة قائمة العملاء — منقولة من customers_tab.py
+لوحة قائمة العملاء — جدول بعرض ثابت على المحتوى.
 """
 
 from PyQt5.QtWidgets import (
     QWidget, QVBoxLayout, QHBoxLayout,
     QFrame, QLabel, QLineEdit, QPushButton,
     QTableWidget, QHeaderView, QComboBox,
-    QAbstractItemView,
+    QAbstractItemView, QSizePolicy,
 )
 from PyQt5.QtCore import Qt, pyqtSignal, QTimer
 
@@ -16,22 +16,24 @@ from db.orders.customers_repo import fetch_all_customers
 
 from ui.widgets.shared.table_utils import (
     make_table_item, color_item, bold_item, muted_item,
-    auto_fit_columns, ROW_HEIGHT_LARGE,
+    auto_fit_columns, fit_table_to_content, ROW_HEIGHT_LARGE,
+    make_list_table,
 )
 from ui.app_settings import _C
 
-_BG     = "#f8f9fb"
-_WHITE  = "#ffffff"
-_BLUE   = "#1565c0"
-_BORDER = "#e5e9f0"
+_BG    = _C['bg_input']
+_WHITE = "#ffffff"
+_BLUE  = _C['accent']
+_BORDER = _C['border']
 
 _COMBO_SS = f"""
     QComboBox {{
-        background: {_BG}; border: 1px solid #cdd3e0;
+        background: {_C['bg_surface_2']}; border: 1px solid {_C['border_med']};
         border-radius: 5px; padding: 0 8px; min-height: 28px;
+        font-size: 11px; color: {_C['text_primary']};
     }}
     QComboBox:focus {{ border-color: {_BLUE}; }}
-    QComboBox::drop-down {{ border: none; }}
+    QComboBox::drop-down {{ border: none; width: 16px; }}
 """
 
 
@@ -47,6 +49,8 @@ class CustomersListPanel(QWidget):
         self._timer.setSingleShot(True)
         self._timer.setInterval(250)
         self._timer.timeout.connect(self._apply_filter)
+        # الـ list panel عرضه ثابت
+        self.setSizePolicy(QSizePolicy.Fixed, QSizePolicy.Expanding)
         self._build()
         self._load()
 
@@ -55,7 +59,7 @@ class CustomersListPanel(QWidget):
         root.setContentsMargins(0, 0, 0, 0)
         root.setSpacing(0)
 
-        # ── شريط الأدوات ──
+        # ── toolbar ──
         toolbar = QFrame()
         toolbar.setStyleSheet(f"""
             QFrame {{ background: {_WHITE}; border-bottom: 1px solid {_BORDER}; }}
@@ -71,7 +75,7 @@ class CustomersListPanel(QWidget):
         self.inp_search.setClearButtonEnabled(True)
         self.inp_search.setStyleSheet(f"""
             QLineEdit {{
-                background: {_BG}; border: 1px solid #cdd3e0;
+                background: {_BG}; border: 1px solid {_C['border_med']};
                 border-radius: 6px; padding: 0 10px; font-size: 12px;
             }}
             QLineEdit:focus {{ border-color: {_BLUE}; background: {_WHITE}; }}
@@ -80,13 +84,14 @@ class CustomersListPanel(QWidget):
 
         btn_new = QPushButton("＋  عميل جديد")
         btn_new.setMinimumHeight(34)
+        btn_new.setSizePolicy(QSizePolicy.Fixed, QSizePolicy.Fixed)
         btn_new.setStyleSheet(f"""
             QPushButton {{
                 background: {_BLUE}; color: white;
                 border: none; border-radius: 6px;
                 padding: 0 14px; font-weight: bold; font-size: 12px;
             }}
-            QPushButton:hover {{ background: #0d47a1; }}
+            QPushButton:hover {{ background: {_C['accent_hover']}; }}
         """)
         btn_new.clicked.connect(self.new_customer.emit)
         row1.addWidget(self.inp_search, stretch=1)
@@ -115,61 +120,23 @@ class CustomersListPanel(QWidget):
         tb.addLayout(row2)
         root.addWidget(toolbar)
 
-        # ── الجدول ──
-        self.table = QTableWidget()
-        self.table.setColumnCount(5)
-        self.table.setHorizontalHeaderLabels(
-            ["الكود", "الاسم", "الهاتف", "المدينة", "الطلبات"]
+        # ── الجدول — عرض ثابت ──
+        self.table = make_list_table(
+            columns=["الكود", "الاسم", "الهاتف", "المدينة", "الطلبات"],
+            stretch_col=1,
+            col_widths={0: 80, 2: 110, 3: 80, 4: 55},
         )
-        self.table.setSelectionBehavior(QAbstractItemView.SelectRows)
-        self.table.setEditTriggers(QAbstractItemView.NoEditTriggers)
-        self.table.setAlternatingRowColors(True)
-        self.table.verticalHeader().setVisible(False)
-        self.table.setShowGrid(False)
-        self.table.setStyleSheet(f"""
-            QTableWidget {{
-                border: none; background: {_WHITE};
-                alternate-background-color: #fafbff; outline: none;
-            }}
-            QTableWidget::item {{ padding: 6px 10px; border-bottom: 1px solid {_BORDER}; }}
-            QTableWidget::item:selected {{ background: #dbeafe; color: #1e40af; }}
-            QTableWidget::item:hover {{ background: {_C['bg_hover']}; }}
-            QHeaderView::section {{
-                background: {_BG}; color: {_BLUE}; font-weight: bold; font-size:11px;
-                padding: 6px 10px; border: none; border-bottom: 2px solid {_BORDER};
-                border-right: 1px solid {_BORDER};
-            }}
-            QHeaderView::section:hover {{
-                background: {_C['bg_hover']}; color: {_C['text_primary']};
-            }}
-        """)
-
-        hh = self.table.horizontalHeader()
-        hh.setSectionsMovable(False)
-        hh.setSectionResizeMode(0, QHeaderView.Interactive)
-        self.table.setColumnWidth(0, 80)
-        hh.setSectionResizeMode(1, QHeaderView.Stretch)
-        hh.setSectionResizeMode(2, QHeaderView.Interactive)
-        self.table.setColumnWidth(2, 110)
-        hh.setSectionResizeMode(3, QHeaderView.Interactive)
-        self.table.setColumnWidth(3, 80)
-        hh.setSectionResizeMode(4, QHeaderView.Fixed)
-        self.table.setColumnWidth(4, 55)
-        hh.setDefaultAlignment(Qt.AlignRight | Qt.AlignVCenter)
-        hh.setMinimumSectionSize(40)
-
-        self.table.setHorizontalScrollMode(QAbstractItemView.ScrollPerPixel)
-        self.table.setVerticalScrollMode(QAbstractItemView.ScrollPerPixel)
+        # لا نسمح بـ horizontal scroll — العرض مضبوط
+        self.table.setHorizontalScrollBarPolicy(Qt.ScrollBarAlwaysOff)
         self.table.itemSelectionChanged.connect(self._on_select)
-        self.table.doubleClicked.connect(self._on_select)
         root.addWidget(self.table, stretch=1)
 
-        # ── شريط الحالة ──
+        # ── status bar ──
         self._status_bar = QLabel("")
         self._status_bar.setAlignment(Qt.AlignCenter)
         self._status_bar.setStyleSheet(f"""
-            background: {_BG}; color: #6b7280;
-            padding: 5px; font-size: 11px;
+            background: {_C['bg_surface_2']}; color: {_C['text_muted']};
+            padding: 5px; font-size: 10px; font-weight: 600;
             border-top: 1px solid {_BORDER};
         """)
         root.addWidget(self._status_bar)
@@ -227,8 +194,13 @@ class CustomersListPanel(QWidget):
         )
 
         if filtered:
-            auto_fit_columns(self.table, fixed_cols=[0, 2, 3],
-                             stretch_col=1, min_width=55, max_width=180)
+            # اضبط عرض الأعمدة على المحتوى
+            auto_fit_columns(self.table, fixed_cols=[0, 2, 3, 4],
+                             stretch_col=1, min_width=40, max_width=180)
+            # اضبط عرض الـ widget على قد الجدول
+            from ui.widgets.shared.table_utils import calc_table_width
+            w = calc_table_width(self.table, padding=12)
+            self.setFixedWidth(max(280, min(w, 560)))
 
     def _on_select(self):
         row = self.table.currentRow()

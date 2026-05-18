@@ -1,38 +1,37 @@
 """
-ui/tabs/orders/orders/_orders_list_panel.py 
-=============================
+ui/tabs/orders/orders/_orders_list_panel.py
+============================================
+لوحة قائمة الطلبات — جدول بعرض ثابت، مش بيتمدد مع النافذة.
 """
-from PyQt5.QtWidgets import (
-    QTableWidget, QWidget, QVBoxLayout,
-    QLabel, QHeaderView,
-    QAbstractItemView
-)
 
+from PyQt5.QtWidgets import (
+    QWidget, QVBoxLayout, QLabel, QHeaderView,
+    QAbstractItemView, QSizePolicy,
+)
 from PyQt5.QtCore import Qt, pyqtSignal
 
-from db.orders.orders_repo import (
-    fetch_all_orders
-)
+from db.orders.orders_repo import fetch_all_orders
 
 from ui.widgets.shared.table_utils import (
     make_table_item, color_item, bold_item, muted_item,
-    ROW_HEIGHT_LARGE,
+    auto_fit_columns, calc_table_width, ROW_HEIGHT_LARGE,
+    make_list_table,
 )
 from ui.app_settings import _C
 from ui.widgets.shared.panels import EmptyState
 
-from ._filter_toolbar import _FilterToolbar
-from ._status_delegate import _StatusDelegate
+from ._filter_toolbar   import _FilterToolbar
+from ._status_delegate  import _StatusDelegate
 
 # ── ثوابت الحالة ──
 STATUS_LABELS = {
-    "pending":     ("⏳ انتظار",   "#b45309", "#fffbeb", "#fde68a"),
-    "confirmed":   ("✅ مؤكد",     "#1d4ed8", "#eff6ff", "#bfdbfe"),
-    "in_progress": ("🔧 تنفيذ",   "#6d28d9", "#f5f3ff", "#ddd6fe"),
-    "ready":       ("📦 جاهز",    "#065f46", "#ecfdf5", "#a7f3d0"),
-    "delivered":   ("🚚 مُسلَّم",  "#374151", "#f9fafb", "#e5e7eb"),
-    "cancelled":   ("❌ ملغي",    "#991b1b", "#fef2f2", "#fecaca"),
-    "on_hold":     ("⏸ معلق",    "#9a3412", "#fff7ed", "#fed7aa"),
+    "pending":     ("⏳ انتظار",   "#b45309"),
+    "confirmed":   ("✅ مؤكد",     "#1d4ed8"),
+    "in_progress": ("🔧 تنفيذ",   "#6d28d9"),
+    "ready":       ("📦 جاهز",    "#065f46"),
+    "delivered":   ("🚚 مُسلَّم",  "#374151"),
+    "cancelled":   ("❌ ملغي",    "#991b1b"),
+    "on_hold":     ("⏸ معلق",    "#9a3412"),
 }
 
 PRIORITY_LABELS = {
@@ -42,19 +41,9 @@ PRIORITY_LABELS = {
     "urgent": ("🔴", "#ef4444"),
 }
 
-TYPE_LABELS = {
-    "new":     "جديد",
-    "reorder": "إعادة",
-    "custom":  "مخصص",
-}
-
 _WHITE  = "#ffffff"
 _BORDER = _C['border']
 
-
-# ══════════════════════════════════════════════════════════
-# لوحة قائمة الطلبات — محسّنة
-# ══════════════════════════════════════════════════════════
 
 class _OrdersListPanel(QWidget):
     order_selected = pyqtSignal(int)
@@ -64,6 +53,8 @@ class _OrdersListPanel(QWidget):
         super().__init__(parent)
         self.conn      = conn
         self._all_rows = []
+        # عرض ثابت — مش بيتمدد
+        self.setSizePolicy(QSizePolicy.Fixed, QSizePolicy.Expanding)
         self._build()
         self._load()
 
@@ -80,84 +71,19 @@ class _OrdersListPanel(QWidget):
         self._filter_bar.changed.connect(self._apply_filter)
         root.addWidget(self._filter_bar)
 
-        # ── جدول الطلبات ──
-        self.table = QTableWidget()
-        self.table.setColumnCount(5)
-        self.table.setHorizontalHeaderLabels(
-            ["رقم الطلب", "العميل", "الحالة", "⚑", "التاريخ"]
+        # ── الجدول — عرض ثابت ──
+        self.table = make_list_table(
+            columns=["رقم الطلب", "العميل", "الحالة", "⚑", "التاريخ"],
+            stretch_col=-1,   # مفيش stretch — كل الأعمدة interactive
+            col_widths={0: 130, 1: 150, 2: 95, 3: 32, 4: 90},
         )
-        self.table.setSelectionBehavior(QAbstractItemView.SelectRows)
-        self.table.setEditTriggers(QAbstractItemView.NoEditTriggers)
-        self.table.setAlternatingRowColors(True)
-        self.table.verticalHeader().setVisible(False)
-        self.table.setShowGrid(False)
-        self.table.setStyleSheet(f"""
-            QTableWidget {{
-                border: none;
-                background: {_WHITE};
-                alternate-background-color: {_C['bg_surface']};
-                outline: none;
-            }}
-            QTableWidget::item {{
-                padding: 4px 10px;
-                border-bottom: 1px solid {_C['border']};
-                color: {_C['text_primary']};
-            }}
-            QTableWidget::item:selected {{
-                background: {_C['accent_light']};
-                color: {_C['accent_text']};
-            }}
-            QTableWidget::item:hover {{
-                background: {_C['bg_hover']};
-            }}
-            QHeaderView::section {{
-                background: {_C['bg_surface_2']};
-                color: {_C['text_muted']};
-                font-weight: 700;
-                font-size: 10px;
-                letter-spacing: 0.5px;
-                padding: 6px 10px;
-                border: none;
-                border-bottom: 2px solid {_C['border_med']};
-                border-right: 1px solid {_C['border']};
-            }}
-            QHeaderView::section:last {{
-                border-right: none;
-            }}
-            QHeaderView::section:hover {{
-                background: {_C['bg_hover']};
-                color: {_C['text_primary']};
-            }}
-        """)
+        # لا نسمح بـ horizontal scroll — العرض مضبوط
+        self.table.setHorizontalScrollBarPolicy(Qt.ScrollBarAlwaysOff)
 
         self._status_delegate = _StatusDelegate(self.table)
         self.table.setItemDelegateForColumn(2, self._status_delegate)
 
-        hh = self.table.horizontalHeader()
-
-        # ── كل الأعمدة Interactive — بعرض مبدئي مناسب ──
-        hh.setSectionsMovable(False)
-        hh.setStretchLastSection(False)
-
-        for col in range(5):
-            hh.setSectionResizeMode(col, QHeaderView.Interactive)
-
-        self.table.setColumnWidth(0, 130)   # رقم الطلب
-        self.table.setColumnWidth(1, 150)   # العميل
-        self.table.setColumnWidth(2, 95)    # الحالة
-        self.table.setColumnWidth(3, 32)    # الأولوية
-        self.table.setColumnWidth(4, 90)    # التاريخ
-
-        hh.setDefaultAlignment(Qt.AlignRight | Qt.AlignVCenter)
-        hh.setMinimumSectionSize(30)
-
-        # ── scroll أفقي ورأسي ──
-        self.table.setHorizontalScrollMode(QAbstractItemView.ScrollPerPixel)
-        self.table.setVerticalScrollMode(QAbstractItemView.ScrollPerPixel)
-        self.table.setHorizontalScrollBarPolicy(Qt.ScrollBarAsNeeded)
-
         self.table.itemSelectionChanged.connect(self._on_select)
-        self.table.doubleClicked.connect(self._on_select)
         root.addWidget(self.table, stretch=1)
 
         # ── حالة لا توجد نتائج ──
@@ -185,7 +111,6 @@ class _OrdersListPanel(QWidget):
             font-size: 10px;
             font-weight: 600;
             border-top: 1px solid {_BORDER};
-            letter-spacing: 0.3px;
         """)
         root.addWidget(self._status_bar)
 
@@ -224,14 +149,12 @@ class _OrdersListPanel(QWidget):
             color_item(num_item, _C['accent'])
             self.table.setItem(r, 0, num_item)
 
-            # العميل — tooltip بالاسم الكامل
-            cust_item = make_table_item(
-                row["customer_name"],
-                tooltip=row["customer_name"],
-            )
+            # العميل
+            cust_item = make_table_item(row["customer_name"],
+                                        tooltip=row["customer_name"])
             self.table.setItem(r, 1, cust_item)
 
-            # الحالة — delegate يرسمها
+            # الحالة
             status_text = STATUS_LABELS.get(row["status"], (row["status"],))[0]
             s_item = make_table_item(status_text, align=Qt.AlignCenter)
             s_item.setData(Qt.UserRole + 1, row["status"])
@@ -246,7 +169,7 @@ class _OrdersListPanel(QWidget):
             self.table.setItem(r, 3, pri_item)
 
             # التاريخ
-            date_str = (row["order_date"] or "")[:10]
+            date_str  = (row["order_date"] or "")[:10]
             date_item = muted_item(make_table_item(date_str))
             self.table.setItem(r, 4, date_item)
 
@@ -256,13 +179,15 @@ class _OrdersListPanel(QWidget):
             f"{cnt} طلب" if cnt == total else f"{cnt} من {total}"
         )
 
-        # ── resizeColumnsToContents بعد ملء البيانات ──
-        # كل الأعمدة تتضبط على حجم محتواها الفعلي
         if has_data:
+            # ضبط عرض الأعمدة على المحتوى
             self.table.resizeColumnsToContents()
-            # حد أدنى لعمود الأولوية لأن أيقونته صغيرة
             if self.table.columnWidth(3) < 32:
                 self.table.setColumnWidth(3, 32)
+
+            # ضبط عرض الـ panel على قد الجدول — الـ horizontal scroll يختفي
+            w = calc_table_width(self.table, padding=12)
+            self.setFixedWidth(max(280, min(w, 560)))
 
     def _on_select(self):
         row = self.table.currentRow()

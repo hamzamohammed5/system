@@ -2,10 +2,15 @@
 ui/widgets/shared/splitter_utils.py
 =====================================
 SmartSplitter — عرض الـ list panel يتحدد على المحتوى فقط.
-النافذة ممكن تكبر بدون ما تكبر الجداول أو الأزرار.
+
+القاعدة:
+  - النافذة تكبر بدون ما الجداول أو الأزرار تكبر
+  - عرض الـ list panel = عرض الأعمدة بالضبط (مع padding للـ scrollbar)
+  - لما النافذة تكبر، الـ detail panel يأخذ الزيادة
+  - setMaximumWidth على الـ list panel عشان الـ horizontal scroll يختفي
 """
 
-from PyQt5.QtWidgets import QSplitter, QTableWidget, QWidget
+from PyQt5.QtWidgets import QSplitter, QTableWidget, QWidget, QSizePolicy
 from PyQt5.QtCore    import Qt, QTimer
 
 
@@ -15,12 +20,29 @@ _TOOLBAR_PAD = 24
 _SCROLLBAR_W = 18
 
 
+def _calc_table_ideal_width(table: QTableWidget,
+                             extra_pad: int = _TOOLBAR_PAD) -> int:
+    """يحسب العرض المثالي للجدول من مجموع الأعمدة."""
+    total = _SCROLLBAR_W + extra_pad
+    for col in range(table.columnCount()):
+        total += table.columnWidth(col)
+    vh = table.verticalHeader()
+    if not vh.isHidden():
+        total += vh.width()
+    return total
+
+
 def fit_list_panel(splitter: QSplitter,
                    list_index: int,
                    table: QTableWidget,
                    min_w: int = _MIN_LIST_W,
                    max_w: int = _MAX_LIST_W,
                    extra_pad: int = _TOOLBAR_PAD) -> int:
+    """
+    يضبط عرض الـ list panel على قد محتوى الجدول.
+    يضبط كمان setMaximumWidth على الـ list widget
+    عشان الـ horizontal scroll ما يظهرش.
+    """
     sizes = splitter.sizes()
     if not sizes or len(sizes) <= list_index:
         return min_w
@@ -29,16 +51,13 @@ def fit_list_panel(splitter: QSplitter,
     if total <= 0:
         return min_w
 
-    col_total = _SCROLLBAR_W
-    for col in range(table.columnCount()):
-        col_total += table.columnWidth(col)
-
-    vh = table.verticalHeader()
-    if not vh.isHidden():
-        col_total += vh.width()
-
-    ideal  = col_total + extra_pad
+    ideal  = _calc_table_ideal_width(table, extra_pad)
     target = max(min_w, min(ideal, max_w))
+
+    # ضبط الـ maximumWidth على الـ list widget نفسه
+    list_widget = splitter.widget(list_index)
+    if list_widget:
+        list_widget.setMaximumWidth(target)
 
     remaining  = total - target
     old_list_w = sizes[list_index]
@@ -76,9 +95,11 @@ def fit_list_panel_delayed(splitter, list_index, table,
 
 class SmartSplitter(QSplitter):
     """
-    QSplitter بيضبط عرض الـ list panel على المحتوى.
-    الجانب الثاني (التفاصيل) يأخذ الباقي.
-    النافذة تكبر بدون ما الجداول تكبر.
+    QSplitter يضبط عرض الـ list panel على المحتوى.
+
+    - الـ list panel له maximumWidth = عرض الأعمدة
+    - الـ detail panel يأخذ الباقي ويكبر مع النافذة
+    - horizontal scroll على الـ list panel يختفي لأن العرض مضبوط
     """
 
     def __init__(self, orientation=Qt.Horizontal, parent=None):
@@ -115,6 +136,16 @@ class SmartSplitter(QSplitter):
         self._min_w      = min_w
         self._max_w      = max_w
 
+        # الـ list panel: Fixed width من المحتوى
+        # الـ detail panel: Expanding يأخذ الباقي
+        if widget:
+            widget.setSizePolicy(QSizePolicy.Fixed, QSizePolicy.Expanding)
+
+        detail_idx = 1 if list_index == 0 else 0
+        detail_widget = self.widget(detail_idx)
+        if detail_widget:
+            detail_widget.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Expanding)
+
     def fit_now(self) -> int:
         if self._table is None:
             return self._min_w
@@ -127,3 +158,27 @@ class SmartSplitter(QSplitter):
         if self._table is None:
             return
         QTimer.singleShot(delay_ms, self.fit_now)
+
+    def resizeEvent(self, event):
+        """لما النافذة تكبر، الـ detail panel يأخذ الزيادة تلقائياً."""
+        super().resizeEvent(event)
+        if self._table is not None:
+            # نحسب الـ target ونضبط الـ sizes بدون تغيير الـ list
+            sizes = self.sizes()
+            if not sizes:
+                return
+            total = sum(sizes)
+            if total <= 0:
+                return
+
+            ideal  = _calc_table_ideal_width(self._table, _TOOLBAR_PAD)
+            target = max(self._min_w, min(ideal, self._max_w))
+
+            if len(sizes) >= 2:
+                detail_idx = 1 if self._list_index == 0 else 0
+                new_list   = target
+                new_detail = max(200, total - new_list)
+                new_sizes  = [0] * len(sizes)
+                new_sizes[self._list_index] = new_list
+                new_sizes[detail_idx]       = new_detail
+                self.setSizes(new_sizes)

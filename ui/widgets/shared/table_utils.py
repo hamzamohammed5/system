@@ -3,16 +3,16 @@ ui/widgets/shared/table_utils.py
 ================================
 جداول بعرض ثابت مبني على المحتوى — مش بتتمدد مع النافذة.
 
-التغييرات الرئيسية:
-  - كل الجداول بـ setMaximumWidth محسوب من الأعمدة
-  - stretch_col اتغير: بيملأ المساحة الداخلية فقط، مش النافذة
-  - fit_table_to_content() — تُستدعى بعد ملء البيانات لتجميد العرض
-  - make_list_table / make_detail_table / make_compact_table محدّثة
+القاعدة الأساسية:
+  - كل الجداول SizePolicy = Preferred, Preferred
+  - الأزرار SizePolicy = Fixed
+  - عرض النافذة أقصى ما يكون على قد ما الـ horizontal scroll يختفي
+  - الجداول والأزرار حجمهم ثابت
 """
 
 from PyQt5.QtWidgets import (
     QTableWidget, QTableWidgetItem, QHeaderView, QAbstractItemView,
-    QSplitter,
+    QSplitter, QSizePolicy,
 )
 from PyQt5.QtCore import Qt
 from PyQt5.QtGui  import QColor, QFont
@@ -24,7 +24,8 @@ ROW_HEIGHT_NORMAL  = 40
 ROW_HEIGHT_COMPACT = 34
 ROW_HEIGHT_LARGE   = 48
 
-_SPLITTER_PADDING = 18
+_SCROLLBAR_W  = 18
+_TOOLBAR_PAD  = 24
 
 
 # ══════════════════════════════════════════════════════════
@@ -166,10 +167,25 @@ def _build_table(columns: list,
         table.setMinimumHeight(min_height)
 
     # ── الجدول مش بيتمدد أفقياً مع النافذة ──
-    from PyQt5.QtWidgets import QSizePolicy
     table.setSizePolicy(QSizePolicy.Preferred, QSizePolicy.Preferred)
 
     return table
+
+
+# ══════════════════════════════════════════════════════════
+# calc_table_width — يحسب عرض الجدول من الأعمدة
+# ══════════════════════════════════════════════════════════
+
+def calc_table_width(table: QTableWidget,
+                     padding: int = _TOOLBAR_PAD) -> int:
+    """يحسب مجموع عرض الأعمدة + الـ scrollbar + padding."""
+    total = _SCROLLBAR_W + padding
+    for col in range(table.columnCount()):
+        total += table.columnWidth(col)
+    vh = table.verticalHeader()
+    if not vh.isHidden():
+        total += vh.width()
+    return total
 
 
 # ══════════════════════════════════════════════════════════
@@ -179,14 +195,12 @@ def _build_table(columns: list,
 def fit_table_to_content(table: QTableWidget,
                          min_w: int = 200,
                          max_w: int = 1200,
-                         padding: int = _SPLITTER_PADDING):
+                         padding: int = _TOOLBAR_PAD):
     """
-    يحسب مجموع عرض الأعمدة ويضبط setMaximumWidth للجدول.
+    يضبط setMaximumWidth للجدول على قد المحتوى.
     استدعيها بعد ملء البيانات وبعد auto_fit_columns.
     """
-    total = padding
-    for col in range(table.columnCount()):
-        total += table.columnWidth(col)
+    total = calc_table_width(table, padding)
     clamped = max(min_w, min(total, max_w))
     table.setMaximumWidth(clamped)
     return clamped
@@ -235,15 +249,8 @@ def auto_fit_all(table: QTableWidget,
 # ══════════════════════════════════════════════════════════
 
 def fit_table_width(table: QTableWidget,
-                    extra_padding: int = _SPLITTER_PADDING) -> int:
-    hh    = table.horizontalHeader()
-    total = extra_padding
-    for col in range(table.columnCount()):
-        total += table.columnWidth(col)
-    vh = table.verticalHeader()
-    if not vh.isHidden():
-        total += vh.width()
-    return total
+                    extra_padding: int = _TOOLBAR_PAD) -> int:
+    return calc_table_width(table, extra_padding)
 
 
 # ══════════════════════════════════════════════════════════
@@ -255,8 +262,8 @@ def fit_splitter_to_table(splitter: QSplitter,
                           table: QTableWidget,
                           min_w: int = 200,
                           max_w: int = 800,
-                          extra_padding: int = _SPLITTER_PADDING):
-    ideal  = fit_table_width(table, extra_padding=extra_padding)
+                          extra_padding: int = _TOOLBAR_PAD):
+    ideal  = calc_table_width(table, extra_padding)
     target = max(min_w, min(ideal, max_w))
 
     sizes = splitter.sizes()
