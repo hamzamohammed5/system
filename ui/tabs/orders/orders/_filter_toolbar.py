@@ -10,6 +10,7 @@ from PyQt5.QtWidgets import (
 )
 from PyQt5.QtCore import Qt, pyqtSignal, QTimer
 from ui.app_settings import _C
+from ui.widgets.shared.panles_helper.make_btn import _make_btn
 
 
 # ── ثوابت الحالة ──
@@ -134,7 +135,7 @@ class _FilterToolbar(QFrame):
         self.inp_search.textChanged.connect(lambda: self._timer.start())
         root.addWidget(self.inp_search)
 
-        # ── صف 3: فلاتر ──
+        # ── صف 3: فلاتر + زرار مسح ──
         row2 = QHBoxLayout()
         row2.setSpacing(6)
 
@@ -154,26 +155,14 @@ class _FilterToolbar(QFrame):
             self.cmb_priority.addItem(icon, k)
         self.cmb_priority.currentIndexChanged.connect(self.changed.emit)
 
-        btn_reset = QPushButton("↺")
-        btn_reset.setToolTip("مسح الفلاتر")
-        btn_reset.setFixedSize(32, 28)
-        btn_reset.setCursor(Qt.PointingHandCursor)
-        btn_reset.setStyleSheet(f"""
-            QPushButton {{
-                background: {_C['bg_surface_2']}; color: {_C['text_muted']};
-                border: 1px solid {_C['border']}; border-radius: 5px;
-                font-size: 13px;
-            }}
-            QPushButton:hover {{
-                background: {_C['bg_hover']};
-                color: {_C['text_primary']};
-            }}
-        """)
+        # ── زرار مسح الفلاتر بـ _make_btn ──
+        btn_reset = _make_btn("↺  مسح", "ghost")
+        btn_reset.setToolTip("مسح كل الفلاتر")
         btn_reset.clicked.connect(self.reset)
 
         row2.addWidget(self.cmb_status, stretch=3)
         row2.addWidget(self.cmb_priority, stretch=2)
-        row2.addWidget(btn_reset)
+        row2.addWidget(btn_reset, stretch=1)
         root.addLayout(row2)
 
     @property
@@ -192,4 +181,3 @@ class _FilterToolbar(QFrame):
         self.cmb_status.setCurrentIndex(0)
         self.cmb_priority.setCurrentIndex(0)
         self.inp_search.clear()
-
