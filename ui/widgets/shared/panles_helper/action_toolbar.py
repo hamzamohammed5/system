@@ -5,14 +5,11 @@ ui/widgets/shared/panles_helper/action_toolbar.py
 
 from PyQt5.QtWidgets import (
     QWidget, QFrame, QHBoxLayout,
-    QPushButton
+    QPushButton, QSizePolicy,
 )
-
 
 from ui.app_settings import _C
 from .make_btn import _make_btn
-
-
 
 
 # ══════════════════════════════════════════════════════════
@@ -56,6 +53,7 @@ class ActionToolbar(QWidget):
                    callback=None, enabled: bool = True) -> QPushButton:
         btn = _make_btn(text, style)
         btn.setEnabled(enabled)
+        btn.setSizePolicy(QSizePolicy.Minimum, QSizePolicy.Fixed)
         if callback:
             btn.clicked.connect(callback)
         self._left_lay.addWidget(btn)
@@ -65,6 +63,7 @@ class ActionToolbar(QWidget):
                    enabled: bool = True) -> QPushButton:
         btn = _make_btn(text, "danger")
         btn.setEnabled(enabled)
+        btn.setSizePolicy(QSizePolicy.Minimum, QSizePolicy.Fixed)
         if callback:
             btn.clicked.connect(callback)
         self._right_lay.addWidget(btn)
@@ -78,4 +77,3 @@ class ActionToolbar(QWidget):
         sep.setFixedWidth(1)
         sep.setStyleSheet(f"background:{_C['border']}; border:none; margin:4px 0;")
         self._left_lay.addWidget(sep)
-

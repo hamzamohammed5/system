@@ -1,10 +1,10 @@
 """
 ui/widgets/shared/panles_helper/make_btn.py
 ============================
-إصلاح: إضافة min-width للأزرار لضمان ظهور النص دايماً.
+الزرار بياخد حجم النص تلقائياً باستخدام fontMetrics.
 """
 
-from PyQt5.QtWidgets import QPushButton
+from PyQt5.QtWidgets import QPushButton, QSizePolicy
 from PyQt5.QtCore import Qt
 
 from ui.app_settings import _C, get_font_size, fs
@@ -16,16 +16,12 @@ def _make_btn(text: str, style: str = "normal") -> QPushButton:
     btn.setCursor(Qt.PointingHandCursor)
     base = _base()
     btn_h = base * 2 + 8
-    # min-width نسبي: يضمن ظهور النص حتى في الأزرار الضيقة
-    btn_min_w = base * 6 + 20
 
     _common = f"""
         font-size: {fs(base, 0)}pt;
         border-radius: 6px;
         padding: 0 14px;
         min-height: {btn_h}px;
-        min-width: {btn_min_w}px;
-        white-space: nowrap;
     """
 
     styles = {
@@ -93,4 +89,16 @@ def _make_btn(text: str, style: str = "normal") -> QPushButton:
         """,
     }
     btn.setStyleSheet(styles.get(style, styles["normal"]))
+
+    # حساب عرض النص باستخدام font size الفعلي
+    from PyQt5.QtGui import QFont, QFontMetrics
+    f = QFont()
+    f.setPointSize(fs(base, 0))
+    fm = QFontMetrics(f)
+    text_w = fm.horizontalAdvance(text)
+    padding = 28 * 2  # 28px padding يمين + شمال
+
+    btn.setSizePolicy(QSizePolicy.Minimum, QSizePolicy.Fixed)
+    btn.setMinimumWidth(text_w + padding)
+
     return btn

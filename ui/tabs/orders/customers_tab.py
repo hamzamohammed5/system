@@ -1,15 +1,13 @@
 """
-ui/tabs/orders/customers_tab.py  — نسخة محسّنة v3
-================================
-تبويب إدارة العملاء — auto_fit_columns + resizable columns (NEW)
+ui/tabs/orders/customers_tab.py — splitter fix
 """
 
 from PyQt5.QtWidgets import (
-    QWidget, QVBoxLayout, QHBoxLayout, QSplitter,
+    QWidget, QVBoxLayout, QHBoxLayout,
     QFrame, QLabel, QLineEdit, QPushButton,
     QTableWidget, QTableWidgetItem, QHeaderView,
     QComboBox, QAbstractItemView, QMessageBox,
-    QDialog, QScrollArea,
+    QScrollArea,
 )
 from PyQt5.QtCore import Qt, pyqtSignal, QTimer
 from PyQt5.QtGui  import QColor, QFont
@@ -29,8 +27,9 @@ from ui.widgets.shared.table_utils import (
     make_compact_table, make_table_item,
     color_item, bold_item, muted_item,
     insert_row, ROW_HEIGHT_COMPACT, ROW_HEIGHT_NORMAL, ROW_HEIGHT_LARGE,
-    auto_fit_columns,          # ← NEW
+    auto_fit_columns,
 )
+from ui.widgets.shared.splitter_utils import SmartSplitter
 from ui.app_settings import _C
 
 _BG     = "#f8f9fb"
@@ -59,10 +58,6 @@ PRIORITY_MAP = {
 }
 
 
-# ══════════════════════════════════════════════════════════
-# لوحة قائمة العملاء (يسار)
-# ══════════════════════════════════════════════════════════
-
 class _CustomersListPanel(QWidget):
     customer_selected = pyqtSignal(int)
     new_customer      = pyqtSignal()
@@ -83,7 +78,6 @@ class _CustomersListPanel(QWidget):
         root.setContentsMargins(0, 0, 0, 0)
         root.setSpacing(0)
 
-        # ── شريط الأدوات ──
         toolbar = QFrame()
         toolbar.setStyleSheet(f"""
             QFrame {{ background: {_WHITE}; border-bottom: 1px solid {_BORDER}; }}
@@ -143,7 +137,6 @@ class _CustomersListPanel(QWidget):
         tb.addLayout(row2)
         root.addWidget(toolbar)
 
-        # ── الجدول ──
         self.table = QTableWidget()
         self.table.setColumnCount(5)
         self.table.setHorizontalHeaderLabels(
@@ -174,37 +167,24 @@ class _CustomersListPanel(QWidget):
 
         hh = self.table.horizontalHeader()
         hh.setSectionsMovable(False)
-
-        # الكود — Interactive مع auto-fit لاحقاً
         hh.setSectionResizeMode(0, QHeaderView.Interactive)
         self.table.setColumnWidth(0, 80)
-
-        # الاسم — Stretch
         hh.setSectionResizeMode(1, QHeaderView.Stretch)
-
-        # الهاتف — Interactive
         hh.setSectionResizeMode(2, QHeaderView.Interactive)
         self.table.setColumnWidth(2, 110)
-
-        # المدينة — Interactive
         hh.setSectionResizeMode(3, QHeaderView.Interactive)
         self.table.setColumnWidth(3, 80)
-
-        # الطلبات — Fixed ضيق
         hh.setSectionResizeMode(4, QHeaderView.Fixed)
         self.table.setColumnWidth(4, 55)
-
         hh.setDefaultAlignment(Qt.AlignRight | Qt.AlignVCenter)
         hh.setMinimumSectionSize(40)
 
         self.table.setHorizontalScrollMode(QAbstractItemView.ScrollPerPixel)
         self.table.setVerticalScrollMode(QAbstractItemView.ScrollPerPixel)
-
         self.table.itemSelectionChanged.connect(self._on_select)
         self.table.doubleClicked.connect(self._on_select)
         root.addWidget(self.table, stretch=1)
 
-        # شريط الحالة
         self._status_bar = QLabel("")
         self._status_bar.setAlignment(Qt.AlignCenter)
         self._status_bar.setStyleSheet(f"""
@@ -238,40 +218,25 @@ class _CustomersListPanel(QWidget):
             self.table.insertRow(r)
             self.table.setRowHeight(r, ROW_HEIGHT_LARGE)
 
-            code_item = make_table_item(
-                row["code"] or "",
-                user_data=row["id"],
-                tooltip=row["code"] or "",
-            )
+            code_item = make_table_item(row["code"] or "", user_data=row["id"],
+                                        tooltip=row["code"] or "")
             muted_item(code_item)
             self.table.setItem(r, 0, code_item)
 
-            name_item = make_table_item(
-                row["name"],
-                tooltip=row["name"],
-            )
+            name_item = make_table_item(row["name"], tooltip=row["name"])
             if not row["is_active"]:
                 color_item(name_item, "#9ca3af")
             else:
                 bold_item(name_item, also_medium=True)
             self.table.setItem(r, 1, name_item)
 
-            phone_item = muted_item(make_table_item(
-                row["phone"] or "—",
-                tooltip=row["phone"] or "",
-            ))
-            self.table.setItem(r, 2, phone_item)
+            self.table.setItem(r, 2, muted_item(make_table_item(
+                row["phone"] or "—", tooltip=row["phone"] or "")))
+            self.table.setItem(r, 3, muted_item(make_table_item(
+                row["city"] or "—", tooltip=row["city"] or "")))
 
-            city_item = muted_item(make_table_item(
-                row["city"] or "—",
-                tooltip=row["city"] or "",
-            ))
-            self.table.setItem(r, 3, city_item)
-
-            cnt_item = make_table_item(
-                str(row["orders_count"] or 0),
-                align=Qt.AlignCenter,
-            )
+            cnt_item = make_table_item(str(row["orders_count"] or 0),
+                                       align=Qt.AlignCenter)
             color_item(cnt_item, _BLUE)
             self.table.setItem(r, 4, cnt_item)
 
@@ -281,17 +246,9 @@ class _CustomersListPanel(QWidget):
             f"{cnt} عميل" if cnt == total else f"{cnt} من {total} عميل"
         )
 
-        # ── auto-fit بعد ملء البيانات ──
-        # الكود (0)، الهاتف (2)، المدينة (3) يتضبطوا حسب المحتوى
-        # الاسم (1) يفضل Stretch، الطلبات (4) Fixed
         if filtered:
-            auto_fit_columns(
-                self.table,
-                fixed_cols=[0, 2, 3],
-                stretch_col=1,
-                min_width=55,
-                max_width=180,
-            )
+            auto_fit_columns(self.table, fixed_cols=[0, 2, 3],
+                             stretch_col=1, min_width=55, max_width=180)
 
     def _on_select(self):
         row = self.table.currentRow()
@@ -312,10 +269,6 @@ class _CustomersListPanel(QWidget):
         self._load()
 
 
-# ══════════════════════════════════════════════════════════
-# لوحة تفاصيل العميل (يمين)
-# ══════════════════════════════════════════════════════════
-
 class _CustomerDetailPanel(QWidget):
     edited  = pyqtSignal(int)
     deleted = pyqtSignal()
@@ -333,7 +286,6 @@ class _CustomerDetailPanel(QWidget):
         root.setSpacing(0)
 
         self._hdr = DetailHeader()
-
         self._card_total_orders  = self._hdr.add_stat_card("📋", "إجمالي الطلبات", color=_BLUE)
         self._card_active_orders = self._hdr.add_stat_card("🔧", "طلبات جارية",    color="#8b5cf6")
         self._card_total_value   = self._hdr.add_stat_card("💰", "إجمالي القيمة",  color="#10b981")
@@ -342,7 +294,6 @@ class _CustomerDetailPanel(QWidget):
         self.btn_edit   = self._hdr.toolbar.add_action("✏️  تعديل",  "primary", self._edit)
         self.btn_toggle = self._hdr.toolbar.add_action("⏸  تعطيل",  "ghost",   self._toggle_active)
         self.btn_del    = self._hdr.toolbar.add_danger("🗑️  حذف",               self._delete)
-
         root.addWidget(self._hdr)
 
         scroll = QScrollArea()
@@ -365,34 +316,24 @@ class _CustomerDetailPanel(QWidget):
         self._content_lay.setContentsMargins(16, 12, 16, 12)
         self._content_lay.setSpacing(10)
 
-        # جهات الاتصال
         self._lbl_contacts_hdr = QLabel("📞  جهات الاتصال")
         self._lbl_contacts_hdr.setStyleSheet(
-            f"font-weight:bold; color:{_C['text_sec']}; background:transparent;"
-        )
+            f"font-weight:bold; color:{_C['text_sec']}; background:transparent;")
         self._content_lay.addWidget(self._lbl_contacts_hdr)
 
         self.contacts_table = make_compact_table(
             columns=["الاسم", "الصفة", "الهاتف", "الإيميل"],
-            stretch_col=0,
-            col_widths={1: 80, 2: 100, 3: 120},
-            max_height=140,
-        )
+            stretch_col=0, col_widths={1: 80, 2: 100, 3: 120}, max_height=140)
         self._content_lay.addWidget(self.contacts_table)
 
-        # آخر الطلبات
         self._lbl_orders_hdr = QLabel("📋  آخر الطلبات")
         self._lbl_orders_hdr.setStyleSheet(
-            f"font-weight:bold; color:{_C['text_sec']}; background:transparent;"
-        )
+            f"font-weight:bold; color:{_C['text_sec']}; background:transparent;")
         self._content_lay.addWidget(self._lbl_orders_hdr)
 
         self.orders_table = make_compact_table(
             columns=["رقم الطلب", "الحالة", "الأولوية", "الإجمالي", "التاريخ"],
-            stretch_col=0,
-            col_widths={1: 90, 2: 70, 3: 80, 4: 90},
-            max_height=220,
-        )
+            stretch_col=0, col_widths={1: 90, 2: 70, 3: 80, 4: 90}, max_height=220)
         self._content_lay.addWidget(self.orders_table)
         self._content_lay.addStretch()
 
@@ -400,13 +341,9 @@ class _CustomerDetailPanel(QWidget):
         root.addWidget(scroll, stretch=1)
 
         self._empty = EmptyState(
-            icon="👤",
-            title="اختر عميلاً من القائمة",
+            icon="👤", title="اختر عميلاً من القائمة",
             subtitle="أو أضف عميلاً جديداً بالضغط على ＋",
-            style="plain",
-            color="#6b7280",
-            min_height=200,
-        )
+            style="plain", color="#6b7280", min_height=200)
         root.addWidget(self._empty)
 
     def load_customer(self, cid: int):
@@ -421,14 +358,13 @@ class _CustomerDetailPanel(QWidget):
         self._hdr.set_title(c["name"])
         self._hdr.set_type_badge(type_map.get(c["customer_type"], ""))
         self._hdr.set_status_badge(
-            c["code"] or "",
-            text_color="#6b7280", bg="transparent", border="transparent"
-        )
+            c["code"] or "", text_color="#6b7280",
+            bg="transparent", border="transparent")
 
         parts = []
-        if c.get("phone"):   parts.append(f"📞 {c['phone']}")
-        if c.get("city"):    parts.append(f"📍 {c['city']}")
-        if c.get("email"):   parts.append(f"✉️ {c['email']}")
+        if c.get("phone"):  parts.append(f"📞 {c['phone']}")
+        if c.get("city"):   parts.append(f"📍 {c['city']}")
+        if c.get("email"):  parts.append(f"✉️ {c['email']}")
         self._hdr.set_info(parts)
 
         stats = fetch_customer_stats(self.conn, cid)
@@ -461,31 +397,20 @@ class _CustomerDetailPanel(QWidget):
             bold_item(num_item, also_medium=True)
             color_item(num_item, _BLUE)
             self.orders_table.setItem(r, 0, num_item)
-
-            status_item = make_table_item(STATUS_MAP.get(o["status"], o["status"]))
-            self.orders_table.setItem(r, 1, status_item)
-
+            self.orders_table.setItem(r, 1,
+                make_table_item(STATUS_MAP.get(o["status"], o["status"])))
             self.orders_table.setItem(r, 2, muted_item(
-                make_table_item(PRIORITY_MAP.get(o["priority"], ""))
-            ))
-
-            val_item = make_table_item(f"{(o['net_amount'] or 0):,.2f} ج", align=Qt.AlignCenter)
+                make_table_item(PRIORITY_MAP.get(o["priority"], ""))))
+            val_item = make_table_item(f"{(o['net_amount'] or 0):,.2f} ج",
+                                       align=Qt.AlignCenter)
             color_item(val_item, _BLUE)
             self.orders_table.setItem(r, 3, val_item)
-
             self.orders_table.setItem(r, 4, muted_item(
-                make_table_item(o["order_date"] or "")
-            ))
+                make_table_item(o["order_date"] or "")))
 
-        # auto-fit لجدول الطلبات في التفاصيل
         if orders:
-            auto_fit_columns(
-                self.orders_table,
-                fixed_cols=[1, 2, 3, 4],
-                stretch_col=0,
-                min_width=55,
-                max_width=160,
-            )
+            auto_fit_columns(self.orders_table, fixed_cols=[1, 2, 3, 4],
+                             stretch_col=0, min_width=55, max_width=160)
 
     def _show_empty(self):
         self._empty.setVisible(True)
@@ -519,11 +444,9 @@ class _CustomerDetailPanel(QWidget):
                 self._show_empty()
                 self.deleted.emit()
             else:
-                QMessageBox.warning(
-                    self, "تعذر الحذف",
+                QMessageBox.warning(self, "تعذر الحذف",
                     "لا يمكن حذف هذا العميل لوجود طلبات مرتبطة به.\n"
-                    "يمكنك تعطيله بدلاً من الحذف."
-                )
+                    "يمكنك تعطيله بدلاً من الحذف.")
 
     def _toggle_active(self):
         if not self._customer_id:
@@ -532,10 +455,6 @@ class _CustomerDetailPanel(QWidget):
         self.load_customer(self._customer_id)
         self.edited.emit(self._customer_id)
 
-
-# ══════════════════════════════════════════════════════════
-# تبويب العملاء الرئيسي
-# ══════════════════════════════════════════════════════════
 
 class CustomersTab(QWidget):
     def __init__(self, conn, parent=None):
@@ -548,31 +467,37 @@ class CustomersTab(QWidget):
         root.setContentsMargins(0, 0, 0, 0)
         root.setSpacing(0)
 
-        splitter = QSplitter(Qt.Horizontal)
-        splitter.setHandleWidth(4)
-        splitter.setStyleSheet(f"""
-            QSplitter::handle {{ background: {_BORDER}; }}
-            QSplitter::handle:hover {{ background: #bfdbfe; }}
-            QSplitter::handle:pressed {{ background: {_BLUE}; }}
-        """)
+        self._splitter = SmartSplitter(Qt.Horizontal)
 
         self._list   = _CustomersListPanel(self.conn)
         self._detail = _CustomerDetailPanel(self.conn)
 
-        splitter.addWidget(self._list)
-        splitter.addWidget(self._detail)
+        # addWidget أولاً ثم setCollapsible
+        self._splitter.addWidget(self._list)
+        self._splitter.addWidget(self._detail)
+        self._splitter.setCollapsible(0, False)
+        self._splitter.setCollapsible(1, False)
 
-        # ── عرض أوسع للقائمة ──
-        splitter.setSizes([420, 680])
-        splitter.setCollapsible(0, False)
-        splitter.setCollapsible(1, False)
+        self._splitter.set_list_widget(
+            self._list,
+            list_table=self._list.table,
+            min_w=300,
+            max_w=560,
+        )
+        self._splitter.setSizes([380, 720])
 
-        root.addWidget(splitter)
+        root.addWidget(self._splitter)
 
         self._list.customer_selected.connect(self._detail.load_customer)
         self._list.new_customer.connect(self._new_customer)
-        self._detail.edited.connect(lambda _: self._list.refresh())
+        self._detail.edited.connect(self._on_edited)
         self._detail.deleted.connect(self._list.refresh)
+
+        self._splitter.fit_delayed(80)
+
+    def _on_edited(self, cid: int):
+        self._list.refresh()
+        self._splitter.fit_delayed(50)
 
     def _new_customer(self):
         dlg = _CustomerForm(self.conn, parent=self)
@@ -583,6 +508,8 @@ class CustomersTab(QWidget):
         self._list.refresh()
         self._list.select_customer(cid)
         self._detail.load_customer(cid)
+        self._splitter.fit_delayed(50)
 
     def refresh(self):
         self._list.refresh()
+        self._splitter.fit_delayed(50)

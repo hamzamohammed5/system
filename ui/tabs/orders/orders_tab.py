@@ -1,10 +1,6 @@
 """
 ui/tabs/orders/orders_tab.py  — نسخة UX v4 مع SmartSplitter
 =============================
-إصلاحات:
-  - SmartSplitter: الـ list panel بيتضبط تلقائياً على عرض الجدول
-  - لا فراغ زائد في القائمة
-  - دعم double-click على الـ splitter handle للـ auto-fit
 """
 
 from PyQt5.QtWidgets import QWidget, QHBoxLayout
@@ -33,16 +29,16 @@ class OrdersTab(QWidget):
         root.setContentsMargins(0, 0, 0, 0)
         root.setSpacing(0)
 
-        # ── SmartSplitter بدل QSplitter العادي ──
         self._splitter = SmartSplitter(Qt.Horizontal)
-        self._splitter.setCollapsible(0, False)
-        self._splitter.setCollapsible(1, False)
 
         self._list   = _OrdersListPanel(self.conn)
         self._detail = _OrderDetail(self.conn)
 
+        # addWidget أولاً ثم setCollapsible
         self._splitter.addWidget(self._list)
         self._splitter.addWidget(self._detail)
+        self._splitter.setCollapsible(0, False)
+        self._splitter.setCollapsible(1, False)
 
         # ربط الـ SmartSplitter بالجدول لـ auto-fit
         self._splitter.set_list_widget(
@@ -52,9 +48,7 @@ class OrdersTab(QWidget):
             max_w=560,
         )
 
-        # عرض مبدئي معقول — سيتضبط بعد تحميل البيانات
         self._splitter.setSizes([360, 760])
-
         root.addWidget(self._splitter)
 
         # ── الـ signals ──
@@ -64,16 +58,13 @@ class OrdersTab(QWidget):
         self._detail.deleted.connect(self._on_deleted)
         self._detail.status_changed.connect(self._on_status_changed)
 
-        # ── auto-fit بعد أول تحميل (تأخير بسيط للـ layout) ──
         self._list._filter_bar.changed.connect(self._fit_splitter)
         self._fit_splitter_delayed()
 
     def _fit_splitter(self):
-        """يضبط الـ splitter فوراً."""
         self._splitter.fit_now()
 
     def _fit_splitter_delayed(self, delay_ms: int = 80):
-        """يضبط الـ splitter بعد اكتمال الـ layout."""
         self._splitter.fit_delayed(delay_ms)
 
     def _on_order_selected(self, order_id: int):
