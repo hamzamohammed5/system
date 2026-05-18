@@ -5,32 +5,9 @@ BaseDetailPanel — قاعدة مشتركة لكل لوحات التفاصيل.
 
 توفر:
   - DetailHeader مع stat cards وأزرار ثابتة الحجم
-  - scroll area للمحتوى (vertical فقط، horizontal معطّل)
+  - scroll area للمحتوى (vertical + horizontal عند الحاجة)
   - EmptyState لما ما في اختيار
   - signals: saved(int), deleted()
-
-الاستخدام:
-    class MyDetailPanel(BaseDetailPanel):
-        EMPTY_ICON    = "📋"
-        EMPTY_TITLE   = "اختر عنصراً"
-        EMPTY_SUBTITLE= ""
-
-        def _build_header_cards(self):
-            self._card_name = self._hdr.add_stat_card("📌", "الاسم", color="#1565c0")
-
-        def _build_header_buttons(self):
-            self.btn_edit = self._hdr.toolbar.add_action("✏️ تعديل", "primary")
-            self.btn_edit.clicked.connect(self._on_edit)
-
-        def _build_content(self, lay):
-            self._table = make_detail_table(...)
-            lay.addWidget(self._table)
-
-        def _fill_data(self, data: dict):
-            self._card_name.set_value(data["name"])
-
-        def _load_data(self, item_id: int) -> dict:
-            return dict(fetch_item(self.conn, item_id))
 """
 
 from PyQt5.QtWidgets import (
@@ -46,15 +23,9 @@ _BG = "#f8f9fb"
 
 
 class BaseDetailPanel(QWidget):
-    """
-    قاعدة مشتركة للوحات التفاصيل.
-    الـ detail panel يكبر مع النافذة (Expanding).
-    """
-
     saved   = pyqtSignal(int)
     deleted = pyqtSignal()
 
-    # ── قابل للـ override ──
     EMPTY_ICON     : str = "📋"
     EMPTY_TITLE    : str = "اختر عنصراً من القائمة"
     EMPTY_SUBTITLE : str = ""
@@ -75,23 +46,18 @@ class BaseDetailPanel(QWidget):
     # ══════════════════════════════════════════════════════
 
     def _build_header_cards(self):
-        """أضف stat cards للـ header هنا."""
         pass
 
     def _build_header_buttons(self):
-        """أضف أزرار الـ header هنا."""
         pass
 
     def _build_content(self, lay: QVBoxLayout):
-        """ابنِ محتوى التفاصيل هنا."""
         pass
 
     def _load_data(self, item_id: int):
-        """اجلب بيانات العنصر من DB."""
         return None
 
     def _fill_data(self, data):
-        """امل الـ UI ببيانات العنصر."""
         pass
 
     # ══════════════════════════════════════════════════════
@@ -113,7 +79,8 @@ class BaseDetailPanel(QWidget):
         # ── Scroll + Content ──
         scroll = QScrollArea()
         scroll.setWidgetResizable(True)
-        scroll.setHorizontalScrollBarPolicy(Qt.ScrollBarAlwaysOff)
+        # ✅ يظهر horizontal scroll تلقائياً لو المحتوى أعرض من النافذة
+        scroll.setHorizontalScrollBarPolicy(Qt.ScrollBarAsNeeded)
         scroll.setVerticalScrollBarPolicy(Qt.ScrollBarAsNeeded)
         scroll.setStyleSheet(SCROLL_SS)
 
