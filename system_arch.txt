@@ -1,5 +1,5 @@
 File Tree Snapshot
-Generated : 2026-05-18 08:31:07
+Generated : 2026-05-18 08:47:30
 Source    : D:\My Workspace\Hg\Alhabaar\accountant\system
 Extensions: .py
 ────────────────────────────────────────────────────────────
@@ -163,6 +163,9 @@ system/
 │   │   │   │   ├── customer_detail_panel.py
 │   │   │   │   └── customers_list_panel.py
 │   │   │   ├── order_detail/
+│   │   │   │   ├── _header_fill.py
+│   │   │   │   ├── _items_section.py
+│   │   │   │   ├── _log_section.py
 │   │   │   │   ├── _status_config.py
 │   │   │   │   └── _status_dialog.py
 │   │   │   ├── order_form/

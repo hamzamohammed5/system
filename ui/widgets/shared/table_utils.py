@@ -4,8 +4,7 @@ ui/widgets/shared/table_utils.py
 جداول بعرض ثابت مبني على المحتوى — مش بتتمدد مع النافذة.
 
 القاعدة الأساسية:
-  - كل الجداول SizePolicy = Preferred, Preferred
-  - الأزرار SizePolicy = Fixed
+  - كل الجداول SizePolicy = Fixed في الـ list panels
   - عرض النافذة أقصى ما يكون على قد ما الـ horizontal scroll يختفي
   - الجداول والأزرار حجمهم ثابت
 """
@@ -108,7 +107,8 @@ def _build_table(columns: list,
                  min_height: int = None,
                  alternating: bool = True,
                  row_height: int = None,
-                 resizable: bool = True) -> QTableWidget:
+                 resizable: bool = True,
+                 fixed_size: bool = False) -> QTableWidget:
 
     table = QTableWidget()
     table.setColumnCount(len(columns))
@@ -166,14 +166,18 @@ def _build_table(columns: list,
     if min_height:
         table.setMinimumHeight(min_height)
 
-    # ── الجدول مش بيتمدد أفقياً مع النافذة ──
-    table.setSizePolicy(QSizePolicy.Preferred, QSizePolicy.Preferred)
+    if fixed_size:
+        # الجداول في الـ list panels — عرض ثابت لا يتمدد
+        table.setSizePolicy(QSizePolicy.Fixed, QSizePolicy.Expanding)
+    else:
+        # الجداول في الـ detail panels — عرض مرن
+        table.setSizePolicy(QSizePolicy.Preferred, QSizePolicy.Preferred)
 
     return table
 
 
 # ══════════════════════════════════════════════════════════
-# calc_table_width — يحسب عرض الجدول من الأعمدة
+# calc_table_width
 # ══════════════════════════════════════════════════════════
 
 def calc_table_width(table: QTableWidget,
@@ -189,17 +193,13 @@ def calc_table_width(table: QTableWidget,
 
 
 # ══════════════════════════════════════════════════════════
-# fit_table_to_content — يجمّد عرض الجدول على المحتوى
+# fit_table_to_content
 # ══════════════════════════════════════════════════════════
 
 def fit_table_to_content(table: QTableWidget,
                          min_w: int = 200,
                          max_w: int = 1200,
                          padding: int = _TOOLBAR_PAD):
-    """
-    يضبط setMaximumWidth للجدول على قد المحتوى.
-    استدعيها بعد ملء البيانات وبعد auto_fit_columns.
-    """
     total = calc_table_width(table, padding)
     clamped = max(min_w, min(total, max_w))
     table.setMaximumWidth(clamped)
@@ -306,6 +306,7 @@ def make_detail_table(columns: list,
         variant="normal",
         max_height=max_height, min_height=min_height,
         row_height=row_height, resizable=resizable,
+        fixed_size=False,
     )
 
 
@@ -324,22 +325,28 @@ def make_compact_table(columns: list,
         max_height=max_height,
         row_height=ROW_HEIGHT_COMPACT,
         resizable=resizable,
+        fixed_size=False,
     )
 
 
 # ══════════════════════════════════════════════════════════
-# make_list_table
+# make_list_table — الجداول في الـ list panels (عرض ثابت)
 # ══════════════════════════════════════════════════════════
 
 def make_list_table(columns: list,
                     stretch_col: int = -1,
                     col_widths: dict = None,
                     resizable: bool = True) -> QTableWidget:
+    """
+    جدول للـ list panel — عرضه ثابت على المحتوى.
+    السيزبوليسي Fixed عشان مش يتمدد مع النافذة.
+    """
     table = _build_table(
         columns, stretch_col, col_widths,
         variant="normal",
         row_height=ROW_HEIGHT_LARGE,
         resizable=resizable,
+        fixed_size=True,   # ← المهم: عرض ثابت
     )
     table.setStyleSheet(table.styleSheet() + """
         QTableWidget {
@@ -347,6 +354,8 @@ def make_list_table(columns: list,
             border-radius: 0;
         }
     """)
+    # منع الـ horizontal scroll في الـ list table
+    table.setHorizontalScrollBarPolicy(Qt.ScrollBarAlwaysOff)
     return table
 
 

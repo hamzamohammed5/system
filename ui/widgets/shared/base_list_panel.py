@@ -5,55 +5,61 @@ BaseListPanel — قاعدة مشتركة لكل لوحات القوائم.
 
 توفر:
   - toolbar فوق الجدول (بحث + أزرار)
-  - جدول بعرض ثابت من المحتوى
+  - جدول بعرض ثابت من المحتوى (لا يتمدد مع النافذة)
   - status bar تحت الجدول
   - signal: item_selected(int id)
+  - auto-fit للعرض بعد كل تحديث
 
 الاستخدام:
     class MyListPanel(BaseListPanel):
-        COLUMNS    = ["الكود", "الاسم", "الحالة"]
+        COLUMNS     = ["الكود", "الاسم", "الحالة"]
         STRETCH_COL = 1
 
         def _load_rows(self):
             return fetch_all_items(self.conn)
 
         def _fill_row(self, table, r, row):
-            table.setItem(r, 0, make_table_item(row["code"]))
+            table.setItem(r, 0, make_table_item(row["code"], user_data=row["id"]))
             ...
 
-        def _match_filter(self, row, q, **kwargs) -> bool:
+        def _match_filter(self, row, q) -> bool:
             return q in row["name"].lower()
 """
 
 from PyQt5.QtWidgets import (
     QWidget, QVBoxLayout, QLabel, QFrame,
     QLineEdit, QPushButton, QHBoxLayout,
-    QHeaderView, QAbstractItemView,
+    QSizePolicy,
 )
 from PyQt5.QtCore import Qt, pyqtSignal, QTimer
 
 from ui.widgets.shared.table_utils import (
-    make_list_table, auto_fit_columns,
-    fit_table_to_content, ROW_HEIGHT_LARGE,
+    make_list_table, auto_fit_columns, calc_table_width,
+    ROW_HEIGHT_LARGE,
 )
 from ui.app_settings import _C
+
+_MIN_W = 260
+_MAX_W = 580
 
 
 class BaseListPanel(QWidget):
     """
     قاعدة مشتركة للوحات القوائم.
+
     Override:
-      COLUMNS, STRETCH_COL, _load_rows(), _fill_row(), _match_filter()
+      COLUMNS, STRETCH_COL, COL_WIDTHS
+      _load_rows(), _fill_row(), _match_filter(), _get_row_id()
     """
 
-    item_selected = pyqtSignal(int)   # يُطلق بالـ id لما يُختار صف
+    item_selected = pyqtSignal(int)
 
     # ── قابل للـ override ──
     COLUMNS     : list = []
     STRETCH_COL : int  = -1
     COL_WIDTHS  : dict = None
-    MIN_W       : int  = 280
-    MAX_W       : int  = 560
+    MIN_W       : int  = _MIN_W
+    MAX_W       : int  = _MAX_W
 
     def __init__(self, conn=None, parent=None):
         super().__init__(parent)
@@ -63,27 +69,27 @@ class BaseListPanel(QWidget):
         self._timer.setSingleShot(True)
         self._timer.setInterval(250)
         self._timer.timeout.connect(self._apply_filter)
+
+        # الـ list panel عرضه ثابت — لا يتمدد مع النافذة
+        self.setSizePolicy(QSizePolicy.Fixed, QSizePolicy.Expanding)
+
         self._build()
         self.refresh()
 
     # ══════════════════════════════════════════════════════
-    # override هنا في الـ subclass
+    # override في الـ subclass
     # ══════════════════════════════════════════════════════
 
     def _load_rows(self) -> list:
-        """يرجع كل الصفوف من DB."""
         return []
 
     def _fill_row(self, table, row_idx: int, row_data):
-        """يملأ صف واحد في الجدول."""
         pass
 
     def _match_filter(self, row_data, q: str) -> bool:
-        """يرجع True لو الصف يطابق البحث."""
         return True
 
     def _get_row_id(self, row_data) -> int:
-        """يرجع الـ id من بيانات الصف."""
         if isinstance(row_data, dict):
             return row_data.get("id", 0)
         return 0
@@ -112,12 +118,14 @@ class BaseListPanel(QWidget):
         self._build_toolbar(self._toolbar_lay)
         root.addWidget(self._toolbar)
 
-        # ── جدول ──
+        # ── جدول بعرض ثابت ──
         self.table = make_list_table(
             self.COLUMNS,
             stretch_col=self.STRETCH_COL,
             col_widths=self.COL_WIDTHS,
         )
+        # الـ horizontal scroll معطّل دايماً في الـ list panel
+        self.table.setHorizontalScrollBarPolicy(Qt.ScrollBarAlwaysOff)
         self.table.itemSelectionChanged.connect(self._on_select)
         root.addWidget(self.table, stretch=1)
 
@@ -154,7 +162,6 @@ class BaseListPanel(QWidget):
         """)
         self.inp_search.textChanged.connect(lambda: self._timer.start())
         row.addWidget(self.inp_search, stretch=1)
-
         lay.addLayout(row)
 
     # ══════════════════════════════════════════════════════
@@ -166,7 +173,10 @@ class BaseListPanel(QWidget):
         self._apply_filter()
 
     def _apply_filter(self):
-        q = self.inp_search.text().strip().lower() if hasattr(self, 'inp_search') else ""
+        q = ""
+        if hasattr(self, 'inp_search'):
+            q = self.inp_search.text().strip().lower()
+
         filtered = [r for r in self._all_rows if self._match_filter(r, q)]
         self._fill_table(filtered)
 
@@ -177,13 +187,7 @@ class BaseListPanel(QWidget):
         )
 
         if filtered:
-            auto_fit_columns(
-                self.table,
-                fixed_cols=[i for i in range(self.table.columnCount())
-                             if i != self.STRETCH_COL],
-                stretch_col=self.STRETCH_COL,
-                min_width=40, max_width=300,
-            )
+            self._auto_resize()
 
     def _fill_table(self, rows: list):
         self.table.setRowCount(0)
@@ -193,6 +197,23 @@ class BaseListPanel(QWidget):
             self.table.setRowHeight(r, ROW_HEIGHT_LARGE)
             self._fill_row(self.table, r, row_data)
 
+    def _auto_resize(self):
+        """
+        يضبط عرض الأعمدة ثم يجمّد عرض الـ panel على قد المحتوى.
+        الـ horizontal scroll يختفي لأن العرض مضبوط بالضبط.
+        """
+        all_cols = [i for i in range(self.table.columnCount())
+                    if i != self.STRETCH_COL]
+        auto_fit_columns(
+            self.table,
+            fixed_cols=all_cols,
+            stretch_col=self.STRETCH_COL,
+            min_width=40, max_width=300,
+        )
+        w = calc_table_width(self.table, padding=12)
+        w = max(self.MIN_W, min(w, self.MAX_W))
+        self.setFixedWidth(w)
+
     # ══════════════════════════════════════════════════════
     # selection
     # ══════════════════════════════════════════════════════
@@ -201,7 +222,6 @@ class BaseListPanel(QWidget):
         row = self.table.currentRow()
         if row < 0:
             return
-        # نحاول نجيب الـ id من العمود الأول
         item = self.table.item(row, 0)
         if item:
             data = item.data(Qt.UserRole)

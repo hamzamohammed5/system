@@ -53,6 +53,7 @@ class ActionToolbar(QWidget):
 
     def add_action(self, text: str, style: str = "normal",
                    callback=None, enabled: bool = True) -> QPushButton:
+        """يضيف زر عادي على اليسار — حجمه ثابت."""
         btn = _make_btn(text, style)
         btn.setEnabled(enabled)
         btn.setSizePolicy(QSizePolicy.Fixed, QSizePolicy.Fixed)
@@ -63,6 +64,7 @@ class ActionToolbar(QWidget):
 
     def add_danger(self, text: str, callback=None,
                    enabled: bool = True) -> QPushButton:
+        """يضيف زر خطر على اليمين — حجمه ثابت."""
         btn = _make_btn(text, "danger")
         btn.setEnabled(enabled)
         btn.setSizePolicy(QSizePolicy.Fixed, QSizePolicy.Fixed)

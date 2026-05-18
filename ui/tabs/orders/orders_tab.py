@@ -30,7 +30,8 @@ class OrdersTab(BaseSection):
         self._detail.saved.connect(self._on_saved)
         self._detail.deleted.connect(self._on_deleted)
         self._detail.status_changed.connect(self._on_status_changed)
-        self._list._filter_bar.changed.connect(self._fit_splitter)
+        # لما الفلتر يتغير، نضبط عرض الـ splitter
+        self._list._filter_bar.changed.connect(self._fit_splitter_delayed)
 
     # ══════════════════════════════════════════════════════
     # handlers
@@ -56,3 +57,7 @@ class OrdersTab(BaseSection):
         self._list.refresh()
         self._list.select_order(order_id)
         self._detail.load_order(order_id)
+
+    def _fit_splitter_delayed(self, *args):
+        """wrapper يتجاهل أي arguments من الـ signals."""
+        super()._fit_splitter_delayed()

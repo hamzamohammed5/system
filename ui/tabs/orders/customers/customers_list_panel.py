@@ -1,14 +1,13 @@
 """
 ui/tabs/orders/customers/customers_list_panel.py
 =================================================
-لوحة قائمة العملاء — جدول بعرض ثابت على المحتوى.
+لوحة قائمة العملاء — جدول بعرض ثابت على المحتوى، لا يتمدد.
 """
 
 from PyQt5.QtWidgets import (
     QWidget, QVBoxLayout, QHBoxLayout,
     QFrame, QLabel, QLineEdit, QPushButton,
-    QTableWidget, QHeaderView, QComboBox,
-    QAbstractItemView, QSizePolicy,
+    QComboBox, QSizePolicy,
 )
 from PyQt5.QtCore import Qt, pyqtSignal, QTimer
 
@@ -16,14 +15,14 @@ from db.orders.customers_repo import fetch_all_customers
 
 from ui.widgets.shared.table_utils import (
     make_table_item, color_item, bold_item, muted_item,
-    auto_fit_columns, fit_table_to_content, ROW_HEIGHT_LARGE,
+    auto_fit_columns, calc_table_width, ROW_HEIGHT_LARGE,
     make_list_table,
 )
 from ui.app_settings import _C
 
-_BG    = _C['bg_input']
-_WHITE = "#ffffff"
-_BLUE  = _C['accent']
+_BG     = _C['bg_input']
+_WHITE  = "#ffffff"
+_BLUE   = _C['accent']
 _BORDER = _C['border']
 
 _COMBO_SS = f"""
@@ -49,7 +48,8 @@ class CustomersListPanel(QWidget):
         self._timer.setSingleShot(True)
         self._timer.setInterval(250)
         self._timer.timeout.connect(self._apply_filter)
-        # الـ list panel عرضه ثابت
+
+        # عرض ثابت — لا يتمدد مع النافذة
         self.setSizePolicy(QSizePolicy.Fixed, QSizePolicy.Expanding)
         self._build()
         self._load()
@@ -120,13 +120,12 @@ class CustomersListPanel(QWidget):
         tb.addLayout(row2)
         root.addWidget(toolbar)
 
-        # ── الجدول — عرض ثابت ──
+        # ── الجدول — عرض ثابت، بدون horizontal scroll ──
         self.table = make_list_table(
             columns=["الكود", "الاسم", "الهاتف", "المدينة", "الطلبات"],
             stretch_col=1,
             col_widths={0: 80, 2: 110, 3: 80, 4: 55},
         )
-        # لا نسمح بـ horizontal scroll — العرض مضبوط
         self.table.setHorizontalScrollBarPolicy(Qt.ScrollBarAlwaysOff)
         self.table.itemSelectionChanged.connect(self._on_select)
         root.addWidget(self.table, stretch=1)
@@ -165,8 +164,9 @@ class CustomersListPanel(QWidget):
             self.table.insertRow(r)
             self.table.setRowHeight(r, ROW_HEIGHT_LARGE)
 
-            code_item = make_table_item(row["code"] or "", user_data=row["id"],
-                                        tooltip=row["code"] or "")
+            code_item = make_table_item(
+                row["code"] or "", user_data=row["id"],
+                tooltip=row["code"] or "")
             muted_item(code_item)
             self.table.setItem(r, 0, code_item)
 
@@ -182,8 +182,8 @@ class CustomersListPanel(QWidget):
             self.table.setItem(r, 3, muted_item(make_table_item(
                 row["city"] or "—", tooltip=row["city"] or "")))
 
-            cnt_item = make_table_item(str(row["orders_count"] or 0),
-                                       align=Qt.AlignCenter)
+            cnt_item = make_table_item(
+                str(row["orders_count"] or 0), align=Qt.AlignCenter)
             color_item(cnt_item, _BLUE)
             self.table.setItem(r, 4, cnt_item)
 
@@ -194,13 +194,17 @@ class CustomersListPanel(QWidget):
         )
 
         if filtered:
-            # اضبط عرض الأعمدة على المحتوى
-            auto_fit_columns(self.table, fixed_cols=[0, 2, 3, 4],
-                             stretch_col=1, min_width=40, max_width=180)
-            # اضبط عرض الـ widget على قد الجدول
-            from ui.widgets.shared.table_utils import calc_table_width
+            # ضبط عرض الأعمدة على المحتوى
+            auto_fit_columns(
+                self.table,
+                fixed_cols=[0, 2, 3, 4],
+                stretch_col=1,
+                min_width=40, max_width=180,
+            )
+            # ضبط عرض الـ panel — horizontal scroll يختفي
             w = calc_table_width(self.table, padding=12)
-            self.setFixedWidth(max(280, min(w, 560)))
+            w = max(280, min(w, 560))
+            self.setFixedWidth(w)
 
     def _on_select(self):
         row = self.table.currentRow()

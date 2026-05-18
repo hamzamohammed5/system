@@ -4,19 +4,21 @@ ui/widgets/shared/base_detail_panel.py
 BaseDetailPanel — قاعدة مشتركة لكل لوحات التفاصيل.
 
 توفر:
-  - DetailHeader مع stat cards وأزرار
-  - scroll area للمحتوى
+  - DetailHeader مع stat cards وأزرار ثابتة الحجم
+  - scroll area للمحتوى (vertical فقط، horizontal معطّل)
   - EmptyState لما ما في اختيار
   - signals: saved(int), deleted()
 
 الاستخدام:
     class MyDetailPanel(BaseDetailPanel):
+        EMPTY_ICON    = "📋"
+        EMPTY_TITLE   = "اختر عنصراً"
+        EMPTY_SUBTITLE= ""
+
         def _build_content(self, lay):
-            # أضف widgets على lay
             ...
 
         def _fill_data(self, data: dict):
-            # ملء البيانات في الـ widgets
             ...
 
         def _load_data(self, item_id: int) -> dict:
@@ -24,7 +26,7 @@ BaseDetailPanel — قاعدة مشتركة لكل لوحات التفاصيل.
 """
 
 from PyQt5.QtWidgets import (
-    QWidget, QVBoxLayout, QScrollArea,
+    QWidget, QVBoxLayout, QScrollArea, QSizePolicy,
 )
 from PyQt5.QtCore import Qt, pyqtSignal
 
@@ -38,11 +40,7 @@ _BG = "#f8f9fb"
 class BaseDetailPanel(QWidget):
     """
     قاعدة مشتركة للوحات التفاصيل.
-
-    Override:
-      EMPTY_ICON, EMPTY_TITLE, EMPTY_SUBTITLE
-      _build_content(lay), _fill_data(data), _load_data(item_id)
-      _build_header_cards(), _build_header_buttons()
+    الـ detail panel يكبر مع النافذة (Expanding).
     """
 
     saved   = pyqtSignal(int)
@@ -59,6 +57,10 @@ class BaseDetailPanel(QWidget):
         self.conn       = conn
         self._item_id   = None
         self._item_data = None
+
+        # الـ detail panel يكبر مع النافذة
+        self.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Expanding)
+
         self._build_base()
         self._show_empty()
 
@@ -67,23 +69,18 @@ class BaseDetailPanel(QWidget):
     # ══════════════════════════════════════════════════════
 
     def _build_header_cards(self):
-        """أضف stat cards على الـ header."""
         pass
 
     def _build_header_buttons(self):
-        """أضف أزرار على الـ header toolbar."""
         pass
 
     def _build_content(self, lay: QVBoxLayout):
-        """ابن المحتوى الداخلي على الـ layout."""
         pass
 
     def _load_data(self, item_id: int):
-        """يجلب بيانات العنصر من DB."""
         return None
 
     def _fill_data(self, data):
-        """يملأ الـ widgets بالبيانات."""
         pass
 
     # ══════════════════════════════════════════════════════
@@ -105,7 +102,9 @@ class BaseDetailPanel(QWidget):
         # ── Scroll + Content ──
         scroll = QScrollArea()
         scroll.setWidgetResizable(True)
+        # الـ detail panel: vertical scroll فقط، horizontal معطّل
         scroll.setHorizontalScrollBarPolicy(Qt.ScrollBarAlwaysOff)
+        scroll.setVerticalScrollBarPolicy(Qt.ScrollBarAsNeeded)
         scroll.setStyleSheet(SCROLL_SS)
 
         content = QWidget()

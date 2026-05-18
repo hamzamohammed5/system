@@ -1,12 +1,12 @@
 """
 ui/tabs/orders/orders/_orders_list_panel.py
 ============================================
-لوحة قائمة الطلبات — جدول بعرض ثابت، مش بيتمدد مع النافذة.
+لوحة قائمة الطلبات — جدول بعرض ثابت على المحتوى، لا يتمدد مع النافذة.
 """
 
 from PyQt5.QtWidgets import (
-    QWidget, QVBoxLayout, QLabel, QHeaderView,
-    QAbstractItemView, QSizePolicy,
+    QWidget, QVBoxLayout, QLabel,
+    QSizePolicy,
 )
 from PyQt5.QtCore import Qt, pyqtSignal
 
@@ -23,7 +23,6 @@ from ui.widgets.shared.panels import EmptyState
 from ._filter_toolbar   import _FilterToolbar
 from ._status_delegate  import _StatusDelegate
 
-# ── ثوابت الحالة ──
 STATUS_LABELS = {
     "pending":     ("⏳ انتظار",   "#b45309"),
     "confirmed":   ("✅ مؤكد",     "#1d4ed8"),
@@ -53,7 +52,7 @@ class _OrdersListPanel(QWidget):
         super().__init__(parent)
         self.conn      = conn
         self._all_rows = []
-        # عرض ثابت — مش بيتمدد
+        # عرض ثابت — مش بيتمدد مع النافذة أبداً
         self.setSizePolicy(QSizePolicy.Fixed, QSizePolicy.Expanding)
         self._build()
         self._load()
@@ -71,18 +70,17 @@ class _OrdersListPanel(QWidget):
         self._filter_bar.changed.connect(self._apply_filter)
         root.addWidget(self._filter_bar)
 
-        # ── الجدول — عرض ثابت ──
+        # ── الجدول — عرض ثابت، بدون horizontal scroll ──
         self.table = make_list_table(
             columns=["رقم الطلب", "العميل", "الحالة", "⚑", "التاريخ"],
-            stretch_col=-1,   # مفيش stretch — كل الأعمدة interactive
+            stretch_col=-1,
             col_widths={0: 130, 1: 150, 2: 95, 3: 32, 4: 90},
         )
-        # لا نسمح بـ horizontal scroll — العرض مضبوط
+        # الـ horizontal scroll معطّل دايماً
         self.table.setHorizontalScrollBarPolicy(Qt.ScrollBarAlwaysOff)
 
         self._status_delegate = _StatusDelegate(self.table)
         self.table.setItemDelegateForColumn(2, self._status_delegate)
-
         self.table.itemSelectionChanged.connect(self._on_select)
         root.addWidget(self.table, stretch=1)
 
@@ -143,32 +141,28 @@ class _OrdersListPanel(QWidget):
             self.table.insertRow(r)
             self.table.setRowHeight(r, ROW_HEIGHT_LARGE)
 
-            # رقم الطلب
             num_item = make_table_item(row["order_number"], user_data=row["id"])
             bold_item(num_item)
             color_item(num_item, _C['accent'])
             self.table.setItem(r, 0, num_item)
 
-            # العميل
             cust_item = make_table_item(row["customer_name"],
                                         tooltip=row["customer_name"])
             self.table.setItem(r, 1, cust_item)
 
-            # الحالة
             status_text = STATUS_LABELS.get(row["status"], (row["status"],))[0]
             s_item = make_table_item(status_text, align=Qt.AlignCenter)
             s_item.setData(Qt.UserRole + 1, row["status"])
             self.table.setItem(r, 2, s_item)
 
-            # الأولوية
-            pri_icon, pri_color = PRIORITY_LABELS.get(row["priority"], ("", "#555"))
+            pri_icon, pri_color = PRIORITY_LABELS.get(
+                row["priority"], ("", "#555"))
             pri_item = make_table_item(pri_icon, align=Qt.AlignCenter)
             color_item(pri_item, pri_color)
             if row["priority"] in ("high", "urgent"):
                 bold_item(pri_item)
             self.table.setItem(r, 3, pri_item)
 
-            # التاريخ
             date_str  = (row["order_date"] or "")[:10]
             date_item = muted_item(make_table_item(date_str))
             self.table.setItem(r, 4, date_item)
@@ -182,12 +176,14 @@ class _OrdersListPanel(QWidget):
         if has_data:
             # ضبط عرض الأعمدة على المحتوى
             self.table.resizeColumnsToContents()
+            # عمود الأولوية — حد أدنى 32
             if self.table.columnWidth(3) < 32:
                 self.table.setColumnWidth(3, 32)
 
-            # ضبط عرض الـ panel على قد الجدول — الـ horizontal scroll يختفي
+            # ضبط عرض الـ panel على قد الجدول — horizontal scroll يختفي
             w = calc_table_width(self.table, padding=12)
-            self.setFixedWidth(max(280, min(w, 560)))
+            w = max(280, min(w, 560))
+            self.setFixedWidth(w)
 
     def _on_select(self):
         row = self.table.currentRow()

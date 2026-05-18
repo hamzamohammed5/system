@@ -3,25 +3,14 @@ ui/widgets/shared/base_section.py
 ===================================
 BaseSection — قاعدة مشتركة للأقسام اللي فيها list + detail.
 
-توفر:
-  - SmartSplitter يقسم الـ list والـ detail
-  - عرض الـ list ثابت على قد المحتوى
-  - الـ detail يكبر مع النافذة
-  - الـ horizontal scroll يختفي لأن العرض مضبوط
-
-الاستخدام:
-    class MySection(BaseSection):
-        def _create_list(self) -> BaseListPanel:
-            return MyListPanel(self.conn)
-
-        def _create_detail(self) -> BaseDetailPanel:
-            return MyDetailPanel(self.conn)
-
-        def _connect_signals(self):
-            self._list.item_selected.connect(self._detail.load_item)
+القاعدة:
+  - الـ list panel عرضه Fixed = عرض الأعمدة بالضبط
+  - الـ detail panel Expanding يأخذ كل الزيادة عند تكبير النافذة
+  - الـ horizontal scroll في الـ list panel معطّل دايماً
+  - لما النافذة تكبر، الـ list panel مش بيتأثر
 """
 
-from PyQt5.QtWidgets import QWidget, QHBoxLayout
+from PyQt5.QtWidgets import QWidget, QHBoxLayout, QSizePolicy
 from PyQt5.QtCore    import Qt
 
 from ui.widgets.shared.splitter_utils import SmartSplitter
@@ -51,19 +40,15 @@ class BaseSection(QWidget):
     # ══════════════════════════════════════════════════════
 
     def _create_list(self):
-        """يرجع الـ list panel."""
         raise NotImplementedError
 
     def _create_detail(self):
-        """يرجع الـ detail panel."""
         raise NotImplementedError
 
     def _connect_signals(self):
-        """يربط الـ signals بين الـ list والـ detail."""
         pass
 
     def _get_list_table(self):
-        """يرجع الجدول الرئيسي في الـ list panel."""
         if hasattr(self._list, 'table'):
             return self._list.table
         return None
@@ -82,10 +67,18 @@ class BaseSection(QWidget):
         self._list   = self._create_list()
         self._detail = self._create_detail()
 
+        # الـ list: Fixed — لا يتمدد أبداً
+        self._list.setSizePolicy(QSizePolicy.Fixed, QSizePolicy.Expanding)
+
+        # الـ detail: Expanding — يأخذ كل المساحة الزيادة
+        self._detail.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Expanding)
+
         self._splitter.addWidget(self._list)
         self._splitter.addWidget(self._detail)
         self._splitter.setCollapsible(0, False)
         self._splitter.setCollapsible(1, False)
+        self._splitter.setStretchFactor(0, 0)   # list: لا stretch
+        self._splitter.setStretchFactor(1, 1)   # detail: كل الزيادة
 
         table = self._get_list_table()
         if table:
