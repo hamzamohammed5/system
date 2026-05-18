@@ -1,5 +1,5 @@
 File Tree Snapshot
-Generated : 2026-05-18 11:27:23
+Generated : 2026-05-18 11:44:23
 Source    : D:\My Workspace\Hg\Alhabaar\accountant\system
 Extensions: .py
 ────────────────────────────────────────────────────────────
@@ -162,6 +162,11 @@ system/
 │   │   │   ├── customers/
 │   │   │   │   ├── customer_detail_panel.py
 │   │   │   │   └── customers_list_panel.py
+│   │   │   ├── dashboard/
+│   │   │   │   ├── _config.py
+│   │   │   │   ├── _recent_table.py
+│   │   │   │   ├── _status_grid.py
+│   │   │   │   └── _top_cards.py
 │   │   │   ├── order_detail/
 │   │   │   │   ├── _header_fill.py
 │   │   │   │   ├── _items_section.py
@@ -215,6 +220,7 @@ system/
 │   │       ├── panles_helper/
 │   │       │   ├── action_toolbar.py
 │   │       │   ├── badge_label.py
+│   │       │   ├── card_grid.py
 │   │       │   ├── collapsible_card.py
 │   │       │   ├── colors_and_base.py
 │   │       │   ├── detail_header.py
@@ -222,7 +228,8 @@ system/
 │   │       │   ├── info_row.py
 │   │       │   ├── make_btn.py
 │   │       │   ├── section_header.py
-│   │       │   └── stat_card.py
+│   │       │   ├── stat_card.py
+│   │       │   └── status_chip.py
 │   │       ├── base_detail_panel.py
 │   │       ├── base_list_panel.py
 │   │       ├── base_section.py

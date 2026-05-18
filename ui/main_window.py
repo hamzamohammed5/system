@@ -8,6 +8,7 @@ ui/main_window.py
   ✅ الـ content عرضه يكفي بالضبط إن الـ horizontal scroll يختفي
   ✅ الجداول والأزرار حجمهم ثابت ومش بيتمدد
   ✅ الـ sidebar عرضه ثابت — لا يتمدد أبداً
+  ✅ حجم النافذة الافتراضي = sidebar + محتوى كافٍ بالضبط
 """
 
 from PyQt5.QtWidgets import (
@@ -29,10 +30,11 @@ from ui.app_settings              import get_font_size, _C
 SIDEBAR_EXPANDED_WIDTH  = 224
 SIDEBAR_COLLAPSED_WIDTH = 56
 
+# ✅ الحد الأدنى لعرض الـ content حتى يختفي الـ horizontal scroll
+# = عرض الـ list panel + عرض الـ detail panel الأدنى
+CONTENT_MIN_WIDTH = 820   # 280 (list) + 5 (splitter) + 535 (detail min)
+WINDOW_DEFAULT_W  = SIDEBAR_EXPANDED_WIDTH + CONTENT_MIN_WIDTH  # ≈ 1044
 
-# ══════════════════════════════════════════════════════════
-# Scroll wrapper — للمحتوى اللي محتاج scroll
-# ══════════════════════════════════════════════════════════
 
 _SCROLL_SS = f"""
     QScrollArea {{
@@ -291,7 +293,7 @@ class _Sidebar(QFrame):
                 border-left: 1px solid {_C['sidebar_border']};
             }}
         """)
-        self._buttons: list       = []
+        self._buttons: list        = []
         self._section_labels: list = []
         self._build()
 
@@ -477,9 +479,13 @@ class MainWindow(QMainWindow):
         self._app = app
 
         self.setWindowTitle("ERP — نظام إدارة التكاليف")
-        self.resize(1300, 820)
+
+        # ✅ الحجم الافتراضي = sidebar + content بالضبط (بدون مساحة زيادة)
+        self.resize(WINDOW_DEFAULT_W, 820)
         self.setLayoutDirection(Qt.RightToLeft)
-        self.setMinimumSize(800, 500)
+
+        # ✅ الحد الأدنى = sidebar + حد أدنى للمحتوى
+        self.setMinimumSize(SIDEBAR_COLLAPSED_WIDTH + 600, 500)
 
         self._build()
         self._sidebar.get_buttons()[0].setChecked(True)
@@ -507,6 +513,9 @@ class MainWindow(QMainWindow):
         self._stack = QStackedWidget()
         self._stack.setStyleSheet(f"background: {_C['bg_page']};")
         self._stack.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Expanding)
+
+        # ✅ حد أدنى للـ stack = CONTENT_MIN_WIDTH عشان الـ scroll يختفي
+        self._stack.setMinimumWidth(CONTENT_MIN_WIDTH)
 
         self._costing    = CostingSection()
         self._pricing    = PricingSection()

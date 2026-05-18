@@ -2,20 +2,25 @@
 ui/tabs/orders/_customer_form.py
 =================================
 Dialog لإنشاء عميل جديد أو تعديل عميل موجود.
+
+✅ يستخدم make_compact_table من table_utils
+✅ الجداول Fixed — لا تتمدد
 """
 
 from PyQt5.QtWidgets import (
     QDialog, QVBoxLayout, QHBoxLayout, QFormLayout,
     QLabel, QLineEdit, QPushButton,
     QComboBox, QTextEdit, QGroupBox,
-    QMessageBox, QTableWidget, QTableWidgetItem,
-    QHeaderView, QAbstractItemView, QDialogButtonBox,
+    QMessageBox, QAbstractItemView,
 )
 from PyQt5.QtCore import Qt, pyqtSignal
 
 from db.orders.customers_repo import (
     fetch_customer, insert_customer, update_customer,
     fetch_contacts, insert_contact, update_contact, delete_contact,
+)
+from ui.widgets.shared.table_utils import (
+    make_compact_table, make_table_item, insert_row, ROW_HEIGHT_COMPACT,
 )
 
 
@@ -64,7 +69,7 @@ class _CustomerForm(QDialog):
         super().__init__(parent)
         self.conn        = conn
         self.customer_id = customer_id
-        self._contacts   = []   # قائمة جهات الاتصال المؤقتة
+        self._contacts   = []
 
         title = "تعديل بيانات العميل" if customer_id else "عميل جديد"
         self.setWindowTitle(title)
@@ -97,7 +102,7 @@ class _CustomerForm(QDialog):
 
         self.setStyleSheet(self.styleSheet() + _input_ss())
 
-        # ══ بيانات العميل الأساسية ════════════════════════
+        # ══ بيانات العميل الأساسية ══
         basic_grp = QGroupBox("البيانات الأساسية")
         basic_grp.setStyleSheet(_group_ss())
         form = QFormLayout(basic_grp)
@@ -140,46 +145,19 @@ class _CustomerForm(QDialog):
 
         root.addWidget(basic_grp)
 
-        # ══ جهات الاتصال الإضافية ══════════════════════════
+        # ══ جهات الاتصال الإضافية ══
         contacts_grp = QGroupBox("جهات الاتصال الإضافية")
         contacts_grp.setStyleSheet(_group_ss())
         c_lay = QVBoxLayout(contacts_grp)
         c_lay.setSpacing(8)
 
-        self.contacts_table = QTableWidget()
-        self.contacts_table.setColumnCount(5)
-        self.contacts_table.setHorizontalHeaderLabels(
-            ["الاسم", "الصفة", "الهاتف", "الإيميل", "ملاحظات"]
+        # ✅ استخدام make_compact_table من shared
+        self.contacts_table = make_compact_table(
+            columns=["الاسم", "الصفة", "الهاتف", "الإيميل", "ملاحظات"],
+            stretch_col=0,
+            col_widths={1: 80, 2: 100, 3: 120, 4: 120},
+            max_height=150,
         )
-        self.contacts_table.setSelectionBehavior(QAbstractItemView.SelectRows)
-        self.contacts_table.setEditTriggers(QAbstractItemView.NoEditTriggers)
-        self.contacts_table.verticalHeader().setVisible(False)
-        self.contacts_table.setMaximumHeight(150)
-        self.contacts_table.setStyleSheet("""
-            QTableWidget {
-                border: 1px solid #e5e9f0;
-                border-radius: 6px;
-                background: white;
-                font-size: 11px;
-                outline: none;
-            }
-            QTableWidget::item { padding: 5px 8px; }
-            QTableWidget::item:selected { background: #dbeafe; color: #1e40af; }
-            QHeaderView::section {
-                background: #f8f9fb; color: #6b7280;
-                font-size: 10px; font-weight: bold;
-                padding: 5px 8px; border: none;
-                border-bottom: 1px solid #e5e9f0;
-                border-right: 1px solid #e5e9f0;
-            }
-        """)
-        hh = self.contacts_table.horizontalHeader()
-        hh.setSectionResizeMode(0, QHeaderView.Stretch)
-        hh.setSectionResizeMode(1, QHeaderView.ResizeToContents)
-        hh.setSectionResizeMode(2, QHeaderView.ResizeToContents)
-        hh.setSectionResizeMode(3, QHeaderView.ResizeToContents)
-        hh.setSectionResizeMode(4, QHeaderView.Stretch)
-        hh.setDefaultAlignment(Qt.AlignRight | Qt.AlignVCenter)
         c_lay.addWidget(self.contacts_table)
 
         c_btn_row = QHBoxLayout()
@@ -214,7 +192,7 @@ class _CustomerForm(QDialog):
 
         root.addWidget(contacts_grp)
 
-        # ══ أزرار ══════════════════════════════════════════
+        # ══ أزرار ══
         btn_row = QHBoxLayout()
         btn_cancel = QPushButton("إلغاء")
         btn_cancel.setMinimumHeight(38)
@@ -272,24 +250,22 @@ class _CustomerForm(QDialog):
     def _refresh_contacts_table(self):
         self.contacts_table.setRowCount(0)
         for ct in self._contacts:
-            r = self.contacts_table.rowCount()
-            self.contacts_table.insertRow(r)
-            self.contacts_table.setRowHeight(r, 36)
+            r = insert_row(self.contacts_table, ROW_HEIGHT_COMPACT)
 
-            cid = ct.get("id") if isinstance(ct, dict) else ct["id"]
-            name = ct.get("name", "") if isinstance(ct, dict) else ct["name"]
-            role = ct.get("role", "") or ""
+            cid   = ct.get("id")   if isinstance(ct, dict) else ct["id"]
+            name  = ct.get("name", "")  if isinstance(ct, dict) else ct["name"]
+            role  = ct.get("role",  "") or ""
             phone = ct.get("phone", "") or ""
             email = ct.get("email", "") or ""
             notes = ct.get("notes", "") or ""
 
-            item0 = QTableWidgetItem(name)
-            item0.setData(Qt.UserRole, cid)
+            from ui.widgets.shared.table_utils import make_table_item
+            item0 = make_table_item(name, user_data=cid)
             self.contacts_table.setItem(r, 0, item0)
-            self.contacts_table.setItem(r, 1, QTableWidgetItem(role))
-            self.contacts_table.setItem(r, 2, QTableWidgetItem(phone))
-            self.contacts_table.setItem(r, 3, QTableWidgetItem(email))
-            self.contacts_table.setItem(r, 4, QTableWidgetItem(notes))
+            self.contacts_table.setItem(r, 1, make_table_item(role))
+            self.contacts_table.setItem(r, 2, make_table_item(phone))
+            self.contacts_table.setItem(r, 3, make_table_item(email))
+            self.contacts_table.setItem(r, 4, make_table_item(notes))
 
     # ══════════════════════════════════════════════════════
     # جهات الاتصال
@@ -346,7 +322,6 @@ class _CustomerForm(QDialog):
                 city=city, notes=notes,
             )
 
-        # حفظ جهات الاتصال الجديدة (اللي مالهاش id)
         for ct in self._contacts:
             if not ct.get("id"):
                 insert_contact(

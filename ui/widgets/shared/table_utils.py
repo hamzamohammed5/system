@@ -12,6 +12,7 @@ ui/widgets/shared/table_utils.py
   make_detail_table   — جدول تفاصيل موحد (بنود، سجل، ...)
   make_compact_table  — جدول صغير للـ sidebars والبطاقات
   make_list_table     — جدول قائمة رئيسية (يسار الـ splitter)
+  make_fixed_table    — جدول بعرض ثابت بالكامل (للـ dashboards)
   make_table_item     — إنشاء خلية مع بيانات مخفية وتوسيط اختياري
   color_item          — تلوين خلية
   bold_item           — تغليظ خلية
@@ -24,6 +25,7 @@ ui/widgets/shared/table_utils.py
 
 from PyQt5.QtWidgets import (
     QTableWidget, QTableWidgetItem, QHeaderView, QAbstractItemView,
+    QSizePolicy,
 )
 from PyQt5.QtCore import Qt
 from PyQt5.QtGui  import QColor, QFont
@@ -165,7 +167,7 @@ def _build_table(columns: list,
     hh.setHighlightSections(False)
     hh.setMinimumSectionSize(40)
 
-    # ✅ الجدول لا يحتاج horizontal scroll داخلي — عرضه بيتحدد بالأعمدة
+    # ✅ الجدول لا يحتاج horizontal scroll داخلي
     table.setHorizontalScrollMode(QAbstractItemView.ScrollPerPixel)
     table.setVerticalScrollMode(QAbstractItemView.ScrollPerPixel)
     # ✅ لا horizontal scroll في الجداول — العرض يكفي دايماً
@@ -240,6 +242,47 @@ def make_list_table(columns: list,
             border-radius: 0;
         }
     """)
+    return table
+
+
+# ══════════════════════════════════════════════════════════
+# make_fixed_table — جدول بعرض ثابت بالكامل (للـ dashboards)
+# ══════════════════════════════════════════════════════════
+
+def make_fixed_table(columns: list,
+                     col_widths: dict,
+                     max_height: int = None,
+                     min_height: int = 60,
+                     row_height: int = ROW_HEIGHT_NORMAL) -> QTableWidget:
+    """
+    جدول بعرض ثابت بالكامل — للـ dashboards والتقارير.
+
+    ✅ كل الأعمدة Fixed — لا يوجد stretch
+    ✅ عرض الجدول = مجموع عرض الأعمدة + 4 بالضبط
+    ✅ لا يتمدد مع النافذة أبداً
+
+    col_widths: dict مطلوب — يحدد عرض كل عمود بالـ index
+    """
+    table = _build_table(
+        columns, stretch_col=-1, col_widths=col_widths,
+        variant="normal",
+        max_height=max_height, min_height=min_height,
+        row_height=row_height
+    )
+
+    # ✅ كل الأعمدة Fixed
+    hh = table.horizontalHeader()
+    for i in range(len(columns)):
+        hh.setSectionResizeMode(i, QHeaderView.Fixed)
+        if i in col_widths:
+            table.setColumnWidth(i, col_widths[i])
+    hh.setStretchLastSection(False)
+
+    # ✅ عرض الجدول ثابت = مجموع الأعمدة + 4
+    total_w = sum(col_widths.get(i, 80) for i in range(len(columns))) + 4
+    table.setFixedWidth(total_w)
+    table.setSizePolicy(QSizePolicy.Fixed, QSizePolicy.Preferred)
+
     return table
 
 
