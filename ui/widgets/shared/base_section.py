@@ -4,16 +4,16 @@ ui/widgets/shared/base_section.py
 BaseSection — قاعدة مشتركة للأقسام اللي فيها list + detail.
 
 القاعدة:
-  - الـ list panel عرضه Fixed = عرض الأعمدة بالضبط
+  - الـ list panel عرضه Fixed = عرض الأعمدة بالضبط (من _auto_resize)
   - الـ detail panel Expanding يأخذ كل الزيادة عند تكبير النافذة
   - الـ horizontal scroll في الـ list panel معطّل دايماً
   - لما النافذة تكبر، الـ list panel مش بيتأثر
 """
 
-from PyQt5.QtWidgets import QWidget, QHBoxLayout, QSizePolicy
-from PyQt5.QtCore    import Qt
+from PyQt5.QtWidgets import QWidget, QHBoxLayout, QSizePolicy, QSplitter
+from PyQt5.QtCore    import Qt, QTimer
 
-from ui.widgets.shared.splitter_utils import SmartSplitter
+from ui.app_settings import _C
 
 
 class BaseSection(QWidget):
@@ -24,7 +24,6 @@ class BaseSection(QWidget):
       _create_list()       → يرجع list panel
       _create_detail()     → يرجع detail panel
       _connect_signals()   → يربط الـ signals
-      _get_list_table()    → يرجع الجدول الرئيسي في الـ list (اختياري)
       LIST_MIN_W, LIST_MAX_W
     """
 
@@ -36,7 +35,7 @@ class BaseSection(QWidget):
         self.conn = conn
         self._build()
         self._connect_signals()
-        self._splitter.fit_delayed(80)
+        QTimer.singleShot(0, self._fit_splitter)
 
     # ══════════════════════════════════════════════════════
     # override في الـ subclass
@@ -51,12 +50,6 @@ class BaseSection(QWidget):
     def _connect_signals(self):
         pass
 
-    def _get_list_table(self):
-        """يرجع الجدول الرئيسي في الـ list panel."""
-        if hasattr(self._list, 'table'):
-            return self._list.table
-        return None
-
     # ══════════════════════════════════════════════════════
     # بناء الواجهة
     # ══════════════════════════════════════════════════════
@@ -66,13 +59,16 @@ class BaseSection(QWidget):
         root.setContentsMargins(0, 0, 0, 0)
         root.setSpacing(0)
 
-        self._splitter = SmartSplitter(Qt.Horizontal)
+        self._splitter = QSplitter(Qt.Horizontal)
+        self._splitter.setHandleWidth(4)
+        self._splitter.setStyleSheet(f"""
+            QSplitter::handle {{ background: {_C['border']}; }}
+            QSplitter::handle:hover {{ background: {_C['accent_mid']}; }}
+            QSplitter::handle:pressed {{ background: {_C['accent']}; }}
+        """)
 
         self._list   = self._create_list()
         self._detail = self._create_detail()
-
-        # الـ list: Fixed — لا يتمدد أبداً
-        self._list.setSizePolicy(QSizePolicy.Fixed, QSizePolicy.Expanding)
 
         # الـ detail: Expanding — يأخذ كل المساحة الزيادة
         self._detail.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Expanding)
@@ -84,16 +80,6 @@ class BaseSection(QWidget):
         self._splitter.setStretchFactor(0, 0)   # list: لا stretch
         self._splitter.setStretchFactor(1, 1)   # detail: كل الزيادة
 
-        table = self._get_list_table()
-        if table:
-            self._splitter.set_list_widget(
-                self._list,
-                list_table=table,
-                min_w=self.LIST_MIN_W,
-                max_w=self.LIST_MAX_W,
-            )
-
-        self._splitter.setSizes([self.LIST_MIN_W, 800])
         root.addWidget(self._splitter)
 
     # ══════════════════════════════════════════════════════
@@ -101,10 +87,18 @@ class BaseSection(QWidget):
     # ══════════════════════════════════════════════════════
 
     def _fit_splitter(self):
-        self._splitter.fit_now()
+        """يضبط الـ splitter بناءً على العرض الفعلي للـ list panel."""
+        list_w = self._list.width()
+        if list_w <= 0:
+            list_w = self.LIST_MIN_W
+        total = self._splitter.width()
+        if total <= list_w:
+            total = self.width()
+        detail_w = max(200, total - list_w - self._splitter.handleWidth())
+        self._splitter.setSizes([list_w, detail_w])
 
     def _fit_splitter_delayed(self, delay_ms: int = 80):
-        self._splitter.fit_delayed(delay_ms)
+        QTimer.singleShot(delay_ms, self._fit_splitter)
 
     def refresh(self):
         if hasattr(self._list, 'refresh'):

@@ -2,35 +2,11 @@
 ui/widgets/shared/base_list_panel.py
 =====================================
 BaseListPanel — قاعدة مشتركة لكل لوحات القوائم.
-
-توفر:
-  - toolbar فوق الجدول (بحث + فلاتر + أزرار)
-  - جدول بعرض ثابت من المحتوى (لا يتمدد مع النافذة)
-  - status bar تحت الجدول
-  - signal: item_selected(int id)
-  - auto-fit للعرض بعد كل تحديث
-
-الاستخدام:
-    class MyListPanel(BaseListPanel):
-        COLUMNS     = ["الكود", "الاسم", "الحالة"]
-        STRETCH_COL = 1
-        COL_WIDTHS  = {0: 80, 2: 90}
-
-        def _load_rows(self):
-            return fetch_all_items(self.conn)
-
-        def _fill_row(self, table, r, row):
-            table.setItem(r, 0, make_table_item(row["code"], user_data=row["id"]))
-            ...
-
-        def _match_filter(self, row, q) -> bool:
-            return q in (row["name"] or "").lower()
 """
 
 from PyQt5.QtWidgets import (
     QWidget, QVBoxLayout, QLabel, QFrame,
-    QLineEdit, QPushButton, QHBoxLayout,
-    QSizePolicy,
+    QLineEdit, QHBoxLayout, QSizePolicy,
 )
 from PyQt5.QtCore import Qt, pyqtSignal, QTimer
 
@@ -46,18 +22,9 @@ _MAX_W = 580
 
 
 class BaseListPanel(QWidget):
-    """
-    قاعدة مشتركة للوحات القوائم.
-
-    Override:
-      COLUMNS, STRETCH_COL, COL_WIDTHS
-      _load_rows(), _fill_row(), _match_filter(), _get_row_id()
-      _build_extra_toolbar()  — لإضافة فلاتر إضافية
-    """
 
     item_selected = pyqtSignal(int)
 
-    # ── قابل للـ override ──
     COLUMNS     : list = []
     STRETCH_COL : int  = -1
     COL_WIDTHS  : dict = None
@@ -75,8 +42,8 @@ class BaseListPanel(QWidget):
         self._timer.setInterval(250)
         self._timer.timeout.connect(self._apply_filter)
 
-        # ← التعديل: Preferred بدل Fixed عشان الـ splitter يقدر يتحرك
-        self.setSizePolicy(QSizePolicy.Preferred, QSizePolicy.Expanding)
+        # عرض ثابت — يتحدد من _auto_resize بعد تحميل البيانات
+        self.setSizePolicy(QSizePolicy.Fixed, QSizePolicy.Expanding)
 
         self._build()
         self.refresh()
@@ -100,11 +67,10 @@ class BaseListPanel(QWidget):
         return 0
 
     def _build_extra_toolbar(self, lay: QVBoxLayout):
-        """Override لإضافة فلاتر أو أزرار إضافية في الـ toolbar."""
         pass
 
     # ══════════════════════════════════════════════════════
-    # بناء الواجهة الأساسية
+    # بناء الواجهة
     # ══════════════════════════════════════════════════════
 
     def _build(self):
@@ -163,9 +129,7 @@ class BaseListPanel(QWidget):
         root.addWidget(self._status_bar)
 
     def _build_toolbar(self, lay: QVBoxLayout):
-        """يبني الـ toolbar الافتراضي — ممكن override."""
         row = QHBoxLayout()
-
         self.inp_search = QLineEdit()
         self.inp_search.setPlaceholderText("🔍  بحث...")
         self.inp_search.setMinimumHeight(34)
@@ -183,8 +147,6 @@ class BaseListPanel(QWidget):
         self.inp_search.textChanged.connect(lambda: self._timer.start())
         row.addWidget(self.inp_search, stretch=1)
         lay.addLayout(row)
-
-        # مساحة للفلاتر الإضافية من الـ subclass
         self._build_extra_toolbar(lay)
 
     # ══════════════════════════════════════════════════════
@@ -213,8 +175,7 @@ class BaseListPanel(QWidget):
         self.table.setVisible(has_data)
         self._empty_state.setVisible(not has_data and bool(self._all_rows))
 
-        if filtered:
-            self._auto_resize()
+        self._auto_resize()
 
     def _fill_table(self, rows: list):
         self.table.setRowCount(0)
@@ -225,11 +186,7 @@ class BaseListPanel(QWidget):
             self._fill_row(self.table, r, row_data)
 
     def _auto_resize(self):
-        """
-        يضبط عرض الأعمدة ثم يضبط min/max width للـ panel.
-        ← التعديل: setMinimumWidth + setMaximumWidth بدل setFixedWidth
-        عشان الـ splitter يقدر يتحرك ويسحب المستخدم.
-        """
+        """يضبط عرض الأعمدة ثم يضبط عرض الـ panel بالضبط على قد المحتوى."""
         all_cols = [i for i in range(self.table.columnCount())
                     if i != self.STRETCH_COL]
         auto_fit_columns(
@@ -240,9 +197,7 @@ class BaseListPanel(QWidget):
         )
         w = calc_table_width(self.table, padding=12)
         w = max(self.MIN_W, min(w, self.MAX_W))
-        # ← التعديل الأساسي: بدل setFixedWidth
-        self.setMinimumWidth(w)
-        self.setMaximumWidth(self.MAX_W)
+        self.setFixedWidth(w)
 
     # ══════════════════════════════════════════════════════
     # selection
@@ -259,7 +214,6 @@ class BaseListPanel(QWidget):
                 self.item_selected.emit(int(data))
 
     def select_item(self, item_id: int):
-        """يحدد صف بالـ id."""
         for r in range(self.table.rowCount()):
             item = self.table.item(r, 0)
             if item and item.data(Qt.UserRole) == item_id:
