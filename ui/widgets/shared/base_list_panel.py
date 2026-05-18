@@ -42,8 +42,8 @@ class BaseListPanel(QWidget):
         self._timer.setInterval(250)
         self._timer.timeout.connect(self._apply_filter)
 
-        # عرض ثابت — يتحدد من _auto_resize بعد تحميل البيانات
-        self.setSizePolicy(QSizePolicy.Fixed, QSizePolicy.Expanding)
+        # Preferred عشان الـ splitter يقدر يتحرك
+        self.setSizePolicy(QSizePolicy.Preferred, QSizePolicy.Expanding)
 
         self._build()
         self.refresh()
@@ -79,7 +79,6 @@ class BaseListPanel(QWidget):
         root.setSpacing(0)
         self.setStyleSheet(f"background:{_C['bg_input']};")
 
-        # ── toolbar ──
         self._toolbar = QFrame()
         self._toolbar.setStyleSheet(f"""
             QFrame {{
@@ -93,7 +92,6 @@ class BaseListPanel(QWidget):
         self._build_toolbar(self._toolbar_lay)
         root.addWidget(self._toolbar)
 
-        # ── جدول ──
         self.table = make_list_table(
             self.COLUMNS,
             stretch_col=self.STRETCH_COL,
@@ -103,7 +101,6 @@ class BaseListPanel(QWidget):
         self.table.itemSelectionChanged.connect(self._on_select)
         root.addWidget(self.table, stretch=1)
 
-        # ── empty state ──
         self._empty_state = EmptyState(
             icon=self.EMPTY_ICON,
             title=self.EMPTY_TITLE,
@@ -115,7 +112,6 @@ class BaseListPanel(QWidget):
         self._empty_state.setVisible(False)
         root.addWidget(self._empty_state)
 
-        # ── status bar ──
         self._status_bar = QLabel("")
         self._status_bar.setAlignment(Qt.AlignCenter)
         self._status_bar.setStyleSheet(f"""
@@ -186,7 +182,10 @@ class BaseListPanel(QWidget):
             self._fill_row(self.table, r, row_data)
 
     def _auto_resize(self):
-        """يضبط عرض الأعمدة ثم يضبط عرض الـ panel بالضبط على قد المحتوى."""
+        """
+        يضبط عرض الأعمدة ويحدد الحد الأدنى والأقصى للـ panel.
+        لا يعمل setFixedWidth عشان الـ splitter يبقى حر الحركة.
+        """
         all_cols = [i for i in range(self.table.columnCount())
                     if i != self.STRETCH_COL]
         auto_fit_columns(
@@ -197,7 +196,9 @@ class BaseListPanel(QWidget):
         )
         w = calc_table_width(self.table, padding=12)
         w = max(self.MIN_W, min(w, self.MAX_W))
-        self.setFixedWidth(w)
+        # حد أدنى = العرض المحسوب، حد أقصى = MAX_W
+        self.setMinimumWidth(w)
+        self.setMaximumWidth(self.MAX_W)
 
     # ══════════════════════════════════════════════════════
     # selection

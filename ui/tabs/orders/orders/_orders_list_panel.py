@@ -2,7 +2,6 @@
 ui/tabs/orders/orders/_orders_list_panel.py
 ============================================
 لوحة قائمة الطلبات — ترث من BaseListPanel.
-عرض ثابت على المحتوى، لا يتمدد مع النافذة، بدون horizontal scroll.
 """
 
 from PyQt5.QtWidgets import QSizePolicy, QVBoxLayout
@@ -38,7 +37,7 @@ PRIORITY_LABELS = {
 
 
 class _OrdersListPanel(BaseListPanel):
-    order_selected = pyqtSignal(int)   # alias لـ item_selected
+    order_selected = pyqtSignal(int)
     new_order      = pyqtSignal()
 
     COLUMNS     = ["رقم الطلب", "العميل", "الحالة", "⚑", "التاريخ"]
@@ -51,14 +50,12 @@ class _OrdersListPanel(BaseListPanel):
 
     def __init__(self, conn, parent=None):
         super().__init__(conn=conn, parent=parent)
-        # ربط item_selected بـ order_selected
         self.item_selected.connect(self.order_selected.emit)
-        # تطبيق delegate على عمود الحالة
         self._status_delegate = _StatusDelegate(self.table)
         self.table.setItemDelegateForColumn(2, self._status_delegate)
 
     # ══════════════════════════════════════════════════════
-    # toolbar مخصص — يستبدل الافتراضي بـ _FilterToolbar
+    # toolbar مخصص
     # ══════════════════════════════════════════════════════
 
     def _build_toolbar(self, lay: QVBoxLayout):
@@ -108,18 +105,6 @@ class _OrdersListPanel(BaseListPanel):
 
         date_item = muted_item(make_table_item((row["order_date"] or "")[:10]))
         table.setItem(r, 4, date_item)
-
-    # ══════════════════════════════════════════════════════
-    # auto-resize مخصص — يضبط عمود الأولوية بحد أدنى
-    # ══════════════════════════════════════════════════════
-
-    def _auto_resize(self):
-        self.table.resizeColumnsToContents()
-        if self.table.columnWidth(3) < 32:
-            self.table.setColumnWidth(3, 32)
-        w = calc_table_width(self.table, padding=12)
-        w = max(self.MIN_W, min(w, self.MAX_W))
-        self.setFixedWidth(w)
 
     # ══════════════════════════════════════════════════════
     # API
