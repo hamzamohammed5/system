@@ -75,8 +75,8 @@ class BaseListPanel(QWidget):
         self._timer.setInterval(250)
         self._timer.timeout.connect(self._apply_filter)
 
-        # الـ list panel عرضه ثابت — لا يتمدد مع النافذة
-        self.setSizePolicy(QSizePolicy.Fixed, QSizePolicy.Expanding)
+        # ← التعديل: Preferred بدل Fixed عشان الـ splitter يقدر يتحرك
+        self.setSizePolicy(QSizePolicy.Preferred, QSizePolicy.Expanding)
 
         self._build()
         self.refresh()
@@ -127,7 +127,7 @@ class BaseListPanel(QWidget):
         self._build_toolbar(self._toolbar_lay)
         root.addWidget(self._toolbar)
 
-        # ── جدول بعرض ثابت ──
+        # ── جدول ──
         self.table = make_list_table(
             self.COLUMNS,
             stretch_col=self.STRETCH_COL,
@@ -226,8 +226,9 @@ class BaseListPanel(QWidget):
 
     def _auto_resize(self):
         """
-        يضبط عرض الأعمدة ثم يجمّد عرض الـ panel على قد المحتوى.
-        الـ horizontal scroll يختفي لأن العرض مضبوط بالضبط.
+        يضبط عرض الأعمدة ثم يضبط min/max width للـ panel.
+        ← التعديل: setMinimumWidth + setMaximumWidth بدل setFixedWidth
+        عشان الـ splitter يقدر يتحرك ويسحب المستخدم.
         """
         all_cols = [i for i in range(self.table.columnCount())
                     if i != self.STRETCH_COL]
@@ -239,7 +240,9 @@ class BaseListPanel(QWidget):
         )
         w = calc_table_width(self.table, padding=12)
         w = max(self.MIN_W, min(w, self.MAX_W))
-        self.setFixedWidth(w)
+        # ← التعديل الأساسي: بدل setFixedWidth
+        self.setMinimumWidth(w)
+        self.setMaximumWidth(self.MAX_W)
 
     # ══════════════════════════════════════════════════════
     # selection

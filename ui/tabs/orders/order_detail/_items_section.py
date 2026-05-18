@@ -45,7 +45,7 @@ def _build_items_section(detail):
     detail._empty_items.action_clicked.connect(detail._add_item)
     detail._content_lay.addWidget(detail._empty_items)
 
-    # أزرار البنود — حجمها ثابت
+    # أزرار البنود — محفوظة في detail._item_toolbar عشان نقدر نخبيها
     item_toolbar = QFrame()
     item_toolbar.setStyleSheet("background:transparent;")
     itb_lay = QHBoxLayout(item_toolbar)
@@ -63,6 +63,9 @@ def _build_items_section(detail):
     itb_lay.addWidget(detail.btn_edit_item)
     itb_lay.addWidget(detail.btn_del_item)
     itb_lay.addStretch()
+
+    # ← التعديل: حفظ reference عشان _show_empty تقدر تخبيه
+    detail._item_toolbar = item_toolbar
     detail._content_lay.addWidget(item_toolbar)
 
 
@@ -76,6 +79,8 @@ def _fill_items(detail):
     detail._empty_items.setVisible(not has_items)
     detail.btn_edit_item.setVisible(has_items)
     detail.btn_del_item.setVisible(has_items)
+    # ← التعديل: الـ toolbar نفسه يتخبى/يظهر مع البنود
+    detail._item_toolbar.setVisible(has_items)
 
     for item in items:
         r = insert_row(detail.items_table, ROW_HEIGHT_NORMAL)

@@ -141,6 +141,9 @@ class _OrderDetail(QWidget):
         self._log_card.setVisible(False)
         self.items_table.setVisible(False)
         self._empty_items.setVisible(False)
+        # ← التعديل: إخفاء شريط أزرار البنود في الحالة الفارغة
+        if hasattr(self, '_item_toolbar'):
+            self._item_toolbar.setVisible(False)
 
     def _show_detail(self):
         self._empty.setVisible(False)

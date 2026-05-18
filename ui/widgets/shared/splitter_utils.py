@@ -4,8 +4,9 @@ ui/widgets/shared/splitter_utils.py
 SmartSplitter — عرض الـ list panel يتحدد على المحتوى فقط.
 
 القاعدة:
-  - الـ list panel عرضه Fixed = عرض الأعمدة بالضبط
-  - لما النافذة تكبر، الـ detail panel يأخذ الزيادة فقط
+  - الـ list panel له حد أدنى = عرض الأعمدة
+  - الـ list panel له حد أقصى = MAX_W (قابل للسحب بينهما)
+  - المستخدم يقدر يسحب الـ splitter بين MIN_W و MAX_W
   - الـ horizontal scroll على الـ list panel معطّل دايماً
 """
 
@@ -39,7 +40,8 @@ def fit_list_panel(splitter: QSplitter,
                    extra_pad: int = _TOOLBAR_PAD) -> int:
     """
     يضبط عرض الـ list panel على قد محتوى الجدول.
-    يضبط setFixedWidth على الـ list widget عشان الـ horizontal scroll يختفي.
+    ← التعديل: يضبط min/max فقط بدل setFixedWidth
+    عشان الـ splitter يفضل قابل للسحب.
     """
     sizes = splitter.sizes()
     if not sizes or len(sizes) <= list_index:
@@ -52,11 +54,11 @@ def fit_list_panel(splitter: QSplitter,
     ideal  = _calc_table_ideal_width(table, extra_pad)
     target = max(min_w, min(ideal, max_w))
 
-    # ضبط الـ list widget بعرض ثابت
+    # ← التعديل: min/max بدل fixed — الـ splitter يقدر يتحرك
     list_widget = splitter.widget(list_index)
     if list_widget:
-        list_widget.setMinimumWidth(target)
-        list_widget.setMaximumWidth(target)
+        list_widget.setMinimumWidth(min_w)
+        list_widget.setMaximumWidth(max_w)
 
     remaining  = total - target
     old_list_w = sizes[list_index]
@@ -96,17 +98,17 @@ class SmartSplitter(QSplitter):
     """
     QSplitter يضبط عرض الـ list panel على المحتوى.
 
-    - الـ list panel له عرض ثابت = عرض الأعمدة فقط
+    - الـ list panel له حد أدنى وأقصى (قابل للسحب بينهما)
     - الـ detail panel يأخذ الباقي ويكبر مع النافذة
     - horizontal scroll على الـ list panel مستحيل يظهر
     """
 
     def __init__(self, orientation=Qt.Horizontal, parent=None):
         super().__init__(orientation, parent)
-        self._list_index = 0
-        self._table      = None
-        self._min_w      = _MIN_LIST_W
-        self._max_w      = _MAX_LIST_W
+        self._list_index  = 0
+        self._table       = None
+        self._min_w       = _MIN_LIST_W
+        self._max_w       = _MAX_LIST_W
         self._list_widget = None
 
         self.setHandleWidth(4)
@@ -137,9 +139,11 @@ class SmartSplitter(QSplitter):
         self._max_w       = max_w
         self._list_widget = widget
 
-        # الـ list panel: Fixed لا يتمدد أبداً
+        # ← التعديل: Preferred بدل Fixed عشان الـ splitter يتحرك
         if widget:
-            widget.setSizePolicy(QSizePolicy.Fixed, QSizePolicy.Expanding)
+            widget.setSizePolicy(QSizePolicy.Preferred, QSizePolicy.Expanding)
+            widget.setMinimumWidth(min_w)
+            widget.setMaximumWidth(max_w)
 
         # الـ detail panel: Expanding يأخذ كل الزيادة
         detail_idx = 1 if list_index == 0 else 0
@@ -165,33 +169,13 @@ class SmartSplitter(QSplitter):
     def resizeEvent(self, event):
         """
         لما النافذة تكبر:
-          - الـ list panel يفضل بنفس العرض (ثابت)
+          - الـ list panel يفضل في نطاق min_w → max_w
           - الـ detail panel يأخذ كل الزيادة
+        ← التعديل: مش بنعمل setSizes هنا عشان ما نلغيش سحب المستخدم
         """
         super().resizeEvent(event)
-        if self._table is None:
-            return
 
-        sizes = self.sizes()
-        if not sizes or len(sizes) < 2:
-            return
-
-        total = sum(sizes)
-        if total <= 0:
-            return
-
-        ideal  = _calc_table_ideal_width(self._table, _TOOLBAR_PAD)
-        target = max(self._min_w, min(ideal, self._max_w))
-
-        detail_idx = 1 if self._list_index == 0 else 0
-        new_list   = target
-        new_detail = max(200, total - new_list)
-
-        new_sizes = [0] * len(sizes)
-        new_sizes[self._list_index] = new_list
-        new_sizes[detail_idx]       = new_detail
-        self.setSizes(new_sizes)
-
-        # ضبط الـ max width على الـ list widget
+        # نضمن بس إن الـ min/max مضبوطين
         if self._list_widget:
-            self._list_widget.setMaximumWidth(target)
+            self._list_widget.setMinimumWidth(self._min_w)
+            self._list_widget.setMaximumWidth(self._max_w)
