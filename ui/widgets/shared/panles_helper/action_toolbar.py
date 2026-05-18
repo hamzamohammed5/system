@@ -53,20 +53,20 @@ class ActionToolbar(QWidget):
                    callback=None, enabled: bool = True) -> QPushButton:
         btn = _make_btn(text, style)
         btn.setEnabled(enabled)
-        btn.setSizePolicy(QSizePolicy.Minimum, QSizePolicy.Fixed)
+        btn.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Fixed)
         if callback:
             btn.clicked.connect(callback)
-        self._left_lay.addWidget(btn)
+        self._left_lay.addWidget(btn, stretch=1)
         return btn
 
     def add_danger(self, text: str, callback=None,
                    enabled: bool = True) -> QPushButton:
         btn = _make_btn(text, "danger")
         btn.setEnabled(enabled)
-        btn.setSizePolicy(QSizePolicy.Minimum, QSizePolicy.Fixed)
+        btn.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Fixed)
         if callback:
             btn.clicked.connect(callback)
-        self._right_lay.addWidget(btn)
+        self._right_lay.addWidget(btn, stretch=1)
         self._sep.setVisible(True)
         self._has_danger = True
         return btn
