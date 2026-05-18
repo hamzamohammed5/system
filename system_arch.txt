@@ -1,5 +1,5 @@
 File Tree Snapshot
-Generated : 2026-05-18 06:33:26
+Generated : 2026-05-18 07:10:36
 Source    : D:\My Workspace\Hg\Alhabaar\accountant\system
 Extensions: .py
 ────────────────────────────────────────────────────────────
@@ -200,6 +200,17 @@ system/
 │   │   │   ├── machine_op_rows_editor.py
 │   │   │   └── raw_variants_panel.py
 │   │   └── shared/
+│   │       ├── panles_helper/
+│   │       │   ├── action_toolbar.py
+│   │       │   ├── badge_label.py
+│   │       │   ├── collapsible_card.py
+│   │       │   ├── colors_and_base.py
+│   │       │   ├── detail_header.py
+│   │       │   ├── empty_state.py
+│   │       │   ├── info_row.py
+│   │       │   ├── make_btn.py
+│   │       │   ├── section_header.py
+│   │       │   └── stat_card.py
 │   │       ├── category_combo.py
 │   │       ├── category_form.py
 │   │       ├── category_manager.py

@@ -15,6 +15,7 @@ from ui.tabs.orders._order_detail import _OrderDetail
 from ui.app_settings import _C
 
 from .orders._orders_list_panel import _OrdersListPanel
+
 # ── ثوابت الحالة ──
 STATUS_LABELS = {
     "pending":     ("⏳ انتظار",   "#b45309", "#fffbeb", "#fde68a"),
