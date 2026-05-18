@@ -2,81 +2,80 @@
 ui/helpers.py
 =============
 أدوات UI مشتركة — محسّنة ومتناسقة مع app_settings._C
+
+ملاحظة: هذا الملف يستورد من widgets/shared ولا يُعيد تعريف ما هو موجود هناك.
+  - WrapDelegate        ← من ui/widgets/shared/flexible_text.py
+  - make_table          ← من ui/widgets/shared/table_utils.py
+  - wrap_scroll         ← من ui/widgets/shared/scrollable_form.py
 """
 
 from PyQt5.QtWidgets import (
     QPushButton, QLabel, QHBoxLayout, QWidget,
-    QTableWidget, QHeaderView, QMessageBox,
-    QAbstractItemView, QSizePolicy,
-    QStyledItemDelegate, QStyle, QApplication,
+    QTableWidget, QMessageBox, QScrollArea,
 )
-from PyQt5.QtGui import QFont, QFontMetrics, QColor
-from PyQt5.QtCore import Qt, QSize, QRect
-from PyQt5.QtWidgets import QScrollArea
+from PyQt5.QtGui import QFont, QColor
+from PyQt5.QtCore import Qt
 
 from ui.app_settings import _C, get_font_size, fs
 
+# ── إعادة تصدير من widgets/shared للتوافق مع الكود القديم ──
+from ui.widgets.shared.flexible_text import WrapDelegate                    # noqa: F401
+from ui.widgets.shared.table_utils import (                                  # noqa: F401
+    make_list_table as make_table,
+    make_table_item, color_item, bold_item, muted_item,
+    auto_fit_columns, fit_splitter_to_table,
+    ROW_HEIGHT_NORMAL, ROW_HEIGHT_COMPACT, ROW_HEIGHT_LARGE,
+)
+from ui.widgets.shared.scrollable_form import wrap_in_scroll as wrap_scroll  # noqa: F401
+
 
 # ══════════════════════════════════════════════════════════
-# WrapDelegate — عرض النص بـ word-wrap مع tooltip تلقائي
+# Scroll stylesheet موحد — يُستورد من هنا في كل الملفات
 # ══════════════════════════════════════════════════════════
 
-class WrapDelegate(QStyledItemDelegate):
-    def __init__(self, parent=None, min_row_height: int = 30, padding: int = 10):
-        super().__init__(parent)
-        self._min_row_height = min_row_height
-        self._padding        = padding
+SCROLL_SS = f"""
+    QScrollArea {{
+        border: none;
+        background: transparent;
+    }}
+    QScrollBar:vertical {{
+        background: transparent;
+        width: 6px;
+        border-radius: 3px;
+    }}
+    QScrollBar::handle:vertical {{
+        background: {_C['border_med']};
+        border-radius: 3px;
+        min-height: 30px;
+    }}
+    QScrollBar::handle:vertical:hover {{
+        background: {_C['border_strong']};
+    }}
+    QScrollBar::add-line:vertical,
+    QScrollBar::sub-line:vertical {{
+        height: 0px;
+    }}
+    QScrollBar:horizontal {{
+        background: transparent;
+        height: 6px;
+        border-radius: 3px;
+    }}
+    QScrollBar::handle:horizontal {{
+        background: {_C['border_med']};
+        border-radius: 3px;
+        min-width: 30px;
+    }}
+    QScrollBar::handle:horizontal:hover {{
+        background: {_C['border_strong']};
+    }}
+    QScrollBar::add-line:horizontal,
+    QScrollBar::sub-line:horizontal {{
+        width: 0px;
+    }}
+"""
 
-    def paint(self, painter, option, index):
-        painter.save()
-        self.initStyleOption(option, index)
-        style = option.widget.style() if option.widget else QApplication.style()
-        style.drawPrimitive(QStyle.PE_PanelItemViewItem, option, painter, option.widget)
-
-        text = index.data(Qt.DisplayRole)
-        if text is None:
-            text = ""
-        text = str(text)
-
-        rect = option.rect.adjusted(self._padding, 2, -self._padding, -2)
-
-        if option.state & QStyle.State_Selected:
-            painter.setPen(QColor(_C['accent_text']))
-        else:
-            fg = index.data(Qt.ForegroundRole)
-            if fg:
-                try:
-                    painter.setPen(fg.color() if hasattr(fg, 'color') else fg)
-                except Exception:
-                    painter.setPen(QColor(_C['text_primary']))
-            else:
-                painter.setPen(QColor(_C['text_primary']))
-
-        painter.setFont(option.font)
-        painter.drawText(
-            QRect(rect),
-            Qt.AlignRight | Qt.AlignVCenter | Qt.TextWordWrap,
-            text
-        )
-        painter.restore()
-
-    def sizeHint(self, option, index):
-        text = index.data(Qt.DisplayRole)
-        if text is None:
-            text = ""
-        text = str(text)
-
-        fm        = QFontMetrics(option.font)
-        col_width = option.rect.width() if option.rect.isValid() else 150
-        text_width = max(col_width - self._padding * 2, 80)
-
-        text_rect = fm.boundingRect(
-            0, 0, text_width, 9999,
-            Qt.AlignRight | Qt.AlignTop | Qt.TextWordWrap,
-            text
-        )
-        height = max(self._min_row_height, text_rect.height() + 10)
-        return QSize(col_width, height)
+# للتوافق مع الكود القديم الذي يستخدم _SCROLL_SS
+_SCROLL_SS = SCROLL_SS
 
 
 # ══════════════════════════════════════════════════════════
@@ -137,105 +136,13 @@ def success_button(text: str) -> QPushButton:
     return btn
 
 
-# ══════════════════════════════════════════════════════════
-# make_table — الجدول الموحد المحسّن
-# ══════════════════════════════════════════════════════════
-
-def make_table(
-    columns: list,
-    stretch_col: int = -1,
-    min_row_height: int = 32,
-) -> QTableWidget:
-    base = get_font_size()
-
-    table = QTableWidget()
-    table.setColumnCount(len(columns))
-    table.setHorizontalHeaderLabels(columns)
-    table.setSelectionBehavior(QAbstractItemView.SelectRows)
-    table.setEditTriggers(QAbstractItemView.NoEditTriggers)
-    table.setWordWrap(True)
-    table.setAlternatingRowColors(True)
-    table.setShowGrid(True)
-    table.setFrameShape(QTableWidget.NoFrame)
-
-    # تطبيق stylesheet محسّن على الجدول
-    table.setStyleSheet(f"""
-        QTableWidget {{
-            background: {_C['bg_input']};
-            alternate-background-color: {_C['bg_surface']};
-            gridline-color: {_C['border']};
-            border: none;
-            selection-background-color: {_C['accent_light']};
-        }}
-        QTableWidget::item {{
-            padding: 5px 10px;
-            border-bottom: 1px solid {_C['border']};
-            color: {_C['text_primary']};
-        }}
-        QTableWidget::item:selected {{
-            background: {_C['accent_light']};
-            color: {_C['accent_text']};
-        }}
-        QTableWidget::item:hover {{
-            background: {_C['bg_hover']};
-        }}
-        QHeaderView::section {{
-            background: {_C['bg_surface_2']};
-            color: {_C['text_muted']};
-            font-size: {fs(base, -1)}pt;
-            font-weight: 600;
-            padding: 6px 10px;
-            border: none;
-            border-bottom: 2px solid {_C['border_med']};
-            border-right: 1px solid {_C['border']};
-            letter-spacing: 0.2px;
-        }}
-        QHeaderView::section:last {{
-            border-right: none;
-        }}
-        QHeaderView::section:hover {{
-            background: {_C['bg_hover']};
-            color: {_C['text_primary']};
-        }}
-    """)
-
-    hh = table.horizontalHeader()
-    vh = table.verticalHeader()
-
-    vh.setSectionResizeMode(QHeaderView.ResizeToContents)
-    vh.setDefaultSectionSize(min_row_height)
-    vh.setMinimumSectionSize(min_row_height)
-    vh.setVisible(False)
-
-    for i in range(len(columns)):
-        if i == stretch_col:
-            hh.setSectionResizeMode(i, QHeaderView.Stretch)
-        else:
-            hh.setSectionResizeMode(i, QHeaderView.Interactive)
-
-    if stretch_col < 0:
-        hh.setStretchLastSection(True)
-
-    hh.setMinimumSectionSize(40)
-    hh.setDefaultSectionSize(100)
-    hh.setDefaultAlignment(Qt.AlignRight | Qt.AlignVCenter)
-    hh.setHighlightSections(False)
-
-    table.setHorizontalScrollMode(QAbstractItemView.ScrollPerPixel)
-    table.setVerticalScrollMode(QAbstractItemView.ScrollPerPixel)
-
-    delegate = WrapDelegate(table, min_row_height=min_row_height)
-    table.setItemDelegate(delegate)
-
-    return table
-
-
 def setup_table_columns(
     table: QTableWidget,
     widths: dict = None,
     stretch_col: int = -1,
     min_width: int = 50,
 ):
+    from PyQt5.QtWidgets import QHeaderView
     hh = table.horizontalHeader()
     n  = table.columnCount()
 
@@ -303,65 +210,3 @@ def confirm_delete(parent, name: str) -> bool:
         parent, "تأكيد الحذف", f"هل تريد حذف «{name}»؟",
         QMessageBox.Yes | QMessageBox.No
     ) == QMessageBox.Yes
-
-
-# ══════════════════════════════════════════════════════════
-# Scroll wrapper موحد
-# ══════════════════════════════════════════════════════════
-
-_SCROLL_SS = f"""
-    QScrollArea {{
-        border: none;
-        background: transparent;
-    }}
-    QScrollBar:vertical {{
-        background: transparent;
-        width: 6px;
-        border-radius: 3px;
-    }}
-    QScrollBar::handle:vertical {{
-        background: {_C['border_med']};
-        border-radius: 3px;
-        min-height: 30px;
-    }}
-    QScrollBar::handle:vertical:hover {{
-        background: {_C['border_strong']};
-    }}
-    QScrollBar::add-line:vertical,
-    QScrollBar::sub-line:vertical {{
-        height: 0px;
-    }}
-    QScrollBar:horizontal {{
-        background: transparent;
-        height: 6px;
-        border-radius: 3px;
-    }}
-    QScrollBar::handle:horizontal {{
-        background: {_C['border_med']};
-        border-radius: 3px;
-        min-width: 30px;
-    }}
-    QScrollBar::handle:horizontal:hover {{
-        background: {_C['border_strong']};
-    }}
-    QScrollBar::add-line:horizontal,
-    QScrollBar::sub-line:horizontal {{
-        width: 0px;
-    }}
-"""
-
-
-def wrap_scroll(widget, min_width: int = 0, min_height: int = 0) -> QScrollArea:
-    scroll = QScrollArea()
-    scroll.setWidget(widget)
-    scroll.setWidgetResizable(True)
-    scroll.setHorizontalScrollBarPolicy(Qt.ScrollBarAsNeeded)
-    scroll.setVerticalScrollBarPolicy(Qt.ScrollBarAsNeeded)
-    scroll.setStyleSheet(_SCROLL_SS)
-
-    if min_width:
-        scroll.setMinimumWidth(min_width)
-    if min_height:
-        scroll.setMinimumHeight(min_height)
-
-    return scroll

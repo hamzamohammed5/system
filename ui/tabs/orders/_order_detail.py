@@ -1,23 +1,19 @@
 """
-ui/tabs/orders/_order_detail.py  — نسخة UX v3 محسّنة
+ui/tabs/orders/_order_detail.py
 ================================
 """
 
 from PyQt5.QtWidgets import (
     QWidget, QVBoxLayout, QHBoxLayout, QScrollArea,
-    QFrame, QLabel, QPushButton, QTableWidget,
-    QTableWidgetItem, QHeaderView, QAbstractItemView,
-    QMessageBox, QDialog, QComboBox, QLineEdit,
-    QSizePolicy,
+    QLabel, QPushButton, QMessageBox, QDialog, QComboBox, QLineEdit,
 )
 from PyQt5.QtCore import Qt, pyqtSignal
-from PyQt5.QtGui  import QColor, QFont
 
 from db.orders.orders_repo import (
     fetch_order, fetch_order_items, fetch_status_log,
     change_order_status, cancel_order, delete_order,
     reorder as do_reorder,
-    insert_order_item, update_order_item, delete_order_item,
+    insert_order_item, delete_order_item,
 )
 from ui.tabs.orders._order_form import _OrderForm
 from ui.tabs.orders._item_form  import _ItemForm
@@ -32,6 +28,7 @@ from ui.widgets.shared.table_utils import (
     make_table_item, color_item, bold_item, muted_item,
     insert_row, ROW_HEIGHT_NORMAL, ROW_HEIGHT_COMPACT,
 )
+from ui.helpers import SCROLL_SS
 from ui.app_settings import _C
 
 # ── ثوابت الحالة ──
@@ -58,7 +55,7 @@ STATUS_TRANSITIONS = {
 PRIORITY_LABELS = {
     "low":    ("⬇ منخفض", "#9ca3af"),
     "normal": ("➡ عادي",  "#6b7280"),
-    "high":   ("⬆ عالي", "#f59e0b"),
+    "high":   ("⬆ عالي",  "#f59e0b"),
     "urgent": ("🔴 عاجل", "#ef4444"),
 }
 
@@ -68,23 +65,10 @@ TYPE_LABELS = {
     "custom":  "⚙️ مخصص",
 }
 
-_BG     = "#f8f9fb"
-_WHITE  = "#ffffff"
-_BLUE   = "#1565c0"
-_GREEN  = "#10b981"
-_BORDER = "#e5e9f0"
-
-_SCROLL_SS = f"""
-    QScrollArea {{ border: none; background: {_BG}; }}
-    QScrollBar:vertical {{
-        background: transparent; width: 5px; border-radius: 2px; margin: 2px;
-    }}
-    QScrollBar::handle:vertical {{
-        background: {_C['border_med']}; border-radius: 2px; min-height: 24px;
-    }}
-    QScrollBar::handle:vertical:hover {{ background: {_C['border_strong']}; }}
-    QScrollBar::add-line:vertical, QScrollBar::sub-line:vertical {{ height: 0; }}
-"""
+_BG    = "#f8f9fb"
+_WHITE = "#ffffff"
+_BLUE  = "#1565c0"
+_GREEN = "#10b981"
 
 
 class _OrderDetail(QWidget):
@@ -128,10 +112,11 @@ class _OrderDetail(QWidget):
 
         root.addWidget(self._hdr)
 
+        # ── Scroll — SCROLL_SS من helpers ──
         scroll = QScrollArea()
         scroll.setWidgetResizable(True)
         scroll.setHorizontalScrollBarPolicy(Qt.ScrollBarAlwaysOff)
-        scroll.setStyleSheet(_SCROLL_SS)
+        scroll.setStyleSheet(SCROLL_SS)
 
         content = QWidget()
         content.setStyleSheet(f"background:{_BG};")
@@ -184,9 +169,11 @@ class _OrderDetail(QWidget):
         self._empty_items.action_clicked.connect(self._add_item)
         self._content_lay.addWidget(self._empty_items)
 
-        item_toolbar = QWidget()
+        from PyQt5.QtWidgets import QFrame
+        item_toolbar = QFrame()
         item_toolbar.setStyleSheet("background:transparent;")
-        itb_lay = QHBoxLayout(item_toolbar)
+        from PyQt5.QtWidgets import QHBoxLayout as QHL
+        itb_lay = QHL(item_toolbar)
         itb_lay.setContentsMargins(0, 0, 0, 0)
         itb_lay.setSpacing(6)
 
@@ -205,7 +192,6 @@ class _OrderDetail(QWidget):
 
     def _build_log_section(self):
         self._log_card = CollapsibleCard("سجل تغييرات الحالة", expanded=False)
-
         self.log_table = make_compact_table(
             columns=["من", "إلى", "الملاحظات", "الوقت"],
             stretch_col=2,
@@ -254,9 +240,7 @@ class _OrderDetail(QWidget):
         self._hdr.set_title(d["order_number"])
         self._hdr.set_type_badge(TYPE_LABELS.get(d["order_type"], ""))
 
-        status_info = STATUS_LABELS.get(
-            d["status"], (d["status"], "#555", "#fff", "#eee")
-        )
+        status_info = STATUS_LABELS.get(d["status"], (d["status"], "#555", "#fff", "#eee"))
         self._hdr.set_status_badge(
             status_info[0], status_info[1], status_info[2], status_info[3]
         )
@@ -264,15 +248,11 @@ class _OrderDetail(QWidget):
         pri_lbl, pri_color = PRIORITY_LABELS.get(d["priority"], ("", "#6b7280"))
         self._hdr.set_priority_badge(pri_lbl, pri_color)
 
-        # ══ الإصلاح: اسم العميل في سطر منفصل — لا يتقطع ══
         customer_line = f"👤  {d['customer_name']}  ({d['customer_code']})"
         details = []
-        if d.get("customer_phone"):
-            details.append(f"📞 {d['customer_phone']}")
-        if d.get("customer_city"):
-            details.append(f"📍 {d['customer_city']}")
+        if d.get("customer_phone"): details.append(f"📞 {d['customer_phone']}")
+        if d.get("customer_city"):  details.append(f"📍 {d['customer_city']}")
 
-        # اسم العميل كسطر أول، والتفاصيل كسطر ثاني
         self._hdr.set_customer_name(customer_line)
         self._hdr.set_info(details)
 
@@ -314,23 +294,17 @@ class _OrderDetail(QWidget):
             name_item = make_table_item(item["item_name"], user_data=item["id"])
             bold_item(name_item)
             self.items_table.setItem(r, 0, name_item)
-
-            self.items_table.setItem(r, 1,
-                make_table_item(item.get("description") or ""))
-
+            self.items_table.setItem(r, 1, make_table_item(item.get("description") or ""))
             self.items_table.setItem(r, 2,
                 make_table_item(f"{item['quantity']:g}", align=Qt.AlignCenter))
 
             unit_item = make_table_item(item["unit"], align=Qt.AlignCenter)
             muted_item(unit_item)
             self.items_table.setItem(r, 3, unit_item)
-
             self.items_table.setItem(r, 4,
                 make_table_item(f"{item['unit_price']:,.2f}", align=Qt.AlignCenter))
 
-            disc_item = make_table_item(
-                f"{item['discount_pct']:g}%", align=Qt.AlignCenter
-            )
+            disc_item = make_table_item(f"{item['discount_pct']:g}%", align=Qt.AlignCenter)
             muted_item(disc_item)
             self.items_table.setItem(r, 5, disc_item)
 
@@ -349,12 +323,9 @@ class _OrderDetail(QWidget):
 
         for log in logs:
             r = insert_row(self.log_table, ROW_HEIGHT_COMPACT)
-
             old_lbl  = STATUS_LABELS.get(log.get("old_status") or "", ("—",))[0]
-            new_info = STATUS_LABELS.get(
-                log.get("new_status", ""),
-                (log.get("new_status", ""), "#555")
-            )
+            new_info = STATUS_LABELS.get(log.get("new_status", ""),
+                                         (log.get("new_status", ""), "#555"))
             new_lbl, new_color = new_info[0], new_info[1]
 
             self.log_table.setItem(r, 0, muted_item(make_table_item(old_lbl)))
@@ -362,11 +333,9 @@ class _OrderDetail(QWidget):
             color_item(new_item, new_color)
             bold_item(new_item)
             self.log_table.setItem(r, 1, new_item)
-            self.log_table.setItem(r, 2,
-                make_table_item(log.get("notes") or ""))
-            time_str = (log.get("changed_at") or "")[:16]
-            self.log_table.setItem(r, 3,
-                muted_item(make_table_item(time_str, align=Qt.AlignCenter)))
+            self.log_table.setItem(r, 2, make_table_item(log.get("notes") or ""))
+            self.log_table.setItem(r, 3, muted_item(
+                make_table_item((log.get("changed_at") or "")[:16], align=Qt.AlignCenter)))
 
     def _edit_order(self):
         if not self._order_id:
@@ -382,7 +351,7 @@ class _OrderDetail(QWidget):
     def _change_status_dialog(self):
         if not self._order_id or not self._order_data:
             return
-        current = self._order_data["status"]
+        current      = self._order_data["status"]
         next_statuses = STATUS_TRANSITIONS.get(current, [])
         if not next_statuses:
             return
@@ -418,10 +387,8 @@ class _OrderDetail(QWidget):
             if delete_order(self.conn, self._order_id):
                 self.deleted.emit()
             else:
-                QMessageBox.warning(
-                    self, "تعذر الحذف",
-                    "لا يمكن حذف الطلب إلا في حالة الانتظار أو الإلغاء."
-                )
+                QMessageBox.warning(self, "تعذر الحذف",
+                    "لا يمكن حذف الطلب إلا في حالة الانتظار أو الإلغاء.")
 
     def _do_reorder(self):
         if not self._order_id:
@@ -441,9 +408,7 @@ class _OrderDetail(QWidget):
         if not self._order_id:
             return
         if self._order_data and self._order_data["status"] in ("delivered", "cancelled"):
-            QMessageBox.information(
-                self, "تنبيه", "لا يمكن تعديل طلب مكتمل أو ملغي."
-            )
+            QMessageBox.information(self, "تنبيه", "لا يمكن تعديل طلب مكتمل أو ملغي.")
             return
         dlg = _ItemForm(self.conn, self._order_id, parent=self)
         if dlg.exec_() == QDialog.Accepted:
@@ -496,7 +461,7 @@ class _OrderDetail(QWidget):
 # ══════════════════════════════════════════════════════════
 
 STATUS_LABELS_SHORT = {k: v[0] for k, v in STATUS_LABELS.items()}
-_STATUS_COLORS = {k: (v[1], v[2], v[3]) for k, v in STATUS_LABELS.items()}
+_STATUS_COLORS      = {k: v[1:] for k, v in STATUS_LABELS.items()}
 
 
 class _StatusDialog(QDialog):
@@ -505,9 +470,7 @@ class _StatusDialog(QDialog):
         self.setWindowTitle("تغيير حالة الطلب")
         self.setMinimumWidth(400)
         self.setModal(True)
-        self._result = (
-            next_statuses[0] if next_statuses else current_status, ""
-        )
+        self._result = (next_statuses[0] if next_statuses else current_status, "")
         self._build(current_status, next_statuses)
 
     def _build(self, current, nexts):
@@ -516,14 +479,13 @@ class _StatusDialog(QDialog):
             QLineEdit {{
                 background: {_C['bg_input']};
                 border: 1.5px solid {_C['border_med']};
-                border-radius: 6px;
-                padding: 6px 10px;
-                font-size: 12px;
-                min-height: 34px;
+                border-radius: 6px; padding: 6px 10px;
+                font-size: 12px; min-height: 34px;
             }}
             QLineEdit:focus {{ border-color: {_C['accent']}; }}
         """)
 
+        from PyQt5.QtWidgets import QVBoxLayout, QHBoxLayout
         lay = QVBoxLayout(self)
         lay.setContentsMargins(20, 18, 20, 18)
         lay.setSpacing(12)
@@ -537,9 +499,7 @@ class _StatusDialog(QDialog):
         lay.addWidget(lbl_hdr)
 
         cur_info = _STATUS_COLORS.get(current, ("#555", "#f5f5f5", "#e0e0e0"))
-        lbl_cur = QLabel(
-            f"الحالة الحالية:  {STATUS_LABELS_SHORT.get(current, current)}"
-        )
+        lbl_cur = QLabel(f"الحالة الحالية:  {STATUS_LABELS_SHORT.get(current, current)}")
         lbl_cur.setStyleSheet(
             f"color:{cur_info[0]}; font-weight:600; font-size:12px;"
             f"background:{cur_info[1]}; border:1px solid {cur_info[2]};"
@@ -547,10 +507,7 @@ class _StatusDialog(QDialog):
         )
         lay.addWidget(lbl_cur)
 
-        lbl_new = QLabel("الحالة الجديدة:")
-        lbl_new.setStyleSheet(f"color:{_C['text_sec']}; font-size:11px;")
-        lay.addWidget(lbl_new)
-
+        lay.addWidget(QLabel("الحالة الجديدة:"))
         self._cmb = QComboBox()
         self._cmb.setMinimumHeight(36)
         self._cmb.setStyleSheet(f"""
@@ -566,10 +523,7 @@ class _StatusDialog(QDialog):
             self._cmb.addItem(STATUS_LABELS_SHORT.get(s, s), s)
         lay.addWidget(self._cmb)
 
-        lbl_note = QLabel("ملاحظات (اختياري):")
-        lbl_note.setStyleSheet(f"color:{_C['text_sec']}; font-size:11px;")
-        lay.addWidget(lbl_note)
-
+        lay.addWidget(QLabel("ملاحظات (اختياري):"))
         self._note = QLineEdit()
         self._note.setPlaceholderText("سبب التغيير...")
         lay.addWidget(self._note)
