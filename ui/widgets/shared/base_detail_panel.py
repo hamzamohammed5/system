@@ -3,23 +3,20 @@ ui/widgets/shared/base_detail_panel.py
 ========================================
 BaseDetailPanel — قاعدة مشتركة لكل لوحات التفاصيل.
 
-الإصلاح: الـ header والمحتوى كلهم جوا scroll area واحد
-عشان لما النافذة تضيق يظهر scrollbar أفقي يشمل كل حاجة.
+الـ scroll (أفقي + عمودي) يشمل كل حاجة: header + content.
+لما النافذة تضيق عن MIN_CONTENT_W يظهر scrollbar أفقي.
 """
 
 from PyQt5.QtWidgets import (
     QWidget, QVBoxLayout, QScrollArea, QSizePolicy,
 )
-from PyQt5.QtCore import Qt
-
-from PyQt5.QtCore import pyqtSignal
+from PyQt5.QtCore import Qt, pyqtSignal
 
 from ui.widgets.shared.panels import DetailHeader, EmptyState
 from ui.app_settings import _C
 
 _BG = "#f8f9fb"
-
-DETAIL_MIN_WIDTH = 500
+DETAIL_MIN_WIDTH = 520   # الحد الأدنى قبل ظهور الـ horizontal scroll
 
 _SCROLL_SS = f"""
     QScrollArea {{
@@ -67,7 +64,7 @@ class BaseDetailPanel(QWidget):
     EMPTY_TITLE    : str = "اختر عنصراً من القائمة"
     EMPTY_SUBTITLE : str = ""
     HEADER_BG      : str = "#ffffff"
-    MIN_CONTENT_W  : int = DETAIL_MIN_WIDTH
+    MIN_CONTENT_W  : int = DETAIL_MIN_WIDTH   # ✅ override في الـ subclass لو محتاج
 
     def __init__(self, conn=None, parent=None):
         super().__init__(parent)
@@ -112,11 +109,13 @@ class BaseDetailPanel(QWidget):
         # ══ Scroll area يلف كل حاجة (header + content) ══
         self._scroll = QScrollArea()
         self._scroll.setWidgetResizable(True)
+        # ✅ أفقي: يظهر لما المحتوى أعرض من الـ panel
         self._scroll.setHorizontalScrollBarPolicy(Qt.ScrollBarAsNeeded)
         self._scroll.setVerticalScrollBarPolicy(Qt.ScrollBarAsNeeded)
         self._scroll.setStyleSheet(_SCROLL_SS)
 
-        # الـ container الداخلي — له minimum width عشان الـ scroll يظهر
+        # ✅ الـ inner container له minimum width = MIN_CONTENT_W
+        # لما النافذة تضيق عنه يظهر الـ horizontal scrollbar
         self._inner = QWidget()
         self._inner.setMinimumWidth(self.MIN_CONTENT_W)
         self._inner.setStyleSheet(f"background:{_BG};")
@@ -125,7 +124,7 @@ class BaseDetailPanel(QWidget):
         inner_lay.setContentsMargins(0, 0, 0, 0)
         inner_lay.setSpacing(0)
 
-        # ── Header (جوا الـ scroll) ──
+        # ── Header ──
         self._hdr = DetailHeader(bg=self.HEADER_BG)
         self._build_header_cards()
         self._build_header_buttons()
@@ -146,7 +145,7 @@ class BaseDetailPanel(QWidget):
         self._scroll.setWidget(self._inner)
         root.addWidget(self._scroll, stretch=1)
 
-        # ── Empty State ──
+        # ── Empty State (خارج الـ scroll) ──
         self._empty = EmptyState(
             icon=self.EMPTY_ICON,
             title=self.EMPTY_TITLE,

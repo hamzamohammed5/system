@@ -17,17 +17,16 @@ from .info_row import InfoRow
 from .action_toolbar import ActionToolbar
 from .colors_and_base import _base
 
-# ══════════════════════════════════════════════════════════
-# DetailHeader — محسّن مع set_customer_name
-# ══════════════════════════════════════════════════════════
 
 class DetailHeader(QFrame):
     """
     هيدر موحد لصفحات التفاصيل.
-
-    الجديد: set_customer_name() — يعرض اسم العميل في سطر مخصص
-    تحت العنوان الرئيسي، بخط واضح ومع word-wrap.
+    له minimum width ثابت عشان متتضغطش لما النافذة تضيق —
+    الـ scroll في BaseDetailPanel هو اللي يتحرك.
     """
+
+    # الحد الأدنى للعرض قبل ما الـ scroll يتحرك
+    HEADER_MIN_WIDTH = 500
 
     def __init__(self, bg: str = None, parent=None):
         super().__init__(parent)
@@ -42,6 +41,8 @@ class DetailHeader(QFrame):
                 border-bottom: 1px solid {_C['border']};
             }}
         """)
+        # ✅ عرض أدنى — لما النافذة تضيق الـ scroll يتحرك مش الـ header يتضغط
+        self.setMinimumWidth(self.HEADER_MIN_WIDTH)
         self.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Fixed)
 
         root = QVBoxLayout(self)
@@ -92,7 +93,7 @@ class DetailHeader(QFrame):
         title_row.addWidget(self._badge_status)
         top_lay.addLayout(title_row)
 
-        # ── صف 2: اسم العميل — سطر مخصص، واسع ومقروء ──
+        # ── صف 2: اسم العميل ──
         self._lbl_customer = QLabel("")
         self._lbl_customer.setWordWrap(True)
         self._lbl_customer.setStyleSheet(
@@ -102,15 +103,14 @@ class DetailHeader(QFrame):
         self._lbl_customer.setVisible(False)
         top_lay.addWidget(self._lbl_customer)
 
-        # ── صف 3: التفاصيل الثانوية (هاتف · مدينة) ──
+        # ── صف 3: التفاصيل الثانوية ──
         self._info_row = InfoRow(separator="  ·  ")
         top_lay.addWidget(self._info_row)
 
         root.addWidget(top_section)
 
         # ── فاصل ──
-        div1 = self._make_divider()
-        root.addWidget(div1)
+        root.addWidget(self._make_divider())
 
         # ══ البطاقات الإحصائية ══
         cards_section = QWidget()
@@ -126,8 +126,7 @@ class DetailHeader(QFrame):
         root.addWidget(cards_section)
 
         # ── فاصل ──
-        div2 = self._make_divider()
-        root.addWidget(div2)
+        root.addWidget(self._make_divider())
 
         # ══ شريط الأزرار ══
         toolbar_section = QWidget()
@@ -174,10 +173,6 @@ class DetailHeader(QFrame):
         )
 
     def set_customer_name(self, name: str):
-        """
-        يعرض اسم العميل في سطر مخصص تحت العنوان الرئيسي.
-        الاسم بيظهر كامل مع word-wrap — مش بيتقطع بنقط.
-        """
         if name:
             self._lbl_customer.setText(name)
             self._lbl_customer.setVisible(True)
@@ -185,7 +180,6 @@ class DetailHeader(QFrame):
             self._lbl_customer.setVisible(False)
 
     def set_info(self, parts: list):
-        """التفاصيل الثانوية: هاتف، مدينة، إلخ."""
         self._info_row.set_parts(parts)
 
     def add_stat_card(self, icon: str, title: str, value: str = "─",
