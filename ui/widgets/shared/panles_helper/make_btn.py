@@ -1,13 +1,15 @@
 """
 ui/widgets/shared/panles_helper/make_btn.py
-============================
-الزرار بياخد حجم النص تلقائياً باستخدام fontMetrics.
+============================================
+الأزرار بحجم ثابت مبني على النص — مش بتكبر مع النافذة.
+SizePolicy = Fixed بدل Expanding.
 """
 
-from PyQt5.QtWidgets import QPushButton, QSizePolicy
+from PyQt5.QtWidgets import QPushButton
 from PyQt5.QtCore import Qt
+from PyQt5.QtGui import QFont, QFontMetrics
 
-from ui.app_settings import _C, get_font_size, fs
+from ui.app_settings import _C, fs
 from .colors_and_base import _base
 
 
@@ -90,16 +92,18 @@ def _make_btn(text: str, style: str = "normal") -> QPushButton:
     }
     btn.setStyleSheet(styles.get(style, styles["normal"]))
 
-    # حساب عرض النص باستخدام font size الفعلي
-    from PyQt5.QtGui import QFont, QFontMetrics
+    # ── حجم ثابت مبني على النص ──
     f = QFont()
     f.setPointSize(fs(base, 0))
     fm = QFontMetrics(f)
     text_w = fm.horizontalAdvance(text)
-    padding = 40 * 2  # 40px padding يمين + شمال (لدعم العربية)
+    h_pad = 32  # padding يمين + شمال
 
+    btn.setFixedHeight(btn_h)
+    btn.setMinimumWidth(text_w + h_pad)
+    btn.setMaximumWidth(text_w + h_pad + 20)  # هامش صغير فقط
 
-    btn.setSizePolicy(QSizePolicy.Preferred, QSizePolicy.Fixed)
-    btn.setMinimumWidth(text_w + padding)
+    from PyQt5.QtWidgets import QSizePolicy
+    btn.setSizePolicy(QSizePolicy.Fixed, QSizePolicy.Fixed)
 
     return btn

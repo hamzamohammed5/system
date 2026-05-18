@@ -1,34 +1,13 @@
 """
 ui/widgets/shared/table_utils.py
 ================================
-أدوات موحدة لإنشاء وإدارة الجداول في كل أقسام التطبيق.
+جداول بعرض ثابت مبني على المحتوى — مش بتتمدد مع النافذة.
 
-الدوال:
-  make_orders_table   — جدول طلبات موحد
-  make_detail_table   — جدول تفاصيل موحد (بنود، سجل، ...)
-  make_compact_table  — جدول صغير للـ sidebars والبطاقات
-  apply_row_height    — تعيين ارتفاع موحد للصفوف
-  set_item_center     — توسيط محتوى خلية
-  color_item          — تلوين خلية
-  bold_item           — تغليظ خلية
-  make_table_item     — إنشاء خلية مع بيانات مخفية وتوسيط اختياري
-  auto_fit_columns    — ضبط عرض الأعمدة تلقائياً حسب المحتوى
-  fit_table_width     — حساب العرض المثالي للجدول (مجموع عرض الأعمدة + هيدر)
-  fit_splitter_to_table — ضبط الـ splitter على عرض الجدول المثالي (مشترك)
-
-الاستخدام:
-    from ui.widgets.shared.table_utils import (
-        make_detail_table, make_table_item, color_item, bold_item,
-        auto_fit_columns, fit_splitter_to_table,
-    )
-
-    table = make_detail_table(["البند", "الكمية", "السعر"], stretch_col=0)
-
-    # بعد ملء البيانات:
-    auto_fit_columns(table, fixed_cols=[0, 2, 4])
-
-    # في الـ splitter:
-    fit_splitter_to_table(splitter, index=0, table=table, min_w=280, max_w=700)
+التغييرات الرئيسية:
+  - كل الجداول بـ setMaximumWidth محسوب من الأعمدة
+  - stretch_col اتغير: بيملأ المساحة الداخلية فقط، مش النافذة
+  - fit_table_to_content() — تُستدعى بعد ملء البيانات لتجميد العرض
+  - make_list_table / make_detail_table / make_compact_table محدّثة
 """
 
 from PyQt5.QtWidgets import (
@@ -41,26 +20,20 @@ from PyQt5.QtGui  import QColor, QFont
 from ui.app_settings import _C, get_font_size, fs
 
 
-# ══════════════════════════════════════════════════════════
-# ثابت الارتفاع الموحد
-# ══════════════════════════════════════════════════════════
-
 ROW_HEIGHT_NORMAL  = 40
 ROW_HEIGHT_COMPACT = 34
 ROW_HEIGHT_LARGE   = 48
 
-# هامش إضافي للـ splitter عند حساب العرض المثالي
-_SPLITTER_PADDING = 18   # scrollbar reserve + حواف
+_SPLITTER_PADDING = 18
 
 
 # ══════════════════════════════════════════════════════════
-# stylesheet الجداول الموحد
+# stylesheet
 # ══════════════════════════════════════════════════════════
 
 def _table_stylesheet(variant: str = "normal") -> str:
-    """يبني stylesheet الجدول حسب الـ variant."""
-    base   = get_font_size()
-    c      = _C
+    base = get_font_size()
+    c    = _C
 
     if variant == "compact":
         item_padding = "4px 6px"
@@ -123,10 +96,10 @@ def _table_stylesheet(variant: str = "normal") -> str:
 
 
 # ══════════════════════════════════════════════════════════
-# دالة بناء الجدول الأساسية
+# دالة البناء الأساسية
 # ══════════════════════════════════════════════════════════
 
-def _build_table(columns: list[str],
+def _build_table(columns: list,
                  stretch_col: int = -1,
                  col_widths: dict = None,
                  variant: str = "normal",
@@ -135,7 +108,7 @@ def _build_table(columns: list[str],
                  alternating: bool = True,
                  row_height: int = None,
                  resizable: bool = True) -> QTableWidget:
-    """دالة بناء داخلية مشتركة."""
+
     table = QTableWidget()
     table.setColumnCount(len(columns))
     table.setHorizontalHeaderLabels(columns)
@@ -192,38 +165,50 @@ def _build_table(columns: list[str],
     if min_height:
         table.setMinimumHeight(min_height)
 
+    # ── الجدول مش بيتمدد أفقياً مع النافذة ──
+    from PyQt5.QtWidgets import QSizePolicy
+    table.setSizePolicy(QSizePolicy.Preferred, QSizePolicy.Preferred)
+
     return table
 
 
 # ══════════════════════════════════════════════════════════
-# auto_fit_columns — ضبط الأعمدة على المحتوى
+# fit_table_to_content — يجمّد عرض الجدول على المحتوى
+# ══════════════════════════════════════════════════════════
+
+def fit_table_to_content(table: QTableWidget,
+                         min_w: int = 200,
+                         max_w: int = 1200,
+                         padding: int = _SPLITTER_PADDING):
+    """
+    يحسب مجموع عرض الأعمدة ويضبط setMaximumWidth للجدول.
+    استدعيها بعد ملء البيانات وبعد auto_fit_columns.
+    """
+    total = padding
+    for col in range(table.columnCount()):
+        total += table.columnWidth(col)
+    clamped = max(min_w, min(total, max_w))
+    table.setMaximumWidth(clamped)
+    return clamped
+
+
+# ══════════════════════════════════════════════════════════
+# auto_fit_columns
 # ══════════════════════════════════════════════════════════
 
 def auto_fit_columns(table: QTableWidget,
-                     fixed_cols: list[int] = None,
+                     fixed_cols: list = None,
                      stretch_col: int = -1,
                      min_width: int = 50,
                      max_width: int = 400):
-    """
-    يضبط عرض الأعمدة تلقائياً حسب المحتوى (auto-fit)،
-    ثم يجعلها Interactive.
-
-    المعاملات:
-        fixed_cols  : أرقام الأعمدة للـ auto-fit (None = كلهم)
-        stretch_col : العمود اللي يفضل Stretch
-        min_width   : الحد الأدنى لعرض أي عمود
-        max_width   : الحد الأقصى لعرض أي عمود
-    """
     hh = table.horizontalHeader()
     n  = table.columnCount()
-
     cols_to_fit = fixed_cols if fixed_cols is not None else list(range(n))
 
     for col in range(n):
         if col == stretch_col:
             hh.setSectionResizeMode(col, QHeaderView.Stretch)
             continue
-
         if col in cols_to_fit:
             table.resizeColumnToContents(col)
             current_w = table.columnWidth(col)
@@ -238,7 +223,6 @@ def auto_fit_all(table: QTableWidget,
                  stretch_col: int = -1,
                  min_width: int = 50,
                  max_width: int = 400):
-    """اختصار — auto-fit لكل الأعمدة ما عدا الـ stretch."""
     n = table.columnCount()
     all_cols = [i for i in range(n) if i != stretch_col]
     auto_fit_columns(table, fixed_cols=all_cols,
@@ -247,40 +231,23 @@ def auto_fit_all(table: QTableWidget,
 
 
 # ══════════════════════════════════════════════════════════
-# fit_table_width — حساب العرض المثالي للجدول
+# fit_table_width (للتوافق)
 # ══════════════════════════════════════════════════════════
 
 def fit_table_width(table: QTableWidget,
                     extra_padding: int = _SPLITTER_PADDING) -> int:
-    """
-    يحسب العرض المثالي للجدول بناءً على مجموع عرض الأعمدة الفعلية.
-
-    يُستخدم لضبط الـ splitter أو setFixedWidth تلقائياً بعد ملء البيانات.
-
-    المعاملات:
-        table         : الجدول المراد قياسه
-        extra_padding : هامش إضافي (scrollbar + حواف) — افتراضي 18px
-
-    يرجع:
-        العرض الإجمالي بالـ pixels
-    """
     hh    = table.horizontalHeader()
     total = extra_padding
-
     for col in range(table.columnCount()):
-        # لو Stretch نأخذ العرض الفعلي (بعد الـ layout)
         total += table.columnWidth(col)
-
-    # نضيف عرض الـ vertical header لو ظاهر
     vh = table.verticalHeader()
     if not vh.isHidden():
         total += vh.width()
-
     return total
 
 
 # ══════════════════════════════════════════════════════════
-# fit_splitter_to_table — ضبط الـ splitter على محتوى الجدول (مشترك)
+# fit_splitter_to_table
 # ══════════════════════════════════════════════════════════
 
 def fit_splitter_to_table(splitter: QSplitter,
@@ -289,34 +256,7 @@ def fit_splitter_to_table(splitter: QSplitter,
                           min_w: int = 200,
                           max_w: int = 800,
                           extra_padding: int = _SPLITTER_PADDING):
-    """
-    يضبط حجم panel في الـ splitter بحيث يتناسب مع عرض الجدول بالضبط.
-
-    يُستدعى بعد auto_fit_columns() وبعد ملء البيانات.
-
-    المعاملات:
-        splitter      : الـ QSplitter
-        index         : رقم الـ panel (0 = أول panel)
-        table         : الجدول المراد التناسب معه
-        min_w         : الحد الأدنى لعرض الـ panel
-        max_w         : الحد الأقصى
-        extra_padding : هامش إضافي (toolbar + borders)
-
-    الاستخدام:
-        # بعد ملء الجدول:
-        auto_fit_all(self.table)
-        fit_splitter_to_table(self._splitter, 0, self.table, min_w=280)
-    """
-    ideal = fit_table_width(table, extra_padding=extra_padding)
-
-    # نضيف ارتفاع الـ toolbar/filter فوق الجدول
-    panel = splitter.widget(index)
-    if panel:
-        panel_h  = panel.sizeHint().height()
-        table_h  = table.sizeHint().height()
-        overhead = max(0, panel_h - table_h)   # toolbar + status bar
-        _ = overhead  # not needed for width
-
+    ideal  = fit_table_width(table, extra_padding=extra_padding)
     target = max(min_w, min(ideal, max_w))
 
     sizes = splitter.sizes()
@@ -330,13 +270,11 @@ def fit_splitter_to_table(splitter: QSplitter,
     other_total = total - sizes[index]
     new_sizes   = list(sizes)
     new_sizes[index] = target
-    # توزّع الباقي على الـ panels الأخرى بنفس النسب
     remaining = total - target
     if len(sizes) > 1 and other_total > 0:
         for i, sz in enumerate(sizes):
             if i != index:
                 new_sizes[i] = max(100, int(sz / other_total * remaining))
-    # تأكد المجموع = total
     diff = total - sum(new_sizes)
     if diff != 0:
         last_other = next(i for i in range(len(sizes)) if i != index)
@@ -349,7 +287,7 @@ def fit_splitter_to_table(splitter: QSplitter,
 # make_detail_table
 # ══════════════════════════════════════════════════════════
 
-def make_detail_table(columns: list[str],
+def make_detail_table(columns: list,
                       stretch_col: int = -1,
                       col_widths: dict = None,
                       max_height: int = None,
@@ -368,7 +306,7 @@ def make_detail_table(columns: list[str],
 # make_compact_table
 # ══════════════════════════════════════════════════════════
 
-def make_compact_table(columns: list[str],
+def make_compact_table(columns: list,
                        stretch_col: int = -1,
                        col_widths: dict = None,
                        max_height: int = 200,
@@ -386,7 +324,7 @@ def make_compact_table(columns: list[str],
 # make_list_table
 # ══════════════════════════════════════════════════════════
 
-def make_list_table(columns: list[str],
+def make_list_table(columns: list,
                     stretch_col: int = -1,
                     col_widths: dict = None,
                     resizable: bool = True) -> QTableWidget:

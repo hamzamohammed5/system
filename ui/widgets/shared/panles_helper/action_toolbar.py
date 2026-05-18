@@ -1,6 +1,7 @@
 """
 ui/widgets/shared/panles_helper/action_toolbar.py
-============================
+==================================================
+ActionToolbar — أزرار بحجم ثابت، مش بتتمدد مع النافذة.
 """
 
 from PyQt5.QtWidgets import (
@@ -11,10 +12,6 @@ from PyQt5.QtWidgets import (
 from ui.app_settings import _C
 from .make_btn import _make_btn
 
-
-# ══════════════════════════════════════════════════════════
-# ActionToolbar
-# ══════════════════════════════════════════════════════════
 
 class ActionToolbar(QWidget):
     def __init__(self, spacing: int = 6, parent=None):
@@ -36,7 +33,7 @@ class ActionToolbar(QWidget):
         self._right_lay.setSpacing(self._spacing)
 
         lay.addLayout(self._left_lay)
-        lay.addStretch()
+        lay.addStretch()   # الـ stretch هنا بس — مش في الأزرار
 
         self._sep = QFrame()
         self._sep.setFrameShape(QFrame.VLine)
@@ -53,20 +50,21 @@ class ActionToolbar(QWidget):
                    callback=None, enabled: bool = True) -> QPushButton:
         btn = _make_btn(text, style)
         btn.setEnabled(enabled)
-        btn.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Fixed)
+        # حجم ثابت — مش Expanding
+        btn.setSizePolicy(QSizePolicy.Fixed, QSizePolicy.Fixed)
         if callback:
             btn.clicked.connect(callback)
-        self._left_lay.addWidget(btn, stretch=1)
+        self._left_lay.addWidget(btn)
         return btn
 
     def add_danger(self, text: str, callback=None,
                    enabled: bool = True) -> QPushButton:
         btn = _make_btn(text, "danger")
         btn.setEnabled(enabled)
-        btn.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Fixed)
+        btn.setSizePolicy(QSizePolicy.Fixed, QSizePolicy.Fixed)
         if callback:
             btn.clicked.connect(callback)
-        self._right_lay.addWidget(btn, stretch=1)
+        self._right_lay.addWidget(btn)
         self._sep.setVisible(True)
         self._has_danger = True
         return btn

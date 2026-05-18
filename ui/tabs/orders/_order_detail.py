@@ -2,10 +2,17 @@
 ui/tabs/orders/_order_detail.py
 ================================
 """
+"""
+ui/tabs/orders/order_detail/
+_order_detail_panel.py
+=======================
+_OrderDetail — لوحة تفاصيل الطلب.
+مقسّم من _order_detail.py الكبير.
+"""
 
 from PyQt5.QtWidgets import (
     QWidget, QVBoxLayout, QHBoxLayout, QScrollArea,
-    QLabel, QPushButton, QMessageBox, QDialog, QComboBox, QLineEdit,
+    QLabel, QPushButton, QMessageBox, QDialog, QFrame,
 )
 from PyQt5.QtCore import Qt, pyqtSignal
 
@@ -15,8 +22,6 @@ from db.orders.orders_repo import (
     reorder as do_reorder,
     insert_order_item, delete_order_item,
 )
-from ui.tabs.orders._order_form import _OrderForm
-from ui.tabs.orders._item_form  import _ItemForm
 
 from ui.widgets.shared.panels import (
     DetailHeader, StatCard, SectionHeader,
@@ -31,39 +36,12 @@ from ui.widgets.shared.table_utils import (
 from ui.helpers import SCROLL_SS
 from ui.app_settings import _C
 
-# ── ثوابت الحالة ──
-STATUS_LABELS = {
-    "pending":     ("⏳ انتظار",   "#b45309", "#fffbeb", "#fde68a"),
-    "confirmed":   ("✅ مؤكد",     "#1d4ed8", "#eff6ff", "#bfdbfe"),
-    "in_progress": ("🔧 تنفيذ",   "#6d28d9", "#f5f3ff", "#ddd6fe"),
-    "ready":       ("📦 جاهز",    "#065f46", "#ecfdf5", "#a7f3d0"),
-    "delivered":   ("🚚 مُسلَّم",  "#374151", "#f9fafb", "#e5e7eb"),
-    "cancelled":   ("❌ ملغي",    "#991b1b", "#fef2f2", "#fecaca"),
-    "on_hold":     ("⏸ معلق",    "#9a3412", "#fff7ed", "#fed7aa"),
-}
-
-STATUS_TRANSITIONS = {
-    "pending":     ["confirmed", "cancelled", "on_hold"],
-    "confirmed":   ["in_progress", "cancelled", "on_hold"],
-    "in_progress": ["ready", "cancelled", "on_hold"],
-    "ready":       ["delivered", "cancelled"],
-    "on_hold":     ["pending", "confirmed", "cancelled"],
-    "delivered":   [],
-    "cancelled":   ["pending"],
-}
-
-PRIORITY_LABELS = {
-    "low":    ("⬇ منخفض", "#9ca3af"),
-    "normal": ("➡ عادي",  "#6b7280"),
-    "high":   ("⬆ عالي",  "#f59e0b"),
-    "urgent": ("🔴 عاجل", "#ef4444"),
-}
-
-TYPE_LABELS = {
-    "new":     "🆕 جديد",
-    "reorder": "🔄 إعادة طلب",
-    "custom":  "⚙️ مخصص",
-}
+from .order_detail._status_config import (
+    STATUS_LABELS, STATUS_TRANSITIONS,
+    PRIORITY_LABELS, TYPE_LABELS,
+    STATUS_LABELS_SHORT,
+)
+from .order_detail._status_dialog import _StatusDialog
 
 _BG    = "#f8f9fb"
 _WHITE = "#ffffff"
@@ -84,15 +62,15 @@ class _OrderDetail(QWidget):
         self._build()
         self._show_empty()
 
+    # ══ بناء الواجهة ══════════════════════════════════════
+
     def _build(self):
         self.setStyleSheet(f"background:{_BG};")
-
         root = QVBoxLayout(self)
         root.setContentsMargins(0, 0, 0, 0)
         root.setSpacing(0)
 
         self._hdr = DetailHeader(bg=_WHITE)
-
         self._card_total   = self._hdr.add_stat_card("💰", "الإجمالي",  color=_BLUE)
         self._card_paid    = self._hdr.add_stat_card("✅", "المدفوع",   color=_GREEN)
         self._card_balance = self._hdr.add_stat_card("⚖️", "المتبقي",   color="#ef4444")
@@ -112,7 +90,6 @@ class _OrderDetail(QWidget):
 
         root.addWidget(self._hdr)
 
-        # ── Scroll — SCROLL_SS من helpers ──
         scroll = QScrollArea()
         scroll.setWidgetResizable(True)
         scroll.setHorizontalScrollBarPolicy(Qt.ScrollBarAlwaysOff)
@@ -135,45 +112,35 @@ class _OrderDetail(QWidget):
             icon="📋",
             title="اختر طلباً من القائمة",
             subtitle="أو أنشئ طلباً جديداً بالضغط على ＋ طلب جديد",
-            style="plain",
-            color="#6b7280",
-            min_height=200,
+            style="plain", color="#6b7280", min_height=200,
         )
         root.addWidget(self._empty)
 
     def _build_items_section(self):
         items_hdr = SectionHeader("بنود الطلب")
-        self.btn_add_item = items_hdr.add_button(
-            "＋  إضافة بند", self._add_item, "success"
-        )
+        self.btn_add_item = items_hdr.add_button("＋  إضافة بند", self._add_item, "success")
         self._content_lay.addWidget(items_hdr)
 
         self.items_table = make_detail_table(
             columns=["البند", "الوصف", "الكمية", "الوحدة", "السعر", "الخصم%", "الإجمالي"],
             stretch_col=0,
             col_widths={2: 65, 3: 65, 4: 90, 5: 60, 6: 95},
-            max_height=280,
-            min_height=60,
+            max_height=280, min_height=60,
             row_height=ROW_HEIGHT_NORMAL,
         )
         self._content_lay.addWidget(self.items_table)
 
         self._empty_items = EmptyState(
-            icon="📦",
-            title="لا توجد بنود في هذا الطلب",
+            icon="📦", title="لا توجد بنود في هذا الطلب",
             subtitle="اضغط «＋ إضافة بند» لإضافة منتج",
-            style="dashed",
-            color=_GREEN,
-            min_height=90,
+            style="dashed", color=_GREEN, min_height=90,
         )
         self._empty_items.action_clicked.connect(self._add_item)
         self._content_lay.addWidget(self._empty_items)
 
-        from PyQt5.QtWidgets import QFrame
         item_toolbar = QFrame()
         item_toolbar.setStyleSheet("background:transparent;")
-        from PyQt5.QtWidgets import QHBoxLayout as QHL
-        itb_lay = QHL(item_toolbar)
+        itb_lay = QHBoxLayout(item_toolbar)
         itb_lay.setContentsMargins(0, 0, 0, 0)
         itb_lay.setSpacing(6)
 
@@ -194,12 +161,12 @@ class _OrderDetail(QWidget):
         self._log_card = CollapsibleCard("سجل تغييرات الحالة", expanded=False)
         self.log_table = make_compact_table(
             columns=["من", "إلى", "الملاحظات", "الوقت"],
-            stretch_col=2,
-            col_widths={0: 95, 1: 95, 3: 130},
-            max_height=160,
+            stretch_col=2, col_widths={0: 95, 1: 95, 3: 130}, max_height=160,
         )
         self._log_card.content_layout.addWidget(self.log_table)
         self._content_lay.addWidget(self._log_card)
+
+    # ══ تحميل ══════════════════════════════════════════════
 
     def load_order(self, order_id: int):
         self._order_id   = order_id
@@ -218,6 +185,7 @@ class _OrderDetail(QWidget):
         self._show_empty()
 
     def new_order(self):
+        from ui.tabs.orders.order_form import _OrderForm
         dlg = _OrderForm(self.conn, parent=self)
         dlg.saved.connect(self._on_form_saved)
         dlg.exec_()
@@ -236,14 +204,11 @@ class _OrderDetail(QWidget):
 
     def _fill_header(self):
         d = self._order_data
-
         self._hdr.set_title(d["order_number"])
         self._hdr.set_type_badge(TYPE_LABELS.get(d["order_type"], ""))
 
         status_info = STATUS_LABELS.get(d["status"], (d["status"], "#555", "#fff", "#eee"))
-        self._hdr.set_status_badge(
-            status_info[0], status_info[1], status_info[2], status_info[3]
-        )
+        self._hdr.set_status_badge(status_info[0], status_info[1], status_info[2], status_info[3])
 
         pri_lbl, pri_color = PRIORITY_LABELS.get(d["priority"], ("", "#6b7280"))
         self._hdr.set_priority_badge(pri_lbl, pri_color)
@@ -290,28 +255,19 @@ class _OrderDetail(QWidget):
 
         for item in items:
             r = insert_row(self.items_table, ROW_HEIGHT_NORMAL)
-
             name_item = make_table_item(item["item_name"], user_data=item["id"])
             bold_item(name_item)
             self.items_table.setItem(r, 0, name_item)
             self.items_table.setItem(r, 1, make_table_item(item.get("description") or ""))
-            self.items_table.setItem(r, 2,
-                make_table_item(f"{item['quantity']:g}", align=Qt.AlignCenter))
-
+            self.items_table.setItem(r, 2, make_table_item(f"{item['quantity']:g}", align=Qt.AlignCenter))
             unit_item = make_table_item(item["unit"], align=Qt.AlignCenter)
             muted_item(unit_item)
             self.items_table.setItem(r, 3, unit_item)
-            self.items_table.setItem(r, 4,
-                make_table_item(f"{item['unit_price']:,.2f}", align=Qt.AlignCenter))
-
+            self.items_table.setItem(r, 4, make_table_item(f"{item['unit_price']:,.2f}", align=Qt.AlignCenter))
             disc_item = make_table_item(f"{item['discount_pct']:g}%", align=Qt.AlignCenter)
             muted_item(disc_item)
             self.items_table.setItem(r, 5, disc_item)
-
-            total_val = (
-                item["quantity"] * item["unit_price"]
-                * (1 - item["discount_pct"] / 100)
-            )
+            total_val = item["quantity"] * item["unit_price"] * (1 - item["discount_pct"] / 100)
             total_item = make_table_item(f"{total_val:,.2f}", align=Qt.AlignCenter)
             bold_item(total_item)
             color_item(total_item, _BLUE)
@@ -320,14 +276,11 @@ class _OrderDetail(QWidget):
     def _fill_log(self):
         logs = [dict(r) for r in fetch_status_log(self.conn, self._order_id)]
         self.log_table.setRowCount(0)
-
         for log in logs:
             r = insert_row(self.log_table, ROW_HEIGHT_COMPACT)
             old_lbl  = STATUS_LABELS.get(log.get("old_status") or "", ("—",))[0]
-            new_info = STATUS_LABELS.get(log.get("new_status", ""),
-                                         (log.get("new_status", ""), "#555"))
+            new_info = STATUS_LABELS.get(log.get("new_status", ""), (log.get("new_status", ""), "#555"))
             new_lbl, new_color = new_info[0], new_info[1]
-
             self.log_table.setItem(r, 0, muted_item(make_table_item(old_lbl)))
             new_item = make_table_item(new_lbl)
             color_item(new_item, new_color)
@@ -337,9 +290,12 @@ class _OrderDetail(QWidget):
             self.log_table.setItem(r, 3, muted_item(
                 make_table_item((log.get("changed_at") or "")[:16], align=Qt.AlignCenter)))
 
+    # ══ أحداث الأزرار ═════════════════════════════════════
+
     def _edit_order(self):
         if not self._order_id:
             return
+        from ui.tabs.orders.order_form import _OrderForm
         dlg = _OrderForm(self.conn, order_id=self._order_id, parent=self)
         dlg.saved.connect(self._on_form_saved)
         dlg.exec_()
@@ -351,7 +307,7 @@ class _OrderDetail(QWidget):
     def _change_status_dialog(self):
         if not self._order_id or not self._order_data:
             return
-        current      = self._order_data["status"]
+        current       = self._order_data["status"]
         next_statuses = STATUS_TRANSITIONS.get(current, [])
         if not next_statuses:
             return
@@ -367,7 +323,8 @@ class _OrderDetail(QWidget):
         d = self._order_data
         if d["status"] in ("delivered", "cancelled"):
             return
-        reason, ok = _get_text_input(
+        from PyQt5.QtWidgets import QInputDialog
+        reason, ok = QInputDialog.getText(
             self, "إلغاء الطلب",
             f"سبب إلغاء الطلب {d['order_number']}:"
         )
@@ -381,7 +338,7 @@ class _OrderDetail(QWidget):
         d = self._order_data
         if QMessageBox.question(
             self, "تأكيد الحذف",
-            f"حذف الطلب {d['order_number']} نهائياً؟\nلا يمكن التراجع عن هذا الإجراء.",
+            f"حذف الطلب {d['order_number']} نهائياً؟\nلا يمكن التراجع.",
             QMessageBox.Yes | QMessageBox.No
         ) == QMessageBox.Yes:
             if delete_order(self.conn, self._order_id):
@@ -410,6 +367,7 @@ class _OrderDetail(QWidget):
         if self._order_data and self._order_data["status"] in ("delivered", "cancelled"):
             QMessageBox.information(self, "تنبيه", "لا يمكن تعديل طلب مكتمل أو ملغي.")
             return
+        from ui.tabs.orders._item_form import _ItemForm
         dlg = _ItemForm(self.conn, self._order_id, parent=self)
         if dlg.exec_() == QDialog.Accepted:
             self._fill_items()
@@ -421,6 +379,7 @@ class _OrderDetail(QWidget):
             QMessageBox.information(self, "تنبيه", "اختر بنداً أولاً")
             return
         item_id = self.items_table.item(row, 0).data(Qt.UserRole)
+        from ui.tabs.orders._item_form import _ItemForm
         dlg = _ItemForm(self.conn, self._order_id, item_id=item_id, parent=self)
         if dlg.exec_() == QDialog.Accepted:
             self._fill_items()
@@ -454,117 +413,3 @@ class _OrderDetail(QWidget):
             self._card_paid.set_value(f"{paid:,.2f} ج")
             self._card_balance.set_value(f"{remain:,.2f} ج")
             self._card_balance.set_color("#ef4444" if remain > 0 else _GREEN)
-
-
-# ══════════════════════════════════════════════════════════
-# Dialog تغيير الحالة
-# ══════════════════════════════════════════════════════════
-
-STATUS_LABELS_SHORT = {k: v[0] for k, v in STATUS_LABELS.items()}
-_STATUS_COLORS      = {k: v[1:] for k, v in STATUS_LABELS.items()}
-
-
-class _StatusDialog(QDialog):
-    def __init__(self, current_status: str, next_statuses: list, parent=None):
-        super().__init__(parent)
-        self.setWindowTitle("تغيير حالة الطلب")
-        self.setMinimumWidth(400)
-        self.setModal(True)
-        self._result = (next_statuses[0] if next_statuses else current_status, "")
-        self._build(current_status, next_statuses)
-
-    def _build(self, current, nexts):
-        self.setStyleSheet(f"""
-            QDialog {{ background: {_C['bg_surface']}; }}
-            QLineEdit {{
-                background: {_C['bg_input']};
-                border: 1.5px solid {_C['border_med']};
-                border-radius: 6px; padding: 6px 10px;
-                font-size: 12px; min-height: 34px;
-            }}
-            QLineEdit:focus {{ border-color: {_C['accent']}; }}
-        """)
-
-        from PyQt5.QtWidgets import QVBoxLayout, QHBoxLayout
-        lay = QVBoxLayout(self)
-        lay.setContentsMargins(20, 18, 20, 18)
-        lay.setSpacing(12)
-
-        lbl_hdr = QLabel("تغيير حالة الطلب")
-        lbl_hdr.setStyleSheet(f"""
-            font-size: 14px; font-weight: bold; color: {_C['accent_text']};
-            background: {_C['accent_light']}; border-radius: 8px;
-            padding: 8px 14px; border: none;
-        """)
-        lay.addWidget(lbl_hdr)
-
-        cur_info = _STATUS_COLORS.get(current, ("#555", "#f5f5f5", "#e0e0e0"))
-        lbl_cur = QLabel(f"الحالة الحالية:  {STATUS_LABELS_SHORT.get(current, current)}")
-        lbl_cur.setStyleSheet(
-            f"color:{cur_info[0]}; font-weight:600; font-size:12px;"
-            f"background:{cur_info[1]}; border:1px solid {cur_info[2]};"
-            "border-radius:6px; padding:6px 10px;"
-        )
-        lay.addWidget(lbl_cur)
-
-        lay.addWidget(QLabel("الحالة الجديدة:"))
-        self._cmb = QComboBox()
-        self._cmb.setMinimumHeight(36)
-        self._cmb.setStyleSheet(f"""
-            QComboBox {{
-                background: {_C['bg_input']}; color: {_C['text_primary']};
-                border: 1.5px solid {_C['border_med']}; border-radius: 6px;
-                padding: 4px 10px; font-size: 12px;
-            }}
-            QComboBox:focus {{ border-color: {_C['accent']}; }}
-            QComboBox::drop-down {{ border: none; width: 20px; }}
-        """)
-        for s in nexts:
-            self._cmb.addItem(STATUS_LABELS_SHORT.get(s, s), s)
-        lay.addWidget(self._cmb)
-
-        lay.addWidget(QLabel("ملاحظات (اختياري):"))
-        self._note = QLineEdit()
-        self._note.setPlaceholderText("سبب التغيير...")
-        lay.addWidget(self._note)
-
-        btns = QHBoxLayout()
-        btn_cancel = QPushButton("إلغاء")
-        btn_cancel.setMinimumHeight(38)
-        btn_cancel.setStyleSheet(f"""
-            QPushButton {{
-                background: {_C['bg_surface_2']}; color: {_C['text_sec']};
-                border: 1px solid {_C['border_med']}; border-radius: 6px;
-                padding: 0 16px; font-size: 12px;
-            }}
-            QPushButton:hover {{ background: {_C['bg_hover']}; }}
-        """)
-        btn_cancel.clicked.connect(self.reject)
-
-        btn_ok = QPushButton("✅  تغيير الحالة")
-        btn_ok.setMinimumHeight(38)
-        btn_ok.setStyleSheet(f"""
-            QPushButton {{
-                background: {_C['accent_light']}; color: {_C['accent_text']};
-                border: 1.5px solid {_C['accent_mid']}; border-radius: 6px;
-                padding: 0 20px; font-weight: bold; font-size: 12px;
-            }}
-            QPushButton:hover {{ background: {_C['accent_mid']}; }}
-        """)
-        btn_ok.clicked.connect(self._save)
-
-        btns.addWidget(btn_cancel)
-        btns.addWidget(btn_ok, stretch=1)
-        lay.addLayout(btns)
-
-    def _save(self):
-        self._result = (self._cmb.currentData(), self._note.text().strip())
-        self.accept()
-
-    def get_result(self):
-        return self._result
-
-
-def _get_text_input(parent, title, prompt):
-    from PyQt5.QtWidgets import QInputDialog
-    return QInputDialog.getText(parent, title, prompt)
