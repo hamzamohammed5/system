@@ -21,12 +21,11 @@ from .colors_and_base import _base
 class DetailHeader(QFrame):
     """
     هيدر موحد لصفحات التفاصيل.
-    له minimum width ثابت عشان متتضغطش لما النافذة تضيق —
-    الـ scroll في BaseDetailPanel هو اللي يتحرك.
+    minimum width = 0 عشان الـ _inner في BaseDetailPanel هو اللي يتحكم في الـ scroll.
     """
 
-    # الحد الأدنى للعرض قبل ما الـ scroll يتحرك
-    HEADER_MIN_WIDTH = 500
+    # ✅ صفر — مش إحنا اللي نحدد الـ minimum، الـ _inner في BaseDetailPanel هو اللي يحددها
+    HEADER_MIN_WIDTH = 0
 
     def __init__(self, bg: str = None, parent=None):
         super().__init__(parent)
@@ -41,8 +40,7 @@ class DetailHeader(QFrame):
                 border-bottom: 1px solid {_C['border']};
             }}
         """)
-        # ✅ عرض أدنى — لما النافذة تضيق الـ scroll يتحرك مش الـ header يتضغط
-        self.setMinimumWidth(self.HEADER_MIN_WIDTH)
+        # ✅ بدون minimum width — الـ BaseDetailPanel._inner هو اللي يتحكم
         self.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Fixed)
 
         root = QVBoxLayout(self)

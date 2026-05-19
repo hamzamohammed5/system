@@ -16,7 +16,7 @@ from ui.widgets.shared.panels import DetailHeader, EmptyState
 from ui.app_settings import _C
 
 _BG = "#f8f9fb"
-DETAIL_MIN_WIDTH = 520   # الحد الأدنى قبل ظهور الـ horizontal scroll
+DETAIL_MIN_WIDTH = 520
 
 _SCROLL_SS = f"""
     QScrollArea {{
@@ -64,7 +64,7 @@ class BaseDetailPanel(QWidget):
     EMPTY_TITLE    : str = "اختر عنصراً من القائمة"
     EMPTY_SUBTITLE : str = ""
     HEADER_BG      : str = "#ffffff"
-    MIN_CONTENT_W  : int = DETAIL_MIN_WIDTH   # ✅ override في الـ subclass لو محتاج
+    MIN_CONTENT_W  : int = DETAIL_MIN_WIDTH
 
     def __init__(self, conn=None, parent=None):
         super().__init__(parent)
@@ -73,7 +73,6 @@ class BaseDetailPanel(QWidget):
         self._item_data = None
 
         self.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Expanding)
-        self.setMinimumWidth(300)
         self._build_base()
         self._show_empty()
 
@@ -109,13 +108,15 @@ class BaseDetailPanel(QWidget):
         # ══ Scroll area يلف كل حاجة (header + content) ══
         self._scroll = QScrollArea()
         self._scroll.setWidgetResizable(True)
-        # ✅ أفقي: يظهر لما المحتوى أعرض من الـ panel
+        # ✅ أفقي: يظهر تلقائياً لما المحتوى أعرض من الـ panel
         self._scroll.setHorizontalScrollBarPolicy(Qt.ScrollBarAsNeeded)
         self._scroll.setVerticalScrollBarPolicy(Qt.ScrollBarAsNeeded)
         self._scroll.setStyleSheet(_SCROLL_SS)
+        # ✅ الـ scroll نفسه يتمدد ويتضيق بحرية — الـ _inner هو اللي بيتحكم في الـ scroll
+        self._scroll.setMinimumWidth(0)
 
-        # ✅ الـ inner container له minimum width = MIN_CONTENT_W
-        # لما النافذة تضيق عنه يظهر الـ horizontal scrollbar
+        # ✅ الـ inner له minimum width — ده اللي بيخلي الـ horizontal scroll يظهر
+        # لما الـ scroll area تضيق عن MIN_CONTENT_W يظهر scrollbar أفقي
         self._inner = QWidget()
         self._inner.setMinimumWidth(self.MIN_CONTENT_W)
         self._inner.setStyleSheet(f"background:{_BG};")
