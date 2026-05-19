@@ -31,8 +31,7 @@ SIDEBAR_EXPANDED_WIDTH  = 224
 SIDEBAR_COLLAPSED_WIDTH = 56
 
 # ✅ الحد الأدنى لعرض الـ content حتى يختفي الـ horizontal scroll
-# = عرض الـ list panel + عرض الـ detail panel الأدنى
-CONTENT_MIN_WIDTH = 820   # 280 (list) + 5 (splitter) + 535 (detail min)
+CONTENT_MIN_WIDTH = 820
 WINDOW_DEFAULT_W  = SIDEBAR_EXPANDED_WIDTH + CONTENT_MIN_WIDTH  # ≈ 1044
 
 
@@ -480,7 +479,7 @@ class MainWindow(QMainWindow):
 
         self.setWindowTitle("ERP — نظام إدارة التكاليف")
 
-        # ✅ الحجم الافتراضي = sidebar + content بالضبط (بدون مساحة زيادة)
+        # ✅ الحجم الافتراضي = sidebar + content بالضبط
         self.resize(WINDOW_DEFAULT_W, 820)
         self.setLayoutDirection(Qt.RightToLeft)
 
@@ -513,8 +512,6 @@ class MainWindow(QMainWindow):
         self._stack = QStackedWidget()
         self._stack.setStyleSheet(f"background: {_C['bg_page']};")
         self._stack.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Expanding)
-
-        # ✅ حد أدنى للـ stack = CONTENT_MIN_WIDTH عشان الـ scroll يختفي
         self._stack.setMinimumWidth(CONTENT_MIN_WIDTH)
 
         self._costing    = CostingSection()
