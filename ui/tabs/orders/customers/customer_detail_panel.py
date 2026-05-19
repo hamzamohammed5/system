@@ -2,6 +2,9 @@
 ui/tabs/orders/customers/customer_detail_panel.py
 ==================================================
 لوحة تفاصيل العميل — ترث من BaseDetailPanel.
+
+✅ كل الـ imports من panels و table_utils مباشرة
+✅ بدون hard-coded styles
 """
 
 from PyQt5.QtWidgets import QMessageBox, QVBoxLayout
@@ -21,10 +24,10 @@ from ui.widgets.shared.table_utils import (
     insert_row, auto_fit_columns,
     ROW_HEIGHT_COMPACT,
 )
-from ui.widgets.shared.panels import SectionHeader
+from ui.widgets.shared.panels import SectionHeader, _make_btn
 from ui.app_settings import _C
 
-_BLUE  = "#1565c0"
+_BLUE  = _C['accent']
 
 STATUS_MAP = {
     "pending":     "⏳ انتظار",
@@ -54,9 +57,7 @@ class CustomerDetailPanel(BaseDetailPanel):
     def __init__(self, conn, parent=None):
         super().__init__(conn=conn, parent=parent)
 
-    # ══════════════════════════════════════════════════════
-    # بناء الـ header
-    # ══════════════════════════════════════════════════════
+    # ══ بناء الـ header ════════════════════════════════════
 
     def _build_header_cards(self):
         self._card_total_orders  = self._hdr.add_stat_card("📋", "إجمالي الطلبات", color=_BLUE)
@@ -73,32 +74,32 @@ class CustomerDetailPanel(BaseDetailPanel):
         self.btn_toggle.clicked.connect(self._toggle_active)
         self.btn_del.clicked.connect(self._delete)
 
-    # ══════════════════════════════════════════════════════
-    # بناء المحتوى
-    # ══════════════════════════════════════════════════════
+    # ══ بناء المحتوى ══════════════════════════════════════
 
     def _build_content(self, lay: QVBoxLayout):
-        # ── جهات الاتصال ──
         self._contacts_hdr = SectionHeader("📞  جهات الاتصال")
         lay.addWidget(self._contacts_hdr)
 
         self.contacts_table = make_compact_table(
             columns=["الاسم", "الصفة", "الهاتف", "الإيميل"],
-            stretch_col=0, col_widths={1: 80, 2: 100, 3: 120}, max_height=140)
+            stretch_col=0,
+            col_widths={1: 80, 2: 100, 3: 120},
+            max_height=140,
+        )
         lay.addWidget(self.contacts_table)
 
-        # ── آخر الطلبات ──
         self._orders_hdr = SectionHeader("📋  آخر الطلبات")
         lay.addWidget(self._orders_hdr)
 
         self.orders_table = make_compact_table(
             columns=["رقم الطلب", "الحالة", "الأولوية", "الإجمالي", "التاريخ"],
-            stretch_col=0, col_widths={1: 90, 2: 70, 3: 80, 4: 90}, max_height=220)
+            stretch_col=0,
+            col_widths={1: 90, 2: 70, 3: 80, 4: 90},
+            max_height=220,
+        )
         lay.addWidget(self.orders_table)
 
-    # ══════════════════════════════════════════════════════
-    # تحميل البيانات
-    # ══════════════════════════════════════════════════════
+    # ══ تحميل البيانات ════════════════════════════════════
 
     def _load_data(self, item_id: int):
         return fetch_customer(self.conn, item_id)
@@ -109,7 +110,7 @@ class CustomerDetailPanel(BaseDetailPanel):
         self._hdr.set_title(c["name"])
         self._hdr.set_type_badge(type_map.get(c["customer_type"], ""))
         self._hdr.set_status_badge(
-            c["code"] or "", text_color="#6b7280",
+            c["code"] or "", text_color=_C['text_muted'],
             bg="transparent", border="transparent")
 
         parts = []
@@ -165,16 +166,12 @@ class CustomerDetailPanel(BaseDetailPanel):
             auto_fit_columns(self.orders_table, fixed_cols=[1, 2, 3, 4],
                              stretch_col=0, min_width=55, max_width=160)
 
-    # ══════════════════════════════════════════════════════
-    # public API — wrapper لـ load_item
-    # ══════════════════════════════════════════════════════
+    # ══ public API ════════════════════════════════════════
 
     def load_customer(self, cid: int):
         self.load_item(cid)
 
-    # ══════════════════════════════════════════════════════
-    # أحداث الأزرار
-    # ══════════════════════════════════════════════════════
+    # ══ أحداث الأزرار ════════════════════════════════════
 
     def _edit(self):
         if not self._item_id:

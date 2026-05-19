@@ -2,14 +2,10 @@
 ui/tabs/orders/_order_form.py
 ==============================
 Dialog لإنشاء طلب جديد أو تعديل طلب موجود.
-يدعم:
-  - اختيار عميل موجود أو إنشاء عميل جديد
-  - تحديد نوع الطلب / الأولوية / تاريخ التسليم
-  - إضافة وتعديل وحذف بنود الطلب مباشرة من الفورم
-  - اختيار المنتج من قائمة المنتجات المسعّرة (مجمّعة بالتصنيف)
-  - اختيار عروض جاهزة وإضافة بنودها دفعة واحدة
-"""
 
+✅ يستخدم _make_btn من panels بدل hard-coded QPushButton styles
+✅ يستخدم _C palette بدل hard-coded hex colors
+"""
 
 from PyQt5.QtWidgets import (
     QDialog, QVBoxLayout, QHBoxLayout, QFormLayout,
@@ -17,10 +13,9 @@ from PyQt5.QtWidgets import (
     QComboBox, QTextEdit, QDateEdit,
     QMessageBox, QGroupBox,
     QDoubleSpinBox, QScrollArea,
-    QWidget, QSizePolicy,
+    QWidget, QFrame,
 )
 from PyQt5.QtCore import Qt, pyqtSignal, QDate
-from PyQt5.QtGui  import QFont
 
 from db.orders.customers_repo import fetch_all_customers, search_customers
 from db.orders.orders_repo import (
@@ -28,8 +23,11 @@ from db.orders.orders_repo import (
     fetch_order_items, insert_order_item,
     update_order_item, delete_order_item,
 )
-from .order_form._item_row_widget   import _ItemRowWidget
-from .order_form._products_fetcher  import fetch_offers, fetch_offer_lines
+from .order_form._item_row_widget  import _ItemRowWidget
+from .order_form._products_fetcher import fetch_offers, fetch_offer_lines
+
+from ui.app_settings import _C
+from ui.widgets.shared.panels import _make_btn
 
 STATUS_OPTIONS = [
     ("pending",     "⏳ انتظار"),
@@ -51,53 +49,45 @@ TYPE_OPTIONS = [
     ("custom",  "⚙️ مخصص"),
 ]
 
-_BLUE   = "#1565c0"
-_ORANGE = "#e65100"
-_GREEN  = "#2e7d32"
-_GRAY   = "#6b7280"
-_BG     = "#f8f9fb"
-_BORDER = "#cdd3e0"
-_WHITE  = "#ffffff"
-
-
+# ── stylesheet موحد للـ inputs داخل الـ dialog ──
 def _input_ss():
     return f"""
         QLineEdit, QTextEdit, QComboBox, QDoubleSpinBox, QDateEdit {{
-            background: {_BG}; border: 1px solid {_BORDER};
-            border-radius: 6px; padding: 4px 10px;
-            font-size: 12px; color: #1a2035; min-height: 32px;
+            background: {_C['bg_input']};
+            border: 1px solid {_C['border_med']};
+            border-radius: 6px;
+            padding: 4px 10px;
+            color: {_C['text_primary']};
+            min-height: 32px;
         }}
         QLineEdit:focus, QTextEdit:focus,
         QComboBox:focus, QDoubleSpinBox:focus, QDateEdit:focus {{
-            border-color: {_BLUE}; background: {_WHITE};
+            border-color: {_C['accent']};
+            background: white;
         }}
         QComboBox::drop-down {{ border: none; width: 20px; }}
     """
 
 
-def _group_ss(accent=_BLUE):
+def _group_ss(accent=None):
+    c = accent or _C['accent']
     return f"""
         QGroupBox {{
-            font-weight: bold; color: #374151;
-            border: 1px solid #e5e9f0; border-radius: 8px;
-            margin-top: 10px; padding-top: 10px; background: {_WHITE};
+            font-weight: bold;
+            color: {_C['text_sec']};
+            border: 1px solid {_C['border']};
+            border-radius: 8px;
+            margin-top: 10px;
+            padding-top: 10px;
+            background: {_C['bg_surface']};
         }}
         QGroupBox::title {{
-            subcontrol-origin: margin; right: 12px; padding: 0 6px;
-            font-size: 11px; color: {accent};
+            subcontrol-origin: margin;
+            right: 12px;
+            padding: 0 6px;
+            font-size: 11px;
+            color: {c};
         }}
-    """
-
-
-def _btn_ss(bg=_BLUE, color=_WHITE, border=None):
-    b = border or bg
-    return f"""
-        QPushButton {{
-            background: {bg}; color: {color};
-            border: 1px solid {b}; border-radius: 6px;
-            padding: 0 14px; font-size: 12px; min-height: 32px;
-        }}
-        QPushButton:hover {{ opacity: 0.85; }}
     """
 
 
@@ -118,7 +108,6 @@ class _OrderForm(QDialog):
         self.setMinimumWidth(880)
         self.setMinimumHeight(760)
         self.setModal(True)
-        self.setStyleSheet(f"QDialog {{ background: {_BG}; }}")
 
         self._build()
         if order_id:
@@ -134,50 +123,36 @@ class _OrderForm(QDialog):
         scroll = QScrollArea()
         scroll.setWidgetResizable(True)
         scroll.setHorizontalScrollBarPolicy(Qt.ScrollBarAlwaysOff)
-        scroll.setStyleSheet("""
-            QScrollArea { border: none; background: transparent; }
-            QScrollBar:vertical { background: #f0f0f0; width: 6px; border-radius: 3px; }
-            QScrollBar::handle:vertical { background: #cdd3e0; border-radius: 3px; min-height: 20px; }
-            QScrollBar::add-line:vertical, QScrollBar::sub-line:vertical { height: 0; }
-        """)
 
         content = QWidget()
-        content.setStyleSheet(f"background: {_BG};")
         root = QVBoxLayout(content)
         root.setContentsMargins(20, 18, 20, 18)
         root.setSpacing(14)
         scroll.setWidget(content)
         outer.addWidget(scroll)
-        self.setStyleSheet(self.styleSheet() + _input_ss())
+
+        self.setStyleSheet(_input_ss())
 
         # رأس
         hdr = QLabel("✏️  تعديل الطلب" if self.order_id else "📋  طلب جديد")
         hdr.setStyleSheet(f"""
-            font-size: 15px; font-weight: bold; color: {_BLUE};
-            background: #e8f0fe; border-radius: 8px; padding: 10px 16px;
+            font-size: 15px; font-weight: bold; color: {_C['accent_text']};
+            background: {_C['accent_light']};
+            border-radius: 8px; padding: 10px 16px;
         """)
         root.addWidget(hdr)
 
-        # ── قسم 1: العميل ──
         self._build_customer_section(root)
-
-        # ── قسم 2: تفاصيل الطلب ──
         self._build_order_details(root)
-
-        # ── قسم 3: بنود الطلب ──
         self._build_items_section(root)
-
-        # ── قسم 4: الملاحظات ──
         self._build_notes_section(root)
-
-        # ── أزرار الحفظ ──
         self._build_save_buttons(root)
 
         self._add_item_row()
 
     def _build_customer_section(self, root):
         cust_grp = QGroupBox("👤  بيانات العميل")
-        cust_grp.setStyleSheet(_group_ss(_BLUE))
+        cust_grp.setStyleSheet(_group_ss(_C['accent']))
         c_lay = QVBoxLayout(cust_grp)
         c_lay.setSpacing(8)
 
@@ -186,10 +161,9 @@ class _OrderForm(QDialog):
         self.inp_cust_search.setPlaceholderText("ابحث عن عميل بالاسم أو الهاتف أو الكود...")
         self.inp_cust_search.textChanged.connect(self._search_customers)
 
-        btn_new_cust = QPushButton("+ عميل جديد")
-        btn_new_cust.setMinimumHeight(34)
-        btn_new_cust.setStyleSheet(_btn_ss("#ecfdf5", "#065f46", "#a7f3d0"))
+        btn_new_cust = _make_btn("+ عميل جديد", "success")
         btn_new_cust.clicked.connect(self._new_customer)
+
         search_row.addWidget(self.inp_cust_search, stretch=1)
         search_row.addWidget(btn_new_cust)
         c_lay.addLayout(search_row)
@@ -205,8 +179,9 @@ class _OrderForm(QDialog):
 
         self._lbl_cust_info = QLabel("")
         self._lbl_cust_info.setStyleSheet(
-            f"font-size:11px; color:#6b7280; background:{_BG};"
-            "border:1px solid #e5e9f0; border-radius:6px; padding:6px 10px;"
+            f"font-size:11px; color:{_C['text_muted']};"
+            f"background:{_C['bg_surface_2']};"
+            f"border:1px solid {_C['border']}; border-radius:6px; padding:6px 10px;"
         )
         self._lbl_cust_info.setVisible(False)
         c_lay.addWidget(self._lbl_cust_info)
@@ -214,7 +189,7 @@ class _OrderForm(QDialog):
 
     def _build_order_details(self, root):
         order_grp = QGroupBox("📋  تفاصيل الطلب")
-        order_grp.setStyleSheet(_group_ss(_BLUE))
+        order_grp.setStyleSheet(_group_ss(_C['accent']))
         form = QFormLayout(order_grp)
         form.setSpacing(10)
         form.setLabelAlignment(Qt.AlignRight)
@@ -258,29 +233,25 @@ class _OrderForm(QDialog):
 
     def _build_items_section(self, root):
         items_grp = QGroupBox("📦  بنود الطلب")
-        items_grp.setStyleSheet(_group_ss(_ORANGE))
+        items_grp.setStyleSheet(_group_ss(_C['warning']))
         items_lay = QVBoxLayout(items_grp)
         items_lay.setSpacing(8)
 
         toolbar = QHBoxLayout()
         toolbar.setSpacing(8)
 
-        btn_add_item = QPushButton("➕  إضافة بند")
-        btn_add_item.setMinimumHeight(34)
-        btn_add_item.setStyleSheet(_btn_ss("#ecfdf5", "#065f46", "#a7f3d0"))
+        btn_add_item = _make_btn("➕  إضافة بند", "success")
         btn_add_item.clicked.connect(self._add_item_row)
 
         lbl_offer = QLabel("أو استورد عرضاً:")
-        lbl_offer.setStyleSheet(f"color:{_GRAY}; font-size:11px;")
+        lbl_offer.setStyleSheet(f"color:{_C['text_muted']}; font-size:11px;")
 
         self.cmb_offers = QComboBox()
         self.cmb_offers.setMinimumHeight(34)
         self.cmb_offers.setMinimumWidth(200)
         self._load_offers_combo()
 
-        btn_import_offer = QPushButton("📥  استيراد")
-        btn_import_offer.setMinimumHeight(34)
-        btn_import_offer.setStyleSheet(_btn_ss("#e8f0fe", _BLUE, "#90caf9"))
+        btn_import_offer = _make_btn("📥  استيراد", "ghost")
         btn_import_offer.clicked.connect(self._import_offer)
 
         toolbar.addWidget(btn_add_item)
@@ -297,22 +268,34 @@ class _OrderForm(QDialog):
         self._rows_layout.setContentsMargins(0, 0, 4, 0)
         items_lay.addWidget(self._rows_container)
 
-        from PyQt5.QtWidgets import QFrame
+        # شريط الإجمالي
         total_bar = QFrame()
-        total_bar.setStyleSheet("""
-            QFrame { background: #e8f0fe; border: 1px solid #90caf9; border-radius: 6px; }
+        total_bar.setStyleSheet(f"""
+            QFrame {{
+                background: {_C['accent_light']};
+                border: 1px solid {_C['accent_mid']};
+                border-radius: 6px;
+            }}
         """)
         total_row = QHBoxLayout(total_bar)
         total_row.setContentsMargins(14, 8, 14, 8)
 
         lbl_items_count = QLabel("البنود:")
-        lbl_items_count.setStyleSheet(f"color:{_GRAY}; font-size:11px; background:transparent;")
+        lbl_items_count.setStyleSheet(
+            f"color:{_C['text_muted']}; font-size:11px; background:transparent;"
+        )
         self.lbl_items_count = QLabel("0")
-        self.lbl_items_count.setStyleSheet(f"font-weight:bold; color:{_BLUE}; background:transparent;")
+        self.lbl_items_count.setStyleSheet(
+            f"font-weight:bold; color:{_C['accent_text']}; background:transparent;"
+        )
         lbl_subtotal_txt = QLabel("الإجمالي قبل الخصم:")
-        lbl_subtotal_txt.setStyleSheet(f"color:{_GRAY}; font-size:11px; background:transparent;")
+        lbl_subtotal_txt.setStyleSheet(
+            f"color:{_C['text_muted']}; font-size:11px; background:transparent;"
+        )
         self.lbl_subtotal = QLabel("0.00 ج")
-        self.lbl_subtotal.setStyleSheet(f"font-weight:bold; color:{_BLUE}; font-size:13px; background:transparent;")
+        self.lbl_subtotal.setStyleSheet(
+            f"font-weight:bold; color:{_C['accent_text']}; font-size:13px; background:transparent;"
+        )
 
         total_row.addWidget(lbl_items_count)
         total_row.addWidget(self.lbl_items_count)
@@ -324,7 +307,7 @@ class _OrderForm(QDialog):
 
     def _build_notes_section(self, root):
         notes_grp = QGroupBox("📝  الملاحظات")
-        notes_grp.setStyleSheet(_group_ss(_GRAY))
+        notes_grp.setStyleSheet(_group_ss(_C['text_muted']))
         n_lay = QVBoxLayout(notes_grp)
         n_lay.setSpacing(8)
 
@@ -344,21 +327,11 @@ class _OrderForm(QDialog):
     def _build_save_buttons(self, root):
         btns = QHBoxLayout()
 
-        btn_cancel = QPushButton("إلغاء")
-        btn_cancel.setMinimumHeight(40)
-        btn_cancel.setStyleSheet(_btn_ss(_WHITE, "#374151", _BORDER))
+        btn_cancel = _make_btn("إلغاء", "ghost")
         btn_cancel.clicked.connect(self.reject)
 
-        btn_save = QPushButton("💾  حفظ الطلب")
+        btn_save = _make_btn("💾  حفظ الطلب", "primary")
         btn_save.setMinimumHeight(40)
-        btn_save.setStyleSheet(f"""
-            QPushButton {{
-                background: {_BLUE}; color: {_WHITE};
-                border: none; border-radius: 8px;
-                padding: 0 24px; font-weight: bold; font-size: 13px;
-            }}
-            QPushButton:hover {{ background: #0d47a1; }}
-        """)
         btn_save.clicked.connect(self._save)
 
         btns.addWidget(btn_cancel)

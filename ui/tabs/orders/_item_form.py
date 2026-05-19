@@ -2,18 +2,22 @@
 ui/tabs/orders/_item_form.py
 =============================
 Dialog لإضافة أو تعديل بند في الطلب.
+
+✅ يستخدم _make_btn من panels
+✅ يستخدم _C palette
 """
 
 from PyQt5.QtWidgets import (
     QDialog, QVBoxLayout, QHBoxLayout, QFormLayout,
-    QLabel, QLineEdit, QPushButton,
-    QDoubleSpinBox, QTextEdit, QMessageBox,
+    QLabel, QLineEdit, QDoubleSpinBox, QMessageBox,
 )
-from PyQt5.QtCore import Qt, pyqtSignal
+from PyQt5.QtCore import Qt
 
 from db.orders.orders_repo import (
     fetch_order_items, insert_order_item, update_order_item,
 )
+from ui.widgets.shared.panels import _make_btn
+from ui.app_settings import _C
 
 
 def _spin(min_=0, max_=9999999, dec=2, suffix=""):
@@ -26,24 +30,6 @@ def _spin(min_=0, max_=9999999, dec=2, suffix=""):
     return s
 
 
-def _input_ss():
-    return """
-        QLineEdit, QTextEdit, QDoubleSpinBox {
-            background: #f8f9fb;
-            border: 1px solid #cdd3e0;
-            border-radius: 6px;
-            padding: 4px 10px;
-            font-size: 12px;
-            color: #1a2035;
-            min-height: 34px;
-        }
-        QLineEdit:focus, QTextEdit:focus, QDoubleSpinBox:focus {
-            border-color: #1565c0;
-            background: white;
-        }
-    """
-
-
 class _ItemForm(QDialog):
     def __init__(self, conn, order_id: int, item_id: int = None, parent=None):
         super().__init__(parent)
@@ -54,13 +40,25 @@ class _ItemForm(QDialog):
         self.setWindowTitle("تعديل بند" if item_id else "إضافة بند")
         self.setMinimumWidth(480)
         self.setModal(True)
-        self.setStyleSheet("QDialog { background: #f8f9fb; }" + _input_ss())
+        self.setStyleSheet(f"""
+            QLineEdit, QDoubleSpinBox {{
+                background: {_C['bg_input']};
+                border: 1px solid {_C['border_med']};
+                border-radius: 6px;
+                padding: 4px 10px;
+                color: {_C['text_primary']};
+                min-height: 34px;
+            }}
+            QLineEdit:focus, QDoubleSpinBox:focus {{
+                border-color: {_C['accent']};
+                background: white;
+            }}
+        """)
 
         self._build()
         if item_id:
             self._load()
 
-        # ربط حقول الحساب
         self.sp_qty.valueChanged.connect(self._update_total)
         self.sp_price.valueChanged.connect(self._update_total)
         self.sp_discount.valueChanged.connect(self._update_total)
@@ -71,9 +69,10 @@ class _ItemForm(QDialog):
         root.setSpacing(12)
 
         hdr = QLabel("➕  إضافة بند" if not self.item_id else "✏️  تعديل بند")
-        hdr.setStyleSheet("""
-            font-size: 13px; font-weight: bold; color: #1565c0;
-            background: #e8f0fe; border-radius: 8px; padding: 8px 14px;
+        hdr.setStyleSheet(f"""
+            font-size: 13px; font-weight: bold; color: {_C['accent_text']};
+            background: {_C['accent_light']};
+            border-radius: 8px; padding: 8px 14px;
         """)
         root.addWidget(hdr)
 
@@ -81,80 +80,55 @@ class _ItemForm(QDialog):
         form.setSpacing(10)
         form.setLabelAlignment(Qt.AlignRight)
 
-        # اسم البند
         self.inp_name = QLineEdit()
         self.inp_name.setPlaceholderText("اسم البند أو المنتج...")
         form.addRow("البند * :", self.inp_name)
 
-        # الوصف
         self.inp_desc = QLineEdit()
         self.inp_desc.setPlaceholderText("وصف تفصيلي (اختياري)...")
         form.addRow("الوصف :", self.inp_desc)
 
-        # الكمية
         self.sp_qty = _spin(min_=0.001, max_=99999, dec=3)
         self.sp_qty.setValue(1)
         form.addRow("الكمية :", self.sp_qty)
 
-        # الوحدة
         self.inp_unit = QLineEdit()
         self.inp_unit.setText("قطعة")
         self.inp_unit.setPlaceholderText("قطعة، متر، كجم ...")
         form.addRow("الوحدة :", self.inp_unit)
 
-        # السعر
         self.sp_price = _spin(max_=9999999, dec=2, suffix="ج")
         form.addRow("سعر الوحدة :", self.sp_price)
 
-        # الخصم
         self.sp_discount = _spin(max_=100, dec=2, suffix="%")
         form.addRow("الخصم :", self.sp_discount)
 
         # الإجمالي (للعرض فقط)
         self.lbl_total = QLabel("0.00 ج")
-        self.lbl_total.setStyleSheet("""
-            font-size: 14px; font-weight: bold; color: #1565c0;
-            background: #e8f0fe; border: 1px solid #90caf9;
+        self.lbl_total.setStyleSheet(f"""
+            font-size: 14px; font-weight: bold; color: {_C['accent_text']};
+            background: {_C['accent_light']};
+            border: 1px solid {_C['accent_mid']};
             border-radius: 6px; padding: 6px 12px;
         """)
         form.addRow("الإجمالي :", self.lbl_total)
 
-        # مرجع التصميم
         self.inp_design_ref = QLineEdit()
         self.inp_design_ref.setPlaceholderText("كود التصميم أو المرجع (اختياري)...")
         form.addRow("مرجع التصميم :", self.inp_design_ref)
 
-        # ملاحظات
         self.inp_notes = QLineEdit()
         self.inp_notes.setPlaceholderText("ملاحظات على البند...")
         form.addRow("ملاحظات :", self.inp_notes)
 
         root.addLayout(form)
 
-        # أزرار
         btn_row = QHBoxLayout()
-        btn_cancel = QPushButton("إلغاء")
-        btn_cancel.setMinimumHeight(36)
-        btn_cancel.setStyleSheet("""
-            QPushButton {
-                background: white; color: #374151;
-                border: 1px solid #cdd3e0; border-radius: 6px;
-                padding: 0 14px;
-            }
-            QPushButton:hover { background: #f8f9fb; }
-        """)
+        btn_cancel = _make_btn("إلغاء", "ghost")
         btn_cancel.clicked.connect(self.reject)
 
-        btn_save = QPushButton("💾  حفظ البند")
+        btn_save = _make_btn("💾  حفظ البند", "primary")
         btn_save.setMinimumHeight(36)
-        btn_save.setStyleSheet("""
-            QPushButton {
-                background: #1565c0; color: white;
-                border: none; border-radius: 6px;
-                padding: 0 18px; font-weight: bold; font-size: 12px;
-            }
-            QPushButton:hover { background: #0d47a1; }
-        """)
         btn_save.clicked.connect(self._save)
 
         btn_row.addWidget(btn_cancel)

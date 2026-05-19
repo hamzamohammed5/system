@@ -18,13 +18,13 @@ def build_top_cards(dashboard) -> QHBoxLayout:
     row.setSpacing(12)
 
     f1, dashboard._lbl_total = make_stat_card_simple(
-        "📋", "إجمالي الطلبات", color="#1565c0", bg="#e8f0fe", border="#90caf9")
+        "📋", "إجمالي الطلبات", color="#1565c0")
     f2, dashboard._lbl_urgent = make_stat_card_simple(
-        "🔴", "عاجل", color="#ef4444", bg="#fef2f2", border="#fecaca")
+        "🔴", "عاجل", color="#ef4444")
     f3, dashboard._lbl_total_value = make_stat_card_simple(
-        "💰", "إجمالي القيمة", color="#10b981", bg="#ecfdf5", border="#a7f3d0")
+        "💰", "إجمالي القيمة", color="#10b981")
     f4, dashboard._lbl_total_paid = make_stat_card_simple(
-        "✅", "إجمالي المدفوع", color="#1565c0", bg="#eff6ff", border="#bfdbfe")
+        "✅", "إجمالي المدفوع", color="#1565c0")
 
     for f in (f1, f2, f3, f4):
         row.addWidget(f, stretch=1)

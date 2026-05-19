@@ -5,7 +5,7 @@ ui/tabs/orders/dashboard_tab.py
 
 ✅ يستخدم shared panels بالكامل (make_stat_card_simple, make_status_chip, CardGrid)
 ✅ الجدول Fixed — لا يتمدد مع النافذة
-✅ مقسّم على ملفات منفصلة في مجلد dashboard/
+✅ بدون hard-coded QSS — يعتمد على _C palette
 """
 
 from PyQt5.QtWidgets import (
@@ -16,6 +16,7 @@ from PyQt5.QtWidgets import (
 from PyQt5.QtCore import Qt
 
 from db.orders.orders_repo import fetch_orders_summary, fetch_all_orders
+from ui.app_settings import _C
 
 from .dashboard._top_cards    import build_top_cards
 from .dashboard._status_grid  import build_status_grid
@@ -36,19 +37,8 @@ class OrdersDashboardTab(QWidget):
         scroll = QScrollArea()
         scroll.setWidgetResizable(True)
         scroll.setHorizontalScrollBarPolicy(Qt.ScrollBarAlwaysOff)
-        scroll.setStyleSheet("""
-            QScrollArea { border: none; background: #f8f9fb; }
-            QScrollBar:vertical {
-                background: #f0f0f0; width: 6px; border-radius: 3px;
-            }
-            QScrollBar::handle:vertical {
-                background: #cdd3e0; border-radius: 3px; min-height: 20px;
-            }
-            QScrollBar::add-line:vertical, QScrollBar::sub-line:vertical { height: 0; }
-        """)
 
         content = QWidget()
-        content.setStyleSheet("background: #f8f9fb;")
         lay = QVBoxLayout(content)
         lay.setContentsMargins(20, 16, 20, 20)
         lay.setSpacing(16)
@@ -58,9 +48,7 @@ class OrdersDashboardTab(QWidget):
 
         # ── عنوان شبكة الحالات ──
         lbl_status = QLabel("توزيع الطلبات حسب الحالة")
-        lbl_status.setStyleSheet(
-            "font-weight:bold; color:#374151; background:transparent;"
-        )
+        lbl_status.setStyleSheet("font-weight:bold;")
         lay.addWidget(lbl_status)
 
         # ── شبكة شرائح الحالات ──
@@ -69,21 +57,13 @@ class OrdersDashboardTab(QWidget):
         # ── رأس جدول آخر الطلبات ──
         recent_hdr = QHBoxLayout()
         lbl_recent = QLabel("آخر الطلبات")
-        lbl_recent.setStyleSheet(
-            "font-weight:bold; color:#374151; background:transparent;"
-        )
+        lbl_recent.setStyleSheet("font-weight:bold;")
+
         btn_refresh = QPushButton("↺  تحديث")
         btn_refresh.setMinimumHeight(30)
         btn_refresh.setSizePolicy(QSizePolicy.Fixed, QSizePolicy.Fixed)
-        btn_refresh.setStyleSheet("""
-            QPushButton {
-                background: #e8eaf6; color: #3949ab;
-                border: 1px solid #c5cae9; border-radius: 5px;
-                padding: 0 12px;
-            }
-            QPushButton:hover { background: #c5cae9; }
-        """)
         btn_refresh.clicked.connect(self.refresh)
+
         recent_hdr.addWidget(lbl_recent)
         recent_hdr.addStretch()
         recent_hdr.addWidget(btn_refresh)
