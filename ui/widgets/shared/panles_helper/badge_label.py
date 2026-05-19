@@ -1,19 +1,11 @@
 """
 ui/widgets/shared/panles_helper/badge_label.py
-============================
 """
-
-from PyQt5.QtWidgets import (
-    QLabel
-)
+from PyQt5.QtWidgets import QLabel
 from PyQt5.QtCore import Qt
-
 from ui.app_settings import fs
 from .colors_and_base import _base
 
-# ══════════════════════════════════════════════════════════
-# BadgeLabel
-# ══════════════════════════════════════════════════════════
 
 class BadgeLabel(QLabel):
     def __init__(self, parent=None):
@@ -37,4 +29,3 @@ class BadgeLabel(QLabel):
     def clear_badge(self):
         self.setText("")
         self._apply_base_style()
-

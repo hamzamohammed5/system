@@ -1,10 +1,7 @@
 """
 ui/widgets/shared/panles_helper/colors_and_base.py
-============================
 """
-
 from ui.app_settings import get_font_size
-
 
 def _base() -> int:
     return get_font_size()
@@ -28,6 +25,9 @@ _CARD_PALETTE = {
     "#8b5cf6": ("#f5f3ff", "#c4b5fd"),
     "#6d28d9": ("#f5f3ff", "#ddd6fe"),
     "#6a1b9a": ("#f3e5f5", "#ce93d8"),
+    "#9ca3af": ("#f9fafb", "#e5e7eb"),
+    "#555555": ("#f5f5f5", "#e0e0e0"),
+    "#555":    ("#f5f5f5", "#e0e0e0"),
 }
 
 def _card_colors(color: str) -> tuple:

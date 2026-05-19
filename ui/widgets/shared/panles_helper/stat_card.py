@@ -1,22 +1,12 @@
 """
 ui/widgets/shared/panles_helper/stat_card.py
-============================
 """
-
-from PyQt5.QtWidgets import (
-    QFrame, QVBoxLayout, QHBoxLayout,
-    QLabel, QSizePolicy,
-)
+from PyQt5.QtWidgets import QFrame, QVBoxLayout, QHBoxLayout, QLabel, QSizePolicy
 from PyQt5.QtCore import Qt
-from PyQt5.QtGui  import QFont
+from PyQt5.QtGui import QFont
+from ui.app_settings import fs
+from .colors_and_base import _card_colors, _base
 
-from ui.app_settings import  fs
-from .colors_and_base import _card_colors
-from .colors_and_base import _base
-
-# ══════════════════════════════════════════════════════════
-# StatCard
-# ══════════════════════════════════════════════════════════
 
 class StatCard(QFrame):
     def __init__(self, icon: str = "", title: str = "",
@@ -26,8 +16,6 @@ class StatCard(QFrame):
         super().__init__(parent)
         self._color   = color
         self._compact = compact
-        self._icon    = icon
-        self._title   = title
         self._build(icon, title, value, color, bg, border)
 
     def _build(self, icon, title, value, color, bg, border):
@@ -44,7 +32,7 @@ class StatCard(QFrame):
         """)
         self.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Fixed)
 
-        lay = QVBoxLayout(self)
+        lay  = QVBoxLayout(self)
         base = _base()
 
         if self._compact:
@@ -69,7 +57,7 @@ class StatCard(QFrame):
             lbl_icon = QLabel(icon)
             lbl_icon.setStyleSheet(
                 f"font-size:{fs(base,+1) if self._compact else fs(base,+2)}pt;"
-                "background:transparent; border:none; opacity:0.8;"
+                "background:transparent; border:none;"
             )
             top_row.addWidget(lbl_icon)
 
@@ -77,8 +65,7 @@ class StatCard(QFrame):
 
         self._lbl_value = QLabel(value)
         f = QFont()
-        val_size = fs(base, +1) if self._compact else fs(base, +3)
-        f.setPointSize(val_size)
+        f.setPointSize(fs(base, +1) if self._compact else fs(base, +3))
         f.setBold(True)
         self._lbl_value.setFont(f)
         self._lbl_value.setStyleSheet(
@@ -104,4 +91,3 @@ class StatCard(QFrame):
 
     def value_label(self) -> QLabel:
         return self._lbl_value
-

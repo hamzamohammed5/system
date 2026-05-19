@@ -1,8 +1,5 @@
 """
-ui/tabs/orders/order_detail/
-_status_config.py
-==================
-ثوابت الحالة والأولوية والنوع — مشتركة بين ملفات الـ detail.
+ui/tabs/orders/order_detail/_status_config.py
 """
 
 STATUS_LABELS = {

@@ -1,38 +1,27 @@
 """
 ui/tabs/orders/order_detail/_header_fill.py
-============================================
-ملء الـ header في _OrderDetail — منفصل للوضوح.
 """
-
-from ._status_config import (
-    STATUS_LABELS, STATUS_TRANSITIONS,
-    PRIORITY_LABELS, TYPE_LABELS,
-)
+from ._status_config import STATUS_LABELS, STATUS_TRANSITIONS, PRIORITY_LABELS, TYPE_LABELS
 
 _GREEN = "#10b981"
 
 
 def _fill_header(detail):
-    """يملأ الـ header ببيانات الطلب."""
     d = detail._order_data
 
     detail._hdr.set_title(d["order_number"])
     detail._hdr.set_type_badge(TYPE_LABELS.get(d["order_type"], ""))
 
-    status_info = STATUS_LABELS.get(
-        d["status"], (d["status"], "#555", "#fff", "#eee"))
-    detail._hdr.set_status_badge(
-        status_info[0], status_info[1], status_info[2], status_info[3])
+    si = STATUS_LABELS.get(d["status"], (d["status"], "#555", "#fff", "#eee"))
+    detail._hdr.set_status_badge(si[0], si[1], si[2], si[3])
 
     pri_lbl, pri_color = PRIORITY_LABELS.get(d["priority"], ("", "#6b7280"))
     detail._hdr.set_priority_badge(pri_lbl, pri_color)
 
     customer_line = f"👤  {d['customer_name']}  ({d['customer_code']})"
     info_parts = []
-    if d.get("customer_phone"):
-        info_parts.append(f"📞 {d['customer_phone']}")
-    if d.get("customer_city"):
-        info_parts.append(f"📍 {d['customer_city']}")
+    if d.get("customer_phone"): info_parts.append(f"📞 {d['customer_phone']}")
+    if d.get("customer_city"):  info_parts.append(f"📍 {d['customer_city']}")
 
     detail._hdr.set_customer_name(customer_line)
     detail._hdr.set_info(info_parts)

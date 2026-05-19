@@ -1,25 +1,12 @@
 """
 ui/widgets/shared/panles_helper/empty_state.py
-============================
 """
-
-from PyQt5.QtWidgets import (
-    QFrame, QVBoxLayout,
-    QLabel
-)
+from PyQt5.QtWidgets import QFrame, QVBoxLayout, QLabel
 from PyQt5.QtCore import Qt, pyqtSignal
-
-
 from ui.app_settings import _C, fs
 from .make_btn import _make_btn
 from .colors_and_base import _card_colors, _base
 
-
-
-
-# ══════════════════════════════════════════════════════════
-# EmptyState
-# ══════════════════════════════════════════════════════════
 
 class EmptyState(QFrame):
     action_clicked = pyqtSignal()
@@ -37,10 +24,7 @@ class EmptyState(QFrame):
 
     def _build(self, icon, title, subtitle, action_text, style, color, min_h):
         _bg, _border = _card_colors(color)
-
-        border_style = {
-            "dashed": "dashed", "solid": "solid", "plain": "none"
-        }.get(style, "dashed")
+        border_style = {"dashed": "dashed", "solid": "solid", "plain": "none"}.get(style, "dashed")
 
         self.setStyleSheet(f"""
             QFrame {{

@@ -1,6 +1,12 @@
 """
 ui/widgets/shared/panles_helper/detail_header.py
-============================
+=================================================
+DetailHeader — هيدر موحد لصفحات التفاصيل.
+
+الإصلاح الرئيسي:
+  - toolbar_section بـ Preferred size policy عشان يتمدد عمودياً
+  - ActionToolbar بـ FlowLayout — الأزرار تنزل لسطر تاني تلقائياً
+  - الهيدر نفسه مش Fixed height — بيكبر مع الأزرار
 """
 
 from PyQt5.QtWidgets import (
@@ -8,25 +14,17 @@ from PyQt5.QtWidgets import (
     QLabel, QSizePolicy,
 )
 from PyQt5.QtCore import Qt
-from PyQt5.QtGui  import QFont
+from PyQt5.QtGui import QFont
 
 from ui.app_settings import _C, fs
-from .stat_card import StatCard
-from .badge_label import BadgeLabel
-from .info_row import InfoRow
+from .stat_card      import StatCard
+from .badge_label    import BadgeLabel
+from .info_row       import InfoRow
 from .action_toolbar import ActionToolbar
 from .colors_and_base import _base
 
 
 class DetailHeader(QFrame):
-    """
-    هيدر موحد لصفحات التفاصيل.
-    minimum width = 0 عشان الـ _inner في BaseDetailPanel هو اللي يتحكم في الـ scroll.
-    """
-
-    # ✅ صفر — مش إحنا اللي نحدد الـ minimum، الـ _inner في BaseDetailPanel هو اللي يحددها
-    HEADER_MIN_WIDTH = 0
-
     def __init__(self, bg: str = None, parent=None):
         super().__init__(parent)
         self._stat_cards: list[StatCard] = []
@@ -40,8 +38,8 @@ class DetailHeader(QFrame):
                 border-bottom: 1px solid {_C['border']};
             }}
         """)
-        # ✅ بدون minimum width — الـ BaseDetailPanel._inner هو اللي يتحكم
-        self.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Fixed)
+        # Preferred — يكبر عمودياً حسب محتواه
+        self.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Preferred)
 
         root = QVBoxLayout(self)
         root.setContentsMargins(20, 14, 20, 0)
@@ -54,7 +52,7 @@ class DetailHeader(QFrame):
         top_lay.setContentsMargins(0, 0, 0, 12)
         top_lay.setSpacing(4)
 
-        # ── صف 1: العنوان + الشارات ──
+        # صف العنوان + شارات
         title_row = QHBoxLayout()
         title_row.setSpacing(10)
         title_row.setAlignment(Qt.AlignVCenter)
@@ -84,14 +82,13 @@ class DetailHeader(QFrame):
         self._badge_priority.setStyleSheet(
             f"background:transparent; border:none; font-size:{fs(base,0)}pt;"
         )
-
         self._badge_status = BadgeLabel()
 
         title_row.addWidget(self._badge_priority)
         title_row.addWidget(self._badge_status)
         top_lay.addLayout(title_row)
 
-        # ── صف 2: اسم العميل ──
+        # اسم العميل
         self._lbl_customer = QLabel("")
         self._lbl_customer.setWordWrap(True)
         self._lbl_customer.setStyleSheet(
@@ -101,13 +98,11 @@ class DetailHeader(QFrame):
         self._lbl_customer.setVisible(False)
         top_lay.addWidget(self._lbl_customer)
 
-        # ── صف 3: التفاصيل الثانوية ──
+        # التفاصيل الثانوية
         self._info_row = InfoRow(separator="  ·  ")
         top_lay.addWidget(self._info_row)
 
         root.addWidget(top_section)
-
-        # ── فاصل ──
         root.addWidget(self._make_divider())
 
         # ══ البطاقات الإحصائية ══
@@ -122,13 +117,14 @@ class DetailHeader(QFrame):
         cards_lay.addLayout(self._cards_row)
 
         root.addWidget(cards_section)
-
-        # ── فاصل ──
         root.addWidget(self._make_divider())
 
-        # ══ شريط الأزرار ══
+        # ══ شريط الأزرار — Preferred size policy ══
         toolbar_section = QWidget()
         toolbar_section.setStyleSheet("background:transparent;")
+        # ← المهم: Preferred عشان يتمدد عمودياً مع الأزرار
+        toolbar_section.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Preferred)
+
         tb_lay = QVBoxLayout(toolbar_section)
         tb_lay.setContentsMargins(0, 8, 0, 10)
         tb_lay.setSpacing(0)
@@ -154,8 +150,9 @@ class DetailHeader(QFrame):
     def set_type_badge(self, text: str, color: str = None):
         self._lbl_type.setText(text)
         if color:
+            base = _base()
             self._lbl_type.setStyleSheet(
-                f"color:{color}; font-size:{fs(_base(),0)}pt;"
+                f"color:{color}; font-size:{fs(base,0)}pt;"
                 "background:transparent; border:none; font-weight:500;"
             )
 

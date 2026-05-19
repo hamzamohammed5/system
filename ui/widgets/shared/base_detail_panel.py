@@ -3,8 +3,10 @@ ui/widgets/shared/base_detail_panel.py
 ========================================
 BaseDetailPanel — قاعدة مشتركة لكل لوحات التفاصيل.
 
-الـ scroll (أفقي + عمودي) يشمل كل حاجة: header + content.
-لما النافذة تضيق عن MIN_CONTENT_W يظهر scrollbar أفقي.
+القواعد:
+  - الهيدر + المحتوى كلهم جوا scroll area واحد
+  - الـ inner container عنده minimum width
+  - الهيدر Preferred size — يكبر مع الأزرار
 """
 
 from PyQt5.QtWidgets import (
@@ -15,44 +17,27 @@ from PyQt5.QtCore import Qt, pyqtSignal
 from ui.widgets.shared.panels import DetailHeader, EmptyState
 from ui.app_settings import _C
 
-_BG = "#f8f9fb"
-DETAIL_MIN_WIDTH = 520
+_BG              = "#f8f9fb"
+DETAIL_MIN_WIDTH = 500
 
 _SCROLL_SS = f"""
-    QScrollArea {{
-        border: none;
-        background: transparent;
-    }}
+    QScrollArea {{ border: none; background: transparent; }}
     QScrollBar:vertical {{
-        background: transparent;
-        width: 6px;
-        border-radius: 3px;
+        background: transparent; width: 6px; border-radius: 3px;
     }}
     QScrollBar::handle:vertical {{
-        background: {_C['border_med']};
-        border-radius: 3px;
-        min-height: 30px;
+        background: {_C['border_med']}; border-radius: 3px; min-height: 30px;
     }}
-    QScrollBar::handle:vertical:hover {{
-        background: {_C['border_strong']};
-    }}
-    QScrollBar::add-line:vertical,
-    QScrollBar::sub-line:vertical {{ height: 0px; }}
+    QScrollBar::handle:vertical:hover {{ background: {_C['border_strong']}; }}
+    QScrollBar::add-line:vertical, QScrollBar::sub-line:vertical {{ height: 0px; }}
     QScrollBar:horizontal {{
-        background: transparent;
-        height: 6px;
-        border-radius: 3px;
+        background: transparent; height: 6px; border-radius: 3px;
     }}
     QScrollBar::handle:horizontal {{
-        background: {_C['border_med']};
-        border-radius: 3px;
-        min-width: 30px;
+        background: {_C['border_med']}; border-radius: 3px; min-width: 30px;
     }}
-    QScrollBar::handle:horizontal:hover {{
-        background: {_C['border_strong']};
-    }}
-    QScrollBar::add-line:horizontal,
-    QScrollBar::sub-line:horizontal {{ width: 0px; }}
+    QScrollBar::handle:horizontal:hover {{ background: {_C['border_strong']}; }}
+    QScrollBar::add-line:horizontal, QScrollBar::sub-line:horizontal {{ width: 0px; }}
 """
 
 
@@ -71,33 +56,20 @@ class BaseDetailPanel(QWidget):
         self.conn       = conn
         self._item_id   = None
         self._item_data = None
-
         self.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Expanding)
+        self.setMinimumWidth(300)
         self._build_base()
         self._show_empty()
 
-    # ══════════════════════════════════════════════════════
-    # override في الـ subclass
-    # ══════════════════════════════════════════════════════
+    # ── override في الـ subclass ──────────────────────────
 
-    def _build_header_cards(self):
-        pass
+    def _build_header_cards(self):   pass
+    def _build_header_buttons(self): pass
+    def _build_content(self, lay: QVBoxLayout): pass
+    def _load_data(self, item_id: int): return None
+    def _fill_data(self, data): pass
 
-    def _build_header_buttons(self):
-        pass
-
-    def _build_content(self, lay: QVBoxLayout):
-        pass
-
-    def _load_data(self, item_id: int):
-        return None
-
-    def _fill_data(self, data):
-        pass
-
-    # ══════════════════════════════════════════════════════
-    # بناء الواجهة
-    # ══════════════════════════════════════════════════════
+    # ── بناء الواجهة ──────────────────────────────────────
 
     def _build_base(self):
         self.setStyleSheet(f"background:{_BG};")
@@ -105,18 +77,13 @@ class BaseDetailPanel(QWidget):
         root.setContentsMargins(0, 0, 0, 0)
         root.setSpacing(0)
 
-        # ══ Scroll area يلف كل حاجة (header + content) ══
+        # Scroll يلف كل حاجة
         self._scroll = QScrollArea()
         self._scroll.setWidgetResizable(True)
-        # ✅ أفقي: يظهر تلقائياً لما المحتوى أعرض من الـ panel
         self._scroll.setHorizontalScrollBarPolicy(Qt.ScrollBarAsNeeded)
         self._scroll.setVerticalScrollBarPolicy(Qt.ScrollBarAsNeeded)
         self._scroll.setStyleSheet(_SCROLL_SS)
-        # ✅ الـ scroll نفسه يتمدد ويتضيق بحرية — الـ _inner هو اللي بيتحكم في الـ scroll
-        self._scroll.setMinimumWidth(0)
 
-        # ✅ الـ inner له minimum width — ده اللي بيخلي الـ horizontal scroll يظهر
-        # لما الـ scroll area تضيق عن MIN_CONTENT_W يظهر scrollbar أفقي
         self._inner = QWidget()
         self._inner.setMinimumWidth(self.MIN_CONTENT_W)
         self._inner.setStyleSheet(f"background:{_BG};")
@@ -125,28 +92,26 @@ class BaseDetailPanel(QWidget):
         inner_lay.setContentsMargins(0, 0, 0, 0)
         inner_lay.setSpacing(0)
 
-        # ── Header ──
+        # Header
         self._hdr = DetailHeader(bg=self.HEADER_BG)
         self._build_header_cards()
         self._build_header_buttons()
         inner_lay.addWidget(self._hdr)
 
-        # ── Content ──
+        # Content
         content = QWidget()
         content.setStyleSheet(f"background:{_BG};")
         self._content_lay = QVBoxLayout(content)
         self._content_lay.setContentsMargins(16, 14, 16, 16)
         self._content_lay.setSpacing(12)
-
         self._build_content(self._content_lay)
         self._content_lay.addStretch()
 
         inner_lay.addWidget(content, stretch=1)
-
         self._scroll.setWidget(self._inner)
         root.addWidget(self._scroll, stretch=1)
 
-        # ── Empty State (خارج الـ scroll) ──
+        # Empty state
         self._empty = EmptyState(
             icon=self.EMPTY_ICON,
             title=self.EMPTY_TITLE,
@@ -155,13 +120,11 @@ class BaseDetailPanel(QWidget):
         )
         root.addWidget(self._empty)
 
-    # ══════════════════════════════════════════════════════
-    # public API
-    # ══════════════════════════════════════════════════════
+    # ── public API ────────────────────────────────────────
 
     def load_item(self, item_id: int):
-        self._item_id = item_id
-        data = self._load_data(item_id)
+        self._item_id   = item_id
+        data            = self._load_data(item_id)
         self._item_data = dict(data) if data else None
         if not self._item_data:
             return

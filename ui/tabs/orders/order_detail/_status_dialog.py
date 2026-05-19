@@ -1,16 +1,11 @@
 """
-ui/tabs/orders/order_detail/
-_status_dialog.py
-==================
-Dialog تغيير حالة الطلب — منفصل عن الـ detail panel.
+ui/tabs/orders/order_detail/_status_dialog.py
 """
-
 from PyQt5.QtWidgets import (
     QDialog, QVBoxLayout, QHBoxLayout,
     QLabel, QPushButton, QComboBox, QLineEdit,
 )
 from PyQt5.QtCore import Qt
-
 from ui.app_settings import _C
 from ._status_config import STATUS_LABELS_SHORT, STATUS_COLORS
 
@@ -28,14 +23,12 @@ class _StatusDialog(QDialog):
         self.setStyleSheet(f"""
             QDialog {{ background: {_C['bg_surface']}; }}
             QLineEdit {{
-                background: {_C['bg_input']};
-                border: 1.5px solid {_C['border_med']};
+                background: {_C['bg_input']}; border: 1.5px solid {_C['border_med']};
                 border-radius: 6px; padding: 6px 10px;
                 font-size: 12px; min-height: 34px;
             }}
             QLineEdit:focus {{ border-color: {_C['accent']}; }}
         """)
-
         lay = QVBoxLayout(self)
         lay.setContentsMargins(20, 18, 20, 18)
         lay.setSpacing(12)
@@ -49,7 +42,7 @@ class _StatusDialog(QDialog):
         lay.addWidget(lbl_hdr)
 
         cur_info = STATUS_COLORS.get(current, ("#555", "#f5f5f5", "#e0e0e0"))
-        lbl_cur = QLabel(f"الحالة الحالية:  {STATUS_LABELS_SHORT.get(current, current)}")
+        lbl_cur  = QLabel(f"الحالة الحالية:  {STATUS_LABELS_SHORT.get(current, current)}")
         lbl_cur.setStyleSheet(
             f"color:{cur_info[0]}; font-weight:600; font-size:12px;"
             f"background:{cur_info[1]}; border:1px solid {cur_info[2]};"
@@ -78,14 +71,14 @@ class _StatusDialog(QDialog):
         self._note.setPlaceholderText("سبب التغيير...")
         lay.addWidget(self._note)
 
-        btns = QHBoxLayout()
+        btns     = QHBoxLayout()
         btn_cancel = QPushButton("إلغاء")
         btn_cancel.setMinimumHeight(38)
         btn_cancel.setStyleSheet(f"""
             QPushButton {{
                 background: {_C['bg_surface_2']}; color: {_C['text_sec']};
                 border: 1px solid {_C['border_med']}; border-radius: 6px;
-                padding: 0 16px; font-size: 12px;
+                padding: 0 16px;
             }}
             QPushButton:hover {{ background: {_C['bg_hover']}; }}
         """)
@@ -97,7 +90,7 @@ class _StatusDialog(QDialog):
             QPushButton {{
                 background: {_C['accent_light']}; color: {_C['accent_text']};
                 border: 1.5px solid {_C['accent_mid']}; border-radius: 6px;
-                padding: 0 20px; font-weight: bold; font-size: 12px;
+                padding: 0 20px; font-weight: bold;
             }}
             QPushButton:hover {{ background: {_C['accent_mid']}; }}
         """)

@@ -2,8 +2,7 @@
 ui/widgets/shared/panles_helper/make_btn.py
 ============================================
 الأزرار بحجم ثابت مبني على النص — SizePolicy = Fixed دايماً.
-✅ حجم الزر لا يتغير مع النافذة أبداً.
-✅ الزر يأخذ عرضه من النص + padding ثابت.
+حجم الزر لا يتغير مع النافذة أبداً.
 """
 
 from PyQt5.QtWidgets import QPushButton, QSizePolicy
@@ -25,7 +24,6 @@ def _make_btn(text: str, style: str = "normal") -> QPushButton:
         border-radius: 6px;
         padding: 0 14px;
         min-height: {btn_h}px;
-        max-height: {btn_h + 4}px;
     """
 
     styles = {
@@ -94,18 +92,16 @@ def _make_btn(text: str, style: str = "normal") -> QPushButton:
     }
     btn.setStyleSheet(styles.get(style, styles["normal"]))
 
-    # ✅ حجم ثابت مبني على النص — لا يتغير مع النافذة أبداً
+    # حجم ثابت مبني على النص
     f = QFont()
     f.setPointSize(fs(base, 0))
-    fm = QFontMetrics(f)
-    text_w = fm.horizontalAdvance(text)
-    h_pad  = 32  # padding يمين + شمال
+    fm    = QFontMetrics(f)
+    txt_w = fm.horizontalAdvance(text)
+    h_pad = 32
 
     btn.setFixedHeight(btn_h)
-    btn.setMinimumWidth(text_w + h_pad)
-    btn.setMaximumWidth(text_w + h_pad + 20)
-
-    # ✅ Fixed: الزر لا يتمدد أبداً
+    btn.setMinimumWidth(txt_w + h_pad)
+    btn.setMaximumWidth(txt_w + h_pad + 20)
     btn.setSizePolicy(QSizePolicy.Fixed, QSizePolicy.Fixed)
 
     return btn
