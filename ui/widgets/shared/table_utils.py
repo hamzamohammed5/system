@@ -104,9 +104,6 @@ def _table_stylesheet(variant: str = "normal") -> str:
             background: {c['bg_hover']};
             color: {c['text_primary']};
         }}
-        QHeaderView::section {{
-            cursor: col-resize;
-        }}
     """
 
 
