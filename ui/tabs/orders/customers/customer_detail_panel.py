@@ -2,9 +2,6 @@
 ui/tabs/orders/customers/customer_detail_panel.py
 ==================================================
 لوحة تفاصيل العميل — ترث من BaseDetailPanel.
-
-✅ كل الـ imports من panels و table_utils مباشرة
-✅ بدون hard-coded styles
 """
 
 from PyQt5.QtWidgets import QMessageBox, QVBoxLayout
@@ -19,15 +16,16 @@ from db.orders.orders_repo import fetch_customer_orders
 from ui.tabs.orders._customer_form import _CustomerForm
 from ui.widgets.shared.base_detail_panel import BaseDetailPanel
 from ui.widgets.shared.table_utils import (
-    make_compact_table, make_table_item,
-    color_item, bold_item, muted_item,
+    make_splitter_table, fit_splitter_table,
+    make_compact_table,
+    make_table_item, color_item, bold_item, muted_item,
     insert_row, auto_fit_columns,
     ROW_HEIGHT_COMPACT,
 )
 from ui.widgets.shared.panels import SectionHeader, _make_btn
 from ui.app_settings import _C
 
-_BLUE  = _C['accent']
+_BLUE = _C['accent']
 
 STATUS_MAP = {
     "pending":     "⏳ انتظار",
@@ -57,8 +55,6 @@ class CustomerDetailPanel(BaseDetailPanel):
     def __init__(self, conn, parent=None):
         super().__init__(conn=conn, parent=parent)
 
-    # ══ بناء الـ header ════════════════════════════════════
-
     def _build_header_cards(self):
         self._card_total_orders  = self._hdr.add_stat_card("📋", "إجمالي الطلبات", color=_BLUE)
         self._card_active_orders = self._hdr.add_stat_card("🔧", "طلبات جارية",    color="#8b5cf6")
@@ -74,9 +70,8 @@ class CustomerDetailPanel(BaseDetailPanel):
         self.btn_toggle.clicked.connect(self._toggle_active)
         self.btn_del.clicked.connect(self._delete)
 
-    # ══ بناء المحتوى ══════════════════════════════════════
-
     def _build_content(self, lay: QVBoxLayout):
+        # ── جهات الاتصال ──
         self._contacts_hdr = SectionHeader("📞  جهات الاتصال")
         lay.addWidget(self._contacts_hdr)
 
@@ -88,18 +83,21 @@ class CustomerDetailPanel(BaseDetailPanel):
         )
         lay.addWidget(self.contacts_table)
 
+        # ── آخر الطلبات (splitter) ──
         self._orders_hdr = SectionHeader("📋  آخر الطلبات")
         lay.addWidget(self._orders_hdr)
 
-        self.orders_table = make_compact_table(
+        splitter, table = make_splitter_table(
             columns=["رقم الطلب", "الحالة", "الأولوية", "الإجمالي", "التاريخ"],
             stretch_col=0,
             col_widths={1: 90, 2: 70, 3: 80, 4: 90},
             max_height=220,
+            variant="compact",
+            row_height=ROW_HEIGHT_COMPACT,
         )
-        lay.addWidget(self.orders_table)
-
-    # ══ تحميل البيانات ════════════════════════════════════
+        self.orders_table    = table
+        self._orders_splitter = splitter
+        lay.addWidget(splitter)
 
     def _load_data(self, item_id: int):
         return fetch_customer(self.conn, item_id)
@@ -144,34 +142,33 @@ class CustomerDetailPanel(BaseDetailPanel):
 
         # آخر الطلبات
         orders = fetch_customer_orders(self.conn, self._item_id)
-        self.orders_table.setRowCount(0)
+        table  = self.orders_table
+        table.setRowCount(0)
+
         for o in orders[:20]:
-            r = insert_row(self.orders_table, ROW_HEIGHT_COMPACT)
+            r = insert_row(table, ROW_HEIGHT_COMPACT)
             num_item = make_table_item(o["order_number"])
             bold_item(num_item, also_medium=True)
             color_item(num_item, _BLUE)
-            self.orders_table.setItem(r, 0, num_item)
-            self.orders_table.setItem(r, 1,
+            table.setItem(r, 0, num_item)
+            table.setItem(r, 1,
                 make_table_item(STATUS_MAP.get(o["status"], o["status"])))
-            self.orders_table.setItem(r, 2, muted_item(
+            table.setItem(r, 2, muted_item(
                 make_table_item(PRIORITY_MAP.get(o["priority"], ""))))
             val_item = make_table_item(f"{(o['net_amount'] or 0):,.2f} ج",
                                        align=Qt.AlignCenter)
             color_item(val_item, _BLUE)
-            self.orders_table.setItem(r, 3, val_item)
-            self.orders_table.setItem(r, 4, muted_item(
+            table.setItem(r, 3, val_item)
+            table.setItem(r, 4, muted_item(
                 make_table_item(o["order_date"] or "")))
 
         if orders:
-            auto_fit_columns(self.orders_table, fixed_cols=[1, 2, 3, 4],
+            auto_fit_columns(table, fixed_cols=[1, 2, 3, 4],
                              stretch_col=0, min_width=55, max_width=160)
-
-    # ══ public API ════════════════════════════════════════
+            fit_splitter_table(self._orders_splitter, table)
 
     def load_customer(self, cid: int):
         self.load_item(cid)
-
-    # ══ أحداث الأزرار ════════════════════════════════════
 
     def _edit(self):
         if not self._item_id:
