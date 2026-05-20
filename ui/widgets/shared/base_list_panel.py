@@ -2,16 +2,11 @@
 ui/widgets/shared/base_list_panel.py
 =====================================
 BaseListPanel — قاعدة مشتركة لكل لوحات القوائم.
-
-القواعد:
-  - عرض ثابت على المحتوى (MIN_W → MAX_W)
-  - الجداول والأزرار حجمهم ثابت
-  - بدون horizontal scroll في القائمة نفسها
 """
 
 from PyQt5.QtWidgets import (
     QWidget, QVBoxLayout, QLabel, QFrame,
-    QLineEdit, QHBoxLayout, QSizePolicy,
+    QLineEdit, QHBoxLayout, QSizePolicy, QComboBox, QPushButton,
 )
 from PyQt5.QtCore import Qt, pyqtSignal, QTimer
 
@@ -24,6 +19,22 @@ from ui.app_settings import _C
 
 _MIN_W = 260
 _MAX_W = 580
+
+
+def _fix_widget_height(widget: QWidget):
+    """
+    يقفل ارتفاع أي widget بالارتفاع المحسوب من sizeHint.
+    يطبّق على كل الـ children بشكل recursive.
+    """
+    for child in widget.findChildren(QWidget):
+        if isinstance(child, (QLineEdit, QComboBox, QPushButton)):
+            h = child.sizeHint().height()
+            if h > 0:
+                child.setFixedHeight(h)
+                child.setSizePolicy(
+                    child.sizePolicy().horizontalPolicy(),
+                    QSizePolicy.Fixed
+                )
 
 
 class BaseListPanel(QWidget):
@@ -51,8 +62,8 @@ class BaseListPanel(QWidget):
 
     # ── override في الـ subclass ──────────────────────────
 
-    def _load_rows(self) -> list:           return []
-    def _fill_row(self, table, r, row):     pass
+    def _load_rows(self) -> list:            return []
+    def _fill_row(self, table, r, row):      pass
     def _match_filter(self, row, q) -> bool: return True
     def _get_row_id(self, row) -> int:
         return row.get("id", 0) if hasattr(row, 'keys') else 0
@@ -75,7 +86,17 @@ class BaseListPanel(QWidget):
         self._toolbar_lay = QVBoxLayout(self._toolbar)
         self._toolbar_lay.setContentsMargins(10, 10, 10, 10)
         self._toolbar_lay.setSpacing(6)
+
+        # بناء محتوى الـ toolbar
         self._build_toolbar(self._toolbar_lay)
+
+        # ← قفل ارتفاع كل الـ widgets جوا الـ toolbar بعد البناء
+        _fix_widget_height(self._toolbar)
+
+        # ← قفل الـ toolbar نفسه
+        self._toolbar.adjustSize()
+        self._toolbar.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Fixed)
+
         root.addWidget(self._toolbar)
 
         self.table = make_list_table(
@@ -99,6 +120,7 @@ class BaseListPanel(QWidget):
 
         self._status_bar = QLabel("")
         self._status_bar.setAlignment(Qt.AlignCenter)
+        self._status_bar.setFixedHeight(24)
         self._status_bar.setStyleSheet(f"""
             background: {_C['bg_surface_2']}; color: {_C['text_muted']};
             padding: 5px 10px; font-size: 10px; font-weight: 600;
@@ -110,8 +132,9 @@ class BaseListPanel(QWidget):
         row = QHBoxLayout()
         self.inp_search = QLineEdit()
         self.inp_search.setPlaceholderText("🔍  بحث...")
-        self.inp_search.setMinimumHeight(34)
+        self.inp_search.setFixedHeight(34)
         self.inp_search.setClearButtonEnabled(True)
+        self.inp_search.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Fixed)
         self.inp_search.setStyleSheet(f"""
             QLineEdit {{
                 background: {_C['bg_input']}; border: 1.5px solid {_C['border_med']};
