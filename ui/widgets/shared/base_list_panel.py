@@ -8,6 +8,7 @@ BaseListPanel — قاعدة مشتركة لكل لوحات القوائم.
   ✅ الأعمدة Interactive — المستخدم يحرك عرضها
   ✅ الـ panel نفسه له MIN_W و MAX_W ثابتين
   ✅ الأزرار في الـ toolbar حجمها Fixed — مش بتكبر مع النافذة
+  ✅ بعد كل تحديث للجدول بيبعت إشعار للـ parent عشان يحدّث الـ guard
 """
 
 from PyQt5.QtWidgets import (
@@ -46,7 +47,6 @@ class BaseListPanel(QWidget):
         self._timer.timeout.connect(self._apply_filter)
 
         self.setSizePolicy(QSizePolicy.Preferred, QSizePolicy.Expanding)
-        
         self.setMinimumWidth(self.MIN_W)
 
         self._build()
@@ -159,9 +159,12 @@ class BaseListPanel(QWidget):
 
         has_data = bool(filtered)
         self.table.setVisible(has_data)
-        self._splitter.setVisible(has_data)        # ← splitter بدل table
+        self._splitter.setVisible(has_data)
         self._empty_state.setVisible(not has_data and bool(self._all_rows))
         self._auto_resize()
+
+        # ← إشعار الـ parent (BaseSection) لتحديث الـ guard
+        self._notify_guard()
 
     def _fill_table(self, rows: list):
         self.table.setRowCount(0)
@@ -171,7 +174,6 @@ class BaseListPanel(QWidget):
             self.table.setRowHeight(r, ROW_HEIGHT_LARGE)
             self._fill_row(self.table, r, row_data)
 
-        # ضبط عرض الجدول في الـ splitter بعد الملء
         if rows:
             fit_splitter_table(self._splitter, self.table, extra_pad=24)
 
@@ -186,6 +188,24 @@ class BaseListPanel(QWidget):
             min_width=40,
             max_width=300,
         )
+
+    # ── إشعار الـ parent بتحديث الـ guard ────────────────
+
+    def _notify_guard(self):
+        """
+        يخبر الـ BaseSection بتحديث الـ _ListSplitterGuard
+        بعد ملء الجدول بالبيانات أو تغيير عرض الأعمدة.
+
+        بيتصعّد للـ parent عبر _refresh_list_guard()
+        اللي موجودة في BaseSection.
+        """
+        parent = self.parent()
+        # صعّد للـ parent لحد ما نلاقي BaseSection أو نوصل للـ None
+        while parent is not None:
+            if hasattr(parent, '_refresh_list_guard'):
+                parent._refresh_list_guard()
+                break
+            parent = parent.parent() if hasattr(parent, 'parent') else None
 
     # ── selection ────────────────────────────────────────
 
