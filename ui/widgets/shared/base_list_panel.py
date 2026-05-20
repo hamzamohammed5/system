@@ -2,11 +2,17 @@
 ui/widgets/shared/base_list_panel.py
 =====================================
 BaseListPanel — قاعدة مشتركة لكل لوحات القوائم.
+
+القواعد:
+  ✅ الجدول عرضه مستقل عن عرض النافذة
+  ✅ الأعمدة Interactive — المستخدم يحرك عرضها
+  ✅ الـ panel نفسه له MIN_W و MAX_W ثابتين
+  ✅ الأزرار في الـ toolbar حجمها Fixed — مش بتكبر مع النافذة
 """
 
 from PyQt5.QtWidgets import (
     QWidget, QVBoxLayout, QLabel, QFrame,
-    QLineEdit, QHBoxLayout, QSizePolicy, QComboBox, QPushButton,
+    QLineEdit, QHBoxLayout, QSizePolicy,
 )
 from PyQt5.QtCore import Qt, pyqtSignal, QTimer
 
@@ -19,22 +25,6 @@ from ui.app_settings import _C
 
 _MIN_W = 260
 _MAX_W = 580
-
-
-def _fix_widget_height(widget: QWidget):
-    """
-    يقفل ارتفاع أي widget بالارتفاع المحسوب من sizeHint.
-    يطبّق على كل الـ children بشكل recursive.
-    """
-    for child in widget.findChildren(QWidget):
-        if isinstance(child, (QLineEdit, QComboBox, QPushButton)):
-            h = child.sizeHint().height()
-            if h > 0:
-                child.setFixedHeight(h)
-                child.setSizePolicy(
-                    child.sizePolicy().horizontalPolicy(),
-                    QSizePolicy.Fixed
-                )
 
 
 class BaseListPanel(QWidget):
@@ -56,7 +46,12 @@ class BaseListPanel(QWidget):
         self._timer.setSingleShot(True)
         self._timer.setInterval(250)
         self._timer.timeout.connect(self._apply_filter)
-        self.setSizePolicy(QSizePolicy.Preferred, QSizePolicy.Expanding)
+
+        # ✅ Fixed: الـ panel عرضه ثابت بين MIN_W و MAX_W
+        self.setSizePolicy(QSizePolicy.Fixed, QSizePolicy.Expanding)
+        self.setMinimumWidth(self.MIN_W)
+        self.setMaximumWidth(self.MAX_W)
+
         self._build()
         self.refresh()
 
@@ -76,6 +71,7 @@ class BaseListPanel(QWidget):
         root.setSpacing(0)
         self.setStyleSheet(f"background:{_C['bg_input']};")
 
+        # ── Toolbar ──
         self._toolbar = QFrame()
         self._toolbar.setStyleSheet(f"""
             QFrame {{
@@ -83,31 +79,33 @@ class BaseListPanel(QWidget):
                 border-bottom: 1px solid {_C['border']};
             }}
         """)
+        # ✅ الـ toolbar ارتفاعه Fixed — مش بيكبر
+        self._toolbar.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Fixed)
+
         self._toolbar_lay = QVBoxLayout(self._toolbar)
         self._toolbar_lay.setContentsMargins(10, 10, 10, 10)
         self._toolbar_lay.setSpacing(6)
 
-        # بناء محتوى الـ toolbar
         self._build_toolbar(self._toolbar_lay)
 
-        # ← قفل ارتفاع كل الـ widgets جوا الـ toolbar بعد البناء
-        _fix_widget_height(self._toolbar)
-
-        # ← قفل الـ toolbar نفسه
+        # ✅ قفل الـ toolbar بعد البناء
         self._toolbar.adjustSize()
-        self._toolbar.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Fixed)
 
         root.addWidget(self._toolbar)
 
+        # ── الجدول ──
         self.table = make_list_table(
             self.COLUMNS,
             stretch_col=self.STRETCH_COL,
             col_widths=self.COL_WIDTHS,
         )
+        # ✅ الجدول مش بيكبر مع النافذة — Preferred عرضاً
+        self.table.setSizePolicy(QSizePolicy.Preferred, QSizePolicy.Expanding)
         self.table.setHorizontalScrollBarPolicy(Qt.ScrollBarAsNeeded)
         self.table.itemSelectionChanged.connect(self._on_select)
         root.addWidget(self.table, stretch=1)
 
+        # ── Empty State ──
         self._empty_state = EmptyState(
             icon=self.EMPTY_ICON, title=self.EMPTY_TITLE,
             style="plain", color="#9ca3af", min_height=100,
@@ -118,6 +116,7 @@ class BaseListPanel(QWidget):
         self._empty_state.setVisible(False)
         root.addWidget(self._empty_state)
 
+        # ── Status Bar ──
         self._status_bar = QLabel("")
         self._status_bar.setAlignment(Qt.AlignCenter)
         self._status_bar.setFixedHeight(24)
@@ -129,11 +128,14 @@ class BaseListPanel(QWidget):
         root.addWidget(self._status_bar)
 
     def _build_toolbar(self, lay: QVBoxLayout):
+        """الـ toolbar الافتراضي — حقل بحث فقط."""
         row = QHBoxLayout()
+
         self.inp_search = QLineEdit()
         self.inp_search.setPlaceholderText("🔍  بحث...")
         self.inp_search.setFixedHeight(34)
         self.inp_search.setClearButtonEnabled(True)
+        # ✅ حقل البحث بيمتد داخل الـ toolbar بس مش بيعدي عرض الـ panel
         self.inp_search.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Fixed)
         self.inp_search.setStyleSheet(f"""
             QLineEdit {{
@@ -176,19 +178,26 @@ class BaseListPanel(QWidget):
             self._fill_row(self.table, r, row_data)
 
     def _auto_resize(self):
+        """
+        ✅ ضبط عرض الأعمدة على قد المحتوى (Interactive).
+        الـ panel نفسه محدود بـ MIN_W → MAX_W.
+        """
         all_cols = [i for i in range(self.table.columnCount())
                     if i != self.STRETCH_COL]
-        auto_fit_columns(self.table, fixed_cols=all_cols,
-                         stretch_col=self.STRETCH_COL,
-                         min_width=40, max_width=300)
-        self.setMinimumWidth(self.MIN_W)
-        self.setMaximumWidth(self.MAX_W)
+        auto_fit_columns(
+            self.table,
+            fixed_cols=all_cols,
+            stretch_col=self.STRETCH_COL,
+            min_width=40,
+            max_width=300,
+        )
 
     # ── selection ────────────────────────────────────────
 
     def _on_select(self):
         row  = self.table.currentRow()
-        if row < 0: return
+        if row < 0:
+            return
         item = self.table.item(row, 0)
         if item:
             data = item.data(Qt.UserRole)

@@ -3,8 +3,9 @@ ui/tabs/orders/orders/_orders_list_panel.py
 ============================================
 لوحة قائمة الطلبات — ترث من BaseListPanel.
 
-✅ الأعمدة Interactive — المستخدم يقدر يحرك عرضها بحرية
-✅ الـ splitter يتحرك بحرية بدون قيود MAX_W
+✅ الأعمدة Interactive
+✅ الـ panel عرضه محدود بـ MIN_W → MAX_W
+✅ الـ handle في الـ splitter مش بيتحرك أكتر من MAX_W
 """
 
 from PyQt5.QtWidgets import QSizePolicy, QVBoxLayout
@@ -15,7 +16,6 @@ from db.orders.orders_repo import fetch_all_orders
 from ui.widgets.shared.base_list_panel import BaseListPanel
 from ui.widgets.shared.table_utils import (
     make_table_item, color_item, bold_item, muted_item,
-    calc_table_width,
 )
 from ui.app_settings import _C
 
@@ -45,10 +45,9 @@ class _OrdersListPanel(BaseListPanel):
 
     COLUMNS     = ["رقم الطلب", "العميل", "الحالة", "⚑", "التاريخ"]
     STRETCH_COL = -1
-    # ✅ عرض ابتدائي مناسب — Interactive يسمح بالتعديل بعدين
     COL_WIDTHS  = {0: 130, 1: 150, 2: 100, 3: 32, 4: 90}
     MIN_W       = 280
-    MAX_W       = 16777215   # ✅ بلا حد — الـ splitter يتحرك بحرية
+    MAX_W       = 560   # ✅ الـ handle مش بيتحرك أكتر من هنا
     EMPTY_ICON  = "📋"
     EMPTY_TITLE = "لا توجد طلبات"
 
@@ -111,24 +110,14 @@ class _OrdersListPanel(BaseListPanel):
         table.setItem(r, 4, date_item)
 
     def _auto_resize(self):
-        """
-        ✅ الأعمدة Interactive — المستخدم يقدر يحرك عرضها.
-        ✅ الـ panel له حد أدنى فقط — الـ splitter يتحرك بحرية.
-        """
-        from PyQt5.QtWidgets import QHeaderView
         from ui.widgets.shared.table_utils import auto_fit_columns
-
-        # ضبط الأعمدة على عرضها المناسب (Interactive)
         auto_fit_columns(
             self.table,
             fixed_cols=list(self.COL_WIDTHS.keys()),
             stretch_col=self.STRETCH_COL,
-            min_width=30, max_width=300,
+            min_width=30,
+            max_width=300,
         )
-
-        # ✅ حد أدنى فقط — بدون MAX_W يقيد الحركة
-        self.setMinimumWidth(self.MIN_W)
-        self.setMaximumWidth(16777215)
 
     # ══════════════════════════════════════════════════════
     # API

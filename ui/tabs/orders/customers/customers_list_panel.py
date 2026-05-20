@@ -2,12 +2,14 @@
 ui/tabs/orders/customers/customers_list_panel.py
 =================================================
 لوحة قائمة العملاء — ترث من BaseListPanel.
-✅ الأعمدة Interactive — المستخدم يقدر يحرك عرضها
-✅ الـ splitter يتحرك بحرية بدون قيود MAX_W
+
+✅ الـ panel عرضه محدود بـ MIN_W → MAX_W
+✅ الـ handle في الـ splitter مش بيتحرك أكتر من MAX_W
 """
 
 from PyQt5.QtWidgets import (
-    QHBoxLayout, QComboBox, QPushButton, QSizePolicy,
+    QHBoxLayout, QComboBox, QPushButton, QSizePolicy, QLineEdit,
+    QVBoxLayout,
 )
 from PyQt5.QtCore import Qt, pyqtSignal
 
@@ -40,7 +42,7 @@ class CustomersListPanel(BaseListPanel):
     STRETCH_COL = 1
     COL_WIDTHS  = {0: 80, 2: 110, 3: 80, 4: 55}
     MIN_W       = 280
-    MAX_W       = 16777215   # ✅ بلا حد — الـ splitter يتحرك بحرية
+    MAX_W       = 560   # ✅ الـ handle مش بيتحرك أكتر من هنا
     EMPTY_ICON  = "👥"
     EMPTY_TITLE = "لا يوجد عملاء"
 
@@ -54,14 +56,15 @@ class CustomersListPanel(BaseListPanel):
     # toolbar إضافي
     # ══════════════════════════════════════════════════════
 
-    def _build_toolbar(self, lay):
-        from PyQt5.QtWidgets import QVBoxLayout as QVL, QHBoxLayout as QHL, QLineEdit
+    def _build_toolbar(self, lay: QVBoxLayout):
+        # ── صف 1: بحث + زر جديد ──
+        row1 = QHBoxLayout()
 
-        row1 = QHL()
         self.inp_search = QLineEdit()
         self.inp_search.setPlaceholderText("بحث بالاسم أو الهاتف أو الكود...")
-        self.inp_search.setMinimumHeight(34)
+        self.inp_search.setFixedHeight(34)
         self.inp_search.setClearButtonEnabled(True)
+        self.inp_search.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Fixed)
         self.inp_search.setStyleSheet(f"""
             QLineEdit {{
                 background: {_C['bg_input']}; border: 1px solid {_C['border_med']};
@@ -71,8 +74,9 @@ class CustomersListPanel(BaseListPanel):
         """)
         self.inp_search.textChanged.connect(lambda: self._timer.start())
 
+        # ✅ الزر حجمه Fixed — مش بيكبر مع النافذة
         btn_new = QPushButton("＋  عميل جديد")
-        btn_new.setMinimumHeight(34)
+        btn_new.setFixedHeight(34)
         btn_new.setSizePolicy(QSizePolicy.Fixed, QSizePolicy.Fixed)
         btn_new.setStyleSheet(f"""
             QPushButton {{
@@ -83,13 +87,16 @@ class CustomersListPanel(BaseListPanel):
             QPushButton:hover {{ background: {_C['accent_hover']}; }}
         """)
         btn_new.clicked.connect(self.new_customer.emit)
+
         row1.addWidget(self.inp_search, stretch=1)
         row1.addWidget(btn_new)
         lay.addLayout(row1)
 
-        row2 = QHL()
+        # ── صف 2: فلاتر ──
+        row2 = QHBoxLayout()
+
         self.cmb_type = QComboBox()
-        self.cmb_type.setMinimumHeight(28)
+        self.cmb_type.setFixedHeight(28)
         self.cmb_type.addItem("كل الأنواع", None)
         self.cmb_type.addItem("أفراد", "individual")
         self.cmb_type.addItem("شركات", "company")
@@ -97,7 +104,7 @@ class CustomersListPanel(BaseListPanel):
         self.cmb_type.currentIndexChanged.connect(self._on_combo_changed)
 
         self.cmb_active = QComboBox()
-        self.cmb_active.setMinimumHeight(28)
+        self.cmb_active.setFixedHeight(28)
         self.cmb_active.addItem("الكل", None)
         self.cmb_active.addItem("نشط", 1)
         self.cmb_active.addItem("غير نشط", 0)
@@ -149,10 +156,9 @@ class CustomersListPanel(BaseListPanel):
         table.setItem(r, 3, muted_item(make_table_item(
             row["city"] or "—", tooltip=row["city"] or "")))
 
-        from ui.widgets.shared.table_utils import color_item as ci
         cnt_item = make_table_item(str(row["orders_count"] or 0),
                                    align=Qt.AlignCenter)
-        ci(cnt_item, _BLUE)
+        color_item(cnt_item, _BLUE)
         table.setItem(r, 4, cnt_item)
 
     # ══════════════════════════════════════════════════════

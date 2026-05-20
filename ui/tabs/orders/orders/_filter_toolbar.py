@@ -2,7 +2,9 @@
 ui/tabs/orders/orders/_filter_toolbar.py
 =========================================
 شريط فلتر قائمة الطلبات.
-الأزرار بحجم ثابت لا تتمدد مع الـ splitter.
+
+✅ كل الأزرار حجمها Fixed — مش بتكبر مع النافذة أو الـ splitter
+✅ الـ toolbar نفسه عرضه Expanding بس ارتفاعه Fixed
 """
 
 from PyQt5.QtWidgets import (
@@ -64,14 +66,17 @@ _COMBO_SS = f"""
 
 
 def _fixed_btn(text: str, stylesheet: str, h: int = 36) -> QPushButton:
-    """زر بحجم ثابت مبني على النص — لا يتمدد أبداً."""
+    """
+    ✅ زر بحجم ثابت مبني على النص — مش بيكبر مع النافذة أبداً.
+    """
     btn = QPushButton(text)
     btn.setStyleSheet(stylesheet)
     btn.setCursor(Qt.PointingHandCursor)
     btn.setFixedHeight(h)
+    # حساب العرض بناءً على النص فقط
     fm = QFontMetrics(QFont("", 12))
     w  = fm.horizontalAdvance(text) + 40
-    btn.setFixedWidth(max(w, 120))
+    btn.setFixedWidth(max(w, 100))
     btn.setSizePolicy(QSizePolicy.Fixed, QSizePolicy.Fixed)
     return btn
 
@@ -85,7 +90,8 @@ class _FilterToolbar(QFrame):
         self._timer.setSingleShot(True)
         self._timer.setInterval(250)
         self._timer.timeout.connect(self.changed.emit)
-        self.setSizePolicy(QSizePolicy.Preferred, QSizePolicy.Fixed)
+        # ✅ الـ toolbar ارتفاعه Fixed
+        self.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Fixed)
         self._build()
 
     def _build(self):
@@ -101,19 +107,21 @@ class _FilterToolbar(QFrame):
         root.setContentsMargins(12, 12, 12, 10)
         root.setSpacing(8)
 
-        # ── صف 1: زر جديد بحجم ثابت ──
+        # ── صف 1: زر جديد (Fixed) ──
         row0 = QHBoxLayout()
         row0.setContentsMargins(0, 0, 0, 0)
         row0.setSpacing(0)
+
+        # ✅ Fixed size — مش بيكبر مطلقاً
         self.btn_new = _fixed_btn("＋  طلب جديد", _BTN_NEW_SS, h=36)
         row0.addWidget(self.btn_new)
-        row0.addStretch(1)
+        row0.addStretch(1)   # المساحة الفاضية على اليسار
         root.addLayout(row0)
 
-        # ── صف 2: البحث ──
+        # ── صف 2: البحث (Expanding داخل الـ toolbar بس) ──
         self.inp_search = QLineEdit()
         self.inp_search.setPlaceholderText("🔍  بحث برقم الطلب أو اسم العميل...")
-        self.inp_search.setMinimumHeight(34)
+        self.inp_search.setFixedHeight(34)
         self.inp_search.setClearButtonEnabled(True)
         self.inp_search.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Fixed)
         self.inp_search.setStyleSheet(f"""
@@ -130,12 +138,12 @@ class _FilterToolbar(QFrame):
         self.inp_search.textChanged.connect(lambda: self._timer.start())
         root.addWidget(self.inp_search)
 
-        # ── صف 3: فلاتر ──
+        # ── صف 3: فلاتر (Expanding داخل الـ toolbar) ──
         row2 = QHBoxLayout()
         row2.setSpacing(6)
 
         self.cmb_status = QComboBox()
-        self.cmb_status.setMinimumHeight(28)
+        self.cmb_status.setFixedHeight(28)
         self.cmb_status.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Fixed)
         self.cmb_status.setStyleSheet(_COMBO_SS)
         self.cmb_status.addItem("كل الحالات", None)
@@ -144,7 +152,7 @@ class _FilterToolbar(QFrame):
         self.cmb_status.currentIndexChanged.connect(self.changed.emit)
 
         self.cmb_priority = QComboBox()
-        self.cmb_priority.setMinimumHeight(28)
+        self.cmb_priority.setFixedHeight(28)
         self.cmb_priority.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Fixed)
         self.cmb_priority.setStyleSheet(_COMBO_SS)
         self.cmb_priority.addItem("كل الأولويات", None)
@@ -152,9 +160,9 @@ class _FilterToolbar(QFrame):
             self.cmb_priority.addItem(icon, k)
         self.cmb_priority.currentIndexChanged.connect(self.changed.emit)
 
+        # ✅ زر مسح Fixed
         btn_reset = _make_btn("↺  مسح", "ghost")
         btn_reset.setToolTip("مسح كل الفلاتر")
-        btn_reset.setSizePolicy(QSizePolicy.Fixed, QSizePolicy.Fixed)
         btn_reset.clicked.connect(self.reset)
 
         row2.addWidget(self.cmb_status,   stretch=3)
