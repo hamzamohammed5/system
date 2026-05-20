@@ -2,23 +2,16 @@
 ui/widgets/shared/base_list_panel.py
 =====================================
 BaseListPanel — قاعدة مشتركة لكل لوحات القوائم.
-
-القواعد:
-  ✅ الجدول عرضه مستقل عن عرض النافذة (splitter)
-  ✅ الأعمدة Interactive — المستخدم يحرك عرضها
-  ✅ الـ panel نفسه له MIN_W و MAX_W ثابتين
-  ✅ الأزرار في الـ toolbar حجمها Fixed — مش بتكبر مع النافذة
-  ✅ بعد كل تحديث للجدول بيبعت إشعار للـ parent عشان يحدّث الـ guard
 """
 
 from PyQt5.QtWidgets import (
     QWidget, QVBoxLayout, QLabel, QFrame,
-    QLineEdit, QHBoxLayout, QSizePolicy, QSplitter,
+    QLineEdit, QHBoxLayout, QSizePolicy,
 )
 from PyQt5.QtCore import Qt, pyqtSignal, QTimer
 
 from ui.widgets.shared.table_utils import (
-    make_splitter_table, fit_splitter_table,
+    make_splitter_table_guarded, fit_splitter_table,
     ROW_HEIGHT_LARGE,
 )
 from ui.widgets.shared.panels import EmptyState
@@ -84,11 +77,10 @@ class BaseListPanel(QWidget):
 
         self._build_toolbar(self._toolbar_lay)
         self._toolbar.adjustSize()
-
         root.addWidget(self._toolbar)
 
-        # ── الجدول جوا splitter ──
-        self._splitter, self.table = make_splitter_table(
+        # ── الجدول جوا splitter مع guard ──
+        self._splitter, self.table, self._table_guard = make_splitter_table_guarded(
             columns=self.COLUMNS,
             stretch_col=self.STRETCH_COL,
             col_widths=self.COL_WIDTHS,
@@ -163,9 +155,6 @@ class BaseListPanel(QWidget):
         self._empty_state.setVisible(not has_data and bool(self._all_rows))
         self._auto_resize()
 
-        # ← إشعار الـ parent (BaseSection) لتحديث الـ guard
-        self._notify_guard()
-
     def _fill_table(self, rows: list):
         self.table.setRowCount(0)
         for row_data in rows:
@@ -176,6 +165,7 @@ class BaseListPanel(QWidget):
 
         if rows:
             fit_splitter_table(self._splitter, self.table, extra_pad=24)
+            self._table_guard.refresh()   # ← guard يتحدث بعد ملء البيانات
 
     def _auto_resize(self):
         from ui.widgets.shared.table_utils import auto_fit_columns
@@ -189,28 +179,10 @@ class BaseListPanel(QWidget):
             max_width=300,
         )
 
-    # ── إشعار الـ parent بتحديث الـ guard ────────────────
-
-    def _notify_guard(self):
-        """
-        يخبر الـ BaseSection بتحديث الـ _ListSplitterGuard
-        بعد ملء الجدول بالبيانات أو تغيير عرض الأعمدة.
-
-        بيتصعّد للـ parent عبر _refresh_list_guard()
-        اللي موجودة في BaseSection.
-        """
-        parent = self.parent()
-        # صعّد للـ parent لحد ما نلاقي BaseSection أو نوصل للـ None
-        while parent is not None:
-            if hasattr(parent, '_refresh_list_guard'):
-                parent._refresh_list_guard()
-                break
-            parent = parent.parent() if hasattr(parent, 'parent') else None
-
     # ── selection ────────────────────────────────────────
 
     def _on_select(self):
-        row  = self.table.currentRow()
+        row = self.table.currentRow()
         if row < 0:
             return
         item = self.table.item(row, 0)

@@ -4,11 +4,8 @@ ui/widgets/shared/base_section.py
 BaseSection — قاعدة مشتركة للأقسام اللي فيها list + detail.
 
 القواعد:
-  ✅ الـ list عرضه بين LIST_MIN_W و LIST_MAX_W — الـ handle مش بيتحرك أكتر
+  ✅ الـ list عرضه بين LIST_MIN_W و LIST_MAX_W — الـ handle بيتحرك بحرية
   ✅ لو النافذة أكبر من المجموع → الـ detail يكبر، الـ list يفضل ثابت
-  ✅ الـ handle بيتوقف تلقائياً لما الجدول بيتشاف كامل (scroll اختفى)
-  ✅ لو ضيّق الجدول وظهر scroll تاني → الـ handle بيتحرك عادي (dynamic)
-  ✅ كل ده بيشتغل عبر _ListSplitterGuard المربوط بجدول الـ list panel
 """
 
 from PyQt5.QtWidgets import (
@@ -21,11 +18,6 @@ from ui.app_settings import _C
 class _ConstrainedSplitter(QSplitter):
     """
     QSplitter بيمنع الـ list panel من تعدي MAX_W.
-    لما المستخدم يحرك الـ handle، لو الـ list راح فوق MAX_W
-    بيرجعه للـ MAX_W تلقائياً.
-
-    ملاحظة: الحد الأقصى الديناميكي (scroll-based) بيتولاه _ListSplitterGuard
-    بشكل مستقل — الـ _ConstrainedSplitter بيطبّق الحد الأقصى الثابت (LIST_MAX_W).
     """
     def __init__(self, list_index: int, min_w: int, max_w: int,
                  orientation=Qt.Horizontal, parent=None):
@@ -74,11 +66,9 @@ class BaseSection(QWidget):
 
     def __init__(self, conn=None, parent=None):
         super().__init__(parent)
-        self.conn        = conn
-        self._list_guard = None   # _ListSplitterGuard للـ list
+        self.conn = conn
         self._build()
         self._connect_signals()
-        self._attach_list_guard()           # ← ربط الـ guard بعد البناء
         QTimer.singleShot(50, self._apply_sizes)
 
     def _create_list(self):   raise NotImplementedError
@@ -123,50 +113,6 @@ class BaseSection(QWidget):
 
         root.addWidget(self._splitter)
 
-    # ══════════════════════════════════════════════════════
-    # ربط _ListSplitterGuard بجدول الـ list
-    # ══════════════════════════════════════════════════════
-
-    def _attach_list_guard(self):
-        """
-        يربط _ListSplitterGuard بجدول الـ list panel.
-
-        الـ guard بيراقب horizontal scrollbar الجدول:
-          • scroll اختفى  → يوقف الـ handle عند العرض الحالي.
-          • scroll ظهر    → يرفع القفل (الـ handle يتحرك عادي).
-
-        يحتاج الـ list panel يكون عنده `self.table` (BaseListPanel).
-        """
-        table = getattr(self._list, 'table', None)
-        if table is None:
-            return   # الـ list مش BaseListPanel
-
-        try:
-            from ui.widgets.shared.splitter_scroll_guard import _ListSplitterGuard
-            self._list_guard = _ListSplitterGuard(
-                outer_splitter = self._splitter,
-                table          = table,
-                list_index     = 0,
-                debounce_ms    = 60,
-                parent         = self,
-            )
-        except Exception:
-            pass   # التطبيق يشتغل عادي بدون الـ guard
-
-    # ══════════════════════════════════════════════════════
-    # تحديث الـ guard بعد كل refresh للـ list
-    # ══════════════════════════════════════════════════════
-
-    def _refresh_list_guard(self):
-        """
-        استدعه بعد أي تغيير في بيانات الجدول أو عرض الأعمدة.
-        بيعمل debounce تلقائياً.
-        """
-        if self._list_guard is not None:
-            self._list_guard.refresh()
-
-    # ══════════════════════════════════════════════════════
-
     def _apply_sizes(self):
         total = self._splitter.width()
         if total <= 0:
@@ -174,26 +120,12 @@ class BaseSection(QWidget):
         if total <= 0:
             QTimer.singleShot(100, self._apply_sizes)
             return
-
-        # عطّل الـ guard مؤقتاً عشان setSizes ما يطلّعش false lock
-        if self._list_guard is not None:
-            self._list_guard.set_enabled(False)
-
         list_w   = max(self.LIST_MIN_W,
                        min(self._list.width() or self.LIST_MIN_W, self.LIST_MAX_W))
         detail_w = max(300, total - list_w - self._splitter.handleWidth())
         self._splitter.blockSignals(True)
         self._splitter.setSizes([list_w, detail_w])
         self._splitter.blockSignals(False)
-
-        # أعد تفعيل الـ guard بعد تأخير بسيط عشان الـ layout يستقر
-        if self._list_guard is not None:
-            QTimer.singleShot(80, lambda: (
-                self._list_guard.set_enabled(True),
-                self._list_guard.refresh(),
-            ))
-        else:
-            self._refresh_list_guard()
 
     def _fit_splitter_delayed(self, delay_ms: int = 80):
         QTimer.singleShot(delay_ms, self._apply_sizes)
