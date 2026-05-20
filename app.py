@@ -7,10 +7,10 @@ app.py
 from PyQt5.QtWidgets import QMainWindow, QTabWidget
 from PyQt5.QtCore    import Qt
 
-from ui.tabs.costing_section.raw_tab        import RawTab
-from ui.tabs.costing_section.product_tab    import ProductTab
-from ui.tabs.costing_section.labor_tab      import LaborTab
-from ui.tabs.costing_section.machine_tab    import MachineTab
+from ui.tabs.costing.raw_tab        import RawTab
+from ui.tabs.costing.product_tab    import ProductTab
+from ui.tabs.costing.labor_tab      import LaborTab
+from ui.tabs.costing.machine_tab    import MachineTab
 from ui.settings_dialog     import SettingsDialog
 
 
