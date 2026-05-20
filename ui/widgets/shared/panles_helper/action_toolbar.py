@@ -3,12 +3,10 @@ ui/widgets/shared/panles_helper/action_toolbar.py
 ==================================================
 ActionToolbar — بـ FlowLayout.
 
-الأزرار بتنزل لسطر تاني تلقائياً لما المساحة تضيق —
-بدل ما تتقطع أو تتخفى.
-
-  - add_action() → أزرار عادية (على اليسار/في الترتيب)
-  - add_danger()  → أزرار خطرة (حمراء) — في الآخر مع separator
-  - add_separator() → فاصل بصري اختياري
+الإصلاح: _rebuild مكانش بيعمل setParent(None) صح على الـ widgets
+اللي لسه موجودين في الـ lists — ده كان بيعمل access violation.
+الحل: نمسح الـ layout items بس من غير ما نعمل setParent أو deleteLater
+على الـ widgets اللي هنضيفهم تاني.
 """
 
 from PyQt5.QtWidgets import (
@@ -25,15 +23,12 @@ class ActionToolbar(QWidget):
     def __init__(self, spacing: int = 6, parent=None):
         super().__init__(parent)
         self._spacing     = spacing
-        self._has_danger  = False
         self._normal_btns : list[QPushButton] = []
         self._danger_btns : list[QPushButton] = []
-        self._sep_widget  = None
         self._build()
 
     def _build(self):
         self.setStyleSheet("background:transparent;")
-        # FlowLayout مباشرة على الـ widget
         self._flow = FlowLayout(self, h_spacing=self._spacing, v_spacing=4)
         self._flow.setContentsMargins(0, 4, 0, 4)
         self.setLayout(self._flow)
@@ -45,6 +40,7 @@ class ActionToolbar(QWidget):
         btn = _make_btn(text, style)
         btn.setEnabled(enabled)
         btn.setSizePolicy(QSizePolicy.Fixed, QSizePolicy.Fixed)
+        btn.setParent(self)
         if callback:
             btn.clicked.connect(callback)
         self._normal_btns.append(btn)
@@ -56,42 +52,50 @@ class ActionToolbar(QWidget):
         btn = _make_btn(text, "danger")
         btn.setEnabled(enabled)
         btn.setSizePolicy(QSizePolicy.Fixed, QSizePolicy.Fixed)
+        btn.setParent(self)
         if callback:
             btn.clicked.connect(callback)
         self._danger_btns.append(btn)
-        self._has_danger = True
         self._rebuild()
         return btn
 
     def add_separator(self):
         """فاصل إضافي بين مجموعات الأزرار العادية."""
         sep = self._make_sep()
+        sep.setParent(self)
         self._normal_btns.append(sep)
         self._rebuild()
 
     # ── بناء داخلي ─────────────────────────────────────
 
     def _rebuild(self):
-        """يعيد بناء الـ flow بالترتيب الصحيح دايماً."""
-        # امسح كل العناصر الحالية
+        """
+        يعيد ترتيب الـ flow بالكامل.
+        
+        المهم: بنمسح الـ items من الـ layout بس —
+        مش بنعمل setParent(None) أو deleteLater على الـ widgets
+        اللي هنضيفهم تاني، لأن ده بيعمل access violation.
+        """
+        # امسح كل الـ items من الـ layout بدون تدمير الـ widgets
         while self._flow.count():
             item = self._flow.takeAt(0)
-            if item and item.widget():
-                item.widget().setParent(None)
+            # لا نعمل حاجة بالـ item أو الـ widget — بس نشيله من الـ layout
 
-        # أزرار عادية
+        # أضف الأزرار العادية
         for w in self._normal_btns:
-            w.setParent(self)
             self._flow.addWidget(w)
+            w.show()
 
         # separator + أزرار خطرة
-        if self._danger_btns and self._normal_btns:
+        if self._normal_btns and self._danger_btns:
             sep = self._make_sep()
+            sep.setParent(self)
             self._flow.addWidget(sep)
+            sep.show()
 
         for w in self._danger_btns:
-            w.setParent(self)
             self._flow.addWidget(w)
+            w.show()
 
         self.updateGeometry()
 

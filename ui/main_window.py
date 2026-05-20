@@ -1,14 +1,12 @@
 """
 ui/main_window.py
 =================
-النافذة الرئيسية — Sidebar + Content.
+النافذة الرئيسية — Sidebar ثابت + Content مع horizontal scroll.
 
-القاعدة:
-  ✅ عرض النافذة أقصى ما يكون = عرض الـ sidebar + عرض الـ content
-  ✅ الـ content عرضه يكفي بالضبط إن الـ horizontal scroll يختفي
-  ✅ الجداول والأزرار حجمهم ثابت ومش بيتمدد
-  ✅ الـ sidebar عرضه ثابت — لا يتمدد أبداً
-  ✅ حجم النافذة الافتراضي = sidebar + محتوى كافٍ بالضبط
+القواعد:
+  ✅ الـ sidebar عرضه ثابت دايماً — مش بيتضغط أبداً
+  ✅ لما النافذة تتصغر الـ content يعمل horizontal scroll
+  ✅ الـ sidebar مش بيختفي أبداً
 """
 
 from PyQt5.QtWidgets import (
@@ -29,52 +27,8 @@ from ui.app_settings              import get_font_size, _C
 
 SIDEBAR_EXPANDED_WIDTH  = 224
 SIDEBAR_COLLAPSED_WIDTH = 56
-
-# ✅ الحد الأدنى لعرض الـ content حتى يختفي الـ horizontal scroll
-CONTENT_MIN_WIDTH = 820
-WINDOW_DEFAULT_W  = SIDEBAR_EXPANDED_WIDTH + CONTENT_MIN_WIDTH  # ≈ 1044
-
-
-_SCROLL_SS = f"""
-    QScrollArea {{
-        border: none;
-        background: transparent;
-    }}
-    QScrollBar:vertical {{
-        background: transparent;
-        width: 6px;
-        border-radius: 3px;
-    }}
-    QScrollBar::handle:vertical {{
-        background: {_C['border_med']};
-        border-radius: 3px;
-        min-height: 30px;
-    }}
-    QScrollBar::handle:vertical:hover {{
-        background: {_C['border_strong']};
-    }}
-    QScrollBar::add-line:vertical,
-    QScrollBar::sub-line:vertical {{
-        height: 0px;
-    }}
-    QScrollBar:horizontal {{
-        background: transparent;
-        height: 6px;
-        border-radius: 3px;
-    }}
-    QScrollBar::handle:horizontal {{
-        background: {_C['border_med']};
-        border-radius: 3px;
-        min-width: 30px;
-    }}
-    QScrollBar::handle:horizontal:hover {{
-        background: {_C['border_strong']};
-    }}
-    QScrollBar::add-line:horizontal,
-    QScrollBar::sub-line:horizontal {{
-        width: 0px;
-    }}
-"""
+CONTENT_MIN_WIDTH       = 820
+WINDOW_DEFAULT_W        = SIDEBAR_EXPANDED_WIDTH + CONTENT_MIN_WIDTH
 
 
 # ══════════════════════════════════════════════════════════
@@ -84,7 +38,6 @@ _SCROLL_SS = f"""
 class _SectionLabel(QLabel):
     def __init__(self, text: str, parent=None):
         super().__init__(text.upper(), parent)
-        self._collapsed = False
         self._apply_style()
 
     def _apply_style(self):
@@ -101,7 +54,6 @@ class _SectionLabel(QLabel):
         """)
 
     def set_collapsed(self, collapsed: bool):
-        self._collapsed = collapsed
         self.setVisible(not collapsed)
 
 
@@ -118,7 +70,6 @@ class _NavButton(QPushButton):
         self._collapsed = False
         self.setCheckable(True)
         self.setCursor(Qt.PointingHandCursor)
-        # ✅ حجم ثابت — مش بيتمدد
         self.setSizePolicy(QSizePolicy.Fixed, QSizePolicy.Fixed)
         self._build_content()
         self._update_style()
@@ -283,8 +234,10 @@ class _Sidebar(QFrame):
     def __init__(self, parent=None):
         super().__init__(parent)
         self._collapsed = False
+        self._current_w = SIDEBAR_EXPANDED_WIDTH
+
+        # ✅ عرض ثابت — لا يتغير أبداً
         self.setFixedWidth(SIDEBAR_EXPANDED_WIDTH)
-        # ✅ الـ sidebar عرضه ثابت دايماً
         self.setSizePolicy(QSizePolicy.Fixed, QSizePolicy.Expanding)
         self.setStyleSheet(f"""
             QFrame {{
@@ -335,7 +288,7 @@ class _Sidebar(QFrame):
         self._brand_sub = QLabel("إدارة التكاليف")
         self._brand_sub.setStyleSheet(f"""
             color: {_C['sidebar_muted']}; font-size: 8pt;
-            background: transparent; border: none; letter-spacing: 0.3px;
+            background: transparent; border: none;
         """)
         bt_lay.addWidget(self._brand_title)
         bt_lay.addWidget(self._brand_sub)
@@ -411,7 +364,9 @@ class _Sidebar(QFrame):
         div = QFrame()
         div.setFrameShape(QFrame.HLine)
         div.setFixedHeight(1)
-        div.setStyleSheet(f"background: {_C['sidebar_border']}; border: none; margin: 2px 4px;")
+        div.setStyleSheet(
+            f"background: {_C['sidebar_border']}; border: none; margin: 2px 4px;"
+        )
         f_lay.addWidget(div)
 
         btn_settings = _NavButton("⚙️", "الإعدادات")
@@ -434,7 +389,9 @@ class _Sidebar(QFrame):
             SIDEBAR_COLLAPSED_WIDTH if self._collapsed
             else SIDEBAR_EXPANDED_WIDTH
         )
+        self._current_w = target
 
+        # ✅ setFixedWidth — الـ sidebar دايماً بعرض ثابت
         self._anim_min = QPropertyAnimation(self, b"minimumWidth")
         self._anim_min.setDuration(200)
         self._anim_min.setEasingCurve(QEasingCurve.InOutCubic)
@@ -478,13 +435,11 @@ class MainWindow(QMainWindow):
         self._app = app
 
         self.setWindowTitle("ERP — نظام إدارة التكاليف")
-
-        # ✅ الحجم الافتراضي = sidebar + content بالضبط
         self.resize(WINDOW_DEFAULT_W, 820)
         self.setLayoutDirection(Qt.RightToLeft)
 
-        # ✅ الحد الأدنى = sidebar + حد أدنى للمحتوى
-        self.setMinimumSize(SIDEBAR_COLLAPSED_WIDTH + 600, 500)
+        # ✅ الحد الأدنى: sidebar collapsed + شوية للـ content
+        self.setMinimumSize(SIDEBAR_COLLAPSED_WIDTH + 400, 500)
 
         self._build()
         self._sidebar.get_buttons()[0].setChecked(True)
@@ -494,24 +449,63 @@ class MainWindow(QMainWindow):
         central = QWidget()
         self.setCentralWidget(central)
 
+        # ✅ الـ layout الرئيسي: sidebar ثابت + scroll area للـ content
         main_layout = QHBoxLayout(central)
         main_layout.setContentsMargins(0, 0, 0, 0)
         main_layout.setSpacing(0)
 
+        # ── Sidebar — ثابت دايماً على اليمين ──
         self._sidebar = _Sidebar()
+        # ✅ الـ sidebar مش بيتضغط — Fixed policy
+        self._sidebar.setSizePolicy(QSizePolicy.Fixed, QSizePolicy.Expanding)
         main_layout.addWidget(self._sidebar)
 
-        # فاصل
+        # ── فاصل ──
         sep = QFrame()
         sep.setFrameShape(QFrame.VLine)
         sep.setFixedWidth(1)
         sep.setStyleSheet(f"background: {_C['border']}; border: none;")
+        sep.setSizePolicy(QSizePolicy.Fixed, QSizePolicy.Expanding)
         main_layout.addWidget(sep)
 
-        # ✅ الـ stack: يأخذ كل المساحة المتبقية — Expanding
+        # ── Content Area مع horizontal scroll ──
+        # ✅ لما النافذة تتضغط يظهر horizontal scrollbar
+        self._content_scroll = QScrollArea()
+        self._content_scroll.setWidgetResizable(True)
+        self._content_scroll.setHorizontalScrollBarPolicy(Qt.ScrollBarAsNeeded)
+        self._content_scroll.setVerticalScrollBarPolicy(Qt.ScrollBarAlwaysOff)
+        self._content_scroll.setStyleSheet("""
+            QScrollArea {
+                border: none;
+                background: transparent;
+            }
+            QScrollBar:horizontal {
+                background: transparent;
+                height: 6px;
+                border-radius: 3px;
+            }
+            QScrollBar::handle:horizontal {
+                background: #C8C4B8;
+                border-radius: 3px;
+                min-width: 30px;
+            }
+            QScrollBar::handle:horizontal:hover {
+                background: #6B6760;
+            }
+            QScrollBar::add-line:horizontal,
+            QScrollBar::sub-line:horizontal {
+                width: 0px;
+            }
+        """)
+        self._content_scroll.setSizePolicy(
+            QSizePolicy.Expanding, QSizePolicy.Expanding
+        )
+
+        # ── Stack جوا الـ scroll ──
         self._stack = QStackedWidget()
         self._stack.setStyleSheet(f"background: {_C['bg_page']};")
         self._stack.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Expanding)
+        # ✅ الحد الأدنى للـ content — لما النافذة تتضغط أقل منه يظهر scrollbar
         self._stack.setMinimumWidth(CONTENT_MIN_WIDTH)
 
         self._costing    = CostingSection()
@@ -521,15 +515,17 @@ class MainWindow(QMainWindow):
         self._design     = DesignSection()
         self._orders     = OrdersSection()
 
-        self._stack.addWidget(self._costing)        # 0
-        self._stack.addWidget(self._pricing)        # 1
-        self._stack.addWidget(self._accounting)     # 2
-        self._stack.addWidget(self._inventory)      # 3
-        self._stack.addWidget(self._design)         # 4
-        self._stack.addWidget(self._orders)         # 5
+        self._stack.addWidget(self._costing)
+        self._stack.addWidget(self._pricing)
+        self._stack.addWidget(self._accounting)
+        self._stack.addWidget(self._inventory)
+        self._stack.addWidget(self._design)
+        self._stack.addWidget(self._orders)
 
-        main_layout.addWidget(self._stack, stretch=1)
+        self._content_scroll.setWidget(self._stack)
+        main_layout.addWidget(self._content_scroll, stretch=1)
 
+        # ── ربط أزرار الـ sidebar ──
         for btn in self._sidebar.get_buttons():
             btn.clicked.connect(lambda checked, b=btn: self._on_nav(b))
 

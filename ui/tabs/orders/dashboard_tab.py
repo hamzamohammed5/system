@@ -1,22 +1,19 @@
 """
 ui/tabs/orders/dashboard_tab.py
 ================================
-لوحة متابعة الطلبات — إحصائيات وملخص سريع.
+لوحة متابعة الطلبات.
 
-✅ يستخدم shared panels بالكامل (make_stat_card_simple, make_status_chip, CardGrid)
-✅ الجدول Fixed — لا يتمدد مع النافذة
-✅ بدون hard-coded QSS — يعتمد على _C palette
+✅ الجدول بعرضه الطبيعي جوا QSplitter — قابل للتوسيع بالـ handle
+✅ الجزء العلوي (cards + status) في ScrollArea
 """
 
 from PyQt5.QtWidgets import (
     QWidget, QVBoxLayout, QHBoxLayout,
-    QLabel, QPushButton, QScrollArea,
-    QSizePolicy,
+    QLabel, QPushButton, QScrollArea, QSizePolicy,
 )
 from PyQt5.QtCore import Qt
 
 from db.orders.orders_repo import fetch_orders_summary, fetch_all_orders
-from ui.app_settings import _C
 
 from .dashboard._top_cards    import build_top_cards
 from .dashboard._status_grid  import build_status_grid
@@ -34,28 +31,34 @@ class OrdersDashboardTab(QWidget):
         root.setContentsMargins(0, 0, 0, 0)
         root.setSpacing(0)
 
+        # ── الجزء العلوي: cards + status grid ──
         scroll = QScrollArea()
         scroll.setWidgetResizable(True)
         scroll.setHorizontalScrollBarPolicy(Qt.ScrollBarAlwaysOff)
+        scroll.setVerticalScrollBarPolicy(Qt.ScrollBarAsNeeded)
+        scroll.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Preferred)
+        scroll.setMaximumHeight(340)
 
-        content = QWidget()
-        lay = QVBoxLayout(content)
-        lay.setContentsMargins(20, 16, 20, 20)
-        lay.setSpacing(16)
+        top_content = QWidget()
+        top_lay = QVBoxLayout(top_content)
+        top_lay.setContentsMargins(20, 16, 20, 12)
+        top_lay.setSpacing(16)
 
-        # ── بطاقات الإحصائيات العلوية ──
-        lay.addLayout(build_top_cards(self))
+        top_lay.addLayout(build_top_cards(self))
 
-        # ── عنوان شبكة الحالات ──
         lbl_status = QLabel("توزيع الطلبات حسب الحالة")
         lbl_status.setStyleSheet("font-weight:bold;")
-        lay.addWidget(lbl_status)
+        top_lay.addWidget(lbl_status)
+        top_lay.addWidget(build_status_grid(self))
 
-        # ── شبكة شرائح الحالات ──
-        lay.addWidget(build_status_grid(self))
+        scroll.setWidget(top_content)
+        root.addWidget(scroll)
 
-        # ── رأس جدول آخر الطلبات ──
-        recent_hdr = QHBoxLayout()
+        # ── رأس الجدول ──
+        hdr_widget = QWidget()
+        recent_hdr = QHBoxLayout(hdr_widget)
+        recent_hdr.setContentsMargins(20, 8, 20, 4)
+
         lbl_recent = QLabel("آخر الطلبات")
         lbl_recent.setStyleSheet("font-weight:bold;")
 
@@ -67,27 +70,25 @@ class OrdersDashboardTab(QWidget):
         recent_hdr.addWidget(lbl_recent)
         recent_hdr.addStretch()
         recent_hdr.addWidget(btn_refresh)
-        lay.addLayout(recent_hdr)
+        root.addWidget(hdr_widget)
 
-        # ── جدول آخر الطلبات (Fixed) ──
-        lay.addWidget(build_recent_table(self))
-        lay.addStretch()
-
-        scroll.setWidget(content)
-        root.addWidget(scroll)
+        # ── الجدول + splitter ──
+        table_container = QWidget()
+        tc_lay = QVBoxLayout(table_container)
+        tc_lay.setContentsMargins(20, 0, 20, 16)
+        tc_lay.setSpacing(0)
+        tc_lay.addWidget(build_recent_table(self))
+        root.addWidget(table_container, stretch=1)
 
     def refresh(self):
         summary = fetch_orders_summary(self.conn)
 
         self._lbl_total.setText(str(summary.get("total") or 0))
         self._lbl_urgent.setText(str(summary.get("urgent") or 0))
-        tv = summary.get("total_value") or 0
-        tp = summary.get("total_paid") or 0
-        self._lbl_total_value.setText(f"{tv:,.0f} ج")
-        self._lbl_total_paid.setText(f"{tp:,.0f} ج")
+        self._lbl_total_value.setText(f"{(summary.get('total_value') or 0):,.0f} ج")
+        self._lbl_total_paid.setText(f"{(summary.get('total_paid') or 0):,.0f} ج")
 
         for status, lbl in self._status_chips.items():
             lbl.setText(str(summary.get(status) or 0))
 
-        orders = fetch_all_orders(self.conn)[:20]
-        fill_recent_table(self, orders)
+        fill_recent_table(self, fetch_all_orders(self.conn)[:20])
