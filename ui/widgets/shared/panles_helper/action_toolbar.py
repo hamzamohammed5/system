@@ -25,6 +25,7 @@ class ActionToolbar(QWidget):
         self._spacing     = spacing
         self._normal_btns : list[QPushButton] = []
         self._danger_btns : list[QPushButton] = []
+        self._separators  : list[QFrame] = []  # ← أضف هذا
         self._build()
 
     def _build(self):
@@ -69,27 +70,22 @@ class ActionToolbar(QWidget):
     # ── بناء داخلي ─────────────────────────────────────
 
     def _rebuild(self):
-        """
-        يعيد ترتيب الـ flow بالكامل.
-        
-        المهم: بنمسح الـ items من الـ layout بس —
-        مش بنعمل setParent(None) أو deleteLater على الـ widgets
-        اللي هنضيفهم تاني، لأن ده بيعمل access violation.
-        """
-        # امسح كل الـ items من الـ layout بدون تدمير الـ widgets
         while self._flow.count():
-            item = self._flow.takeAt(0)
-            # لا نعمل حاجة بالـ item أو الـ widget — بس نشيله من الـ layout
+            self._flow.takeAt(0)
 
-        # أضف الأزرار العادية
+        # احذف الـ separators القديمة
+        for sep in self._separators:
+            sep.deleteLater()
+        self._separators.clear()  # ← أضف هذا
+
         for w in self._normal_btns:
             self._flow.addWidget(w)
             w.show()
 
-        # separator + أزرار خطرة
         if self._normal_btns and self._danger_btns:
             sep = self._make_sep()
             sep.setParent(self)
+            self._separators.append(sep)  # ← تتبّعه
             self._flow.addWidget(sep)
             sep.show()
 

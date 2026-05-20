@@ -9,7 +9,8 @@ from ui.app_settings import _C, fs
 from .colors_and_base import _base
 
 
-def _make_btn(text: str, style: str = "normal") -> QPushButton:
+def _make_btn(text: str, style: str = "normal", 
+              fixed_size: bool = True) -> QPushButton:
     btn = QPushButton(text)
     btn.setCursor(Qt.PointingHandCursor)
     base  = _base()
@@ -98,5 +99,14 @@ def _make_btn(text: str, style: str = "normal") -> QPushButton:
     btn.setFixedHeight(btn_h)
     btn.setFixedWidth(w)
     btn.setSizePolicy(QSizePolicy.Fixed, QSizePolicy.Fixed)
-
+    if fixed_size:
+        btn.setFixedHeight(btn_h)
+        btn.setFixedWidth(w)
+        btn.setSizePolicy(QSizePolicy.Fixed, QSizePolicy.Fixed)
+    else:
+        btn.setFixedHeight(btn_h)
+        btn.setMinimumWidth(w)
+        btn.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Fixed)
     return btn
+
+

@@ -19,8 +19,8 @@ class FlowLayout(QLayout):
         self._items.append(item)
 
     def addWidget(self, widget):
-        from PyQt5.QtWidgets import QWidgetItem
-        self.addItem(QWidgetItem(widget))
+        item = QWidgetItem(widget)
+        self._items.append(item)
 
     def count(self) -> int:
         return len(self._items)

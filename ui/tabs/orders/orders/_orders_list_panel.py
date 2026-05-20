@@ -61,6 +61,7 @@ class _OrdersListPanel(BaseListPanel):
     # toolbar مخصص
     # ══════════════════════════════════════════════════════
 
+    
     def _build_toolbar(self, lay: QVBoxLayout):
         self._filter_bar = _FilterToolbar()
         self._filter_bar.btn_new.clicked.connect(self.new_order.emit)
