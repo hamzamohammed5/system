@@ -9,7 +9,7 @@ from PyQt5.QtCore    import Qt
 from PyQt5.QtGui     import QFont, QColor
 
 from ui.widgets.shared.table_utils import (
-    make_splitter_table, fit_splitter_table,
+    make_splitter_table_guarded, fit_splitter_table,
     insert_row, ROW_HEIGHT_NORMAL,
 )
 from ._config import STATUS_MAP, STATUS_COLOR, TYPE_MAP, PRIORITY_MAP
@@ -20,16 +20,17 @@ COL_WIDTHS = {0: 130, 1: 150, 2: 70, 3: 95, 4: 65, 5: 95, 6: 85}
 
 def build_recent_table(dashboard):
     """
-    يبني جدول آخر الطلبات جوا QSplitter.
+    يبني جدول آخر الطلبات جوا QSplitter + guard.
     يرجع QSplitter جاهز للإضافة في الـ layout.
     """
-    splitter, table = make_splitter_table(
+    splitter, table, guard = make_splitter_table_guarded(
         columns=TABLE_COLS,
         col_widths=COL_WIDTHS,
         min_height=60,
     )
     dashboard.recent_table        = table
     dashboard._recent_splitter    = splitter
+    dashboard._recent_guard       = guard      # ← احتفظ بيه
     return splitter
 
 
@@ -68,3 +69,4 @@ def fill_recent_table(dashboard, orders: list):
         table.setItem(r, 6, date_item)
 
     fit_splitter_table(dashboard._recent_splitter, table)
+    dashboard._recent_guard.refresh()         # ← تحديث الـ guard

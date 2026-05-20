@@ -16,7 +16,7 @@ from db.orders.orders_repo import fetch_customer_orders
 from ui.tabs.orders._customer_form import _CustomerForm
 from ui.widgets.shared.base_detail_panel import BaseDetailPanel
 from ui.widgets.shared.table_utils import (
-    make_splitter_table, fit_splitter_table,
+    make_splitter_table_guarded, fit_splitter_table,
     make_compact_table,
     make_table_item, color_item, bold_item, muted_item,
     insert_row, auto_fit_columns,
@@ -83,11 +83,11 @@ class CustomerDetailPanel(BaseDetailPanel):
         )
         lay.addWidget(self.contacts_table)
 
-        # ── آخر الطلبات (splitter) ──
+        # ── آخر الطلبات (splitter + guard) ──
         self._orders_hdr = SectionHeader("📋  آخر الطلبات")
         lay.addWidget(self._orders_hdr)
 
-        splitter, table = make_splitter_table(
+        splitter, table, guard = make_splitter_table_guarded(
             columns=["رقم الطلب", "الحالة", "الأولوية", "الإجمالي", "التاريخ"],
             stretch_col=0,
             col_widths={1: 90, 2: 70, 3: 80, 4: 90},
@@ -95,8 +95,9 @@ class CustomerDetailPanel(BaseDetailPanel):
             variant="compact",
             row_height=ROW_HEIGHT_COMPACT,
         )
-        self.orders_table    = table
+        self.orders_table     = table
         self._orders_splitter = splitter
+        self._orders_guard    = guard          # ← احتفظ بيه
         lay.addWidget(splitter)
 
     def _load_data(self, item_id: int):
@@ -127,7 +128,7 @@ class CustomerDetailPanel(BaseDetailPanel):
 
         self.btn_toggle.setText("✅  تفعيل" if not c["is_active"] else "⏸  تعطيل")
 
-        # جهات الاتصال
+        # ── جهات الاتصال ──
         contacts = [dict(ct) for ct in fetch_contacts(self.conn, self._item_id)]
         self.contacts_table.setRowCount(0)
         for ct in contacts:
@@ -140,7 +141,7 @@ class CustomerDetailPanel(BaseDetailPanel):
         self._contacts_hdr.setVisible(bool(contacts))
         self.contacts_table.setVisible(bool(contacts))
 
-        # آخر الطلبات
+        # ── آخر الطلبات ──
         orders = fetch_customer_orders(self.conn, self._item_id)
         table  = self.orders_table
         table.setRowCount(0)
@@ -166,6 +167,7 @@ class CustomerDetailPanel(BaseDetailPanel):
             auto_fit_columns(table, fixed_cols=[1, 2, 3, 4],
                              stretch_col=0, min_width=55, max_width=160)
             fit_splitter_table(self._orders_splitter, table)
+            self._orders_guard.refresh()       # ← تحديث الـ guard
 
     def load_customer(self, cid: int):
         self.load_item(cid)

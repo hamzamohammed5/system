@@ -275,6 +275,58 @@ def make_splitter_table(columns: list,
     return splitter, table
 
 
+# ══════════════════════════════════════════════════════════
+# make_splitter_table_guarded ★★
+# ══════════════════════════════════════════════════════════
+
+def make_splitter_table_guarded(columns: list,
+                                 stretch_col: int = -1,
+                                 col_widths: dict = None,
+                                 max_height: int = None,
+                                 min_height: int = 60,
+                                 row_height: int = None,
+                                 variant: str = "normal",
+                                 extra_pad: int = 20) -> tuple:
+    """
+    نفس make_splitter_table مع _SplitterScrollGuard تلقائي.
+
+    الـ guard بيمنع الـ splitter handle من التوسع أكتر من اللازم
+    لما الجدول بيتشاف كامل (horizontal scrollbar مختفي).
+    لما يظهر scroll تاني → الـ handle بيتحرك عادي بشكل dynamic.
+
+    Returns: (QSplitter, QTableWidget, _SplitterScrollGuard)
+
+    الاستخدام:
+        splitter, table, guard = make_splitter_table_guarded(
+            columns=[...], col_widths={...},
+        )
+        self._my_splitter = splitter
+        self._my_table    = table
+        self._my_guard    = guard      # ← لازم تحتفظ بيه (عشان GC)
+        layout.addWidget(splitter)
+
+        # بعد ملء البيانات:
+        fit_splitter_table(splitter, table)
+        guard.refresh()
+    """
+    from ui.widgets.shared.splitter_scroll_guard import _SplitterScrollGuard
+
+    splitter, table = make_splitter_table(
+        columns=columns,
+        stretch_col=stretch_col,
+        col_widths=col_widths,
+        max_height=max_height,
+        min_height=min_height,
+        row_height=row_height,
+        variant=variant,
+        extra_pad=extra_pad,
+    )
+
+    guard = _SplitterScrollGuard(splitter, table, table_index=0, extra_pad=extra_pad)
+
+    return splitter, table, guard
+
+
 def fit_splitter_table(splitter: QSplitter, table: QTableWidget,
                        extra_pad: int = 20, delay_ms: int = 0):
     """يعيد ضبط عرض الجدول في الـ splitter بعد ملء البيانات."""

@@ -10,7 +10,7 @@ from db.orders.orders_repo import fetch_status_log
 
 from ui.widgets.shared.panels import CollapsibleCard
 from ui.widgets.shared.table_utils import (
-    make_splitter_table, fit_splitter_table,
+    make_splitter_table_guarded, fit_splitter_table,
     make_table_item, color_item, bold_item, muted_item,
     insert_row, auto_fit_columns, ROW_HEIGHT_COMPACT,
 )
@@ -21,7 +21,7 @@ def _build_log_section(detail):
     detail._log_card = CollapsibleCard(
         "سجل تغييرات الحالة", expanded=False
     )
-    splitter, table = make_splitter_table(
+    splitter, table, guard = make_splitter_table_guarded(
         columns=["من", "إلى", "الملاحظات", "الوقت"],
         stretch_col=2,
         max_height=160,
@@ -30,6 +30,7 @@ def _build_log_section(detail):
     )
     detail.log_table      = table
     detail._log_splitter  = splitter
+    detail._log_guard     = guard              # ← احتفظ بيه
     detail._log_card.content_layout.addWidget(splitter)
     detail._content_lay.addWidget(detail._log_card)
 
@@ -71,3 +72,4 @@ def _fill_log(detail):
             max_width=200,
         )
         fit_splitter_table(detail._log_splitter, table)
+        detail._log_guard.refresh()            # ← تحديث الـ guard

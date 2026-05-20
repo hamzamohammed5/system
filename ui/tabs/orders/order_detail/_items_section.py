@@ -7,7 +7,7 @@ from PyQt5.QtCore    import Qt
 from db.orders.orders_repo import fetch_order_items
 from ui.widgets.shared.panels import SectionHeader, EmptyState, _make_btn
 from ui.widgets.shared.table_utils import (
-    make_splitter_table, fit_splitter_table,
+    make_splitter_table_guarded, fit_splitter_table,
     make_table_item, color_item, bold_item, muted_item,
     insert_row, ROW_HEIGHT_NORMAL,
 )
@@ -21,7 +21,7 @@ def _build_items_section(detail):
     detail.btn_add_item = items_hdr.add_button("＋  إضافة بند", detail._add_item, "success")
     detail._content_lay.addWidget(items_hdr)
 
-    splitter, table = make_splitter_table(
+    splitter, table, guard = make_splitter_table_guarded(
         columns=["البند", "الوصف", "الكمية", "الوحدة", "السعر", "الخصم%", "الإجمالي"],
         stretch_col=0,
         col_widths={2: 65, 3: 65, 4: 90, 5: 60, 6: 95},
@@ -30,6 +30,7 @@ def _build_items_section(detail):
     )
     detail.items_table        = table
     detail._items_splitter    = splitter
+    detail._items_guard       = guard          # ← احتفظ بيه
     detail._content_lay.addWidget(splitter)
 
     detail._empty_items = EmptyState(
@@ -102,3 +103,4 @@ def _fill_items(detail):
 
     if has_items:
         fit_splitter_table(detail._items_splitter, table)
+        detail._items_guard.refresh()          # ← تحديث الـ guard
