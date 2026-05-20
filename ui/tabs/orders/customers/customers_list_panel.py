@@ -39,10 +39,10 @@ class CustomersListPanel(BaseListPanel):
     new_customer      = pyqtSignal()
 
     COLUMNS     = ["الكود", "الاسم", "الهاتف", "المدينة", "الطلبات"]
-    STRETCH_COL = 1
-    COL_WIDTHS  = {0: 80, 2: 110, 3: 80, 4: 55}
+    STRETCH_COL = -1   # ← كان 1
+    COL_WIDTHS  = {0: 80, 1: 160, 2: 110, 3: 80, 4: 55}  # ← أضف عرض للاسم
     MIN_W       = 280
-    MAX_W       = 560   # ✅ الـ handle مش بيتحرك أكتر من هنا
+    MAX_W       = 560
     EMPTY_ICON  = "👥"
     EMPTY_TITLE = "لا يوجد عملاء"
 

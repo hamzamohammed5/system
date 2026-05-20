@@ -12,7 +12,6 @@ from ui.widgets.shared.base_section                  import BaseSection
 class OrdersTab(BaseSection):
 
     LIST_MIN_W = 280
-    LIST_MAX_W = 560
 
     def __init__(self, conn, parent=None):
         self._conn = conn

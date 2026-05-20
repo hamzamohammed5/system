@@ -4,7 +4,7 @@ ui/widgets/shared/base_list_panel.py
 BaseListPanel — قاعدة مشتركة لكل لوحات القوائم.
 
 القواعد:
-  ✅ الجدول عرضه مستقل عن عرض النافذة
+  ✅ الجدول عرضه مستقل عن عرض النافذة (splitter)
   ✅ الأعمدة Interactive — المستخدم يحرك عرضها
   ✅ الـ panel نفسه له MIN_W و MAX_W ثابتين
   ✅ الأزرار في الـ toolbar حجمها Fixed — مش بتكبر مع النافذة
@@ -12,19 +12,18 @@ BaseListPanel — قاعدة مشتركة لكل لوحات القوائم.
 
 from PyQt5.QtWidgets import (
     QWidget, QVBoxLayout, QLabel, QFrame,
-    QLineEdit, QHBoxLayout, QSizePolicy,
+    QLineEdit, QHBoxLayout, QSizePolicy, QSplitter,
 )
 from PyQt5.QtCore import Qt, pyqtSignal, QTimer
 
 from ui.widgets.shared.table_utils import (
-    make_list_table, auto_fit_columns,
+    make_splitter_table, fit_splitter_table,
     ROW_HEIGHT_LARGE,
 )
 from ui.widgets.shared.panels import EmptyState
 from ui.app_settings import _C
 
 _MIN_W = 260
-_MAX_W = 580
 
 
 class BaseListPanel(QWidget):
@@ -34,7 +33,6 @@ class BaseListPanel(QWidget):
     STRETCH_COL : int  = -1
     COL_WIDTHS  : dict = None
     MIN_W       : int  = _MIN_W
-    MAX_W       : int  = _MAX_W
     EMPTY_ICON  : str  = "📋"
     EMPTY_TITLE : str  = "لا توجد بيانات"
 
@@ -47,10 +45,9 @@ class BaseListPanel(QWidget):
         self._timer.setInterval(250)
         self._timer.timeout.connect(self._apply_filter)
 
-        # ✅ Fixed: الـ panel عرضه ثابت بين MIN_W و MAX_W
-        self.setSizePolicy(QSizePolicy.Fixed, QSizePolicy.Expanding)
+        self.setSizePolicy(QSizePolicy.Preferred, QSizePolicy.Expanding)
+        
         self.setMinimumWidth(self.MIN_W)
-        self.setMaximumWidth(self.MAX_W)
 
         self._build()
         self.refresh()
@@ -79,7 +76,6 @@ class BaseListPanel(QWidget):
                 border-bottom: 1px solid {_C['border']};
             }}
         """)
-        # ✅ الـ toolbar ارتفاعه Fixed — مش بيكبر
         self._toolbar.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Fixed)
 
         self._toolbar_lay = QVBoxLayout(self._toolbar)
@@ -87,23 +83,21 @@ class BaseListPanel(QWidget):
         self._toolbar_lay.setSpacing(6)
 
         self._build_toolbar(self._toolbar_lay)
-
-        # ✅ قفل الـ toolbar بعد البناء
         self._toolbar.adjustSize()
 
         root.addWidget(self._toolbar)
 
-        # ── الجدول ──
-        self.table = make_list_table(
-            self.COLUMNS,
+        # ── الجدول جوا splitter ──
+        self._splitter, self.table = make_splitter_table(
+            columns=self.COLUMNS,
             stretch_col=self.STRETCH_COL,
             col_widths=self.COL_WIDTHS,
+            row_height=ROW_HEIGHT_LARGE,
         )
-        # ✅ الجدول مش بيكبر مع النافذة — Preferred عرضاً
-        self.table.setSizePolicy(QSizePolicy.Preferred, QSizePolicy.Expanding)
+        self._splitter.setSizePolicy(QSizePolicy.Preferred, QSizePolicy.Expanding)
         self.table.setHorizontalScrollBarPolicy(Qt.ScrollBarAsNeeded)
         self.table.itemSelectionChanged.connect(self._on_select)
-        root.addWidget(self.table, stretch=1)
+        root.addWidget(self._splitter, stretch=1)
 
         # ── Empty State ──
         self._empty_state = EmptyState(
@@ -135,7 +129,6 @@ class BaseListPanel(QWidget):
         self.inp_search.setPlaceholderText("🔍  بحث...")
         self.inp_search.setFixedHeight(34)
         self.inp_search.setClearButtonEnabled(True)
-        # ✅ حقل البحث بيمتد داخل الـ toolbar بس مش بيعدي عرض الـ panel
         self.inp_search.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Fixed)
         self.inp_search.setStyleSheet(f"""
             QLineEdit {{
@@ -166,6 +159,7 @@ class BaseListPanel(QWidget):
 
         has_data = bool(filtered)
         self.table.setVisible(has_data)
+        self._splitter.setVisible(has_data)        # ← splitter بدل table
         self._empty_state.setVisible(not has_data and bool(self._all_rows))
         self._auto_resize()
 
@@ -177,11 +171,12 @@ class BaseListPanel(QWidget):
             self.table.setRowHeight(r, ROW_HEIGHT_LARGE)
             self._fill_row(self.table, r, row_data)
 
+        # ضبط عرض الجدول في الـ splitter بعد الملء
+        if rows:
+            fit_splitter_table(self._splitter, self.table, extra_pad=24)
+
     def _auto_resize(self):
-        """
-        ✅ ضبط عرض الأعمدة على قد المحتوى (Interactive).
-        الـ panel نفسه محدود بـ MIN_W → MAX_W.
-        """
+        from ui.widgets.shared.table_utils import auto_fit_columns
         all_cols = [i for i in range(self.table.columnCount())
                     if i != self.STRETCH_COL]
         auto_fit_columns(
