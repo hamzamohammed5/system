@@ -1,7 +1,7 @@
 """
 ui/tabs/costing/machine/machine_table.py
 ==========================================
-_MachineTable — جدول الماكينات مع دعم العناصر المشتركة.
+_MachineTable — جدول الماكينات مع دعم العناصر المشتركة + نشر كمشترك.
 IDs المشتركة = "shared:{n}" (string) متوافق مع النظام الموحد.
 """
 
@@ -86,19 +86,27 @@ class _MachineTable(QWidget):
         btn_edit        = QPushButton("✏️  تعديل")
         btn_del         = danger_button("🗑️  حذف")
         btn_edit_shared = QPushButton("🔗  تعديل المشترك")
+        btn_publish     = QPushButton("📤  نشر كمشترك")
 
         btn_edit_shared.setStyleSheet(
             f"QPushButton {{ background:{_SHARED_BG}; color:{_SHARED_COLOR};"
             "border:1px solid #a5d6a7; border-radius:4px; padding:4px 10px; font-weight:bold; }"
             f"QPushButton:hover {{ background:#c8e6c9; }}"
         )
-        for btn in (btn_edit, btn_del, btn_edit_shared):
+        btn_publish.setStyleSheet(
+            "QPushButton { background:#e3f2fd; color:#1565c0;"
+            "border:1px solid #90caf9; border-radius:4px;"
+            "padding:4px 10px; font-weight:bold; }"
+            "QPushButton:hover { background:#bbdefb; }"
+        )
+        for btn in (btn_edit, btn_del, btn_edit_shared, btn_publish):
             btn.setMinimumHeight(30)
 
         btn_edit.clicked.connect(self._edit)
         btn_del.clicked.connect(self._delete)
         btn_edit_shared.clicked.connect(self._edit_shared)
-        root.addLayout(buttons_row(btn_edit, btn_del, btn_edit_shared))
+        btn_publish.clicked.connect(self._publish_as_shared)
+        root.addLayout(buttons_row(btn_edit, btn_del, btn_edit_shared, btn_publish))
 
     def _selected_row_data(self):
         row = self.table.currentRow()
@@ -107,6 +115,16 @@ class _MachineTable(QWidget):
         item_id   = self.table.item(row, 0).data(0x0100)
         item_name = self.table.item(row, 1).text()
         return item_id, item_name
+
+    def _selected_machine_dict(self):
+        row = self.table.currentRow()
+        if row == -1:
+            return None
+        item_id = self.table.item(row, 0).data(0x0100)
+        for r in self._all_rows:
+            if str(r.get("id")) == str(item_id):
+                return r
+        return None
 
     def _edit(self):
         item_id, _ = self._selected_row_data()
@@ -156,6 +174,53 @@ class _MachineTable(QWidget):
                 QMessageBox.warning(self, "خطأ", str(e))
                 return
             bus.data_changed.emit()
+
+    def _publish_as_shared(self):
+        """نشر ماكينة محلية كمشتركة بين الشركات."""
+        item_id, _ = self._selected_row_data()
+        if item_id is None:
+            QMessageBox.information(self, "تنبيه", "اختر ماكينة من الجدول أولاً")
+            return
+        if is_shared_id(item_id):
+            QMessageBox.information(
+                self, "مشترك بالفعل",
+                "هذه الماكينة مشتركة بالفعل.\n"
+                "استخدم «🔗 تعديل المشترك» لتعديل الربط."
+            )
+            return
+
+        row = self._selected_machine_dict()
+        if not row:
+            return
+
+        item_data = {
+            "rate_per_hour": float(row.get("rate_per_hour", 0.0)),
+            "rate_per_unit": float(row.get("rate_per_unit", 0.0)),
+        }
+
+        try:
+            from db.companies.companies_schema import (
+                get_central_connection, create_central_tables
+            )
+            from db.companies.shared_items_repo import create_shared_items_tables
+            from ui.tabs.companies.shared_items_manager_helper._add_sharedItem_dialog import (
+                PublishAsSharedDialog
+            )
+            central = get_central_connection()
+            create_central_tables(central)
+            create_shared_items_tables(central)
+
+            dlg = PublishAsSharedDialog(
+                central_conn = central,
+                shared_type  = "machine",
+                item_name    = row.get("name", ""),
+                item_data    = item_data,
+                parent       = self,
+            )
+            dlg.exec_()
+            central.close()
+        except Exception as e:
+            QMessageBox.warning(self, "خطأ", str(e))
 
     def _load(self):
         try:

@@ -4,6 +4,7 @@ ui/tabs/costing/raw/raw_table_panel.py
 _TablePanel — جدول الخامات مع:
   - العناصر المشتركة تظهر بـ badge أخضر 🔗
   - تعديل مشترك → SharedItemsDialog (نافذة مباشرة للعنصر الواحد)
+  - نشر خامة محلية كمشتركة → PublishAsSharedDialog
   - bus.data_changed يحدّث الجدول فوراً بعد أي تعديل
   - IDs المشتركة = "shared:{n}" (string) متوافق مع items_repo.py
 """
@@ -92,6 +93,7 @@ class _TablePanel(QWidget):
         btn_del         = danger_button("🗑️  حذف المحدد")
         btn_replace     = QPushButton("🔄  استبدال شامل")
         btn_edit_shared = QPushButton("🔗  تعديل المشترك")
+        btn_publish     = QPushButton("📤  نشر كمشترك")
 
         btn_replace.setStyleSheet(
             "QPushButton { background:#e65100; color:white; border-radius:4px;"
@@ -104,14 +106,22 @@ class _TablePanel(QWidget):
             "padding:4px 10px; font-weight:bold; }"
             f"QPushButton:hover {{ background:#c8e6c9; }}"
         )
-        for btn in (btn_edit, btn_del, btn_replace, btn_edit_shared):
+        btn_publish.setStyleSheet(
+            "QPushButton { background:#e3f2fd; color:#1565c0;"
+            "border:1px solid #90caf9; border-radius:4px;"
+            "padding:4px 10px; font-weight:bold; }"
+            "QPushButton:hover { background:#bbdefb; }"
+        )
+        for btn in (btn_edit, btn_del, btn_replace, btn_edit_shared, btn_publish):
             btn.setMinimumHeight(30)
 
         btn_edit.clicked.connect(self._edit)
         btn_del.clicked.connect(self._delete)
         btn_replace.clicked.connect(self._bulk_replace)
         btn_edit_shared.clicked.connect(self._edit_shared)
-        root.addLayout(buttons_row(btn_edit, btn_del, btn_replace, btn_edit_shared))
+        btn_publish.clicked.connect(self._publish_as_shared)
+        root.addLayout(buttons_row(btn_edit, btn_del, btn_replace,
+                                    btn_edit_shared, btn_publish))
 
     # ══════════════════════════════════════════════════════
     # مساعدات التحديد
@@ -124,6 +134,17 @@ class _TablePanel(QWidget):
         item_id   = self.table.item(row, 0).data(0x0100)
         item_name = self.table.item(row, 1).text()
         return item_id, item_name
+
+    def _selected_raw_dict(self):
+        """يرجع dict كامل للصف المحدد (للنشر)."""
+        row = self.table.currentRow()
+        if row == -1:
+            return None
+        item_id = self.table.item(row, 0).data(0x0100)
+        for r in self._all_rows:
+            if str(r.get("id")) == str(item_id):
+                return r
+        return None
 
     # ══════════════════════════════════════════════════════
     # أحداث الأزرار
@@ -159,7 +180,6 @@ class _TablePanel(QWidget):
             self._open_shared_editor(shared_id)
 
     def _open_shared_editor(self, shared_id: int):
-        """يفتح نافذة تعديل العنصر المشترك المباشرة."""
         from db.companies.companies_schema import (
             get_central_connection, create_central_tables
         )
@@ -167,8 +187,6 @@ class _TablePanel(QWidget):
         central = get_central_connection()
         create_central_tables(central)
         dlg = SharedItemsDialog(central, shared_id, parent=self)
-        # bus.data_changed ينطلق من داخل SharedItemsDialog بعد الحفظ
-        # self._load مربوط بـ bus.data_changed في __init__
         dlg.exec_()
         central.close()
 
@@ -210,6 +228,53 @@ class _TablePanel(QWidget):
         )
         dlg.exec_()
 
+    def _publish_as_shared(self):
+        """نشر خامة محلية كمشتركة بين الشركات."""
+        item_id, _ = self._selected_row_data()
+        if item_id is None:
+            QMessageBox.information(self, "تنبيه", "اختر خامة من الجدول أولاً")
+            return
+        if is_shared_id(item_id):
+            QMessageBox.information(
+                self, "مشترك بالفعل",
+                "هذه الخامة مشتركة بالفعل.\n"
+                "استخدم «🔗 تعديل المشترك» لتعديل الربط."
+            )
+            return
+
+        row = self._selected_raw_dict()
+        if not row:
+            return
+
+        item_data = {
+            "price":     float(row.get("price", 0.0)),
+            "total_qty": row.get("total_qty"),
+        }
+
+        try:
+            from db.companies.companies_schema import (
+                get_central_connection, create_central_tables
+            )
+            from db.companies.shared_items_repo import create_shared_items_tables
+            from ui.tabs.companies.shared_items_manager_helper._add_sharedItem_dialog import (
+                PublishAsSharedDialog
+            )
+            central = get_central_connection()
+            create_central_tables(central)
+            create_shared_items_tables(central)
+
+            dlg = PublishAsSharedDialog(
+                central_conn = central,
+                shared_type  = "raw",
+                item_name    = row.get("name", ""),
+                item_data    = item_data,
+                parent       = self,
+            )
+            dlg.exec_()
+            central.close()
+        except Exception as e:
+            QMessageBox.warning(self, "خطأ", str(e))
+
     # ══════════════════════════════════════════════════════
     # تحميل البيانات
     # ══════════════════════════════════════════════════════
@@ -221,9 +286,7 @@ class _TablePanel(QWidget):
         except Exception:
             local_rows = []
 
-        # العناصر المشتركة — تُقرأ fresh من companies.db في كل load
         shared_rows = get_shared_raws()
-
         self._all_rows = local_rows + shared_rows
         self._apply_filter()
 
@@ -239,7 +302,6 @@ class _TablePanel(QWidget):
             tq        = row.get("total_qty")
             price     = row.get("price", 0.0)
 
-            # حساب سعر الوحدة
             if is_shared:
                 unit = (price / float(tq)) if (tq and float(tq) > 0) else price
             else:
@@ -248,7 +310,6 @@ class _TablePanel(QWidget):
             r = self.table.rowCount()
             self.table.insertRow(r)
 
-            # ID (مع حفظ الـ raw id في UserRole)
             id_item = QTableWidgetItem("🔗" if is_shared else str(row.get("id", "")))
             id_item.setData(0x0100, row.get("id"))
             self.table.setItem(r, 0, id_item)
