@@ -113,6 +113,11 @@ def create_central_tables(conn):
         );
     """)
     conn.commit()
+
+    # ══ PATCH: إنشاء جداول العناصر المشتركة (النموذج الموسع) ══
+    from db.companies.shared_items_repo import create_shared_items_tables
+    create_shared_items_tables(conn)
+
     _migrate_central(conn)
 
 

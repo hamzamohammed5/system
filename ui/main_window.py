@@ -8,6 +8,7 @@ ui/main_window.py  (نسخة multi-company)
   - عند تغيير الشركة → إعادة تهيئة كل التبويبات
   - NoCompanyScreen قبل اختيار شركة
   - زر العناصر المشتركة في footer الـ sidebar
+  - PATCH: دالة _open_shared_items() + زر "🔗 مشتركة" في footer الـ sidebar
 """
 
 from PyQt5.QtWidgets import (
@@ -27,8 +28,7 @@ WINDOW_DEFAULT_W        = SIDEBAR_EXPANDED_WIDTH + CONTENT_MIN_WIDTH
 
 
 # ══════════════════════════════════════════════════════════
-# _SectionLabel, _NavButton, _ToggleButton
-# (نفس الكود القديم — محذوف هنا اختصاراً، انسخه من main_window القديم)
+# _SectionLabel
 # ══════════════════════════════════════════════════════════
 
 class _SectionLabel(QLabel):
@@ -49,6 +49,10 @@ class _SectionLabel(QLabel):
     def set_collapsed(self, collapsed):
         self.setVisible(not collapsed)
 
+
+# ══════════════════════════════════════════════════════════
+# _NavButton
+# ══════════════════════════════════════════════════════════
 
 class _NavButton(QPushButton):
     def __init__(self, icon, label, badge="", parent=None):
@@ -154,6 +158,10 @@ class _NavButton(QPushButton):
         if not self._collapsed:
             self.setFixedWidth(SIDEBAR_EXPANDED_WIDTH - 16)
 
+
+# ══════════════════════════════════════════════════════════
+# _ToggleButton
+# ══════════════════════════════════════════════════════════
 
 class _ToggleButton(QPushButton):
     def __init__(self, parent=None):
@@ -286,13 +294,14 @@ class _Sidebar(QFrame):
         div.setStyleSheet(f"background:{_C['sidebar_border']};border:none;margin:2px 4px;")
         f_lay.addWidget(div)
 
-        # زر العناصر المشتركة
+        # ── PATCH: زر العناصر المشتركة ──────────────────────────
         shared_btn = _NavButton("🔗", "العناصر المشتركة")
         shared_btn.setProperty("nav_key", "shared_items")
         shared_btn.setFixedWidth(SIDEBAR_EXPANDED_WIDTH - 16)
         shared_btn.setFixedHeight(38)
         self._buttons.append(shared_btn)
         f_lay.addWidget(shared_btn)
+        # ────────────────────────────────────────────────────────
 
         btn_settings = _NavButton("⚙️", "الإعدادات")
         btn_settings.setProperty("nav_key", "settings")
@@ -419,7 +428,7 @@ class MainWindow(QMainWindow):
         self._content_scroll.setWidget(self._stack)
         main_layout.addWidget(self._content_scroll, stretch=1)
 
-        # ربط أزرار الـ sidebar
+        # ── ربط أزرار الـ sidebar ──
         for btn in self._sidebar.get_buttons():
             btn.clicked.connect(lambda checked, b=btn: self._on_nav(b))
 
@@ -472,8 +481,6 @@ class MainWindow(QMainWindow):
     def _on_company_changed(self, company_id: int):
         """عند تغيير الشركة — أعد بناء التبويبات."""
         from db.companies.company_state import company_state
-        from db.companies.companies_repo import fetch_company
-        from db.companies.companies_schema import get_central_connection
 
         # حدّث عنوان النافذة
         self.setWindowTitle(f"ERP — {company_state.company_name}")
@@ -499,11 +506,12 @@ class MainWindow(QMainWindow):
             self._sidebar.refresh_all_buttons()
             return
 
+        # ══ PATCH: معالجة زر العناصر المشتركة ══════════════════
         if key == "shared_items":
             clicked_btn.setChecked(False)
-            from ui.tabs.companies.shared_items_dialog import SharedItemsDialog
-            SharedItemsDialog(parent=self).exec_()
+            self._open_shared_items()
             return
+        # ════════════════════════════════════════════════════════
 
         if not self._tabs_built:
             self._stack.setCurrentIndex(0)
@@ -519,3 +527,20 @@ class MainWindow(QMainWindow):
         }
         if key in index_map:
             self._stack.setCurrentIndex(index_map[key])
+
+    # ══ PATCH: دالة فتح نافذة العناصر المشتركة ══════════════════
+    def _open_shared_items(self):
+        """فتح نافذة إدارة العناصر المشتركة بين الشركات."""
+        from db.companies.companies_schema import get_central_connection, create_central_tables
+        from db.companies.shared_items_repo import create_shared_items_tables
+        from ui.tabs.companies.shared_items_manager import SharedItemsManagerDialog
+
+        central = get_central_connection()
+        create_central_tables(central)
+        create_shared_items_tables(central)
+
+        dlg = SharedItemsManagerDialog(central, parent=self)
+        dlg.items_changed.connect(lambda: bus.data_changed.emit())
+        dlg.exec_()
+        central.close()
+    # ════════════════════════════════════════════════════════════

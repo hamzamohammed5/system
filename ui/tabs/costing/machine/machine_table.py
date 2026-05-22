@@ -13,7 +13,7 @@ from ui.helpers import (
     make_table, buttons_row, section_label, confirm_delete, danger_button,
 )
 from ui.widgets.shared.filter_bar import FilterBar
-from ui.widgets.shared.shared_items_mixin import (
+from ...companies.shared_items_mixin import (
     get_shared_machines, is_shared_id, extract_shared_id,
 )
 from ui.events import bus

@@ -14,7 +14,7 @@ from ui.helpers import (
 )
 from ui.widgets.costing.bulk_replace.bulk_replace_dialog import BulkReplaceDialog
 from ui.widgets.shared.filter_bar import FilterBar
-from ui.widgets.shared.shared_items_mixin import (
+from ...companies.shared_items_mixin import (
     get_shared_labor_ops, is_shared_id, extract_shared_id,
 )
 from ui.events import bus

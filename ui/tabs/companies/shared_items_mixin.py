@@ -2,34 +2,34 @@
 ui/widgets/shared/shared_items_mixin.py
 =========================================
 Mixin يُضيف دعم العناصر المشتركة لأي panel.
-
-الاستخدام:
-    class _TablePanel(QWidget, SharedItemsMixin):
-        def _load(self):
-            rows = list(fetch_items_by_type(conn, "raw"))
-            rows += self.get_shared_rows("raw")   # ← يضيف المشتركة
-            self._all_rows = rows
-            self._apply_filter()
 """
 
-from db.companies.shared_items_repo import (
-    fetch_shared_items_for_company,
-    get_item_data,
-)
-from db.companies.companies_schema import get_central_connection
-from db.companies.companies_schema import create_central_tables as _ensure_tables
+import json
+
+
+def _row_to_dict(row) -> dict:
+    """يحول sqlite3.Row أو dict لـ dict آمن."""
+    if row is None:
+        return {}
+    if isinstance(row, dict):
+        return row
+    try:
+        return dict(row)
+    except Exception:
+        return {}
 
 
 def _get_central():
     try:
+        from db.companies.companies_schema import get_central_connection, create_central_tables
         conn = get_central_connection()
-        _ensure_tables(conn)
+        create_central_tables(conn)
         return conn
     except Exception:
         return None
 
 
-def _get_company_id() -> int | None:
+def _get_company_id():
     try:
         from db.companies.company_state import company_state
         return company_state.company_id if company_state.is_ready else None
@@ -37,12 +37,94 @@ def _get_company_id() -> int | None:
         return None
 
 
+def _decode_data(data_str) -> dict:
+    """يفك تشفير عمود data لو JSON، أو يرجع dict فاضي."""
+    if not data_str:
+        return {}
+    if isinstance(data_str, dict):
+        return data_str
+    try:
+        return json.loads(data_str)
+    except Exception:
+        return {}
+
+
+def _get_item_data_safe(central, row_id: int) -> dict:
+    """
+    يجيب بيانات عنصر مشترك بأمان —
+    يتعامل مع كلا الجدولين:
+      • companies_schema.shared_items  (بدون عمود data)
+      • shared_items_repo.shared_items (بعمود data)
+    """
+    # محاولة جلب عمود data لو موجود
+    try:
+        r = central.execute(
+            "SELECT data FROM shared_items WHERE id=?", (row_id,)
+        ).fetchone()
+        if r:
+            return _decode_data(r["data"])
+    except Exception:
+        pass
+
+    # fallback: جدول companies_schema بدون data — نبني من الأعمدة المتاحة
+    try:
+        r = central.execute(
+            "SELECT * FROM shared_items WHERE id=?", (row_id,)
+        ).fetchone()
+        if r:
+            d = _row_to_dict(r)
+            # shared_items_repo يخزن البيانات في data (JSON)
+            # companies_schema يخزنها مباشرة في source_item_id
+            # نرجع dict يحاكي ما يحتاجه كل نوع
+            return d
+    except Exception:
+        pass
+
+    return {}
+
+
+def _fetch_shared_for_company(central, company_id: int, shared_type: str) -> list:
+    """
+    يجيب العناصر المشتركة لشركة معينة — يتعامل مع كلا الـ schema.
+    يرجع list of dicts.
+    """
+    rows = []
+
+    # أولاً: حاول shared_items_repo (عمود data موجود)
+    try:
+        from db.companies.shared_items_repo import fetch_shared_items_for_company
+        raw_rows = fetch_shared_items_for_company(central, company_id,
+                                                   shared_type=shared_type)
+        for r in raw_rows:
+            d = _row_to_dict(r)
+            data = _decode_data(d.get("data", "{}"))
+            d["_data"] = data
+            rows.append(d)
+        return rows
+    except Exception:
+        pass
+
+    # ثانياً: fallback على companies_repo
+    try:
+        from db.companies.companies_repo import fetch_shared_items_for_company as _fetch
+        raw_rows = _fetch(central, company_id)
+        for r in raw_rows:
+            d = _row_to_dict(r)
+            if d.get("shared_type") == shared_type:
+                d["_data"] = {}
+                rows.append(d)
+        return rows
+    except Exception:
+        pass
+
+    return []
+
+
 # ══════════════════════════════════════════════════════════
 # دوال مستقلة — تُستخدم مباشرة في أي panel
 # ══════════════════════════════════════════════════════════
 
-def get_shared_raws(company_id: int = None) -> list[dict]:
-    """يرجع العناصر المشتركة من نوع 'raw' كـ list of dicts تشبه صفوف items."""
+def get_shared_raws(company_id: int = None) -> list:
     cid = company_id or _get_company_id()
     if not cid:
         return []
@@ -50,17 +132,17 @@ def get_shared_raws(company_id: int = None) -> list[dict]:
     if not central:
         return []
     try:
-        rows = fetch_shared_items_for_company(central, cid, shared_type="raw")
+        rows = _fetch_shared_for_company(central, cid, "raw")
         result = []
         for r in rows:
-            d = get_item_data(central, r["id"])
+            data = r.get("_data") or _get_item_data_safe(central, r["id"])
             result.append({
-                "id":            f"shared_{r['id']}",   # prefix عشان نميزه
+                "id":            f"shared_{r['id']}",
                 "shared_id":     r["id"],
-                "name":          r["name"],
+                "name":          r.get("name", ""),
                 "type":          "raw",
-                "price":         d.get("price", 0.0),
-                "total_qty":     d.get("total_qty"),
+                "price":         float(data.get("price", 0.0)),
+                "total_qty":     data.get("total_qty"),
                 "category_id":   None,
                 "category_name": "🔗 مشترك",
                 "is_shared":     True,
@@ -70,10 +152,13 @@ def get_shared_raws(company_id: int = None) -> list[dict]:
         print(f"[shared_mixin] get_shared_raws: {e}")
         return []
     finally:
-        central.close()
+        try:
+            central.close()
+        except Exception:
+            pass
 
 
-def get_shared_machines(company_id: int = None) -> list[dict]:
+def get_shared_machines(company_id: int = None) -> list:
     cid = company_id or _get_company_id()
     if not cid:
         return []
@@ -81,16 +166,16 @@ def get_shared_machines(company_id: int = None) -> list[dict]:
     if not central:
         return []
     try:
-        rows = fetch_shared_items_for_company(central, cid, shared_type="machine")
+        rows = _fetch_shared_for_company(central, cid, "machine")
         result = []
         for r in rows:
-            d = get_item_data(central, r["id"])
+            data = r.get("_data") or _get_item_data_safe(central, r["id"])
             result.append({
                 "id":            f"shared_{r['id']}",
                 "shared_id":     r["id"],
-                "name":          r["name"],
-                "rate_per_hour": d.get("rate_per_hour", 0.0),
-                "rate_per_unit": d.get("rate_per_unit", 0.0),
+                "name":          r.get("name", ""),
+                "rate_per_hour": float(data.get("rate_per_hour", 0.0)),
+                "rate_per_unit": float(data.get("rate_per_unit", 0.0)),
                 "category_id":   None,
                 "category_name": "🔗 مشترك",
                 "is_shared":     True,
@@ -100,10 +185,13 @@ def get_shared_machines(company_id: int = None) -> list[dict]:
         print(f"[shared_mixin] get_shared_machines: {e}")
         return []
     finally:
-        central.close()
+        try:
+            central.close()
+        except Exception:
+            pass
 
 
-def get_shared_labor_ops(company_id: int = None) -> list[dict]:
+def get_shared_labor_ops(company_id: int = None) -> list:
     cid = company_id or _get_company_id()
     if not cid:
         return []
@@ -111,15 +199,15 @@ def get_shared_labor_ops(company_id: int = None) -> list[dict]:
     if not central:
         return []
     try:
-        rows = fetch_shared_items_for_company(central, cid, shared_type="labor_op")
+        rows = _fetch_shared_for_company(central, cid, "labor_op")
         result = []
         for r in rows:
-            d = get_item_data(central, r["id"])
+            data = r.get("_data") or _get_item_data_safe(central, r["id"])
             result.append({
                 "id":            f"shared_{r['id']}",
                 "shared_id":     r["id"],
-                "name":          r["name"],
-                "minutes":       d.get("minutes", 0.0),
+                "name":          r.get("name", ""),
+                "minutes":       float(data.get("minutes", 0.0)),
                 "category_id":   None,
                 "category_name": "🔗 مشترك",
                 "is_shared":     True,
@@ -129,10 +217,13 @@ def get_shared_labor_ops(company_id: int = None) -> list[dict]:
         print(f"[shared_mixin] get_shared_labor_ops: {e}")
         return []
     finally:
-        central.close()
+        try:
+            central.close()
+        except Exception:
+            pass
 
 
-def get_shared_machine_ops(company_id: int = None) -> list[dict]:
+def get_shared_machine_ops(company_id: int = None) -> list:
     cid = company_id or _get_company_id()
     if not cid:
         return []
@@ -140,17 +231,17 @@ def get_shared_machine_ops(company_id: int = None) -> list[dict]:
     if not central:
         return []
     try:
-        rows = fetch_shared_items_for_company(central, cid, shared_type="machine_op")
+        rows = _fetch_shared_for_company(central, cid, "machine_op")
         result = []
         for r in rows:
-            d = get_item_data(central, r["id"])
+            data = r.get("_data") or _get_item_data_safe(central, r["id"])
             result.append({
                 "id":            f"shared_{r['id']}",
                 "shared_id":     r["id"],
-                "name":          r["name"],
-                "mode":          d.get("mode", "time"),
-                "value":         d.get("value", 0.0),
-                "machine_name":  d.get("machine_name", ""),
+                "name":          r.get("name", ""),
+                "mode":          data.get("mode", "time"),
+                "value":         float(data.get("value", 0.0)),
+                "machine_name":  data.get("machine_name", ""),
                 "rate_per_hour": 0.0,
                 "rate_per_unit": 0.0,
                 "category_id":   None,
@@ -162,16 +253,17 @@ def get_shared_machine_ops(company_id: int = None) -> list[dict]:
         print(f"[shared_mixin] get_shared_machine_ops: {e}")
         return []
     finally:
-        central.close()
+        try:
+            central.close()
+        except Exception:
+            pass
 
 
 def is_shared_id(item_id) -> bool:
-    """يتحقق هل الـ id ده خاص بعنصر مشترك."""
     return isinstance(item_id, str) and item_id.startswith("shared_")
 
 
 def extract_shared_id(item_id) -> int | None:
-    """يستخرج الـ shared_id من الـ id المركب."""
     if is_shared_id(item_id):
         try:
             return int(str(item_id).replace("shared_", ""))
@@ -181,10 +273,6 @@ def extract_shared_id(item_id) -> int | None:
 
 
 def update_shared_item_data(shared_id: int, name: str, data: dict) -> bool:
-    """
-    يعدل بيانات عنصر مشترك من أي شركة — يُحدّث المركزي فوراً.
-    يرجع True لو نجح.
-    """
     central = _get_central()
     if not central:
         return False
@@ -196,4 +284,7 @@ def update_shared_item_data(shared_id: int, name: str, data: dict) -> bool:
         print(f"[shared_mixin] update_shared_item_data: {e}")
         return False
     finally:
-        central.close()
+        try:
+            central.close()
+        except Exception:
+            pass
