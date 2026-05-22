@@ -294,7 +294,7 @@ class SharedItemsManagerDialog(QDialog):
     def _add_item(self):
         """إضافة عنصر مشترك جديد."""
         try:
-            from ui.tabs.companies.shared_items_manager_helper._add_sharedItem_dialog import (
+            from ui.tabs.companies.shared_items_manager_helper._add_shared_item_dialog import (
                 PublishAsSharedDialog
             )
         except ImportError:
