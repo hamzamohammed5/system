@@ -4,10 +4,12 @@ db/companies/company_state.py
 Singleton يحفظ الشركة النشطة حالياً.
 يُستخدم من أي مكان في التطبيق للحصول على connections الشركة الحالية.
 
-الإصلاح:
-    الـ connections المشتركة محمية من الإغلاق العرضي عبر ProtectedConnection wrapper.
-    أي كود يستدعي conn.close() على shared connection لن يُغلقه فعلاً.
-    الإغلاق الحقيقي يحدث فقط عند _close_all() عبر conn.real_close().
+الإصلاح (v2):
+    ProtectedConnection أصبح "lazy-reconnecting":
+    - conn.close() لا تزال no-op
+    - أي عملية على connection مغلق → تُعيد الفتح تلقائياً
+    - هذا يحل مشكلة "Cannot operate on a closed database" عند تغيير الشركة
+      أو عند أي كود خارجي يستدعي close() عن طريق الخطأ.
 """
 
 import sqlite3
@@ -17,26 +19,59 @@ from db.companies.companies_schema import get_company_db_path
 
 class ProtectedConnection:
     """
-    Wrapper حول sqlite3.Connection يمنع الإغلاق العرضي.
-    conn.close() → لا تفعل شيئاً.
-    conn.real_close() → الإغلاق الحقيقي.
-    كل الـ attributes والـ methods الأخرى تُمرَّر للـ connection الأصلي.
+    Wrapper حول sqlite3.Connection مع:
+    - منع الإغلاق العرضي (close() = no-op)
+    - إعادة الاتصال التلقائي لو الـ raw connection مات لأي سبب
+    - الإغلاق الحقيقي فقط عبر real_close()
     """
 
-    def __init__(self, raw_conn: sqlite3.Connection):
-        # نحفظ الـ connection الأصلي في __dict__ مباشرة لتجنب __setattr__ recursion
-        object.__setattr__(self, '_raw', raw_conn)
+    def __init__(self, path: str):
+        # نحفظ الـ path عشان نعيد الفتح لو احتجنا
+        object.__setattr__(self, '_path', path)
+        object.__setattr__(self, '_raw', None)
+        object.__setattr__(self, '_closed', False)
+        self._open()
 
-    # ── تمرير كل الـ attributes للـ connection الأصلي ──
+    def _open(self):
+        """يفتح أو يعيد فتح الـ raw connection."""
+        path = object.__getattribute__(self, '_path')
+        raw = sqlite3.connect(path)
+        raw.row_factory     = sqlite3.Row
+        raw.isolation_level = None
+        raw.execute("PRAGMA foreign_keys = ON")
+        raw.execute("PRAGMA journal_mode = WAL")
+        object.__setattr__(self, '_raw', raw)
+        object.__setattr__(self, '_closed', False)
+
+    def _get_raw(self):
+        """يرجع الـ raw connection، ويعيد الفتح لو مات."""
+        closed = object.__getattribute__(self, '_closed')
+        if closed:
+            self._open()
+            return object.__getattribute__(self, '_raw')
+
+        raw = object.__getattribute__(self, '_raw')
+        # تحقق إن الـ connection لسه شغّال
+        try:
+            raw.execute("SELECT 1")
+            return raw
+        except Exception:
+            # مات → أعد الفتح
+            self._open()
+            return object.__getattribute__(self, '_raw')
+
+    # ── تمرير كل الـ attributes للـ raw connection ──
 
     def __getattr__(self, name: str):
-        return getattr(object.__getattribute__(self, '_raw'), name)
+        if name.startswith('_'):
+            raise AttributeError(name)
+        return getattr(self._get_raw(), name)
 
     def __setattr__(self, name: str, value):
-        if name == '_raw':
+        if name.startswith('_'):
             object.__setattr__(self, name, value)
         else:
-            setattr(object.__getattribute__(self, '_raw'), name, value)
+            setattr(self._get_raw(), name, value)
 
     # ── Override close() بـ no-op ──
 
@@ -45,11 +80,15 @@ class ProtectedConnection:
         pass
 
     def real_close(self):
-        """الإغلاق الحقيقي للـ connection."""
-        try:
-            object.__getattribute__(self, '_raw').close()
-        except Exception:
-            pass
+        """الإغلاق الحقيقي للـ connection — بدون إمكانية إعادة الفتح."""
+        object.__setattr__(self, '_closed', True)
+        raw = object.__getattribute__(self, '_raw')
+        if raw:
+            try:
+                raw.close()
+            except Exception:
+                pass
+        object.__setattr__(self, '_raw', None)
 
     # ── دعم context manager ──
 
@@ -59,17 +98,26 @@ class ProtectedConnection:
     def __exit__(self, *args):
         pass
 
+    # ── تمرير execute و executescript و cursor مباشرة ──
+    # (لأنها الأكثر استخداماً وعشان نتفادى أي overhead)
 
-def _make_protected_connection(path: str) -> ProtectedConnection:
-    """
-    ينشئ ProtectedConnection — connection مع حماية من الإغلاق العرضي.
-    """
-    raw = sqlite3.connect(path)
-    raw.row_factory     = sqlite3.Row
-    raw.isolation_level = None
-    raw.execute("PRAGMA foreign_keys = ON")
-    raw.execute("PRAGMA journal_mode = WAL")
-    return ProtectedConnection(raw)   # ← لا تضيف attributes على raw مباشرة
+    def execute(self, sql, params=()):
+        return self._get_raw().execute(sql, params)
+
+    def executemany(self, sql, seq):
+        return self._get_raw().executemany(sql, seq)
+
+    def executescript(self, script):
+        return self._get_raw().executescript(script)
+
+    def cursor(self):
+        return self._get_raw().cursor()
+
+    def commit(self):
+        return self._get_raw().commit()
+
+    def rollback(self):
+        return self._get_raw().rollback()
 
 
 class CompanyState:
@@ -131,13 +179,10 @@ class CompanyState:
         if not self._company_id:
             raise RuntimeError("لم يتم تحديد شركة نشطة بعد")
 
+        # لو عندنا connection موجود → ارجعه (هو يعرف يعيد الفتح لو احتاج)
         conn = self._connections.get(db_name)
-        if conn:
-            try:
-                conn.execute("SELECT 1")
-                return conn
-            except Exception:
-                pass
+        if conn is not None:
+            return conn
 
         path = get_company_db_path(self._company_id, db_name)
         if not os.path.exists(path):
@@ -146,7 +191,7 @@ class CompanyState:
                 f"تأكد من تهيئة الشركة أولاً."
             )
 
-        conn = _make_protected_connection(path)
+        conn = ProtectedConnection(path)
         self._connections[db_name] = conn
         return conn
 

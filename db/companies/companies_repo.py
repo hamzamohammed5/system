@@ -2,6 +2,8 @@
 db/companies/companies_repo.py
 ================================
 عمليات CRUD للشركات والعناصر المشتركة.
+
+إصلاح: كل central connections بتُفتح وتُغلق بشكل صحيح في try/finally
 """
 
 import os
@@ -43,7 +45,6 @@ def insert_company(conn,
     """
     ينشئ الشركة في companies.db ومجلدها وملفات DB الخاصة بها.
     """
-    # 1. أدرج السجل
     cur = conn.execute(
         """INSERT INTO companies (name, short_name, color, notes)
            VALUES (?, ?, ?, ?)""",
@@ -51,10 +52,7 @@ def insert_company(conn,
     )
     company_id = cur.lastrowid
 
-    # 2. أنشئ مجلد الشركة
     ensure_company_dir(company_id)
-
-    # 3. هيئ قواعد بيانات الشركة
     _init_company_databases(company_id)
 
     return company_id
@@ -79,7 +77,7 @@ def update_company(conn, company_id: int,
 def delete_company(conn, company_id: int) -> bool:
     """
     يحذف الشركة من companies.db.
-    ملفات DB الخاصة بها تبقى على الديسك (للأمان) — يمكن حذفها يدوياً.
+    ملفات DB الخاصة بها تبقى على الديسك (للأمان).
     """
     conn.execute("DELETE FROM companies WHERE id=?", (company_id,))
     return True
@@ -100,6 +98,7 @@ def _init_company_databases(company_id: int):
     """
     ينشئ ويهيئ erp.db + accounting.db + inventory.db + orders.db + designs.db
     داخل مجلد الشركة.
+    ملاحظة: هذه connections مؤقتة للتهيئة فقط — تُغلق بعد الانتهاء.
     """
     import sqlite3
 
@@ -112,7 +111,6 @@ def _init_company_databases(company_id: int):
         c.execute("PRAGMA journal_mode = WAL")
         return c
 
-    # erp.db
     erp = _open("erp")
     try:
         from db.costing.schema import _init_erp_db
@@ -120,7 +118,6 @@ def _init_company_databases(company_id: int):
     finally:
         erp.close()
 
-    # accounting.db
     acc = _open("accounting")
     try:
         from db.accounting.accounting_schema import create_accounting_tables
@@ -128,7 +125,6 @@ def _init_company_databases(company_id: int):
     finally:
         acc.close()
 
-    # inventory.db
     inv = _open("inventory")
     try:
         from db.inventory.inventory_schema import create_inventory_tables
@@ -136,7 +132,6 @@ def _init_company_databases(company_id: int):
     finally:
         inv.close()
 
-    # orders.db
     ord_ = _open("orders")
     try:
         from db.orders.orders_schema import create_orders_tables
@@ -144,7 +139,6 @@ def _init_company_databases(company_id: int):
     finally:
         ord_.close()
 
-    # designs.db
     des = _open("designs")
     try:
         from db.designs.design_schema import create_designs_tables
@@ -201,7 +195,6 @@ def publish_item_as_shared(central_conn,
     ينشر عنصر من شركة معينة كعنصر مشترك.
     يربطه تلقائياً بالشركة المصدر.
     """
-    # تحقق إن مش منشور مسبقاً
     existing = central_conn.execute(
         """SELECT id FROM shared_items
            WHERE source_company_id=? AND source_item_id=? AND shared_type=?""",
@@ -218,7 +211,6 @@ def publish_item_as_shared(central_conn,
     )
     shared_id = cur.lastrowid
 
-    # ربط الشركة المصدر بالعنصر المشترك (local_item_id = source_item_id)
     central_conn.execute(
         """INSERT OR IGNORE INTO company_shared_links
            (shared_item_id, company_id, local_item_id, is_synced)
@@ -233,22 +225,15 @@ def link_shared_item_to_company(central_conn,
                                  shared_item_id: int,
                                  target_company_id: int) -> int:
     """
-    يربط عنصراً مشتركاً بشركة جديدة:
-    1. يجلب بيانات العنصر من erp.db الخاص بالشركة المصدر
-    2. ينسخه إلى erp.db الخاص بالشركة الهدف
-    3. يسجل الرابط في company_shared_links
-
-    erp_conn: connection لـ erp.db الخاص بالشركة المصدر
-    يرجع local_item_id في erp.db الشركة الهدف.
+    يربط عنصراً مشتركاً بشركة جديدة.
+    erp_conn: connection لـ erp.db الخاص بالشركة المصدر (shared — لا تُغلقه)
     """
-    # جلب بيانات العنصر المشترك
     shared = central_conn.execute(
         "SELECT * FROM shared_items WHERE id=?", (shared_item_id,)
     ).fetchone()
     if not shared:
         raise ValueError(f"العنصر المشترك {shared_item_id} غير موجود")
 
-    # تحقق إن مش مربوط مسبقاً
     existing = central_conn.execute(
         """SELECT id, local_item_id FROM company_shared_links
            WHERE shared_item_id=? AND company_id=?""",
@@ -257,7 +242,7 @@ def link_shared_item_to_company(central_conn,
     if existing:
         return existing["local_item_id"]
 
-    # فتح erp.db الخاص بالشركة الهدف
+    # فتح erp.db الخاص بالشركة الهدف (connection مؤقت)
     import sqlite3
     target_erp_path = get_company_db_path(target_company_id, "erp")
     target_erp = sqlite3.connect(target_erp_path)
@@ -274,7 +259,6 @@ def link_shared_item_to_company(central_conn,
     finally:
         target_erp.close()
 
-    # سجل الرابط
     central_conn.execute(
         """INSERT OR REPLACE INTO company_shared_links
            (shared_item_id, company_id, local_item_id, is_synced)
@@ -304,7 +288,7 @@ def sync_shared_item(central_conn,
                      shared_item_id: int):
     """
     يحدّث بيانات العنصر المشترك في كل الشركات المرتبطة به.
-    يجلب القيم الجديدة من الشركة المصدر ويكتبها في الشركات الأخرى.
+    source_erp_conn: shared connection — لا تُغلقه
     """
     shared = central_conn.execute(
         "SELECT * FROM shared_items WHERE id=?", (shared_item_id,)
@@ -325,6 +309,7 @@ def sync_shared_item(central_conn,
         target_path = get_company_db_path(lnk["company_id"], "erp")
         if not os.path.exists(target_path):
             continue
+        # هذا connection مؤقت — يُغلق بعد الانتهاء
         target_erp = sqlite3.connect(target_path)
         target_erp.row_factory     = sqlite3.Row
         target_erp.isolation_level = None
@@ -399,7 +384,6 @@ def _copy_item_to_company(source_erp, target_erp,
         """, (source_item_id,)).fetchone()
         if not row:
             raise ValueError(f"عملية التشغيل {source_item_id} غير موجودة")
-        # نسخ الماكينة أولاً لو مش موجودة
         existing_machine = target_erp.execute(
             "SELECT id FROM machines WHERE name=?", (row["machine_name"],)
         ).fetchone()

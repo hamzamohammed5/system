@@ -13,6 +13,10 @@ db/shared/shared_items_bridge.py
   from db.shared.shared_items_bridge import SharedItemsBridge
   bridge = SharedItemsBridge(company_id)
   all_raws = bridge.fetch_items_by_type_with_shared("raw")
+
+ملاحظة:
+  لا نستدعي central.close() لأن get_central_connection() ترجع connection
+  جديد في كل مرة — وهو مسؤوليتنا نقفله بعد الاستخدام المباشر فقط.
 """
 
 import json
@@ -51,12 +55,15 @@ class SharedItemsBridge:
         self.company_id = company_id
 
     def _get_central_conn(self):
-        """يفتح connection لـ companies.db."""
+        """
+        يفتح connection جديد لـ companies.db.
+        المستدعي مسؤول عن إغلاقه بعد الاستخدام المباشر.
+        """
         from db.companies.companies_schema import get_central_connection
         return get_central_connection()
 
     def _get_erp_conn(self):
-        """يرجع erp connection للشركة الحالية."""
+        """يرجع erp connection للشركة الحالية (shared — لا تُغلقه)."""
         from db.companies.company_state import company_state
         return company_state.get_erp_conn()
 
@@ -71,14 +78,16 @@ class SharedItemsBridge:
         """
         try:
             central = self._get_central_conn()
-            rows = central.execute("""
-                SELECT s.id, s.name, s.shared_type, s.data, s.updated_at
-                FROM company_shared_links lnk
-                JOIN shared_items s ON s.id = lnk.shared_item_id
-                WHERE lnk.company_id = ? AND s.shared_type = ?
-                ORDER BY s.name
-            """, (self.company_id, shared_type)).fetchall()
-            central.close()
+            try:
+                rows = central.execute("""
+                    SELECT s.id, s.name, s.shared_type, s.data, s.updated_at
+                    FROM company_shared_links lnk
+                    JOIN shared_items s ON s.id = lnk.shared_item_id
+                    WHERE lnk.company_id = ? AND s.shared_type = ?
+                    ORDER BY s.name
+                """, (self.company_id, shared_type)).fetchall()
+            finally:
+                central.close()
 
             result = []
             for row in rows:
@@ -93,8 +102,8 @@ class SharedItemsBridge:
     def _row_to_item(self, row, data: dict, shared_type: str) -> dict:
         """يحول صف shared_items إلى dict يشبه صف items."""
         base = {
-            "id":             f"shared:{row['id']}",   # ID مركب لتمييزه
-            "shared_item_id": row["id"],               # الـ ID الحقيقي في companies.db
+            "id":             f"shared:{row['id']}",
+            "shared_item_id": row["id"],
             "name":           row["name"],
             "type":           shared_type,
             "category_id":    None,
@@ -148,12 +157,14 @@ class SharedItemsBridge:
         """يجيب عنصر مشترك واحد كـ dict."""
         try:
             central = self._get_central_conn()
-            row = central.execute(
-                "SELECT id, name, shared_type, data, updated_at "
-                "FROM shared_items WHERE id=?",
-                (shared_item_id,)
-            ).fetchone()
-            central.close()
+            try:
+                row = central.execute(
+                    "SELECT id, name, shared_type, data, updated_at "
+                    "FROM shared_items WHERE id=?",
+                    (shared_item_id,)
+                ).fetchone()
+            finally:
+                central.close()
             if not row:
                 return None
             d = _decode(row["data"])
@@ -170,16 +181,14 @@ class SharedItemsBridge:
         يحدث بيانات عنصر مشترك في companies.db.
         التحديث يتعكس فوراً على كل الشركات لأنها تقرأ من companies.db مباشرة.
         """
+        central = self._get_central_conn()
         try:
-            central = self._get_central_conn()
             central.execute(
                 "UPDATE shared_items SET name=?, data=?, updated_at=datetime('now') WHERE id=?",
                 (name, _encode(data), shared_item_id)
             )
+        finally:
             central.close()
-        except Exception as e:
-            print(f"[SharedItemsBridge] update_shared_item error: {e}")
-            raise
 
     # ══════════════════════════════════════════════════════
     # ربط / فك ربط
@@ -187,39 +196,37 @@ class SharedItemsBridge:
 
     def link_shared_item(self, shared_item_id: int):
         """يربط عنصر مشترك بالشركة الحالية."""
+        central = self._get_central_conn()
         try:
-            central = self._get_central_conn()
             central.execute(
                 "INSERT OR IGNORE INTO company_shared_links (shared_item_id, company_id) VALUES (?, ?)",
                 (shared_item_id, self.company_id)
             )
+        finally:
             central.close()
-        except Exception as e:
-            print(f"[SharedItemsBridge] link error: {e}")
-            raise
 
     def unlink_shared_item(self, shared_item_id: int):
         """يفك ربط عنصر مشترك من الشركة الحالية."""
+        central = self._get_central_conn()
         try:
-            central = self._get_central_conn()
             central.execute(
                 "DELETE FROM company_shared_links WHERE shared_item_id=? AND company_id=?",
                 (shared_item_id, self.company_id)
             )
+        finally:
             central.close()
-        except Exception as e:
-            print(f"[SharedItemsBridge] unlink error: {e}")
-            raise
 
     def is_linked(self, shared_item_id: int) -> bool:
         """هل الشركة الحالية مشتركة في هذا العنصر؟"""
         try:
             central = self._get_central_conn()
-            row = central.execute(
-                "SELECT 1 FROM company_shared_links WHERE shared_item_id=? AND company_id=?",
-                (shared_item_id, self.company_id)
-            ).fetchone()
-            central.close()
+            try:
+                row = central.execute(
+                    "SELECT 1 FROM company_shared_links WHERE shared_item_id=? AND company_id=?",
+                    (shared_item_id, self.company_id)
+                ).fetchone()
+            finally:
+                central.close()
             return row is not None
         except Exception:
             return False

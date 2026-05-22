@@ -1,6 +1,8 @@
 """
 db/shared/items_repo.py  (مع دعم variant_id في BOM + العناصر المشتركة)
 ================
+
+إصلاح: central.close() في _fetch_shared_for_type
 """
 
 import json
@@ -33,16 +35,12 @@ def fetch_items_by_type_with_shared(conn, item_type: str,
     """
     يجيب عناصر النوع المطلوب (محلية + مشتركة).
     العناصر المشتركة تظهر مع is_shared=True وcategory_name="🔗 مشترك".
-
-    company_id: لو None يحاول يجيبه من company_state
     """
-    # 1. العناصر المحلية
     local = [dict(r) for r in fetch_items_by_type(conn, item_type)]
     for item in local:
         item["is_shared"]      = False
         item["shared_item_id"] = None
 
-    # 2. العناصر المشتركة
     shared = _fetch_shared_for_type(item_type, company_id)
 
     return local + shared
@@ -59,15 +57,16 @@ def _fetch_shared_for_type(item_type: str, company_id: int = None) -> list:
 
         from db.companies.companies_schema import get_central_connection
         central = get_central_connection()
-
-        rows = central.execute("""
-            SELECT s.id, s.name, s.shared_type, s.data, s.updated_at
-            FROM company_shared_links lnk
-            JOIN shared_items s ON s.id = lnk.shared_item_id
-            WHERE lnk.company_id = ? AND s.shared_type = ?
-            ORDER BY s.name
-        """, (company_id, item_type)).fetchall()
-        central.close()
+        try:
+            rows = central.execute("""
+                SELECT s.id, s.name, s.shared_type, s.data, s.updated_at
+                FROM company_shared_links lnk
+                JOIN shared_items s ON s.id = lnk.shared_item_id
+                WHERE lnk.company_id = ? AND s.shared_type = ?
+                ORDER BY s.name
+            """, (company_id, item_type)).fetchall()
+        finally:
+            central.close()
 
         result = []
         for row in rows:
@@ -161,11 +160,13 @@ def _fetch_shared_item_as_row(shared_item_id: int):
     try:
         from db.companies.companies_schema import get_central_connection
         central = get_central_connection()
-        row = central.execute(
-            "SELECT id, name, shared_type, data FROM shared_items WHERE id=?",
-            (shared_item_id,)
-        ).fetchone()
-        central.close()
+        try:
+            row = central.execute(
+                "SELECT id, name, shared_type, data FROM shared_items WHERE id=?",
+                (shared_item_id,)
+            ).fetchone()
+        finally:
+            central.close()
         if not row:
             return None
         try:
@@ -173,7 +174,6 @@ def _fetch_shared_item_as_row(shared_item_id: int):
         except Exception:
             data = {}
 
-        # نبني dict يشبه صف items
         return _SharedItemRow(
             id=f"shared:{row['id']}",
             name=row["name"],
