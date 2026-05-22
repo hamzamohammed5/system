@@ -2,11 +2,6 @@
 ui/tabs/pricing/offers/offers_table.py
 ================================
 _OffersTable — جدول العروض المحفوظة مع فلتر وأزرار تعديل/حذف.
-
-يعرض:
-  - شريط فلتر بالاسم والتصنيف
-  - جدول يحتوي على بيانات العرض والملخص المالي
-  - أزرار تعديل وحذف
 """
 
 from PyQt5.QtWidgets import (
@@ -16,7 +11,7 @@ from PyQt5.QtWidgets import (
 from PyQt5.QtGui import QColor
 
 from db.pricing.offers_repo import fetch_all_offers, calc_offer_summary
-from ui.helpers     import (
+from ui.helpers import (
     make_table, buttons_row, section_label, danger_button,
 )
 from ui.widgets.shared.filter_bar import FilterBar
@@ -37,6 +32,18 @@ class _OffersTable(QWidget):
         self._load()
         bus.data_changed.connect(self._load)
 
+    # ── connection صالح دايماً ────────────────────────────
+
+    def _live_conn(self):
+        if self.conn is not None:
+            try:
+                self.conn.execute("SELECT 1")
+                return self.conn
+            except Exception:
+                pass
+        from db.companies.company_state import company_state
+        return company_state.get_erp_conn()
+
     # ══════════════════════════════════════════════════════
     # بناء الواجهة
     # ══════════════════════════════════════════════════════
@@ -48,7 +55,7 @@ class _OffersTable(QWidget):
 
         root.addWidget(section_label("─── العروض المحفوظة ───"))
 
-        self._filter = FilterBar(self.conn, scope="all")
+        self._filter = FilterBar(self._live_conn(), scope="all")
         self._filter.filter_changed.connect(self._apply_filter)
         root.addWidget(self._filter)
 
@@ -57,7 +64,6 @@ class _OffersTable(QWidget):
              "خصم %", "إجمالي السعر", "سعر البيع", "التكلفة", "الربح", "التاريخ"],
             stretch_col=1
         )
-        hh = self.table.horizontalHeader()
         self.table.setColumnWidth(0, 35)
         self.table.setColumnWidth(1, 140)
         self.table.setColumnWidth(2, 90)
@@ -94,16 +100,29 @@ class _OffersTable(QWidget):
             self._on_select(oid)
 
     def _load(self):
-        self._all_rows = list(fetch_all_offers(self.conn))
+        try:
+            conn = self._live_conn()
+            self._all_rows = list(fetch_all_offers(conn))
+        except Exception:
+            self._all_rows = []
         self._apply_filter()
 
     def _apply_filter(self):
         self.table.setRowCount(0)
         shown = 0
+        try:
+            conn = self._live_conn()
+        except Exception:
+            self._filter.set_count(0, 0)
+            return
+
         for offer in self._all_rows:
             if not self._filter.match(offer["name"], offer["category_id"]):
                 continue
-            s = calc_offer_summary(self.conn, offer["id"])
+            try:
+                s = calc_offer_summary(conn, offer["id"])
+            except Exception:
+                s = {}
             r = self.table.rowCount()
             self.table.insertRow(r)
             self.table.setItem(r, 0, QTableWidgetItem(str(offer["id"])))

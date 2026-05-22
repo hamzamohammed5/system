@@ -2,12 +2,6 @@
 ui/tabs/pricing/offers/offer_details.py
 ================================
 _OfferDetails — لوحة عرض تفاصيل العرض المختار.
-
-تعرض:
-  - عنوان العرض مع الخصم والتاريخ والتصنيف
-  - صناديق إحصائيات (إجمالي، خصم، بيع، تكلفة، ربح)
-  - جدول تفصيلي بسطور المنتجات
-  - ملاحظات العرض
 """
 
 from PyQt5.QtWidgets import (
@@ -22,7 +16,6 @@ from db.pricing.offers_repo import calc_offer_summary
 
 
 def _stat_box(title: str, color: str = "#1565c0"):
-    """يرجع (QFrame, QLabel_value) — بطاقة إحصائية."""
     frame = QFrame()
     frame.setStyleSheet("""
         QFrame {
@@ -50,7 +43,6 @@ def _stat_box(title: str, color: str = "#1565c0"):
 
 
 class _OfferDetails(QFrame):
-    """لوحة تفاصيل العرض المختار من الجدول."""
 
     def __init__(self, conn, parent=None):
         super().__init__(parent)
@@ -64,16 +56,23 @@ class _OfferDetails(QFrame):
         """)
         self._build()
 
-    # ══════════════════════════════════════════════════════
-    # بناء الواجهة
-    # ══════════════════════════════════════════════════════
+    # ── connection صالح دايماً ────────────────────────────
+
+    def _live_conn(self):
+        if self.conn is not None:
+            try:
+                self.conn.execute("SELECT 1")
+                return self.conn
+            except Exception:
+                pass
+        from db.companies.company_state import company_state
+        return company_state.get_erp_conn()
 
     def _build(self):
         root = QVBoxLayout(self)
         root.setContentsMargins(12, 10, 12, 10)
         root.setSpacing(8)
 
-        # ── العنوان ──
         self.lbl_title = QLabel("اختر عرضاً لعرض تفاصيله")
         self.lbl_title.setStyleSheet(
             "font-weight:bold; color:#e65100; font-size:13px;"
@@ -82,7 +81,6 @@ class _OfferDetails(QFrame):
         self.lbl_title.setAlignment(Qt.AlignCenter)
         root.addWidget(self.lbl_title)
 
-        # ── صناديق الإحصائيات ──
         stats_row = QHBoxLayout()
         stats_row.setSpacing(6)
         f1, self.sl_listed = _stat_box("إجمالي السعر قبل الخصم", "#1565c0")
@@ -94,7 +92,6 @@ class _OfferDetails(QFrame):
             stats_row.addWidget(f, stretch=1)
         root.addLayout(stats_row)
 
-        # ── جدول تفاصيل السطور ──
         self.table = QTableWidget()
         self.table.setColumnCount(7)
         self.table.setHorizontalHeaderLabels([
@@ -114,7 +111,6 @@ class _OfferDetails(QFrame):
         self.table.setMinimumHeight(120)
         root.addWidget(self.table, stretch=1)
 
-        # ── ملاحظات ──
         self.lbl_notes = QLabel("")
         self.lbl_notes.setStyleSheet(
             "font-size:10px; color:#999; background:transparent; border:none;"
@@ -122,23 +118,21 @@ class _OfferDetails(QFrame):
         self.lbl_notes.setWordWrap(True)
         root.addWidget(self.lbl_notes)
 
-    # ══════════════════════════════════════════════════════
-    # تحميل بيانات عرض
-    # ══════════════════════════════════════════════════════
-
     def load(self, offer_id: int):
-        s = calc_offer_summary(self.conn, offer_id)
+        try:
+            conn = self._live_conn()
+            s = calc_offer_summary(conn, offer_id)
+        except Exception:
+            return
         if not s:
             return
 
-        # ── العنوان ──
         cat_part = f"  │  🏷 {s['category_name']}" if s.get("category_name") else ""
         self.lbl_title.setText(
             f"📋  {s['offer_name']}  —  خصم {s['discount']:.1f}%"
             f"  │  {s['created_at']}{cat_part}"
         )
 
-        # ── جدول السطور ──
         self.table.setRowCount(0)
         for line in s["lines"]:
             r = self.table.rowCount()
@@ -178,7 +172,6 @@ class _OfferDetails(QFrame):
             else:
                 self.table.setItem(r, 6, QTableWidgetItem("─"))
 
-        # ── الإحصائيات ──
         disc_pct = s["discount"]
         disc_amt = s["total_listed"] - s["sell_price"]
 
