@@ -1,14 +1,10 @@
 """
 ui/tabs/companies/shared_items_manager_helper/_add_shared_item_dialog.py
 ==========================================================================
-PublishAsSharedDialog — نافذة نشر عنصر محلي كعنصر مشترك بين الشركات.
-
-تُفتح من زر «📤 نشر كمشترك» في جداول الخامات / الماكينات / عمليات العمالة.
-
-الخطوات:
-  1. تأكيد الاسم والبيانات
-  2. اختيار الشركات المراد مشاركتها معهم
-  3. حفظ في companies.db
+إصلاح: حفظ source_company_id و category_name في data عند النشر
+عشان:
+  1. نعرف مين هو المصدر ونتجنب إظهار العنصر مرتين في الشركة الأصلية
+  2. نعرض التصنيف الحقيقي بدل "مشترك"
 """
 
 from PyQt5.QtWidgets import (
@@ -36,20 +32,6 @@ def _spin(max_=9999999, dec=4):
 
 
 class PublishAsSharedDialog(QDialog):
-    """
-    نافذة نشر عنصر كعنصر مشترك.
-
-    الاستخدام:
-        dlg = PublishAsSharedDialog(
-            central_conn=central,
-            shared_type="raw",
-            item_name="قطن أبيض",
-            item_data={"price": 50.0, "total_qty": 10.0},
-            parent=self,
-        )
-        dlg.exec_()
-    """
-
     def __init__(self, central_conn, shared_type: str,
                  item_name: str, item_data: dict, parent=None):
         super().__init__(parent)
@@ -64,16 +46,11 @@ class PublishAsSharedDialog(QDialog):
         self.setLayoutDirection(Qt.RightToLeft)
         self._build()
 
-    # ══════════════════════════════════════════════════════
-    # بناء الواجهة
-    # ══════════════════════════════════════════════════════
-
     def _build(self):
         root = QVBoxLayout(self)
         root.setSpacing(12)
         root.setContentsMargins(16, 16, 16, 12)
 
-        # ── شرح ──
         lbl_hint = QLabel(
             "💡  العنصر المشترك يُحفظ مركزياً ويظهر في كل الشركات المختارة.\n"
             "    أي تعديل على بياناته سيتعكس فوراً على كل الشركات."
@@ -85,7 +62,6 @@ class PublishAsSharedDialog(QDialog):
         )
         root.addWidget(lbl_hint)
 
-        # ── بيانات العنصر ──
         data_grp = QGroupBox("بيانات العنصر المشترك")
         data_grp.setStyleSheet(
             "QGroupBox { font-weight:bold; border:1px solid #e0e0e0;"
@@ -106,7 +82,6 @@ class PublishAsSharedDialog(QDialog):
 
         root.addWidget(data_grp)
 
-        # ── اختيار الشركات ──
         cos_grp = QGroupBox("مشاركة مع الشركات")
         cos_grp.setStyleSheet(
             "QGroupBox { font-weight:bold; border:1px solid #e0e0e0;"
@@ -127,7 +102,6 @@ class PublishAsSharedDialog(QDialog):
 
         all_companies = fetch_all_companies(self._conn)
 
-        # اعرف الشركة الحالية
         try:
             from db.companies.company_state import company_state
             current_co_id = company_state.company_id
@@ -138,13 +112,11 @@ class PublishAsSharedDialog(QDialog):
             item = QListWidgetItem(co["name"])
             item.setData(Qt.UserRole, co["id"])
             item.setFlags(item.flags() | Qt.ItemIsUserCheckable)
-            # الشركة الحالية محددة افتراضياً
             item.setCheckState(
                 Qt.Checked if co["id"] == current_co_id else Qt.Unchecked
             )
             self.lst_companies.addItem(item)
 
-        # أزرار تحديد سريع
         quick_row = QHBoxLayout()
         btn_all  = QPushButton("✅ الكل")
         btn_none = QPushButton("☐ لا شيء")
@@ -161,7 +133,6 @@ class PublishAsSharedDialog(QDialog):
 
         root.addWidget(cos_grp)
 
-        # ── أزرار ──
         btns = QDialogButtonBox()
         btn_ok     = btns.addButton("📤  نشر العنصر", QDialogButtonBox.AcceptRole)
         btn_cancel = btns.addButton("✖  إلغاء",        QDialogButtonBox.RejectRole)
@@ -219,17 +190,20 @@ class PublishAsSharedDialog(QDialog):
                 Qt.Checked if checked else Qt.Unchecked
             )
 
-    # ══════════════════════════════════════════════════════
-    # نشر
-    # ══════════════════════════════════════════════════════
-
     def _publish(self):
         name = self.inp_name.text().strip()
         if not name:
             QMessageBox.warning(self, "تنبيه", "أدخل اسم العنصر")
             return
 
-        # بناء data
+        # ── جلب الشركة الحالية (المصدر) ──
+        try:
+            from db.companies.company_state import company_state
+            current_co_id = company_state.company_id
+        except Exception:
+            current_co_id = None
+
+        # ── بناء data مع source_company_id و category_name ──
         data = {}
         t = self._shared_type
         if t == "raw":
@@ -247,6 +221,13 @@ class PublishAsSharedDialog(QDialog):
             data["machine_name"]  = self._item_data.get("machine_name", "")
             data["rate_per_hour"] = self._item_data.get("rate_per_hour", 0.0)
             data["rate_per_unit"] = self._item_data.get("rate_per_unit", 0.0)
+
+        # ← إصلاح: احفظ مصدر العنصر والتصنيف الحقيقي
+        if current_co_id is not None:
+            data["source_company_id"] = current_co_id
+        cat_name = self._item_data.get("category_name")
+        if cat_name:
+            data["category_name"] = cat_name
 
         # تحقق من وجود تكرار
         existing = fetch_all_shared_items(self._conn, t)
@@ -270,7 +251,6 @@ class PublishAsSharedDialog(QDialog):
                     return
                 break
 
-        # إنشاء عنصر جديد
         shared_id = insert_shared_item(self._conn, name, t, data)
         self._link_companies(shared_id)
         bus.data_changed.emit()
