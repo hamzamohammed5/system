@@ -1,5 +1,5 @@
 """
-ui/tabs/companies/shared_items_manager_helper/_add_sharedItem_dialog.py
+ui/tabs/companies/shared_items_manager_helper/_add_shared_item_dialog.py
 ==========================================================================
 PublishAsSharedDialog — نافذة نشر عنصر محلي كعنصر مشترك بين الشركات.
 

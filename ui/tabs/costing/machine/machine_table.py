@@ -201,7 +201,7 @@ class _MachineTable(QWidget):
                 get_central_connection, create_central_tables
             )
             from db.companies.shared_items_repo import create_shared_items_tables
-            from ui.tabs.companies.shared_items_manager_helper._add_sharedItem_dialog import (
+            from ui.tabs.companies.shared_items_manager_helper._add_shared_item_dialog import (
                 PublishAsSharedDialog
             )
             central = get_central_connection()
