@@ -3,6 +3,11 @@ ui/app_settings.py
 ==================
 يحفظ ويطبّق إعداد حجم الخط على التطبيق كله.
 تصميم محسّن — Warm Neutral System مع تفاصيل دقيقة.
+
+الإصلاح:
+    حُذف conn.close() من get_font_size() و set_font_size()
+    لأن get_connection() يرجع shared connection من company_state
+    ولا يجب إغلاقه — الإغلاق يحدث فقط عند تغيير الشركة النشطة.
 """
 
 from PyQt5.QtWidgets import QApplication
@@ -72,6 +77,8 @@ def get_font_size() -> int:
     """
     يقرأ حجم الخط من إعدادات الشركة النشطة.
     لو ما فيش شركة نشطة بعد → يرجع DEFAULT_FONT_SIZE مباشرة.
+
+    ملاحظة: لا يُغلق الـ connection لأنه shared connection من company_state.
     """
     try:
         from db.shared.connection import get_connection
@@ -95,11 +102,15 @@ def get_font_size() -> int:
         return val
     except Exception:
         return DEFAULT_FONT_SIZE
-    finally:
-        conn.close()
+    # لا conn.close() — الـ connection shared ويُدار بواسطة company_state
 
 
 def set_font_size(size: int):
+    """
+    يحفظ حجم الخط في إعدادات الشركة النشطة.
+
+    ملاحظة: لا يُغلق الـ connection لأنه shared connection من company_state.
+    """
     size = max(MIN_FONT_SIZE, min(MAX_FONT_SIZE, size))
     try:
         from db.shared.connection import get_connection
@@ -111,8 +122,9 @@ def set_font_size(size: int):
     try:
         from db.shared.settings_repo import set_setting
         set_setting(conn, "font_size", size)
-    finally:
-        conn.close()
+    except Exception:
+        pass
+    # لا conn.close() — الـ connection shared ويُدار بواسطة company_state
 
 
 def fs(base: int, delta: int = 0) -> int:
@@ -146,7 +158,7 @@ def _build_stylesheet(base: int) -> str:
     outline: none;
 }}
 
-QMainWindow, QDialog {{
+QMainWindow {{
     background: {c['bg_page']};
 }}
 
@@ -154,7 +166,38 @@ QWidget {{
     background: transparent;
 }}
 
-/* ── إصلاح QMessageBox و QDialog الداخلية ── */
+/* ══ إصلاح شامل للـ Dialogs والـ MessageBoxes ══
+   المشكلة: QWidget {{ background: transparent }} بتخلي
+   محتوى الـ dialogs شفافاً فوق خلفية سوداء.
+   الحل: نعيد تعيين خلفية بيضاء لكل QDialog وما بداخله.
+══════════════════════════════════════════════ */
+
+QDialog {{
+    background: {c['bg_surface']};
+}}
+
+QDialog QWidget {{
+    background: {c['bg_surface']};
+}}
+
+QDialog QLabel {{
+    background: transparent;
+    color: {c['text_primary']};
+}}
+
+QDialog QGroupBox {{
+    background: {c['bg_surface']};
+}}
+
+QDialog QScrollArea {{
+    background: {c['bg_surface']};
+    border: none;
+}}
+
+QDialog QScrollArea > QWidget > QWidget {{
+    background: {c['bg_surface']};
+}}
+
 QMessageBox {{
     background: {c['bg_surface']};
 }}
@@ -170,10 +213,6 @@ QMessageBox QLabel {{
 
 QMessageBox QPushButton {{
     min-width: 70px;
-}}
-
-QDialog > QWidget {{
-    background: {c['bg_surface']};
 }}
 
 /* ══════════════════════════════════════════════
@@ -649,19 +688,33 @@ QToolTip {{
 }}
 
 /* ══════════════════════════════════════════════
-   MessageBox & Dialog
+   MessageBox & Dialog (تكرار للأولوية)
 ══════════════════════════════════════════════ */
 QMessageBox {{
     background: {c['bg_surface']};
 }}
 
+QMessageBox QWidget {{
+    background: {c['bg_surface']};
+}}
+
 QMessageBox QLabel {{
+    background: transparent;
     color: {c['text_primary']};
     font-size: {normal}pt;
 }}
 
 QDialog {{
     background: {c['bg_surface']};
+}}
+
+QDialog QWidget {{
+    background: {c['bg_surface']};
+}}
+
+QDialog QLabel {{
+    background: transparent;
+    color: {c['text_primary']};
 }}
 
 /* ══════════════════════════════════════════════

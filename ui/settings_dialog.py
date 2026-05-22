@@ -2,9 +2,15 @@
 ui/settings_dialog.py
 =====================
 نافذة الإعدادات — حجم الخط + مسار GIMP + إدارة وحدات القياس.
+
+الإصلاح:
+    استبدل get_connection() + conn.close() بـ company_state مباشرة
+    لأن get_connection() يرجع shared connection لا يجب إغلاقه.
+    بدلاً من ذلك نفتح connection مستقل مؤقت لعمليات الإعدادات.
 """
 
 import os
+import sqlite3
 from PyQt5.QtCore    import Qt
 from PyQt5.QtWidgets import (
     QDialog, QVBoxLayout, QHBoxLayout,
@@ -15,12 +21,31 @@ from PyQt5.QtWidgets import (
 )
 
 from ui.app_settings import get_font_size, set_font_size, apply_font
-from db.shared.connection import get_connection
-from db.shared.settings_repo import get_setting, set_setting
 from ui.widgets.shared.unit_combo import (
     load_units, add_unit, remove_unit,
     reset_units_to_default, _DEFAULT_UNITS,
 )
+
+
+def _get_settings_conn():
+    """
+    يفتح connection مستقل مؤقت لقراءة/كتابة الإعدادات.
+    يُغلق بواسطة المُستدعي بعد الانتهاء.
+    استخدم _make_conn() مباشرة بدل get_connection() الـ shared.
+    """
+    try:
+        from db.companies.company_state import company_state
+        from db.companies.companies_schema import get_company_db_path
+        if not company_state.is_ready:
+            return None
+        path = get_company_db_path(company_state.company_id, "erp")
+        conn = sqlite3.connect(path)
+        conn.row_factory     = sqlite3.Row
+        conn.isolation_level = None
+        conn.execute("PRAGMA foreign_keys = ON")
+        return conn
+    except Exception:
+        return None
 
 
 class SettingsDialog(QDialog):
@@ -277,22 +302,29 @@ class SettingsDialog(QDialog):
     # ── تحميل الإعدادات ──────────────────────────────────
 
     def _load_settings(self):
-        try:
-            conn = get_connection()
-            path = get_setting(conn, "gimp_path", "")
-            conn.close()
-            self._inp_gimp.setText(path)
-        except Exception:
-            pass
+        conn = _get_settings_conn()
+        if conn:
+            try:
+                from db.shared.settings_repo import get_setting
+                path = get_setting(conn, "gimp_path", "")
+                self._inp_gimp.setText(path)
+            except Exception:
+                pass
+            finally:
+                conn.close()   # connection مستقل مؤقت — يُغلق بأمان
         self._reload_units_list()
 
     def _reload_units_list(self):
         self._units_list.clear()
-        try:
-            conn = get_connection()
-            units = load_units(conn)
-            conn.close()
-        except Exception:
+        conn = _get_settings_conn()
+        if conn:
+            try:
+                units = load_units(conn)
+            except Exception:
+                units = list(_DEFAULT_UNITS)
+            finally:
+                conn.close()   # connection مستقل مؤقت — يُغلق بأمان
+        else:
             units = list(_DEFAULT_UNITS)
 
         default_vals = {u[0] for u in _DEFAULT_UNITS}
@@ -321,13 +353,17 @@ class SettingsDialog(QDialog):
         )
         if not ok2 or not label.strip():
             return
+        conn = _get_settings_conn()
+        if not conn:
+            QMessageBox.warning(self, "تنبيه", "لا توجد شركة نشطة")
+            return
         try:
-            conn = get_connection()
             result = add_unit(conn, val, label.strip())
-            conn.close()
         except Exception as e:
             QMessageBox.warning(self, "خطأ", str(e))
             return
+        finally:
+            conn.close()
         if result:
             self._reload_units_list()
         else:
@@ -352,13 +388,16 @@ class SettingsDialog(QDialog):
             self, "تأكيد الحذف", f"حذف الوحدة «{item.text()}»؟",
             QMessageBox.Yes | QMessageBox.No
         ) == QMessageBox.Yes:
+            conn = _get_settings_conn()
+            if not conn:
+                return
             try:
-                conn = get_connection()
                 remove_unit(conn, val)
-                conn.close()
             except Exception as e:
                 QMessageBox.warning(self, "خطأ", str(e))
                 return
+            finally:
+                conn.close()
             self._reload_units_list()
 
     def _reset_units(self):
@@ -367,13 +406,16 @@ class SettingsDialog(QDialog):
             "حذف كل الوحدات المضافة والرجوع للقائمة الافتراضية؟",
             QMessageBox.Yes | QMessageBox.No
         ) == QMessageBox.Yes:
+            conn = _get_settings_conn()
+            if not conn:
+                return
             try:
-                conn = get_connection()
                 reset_units_to_default(conn)
-                conn.close()
             except Exception as e:
                 QMessageBox.warning(self, "خطأ", str(e))
                 return
+            finally:
+                conn.close()
             self._reload_units_list()
 
     # ── تصفح لملف GIMP ───────────────────────────────────
@@ -408,12 +450,16 @@ class SettingsDialog(QDialog):
         size = self._slider.value()
         set_font_size(size)
         apply_font(self._app, size)   # ← التطبيق على الواجهة هنا فقط
-        try:
-            conn = get_connection()
-            set_setting(conn, "gimp_path", self._inp_gimp.text().strip())
-            conn.close()
-        except Exception:
-            pass
+
+        conn = _get_settings_conn()
+        if conn:
+            try:
+                from db.shared.settings_repo import set_setting
+                set_setting(conn, "gimp_path", self._inp_gimp.text().strip())
+            except Exception:
+                pass
+            finally:
+                conn.close()
         self.accept()
 
     # ── إلغاء ─────────────────────────────────────────────
