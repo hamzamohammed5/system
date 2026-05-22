@@ -2,6 +2,9 @@
 ui/widgets/shared/category_combo.py
 =============================
 CategoryCombo — QComboBox يعرض التصنيفات بشكل هرمي (indent).
+
+الإصلاح: استخدام live_conn بدل self.conn مباشرة عشان لما تتغير
+الشركة النشطة ويتغلق الـ connection القديم، الـ combo يشتغل صح.
 """
 
 from PyQt5.QtWidgets import QComboBox
@@ -22,19 +25,48 @@ class CategoryCombo(QComboBox):
     """
     def __init__(self, conn, scope: str = "all", parent=None):
         super().__init__(parent)
-        self.conn  = conn
-        self.scope = scope
+        self._conn  = conn
+        self.scope  = scope
         self.refresh()
         bus.data_changed.connect(self.refresh)
 
+    # ── connection صالح دايماً ────────────────────────────
+
+    def _live_conn(self):
+        """
+        يرجع connection حي:
+        - لو self._conn صالح → استخدمه
+        - لو لا → اجلب من company_state
+        """
+        if self._conn is not None:
+            try:
+                self._conn.execute("SELECT 1")
+                return self._conn
+            except Exception:
+                pass
+        from db.companies.company_state import company_state
+        return company_state.get_erp_conn()
+
+    # ── refresh ───────────────────────────────────────────
+
     def refresh(self):
+        try:
+            conn = self._live_conn()
+        except Exception:
+            return
+
         prev = self.currentData()
         self.blockSignals(True)
         self.clear()
         self.addItem("— الكل —", None)
 
-        rows  = fetch_all_categories(self.conn, self.scope)
-        tree  = build_tree(rows)
+        try:
+            rows = fetch_all_categories(conn, self.scope)
+        except Exception:
+            self.blockSignals(False)
+            return
+
+        tree = build_tree(rows)
         self._add_nodes(tree, depth=0)
 
         # استعادة الاختيار السابق

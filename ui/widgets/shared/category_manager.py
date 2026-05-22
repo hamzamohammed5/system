@@ -3,6 +3,9 @@ ui/widgets/shared/category_manager.py
 ===============================
 CategoryManager — شجرة QTreeWidget لإدارة التصنيفات الهرمية.
 
+الإصلاح: استخدام _live_conn بدل self.conn مباشرة عشان لما تتغير
+الشركة النشطة ويتغلق الـ connection القديم، الـ manager يشتغل صح.
+
 التقسيم:
   category_combo.py → CategoryCombo
   category_form.py  → _CategoryForm
@@ -37,6 +40,27 @@ class CategoryManager(QWidget):
         self._build()
         self._load()
         bus.data_changed.connect(self._load)
+
+    # ── connection صالح دايماً ────────────────────────────
+
+    def _live_conn(self):
+        """
+        يرجع connection حي:
+        - لو self.conn صالح → استخدمه
+        - لو لا → اجلب من company_state
+        """
+        if self.conn is not None:
+            try:
+                self.conn.execute("SELECT 1")
+                return self.conn
+            except Exception:
+                pass
+        from db.companies.company_state import company_state
+        return company_state.get_erp_conn()
+
+    # ══════════════════════════════════════════════════════
+    # بناء الواجهة
+    # ══════════════════════════════════════════════════════
 
     def _build(self):
         root = QVBoxLayout(self)
@@ -74,7 +98,16 @@ class CategoryManager(QWidget):
         self._form = _CategoryForm(self.conn, self.scope, self.tree)
         root.addWidget(self._form)
 
+    # ══════════════════════════════════════════════════════
+    # تحميل البيانات
+    # ══════════════════════════════════════════════════════
+
     def _load(self):
+        try:
+            conn = self._live_conn()
+        except Exception:
+            return
+
         expanded = set()
 
         def _collect_expanded(item):
@@ -87,12 +120,17 @@ class CategoryManager(QWidget):
             _collect_expanded(self.tree.topLevelItem(i))
 
         self.tree.clear()
-        rows = fetch_all_categories(self.conn, self.scope)
+
+        try:
+            rows = fetch_all_categories(conn, self.scope)
+        except Exception:
+            return
+
         tree = build_tree(rows)
-        self._add_tree_items(tree, parent=None, expanded=expanded)
+        self._add_tree_items(tree, parent=None, expanded=expanded, conn=conn)
         self.tree.expandAll()
 
-    def _add_tree_items(self, nodes, parent, expanded):
+    def _add_tree_items(self, nodes, parent, expanded, conn):
         for node in nodes:
             item = QTreeWidgetItem()
             item.setText(0, node["name"])
@@ -102,8 +140,11 @@ class CategoryManager(QWidget):
             child_count = len(node["children"])
             item.setText(1, str(child_count) if child_count else "—")
 
-            counts = count_category_items(self.conn, node["id"])
-            total  = sum(counts.values())
+            try:
+                counts = count_category_items(conn, node["id"])
+                total  = sum(counts.values())
+            except Exception:
+                total = 0
             item.setText(2, str(total) if total else "—")
 
             if parent is None:
@@ -115,7 +156,11 @@ class CategoryManager(QWidget):
                 item.setExpanded(True)
 
             if node["children"]:
-                self._add_tree_items(node["children"], item, expanded)
+                self._add_tree_items(node["children"], item, expanded, conn)
+
+    # ══════════════════════════════════════════════════════
+    # إجراءات
+    # ══════════════════════════════════════════════════════
 
     def _selected_id(self):
         items = self.tree.selectedItems()
@@ -138,12 +183,19 @@ class CategoryManager(QWidget):
         if cat_id is None:
             QMessageBox.information(self, "تنبيه", "اختر تصنيفاً أولاً")
             return
-        cat = fetch_category(self.conn, cat_id)
+
+        try:
+            conn = self._live_conn()
+        except Exception as e:
+            QMessageBox.warning(self, "خطأ", str(e))
+            return
+
+        cat = fetch_category(conn, cat_id)
         if not cat:
             return
 
-        descendants = fetch_descendants(self.conn, cat_id)
-        counts      = count_category_items(self.conn, cat_id)
+        descendants = fetch_descendants(conn, cat_id)
+        counts      = count_category_items(conn, cat_id)
         total_items = sum(counts.values())
         child_cats  = len(descendants) - 1
 
@@ -159,5 +211,5 @@ class CategoryManager(QWidget):
             QMessageBox.Yes | QMessageBox.No
         ) == QMessageBox.Yes:
             for did in sorted(descendants, reverse=True):
-                delete_category(self.conn, did)
+                delete_category(conn, did)
             bus.data_changed.emit()

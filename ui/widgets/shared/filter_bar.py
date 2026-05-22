@@ -8,6 +8,9 @@ FilterBar — شريط فلتر مشترك يُستخدم في كل التبوي
   - فلتر بالتصنيف (CategoryCombo)
   - signal filter_changed يُطلق عند أي تغيير
 
+الإصلاح: استخدام _live_conn بدل self.conn مباشرة عشان لما تتغير
+الشركة النشطة ويتغلق الـ connection القديم، الـ FilterBar يشتغل صح.
+
 الاستخدام:
     from ui.widgets.filter_bar import FilterBar
 
@@ -48,6 +51,23 @@ class FilterBar(QWidget):
         self._build()
         # تحديث الـ combo لو تغيرت التصنيفات
         bus.data_changed.connect(self._reload_categories)
+
+    # ── connection صالح دايماً ────────────────────────────
+
+    def _live_conn(self):
+        """
+        يرجع connection حي:
+        - لو self.conn صالح → استخدمه
+        - لو لا → اجلب من company_state
+        """
+        if self.conn is not None:
+            try:
+                self.conn.execute("SELECT 1")
+                return self.conn
+            except Exception:
+                pass
+        from db.companies.company_state import company_state
+        return company_state.get_erp_conn()
 
     # ══════════════════════════════════════════════════════
     # بناء الواجهة
@@ -183,14 +203,22 @@ class FilterBar(QWidget):
     # ══════════════════════════════════════════════════════
 
     def _reload_categories(self):
+        try:
+            conn = self._live_conn()
+        except Exception:
+            return
+
         prev = self.cmb_cat.currentData() if self.cmb_cat.count() else None
         self.cmb_cat.blockSignals(True)
         self.cmb_cat.clear()
         self.cmb_cat.addItem("— كل التصنيفات —", None)
 
-        rows = fetch_all_categories(self.conn, self.scope)
-        tree = build_tree(rows)
-        self._add_cat_nodes(tree, depth=0)
+        try:
+            rows = fetch_all_categories(conn, self.scope)
+            tree = build_tree(rows)
+            self._add_cat_nodes(tree, depth=0)
+        except Exception:
+            pass
 
         # استعادة الاختيار السابق
         for i in range(self.cmb_cat.count()):

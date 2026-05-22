@@ -7,6 +7,11 @@ ui/helpers.py
   - الـ scroll بيقبل horizontal + vertical
   - الـ inner container عنده setMinimumWidth
   عشان لما النافذة تضيق يظهر scrollbar أفقي يشمل كل حاجة.
+
+live_conn:
+  - يرجع connection صالح دايماً
+  - لو stored_conn صالح → يستخدمه
+  - لو لا → يجيب connection جديد من company_state
 """
 
 from PyQt5.QtWidgets import (
@@ -69,6 +74,32 @@ SCROLL_SS = f"""
 """
 
 _SCROLL_SS = SCROLL_SS
+
+
+# ══════════════════════════════════════════════════════════
+# live_conn — connection صالح دايماً
+# ══════════════════════════════════════════════════════════
+
+def live_conn(stored_conn=None, db: str = "erp"):
+    """
+    يرجع connection صالح دايماً.
+
+    - لو stored_conn مش None وصالح → يستخدمه كما هو.
+    - لو stored_conn None أو مغلق أو فشل → يجيب connection
+      جديد من company_state.
+
+    الاستخدام:
+        conn = live_conn(self.conn)
+        rows = fetch_all_categories(conn, self.scope)
+    """
+    if stored_conn is not None:
+        try:
+            stored_conn.execute("SELECT 1")
+            return stored_conn
+        except Exception:
+            pass
+    from db.companies.company_state import company_state
+    return company_state._get_conn(db)
 
 
 def make_detail_scroll(min_content_width: int = 520) -> QScrollArea:

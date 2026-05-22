@@ -2,6 +2,9 @@
 ui/widgets/shared/category_form.py
 ============================
 _CategoryForm — QGroupBox لإضافة وتعديل التصنيفات الهرمية.
+
+الإصلاح: استخدام _live_conn بدل self.conn مباشرة عشان لما تتغير
+الشركة النشطة ويتغلق الـ connection القديم، الـ form يشتغل صح.
 """
 
 from PyQt5.QtWidgets import (
@@ -28,6 +31,27 @@ class _CategoryForm(QGroupBox):
         self._editing_id  = None
         self._color       = "#607d8b"
         self._build()
+
+    # ── connection صالح دايماً ────────────────────────────
+
+    def _live_conn(self):
+        """
+        يرجع connection حي:
+        - لو self.conn صالح → استخدمه
+        - لو لا → اجلب من company_state
+        """
+        if self.conn is not None:
+            try:
+                self.conn.execute("SELECT 1")
+                return self.conn
+            except Exception:
+                pass
+        from db.companies.company_state import company_state
+        return company_state.get_erp_conn()
+
+    # ══════════════════════════════════════════════════════
+    # بناء الواجهة
+    # ══════════════════════════════════════════════════════
 
     def _build(self):
         form = QFormLayout(self)
@@ -82,17 +106,34 @@ class _CategoryForm(QGroupBox):
 
         self._refresh_parent_combo()
 
+    # ══════════════════════════════════════════════════════
+    # تحميل التصنيفات الأب
+    # ══════════════════════════════════════════════════════
+
     def _refresh_parent_combo(self, exclude_id: int = None):
+        try:
+            conn = self._live_conn()
+        except Exception:
+            return
+
         self.cmb_parent.blockSignals(True)
         self.cmb_parent.clear()
         self.cmb_parent.addItem("— بدون أب (رئيسي) —", None)
 
-        rows = fetch_all_categories(self.conn, self.scope)
+        try:
+            rows = fetch_all_categories(conn, self.scope)
+        except Exception:
+            self.cmb_parent.blockSignals(False)
+            return
+
         tree = build_tree(rows)
 
         excluded = set()
         if exclude_id is not None:
-            excluded = set(fetch_descendants(self.conn, exclude_id))
+            try:
+                excluded = set(fetch_descendants(conn, exclude_id))
+            except Exception:
+                pass
 
         self._add_parent_nodes(tree, depth=0, excluded=excluded)
         self.cmb_parent.blockSignals(False)
@@ -107,6 +148,10 @@ class _CategoryForm(QGroupBox):
             if node["children"]:
                 self._add_parent_nodes(node["children"], depth + 1, excluded)
 
+    # ══════════════════════════════════════════════════════
+    # إجراءات
+    # ══════════════════════════════════════════════════════
+
     def _pick_color(self):
         col = QColorDialog.getColor(QColor(self._color), self, "اختر لون التصنيف")
         if col.isValid():
@@ -120,8 +165,13 @@ class _CategoryForm(QGroupBox):
         if not name:
             QMessageBox.warning(self, "تنبيه", "أدخل اسم التصنيف")
             return
+        try:
+            conn = self._live_conn()
+        except Exception as e:
+            QMessageBox.warning(self, "خطأ", str(e))
+            return
         parent_id = self.cmb_parent.currentData()
-        insert_category(self.conn, name, self.scope, self._color, parent_id)
+        insert_category(conn, name, self.scope, self._color, parent_id)
         self._reset()
         bus.data_changed.emit()
 
@@ -132,9 +182,14 @@ class _CategoryForm(QGroupBox):
         if not name:
             QMessageBox.warning(self, "تنبيه", "أدخل اسم التصنيف")
             return
+        try:
+            conn = self._live_conn()
+        except Exception as e:
+            QMessageBox.warning(self, "خطأ", str(e))
+            return
         parent_id = self.cmb_parent.currentData()
         try:
-            update_category(self.conn, self._editing_id, name,
+            update_category(conn, self._editing_id, name,
                             self.scope, self._color, parent_id)
         except ValueError as e:
             QMessageBox.warning(self, "خطأ", str(e))
@@ -143,7 +198,11 @@ class _CategoryForm(QGroupBox):
         bus.data_changed.emit()
 
     def load_for_edit(self, cat_id: int):
-        cat = fetch_category(self.conn, cat_id)
+        try:
+            conn = self._live_conn()
+        except Exception:
+            return
+        cat = fetch_category(conn, cat_id)
         if not cat:
             return
         self._editing_id = cat_id
