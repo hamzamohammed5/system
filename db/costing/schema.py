@@ -1,18 +1,27 @@
 """
-db/schema.py
-============
-إنشاء الجداول والقيم الافتراضية.
-يُستدعى مرة واحدة عند التشغيل من main.py.
+db/costing/schema.py  (نسخة multi-company)
+============================================
+إنشاء الجداول والقيم الافتراضية لـ erp.db الخاص بشركة.
+
+التغيير: أضفنا _init_erp_db(conn) التي تقبل connection جاهز
+بدلاً من إنشاء connection داخلياً — عشان تدعم multi-company.
 """
 
-from db.shared.connection  import get_connection, get_accounting_connection, get_inventory_connection
-from db.shared.migrations  import run_migrations
+from db.shared.migrations   import run_migrations
+from db.shared.migrations_v2 import run_migrations_v2
+from db.shared.migrations_v3 import run_migrations_v3
 
 
-def init_db():
-    # ── 1. قاعدة التكاليف (erp.db) ──
-    conn = get_connection()
-    cur  = conn.cursor()
+# ══════════════════════════════════════════════════════════
+# الدالة الأساسية — تقبل connection جاهز
+# ══════════════════════════════════════════════════════════
+
+def _init_erp_db(conn):
+    """
+    يُهيئ erp.db من connection جاهز.
+    يُستدعى من companies_repo عند إنشاء شركة جديدة.
+    """
+    cur = conn.cursor()
 
     cur.executescript("""
         CREATE TABLE IF NOT EXISTS items (
@@ -74,18 +83,26 @@ def init_db():
             ("font_size",           11.0),
         ]
     )
-    conn.commit()
+
     run_migrations(conn)
-    conn.close()
+    run_migrations_v2(conn)
+    run_migrations_v3(conn)
 
-    # ── 2. قاعدة الحسابات (accounting.db) ──
-    acc_conn = get_accounting_connection()
-    from db.accounting.accounting_schema import create_accounting_tables
-    create_accounting_tables(acc_conn)
-    acc_conn.close()
 
-    # ── 3. قاعدة المخزن (inventory.db) ──
-    inv_conn = get_inventory_connection()
-    from db.inventory.inventory_schema import create_inventory_tables
-    create_inventory_tables(inv_conn)
-    inv_conn.close()
+# ══════════════════════════════════════════════════════════
+# نقطة الدخول القديمة (للتوافق) — لا تُستخدم في multi-company
+# ══════════════════════════════════════════════════════════
+
+def init_db():
+    """
+    ⚠️ هذه الدالة موجودة للتوافق فقط.
+    في وضع multi-company يتم إنشاء الـ DBs عبر companies_repo.
+    تُهيئ فقط قاعدة بيانات الشركات المركزية (companies.db).
+    """
+    # تهيئة companies.db
+    from db.companies.companies_schema import (
+        get_central_connection, create_central_tables
+    )
+    central = get_central_connection()
+    create_central_tables(central)
+    central.close()
