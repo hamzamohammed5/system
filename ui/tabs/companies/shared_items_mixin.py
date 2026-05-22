@@ -3,17 +3,10 @@ ui/tabs/companies/shared_items_mixin.py
 =========================================
 دوال مساعدة لجلب العناصر المشتركة للشركة النشطة.
 
-تُستخدم من:
-  - raw_table_panel.py      → get_shared_raws()
-  - machine_table.py        → get_shared_machines()
-  - labor_op_table.py       → get_shared_labor_ops()
-  - component_row.py / catalog_builder.py (عبر SharedItemsBridge)
-
-المبدأ:
-  - العناصر المشتركة مخزنة في companies.db فقط
-  - الشركة تقرأ منها مباشرة — لا نسخ محلية
-  - أي تعديل يتعكس فوراً على كل الشركات
-  - ID = "shared:{n}" (string) للتمييز عن المحلي
+الإصلاحات:
+1. category_name يُجلب من data["category_name"] لو موجود — بدل "🔗 مشترك" دايماً
+2. remove_local_duplicates() — تزيل العناصر المشتركة التي لها نسخة محلية بنفس الاسم
+   (يحل مشكلة ظهور العنصر مرتين في الشركة الأصلية)
 """
 
 import json
@@ -47,10 +40,25 @@ def _get_company_id() -> int | None:
         return None
 
 
+def remove_local_duplicates(local_rows: list, shared_rows: list) -> list:
+    """
+    يزيل من shared_rows أي عنصر اسمه موجود بالفعل في local_rows.
+    يحل مشكلة ظهور العنصر مرتين في الشركة الأصلية اللي نشرته.
+
+    المقارنة بالاسم (case-insensitive, strip).
+    """
+    local_names = {str(r.get("name", "")).strip().lower() for r in local_rows}
+    return [
+        s for s in shared_rows
+        if str(s.get("name", "")).strip().lower() not in local_names
+    ]
+
+
 def _fetch_shared(shared_type: str) -> list:
     """
     يجيب العناصر المشتركة للشركة النشطة من companies.db.
     يرجع list of dicts مع id = "shared:{n}".
+    category_name يُجلب من data["category_name"] لو محفوظ.
     """
     try:
         company_id = _get_company_id()
@@ -74,17 +82,23 @@ def _fetch_shared(shared_type: str) -> list:
                 data = json.loads(row["data"]) if row["data"] else {}
             except Exception:
                 data = {}
+
+            # category_name: من data لو موجود، وإلا علامة مشترك
+            cat_name = data.get("category_name") or "🔗 مشترك"
+
             item = {
                 "id":             f"shared:{row['id']}",
                 "shared_item_id": row["id"],
                 "name":           row["name"],
                 "shared_type":    row["shared_type"],
                 "category_id":    None,
-                "category_name":  "🔗 مشترك",
+                "category_name":  cat_name,
                 "is_shared":      True,
                 "updated_at":     row["updated_at"],
             }
             item.update(data)
+            # نعيد category_name بعد update عشان data مش تطغى عليه بـ None
+            item["category_name"] = cat_name
             result.append(item)
         return result
     except Exception as e:
@@ -105,15 +119,15 @@ def get_shared_raws() -> list:
     result = []
     for item in items:
         result.append({
-            "id":            item["id"],
+            "id":             item["id"],
             "shared_item_id": item["shared_item_id"],
-            "name":          item["name"],
-            "price":         float(item.get("price", 0.0)),
-            "total_qty":     item.get("total_qty"),
-            "category_id":   None,
-            "category_name": "🔗 مشترك",
-            "is_shared":     True,
-            "updated_at":    item.get("updated_at", ""),
+            "name":           item["name"],
+            "price":          float(item.get("price", 0.0)),
+            "total_qty":      item.get("total_qty"),
+            "category_id":    None,
+            "category_name":  item["category_name"],
+            "is_shared":      True,
+            "updated_at":     item.get("updated_at", ""),
         })
     return result
 
@@ -127,15 +141,15 @@ def get_shared_machines() -> list:
     result = []
     for item in items:
         result.append({
-            "id":            item["id"],
+            "id":             item["id"],
             "shared_item_id": item["shared_item_id"],
-            "name":          item["name"],
-            "rate_per_hour": float(item.get("rate_per_hour", 0.0)),
-            "rate_per_unit": float(item.get("rate_per_unit", 0.0)),
-            "category_id":   None,
-            "category_name": "🔗 مشترك",
-            "is_shared":     True,
-            "updated_at":    item.get("updated_at", ""),
+            "name":           item["name"],
+            "rate_per_hour":  float(item.get("rate_per_hour", 0.0)),
+            "rate_per_unit":  float(item.get("rate_per_unit", 0.0)),
+            "category_id":    None,
+            "category_name":  item["category_name"],
+            "is_shared":      True,
+            "updated_at":     item.get("updated_at", ""),
         })
     return result
 
@@ -149,14 +163,14 @@ def get_shared_labor_ops() -> list:
     result = []
     for item in items:
         result.append({
-            "id":            item["id"],
+            "id":             item["id"],
             "shared_item_id": item["shared_item_id"],
-            "name":          item["name"],
-            "minutes":       float(item.get("minutes", 0.0)),
-            "category_id":   None,
-            "category_name": "🔗 مشترك",
-            "is_shared":     True,
-            "updated_at":    item.get("updated_at", ""),
+            "name":           item["name"],
+            "minutes":        float(item.get("minutes", 0.0)),
+            "category_id":    None,
+            "category_name":  item["category_name"],
+            "is_shared":      True,
+            "updated_at":     item.get("updated_at", ""),
         })
     return result
 
@@ -170,17 +184,17 @@ def get_shared_machine_ops() -> list:
     result = []
     for item in items:
         result.append({
-            "id":            item["id"],
+            "id":             item["id"],
             "shared_item_id": item["shared_item_id"],
-            "name":          item["name"],
-            "mode":          item.get("mode", "time"),
-            "value":         float(item.get("value", 0.0)),
-            "machine_name":  item.get("machine_name", ""),
-            "rate_per_hour": float(item.get("rate_per_hour", 0.0)),
-            "rate_per_unit": float(item.get("rate_per_unit", 0.0)),
-            "category_id":   None,
-            "category_name": "🔗 مشترك",
-            "is_shared":     True,
-            "updated_at":    item.get("updated_at", ""),
+            "name":           item["name"],
+            "mode":           item.get("mode", "time"),
+            "value":          float(item.get("value", 0.0)),
+            "machine_name":   item.get("machine_name", ""),
+            "rate_per_hour":  float(item.get("rate_per_hour", 0.0)),
+            "rate_per_unit":  float(item.get("rate_per_unit", 0.0)),
+            "category_id":    None,
+            "category_name":  item["category_name"],
+            "is_shared":      True,
+            "updated_at":     item.get("updated_at", ""),
         })
     return result
