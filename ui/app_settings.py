@@ -6,8 +6,6 @@ ui/app_settings.py
 """
 
 from PyQt5.QtWidgets import QApplication
-from db.shared.settings_repo import get_setting, set_setting
-from db.shared.connection import get_connection
 
 DEFAULT_FONT_SIZE = 11
 MIN_FONT_SIZE     = 8
@@ -16,63 +14,76 @@ MAX_FONT_SIZE     = 20
 # ── Palette: Warm Neutral + Slate Accents ─────────────────
 _C = {
     # Backgrounds
-    "bg_page":      "#F5F4F0",   # خلفية الصفحة — warm off-white
-    "bg_surface":   "#FAFAF8",   # سطح البطاقات
-    "bg_surface_2": "#F0EEE9",   # سطح ثانوي أغمق قليلاً
-    "bg_hover":     "#ECEAE4",   # hover
-    "bg_active":    "#E4E2DA",   # محدد/نشط
-    "bg_input":     "#FFFFFF",   # خلفية الـ inputs
+    "bg_page":      "#F5F4F0",
+    "bg_surface":   "#FAFAF8",
+    "bg_surface_2": "#F0EEE9",
+    "bg_hover":     "#ECEAE4",
+    "bg_active":    "#E4E2DA",
+    "bg_input":     "#FFFFFF",
 
     # Borders
-    "border":       "#DDD9CF",   # حدود عامة
-    "border_med":   "#C8C4B8",   # حدود متوسطة
-    "border_focus": "#8B8680",   # حدود focus
-    "border_strong":"#6B6760",   # حدود قوية
+    "border":       "#DDD9CF",
+    "border_med":   "#C8C4B8",
+    "border_focus": "#8B8680",
+    "border_strong":"#6B6760",
 
     # Text
-    "text_primary": "#1C1B18",   # نص رئيسي
-    "text_sec":     "#4A4843",   # نص ثانوي
-    "text_muted":   "#7A7870",   # نص خافت
-    "text_disabled":"#A8A69E",   # نص معطل
+    "text_primary": "#1C1B18",
+    "text_sec":     "#4A4843",
+    "text_muted":   "#7A7870",
+    "text_disabled":"#A8A69E",
 
-    # Accent — Slate Blue (هادئ ومهني)
-    "accent":       "#3D5A80",   # accent رئيسي
-    "accent_hover": "#2E4460",   # hover
-    "accent_light": "#D6E4F0",   # خلفية فاتحة
-    "accent_mid":   "#98C1D9",   # وسط
-    "accent_text":  "#2A3F5A",   # نص على الـ accent light
+    # Accent — Slate Blue
+    "accent":       "#3D5A80",
+    "accent_hover": "#2E4460",
+    "accent_light": "#D6E4F0",
+    "accent_mid":   "#98C1D9",
+    "accent_text":  "#2A3F5A",
 
-    # Sidebar (داكن)
-    "sidebar_bg":   "#1E1D1A",
-    "sidebar_text": "#E8E6E1",
-    "sidebar_muted":"#7A7870",
-    "sidebar_hover":"#2E2D2A",
+    # Sidebar
+    "sidebar_bg":    "#1E1D1A",
+    "sidebar_text":  "#E8E6E1",
+    "sidebar_muted": "#7A7870",
+    "sidebar_hover": "#2E2D2A",
     "sidebar_active":"#3A3835",
     "sidebar_border":"#2E2D2A",
 
     # States
-    "danger":       "#C0392B",
-    "danger_bg":    "#FDF0EF",
-    "danger_border":"#E8A39D",
-    "success":      "#2E7D52",
-    "success_bg":   "#EDF7F2",
+    "danger":        "#C0392B",
+    "danger_bg":     "#FDF0EF",
+    "danger_border": "#E8A39D",
+    "success":       "#2E7D52",
+    "success_bg":    "#EDF7F2",
     "success_border":"#8EC5A8",
-    "warning":      "#7A5C00",
-    "warning_bg":   "#FDF8E7",
+    "warning":       "#7A5C00",
+    "warning_bg":    "#FDF8E7",
     "warning_border":"#D4B84A",
-    "info":         "#1A5276",
-    "info_bg":      "#EBF5FB",
-    "info_border":  "#7FB3D3",
+    "info":          "#1A5276",
+    "info_bg":       "#EBF5FB",
+    "info_border":   "#7FB3D3",
 
     # Tab indicator
-    "tab_active":   "#3D5A80",
-    "tab_indicator":"#3D5A80",
+    "tab_active":    "#3D5A80",
+    "tab_indicator": "#3D5A80",
 }
 
 
 def get_font_size() -> int:
-    conn = get_connection()
+    """
+    يقرأ حجم الخط من إعدادات الشركة النشطة.
+    لو ما فيش شركة نشطة بعد → يرجع DEFAULT_FONT_SIZE مباشرة.
+    """
     try:
+        from db.shared.connection import get_connection
+        conn = get_connection()
+    except RuntimeError:
+        # لا توجد شركة نشطة بعد — رجّع الافتراضي
+        return DEFAULT_FONT_SIZE
+    except Exception:
+        return DEFAULT_FONT_SIZE
+
+    try:
+        from db.shared.settings_repo import get_setting, set_setting
         raw = get_setting(conn, "font_size", None)
         if raw is None:
             set_setting(conn, "font_size", DEFAULT_FONT_SIZE)
@@ -90,8 +101,15 @@ def get_font_size() -> int:
 
 def set_font_size(size: int):
     size = max(MIN_FONT_SIZE, min(MAX_FONT_SIZE, size))
-    conn = get_connection()
     try:
+        from db.shared.connection import get_connection
+        conn = get_connection()
+    except RuntimeError:
+        return
+    except Exception:
+        return
+    try:
+        from db.shared.settings_repo import set_setting
         set_setting(conn, "font_size", size)
     finally:
         conn.close()
@@ -112,7 +130,6 @@ def _build_stylesheet(base: int) -> str:
 
     c = _C
 
-    # حسابات ديناميكية
     input_h   = normal * 2 + 6
     btn_h     = normal * 2 + 8
     radius    = "6px"
@@ -135,6 +152,28 @@ QMainWindow, QDialog {{
 
 QWidget {{
     background: transparent;
+}}
+
+/* ── إصلاح QMessageBox و QDialog الداخلية ── */
+QMessageBox {{
+    background: {c['bg_surface']};
+}}
+
+QMessageBox QWidget {{
+    background: {c['bg_surface']};
+}}
+
+QMessageBox QLabel {{
+    background: transparent;
+    color: {c['text_primary']};
+}}
+
+QMessageBox QPushButton {{
+    min-width: 70px;
+}}
+
+QDialog > QWidget {{
+    background: {c['bg_surface']};
 }}
 
 /* ══════════════════════════════════════════════
@@ -494,7 +533,7 @@ QTabBar::tab:hover:!selected {{
 }}
 
 /* ══════════════════════════════════════════════
-   Scrollbars — نحيفة وأنيقة
+   Scrollbars
 ══════════════════════════════════════════════ */
 QScrollBar:vertical {{
     background: transparent;

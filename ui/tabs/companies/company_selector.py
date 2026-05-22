@@ -156,7 +156,7 @@ class CompanySelector(QWidget):
         company = self._companies[idx]
         cid     = company["id"]
         name    = company["name"]
-        color   = company.get("color") or "#1565c0"
+        color   = company["color"] or "#1565c0"
 
         company_state.set_active(cid, name, color)
         self.company_changed.emit(cid)
