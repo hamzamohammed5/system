@@ -2,14 +2,6 @@
 ui/tabs/pricing/offers/offer_item_row.py
 =================================
 _OfferItemRow — صف منتج واحد داخل فورم العرض.
-
-يعرض:
-  - حقل بحث نصي
-  - combo اختيار المنتج (المنتجات المسعّرة فقط)
-  - تكلفة الوحدة وسعر التسعير
-  - حقل الكمية وإجمالي السطر
-  - تحذير لو المنتج بدون تسعير
-  - زر حذف الصف
 """
 
 from PyQt5.QtWidgets import (
@@ -36,16 +28,23 @@ class _OfferItemRow(QFrame):
 
     def __init__(self, conn, on_remove, on_change, parent=None):
         super().__init__(parent)
-        self.conn       = conn
+        self._conn      = conn
         self._on_remove = on_remove
         self._on_change = on_change
         self._build()
         self._load_products()
         bus.data_changed.connect(self._reload_products)
 
-    # ══════════════════════════════════════════════════════
-    # بناء الواجهة
-    # ══════════════════════════════════════════════════════
+    # ── connection صالح دايماً ────────────────────────────
+    def _live_conn(self):
+        if self._conn is not None:
+            try:
+                self._conn.execute("SELECT 1")
+                return self._conn
+            except Exception:
+                pass
+        from db.companies.company_state import company_state
+        return company_state.get_erp_conn()
 
     def _build(self):
         self.setStyleSheet("""
@@ -59,7 +58,6 @@ class _OfferItemRow(QFrame):
         lay.setContentsMargins(8, 6, 8, 6)
         lay.setSpacing(8)
 
-        # ── بحث ──
         self.inp_search = QLineEdit()
         self.inp_search.setPlaceholderText("🔍 بحث...")
         self.inp_search.setFixedWidth(120)
@@ -75,13 +73,11 @@ class _OfferItemRow(QFrame):
             lambda t: self._load_products(filter_text=t.strip())
         )
 
-        # ── اختيار المنتج ──
         self.cmb_product = QComboBox()
         self.cmb_product.setMinimumWidth(180)
         self.cmb_product.setMinimumHeight(28)
         self.cmb_product.currentIndexChanged.connect(self._on_product_changed)
 
-        # ── تكلفة / وحدة ──
         self.lbl_cost = QLabel("─")
         self.lbl_cost.setFixedWidth(72)
         self.lbl_cost.setStyleSheet(
@@ -90,7 +86,6 @@ class _OfferItemRow(QFrame):
         self.lbl_cost.setAlignment(Qt.AlignCenter)
         self.lbl_cost.setToolTip("تكلفة الإنتاج / وحدة")
 
-        # ── سعر التسعير / وحدة ──
         self.lbl_listed = QLabel("─")
         self.lbl_listed.setFixedWidth(72)
         self.lbl_listed.setStyleSheet(
@@ -99,13 +94,11 @@ class _OfferItemRow(QFrame):
         self.lbl_listed.setAlignment(Qt.AlignCenter)
         self.lbl_listed.setToolTip("سعر التسعير / وحدة")
 
-        # ── الكمية ──
         self.sp_qty = _spin(99999, 4)
         self.sp_qty.setValue(1.0)
         self.sp_qty.setFixedWidth(85)
         self.sp_qty.valueChanged.connect(self._on_product_changed)
 
-        # ── إجمالي السطر ──
         self.lbl_line = QLabel("─")
         self.lbl_line.setFixedWidth(80)
         self.lbl_line.setStyleSheet(
@@ -115,7 +108,6 @@ class _OfferItemRow(QFrame):
         self.lbl_line.setAlignment(Qt.AlignCenter)
         self.lbl_line.setToolTip("إجمالي سعر السطر قبل الخصم")
 
-        # ── تحذير بدون تسعير ──
         self.lbl_warn = QLabel("⚠️")
         self.lbl_warn.setStyleSheet(
             "color:#e65100; font-size:11px; background:transparent; border:none;"
@@ -124,7 +116,6 @@ class _OfferItemRow(QFrame):
         self.lbl_warn.setToolTip("هذا المنتج ليس له سعر في التسعير")
         self.lbl_warn.setVisible(False)
 
-        # ── حذف ──
         btn_del = QPushButton("❌")
         btn_del.setFixedSize(28, 28)
         btn_del.setStyleSheet(
@@ -146,31 +137,33 @@ class _OfferItemRow(QFrame):
         lay.addWidget(self.lbl_warn)
         lay.addWidget(btn_del)
 
-    # ══════════════════════════════════════════════════════
-    # تحميل المنتجات
-    # ══════════════════════════════════════════════════════
-
     def _load_products(self, filter_text: str = ""):
+        try:
+            conn = self._live_conn()
+        except Exception:
+            return
+
         prev_id = self.get_item_id()
         self.cmb_product.blockSignals(True)
         self.cmb_product.clear()
         q = filter_text.lower()
 
-        # المنتجات المسعّرة فقط
-        priced_ids = {
-            r["item_id"]
-            for r in self.conn.execute("SELECT item_id FROM pricing").fetchall()
-        }
-
-        for item_type in ("final", "semi"):
-            rows = fetch_items_by_type(self.conn, item_type)
-            icon = "🏭" if item_type == "final" else "🔧"
-            for row in rows:
-                if row["id"] not in priced_ids:
-                    continue
-                if q and q not in row["name"].lower():
-                    continue
-                self.cmb_product.addItem(f"{icon} {row['name']}", row["id"])
+        try:
+            priced_ids = {
+                r["item_id"]
+                for r in conn.execute("SELECT item_id FROM pricing").fetchall()
+            }
+            for item_type in ("final", "semi"):
+                rows = fetch_items_by_type(conn, item_type)
+                icon = "🏭" if item_type == "final" else "🔧"
+                for row in rows:
+                    if row["id"] not in priced_ids:
+                        continue
+                    if q and q not in row["name"].lower():
+                        continue
+                    self.cmb_product.addItem(f"{icon} {row['name']}", row["id"])
+        except Exception:
+            pass
 
         self.cmb_product.blockSignals(False)
         if prev_id is not None:
@@ -183,10 +176,6 @@ class _OfferItemRow(QFrame):
     def _reload_products(self):
         self._load_products(filter_text=self.inp_search.text().strip())
 
-    # ══════════════════════════════════════════════════════
-    # تحديث العرض عند تغيير المنتج
-    # ══════════════════════════════════════════════════════
-
     def _on_product_changed(self):
         item_id = self.get_item_id()
         if item_id is None:
@@ -198,10 +187,15 @@ class _OfferItemRow(QFrame):
                 self._on_change()
             return
 
-        unit_cost   = calc_cost(self.conn, item_id)
-        pricing_row = self.conn.execute(
-            "SELECT price FROM pricing WHERE item_id=?", (item_id,)
-        ).fetchone()
+        try:
+            conn = self._live_conn()
+            unit_cost   = calc_cost(conn, item_id)
+            pricing_row = conn.execute(
+                "SELECT price FROM pricing WHERE item_id=?", (item_id,)
+            ).fetchone()
+        except Exception:
+            return
+
         unit_price  = pricing_row["price"] if pricing_row else 0.0
         has_pricing = pricing_row is not None
 
@@ -214,10 +208,6 @@ class _OfferItemRow(QFrame):
 
         if self._on_change:
             self._on_change()
-
-    # ══════════════════════════════════════════════════════
-    # API خارجي
-    # ══════════════════════════════════════════════════════
 
     def get_item_id(self):
         return self.cmb_product.currentData()

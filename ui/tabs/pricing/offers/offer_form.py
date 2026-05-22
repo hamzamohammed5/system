@@ -2,12 +2,6 @@
 ui/tabs/pricing/offers/offer_form.py
 =============================
 _OfferForm — فورم إنشاء / تعديل العرض الكامل.
-
-يحتوي على:
-  - بيانات العرض (الاسم، الخصم، التصنيف، الملاحظات)
-  - صناديق الإحصائيات (إجمالي، خصم، سعر بيع، تكلفة، ربح)
-  - منطقة صفوف المنتجات (_OfferItemRow) مع scroll
-  - أزرار الحفظ والإلغاء
 """
 
 from PyQt5.QtWidgets import (
@@ -23,10 +17,10 @@ from db.pricing.offers_repo import (
     insert_offer, update_offer,
     replace_offer_items,
 )
-from models.costing import calc_cost
-from ui.helpers     import buttons_row
+from models.costing     import calc_cost
+from ui.helpers         import buttons_row
 from ui.widgets.shared.category_manager import CategoryCombo
-from ui.events      import bus
+from ui.events          import bus
 
 from .offer_item_row import _OfferItemRow
 
@@ -40,7 +34,6 @@ def _spin(max_=999999, dec=2):
 
 
 def _stat_box(title: str, color: str = "#1565c0"):
-    """يرجع (QFrame, QLabel_value) — بطاقة إحصائية."""
     frame = QFrame()
     frame.setStyleSheet("""
         QFrame {
@@ -70,25 +63,30 @@ def _stat_box(title: str, color: str = "#1565c0"):
 
 
 class _OfferForm(QWidget):
-    """فورم إنشاء / تعديل العرض الكامل."""
 
     def __init__(self, conn, parent=None):
         super().__init__(parent)
-        self.conn        = conn
+        self._conn       = conn
         self._editing_id = None
         self._item_rows: list[_OfferItemRow] = []
         self._build()
 
-    # ══════════════════════════════════════════════════════
-    # بناء الواجهة
-    # ══════════════════════════════════════════════════════
+    # ── connection صالح دايماً ────────────────────────────
+    def _live_conn(self):
+        if self._conn is not None:
+            try:
+                self._conn.execute("SELECT 1")
+                return self._conn
+            except Exception:
+                pass
+        from db.companies.company_state import company_state
+        return company_state.get_erp_conn()
 
     def _build(self):
         root = QVBoxLayout(self)
         root.setContentsMargins(12, 10, 12, 10)
         root.setSpacing(8)
 
-        # ── رأس الفورم ──
         header = QFrame()
         header.setStyleSheet("""
             QFrame {
@@ -105,7 +103,6 @@ class _OfferForm(QWidget):
         self.lbl_mode.setStyleSheet("font-weight:bold; color:#e65100; font-size:12px;")
         h_lay.addWidget(self.lbl_mode)
 
-        # ── صف المعلومات الأساسية ──
         info_row = QHBoxLayout()
         info_row.setSpacing(12)
 
@@ -125,7 +122,7 @@ class _OfferForm(QWidget):
 
         lbl_cat = QLabel("التصنيف:")
         lbl_cat.setStyleSheet("font-weight:bold;")
-        self.cmb_category = CategoryCombo(self.conn, scope="all")
+        self.cmb_category = CategoryCombo(self._live_conn(), scope="all")
         self.cmb_category.setMinimumHeight(30)
         self.cmb_category.setFixedWidth(150)
 
@@ -147,7 +144,6 @@ class _OfferForm(QWidget):
 
         self.sp_discount.valueChanged.connect(self._update_totals)
 
-        # ── صناديق الإحصائيات ──
         stats_row = QHBoxLayout()
         stats_row.setSpacing(6)
         f1, self.lbl_total_listed = _stat_box("إجمالي السعر قبل الخصم", "#1565c0")
@@ -161,7 +157,7 @@ class _OfferForm(QWidget):
 
         root.addWidget(header)
 
-        # ── رؤوس الأعمدة ──
+        # رؤوس الأعمدة
         ch = QWidget()
         ch.setStyleSheet("background:transparent;")
         ch_lay = QHBoxLayout(ch)
@@ -188,7 +184,6 @@ class _OfferForm(QWidget):
         _hdr("", 28)
         root.addWidget(ch)
 
-        # ── منطقة الصفوف ──
         self._rows_container = QWidget()
         self._rows_container.setStyleSheet("background:transparent;")
         self._rows_layout = QVBoxLayout(self._rows_container)
@@ -210,7 +205,6 @@ class _OfferForm(QWidget):
         """)
         root.addWidget(scroll, stretch=1)
 
-        # ── أزرار ──
         btn_add_row = QPushButton("➕  إضافة منتج للعرض")
         btn_add_row.setMinimumHeight(30)
         btn_add_row.setStyleSheet(
@@ -240,13 +234,10 @@ class _OfferForm(QWidget):
 
         self._add_item_row()
 
-    # ══════════════════════════════════════════════════════
-    # إدارة الصفوف
-    # ══════════════════════════════════════════════════════
-
+    # ── إدارة الصفوف ─────────────────────────────────────
     def _add_item_row(self, item_id=None, qty=1.0):
         row = _OfferItemRow(
-            self.conn,
+            self._live_conn(),
             on_remove=self._remove_item_row,
             on_change=self._update_totals,
         )
@@ -269,27 +260,30 @@ class _OfferForm(QWidget):
             row.deleteLater()
         self._item_rows.clear()
 
-    # ══════════════════════════════════════════════════════
-    # حساب الإجماليات
-    # ══════════════════════════════════════════════════════
-
+    # ── حساب الإجماليات ──────────────────────────────────
     def _update_totals(self):
         total_listed = 0.0
         total_cost   = 0.0
+
+        try:
+            conn = self._live_conn()
+        except Exception:
+            return
 
         for row in self._item_rows:
             item_id = row.get_item_id()
             if item_id is None:
                 continue
             qty = row.get_qty()
-
-            pr = self.conn.execute(
-                "SELECT price FROM pricing WHERE item_id=?", (item_id,)
-            ).fetchone()
-            if pr:
-                total_listed += pr["price"] * qty
-
-            total_cost += calc_cost(self.conn, item_id) * qty
+            try:
+                pr = conn.execute(
+                    "SELECT price FROM pricing WHERE item_id=?", (item_id,)
+                ).fetchone()
+                if pr:
+                    total_listed += pr["price"] * qty
+                total_cost += calc_cost(conn, item_id) * qty
+            except Exception:
+                pass
 
         disc_pct   = self.sp_discount.value() / 100.0
         disc_amt   = total_listed * disc_pct
@@ -308,10 +302,7 @@ class _OfferForm(QWidget):
             "background:transparent; border:none;"
         )
 
-    # ══════════════════════════════════════════════════════
-    # حفظ / تحميل / إعادة تعيين
-    # ══════════════════════════════════════════════════════
-
+    # ── حفظ / تحميل / إعادة تعيين ────────────────────────
     def _save(self):
         name = self.inp_name.text().strip()
         if not name:
@@ -322,23 +313,32 @@ class _OfferForm(QWidget):
             QMessageBox.warning(self, "تنبيه", "أضف منتجاً واحداً على الأقل")
             return
 
+        try:
+            conn = self._live_conn()
+        except Exception as e:
+            QMessageBox.warning(self, "خطأ", str(e))
+            return
+
         discount    = self.sp_discount.value()
         notes       = self.inp_notes.text().strip()
         category_id = self.cmb_category.get_category()
 
         if self._editing_id is not None:
-            update_offer(self.conn, self._editing_id, name, discount,
-                         notes, category_id)
-            replace_offer_items(self.conn, self._editing_id, items)
+            update_offer(conn, self._editing_id, name, discount, notes, category_id)
+            replace_offer_items(conn, self._editing_id, items)
         else:
-            oid = insert_offer(self.conn, name, discount, notes, category_id)
-            replace_offer_items(self.conn, oid, items)
+            oid = insert_offer(conn, name, discount, notes, category_id)
+            replace_offer_items(conn, oid, items)
 
         self.reset()
         bus.data_changed.emit()
 
     def load_offer(self, offer_id: int):
-        offer = fetch_offer(self.conn, offer_id)
+        try:
+            conn = self._live_conn()
+        except Exception:
+            return
+        offer = fetch_offer(conn, offer_id)
         if not offer:
             return
         self._editing_id = offer_id
@@ -347,7 +347,7 @@ class _OfferForm(QWidget):
         self.inp_notes.setText(offer["notes"] or "")
         self.cmb_category.set_category(offer["category_id"])
         self._clear_rows()
-        for row in fetch_offer_items(self.conn, offer_id):
+        for row in fetch_offer_items(conn, offer_id):
             self._add_item_row(item_id=row["item_id"], qty=row["qty"])
         self.lbl_mode.setText(f"─── تعديل: {offer['name']} ───")
         self.btn_cancel.setVisible(True)
