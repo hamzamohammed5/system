@@ -1,5 +1,5 @@
 File Tree Snapshot
-Generated : 2026-05-20 15:21:22
+Generated : 2026-05-22 10:02:54
 Source    : D:\My Workspace\Hg\Alhabaar\accountant\system
 Extensions: .py
 ────────────────────────────────────────────────────────────
@@ -15,6 +15,10 @@ system/
 │   │   ├── accounting_schema_migrations.py
 │   │   ├── accounting_schema_seed.py
 │   │   └── accounting_statements_repo.py
+│   ├── companies/
+│   │   ├── companies_repo.py
+│   │   ├── companies_schema.py
+│   │   └── company_state.py
 │   ├── costing/
 │   │   ├── bom_scenarios_repo.py
 │   │   ├── machine_op_rows_repo.py
@@ -99,6 +103,12 @@ system/
 │   │   │   ├── investors_tab.py
 │   │   │   ├── journal_tab.py
 │   │   │   └── ledger_tab.py
+│   │   ├── companies/
+│   │   │   ├── _link_item_picker.py
+│   │   │   ├── companies_dialog.py
+│   │   │   ├── company_selector.py
+│   │   │   ├── no_company_screen.py
+│   │   │   └── shared_items_dialog.py
 │   │   ├── costing/
 │   │   │   ├── labor/
 │   │   │   │   ├── labor_op_form.py
