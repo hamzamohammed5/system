@@ -3,11 +3,10 @@ db/companies/company_state.py
 ==============================
 Singleton يحفظ الشركة النشطة حالياً.
 
-إصلاح (v3):
-  - check_same_thread=False لمنع SQLite threading errors
-  - _lock للحماية من race conditions عند الـ reconnect
-  - set_active() بيعمل _close_all() بس مش بيفتح connections جديدة فوراً
-    (lazy open عند أول طلب)
+إصلاح (v4):
+  - _get_raw() يعمل reconnect تلقائي بدل raise عند الـ dead state
+  - real_close() يُغلق الـ raw لكن يسمح بالـ reconnect لاحقاً
+  - set_active() بيعمل _close_all() بس مش بيفتح connections جديدة فوراً (lazy open)
   - ProtectedConnection يعمل reconnect آمن مع lock
 """
 
@@ -21,14 +20,13 @@ class ProtectedConnection:
     """
     Wrapper حول sqlite3.Connection مع:
     - منع الإغلاق العرضي (close() = no-op)
-    - إعادة الاتصال التلقائي الآمن (thread-safe) لو الـ raw connection مات
-    - الإغلاق الحقيقي فقط عبر real_close()
+    - إعادة الاتصال التلقائي الآمن (thread-safe) في كل الأحوال
+    - الإغلاق الحقيقي المؤقت فقط عبر real_close() مع السماح بالـ reconnect
     """
 
     def __init__(self, path: str):
         object.__setattr__(self, '_path', path)
         object.__setattr__(self, '_raw', None)
-        object.__setattr__(self, '_dead', False)
         object.__setattr__(self, '_lock', threading.Lock())
         self._open()
 
@@ -40,33 +38,48 @@ class ProtectedConnection:
         raw.execute("PRAGMA foreign_keys = ON")
         raw.execute("PRAGMA journal_mode = WAL")
         object.__setattr__(self, '_raw', raw)
-        object.__setattr__(self, '_dead', False)
 
     def _get_raw(self):
-        dead = object.__getattribute__(self, '_dead')
-        raw  = object.__getattribute__(self, '_raw')
+        """
+        يرجع raw connection صالح دايماً.
+        لو الـ connection مات أو أُغلق، يعمل reconnect تلقائي.
+        """
+        raw = object.__getattribute__(self, '_raw')
 
-        if not dead and raw is not None:
+        # حاول الـ connection الحالي أولاً
+        if raw is not None:
             try:
                 raw.execute("SELECT 1")
                 return raw
             except Exception:
                 pass
 
+        # الـ connection مات — reconnect تحت الـ lock
         lock = object.__getattribute__(self, '_lock')
         with lock:
-            dead = object.__getattribute__(self, '_dead')
-            if dead:
-                raise sqlite3.ProgrammingError("Connection was permanently closed.")
+            # تحقق مرة تانية بعد ما أخدنا الـ lock
             raw = object.__getattribute__(self, '_raw')
-            try:
-                if raw is not None:
+            if raw is not None:
+                try:
                     raw.execute("SELECT 1")
                     return raw
-            except Exception:
-                pass
-            self._open()
-            return object.__getattribute__(self, '_raw')
+                except Exception:
+                    # أغلق القديم بشكل نظيف
+                    try:
+                        raw.close()
+                    except Exception:
+                        pass
+                    object.__setattr__(self, '_raw', None)
+
+            # افتح connection جديد
+            try:
+                self._open()
+                return object.__getattribute__(self, '_raw')
+            except Exception as e:
+                raise sqlite3.OperationalError(
+                    f"تعذّر إعادة الاتصال بقاعدة البيانات: "
+                    f"{object.__getattribute__(self, '_path')}\n{e}"
+                )
 
     def __getattr__(self, name: str):
         if name.startswith('_'):
@@ -102,9 +115,12 @@ class ProtectedConnection:
         pass
 
     def real_close(self):
+        """
+        يُغلق الـ raw connection الحالي لكن يسمح بالـ reconnect لاحقاً.
+        لا يمنع الاستخدام المستقبلي — الـ _get_raw() سيفتح connection جديد عند الحاجة.
+        """
         lock = object.__getattribute__(self, '_lock')
         with lock:
-            object.__setattr__(self, '_dead', True)
             raw = object.__getattribute__(self, '_raw')
             if raw is not None:
                 try:
@@ -118,6 +134,12 @@ class ProtectedConnection:
 
     def __exit__(self, *args):
         pass
+
+    def __repr__(self):
+        path = object.__getattribute__(self, '_path')
+        raw  = object.__getattribute__(self, '_raw')
+        state = "connected" if raw is not None else "disconnected"
+        return f"<ProtectedConnection {state} path={path}>"
 
 
 class CompanyState:
@@ -149,19 +171,31 @@ class CompanyState:
     def set_active(self, company_id: int, name: str = "", color: str = "#1565c0"):
         """
         تعيين الشركة النشطة.
-        يُغلق الـ connections القديمة — الجديدة تُفتح lazy عند أول طلب.
+        يُغلق الـ raw connections القديمة — لكن الـ ProtectedConnection objects
+        تبقى صالحة وتعمل reconnect تلقائي على الشركة الجديدة عند أول استخدام.
         """
         with self._state_lock:
             if self._company_id == company_id:
+                # نفس الشركة — فقط حدّث الاسم واللون
+                self._company_name  = name
+                self._company_color = color or "#1565c0"
                 return
-            self._close_all_unsafe()
+
+            # شركة مختلفة — أغلق الـ raw connections القديمة
+            # الـ ProtectedConnection objects تبقى لكنها ستفتح connections جديدة
+            self._close_raw_connections_unsafe()
+
             self._company_id    = company_id
             self._company_name  = name
             self._company_color = color or "#1565c0"
 
+            # حذف الـ connection objects القديمة عشان تتنشأ على المسارات الجديدة
+            self._connections.clear()
+
     def clear(self):
         with self._state_lock:
-            self._close_all_unsafe()
+            self._close_raw_connections_unsafe()
+            self._connections.clear()
             self._company_id   = None
             self._company_name = ""
 
@@ -201,20 +235,29 @@ class CompanyState:
             return conn
 
     def refresh_connections(self):
+        """يُغلق كل الـ raw connections — ستُعاد تلقائياً عند الاستخدام."""
         with self._state_lock:
-            self._close_all_unsafe()
+            self._close_raw_connections_unsafe()
 
-    def _close_all(self):
-        with self._state_lock:
-            self._close_all_unsafe()
-
-    def _close_all_unsafe(self):
-        """يُستدعى من داخل كود محمي بـ _state_lock بالفعل."""
+    def _close_raw_connections_unsafe(self):
+        """
+        يُغلق الـ raw connections فقط (بدون حذف الـ ProtectedConnection objects).
+        يُستدعى من داخل كود محمي بـ _state_lock بالفعل.
+        """
         for conn in list(self._connections.values()):
             try:
                 conn.real_close()
             except Exception:
                 pass
+
+    # للتوافق مع الكود القديم
+    def _close_all(self):
+        with self._state_lock:
+            self._close_raw_connections_unsafe()
+            self._connections.clear()
+
+    def _close_all_unsafe(self):
+        self._close_raw_connections_unsafe()
         self._connections.clear()
 
     def close_conn(self, db_name: str):
