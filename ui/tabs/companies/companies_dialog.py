@@ -17,7 +17,7 @@ from db.companies.companies_repo import (
     delete_company, toggle_company_active,
 )
 from ui.app_settings import _C
-from ui.widgets.shared.message_box import msg_question, msg_info, msg_critical
+from ui.widgets.shared.message_box import msg_question, msg_info, msg_warning, msg_critical
 
 
 class CompaniesDialog(QDialog):

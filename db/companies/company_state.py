@@ -69,7 +69,7 @@ def _make_protected_connection(path: str) -> ProtectedConnection:
     raw.isolation_level = None
     raw.execute("PRAGMA foreign_keys = ON")
     raw.execute("PRAGMA journal_mode = WAL")
-    return ProtectedConnection(raw)
+    return ProtectedConnection(raw)   # ← لا تضيف attributes على raw مباشرة
 
 
 class CompanyState:
