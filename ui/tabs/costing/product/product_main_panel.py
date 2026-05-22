@@ -2,6 +2,9 @@
 ui/tabs/costing/product/product_main_panel.py
 =======================================
 _ProductMainPanel — اللوحة الرئيسية: فورم + جدول + BOM tree + تحذير.
+
+الإصلاح: استخدام _live_conn() بدل self.conn مباشرة في كل العمليات
+عشان لما تتغير الشركة النشطة ويتغلق الـ connection القديم يشتغل صح.
 """
 
 from PyQt5.QtWidgets import (
@@ -32,7 +35,7 @@ _SPLITTER_STYLE = """
 
 
 def _catalog_for_component_row(conn) -> dict:
-    from db.shared.items_repo      import fetch_items_by_type
+    from db.shared.items_repo       import fetch_items_by_type
     from db.costing.operations_repo import fetch_all_labor_ops, fetch_all_machine_ops
 
     result: dict[str, list] = {
@@ -69,8 +72,23 @@ class _ProductMainPanel(QWidget):
         self._build()
         bus.data_changed.connect(self._on_data_changed)
 
+    # ── connection صالح دايماً ────────────────────────────
+
+    def _live_conn(self):
+        if self.conn is not None:
+            try:
+                self.conn.execute("SELECT 1")
+                return self.conn
+            except Exception:
+                pass
+        from db.companies.company_state import company_state
+        return company_state.get_erp_conn()
+
     def _get_catalog(self):
-        return _catalog_for_component_row(self.conn)
+        try:
+            return _catalog_for_component_row(self._live_conn())
+        except Exception:
+            return {"raw": [], "semi": [], "labor_op": [], "machine_op": []}
 
     def _build(self):
         root = QVBoxLayout(self)
@@ -118,19 +136,30 @@ class _ProductMainPanel(QWidget):
     def _on_data_changed(self):
         pid = self._prod_table.selected_pid()
         if pid is not None:
-            self._check_orphans(pid)
-            self._bom_tree.load(self.conn, pid)
+            try:
+                conn = self._live_conn()
+                self._check_orphans(pid, conn)
+                self._bom_tree.load(conn, pid)
+            except Exception:
+                pass
 
     def _on_product_selected(self, pid):
         if pid is None:
             self._bom_tree.clear_tree()
             self._warning.setVisible(False)
         else:
-            self._check_orphans(pid)
-            self._bom_tree.load(self.conn, pid)
+            try:
+                conn = self._live_conn()
+                self._check_orphans(pid, conn)
+                self._bom_tree.load(conn, pid)
+            except Exception:
+                pass
 
     def _refresh_form_catalog(self):
-        new_catalog = self._get_catalog()
+        try:
+            new_catalog = self._get_catalog()
+        except Exception:
+            return
         layout = self._form.rows_layout
         for i in range(layout.count()):
             item = layout.itemAt(i)
@@ -140,9 +169,11 @@ class _ProductMainPanel(QWidget):
             if isinstance(w, ComponentRow):
                 w.refresh_catalog(new_catalog)
 
-    def _check_orphans(self, pid):
-        orphans = fetch_orphan_bom_rows(self.conn, pid)
-        item    = fetch_item(self.conn, pid)
+    def _check_orphans(self, pid, conn=None):
+        if conn is None:
+            conn = self._live_conn()
+        orphans = fetch_orphan_bom_rows(conn, pid)
+        item    = fetch_item(conn, pid)
         name    = item["name"] if item else f"ID {pid}"
         self._warning.show_orphans(orphans, name)
 
@@ -150,18 +181,24 @@ class _ProductMainPanel(QWidget):
         pid = self._prod_table.selected_pid()
         if pid is None:
             return
-        orphans = fetch_orphan_bom_rows(self.conn, pid)
+        try:
+            conn = self._live_conn()
+        except Exception as e:
+            QMessageBox.warning(self, "خطأ", str(e))
+            return
+
+        orphans = fetch_orphan_bom_rows(conn, pid)
         orphan_names = [
             o["child_name"] or f"ID:{o['child_id']}" for o in orphans
         ]
-        item = fetch_item(self.conn, pid)
+        item      = fetch_item(conn, pid)
         prod_name = item["name"] if item else f"ID {pid}"
 
-        n = delete_orphan_bom_rows(self.conn, pid)
+        n = delete_orphan_bom_rows(conn, pid)
         self._warning.setVisible(False)
-        self._bom_tree.load(self.conn, pid)
+        self._bom_tree.load(conn, pid)
 
-        auto_deleted = cleanup_empty_products_after_orphan_fix(self.conn, [pid])
+        auto_deleted = cleanup_empty_products_after_orphan_fix(conn, [pid])
         bus.data_changed.emit()
 
         if auto_deleted:
@@ -194,13 +231,18 @@ class _ProductMainPanel(QWidget):
         if pid is None:
             QMessageBox.information(self, "تنبيه", "اختر منتجاً أولاً")
             return
-        item = fetch_item(self.conn, pid)
+        try:
+            conn = self._live_conn()
+        except Exception as e:
+            QMessageBox.warning(self, "خطأ", str(e))
+            return
+        item = fetch_item(conn, pid)
         if not item:
             return
         if confirm_delete(self, item["name"]):
             if self._form.is_editing and self._form._editing_id == pid:
                 self._form.reset()
-            delete_item(self.conn, pid)
+            delete_item(conn, pid)
             self._warning.setVisible(False)
             self._bom_tree.clear_tree()
             bus.data_changed.emit()
