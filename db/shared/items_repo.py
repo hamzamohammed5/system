@@ -1,7 +1,9 @@
 """
-db/items_repo.py  (مع دعم variant_id في BOM)
+db/shared/items_repo.py  (مع دعم variant_id في BOM + العناصر المشتركة)
 ================
 """
+
+import json
 
 
 # ══════════════════════════════════════════════════════════
@@ -26,7 +28,124 @@ def fetch_items_by_type(conn, item_type: str):
     """, (item_type,)).fetchall()
 
 
-def fetch_item(conn, item_id: int):
+def fetch_items_by_type_with_shared(conn, item_type: str,
+                                     company_id: int = None) -> list:
+    """
+    يجيب عناصر النوع المطلوب (محلية + مشتركة).
+    العناصر المشتركة تظهر مع is_shared=True وcategory_name="🔗 مشترك".
+
+    company_id: لو None يحاول يجيبه من company_state
+    """
+    # 1. العناصر المحلية
+    local = [dict(r) for r in fetch_items_by_type(conn, item_type)]
+    for item in local:
+        item["is_shared"]      = False
+        item["shared_item_id"] = None
+
+    # 2. العناصر المشتركة
+    shared = _fetch_shared_for_type(item_type, company_id)
+
+    return local + shared
+
+
+def _fetch_shared_for_type(item_type: str, company_id: int = None) -> list:
+    """يجيب العناصر المشتركة من companies.db."""
+    try:
+        if company_id is None:
+            from db.companies.company_state import company_state
+            if not company_state.is_ready:
+                return []
+            company_id = company_state.company_id
+
+        from db.companies.companies_schema import get_central_connection
+        central = get_central_connection()
+
+        rows = central.execute("""
+            SELECT s.id, s.name, s.shared_type, s.data, s.updated_at
+            FROM company_shared_links lnk
+            JOIN shared_items s ON s.id = lnk.shared_item_id
+            WHERE lnk.company_id = ? AND s.shared_type = ?
+            ORDER BY s.name
+        """, (company_id, item_type)).fetchall()
+        central.close()
+
+        result = []
+        for row in rows:
+            item = _shared_row_to_item(row, item_type)
+            result.append(item)
+        return result
+    except Exception as e:
+        print(f"[items_repo] _fetch_shared_for_type error: {e}")
+        return []
+
+
+def _shared_row_to_item(row, item_type: str) -> dict:
+    """يحول صف shared_items إلى dict يشبه صف items."""
+    try:
+        data = json.loads(row["data"]) if row["data"] else {}
+    except Exception:
+        data = {}
+
+    base = {
+        "id":             f"shared:{row['id']}",
+        "shared_item_id": row["id"],
+        "name":           row["name"],
+        "type":           item_type,
+        "category_id":    None,
+        "category_name":  "🔗 مشترك",
+        "is_shared":      True,
+        "total_qty":      None,
+    }
+
+    if item_type == "raw":
+        base["price"]     = float(data.get("price", 0.0))
+        base["total_qty"] = data.get("total_qty")
+    elif item_type == "machine":
+        base["rate_per_hour"] = float(data.get("rate_per_hour", 0.0))
+        base["rate_per_unit"] = float(data.get("rate_per_unit", 0.0))
+        base["price"] = 0.0
+    elif item_type == "labor_op":
+        base["minutes"] = float(data.get("minutes", 0.0))
+        base["price"] = 0.0
+    elif item_type == "machine_op":
+        base["mode"]          = data.get("mode", "time")
+        base["value"]         = float(data.get("value", 0.0))
+        base["machine_name"]  = data.get("machine_name", "")
+        base["rate_per_hour"] = float(data.get("rate_per_hour", 0.0))
+        base["rate_per_unit"] = float(data.get("rate_per_unit", 0.0))
+        base["price"] = 0.0
+    else:
+        base["price"] = 0.0
+
+    return base
+
+
+def is_shared_id(item_id) -> bool:
+    """هل هذا ID لعنصر مشترك؟"""
+    return isinstance(item_id, str) and str(item_id).startswith("shared:")
+
+
+def extract_shared_id(item_id) -> int | None:
+    """يستخرج shared_item_id الحقيقي من الـ composite id."""
+    if is_shared_id(item_id):
+        try:
+            return int(str(item_id).split(":")[1])
+        except Exception:
+            return None
+    return None
+
+
+def fetch_item(conn, item_id):
+    """
+    يجيب عنصر واحد — يدعم shared items.
+    لو item_id يبدأ بـ "shared:" يجيب من companies.db.
+    """
+    if is_shared_id(item_id):
+        shared_id = extract_shared_id(item_id)
+        if shared_id is None:
+            return None
+        return _fetch_shared_item_as_row(shared_id)
+
     return conn.execute("""
         SELECT i.id, i.name, i.type, i.price, i.total_qty,
                i.category_id,
@@ -35,6 +154,60 @@ def fetch_item(conn, item_id: int):
         LEFT JOIN categories c ON c.id = i.category_id
         WHERE  i.id = ?
     """, (item_id,)).fetchone()
+
+
+def _fetch_shared_item_as_row(shared_item_id: int):
+    """يجيب عنصر مشترك من companies.db كـ sqlite3.Row-like dict."""
+    try:
+        from db.companies.companies_schema import get_central_connection
+        central = get_central_connection()
+        row = central.execute(
+            "SELECT id, name, shared_type, data FROM shared_items WHERE id=?",
+            (shared_item_id,)
+        ).fetchone()
+        central.close()
+        if not row:
+            return None
+        try:
+            data = json.loads(row["data"]) if row["data"] else {}
+        except Exception:
+            data = {}
+
+        # نبني dict يشبه صف items
+        return _SharedItemRow(
+            id=f"shared:{row['id']}",
+            name=row["name"],
+            type=row["shared_type"],
+            price=float(data.get("price", 0.0)),
+            total_qty=data.get("total_qty"),
+            category_id=None,
+            category_name="🔗 مشترك",
+            is_shared=True,
+            shared_item_id=row["id"],
+            data=data,
+        )
+    except Exception:
+        return None
+
+
+class _SharedItemRow:
+    """يحاكي sqlite3.Row للعناصر المشتركة."""
+    def __init__(self, **kwargs):
+        self._data = kwargs
+
+    def __getitem__(self, key):
+        return self._data.get(key)
+
+    def __getattr__(self, key):
+        if key.startswith("_"):
+            raise AttributeError(key)
+        return self._data.get(key)
+
+    def keys(self):
+        return self._data.keys()
+
+    def get(self, key, default=None):
+        return self._data.get(key, default)
 
 
 def insert_item(conn, name: str, item_type: str, price: float = 0,
@@ -84,11 +257,7 @@ def _resolve_name(conn, child_type: str, child_id: int) -> str | None:
 
 
 def fetch_bom(conn, parent_id: int):
-    """
-    يرجع صفوف BOM مع waste_pct و variant_id.
-    كل صف: (child_type, child_id, qty, waste_pct, variant_id)
-    """
-    # تحقق من وجود عمود variant_id
+    """يرجع صفوف BOM مع waste_pct و variant_id."""
     cols = {r["name"] for r in conn.execute("PRAGMA table_info(bom)").fetchall()}
     if "variant_id" in cols:
         return conn.execute(
@@ -99,7 +268,6 @@ def fetch_bom(conn, parent_id: int):
             (parent_id,)
         ).fetchall()
     else:
-        # fallback بدون variant_id
         return conn.execute(
             "SELECT child_type, child_id, qty, "
             "COALESCE(waste_pct, 0) as waste_pct "

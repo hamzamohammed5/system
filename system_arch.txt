@@ -1,5 +1,5 @@
 File Tree Snapshot
-Generated : 2026-05-22 13:45:37
+Generated : 2026-05-22 13:52:07
 Source    : D:\My Workspace\Hg\Alhabaar\accountant\system
 Extensions: .py
 ────────────────────────────────────────────────────────────
@@ -54,7 +54,8 @@ system/
 │   │   ├── migrations.py
 │   │   ├── migrations_v2.py
 │   │   ├── migrations_v3.py
-│   │   └── settings_repo.py
+│   │   ├── settings_repo.py
+│   │   └── shared_items_bridge.py
 ├── models/
 │   ├── costing.py
 │   ├── costing_base.py
@@ -106,8 +107,7 @@ system/
 │   │   │   └── ledger_tab.py
 │   │   ├── companies/
 │   │   │   ├── shared_items_manager_helper/
-│   │   │   │   ├── _companies_panel.py
-│   │   │   │   └── _data_form.py
+│   │   │   │   └── _add_sharedItem_dialog.py
 │   │   │   ├── _link_item_picker.py
 │   │   │   ├── companies_dialog.py
 │   │   │   ├── company_selector.py
@@ -229,6 +229,7 @@ system/
 │   │   │   │   └── bulk_replace_products_panel.py
 │   │   │   ├── bom_scenarios_panel.py
 │   │   │   ├── bom_tree.py
+│   │   │   ├── catalog_builder.py
 │   │   │   ├── component_row.py
 │   │   │   ├── machine_op_rows_editor.py
 │   │   │   └── raw_variants_panel.py
