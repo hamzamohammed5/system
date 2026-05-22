@@ -28,6 +28,18 @@ class _TablePanel(QWidget):
         self._load()
         bus.data_changed.connect(self._load)
 
+    # ── connection صالح دايماً ────────────────────────────
+
+    def _live_conn(self):
+        if self.conn is not None:
+            try:
+                self.conn.execute("SELECT 1")
+                return self.conn
+            except Exception:
+                pass
+        from db.companies.company_state import company_state
+        return company_state.get_erp_conn()
+
     def _build(self):
         root = QVBoxLayout(self)
         root.setSpacing(6)
@@ -35,7 +47,7 @@ class _TablePanel(QWidget):
 
         root.addWidget(section_label("─── الخامات المحفوظة ───"))
 
-        self._filter = FilterBar(self.conn, scope="raw")
+        self._filter = FilterBar(self._live_conn(), scope="raw")
         self._filter.filter_changed.connect(self._apply_filter)
         root.addWidget(self._filter)
 
@@ -90,7 +102,11 @@ class _TablePanel(QWidget):
         if self._input_panel.is_editing and self._input_panel._editing_id == item_id:
             self._input_panel._reset()
         if confirm_delete(self, item_name):
-            delete_item(self.conn, item_id)
+            try:
+                delete_item(self._live_conn(), item_id)
+            except Exception as e:
+                QMessageBox.warning(self, "خطأ", str(e))
+                return
             bus.data_changed.emit()
 
     def _bulk_replace(self):
@@ -99,13 +115,17 @@ class _TablePanel(QWidget):
             QMessageBox.information(self, "تنبيه", "اختر خامة من الجدول أولاً")
             return
         dlg = BulkReplaceDialog(
-            conn=self.conn, child_type="raw",
+            conn=self._live_conn(), child_type="raw",
             child_id=item_id, child_name=item_name, parent=self,
         )
         dlg.exec_()
 
     def _load(self):
-        self._all_rows = list(fetch_items_by_type(self.conn, "raw"))
+        try:
+            conn = self._live_conn()
+            self._all_rows = list(fetch_items_by_type(conn, "raw"))
+        except Exception:
+            self._all_rows = []
         self._apply_filter()
 
     def _apply_filter(self):

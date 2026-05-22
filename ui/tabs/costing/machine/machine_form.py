@@ -2,7 +2,6 @@
 ui/tabs/costing/machine/machine_form.py
 =======================================
 _MachineForm — فورم إضافة / تعديل الماكينة.
-مع scroll عمودي لما المساحة تكون ضيقة.
 """
 
 from PyQt5.QtWidgets import (
@@ -45,6 +44,18 @@ class _MachineForm(QWidget, EditModeMixin):
         self._build()
         self.init_edit_mode(self.btn_add, self.btn_save, self.btn_cancel, self.lbl_mode)
 
+    # ── connection صالح دايماً ────────────────────────────
+
+    def _live_conn(self):
+        if self.conn is not None:
+            try:
+                self.conn.execute("SELECT 1")
+                return self.conn
+            except Exception:
+                pass
+        from db.companies.company_state import company_state
+        return company_state.get_erp_conn()
+
     def _build(self):
         outer = QVBoxLayout(self)
         outer.setContentsMargins(0, 0, 0, 0)
@@ -75,7 +86,7 @@ class _MachineForm(QWidget, EditModeMixin):
         self.inp_name.setMinimumHeight(30)
         self.sp_rate_hour  = _spin()
         self.sp_rate_unit  = _spin()
-        self.cmb_category  = CategoryCombo(self.conn, scope="machine")
+        self.cmb_category  = CategoryCombo(self._live_conn(), scope="machine")
 
         form.addRow("اسم الماكينة :",       self.inp_name)
         form.addRow("معدل التشغيل / ساعة :", _labeled(self.sp_rate_hour, "جنيه / ساعة"))
@@ -95,7 +106,10 @@ class _MachineForm(QWidget, EditModeMixin):
         root.addStretch()
 
     def load_for_edit(self, machine_id: int):
-        m = fetch_machine(self.conn, machine_id)
+        try:
+            m = fetch_machine(self._live_conn(), machine_id)
+        except Exception:
+            return
         if not m:
             return
         self.inp_name.setText(m["name"])
@@ -109,9 +123,13 @@ class _MachineForm(QWidget, EditModeMixin):
         if not name:
             QMessageBox.warning(self, "تنبيه", "أدخل اسم الماكينة")
             return
-        insert_machine(self.conn, name,
-                       self.sp_rate_hour.value(), self.sp_rate_unit.value(),
-                       category_id=self.cmb_category.get_category())
+        try:
+            insert_machine(self._live_conn(), name,
+                           self.sp_rate_hour.value(), self.sp_rate_unit.value(),
+                           category_id=self.cmb_category.get_category())
+        except Exception as e:
+            QMessageBox.warning(self, "خطأ", str(e))
+            return
         self._reset()
         bus.data_changed.emit()
 
@@ -120,9 +138,13 @@ class _MachineForm(QWidget, EditModeMixin):
         if not name:
             QMessageBox.warning(self, "تنبيه", "أدخل الاسم")
             return
-        update_machine(self.conn, self._editing_id, name,
-                       self.sp_rate_hour.value(), self.sp_rate_unit.value(),
-                       category_id=self.cmb_category.get_category())
+        try:
+            update_machine(self._live_conn(), self._editing_id, name,
+                           self.sp_rate_hour.value(), self.sp_rate_unit.value(),
+                           category_id=self.cmb_category.get_category())
+        except Exception as e:
+            QMessageBox.warning(self, "خطأ", str(e))
+            return
         self._reset()
         bus.data_changed.emit()
 

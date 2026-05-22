@@ -109,6 +109,18 @@ class _ProductTable(QWidget):
         self._load()
         bus.data_changed.connect(self._load)
 
+    # ── connection صالح دايماً ────────────────────────────
+
+    def _live_conn(self):
+        if self.conn is not None:
+            try:
+                self.conn.execute("SELECT 1")
+                return self.conn
+            except Exception:
+                pass
+        from db.companies.company_state import company_state
+        return company_state.get_erp_conn()
+
     def _build(self):
         root = QVBoxLayout(self)
         root.setContentsMargins(12, 8, 12, 10)
@@ -116,7 +128,7 @@ class _ProductTable(QWidget):
 
         root.addWidget(section_label("─── المنتجات المحفوظة ───"))
 
-        self._filter = FilterBar(self.conn, scope=self._scope)
+        self._filter = FilterBar(self._live_conn(), scope=self._scope)
         self._filter.filter_changed.connect(self._apply_filter)
         root.addWidget(self._filter)
 
@@ -143,17 +155,28 @@ class _ProductTable(QWidget):
         return int(self.table.item(row, 0).text()) if row >= 0 else None
 
     def _load(self):
-        self._all_rows = list(fetch_items_by_type(self.conn, self.product_type))
+        try:
+            conn = self._live_conn()
+            self._all_rows = list(fetch_items_by_type(conn, self.product_type))
+        except Exception:
+            self._all_rows = []
         self._apply_filter()
 
     def _apply_filter(self):
         prev = self.selected_pid()
         self.table.setRowCount(0)
         shown = 0
+
+        try:
+            conn = self._live_conn()
+        except Exception:
+            self._filter.set_count(0, 0)
+            return
+
         for row in self._all_rows:
             if not self._filter.match(row["name"], row["category_id"]):
                 continue
-            cost = calc_cost(self.conn, row["id"])
+            cost = calc_cost(conn, row["id"])
             r = self.table.rowCount()
             self.table.insertRow(r)
             self.table.setItem(r, 0, QTableWidgetItem(str(row["id"])))

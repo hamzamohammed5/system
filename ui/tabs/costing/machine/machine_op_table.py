@@ -29,13 +29,25 @@ class _MachineOpTable(QWidget):
         self._load()
         bus.data_changed.connect(self._load)
 
+    # ── connection صالح دايماً ────────────────────────────
+
+    def _live_conn(self):
+        if self.conn is not None:
+            try:
+                self.conn.execute("SELECT 1")
+                return self.conn
+            except Exception:
+                pass
+        from db.companies.company_state import company_state
+        return company_state.get_erp_conn()
+
     def _build(self):
         root = QVBoxLayout(self)
         root.setContentsMargins(12, 8, 12, 12)
         root.setSpacing(6)
         root.addWidget(section_label("─── عمليات التشغيل المحفوظة ───"))
 
-        self._filter = FilterBar(self.conn, scope="machine")
+        self._filter = FilterBar(self._live_conn(), scope="machine")
         self._filter.filter_changed.connect(self._apply_filter)
         root.addWidget(self._filter)
 
@@ -86,7 +98,11 @@ class _MachineOpTable(QWidget):
         if self._form.is_editing and self._form._editing_id == op_id:
             self._form._reset()
         if confirm_delete(self, op_name):
-            delete_machine_op(self.conn, op_id)
+            try:
+                delete_machine_op(self._live_conn(), op_id)
+            except Exception as e:
+                QMessageBox.warning(self, "خطأ", str(e))
+                return
             bus.data_changed.emit()
 
     def _bulk_replace(self):
@@ -97,22 +113,31 @@ class _MachineOpTable(QWidget):
         op_id   = int(self.table.item(row, 0).text())
         op_name = self.table.item(row, 1).text()
         dlg = BulkReplaceDialog(
-            conn=self.conn, child_type="machine_op",
+            conn=self._live_conn(), child_type="machine_op",
             child_id=op_id, child_name=op_name, parent=self,
         )
         dlg.exec_()
 
     def _load(self):
-        self._all_rows = list(fetch_all_machine_ops(self.conn))
+        try:
+            conn = self._live_conn()
+            self._all_rows = list(fetch_all_machine_ops(conn))
+        except Exception:
+            self._all_rows = []
         self._apply_filter()
 
     def _apply_filter(self):
         self.table.setRowCount(0)
         shown = 0
+        try:
+            conn = self._live_conn()
+        except Exception:
+            self._filter.set_count(0, 0)
+            return
         for op in self._all_rows:
             if not self._filter.match(op["name"], op["category_id"]):
                 continue
-            cost    = calc_machine_op_cost(self.conn, op["id"])
+            cost    = calc_machine_op_cost(conn, op["id"])
             mode_ar = "وقت" if op["mode"] == "time" else "وحدة"
             r = self.table.rowCount()
             self.table.insertRow(r)

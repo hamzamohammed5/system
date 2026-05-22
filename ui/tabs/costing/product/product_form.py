@@ -1,12 +1,5 @@
 """
 ui/tabs/costing/product/product_form.py
-
-الإصلاح الجوهري:
-  _load_bom_for_scenario:
-  1. بعد إنشاء كل ComponentRow من نوع machine_op، نستدعي expose_load_op_rows
-     مباشرة (synchronously) قبل أي processEvents أو تأخير.
-  2. expose_load_op_rows يضبط _skip_timer_load=True لمنع QTimer من التداخل.
-  3. هذا يضمن إن الـ cmb_op_row يكون ممتلئ بالصحيح قبل أي حفظ.
 """
 
 from PyQt5.QtWidgets import (
@@ -44,6 +37,18 @@ class _FormPanel(QWidget):
         self._current_scenario_id = None
         self._build()
 
+    # ── connection صالح دايماً ────────────────────────────
+
+    def _live_conn(self):
+        if self.conn is not None:
+            try:
+                self.conn.execute("SELECT 1")
+                return self.conn
+            except Exception:
+                pass
+        from db.companies.company_state import company_state
+        return company_state.get_erp_conn()
+
     def _build(self):
         root = QVBoxLayout(self)
         root.setContentsMargins(0, 0, 0, 0)
@@ -71,7 +76,7 @@ class _FormPanel(QWidget):
         self.inp_name.setPlaceholderText("اسم المنتج...")
         self.inp_name.setMinimumHeight(32)
 
-        self.cmb_category = CategoryCombo(self.conn, scope=self._scope)
+        self.cmb_category = CategoryCombo(self._live_conn(), scope=self._scope)
         self.cmb_category.setMinimumHeight(32)
         self.cmb_category.setFixedWidth(160)
 
@@ -98,7 +103,7 @@ class _FormPanel(QWidget):
         top.addWidget(self.btn_cancel)
         header_lay.addLayout(top)
 
-        self._scenarios_panel = _BomScenariosPanel(self.conn)
+        self._scenarios_panel = _BomScenariosPanel(self._live_conn())
         self._scenarios_panel.scenario_changed.connect(self._on_scenario_changed)
         header_lay.addWidget(self._scenarios_panel)
 
@@ -171,10 +176,6 @@ class _FormPanel(QWidget):
         widget.deleteLater()
 
     def collect_rows(self):
-        """
-        يجمع (child_type, child_id, qty, waste_pct, variant_id, machine_op_row_id)
-        دايماً 6 عناصر في كل tuple.
-        """
         result = []
         for i in range(self.rows_layout.count()):
             item = self.rows_layout.itemAt(i)
@@ -185,7 +186,6 @@ class _FormPanel(QWidget):
                 val = w.get_values()
                 if val:
                     val = tuple(val)
-                    # نضمن 6 عناصر دايماً
                     while len(val) < 6:
                         val = val + (None,)
                     result.append(val)
@@ -202,7 +202,11 @@ class _FormPanel(QWidget):
     # ══════════════════════════════════════════════════════
 
     def load_product(self, pid: int):
-        item = fetch_item(self.conn, pid)
+        try:
+            conn = self._live_conn()
+            item = fetch_item(conn, pid)
+        except Exception:
+            return
         if not item:
             return
         self.clear_rows()
@@ -211,16 +215,23 @@ class _FormPanel(QWidget):
 
         self._scenarios_panel.load_item(pid)
 
-        sc = fetch_default_scenario(self.conn, pid)
-        if not sc:
-            sc_id = insert_scenario(self.conn, pid, "سيناريو 1", is_default=True)
-        else:
-            sc_id = sc["id"]
+        try:
+            sc = fetch_default_scenario(conn, pid)
+            if not sc:
+                sc_id = insert_scenario(conn, pid, "سيناريو 1", is_default=True)
+            else:
+                sc_id = sc["id"]
+        except Exception:
+            sc_id = None
 
         self._current_scenario_id = sc_id
-        self._load_bom_for_scenario(pid, sc_id)
+        if sc_id:
+            self._load_bom_for_scenario(pid, sc_id)
 
-        n_orphans = len(fetch_orphan_bom_rows(self.conn, pid))
+        try:
+            n_orphans = len(fetch_orphan_bom_rows(conn, pid))
+        except Exception:
+            n_orphans = 0
         label = (
             f"تعديل: {item['name']}  {n_orphans} مكون ناقص"
             if n_orphans else f"تعديل: {item['name']}"
@@ -229,29 +240,26 @@ class _FormPanel(QWidget):
         self.inp_name.setFocus()
 
     def _load_bom_for_scenario(self, pid: int, scenario_id: int):
-        """
-        تحميل مكونات BOM لسيناريو محدد.
-
-        ✅ الترتيب الصحيح:
-        1. ننشئ ComponentRow مع machine_op_row_id في الـ __init__
-        2. نستدعي expose_load_op_rows فوراً (synchronously)
-           → هذا يضبط _skip_timer_load=True قبل أي QTimer يشتغل
-        3. QTimer(50ms) في ComponentRow.__init__ يرى _skip_timer_load=True
-           → يتجاهل إعادة التحميل
-        4. النتيجة: الاختيار الصحيح محفوظ دائماً
-        """
         self.clear_rows()
+        try:
+            conn = self._live_conn()
+        except Exception:
+            self._add_row()
+            return
 
         orphan_map = {
             (o["child_type"], o["child_id"]): o["child_name"]
-            for o in fetch_orphan_bom_rows(self.conn, pid)
+            for o in fetch_orphan_bom_rows(conn, pid)
         }
 
         try:
-            bom_rows = fetch_bom_for_scenario(self.conn, scenario_id)
+            bom_rows = fetch_bom_for_scenario(conn, scenario_id)
         except Exception:
-            from db.shared.items_repo import fetch_bom
-            bom_rows = fetch_bom(self.conn, pid)
+            try:
+                from db.shared.items_repo import fetch_bom
+                bom_rows = fetch_bom(conn, pid)
+            except Exception:
+                bom_rows = []
 
         for row_data in (bom_rows or []):
             child_type = row_data["child_type"]
@@ -275,8 +283,6 @@ class _FormPanel(QWidget):
 
             o_name = orphan_map.get((child_type, child_id))
 
-            # ✅ الخطوة 1: ننشئ الـ row مع machine_op_row_id
-            # في هذه اللحظة QTimer لم يشتغل بعد (event loop مش شغّال)
             component_row = self._add_row(
                 child_type=child_type,
                 child_id=child_id,
@@ -287,9 +293,6 @@ class _FormPanel(QWidget):
                 machine_op_row_id=machine_op_row_id,
             )
 
-            # ✅ الخطوة 2: لو machine_op، نحمل الصفوف synchronously فوراً
-            # expose_load_op_rows يضبط _skip_timer_load=True
-            # → QTimer(50ms) الذي سيشتغل لاحقاً سيجد _skip_timer_load=True ويتوقف
             if child_type == "machine_op" and child_id is not None:
                 component_row.expose_load_op_rows(child_id, machine_op_row_id)
 
@@ -329,25 +332,31 @@ class _FormPanel(QWidget):
             QMessageBox.warning(self, "تنبيه", "اضف مكونا واحدا على الاقل")
             return
 
-        if self.is_editing:
-            update_item(
-                self.conn, self._editing_id, name, 0,
-                category_id=self.cmb_category.get_category()
-            )
-            if self._current_scenario_id is None:
-                self._current_scenario_id = self._scenarios_panel.ensure_default_scenario(
-                    self._editing_id
+        try:
+            conn = self._live_conn()
+            if self.is_editing:
+                update_item(
+                    conn, self._editing_id, name, 0,
+                    category_id=self.cmb_category.get_category()
                 )
-            replace_bom_for_scenario(self.conn, self._current_scenario_id, rows)
-        else:
-            pid = insert_item(
-                self.conn, name, self.product_type, 0,
-                category_id=self.cmb_category.get_category()
-            )
-            sc_id = insert_scenario(self.conn, pid, "سيناريو 1", is_default=True)
-            replace_bom_for_scenario(self.conn, sc_id, rows)
+                if self._current_scenario_id is None:
+                    self._current_scenario_id = self._scenarios_panel.ensure_default_scenario(
+                        self._editing_id
+                    )
+                replace_bom_for_scenario(conn, self._current_scenario_id, rows)
+            else:
+                pid = insert_item(
+                    conn, name, self.product_type, 0,
+                    category_id=self.cmb_category.get_category()
+                )
+                sc_id = insert_scenario(conn, pid, "سيناريو 1", is_default=True)
+                replace_bom_for_scenario(conn, sc_id, rows)
 
-        self.conn.commit()
+            conn.commit()
+        except Exception as e:
+            QMessageBox.warning(self, "خطأ", str(e))
+            return
+
         self.reset()
         QTimer.singleShot(0, bus.data_changed.emit)
 

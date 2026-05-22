@@ -2,7 +2,6 @@
 ui/tabs/costing/raw/raw_input_panel.py
 =======================================
 _InputPanel — فورم إضافة / تعديل الخامة مع لوحة Variants.
-مع scroll عمودي لما المساحة تكون ضيقة.
 """
 
 from PyQt5.QtWidgets import (
@@ -38,13 +37,23 @@ class _InputPanel(QWidget, EditModeMixin):
         self._build()
         self.init_edit_mode(self.btn_add, self.btn_save, self.btn_cancel, self.lbl_mode)
 
+    # ── connection صالح دايماً ────────────────────────────
+
+    def _live_conn(self):
+        if self.conn is not None:
+            try:
+                self.conn.execute("SELECT 1")
+                return self.conn
+            except Exception:
+                pass
+        from db.companies.company_state import company_state
+        return company_state.get_erp_conn()
+
     def _build(self):
-        # Layout خارجي — يحتوي فقط على الـ scroll area
         outer = QVBoxLayout(self)
         outer.setContentsMargins(0, 0, 0, 0)
         outer.setSpacing(0)
 
-        # الحاوية الداخلية التي تُبنى عليها كل الـ widgets
         self._inner = QWidget()
         self._inner.setMinimumWidth(280)
         self._inner.setSizePolicy(QSizePolicy.Preferred, QSizePolicy.Minimum)
@@ -52,12 +61,10 @@ class _InputPanel(QWidget, EditModeMixin):
         scroll = wrap_in_scroll(self._inner)
         outer.addWidget(scroll)
 
-        # بناء المحتوى داخل self._inner
         root = QVBoxLayout(self._inner)
         root.setSpacing(8)
         root.setContentsMargins(12, 12, 12, 12)
 
-        # ── بيانات الخامة الأساسية ──
         grp = QGroupBox("بيانات الخامة")
         grp_layout = QVBoxLayout(grp)
         grp_layout.setSpacing(10)
@@ -93,7 +100,7 @@ class _InputPanel(QWidget, EditModeMixin):
         self.inp_price.textChanged.connect(lambda _: self._on_price_changed())
         self.inp_total_qty.textChanged.connect(lambda _: self._update_hint())
 
-        self.cmb_category = CategoryCombo(self.conn, scope="raw")
+        self.cmb_category = CategoryCombo(self._live_conn(), scope="raw")
 
         form.addRow("اسم الخامة :",       self.inp_name)
         form.addRow("السعر الكلي :",       _labeled(self.inp_price,     "جنيه"))
@@ -114,8 +121,7 @@ class _InputPanel(QWidget, EditModeMixin):
 
         root.addWidget(grp)
 
-        # ── لوحة Variants ──
-        self._variants_panel = _RawVariantsPanel(self.conn)
+        self._variants_panel = _RawVariantsPanel(self._live_conn())
         root.addWidget(self._variants_panel)
 
         root.addStretch()
@@ -161,7 +167,10 @@ class _InputPanel(QWidget, EditModeMixin):
     # ══════════════════════════════════════════════════════
 
     def load_for_edit(self, item_id: int):
-        item = fetch_item(self.conn, item_id)
+        try:
+            item = fetch_item(self._live_conn(), item_id)
+        except Exception:
+            return
         if not item:
             return
         self.inp_name.setText(item["name"])
@@ -186,9 +195,14 @@ class _InputPanel(QWidget, EditModeMixin):
         name, price, total_qty = self._collect()
         if name is None:
             return
-        new_id = insert_item(self.conn, name, "raw", price,
-                             category_id=self.cmb_category.get_category(),
-                             total_qty=total_qty)
+        try:
+            conn   = self._live_conn()
+            new_id = insert_item(conn, name, "raw", price,
+                                 category_id=self.cmb_category.get_category(),
+                                 total_qty=total_qty)
+        except Exception as e:
+            QMessageBox.warning(self, "خطأ", str(e))
+            return
         self._variants_panel.load_item(new_id, price)
         self.enter_edit_mode(new_id, f"─── أضف وحدات إنتاج لـ: {name} ───")
         self.btn_add.setVisible(False)
@@ -200,9 +214,13 @@ class _InputPanel(QWidget, EditModeMixin):
         name, price, total_qty = self._collect()
         if name is None:
             return
-        update_item(self.conn, self._editing_id, name, price,
-                    category_id=self.cmb_category.get_category(),
-                    total_qty=total_qty)
+        try:
+            update_item(self._live_conn(), self._editing_id, name, price,
+                        category_id=self.cmb_category.get_category(),
+                        total_qty=total_qty)
+        except Exception as e:
+            QMessageBox.warning(self, "خطأ", str(e))
+            return
         self._reset()
         bus.data_changed.emit()
 

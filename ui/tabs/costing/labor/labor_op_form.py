@@ -2,7 +2,6 @@
 ui/tabs/costing/labor/labor_op_form.py
 =======================================
 _LaborOpForm — فورم إضافة / تعديل عملية عمالة.
-مع scroll عمودي لما المساحة تكون ضيقة.
 """
 
 from PyQt5.QtWidgets import (
@@ -49,6 +48,18 @@ class _LaborOpForm(QWidget, EditModeMixin):
         self.init_edit_mode(self.btn_add, self.btn_save, self.btn_cancel, self.lbl_mode)
         bus.data_changed.connect(self._update_preview)
 
+    # ── connection صالح دايماً ────────────────────────────
+
+    def _live_conn(self):
+        if self.conn is not None:
+            try:
+                self.conn.execute("SELECT 1")
+                return self.conn
+            except Exception:
+                pass
+        from db.companies.company_state import company_state
+        return company_state.get_erp_conn()
+
     def _build(self):
         outer = QVBoxLayout(self)
         outer.setContentsMargins(0, 0, 0, 0)
@@ -79,7 +90,7 @@ class _LaborOpForm(QWidget, EditModeMixin):
         self.inp_name.setMinimumHeight(30)
         self.sp_minutes = _spin(99999, 2)
         self.sp_minutes.valueChanged.connect(self._update_preview)
-        self.cmb_category = CategoryCombo(self.conn, scope="labor")
+        self.cmb_category = CategoryCombo(self._live_conn(), scope="labor")
 
         self.lbl_cost = QLabel("─")
         self.lbl_cost.setStyleSheet(
@@ -112,7 +123,10 @@ class _LaborOpForm(QWidget, EditModeMixin):
         )
 
     def load_for_edit(self, op_id: int):
-        op = fetch_labor_op(self.conn, op_id)
+        try:
+            op = fetch_labor_op(self._live_conn(), op_id)
+        except Exception:
+            return
         if not op:
             return
         self.inp_name.setText(op["name"])
@@ -125,8 +139,12 @@ class _LaborOpForm(QWidget, EditModeMixin):
         if not name:
             QMessageBox.warning(self, "تنبيه", "أدخل اسم العملية")
             return
-        insert_labor_op(self.conn, name, self.sp_minutes.value(),
-                        category_id=self.cmb_category.get_category())
+        try:
+            insert_labor_op(self._live_conn(), name, self.sp_minutes.value(),
+                            category_id=self.cmb_category.get_category())
+        except Exception as e:
+            QMessageBox.warning(self, "خطأ", str(e))
+            return
         self._reset()
         bus.data_changed.emit()
 
@@ -135,8 +153,13 @@ class _LaborOpForm(QWidget, EditModeMixin):
         if not name:
             QMessageBox.warning(self, "تنبيه", "أدخل الاسم")
             return
-        update_labor_op(self.conn, self._editing_id, name, self.sp_minutes.value(),
-                        category_id=self.cmb_category.get_category())
+        try:
+            update_labor_op(self._live_conn(), self._editing_id, name,
+                            self.sp_minutes.value(),
+                            category_id=self.cmb_category.get_category())
+        except Exception as e:
+            QMessageBox.warning(self, "خطأ", str(e))
+            return
         self._reset()
         bus.data_changed.emit()
 
