@@ -1,14 +1,12 @@
 """
 ui/tabs/companies/companies_dialog.py
-=======================================
-نافذة إدارة الشركات — إضافة / تعديل / حذف / تفعيل.
 """
 
 from PyQt5.QtWidgets import (
     QDialog, QVBoxLayout, QHBoxLayout, QSplitter,
     QLabel, QPushButton, QLineEdit, QTextEdit,
     QTableWidget, QTableWidgetItem, QHeaderView,
-    QMessageBox, QColorDialog, QWidget, QFrame,
+    QColorDialog, QWidget, QFrame,
 )
 from PyQt5.QtCore import Qt
 from PyQt5.QtGui  import QColor
@@ -19,6 +17,7 @@ from db.companies.companies_repo import (
     delete_company, toggle_company_active,
 )
 from ui.app_settings import _C
+from ui.widgets.shared.message_box import msg_question, msg_info, msg_critical
 
 
 class CompaniesDialog(QDialog):
@@ -259,8 +258,6 @@ class CompaniesDialog(QDialog):
             QPushButton:hover {{ background: {hover}; }}
         """
 
-    # ── تحميل البيانات ─────────────────────────────────────
-
     def _load(self):
         rows = fetch_all_companies(self._conn)
         self._table.setRowCount(0)
@@ -268,7 +265,6 @@ class CompaniesDialog(QDialog):
             ri = self._table.rowCount()
             self._table.insertRow(ri)
 
-            # عمود الاسم — بلون الشركة
             name_lbl = QLabel(f"  {r['name']}")
             name_lbl.setStyleSheet(f"""
                 background: {r['color'] or '#1565c0'};
@@ -289,7 +285,6 @@ class CompaniesDialog(QDialog):
             )
             self._table.setItem(ri, 2, status)
 
-            # عمود الأزرار — خلفية شفافة صريحة
             btns_widget = QWidget()
             btns_widget.setStyleSheet("background: transparent; border: none;")
             btns_lay = QHBoxLayout(btns_widget)
@@ -334,8 +329,6 @@ class CompaniesDialog(QDialog):
             self._table.setCellWidget(ri, 3, btns_widget)
             self._table.setRowHeight(ri, 42)
 
-    # ── إجراءات ───────────────────────────────────────────
-
     def _new_company(self):
         self._editing_id = None
         self._form_title.setText("✨  شركة جديدة")
@@ -376,7 +369,7 @@ class CompaniesDialog(QDialog):
         notes = self._inp_notes.toPlainText().strip()
 
         if not name:
-            QMessageBox.warning(self, "تنبيه", "اسم الشركة مطلوب")
+            msg_warning(self, "تنبيه", "اسم الشركة مطلوب")
             return
 
         try:
@@ -386,16 +379,14 @@ class CompaniesDialog(QDialog):
                     name=name, short_name=short,
                     color=self._color, notes=notes
                 )
-                QMessageBox.information(
-                    self, "تم", f"تم تحديث بيانات «{name}»"
-                )
+                msg_info(self, "تم", f"تم تحديث بيانات «{name}»")
             else:
                 insert_company(
                     self._conn,
                     name=name, short_name=short,
                     color=self._color, notes=notes
                 )
-                QMessageBox.information(
+                msg_info(
                     self, "تم",
                     f"تم إنشاء شركة «{name}» بنجاح.\n"
                     "تم إنشاء قواعد البيانات الخاصة بها."
@@ -403,7 +394,7 @@ class CompaniesDialog(QDialog):
             self._reset_form()
             self._load()
         except Exception as e:
-            QMessageBox.critical(self, "خطأ", str(e))
+            msg_critical(self, "خطأ", str(e))
 
     def _reset_form(self):
         self._editing_id = None
@@ -421,15 +412,13 @@ class CompaniesDialog(QDialog):
         self._load()
 
     def _delete(self, company_id: int, name: str):
-        reply = QMessageBox.question(
+        if msg_question(
             self, "تأكيد الحذف",
             f"هل تريد حذف شركة «{name}»؟\n\n"
-            "ملاحظة: ملفات قواعد البيانات ستبقى على القرص.",
-            QMessageBox.Yes | QMessageBox.No
-        )
-        if reply == QMessageBox.Yes:
+            "ملاحظة: ملفات قواعد البيانات ستبقى على القرص."
+        ):
             try:
                 delete_company(self._conn, company_id)
                 self._load()
             except Exception as e:
-                QMessageBox.critical(self, "خطأ", str(e))
+                msg_critical(self, "خطأ", str(e))

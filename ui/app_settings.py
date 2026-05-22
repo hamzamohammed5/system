@@ -74,17 +74,10 @@ _C = {
 
 
 def get_font_size() -> int:
-    """
-    يقرأ حجم الخط من إعدادات الشركة النشطة.
-    لو ما فيش شركة نشطة بعد → يرجع DEFAULT_FONT_SIZE مباشرة.
-
-    ملاحظة: لا يُغلق الـ connection لأنه shared connection من company_state.
-    """
     try:
         from db.shared.connection import get_connection
         conn = get_connection()
     except RuntimeError:
-        # لا توجد شركة نشطة بعد — رجّع الافتراضي
         return DEFAULT_FONT_SIZE
     except Exception:
         return DEFAULT_FONT_SIZE
@@ -102,15 +95,9 @@ def get_font_size() -> int:
         return val
     except Exception:
         return DEFAULT_FONT_SIZE
-    # لا conn.close() — الـ connection shared ويُدار بواسطة company_state
 
 
 def set_font_size(size: int):
-    """
-    يحفظ حجم الخط في إعدادات الشركة النشطة.
-
-    ملاحظة: لا يُغلق الـ connection لأنه shared connection من company_state.
-    """
     size = max(MIN_FONT_SIZE, min(MAX_FONT_SIZE, size))
     try:
         from db.shared.connection import get_connection
@@ -124,7 +111,6 @@ def set_font_size(size: int):
         set_setting(conn, "font_size", size)
     except Exception:
         pass
-    # لا conn.close() — الـ connection shared ويُدار بواسطة company_state
 
 
 def fs(base: int, delta: int = 0) -> int:
@@ -166,53 +152,76 @@ QWidget {{
     background: transparent;
 }}
 
-/* ══ إصلاح شامل للـ Dialogs والـ MessageBoxes ══
-   المشكلة: QWidget {{ background: transparent }} بتخلي
-   محتوى الـ dialogs شفافاً فوق خلفية سوداء.
-   الحل: نعيد تعيين خلفية بيضاء لكل QDialog وما بداخله.
+/* ══════════════════════════════════════════════
+   QMessageBox — خلفية بيضاء صريحة (أعلى أولوية)
+   يجب أن يكون قبل أي override آخر
 ══════════════════════════════════════════════ */
+QMessageBox {{
+    background: {c['bg_surface']};
+    color: {c['text_primary']};
+}}
+QMessageBox QWidget,
+QMessageBox > QWidget,
+QMessageBox > QWidget > QWidget,
+QMessageBox > QWidget > QWidget > QWidget {{
+    background: {c['bg_surface']};
+    color: {c['text_primary']};
+}}
+QMessageBox QLabel {{
+    background: transparent;
+    color: {c['text_primary']};
+    font-size: {normal}pt;
+}}
+QMessageBox QTextEdit {{
+    background: {c['bg_surface_2']};
+    color: {c['text_primary']};
+    border: 1px solid {c['border_med']};
+    border-radius: {radius_sm};
+}}
+QMessageBox QPushButton {{
+    background: {c['bg_surface_2']};
+    color: {c['text_primary']};
+    border: 1px solid {c['border_med']};
+    border-radius: {radius};
+    padding: 4px 18px;
+    min-width: 70px;
+    min-height: {btn_h}px;
+    font-size: {normal}pt;
+}}
+QMessageBox QPushButton:hover {{
+    background: {c['bg_hover']};
+    border-color: {c['border_strong']};
+}}
+QMessageBox QPushButton:pressed {{
+    background: {c['bg_active']};
+}}
 
+/* ══════════════════════════════════════════════
+   QDialog — خلفية بيضاء صريحة
+══════════════════════════════════════════════ */
 QDialog {{
     background: {c['bg_surface']};
+    color: {c['text_primary']};
 }}
-
-QDialog QWidget {{
+QDialog QWidget,
+QDialog > QWidget,
+QDialog > QWidget > QWidget {{
     background: {c['bg_surface']};
+    color: {c['text_primary']};
 }}
-
 QDialog QLabel {{
     background: transparent;
     color: {c['text_primary']};
 }}
-
 QDialog QGroupBox {{
     background: {c['bg_surface']};
 }}
-
 QDialog QScrollArea {{
     background: {c['bg_surface']};
     border: none;
 }}
-
 QDialog QScrollArea > QWidget > QWidget {{
     background: {c['bg_surface']};
-}}
-
-QMessageBox {{
-    background: {c['bg_surface']};
-}}
-
-QMessageBox QWidget {{
-    background: {c['bg_surface']};
-}}
-
-QMessageBox QLabel {{
-    background: transparent;
-    color: {c['text_primary']};
-}}
-
-QMessageBox QPushButton {{
-    min-width: 70px;
 }}
 
 /* ══════════════════════════════════════════════
@@ -685,36 +694,6 @@ QToolTip {{
     border: none;
     border-radius: {radius_sm};
     padding: 5px 10px;
-}}
-
-/* ══════════════════════════════════════════════
-   MessageBox & Dialog (تكرار للأولوية)
-══════════════════════════════════════════════ */
-QMessageBox {{
-    background: {c['bg_surface']};
-}}
-
-QMessageBox QWidget {{
-    background: {c['bg_surface']};
-}}
-
-QMessageBox QLabel {{
-    background: transparent;
-    color: {c['text_primary']};
-    font-size: {normal}pt;
-}}
-
-QDialog {{
-    background: {c['bg_surface']};
-}}
-
-QDialog QWidget {{
-    background: {c['bg_surface']};
-}}
-
-QDialog QLabel {{
-    background: transparent;
-    color: {c['text_primary']};
 }}
 
 /* ══════════════════════════════════════════════
