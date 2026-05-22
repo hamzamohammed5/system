@@ -1,5 +1,5 @@
 File Tree Snapshot
-Generated : 2026-05-22 11:36:10
+Generated : 2026-05-22 12:01:26
 Source    : D:\My Workspace\Hg\Alhabaar\accountant\system
 Extensions: .py
 ────────────────────────────────────────────────────────────
@@ -18,7 +18,8 @@ system/
 │   ├── companies/
 │   │   ├── companies_repo.py
 │   │   ├── companies_schema.py
-│   │   └── company_state.py
+│   │   ├── company_state.py
+│   │   └── shared_items_repo.py
 │   ├── costing/
 │   │   ├── bom_scenarios_repo.py
 │   │   ├── machine_op_rows_repo.py
@@ -108,7 +109,9 @@ system/
 │   │   │   ├── companies_dialog.py
 │   │   │   ├── company_selector.py
 │   │   │   ├── no_company_screen.py
-│   │   │   └── shared_items_dialog.py
+│   │   │   ├── shared_items_dialog.py
+│   │   │   ├── shared_items_manager.py
+│   │   │   └── shared_items_mixin.py
 │   │   ├── costing/
 │   │   │   ├── labor/
 │   │   │   │   ├── labor_op_form.py
