@@ -1,473 +1,339 @@
 """
 ui/tabs/companies/shared_items_dialog.py
-==========================================
-نافذة إدارة العناصر المشتركة بين الشركات.
+=========================================
+SharedItemsDialog — نافذة خفيفة لعرض/تعديل عنصر مشترك واحد.
+تُفتح من أزرار "تعديل المشترك" في الجداول المحلية.
 
-من هنا يمكن:
-  - نشر عنصر (خامة / ماكينة / عملية) كعنصر مشترك
-  - ربط عناصر مشتركة بالشركة الحالية
-  - مزامنة التغييرات من الشركة المصدر
+الفرق عن SharedItemsManagerDialog:
+  - مركّزة على عنصر واحد محدد مسبقاً
+  - أسرع وأبسط — بدون قائمة عناصر جانبية
+  - بعد الحفظ تطلق bus.data_changed مباشرة
 """
 
+import json
+
 from PyQt5.QtWidgets import (
-    QDialog, QVBoxLayout, QHBoxLayout, QSplitter,
-    QLabel, QPushButton, QComboBox, QTableWidget,
-    QTableWidgetItem, QHeaderView, QMessageBox,
-    QWidget, QFrame, QTabWidget,
+    QDialog, QVBoxLayout, QHBoxLayout, QLabel,
+    QLineEdit, QPushButton, QDoubleSpinBox,
+    QComboBox, QGroupBox, QFormLayout,
+    QWidget, QCheckBox, QScrollArea, QMessageBox,
 )
-from PyQt5.QtCore import Qt
-from PyQt5.QtGui  import QColor
+from PyQt5.QtCore import Qt, pyqtSignal
 
-from db.companies.companies_schema import get_central_connection, create_central_tables
-from db.companies.companies_repo   import (
-    fetch_all_companies,
-    fetch_all_shared_items,
-    fetch_shared_items_for_company,
-    publish_item_as_shared,
-    link_shared_item_to_company,
-    unlink_shared_item,
-    sync_shared_item,
+from db.companies.shared_items_repo import (
+    fetch_shared_item, update_shared_item,
+    fetch_linked_companies, set_linked_companies,
 )
-from db.companies.company_state import company_state
-from ui.app_settings            import _C
+from db.companies.companies_repo import fetch_all_companies
+from ui.events import bus
 
-_TYPE_AR = {
-    "raw":        "خامة",
-    "machine":    "ماكينة",
-    "labor_op":   "عملية عمالة",
-    "machine_op": "عملية تشغيل",
+_TYPE_LABELS = {
+    "raw":        "🧱 خامة",
+    "machine":    "🖥️ ماكينة",
+    "labor_op":   "👷 عملية عمالة",
+    "machine_op": "⚙️ عملية تشغيل",
 }
 
 
+def _spin(max_=9_999_999, dec=2) -> QDoubleSpinBox:
+    s = QDoubleSpinBox()
+    s.setRange(0, max_)
+    s.setDecimals(dec)
+    s.setMinimumHeight(30)
+    return s
+
+
+def _decode(data_str):
+    try:
+        return json.loads(data_str) if data_str else {}
+    except Exception:
+        return {}
+
+
 class SharedItemsDialog(QDialog):
-    """نافذة إدارة العناصر المشتركة."""
+    """
+    نافذة تعديل عنصر مشترك واحد + ربط الشركات.
+    تُستخدم من:
+      raw_table_panel.py   → btn_edit_shared
+      machine_table.py     → btn_edit_shared
+      labor_op_table.py    → btn_edit_shared
+    """
 
-    def __init__(self, parent=None):
+    saved = pyqtSignal()  # يُطلق بعد الحفظ
+
+    def __init__(self, central_conn, shared_id: int, parent=None):
         super().__init__(parent)
-        self._central = get_central_connection()
-        create_central_tables(self._central)
+        self._central   = central_conn
+        self._shared_id = shared_id
+        self._fields    = {}
+        self._shared_type = None
 
-        self.setWindowTitle("🔗  العناصر المشتركة بين الشركات")
-        self.setMinimumSize(920, 620)
         self.setModal(True)
+        self.setMinimumWidth(480)
+        self.setLayoutDirection(Qt.RightToLeft)
         self._build()
-        self._load_all()
+        self._load()
+
+    # ══════════════════════════════════════════════════════
+    # بناء الواجهة
+    # ══════════════════════════════════════════════════════
 
     def _build(self):
         root = QVBoxLayout(self)
-        root.setContentsMargins(12, 12, 12, 12)
         root.setSpacing(10)
+        root.setContentsMargins(16, 14, 16, 14)
 
-        title = QLabel("🔗  العناصر المشتركة")
-        title.setStyleSheet(f"font-size: 14pt; font-weight: bold; color: {_C['accent']};")
-        root.addWidget(title)
-
-        hint = QLabel(
-            "💡  يمكنك نشر عنصر من شركتك كعنصر مشترك، ثم ربطه بشركات أخرى.\n"
-            "    عند المزامنة، تنتقل التغييرات من الشركة المصدر إلى كل الشركات المرتبطة."
+        # ── Header ──
+        self._lbl_title = QLabel("تعديل عنصر مشترك")
+        self._lbl_title.setStyleSheet(
+            "font-weight:bold; font-size:14px; color:#2e7d52;"
         )
-        hint.setStyleSheet(f"""
-            background: {_C['info_bg']}; color: {_C['info']};
-            border: 1px solid {_C['info_border']};
-            border-radius: 6px; padding: 8px 12px; font-size: 10pt;
-        """)
+        root.addWidget(self._lbl_title)
+
+        # ── اسم العنصر ──
+        name_grp = QGroupBox("الاسم")
+        name_lay = QVBoxLayout(name_grp)
+        self._inp_name = QLineEdit()
+        self._inp_name.setMinimumHeight(32)
+        name_lay.addWidget(self._inp_name)
+        root.addWidget(name_grp)
+
+        # ── بيانات العنصر (ديناميكي) ──
+        self._data_grp = QGroupBox("البيانات")
+        self._data_lay = QFormLayout(self._data_grp)
+        self._data_lay.setSpacing(8)
+        self._data_lay.setLabelAlignment(Qt.AlignRight)
+        root.addWidget(self._data_grp)
+
+        # ── الشركات المشتركة ──
+        comp_grp = QGroupBox("الشركات المشتركة")
+        comp_lay = QVBoxLayout(comp_grp)
+
+        self._comp_scroll_widget = QWidget()
+        self._comp_layout        = QVBoxLayout(self._comp_scroll_widget)
+        self._comp_layout.setSpacing(4)
+        self._comp_layout.setContentsMargins(4, 4, 4, 4)
+
+        comp_scroll = QScrollArea()
+        comp_scroll.setWidgetResizable(True)
+        comp_scroll.setMaximumHeight(160)
+        comp_scroll.setStyleSheet("border:none;")
+        comp_scroll.setWidget(self._comp_scroll_widget)
+
+        comp_lay.addWidget(comp_scroll)
+        hint = QLabel("✅ ضع علامة على الشركات التي تريد مشاركة العنصر معها")
+        hint.setStyleSheet(
+            "color:#666; font-size:10px; "
+            "background:#f0f4ff; border-radius:4px; padding:4px 8px;"
+        )
         hint.setWordWrap(True)
-        root.addWidget(hint)
+        comp_lay.addWidget(hint)
+        root.addWidget(comp_grp)
 
-        tabs = QTabWidget()
-        tabs.addTab(self._build_published_tab(),  "📤  العناصر المنشورة")
-        tabs.addTab(self._build_my_links_tab(),   "🔗  المرتبطة بشركتي")
-        tabs.addTab(self._build_publish_tab(),    "➕  نشر عنصر جديد")
-        root.addWidget(tabs)
-
-        close_btn = QPushButton("✖  إغلاق")
-        close_btn.setFixedHeight(34)
-        close_btn.setStyleSheet(f"""
-            QPushButton {{
-                background: {_C['bg_surface_2']};
-                border: 1px solid {_C['border_med']};
-                border-radius: 5px; padding: 4px 18px;
-            }}
-            QPushButton:hover {{ background: {_C['bg_hover']}; }}
-        """)
-        close_btn.clicked.connect(self.accept)
+        # ── أزرار ──
         btn_row = QHBoxLayout()
+        btn_row.setSpacing(8)
+
+        btn_save = QPushButton("💾  حفظ التغييرات")
+        btn_save.setMinimumHeight(36)
+        btn_save.setStyleSheet("""
+            QPushButton {
+                background: #2e7d52; color: white;
+                border: none; border-radius: 6px;
+                font-weight: bold; padding: 0 18px;
+            }
+            QPushButton:hover { background: #1b5e38; }
+        """)
+        btn_save.clicked.connect(self._save)
+
+        btn_cancel = QPushButton("إلغاء")
+        btn_cancel.setMinimumHeight(36)
+        btn_cancel.clicked.connect(self.reject)
+
+        btn_row.addWidget(btn_save)
         btn_row.addStretch()
-        btn_row.addWidget(close_btn)
+        btn_row.addWidget(btn_cancel)
         root.addLayout(btn_row)
 
-    # ══ تبويب: العناصر المنشورة ══════════════════════════
+        self._checkboxes: dict[int, QCheckBox] = {}
 
-    def _build_published_tab(self) -> QWidget:
-        w   = QWidget()
-        lay = QVBoxLayout(w)
-        lay.setSpacing(6)
+    # ══════════════════════════════════════════════════════
+    # تحميل بيانات العنصر
+    # ══════════════════════════════════════════════════════
 
-        toolbar = QHBoxLayout()
-        toolbar.addWidget(QLabel("كل العناصر المنشورة للمشاركة بين الشركات:"))
-        toolbar.addStretch()
-        refresh_btn = QPushButton("🔄  تحديث")
-        refresh_btn.setFixedHeight(30)
-        refresh_btn.clicked.connect(self._load_published)
-        toolbar.addWidget(refresh_btn)
-        lay.addLayout(toolbar)
-
-        self._published_table = self._make_table(
-            ["العنصر", "النوع", "الشركة المصدر", ""]
-        )
-        lay.addWidget(self._published_table)
-        return w
-
-    def _build_my_links_tab(self) -> QWidget:
-        w   = QWidget()
-        lay = QVBoxLayout(w)
-        lay.setSpacing(6)
-
-        if not company_state.is_ready:
-            lay.addWidget(QLabel("⚠️  اختر شركة نشطة أولاً"))
-            return w
-
-        toolbar = QHBoxLayout()
-        toolbar.addWidget(QLabel(f"العناصر المشتركة المرتبطة بـ: {company_state.company_name}"))
-        toolbar.addStretch()
-        add_btn = QPushButton("➕  ربط عنصر مشترك")
-        add_btn.setFixedHeight(30)
-        add_btn.setStyleSheet(self._btn_style(_C['accent'], _C['accent_hover']))
-        add_btn.clicked.connect(self._link_item_dialog)
-        toolbar.addWidget(add_btn)
-        lay.addLayout(toolbar)
-
-        self._links_table = self._make_table(
-            ["العنصر", "النوع", "الشركة المصدر", "آخر مزامنة", ""]
-        )
-        lay.addWidget(self._links_table)
-        return w
-
-    def _build_publish_tab(self) -> QWidget:
-        """تبويب نشر عنصر جديد من الشركة الحالية."""
-        w   = QWidget()
-        lay = QVBoxLayout(w)
-        lay.setSpacing(10)
-        lay.setContentsMargins(16, 16, 16, 16)
-
-        if not company_state.is_ready:
-            lay.addWidget(QLabel("⚠️  اختر شركة نشطة أولاً"))
-            return w
-
-        lay.addWidget(QLabel(f"نشر عنصر من شركة: {company_state.company_name}"))
-
-        def _lbl(t):
-            l = QLabel(t)
-            l.setStyleSheet(f"font-size: 10pt; color: {_C['text_sec']};")
-            return l
-
-        lay.addWidget(_lbl("نوع العنصر:"))
-        self._pub_type_combo = QComboBox()
-        self._pub_type_combo.setFixedHeight(32)
-        for key, ar in _TYPE_AR.items():
-            self._pub_type_combo.addItem(ar, userData=key)
-        self._pub_type_combo.currentIndexChanged.connect(self._on_pub_type_changed)
-        lay.addWidget(self._pub_type_combo)
-
-        lay.addWidget(_lbl("اختر العنصر:"))
-        self._pub_item_combo = QComboBox()
-        self._pub_item_combo.setFixedHeight(32)
-        lay.addWidget(self._pub_item_combo)
-
-        lay.addStretch()
-
-        pub_btn = QPushButton("📤  نشر هذا العنصر كمشترك")
-        pub_btn.setFixedHeight(38)
-        pub_btn.setStyleSheet(self._btn_style(_C['accent'], _C['accent_hover']))
-        pub_btn.clicked.connect(self._publish_item)
-        lay.addWidget(pub_btn)
-
-        # تحميل أول نوع
-        self._on_pub_type_changed(0)
-        return w
-
-    # ══ تحميل البيانات ═══════════════════════════════════
-
-    def _load_all(self):
-        self._load_published()
-        self._load_my_links()
-
-    def _load_published(self):
-        items = fetch_all_shared_items(self._central)
-        t = self._published_table
-        t.setRowCount(0)
-        for item in items:
-            ri = t.rowCount()
-            t.insertRow(ri)
-            t.setItem(ri, 0, QTableWidgetItem(item["name"]))
-            t.setItem(ri, 1, QTableWidgetItem(_TYPE_AR.get(item["shared_type"], item["shared_type"])))
-            t.setItem(ri, 2, QTableWidgetItem(item["source_company_name"] or ""))
-
-            btns = self._make_action_btns(
-                item["id"],
-                item["source_company_name"],
-                is_published_view=True
-            )
-            t.setCellWidget(ri, 3, btns)
-            t.setRowHeight(ri, 36)
-
-    def _load_my_links(self):
-        if not company_state.is_ready:
-            return
-        if not hasattr(self, "_links_table"):
-            return
-        items = fetch_shared_items_for_company(self._central, company_state.company_id)
-        t = self._links_table
-        t.setRowCount(0)
-        for item in items:
-            ri = t.rowCount()
-            t.insertRow(ri)
-            t.setItem(ri, 0, QTableWidgetItem(item["name"]))
-            t.setItem(ri, 1, QTableWidgetItem(_TYPE_AR.get(item["shared_type"], item["shared_type"])))
-            t.setItem(ri, 2, QTableWidgetItem(item["source_company_name"] or ""))
-
-            synced = item["is_synced"]
-            sync_item = QTableWidgetItem("✅ محدّث" if synced else "⚠️ يحتاج مزامنة")
-            sync_item.setForeground(QColor("#2e7d52" if synced else "#e65100"))
-            t.setItem(ri, 3, sync_item)
-
-            btns = self._make_action_btns(
-                item["shared_item_id"],
-                item["source_company_name"],
-                is_published_view=False,
-                link_id=item["link_id"]
-            )
-            t.setCellWidget(ri, 4, btns)
-            t.setRowHeight(ri, 36)
-
-    def _on_pub_type_changed(self, idx: int):
-        """تحميل عناصر النوع المختار من erp.db الشركة النشطة."""
-        if not company_state.is_ready:
-            return
-        self._pub_item_combo.clear()
-        shared_type = self._pub_type_combo.currentData()
-        if not shared_type:
-            return
+    def _load(self):
         try:
-            erp = company_state.get_erp_conn()
-            if shared_type == "raw":
-                rows = erp.execute(
-                    "SELECT id, name FROM items WHERE type='raw' ORDER BY name"
-                ).fetchall()
-            elif shared_type == "machine":
-                rows = erp.execute("SELECT id, name FROM machines ORDER BY name").fetchall()
-            elif shared_type == "labor_op":
-                rows = erp.execute("SELECT id, name FROM labor_ops ORDER BY name").fetchall()
-            elif shared_type == "machine_op":
-                rows = erp.execute("SELECT id, name FROM machine_ops ORDER BY name").fetchall()
-            else:
-                rows = []
-            for r in rows:
-                self._pub_item_combo.addItem(r["name"], userData=r["id"])
-        except Exception as e:
-            print(f"[SharedItemsDialog] _on_pub_type_changed: {e}")
-
-    def _publish_item(self):
-        if not company_state.is_ready:
-            QMessageBox.warning(self, "تنبيه", "اختر شركة نشطة أولاً")
-            return
-        item_id = self._pub_item_combo.currentData()
-        name    = self._pub_item_combo.currentText()
-        stype   = self._pub_type_combo.currentData()
-
-        if not item_id:
-            QMessageBox.warning(self, "تنبيه", "اختر عنصراً أولاً")
-            return
-
-        try:
-            shared_id = publish_item_as_shared(
-                self._central,
-                source_company_id=company_state.company_id,
-                source_item_id=item_id,
-                shared_type=stype,
-                name=name,
-            )
-            QMessageBox.information(
-                self, "تم",
-                f"تم نشر «{name}» كعنصر مشترك.\n"
-                "يمكن للشركات الأخرى الآن ربطه واستخدامه."
-            )
-            self._load_all()
+            row = fetch_shared_item(self._central, self._shared_id)
         except Exception as e:
             QMessageBox.critical(self, "خطأ", str(e))
-
-    def _link_item_dialog(self):
-        """ربط عنصر مشترك بالشركة الحالية."""
-        items = fetch_all_shared_items(self._central)
-        # استثنِ المرتبطة مسبقاً
-        linked = {
-            r["shared_item_id"]
-            for r in fetch_shared_items_for_company(self._central, company_state.company_id)
-        }
-        available = [i for i in items if i["id"] not in linked]
-
-        if not available:
-            QMessageBox.information(self, "تنبيه", "لا توجد عناصر مشتركة متاحة للربط")
+            self.reject()
             return
 
-        from ui.tabs.companies._link_item_picker import LinkItemPicker
-        dlg = LinkItemPicker(available, parent=self)
-        if dlg.exec_() == QDialog.Accepted and dlg.selected_id:
-            self._do_link(dlg.selected_id)
+        if not row:
+            QMessageBox.warning(self, "تنبيه", "العنصر غير موجود")
+            self.reject()
+            return
 
-    def _do_link(self, shared_item_id: int):
+        self._shared_type = row["shared_type"]
+        type_label        = _TYPE_LABELS.get(self._shared_type, self._shared_type)
+
+        self.setWindowTitle(f"تعديل {type_label}")
+        self._lbl_title.setText(f"تعديل {type_label}  —  مشترك بين الشركات")
+        self._data_grp.setTitle(f"بيانات {type_label}")
+
+        self._inp_name.setText(row["name"])
+
+        data = _decode(row["data"])
+        self._build_data_fields(self._shared_type, data)
+        self._load_companies()
+
+    def _build_data_fields(self, shared_type: str, data: dict):
+        """بناء حقول البيانات حسب نوع العنصر."""
+        while self._data_lay.rowCount():
+            self._data_lay.removeRow(0)
+        self._fields.clear()
+
+        if shared_type == "raw":
+            sp_price = _spin()
+            sp_price.setValue(data.get("price", 0.0))
+            sp_qty = _spin()
+            sp_qty.setSpecialValueText("—")
+            tq = data.get("total_qty")
+            sp_qty.setValue(float(tq) if tq else 0.0)
+            self._data_lay.addRow("السعر الكلي :", sp_price)
+            self._data_lay.addRow("الكمية الكلية :", sp_qty)
+            self._fields["price"]     = sp_price
+            self._fields["total_qty"] = sp_qty
+
+        elif shared_type == "machine":
+            sp_h = _spin()
+            sp_h.setValue(data.get("rate_per_hour", 0.0))
+            sp_u = _spin()
+            sp_u.setValue(data.get("rate_per_unit", 0.0))
+            self._data_lay.addRow("جنيه / ساعة :", sp_h)
+            self._data_lay.addRow("جنيه / وحدة :", sp_u)
+            self._fields["rate_per_hour"] = sp_h
+            self._fields["rate_per_unit"] = sp_u
+
+        elif shared_type == "labor_op":
+            sp_m = _spin(99_999, 2)
+            sp_m.setValue(data.get("minutes", 0.0))
+            self._data_lay.addRow("الوقت (دقيقة) :", sp_m)
+            self._fields["minutes"] = sp_m
+
+        elif shared_type == "machine_op":
+            inp_machine = QLineEdit()
+            inp_machine.setText(data.get("machine_name", ""))
+            inp_machine.setMinimumHeight(30)
+            cmb_mode = QComboBox()
+            cmb_mode.addItem("⏱ وقت (time)", "time")
+            cmb_mode.addItem("📦 وحدة (unit)", "unit")
+            cmb_mode.setCurrentIndex(0 if data.get("mode", "time") == "time" else 1)
+            sp_val = _spin()
+            sp_val.setValue(data.get("value", 0.0))
+            sp_rh = _spin()
+            sp_rh.setValue(data.get("rate_per_hour", 0.0))
+            sp_ru = _spin()
+            sp_ru.setValue(data.get("rate_per_unit", 0.0))
+            self._data_lay.addRow("اسم الماكينة :", inp_machine)
+            self._data_lay.addRow("وضع الحساب :",   cmb_mode)
+            self._data_lay.addRow("القيمة :",        sp_val)
+            self._data_lay.addRow("جنيه / ساعة :",  sp_rh)
+            self._data_lay.addRow("جنيه / وحدة :",  sp_ru)
+            self._fields["machine_name"]  = inp_machine
+            self._fields["mode"]          = cmb_mode
+            self._fields["value"]         = sp_val
+            self._fields["rate_per_hour"] = sp_rh
+            self._fields["rate_per_unit"] = sp_ru
+
+    def _load_companies(self):
+        """تحميل قائمة الشركات مع تحديد المشتركة."""
+        for i in reversed(range(self._comp_layout.count())):
+            item = self._comp_layout.takeAt(i)
+            if item and item.widget():
+                item.widget().deleteLater()
+        self._checkboxes.clear()
+
         try:
-            # جلب بيانات العنصر
-            shared = self._central.execute(
-                "SELECT * FROM shared_items WHERE id=?", (shared_item_id,)
-            ).fetchone()
-            if not shared:
-                return
+            all_companies = fetch_all_companies(self._central)
+            linked_ids    = {
+                r["id"] for r in fetch_linked_companies(self._central, self._shared_id)
+            }
+        except Exception:
+            all_companies = []
+            linked_ids    = set()
 
-            import sqlite3
-            from db.companies.companies_schema import get_company_db_path
-            src_path = get_company_db_path(shared["source_company_id"], "erp")
-            src_erp  = sqlite3.connect(src_path)
-            src_erp.row_factory     = sqlite3.Row
-            src_erp.isolation_level = None
-
-            try:
-                local_id = link_shared_item_to_company(
-                    self._central, src_erp,
-                    shared_item_id,
-                    company_state.company_id
-                )
-            finally:
-                src_erp.close()
-
-            # أعد فتح erp connection عشان يظهر العنصر الجديد
-            company_state.refresh_connections()
-
-            QMessageBox.information(
-                self, "تم",
-                f"تم ربط «{shared['name']}» بشركتك بنجاح.\n"
-                f"يمكنك الآن استخدامه في BOM وحسابات التكلفة."
-            )
-            self._load_all()
-        except Exception as e:
-            QMessageBox.critical(self, "خطأ", str(e))
-
-    def _sync_item(self, shared_item_id: int):
-        """مزامنة عنصر مشترك."""
-        try:
-            shared = self._central.execute(
-                "SELECT * FROM shared_items WHERE id=?", (shared_item_id,)
-            ).fetchone()
-            if not shared:
-                return
-
-            import sqlite3
-            from db.companies.companies_schema import get_company_db_path
-            src_path = get_company_db_path(shared["source_company_id"], "erp")
-            src_erp  = sqlite3.connect(src_path)
-            src_erp.row_factory     = sqlite3.Row
-            src_erp.isolation_level = None
-            try:
-                sync_shared_item(self._central, src_erp, shared_item_id)
-            finally:
-                src_erp.close()
-
-            company_state.refresh_connections()
-            QMessageBox.information(self, "تم", "تمت المزامنة بنجاح")
-            self._load_all()
-        except Exception as e:
-            QMessageBox.critical(self, "خطأ", str(e))
-
-    def _unlink_item(self, shared_item_id: int):
-        if QMessageBox.question(
-            self, "تأكيد", "إلغاء ربط هذا العنصر من شركتك؟\n(لن يُحذف العنصر المحلي)",
-            QMessageBox.Yes | QMessageBox.No
-        ) == QMessageBox.Yes:
-            unlink_shared_item(self._central, shared_item_id, company_state.company_id)
-            self._load_my_links()
-
-    # ══ مساعدات ══════════════════════════════════════════
-
-    def _make_table(self, headers: list) -> QTableWidget:
-        t = QTableWidget(0, len(headers))
-        t.setHorizontalHeaderLabels(headers)
-        t.setSelectionBehavior(QTableWidget.SelectRows)
-        t.setEditTriggers(QTableWidget.NoEditTriggers)
-        t.setAlternatingRowColors(True)
-        t.verticalHeader().setVisible(False)
-        hh = t.horizontalHeader()
-        hh.setSectionResizeMode(0, QHeaderView.Stretch)
-        for i in range(1, len(headers)):
-            hh.setSectionResizeMode(i, QHeaderView.ResizeToContents)
-        t.setStyleSheet(f"""
-            QTableWidget {{
-                border: 1px solid {_C['border']};
-                border-radius: 6px; background: white;
-            }}
-            QHeaderView::section {{
-                background: {_C['bg_surface_2']};
-                padding: 6px 8px; border: none;
-                border-bottom: 2px solid {_C['border_med']};
-                font-weight: 600;
-            }}
-        """)
-        return t
-
-    def _make_action_btns(self, shared_item_id: int, source_name: str,
-                           is_published_view: bool, link_id: int = None) -> QWidget:
-        w   = QWidget()
-        lay = QHBoxLayout(w)
-        lay.setContentsMargins(4, 2, 4, 2)
-        lay.setSpacing(4)
-
-        if is_published_view:
-            # زر ربط بالشركة الحالية
-            if company_state.is_ready:
-                link_btn = QPushButton("🔗 ربط بشركتي")
-                link_btn.setFixedHeight(26)
-                link_btn.setStyleSheet("""
-                    QPushButton { background: #e3f2fd; border: none;
-                        border-radius: 4px; padding: 2px 8px; font-size: 9pt; }
-                    QPushButton:hover { background: #bbdefb; }
-                """)
-                link_btn.clicked.connect(lambda _, sid=shared_item_id: self._do_link(sid))
-                lay.addWidget(link_btn)
-        else:
-            # زر مزامنة + فك ربط
-            sync_btn = QPushButton("🔄 مزامنة")
-            sync_btn.setFixedHeight(26)
-            sync_btn.setStyleSheet("""
-                QPushButton { background: #e8f5e9; border: none;
-                    border-radius: 4px; padding: 2px 8px; font-size: 9pt; }
-                QPushButton:hover { background: #c8e6c9; }
+        for company in all_companies:
+            cb = QCheckBox(company["name"])
+            cb.setChecked(company["id"] in linked_ids)
+            color = company["color"] or "#1565c0"
+            cb.setStyleSheet(f"""
+                QCheckBox {{ color: #333; padding: 3px 6px; }}
+                QCheckBox::indicator:checked {{
+                    background: {color};
+                    border-color: {color};
+                }}
             """)
-            sync_btn.clicked.connect(lambda _, sid=shared_item_id: self._sync_item(sid))
-            lay.addWidget(sync_btn)
+            self._checkboxes[company["id"]] = cb
+            self._comp_layout.addWidget(cb)
+        self._comp_layout.addStretch()
 
-            unlink_btn = QPushButton("✖ فك الربط")
-            unlink_btn.setFixedHeight(26)
-            unlink_btn.setStyleSheet("""
-                QPushButton { background: #fdecea; border: none;
-                    border-radius: 4px; padding: 2px 8px; font-size: 9pt; }
-                QPushButton:hover { background: #ffcdd2; }
-            """)
-            unlink_btn.clicked.connect(lambda _, sid=shared_item_id: self._unlink_item(sid))
-            lay.addWidget(unlink_btn)
+    # ══════════════════════════════════════════════════════
+    # جمع البيانات وحفظها
+    # ══════════════════════════════════════════════════════
 
-        return w
+    def _collect_data(self) -> dict:
+        st = self._shared_type
+        if st == "raw":
+            tq = self._fields["total_qty"].value()
+            return {
+                "price":     self._fields["price"].value(),
+                "total_qty": tq if tq > 0 else None,
+            }
+        elif st == "machine":
+            return {
+                "rate_per_hour": self._fields["rate_per_hour"].value(),
+                "rate_per_unit": self._fields["rate_per_unit"].value(),
+            }
+        elif st == "labor_op":
+            return {"minutes": self._fields["minutes"].value()}
+        elif st == "machine_op":
+            return {
+                "machine_name":  self._fields["machine_name"].text().strip(),
+                "mode":          self._fields["mode"].currentData(),
+                "value":         self._fields["value"].value(),
+                "rate_per_hour": self._fields["rate_per_hour"].value(),
+                "rate_per_unit": self._fields["rate_per_unit"].value(),
+            }
+        return {}
 
-    def _btn_style(self, bg, hover):
-        return f"""
-            QPushButton {{
-                background: {bg}; color: white; font-weight: 600;
-                border: none; border-radius: 5px; padding: 4px 14px;
-            }}
-            QPushButton:hover {{ background: {hover}; }}
-        """
+    def _save(self):
+        name = self._inp_name.text().strip()
+        if not name:
+            QMessageBox.warning(self, "تنبيه", "أدخل الاسم أولاً")
+            return
 
-    def closeEvent(self, event):
+        data = self._collect_data()
+        selected_company_ids = [
+            cid for cid, cb in self._checkboxes.items() if cb.isChecked()
+        ]
+
         try:
-            self._central.close()
+            # 1. تحديث بيانات العنصر في companies.db
+            update_shared_item(self._central, self._shared_id, name, data)
+
+            # 2. تحديث ربط الشركات
+            set_linked_companies(self._central, self._shared_id, selected_company_ids)
+
+        except Exception as e:
+            QMessageBox.warning(self, "خطأ", str(e))
+            return
+
+        # 3. إطلاق bus.data_changed → كل الجداول المفتوحة تتحدث فوراً
+        try:
+            bus.data_changed.emit()
         except Exception:
             pass
-        super().closeEvent(event)
+
+        self.saved.emit()
+        self.accept()

@@ -1,10 +1,10 @@
 """
-ui/tabs/costing/raw/raw_table_panel.py  (نسخة محدثة — مع دعم العناصر المشتركة)
+ui/tabs/costing/raw/raw_table_panel.py  (نسخة كاملة مُحدَّثة)
 =======================================
 _TablePanel — جدول الخامات مع:
   - العناصر المشتركة تظهر بـ badge أخضر 🔗
-  - أي تعديل في مشترك يتعكس على كل الشركات
-  - زر "تعديل مشترك" يفتح نافذة التعديل المركزية
+  - تعديل مشترك → SharedItemsDialog (نافذة مباشرة للعنصر الواحد)
+  - bus.data_changed يحدّث الجدول فوراً بعد أي تعديل
 """
 
 from PyQt5.QtWidgets import (
@@ -20,9 +20,8 @@ from ui.helpers import (
 )
 from ui.widgets.costing.bulk_replace.bulk_replace_dialog import BulkReplaceDialog
 from ui.widgets.shared.filter_bar import FilterBar
-from ...companies.shared_items_mixin import (
+from ui.tabs.companies.shared_items_mixin import (
     get_shared_raws, is_shared_id, extract_shared_id,
-    update_shared_item_data,
 )
 from ui.events import bus
 
@@ -31,7 +30,6 @@ _SHARED_BG    = "#e8f5e9"
 
 
 def _to_dict(row) -> dict:
-    """يحول sqlite3.Row أو dict لـ dict عادي."""
     if isinstance(row, dict):
         return row
     try:
@@ -67,7 +65,6 @@ class _TablePanel(QWidget):
 
         root.addWidget(section_label("─── الخامات المحفوظة ───"))
 
-        # شريط مفتاح الألوان
         legend = QLabel("🔗 أخضر = خامة مشتركة بين الشركات")
         legend.setStyleSheet(
             f"color:{_SHARED_COLOR}; background:{_SHARED_BG};"
@@ -90,9 +87,9 @@ class _TablePanel(QWidget):
         self.table.setColumnWidth(5, 95)
         root.addWidget(self.table)
 
-        btn_edit       = QPushButton("✏️  تعديل المحدد")
-        btn_del        = danger_button("🗑️  حذف المحدد")
-        btn_replace    = QPushButton("🔄  استبدال شامل")
+        btn_edit        = QPushButton("✏️  تعديل المحدد")
+        btn_del         = danger_button("🗑️  حذف المحدد")
+        btn_replace     = QPushButton("🔄  استبدال شامل")
         btn_edit_shared = QPushButton("🔗  تعديل المشترك")
 
         btn_replace.setStyleSheet(
@@ -115,20 +112,31 @@ class _TablePanel(QWidget):
         btn_edit_shared.clicked.connect(self._edit_shared)
         root.addLayout(buttons_row(btn_edit, btn_del, btn_replace, btn_edit_shared))
 
+    # ══════════════════════════════════════════════════════
+    # مساعدات التحديد
+    # ══════════════════════════════════════════════════════
+
     def _selected_row_data(self):
         row = self.table.currentRow()
         if row == -1:
             return None, None
-        item_id   = self.table.item(row, 0).data(0x0100)  # Qt.UserRole
+        item_id   = self.table.item(row, 0).data(0x0100)
         item_name = self.table.item(row, 1).text()
         return item_id, item_name
+
+    def _is_shared(self, item_id) -> bool:
+        return is_shared_id(item_id)
+
+    # ══════════════════════════════════════════════════════
+    # أحداث الأزرار
+    # ══════════════════════════════════════════════════════
 
     def _edit(self):
         item_id, _ = self._selected_row_data()
         if item_id is None:
             QMessageBox.information(self, "تنبيه", "اختر خامة من الجدول أولاً")
             return
-        if is_shared_id(item_id):
+        if self._is_shared(item_id):
             QMessageBox.information(
                 self, "عنصر مشترك",
                 "هذه خامة مشتركة — استخدم زر «تعديل المشترك» لتعديلها\n"
@@ -142,7 +150,7 @@ class _TablePanel(QWidget):
         if item_id is None:
             QMessageBox.information(self, "تنبيه", "اختر خامة من الجدول أولاً")
             return
-        if not is_shared_id(item_id):
+        if not self._is_shared(item_id):
             QMessageBox.information(
                 self, "تنبيه",
                 "هذه خامة عادية — استخدم زر «تعديل المحدد» لتعديلها."
@@ -152,27 +160,29 @@ class _TablePanel(QWidget):
         self._open_shared_editor(shared_id)
 
     def _open_shared_editor(self, shared_id: int):
-        from db.companies.companies_schema import get_central_connection, create_central_tables
-        from ui.tabs.companies.shared_items_manager import SharedItemsManagerDialog
+        """يفتح نافذة تعديل العنصر المشترك المباشرة."""
+        from db.companies.companies_schema import (
+            get_central_connection, create_central_tables
+        )
+        from ui.tabs.companies.shared_items_dialog import SharedItemsDialog
         central = get_central_connection()
         create_central_tables(central)
-        dlg = SharedItemsManagerDialog(central, parent=self)
-        dlg._load_for_edit(shared_id)  # افتح مباشرة على العنصر المحدد
-        dlg.items_changed.connect(self._load)
+        dlg = SharedItemsDialog(central, shared_id, parent=self)
+        # بعد الحفظ bus.data_changed ينطلق من داخل SharedItemsDialog
+        # الـ self._load مربوط بـ bus.data_changed في __init__
         dlg.exec_()
         central.close()
-        bus.data_changed.emit()
 
     def _delete(self):
         item_id, item_name = self._selected_row_data()
         if item_id is None:
             QMessageBox.information(self, "تنبيه", "اختر خامة أولاً")
             return
-        if is_shared_id(item_id):
+        if self._is_shared(item_id):
             QMessageBox.warning(
                 self, "عنصر مشترك",
                 "لا يمكن حذف خامة مشتركة من هنا.\n"
-                "استخدم نافذة إدارة العناصر المشتركة لحذفها أو فك الربط."
+                "استخدم نافذة «العناصر المشتركة» لحذفها أو فك الربط."
             )
             return
         if self._input_panel.is_editing and self._input_panel._editing_id == item_id:
@@ -190,8 +200,9 @@ class _TablePanel(QWidget):
         if item_id is None:
             QMessageBox.information(self, "تنبيه", "اختر خامة من الجدول أولاً")
             return
-        if is_shared_id(item_id):
-            QMessageBox.information(self, "تنبيه", "الاستبدال الشامل غير متاح للعناصر المشتركة.")
+        if self._is_shared(item_id):
+            QMessageBox.information(self, "تنبيه",
+                                    "الاستبدال الشامل غير متاح للعناصر المشتركة.")
             return
         dlg = BulkReplaceDialog(
             conn=self._live_conn(), child_type="raw",
@@ -199,15 +210,18 @@ class _TablePanel(QWidget):
         )
         dlg.exec_()
 
+    # ══════════════════════════════════════════════════════
+    # تحميل البيانات
+    # ══════════════════════════════════════════════════════
+
     def _load(self):
         try:
-            conn = self._live_conn()
-            # ✅ تحويل sqlite3.Row لـ dict
+            conn       = self._live_conn()
             local_rows = [_to_dict(r) for r in fetch_items_by_type(conn, "raw")]
         except Exception:
             local_rows = []
 
-        # ── إضافة العناصر المشتركة (هي dicts بالفعل) ──
+        # العناصر المشتركة — تُقرأ fresh من companies.db في كل load
         shared_rows = get_shared_raws()
 
         self._all_rows = local_rows + shared_rows
@@ -224,33 +238,22 @@ class _TablePanel(QWidget):
             is_shared = row.get("is_shared", False)
             tq        = row.get("total_qty")
             price     = row.get("price", 0)
-
-            # حساب سعر الوحدة
-            if is_shared:
-                unit = (price / tq) if (tq and tq > 0) else price
-            else:
-                unit = raw_unit_price(row)
+            unit      = (price / tq) if (is_shared and tq and tq > 0) else raw_unit_price(row)
 
             r = self.table.rowCount()
             self.table.insertRow(r)
 
-            # ID (مخفي في UserRole)
-            id_item = QTableWidgetItem(
-                "🔗" if is_shared else str(row.get("id", ""))
-            )
-            id_item.setData(0x0100, row.get("id"))  # Qt.UserRole
+            id_item = QTableWidgetItem("🔗" if is_shared else str(row.get("id", "")))
+            id_item.setData(0x0100, row.get("id"))
             self.table.setItem(r, 0, id_item)
-
-            name_item = QTableWidgetItem(
+            self.table.setItem(r, 1, QTableWidgetItem(
                 ("🔗 " if is_shared else "") + row.get("name", "")
-            )
-            self.table.setItem(r, 1, name_item)
+            ))
             self.table.setItem(r, 2, QTableWidgetItem(row.get("category_name") or "—"))
             self.table.setItem(r, 3, QTableWidgetItem(f"{price:.2f}"))
             self.table.setItem(r, 4, QTableWidgetItem(str(tq) if tq is not None else "—"))
             self.table.setItem(r, 5, QTableWidgetItem(f"{unit:.4f}"))
 
-            # تلوين صفوف المشتركة
             if is_shared:
                 for col in range(self.table.columnCount()):
                     item = self.table.item(r, col)

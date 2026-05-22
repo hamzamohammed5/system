@@ -1,16 +1,17 @@
 """
-db/companies/shared_items_repo.py
+db/companies/shared_items_repo.py  (نسخة مُحدَّثة)
 ===================================
-إدارة العناصر المشتركة بين الشركات.
+إدارة العناصر المشتركة بين الشركات — نموذج موحّد.
 
 المبدأ:
   - العناصر المشتركة مخزنة مركزياً في companies.db
-  - كل شركة مشتركة في العنصر بتقرأ بياناته مباشرة من المركزي
-  - أي تعديل من أي شركة يُحدّث المركزي → يظهر فوراً لكل الشركات
+  - كل شركة مشتركة تقرأ البيانات مباشرة من المركزي
+  - أي تعديل يُطلق bus.data_changed → كل الجداول تتحدث فوراً
+  - لا نسخ محلية — نقرأ من companies.db دايماً
 
 الجداول في companies.db:
-  shared_items         — بيانات العنصر المشترك
-  company_shared_links — ربط الشركات بالعناصر
+  shared_items         — بيانات العنصر + data (JSON)
+  company_shared_links — ربط الشركات بالعناصر (company_id, shared_item_id)
 """
 
 import json
@@ -45,20 +46,8 @@ def create_shared_items_tables(conn):
 
 
 # ══════════════════════════════════════════════════════════
-# بيانات كل نوع
+# مساعدات الـ JSON
 # ══════════════════════════════════════════════════════════
-
-def _default_data(shared_type: str) -> dict:
-    if shared_type == "raw":
-        return {"price": 0.0, "total_qty": None}
-    elif shared_type == "machine":
-        return {"rate_per_hour": 0.0, "rate_per_unit": 0.0}
-    elif shared_type == "labor_op":
-        return {"minutes": 0.0}
-    elif shared_type == "machine_op":
-        return {"mode": "time", "value": 0.0, "machine_name": ""}
-    return {}
-
 
 def _encode(data: dict) -> str:
     return json.dumps(data, ensure_ascii=False)
@@ -71,24 +60,35 @@ def _decode(data_str: str) -> dict:
         return {}
 
 
+def _default_data(shared_type: str) -> dict:
+    if shared_type == "raw":
+        return {"price": 0.0, "total_qty": None}
+    elif shared_type == "machine":
+        return {"rate_per_hour": 0.0, "rate_per_unit": 0.0}
+    elif shared_type == "labor_op":
+        return {"minutes": 0.0}
+    elif shared_type == "machine_op":
+        return {"mode": "time", "value": 0.0, "machine_name": "",
+                "rate_per_hour": 0.0, "rate_per_unit": 0.0}
+    return {}
+
+
 # ══════════════════════════════════════════════════════════
-# CRUD — العناصر المشتركة
+# CRUD — shared_items
 # ══════════════════════════════════════════════════════════
 
 def fetch_all_shared_items(conn, shared_type: str = None) -> list:
     """كل العناصر المشتركة — مفلترة بالنوع لو محدد."""
     if shared_type:
-        rows = conn.execute(
+        return conn.execute(
             "SELECT id, name, shared_type, data, updated_at "
             "FROM shared_items WHERE shared_type=? ORDER BY name",
             (shared_type,)
         ).fetchall()
-    else:
-        rows = conn.execute(
-            "SELECT id, name, shared_type, data, updated_at "
-            "FROM shared_items ORDER BY shared_type, name"
-        ).fetchall()
-    return rows
+    return conn.execute(
+        "SELECT id, name, shared_type, data, updated_at "
+        "FROM shared_items ORDER BY shared_type, name"
+    ).fetchall()
 
 
 def fetch_shared_item(conn, item_id: int):
@@ -101,7 +101,7 @@ def fetch_shared_item(conn, item_id: int):
 
 def insert_shared_item(conn, name: str, shared_type: str,
                         data: dict = None) -> int:
-    d = data or _default_data(shared_type)
+    d = data if data is not None else _default_data(shared_type)
     cur = conn.execute(
         "INSERT INTO shared_items (name, shared_type, data) VALUES (?, ?, ?)",
         (name, shared_type, _encode(d))
@@ -111,6 +111,10 @@ def insert_shared_item(conn, name: str, shared_type: str,
 
 
 def update_shared_item(conn, item_id: int, name: str, data: dict):
+    """
+    يحدّث بيانات عنصر مشترك.
+    التغيير يُطبق فوراً على كل الشركات المشتركة (قراءة مباشرة من المركزي).
+    """
     conn.execute(
         "UPDATE shared_items SET name=?, data=?, updated_at=datetime('now') WHERE id=?",
         (name, _encode(data), item_id)
@@ -124,7 +128,7 @@ def delete_shared_item(conn, item_id: int):
 
 
 # ══════════════════════════════════════════════════════════
-# روابط الشركات
+# CRUD — company_shared_links
 # ══════════════════════════════════════════════════════════
 
 def fetch_linked_companies(conn, shared_item_id: int) -> list:
@@ -141,7 +145,7 @@ def fetch_linked_companies(conn, shared_item_id: int) -> list:
 
 def fetch_shared_items_for_company(conn, company_id: int,
                                     shared_type: str = None) -> list:
-    """العناصر المشتركة اللي شركة معينة مشتركة فيها."""
+    """العناصر المشتركة التي الشركة مشتركة فيها."""
     if shared_type:
         return conn.execute(
             """SELECT s.id, s.name, s.shared_type, s.data, s.updated_at
@@ -185,8 +189,8 @@ def unlink_company(conn, shared_item_id: int, company_id: int):
     conn.commit()
 
 
-def set_linked_companies(conn, shared_item_id: int, company_ids: list[int]):
-    """يحدد الشركات المشتركة في عنصر — يحذف القديم ويضيف الجديد."""
+def set_linked_companies(conn, shared_item_id: int, company_ids: list):
+    """يُعيّن الشركات المشتركة في عنصر (يحذف القديم ويضيف الجديد)."""
     conn.execute(
         "DELETE FROM company_shared_links WHERE shared_item_id=?",
         (shared_item_id,)
@@ -200,11 +204,10 @@ def set_linked_companies(conn, shared_item_id: int, company_ids: list[int]):
 
 
 # ══════════════════════════════════════════════════════════
-# قراءة بيانات العنصر كـ dict مفهومة
+# قراءة بيانات العنصر كـ dict جاهزة للاستخدام
 # ══════════════════════════════════════════════════════════
 
 def get_item_data(conn, shared_item_id: int) -> dict:
-    """يرجع بيانات العنصر كـ dict جاهزة للاستخدام."""
     row = fetch_shared_item(conn, shared_item_id)
     if not row:
         return {}
@@ -218,15 +221,15 @@ def get_item_as_raw(conn, shared_item_id: int) -> dict | None:
         return None
     d = _decode(row["data"])
     return {
-        "id":         shared_item_id,
-        "name":       row["name"],
-        "type":       "raw",
-        "price":      d.get("price", 0.0),
-        "total_qty":  d.get("total_qty"),
-        "category_id": None,
+        "id":           shared_item_id,
+        "name":         row["name"],
+        "type":         "raw",
+        "price":        d.get("price", 0.0),
+        "total_qty":    d.get("total_qty"),
+        "category_id":  None,
         "category_name": "🔗 مشترك",
-        "is_shared":  True,
-        "shared_id":  shared_item_id,
+        "is_shared":    True,
+        "shared_id":    shared_item_id,
     }
 
 
