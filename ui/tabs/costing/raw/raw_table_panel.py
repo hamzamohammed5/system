@@ -3,10 +3,10 @@ ui/tabs/costing/raw/raw_table_panel.py
 =======================================
 _TablePanel — جدول الخامات مع:
   - العناصر المشتركة تظهر بـ badge أخضر 🔗
-  - تعديل مشترك → SharedItemsDialog (نافذة مباشرة للعنصر الواحد)
+  - تعديل مشترك → SharedItemsDialog
   - نشر خامة محلية كمشتركة → PublishAsSharedDialog
   - bus.data_changed يحدّث الجدول فوراً بعد أي تعديل
-  - IDs المشتركة = "shared:{n}" (string) متوافق مع items_repo.py
+  - IDs المشتركة = "shared:{n}" (string)
 """
 
 from PyQt5.QtWidgets import (
@@ -136,7 +136,6 @@ class _TablePanel(QWidget):
         return item_id, item_name
 
     def _selected_raw_dict(self):
-        """يرجع dict كامل للصف المحدد (للنشر)."""
         row = self.table.currentRow()
         if row == -1:
             return None
@@ -229,7 +228,6 @@ class _TablePanel(QWidget):
         dlg.exec_()
 
     def _publish_as_shared(self):
-        """نشر خامة محلية كمشتركة بين الشركات."""
         item_id, _ = self._selected_row_data()
         if item_id is None:
             QMessageBox.information(self, "تنبيه", "اختر خامة من الجدول أولاً")

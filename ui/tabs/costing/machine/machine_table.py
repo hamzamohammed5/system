@@ -2,7 +2,6 @@
 ui/tabs/costing/machine/machine_table.py
 ==========================================
 _MachineTable — جدول الماكينات مع دعم العناصر المشتركة + نشر كمشترك.
-IDs المشتركة = "shared:{n}" (string) متوافق مع النظام الموحد.
 """
 
 from PyQt5.QtWidgets import (
@@ -176,7 +175,6 @@ class _MachineTable(QWidget):
             bus.data_changed.emit()
 
     def _publish_as_shared(self):
-        """نشر ماكينة محلية كمشتركة بين الشركات."""
         item_id, _ = self._selected_row_data()
         if item_id is None:
             QMessageBox.information(self, "تنبيه", "اختر ماكينة من الجدول أولاً")
