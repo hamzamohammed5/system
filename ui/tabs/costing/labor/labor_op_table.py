@@ -23,6 +23,16 @@ _SHARED_COLOR = "#2e7d52"
 _SHARED_BG    = "#e8f5e9"
 
 
+def _to_dict(row) -> dict:
+    """يحول sqlite3.Row أو dict لـ dict عادي."""
+    if isinstance(row, dict):
+        return row
+    try:
+        return dict(row)
+    except Exception:
+        return {}
+
+
 class _LaborOpTable(QWidget):
     def __init__(self, conn, settings, form, parent=None):
         super().__init__(parent)
@@ -173,7 +183,8 @@ class _LaborOpTable(QWidget):
     def _load(self):
         try:
             conn = self._live_conn()
-            local_rows = list(fetch_all_labor_ops(conn))
+            # ✅ تحويل sqlite3.Row لـ dict
+            local_rows = [_to_dict(op) for op in fetch_all_labor_ops(conn)]
         except Exception:
             local_rows = []
         shared_rows = get_shared_labor_ops()
@@ -185,7 +196,7 @@ class _LaborOpTable(QWidget):
         self.table.setRowCount(0)
         shown = 0
         for op in self._all_rows:
-            if not self._filter.match(op["name"], op["category_id"]):
+            if not self._filter.match(op.get("name", ""), op.get("category_id")):
                 continue
             is_shared = op.get("is_shared", False)
             minutes   = op.get("minutes", 0)
@@ -194,10 +205,10 @@ class _LaborOpTable(QWidget):
             r = self.table.rowCount()
             self.table.insertRow(r)
 
-            id_item = QTableWidgetItem("🔗" if is_shared else str(op["id"]))
-            id_item.setData(0x0100, op["id"])
+            id_item = QTableWidgetItem("🔗" if is_shared else str(op.get("id", "")))
+            id_item.setData(0x0100, op.get("id"))
             self.table.setItem(r, 0, id_item)
-            self.table.setItem(r, 1, QTableWidgetItem(("🔗 " if is_shared else "") + op["name"]))
+            self.table.setItem(r, 1, QTableWidgetItem(("🔗 " if is_shared else "") + op.get("name", "")))
             self.table.setItem(r, 2, QTableWidgetItem(op.get("category_name") or "—"))
             self.table.setItem(r, 3, QTableWidgetItem(f"{minutes:.2f}"))
             self.table.setItem(r, 4, QTableWidgetItem(f"{cost:.2f} جنيه"))

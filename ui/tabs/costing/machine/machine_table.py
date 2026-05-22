@@ -23,6 +23,16 @@ _SHARED_COLOR = "#2e7d52"
 _SHARED_BG    = "#e8f5e9"
 
 
+def _to_dict(row) -> dict:
+    """يحول sqlite3.Row أو dict لـ dict عادي."""
+    if isinstance(row, dict):
+        return row
+    try:
+        return dict(row)
+    except Exception:
+        return {}
+
+
 class _MachineTable(QWidget):
     def __init__(self, conn, form: _MachineForm, parent=None):
         super().__init__(parent)
@@ -149,7 +159,8 @@ class _MachineTable(QWidget):
     def _load(self):
         try:
             conn = self._live_conn()
-            local_rows = list(fetch_all_machines(conn))
+            # ✅ تحويل sqlite3.Row لـ dict
+            local_rows = [_to_dict(m) for m in fetch_all_machines(conn)]
         except Exception:
             local_rows = []
         shared_rows = get_shared_machines()
@@ -160,17 +171,17 @@ class _MachineTable(QWidget):
         self.table.setRowCount(0)
         shown = 0
         for m in self._all_rows:
-            if not self._filter.match(m["name"], m["category_id"]):
+            if not self._filter.match(m.get("name", ""), m.get("category_id")):
                 continue
             is_shared = m.get("is_shared", False)
 
             r = self.table.rowCount()
             self.table.insertRow(r)
 
-            id_item = QTableWidgetItem("🔗" if is_shared else str(m["id"]))
-            id_item.setData(0x0100, m["id"])
+            id_item = QTableWidgetItem("🔗" if is_shared else str(m.get("id", "")))
+            id_item.setData(0x0100, m.get("id"))
             self.table.setItem(r, 0, id_item)
-            self.table.setItem(r, 1, QTableWidgetItem(("🔗 " if is_shared else "") + m["name"]))
+            self.table.setItem(r, 1, QTableWidgetItem(("🔗 " if is_shared else "") + m.get("name", "")))
             self.table.setItem(r, 2, QTableWidgetItem(m.get("category_name") or "—"))
             self.table.setItem(r, 3, QTableWidgetItem(f"{m.get('rate_per_hour', 0):.2f}"))
             self.table.setItem(r, 4, QTableWidgetItem(f"{m.get('rate_per_unit', 0):.2f}"))

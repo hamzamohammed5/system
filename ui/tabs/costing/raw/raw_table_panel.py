@@ -30,6 +30,16 @@ _SHARED_COLOR = "#2e7d52"
 _SHARED_BG    = "#e8f5e9"
 
 
+def _to_dict(row) -> dict:
+    """يحول sqlite3.Row أو dict لـ dict عادي."""
+    if isinstance(row, dict):
+        return row
+    try:
+        return dict(row)
+    except Exception:
+        return {}
+
+
 class _TablePanel(QWidget):
     def __init__(self, conn, input_panel, parent=None):
         super().__init__(parent)
@@ -192,11 +202,12 @@ class _TablePanel(QWidget):
     def _load(self):
         try:
             conn = self._live_conn()
-            local_rows = list(fetch_items_by_type(conn, "raw"))
+            # ✅ تحويل sqlite3.Row لـ dict
+            local_rows = [_to_dict(r) for r in fetch_items_by_type(conn, "raw")]
         except Exception:
             local_rows = []
 
-        # ── إضافة العناصر المشتركة ──
+        # ── إضافة العناصر المشتركة (هي dicts بالفعل) ──
         shared_rows = get_shared_raws()
 
         self._all_rows = local_rows + shared_rows
@@ -207,7 +218,7 @@ class _TablePanel(QWidget):
         shown = 0
 
         for row in self._all_rows:
-            if not self._filter.match(row["name"], row["category_id"]):
+            if not self._filter.match(row.get("name", ""), row.get("category_id")):
                 continue
 
             is_shared = row.get("is_shared", False)
@@ -225,13 +236,13 @@ class _TablePanel(QWidget):
 
             # ID (مخفي في UserRole)
             id_item = QTableWidgetItem(
-                "🔗" if is_shared else str(row["id"])
+                "🔗" if is_shared else str(row.get("id", ""))
             )
-            id_item.setData(0x0100, row["id"])  # Qt.UserRole
+            id_item.setData(0x0100, row.get("id"))  # Qt.UserRole
             self.table.setItem(r, 0, id_item)
 
             name_item = QTableWidgetItem(
-                ("🔗 " if is_shared else "") + row["name"]
+                ("🔗 " if is_shared else "") + row.get("name", "")
             )
             self.table.setItem(r, 1, name_item)
             self.table.setItem(r, 2, QTableWidgetItem(row.get("category_name") or "—"))
