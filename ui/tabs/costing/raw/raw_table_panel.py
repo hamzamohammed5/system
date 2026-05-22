@@ -1,10 +1,11 @@
 """
-ui/tabs/costing/raw/raw_table_panel.py  (نسخة كاملة مُحدَّثة)
+ui/tabs/costing/raw/raw_table_panel.py
 =======================================
 _TablePanel — جدول الخامات مع:
   - العناصر المشتركة تظهر بـ badge أخضر 🔗
   - تعديل مشترك → SharedItemsDialog (نافذة مباشرة للعنصر الواحد)
   - bus.data_changed يحدّث الجدول فوراً بعد أي تعديل
+  - IDs المشتركة = "shared:{n}" (string) متوافق مع items_repo.py
 """
 
 from PyQt5.QtWidgets import (
@@ -65,7 +66,7 @@ class _TablePanel(QWidget):
 
         root.addWidget(section_label("─── الخامات المحفوظة ───"))
 
-        legend = QLabel("🔗 أخضر = خامة مشتركة بين الشركات")
+        legend = QLabel("🔗 أخضر = خامة مشتركة بين الشركات — تعديلها يتعكس فوراً على الكل")
         legend.setStyleSheet(
             f"color:{_SHARED_COLOR}; background:{_SHARED_BG};"
             "border-radius:4px; padding:3px 8px; font-size:9pt;"
@@ -124,9 +125,6 @@ class _TablePanel(QWidget):
         item_name = self.table.item(row, 1).text()
         return item_id, item_name
 
-    def _is_shared(self, item_id) -> bool:
-        return is_shared_id(item_id)
-
     # ══════════════════════════════════════════════════════
     # أحداث الأزرار
     # ══════════════════════════════════════════════════════
@@ -136,11 +134,11 @@ class _TablePanel(QWidget):
         if item_id is None:
             QMessageBox.information(self, "تنبيه", "اختر خامة من الجدول أولاً")
             return
-        if self._is_shared(item_id):
+        if is_shared_id(item_id):
             QMessageBox.information(
                 self, "عنصر مشترك",
-                "هذه خامة مشتركة — استخدم زر «تعديل المشترك» لتعديلها\n"
-                "التعديل سيُطبق على كل الشركات المشتركة فيها."
+                "هذه خامة مشتركة — استخدم زر «🔗 تعديل المشترك» لتعديلها\n"
+                "التعديل سيُطبق فوراً على كل الشركات المشتركة فيها."
             )
             return
         self._input_panel.load_for_edit(int(item_id))
@@ -150,14 +148,15 @@ class _TablePanel(QWidget):
         if item_id is None:
             QMessageBox.information(self, "تنبيه", "اختر خامة من الجدول أولاً")
             return
-        if not self._is_shared(item_id):
+        if not is_shared_id(item_id):
             QMessageBox.information(
                 self, "تنبيه",
-                "هذه خامة عادية — استخدم زر «تعديل المحدد» لتعديلها."
+                "هذه خامة عادية — استخدم زر «✏️ تعديل المحدد» لتعديلها."
             )
             return
         shared_id = extract_shared_id(item_id)
-        self._open_shared_editor(shared_id)
+        if shared_id is not None:
+            self._open_shared_editor(shared_id)
 
     def _open_shared_editor(self, shared_id: int):
         """يفتح نافذة تعديل العنصر المشترك المباشرة."""
@@ -168,8 +167,8 @@ class _TablePanel(QWidget):
         central = get_central_connection()
         create_central_tables(central)
         dlg = SharedItemsDialog(central, shared_id, parent=self)
-        # بعد الحفظ bus.data_changed ينطلق من داخل SharedItemsDialog
-        # الـ self._load مربوط بـ bus.data_changed في __init__
+        # bus.data_changed ينطلق من داخل SharedItemsDialog بعد الحفظ
+        # self._load مربوط بـ bus.data_changed في __init__
         dlg.exec_()
         central.close()
 
@@ -178,18 +177,19 @@ class _TablePanel(QWidget):
         if item_id is None:
             QMessageBox.information(self, "تنبيه", "اختر خامة أولاً")
             return
-        if self._is_shared(item_id):
+        if is_shared_id(item_id):
             QMessageBox.warning(
                 self, "عنصر مشترك",
                 "لا يمكن حذف خامة مشتركة من هنا.\n"
                 "استخدم نافذة «العناصر المشتركة» لحذفها أو فك الربط."
             )
             return
-        if self._input_panel.is_editing and self._input_panel._editing_id == item_id:
+        item_id_int = int(item_id)
+        if self._input_panel.is_editing and self._input_panel._editing_id == item_id_int:
             self._input_panel._reset()
         if confirm_delete(self, item_name):
             try:
-                delete_item(self._live_conn(), int(item_id))
+                delete_item(self._live_conn(), item_id_int)
             except Exception as e:
                 QMessageBox.warning(self, "خطأ", str(e))
                 return
@@ -200,7 +200,7 @@ class _TablePanel(QWidget):
         if item_id is None:
             QMessageBox.information(self, "تنبيه", "اختر خامة من الجدول أولاً")
             return
-        if self._is_shared(item_id):
+        if is_shared_id(item_id):
             QMessageBox.information(self, "تنبيه",
                                     "الاستبدال الشامل غير متاح للعناصر المشتركة.")
             return
@@ -237,15 +237,22 @@ class _TablePanel(QWidget):
 
             is_shared = row.get("is_shared", False)
             tq        = row.get("total_qty")
-            price     = row.get("price", 0)
-            unit      = (price / tq) if (is_shared and tq and tq > 0) else raw_unit_price(row)
+            price     = row.get("price", 0.0)
+
+            # حساب سعر الوحدة
+            if is_shared:
+                unit = (price / float(tq)) if (tq and float(tq) > 0) else price
+            else:
+                unit = raw_unit_price(row)
 
             r = self.table.rowCount()
             self.table.insertRow(r)
 
+            # ID (مع حفظ الـ raw id في UserRole)
             id_item = QTableWidgetItem("🔗" if is_shared else str(row.get("id", "")))
             id_item.setData(0x0100, row.get("id"))
             self.table.setItem(r, 0, id_item)
+
             self.table.setItem(r, 1, QTableWidgetItem(
                 ("🔗 " if is_shared else "") + row.get("name", "")
             ))
@@ -256,10 +263,10 @@ class _TablePanel(QWidget):
 
             if is_shared:
                 for col in range(self.table.columnCount()):
-                    item = self.table.item(r, col)
-                    if item:
-                        item.setBackground(QColor(_SHARED_BG))
-                        item.setForeground(QColor(_SHARED_COLOR))
+                    itm = self.table.item(r, col)
+                    if itm:
+                        itm.setBackground(QColor(_SHARED_BG))
+                        itm.setForeground(QColor(_SHARED_COLOR))
 
             shown += 1
 

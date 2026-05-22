@@ -12,8 +12,11 @@ ui/widgets/costing/catalog_builder.py
     "machine_op": [(id, name, category_name, mode, machine_name), ...],
   }
 
-العناصر المشتركة تأتي مع category_name = "🔗 مشترك"
-وid مركب = "shared:{shared_item_id}"
+العناصر المشتركة:
+  - تأتي مع category_name = "🔗 مشترك"
+  - id = "shared:{shared_item_id}" (string)
+  - تُقرأ مباشرة من companies.db
+  - أي تعديل عليها يتعكس فوراً على كل الشركات المشتركة
 """
 
 from db.shared.items_repo import fetch_items_by_type
@@ -61,12 +64,11 @@ def _build_raw(conn) -> list:
         for r in fetch_items_by_type(conn, "raw")
     ]
 
-    # مشتركة
-    shared = _fetch_shared("raw")
+    # مشتركة — تُقرأ من companies.db مباشرة
     shared_entries = []
-    for item in shared:
+    for item in _fetch_shared("raw"):
         shared_entries.append((
-            item["id"],             # "shared:{n}"
+            item["id"],                      # "shared:{n}"
             item["name"],
             SHARED_CATEGORY,
             float(item.get("price", 0.0)),
@@ -87,10 +89,9 @@ def _build_labor_ops(conn) -> list:
     except Exception:
         local = []
 
-    shared = _fetch_shared("labor_op")
     shared_entries = [
         (item["id"], item["name"], SHARED_CATEGORY, float(item.get("minutes", 0.0)))
-        for item in shared
+        for item in _fetch_shared("labor_op")
     ]
 
     return local + shared_entries
@@ -108,18 +109,20 @@ def _build_machine_ops(conn) -> list:
     except Exception:
         local = []
 
-    shared = _fetch_shared("machine_op")
     shared_entries = [
         (item["id"], item["name"], SHARED_CATEGORY,
          item.get("mode", "time"), item.get("machine_name", ""))
-        for item in shared
+        for item in _fetch_shared("machine_op")
     ]
 
     return local + shared_entries
 
 
 def _fetch_shared(shared_type: str) -> list:
-    """يجيب العناصر المشتركة من companies.db للشركة النشطة."""
+    """
+    يجيب العناصر المشتركة من companies.db للشركة النشطة.
+    يرجع list of dicts مع id = "shared:{n}".
+    """
     try:
         from db.companies.company_state import company_state
         if not company_state.is_ready:

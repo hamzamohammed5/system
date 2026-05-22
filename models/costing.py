@@ -1,7 +1,13 @@
 """
-models/costing.py  — مع دعم waste_pct و variant_id و machine_op_row_id والعناصر المشتركة
+models/costing.py  — مع دعم كامل للعناصر المشتركة (shared items)
 =================
 Facade يُعيد تصدير الدوال الأساسية ويضيف calc_cost و calc_cost_breakdown.
+
+العناصر المشتركة:
+  - IDs بالشكل "shared:{n}" (string)
+  - بياناتها في companies.db مباشرة
+  - is_shared_id() تتحقق من الـ string prefix
+  - الحسابات تقرأ من companies.db دون نسخ محلية
 """
 
 from models.costing_base import (
@@ -40,70 +46,63 @@ def _raw_cost_with_variant(conn, item_row, variant_id: int | None) -> float:
     return raw_unit_price(item_row)
 
 
-def _shared_raw_unit_price(shared_item_id: int) -> float:
-    """يحسب سعر وحدة الخامة المشتركة من companies.db."""
+# ══════════════════════════════════════════════════════════
+# حساب تكلفة العناصر المشتركة من companies.db
+# ══════════════════════════════════════════════════════════
+
+def _get_shared_data(shared_item_id: int) -> dict:
+    """يجيب بيانات عنصر مشترك من companies.db."""
     try:
         import json
         from db.companies.companies_schema import get_central_connection
         central = get_central_connection()
         row = central.execute(
-            "SELECT data FROM shared_items WHERE id=?", (shared_item_id,)
-        ).fetchone()
-        central.close()
-        if not row:
-            return 0.0
-        data = json.loads(row["data"]) if row["data"] else {}
-        price     = float(data.get("price", 0.0))
-        total_qty = data.get("total_qty")
-        if total_qty and float(total_qty) > 0:
-            return price / float(total_qty)
-        return price
-    except Exception:
-        return 0.0
-
-
-def _shared_labor_op_cost(conn, shared_item_id: int) -> float:
-    """يحسب تكلفة عملية عمالة مشتركة."""
-    try:
-        import json
-        from db.companies.companies_schema import get_central_connection
-        central = get_central_connection()
-        row = central.execute(
-            "SELECT data FROM shared_items WHERE id=? AND shared_type='labor_op'",
+            "SELECT shared_type, data FROM shared_items WHERE id=?",
             (shared_item_id,)
         ).fetchone()
         central.close()
         if not row:
-            return 0.0
+            return {}
         data = json.loads(row["data"]) if row["data"] else {}
-        minutes = float(data.get("minutes", 0.0))
-        return (minutes / 60.0) * calc_worker_hourly_rate(conn)
+        data["_shared_type"] = row["shared_type"]
+        return data
     except Exception:
+        return {}
+
+
+def _shared_raw_unit_price(shared_item_id: int) -> float:
+    """يحسب سعر وحدة الخامة المشتركة من companies.db."""
+    data = _get_shared_data(shared_item_id)
+    if not data:
         return 0.0
+    price = float(data.get("price", 0.0))
+    total_qty = data.get("total_qty")
+    if total_qty and float(total_qty) > 0:
+        return price / float(total_qty)
+    return price
+
+
+def _shared_labor_op_cost(conn, shared_item_id: int) -> float:
+    """يحسب تكلفة عملية عمالة مشتركة — المعدل من erp.db الشركة."""
+    data = _get_shared_data(shared_item_id)
+    if not data:
+        return 0.0
+    minutes = float(data.get("minutes", 0.0))
+    rate = calc_worker_hourly_rate(conn)
+    return (minutes / 60.0) * rate
 
 
 def _shared_machine_op_cost(shared_item_id: int) -> float:
     """يحسب تكلفة عملية تشغيل مشتركة."""
-    try:
-        import json
-        from db.companies.companies_schema import get_central_connection
-        central = get_central_connection()
-        row = central.execute(
-            "SELECT data FROM shared_items WHERE id=? AND shared_type='machine_op'",
-            (shared_item_id,)
-        ).fetchone()
-        central.close()
-        if not row:
-            return 0.0
-        data = json.loads(row["data"]) if row["data"] else {}
-        mode  = data.get("mode", "time")
-        value = float(data.get("value", 0.0))
-        if mode == "time":
-            return (value / 60.0) * float(data.get("rate_per_hour", 0.0))
-        else:
-            return value * float(data.get("rate_per_unit", 0.0))
-    except Exception:
+    data = _get_shared_data(shared_item_id)
+    if not data:
         return 0.0
+    mode = data.get("mode", "time")
+    value = float(data.get("value", 0.0))
+    if mode == "time":
+        return (value / 60.0) * float(data.get("rate_per_hour", 0.0))
+    else:
+        return value * float(data.get("rate_per_unit", 0.0))
 
 
 # ══════════════════════════════════════════════════════════
@@ -204,21 +203,75 @@ def _col_exists(conn, table: str, col: str) -> bool:
 
 
 # ══════════════════════════════════════════════════════════
+# حساب تكلفة child_id (محلي أو مشترك)
+# ══════════════════════════════════════════════════════════
+
+def _calc_child_cost(conn, child_type: str, child_id,
+                     variant_id=None, machine_op_row_id=None,
+                     _visited: set = None) -> float:
+    """
+    يحسب تكلفة وحدة من child_id سواء كان محلي أو مشترك.
+    child_id يمكن أن يكون int (محلي) أو str "shared:{n}" (مشترك).
+    """
+    if is_shared_id(child_id):
+        sid = extract_shared_id(child_id)
+        if sid is None:
+            return 0.0
+        if child_type == "raw":
+            return _shared_raw_unit_price(sid)
+        elif child_type == "labor_op":
+            return _shared_labor_op_cost(conn, sid)
+        elif child_type == "machine_op":
+            return _shared_machine_op_cost(sid)
+        elif child_type == "semi":
+            # نصف مصنع مشترك — نحاول نحسب تكلفته
+            return _shared_raw_unit_price(sid)
+        return 0.0
+
+    # عنصر محلي
+    if child_type == "raw":
+        child = fetch_item(conn, child_id)
+        if not child:
+            return 0.0
+        return _raw_cost_with_variant(conn, child, variant_id)
+
+    elif child_type == "semi":
+        return calc_cost(conn, child_id, set(_visited) if _visited else None)
+
+    elif child_type == "labor_op":
+        return calc_labor_op_cost(conn, child_id)
+
+    elif child_type == "machine_op":
+        return calc_machine_op_cost(conn, child_id, row_id=machine_op_row_id)
+
+    return 0.0
+
+
+# ══════════════════════════════════════════════════════════
 # التكلفة الكاملة (متكررة عبر BOM)
 # ══════════════════════════════════════════════════════════
 
-def calc_cost(conn, item_id: int, _visited: set = None) -> float:
+def calc_cost(conn, item_id, _visited: set = None) -> float:
+    """
+    يحسب التكلفة الكاملة لمنتج أو خامة.
+    يدعم:
+      - العناصر المحلية (int IDs)
+      - العناصر المشتركة (str "shared:{n}")
+      - BOM متعدد السيناريوهات (يستخدم الـ default)
+    """
     if _visited is None:
         _visited = set()
 
-    # دعم shared items
+    # دعم shared items مباشرة
     if is_shared_id(item_id):
         sid = extract_shared_id(item_id)
         return _shared_raw_unit_price(sid) if sid else 0.0
 
-    if item_id in _visited:
+    # تجنب الحلقات اللانهائية
+    item_id_int = int(item_id) if not is_shared_id(item_id) else item_id
+    if item_id_int in _visited:
         return 0.0
-    _visited.add(item_id)
+    _visited.add(item_id_int)
 
     item = fetch_item(conn, item_id)
     if not item:
@@ -237,31 +290,12 @@ def calc_cost(conn, item_id: int, _visited: set = None) -> float:
         machine_op_row_id = _get_machine_op_row_id(row)
         eff_qty           = effective_qty(qty, waste_pct)
 
-        if child_type == "raw":
-            # دعم shared raw
-            if is_shared_id(child_id):
-                sid = extract_shared_id(child_id)
-                unit_cost = _shared_raw_unit_price(sid) if sid else 0.0
-            else:
-                child = fetch_item(conn, child_id)
-                unit_cost = _raw_cost_with_variant(conn, child, variant_id) if child else 0.0
-        elif child_type == "semi":
-            unit_cost = calc_cost(conn, child_id, set(_visited))
-        elif child_type == "labor_op":
-            if is_shared_id(child_id):
-                sid = extract_shared_id(child_id)
-                unit_cost = _shared_labor_op_cost(conn, sid) if sid else 0.0
-            else:
-                unit_cost = calc_labor_op_cost(conn, child_id)
-        elif child_type == "machine_op":
-            if is_shared_id(child_id):
-                sid = extract_shared_id(child_id)
-                unit_cost = _shared_machine_op_cost(sid) if sid else 0.0
-            else:
-                unit_cost = calc_machine_op_cost(conn, child_id, row_id=machine_op_row_id)
-        else:
-            unit_cost = 0.0
-
+        unit_cost = _calc_child_cost(
+            conn, child_type, child_id,
+            variant_id=variant_id,
+            machine_op_row_id=machine_op_row_id,
+            _visited=_visited,
+        )
         total += unit_cost * eff_qty
 
     return total
@@ -291,29 +325,17 @@ def calc_cost_breakdown(conn, item_id: int) -> dict:
         machine_op_row_id = _get_machine_op_row_id(row)
         eff_qty           = effective_qty(qty, waste_pct)
 
-        if child_type == "raw":
-            if is_shared_id(child_id):
-                sid = extract_shared_id(child_id)
-                unit_cost = _shared_raw_unit_price(sid) if sid else 0.0
-            else:
-                child = fetch_item(conn, child_id)
-                unit_cost = _raw_cost_with_variant(conn, child, variant_id) if child else 0.0
+        unit_cost = _calc_child_cost(
+            conn, child_type, child_id,
+            variant_id=variant_id,
+            machine_op_row_id=machine_op_row_id,
+        )
+
+        if child_type in ("raw", "semi"):
             materials += unit_cost * eff_qty
-        elif child_type == "semi":
-            materials += calc_cost(conn, child_id) * eff_qty
         elif child_type == "labor_op":
-            if is_shared_id(child_id):
-                sid = extract_shared_id(child_id)
-                unit_cost = _shared_labor_op_cost(conn, sid) if sid else 0.0
-            else:
-                unit_cost = calc_labor_op_cost(conn, child_id)
             labor += unit_cost * eff_qty
         elif child_type == "machine_op":
-            if is_shared_id(child_id):
-                sid = extract_shared_id(child_id)
-                unit_cost = _shared_machine_op_cost(sid) if sid else 0.0
-            else:
-                unit_cost = calc_machine_op_cost(conn, child_id, row_id=machine_op_row_id)
             machine += unit_cost * eff_qty
 
     return {

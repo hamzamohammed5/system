@@ -1,5 +1,8 @@
 """
-ui/tabs/costing/machine/machine_table.py  (نسخة محدثة — مع دعم العناصر المشتركة)
+ui/tabs/costing/machine/machine_table.py
+==========================================
+_MachineTable — جدول الماكينات مع دعم العناصر المشتركة.
+IDs المشتركة = "shared:{n}" (string) متوافق مع النظام الموحد.
 """
 
 from PyQt5.QtWidgets import (
@@ -13,7 +16,7 @@ from ui.helpers import (
     make_table, buttons_row, section_label, confirm_delete, danger_button,
 )
 from ui.widgets.shared.filter_bar import FilterBar
-from ...companies.shared_items_mixin import (
+from ui.tabs.companies.shared_items_mixin import (
     get_shared_machines, is_shared_id, extract_shared_id,
 )
 from ui.events import bus
@@ -24,7 +27,6 @@ _SHARED_BG    = "#e8f5e9"
 
 
 def _to_dict(row) -> dict:
-    """يحول sqlite3.Row أو dict لـ dict عادي."""
     if isinstance(row, dict):
         return row
     try:
@@ -59,7 +61,7 @@ class _MachineTable(QWidget):
         root.setSpacing(6)
         root.addWidget(section_label("─── الماكينات المحفوظة ───"))
 
-        legend = QLabel("🔗 أخضر = ماكينة مشتركة بين الشركات")
+        legend = QLabel("🔗 أخضر = ماكينة مشتركة بين الشركات — تعديلها يتعكس فوراً")
         legend.setStyleSheet(
             f"color:{_SHARED_COLOR}; background:{_SHARED_BG};"
             "border-radius:4px; padding:3px 8px; font-size:9pt;"
@@ -113,7 +115,7 @@ class _MachineTable(QWidget):
             return
         if is_shared_id(item_id):
             QMessageBox.information(self, "عنصر مشترك",
-                                    "هذه ماكينة مشتركة — استخدم «تعديل المشترك».")
+                                    "هذه ماكينة مشتركة — استخدم «🔗 تعديل المشترك».")
             return
         self._form.load_for_edit(int(item_id))
 
@@ -123,19 +125,18 @@ class _MachineTable(QWidget):
             QMessageBox.information(self, "تنبيه", "اختر ماكينة أولاً")
             return
         if not is_shared_id(item_id):
-            QMessageBox.information(self, "تنبيه", "هذه ماكينة عادية — استخدم «تعديل».")
+            QMessageBox.information(self, "تنبيه", "هذه ماكينة عادية — استخدم «✏️ تعديل».")
             return
         shared_id = extract_shared_id(item_id)
+        if shared_id is None:
+            return
         from db.companies.companies_schema import get_central_connection, create_central_tables
-        from ui.tabs.companies.shared_items_manager import SharedItemsManagerDialog
+        from ui.tabs.companies.shared_items_dialog import SharedItemsDialog
         central = get_central_connection()
         create_central_tables(central)
-        dlg = SharedItemsManagerDialog(central, parent=self)
-        dlg._load_for_edit(shared_id)
-        dlg.items_changed.connect(self._load)
+        dlg = SharedItemsDialog(central, shared_id, parent=self)
         dlg.exec_()
         central.close()
-        bus.data_changed.emit()
 
     def _delete(self):
         item_id, name = self._selected_row_data()
@@ -159,7 +160,6 @@ class _MachineTable(QWidget):
     def _load(self):
         try:
             conn = self._live_conn()
-            # ✅ تحويل sqlite3.Row لـ dict
             local_rows = [_to_dict(m) for m in fetch_all_machines(conn)]
         except Exception:
             local_rows = []
@@ -181,16 +181,18 @@ class _MachineTable(QWidget):
             id_item = QTableWidgetItem("🔗" if is_shared else str(m.get("id", "")))
             id_item.setData(0x0100, m.get("id"))
             self.table.setItem(r, 0, id_item)
-            self.table.setItem(r, 1, QTableWidgetItem(("🔗 " if is_shared else "") + m.get("name", "")))
+            self.table.setItem(r, 1, QTableWidgetItem(
+                ("🔗 " if is_shared else "") + m.get("name", "")
+            ))
             self.table.setItem(r, 2, QTableWidgetItem(m.get("category_name") or "—"))
             self.table.setItem(r, 3, QTableWidgetItem(f"{m.get('rate_per_hour', 0):.2f}"))
             self.table.setItem(r, 4, QTableWidgetItem(f"{m.get('rate_per_unit', 0):.2f}"))
 
             if is_shared:
                 for col in range(self.table.columnCount()):
-                    item = self.table.item(r, col)
-                    if item:
-                        item.setBackground(QColor(_SHARED_BG))
-                        item.setForeground(QColor(_SHARED_COLOR))
+                    itm = self.table.item(r, col)
+                    if itm:
+                        itm.setBackground(QColor(_SHARED_BG))
+                        itm.setForeground(QColor(_SHARED_COLOR))
             shown += 1
         self._filter.set_count(shown, len(self._all_rows))
