@@ -2,6 +2,10 @@
 ui/tabs/accounting/investors/_link_to_entry_panel.py
 =====================================================
 _LinkToEntryPanel — لوحة ربط مستثمر بقيد محاسبي موجود.
+
+تغييرات (v2):
+  - يستمع لـ bus.company_data_changed بدل bus.data_changed العام.
+  - يتحقق من الـ company_id قبل إعادة تحميل المستثمرين لعزل بيانات الشركات.
 """
 
 from PyQt5.QtWidgets import (
@@ -16,13 +20,27 @@ from ui.events import bus
 from ._helpers import _spin
 
 
+def _get_current_company_id() -> int | None:
+    try:
+        from db.companies.company_state import company_state
+        return company_state.company_id if company_state.is_ready else None
+    except Exception:
+        return None
+
+
 class _LinkToEntryPanel(QWidget):
     def __init__(self, acc_conn, erp_conn, parent=None):
         super().__init__(parent)
-        self.acc_conn = acc_conn
-        self.erp_conn = erp_conn
+        self.acc_conn    = acc_conn
+        self.erp_conn    = erp_conn
+        self._company_id = _get_current_company_id()
         self._build()
-        bus.data_changed.connect(self._reload_investors)
+        bus.company_data_changed.connect(self._on_company_event)
+
+    def _on_company_event(self, company_id: int):
+        """يُعيد تحميل المستثمرين فقط لو الحدث من نفس شركتنا."""
+        if company_id == self._company_id:
+            self._reload_investors()
 
     def _build(self):
         root = QVBoxLayout(self)
@@ -92,8 +110,11 @@ class _LinkToEntryPanel(QWidget):
         prev = self.cmb_investor.currentData() if self.cmb_investor.count() else None
         self.cmb_investor.blockSignals(True)
         self.cmb_investor.clear()
-        for inv in fetch_all_investors(self.erp_conn):
-            self.cmb_investor.addItem(inv["name"], inv["id"])
+        try:
+            for inv in fetch_all_investors(self.erp_conn):
+                self.cmb_investor.addItem(inv["name"], inv["id"])
+        except Exception:
+            pass
         self.cmb_investor.blockSignals(False)
         if prev:
             for i in range(self.cmb_investor.count()):
@@ -145,7 +166,8 @@ class _LinkToEntryPanel(QWidget):
             self.inp_entry_ref.clear()
             self.sp_amount.setValue(0)
             self.inp_notes.clear()
-            bus.data_changed.emit()
+            # إطلاق الحدث المقيّد بالشركة النشطة
+            bus.company_data_changed.emit(self._company_id or 0)
             QMessageBox.information(self, "تم", "✅ تم ربط القيد بالمستثمر بنجاح")
         except Exception as e:
             QMessageBox.critical(self, "خطأ", str(e))

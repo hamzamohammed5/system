@@ -1,9 +1,10 @@
 """
-ui/main_window.py  (نسخة multi-company — مُصلَحة v4)
+ui/main_window.py  (نسخة multi-company — مُصلَحة v5)
 =====================================================
-التغييرات عن النسخة السابقة:
-  1. _destroy_tabs() تضيف QApplication.processEvents() بعد الحذف
-     لضمان معالجة أحداث deleteLater() قبل البناء الجديد.
+التغييرات عن النسخة السابقة (v4):
+  1. _destroy_tabs() تستدعي company_state.refresh_connections() بعد
+     processEvents() لضمان إغلاق الـ raw connections للشركة القديمة
+     قبل فتح connections جديدة للشركة الجديدة.
   2. _on_company_changed() تُطلق bus.company_data_changed(company_id)
      بعد _refresh_tabs() مباشرة — ليس قبله.
   3. كل rebuild يضمن حذف الـ widgets القديمة قبل بناء الجديدة.
@@ -142,6 +143,7 @@ class MainWindow(QMainWindow):
         يحذف التبويبات القديمة من الـ stack بشكل آمن.
         يستخدم hide() + deleteLater() بدل sip.delete لتجنب crashes.
         يضيف processEvents() لضمان معالجة الحذف قبل بناء الجديد.
+        يستدعي refresh_connections() لإغلاق الـ raw connections للشركة القديمة.
         """
         while self._stack.count() > 1:
             w = self._stack.widget(1)
@@ -155,6 +157,15 @@ class MainWindow(QMainWindow):
         # معالجة أحداث deleteLater() المعلقة قبل البناء الجديد
         # هذا يضمن أن الـ widgets القديمة لن تستجيب لأي أحداث بعد الآن
         QApplication.processEvents()
+
+        # إغلاق الـ raw connections للشركة القديمة بعد ما الـ widgets اتحذفت
+        # الـ ProtectedConnection objects ستفتح connections جديدة تلقائياً
+        # على الشركة الجديدة عند أول استخدام
+        try:
+            from db.companies.company_state import company_state
+            company_state.refresh_connections()
+        except Exception as e:
+            print(f"[MainWindow] refresh_connections warning: {e}")
 
         self._accounting = None
         self._tabs_built = False
@@ -174,7 +185,7 @@ class MainWindow(QMainWindow):
         الخطوات:
           1. تحديث عنوان النافذة.
           2. إعادة بناء كل التبويبات على الـ DB الجديد
-             (يشمل _destroy_tabs مع processEvents).
+             (يشمل _destroy_tabs مع processEvents و refresh_connections).
           3. إطلاق bus.company_data_changed بـ company_id
              بعد اكتمال البناء — الـ widgets الجديدة فقط تستجيب.
         """
@@ -182,7 +193,7 @@ class MainWindow(QMainWindow):
 
         self.setWindowTitle(f"ERP — {company_state.company_name}")
 
-        # أعد البناء أولاً (يشمل processEvents داخل _destroy_tabs)
+        # أعد البناء أولاً (يشمل processEvents و refresh_connections داخل _destroy_tabs)
         self._refresh_tabs()
 
         # ثم أطلق الإشعار — الـ widgets الجديدة جاهزة الآن للاستجابة

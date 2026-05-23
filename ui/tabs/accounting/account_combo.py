@@ -3,6 +3,10 @@ ui/tabs/accounting/account_combo.py
 =====================================
 _AccountCombo — Combo قابل للبحث والفلترة لاختيار الحسابات.
 - عرض الـ badge (DR↑/CR↑) نسبي من حجم الخط
+
+تغييرات (v2):
+  - يستمع لـ bus.company_data_changed بدل bus.data_changed العام.
+  - يتحقق من الـ company_id قبل إعادة التحميل لعزل بيانات الشركات.
 """
 
 from PyQt5.QtWidgets import (
@@ -22,18 +26,29 @@ from ui.font_utils import badge_style, badge_width
 from .helpers import TYPE_COLORS
 
 
+def _get_current_company_id() -> int | None:
+    try:
+        from db.companies.company_state import company_state
+        return company_state.company_id if company_state.is_ready else None
+    except Exception:
+        return None
+
+
 class _AccountCombo(QWidget):
     def __init__(self, conn, acc_types: list = None, parent=None):
         super().__init__(parent)
-        self.conn      = conn
-        self.acc_types = acc_types
-        self._all_accs = []
+        self.conn        = conn
+        self.acc_types   = acc_types
+        self._all_accs   = []
+        self._company_id = _get_current_company_id()
         self._build()
         self.refresh()
-        bus.data_changed.connect(self._on_data_changed)
+        bus.company_data_changed.connect(self._on_company_event)
 
-    def _on_data_changed(self):
-        QTimer.singleShot(0, self.refresh)
+    def _on_company_event(self, company_id: int):
+        """يُعيد التحميل فقط لو الحدث من نفس شركتنا."""
+        if company_id == self._company_id:
+            QTimer.singleShot(0, self.refresh)
 
     def _build(self):
         lay = QHBoxLayout(self)
@@ -76,11 +91,14 @@ class _AccountCombo(QWidget):
         self.cmb_group.clear()
         self.cmb_group.addItem("— كل التصنيفات —", None)
 
-        all_groups  = fetch_all_groups(self.conn)
-        seen_types  = set(self.acc_types) if self.acc_types else set(TYPE_AR.keys())
-        groups      = [g for g in all_groups if g["acc_type"] in seen_types]
-        tree        = build_group_tree(groups)
-        self._add_group_nodes(tree, depth=0)
+        try:
+            all_groups  = fetch_all_groups(self.conn)
+            seen_types  = set(self.acc_types) if self.acc_types else set(TYPE_AR.keys())
+            groups      = [g for g in all_groups if g["acc_type"] in seen_types]
+            tree        = build_group_tree(groups)
+            self._add_group_nodes(tree, depth=0)
+        except Exception:
+            pass
 
         for i in range(self.cmb_group.count()):
             if self.cmb_group.itemData(i) == prev:
@@ -99,9 +117,12 @@ class _AccountCombo(QWidget):
                 self._add_group_nodes(node["children"], depth + 1)
 
     def _load_accounts(self):
-        self._all_accs = list(fetch_leaf_accounts(self.conn))
-        if self.acc_types:
-            self._all_accs = [a for a in self._all_accs if a["type"] in self.acc_types]
+        try:
+            self._all_accs = list(fetch_leaf_accounts(self.conn))
+            if self.acc_types:
+                self._all_accs = [a for a in self._all_accs if a["type"] in self.acc_types]
+        except Exception:
+            self._all_accs = []
         self._apply_filter()
 
     def _apply_filter(self):
@@ -114,13 +135,15 @@ class _AccountCombo(QWidget):
         self.cmb_account.addItem("— اختر الحساب —", None)
 
         last_type = None
-        sep_index = None
 
         for acc in self._all_accs:
             if gid is not None:
-                desc = _get_group_descendants(self.conn, gid)
-                if acc["group_id"] not in desc:
-                    continue
+                try:
+                    desc = _get_group_descendants(self.conn, gid)
+                    if acc["group_id"] not in desc:
+                        continue
+                except Exception:
+                    pass
             if q and q not in acc["name"].lower() and q not in acc["code"].lower():
                 continue
 
@@ -138,7 +161,6 @@ class _AccountCombo(QWidget):
             self.cmb_account.addItem(label, acc["id"])
             idx2 = self.cmb_account.count() - 1
             self.cmb_account.setItemData(idx2, QColor(color), Qt.ForegroundRole)
-            sep_index = None
 
         self._remove_trailing_separators()
         self.cmb_account.blockSignals(False)
@@ -195,16 +217,19 @@ class _AccountCombo(QWidget):
             self.lbl_nb.setText("")
             self.lbl_nb.setStyleSheet(badge_style())
             return
-        acc = fetch_account(self.conn, acc_id)
-        if not acc:
-            return
-        nb = get_normal_balance(acc["type"])
-        if nb == "dr":
-            self.lbl_nb.setText("DR↑")
-            self.lbl_nb.setStyleSheet(badge_style("dr"))
-        else:
-            self.lbl_nb.setText("CR↑")
-            self.lbl_nb.setStyleSheet(badge_style("cr"))
+        try:
+            acc = fetch_account(self.conn, acc_id)
+            if not acc:
+                return
+            nb = get_normal_balance(acc["type"])
+            if nb == "dr":
+                self.lbl_nb.setText("DR↑")
+                self.lbl_nb.setStyleSheet(badge_style("dr"))
+            else:
+                self.lbl_nb.setText("CR↑")
+                self.lbl_nb.setStyleSheet(badge_style("cr"))
+        except Exception:
+            pass
 
     def current_account_id(self):
         data = self.cmb_account.currentData()

@@ -3,7 +3,7 @@ ui/tabs/accounting_section.py
 ==============================
 النافذة المحاسبية الرئيسية — مع دعم كامل لتعدد الشركات.
 
-التغييرات (v3):
+التغييرات (v4):
   - _INITIALIZED_COMPANIES أصبح dict[int, str] يخزن company_id → db_path
     لضمان إعادة التهيئة لو اتحذفت الشركة وأُعيد إنشاؤها بنفس الـ ID.
   - refresh_for_company() تُعيد بناء كل التبويبات عند تغيير الشركة.
@@ -12,6 +12,8 @@ ui/tabs/accounting_section.py
   - تنظيف الـ layout القديم بـ hide()+deleteLater() بدل sip.delete.
   - الاشتراك في bus.company_data_changed بدل bus.data_changed
     لعزل الإشعارات بين الشركات.
+  - [v4] مسح cache الشركة القديمة قبل الـ rebuild في refresh_for_company().
+  - [v4] refresh_connections() بعد تدمير الـ widgets في _destroy_tabs().
 """
 
 from PyQt5.QtWidgets import (
@@ -321,8 +323,13 @@ class AccountingTab(QWidget):
     def refresh_for_company(self):
         """
         يُستدعى من MainWindow عند تغيير الشركة النشطة.
-        يُعيد بناء كل التبويبات على الـ DB الجديد.
+        يمسح الـ cache للشركة القديمة ثم يُعيد بناء كل التبويبات.
         """
+        # مسح الـ cache للشركة القديمة لضمان إعادة التهيئة
+        old_id = self._company_id
+        if old_id is not None and old_id in _INITIALIZED_COMPANIES:
+            del _INITIALIZED_COMPANIES[old_id]
+
         self._build()
 
     # ── closeEvent ─────────────────────────────────────────
