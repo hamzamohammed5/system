@@ -1,13 +1,11 @@
 """
-ui/main_window.py  (نسخة multi-company — مُصلَحة v5)
+ui/main_window.py  (نسخة multi-company — مُصلَحة v6)
 =====================================================
-التغييرات عن النسخة السابقة (v4):
-  1. _destroy_tabs() تستدعي company_state.refresh_connections() بعد
-     processEvents() لضمان إغلاق الـ raw connections للشركة القديمة
-     قبل فتح connections جديدة للشركة الجديدة.
-  2. _on_company_changed() تُطلق bus.company_data_changed(company_id)
-     بعد _refresh_tabs() مباشرة — ليس قبله.
-  3. كل rebuild يضمن حذف الـ widgets القديمة قبل بناء الجديدة.
+التغييرات عن النسخة السابقة (v5):
+  1. _destroy_tabs() تعمل blockSignals(True) على bus.company_data_changed
+     قبل حذف الـ widgets، وتُعيد blockSignals(False) بعدها.
+     هذا يمنع أي widget قديم من الاستجابة لأحداث أثناء فترة الحذف.
+  2. باقي المنطق محافظ عليه كما هو من v5.
 """
 
 from PyQt5.QtWidgets import (
@@ -141,10 +139,19 @@ class MainWindow(QMainWindow):
     def _destroy_tabs(self):
         """
         يحذف التبويبات القديمة من الـ stack بشكل آمن.
-        يستخدم hide() + deleteLater() بدل sip.delete لتجنب crashes.
-        يضيف processEvents() لضمان معالجة الحذف قبل بناء الجديد.
-        يستدعي refresh_connections() لإغلاق الـ raw connections للشركة القديمة.
+
+        الخطوات:
+          1. blockSignals(True) على bus.company_data_changed
+             لمنع أي widget قديم من الاستجابة أثناء الحذف.
+          2. حذف الـ widgets بـ hide() + deleteLater().
+          3. processEvents() لضمان معالجة الحذف الفعلي.
+          4. blockSignals(False) لإعادة تفعيل الأحداث.
+          5. refresh_connections() لإغلاق raw connections الشركة القديمة.
         """
+        # ── الخطوة 1: وقّف الأحداث أثناء الحذف ──────────────
+        bus.company_data_changed.blockSignals(True)
+
+        # ── الخطوة 2: احذف الـ widgets ───────────────────────
         while self._stack.count() > 1:
             w = self._stack.widget(1)
             self._stack.removeWidget(w)
@@ -154,13 +161,17 @@ class MainWindow(QMainWindow):
             except Exception:
                 pass
 
-        # معالجة أحداث deleteLater() المعلقة قبل البناء الجديد
-        # هذا يضمن أن الـ widgets القديمة لن تستجيب لأي أحداث بعد الآن
+        # ── الخطوة 3: معالجة أحداث deleteLater() المعلقة ─────
+        # يضمن أن الـ widgets القديمة اتحذفت فعلاً من الذاكرة
+        # قبل ما نفتح connections جديدة
         QApplication.processEvents()
 
-        # إغلاق الـ raw connections للشركة القديمة بعد ما الـ widgets اتحذفت
-        # الـ ProtectedConnection objects ستفتح connections جديدة تلقائياً
-        # على الشركة الجديدة عند أول استخدام
+        # ── الخطوة 4: أعد تفعيل الأحداث ─────────────────────
+        bus.company_data_changed.blockSignals(False)
+
+        # ── الخطوة 5: أغلق raw connections الشركة القديمة ────
+        # الـ ProtectedConnection objects ستفتح connections جديدة
+        # تلقائياً على الشركة الجديدة عند أول استخدام
         try:
             from db.companies.company_state import company_state
             company_state.refresh_connections()
@@ -185,7 +196,8 @@ class MainWindow(QMainWindow):
         الخطوات:
           1. تحديث عنوان النافذة.
           2. إعادة بناء كل التبويبات على الـ DB الجديد
-             (يشمل _destroy_tabs مع processEvents و refresh_connections).
+             (يشمل _destroy_tabs مع blockSignals و processEvents
+              و refresh_connections).
           3. إطلاق bus.company_data_changed بـ company_id
              بعد اكتمال البناء — الـ widgets الجديدة فقط تستجيب.
         """
@@ -193,7 +205,8 @@ class MainWindow(QMainWindow):
 
         self.setWindowTitle(f"ERP — {company_state.company_name}")
 
-        # أعد البناء أولاً (يشمل processEvents و refresh_connections داخل _destroy_tabs)
+        # أعد البناء أولاً (يشمل blockSignals و processEvents
+        # و refresh_connections داخل _destroy_tabs)
         self._refresh_tabs()
 
         # ثم أطلق الإشعار — الـ widgets الجديدة جاهزة الآن للاستجابة
