@@ -1,25 +1,38 @@
 """
 ui/events.py
-=============
-Bus للأحداث العامة بين الـ widgets.
+============
+Bus مركزي للإشعارات — أي tab يحفظ بيانات يبعت signal،
+وكل tab تاني مشترك فيه يعمل refresh تلقائي.
 
-company_data_changed(int):
-  يُطلق بعد أي تغيير في بيانات شركة محددة.
-  الـ widgets تتحقق من الـ company_id قبل إعادة التحميل.
+الاستخدام:
+    from ui.events import bus
 
-data_changed():
-  الحدث العام القديم — يُبقى للتوافق مع الكود الذي لم يُحدَّث بعد.
+    # إشعار عام (للـ widgets اللي مش مرتبطة بشركة محددة)
+    bus.data_changed.emit()
+    bus.data_changed.connect(fn)
+
+    # إشعار مقيّد بشركة (الأفضل لتجنب تسريب البيانات بين الشركات)
+    bus.company_data_changed.emit(company_id)
+    bus.company_data_changed.connect(fn)   # fn(company_id: int)
+
+    # تغيير حجم الخط
+    bus.font_changed.emit(12)
+    bus.font_changed.connect(fn)
 """
 
 from PyQt5.QtCore import QObject, pyqtSignal
 
 
-class _Bus(QObject):
-    # الحدث العام (للتوافق مع الكود القديم)
-    data_changed         = pyqtSignal()
+class _EventBus(QObject):
+    # إشعار عام — للتوافق مع الكود القديم
+    data_changed = pyqtSignal()
 
-    # الحدث المقيّد بالشركة — الأولوية للاستخدام هنا
-    company_data_changed = pyqtSignal(int)   # company_id
+    # إشعار مقيّد بـ company_id — الأفضل للاستخدام الجديد
+    # كل widget يقارن company_id قبل ما يستجيب
+    company_data_changed = pyqtSignal(int)
+
+    # تغيير حجم الخط
+    font_changed = pyqtSignal(int)
 
 
-bus = _Bus()
+bus = _EventBus()
