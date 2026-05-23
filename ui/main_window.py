@@ -1,9 +1,9 @@
 """
-ui/main_window.py  (نسخة multi-company — مُصلَحة v2)
+ui/main_window.py  (نسخة multi-company — مُصلَحة v3)
 =====================================================
 التغييرات عن النسخة السابقة:
   1. _on_company_changed() تُطلق bus.company_data_changed(company_id)
-     بدلاً من bus.data_changed() — لعزل الإشعارات بين الشركات.
+     بعد _refresh_tabs() مباشرة — ليس قبله.
   2. _destroy_tabs() تستخدم hide() + deleteLater() بدل sip.delete.
   3. كل rebuild يضمن حذف الـ widgets القديمة قبل بناء الجديدة.
 """
@@ -168,14 +168,16 @@ class MainWindow(QMainWindow):
           1. تحديث عنوان النافذة.
           2. إعادة بناء كل التبويبات على الـ DB الجديد.
           3. إطلاق bus.company_data_changed بـ company_id
-             (بدل bus.data_changed العام) لعزل الإشعارات.
+             بعد اكتمال البناء — الـ widgets الجديدة فقط تستجيب.
         """
         from db.companies.company_state import company_state
 
         self.setWindowTitle(f"ERP — {company_state.company_name}")
+
+        # أعد البناء أولاً
         self._refresh_tabs()
 
-        # إطلاق الإشعار المقيّد بالشركة — الـ widgets الجديدة فقط تستجيب
+        # ثم أطلق الإشعار — الـ widgets الجديدة جاهزة الآن للاستجابة
         bus.company_data_changed.emit(company_id)
 
     def _on_nav(self, clicked_btn):

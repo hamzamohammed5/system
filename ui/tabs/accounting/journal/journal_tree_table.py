@@ -3,6 +3,10 @@ ui/tabs/accounting/journal/journal_tree_table.py
 =========================================
 _JournalTreeTable — جدول القيود المحاسبية مع expand/collapse وفلاتر متكاملة.
 JournalTab        — التبويب الرئيسي يجمع الفورم والجدول.
+
+تغييرات (v2):
+  - يستمع لـ bus.company_data_changed بدل bus.data_changed العام.
+  - يتحقق من الـ company_id قبل إعادة التحميل لعزل الشركات.
 """
 
 from PyQt5.QtWidgets import (
@@ -27,12 +31,21 @@ from .journal_filter  import _JournalFilterBar
 from .journal_form    import _JournalForm
 
 
+def _get_current_company_id() -> int | None:
+    try:
+        from db.companies.company_state import company_state
+        return company_state.company_id if company_state.is_ready else None
+    except Exception:
+        return None
+
+
 class _JournalTreeTable(QWidget):
     """
     جدول القيود المحاسبية:
     - كل قيد يُعرض كصف رئيسي قابل للتوسيع/الطي
     - عند التوسيع تظهر صفوف الحسابات (DR/CR) تحته
     - فلاتر: بحث + تصنيف شجري + توازن + نطاق تاريخ
+    - يستجيب فقط لأحداث الشركة النشطة عند إنشائه
     """
 
     COLS = ["#", "التاريخ", "رقم القيد", "البيان / الحساب", "DR", "CR", "الحالة"]
@@ -43,9 +56,20 @@ class _JournalTreeTable(QWidget):
         self._expanded: set[int] = set()
         self._entries_data = []
         self._row_meta     = {}
+
+        # حفظ الـ company_id عند الإنشاء لفلترة الأحداث
+        self._company_id   = _get_current_company_id()
+
         self._build()
         self._load()
-        bus.data_changed.connect(self._load)
+
+        # الاستماع للأحداث المقيّدة بالشركة فقط
+        bus.company_data_changed.connect(self._on_company_data_changed)
+
+    def _on_company_data_changed(self, company_id: int):
+        """يُعيد التحميل فقط لو الحدث من نفس شركتنا."""
+        if company_id == self._company_id:
+            self._load()
 
     # ══════════════════════════════════════════════════════
     # بناء الواجهة
@@ -68,7 +92,6 @@ class _JournalTreeTable(QWidget):
         self._filter.dt_from.dateChanged.connect(self._apply_filter)
         self._filter.dt_to.dateChanged.connect(self._apply_filter)
 
-        # ربط زر المسح
         orig_reset = self._filter.reset
         def _reset_and_apply():
             orig_reset()
@@ -210,9 +233,9 @@ class _JournalTreeTable(QWidget):
                         "entry_id": eid, "is_parent": False, "is_child": True
                     }
 
-                    acc_name = line.get("account_name", "")
-                    acc_code = line.get("account_code", "")
-                    acc_type = line.get("account_type", "")
+                    acc_name  = line.get("account_name", "")
+                    acc_code  = line.get("account_code", "")
+                    acc_type  = line.get("account_type", "")
                     acc_color = TYPE_COLORS.get(acc_type, "#333")
 
                     prefix    = "    └─ "
@@ -272,7 +295,6 @@ class _JournalTreeTable(QWidget):
         meta = self._row_meta.get(row)
         if not meta or not meta["is_parent"]:
             return
-        # الضغط على الأعمدة الأولى يفتح/يغلق
         if col not in (0, 1, 2):
             return
         eid = meta["entry_id"]
@@ -309,7 +331,8 @@ class _JournalTreeTable(QWidget):
         if confirm_delete(self, desc):
             delete_entry(self.conn, eid)
             self._expanded.discard(eid)
-            bus.data_changed.emit()
+            # أطلق الحدث المقيّد بالشركة
+            bus.company_data_changed.emit(self._company_id or 0)
 
 
 # ══════════════════════════════════════════════════════════

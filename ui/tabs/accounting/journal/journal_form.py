@@ -4,6 +4,9 @@ ui/tabs/accounting/journal/journal_form.py
 _JournalForm — فورم إدخال القيد اليومي الكامل.
 
 يستخدم _LinesPanel لإدارة الصفوف ويعرض شريط التوازن DR/CR.
+
+تغييرات (v2):
+  - بعد الحفظ يُطلق bus.company_data_changed(company_id) بدل bus.data_changed العام.
 """
 
 from PyQt5.QtWidgets import (
@@ -19,6 +22,23 @@ from db.accounting.accounting_repo import (
 from ui.helpers import buttons_row
 from ui.events  import bus
 from .journal_lines import _LinesPanel
+
+
+def _get_current_company_id() -> int | None:
+    try:
+        from db.companies.company_state import company_state
+        return company_state.company_id if company_state.is_ready else None
+    except Exception:
+        return None
+
+
+def _emit_data_changed():
+    """يُطلق الحدث المقيّد بالشركة النشطة."""
+    cid = _get_current_company_id()
+    if cid is not None:
+        bus.company_data_changed.emit(cid)
+    else:
+        bus.data_changed.emit()   # fallback للتوافق
 
 
 class _JournalForm(QWidget):
@@ -248,7 +268,7 @@ class _JournalForm(QWidget):
                     print(f"[JournalForm] investor link error: {e}")
 
         self._clear()
-        bus.data_changed.emit()
+        _emit_data_changed()   # حدث مقيّد بالشركة النشطة
         QMessageBox.information(self, "تم", "✅ تم حفظ القيد بنجاح")
 
     def _clear(self):

@@ -3,14 +3,13 @@ ui/tabs/accounting_section.py
 ==============================
 النافذة المحاسبية الرئيسية — مع دعم كامل لتعدد الشركات.
 
-التغييرات (v2):
-  - الـ connections لا تُحفَظ كـ instance attributes ثابتة،
-    بل تُجلَب من company_state عند كل استخدام.
+التغييرات (v3):
+  - _INITIALIZED_COMPANIES أصبح dict[int, str] يخزن company_id → db_path
+    لضمان إعادة التهيئة لو اتحذفت الشركة وأُعيد إنشاؤها بنفس الـ ID.
   - refresh_for_company() تُعيد بناء كل التبويبات عند تغيير الشركة.
   - closeEvent لا يُغلق ProtectedConnection.
   - _is_ready() يتحقق من وجود شركة نشطة قبل أي عملية.
   - تنظيف الـ layout القديم بـ hide()+deleteLater() بدل sip.delete.
-  - cache الـ schema init لتجنب CREATE TABLE المتكرر.
   - الاشتراك في bus.company_data_changed بدل bus.data_changed
     لعزل الإشعارات بين الشركات.
 """
@@ -32,8 +31,9 @@ from .accounting.financial_statements import (
 from .accounting.investors_tab import InvestorsTab
 
 
-# ── cache لتجنب إعادة تهيئة الجداول في كل بناء ───────────
-_INITIALIZED_COMPANIES: set = set()
+# ── cache: company_id → accounting db path ────────────────
+# نخزن المسار عشان نكتشف لو نفس الـ ID اتحذف وأُعيد بمسار مختلف
+_INITIALIZED_COMPANIES: dict[int, str] = {}
 
 
 _TAB_STYLE = """
@@ -114,6 +114,18 @@ def _current_company_id() -> int | None:
     return company_state.company_id if company_state.is_ready else None
 
 
+def _current_acc_db_path() -> str | None:
+    """يرجع مسار accounting.db للشركة النشطة."""
+    cid = _current_company_id()
+    if cid is None:
+        return None
+    try:
+        from db.companies.companies_schema import get_company_db_path
+        return get_company_db_path(cid, "accounting")
+    except Exception:
+        return None
+
+
 # ══════════════════════════════════════════════════════════
 # AccountingTab
 # ══════════════════════════════════════════════════════════
@@ -125,13 +137,12 @@ class AccountingTab(QWidget):
     - يجلب الـ connections من company_state عند كل بناء.
     - يستمع لـ bus.company_data_changed بـ company_id محدد
       لضمان عدم استجابة الـ widget لأحداث شركة أخرى.
-    - تنظيف الـ layout بـ hide()+deleteLater() بدل sip.delete.
+    - _INITIALIZED_COMPANIES يخزن المسار مع الـ ID لاكتشاف إعادة الإنشاء.
     """
 
     def __init__(self, parent=None):
         super().__init__(parent)
         self._main_tabs: QTabWidget | None = None
-        # حفظ الـ company_id عند الإنشاء للتحقق في الـ bus handler
         self._company_id: int | None = _current_company_id()
         self._build()
 
@@ -148,23 +159,38 @@ class AccountingTab(QWidget):
     # ── تهيئة الجداول مع cache ────────────────────────────
 
     def _init_schema(self):
-        """تهيئة الجداول مع cache لتجنب التكرار."""
+        """
+        تهيئة الجداول مع cache ذكي يكتشف:
+          1. الشركة الجديدة (ID غير موجود في الـ cache)
+          2. نفس الـ ID لكن مسار مختلف (حُذفت وأُعيد إنشاؤها)
+        """
         if not _is_ready():
             return
-        cid = _current_company_id()
-        if cid in _INITIALIZED_COMPANIES:
-            return
+
+        cid          = _current_company_id()
+        current_path = _current_acc_db_path()
+
+        # تحقق من الـ cache
+        cached_path = _INITIALIZED_COMPANIES.get(cid)
+        if cached_path and cached_path == current_path:
+            return   # نفس الشركة ونفس المسار — لا حاجة لإعادة التهيئة
+
+        # تهيئة جديدة مطلوبة
         try:
             from db.accounting.accounting_schema import create_accounting_tables
             create_accounting_tables(self.acc_conn)
         except Exception as e:
             print(f"[AccountingTab] schema init error: {e}")
+
         try:
             from db.inventory.investors_repo import create_investors_tables
             create_investors_tables(self.erp_conn)
         except Exception as e:
             print(f"[AccountingTab] investors schema error: {e}")
-        _INITIALIZED_COMPANIES.add(cid)
+
+        # حفظ في الـ cache مع المسار
+        if current_path:
+            _INITIALIZED_COMPANIES[cid] = current_path
 
     # ── بناء الواجهة ───────────────────────────────────────
 
@@ -177,7 +203,6 @@ class AccountingTab(QWidget):
         if old_layout is None:
             return
 
-        # إخفاء وجدولة حذف كل الـ widgets
         while old_layout.count():
             item = old_layout.takeAt(0)
             w = item.widget()
@@ -185,8 +210,6 @@ class AccountingTab(QWidget):
                 w.hide()
                 w.deleteLater()
 
-        # نقل الـ layout لـ widget مؤقت يُحذف فوراً
-        # (بديل آمن لـ sip.delete)
         dummy = QWidget()
         dummy.setLayout(old_layout)
         dummy.deleteLater()
