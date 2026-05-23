@@ -3,6 +3,7 @@ ui/tabs/costing/machine/machine_table.py
 إصلاحات:
 1. _load تمرر local_rows لـ get_shared_machines (منع التكرار)
 2. category_name يُعرض الحقيقي (أو "—")
+3. علامة 📤 على الماكينات المحلية المنشورة كمشتركة
 """
 
 from PyQt5.QtWidgets import (
@@ -18,12 +19,15 @@ from ui.helpers import (
 from ui.widgets.shared.filter_bar import FilterBar
 from ui.tabs.companies.shared_items_mixin import (
     get_shared_machines, is_shared_id, extract_shared_id,
+    get_published_local_names,
 )
 from ui.events import bus
 from .machine_form import _MachineForm
 
-_SHARED_COLOR = "#2e7d52"
-_SHARED_BG    = "#e8f5e9"
+_SHARED_COLOR    = "#2e7d52"
+_SHARED_BG       = "#e8f5e9"
+_PUBLISHED_COLOR = "#1565c0"
+_PUBLISHED_BG    = "#e3f2fd"
 
 
 def _to_dict(row) -> dict:
@@ -38,9 +42,10 @@ def _to_dict(row) -> dict:
 class _MachineTable(QWidget):
     def __init__(self, conn, form: _MachineForm, parent=None):
         super().__init__(parent)
-        self.conn      = conn
-        self._form     = form
-        self._all_rows = []
+        self.conn              = conn
+        self._form             = form
+        self._all_rows         = []
+        self._published_names  = set()
         self._build()
         self._load()
         bus.data_changed.connect(self._load)
@@ -61,12 +66,19 @@ class _MachineTable(QWidget):
         root.setSpacing(6)
         root.addWidget(section_label("─── الماكينات المحفوظة ───"))
 
-        legend = QLabel("🔗 أخضر = ماكينة مشتركة بين الشركات — تعديلها يتعكس فوراً")
-        legend.setStyleSheet(
+        legend_shared = QLabel("🔗 أخضر = ماكينة مشتركة واردة من شركة أخرى")
+        legend_shared.setStyleSheet(
             f"color:{_SHARED_COLOR}; background:{_SHARED_BG};"
             "border-radius:4px; padding:3px 8px; font-size:9pt;"
         )
-        root.addWidget(legend)
+        root.addWidget(legend_shared)
+
+        legend_published = QLabel("📤 أزرق = ماكينة محلية منشورة ومشتركة مع شركات أخرى")
+        legend_published.setStyleSheet(
+            f"color:{_PUBLISHED_COLOR}; background:{_PUBLISHED_BG};"
+            "border-radius:4px; padding:3px 8px; font-size:9pt;"
+        )
+        root.addWidget(legend_published)
 
         self._filter = FilterBar(self._live_conn(), scope="machine")
         self._filter.filter_changed.connect(self._apply_filter)
@@ -94,7 +106,7 @@ class _MachineTable(QWidget):
             f"QPushButton:hover {{ background:#c8e6c9; }}"
         )
         btn_publish.setStyleSheet(
-            "QPushButton { background:#e3f2fd; color:#1565c0;"
+            f"QPushButton {{ background:{_PUBLISHED_BG}; color:{_PUBLISHED_COLOR};"
             "border:1px solid #90caf9; border-radius:4px;"
             "padding:4px 10px; font-weight:bold; }"
             "QPushButton:hover { background:#bbdefb; }"
@@ -142,9 +154,16 @@ class _MachineTable(QWidget):
         if item_id is None:
             QMessageBox.information(self, "تنبيه", "اختر ماكينة أولاً")
             return
+
+        # لو محلية منشورة → افتح تعديل المشترك عن طريق الاسم
         if not is_shared_id(item_id):
+            row = self._selected_machine_dict()
+            if row and str(row.get("name", "")).strip().lower() in self._published_names:
+                self._edit_published_as_shared(row)
+                return
             QMessageBox.information(self, "تنبيه", "هذه ماكينة عادية — استخدم «✏️ تعديل».")
             return
+
         shared_id = extract_shared_id(item_id)
         if shared_id is None:
             return
@@ -155,6 +174,24 @@ class _MachineTable(QWidget):
         dlg = SharedItemsDialog(central, shared_id, parent=self)
         dlg.exec_()
         central.close()
+
+    def _edit_published_as_shared(self, row: dict):
+        """يفتح نافذة تعديل المشترك للماكينة المحلية المنشورة."""
+        try:
+            from db.companies.companies_schema import get_central_connection, create_central_tables
+            from ui.tabs.companies.shared_items_dialog import SharedItemsDialog
+            central = get_central_connection()
+            create_central_tables(central)
+            shared_row = central.execute(
+                "SELECT id FROM shared_items WHERE name=? AND shared_type='machine' LIMIT 1",
+                (row["name"],)
+            ).fetchone()
+            if shared_row:
+                dlg = SharedItemsDialog(central, shared_row["id"], parent=self)
+                dlg.exec_()
+            central.close()
+        except Exception as e:
+            QMessageBox.warning(self, "خطأ", str(e))
 
     def _delete(self):
         item_id, name = self._selected_row_data()
@@ -192,10 +229,14 @@ class _MachineTable(QWidget):
         if not row:
             return
 
+        # لو محلية منشورة بالفعل → افتح تعديل الربط
+        if str(row.get("name", "")).strip().lower() in self._published_names:
+            self._edit_published_as_shared(row)
+            return
+
         item_data = {
             "rate_per_hour": float(row.get("rate_per_hour", 0.0)),
             "rate_per_unit": float(row.get("rate_per_unit", 0.0)),
-            # ← إصلاح: نحفظ category_name الحقيقي
             "category_name": row.get("category_name") or None,
         }
 
@@ -223,7 +264,7 @@ class _MachineTable(QWidget):
         except Exception as e:
             QMessageBox.warning(self, "خطأ", str(e))
 
-    # ── الإصلاح الرئيسي: تمرير local_rows ──────────────
+    # ── الإصلاح الرئيسي: تمرير local_rows + published_names ──
 
     def _load(self):
         try:
@@ -231,7 +272,9 @@ class _MachineTable(QWidget):
             local_rows = [_to_dict(m) for m in fetch_all_machines(conn)]
         except Exception:
             local_rows = []
-        # ← إصلاح: نمرر local_rows عشان remove_local_duplicates يمنع التكرار
+
+        self._published_names = get_published_local_names("machine")
+
         shared_rows = get_shared_machines(local_rows)
         self._all_rows = local_rows + shared_rows
         self._apply_filter()
@@ -242,29 +285,46 @@ class _MachineTable(QWidget):
         for m in self._all_rows:
             if not self._filter.match(m.get("name", ""), m.get("category_id")):
                 continue
-            is_shared = m.get("is_shared", False)
+            is_shared    = m.get("is_shared", False)
+            is_published = (
+                not is_shared and
+                str(m.get("name", "")).strip().lower() in self._published_names
+            )
 
-            # category_name الحقيقي أو "—"
             cat_display = m.get("category_name") or "—"
+
+            if is_shared:
+                name_prefix = "🔗 "
+            elif is_published:
+                name_prefix = "📤 "
+            else:
+                name_prefix = ""
 
             r = self.table.rowCount()
             self.table.insertRow(r)
 
-            id_item = QTableWidgetItem("🔗" if is_shared else str(m.get("id", "")))
+            id_item = QTableWidgetItem(
+                "🔗" if is_shared else ("📤" if is_published else str(m.get("id", "")))
+            )
             id_item.setData(0x0100, m.get("id"))
             self.table.setItem(r, 0, id_item)
-            self.table.setItem(r, 1, QTableWidgetItem(
-                ("🔗 " if is_shared else "") + m.get("name", "")
-            ))
+            self.table.setItem(r, 1, QTableWidgetItem(name_prefix + m.get("name", "")))
             self.table.setItem(r, 2, QTableWidgetItem(cat_display))
             self.table.setItem(r, 3, QTableWidgetItem(f"{m.get('rate_per_hour', 0):.2f}"))
             self.table.setItem(r, 4, QTableWidgetItem(f"{m.get('rate_per_unit', 0):.2f}"))
 
             if is_shared:
+                bg, fg = _SHARED_BG, _SHARED_COLOR
+            elif is_published:
+                bg, fg = _PUBLISHED_BG, _PUBLISHED_COLOR
+            else:
+                bg = fg = None
+
+            if bg:
                 for col in range(self.table.columnCount()):
                     itm = self.table.item(r, col)
                     if itm:
-                        itm.setBackground(QColor(_SHARED_BG))
-                        itm.setForeground(QColor(_SHARED_COLOR))
+                        itm.setBackground(QColor(bg))
+                        itm.setForeground(QColor(fg))
             shown += 1
         self._filter.set_count(shown, len(self._all_rows))

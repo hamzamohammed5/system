@@ -3,6 +3,7 @@ ui/tabs/costing/labor/labor_op_table.py
 إصلاحات:
 1. _load تمرر local_rows لـ get_shared_labor_ops (منع التكرار)
 2. category_name يُعرض الحقيقي (أو "—")
+3. علامة 📤 على عمليات العمالة المحلية المنشورة كمشتركة
 """
 
 from PyQt5.QtWidgets import (
@@ -19,11 +20,14 @@ from ui.widgets.costing.bulk_replace.bulk_replace_dialog import BulkReplaceDialo
 from ui.widgets.shared.filter_bar import FilterBar
 from ...companies.shared_items_mixin import (
     get_shared_labor_ops, is_shared_id, extract_shared_id,
+    get_published_local_names,
 )
 from ui.events import bus
 
-_SHARED_COLOR = "#2e7d52"
-_SHARED_BG    = "#e8f5e9"
+_SHARED_COLOR    = "#2e7d52"
+_SHARED_BG       = "#e8f5e9"
+_PUBLISHED_COLOR = "#1565c0"
+_PUBLISHED_BG    = "#e3f2fd"
 
 
 def _to_dict(row) -> dict:
@@ -38,10 +42,11 @@ def _to_dict(row) -> dict:
 class _LaborOpTable(QWidget):
     def __init__(self, conn, settings, form, parent=None):
         super().__init__(parent)
-        self.conn      = conn
-        self._settings = settings
-        self._form     = form
-        self._all_rows = []
+        self.conn             = conn
+        self._settings        = settings
+        self._form            = form
+        self._all_rows        = []
+        self._published_names = set()
         self._build()
         self._load()
         bus.data_changed.connect(self._load)
@@ -62,12 +67,19 @@ class _LaborOpTable(QWidget):
         root.setSpacing(6)
         root.addWidget(section_label("─── عمليات العمالة المحفوظة ───"))
 
-        legend = QLabel("🔗 أخضر = عملية مشتركة بين الشركات")
-        legend.setStyleSheet(
+        legend_shared = QLabel("🔗 أخضر = عملية مشتركة واردة من شركة أخرى")
+        legend_shared.setStyleSheet(
             f"color:{_SHARED_COLOR}; background:{_SHARED_BG};"
             "border-radius:4px; padding:3px 8px; font-size:9pt;"
         )
-        root.addWidget(legend)
+        root.addWidget(legend_shared)
+
+        legend_published = QLabel("📤 أزرق = عملية محلية منشورة ومشتركة مع شركات أخرى")
+        legend_published.setStyleSheet(
+            f"color:{_PUBLISHED_COLOR}; background:{_PUBLISHED_BG};"
+            "border-radius:4px; padding:3px 8px; font-size:9pt;"
+        )
+        root.addWidget(legend_published)
 
         self._filter = FilterBar(self._live_conn(), scope="labor")
         self._filter.filter_changed.connect(self._apply_filter)
@@ -101,7 +113,7 @@ class _LaborOpTable(QWidget):
             f"QPushButton:hover {{ background:#c8e6c9; }}"
         )
         btn_publish.setStyleSheet(
-            "QPushButton { background:#e3f2fd; color:#1565c0;"
+            f"QPushButton {{ background:{_PUBLISHED_BG}; color:{_PUBLISHED_COLOR};"
             "border:1px solid #90caf9; border-radius:4px;"
             "padding:4px 10px; font-weight:bold; }"
             "QPushButton:hover { background:#bbdefb; }"
@@ -153,9 +165,16 @@ class _LaborOpTable(QWidget):
         if item_id is None:
             QMessageBox.information(self, "تنبيه", "اختر عملية أولاً")
             return
+
+        # لو محلية منشورة → افتح تعديل المشترك عن طريق الاسم
         if not is_shared_id(item_id):
+            row = self._selected_op_dict()
+            if row and str(row.get("name", "")).strip().lower() in self._published_names:
+                self._edit_published_as_shared(row)
+                return
             QMessageBox.information(self, "تنبيه", "هذه عملية عادية — استخدم «تعديل».")
             return
+
         shared_id = extract_shared_id(item_id)
         from db.companies.companies_schema import get_central_connection, create_central_tables
         from ui.tabs.companies.shared_items_dialog import SharedItemsDialog
@@ -165,6 +184,25 @@ class _LaborOpTable(QWidget):
         dlg.exec_()
         central.close()
         bus.data_changed.emit()
+
+    def _edit_published_as_shared(self, row: dict):
+        """يفتح نافذة تعديل المشترك لعملية العمالة المحلية المنشورة."""
+        try:
+            from db.companies.companies_schema import get_central_connection, create_central_tables
+            from ui.tabs.companies.shared_items_dialog import SharedItemsDialog
+            central = get_central_connection()
+            create_central_tables(central)
+            shared_row = central.execute(
+                "SELECT id FROM shared_items WHERE name=? AND shared_type='labor_op' LIMIT 1",
+                (row["name"],)
+            ).fetchone()
+            if shared_row:
+                dlg = SharedItemsDialog(central, shared_row["id"], parent=self)
+                dlg.exec_()
+            central.close()
+            bus.data_changed.emit()
+        except Exception as e:
+            QMessageBox.warning(self, "خطأ", str(e))
 
     def _delete(self):
         item_id, item_name = self._selected_row_data()
@@ -216,9 +254,13 @@ class _LaborOpTable(QWidget):
         if not row:
             return
 
+        # لو محلية منشورة بالفعل → افتح تعديل الربط
+        if str(row.get("name", "")).strip().lower() in self._published_names:
+            self._edit_published_as_shared(row)
+            return
+
         item_data = {
             "minutes":       float(row.get("minutes", 0.0)),
-            # ← إصلاح: نحفظ category_name الحقيقي
             "category_name": row.get("category_name") or None,
         }
 
@@ -246,7 +288,7 @@ class _LaborOpTable(QWidget):
         except Exception as e:
             QMessageBox.warning(self, "خطأ", str(e))
 
-    # ── الإصلاح الرئيسي: تمرير local_rows ──────────────
+    # ── الإصلاح الرئيسي: تمرير local_rows + published_names ──
 
     def _load(self):
         try:
@@ -254,7 +296,9 @@ class _LaborOpTable(QWidget):
             local_rows = [_to_dict(op) for op in fetch_all_labor_ops(conn)]
         except Exception:
             local_rows = []
-        # ← إصلاح: نمرر local_rows عشان remove_local_duplicates يمنع التكرار
+
+        self._published_names = get_published_local_names("labor_op")
+
         shared_rows = get_shared_labor_ops(local_rows)
         self._all_rows = local_rows + shared_rows
         self._apply_filter()
@@ -266,29 +310,47 @@ class _LaborOpTable(QWidget):
         for op in self._all_rows:
             if not self._filter.match(op.get("name", ""), op.get("category_id")):
                 continue
-            is_shared = op.get("is_shared", False)
-            minutes   = op.get("minutes", 0)
-            cost      = (minutes / 60.0) * rate
-
-            # category_name الحقيقي أو "—"
+            is_shared    = op.get("is_shared", False)
+            is_published = (
+                not is_shared and
+                str(op.get("name", "")).strip().lower() in self._published_names
+            )
+            minutes     = op.get("minutes", 0)
+            cost        = (minutes / 60.0) * rate
             cat_display = op.get("category_name") or "—"
+
+            if is_shared:
+                name_prefix = "🔗 "
+            elif is_published:
+                name_prefix = "📤 "
+            else:
+                name_prefix = ""
 
             r = self.table.rowCount()
             self.table.insertRow(r)
 
-            id_item = QTableWidgetItem("🔗" if is_shared else str(op.get("id", "")))
+            id_item = QTableWidgetItem(
+                "🔗" if is_shared else ("📤" if is_published else str(op.get("id", "")))
+            )
             id_item.setData(0x0100, op.get("id"))
             self.table.setItem(r, 0, id_item)
-            self.table.setItem(r, 1, QTableWidgetItem(("🔗 " if is_shared else "") + op.get("name", "")))
+            self.table.setItem(r, 1, QTableWidgetItem(name_prefix + op.get("name", "")))
             self.table.setItem(r, 2, QTableWidgetItem(cat_display))
             self.table.setItem(r, 3, QTableWidgetItem(f"{minutes:.2f}"))
             self.table.setItem(r, 4, QTableWidgetItem(f"{cost:.2f} جنيه"))
 
             if is_shared:
+                bg, fg = _SHARED_BG, _SHARED_COLOR
+            elif is_published:
+                bg, fg = _PUBLISHED_BG, _PUBLISHED_COLOR
+            else:
+                bg = fg = None
+
+            if bg:
                 for col in range(self.table.columnCount()):
                     item = self.table.item(r, col)
                     if item:
-                        item.setBackground(QColor(_SHARED_BG))
-                        item.setForeground(QColor(_SHARED_COLOR))
+                        item.setBackground(QColor(bg))
+                        item.setForeground(QColor(fg))
             shown += 1
         self._filter.set_count(shown, len(self._all_rows))
