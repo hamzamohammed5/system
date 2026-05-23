@@ -2,6 +2,10 @@
 ui/tabs/accounting/ledger/ledger_accounts_panel.py
 ===================================================
 _AccountsPanel — قائمة الحسابات في دفتر الأستاذ.
+
+تغييرات (v2):
+  - يستمع لـ bus.company_data_changed بدل bus.data_changed العام.
+  - يتحقق من الـ company_id قبل إعادة التحميل لعزل بيانات الشركات.
 """
 
 from PyQt5.QtWidgets import (
@@ -18,15 +22,28 @@ from ui.events import bus
 from ui.tabs.accounting.helpers import TYPE_COLORS
 
 
+def _get_current_company_id():
+    try:
+        from db.companies.company_state import company_state
+        return company_state.company_id if company_state.is_ready else None
+    except Exception:
+        return None
+
+
 class _AccountsPanel(QWidget):
     def __init__(self, conn, on_select, parent=None):
         super().__init__(parent)
-        self.conn       = conn
-        self._on_select = on_select
-        self._all       = []
+        self.conn        = conn
+        self._on_select  = on_select
+        self._all        = []
+        self._company_id = _get_current_company_id()
         self._build()
         self._refresh_accounts()
-        bus.data_changed.connect(self._refresh_accounts)
+        bus.company_data_changed.connect(self._on_company_event)
+
+    def _on_company_event(self, company_id: int):
+        if company_id == self._company_id:
+            self._refresh_accounts()
 
     def _build(self):
         root = QVBoxLayout(self)

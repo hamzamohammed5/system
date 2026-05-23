@@ -2,6 +2,10 @@
 ui/tabs/accounting/financial/income_statement_tab.py
 =====================================================
 IncomeStatementTab — تبويب قائمة الدخل.
+
+تغييرات (v2):
+  - يستمع لـ bus.company_data_changed بدل bus.data_changed العام.
+  - يتحقق من الـ company_id قبل إعادة التحميل لعزل بيانات الشركات.
 """
 
 from PyQt5.QtWidgets import (
@@ -17,13 +21,26 @@ from ui.events  import bus
 from ui.tabs.accounting.helpers import _money, _stat_card
 
 
+def _get_current_company_id():
+    try:
+        from db.companies.company_state import company_state
+        return company_state.company_id if company_state.is_ready else None
+    except Exception:
+        return None
+
+
 class IncomeStatementTab(QWidget):
     def __init__(self, conn, parent=None):
         super().__init__(parent)
-        self.conn = conn
+        self.conn        = conn
+        self._company_id = _get_current_company_id()
         self._build()
         self._load()
-        bus.data_changed.connect(self._load)
+        bus.company_data_changed.connect(self._on_company_event)
+
+    def _on_company_event(self, company_id: int):
+        if company_id == self._company_id:
+            self._load()
 
     def _build(self):
         root = QVBoxLayout(self)
@@ -69,7 +86,6 @@ class IncomeStatementTab(QWidget):
 
     def _load(self):
         data = income_statement(self.conn)
-        colors = {"table_rev": "#6a1b9a", "table_exp": "#e65100"}
         row_data = [
             (self.table_rev, data["revenues"], "#6a1b9a"),
             (self.table_exp, data["expenses"], "#e65100"),

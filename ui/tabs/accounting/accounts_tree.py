@@ -3,11 +3,10 @@ ui/tabs/accounting/accounts_tree.py
 =====================================
 AccountsTreePanel — شجرة الحسابات مع فورم الإضافة والتعديل.
 
-التقسيم الداخلي:
-  accounts_tree/_tree_builder.py  → دوال بناء الشجرة
-  accounts_tree/_account_form.py  → _AccountForm (فورم الإضافة/التعديل)
-  accounts_tree/_group_filter.py  → _GroupFilterCombo
-  accounts_tree.py                → AccountsTreePanel (هذا الملف)
+تغييرات (v2):
+  - يستمع لـ bus.company_data_changed بدل bus.data_changed العام.
+  - يتحقق من الـ company_id قبل إعادة التحميل لعزل بيانات الشركات.
+  - _AccountForm و _GroupFilterCombo يستخدمان نفس الـ company_id للعزل.
 """
 
 from PyQt5.QtWidgets import (
@@ -34,6 +33,14 @@ from .tree._account_form  import _AccountForm
 from .tree._group_filter  import _GroupFilterCombo
 
 
+def _get_current_company_id():
+    try:
+        from db.companies.company_state import company_state
+        return company_state.company_id if company_state.is_ready else None
+    except Exception:
+        return None
+
+
 class AccountsTreePanel(QWidget):
     def __init__(self, conn, acc_types: list, title: str, parent=None):
         super().__init__(parent)
@@ -41,9 +48,14 @@ class AccountsTreePanel(QWidget):
         self.acc_types   = acc_types
         self.title       = title
         self._loading    = False
+        self._company_id = _get_current_company_id()
         self._build()
         self._load()
-        bus.data_changed.connect(self._load)
+        bus.company_data_changed.connect(self._on_company_event)
+
+    def _on_company_event(self, company_id: int):
+        if company_id == self._company_id:
+            self._load()
 
     def _build(self):
         main_layout = QVBoxLayout(self)
@@ -272,6 +284,6 @@ class AccountsTreePanel(QWidget):
         try:
             for del_id in reversed(all_ids):
                 self.conn.execute("DELETE FROM accounts WHERE id=?", (del_id,))
-            bus.data_changed.emit()
+            bus.company_data_changed.emit(self._company_id or 0)
         except Exception as e:
             QMessageBox.critical(self, "خطأ", f"فشل الحذف:\n{e}")

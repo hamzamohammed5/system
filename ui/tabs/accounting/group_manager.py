@@ -2,6 +2,10 @@
 ui/tabs/accounting/group_manager.py
 =====================================
 _GroupManagerPanel — إدارة تصنيفات الحسابات (شجرة + فورم).
+
+تغييرات (v2):
+  - يستمع لـ bus.company_data_changed بدل bus.data_changed العام.
+  - يتحقق من الـ company_id قبل إعادة التحميل لعزل بيانات الشركات.
 """
 
 from PyQt5.QtWidgets import (
@@ -23,15 +27,28 @@ from ui.helpers import section_label, danger_button
 from ui.events  import bus
 
 
+def _get_current_company_id():
+    try:
+        from db.companies.company_state import company_state
+        return company_state.company_id if company_state.is_ready else None
+    except Exception:
+        return None
+
+
 class _GroupManagerPanel(QWidget):
     def __init__(self, conn, acc_type: str, parent=None):
         super().__init__(parent)
         self.conn        = conn
         self.acc_type    = acc_type
         self._editing_id = None
+        self._company_id = _get_current_company_id()
         self._build()
         self._load()
-        bus.data_changed.connect(self._load)
+        bus.company_data_changed.connect(self._on_company_event)
+
+    def _on_company_event(self, company_id: int):
+        if company_id == self._company_id:
+            self._load()
 
     def _build(self):
         root = QVBoxLayout(self)
@@ -196,7 +213,7 @@ class _GroupManagerPanel(QWidget):
         insert_group(self.conn, name, self.acc_type,
                      self.cmb_parent.currentData(), self._color)
         self._reset()
-        bus.data_changed.emit()
+        bus.company_data_changed.emit(self._company_id or 0)
 
     def _edit(self):
         gid = self._selected_id()
@@ -229,7 +246,7 @@ class _GroupManagerPanel(QWidget):
         update_group(self.conn, self._editing_id, name,
                      self.cmb_parent.currentData(), self._color)
         self._reset()
-        bus.data_changed.emit()
+        bus.company_data_changed.emit(self._company_id or 0)
 
     def _delete(self):
         gid = self._selected_id()
@@ -248,7 +265,7 @@ class _GroupManagerPanel(QWidget):
         if QMessageBox.question(self, "تأكيد", msg,
                                 QMessageBox.Yes | QMessageBox.No) == QMessageBox.Yes:
             delete_group(self.conn, gid)
-            bus.data_changed.emit()
+            bus.company_data_changed.emit(self._company_id or 0)
 
     def _reset(self):
         self._editing_id = None

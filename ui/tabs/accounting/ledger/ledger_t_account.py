@@ -2,6 +2,10 @@
 ui/tabs/accounting/ledger/ledger_t_account.py
 ==============================================
 _TAccountPanel — لوحة حساب T في دفتر الأستاذ.
+
+تغييرات (v2):
+  - لا يستمع لأي bus event (يتحدث عبر load() المستدعى من _AccountsPanel).
+  - _AccountsPanel هي المسؤولة عن الاستماع للأحداث وإعادة تحميل البيانات.
 """
 
 from PyQt5.QtWidgets import (
