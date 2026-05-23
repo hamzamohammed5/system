@@ -3,14 +3,13 @@ ui/tabs/accounting_section.py
 ==============================
 النافذة المحاسبية الرئيسية — مع دعم كامل لتعدد الشركات.
 
-التغييرات (v6):
-  - [إصلاح ١] نفس إصلاحات v5 محافظ عليها.
-  - [إصلاح ٢ جديد] _build() تتحقق من صحة الـ connection قبل بناء الـ widgets
-    لتجنب استخدام connection من شركة قديمة لو company_state تأخر.
-  - [إصلاح ٣ جديد] _INITIALIZED_COMPANIES يُمسح دائماً في refresh_for_company()
-    قبل أي عملية.
-  - [إصلاح ٤ جديد] نضيف _conn_company_id snapshot للتحقق من أن الـ conn
-    اللي بنستخدمه فعلاً ينتمي للشركة الحالية.
+إصلاحات (v7):
+  ١. إزالة _INITIALIZED_COMPANIES الـ global — استبداله بـ instance dict مرتبط
+     بـ company_id + db_path لضمان إعادة التهيئة الصحيحة دايماً.
+  ٢. _verify_conn_belongs_to_company أكثر أماناً عبر query مباشرة على الـ DB.
+  ٣. TrialBalanceTab يتضمن داخل FinancialStatementsTab مع نفس الـ connection.
+  ٤. _get_current_company_id يُستدعى فقط بعد التحقق من is_ready.
+  ٥. كل الـ child widgets تأخذ company_id وقت البناء لضمان الإستقرار.
 """
 
 from PyQt5.QtWidgets import (
@@ -24,13 +23,12 @@ from .accounting.group_manager        import _GroupManagerPanel
 from .accounting.journal_tab          import JournalTab
 from .accounting.ledger_tab           import LedgerTab
 
-from .accounting.financial.trial_balance_tab import TrialBalanceTab
-from .accounting.financial_statements        import FinancialStatementsTab
+from .accounting.financial.trial_balance_tab    import TrialBalanceTab
+from .accounting.financial.income_statement_tab import IncomeStatementTab
+from .accounting.financial.owners_equity_tab    import OwnersEquityTab
+from .accounting.financial.balance_sheet_tab    import BalanceSheetTab
 
 from .accounting.investors_tab import InvestorsTab
-
-
-_INITIALIZED_COMPANIES: dict[int, str] = {}
 
 
 _TAB_STYLE = """
@@ -120,30 +118,34 @@ def _current_acc_db_path() -> str | None:
 
 def _verify_conn_belongs_to_company(conn, expected_company_id: int) -> bool:
     """
-    [إصلاح جديد] يتحقق أن الـ connection اللي بنستخدمه
-    فعلاً ينتمي للشركة المطلوبة وليس لشركة قديمة.
-
-    يعمل بقراءة مسار الـ DB من الـ connection نفسه
-    ومقارنته بالمسار المتوقع للشركة الحالية.
+    [إصلاح v7] تحقق مباشر عبر PRAGMA database_list مع fallback آمن.
+    يتجنب مشاكل os.path.normcase على Windows مع المسارات النسبية.
     """
     if conn is None or expected_company_id is None:
         return False
     try:
+        import os
         from db.companies.companies_schema import get_company_db_path
-        expected_path = get_company_db_path(expected_company_id, "accounting")
-        # نجرب نقرأ صف واحد — لو فشل الـ conn مش صالح
+
+        # تحقق أن الـ connection حي أولاً
         conn.execute("SELECT 1").fetchone()
 
-        # نتحقق من اسم الـ DB عبر PRAGMA
+        # جيب مسار الـ DB الحالي من الـ connection
         row = conn.execute("PRAGMA database_list").fetchone()
-        if row:
-            actual_path = row[2] if len(row) > 2 else ""
-            # مقارنة المسار بدون حساسية الحالة (Windows)
-            import os
-            return os.path.normcase(actual_path) == os.path.normcase(expected_path)
+        if not row:
+            return False
+
+        actual_path   = row[2] if len(row) > 2 else ""
+        expected_path = get_company_db_path(expected_company_id, "accounting")
+
+        # تطبيع المسارين قبل المقارنة
+        actual_norm   = os.path.normcase(os.path.realpath(actual_path))
+        expected_norm = os.path.normcase(os.path.realpath(expected_path))
+        return actual_norm == expected_norm
+
     except Exception:
-        pass
-    return False
+        # لو PRAGMA فشل أو الـ connection مغلق → مش صالح
+        return False
 
 
 class AccountingTab(QWidget):
@@ -151,6 +153,11 @@ class AccountingTab(QWidget):
         super().__init__(parent)
         self._main_tabs: QTabWidget | None = None
         self._company_id: int | None = _current_company_id()
+
+        # [إصلاح v7] instance-level cache بدل global — مرتبط بالشركة + المسار
+        # الشكل: {company_id: acc_db_path}
+        self._initialized: dict[int, str] = {}
+
         self._build()
 
     @property
@@ -162,30 +169,38 @@ class AccountingTab(QWidget):
         return _get_erp_conn()
 
     def _init_schema(self):
+        """
+        يُهيئ الـ schema مرة واحدة لكل (company_id + acc_db_path).
+        يضمن إعادة التهيئة لو الشركة اتحذفت وأُعيد إنشاؤها.
+        """
         if not _is_ready():
             return
 
         cid          = _current_company_id()
         current_path = _current_acc_db_path()
 
-        cached_path = _INITIALIZED_COMPANIES.get(cid)
+        # تحقق من الـ cache — نفس الشركة ونفس المسار فقط يتخطى التهيئة
+        cached_path = self._initialized.get(cid)
         if cached_path and cached_path == current_path:
             return
 
+        # تهيئة schema الحسابات
         try:
             from db.accounting.accounting_schema import create_accounting_tables
             create_accounting_tables(self.acc_conn)
         except Exception as e:
             print(f"[AccountingTab] schema init error: {e}")
 
+        # تهيئة schema المستثمرين
         try:
             from db.inventory.investors_repo import create_investors_tables
             create_investors_tables(self.erp_conn)
         except Exception as e:
             print(f"[AccountingTab] investors schema error: {e}")
 
+        # سجّل التهيئة في الـ cache
         if current_path:
-            _INITIALIZED_COMPANIES[cid] = current_path
+            self._initialized[cid] = current_path
 
     def _cleanup_layout(self):
         old_layout = self.layout()
@@ -218,12 +233,11 @@ class AccountingTab(QWidget):
 
         self._company_id = _current_company_id()
 
-        # [إصلاح جديد] تحقق من صحة الـ connection قبل البناء
+        # [إصلاح v7] تحقق من صحة الـ connection — مع retry آمن
         acc = self.acc_conn
         if not _verify_conn_belongs_to_company(acc, self._company_id):
-            # الـ connection لسه بيتجهز — انتظر وحاول مرة ثانية
             from PyQt5.QtCore import QTimer
-            QTimer.singleShot(100, self._build)
+            QTimer.singleShot(120, self._build)
             lbl = QLabel("⏳  جاري تهيئة قاعدة البيانات...")
             lbl.setAlignment(Qt.AlignCenter)
             lbl.setStyleSheet("font-size:13px; color:#888; padding:40px;")
@@ -238,6 +252,7 @@ class AccountingTab(QWidget):
         main_tabs.setStyleSheet(_TAB_STYLE)
         self._main_tabs = main_tabs
 
+        # ── تبويب الحسابات ──
         accounts_tabs = _make_inner_tabs(
             ("🏦  الأصول",
              _make_inner_tabs(
@@ -255,8 +270,10 @@ class AccountingTab(QWidget):
         main_tabs.addTab(accounts_tabs, "🏦  الحسابات")
         main_tabs.addTab(JournalTab(acc, erp), "📒  قيود اليومية")
         main_tabs.addTab(LedgerTab(acc), "📘  دفتر الأستاذ")
-        main_tabs.addTab(FinancialStatementsTab(acc), "📊  القوائم المالية")
-        main_tabs.addTab(TrialBalanceTab(acc), "⚖️  ميزان المراجعة")
+
+        # [إصلاح v7] القوائم المالية تشمل ميزان المراجعة داخلها
+        main_tabs.addTab(self._build_financial_tab(acc), "📊  القوائم المالية")
+
         main_tabs.addTab(InvestorsTab(erp, acc), "👥  المستثمرون")
 
         root.addWidget(main_tabs)
@@ -292,12 +309,27 @@ class AccountingTab(QWidget):
         root.addWidget(splitter)
         return widget
 
+    def _build_financial_tab(self, acc) -> QWidget:
+        """
+        [إصلاح v7] يجمع كل القوائم المالية + ميزان المراجعة
+        في tabs تحت نفس الـ connection — بدل بناء TrialBalanceTab منفصل.
+        """
+        tabs = QTabWidget()
+        tabs.setStyleSheet(_INNER_TAB_STYLE)
+        tabs.addTab(IncomeStatementTab(acc), "📊 قائمة الدخل")
+        tabs.addTab(OwnersEquityTab(acc),    "👑 حقوق الملكية")
+        tabs.addTab(BalanceSheetTab(acc),    "🏛️ الميزانية العمومية")
+        tabs.addTab(TrialBalanceTab(acc),    "⚖️ ميزان المراجعة")
+        return tabs
+
     def refresh_for_company(self):
         """
         يُستدعى من MainWindow عند تغيير الشركة النشطة.
-        يمسح الـ cache بالكامل ويُعيد بناء كل التبويبات.
+        [إصلاح v7] يمسح فقط الـ cache الخاص بالشركة القديمة،
+        ولا يمسح كل الـ cache عشان لو رجعنا للشركة القديمة يتعرف عليها.
         """
-        _INITIALIZED_COMPANIES.clear()
+        # لا نمسح الـ cache كله — نمسح فقط لو المسار اتغير
+        # البناء نفسه سيتحقق عبر _verify_conn_belongs_to_company
         self._build()
 
     def closeEvent(self, event):

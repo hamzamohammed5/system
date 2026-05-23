@@ -3,6 +3,10 @@ ui/tabs/accounting/financial_statements.py
 ==========================================
 القوائم المالية — الملف الرئيسي يجمع التبويبات الفرعية.
 
+[إصلاح v2] TrialBalanceTab أُضيف هنا داخل نفس الـ connection
+بدل بنائه منفصلاً في accounting_section.py عشان يضمن
+أنه يستخدم نفس accounting connection الشركة النشطة.
+
 التقسيم الداخلي:
   financial/trial_balance_tab.py    → TrialBalanceTab
   financial/income_statement_tab.py → IncomeStatementTab
@@ -20,6 +24,11 @@ from .financial.balance_sheet_tab    import BalanceSheetTab       # noqa: F401
 
 
 class FinancialStatementsTab(QWidget):
+    """
+    يجمع كل القوائم المالية في تبويبات تحت نفس الـ connection.
+    كل التبويبات تستخدم نفس acc_conn المُمرر — لا connections إضافية.
+    """
+
     def __init__(self, conn, parent=None):
         super().__init__(parent)
         self.conn = conn
@@ -28,6 +37,7 @@ class FinancialStatementsTab(QWidget):
     def _build(self):
         root = QVBoxLayout(self)
         root.setContentsMargins(0, 0, 0, 0)
+
         tabs = QTabWidget()
         tabs.setStyleSheet(
             "QTabBar::tab:selected { color:#1565c0; border-top:2px solid #1565c0; }"
@@ -35,4 +45,5 @@ class FinancialStatementsTab(QWidget):
         tabs.addTab(IncomeStatementTab(self.conn), "📊 قائمة الدخل")
         tabs.addTab(OwnersEquityTab(self.conn),    "👑 حقوق الملكية")
         tabs.addTab(BalanceSheetTab(self.conn),    "🏛️ الميزانية العمومية")
+        tabs.addTab(TrialBalanceTab(self.conn),    "⚖️ ميزان المراجعة")
         root.addWidget(tabs)
