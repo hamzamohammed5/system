@@ -2,6 +2,9 @@
 ui/tabs/accounting/tree/_account_form.py
 ==================================================
 _AccountForm — فورم إضافة / تعديل حساب محاسبي.
+
+تغييرات (v2):
+  - يبعت bus.company_data_changed بدل bus.data_changed العام.
 """
 
 from PyQt5.QtWidgets import (
@@ -19,6 +22,23 @@ from db.accounting.accounting_repo import (
 from db.accounting.accounting_schema import TYPE_AR
 from ui.helpers import danger_button
 from ui.events  import bus
+
+
+def _get_current_company_id():
+    try:
+        from db.companies.company_state import company_state
+        return company_state.company_id if company_state.is_ready else None
+    except Exception:
+        return None
+
+
+def _emit_data_changed():
+    """يُطلق الحدث المقيّد بالشركة النشطة."""
+    cid = _get_current_company_id()
+    if cid is not None:
+        bus.company_data_changed.emit(cid)
+    else:
+        bus.data_changed.emit()
 
 
 class _AccountForm(QWidget):
@@ -161,7 +181,7 @@ class _AccountForm(QWidget):
             insert_account(self.conn, code, name, acc_type, parent_id, group_id)
             self.inp_code.clear()
             self.inp_name.clear()
-            bus.data_changed.emit()
+            _emit_data_changed()
         except Exception as e:
             QMessageBox.warning(self, "خطأ", str(e))
 
@@ -193,7 +213,7 @@ class _AccountForm(QWidget):
         update_account(self.conn, self._editing_id, name,
                        self.cmb_group.currentData())
         self._cancel_edit()
-        bus.data_changed.emit()
+        _emit_data_changed()
 
     def _cancel_edit(self):
         self._editing_id = None

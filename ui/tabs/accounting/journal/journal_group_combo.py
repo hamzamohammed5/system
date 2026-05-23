@@ -3,6 +3,10 @@ ui/tabs/accounting/journal/journal_group_combo.py
 ==========================================
 _NoSelectDelegate  — يمنع اختيار عناصر الرأس في الشجرة
 _TreeGroupCombo    — QComboBox مع QTreeView شجري لعرض تصنيفات الحسابات
+
+تغييرات (v2):
+  - يستمع لـ bus.company_data_changed بدل bus.data_changed العام.
+  - يتحقق من الـ company_id قبل إعادة التحميل لعزل بيانات الشركات.
 """
 
 from PyQt5.QtWidgets import (
@@ -34,6 +38,14 @@ _EQUITY_COLOR = "#2e7d32"
 _EQUITY_LABEL = "حقوق الملكية"
 
 
+def _get_current_company_id():
+    try:
+        from db.companies.company_state import company_state
+        return company_state.company_id if company_state.is_ready else None
+    except Exception:
+        return None
+
+
 class _NoSelectDelegate(QStyledItemDelegate):
     """يجعل عناصر الرأس غير قابلة للاختيار."""
     def paint(self, painter, option, index):
@@ -53,8 +65,9 @@ class _TreeGroupCombo(QComboBox):
 
     def __init__(self, conn, parent=None):
         super().__init__(parent)
-        self.conn = conn
+        self.conn             = conn
         self._group_entry_ids = None
+        self._company_id      = _get_current_company_id()
 
         self._model = QStandardItemModel()
         self.setModel(self._model)
@@ -87,7 +100,12 @@ class _TreeGroupCombo(QComboBox):
         self._tree_view.clicked.connect(self._on_tree_clicked)
 
         self._populate()
-        bus.data_changed.connect(self._reload)
+        bus.company_data_changed.connect(self._on_company_event)
+
+    def _on_company_event(self, company_id: int):
+        """يُعيد التحميل فقط لو الحدث من نفس شركتنا."""
+        if company_id == self._company_id:
+            self._reload()
 
     def _populate(self):
         prev_gid = self.currentData()

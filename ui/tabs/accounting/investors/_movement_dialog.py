@@ -2,6 +2,11 @@
 ui/tabs/accounting/investors/_movement_dialog.py
 =================================================
 _MovementDialog — نافذة إضافة حركة (capital / drawings) لمستثمر.
+
+تغييرات (v2):
+  - يبعت bus.company_data_changed بدل bus.data_changed العام.
+  - إزالة الاشتراك في bus.data_changed لتحديث الـ combos (كان بيأثر على كل الشركات).
+  - الـ combos بتتحدث فقط عند فتح النافذة.
 """
 
 from PyQt5.QtWidgets import (
@@ -18,6 +23,14 @@ from ._helpers import (
 )
 
 
+def _get_current_company_id():
+    try:
+        from db.companies.company_state import company_state
+        return company_state.company_id if company_state.is_ready else None
+    except Exception:
+        return None
+
+
 class _MovementDialog(QDialog):
     """نافذة تسجيل رأس مال أو مسحوبات لمستثمر."""
 
@@ -30,6 +43,7 @@ class _MovementDialog(QDialog):
         self.investor_id   = investor_id
         self.investor_name = investor_name
         self.move_type     = move_type
+        self._company_id   = _get_current_company_id()
 
         is_cap = move_type == "capital"
         title  = "💰  إضافة رأس مال" if is_cap else "💸  تسجيل مسحوبات"
@@ -38,7 +52,7 @@ class _MovementDialog(QDialog):
         self.setModal(True)
         self.setLayoutDirection(Qt.RightToLeft)
         self._build()
-        bus.data_changed.connect(self._refresh_account_combos)
+        # لا نشترك في bus.data_changed — الـ combos بتتحدث عند الفتح فقط
 
     def _build(self):
         root = QVBoxLayout(self)
@@ -134,16 +148,6 @@ class _MovementDialog(QDialog):
         btn_row.addWidget(btn_ok)
         root.addLayout(btn_row)
 
-    def _refresh_account_combos(self):
-        prev_equity = self.cmb_equity_acc.currentData()
-        prev_asset  = self.cmb_asset_acc.currentData()
-        if self.move_type == "capital":
-            _fill_capital_combo(self.cmb_equity_acc, self.acc_conn, prev_equity)
-        else:
-            _fill_drawings_combo(self.cmb_equity_acc, self.acc_conn, prev_equity)
-        _fill_asset_combo(self.cmb_asset_acc, self.acc_conn, prev_asset)
-        self._update_preview()
-
     def _update_preview(self):
         is_cap   = self.move_type == "capital"
         amount   = self.sp_amount.value()
@@ -181,7 +185,11 @@ class _MovementDialog(QDialog):
                     self.investor_id, self.investor_name,
                     equity_acc, asset_acc, amount, date, notes
                 )
-            bus.data_changed.emit()
+            # إطلاق الحدث المقيّد بالشركة النشطة
+            if self._company_id is not None:
+                bus.company_data_changed.emit(self._company_id)
+            else:
+                bus.data_changed.emit()
             self.accept()
         except Exception as e:
             QMessageBox.critical(self, "خطأ", str(e))

@@ -2,6 +2,10 @@
 ui/tabs/accounting/investors/_investors_table.py
 ================================================
 _InvestorsTable — جدول المستثمرين مع أزرار الإضافة والتعديل والحذف.
+
+تغييرات (v2):
+  - يستمع لـ bus.company_data_changed بدل bus.data_changed العام.
+  - يتحقق من الـ company_id قبل إعادة التحميل لعزل بيانات الشركات.
 """
 
 from PyQt5.QtWidgets import (
@@ -23,17 +27,30 @@ from ._investor_form    import _InvestorForm
 from ._movement_dialog  import _MovementDialog
 
 
+def _get_current_company_id():
+    try:
+        from db.companies.company_state import company_state
+        return company_state.company_id if company_state.is_ready else None
+    except Exception:
+        return None
+
+
 class _InvestorsTable(QWidget):
     def __init__(self, acc_conn, erp_conn, form: _InvestorForm,
                  on_select, parent=None):
         super().__init__(parent)
-        self.acc_conn   = acc_conn
-        self.erp_conn   = erp_conn
-        self._form      = form
-        self._on_select = on_select
+        self.acc_conn    = acc_conn
+        self.erp_conn    = erp_conn
+        self._form       = form
+        self._on_select  = on_select
+        self._company_id = _get_current_company_id()
         self._build()
         self._load()
-        bus.data_changed.connect(self._load)
+        bus.company_data_changed.connect(self._on_company_event)
+
+    def _on_company_event(self, company_id: int):
+        if company_id == self._company_id:
+            self._load()
 
     def _build(self):
         root = QVBoxLayout(self)
@@ -130,7 +147,7 @@ class _InvestorsTable(QWidget):
         inv = fetch_investor(self.erp_conn, inv_id)
         if confirm_delete(self, inv["name"]):
             delete_investor(self.erp_conn, inv_id)
-            bus.data_changed.emit()
+            bus.company_data_changed.emit(self._company_id or 0)
 
     def _open_movement(self, move_type: str):
         inv_id = self._selected_id()
