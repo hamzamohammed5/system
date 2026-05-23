@@ -12,13 +12,8 @@ from PyQt5.QtCore import Qt, QPropertyAnimation, QEasingCurve
 from ui.app_settings  import _C
 
 from ._section_label import _SectionLabel
-from ._nav_button import _NavButton
+from ._nav_button import _NavButton, SIDEBAR_COLLAPSED_WIDTH, SIDEBAR_EXPANDED_WIDTH
 from ._toggle_button import _ToggleButton
-
-SIDEBAR_EXPANDED_WIDTH  = 224
-SIDEBAR_COLLAPSED_WIDTH = 56
-CONTENT_MIN_WIDTH       = 820
-WINDOW_DEFAULT_W        = SIDEBAR_EXPANDED_WIDTH + CONTENT_MIN_WIDTH
 
 
 

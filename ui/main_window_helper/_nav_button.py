@@ -10,10 +10,12 @@ from PyQt5.QtWidgets import (
 from PyQt5.QtCore import Qt
 
 from ui.app_settings  import get_font_size, _C
-from ._sidebar import SIDEBAR_COLLAPSED_WIDTH, SIDEBAR_EXPANDED_WIDTH
 
 
-
+SIDEBAR_EXPANDED_WIDTH  = 224
+SIDEBAR_COLLAPSED_WIDTH = 56
+CONTENT_MIN_WIDTH       = 820
+WINDOW_DEFAULT_W        = SIDEBAR_EXPANDED_WIDTH + CONTENT_MIN_WIDTH
 
 
 # ══════════════════════════════════════════════════════════

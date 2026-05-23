@@ -1,40 +1,36 @@
 """
-ui/main_window.py  (نسخة multi-company — مُصلَحة)
-===================================================
+ui/main_window.py  (نسخة multi-company — مُصلَحة v2)
+=====================================================
 التغييرات عن النسخة السابقة:
-  1. _on_company_changed() تستدعي accounting._refresh_for_company()
-     بدلاً من تدمير وإعادة بناء كل التبويبات.
-  2. _build_tabs() تمرر المرجع للـ AccountingTab لـ _on_company_changed.
-  3. _destroy_tabs() تبقى للشركة الأولى فقط (full rebuild).
-  4. شركة تُفعَّل → تُبنى التبويبات مرة واحدة، ثم كل تغيير
-     يُحدِّث فقط الـ widgets المتأثرة.
+  1. _on_company_changed() تُطلق bus.company_data_changed(company_id)
+     بدلاً من bus.data_changed() — لعزل الإشعارات بين الشركات.
+  2. _destroy_tabs() تستخدم hide() + deleteLater() بدل sip.delete.
+  3. كل rebuild يضمن حذف الـ widgets القديمة قبل بناء الجديدة.
 """
 
 from PyQt5.QtWidgets import (
     QMainWindow, QWidget, QHBoxLayout, QVBoxLayout,
-    QStackedWidget , QFrame,
+    QStackedWidget, QFrame,
     QScrollArea, QSizePolicy,
 )
-from PyQt5.QtCore import Qt, QPropertyAnimation, QEasingCurve
+from PyQt5.QtCore import Qt
 
 from ui.app_settings  import _C
 from ui.events        import bus
-from .main_window_helper._sidebar import _Sidebar, WINDOW_DEFAULT_W, SIDEBAR_COLLAPSED_WIDTH, CONTENT_MIN_WIDTH
+from .main_window_helper._sidebar import _Sidebar
 
+from .main_window_helper._nav_button import (
+    WINDOW_DEFAULT_W,
+    SIDEBAR_COLLAPSED_WIDTH, CONTENT_MIN_WIDTH,
+)
 
-
-# ══════════════════════════════════════════════════════════
-# MainWindow
-# ══════════════════════════════════════════════════════════
 
 class MainWindow(QMainWindow):
     def __init__(self, app):
         super().__init__()
         self._app          = app
         self._tabs_built   = False
-
-        # مراجع للتبويبات — تُضبَط في _build_tabs()
-        self._accounting: "AccountingTab | None" = None
+        self._accounting   = None
 
         self.setWindowTitle("ERP — نظام إدارة التكاليف")
         self.resize(WINDOW_DEFAULT_W, 820)
@@ -42,6 +38,10 @@ class MainWindow(QMainWindow):
         self.setMinimumSize(SIDEBAR_COLLAPSED_WIDTH + 400, 500)
 
         self._build()
+
+    # ──────────────────────────────────────────────────────
+    # بناء الهيكل الأساسي
+    # ──────────────────────────────────────────────────────
 
     def _build(self):
         central = QWidget()
@@ -137,12 +137,15 @@ class MainWindow(QMainWindow):
         self._tabs_built = True
 
     def _destroy_tabs(self):
-        """يحذف التبويبات القديمة من الـ stack."""
+        """
+        يحذف التبويبات القديمة من الـ stack بشكل آمن.
+        يستخدم hide() + deleteLater() بدل sip.delete لتجنب crashes.
+        """
         while self._stack.count() > 1:
             w = self._stack.widget(1)
             self._stack.removeWidget(w)
             try:
-                w.close()
+                w.hide()
                 w.deleteLater()
             except Exception:
                 pass
@@ -150,15 +153,7 @@ class MainWindow(QMainWindow):
         self._tabs_built = False
 
     def _refresh_tabs(self):
-        """
-        عند تغيير الشركة:
-        - يُعيد بناء AccountingTab (الأهم).
-        - يُعيد بناء كل التبويبات الأخرى.
-        
-        ملاحظة: التبويبات الأخرى (Costing, Inventory …) تستدعي
-        get_connection() بشكل lazy عند التحميل، لذا إعادة بناؤها
-        كافية لضمان استخدام الـ DB الجديد.
-        """
+        """إعادة بناء كل التبويبات عند تغيير الشركة."""
         self._build_tabs()
 
     # ──────────────────────────────────────────────────────
@@ -172,16 +167,16 @@ class MainWindow(QMainWindow):
         الخطوات:
           1. تحديث عنوان النافذة.
           2. إعادة بناء كل التبويبات على الـ DB الجديد.
-          3. إطلاق bus.data_changed لأي widget خارجي.
+          3. إطلاق bus.company_data_changed بـ company_id
+             (بدل bus.data_changed العام) لعزل الإشعارات.
         """
         from db.companies.company_state import company_state
 
         self.setWindowTitle(f"ERP — {company_state.company_name}")
-
-        # إعادة بناء كاملة لضمان عزل بيانات الشركات
         self._refresh_tabs()
 
-        bus.data_changed.emit()
+        # إطلاق الإشعار المقيّد بالشركة — الـ widgets الجديدة فقط تستجيب
+        bus.company_data_changed.emit(company_id)
 
     def _on_nav(self, clicked_btn):
         for btn in self._sidebar.get_buttons():

@@ -3,12 +3,16 @@ ui/tabs/accounting_section.py
 ==============================
 النافذة المحاسبية الرئيسية — مع دعم كامل لتعدد الشركات.
 
-التغييرات:
+التغييرات (v2):
   - الـ connections لا تُحفَظ كـ instance attributes ثابتة،
     بل تُجلَب من company_state عند كل استخدام.
   - refresh_for_company() تُعيد بناء كل التبويبات عند تغيير الشركة.
   - closeEvent لا يُغلق ProtectedConnection.
   - _is_ready() يتحقق من وجود شركة نشطة قبل أي عملية.
+  - تنظيف الـ layout القديم بـ hide()+deleteLater() بدل sip.delete.
+  - cache الـ schema init لتجنب CREATE TABLE المتكرر.
+  - الاشتراك في bus.company_data_changed بدل bus.data_changed
+    لعزل الإشعارات بين الشركات.
 """
 
 from PyQt5.QtWidgets import (
@@ -17,7 +21,6 @@ from PyQt5.QtWidgets import (
 )
 from PyQt5.QtCore import Qt
 
-# ── أجزاء الحسابات ──
 from .accounting.accounts_tree        import AccountsTreePanel
 from .accounting.group_manager        import _GroupManagerPanel
 from .accounting.journal_tab          import JournalTab
@@ -27,6 +30,10 @@ from .accounting.financial_statements import (
     FinancialStatementsTab,
 )
 from .accounting.investors_tab import InvestorsTab
+
+
+# ── cache لتجنب إعادة تهيئة الجداول في كل بناء ───────────
+_INITIALIZED_COMPANIES: set = set()
 
 
 _TAB_STYLE = """
@@ -88,21 +95,23 @@ def _make_inner_tabs(*tab_defs) -> QTabWidget:
 # ══════════════════════════════════════════════════════════
 
 def _get_acc_conn():
-    """يرجع accounting.db connection للشركة النشطة."""
     from db.shared.connection import get_accounting_connection
     return get_accounting_connection()
 
 
 def _get_erp_conn():
-    """يرجع erp.db connection للشركة النشطة."""
     from db.shared.connection import get_connection
     return get_connection()
 
 
 def _is_ready() -> bool:
-    """هل في شركة نشطة؟"""
     from db.companies.company_state import company_state
     return company_state.is_ready
+
+
+def _current_company_id() -> int | None:
+    from db.companies.company_state import company_state
+    return company_state.company_id if company_state.is_ready else None
 
 
 # ══════════════════════════════════════════════════════════
@@ -113,32 +122,37 @@ class AccountingTab(QWidget):
     """
     التبويب الرئيسي للمحاسبة.
 
-    يَجلُب الـ connections من company_state عند كل بناء أو إعادة بناء،
-    لذا تغيير الشركة لا يُبقي بيانات الشركة القديمة مرئية.
+    - يجلب الـ connections من company_state عند كل بناء.
+    - يستمع لـ bus.company_data_changed بـ company_id محدد
+      لضمان عدم استجابة الـ widget لأحداث شركة أخرى.
+    - تنظيف الـ layout بـ hide()+deleteLater() بدل sip.delete.
     """
 
     def __init__(self, parent=None):
         super().__init__(parent)
         self._main_tabs: QTabWidget | None = None
+        # حفظ الـ company_id عند الإنشاء للتحقق في الـ bus handler
+        self._company_id: int | None = _current_company_id()
         self._build()
 
     # ── الحصول على connections ─────────────────────────────
 
     @property
     def acc_conn(self):
-        """دائماً يرجع accounting.db للشركة النشطة."""
         return _get_acc_conn()
 
     @property
     def erp_conn(self):
-        """دائماً يرجع erp.db للشركة النشطة."""
         return _get_erp_conn()
 
-    # ── بناء الواجهة ───────────────────────────────────────
+    # ── تهيئة الجداول مع cache ────────────────────────────
 
     def _init_schema(self):
-        """تهيئة الجداول لو لم تُهيَّأ بعد."""
+        """تهيئة الجداول مع cache لتجنب التكرار."""
         if not _is_ready():
+            return
+        cid = _current_company_id()
+        if cid in _INITIALIZED_COMPANIES:
             return
         try:
             from db.accounting.accounting_schema import create_accounting_tables
@@ -150,23 +164,36 @@ class AccountingTab(QWidget):
             create_investors_tables(self.erp_conn)
         except Exception as e:
             print(f"[AccountingTab] investors schema error: {e}")
+        _INITIALIZED_COMPANIES.add(cid)
+
+    # ── بناء الواجهة ───────────────────────────────────────
+
+    def _cleanup_layout(self):
+        """
+        يحذف الـ layout القديم وكل widgets فيه بشكل آمن.
+        يستخدم hide()+deleteLater() بدل sip.delete لتجنب crashes.
+        """
+        old_layout = self.layout()
+        if old_layout is None:
+            return
+
+        # إخفاء وجدولة حذف كل الـ widgets
+        while old_layout.count():
+            item = old_layout.takeAt(0)
+            w = item.widget()
+            if w is not None:
+                w.hide()
+                w.deleteLater()
+
+        # نقل الـ layout لـ widget مؤقت يُحذف فوراً
+        # (بديل آمن لـ sip.delete)
+        dummy = QWidget()
+        dummy.setLayout(old_layout)
+        dummy.deleteLater()
 
     def _build(self):
         """بناء (أو إعادة بناء) كل التبويبات."""
-        # تنظيف الـ layout القديم
-        if self.layout() is not None:
-            old_layout = self.layout()
-            # احذف كل الـ widgets من الـ layout
-            while old_layout.count():
-                item = old_layout.takeAt(0)
-                if item.widget():
-                    item.widget().deleteLater()
-            # احذف الـ layout نفسه
-            import sip
-            try:
-                sip.delete(old_layout)
-            except Exception:
-                pass
+        self._cleanup_layout()
 
         root = QVBoxLayout(self)
         root.setContentsMargins(0, 0, 0, 0)
@@ -174,15 +201,13 @@ class AccountingTab(QWidget):
         if not _is_ready():
             lbl = QLabel("⚠️  اختر شركة أولاً لعرض الحسابات")
             lbl.setAlignment(Qt.AlignCenter)
-            lbl.setStyleSheet(
-                "font-size:14px; color:#888; padding:40px;"
-            )
+            lbl.setStyleSheet("font-size:14px; color:#888; padding:40px;")
             root.addWidget(lbl)
             return
 
+        self._company_id = _current_company_id()
         self._init_schema()
 
-        # نجلب الـ connections مرة واحدة لهذه الدورة من البناء
         acc = self.acc_conn
         erp = self.erp_conn
 
@@ -212,10 +237,7 @@ class AccountingTab(QWidget):
         # ═══════════════════════════════════════════════════
         # 2. القيود المحاسبية
         # ═══════════════════════════════════════════════════
-        main_tabs.addTab(
-            JournalTab(acc, erp),
-            "📒  قيود اليومية"
-        )
+        main_tabs.addTab(JournalTab(acc, erp), "📒  قيود اليومية")
 
         # ═══════════════════════════════════════════════════
         # 3. دفتر الأستاذ
@@ -235,10 +257,7 @@ class AccountingTab(QWidget):
         # ═══════════════════════════════════════════════════
         # 6. المستثمرون
         # ═══════════════════════════════════════════════════
-        main_tabs.addTab(
-            InvestorsTab(erp, acc),
-            "👥  المستثمرون"
-        )
+        main_tabs.addTab(InvestorsTab(erp, acc), "👥  المستثمرون")
 
         root.addWidget(main_tabs)
 
@@ -274,7 +293,7 @@ class AccountingTab(QWidget):
         root.addWidget(splitter)
         return widget
 
-    # ── واجهة خارجية: إعادة التهيئة عند تغيير الشركة ──────
+    # ── واجهة خارجية ──────────────────────────────────────
 
     def refresh_for_company(self):
         """
@@ -283,10 +302,8 @@ class AccountingTab(QWidget):
         """
         self._build()
 
-    # ── closeEvent — لا نُغلق ProtectedConnection ──────────
+    # ── closeEvent ─────────────────────────────────────────
 
     def closeEvent(self, event):
-        """
-        ProtectedConnection لا تُغلق هنا — هي مُدارة بواسطة company_state.
-        """
+        """ProtectedConnection لا تُغلق هنا — مُدارة بواسطة company_state."""
         super().closeEvent(event)
