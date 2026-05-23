@@ -3,9 +3,7 @@ ui/tabs/accounting/financial/balance_sheet_tab.py
 ==================================================
 BalanceSheetTab — تبويب الميزانية العمومية.
 
-تغييرات (v2):
-  - يستمع لـ bus.company_data_changed بدل bus.data_changed العام.
-  - يتحقق من الـ company_id قبل إعادة التحميل لعزل بيانات الشركات.
+إصلاحات (v3): SafeConnMixin بدل conn property يدوي.
 """
 
 from PyQt5.QtWidgets import (
@@ -19,27 +17,20 @@ from db.accounting.accounting_repo import balance_sheet
 from ui.helpers import make_table, section_label
 from ui.events  import bus
 from ui.tabs.accounting.helpers import _money, _stat_card
+from ui.tabs.accounting.safe_conn_mixin import SafeConnMixin
 
 
-def _get_current_company_id():
-    try:
-        from db.companies.company_state import company_state
-        return company_state.company_id if company_state.is_ready else None
-    except Exception:
-        return None
-
-
-class BalanceSheetTab(QWidget):
+class BalanceSheetTab(SafeConnMixin, QWidget):
     def __init__(self, conn, parent=None):
         super().__init__(parent)
-        self.conn        = conn
-        self._company_id = _get_current_company_id()
+        self._init_safe_conn(conn, "accounting")
+        self._company_id = self._get_company_id()
         self._build()
         self._load()
         bus.company_data_changed.connect(self._on_company_event)
 
     def _on_company_event(self, company_id: int):
-        if company_id == self._company_id:
+        if self._on_company_event_safe(company_id):
             self._load()
 
     def _build(self):
@@ -99,7 +90,11 @@ class BalanceSheetTab(QWidget):
         root.addWidget(splitter, stretch=1)
 
     def _load(self):
-        data = balance_sheet(self.conn)
+        try:
+            data = balance_sheet(self._get_safe_conn())
+        except Exception as e:
+            print(f"[BalanceSheetTab] _load error: {e}")
+            return
 
         self.table_assets.setRowCount(0)
         for row in data["assets"]:

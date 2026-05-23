@@ -3,9 +3,7 @@ ui/tabs/accounting/financial/trial_balance_tab.py
 ==================================================
 TrialBalanceTab — تبويب ميزان المراجعة.
 
-تغييرات (v2):
-  - يستمع لـ bus.company_data_changed بدل bus.data_changed العام.
-  - يتحقق من الـ company_id قبل إعادة التحميل لعزل بيانات الشركات.
+إصلاحات (v3): SafeConnMixin بدل conn property يدوي.
 """
 
 from PyQt5.QtWidgets import (
@@ -17,27 +15,20 @@ from PyQt5.QtGui import QColor
 from db.accounting.accounting_repo import trial_balance, get_normal_balance
 from ui.helpers import make_table, section_label
 from ui.events  import bus
+from ui.tabs.accounting.safe_conn_mixin import SafeConnMixin
 
 
-def _get_current_company_id():
-    try:
-        from db.companies.company_state import company_state
-        return company_state.company_id if company_state.is_ready else None
-    except Exception:
-        return None
-
-
-class TrialBalanceTab(QWidget):
+class TrialBalanceTab(SafeConnMixin, QWidget):
     def __init__(self, conn, parent=None):
         super().__init__(parent)
-        self.conn        = conn
-        self._company_id = _get_current_company_id()
+        self._init_safe_conn(conn, "accounting")
+        self._company_id = self._get_company_id()
         self._build()
         self._load()
         bus.company_data_changed.connect(self._on_company_event)
 
     def _on_company_event(self, company_id: int):
-        if company_id == self._company_id:
+        if self._on_company_event_safe(company_id):
             self._load()
 
     def _build(self):
@@ -88,7 +79,12 @@ class TrialBalanceTab(QWidget):
         root.addWidget(totals)
 
     def _load(self):
-        rows = trial_balance(self.conn)
+        try:
+            rows = trial_balance(self._get_safe_conn())
+        except Exception as e:
+            print(f"[TrialBalanceTab] _load error: {e}")
+            return
+
         self.table.setRowCount(0)
         sd = sc = 0.0
 
@@ -110,11 +106,8 @@ class TrialBalanceTab(QWidget):
             bal     = row["balance"]
             abs_bal = abs(bal)
             nb      = get_normal_balance(row["type"])
-
-            if nb == "dr":
-                color = "#1565c0" if bal >= 0 else "#e65100"
-            else:
-                color = "#c62828" if bal <= 0 else "#e65100"
+            color   = ("#1565c0" if bal >= 0 else "#e65100") if nb == "dr" \
+                      else ("#c62828" if bal <= 0 else "#e65100")
 
             bal_item = QTableWidgetItem(f"{abs_bal:,.2f}")
             bal_item.setForeground(QColor(color))

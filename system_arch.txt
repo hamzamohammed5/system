@@ -1,5 +1,5 @@
 File Tree Snapshot
-Generated : 2026-05-23 21:58:15
+Generated : 2026-05-23 22:08:16
 Source    : D:\My Workspace\Hg\Alhabaar\accountant\system
 Extensions: .py
 ────────────────────────────────────────────────────────────
@@ -109,7 +109,8 @@ system/
 │   │   │   ├── helpers.py
 │   │   │   ├── investors_tab.py
 │   │   │   ├── journal_tab.py
-│   │   │   └── ledger_tab.py
+│   │   │   ├── ledger_tab.py
+│   │   │   └── safe_conn_mixin.py
 │   │   ├── companies/
 │   │   │   ├── shared_items_manager_helper/
 │   │   │   │   └── _add_shared_item_dialog.py
