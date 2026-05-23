@@ -137,19 +137,8 @@ class MainWindow(QMainWindow):
         self._tabs_built = True
 
     def _destroy_tabs(self):
-        """
-        يحذف التبويبات القديمة من الـ stack بشكل آمن.
-
-        الخطوات:
-          1. blockSignals(True) على bus.company_data_changed
-             لمنع أي widget قديم من الاستجابة أثناء الحذف.
-          2. حذف الـ widgets بـ hide() + deleteLater().
-          3. processEvents() لضمان معالجة الحذف الفعلي.
-          4. blockSignals(False) لإعادة تفعيل الأحداث.
-          5. refresh_connections() لإغلاق raw connections الشركة القديمة.
-        """
-        # ── الخطوة 1: وقّف الأحداث أثناء الحذف ──────────────
-        bus.company_data_changed.blockSignals(True)
+        # ── الخطوة 1: وقّف كل signals الـ bus أثناء الحذف ──
+        bus.blockSignals(True)
 
         # ── الخطوة 2: احذف الـ widgets ───────────────────────
         while self._stack.count() > 1:
@@ -162,16 +151,12 @@ class MainWindow(QMainWindow):
                 pass
 
         # ── الخطوة 3: معالجة أحداث deleteLater() المعلقة ─────
-        # يضمن أن الـ widgets القديمة اتحذفت فعلاً من الذاكرة
-        # قبل ما نفتح connections جديدة
         QApplication.processEvents()
 
-        # ── الخطوة 4: أعد تفعيل الأحداث ─────────────────────
-        bus.company_data_changed.blockSignals(False)
+        # ── الخطوة 4: أعد تفعيل الـ signals ──────────────────
+        bus.blockSignals(False)
 
         # ── الخطوة 5: أغلق raw connections الشركة القديمة ────
-        # الـ ProtectedConnection objects ستفتح connections جديدة
-        # تلقائياً على الشركة الجديدة عند أول استخدام
         try:
             from db.companies.company_state import company_state
             company_state.refresh_connections()
