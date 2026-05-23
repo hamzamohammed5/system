@@ -1,12 +1,10 @@
 """
 ui/tabs/companies/shared_items_mixin.py
 =========================================
-دوال مساعدة لجلب العناصر المشتركة للشركة النشطة.
-
-الإصلاحات:
-1. category_name يُجلب من data["category_name"] لو موجود — بدل "🔗 مشترك" دايماً
-2. remove_local_duplicates() — تزيل العناصر المشتركة التي لها نسخة محلية بنفس الاسم
-   (يحل مشكلة ظهور العنصر مرتين في الشركة الأصلية)
+إصلاحات:
+1. category_name يُجلب من data["category_name"] لو موجود — يظهر التصنيف الحقيقي
+2. العنصر لا يظهر مرتين في الشركة الأصلية:
+   - get_shared_* تقبل local_rows اختياري وتستخدم remove_local_duplicates
 """
 
 import json
@@ -44,7 +42,6 @@ def remove_local_duplicates(local_rows: list, shared_rows: list) -> list:
     """
     يزيل من shared_rows أي عنصر اسمه موجود بالفعل في local_rows.
     يحل مشكلة ظهور العنصر مرتين في الشركة الأصلية اللي نشرته.
-
     المقارنة بالاسم (case-insensitive, strip).
     """
     local_names = {str(r.get("name", "")).strip().lower() for r in local_rows}
@@ -83,8 +80,8 @@ def _fetch_shared(shared_type: str) -> list:
             except Exception:
                 data = {}
 
-            # category_name: من data لو موجود، وإلا علامة مشترك
-            cat_name = data.get("category_name") or "🔗 مشترك"
+            # category_name: من data لو محفوظ، وإلا None (الجدول يعرض "—")
+            cat_name = data.get("category_name") or None
 
             item = {
                 "id":             f"shared:{row['id']}",
@@ -97,7 +94,7 @@ def _fetch_shared(shared_type: str) -> list:
                 "updated_at":     row["updated_at"],
             }
             item.update(data)
-            # نعيد category_name بعد update عشان data مش تطغى عليه بـ None
+            # نعيد بعد update عشان data مش تطغى على category_name
             item["category_name"] = cat_name
             result.append(item)
         return result
@@ -110,10 +107,10 @@ def _fetch_shared(shared_type: str) -> list:
 # دوال عامة للاستخدام من الجداول
 # ══════════════════════════════════════════════════════════
 
-def get_shared_raws() -> list:
+def get_shared_raws(local_rows: list = None) -> list:
     """
     يرجع الخامات المشتركة للشركة النشطة.
-    كل عنصر: {id, name, price, total_qty, category_name, is_shared, ...}
+    local_rows: لو مُمرَّرة تُزال المكررات (نفس الاسم) — لمنع ظهور العنصر مرتين.
     """
     items = _fetch_shared("raw")
     result = []
@@ -129,13 +126,15 @@ def get_shared_raws() -> list:
             "is_shared":      True,
             "updated_at":     item.get("updated_at", ""),
         })
+    if local_rows is not None:
+        result = remove_local_duplicates(local_rows, result)
     return result
 
 
-def get_shared_machines() -> list:
+def get_shared_machines(local_rows: list = None) -> list:
     """
     يرجع الماكينات المشتركة للشركة النشطة.
-    كل عنصر: {id, name, rate_per_hour, rate_per_unit, category_name, is_shared, ...}
+    local_rows: لو مُمرَّرة تُزال المكررات.
     """
     items = _fetch_shared("machine")
     result = []
@@ -151,13 +150,15 @@ def get_shared_machines() -> list:
             "is_shared":      True,
             "updated_at":     item.get("updated_at", ""),
         })
+    if local_rows is not None:
+        result = remove_local_duplicates(local_rows, result)
     return result
 
 
-def get_shared_labor_ops() -> list:
+def get_shared_labor_ops(local_rows: list = None) -> list:
     """
     يرجع عمليات العمالة المشتركة للشركة النشطة.
-    كل عنصر: {id, name, minutes, category_name, is_shared, ...}
+    local_rows: لو مُمرَّرة تُزال المكررات.
     """
     items = _fetch_shared("labor_op")
     result = []
@@ -172,13 +173,15 @@ def get_shared_labor_ops() -> list:
             "is_shared":      True,
             "updated_at":     item.get("updated_at", ""),
         })
+    if local_rows is not None:
+        result = remove_local_duplicates(local_rows, result)
     return result
 
 
-def get_shared_machine_ops() -> list:
+def get_shared_machine_ops(local_rows: list = None) -> list:
     """
     يرجع عمليات التشغيل المشتركة للشركة النشطة.
-    كل عنصر: {id, name, mode, value, machine_name, rate_per_hour, rate_per_unit, ...}
+    local_rows: لو مُمرَّرة تُزال المكررات.
     """
     items = _fetch_shared("machine_op")
     result = []
@@ -197,4 +200,6 @@ def get_shared_machine_ops() -> list:
             "is_shared":      True,
             "updated_at":     item.get("updated_at", ""),
         })
+    if local_rows is not None:
+        result = remove_local_duplicates(local_rows, result)
     return result

@@ -1,5 +1,8 @@
 """
-ui/tabs/costing/labor/labor_op_table.py  (نسخة محدثة — مع نشر كمشترك)
+ui/tabs/costing/labor/labor_op_table.py
+إصلاحات:
+1. _load تمرر local_rows لـ get_shared_labor_ops (منع التكرار)
+2. category_name يُعرض الحقيقي (أو "—")
 """
 
 from PyQt5.QtWidgets import (
@@ -197,7 +200,6 @@ class _LaborOpTable(QWidget):
         dlg.exec_()
 
     def _publish_as_shared(self):
-        """نشر عملية عمالة محلية كمشتركة بين الشركات."""
         item_id, _ = self._selected_row_data()
         if item_id is None:
             QMessageBox.information(self, "تنبيه", "اختر عملية من الجدول أولاً")
@@ -214,7 +216,11 @@ class _LaborOpTable(QWidget):
         if not row:
             return
 
-        item_data = {"minutes": float(row.get("minutes", 0.0))}
+        item_data = {
+            "minutes":       float(row.get("minutes", 0.0)),
+            # ← إصلاح: نحفظ category_name الحقيقي
+            "category_name": row.get("category_name") or None,
+        }
 
         try:
             from db.companies.companies_schema import (
@@ -240,13 +246,16 @@ class _LaborOpTable(QWidget):
         except Exception as e:
             QMessageBox.warning(self, "خطأ", str(e))
 
+    # ── الإصلاح الرئيسي: تمرير local_rows ──────────────
+
     def _load(self):
         try:
             conn = self._live_conn()
             local_rows = [_to_dict(op) for op in fetch_all_labor_ops(conn)]
         except Exception:
             local_rows = []
-        shared_rows = get_shared_labor_ops()
+        # ← إصلاح: نمرر local_rows عشان remove_local_duplicates يمنع التكرار
+        shared_rows = get_shared_labor_ops(local_rows)
         self._all_rows = local_rows + shared_rows
         self._apply_filter()
 
@@ -261,6 +270,9 @@ class _LaborOpTable(QWidget):
             minutes   = op.get("minutes", 0)
             cost      = (minutes / 60.0) * rate
 
+            # category_name الحقيقي أو "—"
+            cat_display = op.get("category_name") or "—"
+
             r = self.table.rowCount()
             self.table.insertRow(r)
 
@@ -268,7 +280,7 @@ class _LaborOpTable(QWidget):
             id_item.setData(0x0100, op.get("id"))
             self.table.setItem(r, 0, id_item)
             self.table.setItem(r, 1, QTableWidgetItem(("🔗 " if is_shared else "") + op.get("name", "")))
-            self.table.setItem(r, 2, QTableWidgetItem(op.get("category_name") or "—"))
+            self.table.setItem(r, 2, QTableWidgetItem(cat_display))
             self.table.setItem(r, 3, QTableWidgetItem(f"{minutes:.2f}"))
             self.table.setItem(r, 4, QTableWidgetItem(f"{cost:.2f} جنيه"))
 

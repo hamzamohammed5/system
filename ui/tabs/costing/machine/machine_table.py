@@ -1,7 +1,8 @@
 """
 ui/tabs/costing/machine/machine_table.py
-==========================================
-_MachineTable — جدول الماكينات مع دعم العناصر المشتركة + نشر كمشترك.
+إصلاحات:
+1. _load تمرر local_rows لـ get_shared_machines (منع التكرار)
+2. category_name يُعرض الحقيقي (أو "—")
 """
 
 from PyQt5.QtWidgets import (
@@ -194,6 +195,8 @@ class _MachineTable(QWidget):
         item_data = {
             "rate_per_hour": float(row.get("rate_per_hour", 0.0)),
             "rate_per_unit": float(row.get("rate_per_unit", 0.0)),
+            # ← إصلاح: نحفظ category_name الحقيقي
+            "category_name": row.get("category_name") or None,
         }
 
         try:
@@ -220,13 +223,16 @@ class _MachineTable(QWidget):
         except Exception as e:
             QMessageBox.warning(self, "خطأ", str(e))
 
+    # ── الإصلاح الرئيسي: تمرير local_rows ──────────────
+
     def _load(self):
         try:
             conn = self._live_conn()
             local_rows = [_to_dict(m) for m in fetch_all_machines(conn)]
         except Exception:
             local_rows = []
-        shared_rows = get_shared_machines()
+        # ← إصلاح: نمرر local_rows عشان remove_local_duplicates يمنع التكرار
+        shared_rows = get_shared_machines(local_rows)
         self._all_rows = local_rows + shared_rows
         self._apply_filter()
 
@@ -238,6 +244,9 @@ class _MachineTable(QWidget):
                 continue
             is_shared = m.get("is_shared", False)
 
+            # category_name الحقيقي أو "—"
+            cat_display = m.get("category_name") or "—"
+
             r = self.table.rowCount()
             self.table.insertRow(r)
 
@@ -247,7 +256,7 @@ class _MachineTable(QWidget):
             self.table.setItem(r, 1, QTableWidgetItem(
                 ("🔗 " if is_shared else "") + m.get("name", "")
             ))
-            self.table.setItem(r, 2, QTableWidgetItem(m.get("category_name") or "—"))
+            self.table.setItem(r, 2, QTableWidgetItem(cat_display))
             self.table.setItem(r, 3, QTableWidgetItem(f"{m.get('rate_per_hour', 0):.2f}"))
             self.table.setItem(r, 4, QTableWidgetItem(f"{m.get('rate_per_unit', 0):.2f}"))
 

@@ -1,12 +1,9 @@
 """
 ui/tabs/costing/raw/raw_table_panel.py
 =======================================
-_TablePanel — جدول الخامات مع:
-  - العناصر المشتركة تظهر بـ badge أخضر 🔗
-  - تعديل مشترك → SharedItemsDialog
-  - نشر خامة محلية كمشتركة → PublishAsSharedDialog
-  - bus.data_changed يحدّث الجدول فوراً بعد أي تعديل
-  - IDs المشتركة = "shared:{n}" (string)
+إصلاحات:
+1. _load تمرر local_rows لـ get_shared_raws عشان remove_local_duplicates يشتغل
+2. _apply_filter يعرض category_name الحقيقي (أو "—" لو None)
 """
 
 from PyQt5.QtWidgets import (
@@ -245,8 +242,10 @@ class _TablePanel(QWidget):
             return
 
         item_data = {
-            "price":     float(row.get("price", 0.0)),
-            "total_qty": row.get("total_qty"),
+            "price":         float(row.get("price", 0.0)),
+            "total_qty":     row.get("total_qty"),
+            # ← إصلاح: نحفظ category_name الحقيقي عشان يتحفظ في data
+            "category_name": row.get("category_name") or None,
         }
 
         try:
@@ -274,7 +273,7 @@ class _TablePanel(QWidget):
             QMessageBox.warning(self, "خطأ", str(e))
 
     # ══════════════════════════════════════════════════════
-    # تحميل البيانات
+    # تحميل البيانات — الإصلاح الرئيسي هنا
     # ══════════════════════════════════════════════════════
 
     def _load(self):
@@ -284,7 +283,8 @@ class _TablePanel(QWidget):
         except Exception:
             local_rows = []
 
-        shared_rows = get_shared_raws()
+        # ← إصلاح: نمرر local_rows عشان remove_local_duplicates يمنع التكرار
+        shared_rows = get_shared_raws(local_rows)
         self._all_rows = local_rows + shared_rows
         self._apply_filter()
 
@@ -305,6 +305,9 @@ class _TablePanel(QWidget):
             else:
                 unit = raw_unit_price(row)
 
+            # category_name: الحقيقي لو موجود، وإلا "—"
+            cat_display = row.get("category_name") or "—"
+
             r = self.table.rowCount()
             self.table.insertRow(r)
 
@@ -315,7 +318,7 @@ class _TablePanel(QWidget):
             self.table.setItem(r, 1, QTableWidgetItem(
                 ("🔗 " if is_shared else "") + row.get("name", "")
             ))
-            self.table.setItem(r, 2, QTableWidgetItem(row.get("category_name") or "—"))
+            self.table.setItem(r, 2, QTableWidgetItem(cat_display))
             self.table.setItem(r, 3, QTableWidgetItem(f"{price:.2f}"))
             self.table.setItem(r, 4, QTableWidgetItem(str(tq) if tq is not None else "—"))
             self.table.setItem(r, 5, QTableWidgetItem(f"{unit:.4f}"))
