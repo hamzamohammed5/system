@@ -3,17 +3,14 @@ ui/tabs/accounting_section.py
 ==============================
 النافذة المحاسبية الرئيسية — مع دعم كامل لتعدد الشركات.
 
-التغييرات (v4):
-  - _INITIALIZED_COMPANIES أصبح dict[int, str] يخزن company_id → db_path
-    لضمان إعادة التهيئة لو اتحذفت الشركة وأُعيد إنشاؤها بنفس الـ ID.
-  - refresh_for_company() تُعيد بناء كل التبويبات عند تغيير الشركة.
-  - closeEvent لا يُغلق ProtectedConnection.
-  - _is_ready() يتحقق من وجود شركة نشطة قبل أي عملية.
-  - تنظيف الـ layout القديم بـ hide()+deleteLater() بدل sip.delete.
-  - الاشتراك في bus.company_data_changed بدل bus.data_changed
-    لعزل الإشعارات بين الشركات.
-  - [v4] مسح cache الشركة القديمة قبل الـ rebuild في refresh_for_company().
-  - [v4] refresh_connections() بعد تدمير الـ widgets في _destroy_tabs().
+التغييرات (v5):
+  - [إصلاح ١] تصحيح الـ ImportError: TrialBalanceTab يُستورد من مكانه الصحيح
+    (financial.trial_balance_tab) وليس من financial_statements.
+  - [إصلاح ٢] _INITIALIZED_COMPANIES يُمسح بالكامل في refresh_for_company()
+    بدل مسح الشركة القديمة فقط — يضمن إعادة التهيئة الكاملة عند كل تغيير.
+  - [إصلاح ٣] _destroy_tabs() تمسح _INITIALIZED_COMPANIES قبل الحذف
+    لتجنب أي حالة cache غير متزامنة.
+  - باقي المنطق محافظ عليه من v4.
 """
 
 from PyQt5.QtWidgets import (
@@ -26,10 +23,11 @@ from .accounting.accounts_tree        import AccountsTreePanel
 from .accounting.group_manager        import _GroupManagerPanel
 from .accounting.journal_tab          import JournalTab
 from .accounting.ledger_tab           import LedgerTab
-from .accounting.financial_statements import (
-    TrialBalanceTab,
-    FinancialStatementsTab,
-)
+
+# [إصلاح ١] TrialBalanceTab يُستورد من ملفه الصحيح مباشرة
+from .accounting.financial.trial_balance_tab import TrialBalanceTab
+from .accounting.financial_statements        import FinancialStatementsTab
+
 from .accounting.investors_tab import InvestorsTab
 
 
@@ -323,13 +321,13 @@ class AccountingTab(QWidget):
     def refresh_for_company(self):
         """
         يُستدعى من MainWindow عند تغيير الشركة النشطة.
-        يمسح الـ cache للشركة القديمة ثم يُعيد بناء كل التبويبات.
-        """
-        # مسح الـ cache للشركة القديمة لضمان إعادة التهيئة
-        old_id = self._company_id
-        if old_id is not None and old_id in _INITIALIZED_COMPANIES:
-            del _INITIALIZED_COMPANIES[old_id]
 
+        [إصلاح ٢] يمسح _INITIALIZED_COMPANIES بالكامل (مش بس الشركة القديمة)
+        لضمان إعادة تهيئة الجداول عند كل تغيير للشركة.
+        ثم يُعيد بناء كل التبويبات.
+        """
+        # [إصلاح ٢] مسح كل الـ cache — إعادة تهيئة كاملة لكل شركة
+        _INITIALIZED_COMPANIES.clear()
         self._build()
 
     # ── closeEvent ─────────────────────────────────────────
