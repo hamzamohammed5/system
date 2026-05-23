@@ -1,8 +1,14 @@
 """
-ui/tabs/accounting_tab.py  — نسخة مصححة
-==========================================
-التغيير: تبويب "حقوق الملكية" يعرض capital/drawings/revenue/expense
-مجمّعين في شجرة واحدة تحت "حقوق الملكية".
+ui/tabs/accounting_section.py
+==============================
+النافذة المحاسبية الرئيسية — مع دعم كامل لتعدد الشركات.
+
+التغييرات:
+  - الـ connections لا تُحفَظ كـ instance attributes ثابتة،
+    بل تُجلَب من company_state عند كل استخدام.
+  - refresh_for_company() تُعيد بناء كل التبويبات عند تغيير الشركة.
+  - closeEvent لا يُغلق ProtectedConnection.
+  - _is_ready() يتحقق من وجود شركة نشطة قبل أي عملية.
 """
 
 from PyQt5.QtWidgets import (
@@ -10,8 +16,6 @@ from PyQt5.QtWidgets import (
     QTabWidget, QLabel, QFrame, QSplitter,
 )
 from PyQt5.QtCore import Qt
-
-from db.shared.connection import get_connection, get_accounting_connection
 
 # ── أجزاء الحسابات ──
 from .accounting.accounts_tree        import AccountsTreePanel
@@ -22,7 +26,6 @@ from .accounting.financial_statements import (
     TrialBalanceTab,
     FinancialStatementsTab,
 )
-# ── المستثمرون ──
 from .accounting.investors_tab import InvestorsTab
 
 
@@ -80,15 +83,63 @@ def _make_inner_tabs(*tab_defs) -> QTabWidget:
     return tabs
 
 
+# ══════════════════════════════════════════════════════════
+# مساعد: جلب الـ connections دائماً من الشركة النشطة
+# ══════════════════════════════════════════════════════════
+
+def _get_acc_conn():
+    """يرجع accounting.db connection للشركة النشطة."""
+    from db.shared.connection import get_accounting_connection
+    return get_accounting_connection()
+
+
+def _get_erp_conn():
+    """يرجع erp.db connection للشركة النشطة."""
+    from db.shared.connection import get_connection
+    return get_connection()
+
+
+def _is_ready() -> bool:
+    """هل في شركة نشطة؟"""
+    from db.companies.company_state import company_state
+    return company_state.is_ready
+
+
+# ══════════════════════════════════════════════════════════
+# AccountingTab
+# ══════════════════════════════════════════════════════════
+
 class AccountingTab(QWidget):
+    """
+    التبويب الرئيسي للمحاسبة.
+
+    يَجلُب الـ connections من company_state عند كل بناء أو إعادة بناء،
+    لذا تغيير الشركة لا يُبقي بيانات الشركة القديمة مرئية.
+    """
+
     def __init__(self, parent=None):
         super().__init__(parent)
-        self.acc_conn = get_accounting_connection()
-        self.erp_conn = get_connection()
-        self._init_schema()
+        self._main_tabs: QTabWidget | None = None
         self._build()
 
+    # ── الحصول على connections ─────────────────────────────
+
+    @property
+    def acc_conn(self):
+        """دائماً يرجع accounting.db للشركة النشطة."""
+        return _get_acc_conn()
+
+    @property
+    def erp_conn(self):
+        """دائماً يرجع erp.db للشركة النشطة."""
+        return _get_erp_conn()
+
+    # ── بناء الواجهة ───────────────────────────────────────
+
     def _init_schema(self):
+        """تهيئة الجداول لو لم تُهيَّأ بعد."""
+        if not _is_ready():
+            return
         try:
             from db.accounting.accounting_schema import create_accounting_tables
             create_accounting_tables(self.acc_conn)
@@ -101,29 +152,60 @@ class AccountingTab(QWidget):
             print(f"[AccountingTab] investors schema error: {e}")
 
     def _build(self):
+        """بناء (أو إعادة بناء) كل التبويبات."""
+        # تنظيف الـ layout القديم
+        if self.layout() is not None:
+            old_layout = self.layout()
+            # احذف كل الـ widgets من الـ layout
+            while old_layout.count():
+                item = old_layout.takeAt(0)
+                if item.widget():
+                    item.widget().deleteLater()
+            # احذف الـ layout نفسه
+            import sip
+            try:
+                sip.delete(old_layout)
+            except Exception:
+                pass
+
         root = QVBoxLayout(self)
         root.setContentsMargins(0, 0, 0, 0)
 
+        if not _is_ready():
+            lbl = QLabel("⚠️  اختر شركة أولاً لعرض الحسابات")
+            lbl.setAlignment(Qt.AlignCenter)
+            lbl.setStyleSheet(
+                "font-size:14px; color:#888; padding:40px;"
+            )
+            root.addWidget(lbl)
+            return
+
+        self._init_schema()
+
+        # نجلب الـ connections مرة واحدة لهذه الدورة من البناء
+        acc = self.acc_conn
+        erp = self.erp_conn
+
         main_tabs = QTabWidget()
         main_tabs.setStyleSheet(_TAB_STYLE)
+        self._main_tabs = main_tabs
 
         # ═══════════════════════════════════════════════════
-        # 1. الحسابات — ثلاث تبويبات: أصول | خصوم | حقوق الملكية
+        # 1. الحسابات
         # ═══════════════════════════════════════════════════
         accounts_tabs = _make_inner_tabs(
             ("🏦  الأصول",
              _make_inner_tabs(
-                 ("📊 الحسابات",   AccountsTreePanel(self.acc_conn, ["asset"], "الأصول")),
-                 ("🏷️ التصنيفات", _GroupManagerPanel(self.acc_conn, "asset")),
+                 ("📊 الحسابات",   AccountsTreePanel(acc, ["asset"], "الأصول")),
+                 ("🏷️ التصنيفات", _GroupManagerPanel(acc, "asset")),
              )),
             ("📋  الخصوم",
              _make_inner_tabs(
-                 ("📊 الحسابات",   AccountsTreePanel(self.acc_conn, ["liability"], "الخصوم")),
-                 ("🏷️ التصنيفات", _GroupManagerPanel(self.acc_conn, "liability")),
+                 ("📊 الحسابات",   AccountsTreePanel(acc, ["liability"], "الخصوم")),
+                 ("🏷️ التصنيفات", _GroupManagerPanel(acc, "liability")),
              )),
-            # ✅ حقوق الملكية: الأربعة أنواع مجمّعة في شجرة واحدة
             ("👑  حقوق الملكية",
-             self._build_equity_tab()),
+             self._build_equity_tab(acc)),
         )
         main_tabs.addTab(accounts_tabs, "🏦  الحسابات")
 
@@ -131,42 +213,37 @@ class AccountingTab(QWidget):
         # 2. القيود المحاسبية
         # ═══════════════════════════════════════════════════
         main_tabs.addTab(
-            JournalTab(self.acc_conn, self.erp_conn),
+            JournalTab(acc, erp),
             "📒  قيود اليومية"
         )
 
         # ═══════════════════════════════════════════════════
         # 3. دفتر الأستاذ
         # ═══════════════════════════════════════════════════
-        main_tabs.addTab(LedgerTab(self.acc_conn), "📘  دفتر الأستاذ")
+        main_tabs.addTab(LedgerTab(acc), "📘  دفتر الأستاذ")
 
         # ═══════════════════════════════════════════════════
         # 4. القوائم المالية
         # ═══════════════════════════════════════════════════
-        main_tabs.addTab(FinancialStatementsTab(self.acc_conn), "📊  القوائم المالية")
+        main_tabs.addTab(FinancialStatementsTab(acc), "📊  القوائم المالية")
 
         # ═══════════════════════════════════════════════════
         # 5. ميزان المراجعة
         # ═══════════════════════════════════════════════════
-        main_tabs.addTab(TrialBalanceTab(self.acc_conn), "⚖️  ميزان المراجعة")
+        main_tabs.addTab(TrialBalanceTab(acc), "⚖️  ميزان المراجعة")
 
         # ═══════════════════════════════════════════════════
         # 6. المستثمرون
         # ═══════════════════════════════════════════════════
         main_tabs.addTab(
-            InvestorsTab(self.erp_conn, self.acc_conn),
+            InvestorsTab(erp, acc),
             "👥  المستثمرون"
         )
 
         root.addWidget(main_tabs)
 
-    def _build_equity_tab(self) -> QWidget:
-        """
-        تبويب حقوق الملكية:
-        - شجرة واحدة تجمع capital + drawings + revenue + expense
-          مع تقسيمها داخلياً (كل نوع تحت عقدة فرعية).
-        - التصنيفات لكل نوع في تبويبات منفصلة على اليمين.
-        """
+    def _build_equity_tab(self, acc) -> QWidget:
+        """تبويب حقوق الملكية — شجرة جامعة + تصنيفات."""
         widget = QWidget()
         root   = QVBoxLayout(widget)
         root.setContentsMargins(0, 0, 0, 0)
@@ -178,20 +255,18 @@ class AccountingTab(QWidget):
             QSplitter::handle:hover { background: #c8e6c9; }
         """)
 
-        # ── الشجرة الجامعة (كل أنواع الملكية) ──
         tree_panel = AccountsTreePanel(
-            self.acc_conn,
+            acc,
             ["capital", "drawings", "revenue", "expense"],
             "حقوق الملكية"
         )
         splitter.addWidget(tree_panel)
 
-        # ── التصنيفات: تبويب لكل نوع ──
         cat_tabs = _make_inner_tabs(
-            ("👑 رأس المال",   _GroupManagerPanel(self.acc_conn, "capital")),
-            ("💸 المسحوبات",  _GroupManagerPanel(self.acc_conn, "drawings")),
-            ("💹 الإيرادات",  _GroupManagerPanel(self.acc_conn, "revenue")),
-            ("📤 المصروفات",  _GroupManagerPanel(self.acc_conn, "expense")),
+            ("👑 رأس المال",   _GroupManagerPanel(acc, "capital")),
+            ("💸 المسحوبات",  _GroupManagerPanel(acc, "drawings")),
+            ("💹 الإيرادات",  _GroupManagerPanel(acc, "revenue")),
+            ("📤 المصروفات",  _GroupManagerPanel(acc, "expense")),
         )
         splitter.addWidget(cat_tabs)
         splitter.setSizes([600, 300])
@@ -199,13 +274,19 @@ class AccountingTab(QWidget):
         root.addWidget(splitter)
         return widget
 
+    # ── واجهة خارجية: إعادة التهيئة عند تغيير الشركة ──────
+
+    def refresh_for_company(self):
+        """
+        يُستدعى من MainWindow عند تغيير الشركة النشطة.
+        يُعيد بناء كل التبويبات على الـ DB الجديد.
+        """
+        self._build()
+
+    # ── closeEvent — لا نُغلق ProtectedConnection ──────────
+
     def closeEvent(self, event):
-        try:
-            self.acc_conn.close()
-        except Exception:
-            pass
-        try:
-            self.erp_conn.close()
-        except Exception:
-            pass
+        """
+        ProtectedConnection لا تُغلق هنا — هي مُدارة بواسطة company_state.
+        """
         super().closeEvent(event)
