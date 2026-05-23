@@ -2,11 +2,13 @@
 ui/tabs/accounting/account_combo.py
 =====================================
 _AccountCombo — Combo قابل للبحث والفلترة لاختيار الحسابات.
-- عرض الـ badge (DR↑/CR↑) نسبي من حجم الخط
+- عرض الـ badge (DR↑/CR↑) نسبي من حجم الخط الأساسي
 
-تغييرات (v2):
-  - يستمع لـ bus.company_data_changed بدل bus.data_changed العام.
-  - يتحقق من الـ company_id قبل إعادة التحميل لعزل بيانات الشركات.
+تغييرات (v3):
+  - إصلاح race condition في QTimer.singleShot:
+    كانت ممكنة تشتغل بعد تغيير الشركة وتلوّث الـ combo بداتا شركة قديمة.
+    الحل: نخزن snapshot من company_id قبل الـ timer،
+    ونتحقق منه جوا الـ callback قبل ما نكمل.
 """
 
 from PyQt5.QtWidgets import (
@@ -48,7 +50,16 @@ class _AccountCombo(QWidget):
     def _on_company_event(self, company_id: int):
         """يُعيد التحميل فقط لو الحدث من نفس شركتنا."""
         if company_id == self._company_id:
-            QTimer.singleShot(0, self.refresh)
+            # --- إصلاح race condition ---
+            # نحفظ الـ company_id الحالي قبل الـ timer
+            # لو تغيّرت الشركة خلال فترة الانتظار نلغي العملية
+            snapshot_id = company_id
+            QTimer.singleShot(0, lambda: self._safe_refresh(snapshot_id))
+
+    def _safe_refresh(self, snapshot_id: int):
+        """يتحقق من الشركة قبل إعادة التحميل لتجنب race condition."""
+        if _get_current_company_id() == snapshot_id:
+            self.refresh()
 
     def _build(self):
         lay = QHBoxLayout(self)
@@ -69,7 +80,6 @@ class _AccountCombo(QWidget):
         self.cmb_account.setSizeAdjustPolicy(QComboBox.AdjustToMinimumContentsLength)
         self.cmb_account.setMinimumWidth(200)
 
-        # ── الـ badge بعرض نسبي ──
         self.lbl_nb = QLabel("")
         self.lbl_nb.setFixedWidth(badge_width())
         self.lbl_nb.setAlignment(Qt.AlignCenter)

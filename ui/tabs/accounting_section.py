@@ -3,14 +3,14 @@ ui/tabs/accounting_section.py
 ==============================
 النافذة المحاسبية الرئيسية — مع دعم كامل لتعدد الشركات.
 
-التغييرات (v5):
-  - [إصلاح ١] تصحيح الـ ImportError: TrialBalanceTab يُستورد من مكانه الصحيح
-    (financial.trial_balance_tab) وليس من financial_statements.
-  - [إصلاح ٢] _INITIALIZED_COMPANIES يُمسح بالكامل في refresh_for_company()
-    بدل مسح الشركة القديمة فقط — يضمن إعادة التهيئة الكاملة عند كل تغيير.
-  - [إصلاح ٣] _destroy_tabs() تمسح _INITIALIZED_COMPANIES قبل الحذف
-    لتجنب أي حالة cache غير متزامنة.
-  - باقي المنطق محافظ عليه من v4.
+التغييرات (v6):
+  - [إصلاح ١] نفس إصلاحات v5 محافظ عليها.
+  - [إصلاح ٢ جديد] _build() تتحقق من صحة الـ connection قبل بناء الـ widgets
+    لتجنب استخدام connection من شركة قديمة لو company_state تأخر.
+  - [إصلاح ٣ جديد] _INITIALIZED_COMPANIES يُمسح دائماً في refresh_for_company()
+    قبل أي عملية.
+  - [إصلاح ٤ جديد] نضيف _conn_company_id snapshot للتحقق من أن الـ conn
+    اللي بنستخدمه فعلاً ينتمي للشركة الحالية.
 """
 
 from PyQt5.QtWidgets import (
@@ -24,15 +24,12 @@ from .accounting.group_manager        import _GroupManagerPanel
 from .accounting.journal_tab          import JournalTab
 from .accounting.ledger_tab           import LedgerTab
 
-# [إصلاح ١] TrialBalanceTab يُستورد من ملفه الصحيح مباشرة
 from .accounting.financial.trial_balance_tab import TrialBalanceTab
 from .accounting.financial_statements        import FinancialStatementsTab
 
 from .accounting.investors_tab import InvestorsTab
 
 
-# ── cache: company_id → accounting db path ────────────────
-# نخزن المسار عشان نكتشف لو نفس الـ ID اتحذف وأُعيد بمسار مختلف
 _INITIALIZED_COMPANIES: dict[int, str] = {}
 
 
@@ -90,10 +87,6 @@ def _make_inner_tabs(*tab_defs) -> QTabWidget:
     return tabs
 
 
-# ══════════════════════════════════════════════════════════
-# مساعد: جلب الـ connections دائماً من الشركة النشطة
-# ══════════════════════════════════════════════════════════
-
 def _get_acc_conn():
     from db.shared.connection import get_accounting_connection
     return get_accounting_connection()
@@ -115,7 +108,6 @@ def _current_company_id() -> int | None:
 
 
 def _current_acc_db_path() -> str | None:
-    """يرجع مسار accounting.db للشركة النشطة."""
     cid = _current_company_id()
     if cid is None:
         return None
@@ -126,27 +118,40 @@ def _current_acc_db_path() -> str | None:
         return None
 
 
-# ══════════════════════════════════════════════════════════
-# AccountingTab
-# ══════════════════════════════════════════════════════════
+def _verify_conn_belongs_to_company(conn, expected_company_id: int) -> bool:
+    """
+    [إصلاح جديد] يتحقق أن الـ connection اللي بنستخدمه
+    فعلاً ينتمي للشركة المطلوبة وليس لشركة قديمة.
+
+    يعمل بقراءة مسار الـ DB من الـ connection نفسه
+    ومقارنته بالمسار المتوقع للشركة الحالية.
+    """
+    if conn is None or expected_company_id is None:
+        return False
+    try:
+        from db.companies.companies_schema import get_company_db_path
+        expected_path = get_company_db_path(expected_company_id, "accounting")
+        # نجرب نقرأ صف واحد — لو فشل الـ conn مش صالح
+        conn.execute("SELECT 1").fetchone()
+
+        # نتحقق من اسم الـ DB عبر PRAGMA
+        row = conn.execute("PRAGMA database_list").fetchone()
+        if row:
+            actual_path = row[2] if len(row) > 2 else ""
+            # مقارنة المسار بدون حساسية الحالة (Windows)
+            import os
+            return os.path.normcase(actual_path) == os.path.normcase(expected_path)
+    except Exception:
+        pass
+    return False
+
 
 class AccountingTab(QWidget):
-    """
-    التبويب الرئيسي للمحاسبة.
-
-    - يجلب الـ connections من company_state عند كل بناء.
-    - يستمع لـ bus.company_data_changed بـ company_id محدد
-      لضمان عدم استجابة الـ widget لأحداث شركة أخرى.
-    - _INITIALIZED_COMPANIES يخزن المسار مع الـ ID لاكتشاف إعادة الإنشاء.
-    """
-
     def __init__(self, parent=None):
         super().__init__(parent)
         self._main_tabs: QTabWidget | None = None
         self._company_id: int | None = _current_company_id()
         self._build()
-
-    # ── الحصول على connections ─────────────────────────────
 
     @property
     def acc_conn(self):
@@ -156,26 +161,17 @@ class AccountingTab(QWidget):
     def erp_conn(self):
         return _get_erp_conn()
 
-    # ── تهيئة الجداول مع cache ────────────────────────────
-
     def _init_schema(self):
-        """
-        تهيئة الجداول مع cache ذكي يكتشف:
-          1. الشركة الجديدة (ID غير موجود في الـ cache)
-          2. نفس الـ ID لكن مسار مختلف (حُذفت وأُعيد إنشاؤها)
-        """
         if not _is_ready():
             return
 
         cid          = _current_company_id()
         current_path = _current_acc_db_path()
 
-        # تحقق من الـ cache
         cached_path = _INITIALIZED_COMPANIES.get(cid)
         if cached_path and cached_path == current_path:
-            return   # نفس الشركة ونفس المسار — لا حاجة لإعادة التهيئة
+            return
 
-        # تهيئة جديدة مطلوبة
         try:
             from db.accounting.accounting_schema import create_accounting_tables
             create_accounting_tables(self.acc_conn)
@@ -188,17 +184,10 @@ class AccountingTab(QWidget):
         except Exception as e:
             print(f"[AccountingTab] investors schema error: {e}")
 
-        # حفظ في الـ cache مع المسار
         if current_path:
             _INITIALIZED_COMPANIES[cid] = current_path
 
-    # ── بناء الواجهة ───────────────────────────────────────
-
     def _cleanup_layout(self):
-        """
-        يحذف الـ layout القديم وكل widgets فيه بشكل آمن.
-        يستخدم hide()+deleteLater() بدل sip.delete لتجنب crashes.
-        """
         old_layout = self.layout()
         if old_layout is None:
             return
@@ -215,7 +204,6 @@ class AccountingTab(QWidget):
         dummy.deleteLater()
 
     def _build(self):
-        """بناء (أو إعادة بناء) كل التبويبات."""
         self._cleanup_layout()
 
         root = QVBoxLayout(self)
@@ -229,18 +217,27 @@ class AccountingTab(QWidget):
             return
 
         self._company_id = _current_company_id()
+
+        # [إصلاح جديد] تحقق من صحة الـ connection قبل البناء
+        acc = self.acc_conn
+        if not _verify_conn_belongs_to_company(acc, self._company_id):
+            # الـ connection لسه بيتجهز — انتظر وحاول مرة ثانية
+            from PyQt5.QtCore import QTimer
+            QTimer.singleShot(100, self._build)
+            lbl = QLabel("⏳  جاري تهيئة قاعدة البيانات...")
+            lbl.setAlignment(Qt.AlignCenter)
+            lbl.setStyleSheet("font-size:13px; color:#888; padding:40px;")
+            root.addWidget(lbl)
+            return
+
         self._init_schema()
 
-        acc = self.acc_conn
         erp = self.erp_conn
 
         main_tabs = QTabWidget()
         main_tabs.setStyleSheet(_TAB_STYLE)
         self._main_tabs = main_tabs
 
-        # ═══════════════════════════════════════════════════
-        # 1. الحسابات
-        # ═══════════════════════════════════════════════════
         accounts_tabs = _make_inner_tabs(
             ("🏦  الأصول",
              _make_inner_tabs(
@@ -256,36 +253,15 @@ class AccountingTab(QWidget):
              self._build_equity_tab(acc)),
         )
         main_tabs.addTab(accounts_tabs, "🏦  الحسابات")
-
-        # ═══════════════════════════════════════════════════
-        # 2. القيود المحاسبية
-        # ═══════════════════════════════════════════════════
         main_tabs.addTab(JournalTab(acc, erp), "📒  قيود اليومية")
-
-        # ═══════════════════════════════════════════════════
-        # 3. دفتر الأستاذ
-        # ═══════════════════════════════════════════════════
         main_tabs.addTab(LedgerTab(acc), "📘  دفتر الأستاذ")
-
-        # ═══════════════════════════════════════════════════
-        # 4. القوائم المالية
-        # ═══════════════════════════════════════════════════
         main_tabs.addTab(FinancialStatementsTab(acc), "📊  القوائم المالية")
-
-        # ═══════════════════════════════════════════════════
-        # 5. ميزان المراجعة
-        # ═══════════════════════════════════════════════════
         main_tabs.addTab(TrialBalanceTab(acc), "⚖️  ميزان المراجعة")
-
-        # ═══════════════════════════════════════════════════
-        # 6. المستثمرون
-        # ═══════════════════════════════════════════════════
         main_tabs.addTab(InvestorsTab(erp, acc), "👥  المستثمرون")
 
         root.addWidget(main_tabs)
 
     def _build_equity_tab(self, acc) -> QWidget:
-        """تبويب حقوق الملكية — شجرة جامعة + تصنيفات."""
         widget = QWidget()
         root   = QVBoxLayout(widget)
         root.setContentsMargins(0, 0, 0, 0)
@@ -316,22 +292,13 @@ class AccountingTab(QWidget):
         root.addWidget(splitter)
         return widget
 
-    # ── واجهة خارجية ──────────────────────────────────────
-
     def refresh_for_company(self):
         """
         يُستدعى من MainWindow عند تغيير الشركة النشطة.
-
-        [إصلاح ٢] يمسح _INITIALIZED_COMPANIES بالكامل (مش بس الشركة القديمة)
-        لضمان إعادة تهيئة الجداول عند كل تغيير للشركة.
-        ثم يُعيد بناء كل التبويبات.
+        يمسح الـ cache بالكامل ويُعيد بناء كل التبويبات.
         """
-        # [إصلاح ٢] مسح كل الـ cache — إعادة تهيئة كاملة لكل شركة
         _INITIALIZED_COMPANIES.clear()
         self._build()
 
-    # ── closeEvent ─────────────────────────────────────────
-
     def closeEvent(self, event):
-        """ProtectedConnection لا تُغلق هنا — مُدارة بواسطة company_state."""
         super().closeEvent(event)

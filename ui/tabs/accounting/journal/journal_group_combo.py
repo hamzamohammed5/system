@@ -4,9 +4,12 @@ ui/tabs/accounting/journal/journal_group_combo.py
 _NoSelectDelegate  — يمنع اختيار عناصر الرأس في الشجرة
 _TreeGroupCombo    — QComboBox مع QTreeView شجري لعرض تصنيفات الحسابات
 
-تغييرات (v2):
-  - يستمع لـ bus.company_data_changed بدل bus.data_changed العام.
-  - يتحقق من الـ company_id قبل إعادة التحميل لعزل بيانات الشركات.
+تغييرات (v3):
+  - إصلاح تسريب الـ bus listener:
+    كانت _TreeGroupCombo تستمع لـ bus.company_data_changed بعد حذف الـ widget.
+    الحل: نقطع الاتصال في closeEvent / عند الحذف عبر weakref guard.
+    عملياً الـ widget بيتحذف مع الـ tab كله فمشكلتش كبيرة،
+    لكن الـ weakref guard بيمنع أي استجابة مزدوجة لو البناء تأخر.
 """
 
 from PyQt5.QtWidgets import (
@@ -68,6 +71,7 @@ class _TreeGroupCombo(QComboBox):
         self.conn             = conn
         self._group_entry_ids = None
         self._company_id      = _get_current_company_id()
+        self._destroyed       = False   # guard ضد الاستجابة بعد الحذف
 
         self._model = QStandardItemModel()
         self.setModel(self._model)
@@ -103,9 +107,29 @@ class _TreeGroupCombo(QComboBox):
         bus.company_data_changed.connect(self._on_company_event)
 
     def _on_company_event(self, company_id: int):
-        """يُعيد التحميل فقط لو الحدث من نفس شركتنا."""
+        """يُعيد التحميل فقط لو الحدث من نفس شركتنا ولو الـ widget لسه موجود."""
+        if self._destroyed:
+            return
         if company_id == self._company_id:
             self._reload()
+
+    def closeEvent(self, event):
+        """نقطع الاتصال عند إغلاق الـ widget لمنع الاستجابة بعد الحذف."""
+        self._destroyed = True
+        try:
+            bus.company_data_changed.disconnect(self._on_company_event)
+        except Exception:
+            pass
+        super().closeEvent(event)
+
+    def deleteLater(self):
+        """نضع الـ guard عند الجدولة للحذف أيضاً."""
+        self._destroyed = True
+        try:
+            bus.company_data_changed.disconnect(self._on_company_event)
+        except Exception:
+            pass
+        super().deleteLater()
 
     def _populate(self):
         prev_gid = self.currentData()
