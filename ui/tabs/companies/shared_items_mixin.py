@@ -2,25 +2,24 @@
 ui/tabs/companies/shared_items_mixin.py
 =========================================
 إصلاحات:
-1. category_name يُجلب من data["category_name"] لو موجود — يظهر التصنيف الحقيقي
-2. العنصر لا يظهر مرتين في الشركة الأصلية:
-   - get_shared_* تقبل local_rows اختياري وتستخدم remove_local_duplicates
+1. category_name في الشركة المرتبطة: لو مش موجود في data، نجيبه من erp.db المحلي
+2. العنصر الأصلي يظهر بعلامة 🔗 في الشركة اللي نشرته:
+   - get_published_local_ids() ترجع IDs المحلية المنشورة كمشتركة
+3. remove_local_duplicates تمنع ظهور العنصر مرتين
 """
 
 import json
 
 
 # ══════════════════════════════════════════════════════════
-# مساعدات
+# مساعدات أساسية
 # ══════════════════════════════════════════════════════════
 
 def is_shared_id(item_id) -> bool:
-    """هل هذا ID لعنصر مشترك؟"""
     return isinstance(item_id, str) and str(item_id).startswith("shared:")
 
 
 def extract_shared_id(item_id) -> int | None:
-    """يستخرج الـ shared_item_id الحقيقي من الـ composite id."""
     if is_shared_id(item_id):
         try:
             return int(str(item_id).split(":")[1])
@@ -30,7 +29,6 @@ def extract_shared_id(item_id) -> int | None:
 
 
 def _get_company_id() -> int | None:
-    """يرجع ID الشركة النشطة."""
     try:
         from db.companies.company_state import company_state
         return company_state.company_id if company_state.is_ready else None
@@ -38,11 +36,21 @@ def _get_company_id() -> int | None:
         return None
 
 
+def _get_erp_conn():
+    """يرجع erp connection للشركة النشطة (shared — لا تُغلقه)."""
+    try:
+        from db.companies.company_state import company_state
+        if company_state.is_ready:
+            return company_state.get_erp_conn()
+    except Exception:
+        pass
+    return None
+
+
 def remove_local_duplicates(local_rows: list, shared_rows: list) -> list:
     """
     يزيل من shared_rows أي عنصر اسمه موجود بالفعل في local_rows.
-    يحل مشكلة ظهور العنصر مرتين في الشركة الأصلية اللي نشرته.
-    المقارنة بالاسم (case-insensitive, strip).
+    يمنع ظهور العنصر مرتين في الشركة الأصلية.
     """
     local_names = {str(r.get("name", "")).strip().lower() for r in local_rows}
     return [
@@ -51,11 +59,100 @@ def remove_local_duplicates(local_rows: list, shared_rows: list) -> list:
     ]
 
 
+def _resolve_category_name_from_local(item_name: str, shared_type: str) -> str | None:
+    """
+    يجيب category_name من erp.db المحلي عن طريق اسم العنصر.
+    يُستخدم كـ fallback لو category_name مش محفوظ في data.
+    """
+    try:
+        conn = _get_erp_conn()
+        if not conn:
+            return None
+
+        if shared_type == "raw":
+            row = conn.execute("""
+                SELECT c.name as cat_name
+                FROM items i
+                LEFT JOIN categories c ON c.id = i.category_id
+                WHERE i.name = ? AND i.type = 'raw'
+                LIMIT 1
+            """, (item_name,)).fetchone()
+        elif shared_type == "machine":
+            row = conn.execute("""
+                SELECT c.name as cat_name
+                FROM machines m
+                LEFT JOIN categories c ON c.id = m.category_id
+                WHERE m.name = ?
+                LIMIT 1
+            """, (item_name,)).fetchone()
+        elif shared_type == "labor_op":
+            row = conn.execute("""
+                SELECT c.name as cat_name
+                FROM labor_ops lo
+                LEFT JOIN categories c ON c.id = lo.category_id
+                WHERE lo.name = ?
+                LIMIT 1
+            """, (item_name,)).fetchone()
+        elif shared_type == "machine_op":
+            row = conn.execute("""
+                SELECT c.name as cat_name
+                FROM machine_ops mo
+                LEFT JOIN categories c ON c.id = mo.category_id
+                WHERE mo.name = ?
+                LIMIT 1
+            """, (item_name,)).fetchone()
+        else:
+            return None
+
+        if row and row["cat_name"]:
+            return row["cat_name"]
+    except Exception:
+        pass
+    return None
+
+
+# ══════════════════════════════════════════════════════════
+# العناصر المحلية المنشورة كمشتركة
+# (للشركة الأصلية عشان تعرف تعلم عليها بـ 🔗)
+# ══════════════════════════════════════════════════════════
+
+def get_published_local_names(shared_type: str) -> set:
+    """
+    يرجع set من أسماء العناصر المحلية اللي اتنشرت كمشتركة من الشركة الحالية.
+    يُستخدم في الجداول عشان نعلم على العناصر الأصلية بـ 🔗.
+    """
+    try:
+        company_id = _get_company_id()
+        if company_id is None:
+            return set()
+
+        from db.companies.companies_schema import get_central_connection
+        central = get_central_connection()
+        rows = central.execute("""
+            SELECT s.name
+            FROM company_shared_links lnk
+            JOIN shared_items s ON s.id = lnk.shared_item_id
+            WHERE lnk.company_id = ? AND s.shared_type = ?
+        """, (company_id, shared_type)).fetchall()
+        central.close()
+
+        return {r["name"].strip().lower() for r in rows}
+    except Exception as e:
+        print(f"[shared_items_mixin] get_published_local_names error: {e}")
+        return set()
+
+
+# ══════════════════════════════════════════════════════════
+# جلب العناصر المشتركة من companies.db
+# ══════════════════════════════════════════════════════════
+
 def _fetch_shared(shared_type: str) -> list:
     """
     يجيب العناصر المشتركة للشركة النشطة من companies.db.
-    يرجع list of dicts مع id = "shared:{n}".
-    category_name يُجلب من data["category_name"] لو محفوظ.
+    category_name:
+      1. من data["category_name"] لو موجود
+      2. من erp.db المحلي عن طريق الاسم (fallback)
+      3. None لو مش موجود (الجدول يعرض "—")
     """
     try:
         company_id = _get_company_id()
@@ -80,22 +177,25 @@ def _fetch_shared(shared_type: str) -> list:
             except Exception:
                 data = {}
 
-            # category_name: من data لو محفوظ، وإلا None (الجدول يعرض "—")
+            # category_name: من data أولاً، ثم من erp.db المحلي كـ fallback
             cat_name = data.get("category_name") or None
+            if not cat_name:
+                cat_name = _resolve_category_name_from_local(row["name"], shared_type)
 
             item = {
                 "id":             f"shared:{row['id']}",
                 "shared_item_id": row["id"],
                 "name":           row["name"],
-                "shared_type":    row["shared_type"],
+                "shared_type":    shared_type,
                 "category_id":    None,
                 "category_name":  cat_name,
                 "is_shared":      True,
                 "updated_at":     row["updated_at"],
             }
             item.update(data)
-            # نعيد بعد update عشان data مش تطغى على category_name
+            # نعيد تعيين بعد update عشان data مش تطغى
             item["category_name"] = cat_name
+            item["is_shared"]     = True
             result.append(item)
         return result
     except Exception as e:
@@ -108,10 +208,6 @@ def _fetch_shared(shared_type: str) -> list:
 # ══════════════════════════════════════════════════════════
 
 def get_shared_raws(local_rows: list = None) -> list:
-    """
-    يرجع الخامات المشتركة للشركة النشطة.
-    local_rows: لو مُمرَّرة تُزال المكررات (نفس الاسم) — لمنع ظهور العنصر مرتين.
-    """
     items = _fetch_shared("raw")
     result = []
     for item in items:
@@ -132,10 +228,6 @@ def get_shared_raws(local_rows: list = None) -> list:
 
 
 def get_shared_machines(local_rows: list = None) -> list:
-    """
-    يرجع الماكينات المشتركة للشركة النشطة.
-    local_rows: لو مُمرَّرة تُزال المكررات.
-    """
     items = _fetch_shared("machine")
     result = []
     for item in items:
@@ -156,10 +248,6 @@ def get_shared_machines(local_rows: list = None) -> list:
 
 
 def get_shared_labor_ops(local_rows: list = None) -> list:
-    """
-    يرجع عمليات العمالة المشتركة للشركة النشطة.
-    local_rows: لو مُمرَّرة تُزال المكررات.
-    """
     items = _fetch_shared("labor_op")
     result = []
     for item in items:
@@ -179,10 +267,6 @@ def get_shared_labor_ops(local_rows: list = None) -> list:
 
 
 def get_shared_machine_ops(local_rows: list = None) -> list:
-    """
-    يرجع عمليات التشغيل المشتركة للشركة النشطة.
-    local_rows: لو مُمرَّرة تُزال المكررات.
-    """
     items = _fetch_shared("machine_op")
     result = []
     for item in items:
