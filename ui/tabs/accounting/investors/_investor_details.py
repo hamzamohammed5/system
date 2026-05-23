@@ -2,11 +2,15 @@
 ui/tabs/accounting/investors/_investor_details.py
 =================================================
 _InvestorDetails — لوحة تفاصيل مستثمر واحد مع حذف الحركات.
+
+تغييرات (v2):
+  - يستمع لـ bus.company_data_changed بدل bus.data_changed العام.
+  - يتحقق من الـ company_id قبل إعادة التحميل لعزل بيانات الشركات.
 """
 
 from PyQt5.QtWidgets import (
     QWidget, QVBoxLayout, QHBoxLayout,
-    QLabel, QMessageBox,
+    QLabel, QMessageBox, QTableWidgetItem,
 )
 from PyQt5.QtCore import Qt
 from PyQt5.QtGui  import QColor, QFont
@@ -23,14 +27,31 @@ from ui.events import bus
 from ._helpers import _stat_card
 
 
+def _get_current_company_id() -> int | None:
+    try:
+        from db.companies.company_state import company_state
+        return company_state.company_id if company_state.is_ready else None
+    except Exception:
+        return None
+
+
 class _InvestorDetails(QWidget):
     def __init__(self, acc_conn, erp_conn, parent=None):
         super().__init__(parent)
         self.acc_conn = acc_conn
         self.erp_conn = erp_conn
         self._inv_id  = None
+
+        # حفظ الـ company_id عند الإنشاء لفلترة الأحداث
+        self._company_id = _get_current_company_id()
+
         self._build()
-        bus.data_changed.connect(self._refresh)
+        bus.company_data_changed.connect(self._on_company_event)
+
+    def _on_company_event(self, company_id: int):
+        """يُعيد التحميل فقط لو الحدث من نفس شركتنا."""
+        if company_id == self._company_id:
+            self._refresh()
 
     def _build(self):
         root = QVBoxLayout(self)
@@ -150,7 +171,8 @@ class _InvestorDetails(QWidget):
                 except Exception as e:
                     print(f"[InvestorDetails] could not delete acc entry: {e}")
             delete_investor_link(self.erp_conn, link_id)
-            bus.data_changed.emit()
+            # إطلاق الحدث المقيّد بالشركة النشطة
+            bus.company_data_changed.emit(self._company_id or 0)
         except Exception as e:
             QMessageBox.critical(self, "خطأ", str(e))
 

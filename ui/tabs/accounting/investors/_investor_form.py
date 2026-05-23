@@ -2,6 +2,10 @@
 ui/tabs/accounting/investors/_investor_form.py
 ==============================================
 _InvestorForm — فورم إضافة / تعديل مستثمر مع رأس المال الأولي.
+
+تغييرات (v2):
+  - يستمع لـ bus.company_data_changed بدل bus.data_changed العام.
+  - يتحقق من الـ company_id قبل تحديث الـ combos لعزل بيانات الشركات.
 """
 
 from PyQt5.QtWidgets import (
@@ -22,14 +26,31 @@ from ._helpers  import (
 )
 
 
+def _get_current_company_id() -> int | None:
+    try:
+        from db.companies.company_state import company_state
+        return company_state.company_id if company_state.is_ready else None
+    except Exception:
+        return None
+
+
 class _InvestorForm(QWidget, EditModeMixin):
     def __init__(self, acc_conn, erp_conn, parent=None):
         super().__init__(parent)
         self.acc_conn = acc_conn
         self.erp_conn = erp_conn
+
+        # حفظ الـ company_id عند الإنشاء لفلترة الأحداث
+        self._company_id = _get_current_company_id()
+
         self._build()
         self.init_edit_mode(self.btn_add, self.btn_save, self.btn_cancel, self.lbl_mode)
-        bus.data_changed.connect(self._refresh_account_combos)
+        bus.company_data_changed.connect(self._on_company_event)
+
+    def _on_company_event(self, company_id: int):
+        """يُحدّث الـ combos فقط لو الحدث من نفس شركتنا."""
+        if company_id == self._company_id:
+            self._refresh_account_combos()
 
     def _build(self):
         root = QVBoxLayout(self)
@@ -180,7 +201,8 @@ class _InvestorForm(QWidget, EditModeMixin):
                     QMessageBox.warning(self, "تنبيه",
                                         f"تم إضافة المستثمر لكن فشل القيد:\n{e}")
         self._reset()
-        bus.data_changed.emit()
+        # إطلاق الحدث المقيّد بالشركة النشطة
+        bus.company_data_changed.emit(self._company_id or 0)
 
     def _save_edit(self):
         data = self._collect()
@@ -189,7 +211,8 @@ class _InvestorForm(QWidget, EditModeMixin):
         update_investor(self.erp_conn, self._editing_id,
                         data["name"], data["notes"], data["joined_at"])
         self._reset()
-        bus.data_changed.emit()
+        # إطلاق الحدث المقيّد بالشركة النشطة
+        bus.company_data_changed.emit(self._company_id or 0)
 
     def _cancel(self):
         self._reset()

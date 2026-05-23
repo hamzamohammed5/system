@@ -2,6 +2,10 @@
 ui/tabs/accounting/journal/lines/_smart_line.py
 ================================================
 _SmartLine — صف قيد واحد ذكي (حساب + اتجاه + مبلغ + بيان + ربط مستثمر).
+
+تغييرات (v2):
+  - يستمع لـ bus.company_data_changed بدل bus.data_changed العام.
+  - يتحقق من الـ company_id قبل إعادة تحميل المستثمرين لعزل بيانات الشركات.
 """
 
 from PyQt5.QtWidgets import (
@@ -18,6 +22,14 @@ from ui.events import bus
 from ..journal_account_picker import _AccountPickerButton
 
 _INVESTOR_TYPES = {"capital", "drawings"}
+
+
+def _get_current_company_id() -> int | None:
+    try:
+        from db.companies.company_state import company_state
+        return company_state.company_id if company_state.is_ready else None
+    except Exception:
+        return None
 
 
 def _resolve_side(acc_type: str, is_increase: bool) -> str:
@@ -38,8 +50,17 @@ class _SmartLine(QFrame):
         self._on_move_up = on_move_up
         self._on_move_dn = on_move_dn
         self._resolved_side = "dr"
+
+        # حفظ الـ company_id عند الإنشاء لفلترة الأحداث
+        self._company_id = _get_current_company_id()
+
         self._build()
-        bus.data_changed.connect(self._reload_investors)
+        bus.company_data_changed.connect(self._on_company_event)
+
+    def _on_company_event(self, company_id: int):
+        """يُعيد تحميل المستثمرين فقط لو الحدث من نفس شركتنا."""
+        if company_id == self._company_id:
+            self._reload_investors()
 
     def _build(self):
         self.setStyleSheet("""
