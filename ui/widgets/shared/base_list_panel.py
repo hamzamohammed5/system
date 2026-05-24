@@ -3,10 +3,9 @@ ui/widgets/shared/base_list_panel.py
 =====================================
 BaseListPanel — قاعدة مشتركة لكل لوحات القوائم.
 
-[تحديث v3]:
-  - يستخدم SearchLineEdit من input_widgets بدل inp_search المباشر
-  - يستخدم BusConnectedMixin للاشتراك في bus
-  - لا تكرار في setup الجدول
+[تحديث v4]:
+  - fit_splitter_table من panels بدل table_utils مباشرة
+  - جميع الـ imports من panels
 """
 
 from PyQt5.QtWidgets import (
@@ -14,12 +13,14 @@ from PyQt5.QtWidgets import (
 )
 from PyQt5.QtCore import Qt, pyqtSignal, QTimer
 
-from ui.widgets.shared.table_utils import (
-    make_splitter_table_guarded, fit_splitter_table,
-    ROW_HEIGHT_LARGE,
-)
 from ui.widgets.shared.panels import (
-    EmptyState, ListHeader, ListStatusBar,
+    make_splitter_table_guarded,
+    fit_splitter_table,
+    auto_fit_columns,
+    ROW_HEIGHT_LARGE,
+    EmptyState,
+    ListHeader,
+    ListStatusBar,
 )
 from ui.app_settings import _C
 
@@ -153,7 +154,6 @@ class BaseListPanel(QWidget):
             self._table_guard.refresh()
 
     def _auto_resize(self):
-        from ui.widgets.shared.table_utils import auto_fit_columns
         all_cols = [i for i in range(self.table.columnCount())
                     if i != self.STRETCH_COL]
         auto_fit_columns(

@@ -3,8 +3,9 @@ ui/widgets/shared/panels.py
 ============================
 مكونات UI مشتركة — re-export من panles_helper وملفات أخرى.
 
-[تحديث v5]:
-  - إضافة NotificationBar و PageHeader
+[تحديث v6]:
+  - إضافة exports ناقصة: fit_splitter_table, ROW_HEIGHT_*, calc_table_width
+  - إضافة make_fixed_table
   - جميع المكونات المشتركة متاحة من هنا
 
 كل الملفات التانية تستورد من هنا مباشرة — مش من panles_helper.
@@ -199,6 +200,7 @@ from .table_utils import (                                      # noqa: F401
     make_detail_table,
     make_compact_table,
     make_list_table,
+    make_fixed_table,
     make_splitter_table,
     make_splitter_table_guarded,
     bold_table_item,
@@ -208,6 +210,13 @@ from .table_utils import (                                      # noqa: F401
     make_table_item,
     insert_row,
     auto_fit_columns,
+    # ← إضافات جديدة:
+    fit_splitter_table,
+    fit_splitter_to_table,
+    ROW_HEIGHT_NORMAL,
+    ROW_HEIGHT_COMPACT,
+    ROW_HEIGHT_LARGE,
+    calc_table_width,
 )
 
 # ── shared UI mixins ──────────────────────────────────────
@@ -234,7 +243,7 @@ from .panles_helper.progress_bar import (                   # noqa: F401
     ProgressBar,
     MultiProgressBar,
 )
- 
+
 # ── data_table_widget ──────────────────────────────────────
 from .panles_helper.data_table_widget import DataTableWidget  # noqa: F401
 
@@ -339,10 +348,15 @@ __all__ = [
 
     # table_utils
     "make_detail_table", "make_compact_table", "make_list_table",
+    "make_fixed_table",
     "make_splitter_table", "make_splitter_table_guarded",
     "bold_table_item", "colored_table_item", "center_table_item",
     "set_row_background", "make_table_item", "insert_row",
     "auto_fit_columns",
+    # جديد:
+    "fit_splitter_table", "fit_splitter_to_table",
+    "ROW_HEIGHT_NORMAL", "ROW_HEIGHT_COMPACT", "ROW_HEIGHT_LARGE",
+    "calc_table_width",
 
     # shared_ui_mixins
     "RefreshableMixin", "BusConnectedMixin",
@@ -351,4 +365,10 @@ __all__ = [
     # input_widgets
     "SearchLineEdit", "AmountSpinBox", "DateField",
     "LabeledInput", "RequiredLineEdit", "StyledComboBox", "NotesLineEdit",
+
+    # progress_bar
+    "ProgressBar", "MultiProgressBar",
+
+    # data_table_widget
+    "DataTableWidget",
 ]

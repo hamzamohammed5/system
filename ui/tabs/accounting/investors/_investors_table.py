@@ -3,8 +3,11 @@ ui/tabs/accounting/investors/_investors_table.py
 ================================================
 _InvestorsTable — جدول المستثمرين مع أزرار الإضافة والتعديل والحذف.
 
-[إصلاح v4 — DualConnMixin]:
-  - DualConnMixin بدل _get_erp_conn() المكرر يدوياً.
+[إصلاح v5 — panels بدل ui.helpers]:
+  - make_list_table من panels بدل make_table من ui.helpers
+  - confirm_delete من panels
+  - _make_btn من panels
+  - auto_fit_columns من panels
 """
 
 from PyQt5.QtWidgets import (
@@ -17,14 +20,21 @@ from db.inventory.investors_repo import (
     fetch_investor, delete_investor,
     calc_all_investors_summary,
 )
-from ui.helpers import (
-    make_table, setup_table_columns, buttons_row,
-    section_label, danger_button, confirm_delete,
+from ui.widgets.shared.panels import (
+    make_list_table,
+    _make_btn,
+    confirm_delete,
+    auto_fit_columns,
+    form_section_title,
+    ROW_HEIGHT_LARGE,
 )
 from ui.events import bus
 from ui.widgets.shared.safe_conn_mixin import DualConnMixin
 from ._investor_form    import _InvestorForm
 from ._movement_dialog  import _MovementDialog
+
+_COLS = ["ID", "الاسم", "تاريخ الانضمام", "رأس المال", "المسحوبات", "صافي الاستثمار"]
+_COL_WIDTHS = {0: 40, 2: 100, 3: 110, 4: 100, 5: 120}
 
 
 class _InvestorsTable(DualConnMixin, QWidget):
@@ -46,16 +56,12 @@ class _InvestorsTable(DualConnMixin, QWidget):
         root = QVBoxLayout(self)
         root.setContentsMargins(12, 8, 12, 12)
         root.setSpacing(6)
-        root.addWidget(section_label("─── المستثمرون ───"))
+        root.addWidget(form_section_title("─── المستثمرون ───"))
 
-        self.table = make_table(
-            ["ID", "الاسم", "تاريخ الانضمام",
-             "رأس المال", "المسحوبات", "صافي الاستثمار"],
-            stretch_col=1
-        )
-        setup_table_columns(self.table,
-            widths={0: 40, 2: 100, 3: 110, 4: 100, 5: 120},
-            stretch_col=1
+        self.table = make_list_table(
+            columns=_COLS,
+            stretch_col=1,
+            col_widths=_COL_WIDTHS,
         )
         self.table.setAlternatingRowColors(True)
         self.table.itemSelectionChanged.connect(
@@ -63,21 +69,11 @@ class _InvestorsTable(DualConnMixin, QWidget):
         )
         root.addWidget(self.table, stretch=1)
 
-        btn_edit    = QPushButton("✏️  تعديل")
-        btn_del     = danger_button("🗑️  حذف")
-        btn_capital = QPushButton("💰  إضافة استثمار")
-        btn_draw    = QPushButton("💸  مسحوبات")
+        btn_edit    = _make_btn("✏️  تعديل", "normal")
+        btn_del     = _make_btn("🗑️  حذف", "danger")
+        btn_capital = _make_btn("💰  إضافة استثمار", "success")
+        btn_draw    = _make_btn("💸  مسحوبات", "danger")
 
-        btn_capital.setStyleSheet(
-            "QPushButton { background:#2e7d32; color:white; border-radius:4px;"
-            "padding:4px 10px; font-weight:bold; }"
-            "QPushButton:hover { background:#1b5e20; }"
-        )
-        btn_draw.setStyleSheet(
-            "QPushButton { background:#c62828; color:white; border-radius:4px;"
-            "padding:4px 10px; font-weight:bold; }"
-            "QPushButton:hover { background:#b71c1c; }"
-        )
         for btn in (btn_edit, btn_del, btn_capital, btn_draw):
             btn.setMinimumHeight(30)
 
@@ -85,7 +81,14 @@ class _InvestorsTable(DualConnMixin, QWidget):
         btn_del.clicked.connect(self._delete)
         btn_capital.clicked.connect(lambda: self._open_movement("capital"))
         btn_draw.clicked.connect(lambda: self._open_movement("drawings"))
-        root.addLayout(buttons_row(btn_edit, btn_del, btn_capital, btn_draw))
+
+        from PyQt5.QtWidgets import QHBoxLayout
+        btn_row = QHBoxLayout()
+        btn_row.setSpacing(6)
+        for btn in (btn_edit, btn_del, btn_capital, btn_draw):
+            btn_row.addWidget(btn)
+        btn_row.addStretch()
+        root.addLayout(btn_row)
 
     def _selected_id(self):
         row = self.table.currentRow()
@@ -100,6 +103,7 @@ class _InvestorsTable(DualConnMixin, QWidget):
         for s in summaries:
             r = self.table.rowCount()
             self.table.insertRow(r)
+            self.table.setRowHeight(r, ROW_HEIGHT_LARGE)
             self.table.setItem(r, 0, QTableWidgetItem(str(s["investor_id"])))
             self.table.setItem(r, 1, QTableWidgetItem(s["investor_name"]))
             self.table.setItem(r, 2, QTableWidgetItem(s.get("joined_at", "—")))
@@ -121,6 +125,15 @@ class _InvestorsTable(DualConnMixin, QWidget):
             f.setBold(True)
             net_item.setFont(f)
             self.table.setItem(r, 5, net_item)
+
+        if summaries:
+            auto_fit_columns(
+                self.table,
+                fixed_cols=[0, 2, 3, 4, 5],
+                stretch_col=1,
+                min_width=40,
+                max_width=200,
+            )
 
     def _edit(self):
         inv_id = self._selected_id()

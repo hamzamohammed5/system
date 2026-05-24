@@ -3,7 +3,9 @@ ui/widgets/shared/category_manager.py
 ===============================
 CategoryManager — شجرة QTreeWidget لإدارة التصنيفات الهرمية.
 
-[تحسين]: استخدام confirm_delete بدل QMessageBox.question المباشر.
+[إصلاح v2]:
+  - كل الـ imports من panels بدل مزيج من panels و panles_helper مباشرة
+  - confirm_delete من panels
 """
 
 from PyQt5.QtWidgets import (
@@ -20,7 +22,12 @@ from db.shared.categories_repo import (
     build_tree, fetch_descendants,
 )
 from ui.widgets.shared.connection_mixin import LiveConnMixin
-from ui.widgets.shared.panels import _make_btn, confirm_delete, get_tree_style
+from ui.widgets.shared.panels import (
+    _make_btn,
+    confirm_delete,
+    get_tree_style,
+    form_section_title,
+)
 from ui.events import bus
 
 # إعادة تصدير للتوافق مع الكود القديم
@@ -178,7 +185,6 @@ class CategoryManager(QWidget, LiveConnMixin):
             details = "، ".join(f"{v} {k}" for k, v in counts.items() if v)
             extra += f"⚠️ {details} ستفقد تصنيفها."
 
-        # ── استخدام confirm_delete الموحد ──
         if confirm_delete(self, cat["name"], extra_msg=extra.strip()):
             for did in sorted(descendants, reverse=True):
                 delete_category(conn, did)

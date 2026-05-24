@@ -3,24 +3,27 @@ ui/widgets/shared/filter_bar.py
 ========================
 FilterBar — شريط فلتر مشترك يُستخدم في كل التبويبات.
 
-يرث من LiveConnMixin بدل كتابة _live_conn يدوياً.
+[إصلاح v2]:
+  - استخدام SearchBar من panles_helper/list_header بدل QLineEdit يدوي
+  - LiveConnMixin للـ connection
 """
 
 from PyQt5.QtWidgets import (
-    QWidget, QHBoxLayout, QLineEdit, QPushButton, QLabel, QComboBox,
+    QWidget, QHBoxLayout, QLabel, QPushButton, QComboBox,
 )
-from PyQt5.QtCore import pyqtSignal, Qt, QTimer
+from PyQt5.QtCore import pyqtSignal
 from PyQt5.QtGui  import QColor
 
 from db.shared.categories_repo import fetch_all_categories, build_tree
 from ui.widgets.shared.connection_mixin import LiveConnMixin
+from ui.widgets.shared.panels import SearchBar
 from ui.events import bus
 
 
 class FilterBar(QWidget, LiveConnMixin):
     """
     شريط فلتر أفقي:
-      [🔍 بحث بالاسم ...]  [✖]   [🏷 التصنيف ▼]   [↺ مسح الكل]
+      [🔍 بحث بالاسم ...]   [🏷 التصنيف ▼]   [↺ مسح الكل]
     """
     filter_changed = pyqtSignal()
 
@@ -36,6 +39,7 @@ class FilterBar(QWidget, LiveConnMixin):
     # ══════════════════════════════════════════════════════
 
     def _build(self):
+        from ui.app_settings import _C
         self.setStyleSheet("""
             QWidget {
                 background: #f0f4ff;
@@ -48,49 +52,16 @@ class FilterBar(QWidget, LiveConnMixin):
         lay.setContentsMargins(8, 6, 8, 6)
         lay.setSpacing(8)
 
-        lbl_icon = QLabel("🔍")
-        lbl_icon.setStyleSheet(
-            "background:transparent; border:none; font-size:13px;"
+        # ── SearchBar الموحد بدل QLineEdit يدوي ──
+        self._search_bar = SearchBar(
+            placeholder="بحث بالاسم...",
+            delay_ms=250,
+            height=28,
         )
-        lbl_icon.setFixedWidth(20)
-        lay.addWidget(lbl_icon)
-
-        self.inp_search = QLineEdit()
-        self.inp_search.setPlaceholderText("بحث بالاسم...")
-        self.inp_search.setMinimumHeight(28)
-        self.inp_search.setStyleSheet("""
-            QLineEdit {
-                background: white;
-                border: 1px solid #c5cae9;
-                border-radius: 4px;
-                padding: 2px 8px;
-                font-size: 12px;
-            }
-            QLineEdit:focus { border-color: #1565c0; }
-        """)
-        self._search_timer = QTimer()
-        self._search_timer.setSingleShot(True)
-        self._search_timer.setInterval(250)
-        self._search_timer.timeout.connect(self.filter_changed.emit)
-        self.inp_search.textChanged.connect(
-            lambda: self._search_timer.start()
-        )
-        lay.addWidget(self.inp_search, stretch=2)
-
-        self.btn_clear_search = QPushButton("✖")
-        self.btn_clear_search.setFixedSize(24, 24)
-        self.btn_clear_search.setStyleSheet("""
-            QPushButton {
-                background: transparent;
-                border: none;
-                color: #999;
-                font-size: 11px;
-            }
-            QPushButton:hover { color: #e53935; }
-        """)
-        self.btn_clear_search.setToolTip("مسح البحث")
-        self.btn_clear_search.clicked.connect(self._clear_search)
-        lay.addWidget(self.btn_clear_search)
+        self._search_bar.search_changed.connect(lambda _: self.filter_changed.emit())
+        # expose inp_search للتوافق مع الكود القديم
+        self.inp_search = self._search_bar.inp
+        lay.addWidget(self._search_bar, stretch=2)
 
         sep = QLabel("│")
         sep.setStyleSheet(
@@ -140,6 +111,7 @@ class FilterBar(QWidget, LiveConnMixin):
         lay.addWidget(btn_reset)
 
         self.lbl_count = QLabel("")
+        from PyQt5.QtCore import Qt
         self.lbl_count.setStyleSheet(
             "color:#1565c0; font-size:10px; font-weight:bold;"
             "background:transparent; border:none;"
@@ -185,7 +157,7 @@ class FilterBar(QWidget, LiveConnMixin):
             )
             idx = self.cmb_cat.count() - 1
             self.cmb_cat.setItemData(
-                idx, QColor(node["color"]), Qt.ForegroundRole
+                idx, QColor(node["color"]), 0x0100  # Qt.ForegroundRole
             )
             if node["children"]:
                 self._add_cat_nodes(node["children"], depth + 1)
@@ -196,7 +168,7 @@ class FilterBar(QWidget, LiveConnMixin):
 
     @property
     def name_query(self) -> str:
-        return self.inp_search.text().strip().lower()
+        return self._search_bar.text()
 
     @property
     def category_id(self):
@@ -218,13 +190,11 @@ class FilterBar(QWidget, LiveConnMixin):
             self.lbl_count.setText(f"({shown} / {total})")
 
     def reset(self):
-        self.inp_search.blockSignals(True)
+        self._search_bar.clear()
         self.cmb_cat.blockSignals(True)
-        self.inp_search.clear()
         self.cmb_cat.setCurrentIndex(0)
-        self.inp_search.blockSignals(False)
         self.cmb_cat.blockSignals(False)
         self.filter_changed.emit()
 
     def _clear_search(self):
-        self.inp_search.clear()
+        self._search_bar.clear()

@@ -2,6 +2,11 @@
 ui/widgets/shared/list_panel_with_shared.py
 ============================================
 SharedItemsListPanel — قاعدة مشتركة للجداول التي تدعم العناصر المشتركة.
+
+[إصلاح v2]:
+  - استخدام panels بدل ui.helpers
+  - استخدام DataTableWidget بدل make_table المباشر
+  - استخدام confirm_delete من panels
 """
 
 from PyQt5.QtWidgets import (
@@ -10,9 +15,11 @@ from PyQt5.QtWidgets import (
 )
 from PyQt5.QtGui import QColor
 
-from ui.helpers import (
-    make_table, buttons_row, section_label,
-    confirm_delete, danger_button,
+from ui.widgets.shared.panels import (
+    _make_btn,
+    confirm_delete,
+    DataTableWidget,
+    form_section_title,
 )
 from ui.widgets.shared.filter_bar import FilterBar
 from ui.widgets.shared.connection_mixin import LiveConnMixin
@@ -51,7 +58,7 @@ class SharedItemsListPanel(QWidget, LiveConnMixin, SharedOpsMixin):
         root = QVBoxLayout(self)
         root.setContentsMargins(12, 8, 12, 12)
         root.setSpacing(6)
-        root.addWidget(section_label(self.TABLE_TITLE))
+        root.addWidget(form_section_title(self.TABLE_TITLE))
 
         lbl_shared = QLabel("🔗 أخضر = عنصر مشترك وارد من شركة أخرى")
         lbl_shared.setStyleSheet(
@@ -71,28 +78,37 @@ class SharedItemsListPanel(QWidget, LiveConnMixin, SharedOpsMixin):
         self._filter.filter_changed.connect(self._apply_filter)
         root.addWidget(self._filter)
 
-        self.table = make_table(self.TABLE_COLS, stretch_col=1)
+        # ── استخدام DataTableWidget بدل make_table المباشر ──
+        self._data_table = DataTableWidget(
+            columns=self.TABLE_COLS,
+            stretch_col=1,
+            search_placeholder="🔍  بحث...",
+        )
+        self.table = self._data_table.table
         self.table.setAlternatingRowColors(True)
         self._setup_column_widths(self.table)
-        root.addWidget(self.table)
+        # إخفاء الهيدر الداخلي لـ DataTableWidget لأن عندنا FilterBar خارجي
+        self._data_table.header.setVisible(False)
+        root.addWidget(self._data_table)
 
         root.addLayout(self._build_buttons())
 
     def _build_buttons(self):
-        btn_edit        = QPushButton("✏️  تعديل")
-        btn_del         = danger_button("🗑️  حذف")
-        btn_edit_shared = QPushButton("🔗  تعديل المشترك")
-        btn_publish     = QPushButton("📤  نشر كمشترك")
+        from PyQt5.QtWidgets import QHBoxLayout
+        btn_edit        = _make_btn("✏️  تعديل", "normal")
+        btn_del         = _make_btn("🗑️  حذف", "danger")
+        btn_edit_shared = _make_btn("🔗  تعديل المشترك", "normal")
+        btn_publish     = _make_btn("📤  نشر كمشترك", "primary")
 
-        # ✅ f-string واحدة متكاملة لكل زر
         btn_edit_shared.setStyleSheet(f"""
             QPushButton {{
                 background: {_SHARED_BG};
                 color: {_SHARED_COLOR};
                 border: 1px solid #a5d6a7;
-                border-radius: 4px;
-                padding: 4px 10px;
+                border-radius: 6px;
+                padding: 0 14px;
                 font-weight: bold;
+                min-height: 30px;
             }}
             QPushButton:hover {{ background: #c8e6c9; }}
         """)
@@ -102,9 +118,10 @@ class SharedItemsListPanel(QWidget, LiveConnMixin, SharedOpsMixin):
                 background: {_PUBLISHED_BG};
                 color: {_PUBLISHED_COLOR};
                 border: 1px solid #90caf9;
-                border-radius: 4px;
-                padding: 4px 10px;
+                border-radius: 6px;
+                padding: 0 14px;
                 font-weight: bold;
+                min-height: 30px;
             }}
             QPushButton:hover {{ background: #bbdefb; }}
         """)
@@ -112,17 +129,7 @@ class SharedItemsListPanel(QWidget, LiveConnMixin, SharedOpsMixin):
         btns = [btn_edit, btn_del]
 
         if self.HAS_BULK_REPLACE:
-            btn_replace = QPushButton("🔄  استبدال شامل")
-            btn_replace.setStyleSheet("""
-                QPushButton {
-                    background: #e65100;
-                    color: white;
-                    border-radius: 4px;
-                    padding: 4px 10px;
-                    font-weight: bold;
-                }
-                QPushButton:hover { background: #bf360c; }
-            """)
+            btn_replace = _make_btn("🔄  استبدال شامل", "danger")
             btn_replace.clicked.connect(self._on_bulk_replace)
             btns.append(btn_replace)
 
@@ -136,7 +143,12 @@ class SharedItemsListPanel(QWidget, LiveConnMixin, SharedOpsMixin):
         btn_edit_shared.clicked.connect(self._on_edit_shared)
         btn_publish.clicked.connect(self._on_publish)
 
-        return buttons_row(*btns)
+        lay = QHBoxLayout()
+        lay.setSpacing(6)
+        for btn in btns:
+            lay.addWidget(btn)
+        lay.addStretch()
+        return lay
 
     # ── Override hooks ─────────────────────────────────────
 
@@ -295,3 +307,8 @@ class SharedItemsListPanel(QWidget, LiveConnMixin, SharedOpsMixin):
             return
         item_data = self._get_item_data_for_publish(row)
         self._publish_item(row, self.SHARED_TYPE, item_data, self)
+
+    # ── للتوافق مع confirm_delete في panels ───────────────
+
+    def _confirm_delete(self, name: str, extra: str = "") -> bool:
+        return confirm_delete(self, name, extra_msg=extra)
