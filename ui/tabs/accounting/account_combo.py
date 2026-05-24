@@ -19,7 +19,7 @@ from db.accounting.accounting_repo import (
 from db.accounting.accounting_schema import TYPE_AR
 from ui.events import bus
 from ui.font_utils import badge_style, badge_width
-from ui.tabs.accounting.safe_conn_mixin import SafeConnMixin
+from ui.widgets.shared.safe_conn_mixin import SafeConnMixin
 from .helpers import TYPE_COLORS
 
 

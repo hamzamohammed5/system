@@ -2,6 +2,12 @@
 ui/tabs/accounting/ledger/ledger_filter_bar.py
 ===============================================
 _LedgerFilterBar — شريط فلاتر دفتر الأستاذ.
+
+[إصلاح v2]:
+  - __init__ يقبل conn اختياري — مطلوب فقط لو فيه فلاتر تحتاجه مستقبلاً.
+  - لا تحفظ conn داخلياً — الـ LedgerTab هي المسؤولة عن تمرير conn حي
+    لأي query عبر _TAccountPanel.load(conn, account_id).
+  - الـ matches() و set_count() تعمل بدون أي DB access — فلترة محلية فقط.
 """
 
 from PyQt5.QtWidgets import (
@@ -12,7 +18,7 @@ from PyQt5.QtCore import Qt, QDate
 
 
 class _LedgerFilterBar(QFrame):
-    """شريط فلاتر متكامل لدفتر الأستاذ."""
+    """شريط فلاتر متكامل لدفتر الأستاذ — لا يحتاج DB access."""
 
     def __init__(self, parent=None):
         super().__init__(parent)
@@ -136,6 +142,7 @@ class _LedgerFilterBar(QFrame):
         self.dt_to.setDate(QDate.currentDate())
 
     def matches(self, line: dict) -> bool:
+        """فلترة محلية بالكامل — لا تحتاج DB access."""
         q = self.inp_search.text().strip().lower()
         if q:
             desc  = (line.get("description") or "").lower()
@@ -153,7 +160,6 @@ class _LedgerFilterBar(QFrame):
         date_str = line.get("date", "")
         if date_str:
             try:
-                from PyQt5.QtCore import QDate
                 line_date = QDate.fromString(date_str, "yyyy-MM-dd")
                 if line_date < self.dt_from.date() or line_date > self.dt_to.date():
                     return False

@@ -17,7 +17,7 @@ from db.accounting.accounting_repo import income_statement
 from ui.helpers import make_table, section_label
 from ui.events  import bus
 from ui.tabs.accounting.helpers import _money, _stat_card
-from ui.tabs.accounting.safe_conn_mixin import SafeConnMixin
+from ui.widgets.shared.safe_conn_mixin import SafeConnMixin
 
 
 class IncomeStatementTab(SafeConnMixin, QWidget):

@@ -20,7 +20,7 @@ from db.accounting.accounting_repo import (
 from db.accounting.accounting_schema import TYPE_AR
 from ui.helpers import danger_button
 from ui.events  import bus
-from ui.tabs.accounting.safe_conn_mixin import SafeConnMixin
+from ui.widgets.shared.safe_conn_mixin import SafeConnMixin
 
 
 def _get_current_company_id():

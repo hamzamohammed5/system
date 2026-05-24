@@ -22,7 +22,7 @@ from .investors._investor_form       import _InvestorForm
 from .investors._investors_table     import _InvestorsTable
 from .investors._investor_details    import _InvestorDetails
 from .investors._link_to_entry_panel import _LinkToEntryPanel
-from ui.tabs.accounting.safe_conn_mixin import SafeConnMixin
+from ui.widgets.shared.safe_conn_mixin import SafeConnMixin
 from ui.events import bus
 
 

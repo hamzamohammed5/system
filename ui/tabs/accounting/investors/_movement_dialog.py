@@ -17,7 +17,7 @@ from PyQt5.QtWidgets import (
 from PyQt5.QtCore import Qt, QDate
 
 from ui.events import bus
-from ui.tabs.accounting.safe_conn_mixin import SafeConnMixin
+from ui.widgets.shared.safe_conn_mixin import SafeConnMixin
 from ._helpers import (
     _spin, _fill_capital_combo, _fill_drawings_combo, _fill_asset_combo,
     _post_capital_entry, _post_drawings_entry,

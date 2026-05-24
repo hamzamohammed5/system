@@ -14,7 +14,7 @@ from PyQt5.QtWidgets import (
     QMessageBox,
 )
 
-from ui.tabs.accounting.safe_conn_mixin import SafeConnMixin
+from ui.widgets.shared.safe_conn_mixin import SafeConnMixin
 from ._smart_line import _SmartLine
 
 

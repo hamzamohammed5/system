@@ -15,7 +15,7 @@ from PyQt5.QtGui import QColor
 from db.accounting.accounting_repo import trial_balance, get_normal_balance
 from ui.helpers import make_table, section_label
 from ui.events  import bus
-from ui.tabs.accounting.safe_conn_mixin import SafeConnMixin
+from ui.widgets.shared.safe_conn_mixin import SafeConnMixin
 
 
 class TrialBalanceTab(SafeConnMixin, QWidget):

@@ -21,7 +21,7 @@ from PyQt5.QtGui  import QColor, QFont, QStandardItemModel, QStandardItem
 from db.accounting.accounting_repo import fetch_all_groups, build_group_tree
 from db.accounting.accounting_schema import TYPE_AR, EQUITY_TYPES
 from ui.events import bus
-from ui.tabs.accounting.safe_conn_mixin import SafeConnMixin
+from ui.widgets.shared.safe_conn_mixin import SafeConnMixin
 from ..helpers  import TYPE_COLORS
 
 _TYPE_ORDER = ["asset", "liability", "capital", "drawings", "revenue", "expense"]

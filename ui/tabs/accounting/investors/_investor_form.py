@@ -21,7 +21,7 @@ from db.inventory.investors_repo import (
 )
 from ui.helpers import EditModeMixin
 from ui.events  import bus
-from ui.tabs.accounting.safe_conn_mixin import SafeConnMixin
+from ui.widgets.shared.safe_conn_mixin import SafeConnMixin
 from ._helpers  import (
     _spin, _fill_capital_combo, _fill_asset_combo,
     _post_capital_entry,

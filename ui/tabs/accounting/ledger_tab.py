@@ -16,7 +16,7 @@ from PyQt5.QtCore import Qt
 
 from .ledger.ledger_accounts_panel import _AccountsPanel
 from .ledger.ledger_t_account import _TAccountPanel
-from ui.tabs.accounting.safe_conn_mixin import SafeConnMixin
+from ui.widgets.shared.safe_conn_mixin import SafeConnMixin
 from ui.events import bus
 
 

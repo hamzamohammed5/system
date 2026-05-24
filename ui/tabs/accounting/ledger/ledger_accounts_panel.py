@@ -20,7 +20,7 @@ from PyQt5.QtGui  import QColor
 
 from db.accounting.accounting_repo import fetch_all_accounts
 from db.accounting.accounting_schema import TYPE_AR
-from ui.tabs.accounting.safe_conn_mixin import SafeConnMixin
+from ui.widgets.shared.safe_conn_mixin import SafeConnMixin
 from ui.tabs.accounting.helpers import TYPE_COLORS
 
 

@@ -22,7 +22,7 @@ from db.accounting.accounting_repo import (
 from db.accounting.accounting_schema import TYPE_AR
 from ui.helpers import section_label, danger_button
 from ui.events  import bus
-from ui.tabs.accounting.safe_conn_mixin import SafeConnMixin
+from ui.widgets.shared.safe_conn_mixin import SafeConnMixin
 
 
 class _GroupManagerPanel(SafeConnMixin, QWidget):

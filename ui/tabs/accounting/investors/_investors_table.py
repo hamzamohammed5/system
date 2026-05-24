@@ -24,7 +24,7 @@ from ui.helpers import (
     section_label, danger_button, confirm_delete,
 )
 from ui.events import bus
-from ui.tabs.accounting.safe_conn_mixin import SafeConnMixin
+from ui.widgets.shared.safe_conn_mixin import SafeConnMixin
 from ._investor_form    import _InvestorForm
 from ._movement_dialog  import _MovementDialog
 

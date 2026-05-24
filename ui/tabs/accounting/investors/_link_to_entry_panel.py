@@ -18,7 +18,7 @@ from PyQt5.QtCore import Qt
 
 from db.inventory.investors_repo import fetch_all_investors, link_investor_to_line
 from ui.events import bus
-from ui.tabs.accounting.safe_conn_mixin import SafeConnMixin
+from ui.widgets.shared.safe_conn_mixin import SafeConnMixin
 from ._helpers import _spin
 
 

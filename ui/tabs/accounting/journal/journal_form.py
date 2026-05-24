@@ -21,7 +21,7 @@ from db.accounting.accounting_repo import (
 )
 from ui.helpers import buttons_row
 from ui.events  import bus
-from ui.tabs.accounting.safe_conn_mixin import SafeConnMixin
+from ui.widgets.shared.safe_conn_mixin import SafeConnMixin
 from .journal_lines import _LinesPanel
 
 

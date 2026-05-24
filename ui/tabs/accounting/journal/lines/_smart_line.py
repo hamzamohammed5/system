@@ -20,7 +20,7 @@ from PyQt5.QtCore import Qt
 from db.accounting.accounting_repo import fetch_account, get_normal_balance
 from db.accounting.accounting_schema import NORMAL_BALANCE
 from ui.events import bus
-from ui.tabs.accounting.safe_conn_mixin import SafeConnMixin
+from ui.widgets.shared.safe_conn_mixin import SafeConnMixin
 from ..journal_account_picker import _AccountPickerButton
 
 _INVESTOR_TYPES = {"capital", "drawings"}

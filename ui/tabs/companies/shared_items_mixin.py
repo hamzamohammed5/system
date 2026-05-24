@@ -6,6 +6,11 @@ ui/tabs/companies/shared_items_mixin.py
 2. العنصر الأصلي يظهر بعلامة 🔗 في الشركة اللي نشرته:
    - get_published_local_ids() ترجع IDs المحلية المنشورة كمشتركة
 3. remove_local_duplicates تمنع ظهور العنصر مرتين
+
+[إصلاح v2]:
+  - get_published_local_names(): استخدام try/finally لضمان central.close()
+    حتى لو execute() رمى exception — منع connection leak.
+  - _fetch_shared(): نفس الإصلاح — try/finally حول central.execute().
 """
 
 import json
@@ -113,13 +118,14 @@ def _resolve_category_name_from_local(item_name: str, shared_type: str) -> str |
 
 # ══════════════════════════════════════════════════════════
 # العناصر المحلية المنشورة كمشتركة
-# (للشركة الأصلية عشان تعرف تعلم عليها بـ 🔗)
 # ══════════════════════════════════════════════════════════
 
 def get_published_local_names(shared_type: str) -> set:
     """
     يرجع set من أسماء العناصر المحلية اللي اتنشرت كمشتركة من الشركة الحالية.
     يُستخدم في الجداول عشان نعلم على العناصر الأصلية بـ 🔗.
+
+    [إصلاح v2]: try/finally يضمن central.close() حتى عند الخطأ.
     """
     try:
         company_id = _get_company_id()
@@ -128,13 +134,15 @@ def get_published_local_names(shared_type: str) -> set:
 
         from db.companies.companies_schema import get_central_connection
         central = get_central_connection()
-        rows = central.execute("""
-            SELECT s.name
-            FROM company_shared_links lnk
-            JOIN shared_items s ON s.id = lnk.shared_item_id
-            WHERE lnk.company_id = ? AND s.shared_type = ?
-        """, (company_id, shared_type)).fetchall()
-        central.close()
+        try:
+            rows = central.execute("""
+                SELECT s.name
+                FROM company_shared_links lnk
+                JOIN shared_items s ON s.id = lnk.shared_item_id
+                WHERE lnk.company_id = ? AND s.shared_type = ?
+            """, (company_id, shared_type)).fetchall()
+        finally:
+            central.close()
 
         return {r["name"].strip().lower() for r in rows}
     except Exception as e:
@@ -153,6 +161,8 @@ def _fetch_shared(shared_type: str) -> list:
       1. من data["category_name"] لو موجود
       2. من erp.db المحلي عن طريق الاسم (fallback)
       3. None لو مش موجود (الجدول يعرض "—")
+
+    [إصلاح v2]: try/finally يضمن central.close() حتى عند الخطأ.
     """
     try:
         company_id = _get_company_id()
@@ -161,14 +171,16 @@ def _fetch_shared(shared_type: str) -> list:
 
         from db.companies.companies_schema import get_central_connection
         central = get_central_connection()
-        rows = central.execute("""
-            SELECT s.id, s.name, s.shared_type, s.data, s.updated_at
-            FROM company_shared_links lnk
-            JOIN shared_items s ON s.id = lnk.shared_item_id
-            WHERE lnk.company_id = ? AND s.shared_type = ?
-            ORDER BY s.name
-        """, (company_id, shared_type)).fetchall()
-        central.close()
+        try:
+            rows = central.execute("""
+                SELECT s.id, s.name, s.shared_type, s.data, s.updated_at
+                FROM company_shared_links lnk
+                JOIN shared_items s ON s.id = lnk.shared_item_id
+                WHERE lnk.company_id = ? AND s.shared_type = ?
+                ORDER BY s.name
+            """, (company_id, shared_type)).fetchall()
+        finally:
+            central.close()
 
         result = []
         for row in rows:

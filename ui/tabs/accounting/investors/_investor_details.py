@@ -25,7 +25,7 @@ from ui.helpers import (
     section_label, danger_button,
 )
 from ui.events import bus
-from ui.tabs.accounting.safe_conn_mixin import SafeConnMixin
+from ui.widgets.shared.safe_conn_mixin import SafeConnMixin
 from ._helpers import _stat_card
 
 
