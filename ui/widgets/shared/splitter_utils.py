@@ -2,6 +2,10 @@
 ui/widgets/shared/splitter_utils.py
 =====================================
 SmartSplitter — أدوات مساعدة للـ splitter.
+
+[إصلاح v2]:
+  - SmartSplitter._apply_style تستخدم get_splitter_style() من theme بدل inline style
+  - fit_list_panel_delayed توحّد delay=0 مع delay>0 في branch واحد
 """
 
 from PyQt5.QtWidgets import QSplitter, QTableWidget, QWidget, QSizePolicy
@@ -65,20 +69,29 @@ def fit_list_panel(splitter: QSplitter,
     return target
 
 
-def fit_list_panel_delayed(splitter, list_index, table,
-                            delay_ms=0, min_w=_MIN_LIST_W, max_w=_MAX_LIST_W):
-    if delay_ms <= 0:
-        fit_list_panel(splitter, list_index, table, min_w, max_w)
-    else:
-        QTimer.singleShot(
-            delay_ms,
-            lambda: fit_list_panel(splitter, list_index, table, min_w, max_w)
-        )
+def fit_list_panel_delayed(splitter: QSplitter,
+                            list_index: int,
+                            table: QTableWidget,
+                            delay_ms: int = 0,
+                            min_w: int = _MIN_LIST_W,
+                            max_w: int = _MAX_LIST_W):
+    """
+    يضبط عرض لوحة القائمة بعد delay اختياري.
+    delay_ms=0 يعمل synchronously عبر QTimer.singleShot(0, ...) لضمان
+    أن الـ layout اتحسب قبل الضبط.
+    """
+    QTimer.singleShot(
+        delay_ms,
+        lambda: fit_list_panel(splitter, list_index, table, min_w, max_w)
+    )
 
 
 class SmartSplitter(QSplitter):
     """
     QSplitter مساعد — محتفظ به للتوافق مع الكود القديم.
+
+    [إصلاح v2]: _apply_style تستخدم get_splitter_style() من theme
+    بدل تكرار CSS inline.
     """
 
     def __init__(self, orientation=Qt.Horizontal, parent=None):
@@ -93,12 +106,9 @@ class SmartSplitter(QSplitter):
         self._apply_style()
 
     def _apply_style(self):
-        from ui.app_settings import _C
-        self.setStyleSheet(f"""
-            QSplitter::handle {{ background: {_C['border']}; }}
-            QSplitter::handle:hover {{ background: {_C['accent_mid']}; }}
-            QSplitter::handle:pressed {{ background: {_C['accent']}; }}
-        """)
+        # استخدام get_splitter_style() الموحدة من theme بدل inline CSS
+        from ui.widgets.shared.panles_helper.theme import get_splitter_style
+        self.setStyleSheet(get_splitter_style())
 
     def set_list_widget(self, widget: QWidget,
                         list_table: QTableWidget,
@@ -129,7 +139,10 @@ class SmartSplitter(QSplitter):
     def fit_delayed(self, delay_ms: int = 50):
         if self._table is None:
             return
-        QTimer.singleShot(delay_ms, self.fit_now)
+        fit_list_panel_delayed(
+            self, self._list_index, self._table,
+            delay_ms, self._min_w, self._max_w
+        )
 
     def resizeEvent(self, event):
         super().resizeEvent(event)

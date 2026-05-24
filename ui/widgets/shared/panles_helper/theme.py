@@ -3,20 +3,12 @@ ui/widgets/shared/panles_helper/theme.py
 =========================================
 ثيم موحد لكل مكونات UI — مصدر واحد للألوان والستايلات.
 
-يُستخدم من كل ملفات UI بدل تكرار الألوان والستايلات.
-
-المتوفر:
-  - COLORS             : dict ألوان التطبيق
-  - STATUS_COLORS      : dict ألوان الحالات
-  - get_input_style()  : ستايل موحد لـ QLineEdit/QComboBox
-  - get_btn_style()    : ستايل موحد للأزرار
-  - get_card_style()   : ستايل موحد للبطاقات
-  - get_table_header_style() : ستايل موحد لرأس الجداول
-  - get_group_box_style()    : ستايل موحد لـ QGroupBox
-  - get_frame_style()        : ستايل موحد لـ QFrame
-  - get_scroll_style()       : ستايل موحد لـ QScrollArea
+[إصلاح v2]:
+  - إضافة make_divider() دالة مشتركة بدل تكرارها في كل ملف
+  - إضافة make_vline_sep() للفواصل العمودية في الـ toolbars
 """
 
+from PyQt5.QtWidgets import QFrame
 from ui.app_settings import _C, fs
 from .colors_and_base import _base
 
@@ -26,15 +18,53 @@ from .colors_and_base import _base
 # ══════════════════════════════════════════════════════════
 
 STATUS_COLORS = {
-    "success":  {"fg": "#065f46", "bg": "#ecfdf5", "border": "#6ee7b7"},
-    "warning":  {"fg": "#92400e", "bg": "#fffbeb", "border": "#fcd34d"},
-    "danger":   {"fg": "#991b1b", "bg": "#fef2f2", "border": "#fca5a5"},
-    "info":     {"fg": "#1e40af", "bg": "#eff6ff", "border": "#93c5fd"},
-    "neutral":  {"fg": "#374151", "bg": "#f9fafb", "border": "#d1d5db"},
-    "primary":  {"fg": "#1565c0", "bg": "#e8f0fe", "border": "#90caf9"},
-    "purple":   {"fg": "#6a1b9a", "bg": "#f3e5f5", "border": "#ce93d8"},
-    "orange":   {"fg": "#e65100", "bg": "#fff3e0", "border": "#ffcc80"},
+    "success": {"fg": "#065f46", "bg": "#ecfdf5", "border": "#6ee7b7"},
+    "warning": {"fg": "#92400e", "bg": "#fffbeb", "border": "#fcd34d"},
+    "danger":  {"fg": "#991b1b", "bg": "#fef2f2", "border": "#fca5a5"},
+    "info":    {"fg": "#1e40af", "bg": "#eff6ff", "border": "#93c5fd"},
+    "neutral": {"fg": "#374151", "bg": "#f9fafb", "border": "#d1d5db"},
+    "primary": {"fg": "#1565c0", "bg": "#e8f0fe", "border": "#90caf9"},
+    "purple":  {"fg": "#6a1b9a", "bg": "#f3e5f5", "border": "#ce93d8"},
+    "orange":  {"fg": "#e65100", "bg": "#fff3e0", "border": "#ffcc80"},
 }
+
+
+# ══════════════════════════════════════════════════════════
+# فواصل موحدة — تُستخدم في detail_header وغيره
+# ══════════════════════════════════════════════════════════
+
+def make_divider(color: str = None, height: int = 1) -> QFrame:
+    """
+    يبني فاصل أفقي (HLine) بلون موحد من الـ theme.
+
+    الاستخدام:
+        root.addWidget(make_divider())
+        root.addWidget(make_divider(color="#e0e0e0"))
+    """
+    c = color or _C.get('border', '#e0e0e0')
+    div = QFrame()
+    div.setFrameShape(QFrame.HLine)
+    div.setFixedHeight(height)
+    div.setStyleSheet(f"background:{c}; border:none;")
+    return div
+
+
+def make_vline_sep(color: str = None, width: int = 1,
+                   margin_v: int = 4) -> QFrame:
+    """
+    يبني فاصل عمودي (VLine) للـ toolbars.
+
+    الاستخدام:
+        toolbar_lay.addWidget(make_vline_sep())
+    """
+    c = color or _C.get('border_med', '#bdbdbd')
+    sep = QFrame()
+    sep.setFrameShape(QFrame.VLine)
+    sep.setFixedWidth(width)
+    sep.setStyleSheet(
+        f"background:{c}; border:none; margin:{margin_v}px 2px;"
+    )
+    return sep
 
 
 # ══════════════════════════════════════════════════════════
@@ -277,7 +307,6 @@ def get_link_btn_style(color: str = None) -> str:
 
 def get_tab_style(accent: str = None, size: str = "normal") -> str:
     """ستايل موحد للتبويبات."""
-    from ui.app_settings import _C, fs
     base = _base()
     c = accent or _C['accent']
     padding = "8px 16px" if size == "normal" else "6px 12px"

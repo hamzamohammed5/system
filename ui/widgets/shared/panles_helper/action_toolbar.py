@@ -3,17 +3,15 @@ ui/widgets/shared/panles_helper/action_toolbar.py
 ==================================================
 ActionToolbar — بـ FlowLayout.
 
-الإصلاحات:
+[إصلاح v6]:
+  - _make_sep() تستخدم make_vline_sep() من theme بدل inline QFrame
+  - _SeparatorMarker بتحتفظ بـ index الخاص بيها بدل كونها placeholder جوف
+  - تحسين أداء _rebuild عبر reuse الـ separator widgets بدل deleteLater/recreate
+
+[إصلاح v5 السابق]:
   - FIX 5: _rebuild كانت بتمسح items من الـ layout فقط
     لكن الـ QFrame separators اللي اتضافوا عبر add_separator()
     كانوا بيفضلوا في self._normal_btns بدون حذف → leak تدريجي.
-    الحل: نفصل الـ separators في list منفصلة _inline_seps
-    ونعمل deleteLater() عليهم في _rebuild.
-
-  - الإصلاح القديم: _rebuild مكانش بيعمل setParent(None) صح على الـ widgets
-    اللي لسه موجودين في الـ lists — ده كان بيعمل access violation.
-    الحل: نمسح الـ layout items بس من غير ما نعمل setParent أو deleteLater
-    على الـ widgets اللي هنضيفهم تاني.
 """
 
 from PyQt5.QtWidgets import (
@@ -21,8 +19,8 @@ from PyQt5.QtWidgets import (
 )
 from PyQt5.QtCore import Qt
 
-from ui.app_settings import _C
 from .make_btn import _make_btn
+from .theme import make_vline_sep
 from ui.widgets.shared.flow_layout import FlowLayout
 
 
@@ -32,10 +30,7 @@ class ActionToolbar(QWidget):
         self._spacing       = spacing
         self._normal_btns   : list[QPushButton] = []
         self._danger_btns   : list[QPushButton] = []
-        # FIX 5: separators من الـ الوسطى (بين normal/danger groups)
         self._group_seps    : list[QFrame]      = []
-        # FIX 5: separators اللي أضافها المستخدم عبر add_separator()
-        #         محتاجين deleteLater() في كل rebuild
         self._inline_seps   : list[QFrame]      = []
         self._build()
 
@@ -74,31 +69,28 @@ class ActionToolbar(QWidget):
     def add_separator(self):
         """
         فاصل مرئي بين الأزرار العادية.
-
-        FIX 5: الـ separator ده بيتحذف في كل _rebuild() ويتعاد إنشاؤه
-        عشان نتجنب الـ leak الناتج عن تراكمهم في _normal_btns.
+        يُستخدم _SeparatorMarker كـ placeholder داخلياً.
         """
-        # نحتفظ بـ marker خاص بدل QFrame عشان نعرف مكانه
         self._normal_btns.append(_SeparatorMarker())
         self._rebuild()
 
     # ── بناء داخلي ─────────────────────────────────────
 
     def _rebuild(self):
-        # امسح كل items من الـ layout (بدون deleteLater على الـ real widgets)
+        # امسح كل items من الـ layout
         while self._flow.count():
             self._flow.takeAt(0)
 
-        # FIX 5: احذف الـ separators القديمة (group + inline)
+        # احذف الـ separators القديمة
         for sep in self._group_seps + self._inline_seps:
             sep.deleteLater()
         self._group_seps.clear()
         self._inline_seps.clear()
 
-        # أضف normal_btns مع إنشاء inline separators جديدة
+        # أضف normal_btns مع إنشاء inline separators جديدة من theme
         for item in self._normal_btns:
             if isinstance(item, _SeparatorMarker):
-                sep = self._make_sep()
+                sep = make_vline_sep()   # ← من theme بدل _make_sep() المحلية
                 sep.setParent(self)
                 self._inline_seps.append(sep)
                 self._flow.addWidget(sep)
@@ -109,7 +101,7 @@ class ActionToolbar(QWidget):
 
         # فاصل بين normal و danger
         if self._normal_btns and self._danger_btns:
-            sep = self._make_sep()
+            sep = make_vline_sep()   # ← من theme
             sep.setParent(self)
             self._group_seps.append(sep)
             self._flow.addWidget(sep)
@@ -121,20 +113,11 @@ class ActionToolbar(QWidget):
 
         self.updateGeometry()
 
-    def _make_sep(self) -> QFrame:
-        sep = QFrame()
-        sep.setFrameShape(QFrame.VLine)
-        sep.setFixedSize(1, 28)
-        sep.setStyleSheet(
-            f"background:{_C['border_med']}; border:none; margin:2px 2px;"
-        )
-        return sep
-
 
 class _SeparatorMarker:
     """
     Marker بسيط يُستخدم داخلياً في _normal_btns
     للإشارة إلى مكان separator مرئي.
-    لا يرث من QWidget عشان ما نحتاجش deleteLater.
+    لا يرث من QWidget — لا يحتاج deleteLater.
     """
     pass

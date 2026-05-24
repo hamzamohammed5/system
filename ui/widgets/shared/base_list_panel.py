@@ -3,13 +3,11 @@ ui/widgets/shared/base_list_panel.py
 =====================================
 BaseListPanel — قاعدة مشتركة لكل لوحات القوائم.
 
-[تحديث v5]:
-  - FilterToolbar بدل ListHeader المجرد — يدعم تصنيفات وتاريخ
-  - BusConnectedMixin للربط التلقائي
-  - _fill_table منفصلة عن _apply_filter لوضوح أكبر
-  - SHOW_CATEGORY و SHOW_DATE للتحكم في الفلاتر
-  - select_item محسّنة تشغّل signal تلقائياً
-  - _build_extra_header_actions بدل _build_extra_toolbar للوضوح
+[إصلاح v6]:
+  - _get_search_query و _get_category_filter بدل من الاستدعاء المباشر
+    بيستخدموا FilterToolbar.name_query و .category_id مباشرة
+  - _build_header موحدة بدل branch مكرر
+  - إزالة تكرار show_search=False / show_search=True logic المنتشرة
 """
 
 from PyQt5.QtWidgets import (
@@ -23,8 +21,8 @@ from .table_utils import (
     fit_splitter_table,
     ROW_HEIGHT_LARGE,
 )
-from .panles_helper.empty_state  import EmptyState
-from .panles_helper.list_header  import ListHeader, StatusBar as ListStatusBar
+from .panles_helper.empty_state    import EmptyState
+from .panles_helper.list_header    import ListHeader, StatusBar as ListStatusBar
 from .panles_helper.filter_toolbar import FilterToolbar
 from .shared_ui_mixins import BusConnectedMixin
 
@@ -48,10 +46,10 @@ class BaseListPanel(QWidget, BusConnectedMixin):
     SEARCH_PLACEHOLDER : str = "🔍  بحث..."
 
     # ── فلاتر ──────────────────────────────────────────────
-    SHOW_CATEGORY : bool = False   # True = يظهر فلتر التصنيف
-    SHOW_DATE     : bool = False   # True = يظهر فلتر التاريخ
-    FILTER_SCOPE  : str  = "all"   # نطاق التصنيفات
-    CONNECT_BUS   : bool = True    # True = يربط bus.data_changed تلقائياً
+    SHOW_CATEGORY : bool = False
+    SHOW_DATE     : bool = False
+    FILTER_SCOPE  : str  = "all"
+    CONNECT_BUS   : bool = True
 
     def __init__(self, conn=None, parent=None):
         super().__init__(parent)
@@ -75,20 +73,16 @@ class BaseListPanel(QWidget, BusConnectedMixin):
     # ── override في الـ subclass ──────────────────────────
 
     def _load_rows(self) -> list:
-        """يجلب البيانات من DB — override هنا."""
         return []
 
     def _fill_row(self, table, r: int, row: dict):
-        """يملأ صف واحد في الجدول — override هنا."""
         pass
 
     def _match_filter(self, row: dict, q: str) -> bool:
-        """يتحقق من تطابق الصف مع فلتر البحث — override لو احتجت."""
         name = str(row.get("name", ""))
         return not q or q in name.lower()
 
     def _match_category(self, row: dict, cat_id) -> bool:
-        """يتحقق من تطابق الصف مع فلتر التصنيف — override لو احتجت."""
         if cat_id is None:
             return True
         return row.get("category_id") == cat_id
@@ -97,15 +91,12 @@ class BaseListPanel(QWidget, BusConnectedMixin):
         return row.get("id", 0) if hasattr(row, 'keys') else 0
 
     def _on_add_clicked(self):
-        """يُستدعى عند ضغط زر الإضافة — override هنا."""
         pass
 
     def _on_data_changed(self):
-        """يُستدعى عند bus.data_changed — يمكن override."""
         self.refresh()
 
     def _build_extra_header_actions(self, header: ListHeader):
-        """Override لإضافة أزرار إضافية في الهيدر."""
         pass
 
     # alias للتوافق مع الكود القديم
@@ -121,8 +112,22 @@ class BaseListPanel(QWidget, BusConnectedMixin):
         self.setStyleSheet(f"background:{_C['bg_input']};")
 
         # ── Header ──
+        # دايماً نبني ListHeader للعنوان والأزرار
+        self._header = ListHeader(
+            title=self.LIST_TITLE,
+            add_text=self.ADD_TEXT,
+            show_search=not (self.SHOW_CATEGORY or self.SHOW_DATE),
+            search_placeholder=self.SEARCH_PLACEHOLDER,
+        )
+        if not (self.SHOW_CATEGORY or self.SHOW_DATE):
+            self._header.search_changed.connect(lambda _: self._timer.start())
+        if self.ADD_TEXT:
+            self._header.add_clicked.connect(self._on_add_clicked)
+        self._build_extra_header_actions(self._header)
+        root.addWidget(self._header)
+
+        # ── FilterToolbar (لو محتاج تصنيف أو تاريخ) ──
         if self.SHOW_CATEGORY or self.SHOW_DATE:
-            # استخدم FilterToolbar لو فيه تصنيفات أو تاريخ
             self._filter_toolbar = FilterToolbar(
                 conn=self.conn,
                 scope=self.FILTER_SCOPE,
@@ -133,33 +138,15 @@ class BaseListPanel(QWidget, BusConnectedMixin):
             self._filter_toolbar.filter_changed.connect(
                 lambda: self._timer.start()
             )
-            self._header = ListHeader(
-                title=self.LIST_TITLE,
-                add_text=self.ADD_TEXT,
-                show_search=False,   # البحث موجود في FilterToolbar
-            )
-            if self.ADD_TEXT:
-                self._header.add_clicked.connect(self._on_add_clicked)
-            self._build_extra_header_actions(self._header)
-            root.addWidget(self._header)
             root.addWidget(self._filter_toolbar)
-            # expose inp_search للتوافق
+            # expose inp_search للتوافق مع الكود القديم
             self.inp_search = self._filter_toolbar.inp_search
         else:
-            # ListHeader بسيط مع بحث مدمج
             self._filter_toolbar = None
-            self._header = ListHeader(
-                title=self.LIST_TITLE,
-                add_text=self.ADD_TEXT,
-                show_search=True,
-                search_placeholder=self.SEARCH_PLACEHOLDER,
+            self.inp_search = (
+                self._header.search_bar.inp
+                if self._header.search_bar else None
             )
-            self._header.search_changed.connect(lambda _: self._timer.start())
-            if self.ADD_TEXT:
-                self._header.add_clicked.connect(self._on_add_clicked)
-            self._build_extra_header_actions(self._header)
-            root.addWidget(self._header)
-            self.inp_search = self._header.search_bar.inp if self._header.search_bar else None
 
         # ── الجدول ──
         self._splitter, self.table, self._table_guard = make_splitter_table_guarded(
@@ -191,30 +178,25 @@ class BaseListPanel(QWidget, BusConnectedMixin):
     # ── تحميل وفلترة ────────────────────────────────────
 
     def refresh(self):
-        """يعيد تحميل كل البيانات من DB."""
         self._all_rows = self._load_rows()
-        # reload categories لو FilterToolbar موجودة
         if self._filter_toolbar and self.conn:
             self._filter_toolbar.reload(self.conn)
         self._apply_filter()
 
     def _apply_filter(self):
-        """يطبق الفلاتر الحالية ويعرض النتائج."""
-        q = self._get_search_query()
+        q      = self._get_search_query()
         cat_id = self._get_category_filter()
 
-        filtered = []
-        for row in self._all_rows:
-            if not self._match_filter(row, q):
-                continue
-            if not self._match_category(row, cat_id):
-                continue
-            filtered.append(row)
+        filtered = [
+            row for row in self._all_rows
+            if self._match_filter(row, q) and self._match_category(row, cat_id)
+        ]
 
         self._fill_table(filtered)
         self._update_status(len(filtered))
 
     def _get_search_query(self) -> str:
+        """يرجع نص البحث من أي مصدر متاح."""
         if self._filter_toolbar:
             return self._filter_toolbar.name_query
         if self._header.search_bar:
@@ -222,12 +204,12 @@ class BaseListPanel(QWidget, BusConnectedMixin):
         return ""
 
     def _get_category_filter(self):
+        """يرجع category_id المختار أو None."""
         if self._filter_toolbar:
             return self._filter_toolbar.category_id
         return None
 
     def _fill_table(self, rows: list):
-        """يملأ الجدول بالصفوف المُفلترة."""
         self.table.setRowCount(0)
         for row_data in rows:
             r = self.table.rowCount()
@@ -275,7 +257,6 @@ class BaseListPanel(QWidget, BusConnectedMixin):
                 self.item_selected.emit(int(data))
 
     def select_item(self, item_id: int):
-        """يحدد عنصر في الجدول ويطلق signal التحديد."""
         for r in range(self.table.rowCount()):
             item = self.table.item(r, 0)
             if item and item.data(Qt.UserRole) == item_id:

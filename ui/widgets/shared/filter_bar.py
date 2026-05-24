@@ -1,15 +1,13 @@
 """
 ui/widgets/shared/filter_bar.py
-========================
+================================
 FilterBar — شريط فلتر مشترك.
 
-[تحديث v3]:
-  - يرث من FilterToolbar مباشرة عشان ما نكرر الكود
-  - يحافظ على نفس الـ API القديم للتوافق مع الكود الموجود
-  - LiveConnMixin للـ connection
+[إصلاح v4]:
+  - حذف تعريف filter_changed المكرر — الـ signal موروث من FilterToolbar
+  - LiveConnMixin للـ connection مع lazy reload
+  - _on_data_changed أبسط بدون try/except مكرر
 """
-
-from PyQt5.QtCore import pyqtSignal
 
 from ui.widgets.shared.panles_helper.filter_toolbar import FilterToolbar
 from ui.widgets.shared.connection_mixin import LiveConnMixin
@@ -23,7 +21,9 @@ class FilterBar(FilterToolbar, LiveConnMixin):
     يرث من FilterToolbar مع إضافة:
       - LiveConnMixin للـ connection
       - ربط تلقائي بـ bus.data_changed لإعادة تحميل التصنيفات
-      - set_count() للعداد
+      - set_count() للعداد (موروث من FilterToolbar)
+
+    ملاحظة: filter_changed موروث من FilterToolbar — لا يُعاد تعريفه.
 
     الاستخدام (متوافق مع الكود القديم):
         bar = FilterBar(conn, scope="raw")
@@ -35,10 +35,8 @@ class FilterBar(FilterToolbar, LiveConnMixin):
         bar.set_count(shown, total)
     """
 
-    filter_changed = pyqtSignal()
-
     def __init__(self, conn, scope: str = "all", parent=None):
-        self.conn  = conn    # LiveConnMixin يقرأ self.conn
+        self.conn   = conn    # LiveConnMixin يقرأ self.conn
         self._scope = scope
         super().__init__(
             conn=conn,
@@ -51,8 +49,7 @@ class FilterBar(FilterToolbar, LiveConnMixin):
         bus.data_changed.connect(self._on_data_changed)
 
     def _on_data_changed(self):
-        try:
-            conn = self._live_conn()
+        """يعيد تحميل التصنيفات عند تغيير البيانات."""
+        conn = self._live_conn()
+        if conn is not None:
             self.reload(conn)
-        except Exception:
-            pass

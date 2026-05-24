@@ -3,10 +3,10 @@ ui/widgets/shared/panles_helper/detail_header.py
 =================================================
 DetailHeader — هيدر موحد لصفحات التفاصيل.
 
-الإصلاح الرئيسي:
+[إصلاح v2]:
+  - _make_divider() تستخدم make_divider() من theme بدل تعريف local
   - toolbar_section بـ Preferred size policy عشان يتمدد عمودياً
   - ActionToolbar بـ FlowLayout — الأزرار تنزل لسطر تاني تلقائياً
-  - الهيدر نفسه مش Fixed height — بيكبر مع الأزرار
 """
 
 from PyQt5.QtWidgets import (
@@ -22,6 +22,7 @@ from .badge_label    import BadgeLabel
 from .info_row       import InfoRow
 from .action_toolbar import ActionToolbar
 from .colors_and_base import _base
+from .theme import make_divider
 
 
 class DetailHeader(QFrame):
@@ -38,7 +39,6 @@ class DetailHeader(QFrame):
                 border-bottom: 1px solid {_C['border']};
             }}
         """)
-        # Preferred — يكبر عمودياً حسب محتواه
         self.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Preferred)
 
         root = QVBoxLayout(self)
@@ -103,7 +103,7 @@ class DetailHeader(QFrame):
         top_lay.addWidget(self._info_row)
 
         root.addWidget(top_section)
-        root.addWidget(self._make_divider())
+        root.addWidget(make_divider())   # ← من theme بدل _make_divider()
 
         # ══ البطاقات الإحصائية ══
         cards_section = QWidget()
@@ -117,12 +117,11 @@ class DetailHeader(QFrame):
         cards_lay.addLayout(self._cards_row)
 
         root.addWidget(cards_section)
-        root.addWidget(self._make_divider())
+        root.addWidget(make_divider())   # ← من theme بدل _make_divider()
 
         # ══ شريط الأزرار — Preferred size policy ══
         toolbar_section = QWidget()
         toolbar_section.setStyleSheet("background:transparent;")
-        # ← المهم: Preferred عشان يتمدد عمودياً مع الأزرار
         toolbar_section.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Preferred)
 
         tb_lay = QVBoxLayout(toolbar_section)
@@ -133,14 +132,6 @@ class DetailHeader(QFrame):
         tb_lay.addWidget(self.toolbar)
 
         root.addWidget(toolbar_section)
-
-    @staticmethod
-    def _make_divider() -> QFrame:
-        div = QFrame()
-        div.setFrameShape(QFrame.HLine)
-        div.setFixedHeight(1)
-        div.setStyleSheet(f"background:{_C['border']}; border:none;")
-        return div
 
     # ── API ──────────────────────────────────────────────
 
