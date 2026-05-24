@@ -31,8 +31,8 @@ from ui.widgets.shared.panels import (
     SectionHeader, _make_btn, get_tree_style, confirm_delete,
     ListStatusBar,
 )
-from ui.widgets.shared.form_utils import FormGroup, ModeLabel
-
+from ui.widgets.shared.form_utils import FormGroup
+from ui.widgets.shared.panles_helper.mode_label import ModeLabel
 
 class _GroupManagerPanel(SafeConnMixin, QWidget):
     def __init__(self, conn, acc_type: str, parent=None):
