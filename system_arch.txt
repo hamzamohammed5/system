@@ -1,5 +1,5 @@
 File Tree Snapshot
-Generated : 2026-05-24 11:22:51
+Generated : 2026-05-24 11:46:47
 Source    : D:\My Workspace\Hg\Alhabaar\accountant\system
 Extensions: .py
 ────────────────────────────────────────────────────────────
@@ -149,7 +149,7 @@ system/
 │   │   │   │   │   ├── _db_scenarios.py
 │   │   │   │   │   ├── _memory_manager.py
 │   │   │   │   │   └── _memory_scenarios.py
-│   │   │   │   ├── bom_tree/
+│   │   │   │   ├── bom_tree_helper/
 │   │   │   │   │   └── _scenario_node_builder.py
 │   │   │   │   ├── bulk_replace/
 │   │   │   │   │   ├── _operation_section.py

@@ -2,17 +2,6 @@
 ui/tabs/costing/shared/bom_scenarios_panel.py
 ==================================
 _BomScenariosPanel — لوحة إدارة سيناريوهات BOM.
-
-تُستخدم داخل _FormPanel (product_form.py) وتظهر فوق منطقة المكونات.
-
-التقسيم الداخلي:
-  bom_scenarios/_memory_scenarios.py → MemoryScenariosMixin
-  bom_scenarios/_db_scenarios.py     → DbScenariosMixin
-  bom_scenarios_panel.py (هذا الملف) → _BomScenariosPanel
-
-وضعان:
-  - in-memory mode (منتج جديد): السيناريوهات في الذاكرة فقط.
-  - DB mode (منتج موجود): السيناريوهات في قاعدة البيانات.
 """
 
 from PyQt5.QtWidgets import (
@@ -101,14 +90,6 @@ class _BomScenariosPanel(QFrame, MemoryScenariosMixin, DbScenariosMixin):
 
         lay.addStretch()
 
-        _btn_style_base = (
-            "QPushButton {{ background:{bg}; color:{fg};"
-            "border:1px solid {border}; border-radius:4px;"
-            "font-size:10px; font-weight:bold; padding:2px 6px; }}"
-            "QPushButton:hover {{ background:{hover}; }}"
-            "QPushButton:disabled {{ background:#f5f5f5; color:#bbb; border-color:#ddd; }}"
-        )
-
         self.btn_set_default = self._make_btn(
             "⭐ افتراضي", 100,
             "#fff9c4", "#f57f17", "#f9a825", "#fff176"
@@ -143,12 +124,24 @@ class _BomScenariosPanel(QFrame, MemoryScenariosMixin, DbScenariosMixin):
         btn = QPushButton(text)
         btn.setMinimumHeight(28)
         btn.setFixedWidth(width)
-        btn.setStyleSheet(
-            f"QPushButton {{ background:{bg}; color:{fg};"
-            f"border:1px solid {border}; border-radius:4px;"
-            "font-size:10px; font-weight:bold; padding:2px 6px; }"
-            f"QPushButton:hover {{ background:{hover}; }}"
-        )
+        # ✅ f-string واحدة متكاملة — بدون string concatenation
+        btn.setStyleSheet(f"""
+            QPushButton {{
+                background: {bg};
+                color: {fg};
+                border: 1px solid {border};
+                border-radius: 4px;
+                font-size: 10px;
+                font-weight: bold;
+                padding: 2px 6px;
+            }}
+            QPushButton:hover {{ background: {hover}; }}
+            QPushButton:disabled {{
+                background: #f5f5f5;
+                color: #bbb;
+                border-color: #ddd;
+            }}
+        """)
         return btn
 
     # ══════════════════════════════════════════════════════
@@ -202,7 +195,7 @@ class _BomScenariosPanel(QFrame, MemoryScenariosMixin, DbScenariosMixin):
             self.scenario_changed.emit(self._current_id)
 
     # ══════════════════════════════════════════════════════
-    # أزرار — تعمل في كلا الوضعين عبر الـ Mixins
+    # أزرار
     # ══════════════════════════════════════════════════════
 
     def _set_default(self):

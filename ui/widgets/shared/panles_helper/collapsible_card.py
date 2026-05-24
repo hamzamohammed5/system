@@ -55,6 +55,8 @@ class CollapsibleCard(QFrame):
 
     def _update_header_style(self):
         base = _base()
+        font_size = fs(base, 0)
+        # ✅ f-string واحدة متكاملة
         self._header_btn.setStyleSheet(f"""
             QPushButton {{
                 background: {_C['bg_surface_2']};
@@ -63,7 +65,7 @@ class CollapsibleCard(QFrame):
                 padding: 10px 14px;
                 text-align: right;
                 font-weight: 700;
-                font-size: {fs(base, 0)}pt;
+                font-size: {font_size}pt;
                 color: {_C['text_sec']};
             }}
             QPushButton:hover {{

@@ -28,21 +28,6 @@ _PUBLISHED_BG    = "#e3f2fd"
 class SharedItemsListPanel(QWidget, LiveConnMixin, SharedOpsMixin):
     """
     قاعدة مشتركة للجداول التي تدعم العناصر المشتركة.
-
-    Override المطلوب:
-      SHARED_TYPE        : str  — نوع العنصر (machine / labor_op / ...)
-      TABLE_COLS         : list — أعمدة الجدول
-      FILTER_SCOPE       : str  — scope لـ FilterBar
-      TABLE_TITLE        : str  — عنوان القسم
-      HAS_BULK_REPLACE   : bool — هل يوجد زر استبدال شامل
-
-      _fetch_local_rows()       → list[dict]
-      _get_shared_rows(local)   → list[dict]
-      _fill_table_row(r, item)  → None
-      _edit_item(item_id)       → None
-      _delete_item(id, name)    → None
-      _bulk_replace_item(id, name) → None (اختياري)
-      _get_item_data_for_publish(row) → dict
     """
 
     SHARED_TYPE      : str  = ""
@@ -99,28 +84,45 @@ class SharedItemsListPanel(QWidget, LiveConnMixin, SharedOpsMixin):
         btn_edit_shared = QPushButton("🔗  تعديل المشترك")
         btn_publish     = QPushButton("📤  نشر كمشترك")
 
-        btn_edit_shared.setStyleSheet(
-            f"QPushButton {{ background:{_SHARED_BG}; color:{_SHARED_COLOR};"
-            "border:1px solid #a5d6a7; border-radius:4px;"
-            "padding:4px 10px; font-weight:bold; }}"
-            f"QPushButton:hover {{ background:#c8e6c9; }}"
-        )
-        btn_publish.setStyleSheet(
-            f"QPushButton {{ background:{_PUBLISHED_BG}; color:{_PUBLISHED_COLOR};"
-            "border:1px solid #90caf9; border-radius:4px;"
-            "padding:4px 10px; font-weight:bold; }}"
-            "QPushButton:hover { background:#bbdefb; }"
-        )
+        # ✅ f-string واحدة متكاملة لكل زر
+        btn_edit_shared.setStyleSheet(f"""
+            QPushButton {{
+                background: {_SHARED_BG};
+                color: {_SHARED_COLOR};
+                border: 1px solid #a5d6a7;
+                border-radius: 4px;
+                padding: 4px 10px;
+                font-weight: bold;
+            }}
+            QPushButton:hover {{ background: #c8e6c9; }}
+        """)
+
+        btn_publish.setStyleSheet(f"""
+            QPushButton {{
+                background: {_PUBLISHED_BG};
+                color: {_PUBLISHED_COLOR};
+                border: 1px solid #90caf9;
+                border-radius: 4px;
+                padding: 4px 10px;
+                font-weight: bold;
+            }}
+            QPushButton:hover {{ background: #bbdefb; }}
+        """)
 
         btns = [btn_edit, btn_del]
 
         if self.HAS_BULK_REPLACE:
             btn_replace = QPushButton("🔄  استبدال شامل")
-            btn_replace.setStyleSheet(
-                "QPushButton { background:#e65100; color:white; border-radius:4px;"
-                "padding:4px 10px; font-weight:bold; }"
-                "QPushButton:hover { background:#bf360c; }"
-            )
+            btn_replace.setStyleSheet("""
+                QPushButton {
+                    background: #e65100;
+                    color: white;
+                    border-radius: 4px;
+                    padding: 4px 10px;
+                    font-weight: bold;
+                }
+                QPushButton:hover { background: #bf360c; }
+            """)
             btn_replace.clicked.connect(self._on_bulk_replace)
             btns.append(btn_replace)
 

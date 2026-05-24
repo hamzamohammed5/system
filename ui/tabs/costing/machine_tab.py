@@ -3,18 +3,13 @@ ui/tabs/costing/machine_tab.py
 ================================
 MachineTab — التبويب الرئيسي للماكينات وعمليات التشغيل.
 
-التقسيم الداخلي:
-  machine/machine_form.py      → _MachineForm
-  machine/machine_table.py     → _MachineTable
-  machine/machine_op_form.py   → _MachineOpForm
-  machine/machine_op_table.py  → _MachineOpTable
-  machine_tab.py               → _MachinesTab, _MachineOpsTab, MachineTab  (هذا الملف)
+يرث من TabSectionBase للتوحيد مع RawTab و ProductTab و LaborTab.
 """
 
-from PyQt5.QtWidgets import QWidget, QVBoxLayout, QTabWidget, QSplitter
+from PyQt5.QtWidgets import QTabWidget, QWidget, QVBoxLayout, QSplitter
 from PyQt5.QtCore import Qt
 
-from db.shared.connection import get_connection
+from ui.widgets.shared.tab_section_base import TabSectionBase
 from ui.widgets.shared.category_manager import CategoryManager
 
 from .machine.machine_form     import _MachineForm
@@ -34,12 +29,15 @@ class _MachinesTab(QWidget):
         splitter = QSplitter(Qt.Vertical)
         splitter.setHandleWidth(6)
         splitter.setStyleSheet(_SPLITTER_STYLE)
+
         form  = _MachineForm(conn)
         table = _MachineTable(conn, form)
+
         splitter.addWidget(form)
         splitter.addWidget(table)
         splitter.setSizes([260, 380])
         splitter.setCollapsible(0, True)
+
         root = QVBoxLayout(self)
         root.setContentsMargins(0, 0, 0, 0)
         root.addWidget(splitter)
@@ -51,33 +49,26 @@ class _MachineOpsTab(QWidget):
         splitter = QSplitter(Qt.Vertical)
         splitter.setHandleWidth(6)
         splitter.setStyleSheet(_SPLITTER_STYLE)
+
         form  = _MachineOpForm(conn)
         table = _MachineOpTable(conn, form)
+
         splitter.addWidget(form)
         splitter.addWidget(table)
         splitter.setSizes([300, 400])
         splitter.setCollapsible(0, True)
+
         root = QVBoxLayout(self)
         root.setContentsMargins(0, 0, 0, 0)
         root.addWidget(splitter)
 
 
-class MachineTab(QWidget):
-    def __init__(self, parent=None):
-        super().__init__(parent)
-        self.conn = get_connection()
-        self._build()
+class MachineTab(TabSectionBase):
+    """
+    التبويب الرئيسي للماكينات — يرث من TabSectionBase للتوحيد البصري.
+    """
 
-    def _build(self):
-        tabs = QTabWidget()
+    def _build_tabs(self, tabs: QTabWidget):
         tabs.addTab(_MachinesTab(self.conn),                       "🖥️  الماكينات")
         tabs.addTab(_MachineOpsTab(self.conn),                     "⚙️  عمليات التشغيل")
         tabs.addTab(CategoryManager(self.conn, scope="machine"),   "🏷️  التصنيفات")
-
-        root = QVBoxLayout(self)
-        root.setContentsMargins(0, 0, 0, 0)
-        root.addWidget(tabs)
-
-    def closeEvent(self, event):
-        self.conn.close()
-        super().closeEvent(event)

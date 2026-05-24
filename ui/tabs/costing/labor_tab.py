@@ -3,17 +3,13 @@ ui/tabs/costing/labor_tab.py
 ====================================
 LaborTab — التبويب الرئيسي للعمالة.
 
-التقسيم الداخلي:
-  labor_settings.py  → _LaborSettingsPanel
-  labor_op_form.py   → _LaborOpForm
-  labor_op_table.py  → _LaborOpTable
-  labor_tab.py       → _LaborOpsTab, LaborTab  (هذا الملف)
+يرث من TabSectionBase للتوحيد مع RawTab و ProductTab.
 """
 
-from PyQt5.QtWidgets import QWidget, QVBoxLayout, QTabWidget, QSplitter
+from PyQt5.QtWidgets import QTabWidget, QWidget, QVBoxLayout, QSplitter
 from PyQt5.QtCore import Qt
 
-from db.shared.connection import get_connection
+from ui.widgets.shared.tab_section_base import TabSectionBase
 from ui.widgets.shared.category_manager import CategoryManager
 
 from .labor.labor_settings import _LaborSettingsPanel
@@ -46,21 +42,15 @@ class _LaborOpsTab(QWidget):
         root.addWidget(splitter)
 
 
-class LaborTab(QWidget):
-    def __init__(self, parent=None):
-        super().__init__(parent)
-        self.conn = get_connection()
+class LaborTab(TabSectionBase):
+    """
+    التبويب الرئيسي للعمالة — يرث من TabSectionBase للتوحيد البصري.
+    """
+
+    def _build_tabs(self, tabs: QTabWidget):
+        # _LaborSettingsPanel محتاج conn — نبنيه هنا ونمرره للـ ops tab
         self._settings = _LaborSettingsPanel(self.conn)
 
-        tabs = QTabWidget()
         tabs.addTab(self._settings,                                "⚙️  إعدادات العمالة")
         tabs.addTab(_LaborOpsTab(self.conn, self._settings),       "📋  عمليات العمالة")
         tabs.addTab(CategoryManager(self.conn, scope="labor"),     "🏷️  التصنيفات")
-
-        layout = QVBoxLayout(self)
-        layout.setContentsMargins(0, 0, 0, 0)
-        layout.addWidget(tabs)
-
-    def closeEvent(self, event):
-        self.conn.close()
-        super().closeEvent(event)
