@@ -18,7 +18,7 @@ from PyQt5.QtCore import Qt
 from db.shared.items_repo import fetch_bom, delete_bom_row
 from ui.helpers import danger_button
 
-from ui.tabs.costing.shared.bom_tree._scenario_node_builder import (
+from ui.tabs.costing.shared.bom_tree_helper._scenario_node_builder import (
     build_scenario_node,
     build_component_node,
 )
