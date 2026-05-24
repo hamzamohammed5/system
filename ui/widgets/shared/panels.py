@@ -11,6 +11,9 @@ ui/widgets/shared/panels.py
   _make_btn, make_stat_card_simple, make_status_chip, CardGrid,
   StatusChip,
 
+  --- stat_row (جديد) ---
+  StatRow, StatItem, make_stat_row, stat_card_pair,
+
   --- form_utils ---
   FormGroup, labeled_widget, spin_field, int_spin_field,
   ResultBadge, ModeBadge, build_inner_scroll, CrudButtonsBar, InlinePreview,
@@ -27,6 +30,9 @@ ui/widgets/shared/panels.py
 
   --- dialog ---
   BaseDialog,
+
+  --- confirm_dialog (جديد) ---
+  confirm_delete, confirm_action, confirm_save,
 
   --- scroll ---
   wrap_in_scroll, ScrollableFormWidget,
@@ -67,6 +73,14 @@ from .panles_helper.status_chip      import (                   # noqa: F401
     make_status_chip,
 )
 
+# ── stat_row (جديد — يوحد _stat_card في كل الأماكن) ──────
+from .stat_row import (                                         # noqa: F401
+    StatRow,
+    StatItem,
+    make_stat_row,
+    stat_card_pair,
+)
+
 # ── form_utils ────────────────────────────────────────────
 from .form_utils import (                                       # noqa: F401
     FormGroup,
@@ -81,17 +95,24 @@ from .form_utils import (                                       # noqa: F401
 )
 
 # ── base forms & panels ───────────────────────────────────
-from .base_crud_form   import BaseCrudForm                      # noqa: F401
-from .base_list_panel  import BaseListPanel                     # noqa: F401
+from .base_crud_form    import BaseCrudForm                     # noqa: F401
+from .base_list_panel   import BaseListPanel                    # noqa: F401
 from .base_detail_panel import BaseDetailPanel                  # noqa: F401
-from .base_section     import BaseSection                       # noqa: F401
-from .tab_section_base import TabSectionBase                    # noqa: F401
+from .base_section      import BaseSection                      # noqa: F401
+from .tab_section_base  import TabSectionBase                   # noqa: F401
 
 # ── connection ────────────────────────────────────────────
 from .connection_mixin import LiveConnMixin                     # noqa: F401
 
 # ── dialog ───────────────────────────────────────────────
-from .dialog_base import BaseDialog                             # noqa: F401
+from .dialog_base      import BaseDialog                        # noqa: F401
+
+# ── confirm_dialog (جديد) ─────────────────────────────────
+from .confirm_dialog   import (                                 # noqa: F401
+    confirm_delete,
+    confirm_action,
+    confirm_save,
+)
 
 # ── scroll ───────────────────────────────────────────────
 from .scrollable_form import wrap_in_scroll, ScrollableFormWidget  # noqa: F401
@@ -134,6 +155,8 @@ __all__ = [
     "CollapsibleCard", "ActionToolbar", "BadgeLabel", "InfoRow",
     "_make_btn", "CardGrid", "StatusChip",
     "make_stat_card_simple", "make_status_chip",
+    # stat_row
+    "StatRow", "StatItem", "make_stat_row", "stat_card_pair",
     # form_utils
     "FormGroup", "labeled_widget", "spin_field", "int_spin_field",
     "ResultBadge", "ModeBadge", "build_inner_scroll",
@@ -148,6 +171,8 @@ __all__ = [
     "LiveConnMixin",
     # dialog
     "BaseDialog",
+    # confirm_dialog
+    "confirm_delete", "confirm_action", "confirm_save",
     # scroll
     "wrap_in_scroll", "ScrollableFormWidget",
     # flexible_text

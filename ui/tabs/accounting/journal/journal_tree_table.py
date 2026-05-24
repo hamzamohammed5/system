@@ -1,22 +1,21 @@
 """
 ui/tabs/accounting/journal/journal_tree_table.py
-=========================================
-_JournalTreeTable و JournalTab
+================================================
+_JournalTreeTable — جدول القيود المحاسبية.
 
-إصلاحات (v6):
-  - استبدال _bold_item و _colored_item المحليين بـ
-    bold_table_item و colored_table_item من table_utils.
-  - set_row_background من table_utils بدل الحلقة اليدوية.
-  - باقي إصلاحات v5 محافظ عليها.
+[تحديث v7]:
+  - JournalTab انتقل لـ journal_tab_widget.py
+  - هذا الملف يحتوي فقط على _JournalTreeTable
+  - يُعاد تصدير JournalTab للتوافق مع الكود القديم
 """
 
 from PyQt5.QtWidgets import (
-    QWidget, QVBoxLayout, QSplitter,
+    QWidget, QVBoxLayout,
     QTableWidget, QTableWidgetItem, QHeaderView,
     QPushButton, QMessageBox, QAbstractItemView,
 )
 from PyQt5.QtCore import Qt, QTimer
-from PyQt5.QtGui  import QColor, QFont, QBrush
+from PyQt5.QtGui  import QColor
 
 from db.accounting.accounting_repo import (
     fetch_all_entries, fetch_entry_lines,
@@ -35,6 +34,9 @@ from ui.widgets.shared.table_utils import (
 from ..helpers  import TYPE_COLORS
 from .journal_filter  import _JournalFilterBar
 from .journal_form    import _JournalForm
+
+# ── إعادة تصدير JournalTab للتوافق مع الكود القديم ──────
+from .journal_tab_widget import JournalTab  # noqa: F401
 
 
 class _JournalTreeTable(SafeConnMixin, QWidget):
@@ -180,20 +182,12 @@ class _JournalTreeTable(SafeConnMixin, QWidget):
             self.table.insertRow(r)
             self._row_meta[r] = {"entry_id": eid, "is_parent": True, "is_child": False}
 
-            # ── عمود التبديل (▼/▶) ──
             toggle_item = center_table_item(
                 "▼" if expanded else "▶",
-                color="#1565c0",
-                bold=True,
+                color="#1565c0", bold=True,
             )
             self.table.setItem(r, 0, toggle_item)
-
-            # ── التاريخ ──
-            self.table.setItem(r, 1, center_table_item(
-                entry["date"], color="#2e7d32", bold=True
-            ))
-
-            # ── رقم القيد + البيان + DR + CR + الحالة ──
+            self.table.setItem(r, 1, center_table_item(entry["date"], color="#2e7d32", bold=True))
             self.table.setItem(r, 2, bold_table_item(entry["ref_no"],       "#1565c0"))
             self.table.setItem(r, 3, bold_table_item(entry["description"]))
             self.table.setItem(r, 4, bold_table_item(f"{total_dr:,.2f}",    "#1565c0"))
@@ -204,10 +198,8 @@ class _JournalTreeTable(SafeConnMixin, QWidget):
             bal_text  = "✅ متوازن" if abs(diff) < 0.01 else f"⚠️ {abs(diff):,.2f}"
             self.table.setItem(r, 6, bold_table_item(bal_text, bal_color))
 
-            # خلفية الصف الرئيسي
             set_row_background(self.table, r, "#eef3fb")
 
-            # ── الصفوف الفرعية ──
             if expanded:
                 for line in entry["lines"]:
                     rc = self.table.rowCount()
@@ -229,32 +221,23 @@ class _JournalTreeTable(SafeConnMixin, QWidget):
                     is_dr  = line["debit"] > 0
                     row_bg = "#f4f8ff" if is_dr else "#fff4f4"
 
-                    # أعمدة فاضية للصف الفرعي (0-2)
                     for c in range(3):
                         self.table.setItem(rc, c, QTableWidgetItem(""))
 
-                    # البيان (الحساب)
                     desc_item = colored_table_item(
                         desc_text, acc_color,
                         tooltip=f"{acc_code} — {acc_name}"
                     )
                     self.table.setItem(rc, 3, desc_item)
 
-                    # DR / CR
                     if is_dr:
-                        self.table.setItem(rc, 4, colored_table_item(
-                            f"{line['debit']:,.2f}", "#1565c0"
-                        ))
+                        self.table.setItem(rc, 4, colored_table_item(f"{line['debit']:,.2f}",  "#1565c0"))
                         self.table.setItem(rc, 5, QTableWidgetItem(""))
                     else:
                         self.table.setItem(rc, 4, QTableWidgetItem(""))
-                        self.table.setItem(rc, 5, colored_table_item(
-                            f"{line['credit']:,.2f}", "#c62828"
-                        ))
+                        self.table.setItem(rc, 5, colored_table_item(f"{line['credit']:,.2f}", "#c62828"))
 
                     self.table.setItem(rc, 6, QTableWidgetItem(""))
-
-                    # خلفية الصف الفرعي
                     set_row_background(self.table, rc, row_bg)
 
     def _on_cell_clicked(self, row, col):
@@ -298,103 +281,3 @@ class _JournalTreeTable(SafeConnMixin, QWidget):
             delete_entry(self._get_safe_conn(), eid)
             self._expanded.discard(eid)
             bus.company_data_changed.emit(self._company_id or 0)
-
-
-# ══════════════════════════════════════════════════════════
-# JournalTab — التبويب الرئيسي
-# ══════════════════════════════════════════════════════════
-
-class JournalTab(SafeConnMixin, QWidget):
-    """
-    التبويب الرئيسي لليومية.
-
-    إصلاح (v5): يستمع لـ bus.company_data_changed ويعيد بناء
-    _JournalForm و _JournalTreeTable بـ connections حية للشركة الجديدة.
-    """
-
-    def __init__(self, conn, erp_conn=None, parent=None):
-        super().__init__(parent)
-        self._init_safe_conn(conn, "accounting")
-        self._erp_conn = erp_conn
-        self._company_id = self._get_company_id()
-        self._splitter = None
-        self._form = None
-        self._tree_table = None
-        self._build()
-        bus.company_data_changed.connect(self._on_company_event)
-
-    def _on_company_event(self, company_id: int):
-        if self._on_company_event_safe(company_id):
-            QTimer.singleShot(0, self._rebuild_children)
-
-    def _get_erp_conn(self):
-        try:
-            if self._erp_conn is not None:
-                self._erp_conn.execute("SELECT 1")
-                return self._erp_conn
-        except Exception:
-            pass
-        try:
-            from db.companies.company_state import company_state
-            new = company_state._get_conn("erp")
-            self._erp_conn = new
-            return new
-        except Exception:
-            return self._erp_conn
-
-    def _build(self):
-        root = QVBoxLayout(self)
-        root.setContentsMargins(0, 0, 0, 0)
-
-        self._splitter = QSplitter(Qt.Vertical)
-        self._splitter.setHandleWidth(6)
-        self._splitter.setStyleSheet("""
-            QSplitter::handle { background:#e0e0e0; }
-            QSplitter::handle:hover { background:#bbdefb; }
-        """)
-
-        conn = self._get_safe_conn()
-        erp  = self._get_erp_conn()
-
-        self._form       = _JournalForm(conn, erp)
-        self._tree_table = _JournalTreeTable(conn)
-
-        self._splitter.addWidget(self._form)
-        self._splitter.addWidget(self._tree_table)
-        self._splitter.setSizes([440, 360])
-        self._splitter.setCollapsible(0, True)
-
-        root.addWidget(self._splitter)
-
-    def _rebuild_children(self):
-        if self._splitter is None:
-            return
-
-        sizes = self._splitter.sizes()
-
-        if self._form:
-            self._splitter.widget(0).hide()
-            old_form = self._form
-            self._form = None
-            old_form.deleteLater()
-
-        if self._tree_table:
-            if self._splitter.count() > 1:
-                self._splitter.widget(1).hide()
-            old_table = self._tree_table
-            self._tree_table = None
-            old_table.deleteLater()
-
-        conn = self._get_safe_conn()
-        erp  = self._get_erp_conn()
-
-        self._form       = _JournalForm(conn, erp)
-        self._tree_table = _JournalTreeTable(conn)
-
-        self._splitter.addWidget(self._form)
-        self._splitter.addWidget(self._tree_table)
-
-        if sizes and len(sizes) >= 2:
-            self._splitter.setSizes(sizes)
-        else:
-            self._splitter.setSizes([440, 360])

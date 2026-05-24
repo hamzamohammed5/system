@@ -1,5 +1,5 @@
 File Tree Snapshot
-Generated : 2026-05-24 12:20:51
+Generated : 2026-05-24 12:33:18
 Source    : D:\My Workspace\Hg\Alhabaar\accountant\system
 Extensions: .py
 ────────────────────────────────────────────────────────────
@@ -95,6 +95,7 @@ system/
 │   │   │   │   ├── journal_form.py
 │   │   │   │   ├── journal_group_combo.py
 │   │   │   │   ├── journal_lines.py
+│   │   │   │   ├── journal_tab_widget.py
 │   │   │   │   └── journal_tree_table.py
 │   │   │   ├── ledger/
 │   │   │   │   ├── ledger_accounts_panel.py
@@ -106,6 +107,7 @@ system/
 │   │   │   │   ├── _group_filter.py
 │   │   │   │   └── _tree_builder.py
 │   │   │   ├── account_combo.py
+│   │   │   ├── accounting_tabs_builder.py
 │   │   │   ├── accounts_tree.py
 │   │   │   ├── financial_statements.py
 │   │   │   ├── group_manager.py
@@ -281,6 +283,7 @@ system/
 │   │       ├── category_combo.py
 │   │       ├── category_form.py
 │   │       ├── category_manager.py
+│   │       ├── confirm_dialog.py
 │   │       ├── connection_mixin.py
 │   │       ├── dialog_base.py
 │   │       ├── filter_bar.py
@@ -298,6 +301,7 @@ system/
 │   │       ├── shared_ops_mixin.py
 │   │       ├── splitter_scroll_guard.py
 │   │       ├── splitter_utils.py
+│   │       ├── stat_row.py
 │   │       ├── tab_section_base.py
 │   │       ├── table_utils.py
 │   │       ├── tooltip_helper.py

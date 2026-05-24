@@ -2,14 +2,14 @@
 ui/tabs/accounting/ledger/ledger_stat_cards.py
 ================================================
 _StatCards — بطاقات الإحصائيات في دفتر الأستاذ.
+
+[تحديث] يستخدم StatRow من widgets/shared بدل _card محلية.
 """
 
-from PyQt5.QtWidgets import (
-    QFrame, QHBoxLayout, QVBoxLayout, QWidget, QLabel,
-)
-from PyQt5.QtCore import Qt
+from PyQt5.QtWidgets import QFrame, QVBoxLayout
 
 from db.accounting.accounting_schema import TYPE_AR
+from ui.widgets.shared.stat_row import StatRow, StatItem
 
 
 class _StatCards(QFrame):
@@ -25,47 +25,26 @@ class _StatCards(QFrame):
         self._build()
 
     def _build(self):
-        lay = QHBoxLayout(self)
-        lay.setContentsMargins(12, 8, 12, 8)
+        lay = QVBoxLayout(self)
+        lay.setContentsMargins(0, 0, 0, 0)
         lay.setSpacing(0)
 
-        def _card(icon, label, color):
-            w = QWidget()
-            w.setStyleSheet("background:transparent;")
-            wl = QVBoxLayout(w)
-            wl.setContentsMargins(12, 4, 12, 4)
-            wl.setSpacing(2)
-            lbl_t = QLabel(f"{icon}  {label}")
-            lbl_t.setStyleSheet(
-                "font-size:10px; color:#888; background:transparent; border:none;"
-            )
-            lbl_v = QLabel("─")
-            lbl_v.setStyleSheet(
-                f"font-size:14px; font-weight:bold; color:{color};"
-                "background:transparent; border:none;"
-            )
-            wl.addWidget(lbl_t)
-            wl.addWidget(lbl_v)
-            return w, lbl_v
+        self._row = StatRow([
+            StatItem("إجمالي المدين",  "#1565c0", icon="📥", compact=True),
+            StatItem("إجمالي الدائن",  "#c62828", icon="📤", compact=True),
+            StatItem("الرصيد",          "#2e7d32", icon="⚖️",  compact=True),
+            StatItem("عدد الحركات",    "#6a1b9a", icon="🔢", compact=True),
+            StatItem("الرصيد الطبيعي", "#e65100", icon="📌", compact=True),
+        ], separator=True, bg="white")
 
-        def _sep():
-            s = QFrame()
-            s.setFrameShape(QFrame.VLine)
-            s.setStyleSheet("color:#e0e0e0; background:#e0e0e0;")
-            s.setFixedWidth(1)
-            return s
+        lay.addWidget(self._row)
 
-        w1, self.lbl_dr   = _card("📥", "إجمالي المدين",   "#1565c0")
-        w2, self.lbl_cr   = _card("📤", "إجمالي الدائن",   "#c62828")
-        w3, self.lbl_bal  = _card("⚖️", "الرصيد",           "#2e7d32")
-        w4, self.lbl_cnt  = _card("🔢", "عدد الحركات",      "#6a1b9a")
-        w5, self.lbl_nb   = _card("📌", "الرصيد الطبيعي",   "#e65100")
-
-        for i, w in enumerate([w1, _sep(), w2, _sep(), w3, _sep(), w4, _sep(), w5]):
-            if isinstance(w, QFrame):
-                lay.addWidget(w)
-            else:
-                lay.addWidget(w, stretch=1)
+        # مراجع مباشرة للتوافق مع الكود القديم
+        self.lbl_dr  = self._row.value_label(0)
+        self.lbl_cr  = self._row.value_label(1)
+        self.lbl_bal = self._row.value_label(2)
+        self.lbl_cnt = self._row.value_label(3)
+        self.lbl_nb  = self._row.value_label(4)
 
     def update(self, total_dr: float, total_cr: float,
                balance: float, count: int, normal_balance: str, acc_type: str):
@@ -73,23 +52,14 @@ class _StatCards(QFrame):
         self.lbl_cr.setText(f"{total_cr:,.2f}  ج")
 
         bal_color = "#2e7d32" if balance >= 0 else "#c62828"
-        self.lbl_bal.setText(f"{abs(balance):,.2f}  ج")
-        self.lbl_bal.setStyleSheet(
-            f"font-size:14px; font-weight:bold; color:{bal_color};"
-            "background:transparent; border:none;"
-        )
+        self._row.set_value(2, f"{abs(balance):,.2f}  ج", bal_color)
 
         self.lbl_cnt.setText(str(count))
 
         nb_ar    = "مدين (DR↑)" if normal_balance == "dr" else "دائن (CR↑)"
         type_ar  = TYPE_AR.get(acc_type, "")
         nb_color = "#1565c0" if normal_balance == "dr" else "#c62828"
-        self.lbl_nb.setText(f"{nb_ar} — {type_ar}")
-        self.lbl_nb.setStyleSheet(
-            f"font-size:13px; font-weight:bold; color:{nb_color};"
-            "background:transparent; border:none;"
-        )
+        self._row.set_value(4, f"{nb_ar} — {type_ar}", nb_color)
 
     def clear(self):
-        for lbl in (self.lbl_dr, self.lbl_cr, self.lbl_bal, self.lbl_cnt, self.lbl_nb):
-            lbl.setText("─")
+        self._row.reset_all()

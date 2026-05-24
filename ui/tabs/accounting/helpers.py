@@ -3,16 +3,14 @@ ui/tabs/accounting/helpers.py
 ==============================
 أدوات مساعدة صغيرة مشتركة بين تبويبات الحسابات.
 
-- stat cards بأحجام نسبية من حجم الخط الأساسي
-- _spin / _money مشتركة
-- TYPE_COLORS
+[تحديث] _stat_card تستخدم stat_card_pair من stat_row بدل كود محلي.
 """
 
-from PyQt5.QtWidgets import QDoubleSpinBox, QFrame, QVBoxLayout, QLabel
-from PyQt5.QtCore    import Qt
+from PyQt5.QtWidgets import QDoubleSpinBox
 
 from db.accounting.accounting_schema import TYPE_AR, NORMAL_BALANCE
 from ui.font_utils import card_title_style, card_value_style
+from ui.widgets.shared.stat_row import stat_card_pair   # ← الموحد
 
 
 TYPE_COLORS = {
@@ -27,13 +25,9 @@ TYPE_COLORS = {
 
 def _spin(max_=999_999_999, dec=2, min_height: int = 30) -> QDoubleSpinBox:
     """
-    QDoubleSpinBox موحد — يُستخدم في helpers و investors وكل تبويبات الحسابات.
-
-    Parameters
-    ----------
-    max_ : الحد الأقصى للقيمة
-    dec  : عدد الخانات العشرية
-    min_height : الارتفاع الأدنى للعنصر
+    QDoubleSpinBox موحد.
+    ملاحظة: spin_field() في form_utils يوفر نفس الوظيفة مع ستايل أكثر.
+    هذه الدالة محتفظ بها للتوافق مع الكود القديم.
     """
     s = QDoubleSpinBox()
     s.setRange(0, max_)
@@ -48,31 +42,7 @@ def _money(val: float) -> str:
 
 def _stat_card(label: str, color: str = "#1565c0"):
     """
-    يرجع (QFrame, QLabel_value) — بطاقة إحصائية بأحجام نسبية.
-
-    يُستخدم في:
-      - accounting/helpers.py (هنا)
-      - investors/_helpers.py  (يستدعي من هنا)
-      - financial tabs
+    يرجع (QFrame, QLabel_value) — بطاقة إحصائية.
+    [تحديث] يستخدم stat_card_pair الموحدة بدل كود محلي مكرر.
     """
-    f = QFrame()
-    f.setStyleSheet(f"""
-        QFrame {{
-            background: white;
-            border-left: 4px solid {color};
-            border-radius: 6px;
-        }}
-    """)
-    lay = QVBoxLayout(f)
-    lay.setContentsMargins(12, 8, 12, 8)
-    lay.setSpacing(2)
-
-    lt = QLabel(label)
-    lt.setStyleSheet(card_title_style())
-
-    lv = QLabel("0.00  ج")
-    lv.setStyleSheet(card_value_style(color))
-
-    lay.addWidget(lt)
-    lay.addWidget(lv)
-    return f, lv
+    return stat_card_pair(label=label, color=color)

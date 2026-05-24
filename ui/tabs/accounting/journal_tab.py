@@ -9,8 +9,10 @@ ui/tabs/accounting/journal_tab.py
   journal_form.py            → _JournalForm
   journal_group_combo.py     → _TreeGroupCombo, _NoSelectDelegate
   journal_filter.py          → _JournalFilterBar
-  journal_tree_table.py      → _JournalTreeTable, JournalTab
+  journal_tree_table.py      → _JournalTreeTable
+  journal_tab_widget.py      → JournalTab  ← (منفصل الآن)
 """
 
-from .journal.journal_tree_table import JournalTab, _JournalTreeTable  # noqa: F401
-from .journal.journal_form       import _JournalForm                   # noqa: F401
+from .journal.journal_tab_widget  import JournalTab             # noqa: F401
+from .journal.journal_tree_table  import _JournalTreeTable      # noqa: F401
+from .journal.journal_form        import _JournalForm           # noqa: F401
