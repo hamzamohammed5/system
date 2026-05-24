@@ -2,38 +2,21 @@
 ui/tabs/costing/labor/labor_settings.py
 ========================================
 _LaborSettingsPanel — لوحة إعدادات معايير حساب تكلفة العمالة.
-مع scroll عمودي لما المساحة تكون ضيقة.
+
+التحسينات:
+  - يستخدم form_utils: FormGroup, labeled_widget, spin_field, ResultBadge
+  - يستخدم build_inner_scroll بدل بناء الـ scroll يدوياً
 """
 
 from PyQt5.QtWidgets import (
-    QWidget, QVBoxLayout, QHBoxLayout, QFormLayout,
-    QDoubleSpinBox, QLabel, QGroupBox, QPushButton, QMessageBox,
-    QSizePolicy,
+    QWidget, QPushButton, QMessageBox, QSizePolicy,
 )
-from PyQt5.QtCore import Qt
 
 from db.shared.settings_repo import get_setting, set_setting
-from ui.widgets.shared.scrollable_form import wrap_in_scroll
+from ui.widgets.shared.form_utils import (
+    FormGroup, labeled_widget, spin_field, ResultBadge, build_inner_scroll,
+)
 from ui.events import bus
-
-
-def _spin(max_=999999, dec=2):
-    s = QDoubleSpinBox()
-    s.setRange(0, max_)
-    s.setDecimals(dec)
-    s.setMinimumHeight(30)
-    return s
-
-
-def _labeled(widget, unit):
-    w = QWidget()
-    lay = QHBoxLayout(w)
-    lay.setContentsMargins(0, 0, 0, 0)
-    lay.setSpacing(6)
-    lay.addWidget(widget)
-    lay.addWidget(QLabel(unit))
-    lay.addStretch()
-    return w
 
 
 class _LaborSettingsPanel(QWidget):
@@ -44,45 +27,24 @@ class _LaborSettingsPanel(QWidget):
         self._load()
 
     def _build(self):
-        outer = QVBoxLayout(self)
-        outer.setContentsMargins(0, 0, 0, 0)
-        outer.setSpacing(0)
+        _outer, _inner, layout = build_inner_scroll(self, min_width=260)
 
-        self._inner = QWidget()
-        self._inner.setMinimumWidth(260)
-        self._inner.setSizePolicy(QSizePolicy.Preferred, QSizePolicy.Minimum)
+        grp = FormGroup("معايير حساب تكلفة العمالة")
 
-        scroll = wrap_in_scroll(self._inner)
-        outer.addWidget(scroll)
+        self.sp_salary   = spin_field(max_=999999, dec=2)
+        self.sp_days     = spin_field(max_=31,     dec=0)
+        self.sp_holidays = spin_field(max_=31,     dec=0)
+        self.sp_hours    = spin_field(max_=24,     dec=1)
+        self.sp_overhead = spin_field(max_=10,     dec=2)
 
-        layout = QVBoxLayout(self._inner)
-        layout.setSpacing(12)
-        layout.setContentsMargins(12, 12, 12, 12)
+        grp.add_row("الراتب الأساسي :",         labeled_widget(self.sp_salary,   "جنيه / شهر"))
+        grp.add_row("أيام العمل :",             labeled_widget(self.sp_days,     "يوم / شهر"))
+        grp.add_row("أيام الإجازات :",          labeled_widget(self.sp_holidays, "يوم / شهر"))
+        grp.add_row("ساعات العمل / يوم :",      labeled_widget(self.sp_hours,    "ساعة / يوم"))
+        grp.add_row("معامل الأعباء الإدارية :", labeled_widget(self.sp_overhead, "×"))
 
-        grp  = QGroupBox("معايير حساب تكلفة العمالة")
-        form = QFormLayout(grp)
-        form.setSpacing(10)
-        form.setLabelAlignment(Qt.AlignRight)
-
-        self.sp_salary   = _spin()
-        self.sp_days     = _spin(31, 0)
-        self.sp_holidays = _spin(31, 0)
-        self.sp_hours    = _spin(24, 1)
-        self.sp_overhead = _spin(10, 2)
-
-        form.addRow("الراتب الأساسي :",         _labeled(self.sp_salary,   "جنيه / شهر"))
-        form.addRow("أيام العمل :",             _labeled(self.sp_days,     "يوم / شهر"))
-        form.addRow("أيام الإجازات :",          _labeled(self.sp_holidays, "يوم / شهر"))
-        form.addRow("ساعات العمل / يوم :",      _labeled(self.sp_hours,    "ساعة / يوم"))
-        form.addRow("معامل الأعباء الإدارية :", _labeled(self.sp_overhead, "×"))
-
-        self.lbl_rate = QLabel("─")
-        self.lbl_rate.setStyleSheet(
-            "font-weight:bold; color:#1a6e1a; font-size:13px;"
-            "background:#f0faf0; border:1px solid #b2dfb2;"
-            "border-radius:4px; padding:4px 8px;"
-        )
-        form.addRow("➡  معدل الأجر / ساعة :", self.lbl_rate)
+        self.lbl_rate = ResultBadge()
+        grp.add_row("➡  معدل الأجر / ساعة :", self.lbl_rate)
         layout.addWidget(grp)
 
         for sp in (self.sp_salary, self.sp_days, self.sp_holidays,
@@ -101,7 +63,7 @@ class _LaborSettingsPanel(QWidget):
         return (self.sp_salary.value() / net_hours) * self.sp_overhead.value() if net_hours else 0.0
 
     def _update_preview(self):
-        self.lbl_rate.setText(f"{self._calc_rate():.2f}  جنيه / ساعة")
+        self.lbl_rate.set_value(f"{self._calc_rate():.2f}  جنيه / ساعة")
 
     def _load(self):
         self.sp_salary.setValue(  get_setting(self.conn, "monthly_salary",    3000))

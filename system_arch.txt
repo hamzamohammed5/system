@@ -1,5 +1,5 @@
 File Tree Snapshot
-Generated : 2026-05-24 08:52:51
+Generated : 2026-05-24 09:10:33
 Source    : D:\My Workspace\Hg\Alhabaar\accountant\system
 Extensions: .py
 ────────────────────────────────────────────────────────────
@@ -141,6 +141,8 @@ system/
 │   │   │   │   ├── raw_section.py
 │   │   │   │   └── raw_table_panel.py
 │   │   │   ├── shared/
+│   │   │   │   ├── bom_scenarios/
+│   │   │   │   │   └── _memory_manager.py
 │   │   │   │   ├── bulk_replace/
 │   │   │   │   │   ├── _operation_section.py
 │   │   │   │   │   ├── bulk_replace_dialog.py
@@ -243,6 +245,10 @@ system/
 │   │   └── pricing_section.py
 │   ├── widgets/
 │   │   └── shared/
+│   │       ├── component_row/
+│   │       │   ├── _op_rows_logic.py
+│   │       │   ├── _row_widget.py
+│   │       │   └── _variants_logic.py
 │   │       ├── panles_helper/
 │   │       │   ├── action_toolbar.py
 │   │       │   ├── badge_label.py
@@ -267,6 +273,7 @@ system/
 │   │       ├── filter_bar.py
 │   │       ├── flexible_text.py
 │   │       ├── flow_layout.py
+│   │       ├── form_utils.py
 │   │       ├── message_box.py
 │   │       ├── no_wheel.py
 │   │       ├── panels.py

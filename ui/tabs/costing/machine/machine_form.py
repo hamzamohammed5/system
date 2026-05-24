@@ -2,96 +2,56 @@
 ui/tabs/costing/machine/machine_form.py
 =======================================
 _MachineForm — فورم إضافة / تعديل الماكينة.
+
+التحسينات:
+  - يرث من LiveConnMixin بدل كتابة _live_conn يدوياً
+  - يستخدم form_utils: FormGroup, labeled_widget, spin_field, build_inner_scroll
 """
 
 from PyQt5.QtWidgets import (
-    QWidget, QVBoxLayout, QHBoxLayout, QFormLayout,
-    QLineEdit, QPushButton, QDoubleSpinBox, QLabel,
-    QMessageBox, QGroupBox, QSizePolicy,
+    QWidget, QMessageBox, QPushButton, QSizePolicy,
 )
-from PyQt5.QtCore import Qt
 
 from db.costing.operations_repo import fetch_machine, insert_machine, update_machine
 from ui.helpers import EditModeMixin, buttons_row
 from ui.widgets.shared.category_manager import CategoryCombo
-from ui.widgets.shared.scrollable_form import wrap_in_scroll
+from ui.widgets.shared.connection_mixin import LiveConnMixin
+from ui.widgets.shared.form_utils import (
+    FormGroup, labeled_widget, spin_field, build_inner_scroll,
+)
 from ui.events import bus
 
 
-def _labeled(widget, unit: str) -> QWidget:
-    w = QWidget()
-    lay = QHBoxLayout(w)
-    lay.setContentsMargins(0, 0, 0, 0)
-    lay.setSpacing(6)
-    lay.addWidget(widget)
-    lay.addWidget(QLabel(unit))
-    lay.addStretch()
-    return w
-
-
-def _spin(max_=999999, dec=2):
-    s = QDoubleSpinBox()
-    s.setRange(0, max_)
-    s.setDecimals(dec)
-    s.setMinimumHeight(30)
-    return s
-
-
-class _MachineForm(QWidget, EditModeMixin):
+class _MachineForm(QWidget, EditModeMixin, LiveConnMixin):
     def __init__(self, conn, parent=None):
         super().__init__(parent)
         self.conn = conn
         self._build()
         self.init_edit_mode(self.btn_add, self.btn_save, self.btn_cancel, self.lbl_mode)
 
-    # ── connection صالح دايماً ────────────────────────────
-
-    def _live_conn(self):
-        if self.conn is not None:
-            try:
-                self.conn.execute("SELECT 1")
-                return self.conn
-            except Exception:
-                pass
-        from db.companies.company_state import company_state
-        return company_state.get_erp_conn()
-
     def _build(self):
-        outer = QVBoxLayout(self)
-        outer.setContentsMargins(0, 0, 0, 0)
-        outer.setSpacing(0)
+        _outer, _inner, root = build_inner_scroll(self, min_width=260)
 
-        self._inner = QWidget()
-        self._inner.setMinimumWidth(260)
-        self._inner.setSizePolicy(QSizePolicy.Preferred, QSizePolicy.Minimum)
+        grp = FormGroup("بيانات الماكينة")
 
-        scroll = wrap_in_scroll(self._inner)
-        outer.addWidget(scroll)
-
-        root = QVBoxLayout(self._inner)
-        root.setSpacing(10)
-        root.setContentsMargins(12, 12, 12, 12)
-
-        grp  = QGroupBox("بيانات الماكينة")
-        form = QFormLayout(grp)
-        form.setSpacing(10)
-        form.setLabelAlignment(Qt.AlignRight)
-
+        from PyQt5.QtWidgets import QLabel
         self.lbl_mode = QLabel("─── إضافة ماكينة جديدة ───")
         self.lbl_mode.setStyleSheet("font-weight:bold; color:#1565c0;")
-        form.addRow(self.lbl_mode)
+        grp.add_label_row(self.lbl_mode)
 
-        self.inp_name      = QLineEdit()
+        from PyQt5.QtWidgets import QLineEdit
+        self.inp_name = QLineEdit()
         self.inp_name.setPlaceholderText("مثال: ماكينة خياطة، فرن، مكبس...")
         self.inp_name.setMinimumHeight(30)
-        self.sp_rate_hour  = _spin()
-        self.sp_rate_unit  = _spin()
-        self.cmb_category  = CategoryCombo(self._live_conn(), scope="machine")
 
-        form.addRow("اسم الماكينة :",       self.inp_name)
-        form.addRow("معدل التشغيل / ساعة :", _labeled(self.sp_rate_hour, "جنيه / ساعة"))
-        form.addRow("معدل التشغيل / وحدة :", _labeled(self.sp_rate_unit, "جنيه / وحدة"))
-        form.addRow("التصنيف :",             self.cmb_category)
+        self.sp_rate_hour = spin_field(max_=999999, dec=2)
+        self.sp_rate_unit = spin_field(max_=999999, dec=2)
+        self.cmb_category = CategoryCombo(self._live_conn(), scope="machine")
+
+        grp.add_row("اسم الماكينة :",       self.inp_name)
+        grp.add_row("معدل التشغيل / ساعة :", labeled_widget(self.sp_rate_hour, "جنيه / ساعة"))
+        grp.add_row("معدل التشغيل / وحدة :", labeled_widget(self.sp_rate_unit, "جنيه / وحدة"))
+        grp.add_row("التصنيف :",             self.cmb_category)
         root.addWidget(grp)
 
         self.btn_add    = QPushButton("➕  إضافة")

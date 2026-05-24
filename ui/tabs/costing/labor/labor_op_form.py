@@ -2,44 +2,29 @@
 ui/tabs/costing/labor/labor_op_form.py
 =======================================
 _LaborOpForm — فورم إضافة / تعديل عملية عمالة.
+
+التحسينات:
+  - يرث من LiveConnMixin
+  - يستخدم form_utils: FormGroup, labeled_widget, spin_field, ResultBadge
 """
 
 from PyQt5.QtWidgets import (
-    QWidget, QVBoxLayout, QHBoxLayout, QFormLayout,
-    QLineEdit, QPushButton, QDoubleSpinBox, QLabel, QGroupBox, QMessageBox,
-    QSizePolicy,
+    QWidget, QMessageBox, QPushButton, QLineEdit, QSizePolicy,
 )
-from PyQt5.QtCore import Qt
 
 from db.costing.operations_repo import (
     fetch_labor_op, insert_labor_op, update_labor_op,
 )
 from ui.helpers import EditModeMixin, buttons_row
 from ui.widgets.shared.category_manager import CategoryCombo
-from ui.widgets.shared.scrollable_form import wrap_in_scroll
+from ui.widgets.shared.connection_mixin import LiveConnMixin
+from ui.widgets.shared.form_utils import (
+    FormGroup, labeled_widget, spin_field, ResultBadge, build_inner_scroll,
+)
 from ui.events import bus
 
 
-def _spin(max_=999999, dec=2):
-    s = QDoubleSpinBox()
-    s.setRange(0, max_)
-    s.setDecimals(dec)
-    s.setMinimumHeight(30)
-    return s
-
-
-def _labeled(widget, unit):
-    w = QWidget()
-    lay = QHBoxLayout(w)
-    lay.setContentsMargins(0, 0, 0, 0)
-    lay.setSpacing(6)
-    lay.addWidget(widget)
-    lay.addWidget(QLabel(unit))
-    lay.addStretch()
-    return w
-
-
-class _LaborOpForm(QWidget, EditModeMixin):
+class _LaborOpForm(QWidget, EditModeMixin, LiveConnMixin):
     def __init__(self, conn, settings, parent=None):
         super().__init__(parent)
         self.conn      = conn
@@ -48,61 +33,31 @@ class _LaborOpForm(QWidget, EditModeMixin):
         self.init_edit_mode(self.btn_add, self.btn_save, self.btn_cancel, self.lbl_mode)
         bus.data_changed.connect(self._update_preview)
 
-    # ── connection صالح دايماً ────────────────────────────
-
-    def _live_conn(self):
-        if self.conn is not None:
-            try:
-                self.conn.execute("SELECT 1")
-                return self.conn
-            except Exception:
-                pass
-        from db.companies.company_state import company_state
-        return company_state.get_erp_conn()
-
     def _build(self):
-        outer = QVBoxLayout(self)
-        outer.setContentsMargins(0, 0, 0, 0)
-        outer.setSpacing(0)
+        _outer, _inner, root = build_inner_scroll(self, min_width=260)
 
-        self._inner = QWidget()
-        self._inner.setMinimumWidth(260)
-        self._inner.setSizePolicy(QSizePolicy.Preferred, QSizePolicy.Minimum)
+        grp = FormGroup("بيانات العملية")
 
-        scroll = wrap_in_scroll(self._inner)
-        outer.addWidget(scroll)
-
-        layout = QVBoxLayout(self._inner)
-        layout.setSpacing(10)
-        layout.setContentsMargins(12, 12, 12, 12)
-
-        grp  = QGroupBox("بيانات العملية")
-        form = QFormLayout(grp)
-        form.setSpacing(10)
-        form.setLabelAlignment(Qt.AlignRight)
-
+        from PyQt5.QtWidgets import QLabel
         self.lbl_mode = QLabel("─── إضافة عملية عمالة جديدة ───")
         self.lbl_mode.setStyleSheet("font-weight:bold; color:#1565c0;")
-        form.addRow(self.lbl_mode)
+        grp.add_label_row(self.lbl_mode)
 
-        self.inp_name   = QLineEdit()
+        self.inp_name = QLineEdit()
         self.inp_name.setPlaceholderText("مثال: خياطة، تغليف...")
         self.inp_name.setMinimumHeight(30)
-        self.sp_minutes = _spin(99999, 2)
+
+        self.sp_minutes = spin_field(max_=99999, dec=2)
         self.sp_minutes.valueChanged.connect(self._update_preview)
+
         self.cmb_category = CategoryCombo(self._live_conn(), scope="labor")
+        self.lbl_cost = ResultBadge()
 
-        self.lbl_cost = QLabel("─")
-        self.lbl_cost.setStyleSheet(
-            "color:#1a6e1a; font-weight:bold;"
-            "background:#f0faf0; border:1px solid #b2dfb2; border-radius:4px; padding:4px 8px;"
-        )
-
-        form.addRow("اسم العملية :", self.inp_name)
-        form.addRow("الوقت :",       _labeled(self.sp_minutes, "دقيقة"))
-        form.addRow("التصنيف :",     self.cmb_category)
-        form.addRow("التكلفة :",     self.lbl_cost)
-        layout.addWidget(grp)
+        grp.add_row("اسم العملية :", self.inp_name)
+        grp.add_row("الوقت :",       labeled_widget(self.sp_minutes, "دقيقة"))
+        grp.add_row("التصنيف :",     self.cmb_category)
+        grp.add_row("التكلفة :",     self.lbl_cost)
+        root.addWidget(grp)
 
         self.btn_add    = QPushButton("➕  إضافة")
         self.btn_save   = QPushButton("💾  حفظ التعديل")
@@ -112,13 +67,13 @@ class _LaborOpForm(QWidget, EditModeMixin):
         self.btn_add.clicked.connect(self._add)
         self.btn_save.clicked.connect(self._save_edit)
         self.btn_cancel.clicked.connect(self._cancel)
-        layout.addLayout(buttons_row(self.btn_add, self.btn_save, self.btn_cancel))
-        layout.addStretch()
+        root.addLayout(buttons_row(self.btn_add, self.btn_save, self.btn_cancel))
+        root.addStretch()
 
     def _update_preview(self):
         rate = self._settings.get_hourly_rate()
         cost = (self.sp_minutes.value() / 60.0) * rate
-        self.lbl_cost.setText(
+        self.lbl_cost.set_value(
             f"{cost:.2f} جنيه / وحدة   ({self.sp_minutes.value():.2f} د ÷ 60 × {rate:.2f})"
         )
 
@@ -169,6 +124,6 @@ class _LaborOpForm(QWidget, EditModeMixin):
     def _reset(self):
         self.inp_name.clear()
         self.sp_minutes.setValue(0)
-        self.lbl_cost.setText("─")
+        self.lbl_cost.reset()
         self.cmb_category.setCurrentIndex(0)
         self.exit_edit_mode("─── إضافة عملية عمالة جديدة ───")

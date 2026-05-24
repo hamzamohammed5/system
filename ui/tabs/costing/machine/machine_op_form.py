@@ -2,15 +2,16 @@
 ui/tabs/costing/machine/machine_op_form.py
 ==========================================
 _MachineOpForm — فورم إضافة / تعديل عملية تشغيل.
+
+التحسينات:
+  - يرث من LiveConnMixin
+  - يستخدم form_utils: FormGroup, ModeBadge, ResultBadge, build_inner_scroll
 """
 
 from PyQt5.QtWidgets import (
-    QWidget, QVBoxLayout, QHBoxLayout, QFormLayout,
-    QLineEdit, QPushButton, QLabel,
-    QMessageBox, QGroupBox, QComboBox,
-    QSizePolicy,
+    QWidget, QMessageBox, QPushButton, QLineEdit,
+    QComboBox, QSizePolicy,
 )
-from PyQt5.QtCore import Qt
 
 from db.costing.operations_repo import (
     fetch_machine, fetch_machine_op,
@@ -20,12 +21,15 @@ from db.costing.operations_repo import (
 from db.costing.machine_op_rows_repo import calc_op_total_cost
 from ui.helpers import EditModeMixin, buttons_row
 from ui.widgets.shared.category_manager import CategoryCombo
-from ui.widgets.shared.scrollable_form import wrap_in_scroll
+from ui.widgets.shared.connection_mixin import LiveConnMixin
+from ui.widgets.shared.form_utils import (
+    FormGroup, ModeBadge, ResultBadge, build_inner_scroll,
+)
 from ui.tabs.costing.shared.machine_op_rows_editor import _OpRowsEditor
 from ui.events import bus
 
 
-class _MachineOpForm(QWidget, EditModeMixin):
+class _MachineOpForm(QWidget, EditModeMixin, LiveConnMixin):
     def __init__(self, conn, parent=None):
         super().__init__(parent)
         self.conn = conn
@@ -34,42 +38,15 @@ class _MachineOpForm(QWidget, EditModeMixin):
         self.init_edit_mode(self.btn_add, self.btn_save, self.btn_cancel, self.lbl_mode)
         bus.data_changed.connect(self._refresh_machines)
 
-    # ── connection صالح دايماً ────────────────────────────
-
-    def _live_conn(self):
-        if self.conn is not None:
-            try:
-                self.conn.execute("SELECT 1")
-                return self.conn
-            except Exception:
-                pass
-        from db.companies.company_state import company_state
-        return company_state.get_erp_conn()
-
     def _build(self):
-        outer = QVBoxLayout(self)
-        outer.setContentsMargins(0, 0, 0, 0)
-        outer.setSpacing(0)
+        _outer, _inner, root = build_inner_scroll(self, min_width=280)
 
-        self._inner = QWidget()
-        self._inner.setMinimumWidth(280)
-        self._inner.setSizePolicy(QSizePolicy.Preferred, QSizePolicy.Minimum)
+        grp = FormGroup("بيانات عملية التشغيل")
 
-        scroll = wrap_in_scroll(self._inner)
-        outer.addWidget(scroll)
-
-        root = QVBoxLayout(self._inner)
-        root.setSpacing(10)
-        root.setContentsMargins(12, 12, 12, 12)
-
-        grp  = QGroupBox("بيانات عملية التشغيل")
-        form = QFormLayout(grp)
-        form.setSpacing(10)
-        form.setLabelAlignment(Qt.AlignRight)
-
+        from PyQt5.QtWidgets import QLabel
         self.lbl_mode = QLabel("─── إضافة عملية تشغيل جديدة ───")
         self.lbl_mode.setStyleSheet("font-weight:bold; color:#1565c0;")
-        form.addRow(self.lbl_mode)
+        grp.add_label_row(self.lbl_mode)
 
         self.inp_name = QLineEdit()
         self.inp_name.setPlaceholderText("مثال: خياطة غرزة، كبس...")
@@ -78,12 +55,8 @@ class _MachineOpForm(QWidget, EditModeMixin):
         self.cmb_machine = QComboBox()
         self.cmb_machine.setMinimumHeight(30)
 
-        self.lbl_machine_mode = QLabel("─")
-        self.lbl_machine_mode.setStyleSheet(
-            "color:#e65100; font-weight:bold; font-size:11px;"
-            "background:#fff3e0; border:1px solid #ffcc80;"
-            "border-radius:4px; padding:3px 8px;"
-        )
+        # ModeBadge بدل QLabel عادي
+        self.lbl_machine_mode = ModeBadge(color="orange")
         self.lbl_machine_mode.setToolTip(
             "وضع الحساب يُحدد تلقائياً من الماكينة المختارة\n"
             "لتغييره، عدّل إعداد الماكينة في تبويب الماكينات"
@@ -91,17 +64,14 @@ class _MachineOpForm(QWidget, EditModeMixin):
 
         self.cmb_category = CategoryCombo(self._live_conn(), scope="machine")
 
-        self.lbl_cost = QLabel("─")
-        self.lbl_cost.setStyleSheet(
-            "color:#1a6e1a; font-weight:bold;"
-            "background:#f0faf0; border:1px solid #b2dfb2; border-radius:4px; padding:4px 8px;"
-        )
+        # ResultBadge بدل QLabel عادي
+        self.lbl_cost = ResultBadge()
 
-        form.addRow("اسم العملية :",     self.inp_name)
-        form.addRow("الماكينة :",        self.cmb_machine)
-        form.addRow("وضع الحساب :",      self.lbl_machine_mode)
-        form.addRow("التصنيف :",         self.cmb_category)
-        form.addRow("إجمالي التكلفة :", self.lbl_cost)
+        grp.add_row("اسم العملية :",     self.inp_name)
+        grp.add_row("الماكينة :",        self.cmb_machine)
+        grp.add_row("وضع الحساب :",      self.lbl_machine_mode)
+        grp.add_row("التصنيف :",         self.cmb_category)
+        grp.add_row("إجمالي التكلفة :", self.lbl_cost)
         root.addWidget(grp)
 
         self.btn_add    = QPushButton("➕  إضافة العملية")
@@ -116,14 +86,13 @@ class _MachineOpForm(QWidget, EditModeMixin):
 
         self._rows_editor = _OpRowsEditor(self._live_conn())
         root.addWidget(self._rows_editor)
-
         root.addStretch()
 
         self.cmb_machine.currentIndexChanged.connect(self._on_machine_changed)
         self._refresh_machines()
 
     # ══════════════════════════════════════════════════════
-    # تحديث الماكينات والوضع
+    # تحديث الماكينات
     # ══════════════════════════════════════════════════════
 
     def _refresh_machines(self):
@@ -147,7 +116,7 @@ class _MachineOpForm(QWidget, EditModeMixin):
     def _on_machine_changed(self):
         machine_id = self.cmb_machine.currentData()
         if machine_id is None:
-            self.lbl_machine_mode.setText("─")
+            self.lbl_machine_mode.reset()
             if self._rows_editor is not None:
                 self._rows_editor.update_rates("time", 0.0, 0.0)
             return
@@ -160,20 +129,20 @@ class _MachineOpForm(QWidget, EditModeMixin):
 
         if float(m["rate_per_hour"]) > 0:
             mode = "time"
-            self.lbl_machine_mode.setText(
-                f"⏱ بالوقت  │  {m['rate_per_hour']:.2f} جنيه/ساعة"
+            self.lbl_machine_mode.set_mode(
+                f"⏱ بالوقت  │  {m['rate_per_hour']:.2f} جنيه/ساعة",
+                color="orange"
             )
         else:
             mode = "unit"
-            self.lbl_machine_mode.setText(
-                f"📦 بالوحدة  │  {m['rate_per_unit']:.2f} جنيه/وحدة"
+            self.lbl_machine_mode.set_mode(
+                f"📦 بالوحدة  │  {m['rate_per_unit']:.2f} جنيه/وحدة",
+                color="blue"
             )
 
         if self._rows_editor is not None and self._rows_editor.isEnabled():
             self._rows_editor.update_rates(
-                mode,
-                float(m["rate_per_hour"]),
-                float(m["rate_per_unit"])
+                mode, float(m["rate_per_hour"]), float(m["rate_per_unit"])
             )
 
         self._update_cost_label()
@@ -183,11 +152,11 @@ class _MachineOpForm(QWidget, EditModeMixin):
         if editing_id is not None and editing_id > 0:
             try:
                 total = calc_op_total_cost(self._live_conn(), editing_id)
-                self.lbl_cost.setText(f"{total:.4f} جنيه / قطعة")
+                self.lbl_cost.set_value(f"{total:.4f} جنيه / قطعة")
             except Exception:
-                self.lbl_cost.setText("─")
+                self.lbl_cost.reset()
         else:
-            self.lbl_cost.setText("─ (أضف العملية أولاً لتظهر الصفوف)")
+            self.lbl_cost.set_value("─ (أضف العملية أولاً لتظهر الصفوف)")
 
     # ══════════════════════════════════════════════════════
     # تحميل للتعديل
@@ -201,12 +170,10 @@ class _MachineOpForm(QWidget, EditModeMixin):
         if not op:
             return
         self.inp_name.setText(op["name"])
-
         for i in range(self.cmb_machine.count()):
             if self.cmb_machine.itemData(i) == op["machine_id"]:
                 self.cmb_machine.setCurrentIndex(i)
                 break
-
         self.cmb_category.set_category(op["category_id"])
         self.enter_edit_mode(op_id, f"─── تعديل: {op['name']} ───")
 
@@ -268,7 +235,6 @@ class _MachineOpForm(QWidget, EditModeMixin):
         except Exception:
             rate_h = rate_u = 0.0
         self._rows_editor.load_op(op_id, mode, rate_h, rate_u)
-
         self.enter_edit_mode(op_id, f"─── تعديل صفوف: {name} ───")
         self.btn_add.setVisible(False)
         self._update_cost_label()
@@ -306,7 +272,7 @@ class _MachineOpForm(QWidget, EditModeMixin):
     def _reset(self):
         self.inp_name.clear()
         self.cmb_category.setCurrentIndex(0)
-        self.lbl_cost.setText("─")
+        self.lbl_cost.reset()
         self._rows_editor.clear()
         self.exit_edit_mode("─── إضافة عملية تشغيل جديدة ───")
         self.btn_add.setVisible(True)
