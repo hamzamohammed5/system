@@ -4,9 +4,10 @@ ui/tabs/accounting/journal/journal_tree_table.py
 _JournalTreeTable — جدول القيود المحاسبية مع expand/collapse وفلاتر متكاملة.
 JournalTab        — التبويب الرئيسي يجمع الفورم والجدول.
 
-تغييرات (v2):
-  - يستمع لـ bus.company_data_changed بدل bus.data_changed العام.
-  - يتحقق من الـ company_id قبل إعادة التحميل لعزل الشركات.
+إصلاحات (v3 — SafeConnMixin):
+  - _JournalTreeTable يستخدم SafeConnMixin بدل self.conn الثابت.
+  - كل query تستخدم _get_safe_conn() لضمان conn الشركة النشطة.
+  - يستمع لـ bus.company_data_changed ويتحقق من company_id.
 """
 
 from PyQt5.QtWidgets import (
@@ -26,49 +27,33 @@ from ui.helpers import (
     danger_button, confirm_delete,
 )
 from ui.events import bus
+from ui.tabs.accounting.safe_conn_mixin import SafeConnMixin
 from ..helpers  import TYPE_COLORS
 from .journal_filter  import _JournalFilterBar
 from .journal_form    import _JournalForm
 
 
-def _get_current_company_id() -> int | None:
-    try:
-        from db.companies.company_state import company_state
-        return company_state.company_id if company_state.is_ready else None
-    except Exception:
-        return None
-
-
-class _JournalTreeTable(QWidget):
+class _JournalTreeTable(SafeConnMixin, QWidget):
     """
-    جدول القيود المحاسبية:
-    - كل قيد يُعرض كصف رئيسي قابل للتوسيع/الطي
-    - عند التوسيع تظهر صفوف الحسابات (DR/CR) تحته
-    - فلاتر: بحث + تصنيف شجري + توازن + نطاق تاريخ
-    - يستجيب فقط لأحداث الشركة النشطة عند إنشائه
+    جدول القيود المحاسبية — يستخدم SafeConnMixin لضمان conn الشركة الصح.
     """
 
     COLS = ["#", "التاريخ", "رقم القيد", "البيان / الحساب", "DR", "CR", "الحالة"]
 
     def __init__(self, conn, parent=None):
         super().__init__(parent)
-        self.conn          = conn
+        self._init_safe_conn(conn, "accounting")
         self._expanded: set[int] = set()
         self._entries_data = []
         self._row_meta     = {}
-
-        # حفظ الـ company_id عند الإنشاء لفلترة الأحداث
-        self._company_id   = _get_current_company_id()
+        self._company_id   = self._get_company_id()
 
         self._build()
         self._load()
-
-        # الاستماع للأحداث المقيّدة بالشركة فقط
         bus.company_data_changed.connect(self._on_company_data_changed)
 
     def _on_company_data_changed(self, company_id: int):
-        """يُعيد التحميل فقط لو الحدث من نفس شركتنا."""
-        if company_id == self._company_id:
+        if self._on_company_event_safe(company_id):
             self._load()
 
     # ══════════════════════════════════════════════════════
@@ -83,7 +68,7 @@ class _JournalTreeTable(QWidget):
         root.addWidget(section_label("── القيود المحاسبية المحفوظة ──"))
 
         # ── شريط الفلاتر ──
-        self._filter = _JournalFilterBar(self.conn)
+        self._filter = _JournalFilterBar(self._get_safe_conn())
         self._filter.inp_search.textChanged.connect(self._apply_filter)
         self._filter.cmb_group._tree_view.clicked.connect(
             lambda _: QTimer.singleShot(50, self._apply_filter)
@@ -152,10 +137,11 @@ class _JournalTreeTable(QWidget):
     # ══════════════════════════════════════════════════════
 
     def _load(self):
-        entries = fetch_all_entries(self.conn)
+        conn = self._get_safe_conn()   # [إصلاح] conn حي دائماً
+        entries = fetch_all_entries(conn)
         self._entries_data = []
         for e in entries:
-            lines = fetch_entry_lines(self.conn, e["id"])
+            lines = fetch_entry_lines(conn, e["id"])
             self._entries_data.append({
                 "id":           e["id"],
                 "ref_no":       e["ref_no"],
@@ -329,9 +315,8 @@ class _JournalTreeTable(QWidget):
         )
         desc = entry_data["description"] if entry_data else f"ID:{eid}"
         if confirm_delete(self, desc):
-            delete_entry(self.conn, eid)
+            delete_entry(self._get_safe_conn(), eid)   # [إصلاح] conn حي
             self._expanded.discard(eid)
-            # أطلق الحدث المقيّد بالشركة
             bus.company_data_changed.emit(self._company_id or 0)
 
 
@@ -340,12 +325,6 @@ class _JournalTreeTable(QWidget):
 # ══════════════════════════════════════════════════════════
 
 class JournalTab(QWidget):
-    """
-    تبويب القيود المحاسبية الكامل:
-    - فورم إدخال القيد (أعلى)
-    - جدول القيود المحفوظة مع فلاتر (أسفل)
-    """
-
     def __init__(self, conn, erp_conn=None, parent=None):
         super().__init__(parent)
         self.conn     = conn

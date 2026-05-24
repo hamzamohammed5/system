@@ -3,12 +3,10 @@ ui/tabs/accounting/journal/journal_filter.py
 ======================================
 _JournalFilterBar — شريط فلاتر القيود المحاسبية.
 
-يوفر:
-  - بحث نصي في الوصف ورقم القيد
-  - فلتر تصنيف الحسابات (شجرة هرمية عبر _TreeGroupCombo)
-  - فلتر التوازن (متوازن / غير متوازن)
-  - نطاق التاريخ من/إلى
-  - زر مسح الفلاتر
+[إصلاح v2]:
+  - SafeConnMixin بدل self.conn الثابت.
+  - _reload_group_combo() تُعيد بناء _TreeGroupCombo بـ conn حي عند تغيير الشركة.
+  - يستمع لـ bus.company_data_changed لتحديث فلتر التصنيفات.
 """
 
 from PyQt5.QtWidgets import (
@@ -17,15 +15,18 @@ from PyQt5.QtWidgets import (
 )
 from PyQt5.QtCore import Qt, QDate, QTimer
 
+from ui.tabs.accounting.safe_conn_mixin import SafeConnMixin
+from ui.events import bus
 from .journal_group_combo import _TreeGroupCombo
 
 
-class _JournalFilterBar(QFrame):
+class _JournalFilterBar(SafeConnMixin, QFrame):
     """شريط فلاتر متكامل لجدول القيود — بفلتر تصنيفات شجري."""
 
     def __init__(self, conn, parent=None):
         super().__init__(parent)
-        self.conn = conn
+        self._init_safe_conn(conn, "accounting")
+        self._company_id = self._get_company_id()
         self.setStyleSheet("""
             QFrame {
                 background: #f0f4ff;
@@ -34,6 +35,31 @@ class _JournalFilterBar(QFrame):
             }
         """)
         self._build()
+        bus.company_data_changed.connect(self._on_company_event)
+
+    def _on_company_event(self, company_id: int):
+        """يُعيد بناء _TreeGroupCombo بـ conn الشركة الجديدة."""
+        if self._on_company_event_safe(company_id):
+            QTimer.singleShot(0, self._reload_group_combo)
+
+    def _reload_group_combo(self):
+        """يُعيد إنشاء _TreeGroupCombo بـ conn حي."""
+        conn = self._get_safe_conn()
+        old_combo = self.cmb_group
+        new_combo = _TreeGroupCombo(conn)
+        new_combo.setMinimumHeight(30)
+        new_combo.setMinimumWidth(200)
+        new_combo.setMaximumWidth(280)
+        new_combo.setStyleSheet(old_combo.styleSheet())
+        # استبدال الـ widget في الـ layout
+        layout = old_combo.parent().layout() if old_combo.parent() else None
+        if layout:
+            idx = layout.indexOf(old_combo)
+            if idx >= 0:
+                layout.removeWidget(old_combo)
+                old_combo.deleteLater()
+                layout.insertWidget(idx, new_combo)
+        self.cmb_group = new_combo
 
     def _build(self):
         root = QVBoxLayout(self)
@@ -65,7 +91,7 @@ class _JournalFilterBar(QFrame):
             "font-size:11px; color:#555;"
         )
 
-        self.cmb_group = _TreeGroupCombo(self.conn)
+        self.cmb_group = _TreeGroupCombo(self._get_safe_conn())
         self.cmb_group.setMinimumHeight(30)
         self.cmb_group.setMinimumWidth(200)
         self.cmb_group.setMaximumWidth(280)
@@ -184,7 +210,6 @@ class _JournalFilterBar(QFrame):
         self.dt_to.setDate(QDate.currentDate())
 
     def matches(self, entry: dict) -> bool:
-        """يتحقق إذا كان القيد يطابق الفلاتر الحالية."""
         q = self.inp_search.text().strip().lower()
         if q:
             desc   = (entry.get("description") or "").lower()

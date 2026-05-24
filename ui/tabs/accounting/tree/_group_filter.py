@@ -2,6 +2,10 @@
 ui/tabs/accounting/tree/_group_filter.py
 ==================================================
 _GroupFilterCombo — Combo فلتر التصنيفات في شجرة الحسابات.
+
+[إصلاح v2] SafeConnMixin بدل self.conn الثابت.
+  - _get_safe_conn() في كل query بدل self.conn المحفوظ.
+  - refresh(conn=None) تقبل conn خارجي (من AccountsTreePanel عند تغيير الشركة).
 """
 
 from PyQt5.QtWidgets import QComboBox
@@ -10,25 +14,33 @@ from PyQt5.QtGui  import QColor
 
 from db.accounting.accounting_repo import fetch_all_groups, build_group_tree
 from ui.tabs.accounting.helpers import TYPE_COLORS
+from ui.tabs.accounting.safe_conn_mixin import SafeConnMixin
 
 
-class _GroupFilterCombo(QComboBox):
+class _GroupFilterCombo(SafeConnMixin, QComboBox):
     """Combo لفلترة الحسابات بالتصنيف."""
 
     def __init__(self, conn, acc_types: list, parent=None):
         super().__init__(parent)
-        self.conn      = conn
+        self._init_safe_conn(conn, "accounting")
         self.acc_types = acc_types
         self.refresh()
 
-    def refresh(self, restore_id=None):
+    def refresh(self, restore_id=None, conn=None):
+        """
+        يُعيد تحميل التصنيفات.
+        conn: لو مُمرر من الخارج (عند تغيير الشركة) يستخدمه مباشرةً،
+              وإلا يستخدم _get_safe_conn().
+        """
+        effective_conn = conn if conn is not None else self._get_safe_conn()
+
         self.blockSignals(True)
         prev = restore_id if restore_id is not None else self.currentData()
         self.clear()
         self.addItem("— كل التصنيفات —", None)
         for t in self.acc_types:
             try:
-                rows = fetch_all_groups(self.conn, t)
+                rows = fetch_all_groups(effective_conn, t)
                 tree = build_group_tree(rows)
                 self._add_nodes(tree, 0)
             except Exception as e:

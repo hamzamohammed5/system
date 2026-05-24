@@ -3,10 +3,10 @@ ui/tabs/accounting/ledger_tab.py
 =========================================
 LedgerTab — التبويب الرئيسي لدفتر الأستاذ.
 
-إصلاحات (v4 — SafeConnMixin):
-  - SafeConnMixin بدل conn property يدوي (متسق مع باقي التبويبات).
-  - يستمع لـ bus.company_data_changed ويعيد تحميل الحسابات بـ conn محدث.
-  - _AccountsPanel و _TAccountPanel يستخدمان SafeConnMixin كمان.
+إصلاحات (v5 — conn isolation):
+  - _TAccountPanel لا تستقبل conn في __init__ بعد الآن.
+  - _on_account_selected تمرر _get_safe_conn() مباشرةً لـ load().
+  - ضمان أن كل query تستخدم conn الشركة النشطة حتى بعد تبديل الشركة.
 """
 
 from PyQt5.QtWidgets import (
@@ -59,7 +59,8 @@ class LedgerTab(SafeConnMixin, QWidget):
         rl    = QVBoxLayout(right)
         rl.setContentsMargins(6, 10, 10, 10)
         rl.setSpacing(0)
-        self._t_panel = _TAccountPanel(self._get_safe_conn())
+        # [إصلاح] لا نمرر conn هنا — يتمرر في كل load()
+        self._t_panel = _TAccountPanel()
         rl.addWidget(self._t_panel)
         splitter.addWidget(right)
 
@@ -67,4 +68,5 @@ class LedgerTab(SafeConnMixin, QWidget):
         root.addWidget(splitter)
 
     def _on_account_selected(self, acc_id: int):
+        # [إصلاح] نمرر conn حي دائماً — مش conn قديم محفوظ
         self._t_panel.load(self._get_safe_conn(), acc_id)

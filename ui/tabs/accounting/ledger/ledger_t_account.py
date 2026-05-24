@@ -3,9 +3,11 @@ ui/tabs/accounting/ledger/ledger_t_account.py
 ==============================================
 _TAccountPanel — لوحة حساب T في دفتر الأستاذ.
 
-تغييرات (v2):
-  - لا يستمع لأي bus event (يتحدث عبر load() المستدعى من _AccountsPanel).
-  - _AccountsPanel هي المسؤولة عن الاستماع للأحداث وإعادة تحميل البيانات.
+[إصلاح v3]:
+  - لا يحفظ conn في __init__ إطلاقاً.
+  - load(conn, account_id) يستخدم الـ conn المُمرر مباشرةً من LedgerTab.
+  - LedgerTab هي المسؤولة عن تمرير conn صالح عبر _get_safe_conn().
+  - _apply_filter() تحفظ آخر conn صالح عبر self._last_conn للـ re-filter.
 """
 
 from PyQt5.QtWidgets import (
@@ -24,11 +26,19 @@ from .ledger_stat_cards import _StatCards
 
 
 class _TAccountPanel(QWidget):
-    def __init__(self, conn, parent=None):
+    def __init__(self, parent=None):
         super().__init__(parent)
-        self.conn      = conn
         self._all_data = None
+        self._last_conn = None   # آخر conn صالح — للـ re-filter فقط
         self._build()
+
+    # ── التوافق مع الكود القديم الذي يمرر conn في __init__ ──────────
+    @classmethod
+    def with_conn(cls, conn, parent=None):
+        """factory للتوافق مع: _TAccountPanel(conn)"""
+        obj = cls(parent)
+        obj._last_conn = conn
+        return obj
 
     def _build(self):
         root = QVBoxLayout(self)
@@ -177,6 +187,11 @@ class _TAccountPanel(QWidget):
         return tbl
 
     def load(self, conn, account_id: int):
+        """
+        [مهم] conn يأتي دائماً من LedgerTab._get_safe_conn()
+        — لا نحفظه في self.conn، نحفظه فقط في _last_conn للـ re-filter.
+        """
+        self._last_conn = conn
         data = fetch_t_account(conn, account_id)
         if not data:
             return
@@ -274,7 +289,8 @@ class _TAccountPanel(QWidget):
         tbl.setItem(r, 3, amt_item)
 
     def clear(self):
-        self._all_data = None
+        self._all_data  = None
+        self._last_conn = None
         self.t_dr_table.setRowCount(0)
         self.t_cr_table.setRowCount(0)
         self.lbl_dr_total.setText("الإجمالي: 0.00")

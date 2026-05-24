@@ -2,6 +2,11 @@
 ui/tabs/accounting/journal/account_picker/_account_tree_popup.py
 =================================================================
 _AccountTreePopup — نافذة popup شجرية لاختيار حساب.
+
+[إصلاح v2]:
+  - لا تحفظ conn داخلياً — تستقبله في __init__ وتستخدمه فوراً لتحميل البيانات.
+  - المستدعي (_AccountPickerButton) مسؤول عن تمرير conn حي دائماً.
+  - fetch_account في get_selected_type تأخذ conn من المستدعي أيضاً.
 """
 
 from PyQt5.QtWidgets import (
@@ -36,11 +41,18 @@ _EQUITY_LABEL = "حقوق الملكية"
 
 
 class _AccountTreePopup(QDialog):
-    """نافذة popup تعرض الحسابات في شجرة قابلة للطي مع بحث نصي."""
+    """
+    نافذة popup تعرض الحسابات في شجرة قابلة للطي مع بحث نصي.
+
+    [مهم] conn يُمرر عند الإنشاء ويُستخدم فوراً في _load_accounts().
+    المستدعي مسؤول عن تمرير conn صالح (حي) من _get_safe_conn().
+    """
 
     def __init__(self, conn, acc_types=None, parent=None):
         super().__init__(parent, Qt.Popup | Qt.FramelessWindowHint)
-        self.conn           = conn
+        # نحفظ conn لاستخدامه في _load_accounts و get_selected_type فقط
+        # — لا نستخدمه بعد إغلاق الـ popup
+        self._conn          = conn
         self.acc_types      = acc_types or _TYPE_ORDER
         self._selected_id   = None
         self._selected_name = None
@@ -101,7 +113,7 @@ class _AccountTreePopup(QDialog):
         self._all_accounts = []
         for acc_type in self.acc_types:
             try:
-                rows = fetch_all_accounts(self.conn, acc_type)
+                rows = fetch_all_accounts(self._conn, acc_type)
                 for r in rows:
                     if r["is_leaf"]:
                         self._all_accounts.append({
@@ -299,5 +311,5 @@ class _AccountTreePopup(QDialog):
     def get_selected_type(self):
         if not self._selected_id:
             return None
-        acc = fetch_account(self.conn, self._selected_id)
+        acc = fetch_account(self._conn, self._selected_id)
         return acc["type"] if acc else None

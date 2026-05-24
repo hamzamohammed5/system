@@ -3,10 +3,11 @@ ui/tabs/accounting/journal/journal_form.py
 ====================================
 _JournalForm — فورم إدخال القيد اليومي الكامل.
 
-يستخدم _LinesPanel لإدارة الصفوف ويعرض شريط التوازن DR/CR.
-
-تغييرات (v2):
-  - بعد الحفظ يُطلق bus.company_data_changed(company_id) بدل bus.data_changed العام.
+[إصلاح v3 — SafeConnMixin]:
+  - SafeConnMixin بدل self.conn الثابت.
+  - _get_safe_conn() في كل عملية حفظ.
+  - _LinesPanel تستقبل conn حي من _get_safe_conn() عند الإنشاء.
+  - erp_conn يبقى كما هو (يأتي من InvestorsTab وهو ProtectedConnection).
 """
 
 from PyQt5.QtWidgets import (
@@ -21,6 +22,7 @@ from db.accounting.accounting_repo import (
 )
 from ui.helpers import buttons_row
 from ui.events  import bus
+from ui.tabs.accounting.safe_conn_mixin import SafeConnMixin
 from .journal_lines import _LinesPanel
 
 
@@ -33,20 +35,19 @@ def _get_current_company_id() -> int | None:
 
 
 def _emit_data_changed():
-    """يُطلق الحدث المقيّد بالشركة النشطة."""
     cid = _get_current_company_id()
     if cid is not None:
         bus.company_data_changed.emit(cid)
     else:
-        bus.data_changed.emit()   # fallback للتوافق
+        bus.data_changed.emit()
 
 
-class _JournalForm(QWidget):
+class _JournalForm(SafeConnMixin, QWidget):
     """فورم كامل لإدخال قيد يومية جديد مع صفوف ذكية وشريط توازن."""
 
     def __init__(self, conn, erp_conn=None, parent=None):
         super().__init__(parent)
-        self.conn     = conn
+        self._init_safe_conn(conn, "accounting")
         self.erp_conn = erp_conn
         self._build()
 
@@ -82,9 +83,9 @@ class _JournalForm(QWidget):
         info_row.addWidget(self.inp_desc, stretch=1)
         root.addLayout(info_row)
 
-        # لوحة الصفوف
+        # لوحة الصفوف — تستقبل conn حي عند الإنشاء
         self._lines_panel = _LinesPanel(
-            self.conn, self.erp_conn, self._on_balance_changed
+            self._get_safe_conn(), self.erp_conn, self._on_balance_changed
         )
         root.addWidget(self._lines_panel)
 
@@ -207,6 +208,8 @@ class _JournalForm(QWidget):
             self.btn_save.setEnabled(False)
 
     def _save(self):
+        conn = self._get_safe_conn()   # [إصلاح] conn حي دائماً
+
         desc = self.inp_desc.text().strip()
         if not desc:
             QMessageBox.warning(self, "تنبيه", "أدخل وصف القيد")
@@ -236,8 +239,8 @@ class _JournalForm(QWidget):
             return
 
         date     = self.dt_date.date().toString("yyyy-MM-dd")
-        entry_id = insert_entry(self.conn, date, desc, "manual")
-        add_entry_lines(self.conn, entry_id, all_lines)
+        entry_id = insert_entry(conn, date, desc, "manual")
+        add_entry_lines(conn, entry_id, all_lines)
 
         # ربط المستثمرين
         investor_links = self._lines_panel.get_all_investor_links()
@@ -249,12 +252,12 @@ class _JournalForm(QWidget):
                 amount    = link["amount"]
                 move_type = "capital" if acc_type == "capital" else "drawings"
                 if move_type == "capital":
-                    line_row = self.conn.execute(
+                    line_row = conn.execute(
                         "SELECT id FROM journal_lines WHERE entry_id=? AND credit>0 LIMIT 1",
                         (entry_id,)
                     ).fetchone()
                 else:
-                    line_row = self.conn.execute(
+                    line_row = conn.execute(
                         "SELECT id FROM journal_lines WHERE entry_id=? AND debit>0 LIMIT 1",
                         (entry_id,)
                     ).fetchone()
@@ -268,7 +271,7 @@ class _JournalForm(QWidget):
                     print(f"[JournalForm] investor link error: {e}")
 
         self._clear()
-        _emit_data_changed()   # حدث مقيّد بالشركة النشطة
+        _emit_data_changed()
         QMessageBox.information(self, "تم", "✅ تم حفظ القيد بنجاح")
 
     def _clear(self):
