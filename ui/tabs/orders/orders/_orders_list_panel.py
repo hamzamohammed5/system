@@ -52,6 +52,7 @@ class _OrdersListPanel(BaseListPanel):
     EMPTY_TITLE = "لا توجد طلبات"
 
     def __init__(self, conn, parent=None):
+        self._filter_bar = _FilterToolbar()
         super().__init__(conn=conn, parent=parent)
         self.item_selected.connect(self.order_selected.emit)
         self._status_delegate = _StatusDelegate(self.table)
@@ -63,7 +64,6 @@ class _OrdersListPanel(BaseListPanel):
 
     
     def _build_toolbar(self, lay: QVBoxLayout):
-        self._filter_bar = _FilterToolbar()
         self._filter_bar.btn_new.clicked.connect(self.new_order.emit)
         self._filter_bar.changed.connect(self._apply_filter)
         lay.addWidget(self._filter_bar)
@@ -76,12 +76,14 @@ class _OrdersListPanel(BaseListPanel):
         return fetch_all_orders(self.conn)
 
     def _match_filter(self, row, q: str) -> bool:
+        if not hasattr(self, '_filter_bar'):   # ← أضف هذا السطر
+            return True
         status   = self._filter_bar.status_filter
         priority = self._filter_bar.priority_filter
         if status   and row["status"]   != status:   return False
         if priority and row["priority"] != priority: return False
         if q and q not in row["order_number"].lower() \
-             and q not in row["customer_name"].lower():
+            and q not in row["customer_name"].lower():
             return False
         return True
 
