@@ -3,14 +3,14 @@ ui/tabs/accounting/helpers.py
 ==============================
 أدوات مساعدة صغيرة مشتركة بين تبويبات الحسابات.
 
-[تحديث] _stat_card تستخدم stat_card_pair من stat_row بدل كود محلي.
+[تحديث v2]: _stat_card تستخدم stat_card_pair من stat_row بدل كود محلي.
+[تحديث v3]: _spin تستخدم spin_field من form_utils بدل تعريف محلي مكرر.
 """
-
-from PyQt5.QtWidgets import QDoubleSpinBox
 
 from db.accounting.accounting_schema import TYPE_AR, NORMAL_BALANCE
 from ui.font_utils import card_title_style, card_value_style
 from ui.widgets.shared.stat_row import stat_card_pair   # ← الموحد
+from ui.widgets.shared.form_utils import spin_field     # ← الموحد (بدل التعريف المحلي)
 
 
 TYPE_COLORS = {
@@ -23,17 +23,12 @@ TYPE_COLORS = {
 }
 
 
-def _spin(max_=999_999_999, dec=2, min_height: int = 30) -> QDoubleSpinBox:
+def _spin(max_=999_999_999, dec=2, min_height: int = 30):
     """
     QDoubleSpinBox موحد.
-    ملاحظة: spin_field() في form_utils يوفر نفس الوظيفة مع ستايل أكثر.
-    هذه الدالة محتفظ بها للتوافق مع الكود القديم.
+    [تحديث v3]: wrapper حول spin_field للتوافق مع الكود القديم.
     """
-    s = QDoubleSpinBox()
-    s.setRange(0, max_)
-    s.setDecimals(dec)
-    s.setMinimumHeight(min_height)
-    return s
+    return spin_field(max_=float(max_), dec=dec, min_height=min_height)
 
 
 def _money(val: float) -> str:
@@ -43,6 +38,6 @@ def _money(val: float) -> str:
 def _stat_card(label: str, color: str = "#1565c0"):
     """
     يرجع (QFrame, QLabel_value) — بطاقة إحصائية.
-    [تحديث] يستخدم stat_card_pair الموحدة بدل كود محلي مكرر.
+    [تحديث]: يستخدم stat_card_pair الموحدة بدل كود محلي مكرر.
     """
     return stat_card_pair(label=label, color=color)

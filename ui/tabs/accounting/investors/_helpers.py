@@ -6,12 +6,15 @@ ui/tabs/accounting/investors/_helpers.py
   - دوال ملء القوائم (_fill_*)
   - دوال تسجيل القيود (_post_*)
   - _spin و _stat_card — مستوردة من helpers الموحد
+
+[تحديث]: استخدام spin_field و stat_card_pair مباشرة بدل تمريرهم عبر helpers.
 """
 
 from PyQt5.QtWidgets import QComboBox
 
-# ── استيراد من helpers الموحد بدل التكرار ──
-from ui.tabs.accounting.helpers import _spin, _stat_card  # noqa: F401
+# ── استيراد من الـ shared الموحد مباشرة ──
+from ui.widgets.shared.form_utils import spin_field as _spin          # noqa: F401
+from ui.widgets.shared.stat_row   import stat_card_pair as _stat_card  # noqa: F401
 
 from db.accounting.accounting_repo import fetch_leaf_accounts, insert_entry, add_entry_lines
 from db.inventory.investors_repo  import link_investor_to_line

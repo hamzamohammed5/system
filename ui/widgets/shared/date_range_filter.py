@@ -3,27 +3,16 @@ ui/widgets/shared/date_range_filter.py
 ========================================
 DateRangeFilter — فلتر نطاق التاريخ الموحد.
 
+[تحديث]: إضافة show_presets لاختصارات سريعة (اليوم / الشهر / العام).
+
 يحل محل الكود المكرر في:
   - _JournalFilterBar
   - _LedgerFilterBar
   - أي شريط فلاتر يحتوي على من/إلى
-
-الاستخدام:
-    from ui.widgets.shared.date_range_filter import DateRangeFilter
-
-    date_filter = DateRangeFilter()
-    layout.addLayout(date_filter.layout())
-
-    # فلترة:
-    if date_filter.in_range(date_str):
-        ...
-
-    # ربط signal:
-    date_filter.range_changed.connect(self._apply_filter)
 """
 
 from PyQt5.QtWidgets import (
-    QWidget, QHBoxLayout, QLabel, QDateEdit,
+    QWidget, QHBoxLayout, QLabel, QDateEdit, QPushButton,
 )
 from PyQt5.QtCore import QDate, pyqtSignal
 
@@ -47,25 +36,23 @@ _LBL_STYLE = (
     "font-size: 11px; color: #555;"
 )
 
+_PRESET_STYLE = """
+    QPushButton {
+        background: #e8eaf6; border: 1px solid #c5cae9;
+        border-radius: 4px; color: #3949ab;
+        font-size: 10px; padding: 2px 6px;
+        min-height: 22px;
+    }
+    QPushButton:hover { background: #c5cae9; }
+"""
+
 
 class DateRangeFilter(QWidget):
     """
-    فلتر نطاق التاريخ: [من: ___] [إلى: ___]
+    فلتر نطاق التاريخ: [من: ___] [إلى: ___] [اليوم] [الشهر] [العام]
 
     Signals:
         range_changed — يُطلق عند تغيير أي تاريخ
-
-    الاستخدام:
-        f = DateRangeFilter()
-        layout.addWidget(f)
-        f.range_changed.connect(self._filter)
-
-        # في الفلترة:
-        if f.in_range("2024-03-15"):
-            ...
-
-        # إعادة تعيين:
-        f.reset()
     """
 
     range_changed = pyqtSignal()
@@ -75,10 +62,12 @@ class DateRangeFilter(QWidget):
                  default_to: QDate = None,
                  width: int = 115,
                  height: int = 30,
+                 show_presets: bool = False,
                  parent=None):
         super().__init__(parent)
         self._width   = width
         self._height  = height
+        self._show_presets  = show_presets
         self._default_from = default_from or QDate(2000, 1, 1)
         self._default_to   = default_to or QDate.currentDate()
         self._build()
@@ -117,12 +106,47 @@ class DateRangeFilter(QWidget):
         lay.addWidget(lbl_to)
         lay.addWidget(self.dt_to)
 
-    def in_range(self, date_str: str) -> bool:
-        """
-        يتحقق لو التاريخ المحدد في النطاق.
+        # ── اختصارات سريعة (اختياري) ──
+        if self._show_presets:
+            btn_today = QPushButton("اليوم")
+            btn_month = QPushButton("الشهر")
+            btn_year  = QPushButton("العام")
+            for btn in (btn_today, btn_month, btn_year):
+                btn.setStyleSheet(_PRESET_STYLE)
+            btn_today.clicked.connect(self._preset_today)
+            btn_month.clicked.connect(self._preset_month)
+            btn_year.clicked.connect(self._preset_year)
+            lay.addWidget(btn_today)
+            lay.addWidget(btn_month)
+            lay.addWidget(btn_year)
 
-        date_str: تاريخ بصيغة "yyyy-MM-dd"
-        """
+    # ── presets ───────────────────────────────────────────
+
+    def _set_range(self, from_date: QDate, to_date: QDate):
+        self.dt_from.blockSignals(True)
+        self.dt_to.blockSignals(True)
+        self.dt_from.setDate(from_date)
+        self.dt_to.setDate(to_date)
+        self.dt_from.blockSignals(False)
+        self.dt_to.blockSignals(False)
+        self.range_changed.emit()
+
+    def _preset_today(self):
+        today = QDate.currentDate()
+        self._set_range(today, today)
+
+    def _preset_month(self):
+        today = QDate.currentDate()
+        self._set_range(QDate(today.year(), today.month(), 1), today)
+
+    def _preset_year(self):
+        today = QDate.currentDate()
+        self._set_range(QDate(today.year(), 1, 1), today)
+
+    # ── API ───────────────────────────────────────────────
+
+    def in_range(self, date_str: str) -> bool:
+        """يتحقق لو التاريخ في النطاق. date_str: 'yyyy-MM-dd'"""
         if not date_str:
             return True
         try:

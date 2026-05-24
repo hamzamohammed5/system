@@ -10,6 +10,8 @@ ui/widgets/shared/flexible_text.py
   3. set_flexible_columns — بيطبّق word-wrap على أعمدة محددة
   4. FlexibleTreeWidget  — QTreeWidget بـ word-wrap وتوسيع تلقائي للصفوف
   5. make_flexible_table  — بديل لـ make_table بـ word-wrap كامل
+
+[تحديث]: إصلاح sizeHint لاستخدام عرض العمود الفعلي من الـ view.
 """
 
 from PyQt5.QtWidgets import (
@@ -79,15 +81,19 @@ class WrapDelegate(QStyledItemDelegate):
             text = ""
         text = str(text)
 
-        # حساب الارتفاع المطلوب
-        fm   = QFontMetrics(option.font)
-        col_width = option.rect.width() if option.rect.isValid() else 150
-        text_width = col_width - self._padding * 2
+        # [إصلاح]: استخدم عرض العمود الفعلي من الـ view بدل fallback ثابت
+        view = option.widget
+        if view and hasattr(view, 'columnWidth'):
+            col_width = view.columnWidth(index.column())
+        elif option.rect.isValid():
+            col_width = option.rect.width()
+        else:
+            col_width = 200
 
-        if text_width <= 0:
-            text_width = 150
+        text_width = max(col_width - self._padding * 2, 40)
 
         # كم سطر لازم؟
+        fm = QFontMetrics(option.font)
         text_rect = fm.boundingRect(
             0, 0, text_width, 9999,
             Qt.AlignRight | Qt.AlignTop | Qt.TextWordWrap,
@@ -131,7 +137,7 @@ def set_flexible_columns(table: QTableWidget,
     """
     table.setWordWrap(True)
     table.verticalHeader().setSectionResizeMode(QHeaderView.ResizeToContents)
-    table.setTextElideMode(Qt.ElideRight)  # نهاية النص تُقطع بـ ...
+    table.setTextElideMode(Qt.ElideRight)
 
     delegate = WrapDelegate(table, min_row_height=min_row_height)
 
