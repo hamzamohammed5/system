@@ -344,30 +344,34 @@ class _JournalTreeTable(SafeConnMixin, QWidget):
 # التبويب الرئيسي
 # ══════════════════════════════════════════════════════════
 
-class JournalTab(QWidget):
+class JournalTab(SafeConnMixin, QWidget):
     def __init__(self, conn, erp_conn=None, parent=None):
         super().__init__(parent)
-        self.conn     = conn
-        self.erp_conn = erp_conn
+        self._init_safe_conn(conn, "accounting")
+        self._erp_conn = erp_conn   # نحفظه بـ _ عشان نفرّقه
         self._build()
-
+        # لا نحتاج نستمع لـ bus هنا — الـ children عندهم SafeConnMixin
+        # وبيستجيبون تلقائياً
+ 
     def _build(self):
         root = QVBoxLayout(self)
         root.setContentsMargins(0, 0, 0, 0)
-
+ 
         splitter = QSplitter(Qt.Vertical)
         splitter.setHandleWidth(6)
         splitter.setStyleSheet("""
             QSplitter::handle { background:#e0e0e0; }
             QSplitter::handle:hover { background:#bbdefb; }
         """)
-
-        self._form       = _JournalForm(self.conn, self.erp_conn)
-        self._tree_table = _JournalTreeTable(self.conn)
-
+ 
+        # ← الإصلاح: _get_safe_conn() بدل self.conn
+        conn = self._get_safe_conn()
+        self._form       = _JournalForm(conn, self._erp_conn)
+        self._tree_table = _JournalTreeTable(conn)
+ 
         splitter.addWidget(self._form)
         splitter.addWidget(self._tree_table)
         splitter.setSizes([440, 360])
         splitter.setCollapsible(0, True)
-
+ 
         root.addWidget(splitter)

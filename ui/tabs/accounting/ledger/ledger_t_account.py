@@ -29,16 +29,7 @@ class _TAccountPanel(QWidget):
     def __init__(self, parent=None):
         super().__init__(parent)
         self._all_data = None
-        self._last_conn = None   # آخر conn صالح — للـ re-filter فقط
         self._build()
-
-    # ── التوافق مع الكود القديم الذي يمرر conn في __init__ ──────────
-    @classmethod
-    def with_conn(cls, conn, parent=None):
-        """factory للتوافق مع: _TAccountPanel(conn)"""
-        obj = cls(parent)
-        obj._last_conn = conn
-        return obj
 
     def _build(self):
         root = QVBoxLayout(self)
@@ -191,12 +182,11 @@ class _TAccountPanel(QWidget):
         [مهم] conn يأتي دائماً من LedgerTab._get_safe_conn()
         — لا نحفظه في self.conn، نحفظه فقط في _last_conn للـ re-filter.
         """
-        self._last_conn = conn
         data = fetch_t_account(conn, account_id)
         if not data:
             return
-
         self._all_data = data
+
         acc = data["account"]
         nb  = data["normal_balance"]
 
@@ -290,7 +280,6 @@ class _TAccountPanel(QWidget):
 
     def clear(self):
         self._all_data  = None
-        self._last_conn = None
         self.t_dr_table.setRowCount(0)
         self.t_cr_table.setRowCount(0)
         self.lbl_dr_total.setText("الإجمالي: 0.00")
