@@ -15,134 +15,114 @@ ui/widgets/shared/message_box.py
     msg_critical(self, "خطأ", "حدث خطأ غير متوقع")
 """
 
-from PyQt5.QtWidgets import QMessageBox, QDialog, QPushButton, QLabel, QVBoxLayout, QHBoxLayout, QFrame
+from PyQt5.QtWidgets import QLabel, QPushButton
 from PyQt5.QtCore    import Qt
-from PyQt5.QtGui     import QColor
+
+from ui.app_settings import _C, fs
+from ui.widgets.shared.panles_helper.dialog_shell import _DialogShell
+from ui.widgets.shared.panles_helper.colors_and_base import _base
 
 
-# ── الألوان الثابتة (مستقلة عن _C عشان تشتغل في أي وقت) ──
-_BG       = "#FAFAF8"
-_TEXT     = "#1C1B18"
-_BTN_BG   = "#F0EEE9"
-_BTN_HV   = "#ECEAE4"
-_BTN_PR   = "#E4E2DA"
-_BORDER   = "#C8C4B8"
-_BORDER_S = "#6B6760"
+_ICONS = {
+    "question": ("❓", "#1565c0"),
+    "info":     ("ℹ️",  "#1565c0"),
+    "warning":  ("⚠️",  "#e65100"),
+    "critical": ("❌",  "#c62828"),
+}
 
-
-_STYLE = f"""
-QDialog {{
-    background: {_BG};
-}}
-QDialog QWidget {{
-    background: {_BG};
-    color: {_TEXT};
-}}
-QLabel {{
-    background: transparent;
-    color: {_TEXT};
-    font-size: 11pt;
-}}
-QPushButton {{
-    background: {_BTN_BG};
-    color: {_TEXT};
-    border: 1px solid {_BORDER};
-    border-radius: 6px;
-    padding: 5px 20px;
-    min-width: 72px;
-    min-height: 30px;
-    font-size: 11pt;
-}}
-QPushButton:hover {{
-    background: {_BTN_HV};
-    border-color: {_BORDER_S};
-}}
-QPushButton:pressed {{
-    background: {_BTN_PR};
-}}
-QFrame#sep {{
-    background: {_BORDER};
-    border: none;
-}}
+_BTN_STYLE = """
+    QPushButton {{
+        background: {bg};
+        color: {fg};
+        border: 1px solid {border};
+        border-radius: 6px;
+        padding: 5px 20px;
+        min-width: 72px;
+        min-height: 30px;
+        font-size: {fs}pt;
+    }}
+    QPushButton:hover {{
+        background: {hover};
+        border-color: {border_h};
+    }}
+    QPushButton:pressed {{ background: {pressed}; }}
 """
 
 
-# ══════════════════════════════════════════════════════════
-# _MsgDialog — نافذة رسالة مخصصة بالكامل
-# ══════════════════════════════════════════════════════════
+def _make_ok_btn(text: str = "حسناً", accent: str = "#1565c0") -> QPushButton:
+    btn = QPushButton(text)
+    base = _base()
+    btn.setStyleSheet(_BTN_STYLE.format(
+        bg=accent, fg="white",
+        border=accent, hover=f"{accent}dd", border_h=accent,
+        pressed=f"{accent}bb", fs=fs(base, 0),
+    ))
+    btn.setMinimumHeight(32)
+    btn.setMinimumWidth(80)
+    return btn
 
-_ICONS = {
-    "question": "❓",
-    "info":     "ℹ️",
-    "warning":  "⚠️",
-    "critical": "❌",
-}
+
+def _make_ghost_btn(text: str) -> QPushButton:
+    btn = QPushButton(text)
+    base = _base()
+    btn.setStyleSheet(_BTN_STYLE.format(
+        bg=_C.get('bg_surface_2', '#f5f5f5'),
+        fg=_C.get('text_sec', '#555'),
+        border=_C.get('border', '#e0e0e0'),
+        hover=_C.get('bg_hover', '#eeeeee'),
+        border_h=_C.get('border_med', '#bdbdbd'),
+        pressed=_C.get('border', '#e0e0e0'),
+        fs=fs(_base(), 0),
+    ))
+    btn.setMinimumHeight(32)
+    btn.setMinimumWidth(80)
+    return btn
 
 
-class _MsgDialog(QDialog):
+class _MsgDialog(_DialogShell):
     """
-    QDialog بسيط بخلفية بيضاء مضمونة 100%.
-    بديل كامل لـ QMessageBox.
+    نافذة رسالة مخصصة — تستخدم _DialogShell للهيكل.
     """
 
     def __init__(self, parent, title: str, text: str,
                  kind: str = "info", yes_no: bool = False):
-        super().__init__(parent, Qt.Dialog | Qt.WindowTitleHint | Qt.WindowCloseButtonHint)
-        self.setWindowTitle(title)
-        self.setModal(True)
-        self.setMinimumWidth(360)
-        self.setLayoutDirection(Qt.RightToLeft)
-        self.setStyleSheet(_STYLE)
+        icon, accent = _ICONS.get(kind, ("ℹ️", "#1565c0"))
+        super().__init__(
+            parent,
+            title=title,
+            icon=icon,
+            accent=accent,
+            min_width=380,
+        )
+        self._result = False
+        self._build_body(text, kind, yes_no, accent)
 
-        root = QVBoxLayout(self)
-        root.setContentsMargins(24, 20, 24, 16)
-        root.setSpacing(14)
-
-        # ── صف الأيقونة + النص ──
-        msg_row = QHBoxLayout()
-        msg_row.setSpacing(14)
-
-        ico = QLabel(_ICONS.get(kind, "ℹ️"))
-        ico.setStyleSheet("font-size: 22pt; background: transparent;")
-        ico.setAlignment(Qt.AlignTop)
-        ico.setFixedWidth(36)
-
+    def _build_body(self, text: str, kind: str, yes_no: bool, accent: str):
+        # النص
         lbl = QLabel(text)
         lbl.setWordWrap(True)
         lbl.setAlignment(Qt.AlignRight | Qt.AlignVCenter)
-        lbl.setStyleSheet(f"font-size: 11pt; color: {_TEXT}; background: transparent;")
+        base = _base()
+        lbl.setStyleSheet(
+            f"font-size: {fs(base, 0)}pt;"
+            f"color: {_C.get('text_primary', '#1c1b18')};"
+            "background: transparent; border: none;"
+        )
+        self.body_layout.addWidget(lbl)
 
-        msg_row.addWidget(lbl, stretch=1)
-        msg_row.addWidget(ico)
-        root.addLayout(msg_row)
-
-        # ── فاصل ──
-        sep = QFrame()
-        sep.setObjectName("sep")
-        sep.setFrameShape(QFrame.HLine)
-        sep.setFixedHeight(1)
-        root.addWidget(sep)
-
-        # ── أزرار ──
-        btn_row = QHBoxLayout()
-        btn_row.setSpacing(8)
-        btn_row.addStretch()
-
+        # الأزرار
         if yes_no:
-            self._result = False
-            btn_yes = QPushButton("نعم")
-            btn_no  = QPushButton("لا")
+            btn_yes = _make_ok_btn("نعم", accent)
+            btn_no  = _make_ghost_btn("لا")
             btn_yes.clicked.connect(self._on_yes)
             btn_no.clicked.connect(self.reject)
-            btn_row.addWidget(btn_yes)
-            btn_row.addWidget(btn_no)
+            self.btn_layout.addWidget(btn_yes)
+            self.btn_layout.addWidget(btn_no)
         else:
             self._result = True
-            btn_ok = QPushButton("حسناً")
+            btn_ok = _make_ok_btn("حسناً", accent)
             btn_ok.clicked.connect(self.accept)
-            btn_row.addWidget(btn_ok)
-
-        root.addLayout(btn_row)
+            self.btn_layout.addWidget(btn_ok)
 
     def _on_yes(self):
         self._result = True
