@@ -1,10 +1,16 @@
 """
 ui/widgets/shared/panles_helper/collapsible_card.py
+
+[إصلاح v2]:
+  - _update_header_style تستخدم _C مباشرة بدون تكرار font_size calculation
+  - card frame style بيستخدم get_card_style() من theme
+  - divider بيستخدم make_divider() من divider_utils
 """
 from PyQt5.QtWidgets import QWidget, QFrame, QVBoxLayout, QPushButton
 from PyQt5.QtCore import Qt, pyqtSignal
 from ui.app_settings import _C, fs
 from .colors_and_base import _base
+from .divider_utils import make_divider
 
 
 class CollapsibleCard(QFrame):
@@ -19,13 +25,9 @@ class CollapsibleCard(QFrame):
         self._build(title)
 
     def _build(self, title):
-        self.setStyleSheet(f"""
-            QFrame {{
-                background: {_C['bg_surface']};
-                border: 1px solid {_C['border']};
-                border-radius: 10px;
-            }}
-        """)
+        from .theme import get_card_style
+        self.setStyleSheet(get_card_style())
+
         root = QVBoxLayout(self)
         root.setContentsMargins(0, 0, 0, 0)
         root.setSpacing(0)
@@ -36,10 +38,7 @@ class CollapsibleCard(QFrame):
         self._update_header_style()
         root.addWidget(self._header_btn)
 
-        self._divider = QFrame()
-        self._divider.setFrameShape(QFrame.HLine)
-        self._divider.setFixedHeight(1)
-        self._divider.setStyleSheet(f"background:{_C['border']}; border:none; margin:0;")
+        self._divider = make_divider()
         self._divider.setVisible(self._expanded)
         root.addWidget(self._divider)
 
@@ -55,8 +54,6 @@ class CollapsibleCard(QFrame):
 
     def _update_header_style(self):
         base = _base()
-        font_size = fs(base, 0)
-        # ✅ f-string واحدة متكاملة
         self._header_btn.setStyleSheet(f"""
             QPushButton {{
                 background: {_C['bg_surface_2']};
@@ -65,7 +62,7 @@ class CollapsibleCard(QFrame):
                 padding: 10px 14px;
                 text-align: right;
                 font-weight: 700;
-                font-size: {font_size}pt;
+                font-size: {fs(base, 0)}pt;
                 color: {_C['text_sec']};
             }}
             QPushButton:hover {{

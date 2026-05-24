@@ -1,8 +1,11 @@
 """
 ui/widgets/shared/panles_helper/section_header.py
+
+[إصلاح v2]:
+  - accent bar بيستخدم _C['accent'] بدل hardcoded style مكرر
+  - add_button يُرجع QPushButton للتوافق مع الكود القديم
 """
-from PyQt5.QtWidgets import QWidget, QFrame, QHBoxLayout, QLabel, QPushButton
-from PyQt5.QtCore import Qt
+from PyQt5.QtWidgets import QWidget, QHBoxLayout, QLabel, QPushButton
 from ui.app_settings import _C, fs
 from .make_btn import _make_btn
 from .colors_and_base import _base
@@ -19,12 +22,13 @@ class SectionHeader(QWidget):
         lay.setContentsMargins(0, 6, 0, 6)
         lay.setSpacing(10)
 
-        accent = QFrame()
-        accent.setFixedSize(3, 18)
-        accent.setStyleSheet(
+        # Accent bar — لون من theme مباشرة
+        accent_bar = QLabel()
+        accent_bar.setFixedSize(3, 18)
+        accent_bar.setStyleSheet(
             f"background:{_C['accent']}; border-radius:2px; border:none;"
         )
-        lay.addWidget(accent)
+        lay.addWidget(accent_bar)
 
         base = _base()
         self._lbl = QLabel(title)
