@@ -3,62 +3,39 @@ ui/widgets/shared/base_crud_form.py
 =====================================
 BaseCrudForm — قاعدة مشتركة لكل نماذج الإضافة/التعديل/الإلغاء.
 
-تحل محل الكود المتكرر في:
-  machine_form.py, labor_op_form.py, machine_op_form.py,
-  raw_input_panel.py, category_form.py
-
-توفر:
-  - build_inner_scroll تلقائي
-  - EditModeMixin جاهز
-  - أزرار إضافة/حفظ/إلغاء موحدة
-  - منطق CRUD مجرد (abstract methods)
-
-الاستخدام:
-    class _MachineForm(BaseCrudForm):
-        def _build_fields(self, grp: FormGroup) -> None:
-            self.inp_name = QLineEdit()
-            grp.add_row("الاسم:", self.inp_name)
-
-        def _collect(self) -> dict | None:
-            name = self.inp_name.text().strip()
-            if not name:
-                self._warn("أدخل الاسم")
-                return None
-            return {"name": name}
-
-        def _do_insert(self, data: dict) -> int:
-            return insert_machine(self._live_conn(), **data)
-
-        def _do_update(self, item_id: int, data: dict) -> None:
-            update_machine(self._live_conn(), item_id, **data)
-
-        def _do_load(self, item_id: int) -> dict | None:
-            return dict(fetch_machine(self._live_conn(), item_id) or {})
-
-        def _fill_fields(self, data: dict) -> None:
-            self.inp_name.setText(data.get("name", ""))
-
-        def _reset_fields(self) -> None:
-            self.inp_name.clear()
+[إصلاح v2]:
+  - لا يستورد من ui.helpers — كل شيء من panels
+  - buttons_row مبني داخلياً بـ QHBoxLayout
+  - msg_warning من message_box بدل QMessageBox مباشرة
 """
 
 import logging
 from PyQt5.QtWidgets import (
-    QWidget, QPushButton, QLabel,
+    QWidget, QPushButton, QLabel, QHBoxLayout,
 )
 from PyQt5.QtCore import pyqtSignal
 
-from ui.helpers import EditModeMixin, buttons_row
+from ui.helpers import EditModeMixin
 from ui.widgets.shared.connection_mixin import LiveConnMixin
-from ui.widgets.shared.form_utils import (
-    FormGroup, build_inner_scroll,
+from ui.widgets.shared.panels import (
+    FormGroup,
+    build_inner_scroll,
+    ModeLabel,
 )
-# FIX 6: استخدم msg_warning الموحدة بدل QMessageBox.warning مباشرة
-# عشان تجربة المستخدم تكون متسقة في كل التطبيق
 from ui.widgets.shared.message_box import msg_warning
 from ui.events import bus
 
 logger = logging.getLogger(__name__)
+
+
+def _buttons_row(*btns) -> QHBoxLayout:
+    """بديل لـ buttons_row من ui.helpers."""
+    lay = QHBoxLayout()
+    lay.setSpacing(6)
+    for btn in btns:
+        lay.addWidget(btn)
+    lay.addStretch()
+    return lay
 
 
 class BaseCrudForm(QWidget, EditModeMixin, LiveConnMixin):
@@ -75,7 +52,7 @@ class BaseCrudForm(QWidget, EditModeMixin, LiveConnMixin):
       _reset_fields()      → يمسح الحقول
 
     اختياري:
-      _after_insert(new_id)  → بعد الإضافة (مثلاً تحميل صفوف)
+      _after_insert(new_id)  → بعد الإضافة
       _after_save()          → بعد الحفظ
       _build_extra(root)     → widgets إضافية تحت الأزرار
     """
@@ -139,23 +116,26 @@ class BaseCrudForm(QWidget, EditModeMixin, LiveConnMixin):
 
         grp = FormGroup(self.FORM_TITLE)
 
-        self.lbl_mode = QLabel(f"─── {self.ADD_TEXT.lstrip('➕  ')} جديد ───")
-        self.lbl_mode.setStyleSheet("font-weight:bold; color:#1565c0;")
+        # ModeLabel بدل QLabel عادي
+        self.lbl_mode = ModeLabel(
+            add_text=self.ADD_TEXT.lstrip("➕  "),
+        )
         grp.add_label_row(self.lbl_mode)
 
         self._build_fields(grp)
         root.addWidget(grp)
 
-        self.btn_add    = QPushButton(self.ADD_TEXT)
-        self.btn_save   = QPushButton(self.SAVE_TEXT)
-        self.btn_cancel = QPushButton(self.CANCEL_TEXT)
+        from ui.widgets.shared.panels import _make_btn
+        self.btn_add    = _make_btn(self.ADD_TEXT, "primary")
+        self.btn_save   = _make_btn(self.SAVE_TEXT, "success")
+        self.btn_cancel = _make_btn(self.CANCEL_TEXT, "ghost")
         for btn in (self.btn_add, self.btn_save, self.btn_cancel):
             btn.setMinimumHeight(30)
 
         self.btn_add.clicked.connect(self._on_add)
         self.btn_save.clicked.connect(self._on_save)
         self.btn_cancel.clicked.connect(self._on_cancel)
-        root.addLayout(buttons_row(self.btn_add, self.btn_save, self.btn_cancel))
+        root.addLayout(_buttons_row(self.btn_add, self.btn_save, self.btn_cancel))
 
         self._build_extra(root)
         root.addStretch()
@@ -214,6 +194,4 @@ class BaseCrudForm(QWidget, EditModeMixin, LiveConnMixin):
         self.exit_edit_mode(f"─── {self.ADD_TEXT.lstrip('➕  ')} جديد ───")
 
     def _warn(self, msg: str) -> None:
-        # FIX 6: msg_warning بدل QMessageBox.warning مباشرة
-        # عشان الستايل يكون موحد مع باقي التطبيق
         msg_warning(self, "تنبيه", msg)

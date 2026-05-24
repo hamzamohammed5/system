@@ -13,15 +13,20 @@ from PyQt5.QtWidgets import (
 )
 from PyQt5.QtCore import Qt, pyqtSignal, QTimer
 
-from ui.widgets.shared.panels import (
+
+
+from .table_utils import (                                      # noqa: F401
     make_splitter_table_guarded,
-    fit_splitter_table,
     auto_fit_columns,
+    fit_splitter_table,
     ROW_HEIGHT_LARGE,
-    EmptyState,
-    ListHeader,
-    ListStatusBar,
 )
+from .panles_helper.empty_state      import EmptyState          # noqa: F401
+from .panles_helper.list_header import (                        # noqa: F401
+    ListHeader,
+    StatusBar as ListStatusBar,
+)
+
 from ui.app_settings import _C
 
 _MIN_W = 260

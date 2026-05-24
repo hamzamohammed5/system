@@ -3,13 +3,16 @@ ui/tabs/accounting/investors/_link_to_entry_panel.py
 =====================================================
 _LinkToEntryPanel — لوحة ربط مستثمر بقيد محاسبي موجود.
 
-[إصلاح v4 — DualConnMixin]:
-  - DualConnMixin بدل _get_erp_conn() المكرر يدوياً.
+[إصلاح v5]:
+  - FormGroup من panels بدل QGroupBox اليدوي
+  - _make_btn من panels بدل QPushButton اليدوي
+  - spin_field من panels بدل _spin المحلي
+  - NotificationBar من panels بدل QMessageBox للنجاح
 """
 
 from PyQt5.QtWidgets import (
-    QWidget, QVBoxLayout, QFormLayout, QGroupBox,
-    QLabel, QLineEdit, QPushButton,
+    QWidget, QVBoxLayout, QHBoxLayout,
+    QLabel, QLineEdit,
     QComboBox, QMessageBox,
 )
 from PyQt5.QtCore import Qt
@@ -17,7 +20,16 @@ from PyQt5.QtCore import Qt
 from db.inventory.investors_repo import fetch_all_investors, link_investor_to_line
 from ui.events import bus
 from ui.widgets.shared.safe_conn_mixin import DualConnMixin
-from ._helpers import _spin
+from ui.widgets.shared.panels import (
+    FormGroup,
+    spin_field,
+    _make_btn,
+    NotificationBar,
+    make_form_layout,
+    required_label,
+    form_label,
+    NotesLineEdit,
+)
 
 
 class _LinkToEntryPanel(DualConnMixin, QWidget):
@@ -36,6 +48,10 @@ class _LinkToEntryPanel(DualConnMixin, QWidget):
         root.setContentsMargins(12, 10, 12, 10)
         root.setSpacing(10)
 
+        # ── شريط الإشعارات ──
+        self._notif = NotificationBar(show_dismiss=True)
+        root.addWidget(self._notif)
+
         lbl_info = QLabel(
             "🔗  ربط قيد محاسبي موجود بمستثمر\n"
             "استخدم هذا لو أضفت القيد يدوياً في تبويب القيود وتريد نسبته لمستثمر."
@@ -47,50 +63,35 @@ class _LinkToEntryPanel(DualConnMixin, QWidget):
         lbl_info.setWordWrap(True)
         root.addWidget(lbl_info)
 
-        grp = QGroupBox("بيانات الربط")
-        grp.setStyleSheet(
-            "QGroupBox { border:1px solid #e0e0e0; border-radius:8px;"
-            "margin-top:8px; padding-top:8px; font-weight:bold; }"
-        )
-        form = QFormLayout(grp)
-        form.setSpacing(10)
-        form.setLabelAlignment(Qt.AlignRight)
+        # ── FormGroup بدل QGroupBox اليدوي ──
+        grp = FormGroup("بيانات الربط")
+        form = grp.form
 
         self.cmb_investor = QComboBox()
         self.cmb_investor.setMinimumHeight(30)
         self._reload_investors()
-        form.addRow("المستثمر:", self.cmb_investor)
+        form.addRow(required_label("المستثمر:"), self.cmb_investor)
 
         self.cmb_move = QComboBox()
         self.cmb_move.addItem("💰  رأس مال (capital)", "capital")
         self.cmb_move.addItem("💸  مسحوبات (drawings)", "drawings")
         self.cmb_move.setMinimumHeight(30)
-        form.addRow("نوع الحركة:", self.cmb_move)
+        form.addRow(form_label("نوع الحركة:"), self.cmb_move)
 
         self.inp_entry_ref = QLineEdit()
         self.inp_entry_ref.setPlaceholderText("مثال: JE-00012")
         self.inp_entry_ref.setMinimumHeight(30)
-        form.addRow("رقم القيد:", self.inp_entry_ref)
+        form.addRow(required_label("رقم القيد:"), self.inp_entry_ref)
 
-        self.sp_amount = _spin()
-        form.addRow("المبلغ:", self.sp_amount)
+        self.sp_amount = spin_field(max_=999_999_999, dec=2)
+        form.addRow(required_label("المبلغ:"), self.sp_amount)
 
-        self.inp_notes = QLineEdit()
-        self.inp_notes.setPlaceholderText("ملاحظات...")
-        self.inp_notes.setMinimumHeight(28)
-        form.addRow("ملاحظات:", self.inp_notes)
+        self.inp_notes = NotesLineEdit()
+        form.addRow(form_label("ملاحظات:"), self.inp_notes)
 
         root.addWidget(grp)
 
-        btn_link = QPushButton("🔗  ربط")
-        btn_link.setMinimumHeight(34)
-        btn_link.setStyleSheet("""
-            QPushButton {
-                background: #e65100; color: white;
-                font-weight: bold; border-radius: 6px; padding: 0 20px;
-            }
-            QPushButton:hover { background: #bf360c; }
-        """)
+        btn_link = _make_btn("🔗  ربط", "danger")
         btn_link.clicked.connect(self._link)
         root.addWidget(btn_link)
         root.addStretch()
@@ -158,6 +159,7 @@ class _LinkToEntryPanel(DualConnMixin, QWidget):
             self.sp_amount.setValue(0)
             self.inp_notes.clear()
             bus.company_data_changed.emit(self._company_id or 0)
-            QMessageBox.information(self, "تم", "✅ تم ربط القيد بالمستثمر بنجاح")
+            # استخدام NotificationBar بدل QMessageBox
+            self._notif.show("✅ تم ربط القيد بالمستثمر بنجاح", "success", auto_hide=3000)
         except Exception as e:
             QMessageBox.critical(self, "خطأ", str(e))
