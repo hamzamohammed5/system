@@ -3,9 +3,11 @@ ui/tabs/accounting/journal/lines/_smart_line.py
 ================================================
 _SmartLine — صف قيد واحد ذكي (حساب + اتجاه + مبلغ + بيان + ربط مستثمر).
 
-تغييرات (v2):
+تغييرات (v3):
+  - SafeConnMixin بدل self.conn الثابت.
+  - _get_safe_conn() في كل fetch_account بدل self.conn المحفوظ.
   - يستمع لـ bus.company_data_changed بدل bus.data_changed العام.
-  - يتحقق من الـ company_id قبل إعادة تحميل المستثمرين لعزل بيانات الشركات.
+  - يتحقق من الـ company_id قبل إعادة تحميل المستثمرين.
 """
 
 from PyQt5.QtWidgets import (
@@ -19,6 +21,7 @@ from PyQt5.QtCore import Qt
 from db.accounting.accounting_repo import fetch_account, get_normal_balance
 from db.accounting.accounting_schema import NORMAL_BALANCE
 from ui.events import bus
+from ui.tabs.accounting.safe_conn_mixin import SafeConnMixin
 from ..journal_account_picker import _AccountPickerButton
 
 _INVESTOR_TYPES = {"capital", "drawings"}
@@ -37,13 +40,14 @@ def _resolve_side(acc_type: str, is_increase: bool) -> str:
     return nb if is_increase else ("cr" if nb == "dr" else "dr")
 
 
-class _SmartLine(QFrame):
+class _SmartLine(SafeConnMixin, QFrame):
     """صف قيد واحد: حساب + زيادة/نقص + مبلغ + بيان + ربط مستثمر اختياري."""
 
     def __init__(self, conn, erp_conn, on_change, on_remove,
                  on_move_up, on_move_dn, parent=None):
         super().__init__(parent)
-        self.conn        = conn
+        # [إصلاح] SafeConnMixin بدل self.conn الثابت
+        self._init_safe_conn(conn, "accounting")
         self.erp_conn    = erp_conn
         self._on_change  = on_change
         self._on_remove  = on_remove
@@ -51,7 +55,6 @@ class _SmartLine(QFrame):
         self._on_move_dn = on_move_dn
         self._resolved_side = "dr"
 
-        # حفظ الـ company_id عند الإنشاء لفلترة الأحداث
         self._company_id = _get_current_company_id()
 
         self._build()
@@ -96,8 +99,8 @@ class _SmartLine(QFrame):
         ord_col.addWidget(self.btn_dn)
         main_row.addLayout(ord_col)
 
-        # اختيار الحساب
-        self._acc = _AccountPickerButton(self.conn)
+        # [إصلاح] نمرر conn حي لـ _AccountPickerButton
+        self._acc = _AccountPickerButton(self._get_safe_conn())
         self._acc.set_on_changed(self._on_acc_changed)
         main_row.addWidget(self._acc, stretch=4)
 
@@ -148,7 +151,7 @@ class _SmartLine(QFrame):
 
         lay.addLayout(main_row)
 
-        # صف ربط المستثمر (يظهر فقط لحسابات capital/drawings)
+        # صف ربط المستثمر
         self._investor_row = QFrame()
         self._investor_row.setStyleSheet(
             "QFrame { background:#fff8e1; border:1px solid #ffe082;"
@@ -207,7 +210,8 @@ class _SmartLine(QFrame):
         acc_id = self._acc.current_account_id()
         if not acc_id:
             return None
-        acc = fetch_account(self.conn, acc_id)
+        # [إصلاح] _get_safe_conn() بدل self.conn
+        acc = fetch_account(self._get_safe_conn(), acc_id)
         return acc["type"] if acc else None
 
     def _update_side_style(self):

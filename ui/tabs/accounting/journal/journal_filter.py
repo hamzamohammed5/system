@@ -3,17 +3,18 @@ ui/tabs/accounting/journal/journal_filter.py
 ======================================
 _JournalFilterBar — شريط فلاتر القيود المحاسبية.
 
-[إصلاح v2]:
+تغييرات (v3 — SafeConnMixin + signal fix):
   - SafeConnMixin بدل self.conn الثابت.
-  - _reload_group_combo() تُعيد بناء _TreeGroupCombo بـ conn حي عند تغيير الشركة.
-  - يستمع لـ bus.company_data_changed لتحديث فلتر التصنيفات.
+  - _reload_group_combo() تُطلق signal group_reloaded بعد استبدال الـ widget
+    حتى يتمكن _JournalTreeTable من إعادة ربط الـ signal على الـ combo الجديد.
+  - _get_safe_conn() في كل query.
 """
 
 from PyQt5.QtWidgets import (
     QFrame, QVBoxLayout, QHBoxLayout,
     QLabel, QLineEdit, QComboBox, QDateEdit, QPushButton,
 )
-from PyQt5.QtCore import Qt, QDate, QTimer
+from PyQt5.QtCore import Qt, QDate, QTimer, pyqtSignal
 
 from ui.tabs.accounting.safe_conn_mixin import SafeConnMixin
 from ui.events import bus
@@ -22,6 +23,9 @@ from .journal_group_combo import _TreeGroupCombo
 
 class _JournalFilterBar(SafeConnMixin, QFrame):
     """شريط فلاتر متكامل لجدول القيود — بفلتر تصنيفات شجري."""
+
+    # signal يُطلق بعد إعادة بناء _TreeGroupCombo عند تغيير الشركة
+    group_reloaded = pyqtSignal()
 
     def __init__(self, conn, parent=None):
         super().__init__(parent)
@@ -38,20 +42,24 @@ class _JournalFilterBar(SafeConnMixin, QFrame):
         bus.company_data_changed.connect(self._on_company_event)
 
     def _on_company_event(self, company_id: int):
-        """يُعيد بناء _TreeGroupCombo بـ conn الشركة الجديدة."""
         if self._on_company_event_safe(company_id):
             QTimer.singleShot(0, self._reload_group_combo)
 
     def _reload_group_combo(self):
-        """يُعيد إنشاء _TreeGroupCombo بـ conn حي."""
+        """
+        يُعيد إنشاء _TreeGroupCombo بـ conn حي.
+        بعد الاستبدال يُطلق group_reloaded حتى يتمكن
+        _JournalTreeTable من إعادة ربط signal الـ click.
+        """
         conn = self._get_safe_conn()
         old_combo = self.cmb_group
+
         new_combo = _TreeGroupCombo(conn)
         new_combo.setMinimumHeight(30)
         new_combo.setMinimumWidth(200)
         new_combo.setMaximumWidth(280)
         new_combo.setStyleSheet(old_combo.styleSheet())
-        # استبدال الـ widget في الـ layout
+
         layout = old_combo.parent().layout() if old_combo.parent() else None
         if layout:
             idx = layout.indexOf(old_combo)
@@ -59,7 +67,10 @@ class _JournalFilterBar(SafeConnMixin, QFrame):
                 layout.removeWidget(old_combo)
                 old_combo.deleteLater()
                 layout.insertWidget(idx, new_combo)
+
         self.cmb_group = new_combo
+        # أعلم المستمعين (JournalTreeTable) بالـ combo الجديد
+        self.group_reloaded.emit()
 
     def _build(self):
         root = QVBoxLayout(self)
@@ -167,7 +178,9 @@ class _JournalFilterBar(SafeConnMixin, QFrame):
         self.dt_to.setStyleSheet(date_style)
 
         sep = QLabel("│")
-        sep.setStyleSheet("color:#c5cae9; background:transparent; border:none; font-size:16px;")
+        sep.setStyleSheet(
+            "color:#c5cae9; background:transparent; border:none; font-size:16px;"
+        )
 
         btn_reset = QPushButton("↺ مسح الفلاتر")
         btn_reset.setMinimumHeight(28)

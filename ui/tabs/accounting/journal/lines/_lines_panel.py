@@ -2,6 +2,10 @@
 ui/tabs/accounting/journal/lines/_lines_panel.py
 ================================================
 _LinesPanel — لوحة صفوف القيد كاملة مع scroll وإضافة/حذف/ترتيب.
+
+تغييرات (v2):
+  - SafeConnMixin بدل self.conn الثابت.
+  - add_line() تمرر _get_safe_conn() حي لكل _SmartLine جديدة.
 """
 
 from PyQt5.QtWidgets import (
@@ -10,15 +14,17 @@ from PyQt5.QtWidgets import (
     QMessageBox,
 )
 
+from ui.tabs.accounting.safe_conn_mixin import SafeConnMixin
 from ._smart_line import _SmartLine
 
 
-class _LinesPanel(QFrame):
+class _LinesPanel(SafeConnMixin, QFrame):
     """لوحة صفوف القيد: رأس DR/CR + scroll + زر إضافة."""
 
     def __init__(self, conn, erp_conn, on_balance_changed, parent=None):
         super().__init__(parent)
-        self.conn                = conn
+        # [إصلاح] SafeConnMixin بدل self.conn الثابت
+        self._init_safe_conn(conn, "accounting")
         self.erp_conn            = erp_conn
         self._on_balance_changed = on_balance_changed
         self._lines: list[_SmartLine] = []
@@ -119,8 +125,9 @@ class _LinesPanel(QFrame):
         root.addWidget(btn_add)
 
     def add_line(self) -> _SmartLine:
+        # [إصلاح] نمرر conn حي في كل مرة نضيف صف
         line = _SmartLine(
-            conn        = self.conn,
+            conn        = self._get_safe_conn(),
             erp_conn    = self.erp_conn,
             on_change   = self._on_line_changed,
             on_remove   = self._remove_line,

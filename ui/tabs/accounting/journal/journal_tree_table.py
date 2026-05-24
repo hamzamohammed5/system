@@ -4,10 +4,10 @@ ui/tabs/accounting/journal/journal_tree_table.py
 _JournalTreeTable — جدول القيود المحاسبية مع expand/collapse وفلاتر متكاملة.
 JournalTab        — التبويب الرئيسي يجمع الفورم والجدول.
 
-إصلاحات (v3 — SafeConnMixin):
-  - _JournalTreeTable يستخدم SafeConnMixin بدل self.conn الثابت.
-  - كل query تستخدم _get_safe_conn() لضمان conn الشركة النشطة.
-  - يستمع لـ bus.company_data_changed ويتحقق من company_id.
+تغييرات (v4 — SafeConnMixin + group signal fix):
+  - يستمع لـ _filter.group_reloaded لإعادة ربط signal الـ _TreeGroupCombo
+    بعد استبدالها عند تغيير الشركة.
+  - باقي إصلاحات v3 (SafeConnMixin / company_data_changed) محافظ عليها.
 """
 
 from PyQt5.QtWidgets import (
@@ -69,19 +69,17 @@ class _JournalTreeTable(SafeConnMixin, QWidget):
 
         # ── شريط الفلاتر ──
         self._filter = _JournalFilterBar(self._get_safe_conn())
-        self._filter.inp_search.textChanged.connect(self._apply_filter)
-        self._filter.cmb_group._tree_view.clicked.connect(
-            lambda _: QTimer.singleShot(50, self._apply_filter)
-        )
-        self._filter.cmb_balance.currentIndexChanged.connect(self._apply_filter)
-        self._filter.dt_from.dateChanged.connect(self._apply_filter)
-        self._filter.dt_to.dateChanged.connect(self._apply_filter)
+        self._connect_filter_signals()
 
         orig_reset = self._filter.reset
         def _reset_and_apply():
             orig_reset()
             self._apply_filter()
         self._filter.reset = _reset_and_apply
+
+        # [إصلاح] إعادة ربط signals بعد استبدال _TreeGroupCombo
+        self._filter.group_reloaded.connect(self._reconnect_group_signal)
+
         root.addWidget(self._filter)
 
         # ── أزرار التحكم ──
@@ -132,12 +130,34 @@ class _JournalTreeTable(SafeConnMixin, QWidget):
         self.table.cellClicked.connect(self._on_cell_clicked)
         root.addWidget(self.table, stretch=1)
 
+    def _connect_filter_signals(self):
+        """يربط كل signals الفلاتر — يُستدعى مرة عند البناء."""
+        self._filter.inp_search.textChanged.connect(self._apply_filter)
+        self._filter.cmb_group._tree_view.clicked.connect(
+            lambda _: QTimer.singleShot(50, self._apply_filter)
+        )
+        self._filter.cmb_balance.currentIndexChanged.connect(self._apply_filter)
+        self._filter.dt_from.dateChanged.connect(self._apply_filter)
+        self._filter.dt_to.dateChanged.connect(self._apply_filter)
+
+    def _reconnect_group_signal(self):
+        """
+        [إصلاح] يُعيد ربط signal الـ _tree_view.clicked على الـ combo الجديد
+        بعد استبداله في _reload_group_combo().
+        """
+        try:
+            self._filter.cmb_group._tree_view.clicked.connect(
+                lambda _: QTimer.singleShot(50, self._apply_filter)
+            )
+        except Exception as e:
+            print(f"[_JournalTreeTable] _reconnect_group_signal error: {e}")
+
     # ══════════════════════════════════════════════════════
     # تحميل البيانات
     # ══════════════════════════════════════════════════════
 
     def _load(self):
-        conn = self._get_safe_conn()   # [إصلاح] conn حي دائماً
+        conn = self._get_safe_conn()
         entries = fetch_all_entries(conn)
         self._entries_data = []
         for e in entries:
@@ -315,7 +335,7 @@ class _JournalTreeTable(SafeConnMixin, QWidget):
         )
         desc = entry_data["description"] if entry_data else f"ID:{eid}"
         if confirm_delete(self, desc):
-            delete_entry(self._get_safe_conn(), eid)   # [إصلاح] conn حي
+            delete_entry(self._get_safe_conn(), eid)
             self._expanded.discard(eid)
             bus.company_data_changed.emit(self._company_id or 0)
 

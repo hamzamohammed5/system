@@ -4,12 +4,12 @@ ui/tabs/accounting/journal/journal_group_combo.py
 _NoSelectDelegate  — يمنع اختيار عناصر الرأس في الشجرة
 _TreeGroupCombo    — QComboBox مع QTreeView شجري لعرض تصنيفات الحسابات
 
-تغييرات (v3):
-  - إصلاح تسريب الـ bus listener:
-    كانت _TreeGroupCombo تستمع لـ bus.company_data_changed بعد حذف الـ widget.
-    الحل: نقطع الاتصال في closeEvent / عند الحذف عبر weakref guard.
-    عملياً الـ widget بيتحذف مع الـ tab كله فمشكلتش كبيرة،
-    لكن الـ weakref guard بيمنع أي استجابة مزدوجة لو البناء تأخر.
+تغييرات (v4 — SafeConnMixin):
+  - SafeConnMixin بدل self.conn الثابت.
+  - _get_safe_conn() في كل query بدل self.conn المحفوظ.
+  - _reload() تستخدم conn حي دايماً.
+  - _on_tree_clicked() تستخدم _get_safe_conn() في الـ query.
+  - باقي إصلاحات v3 (weakref guard / closeEvent) محافظ عليها.
 """
 
 from PyQt5.QtWidgets import (
@@ -21,6 +21,7 @@ from PyQt5.QtGui  import QColor, QFont, QStandardItemModel, QStandardItem
 from db.accounting.accounting_repo import fetch_all_groups, build_group_tree
 from db.accounting.accounting_schema import TYPE_AR, EQUITY_TYPES
 from ui.events import bus
+from ui.tabs.accounting.safe_conn_mixin import SafeConnMixin
 from ..helpers  import TYPE_COLORS
 
 _TYPE_ORDER = ["asset", "liability", "capital", "drawings", "revenue", "expense"]
@@ -59,7 +60,7 @@ class _NoSelectDelegate(QStyledItemDelegate):
         super().paint(painter, option, index)
 
 
-class _TreeGroupCombo(QComboBox):
+class _TreeGroupCombo(SafeConnMixin, QComboBox):
     """
     QComboBox يعرض التصنيفات في شجرة هرمية.
     عناصر الرأس (أنواع الحسابات) غير قابلة للاختيار.
@@ -68,10 +69,11 @@ class _TreeGroupCombo(QComboBox):
 
     def __init__(self, conn, parent=None):
         super().__init__(parent)
-        self.conn             = conn
+        # [إصلاح] SafeConnMixin بدل self.conn الثابت
+        self._init_safe_conn(conn, "accounting")
         self._group_entry_ids = None
         self._company_id      = _get_current_company_id()
-        self._destroyed       = False   # guard ضد الاستجابة بعد الحذف
+        self._destroyed       = False
 
         self._model = QStandardItemModel()
         self.setModel(self._model)
@@ -107,14 +109,12 @@ class _TreeGroupCombo(QComboBox):
         bus.company_data_changed.connect(self._on_company_event)
 
     def _on_company_event(self, company_id: int):
-        """يُعيد التحميل فقط لو الحدث من نفس شركتنا ولو الـ widget لسه موجود."""
         if self._destroyed:
             return
         if company_id == self._company_id:
             self._reload()
 
     def closeEvent(self, event):
-        """نقطع الاتصال عند إغلاق الـ widget لمنع الاستجابة بعد الحذف."""
         self._destroyed = True
         try:
             bus.company_data_changed.disconnect(self._on_company_event)
@@ -123,7 +123,6 @@ class _TreeGroupCombo(QComboBox):
         super().closeEvent(event)
 
     def deleteLater(self):
-        """نضع الـ guard عند الجدولة للحذف أيضاً."""
         self._destroyed = True
         try:
             bus.company_data_changed.disconnect(self._on_company_event)
@@ -132,6 +131,9 @@ class _TreeGroupCombo(QComboBox):
         super().deleteLater()
 
     def _populate(self):
+        # [إصلاح] conn حي في كل populate
+        conn = self._get_safe_conn()
+
         prev_gid = self.currentData()
         self._model.clear()
 
@@ -145,7 +147,7 @@ class _TreeGroupCombo(QComboBox):
         self._model.appendRow(all_item)
 
         try:
-            all_groups = fetch_all_groups(self.conn)
+            all_groups = fetch_all_groups(conn)
         except Exception:
             all_groups = []
 
@@ -179,7 +181,6 @@ class _TreeGroupCombo(QComboBox):
         self._restore_selection(prev_gid)
 
     def _add_group_items(self, parent_item: QStandardItem, nodes: list, acc_type: str):
-        color = QColor(TYPE_COLORS.get(acc_type, "#333"))
         for node in nodes:
             item = QStandardItem(f"  {node['name']}")
             item.setData(node["id"], _ROLE_GROUP_ID)
@@ -225,6 +226,9 @@ class _TreeGroupCombo(QComboBox):
         self.hidePopup()
 
     def _update_selection(self, item: QStandardItem, gid):
+        # [إصلاح] conn حي في كل query
+        conn = self._get_safe_conn()
+
         if gid is None:
             self.setCurrentText("— كل التصنيفات —")
             self._group_entry_ids = None
@@ -232,12 +236,12 @@ class _TreeGroupCombo(QComboBox):
             self.setCurrentText(item.text().strip())
             try:
                 from db.accounting.accounting_repo import _get_group_descendants
-                desc_ids = _get_group_descendants(self.conn, gid)
+                desc_ids = _get_group_descendants(conn, gid)
                 if not desc_ids:
                     self._group_entry_ids = set()
                 else:
                     placeholders = ",".join("?" * len(desc_ids))
-                    rows = self.conn.execute(f"""
+                    rows = conn.execute(f"""
                         SELECT DISTINCT jl.entry_id
                         FROM journal_lines jl
                         JOIN accounts a ON a.id = jl.account_id
@@ -260,6 +264,7 @@ class _TreeGroupCombo(QComboBox):
         return self._group_entry_ids
 
     def _reload(self):
+        # [إصلاح] _populate تأخذ conn حي من _get_safe_conn()
         self._populate()
         self._tree_view.expandAll()
 
