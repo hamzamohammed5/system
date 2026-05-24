@@ -5,51 +5,16 @@ ui/tabs/accounting/investors/_helpers.py
   - دوال جلب الحسابات (_fetch_*)
   - دوال ملء القوائم (_fill_*)
   - دوال تسجيل القيود (_post_*)
-  - _spin و _stat_card
+  - _spin و _stat_card — مستوردة من helpers الموحد
 """
 
-from PyQt5.QtWidgets import (
-    QFrame, QVBoxLayout, QLabel, QDoubleSpinBox, QComboBox,
-)
+from PyQt5.QtWidgets import QComboBox
+
+# ── استيراد من helpers الموحد بدل التكرار ──
+from ui.tabs.accounting.helpers import _spin, _stat_card  # noqa: F401
 
 from db.accounting.accounting_repo import fetch_leaf_accounts, insert_entry, add_entry_lines
 from db.inventory.investors_repo  import link_investor_to_line
-
-
-# ══════════════════════════════════════════════════════════
-# مساعدات UI
-# ══════════════════════════════════════════════════════════
-
-def _spin(max_=999_999_999, dec=2):
-    s = QDoubleSpinBox()
-    s.setRange(0, max_)
-    s.setDecimals(dec)
-    s.setMinimumHeight(30)
-    return s
-
-
-def _stat_card(label: str, color: str = "#1565c0"):
-    """يرجع (QFrame, QLabel_value)."""
-    f = QFrame()
-    f.setStyleSheet(f"""
-        QFrame {{
-            background: white;
-            border-left: 4px solid {color};
-            border-radius: 6px;
-        }}
-    """)
-    lay = QVBoxLayout(f)
-    lay.setContentsMargins(12, 8, 12, 8)
-    lt = QLabel(label)
-    lt.setStyleSheet("font-size:10px; color:#888; background:transparent; border:none;")
-    lv = QLabel("0.00  ج")
-    lv.setStyleSheet(
-        f"font-size:15px; font-weight:bold; color:{color};"
-        " background:transparent; border:none;"
-    )
-    lay.addWidget(lt)
-    lay.addWidget(lv)
-    return f, lv
 
 
 # ══════════════════════════════════════════════════════════

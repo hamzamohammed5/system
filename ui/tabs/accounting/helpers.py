@@ -2,7 +2,10 @@
 ui/tabs/accounting/helpers.py
 ==============================
 أدوات مساعدة صغيرة مشتركة بين تبويبات الحسابات.
+
 - stat cards بأحجام نسبية من حجم الخط الأساسي
+- _spin / _money مشتركة
+- TYPE_COLORS
 """
 
 from PyQt5.QtWidgets import QDoubleSpinBox, QFrame, QVBoxLayout, QLabel
@@ -22,10 +25,20 @@ TYPE_COLORS = {
 }
 
 
-def _spin(max_=999_999_999, dec=2) -> QDoubleSpinBox:
+def _spin(max_=999_999_999, dec=2, min_height: int = 30) -> QDoubleSpinBox:
+    """
+    QDoubleSpinBox موحد — يُستخدم في helpers و investors وكل تبويبات الحسابات.
+
+    Parameters
+    ----------
+    max_ : الحد الأقصى للقيمة
+    dec  : عدد الخانات العشرية
+    min_height : الارتفاع الأدنى للعنصر
+    """
     s = QDoubleSpinBox()
     s.setRange(0, max_)
     s.setDecimals(dec)
+    s.setMinimumHeight(min_height)
     return s
 
 
@@ -34,7 +47,14 @@ def _money(val: float) -> str:
 
 
 def _stat_card(label: str, color: str = "#1565c0"):
-    """يرجع (QFrame, QLabel_value) — بطاقة إحصائية بأحجام نسبية."""
+    """
+    يرجع (QFrame, QLabel_value) — بطاقة إحصائية بأحجام نسبية.
+
+    يُستخدم في:
+      - accounting/helpers.py (هنا)
+      - investors/_helpers.py  (يستدعي من هنا)
+      - financial tabs
+    """
     f = QFrame()
     f.setStyleSheet(f"""
         QFrame {{
@@ -48,11 +68,9 @@ def _stat_card(label: str, color: str = "#1565c0"):
     lay.setSpacing(2)
 
     lt = QLabel(label)
-    # حجم صغير للعنوان — يأتي من الـ stylesheet العام عبر card-title
     lt.setStyleSheet(card_title_style())
 
     lv = QLabel("0.00  ج")
-    # حجم أكبر للقيمة — نسبي
     lv.setStyleSheet(card_value_style(color))
 
     lay.addWidget(lt)

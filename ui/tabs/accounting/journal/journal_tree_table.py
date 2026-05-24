@@ -3,13 +3,11 @@ ui/tabs/accounting/journal/journal_tree_table.py
 =========================================
 _JournalTreeTable و JournalTab
 
-إصلاحات (v5):
-  - JournalTab يستمع لـ bus.company_data_changed ويعيد بناء الـ children
-    بدل الاعتماد على SafeConnMixin فيهم فقط — يضمن إن _erp_conn_ref
-    في _JournalForm ما يفضلش لشركة قديمة.
-  - _rebuild_children(): يحذف الـ children القديمة وينشئها جديدة
-    بـ conn حي من _get_safe_conn().
-  - باقي إصلاحات v4 محافظ عليها.
+إصلاحات (v6):
+  - استبدال _bold_item و _colored_item المحليين بـ
+    bold_table_item و colored_table_item من table_utils.
+  - set_row_background من table_utils بدل الحلقة اليدوية.
+  - باقي إصلاحات v5 محافظ عليها.
 """
 
 from PyQt5.QtWidgets import (
@@ -30,6 +28,10 @@ from ui.helpers import (
 )
 from ui.events import bus
 from ui.widgets.shared.safe_conn_mixin import SafeConnMixin
+from ui.widgets.shared.table_utils import (
+    bold_table_item, colored_table_item,
+    center_table_item, set_row_background,
+)
 from ..helpers  import TYPE_COLORS
 from .journal_filter  import _JournalFilterBar
 from .journal_form    import _JournalForm
@@ -178,35 +180,34 @@ class _JournalTreeTable(SafeConnMixin, QWidget):
             self.table.insertRow(r)
             self._row_meta[r] = {"entry_id": eid, "is_parent": True, "is_child": False}
 
-            toggle_item = QTableWidgetItem("▼" if expanded else "▶")
-            toggle_item.setTextAlignment(Qt.AlignCenter)
-            toggle_item.setForeground(QBrush(QColor("#1565c0")))
-            f = QFont(); f.setBold(True)
-            toggle_item.setFont(f)
+            # ── عمود التبديل (▼/▶) ──
+            toggle_item = center_table_item(
+                "▼" if expanded else "▶",
+                color="#1565c0",
+                bold=True,
+            )
             self.table.setItem(r, 0, toggle_item)
 
-            date_item = QTableWidgetItem(entry["date"])
-            date_item.setTextAlignment(Qt.AlignCenter)
-            df = QFont(); df.setBold(True)
-            date_item.setFont(df)
-            date_item.setForeground(QBrush(QColor("#2e7d32")))
-            self.table.setItem(r, 1, date_item)
+            # ── التاريخ ──
+            self.table.setItem(r, 1, center_table_item(
+                entry["date"], color="#2e7d32", bold=True
+            ))
 
-            self.table.setItem(r, 2, self._bold_item(entry["ref_no"], "#1565c0"))
-            self.table.setItem(r, 3, self._bold_item(entry["description"]))
-            self.table.setItem(r, 4, self._bold_item(f"{total_dr:,.2f}", "#1565c0"))
-            self.table.setItem(r, 5, self._bold_item(f"{total_cr:,.2f}", "#c62828"))
+            # ── رقم القيد + البيان + DR + CR + الحالة ──
+            self.table.setItem(r, 2, bold_table_item(entry["ref_no"],       "#1565c0"))
+            self.table.setItem(r, 3, bold_table_item(entry["description"]))
+            self.table.setItem(r, 4, bold_table_item(f"{total_dr:,.2f}",    "#1565c0"))
+            self.table.setItem(r, 5, bold_table_item(f"{total_cr:,.2f}",    "#c62828"))
 
             diff      = total_dr - total_cr
             bal_color = "#2e7d32" if abs(diff) < 0.01 else "#c62828"
             bal_text  = "✅ متوازن" if abs(diff) < 0.01 else f"⚠️ {abs(diff):,.2f}"
-            self.table.setItem(r, 6, self._bold_item(bal_text, bal_color))
+            self.table.setItem(r, 6, bold_table_item(bal_text, bal_color))
 
-            for c in range(self.table.columnCount()):
-                item = self.table.item(r, c)
-                if item:
-                    item.setBackground(QBrush(QColor("#eef3fb")))
+            # خلفية الصف الرئيسي
+            set_row_background(self.table, r, "#eef3fb")
 
+            # ── الصفوف الفرعية ──
             if expanded:
                 for line in entry["lines"]:
                     rc = self.table.rowCount()
@@ -226,44 +227,35 @@ class _JournalTreeTable(SafeConnMixin, QWidget):
                         desc_text += f"  │  {line['description']}"
 
                     is_dr  = line["debit"] > 0
-                    row_bg = QColor("#f4f8ff") if is_dr else QColor("#fff4f4")
+                    row_bg = "#f4f8ff" if is_dr else "#fff4f4"
 
-                    for c in range(4):
+                    # أعمدة فاضية للصف الفرعي (0-2)
+                    for c in range(3):
                         self.table.setItem(rc, c, QTableWidgetItem(""))
 
-                    desc_item = QTableWidgetItem(desc_text)
-                    desc_item.setToolTip(f"{acc_code} — {acc_name}")
-                    desc_item.setForeground(QBrush(QColor(acc_color)))
+                    # البيان (الحساب)
+                    desc_item = colored_table_item(
+                        desc_text, acc_color,
+                        tooltip=f"{acc_code} — {acc_name}"
+                    )
                     self.table.setItem(rc, 3, desc_item)
 
+                    # DR / CR
                     if is_dr:
-                        self.table.setItem(rc, 4,
-                            self._colored_item(f"{line['debit']:,.2f}", "#1565c0"))
+                        self.table.setItem(rc, 4, colored_table_item(
+                            f"{line['debit']:,.2f}", "#1565c0"
+                        ))
                         self.table.setItem(rc, 5, QTableWidgetItem(""))
                     else:
                         self.table.setItem(rc, 4, QTableWidgetItem(""))
-                        self.table.setItem(rc, 5,
-                            self._colored_item(f"{line['credit']:,.2f}", "#c62828"))
+                        self.table.setItem(rc, 5, colored_table_item(
+                            f"{line['credit']:,.2f}", "#c62828"
+                        ))
 
                     self.table.setItem(rc, 6, QTableWidgetItem(""))
 
-                    for c in range(self.table.columnCount()):
-                        item = self.table.item(rc, c)
-                        if item:
-                            item.setBackground(QBrush(row_bg))
-
-    def _bold_item(self, text, color=None):
-        item = QTableWidgetItem(text)
-        f = QFont(); f.setBold(True)
-        item.setFont(f)
-        if color:
-            item.setForeground(QBrush(QColor(color)))
-        return item
-
-    def _colored_item(self, text, color):
-        item = QTableWidgetItem(text)
-        item.setForeground(QBrush(QColor(color)))
-        return item
+                    # خلفية الصف الفرعي
+                    set_row_background(self.table, rc, row_bg)
 
     def _on_cell_clicked(self, row, col):
         meta = self._row_meta.get(row)
@@ -318,7 +310,6 @@ class JournalTab(SafeConnMixin, QWidget):
 
     إصلاح (v5): يستمع لـ bus.company_data_changed ويعيد بناء
     _JournalForm و _JournalTreeTable بـ connections حية للشركة الجديدة.
-    هذا يضمن إن _erp_conn_ref في _JournalForm ما يفضلش لشركة قديمة.
     """
 
     def __init__(self, conn, erp_conn=None, parent=None):
@@ -334,7 +325,6 @@ class JournalTab(SafeConnMixin, QWidget):
 
     def _on_company_event(self, company_id: int):
         if self._on_company_event_safe(company_id):
-            # [إصلاح] نعيد بناء الـ children بـ connections حية للشركة الجديدة
             QTimer.singleShot(0, self._rebuild_children)
 
     def _get_erp_conn(self):
@@ -377,17 +367,11 @@ class JournalTab(SafeConnMixin, QWidget):
         root.addWidget(self._splitter)
 
     def _rebuild_children(self):
-        """
-        [إصلاح v5] يعيد بناء الـ form والجدول بـ connections حية.
-        يُستدعى بعد تغيير الشركة.
-        """
         if self._splitter is None:
             return
 
-        # احفظ الأحجام الحالية
         sizes = self._splitter.sizes()
 
-        # احذف الـ children القديمة
         if self._form:
             self._splitter.widget(0).hide()
             old_form = self._form
@@ -401,7 +385,6 @@ class JournalTab(SafeConnMixin, QWidget):
             self._tree_table = None
             old_table.deleteLater()
 
-        # أنشئ connections حية للشركة الجديدة
         conn = self._get_safe_conn()
         erp  = self._get_erp_conn()
 

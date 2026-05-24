@@ -1,5 +1,5 @@
 File Tree Snapshot
-Generated : 2026-05-24 12:01:02
+Generated : 2026-05-24 12:20:51
 Source    : D:\My Workspace\Hg\Alhabaar\accountant\system
 Extensions: .py
 ────────────────────────────────────────────────────────────
@@ -84,6 +84,9 @@ system/
 │   │   │   │   ├── account_picker/
 │   │   │   │   │   ├── _account_picker_button.py
 │   │   │   │   │   └── _account_tree_popup.py
+│   │   │   │   ├── form/
+│   │   │   │   │   ├── _balance_bar.py
+│   │   │   │   │   └── _journal_header.py
 │   │   │   │   ├── lines/
 │   │   │   │   │   ├── _lines_panel.py
 │   │   │   │   │   └── _smart_line.py

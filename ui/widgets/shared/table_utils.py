@@ -2,6 +2,12 @@
 ui/widgets/shared/table_utils.py
 ================================
 أدوات موحدة لإنشاء وإدارة الجداول في كل أقسام التطبيق.
+
+الجديد (v2):
+  - bold_table_item(text, color)    → QTableWidgetItem بخط عريض
+  - colored_table_item(text, color) → QTableWidgetItem بلون مخصص
+  - center_table_item(text)         → QTableWidgetItem محاذاة وسط
+  كلهم دوال عامة قابلة للاستخدام من أي جدول في التطبيق.
 """
 
 from PyQt5.QtWidgets import (
@@ -9,7 +15,7 @@ from PyQt5.QtWidgets import (
     QSizePolicy, QSplitter, QWidget,
 )
 from PyQt5.QtCore import Qt, QTimer
-from PyQt5.QtGui  import QColor, QFont
+from PyQt5.QtGui  import QColor, QFont, QBrush
 
 from ui.app_settings import _C, get_font_size, fs
 
@@ -240,13 +246,8 @@ def make_splitter_table(columns: list,
                         variant: str = "normal",
                         extra_pad: int = 20) -> tuple:
     """
-    يبني جدول جوا QSplitter أفقي — نفس pattern الـ dashboard.
-    - الجدول على اليسار بعرضه الطبيعي
-    - spacer على اليمين يأخذ المساحة الزيادة
-    - المستخدم يقدر يوسّع/يضيّق بالـ handle
-
+    يبني جدول جوا QSplitter أفقي.
     Returns: (QSplitter, QTableWidget)
-    بعد ملء البيانات استدعِ: fit_splitter_table(splitter, table)
     """
     table = _build_table(
         columns, stretch_col, col_widths,
@@ -289,25 +290,7 @@ def make_splitter_table_guarded(columns: list,
                                  extra_pad: int = 20) -> tuple:
     """
     نفس make_splitter_table مع _SplitterScrollGuard تلقائي.
-
-    الـ guard بيمنع الـ splitter handle من التوسع أكتر من اللازم
-    لما الجدول بيتشاف كامل (horizontal scrollbar مختفي).
-    لما يظهر scroll تاني → الـ handle بيتحرك عادي بشكل dynamic.
-
     Returns: (QSplitter, QTableWidget, _SplitterScrollGuard)
-
-    الاستخدام:
-        splitter, table, guard = make_splitter_table_guarded(
-            columns=[...], col_widths={...},
-        )
-        self._my_splitter = splitter
-        self._my_table    = table
-        self._my_guard    = guard      # ← لازم تحتفظ بيه (عشان GC)
-        layout.addWidget(splitter)
-
-        # بعد ملء البيانات:
-        fit_splitter_table(splitter, table)
-        guard.refresh()
     """
     from ui.widgets.shared.splitter_scroll_guard import _SplitterScrollGuard
 
@@ -343,7 +326,7 @@ def fit_splitter_table(splitter: QSplitter, table: QTableWidget,
 
 
 # ══════════════════════════════════════════════════════════
-# أدوات الخلايا
+# أدوات الخلايا — الأصلية
 # ══════════════════════════════════════════════════════════
 
 def make_table_item(text: str = "",
@@ -468,3 +451,134 @@ def fit_splitter_to_table(splitter,
             new_sizes[i] = max(300, int(remaining * ratio))
 
     splitter.setSizes(new_sizes)
+
+
+# ══════════════════════════════════════════════════════════
+# أدوات الخلايا المحسّنة (v2) — قابلة للاستخدام من أي جدول
+# ══════════════════════════════════════════════════════════
+
+def bold_table_item(text: str,
+                    color: str = None,
+                    align: int = None,
+                    user_data=None,
+                    tooltip: str = None) -> QTableWidgetItem:
+    """
+    يبني QTableWidgetItem بخط عريض مع لون اختياري.
+
+    بيحل محل _bold_item في journal_tree_table.py وأي جدول تاني.
+
+    الاستخدام:
+        self.table.setItem(r, 2, bold_table_item(entry["ref_no"], "#1565c0"))
+        self.table.setItem(r, 3, bold_table_item(entry["description"]))
+
+    Parameters
+    ----------
+    text      : نص الخلية
+    color     : لون الخط (hex) — None = اللون الافتراضي
+    align     : Qt.Align* — None = الافتراضي (يمين + وسط عمودي)
+    user_data : بيانات مخفية (Qt.UserRole)
+    tooltip   : tooltip الخلية
+    """
+    item = QTableWidgetItem(str(text) if text is not None else "")
+
+    f = QFont()
+    f.setBold(True)
+    item.setFont(f)
+
+    if color:
+        item.setForeground(QBrush(QColor(color)))
+
+    if align is not None:
+        item.setTextAlignment(align | Qt.AlignVCenter)
+
+    if user_data is not None:
+        item.setData(Qt.UserRole, user_data)
+
+    if tooltip:
+        item.setToolTip(tooltip)
+
+    return item
+
+
+def colored_table_item(text: str,
+                       color: str,
+                       align: int = None,
+                       user_data=None,
+                       tooltip: str = None) -> QTableWidgetItem:
+    """
+    يبني QTableWidgetItem بلون مخصص (بدون bold).
+
+    بيحل محل _colored_item في journal_tree_table.py وأي جدول تاني.
+
+    الاستخدام:
+        self.table.setItem(r, 4, colored_table_item(f"{dr:,.2f}", "#1565c0"))
+        self.table.setItem(r, 5, colored_table_item(f"{cr:,.2f}", "#c62828"))
+
+    Parameters
+    ----------
+    text      : نص الخلية
+    color     : لون الخط (hex) — مطلوب
+    align     : Qt.Align* — None = الافتراضي
+    user_data : بيانات مخفية (Qt.UserRole)
+    tooltip   : tooltip الخلية
+    """
+    item = QTableWidgetItem(str(text) if text is not None else "")
+    item.setForeground(QBrush(QColor(color)))
+
+    if align is not None:
+        item.setTextAlignment(align | Qt.AlignVCenter)
+
+    if user_data is not None:
+        item.setData(Qt.UserRole, user_data)
+
+    if tooltip:
+        item.setToolTip(tooltip)
+
+    return item
+
+
+def center_table_item(text: str,
+                      color: str = None,
+                      bold: bool = False,
+                      user_data=None) -> QTableWidgetItem:
+    """
+    يبني QTableWidgetItem بمحاذاة وسط.
+
+    الاستخدام:
+        self.table.setItem(r, 0, center_table_item(entry["date"], "#2e7d32", bold=True))
+    """
+    item = QTableWidgetItem(str(text) if text is not None else "")
+    item.setTextAlignment(Qt.AlignCenter | Qt.AlignVCenter)
+
+    if color:
+        item.setForeground(QBrush(QColor(color)))
+
+    if bold:
+        f = QFont()
+        f.setBold(True)
+        item.setFont(f)
+
+    if user_data is not None:
+        item.setData(Qt.UserRole, user_data)
+
+    return item
+
+
+def set_row_background(table: QTableWidget, row: int, color: str):
+    """
+    يلوّن خلفية صف كامل في الجدول.
+
+    الاستخدام:
+        set_row_background(self.table, r, "#eef3fb")  # صف رئيسي
+        set_row_background(self.table, r, "#f4f8ff")  # صف فرعي DR
+    """
+    brush = QBrush(QColor(color))
+    for c in range(table.columnCount()):
+        item = table.item(row, c)
+        if item:
+            item.setBackground(brush)
+        else:
+            # لو الخلية فاضية، نحتاج نعمل item عشان نلوّنه
+            new_item = QTableWidgetItem("")
+            new_item.setBackground(brush)
+            table.setItem(row, c, new_item)
