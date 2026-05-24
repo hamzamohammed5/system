@@ -16,6 +16,7 @@ from ui.helpers import EditModeMixin, buttons_row
 from ui.widgets.shared.category_manager import CategoryCombo
 from ui.tabs.costing.shared.raw_variants_panel import _RawVariantsPanel
 from ui.widgets.shared.scrollable_form import wrap_in_scroll
+from ui.widgets.shared.connection_mixin import LiveConnMixin
 from ui.events import bus
 
 
@@ -30,24 +31,12 @@ def _labeled(widget, unit: str) -> QWidget:
     return w
 
 
-class _InputPanel(QWidget, EditModeMixin):
+class _InputPanel(QWidget, EditModeMixin, LiveConnMixin):
     def __init__(self, conn, parent=None):
         super().__init__(parent)
         self.conn = conn
         self._build()
         self.init_edit_mode(self.btn_add, self.btn_save, self.btn_cancel, self.lbl_mode)
-
-    # ── connection صالح دايماً ────────────────────────────
-
-    def _live_conn(self):
-        if self.conn is not None:
-            try:
-                self.conn.execute("SELECT 1")
-                return self.conn
-            except Exception:
-                pass
-        from db.companies.company_state import company_state
-        return company_state.get_erp_conn()
 
     def _build(self):
         outer = QVBoxLayout(self)

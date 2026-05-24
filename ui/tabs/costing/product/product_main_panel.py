@@ -14,7 +14,7 @@ from PyQt5.QtCore import Qt
 from db.shared.items_repo import fetch_item, delete_item
 from ui.helpers            import confirm_delete
 from ui.widgets.shared.connection_mixin import LiveConnMixin
-from ui.tabs.costing.shared.component_row import ComponentRow
+from ui.widgets.shared.component_row._row_widget import ComponentRow
 from ui.tabs.costing.shared.bom_tree      import BomTree
 from ui.events import bus
 

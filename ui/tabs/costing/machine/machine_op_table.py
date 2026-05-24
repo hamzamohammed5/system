@@ -15,11 +15,12 @@ from ui.helpers import (
 )
 from ui.tabs.costing.shared.bulk_replace.bulk_replace_dialog import BulkReplaceDialog
 from ui.widgets.shared.filter_bar import FilterBar
+from ui.widgets.shared.connection_mixin import LiveConnMixin
 from ui.events import bus
 from .machine_op_form import _MachineOpForm
 
 
-class _MachineOpTable(QWidget):
+class _MachineOpTable(QWidget, LiveConnMixin):
     def __init__(self, conn, form: _MachineOpForm, parent=None):
         super().__init__(parent)
         self.conn      = conn
@@ -28,18 +29,6 @@ class _MachineOpTable(QWidget):
         self._build()
         self._load()
         bus.data_changed.connect(self._load)
-
-    # ── connection صالح دايماً ────────────────────────────
-
-    def _live_conn(self):
-        if self.conn is not None:
-            try:
-                self.conn.execute("SELECT 1")
-                return self.conn
-            except Exception:
-                pass
-        from db.companies.company_state import company_state
-        return company_state.get_erp_conn()
 
     def _build(self):
         root = QVBoxLayout(self)

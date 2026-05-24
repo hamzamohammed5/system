@@ -2,26 +2,6 @@
 ui/widgets/shared/list_panel_with_shared.py
 ============================================
 SharedItemsListPanel — قاعدة مشتركة للجداول التي تدعم العناصر المشتركة.
-
-يوحّد الكود المتكرر بين machine_table.py و labor_op_table.py:
-  - legend العناصر المشتركة/المنشورة
-  - FilterBar
-  - أزرار تعديل/حذف/استبدال شامل/تعديل مشترك/نشر كمشترك
-  - منطق التلوين
-  - _load + _apply_filter pattern
-
-الاستخدام:
-    class _MachineTable(SharedItemsListPanel):
-        SHARED_TYPE  = "machine"
-        TABLE_COLS   = ["ID", "الاسم", "التصنيف", ...]
-        FILTER_SCOPE = "machine"
-
-        def _fetch_local_rows(self): ...
-        def _get_item_data_for_publish(self, row): ...
-        def _fill_table_row(self, r, item): ...
-        def _edit_item(self, item_id): ...
-        def _delete_item(self, item_id, item_name): ...
-        def _bulk_replace_item(self, item_id, item_name): ...
 """
 
 from PyQt5.QtWidgets import (
@@ -35,6 +15,7 @@ from ui.helpers import (
     confirm_delete, danger_button,
 )
 from ui.widgets.shared.filter_bar import FilterBar
+from ui.widgets.shared.connection_mixin import LiveConnMixin
 from ui.widgets.shared.shared_ops_mixin import SharedOpsMixin
 from ui.events import bus
 
@@ -44,7 +25,7 @@ _PUBLISHED_COLOR = "#1565c0"
 _PUBLISHED_BG    = "#e3f2fd"
 
 
-class SharedItemsListPanel(QWidget, SharedOpsMixin):
+class SharedItemsListPanel(QWidget, LiveConnMixin, SharedOpsMixin):
     """
     قاعدة مشتركة للجداول التي تدعم العناصر المشتركة.
 
@@ -57,7 +38,6 @@ class SharedItemsListPanel(QWidget, SharedOpsMixin):
 
       _fetch_local_rows()       → list[dict]
       _get_shared_rows(local)   → list[dict]
-      _get_published_names()    → set[str]
       _fill_table_row(r, item)  → None
       _edit_item(item_id)       → None
       _delete_item(id, name)    → None
@@ -79,16 +59,6 @@ class SharedItemsListPanel(QWidget, SharedOpsMixin):
         self._build()
         self._load()
         bus.data_changed.connect(self._load)
-
-    def _live_conn(self):
-        if self.conn is not None:
-            try:
-                self.conn.execute("SELECT 1")
-                return self.conn
-            except Exception:
-                pass
-        from db.companies.company_state import company_state
-        return company_state.get_erp_conn()
 
     # ── بناء الواجهة ──────────────────────────────────────
 
@@ -169,7 +139,6 @@ class SharedItemsListPanel(QWidget, SharedOpsMixin):
     # ── Override hooks ─────────────────────────────────────
 
     def _setup_column_widths(self, table):
-        """Override لتحديد عروض الأعمدة."""
         pass
 
     def _fetch_local_rows(self) -> list:
@@ -186,23 +155,18 @@ class SharedItemsListPanel(QWidget, SharedOpsMixin):
             return set()
 
     def _fill_table_row(self, r: int, item: dict):
-        """Override لملء صف الجدول."""
         raise NotImplementedError
 
     def _edit_item(self, item_id: int):
-        """Override لمنطق التعديل."""
         raise NotImplementedError
 
     def _delete_item(self, item_id: int, item_name: str):
-        """Override لمنطق الحذف."""
         raise NotImplementedError
 
     def _bulk_replace_item(self, item_id: int, item_name: str):
-        """Override لمنطق الاستبدال الشامل (اختياري)."""
         pass
 
     def _get_item_data_for_publish(self, row: dict) -> dict:
-        """Override لجمع بيانات النشر."""
         return {}
 
     # ── تحميل البيانات ────────────────────────────────────
@@ -264,7 +228,6 @@ class SharedItemsListPanel(QWidget, SharedOpsMixin):
             return None, None
         item_id   = self.table.item(row, 0).data(0x0100)
         item_name = self.table.item(row, 1).text()
-        # إزالة البادئة (🔗 أو 📤) من الاسم
         item_name = item_name.lstrip("🔗 📤 ")
         return item_id, item_name
 

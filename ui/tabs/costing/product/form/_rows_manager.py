@@ -16,7 +16,7 @@ from PyQt5.QtWidgets import (
 )
 from PyQt5.QtCore import QTimer
 
-from ui.tabs.costing.shared.component_row import ComponentRow
+from ui.widgets.shared.component_row._row_widget import ComponentRow
 
 
 class _RowsManager(QWidget):

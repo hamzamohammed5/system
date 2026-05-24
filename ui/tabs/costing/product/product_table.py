@@ -17,6 +17,7 @@ from ui.helpers import (
     make_table, buttons_row, section_label, danger_button,
 )
 from ui.widgets.shared.filter_bar import FilterBar
+from ui.widgets.shared.connection_mixin import LiveConnMixin
 from ui.events import bus
 
 _TYPE_AR = {
@@ -95,7 +96,7 @@ class _WarningBar(QFrame):
         self.setVisible(True)
 
 
-class _ProductTable(QWidget):
+class _ProductTable(QWidget, LiveConnMixin):
     def __init__(self, conn, product_type, on_select, on_edit, on_delete, parent=None):
         super().__init__(parent)
         self.conn         = conn
@@ -108,18 +109,6 @@ class _ProductTable(QWidget):
         self._build()
         self._load()
         bus.data_changed.connect(self._load)
-
-    # ── connection صالح دايماً ────────────────────────────
-
-    def _live_conn(self):
-        if self.conn is not None:
-            try:
-                self.conn.execute("SELECT 1")
-                return self.conn
-            except Exception:
-                pass
-        from db.companies.company_state import company_state
-        return company_state.get_erp_conn()
 
     def _build(self):
         root = QVBoxLayout(self)

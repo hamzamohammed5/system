@@ -4,6 +4,7 @@ ui/tabs/costing/raw/raw_table_panel.py
 1. _load تمرر local_rows لـ get_shared_raws (منع التكرار)
 2. العناصر الأصلية المنشورة تظهر بعلامة 🔗 مع تلوين مختلف
 3. category_name الحقيقي في كل الحالات
+4. يرث من LiveConnMixin بدل كتابة _live_conn يدوياً
 """
 
 from PyQt5.QtWidgets import (
@@ -19,15 +20,16 @@ from ui.helpers import (
 )
 from ui.tabs.costing.shared.bulk_replace.bulk_replace_dialog import BulkReplaceDialog
 from ui.widgets.shared.filter_bar import FilterBar
+from ui.widgets.shared.connection_mixin import LiveConnMixin
 from ui.tabs.companies.shared_items_mixin import (
     get_shared_raws, get_published_local_names,
     is_shared_id, extract_shared_id,
 )
 from ui.events import bus
 
-_SHARED_COLOR    = "#2e7d52"   # أخضر — عناصر مشتركة (shared:)
+_SHARED_COLOR    = "#2e7d52"
 _SHARED_BG       = "#e8f5e9"
-_PUBLISHED_COLOR = "#1565c0"   # أزرق — عناصر محلية منشورة كمشتركة
+_PUBLISHED_COLOR = "#1565c0"
 _PUBLISHED_BG    = "#e3f2fd"
 
 
@@ -40,26 +42,16 @@ def _to_dict(row) -> dict:
         return {}
 
 
-class _TablePanel(QWidget):
+class _TablePanel(QWidget, LiveConnMixin):
     def __init__(self, conn, input_panel, parent=None):
         super().__init__(parent)
         self.conn              = conn
         self._input_panel      = input_panel
         self._all_rows         = []
-        self._published_names  = set()   # أسماء العناصر المحلية المنشورة
+        self._published_names  = set()
         self._build()
         self._load()
         bus.data_changed.connect(self._load)
-
-    def _live_conn(self):
-        if self.conn is not None:
-            try:
-                self.conn.execute("SELECT 1")
-                return self.conn
-            except Exception:
-                pass
-        from db.companies.company_state import company_state
-        return company_state.get_erp_conn()
 
     def _build(self):
         root = QVBoxLayout(self)
@@ -176,7 +168,6 @@ class _TablePanel(QWidget):
             QMessageBox.information(self, "تنبيه", "اختر خامة من الجدول أولاً")
             return
         if not is_shared_id(item_id):
-            # لو كانت محلية منشورة → افتح تعديل المشترك عن طريق الاسم
             row = self._selected_raw_dict()
             if row and str(row.get("name", "")).strip().lower() in self._published_names:
                 self._edit_published_as_shared(row)
@@ -191,13 +182,11 @@ class _TablePanel(QWidget):
             self._open_shared_editor(shared_id)
 
     def _edit_published_as_shared(self, row: dict):
-        """يفتح نافذة تعديل المشترك للخامة المحلية المنشورة."""
         try:
             from db.companies.companies_schema import get_central_connection, create_central_tables
             from ui.tabs.companies.shared_items_dialog import SharedItemsDialog
             central = get_central_connection()
             create_central_tables(central)
-            # ابحث عن shared_item_id بالاسم
             shared_row = central.execute(
                 "SELECT id FROM shared_items WHERE name=? AND shared_type='raw' LIMIT 1",
                 (row["name"],)
@@ -272,7 +261,6 @@ class _TablePanel(QWidget):
         if not row:
             return
 
-        # لو محلية منشورة بالفعل → افتح تعديل الربط
         if str(row.get("name", "")).strip().lower() in self._published_names:
             self._edit_published_as_shared(row)
             return
@@ -312,10 +300,7 @@ class _TablePanel(QWidget):
         except Exception:
             local_rows = []
 
-        # أسماء العناصر المحلية المنشورة كمشتركة (للتعليم عليها بـ 📤)
         self._published_names = get_published_local_names("raw")
-
-        # نمرر local_rows عشان remove_local_duplicates يمنع التكرار
         shared_rows    = get_shared_raws(local_rows)
         self._all_rows = local_rows + shared_rows
         self._apply_filter()
@@ -343,7 +328,6 @@ class _TablePanel(QWidget):
 
             cat_display = row.get("category_name") or "—"
 
-            # prefix الاسم
             if is_shared:
                 name_prefix = "🔗 "
             elif is_published:
@@ -365,7 +349,6 @@ class _TablePanel(QWidget):
             self.table.setItem(r, 4, QTableWidgetItem(str(tq) if tq is not None else "—"))
             self.table.setItem(r, 5, QTableWidgetItem(f"{unit:.4f}"))
 
-            # تلوين الصف
             if is_shared:
                 bg, fg = _SHARED_BG, _SHARED_COLOR
             elif is_published:

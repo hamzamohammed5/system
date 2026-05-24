@@ -20,7 +20,7 @@ from db.costing.bom_scenarios_repo import (
     fetch_bom_for_scenario,
 )
 from ui.widgets.shared.connection_mixin import LiveConnMixin
-from ui.tabs.costing.shared.component_row import ComponentRow
+from ui.widgets.shared.component_row._row_widget import ComponentRow
 from ui.events import bus
 
 from .form._header_bar   import _FormHeaderBar
