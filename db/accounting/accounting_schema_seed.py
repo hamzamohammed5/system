@@ -1,8 +1,14 @@
 """
 db/accounting/accounting_schema_seed.py
-==============================
-البيانات الافتراضية للحسابات — تُدرج مرة واحدة عند إنشاء قاعدة بيانات جديدة.
+======================================
+البيانات الافتراضية للحسابات.
+
+إصلاح (v2):
+  - _verify_conn_is_accounting: تتحقق إن الـ conn فعلاً لـ accounting.db
+    قبل ما تعمل seed — يمنع إدراج بيانات في DB غلط.
 """
+
+import os
 
 
 def _account_exists(conn) -> bool:
@@ -13,8 +19,30 @@ def _account_exists(conn) -> bool:
         return False
 
 
+def _verify_conn_is_accounting(conn) -> bool:
+    """
+    يتحقق إن الـ conn مفتوح على ملف اسمه accounting.db.
+    يمنع الـ seed من الاشتغال على erp.db أو أي DB تاني بالغلط.
+    """
+    try:
+        row = conn.execute("PRAGMA database_list").fetchone()
+        if not row:
+            return False
+        path = row[2] if len(row) > 2 else ""
+        return os.path.basename(path).lower() == "accounting.db"
+    except Exception:
+        # لو مش قادر يتحقق، نسمح بالمتابعة (backward compat)
+        return True
+
+
 def seed_default_accounts(conn):
     """يُدرج الحسابات الافتراضية لو كانت قاعدة البيانات فارغة."""
+
+    # [إصلاح] تحقق إن الـ conn للـ DB الصح
+    if not _verify_conn_is_accounting(conn):
+        print("[accounting_schema_seed] تحذير: conn ليس لـ accounting.db — تم تخطي الـ seed")
+        return
+
     if _account_exists(conn):
         return
 

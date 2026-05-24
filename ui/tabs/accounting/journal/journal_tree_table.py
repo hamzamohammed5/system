@@ -1,13 +1,15 @@
 """
 ui/tabs/accounting/journal/journal_tree_table.py
 =========================================
-_JournalTreeTable — جدول القيود المحاسبية مع expand/collapse وفلاتر متكاملة.
-JournalTab        — التبويب الرئيسي يجمع الفورم والجدول.
+_JournalTreeTable و JournalTab
 
-تغييرات (v4 — SafeConnMixin + group signal fix):
-  - يستمع لـ _filter.group_reloaded لإعادة ربط signal الـ _TreeGroupCombo
-    بعد استبدالها عند تغيير الشركة.
-  - باقي إصلاحات v3 (SafeConnMixin / company_data_changed) محافظ عليها.
+إصلاحات (v5):
+  - JournalTab يستمع لـ bus.company_data_changed ويعيد بناء الـ children
+    بدل الاعتماد على SafeConnMixin فيهم فقط — يضمن إن _erp_conn_ref
+    في _JournalForm ما يفضلش لشركة قديمة.
+  - _rebuild_children(): يحذف الـ children القديمة وينشئها جديدة
+    بـ conn حي من _get_safe_conn().
+  - باقي إصلاحات v4 محافظ عليها.
 """
 
 from PyQt5.QtWidgets import (
@@ -34,9 +36,7 @@ from .journal_form    import _JournalForm
 
 
 class _JournalTreeTable(SafeConnMixin, QWidget):
-    """
-    جدول القيود المحاسبية — يستخدم SafeConnMixin لضمان conn الشركة الصح.
-    """
+    """جدول القيود المحاسبية — SafeConnMixin يضمن conn الشركة الصح."""
 
     COLS = ["#", "التاريخ", "رقم القيد", "البيان / الحساب", "DR", "CR", "الحالة"]
 
@@ -56,10 +56,6 @@ class _JournalTreeTable(SafeConnMixin, QWidget):
         if self._on_company_event_safe(company_id):
             self._load()
 
-    # ══════════════════════════════════════════════════════
-    # بناء الواجهة
-    # ══════════════════════════════════════════════════════
-
     def _build(self):
         root = QVBoxLayout(self)
         root.setContentsMargins(0, 0, 0, 0)
@@ -67,7 +63,6 @@ class _JournalTreeTable(SafeConnMixin, QWidget):
 
         root.addWidget(section_label("── القيود المحاسبية المحفوظة ──"))
 
-        # ── شريط الفلاتر ──
         self._filter = _JournalFilterBar(self._get_safe_conn())
         self._connect_filter_signals()
 
@@ -77,12 +72,9 @@ class _JournalTreeTable(SafeConnMixin, QWidget):
             self._apply_filter()
         self._filter.reset = _reset_and_apply
 
-        # [إصلاح] إعادة ربط signals بعد استبدال _TreeGroupCombo
         self._filter.group_reloaded.connect(self._reconnect_group_signal)
-
         root.addWidget(self._filter)
 
-        # ── أزرار التحكم ──
         btn_expand_all   = QPushButton("⊞ توسيع الكل")
         btn_collapse_all = QPushButton("⊟ طي الكل")
         btn_del          = danger_button("🗑️  حذف القيد المحدد")
@@ -101,7 +93,6 @@ class _JournalTreeTable(SafeConnMixin, QWidget):
         btn_del.clicked.connect(self._delete_selected)
         root.addLayout(buttons_row(btn_expand_all, btn_collapse_all, btn_del))
 
-        # ── الجدول ──
         self.table = QTableWidget()
         self.table.setColumnCount(len(self.COLS))
         self.table.setHorizontalHeaderLabels(self.COLS)
@@ -125,13 +116,12 @@ class _JournalTreeTable(SafeConnMixin, QWidget):
         self.table.setColumnWidth(4, 95)
         self.table.setColumnWidth(5, 95)
         self.table.setColumnWidth(6, 85)
-        hh.setDefaultAlignment(Qt.AlignRight | Qt.AlignVCenter)
+        self.table.horizontalHeader().setDefaultAlignment(Qt.AlignRight | Qt.AlignVCenter)
         self.table.setWordWrap(False)
         self.table.cellClicked.connect(self._on_cell_clicked)
         root.addWidget(self.table, stretch=1)
 
     def _connect_filter_signals(self):
-        """يربط كل signals الفلاتر — يُستدعى مرة عند البناء."""
         self._filter.inp_search.textChanged.connect(self._apply_filter)
         self._filter.cmb_group._tree_view.clicked.connect(
             lambda _: QTimer.singleShot(50, self._apply_filter)
@@ -141,20 +131,12 @@ class _JournalTreeTable(SafeConnMixin, QWidget):
         self._filter.dt_to.dateChanged.connect(self._apply_filter)
 
     def _reconnect_group_signal(self):
-        """
-        [إصلاح] يُعيد ربط signal الـ _tree_view.clicked على الـ combo الجديد
-        بعد استبداله في _reload_group_combo().
-        """
         try:
             self._filter.cmb_group._tree_view.clicked.connect(
                 lambda _: QTimer.singleShot(50, self._apply_filter)
             )
         except Exception as e:
             print(f"[_JournalTreeTable] _reconnect_group_signal error: {e}")
-
-    # ══════════════════════════════════════════════════════
-    # تحميل البيانات
-    # ══════════════════════════════════════════════════════
 
     def _load(self):
         conn = self._get_safe_conn()
@@ -174,10 +156,6 @@ class _JournalTreeTable(SafeConnMixin, QWidget):
             })
         self._apply_filter()
 
-    # ══════════════════════════════════════════════════════
-    # الفلترة والعرض
-    # ══════════════════════════════════════════════════════
-
     def _apply_filter(self):
         filtered = [e for e in self._entries_data if self._filter.matches(e)]
         self._filter.set_count(len(filtered), len(self._entries_data))
@@ -196,7 +174,6 @@ class _JournalTreeTable(SafeConnMixin, QWidget):
             total_dr = entry["total_debit"]
             total_cr = entry["total_credit"]
 
-            # ── الصف الرئيسي ──
             r = self.table.rowCount()
             self.table.insertRow(r)
             self._row_meta[r] = {"entry_id": eid, "is_parent": True, "is_child": False}
@@ -230,7 +207,6 @@ class _JournalTreeTable(SafeConnMixin, QWidget):
                 if item:
                     item.setBackground(QBrush(QColor("#eef3fb")))
 
-            # ── صفوف الأبناء (لو موسع) ──
             if expanded:
                 for line in entry["lines"]:
                     rc = self.table.rowCount()
@@ -276,10 +252,6 @@ class _JournalTreeTable(SafeConnMixin, QWidget):
                         if item:
                             item.setBackground(QBrush(row_bg))
 
-    # ══════════════════════════════════════════════════════
-    # مساعدات العرض
-    # ══════════════════════════════════════════════════════
-
     def _bold_item(self, text, color=None):
         item = QTableWidgetItem(text)
         f = QFont(); f.setBold(True)
@@ -292,10 +264,6 @@ class _JournalTreeTable(SafeConnMixin, QWidget):
         item = QTableWidgetItem(text)
         item.setForeground(QBrush(QColor(color)))
         return item
-
-    # ══════════════════════════════════════════════════════
-    # تفاعل المستخدم
-    # ══════════════════════════════════════════════════════
 
     def _on_cell_clicked(self, row, col):
         meta = self._row_meta.get(row)
@@ -341,37 +309,109 @@ class _JournalTreeTable(SafeConnMixin, QWidget):
 
 
 # ══════════════════════════════════════════════════════════
-# التبويب الرئيسي
+# JournalTab — التبويب الرئيسي
 # ══════════════════════════════════════════════════════════
 
 class JournalTab(SafeConnMixin, QWidget):
+    """
+    التبويب الرئيسي لليومية.
+
+    إصلاح (v5): يستمع لـ bus.company_data_changed ويعيد بناء
+    _JournalForm و _JournalTreeTable بـ connections حية للشركة الجديدة.
+    هذا يضمن إن _erp_conn_ref في _JournalForm ما يفضلش لشركة قديمة.
+    """
+
     def __init__(self, conn, erp_conn=None, parent=None):
         super().__init__(parent)
         self._init_safe_conn(conn, "accounting")
-        self._erp_conn = erp_conn   # نحفظه بـ _ عشان نفرّقه
+        self._erp_conn = erp_conn
+        self._company_id = self._get_company_id()
+        self._splitter = None
+        self._form = None
+        self._tree_table = None
         self._build()
-        # لا نحتاج نستمع لـ bus هنا — الـ children عندهم SafeConnMixin
-        # وبيستجيبون تلقائياً
- 
+        bus.company_data_changed.connect(self._on_company_event)
+
+    def _on_company_event(self, company_id: int):
+        if self._on_company_event_safe(company_id):
+            # [إصلاح] نعيد بناء الـ children بـ connections حية للشركة الجديدة
+            QTimer.singleShot(0, self._rebuild_children)
+
+    def _get_erp_conn(self):
+        try:
+            if self._erp_conn is not None:
+                self._erp_conn.execute("SELECT 1")
+                return self._erp_conn
+        except Exception:
+            pass
+        try:
+            from db.companies.company_state import company_state
+            new = company_state._get_conn("erp")
+            self._erp_conn = new
+            return new
+        except Exception:
+            return self._erp_conn
+
     def _build(self):
         root = QVBoxLayout(self)
         root.setContentsMargins(0, 0, 0, 0)
- 
-        splitter = QSplitter(Qt.Vertical)
-        splitter.setHandleWidth(6)
-        splitter.setStyleSheet("""
+
+        self._splitter = QSplitter(Qt.Vertical)
+        self._splitter.setHandleWidth(6)
+        self._splitter.setStyleSheet("""
             QSplitter::handle { background:#e0e0e0; }
             QSplitter::handle:hover { background:#bbdefb; }
         """)
- 
-        # ← الإصلاح: _get_safe_conn() بدل self.conn
+
         conn = self._get_safe_conn()
-        self._form       = _JournalForm(conn, self._erp_conn)
+        erp  = self._get_erp_conn()
+
+        self._form       = _JournalForm(conn, erp)
         self._tree_table = _JournalTreeTable(conn)
- 
-        splitter.addWidget(self._form)
-        splitter.addWidget(self._tree_table)
-        splitter.setSizes([440, 360])
-        splitter.setCollapsible(0, True)
- 
-        root.addWidget(splitter)
+
+        self._splitter.addWidget(self._form)
+        self._splitter.addWidget(self._tree_table)
+        self._splitter.setSizes([440, 360])
+        self._splitter.setCollapsible(0, True)
+
+        root.addWidget(self._splitter)
+
+    def _rebuild_children(self):
+        """
+        [إصلاح v5] يعيد بناء الـ form والجدول بـ connections حية.
+        يُستدعى بعد تغيير الشركة.
+        """
+        if self._splitter is None:
+            return
+
+        # احفظ الأحجام الحالية
+        sizes = self._splitter.sizes()
+
+        # احذف الـ children القديمة
+        if self._form:
+            self._splitter.widget(0).hide()
+            old_form = self._form
+            self._form = None
+            old_form.deleteLater()
+
+        if self._tree_table:
+            if self._splitter.count() > 1:
+                self._splitter.widget(1).hide()
+            old_table = self._tree_table
+            self._tree_table = None
+            old_table.deleteLater()
+
+        # أنشئ connections حية للشركة الجديدة
+        conn = self._get_safe_conn()
+        erp  = self._get_erp_conn()
+
+        self._form       = _JournalForm(conn, erp)
+        self._tree_table = _JournalTreeTable(conn)
+
+        self._splitter.addWidget(self._form)
+        self._splitter.addWidget(self._tree_table)
+
+        if sizes and len(sizes) >= 2:
+            self._splitter.setSizes(sizes)
+        else:
+            self._splitter.setSizes([440, 360])
