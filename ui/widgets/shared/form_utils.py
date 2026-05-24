@@ -272,11 +272,8 @@ class FormGroup(QGroupBox):
 
     def add_separator(self):
         """يضيف فاصل أفقي."""
-        sep = QFrame()
-        sep.setFrameShape(QFrame.HLine)
-        sep.setFixedHeight(1)
-        sep.setStyleSheet(f"background: {_C['border']}; border: none;")
-        self.form.addRow(sep)
+        from ui.widgets.shared.panles_helper.divider_utils import make_divider
+        self.form.addRow(make_divider())
 
 
 # ══════════════════════════════════════════════════════════
