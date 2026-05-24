@@ -1,5 +1,5 @@
 File Tree Snapshot
-Generated : 2026-05-24 15:05:09
+Generated : 2026-05-24 15:14:28
 Source    : D:\My Workspace\Hg\Alhabaar\accountant\system
 Extensions: .py
 ────────────────────────────────────────────────────────────
@@ -74,10 +74,12 @@ system/
 │   │   │   │   ├── owners_equity_tab.py
 │   │   │   │   └── trial_balance_tab.py
 │   │   │   ├── investors/
+│   │   │   │   ├── _details_table.py
 │   │   │   │   ├── _helpers.py
 │   │   │   │   ├── _investor_details.py
 │   │   │   │   ├── _investor_form.py
 │   │   │   │   ├── _investors_layout.py
+│   │   │   │   ├── _investors_panel.py
 │   │   │   │   ├── _investors_table.py
 │   │   │   │   ├── _link_to_entry_panel.py
 │   │   │   │   └── _movement_dialog.py
@@ -276,6 +278,7 @@ system/
 │   │       │   ├── card_grid.py
 │   │       │   ├── collapsible_card.py
 │   │       │   ├── colors_and_base.py
+│   │       │   ├── data_table_widget.py
 │   │       │   ├── detail_header.py
 │   │       │   ├── empty_state.py
 │   │       │   ├── form_row.py
@@ -285,6 +288,7 @@ system/
 │   │       │   ├── mode_label.py
 │   │       │   ├── notification_bar.py
 │   │       │   ├── page_header.py
+│   │       │   ├── progress_bar.py
 │   │       │   ├── section_header.py
 │   │       │   ├── stat_card.py
 │   │       │   ├── status_chip.py

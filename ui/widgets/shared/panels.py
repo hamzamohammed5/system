@@ -230,6 +230,14 @@ from .input_widgets import (                                    # noqa: F401
 )
 
 
+from .panles_helper.progress_bar import (                   # noqa: F401
+    ProgressBar,
+    MultiProgressBar,
+)
+ 
+# ── data_table_widget ──────────────────────────────────────
+from .panles_helper.data_table_widget import DataTableWidget  # noqa: F401
+
 __all__ = [
     # panles_helper
     "DetailHeader", "StatCard", "SectionHeader", "EmptyState",

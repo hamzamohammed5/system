@@ -3,28 +3,27 @@ ui/tabs/accounting/investors/_investor_details.py
 =================================================
 _InvestorDetails — لوحة تفاصيل مستثمر واحد مع حذف الحركات.
 
-[إصلاح v4 — DualConnMixin]:
-  - DualConnMixin بدل _get_erp_conn() المكرر يدوياً.
+[تحسين v5]:
+  - منطق بناء الجدول انتقل لـ _details_table.py
+  - يستخدم StatRow / StatItem من panels بدل _stat_card المحلية
 """
 
 from PyQt5.QtWidgets import (
-    QWidget, QVBoxLayout, QHBoxLayout,
-    QLabel, QMessageBox, QTableWidgetItem,
+    QWidget, QVBoxLayout,
+    QLabel, QMessageBox,
 )
 from PyQt5.QtCore import Qt
-from PyQt5.QtGui  import QColor, QFont
 
 from db.inventory.investors_repo import (
     calc_investor_summary, delete_investor_link,
 )
 from db.accounting.accounting_repo import delete_entry
-from ui.helpers import (
-    make_table, setup_table_columns, buttons_row,
-    section_label, danger_button,
-)
+from ui.helpers import buttons_row, section_label, danger_button
 from ui.events import bus
 from ui.widgets.shared.safe_conn_mixin import DualConnMixin
-from ._helpers import _stat_card
+from ui.widgets.shared.panels import StatRow, StatItem
+
+from ._details_table import build_movements_table, fill_movement_row
 
 
 class _InvestorDetails(DualConnMixin, QWidget):
@@ -54,27 +53,18 @@ class _InvestorDetails(DualConnMixin, QWidget):
         self.lbl_title.setAlignment(Qt.AlignCenter)
         root.addWidget(self.lbl_title)
 
-        cards = QHBoxLayout()
-        cards.setSpacing(8)
-        f1, self.lbl_cap  = _stat_card("إجمالي رأس المال",  "#2e7d32")
-        f2, self.lbl_draw = _stat_card("إجمالي المسحوبات",  "#c62828")
-        f3, self.lbl_net  = _stat_card("صافي الاستثمار",    "#1565c0")
-        for f in (f1, f2, f3):
-            cards.addWidget(f, stretch=1)
-        root.addLayout(cards)
+        # ── بطاقات الإحصاء باستخدام StatRow الموحد ──
+        self._stat_row = StatRow([
+            StatItem(label="إجمالي رأس المال",  color="#2e7d32", icon="💰"),
+            StatItem(label="إجمالي المسحوبات",  color="#c62828", icon="💸"),
+            StatItem(label="صافي الاستثمار",    color="#1565c0", icon="⚖️"),
+        ])
+        root.addWidget(self._stat_row)
 
         root.addWidget(section_label("─── الحركات المالية ───"))
 
-        self.table = make_table(
-            ["LinkID", "التاريخ", "النوع", "المبلغ", "رقم القيد", "البيان"],
-            stretch_col=5
-        )
-        self.table.setColumnHidden(0, True)
-        setup_table_columns(self.table,
-            widths={1: 90, 2: 90, 3: 110, 4: 95},
-            stretch_col=5
-        )
-        self.table.setAlternatingRowColors(True)
+        # ── جدول الحركات ──
+        self.table = build_movements_table()
         root.addWidget(self.table, stretch=1)
 
         btn_del_move = danger_button("🗑️  حذف الحركة المحددة")
@@ -98,37 +88,20 @@ class _InvestorDetails(DualConnMixin, QWidget):
         self.lbl_title.setText(
             f"👤  {s['investor_name']}  │  انضم: {s.get('joined_at','—')}"
         )
-        self.lbl_cap.setText(f"{s['total_capital']:,.2f}  ج")
-        self.lbl_draw.setText(f"{s['total_drawings']:,.2f}  ج")
+
+        # تحديث StatRow
+        self._stat_row.set_value(0, f"{s['total_capital']:,.2f}  ج")
+        self._stat_row.set_value(1, f"{s['total_drawings']:,.2f}  ج")
 
         net   = s["net_investment"]
         color = "#1b5e20" if net >= 0 else "#b71c1c"
-        self.lbl_net.setText(f"{net:,.2f}  ج")
-        self.lbl_net.setStyleSheet(
-            f"font-size:15px; font-weight:bold; color:{color};"
-            " background:transparent; border:none;"
-        )
+        self._stat_row.set_value(2, f"{net:,.2f}  ج", color=color)
 
+        # ملء جدول الحركات
         self.table.setRowCount(0)
-        type_ar    = {"capital": "💰 رأس مال", "drawings": "💸 مسحوبات"}
-        type_color = {"capital": "#2e7d32",    "drawings": "#c62828"}
-
-        for e in s["entries"]:
-            r = self.table.rowCount()
-            self.table.insertRow(r)
-            self.table.setItem(r, 0, QTableWidgetItem(str(e.get("id", ""))))
-            self.table.setItem(r, 1, QTableWidgetItem(e.get("date", "—")))
-            mt = e["move_type"]
-            ti = QTableWidgetItem(type_ar.get(mt, mt))
-            ti.setForeground(QColor(type_color.get(mt, "#333")))
-            self.table.setItem(r, 2, ti)
-            amt_item = QTableWidgetItem(f"{e['amount']:,.2f}")
-            amt_item.setForeground(QColor(type_color.get(mt, "#333")))
-            self.table.setItem(r, 3, amt_item)
-            self.table.setItem(r, 4, QTableWidgetItem(e.get("ref_no") or "—"))
-            self.table.setItem(r, 5, QTableWidgetItem(
-                e.get("entry_desc") or e.get("notes") or "—"
-            ))
+        for r_idx, entry in enumerate(s["entries"]):
+            self.table.insertRow(r_idx)
+            fill_movement_row(self.table, r_idx, entry)
 
     def _delete_movement(self):
         row = self.table.currentRow()
@@ -170,5 +143,4 @@ class _InvestorDetails(DualConnMixin, QWidget):
         self._inv_id = None
         self.lbl_title.setText("اختر مستثمراً لعرض تفاصيله")
         self.table.setRowCount(0)
-        for lbl in (self.lbl_cap, self.lbl_draw, self.lbl_net):
-            lbl.setText("─")
+        self._stat_row.reset_all()
