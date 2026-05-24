@@ -42,8 +42,9 @@ BaseCrudForm — قاعدة مشتركة لكل نماذج الإضافة/الت
             self.inp_name.clear()
 """
 
+import logging
 from PyQt5.QtWidgets import (
-    QWidget, QPushButton, QLabel, QMessageBox,
+    QWidget, QPushButton, QLabel,
 )
 from PyQt5.QtCore import pyqtSignal
 
@@ -52,7 +53,12 @@ from ui.widgets.shared.connection_mixin import LiveConnMixin
 from ui.widgets.shared.form_utils import (
     FormGroup, build_inner_scroll,
 )
+# FIX 6: استخدم msg_warning الموحدة بدل QMessageBox.warning مباشرة
+# عشان تجربة المستخدم تكون متسقة في كل التطبيق
+from ui.widgets.shared.message_box import msg_warning
 from ui.events import bus
+
+logger = logging.getLogger(__name__)
 
 
 class BaseCrudForm(QWidget, EditModeMixin, LiveConnMixin):
@@ -74,7 +80,6 @@ class BaseCrudForm(QWidget, EditModeMixin, LiveConnMixin):
       _build_extra(root)     → widgets إضافية تحت الأزرار
     """
 
-    # اسم النموذج للعرض (يُستخدم في label الوضع)
     FORM_TITLE : str = "بيانات"
     ADD_TEXT   : str = "➕  إضافة"
     SAVE_TEXT  : str = "💾  حفظ التعديل"
@@ -93,49 +98,38 @@ class BaseCrudForm(QWidget, EditModeMixin, LiveConnMixin):
     # ── override hooks ─────────────────────────────────────
 
     def _build_fields(self, grp: FormGroup) -> None:
-        """يضيف حقول الفورم في grp.add_row(...)."""
         raise NotImplementedError
 
     def _collect(self) -> dict | None:
-        """يجمع البيانات من الحقول ويرجع dict أو None لو فيه خطأ."""
         raise NotImplementedError
 
     def _do_insert(self, data: dict) -> int:
-        """يضيف سجل في DB ويرجع ID الجديد."""
         raise NotImplementedError
 
     def _do_update(self, item_id: int, data: dict) -> None:
-        """يحدّث سجل في DB."""
         raise NotImplementedError
 
     def _do_load(self, item_id: int) -> dict | None:
-        """يجلب بيانات سجل للتعديل ويرجع dict أو None."""
         raise NotImplementedError
 
     def _fill_fields(self, data: dict) -> None:
-        """يملأ الحقول بالبيانات للتعديل."""
         raise NotImplementedError
 
     def _reset_fields(self) -> None:
-        """يمسح الحقول بعد الحفظ أو الإلغاء."""
         raise NotImplementedError
 
     # ── اختياري ───────────────────────────────────────────
 
     def _after_insert(self, new_id: int) -> None:
-        """يُستدعى بعد الإضافة الناجحة."""
         pass
 
     def _after_save(self) -> None:
-        """يُستدعى بعد الحفظ الناجح."""
         pass
 
     def _build_extra(self, root) -> None:
-        """يضيف widgets إضافية تحت الأزرار (مثل _OpRowsEditor)."""
         pass
 
     def _post_init(self) -> None:
-        """يُستدعى بعد الـ init — للاشتراك في signals مثلاً."""
         pass
 
     # ── بناء الواجهة ──────────────────────────────────────
@@ -175,7 +169,8 @@ class BaseCrudForm(QWidget, EditModeMixin, LiveConnMixin):
         try:
             new_id = self._do_insert(data)
         except Exception as e:
-            QMessageBox.warning(self, "خطأ", str(e))
+            logger.warning("%s._on_add failed: %s", type(self).__name__, e)
+            self._warn(str(e))
             return
         bus.data_changed.emit()
         self._after_insert(new_id)
@@ -188,7 +183,8 @@ class BaseCrudForm(QWidget, EditModeMixin, LiveConnMixin):
         try:
             self._do_update(self._editing_id, data)
         except Exception as e:
-            QMessageBox.warning(self, "خطأ", str(e))
+            logger.warning("%s._on_save failed: %s", type(self).__name__, e)
+            self._warn(str(e))
             return
         self._reset()
         bus.data_changed.emit()
@@ -200,10 +196,10 @@ class BaseCrudForm(QWidget, EditModeMixin, LiveConnMixin):
     # ── تحميل للتعديل ─────────────────────────────────────
 
     def load_for_edit(self, item_id: int):
-        """يحمل بيانات سجل ويدخل وضع التعديل."""
         try:
             data = self._do_load(item_id)
-        except Exception:
+        except Exception as e:
+            logger.warning("%s.load_for_edit failed: %s", type(self).__name__, e)
             return
         if not data:
             return
@@ -214,10 +210,10 @@ class BaseCrudForm(QWidget, EditModeMixin, LiveConnMixin):
     # ── مساعدات ───────────────────────────────────────────
 
     def _reset(self):
-        """يمسح الحقول ويخرج من وضع التعديل."""
         self._reset_fields()
         self.exit_edit_mode(f"─── {self.ADD_TEXT.lstrip('➕  ')} جديد ───")
 
     def _warn(self, msg: str) -> None:
-        """يعرض رسالة تحذير."""
-        QMessageBox.warning(self, "تنبيه", msg)
+        # FIX 6: msg_warning بدل QMessageBox.warning مباشرة
+        # عشان الستايل يكون موحد مع باقي التطبيق
+        msg_warning(self, "تنبيه", msg)

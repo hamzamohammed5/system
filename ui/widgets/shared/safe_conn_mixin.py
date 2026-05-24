@@ -3,15 +3,15 @@ ui/widgets/shared/safe_conn_mixin.py
 ======================================
 SafeConnMixin — مكسن يضاف لأي widget يحفظ accounting conn.
 
-إصلاحات (v5):
+إصلاحات (v6):
+  - FIX: كل except Exception: pass استُبدلت بـ logger.debug/warning
+    عشان الأخطاء تظهر في الـ logs بدل ما تُبتلع بصمت.
   - DualConnMixin: مكسن إضافي لأي widget يحتاج acc_conn + erp_conn معاً.
-    يحل التكرار المتواجد في 8+ ملفات (_investor_form, _investors_table,
-    _investor_details, _link_to_entry_panel, _investors_tab,
-    journal_form, _lines_panel, _smart_line).
-  - _init_erp_conn() / _get_erp_conn() في DualConnMixin.
-  - _on_dual_company_event() helper موحد.
-  - باقي SafeConnMixin كما هو للتوافق الكامل مع الكود القديم.
 """
+
+import logging
+
+logger = logging.getLogger(__name__)
 
 
 class SafeConnMixin:
@@ -43,8 +43,12 @@ class SafeConnMixin:
                 if not self.__safe_conn.validate(expected):
                     raise RuntimeError("conn لشركة مختلفة")
             return self.__safe_conn
-        except Exception:
-            pass
+        except Exception as e:
+            # FIX 3: سجّل السبب بدل ما نبتلعه بصمت
+            logger.debug(
+                "%s._get_safe_conn: conn check failed (%s), reconnecting",
+                type(self).__name__, e
+            )
 
         try:
             from db.companies.company_state import company_state
@@ -52,7 +56,11 @@ class SafeConnMixin:
             new_conn = company_state._get_conn(db)
             self.__safe_conn = new_conn
             return new_conn
-        except Exception:
+        except Exception as e:
+            logger.warning(
+                "%s._get_safe_conn: reconnect failed: %s",
+                type(self).__name__, e
+            )
             return self.__safe_conn
 
     @staticmethod
@@ -60,7 +68,8 @@ class SafeConnMixin:
         try:
             from db.companies.company_state import company_state
             return company_state.company_id if company_state.is_ready else None
-        except Exception:
+        except Exception as e:
+            logger.debug("_get_company_id failed: %s", e)
             return None
 
     def _sync_company_id(self, attr: str = '_company_id'):
@@ -124,21 +133,27 @@ class DualConnMixin(SafeConnMixin):
         """
         يرجع erp conn صالح دايماً.
         لو الـ connection مات أو لشركة مختلفة → يعمل reconnect تلقائي.
-
-        هذا الكود كان مكرراً في 8+ ملفات — الآن موحد هنا.
         """
         try:
             if self._erp_conn_ref is not None:
                 self._erp_conn_ref.execute("SELECT 1")
                 return self._erp_conn_ref
-        except Exception:
-            pass
+        except Exception as e:
+            logger.debug(
+                "%s._get_erp_conn: erp conn failed (%s), reconnecting",
+                type(self).__name__, e
+            )
+
         try:
             from db.companies.company_state import company_state
             new = company_state._get_conn("erp")
             self._erp_conn_ref = new
             return new
-        except Exception:
+        except Exception as e:
+            logger.warning(
+                "%s._get_erp_conn: reconnect failed: %s",
+                type(self).__name__, e
+            )
             return self._erp_conn_ref
 
     def _on_dual_company_event(self, company_id: int) -> bool:

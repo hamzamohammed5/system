@@ -21,11 +21,14 @@ UnitCombo — QComboBox موحد لاختيار وحدة القياس.
 """
 
 import json
+import logging
 from PyQt5.QtWidgets import QComboBox
 from PyQt5.QtCore    import pyqtSignal
 
+logger = logging.getLogger(__name__)
+
 # ── مفتاح التخزين في settings ──
-_UNITS_KEY   = "custom_units"          # قائمة الوحدات المخزنة
+_UNITS_KEY    = "custom_units"
 _DEFAULT_UNITS = [
     ("px",   "px — بكسل"),
     ("mm",   "mm — مليمتر"),
@@ -34,35 +37,58 @@ _DEFAULT_UNITS = [
     ("inch", "inch — بوصة"),
 ]
 
+# FIX 8: cache بسيط لتجنب DB query في كل مرة
+# المفتاح: id(conn) — يُبطل بـ invalidate_units_cache() بعد أي تغيير
+_units_cache: dict[int, list[tuple[str, str]]] = {}
+
+
+def invalidate_units_cache(conn=None):
+    """يُبطل الـ cache — استدعه بعد add_unit / remove_unit / reset."""
+    if conn is None:
+        _units_cache.clear()
+    else:
+        _units_cache.pop(id(conn), None)
+
 
 # ══════════════════════════════════════════════════════════
 # دوال الـ settings
 # ══════════════════════════════════════════════════════════
 
-def load_units(conn) -> list[tuple[str, str]]:
+def load_units(conn, force: bool = False) -> list[tuple[str, str]]:
     """
-    يجلب قائمة الوحدات من settings.
+    يجلب قائمة الوحدات من settings مع cache.
     يرجع list of (value, label).
+
+    force=True يتجاوز الـ cache ويجبر إعادة القراءة من DB.
     """
+    cache_key = id(conn)
+
+    # FIX 8: أرجع من الـ cache لو موجود
+    if not force and cache_key in _units_cache:
+        return _units_cache[cache_key]
+
+    result = list(_DEFAULT_UNITS)
     try:
         from db.shared.settings_repo import get_setting
         raw = get_setting(conn, _UNITS_KEY, "")
         if raw:
             data = json.loads(raw)
-            # data: list of [value, label]
-            return [(d[0], d[1]) for d in data]
-    except Exception:
-        pass
-    return list(_DEFAULT_UNITS)
+            result = [(d[0], d[1]) for d in data]
+    except Exception as e:
+        logger.debug("load_units failed, using defaults: %s", e)
+
+    _units_cache[cache_key] = result
+    return result
 
 
 def save_units(conn, units: list[tuple[str, str]]):
-    """يحفظ قائمة الوحدات في settings."""
+    """يحفظ قائمة الوحدات في settings ويُبطل الـ cache."""
     try:
         from db.shared.settings_repo import set_setting
         set_setting(conn, _UNITS_KEY, json.dumps(units, ensure_ascii=False))
-    except Exception:
-        pass
+        invalidate_units_cache(conn)
+    except Exception as e:
+        logger.warning("save_units failed: %s", e)
 
 
 def get_last_unit(conn, key: str, fallback: str = "cm") -> str:
@@ -71,7 +97,8 @@ def get_last_unit(conn, key: str, fallback: str = "cm") -> str:
         from db.shared.settings_repo import get_setting
         val = get_setting(conn, f"last_unit_{key}", "")
         return val if val else fallback
-    except Exception:
+    except Exception as e:
+        logger.debug("get_last_unit failed: %s", e)
         return fallback
 
 
@@ -80,8 +107,8 @@ def set_last_unit(conn, key: str, unit: str):
     try:
         from db.shared.settings_repo import set_setting
         set_setting(conn, f"last_unit_{key}", unit)
-    except Exception:
-        pass
+    except Exception as e:
+        logger.debug("set_last_unit failed: %s", e)
 
 
 # ══════════════════════════════════════════════════════════
@@ -102,14 +129,13 @@ class UnitCombo(QComboBox):
         current  : الوحدة المحددة مبدئياً (تتجاوز last_key لو محدد)
     """
 
-    unit_changed = pyqtSignal(str)   # يُطلق عند تغيير الوحدة
+    unit_changed = pyqtSignal(str)
 
     def __init__(self, conn, last_key: str = None,
                  current: str = None, parent=None):
         super().__init__(parent)
         self._conn     = conn
         self._last_key = last_key
-        self._loading  = False
 
         self._populate()
 
@@ -117,24 +143,25 @@ class UnitCombo(QComboBox):
         if current:
             self.set_unit(current)
         elif last_key:
-            last = get_last_unit(conn, last_key)
-            self.set_unit(last)
+            self.set_unit(get_last_unit(conn, last_key))
 
         self.currentIndexChanged.connect(self._on_changed)
 
     def _populate(self):
-        """يملأ الـ combo بالوحدات من settings أو الافتراضية."""
-        self._loading = True
+        """
+        يملأ الـ combo بالوحدات من settings أو الافتراضية.
+
+        FIX 2: يستخدم blockSignals() بدل _loading flag
+        عشان يكون آمن وصريح — blockSignals هو الطريقة الصحيحة في Qt
+        """
         prev = self.currentData()
         self.blockSignals(True)
         self.clear()
 
-        units = load_units(self._conn)
-        for val, label in units:
+        for val, label in load_units(self._conn):
             self.addItem(label, val)
 
         self.blockSignals(False)
-        self._loading = False
 
         # استعادة الاختيار السابق
         if prev:
@@ -142,6 +169,8 @@ class UnitCombo(QComboBox):
 
     def refresh(self):
         """يعيد تحميل الوحدات (بعد إضافة وحدات جديدة من الإعدادات)."""
+        # أبطل الـ cache قبل إعادة التحميل
+        invalidate_units_cache(self._conn)
         self._populate()
 
     def current_unit(self) -> str:
@@ -154,13 +183,10 @@ class UnitCombo(QComboBox):
             if self.itemData(i) == unit:
                 self.setCurrentIndex(i)
                 return
-        # لو الوحدة مش موجودة → اختر الأولى
         if self.count():
             self.setCurrentIndex(0)
 
     def _on_changed(self, _):
-        if self._loading:
-            return
         unit = self.current_unit()
         if self._last_key and self._conn:
             set_last_unit(self._conn, self._last_key, unit)
@@ -181,12 +207,10 @@ def make_unit_combo(conn=None, current: str = "cm",
     if conn is not None:
         combo = UnitCombo(conn, last_key=last_key, current=current)
     else:
-        # fallback بدون DB
         combo = QComboBox()
         for val, label in _DEFAULT_UNITS:
             combo.addItem(label, val)
 
-    # تحديد الوحدة الحالية
     for i in range(combo.count()):
         if combo.itemData(i) == current:
             combo.setCurrentIndex(i)

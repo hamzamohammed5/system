@@ -19,8 +19,10 @@ class FlowLayout(QLayout):
         self._items.append(item)
 
     def addWidget(self, widget):
-        item = QWidgetItem(widget)
-        self._items.append(item)
+        # FIX 4: كان بيضيف QWidgetItem للـ list مباشرة متجاوزاً addItem
+        # ده بيخلي Qt internal state inconsistent
+        # الصح: تمرير الـ item عبر addItem() عشان Qt يتتبعه صح
+        self.addItem(QWidgetItem(widget))
 
     def count(self) -> int:
         return len(self._items)

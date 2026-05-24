@@ -5,6 +5,7 @@ _SearchableCombo  — QComboBox مع حقل بحث نصي مدمج.
 _build_grouped_items — دالة مساعدة تجمّع العناصر بالتصنيف.
 
 [تحديث]: إضافة clear_items() و get_selected_id() و set_placeholder().
+[FIX 7]: _remove_empty_separators أصبحت O(n) بدل O(n²).
 """
 
 from PyQt5.QtWidgets import (
@@ -14,7 +15,6 @@ from PyQt5.QtWidgets import (
 from PyQt5.QtCore import pyqtSignal, Qt
 from PyQt5.QtGui  import QColor, QFont
 
-# ── بيانات خاصة للسيباريتور ──
 _SEPARATOR_DATA = ("__sep__", None)
 
 
@@ -195,22 +195,47 @@ class _SearchableCombo(QWidget):
             item.setFlags(item.flags() & ~Qt.ItemIsEnabled & ~Qt.ItemIsSelectable)
 
     def _remove_empty_separators(self):
-        changed = True
-        while changed:
-            changed = False
-            count = self.cmb.count()
-            for i in range(count - 1, -1, -1):
-                d = self.cmb.itemData(i)
-                if not self._is_sep(d):
-                    continue
-                if i == count - 1:
-                    self.cmb.removeItem(i)
-                    changed = True
-                    break
-                if self._is_sep(self.cmb.itemData(i + 1)):
-                    self.cmb.removeItem(i)
-                    changed = True
-                    break
+        """
+        FIX 7: كانت O(n²) بسبب nested while+for مع break وإعادة scan.
+        الآن O(n): نحدد الـ indices المطلوب حذفها في pass واحد
+        ثم نحذفهم بترتيب عكسي عشان الـ indices ما تتغيرش.
+
+        separator يُحذف إذا:
+          - جاء أول حاجة (قبله ما فيش عناصر حقيقية)، أو
+          - جاء بعده separator مباشرة (separators متتالية)، أو
+          - جاء آخر حاجة في القائمة
+        """
+        count = self.cmb.count()
+        if count == 0:
+            return
+
+        to_remove = []
+        prev_was_real = False  # هل العنصر السابق كان عنصر حقيقي
+
+        for i in range(count):
+            data = self.cmb.itemData(i)
+            is_sep = self._is_sep(data)
+
+            if is_sep:
+                # separator في البداية أو بعد separator آخر → احذفه
+                if not prev_was_real:
+                    to_remove.append(i)
+                else:
+                    prev_was_real = False  # الـ separator يكسر السلسلة
+            else:
+                prev_was_real = True
+
+        # احذف الـ separator الأخير لو الـ list تنتهي بـ separator
+        if count > 0 and not to_remove and self._is_sep(self.cmb.itemData(count - 1)):
+            to_remove.append(count - 1)
+        elif to_remove and to_remove[-1] != count - 1:
+            # تحقق من آخر عنصر (ممكن يكون separator ما اتحددش في الـ loop)
+            if self._is_sep(self.cmb.itemData(count - 1)):
+                to_remove.append(count - 1)
+
+        # احذف بترتيب عكسي عشان الـ indices ما تتأثرش
+        for i in sorted(set(to_remove), reverse=True):
+            self.cmb.removeItem(i)
 
     @staticmethod
     def _is_sep(data) -> bool:
@@ -258,7 +283,6 @@ class _SearchableCombo(QWidget):
                 return
 
     def set_placeholder(self, text: str):
-        """يغير placeholder حقل البحث."""
         self.inp_search.setPlaceholderText(text)
 
     def block_signals(self, val: bool):

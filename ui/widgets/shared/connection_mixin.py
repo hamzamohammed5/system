@@ -40,6 +40,10 @@ LiveConnMixin — مكسن يوحّد نمط الـ live connection في كل ا
 ملاحظة: الـ attribute الافتراضي هو "conn".
 """
 
+import logging
+
+logger = logging.getLogger(__name__)
+
 
 class LiveConnMixin:
     """
@@ -52,7 +56,6 @@ class LiveConnMixin:
     """
 
     # اسم الـ attribute اللي بيخزن الـ connection
-    # يمكن override في الـ subclass لو الاسم مختلف
     _conn_attr: str = "conn"
 
     def _live_conn(self):
@@ -65,14 +68,22 @@ class LiveConnMixin:
             try:
                 stored.execute("SELECT 1")
                 return stored
-            except Exception:
-                pass
+            except Exception as e:
+                # FIX 3: سجّل السبب بدل ما نبتلعه بصمت
+                logger.debug(
+                    "%s._live_conn: stored conn failed (%s), falling back",
+                    type(self).__name__, e
+                )
 
         # Fallback: اجلب من company_state
         try:
             from db.companies.company_state import company_state
             return company_state.get_erp_conn()
-        except Exception:
+        except Exception as e:
+            logger.warning(
+                "%s._live_conn: company_state fallback failed: %s",
+                type(self).__name__, e
+            )
             return stored  # آخر محاولة — قد يفشل
 
     def _live_acc_conn(self):
@@ -86,11 +97,18 @@ class LiveConnMixin:
             try:
                 stored.execute("SELECT 1")
                 return stored
-            except Exception:
-                pass
+            except Exception as e:
+                logger.debug(
+                    "%s._live_acc_conn: stored acc_conn failed (%s), falling back",
+                    type(self).__name__, e
+                )
 
         try:
             from db.shared.connection import get_accounting_connection
             return get_accounting_connection()
-        except Exception:
+        except Exception as e:
+            logger.warning(
+                "%s._live_acc_conn: fallback failed: %s",
+                type(self).__name__, e
+            )
             return stored

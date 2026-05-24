@@ -3,9 +3,11 @@ ui/widgets/shared/base_detail_panel.py
 ========================================
 BaseDetailPanel — قاعدة مشتركة لكل لوحات التفاصيل.
 
-[تحديث v2]:
-  - يستخدم get_scroll_style() من theme بدل ستايل inline مكرر
-  - يستخدم EmptyState من panels مباشرة
+[تحديث v3]:
+  - FIX 9: _show_empty و _show_detail دُمجا في _set_mode(has_data)
+    لتجنب التكرار وضمان تزامن حالة الـ widgets دايماً.
+  - يستخدم get_scroll_style() من theme بدل ستايل inline مكرر.
+  - يستخدم EmptyState من panels مباشرة.
 """
 
 from PyQt5.QtWidgets import (
@@ -38,7 +40,7 @@ class BaseDetailPanel(QWidget):
         self.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Expanding)
         self.setMinimumWidth(300)
         self._build_base()
-        self._show_empty()
+        self._set_mode(has_data=False)
 
     # ── override في الـ subclass ──────────────────────────
 
@@ -56,7 +58,6 @@ class BaseDetailPanel(QWidget):
         root.setContentsMargins(0, 0, 0, 0)
         root.setSpacing(0)
 
-        # Scroll يلف كل حاجة — يستخدم get_scroll_style() الموحد
         self._scroll = QScrollArea()
         self._scroll.setWidgetResizable(True)
         self._scroll.setHorizontalScrollBarPolicy(Qt.ScrollBarAsNeeded)
@@ -71,13 +72,11 @@ class BaseDetailPanel(QWidget):
         inner_lay.setContentsMargins(0, 0, 0, 0)
         inner_lay.setSpacing(0)
 
-        # Header
         self._hdr = DetailHeader(bg=self.HEADER_BG)
         self._build_header_cards()
         self._build_header_buttons()
         inner_lay.addWidget(self._hdr)
 
-        # Content
         content = QWidget()
         content.setStyleSheet(f"background:{_BG};")
         self._content_lay = QVBoxLayout(content)
@@ -90,7 +89,6 @@ class BaseDetailPanel(QWidget):
         self._scroll.setWidget(self._inner)
         root.addWidget(self._scroll, stretch=1)
 
-        # Empty state
         self._empty = EmptyState(
             icon=self.EMPTY_ICON,
             title=self.EMPTY_TITLE,
@@ -107,19 +105,33 @@ class BaseDetailPanel(QWidget):
         self._item_data = dict(data) if data else None
         if not self._item_data:
             return
-        self._show_detail()
+        self._set_mode(has_data=True)
         self._fill_data(self._item_data)
 
     def clear(self):
         self._item_id   = None
         self._item_data = None
-        self._show_empty()
+        self._set_mode(has_data=False)
 
+    # ── FIX 9: method موحدة بدل _show_empty / _show_detail المتكررتين ──
+
+    def _set_mode(self, has_data: bool):
+        """
+        يتحكم في ظهور الـ scroll (التفاصيل) والـ empty state.
+
+        كان عندنا:
+          _show_empty()  → scroll=False, empty=True
+          _show_detail() → scroll=True,  empty=False, hdr=True
+
+        الآن method واحدة تضمن تزامن الحالة دايماً.
+        """
+        self._scroll.setVisible(has_data)
+        self._hdr.setVisible(has_data)
+        self._empty.setVisible(not has_data)
+
+    # أُبقي عليهما للتوافق مع الكود الموروث الذي قد يستدعيهما مباشرة
     def _show_empty(self):
-        self._scroll.setVisible(False)
-        self._empty.setVisible(True)
+        self._set_mode(has_data=False)
 
     def _show_detail(self):
-        self._empty.setVisible(False)
-        self._scroll.setVisible(True)
-        self._hdr.setVisible(True)
+        self._set_mode(has_data=True)
