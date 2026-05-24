@@ -2,14 +2,19 @@
 ui/tabs/accounting/group_manager.py
 =====================================
 _GroupManagerPanel — إدارة تصنيفات الحسابات.
-SafeConnMixin (v3): _get_safe_conn() بدل self.conn في كل query.
+
+[تحسين v4]:
+  - استخدام FormGroup + ModeLabel من form_utils بدل بناء يدوي.
+  - استخدام get_tree_style + ListStatusBar من panels.
+  - استخدام confirm_delete من panels.
+  - SafeConnMixin كما هو.
 """
 
 from PyQt5.QtWidgets import (
-    QWidget, QVBoxLayout, QHBoxLayout, QFormLayout,
-    QTreeWidget, QTreeWidgetItem, QGroupBox,
+    QWidget, QVBoxLayout, QHBoxLayout,
+    QTreeWidget, QTreeWidgetItem,
     QLineEdit, QPushButton, QLabel, QColorDialog, QMessageBox,
-    QHeaderView,
+    QComboBox, QHeaderView,
 )
 from PyQt5.QtCore import Qt
 from PyQt5.QtGui  import QColor
@@ -20,9 +25,13 @@ from db.accounting.accounting_repo import (
     build_group_tree,
 )
 from db.accounting.accounting_schema import TYPE_AR
-from ui.helpers import section_label, danger_button
 from ui.events  import bus
 from ui.widgets.shared.safe_conn_mixin import SafeConnMixin
+from ui.widgets.shared.panels import (
+    SectionHeader, _make_btn, get_tree_style, confirm_delete,
+    ListStatusBar,
+)
+from ui.widgets.shared.form_utils import FormGroup, ModeLabel
 
 
 class _GroupManagerPanel(SafeConnMixin, QWidget):
@@ -31,6 +40,7 @@ class _GroupManagerPanel(SafeConnMixin, QWidget):
         self._init_safe_conn(conn, "accounting")
         self.acc_type    = acc_type
         self._editing_id = None
+        self._color      = "#607d8b"
         self._company_id = self._get_company_id()
         self._build()
         self._load()
@@ -45,23 +55,24 @@ class _GroupManagerPanel(SafeConnMixin, QWidget):
         root.setContentsMargins(8, 8, 8, 8)
         root.setSpacing(8)
 
-        root.addWidget(section_label(
-            f"── تصنيفات {TYPE_AR.get(self.acc_type, '')} ──"
-        ))
+        # ── هيدر القسم ──
+        hdr = SectionHeader(f"تصنيفات {TYPE_AR.get(self.acc_type, '')}")
+        root.addWidget(hdr)
 
+        # ── الشجرة ──
         self.tree = QTreeWidget()
         self.tree.setHeaderLabels(["التصنيف", "عدد الحسابات"])
         self.tree.header().setSectionResizeMode(0, QHeaderView.Stretch)
         self.tree.header().setSectionResizeMode(1, QHeaderView.Interactive)
         self.tree.setColumnWidth(1, 100)
         self.tree.setAlternatingRowColors(True)
+        self.tree.setStyleSheet(get_tree_style())
         root.addWidget(self.tree, stretch=1)
 
+        # ── أزرار التعديل والحذف ──
         btn_row  = QHBoxLayout()
-        btn_edit = QPushButton("✏️ تعديل")
-        btn_del  = danger_button("🗑️ حذف")
-        for b in (btn_edit, btn_del):
-            b.setMinimumHeight(28)
+        btn_edit = _make_btn("✏️ تعديل", "normal")
+        btn_del  = _make_btn("🗑️ حذف",  "danger")
         btn_edit.clicked.connect(self._edit)
         btn_del.clicked.connect(self._delete)
         btn_row.addWidget(btn_edit)
@@ -69,68 +80,66 @@ class _GroupManagerPanel(SafeConnMixin, QWidget):
         btn_row.addStretch()
         root.addLayout(btn_row)
 
-        grp = QGroupBox("➕ إضافة / تعديل تصنيف")
-        grp.setStyleSheet("""
-            QGroupBox { font-weight:bold; color:#1565c0;
-                border:1px solid #e0e0e0; border-radius:6px;
-                margin-top:6px; padding-top:6px; }
-            QGroupBox::title { subcontrol-origin:margin; padding:0 6px; }
-        """)
-        fl = QFormLayout(grp)
-        fl.setSpacing(8)
-        fl.setLabelAlignment(Qt.AlignRight)
+        # ── شريط الحالة ──
+        self._status = ListStatusBar()
+        root.addWidget(self._status)
 
-        self.lbl_mode = QLabel("── تصنيف جديد ──")
-        self.lbl_mode.setStyleSheet("font-weight:bold; color:#1565c0;")
-        fl.addRow(self.lbl_mode)
+        # ── فورم الإضافة/التعديل (FormGroup الموحد) ──
+        grp = FormGroup(f"➕ إضافة / تعديل تصنيف {TYPE_AR.get(self.acc_type, '')}")
+
+        self._lbl_mode = ModeLabel(add_text="تصنيف جديد")
+        grp.add_label_row(self._lbl_mode)
 
         self.inp_name = QLineEdit()
         self.inp_name.setMinimumHeight(28)
-        fl.addRow("الاسم:", self.inp_name)
+        self.inp_name.setPlaceholderText("اسم التصنيف...")
+        grp.add_row("الاسم:", self.inp_name)
 
-        self.cmb_parent = self._make_combo()
+        self.cmb_parent = QComboBox()
         self.cmb_parent.setMinimumHeight(28)
-        fl.addRow("تابع لـ:", self.cmb_parent)
+        grp.add_row("تابع لـ:", self.cmb_parent)
 
-        color_row      = QHBoxLayout()
-        self._color    = "#607d8b"
+        # ── لون التصنيف ──
+        color_w = QWidget()
+        color_w.setStyleSheet("background: transparent;")
+        cl = QHBoxLayout(color_w)
+        cl.setContentsMargins(0, 0, 0, 0)
+        cl.setSpacing(6)
         self.lbl_color = QLabel()
         self.lbl_color.setFixedSize(26, 26)
-        self.lbl_color.setStyleSheet(
-            f"background:{self._color}; border-radius:4px; border:1px solid #ccc;"
-        )
-        btn_color = QPushButton("اختر لون")
-        btn_color.setMinimumHeight(26)
+        self._apply_color_preview()
+        btn_color = _make_btn("اختر لون", "normal")
         btn_color.clicked.connect(self._pick_color)
-        color_row.addWidget(self.lbl_color)
-        color_row.addWidget(btn_color)
-        color_row.addStretch()
-        fl.addRow("اللون:", color_row)
+        cl.addWidget(self.lbl_color)
+        cl.addWidget(btn_color)
+        cl.addStretch()
+        grp.add_row("اللون:", color_w)
 
-        self.btn_add    = QPushButton("➕ إضافة")
-        self.btn_save   = QPushButton("💾 حفظ")
-        self.btn_cancel = QPushButton("✖ إلغاء")
+        # ── أزرار الفورم ──
+        btn_w = QWidget()
+        btn_w.setStyleSheet("background: transparent;")
+        bl    = QHBoxLayout(btn_w)
+        bl.setContentsMargins(0, 0, 0, 0)
+        self.btn_add    = _make_btn("➕ إضافة", "primary")
+        self.btn_save   = _make_btn("💾 حفظ",  "success")
+        self.btn_cancel = _make_btn("✖ إلغاء", "ghost")
         self.btn_save.setVisible(False)
         self.btn_cancel.setVisible(False)
-        for b in (self.btn_add, self.btn_save, self.btn_cancel):
-            b.setMinimumHeight(28)
         self.btn_add.clicked.connect(self._add)
         self.btn_save.clicked.connect(self._save_edit)
         self.btn_cancel.clicked.connect(self._reset)
-
-        btn_w = QWidget()
-        bl    = QHBoxLayout(btn_w)
-        bl.setContentsMargins(0, 0, 0, 0)
         bl.addWidget(self.btn_add)
         bl.addWidget(self.btn_save)
         bl.addWidget(self.btn_cancel)
         bl.addStretch()
-        fl.addRow(btn_w)
+        grp.add_label_row(btn_w)
+
         root.addWidget(grp)
 
-    def _make_combo(self):
-        from PyQt5.QtWidgets import QComboBox
-        return QComboBox()
+    def _apply_color_preview(self):
+        self.lbl_color.setStyleSheet(
+            f"background:{self._color}; border-radius:4px; border:1px solid #ccc;"
+        )
 
     def _load(self):
         conn = self._get_safe_conn()
@@ -140,6 +149,9 @@ class _GroupManagerPanel(SafeConnMixin, QWidget):
         self._add_tree_nodes(tree, None)
         self.tree.expandAll()
         self._refresh_parent_combo()
+
+        total = self.tree.topLevelItemCount()
+        self._status.set_count(total, total)
 
     def _add_tree_nodes(self, nodes, parent):
         conn = self._get_safe_conn()
@@ -187,9 +199,7 @@ class _GroupManagerPanel(SafeConnMixin, QWidget):
         col = QColorDialog.getColor(QColor(self._color), self, "اختر لون")
         if col.isValid():
             self._color = col.name()
-            self.lbl_color.setStyleSheet(
-                f"background:{self._color}; border-radius:4px; border:1px solid #ccc;"
-            )
+            self._apply_color_preview()
 
     def _selected_id(self):
         items = self.tree.selectedItems()
@@ -216,15 +226,13 @@ class _GroupManagerPanel(SafeConnMixin, QWidget):
         self._editing_id = gid
         self.inp_name.setText(grp["name"])
         self._color = grp["color"]
-        self.lbl_color.setStyleSheet(
-            f"background:{self._color}; border-radius:4px; border:1px solid #ccc;"
-        )
+        self._apply_color_preview()
         self._refresh_parent_combo(exclude_id=gid)
         for i in range(self.cmb_parent.count()):
             if self.cmb_parent.itemData(i) == grp["parent_id"]:
                 self.cmb_parent.setCurrentIndex(i)
                 break
-        self.lbl_mode.setText(f"── تعديل: {grp['name']} ──")
+        self._lbl_mode.set_edit_mode(grp["name"])
         self.btn_add.setVisible(False)
         self.btn_save.setVisible(True)
         self.btn_cancel.setVisible(True)
@@ -250,11 +258,9 @@ class _GroupManagerPanel(SafeConnMixin, QWidget):
             ).fetchone()["c"]
         except Exception:
             count = 0
-        msg = f"حذف تصنيف «{grp['name']}»؟"
-        if count:
-            msg += f"\n⚠️ {count} حساب سيفقد تصنيفه."
-        if QMessageBox.question(self, "تأكيد", msg,
-                                QMessageBox.Yes | QMessageBox.No) == QMessageBox.Yes:
+
+        extra = f"⚠️ {count} حساب سيفقد تصنيفه." if count else ""
+        if confirm_delete(self, grp["name"], extra_msg=extra):
             delete_group(conn, gid)
             bus.company_data_changed.emit(self._company_id or 0)
 
@@ -262,10 +268,8 @@ class _GroupManagerPanel(SafeConnMixin, QWidget):
         self._editing_id = None
         self.inp_name.clear()
         self._color = "#607d8b"
-        self.lbl_color.setStyleSheet(
-            "background:#607d8b; border-radius:4px; border:1px solid #ccc;"
-        )
-        self.lbl_mode.setText("── تصنيف جديد ──")
+        self._apply_color_preview()
+        self._lbl_mode.set_add_mode()
         self.btn_add.setVisible(True)
         self.btn_save.setVisible(False)
         self.btn_cancel.setVisible(False)

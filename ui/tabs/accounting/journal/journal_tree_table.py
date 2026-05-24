@@ -3,10 +3,12 @@ ui/tabs/accounting/journal/journal_tree_table.py
 ================================================
 _JournalTreeTable — جدول القيود المحاسبية.
 
-[تحديث v7]:
-  - JournalTab انتقل لـ journal_tab_widget.py
-  - هذا الملف يحتوي فقط على _JournalTreeTable
-  - يُعاد تصدير JournalTab للتوافق مع الكود القديم
+[تحسين v8]:
+  - استخدام ListHeader + ListStatusBar بدل section_label يدوي.
+  - استخدام bold_table_item / colored_table_item / center_table_item / set_row_background
+    من table_utils بدل دوال محلية.
+  - استخدام confirm_delete من panels بدل استيراد مباشر.
+  - إزالة دوال _bold_item / _colored_item المحلية المكررة.
 """
 
 from PyQt5.QtWidgets import (
@@ -21,12 +23,13 @@ from db.accounting.accounting_repo import (
     fetch_all_entries, fetch_entry_lines,
     delete_entry,
 )
-from ui.helpers import (
-    section_label, buttons_row,
-    danger_button, confirm_delete,
-)
 from ui.events import bus
 from ui.widgets.shared.safe_conn_mixin import SafeConnMixin
+from ui.widgets.shared.panels import (
+    ListHeader, ListStatusBar,
+    confirm_delete,
+    _make_btn,
+)
 from ui.widgets.shared.table_utils import (
     bold_table_item, colored_table_item,
     center_table_item, set_row_background,
@@ -60,10 +63,20 @@ class _JournalTreeTable(SafeConnMixin, QWidget):
     def _build(self):
         root = QVBoxLayout(self)
         root.setContentsMargins(0, 0, 0, 0)
-        root.setSpacing(6)
+        root.setSpacing(0)
 
-        root.addWidget(section_label("── القيود المحاسبية المحفوظة ──"))
+        # ── هيدر موحد ──
+        self._header = ListHeader(
+            title="── القيود المحاسبية المحفوظة ──",
+            show_search=False,
+        )
+        # أزرار التوسيع/الطي في الهيدر
+        self._header.add_action("⊞ توسيع الكل",   self._expand_all,   "normal")
+        self._header.add_action("⊟ طي الكل",      self._collapse_all, "normal")
+        self._header.add_action("🗑️  حذف المحدد", self._delete_selected, "danger")
+        root.addWidget(self._header)
 
+        # ── شريط الفلاتر ──
         self._filter = _JournalFilterBar(self._get_safe_conn())
         self._connect_filter_signals()
 
@@ -76,24 +89,7 @@ class _JournalTreeTable(SafeConnMixin, QWidget):
         self._filter.group_reloaded.connect(self._reconnect_group_signal)
         root.addWidget(self._filter)
 
-        btn_expand_all   = QPushButton("⊞ توسيع الكل")
-        btn_collapse_all = QPushButton("⊟ طي الكل")
-        btn_del          = danger_button("🗑️  حذف القيد المحدد")
-        for btn in (btn_expand_all, btn_collapse_all, btn_del):
-            btn.setMinimumHeight(26)
-
-        _btn_style = (
-            "QPushButton { background:#e8f4fd; color:#1565c0; border:1px solid #90caf9;"
-            "border-radius:4px; padding:2px 10px; font-size:11px; }"
-            "QPushButton:hover { background:#1565c0; color:white; }"
-        )
-        btn_expand_all.setStyleSheet(_btn_style)
-        btn_collapse_all.setStyleSheet(_btn_style)
-        btn_expand_all.clicked.connect(self._expand_all)
-        btn_collapse_all.clicked.connect(self._collapse_all)
-        btn_del.clicked.connect(self._delete_selected)
-        root.addLayout(buttons_row(btn_expand_all, btn_collapse_all, btn_del))
-
+        # ── الجدول ──
         self.table = QTableWidget()
         self.table.setColumnCount(len(self.COLS))
         self.table.setHorizontalHeaderLabels(self.COLS)
@@ -122,6 +118,10 @@ class _JournalTreeTable(SafeConnMixin, QWidget):
         self.table.cellClicked.connect(self._on_cell_clicked)
         root.addWidget(self.table, stretch=1)
 
+        # ── شريط الحالة ──
+        self._status = ListStatusBar()
+        root.addWidget(self._status)
+
     def _connect_filter_signals(self):
         self._filter.inp_search.textChanged.connect(self._apply_filter)
         self._filter.cmb_group._tree_view.clicked.connect(
@@ -140,7 +140,7 @@ class _JournalTreeTable(SafeConnMixin, QWidget):
             print(f"[_JournalTreeTable] _reconnect_group_signal error: {e}")
 
     def _load(self):
-        conn = self._get_safe_conn()
+        conn    = self._get_safe_conn()
         entries = fetch_all_entries(conn)
         self._entries_data = []
         for e in entries:
@@ -160,6 +160,7 @@ class _JournalTreeTable(SafeConnMixin, QWidget):
     def _apply_filter(self):
         filtered = [e for e in self._entries_data if self._filter.matches(e)]
         self._filter.set_count(len(filtered), len(self._entries_data))
+        self._status.set_count(len(filtered), len(self._entries_data))
         self._render(filtered)
 
     def _render(self, entries=None):
@@ -179,16 +180,15 @@ class _JournalTreeTable(SafeConnMixin, QWidget):
             self.table.insertRow(r)
             self._row_meta[r] = {"entry_id": eid, "is_parent": True, "is_child": False}
 
-            toggle_item = center_table_item(
-                "▼" if expanded else "▶",
-                color="#1565c0", bold=True,
-            )
-            self.table.setItem(r, 0, toggle_item)
+            # ── استخدام table_utils بدل دوال محلية مكررة ──
+            self.table.setItem(r, 0, center_table_item(
+                "▼" if expanded else "▶", color="#1565c0", bold=True,
+            ))
             self.table.setItem(r, 1, center_table_item(entry["date"], color="#2e7d32", bold=True))
-            self.table.setItem(r, 2, bold_table_item(entry["ref_no"],       "#1565c0"))
+            self.table.setItem(r, 2, bold_table_item(entry["ref_no"],      "#1565c0"))
             self.table.setItem(r, 3, bold_table_item(entry["description"]))
-            self.table.setItem(r, 4, bold_table_item(f"{total_dr:,.2f}",    "#1565c0"))
-            self.table.setItem(r, 5, bold_table_item(f"{total_cr:,.2f}",    "#c62828"))
+            self.table.setItem(r, 4, bold_table_item(f"{total_dr:,.2f}",   "#1565c0"))
+            self.table.setItem(r, 5, bold_table_item(f"{total_cr:,.2f}",   "#c62828"))
 
             diff      = total_dr - total_cr
             bal_color = "#2e7d32" if abs(diff) < 0.01 else "#c62828"
@@ -221,11 +221,10 @@ class _JournalTreeTable(SafeConnMixin, QWidget):
                     for c in range(3):
                         self.table.setItem(rc, c, QTableWidgetItem(""))
 
-                    desc_item = colored_table_item(
+                    self.table.setItem(rc, 3, colored_table_item(
                         desc_text, acc_color,
-                        tooltip=f"{acc_code} — {acc_name}"
-                    )
-                    self.table.setItem(rc, 3, desc_item)
+                        tooltip=f"{acc_code} — {acc_name}",
+                    ))
 
                     if is_dr:
                         self.table.setItem(rc, 4, colored_table_item(f"{line['debit']:,.2f}",  "#1565c0"))

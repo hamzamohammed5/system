@@ -1,5 +1,5 @@
 File Tree Snapshot
-Generated : 2026-05-24 13:31:19
+Generated : 2026-05-24 13:42:13
 Source    : D:\My Workspace\Hg\Alhabaar\accountant\system
 Extensions: .py
 ────────────────────────────────────────────────────────────
@@ -282,6 +282,7 @@ system/
 │   │       │   ├── stat_card.py
 │   │       │   ├── status_chip.py
 │   │       │   └── theme.py
+│   │       ├── accounts_combo_widget.py
 │   │       ├── base_crud_form.py
 │   │       ├── base_detail_panel.py
 │   │       ├── base_list_panel.py
@@ -290,6 +291,7 @@ system/
 │   │       ├── category_combo.py
 │   │       ├── category_form.py
 │   │       ├── category_manager.py
+│   │       ├── color_picker_widget.py
 │   │       ├── confirm_dialog.py
 │   │       ├── connection_mixin.py
 │   │       ├── date_range_filter.py

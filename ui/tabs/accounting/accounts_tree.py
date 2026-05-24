@@ -2,13 +2,18 @@
 ui/tabs/accounting/accounts_tree.py
 =====================================
 AccountsTreePanel — شجرة الحسابات مع فورم الإضافة والتعديل.
-SafeConnMixin (v3): _get_safe_conn() بدل self.conn في كل query.
+
+[تحسين v4]:
+  - استخدام SectionHeader + _make_btn من panels بدل بناء يدوي.
+  - استخدام get_splitter_style من panels.
+  - استخدام confirm_delete من panels.
+  - SafeConnMixin كما هو.
 """
 
 from PyQt5.QtWidgets import (
     QWidget, QVBoxLayout, QHBoxLayout,
     QTreeWidget, QTreeWidgetItem, QSplitter,
-    QPushButton, QLabel, QMessageBox,
+    QLabel, QMessageBox,
     QHeaderView,
 )
 from PyQt5.QtCore import Qt
@@ -19,9 +24,12 @@ from db.accounting.accounting_repo import (
     fetch_all_groups, build_group_tree,
 )
 from db.accounting.accounting_schema import TYPE_AR, EQUITY_TYPES
-from ui.helpers import section_label, danger_button, confirm_delete
 from ui.events  import bus
 from ui.widgets.shared.safe_conn_mixin import SafeConnMixin
+from ui.widgets.shared.panels import (
+    SectionHeader, _make_btn, get_splitter_style,
+    get_tree_style, confirm_delete,
+)
 
 from .tree._tree_builder import (
     rows_to_tree, filter_by_group, add_acc_nodes, add_type_header, EQUITY_COLOR,
@@ -53,22 +61,29 @@ class AccountsTreePanel(SafeConnMixin, QWidget):
 
         splitter = QSplitter(Qt.Horizontal)
         splitter.setHandleWidth(5)
+        splitter.setStyleSheet(get_splitter_style())
 
         left = QWidget()
         ll   = QVBoxLayout(left)
         ll.setContentsMargins(10, 8, 6, 10)
         ll.setSpacing(6)
 
-        ll.addWidget(section_label(f"── {self.title} ──"))
+        # ── هيدر القسم ──
+        hdr = SectionHeader(self.title)
+        ll.addWidget(hdr)
 
+        # ── فلتر التصنيف ──
         filter_row = QHBoxLayout()
+        lbl_tag = QLabel("🏷")
+        lbl_tag.setStyleSheet("background:transparent; border:none;")
         self.cmb_group_filter = _GroupFilterCombo(self._get_safe_conn(), self.acc_types)
         self.cmb_group_filter.setMinimumHeight(26)
         self.cmb_group_filter.currentIndexChanged.connect(self._on_filter_changed)
-        filter_row.addWidget(QLabel("🏷"))
+        filter_row.addWidget(lbl_tag)
         filter_row.addWidget(self.cmb_group_filter, stretch=1)
         ll.addLayout(filter_row)
 
+        # ── شجرة الحسابات ──
         self.tree = QTreeWidget()
         self.tree.setHeaderLabels(["الكود", "اسم الحساب", "الرصيد"])
         hh = self.tree.header()
@@ -78,13 +93,13 @@ class AccountsTreePanel(SafeConnMixin, QWidget):
         self.tree.setColumnWidth(0, 70)
         self.tree.setColumnWidth(2, 110)
         self.tree.setAlternatingRowColors(True)
+        self.tree.setStyleSheet(get_tree_style())
         ll.addWidget(self.tree, stretch=1)
 
+        # ── أزرار التعديل والحذف ──
         btn_row  = QHBoxLayout()
-        btn_edit = QPushButton("✏️ تعديل")
-        btn_del  = danger_button("🗑️ حذف")
-        for b in (btn_edit, btn_del):
-            b.setMinimumHeight(28)
+        btn_edit = _make_btn("✏️ تعديل", "normal")
+        btn_del  = _make_btn("🗑️ حذف",  "danger")
         btn_edit.clicked.connect(self._edit)
         btn_del.clicked.connect(self._delete)
         btn_row.addWidget(btn_edit)
@@ -244,23 +259,12 @@ class AccountsTreePanel(SafeConnMixin, QWidget):
             return
 
         child_count = len(all_ids) - 1
-        if child_count:
-            msg = (
-                f"حذف حساب «{acc['name']}»؟\n"
-                f"⚠️ سيتم حذف {child_count} حساب فرعي معه."
-            )
-            if QMessageBox.question(
-                self, "تأكيد الحذف", msg,
-                QMessageBox.Yes | QMessageBox.No
-            ) != QMessageBox.Yes:
-                return
-        else:
-            if not confirm_delete(self, acc["name"]):
-                return
+        extra = f"⚠️ سيتم حذف {child_count} حساب فرعي معه." if child_count else ""
 
-        try:
-            for del_id in reversed(all_ids):
-                conn.execute("DELETE FROM accounts WHERE id=?", (del_id,))
-            bus.company_data_changed.emit(self._company_id or 0)
-        except Exception as e:
-            QMessageBox.critical(self, "خطأ", f"فشل الحذف:\n{e}")
+        if confirm_delete(self, acc["name"], extra_msg=extra):
+            try:
+                for del_id in reversed(all_ids):
+                    conn.execute("DELETE FROM accounts WHERE id=?", (del_id,))
+                bus.company_data_changed.emit(self._company_id or 0)
+            except Exception as e:
+                QMessageBox.critical(self, "خطأ", f"فشل الحذف:\n{e}")

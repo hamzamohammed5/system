@@ -3,16 +3,14 @@ ui/tabs/accounting/ledger/ledger_accounts_panel.py
 ===================================================
 _AccountsPanel — قائمة الحسابات في دفتر الأستاذ.
 
-إصلاحات (v3 — SafeConnMixin):
-  - SafeConnMixin بدل self.conn اليدوي.
-  - _get_safe_conn() في كل query بدل self.conn المحفوظ.
-  - لا يستمع للـ bus مباشرة — LedgerTab هو المسؤول ويستدعي _refresh_accounts().
-  - _refresh_accounts() public عشان LedgerTab يقدر يستدعيها.
+[تحسين v4]:
+  - استخدام ListHeader + SearchBar من widgets/shared بدل بناء يدوي.
+  - استخدام make_list_table من table_utils.
+  - SafeConnMixin كما هو.
 """
 
 from PyQt5.QtWidgets import (
-    QWidget, QVBoxLayout, QHBoxLayout,
-    QLabel, QLineEdit, QComboBox, QTreeWidget, QTreeWidgetItem,
+    QWidget, QVBoxLayout, QComboBox, QTreeWidget, QTreeWidgetItem,
     QHeaderView,
 )
 from PyQt5.QtCore import Qt
@@ -21,6 +19,7 @@ from PyQt5.QtGui  import QColor
 from db.accounting.accounting_repo import fetch_all_accounts
 from db.accounting.accounting_schema import TYPE_AR
 from ui.widgets.shared.safe_conn_mixin import SafeConnMixin
+from ui.widgets.shared.panels import ListHeader, ListStatusBar, get_tree_style
 from ui.tabs.accounting.helpers import TYPE_COLORS
 
 
@@ -36,17 +35,18 @@ class _AccountsPanel(SafeConnMixin, QWidget):
     def _build(self):
         root = QVBoxLayout(self)
         root.setContentsMargins(0, 0, 0, 0)
-        root.setSpacing(6)
+        root.setSpacing(0)
 
-        hdr = QLabel("📚  الحسابات")
-        hdr.setStyleSheet("""
-            font-weight: bold; font-size: 13px; color: #1565c0;
-            background: #e8f4fd; border: 1px solid #90caf9;
-            border-radius: 6px; padding: 6px 12px;
-        """)
-        hdr.setAlignment(Qt.AlignCenter)
-        root.addWidget(hdr)
+        # ── هيدر موحد بدل بناء يدوي ──
+        self._header = ListHeader(
+            title="📚  الحسابات",
+            show_search=True,
+            search_placeholder="🔍  بحث بالاسم أو الكود...",
+        )
+        self._header.search_changed.connect(self._filter_accounts)
+        root.addWidget(self._header)
 
+        # ── فلتر النوع ──
         self.cmb_type = QComboBox()
         self.cmb_type.setMinimumHeight(28)
         self.cmb_type.addItem("── كل الأنواع ──", None)
@@ -56,27 +56,14 @@ class _AccountsPanel(SafeConnMixin, QWidget):
             QComboBox {
                 background: white; border: 1px solid #c5cae9;
                 border-radius: 5px; padding: 2px 8px; font-size: 11px;
+                margin: 4px 8px;
             }
             QComboBox::drop-down { border: none; }
         """)
         self.cmb_type.currentIndexChanged.connect(self._filter_accounts)
         root.addWidget(self.cmb_type)
 
-        search_row = QHBoxLayout()
-        self.inp_search = QLineEdit()
-        self.inp_search.setPlaceholderText("🔍  بحث بالاسم أو الكود...")
-        self.inp_search.setMinimumHeight(28)
-        self.inp_search.setStyleSheet("""
-            QLineEdit {
-                background: white; border: 1px solid #c5cae9;
-                border-radius: 5px; padding: 2px 8px; font-size: 11px;
-            }
-            QLineEdit:focus { border-color: #1565c0; }
-        """)
-        self.inp_search.textChanged.connect(self._filter_accounts)
-        search_row.addWidget(self.inp_search)
-        root.addLayout(search_row)
-
+        # ── شجرة الحسابات باستخدام get_tree_style الموحد ──
         self.lst = QTreeWidget()
         self.lst.setHeaderLabels(["الكود", "الاسم", "الرصيد"])
         hh = self.lst.header()
@@ -86,35 +73,15 @@ class _AccountsPanel(SafeConnMixin, QWidget):
         self.lst.setColumnWidth(0, 65)
         self.lst.setColumnWidth(2, 90)
         self.lst.setAlternatingRowColors(True)
-        self.lst.setStyleSheet("""
-            QTreeWidget {
-                border: 1px solid #e0e0e0;
-                border-radius: 6px;
-                background: white;
-            }
-            QTreeWidget::item { padding: 3px 2px; }
-            QTreeWidget::item:selected {
-                background: #e3f2fd;
-                color: #1565c0;
-            }
-            QTreeWidget::item:hover:!selected { background: #f5f5f5; }
-        """)
+        self.lst.setStyleSheet(get_tree_style())
         self.lst.itemSelectionChanged.connect(self._on_selected)
         root.addWidget(self.lst, stretch=1)
 
-        self.lbl_count = QLabel("")
-        self.lbl_count.setStyleSheet(
-            "color:#888; font-size:10px; background:transparent;"
-            "border:none; padding:2px;"
-        )
-        self.lbl_count.setAlignment(Qt.AlignCenter)
-        root.addWidget(self.lbl_count)
+        # ── شريط الحالة الموحد ──
+        self._status = ListStatusBar()
+        root.addWidget(self._status)
 
     def _refresh_accounts(self):
-        """
-        يُعيد تحميل الحسابات — يُستدعى عند البناء وعند تغيير الشركة.
-        _get_safe_conn() يضمن استخدام connection الشركة النشطة دايماً.
-        """
         try:
             self._all = fetch_all_accounts(self._get_safe_conn())
         except Exception as e:
@@ -122,15 +89,14 @@ class _AccountsPanel(SafeConnMixin, QWidget):
             self._all = []
         self._filter_accounts()
 
-    def _filter_accounts(self):
-        q         = self.inp_search.text().strip().lower()
+    def _filter_accounts(self, q: str = ""):
+        if not q:
+            q = self._header.search_text()
         type_filt = self.cmb_type.currentData()
 
         self.lst.clear()
+        conn  = self._get_safe_conn()
         count = 0
-
-        # _get_safe_conn() هنا يضمن أرصدة الشركة الصح
-        conn = self._get_safe_conn()
 
         for acc in self._all:
             if not acc["is_leaf"]:
@@ -168,10 +134,7 @@ class _AccountsPanel(SafeConnMixin, QWidget):
             count += 1
 
         total = sum(1 for a in self._all if a["is_leaf"])
-        if count == total:
-            self.lbl_count.setText(f"({count} حساب)")
-        else:
-            self.lbl_count.setText(f"({count} / {total})")
+        self._status.set_count(count, total)
 
     def _on_selected(self):
         items = self.lst.selectedItems()
@@ -180,3 +143,4 @@ class _AccountsPanel(SafeConnMixin, QWidget):
         acc_id = items[0].data(0, Qt.UserRole)
         if acc_id:
             self._on_select(acc_id)
+            
