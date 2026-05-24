@@ -4,6 +4,8 @@ ui/widgets/shared/scenario_comparison_widget.py
 ScenarioComparisonWidget — يقارن تكلفة السيناريو الافتراضي بأي سيناريو آخر
 ويحسب الفرق في الربح لو السعر ثابت.
 
+[تحديث]: يستخدم stat_card_pair من stat_row بدل _stat_card المحلية.
+
 الاستخدام:
     widget = ScenarioComparisonWidget(conn)
     widget.load_product(item_id, current_price)
@@ -12,42 +14,12 @@ ScenarioComparisonWidget — يقارن تكلفة السيناريو الافت
 
 from PyQt5.QtWidgets import (
     QWidget, QVBoxLayout, QHBoxLayout,
-    QLabel, QComboBox, QFrame, QGridLayout,
+    QLabel, QComboBox, QFrame,
 )
 from PyQt5.QtCore import Qt
-from PyQt5.QtGui import QColor
 
 from models.costing import calc_cost
-
-
-def _stat_card(title: str, color: str = "#1565c0") -> tuple:
-    """يرجع (QFrame, QLabel_value)."""
-    frame = QFrame()
-    frame.setStyleSheet("""
-        QFrame {
-            background: white;
-            border: 1px solid #e0e0e0;
-            border-radius: 6px;
-        }
-    """)
-    lay = QVBoxLayout(frame)
-    lay.setContentsMargins(10, 8, 10, 8)
-    lay.setSpacing(2)
-
-    lbl_t = QLabel(title)
-    lbl_t.setStyleSheet("font-size:10px; color:#888; background:transparent; border:none;")
-    lbl_t.setAlignment(Qt.AlignCenter)
-    lbl_t.setWordWrap(True)
-
-    lbl_v = QLabel("─")
-    lbl_v.setStyleSheet(
-        f"font-size:13px; font-weight:bold; color:{color};"
-        "background:transparent; border:none;"
-    )
-    lbl_v.setAlignment(Qt.AlignCenter)
-    lay.addWidget(lbl_t)
-    lay.addWidget(lbl_v)
-    return frame, lbl_v
+from ui.widgets.shared.stat_row import stat_card_pair   # ← الموحد بدل _stat_card المحلية
 
 
 class ScenarioComparisonWidget(QFrame):
@@ -126,12 +98,12 @@ class ScenarioComparisonWidget(QFrame):
         header_row.addWidget(self.cmb_scenario)
         root.addLayout(header_row)
 
-        # ── الصف الأول: التكاليف ──
+        # ── الصف الأول: التكاليف — يستخدم stat_card_pair الموحدة ──
         cost_row = QHBoxLayout()
         cost_row.setSpacing(6)
-        f1, self.lbl_default_cost = _stat_card("تكلفة السيناريو الافتراضي", "#1565c0")
-        f2, self.lbl_compare_cost = _stat_card("تكلفة السيناريو المقارن",  "#6a1b9a")
-        f3, self.lbl_cost_diff    = _stat_card("فرق التكلفة",               "#e65100")
+        f1, self.lbl_default_cost = stat_card_pair("تكلفة السيناريو الافتراضي", "#1565c0")
+        f2, self.lbl_compare_cost = stat_card_pair("تكلفة السيناريو المقارن",  "#6a1b9a")
+        f3, self.lbl_cost_diff    = stat_card_pair("فرق التكلفة",               "#e65100")
         for f in (f1, f2, f3):
             cost_row.addWidget(f, stretch=1)
         root.addLayout(cost_row)
@@ -139,11 +111,11 @@ class ScenarioComparisonWidget(QFrame):
         # ── الصف الثاني: الربح (السعر ثابت) ──
         profit_row = QHBoxLayout()
         profit_row.setSpacing(6)
-        f4, self.lbl_fixed_price       = _stat_card("السعر الثابت",               "#555")
-        f5, self.lbl_default_profit    = _stat_card("ربح السيناريو الافتراضي",    "#2e7d32")
-        f6, self.lbl_compare_profit    = _stat_card("ربح السيناريو المقارن",      "#6a1b9a")
-        f7, self.lbl_profit_diff       = _stat_card("فرق الربح",                  "#e65100")
-        f8, self.lbl_compare_margin    = _stat_card("هامش الربح (سيناريو مقارن)", "#1b5e20")
+        f4, self.lbl_fixed_price    = stat_card_pair("السعر الثابت",               "#555")
+        f5, self.lbl_default_profit = stat_card_pair("ربح السيناريو الافتراضي",    "#2e7d32")
+        f6, self.lbl_compare_profit = stat_card_pair("ربح السيناريو المقارن",      "#6a1b9a")
+        f7, self.lbl_profit_diff    = stat_card_pair("فرق الربح",                  "#e65100")
+        f8, self.lbl_compare_margin = stat_card_pair("هامش الربح (سيناريو مقارن)", "#1b5e20")
         for f in (f4, f5, f6, f7, f8):
             profit_row.addWidget(f, stretch=1)
         root.addLayout(profit_row)
@@ -161,23 +133,12 @@ class ScenarioComparisonWidget(QFrame):
     # ══════════════════════════════════════════════════════
 
     def load_product(self, item_id: int, fixed_price: float):
-        """
-        تحميل سيناريوهات منتج مع السعر الثابت للمقارنة.
-
-        item_id     : ID المنتج
-        fixed_price : السعر اللي هيفضل ثابت (من التسعير الأساسي)
-        """
         self._item_id     = item_id
         self._fixed_price = fixed_price
-
-        # حساب تكلفة السيناريو الافتراضي
         self._default_cost = self._calc_default_cost(item_id)
-
-        # تحميل السيناريوهات
         self._reload_scenarios()
 
     def update_price(self, new_price: float):
-        """تحديث السعر الثابت لو تغير في فورم التسعير."""
         self._fixed_price = new_price
         self._refresh_comparison()
 
@@ -195,7 +156,6 @@ class ScenarioComparisonWidget(QFrame):
     # ══════════════════════════════════════════════════════
 
     def _reload_scenarios(self):
-        """تحميل السيناريوهات في الـ combo."""
         self.cmb_scenario.blockSignals(True)
         self.cmb_scenario.clear()
         self.cmb_scenario.addItem("─ اختر سيناريو ─", None)
@@ -222,11 +182,9 @@ class ScenarioComparisonWidget(QFrame):
         self._refresh_comparison()
 
     def _calc_default_cost(self, item_id: int) -> float:
-        """تكلفة السيناريو الافتراضي."""
         return calc_cost(self.conn, item_id)
 
     def _calc_scenario_cost(self, scenario_id: int) -> float:
-        """تكلفة سيناريو محدد — يحسب من صفوف الـ BOM مباشرة."""
         try:
             from db.costing.bom_scenarios_repo import fetch_bom_for_scenario
             from db.shared.items_repo import fetch_item
@@ -270,20 +228,15 @@ class ScenarioComparisonWidget(QFrame):
             return 0.0
 
     def _refresh_comparison(self):
-        """إعادة حساب وعرض المقارنة."""
         sc_id = self.cmb_scenario.currentData()
 
-        # عرض السعر الثابت دايماً
         self.lbl_fixed_price.setText(f"{self._fixed_price:.2f} ج")
-
-        # التكلفة الافتراضية
         self.lbl_default_cost.setText(f"{self._default_cost:.4f} ج")
         default_profit = self._fixed_price - self._default_cost
         self.lbl_default_profit.setText(f"{default_profit:.2f} ج")
         self._color_label(self.lbl_default_profit, default_profit)
 
         if sc_id is None:
-            # ما اتحددش سيناريو بعد
             for lbl in (self.lbl_compare_cost, self.lbl_cost_diff,
                         self.lbl_compare_profit, self.lbl_profit_diff,
                         self.lbl_compare_margin):
@@ -294,24 +247,20 @@ class ScenarioComparisonWidget(QFrame):
         compare_cost = self._calc_scenario_cost(sc_id)
         self.lbl_compare_cost.setText(f"{compare_cost:.4f} ج")
 
-        # فرق التكلفة
         cost_diff = compare_cost - self._default_cost
         sign = "+" if cost_diff > 0 else ""
         self.lbl_cost_diff.setText(f"{sign}{cost_diff:.4f} ج")
-        self._color_label(self.lbl_cost_diff, -cost_diff)  # زيادة في التكلفة = سيء
+        self._color_label(self.lbl_cost_diff, -cost_diff)
 
-        # الربح في السيناريو المقارن (السعر ثابت)
         compare_profit = self._fixed_price - compare_cost
         self.lbl_compare_profit.setText(f"{compare_profit:.2f} ج")
         self._color_label(self.lbl_compare_profit, compare_profit)
 
-        # فرق الربح
         profit_diff = compare_profit - default_profit
         sign2 = "+" if profit_diff > 0 else ""
         self.lbl_profit_diff.setText(f"{sign2}{profit_diff:.2f} ج")
         self._color_label(self.lbl_profit_diff, profit_diff)
 
-        # هامش الربح الفعلي في السيناريو المقارن
         if compare_cost > 0 and self._fixed_price > 0:
             margin = (self._fixed_price - compare_cost) / compare_cost * 100
             self.lbl_compare_margin.setText(f"{margin:.1f} %")
@@ -319,7 +268,6 @@ class ScenarioComparisonWidget(QFrame):
         else:
             self.lbl_compare_margin.setText("─")
 
-        # رسالة موجزة
         if cost_diff > 0:
             self.lbl_note.setText(
                 f"⬆ السيناريو المقارن أعلى تكلفة بـ {cost_diff:.4f} ج/قطعة — "
@@ -338,14 +286,12 @@ class ScenarioComparisonWidget(QFrame):
     # ══════════════════════════════════════════════════════
 
     def _color_label(self, lbl: QLabel, value: float):
-        """يلوّن الـ label حسب الإشارة."""
         if value > 0:
             color = "#1b5e20"
         elif value < 0:
             color = "#b71c1c"
         else:
             color = "#555555"
-        current = lbl.styleSheet()
         lbl.setStyleSheet(
             f"font-size:13px; font-weight:bold; color:{color};"
             "background:transparent; border:none;"
@@ -358,10 +304,6 @@ class ScenarioComparisonWidget(QFrame):
                     self.lbl_compare_margin):
             lbl.setText("─")
         self.lbl_note.setText("اختر منتجاً لبدء المقارنة")
-
-    # ══════════════════════════════════════════════════════
-    # Signal handlers
-    # ══════════════════════════════════════════════════════
 
     def _on_scenario_changed(self, _):
         self._refresh_comparison()

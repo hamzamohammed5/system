@@ -3,20 +3,20 @@ ui/tabs/accounting/journal/journal_filter.py
 ======================================
 _JournalFilterBar — شريط فلاتر القيود المحاسبية.
 
-تغييرات (v3 — SafeConnMixin + signal fix):
-  - SafeConnMixin بدل self.conn الثابت.
-  - _reload_group_combo() تُطلق signal group_reloaded بعد استبدال الـ widget
-    حتى يتمكن _JournalTreeTable من إعادة ربط الـ signal على الـ combo الجديد.
-  - _get_safe_conn() في كل query.
+تغييرات (v4 — DateRangeFilter):
+  - يستخدم DateRangeFilter الموحد بدل بناء حقول التاريخ يدوياً.
+  - SafeConnMixin + signal fix من v3 محافظ عليهم.
+  - _reload_group_combo() تُطلق signal group_reloaded بعد استبدال الـ widget.
 """
 
 from PyQt5.QtWidgets import (
     QFrame, QVBoxLayout, QHBoxLayout,
-    QLabel, QLineEdit, QComboBox, QDateEdit, QPushButton,
+    QLabel, QLineEdit, QComboBox, QPushButton,
 )
 from PyQt5.QtCore import Qt, QDate, QTimer, pyqtSignal
 
 from ui.widgets.shared.safe_conn_mixin import SafeConnMixin
+from ui.widgets.shared.date_range_filter import DateRangeFilter
 from ui.events import bus
 from .journal_group_combo import _TreeGroupCombo
 
@@ -69,7 +69,6 @@ class _JournalFilterBar(SafeConnMixin, QFrame):
                 layout.insertWidget(idx, new_combo)
 
         self.cmb_group = new_combo
-        # أعلم المستمعين (JournalTreeTable) بالـ combo الجديد
         self.group_reloaded.emit()
 
     def _build(self):
@@ -139,48 +138,30 @@ class _JournalFilterBar(SafeConnMixin, QFrame):
         row1.addWidget(self.cmb_balance)
         root.addLayout(row1)
 
-        # ══ الصف الثاني: نطاق التاريخ + مسح ══
+        # ══ الصف الثاني: DateRangeFilter الموحد + مسح ══
         row2 = QHBoxLayout()
         row2.setSpacing(8)
 
         lbl_date = QLabel("📅")
         lbl_date.setStyleSheet("background:transparent; border:none; font-size:13px;")
         lbl_date.setFixedWidth(20)
+        row2.addWidget(lbl_date)
 
-        lbl_from = QLabel("من:")
-        lbl_from.setStyleSheet(lbl_grp.styleSheet())
-
-        date_style = """
-            QDateEdit {
-                background: white; border: 1px solid #c5cae9;
-                border-radius: 5px; padding: 2px 6px; font-size: 11px;
-            }
-            QDateEdit::drop-down { border: none; }
-        """
-
-        self.dt_from = QDateEdit()
-        self.dt_from.setCalendarPopup(True)
-        self.dt_from.setDisplayFormat("yyyy-MM-dd")
-        self.dt_from.setDate(QDate(2000, 1, 1))
-        self.dt_from.setFixedWidth(115)
-        self.dt_from.setMinimumHeight(28)
-        self.dt_from.setStyleSheet(date_style)
-
-        lbl_to = QLabel("إلى:")
-        lbl_to.setStyleSheet(lbl_grp.styleSheet())
-
-        self.dt_to = QDateEdit()
-        self.dt_to.setCalendarPopup(True)
-        self.dt_to.setDisplayFormat("yyyy-MM-dd")
-        self.dt_to.setDate(QDate.currentDate())
-        self.dt_to.setFixedWidth(115)
-        self.dt_to.setMinimumHeight(28)
-        self.dt_to.setStyleSheet(date_style)
+        # ← استخدام DateRangeFilter الموحد بدل بناء حقول يدوياً
+        self._date_filter = DateRangeFilter(
+            default_from=QDate(2000, 1, 1),
+            default_to=QDate.currentDate(),
+        )
+        # كشف dt_from و dt_to للتوافق مع الكود الخارجي الذي يتصل بـ dateChanged
+        self.dt_from = self._date_filter.dt_from
+        self.dt_to   = self._date_filter.dt_to
+        row2.addWidget(self._date_filter)
 
         sep = QLabel("│")
         sep.setStyleSheet(
             "color:#c5cae9; background:transparent; border:none; font-size:16px;"
         )
+        row2.addWidget(sep)
 
         btn_reset = QPushButton("↺ مسح الفلاتر")
         btn_reset.setMinimumHeight(28)
@@ -194,6 +175,8 @@ class _JournalFilterBar(SafeConnMixin, QFrame):
             QPushButton:hover { background: #c5cae9; }
         """)
         btn_reset.clicked.connect(self.reset)
+        row2.addWidget(btn_reset)
+        row2.addStretch()
 
         self.lbl_count = QLabel("")
         self.lbl_count.setStyleSheet(
@@ -201,15 +184,6 @@ class _JournalFilterBar(SafeConnMixin, QFrame):
             "background:transparent; border:none; min-width:70px;"
         )
         self.lbl_count.setAlignment(Qt.AlignCenter)
-
-        row2.addWidget(lbl_date)
-        row2.addWidget(lbl_from)
-        row2.addWidget(self.dt_from)
-        row2.addWidget(lbl_to)
-        row2.addWidget(self.dt_to)
-        row2.addWidget(sep)
-        row2.addWidget(btn_reset)
-        row2.addStretch()
         row2.addWidget(self.lbl_count)
         root.addLayout(row2)
 
@@ -219,8 +193,7 @@ class _JournalFilterBar(SafeConnMixin, QFrame):
         self.inp_search.clear()
         self.cmb_group.reset()
         self.cmb_balance.setCurrentIndex(0)
-        self.dt_from.setDate(QDate(2000, 1, 1))
-        self.dt_to.setDate(QDate.currentDate())
+        self._date_filter.reset()
 
     def matches(self, entry: dict) -> bool:
         q = self.inp_search.text().strip().lower()
@@ -247,14 +220,9 @@ class _JournalFilterBar(SafeConnMixin, QFrame):
             if bal_filt == "unbalanced" and is_balanced:
                 return False
 
-        date_str = entry.get("date", "")
-        if date_str:
-            try:
-                d = QDate.fromString(date_str, "yyyy-MM-dd")
-                if d < self.dt_from.date() or d > self.dt_to.date():
-                    return False
-            except Exception:
-                pass
+        # استخدام DateRangeFilter.in_range() الموحدة
+        if not self._date_filter.in_range(entry.get("date", "")):
+            return False
 
         return True
 

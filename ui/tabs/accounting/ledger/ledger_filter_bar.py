@@ -3,18 +3,19 @@ ui/tabs/accounting/ledger/ledger_filter_bar.py
 ===============================================
 _LedgerFilterBar — شريط فلاتر دفتر الأستاذ.
 
-[إصلاح v2]:
-  - __init__ يقبل conn اختياري — مطلوب فقط لو فيه فلاتر تحتاجه مستقبلاً.
-  - لا تحفظ conn داخلياً — الـ LedgerTab هي المسؤولة عن تمرير conn حي
-    لأي query عبر _TAccountPanel.load(conn, account_id).
+[إصلاح v3]:
+  - يستخدم DateRangeFilter الموحد بدل بناء حقول التاريخ يدوياً.
+  - لا يحفظ conn داخلياً — الـ LedgerTab هي المسؤولة عن تمرير conn حي.
   - الـ matches() و set_count() تعمل بدون أي DB access — فلترة محلية فقط.
 """
 
 from PyQt5.QtWidgets import (
     QFrame, QHBoxLayout,
-    QLabel, QLineEdit, QComboBox, QDateEdit, QPushButton,
+    QLabel, QLineEdit, QComboBox, QPushButton,
 )
 from PyQt5.QtCore import Qt, QDate
+
+from ui.widgets.shared.date_range_filter import DateRangeFilter
 
 
 class _LedgerFilterBar(QFrame):
@@ -69,36 +70,14 @@ class _LedgerFilterBar(QFrame):
         sep1 = QLabel("│")
         sep1.setStyleSheet("color:#c5cae9; background:transparent; border:none; font-size:16px;")
 
-        lbl_from = QLabel("من:")
-        lbl_from.setStyleSheet(
-            "background:transparent; border:none; font-weight:bold; font-size:11px; color:#555;"
+        # ← DateRangeFilter الموحد بدل بناء حقول يدوياً
+        self._date_filter = DateRangeFilter(
+            default_from=QDate(2000, 1, 1),
+            default_to=QDate.currentDate(),
         )
-
-        self.dt_from = QDateEdit()
-        self.dt_from.setCalendarPopup(True)
-        self.dt_from.setDisplayFormat("yyyy-MM-dd")
-        self.dt_from.setDate(QDate(2000, 1, 1))
-        self.dt_from.setFixedWidth(115)
-        self.dt_from.setMinimumHeight(30)
-        self.dt_from.setStyleSheet("""
-            QDateEdit {
-                background: white; border: 1px solid #c5cae9;
-                border-radius: 5px; padding: 2px 6px; font-size: 11px;
-            }
-            QDateEdit:focus { border-color: #1565c0; }
-            QDateEdit::drop-down { border: none; }
-        """)
-
-        lbl_to = QLabel("إلى:")
-        lbl_to.setStyleSheet(lbl_from.styleSheet())
-
-        self.dt_to = QDateEdit()
-        self.dt_to.setCalendarPopup(True)
-        self.dt_to.setDisplayFormat("yyyy-MM-dd")
-        self.dt_to.setDate(QDate.currentDate())
-        self.dt_to.setFixedWidth(115)
-        self.dt_to.setMinimumHeight(30)
-        self.dt_to.setStyleSheet(self.dt_from.styleSheet())
+        # كشف dt_from و dt_to للتوافق مع الكود الخارجي
+        self.dt_from = self._date_filter.dt_from
+        self.dt_to   = self._date_filter.dt_to
 
         sep2 = QLabel("│")
         sep2.setStyleSheet(sep1.styleSheet())
@@ -127,10 +106,7 @@ class _LedgerFilterBar(QFrame):
         lay.addWidget(self.inp_search, stretch=2)
         lay.addWidget(self.cmb_move_type)
         lay.addWidget(sep1)
-        lay.addWidget(lbl_from)
-        lay.addWidget(self.dt_from)
-        lay.addWidget(lbl_to)
-        lay.addWidget(self.dt_to)
+        lay.addWidget(self._date_filter)
         lay.addWidget(sep2)
         lay.addWidget(btn_reset)
         lay.addWidget(self.lbl_count)
@@ -138,8 +114,7 @@ class _LedgerFilterBar(QFrame):
     def reset(self):
         self.inp_search.clear()
         self.cmb_move_type.setCurrentIndex(0)
-        self.dt_from.setDate(QDate(2000, 1, 1))
-        self.dt_to.setDate(QDate.currentDate())
+        self._date_filter.reset()
 
     def matches(self, line: dict) -> bool:
         """فلترة محلية بالكامل — لا تحتاج DB access."""
@@ -157,14 +132,9 @@ class _LedgerFilterBar(QFrame):
         if move_type == "cr" and not (line.get("credit", 0) > 0):
             return False
 
-        date_str = line.get("date", "")
-        if date_str:
-            try:
-                line_date = QDate.fromString(date_str, "yyyy-MM-dd")
-                if line_date < self.dt_from.date() or line_date > self.dt_to.date():
-                    return False
-            except Exception:
-                pass
+        # استخدام DateRangeFilter.in_range() الموحدة
+        if not self._date_filter.in_range(line.get("date", "")):
+            return False
 
         return True
 
