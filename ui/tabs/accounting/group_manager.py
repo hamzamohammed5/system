@@ -3,17 +3,15 @@ ui/tabs/accounting/group_manager.py
 =====================================
 _GroupManagerPanel — إدارة تصنيفات الحسابات.
 
-[تحسين v4]:
-  - استخدام FormGroup + ModeLabel من form_utils بدل بناء يدوي.
-  - استخدام get_tree_style + ListStatusBar من panels.
-  - استخدام confirm_delete من panels.
-  - SafeConnMixin كما هو.
+[تحسين v5]:
+  - ColorPickerWidget بدل لون picker مكرر يدوياً.
+  - باقي التحسينات كما هي (FormGroup, ModeLabel, SafeConnMixin).
 """
 
 from PyQt5.QtWidgets import (
     QWidget, QVBoxLayout, QHBoxLayout,
     QTreeWidget, QTreeWidgetItem,
-    QLineEdit, QPushButton, QLabel, QColorDialog, QMessageBox,
+    QLineEdit, QMessageBox,
     QComboBox, QHeaderView,
 )
 from PyQt5.QtCore import Qt
@@ -27,6 +25,7 @@ from db.accounting.accounting_repo import (
 from db.accounting.accounting_schema import TYPE_AR
 from ui.events  import bus
 from ui.widgets.shared.safe_conn_mixin import SafeConnMixin
+from ui.widgets.shared.color_picker_widget import ColorPickerWidget
 from ui.widgets.shared.panels import (
     SectionHeader, _make_btn, get_tree_style, confirm_delete,
     ListStatusBar,
@@ -34,13 +33,13 @@ from ui.widgets.shared.panels import (
 from ui.widgets.shared.form_utils import FormGroup
 from ui.widgets.shared.panles_helper.mode_label import ModeLabel
 
+
 class _GroupManagerPanel(SafeConnMixin, QWidget):
     def __init__(self, conn, acc_type: str, parent=None):
         super().__init__(parent)
         self._init_safe_conn(conn, "accounting")
         self.acc_type    = acc_type
         self._editing_id = None
-        self._color      = "#607d8b"
         self._company_id = self._get_company_id()
         self._build()
         self._load()
@@ -99,21 +98,9 @@ class _GroupManagerPanel(SafeConnMixin, QWidget):
         self.cmb_parent.setMinimumHeight(28)
         grp.add_row("تابع لـ:", self.cmb_parent)
 
-        # ── لون التصنيف ──
-        color_w = QWidget()
-        color_w.setStyleSheet("background: transparent;")
-        cl = QHBoxLayout(color_w)
-        cl.setContentsMargins(0, 0, 0, 0)
-        cl.setSpacing(6)
-        self.lbl_color = QLabel()
-        self.lbl_color.setFixedSize(26, 26)
-        self._apply_color_preview()
-        btn_color = _make_btn("اختر لون", "normal")
-        btn_color.clicked.connect(self._pick_color)
-        cl.addWidget(self.lbl_color)
-        cl.addWidget(btn_color)
-        cl.addStretch()
-        grp.add_row("اللون:", color_w)
+        # ── ColorPickerWidget الموحد ──
+        self._color_picker = ColorPickerWidget(default="#607d8b")
+        grp.add_row("اللون:", self._color_picker)
 
         # ── أزرار الفورم ──
         btn_w = QWidget()
@@ -135,11 +122,6 @@ class _GroupManagerPanel(SafeConnMixin, QWidget):
         grp.add_label_row(btn_w)
 
         root.addWidget(grp)
-
-    def _apply_color_preview(self):
-        self.lbl_color.setStyleSheet(
-            f"background:{self._color}; border-radius:4px; border:1px solid #ccc;"
-        )
 
     def _load(self):
         conn = self._get_safe_conn()
@@ -195,12 +177,6 @@ class _GroupManagerPanel(SafeConnMixin, QWidget):
             if node["children"]:
                 self._add_parent_nodes(node["children"], depth + 1, exclude_id)
 
-    def _pick_color(self):
-        col = QColorDialog.getColor(QColor(self._color), self, "اختر لون")
-        if col.isValid():
-            self._color = col.name()
-            self._apply_color_preview()
-
     def _selected_id(self):
         items = self.tree.selectedItems()
         return items[0].data(0, Qt.UserRole) if items else None
@@ -211,7 +187,8 @@ class _GroupManagerPanel(SafeConnMixin, QWidget):
             QMessageBox.warning(self, "تنبيه", "أدخل اسم التصنيف")
             return
         insert_group(self._get_safe_conn(), name, self.acc_type,
-                     self.cmb_parent.currentData(), self._color)
+                     self.cmb_parent.currentData(),
+                     self._color_picker.current_color())
         self._reset()
         bus.company_data_changed.emit(self._company_id or 0)
 
@@ -225,8 +202,7 @@ class _GroupManagerPanel(SafeConnMixin, QWidget):
             return
         self._editing_id = gid
         self.inp_name.setText(grp["name"])
-        self._color = grp["color"]
-        self._apply_color_preview()
+        self._color_picker.set_color(grp["color"])
         self._refresh_parent_combo(exclude_id=gid)
         for i in range(self.cmb_parent.count()):
             if self.cmb_parent.itemData(i) == grp["parent_id"]:
@@ -242,7 +218,8 @@ class _GroupManagerPanel(SafeConnMixin, QWidget):
         if not name or not self._editing_id:
             return
         update_group(self._get_safe_conn(), self._editing_id, name,
-                     self.cmb_parent.currentData(), self._color)
+                     self.cmb_parent.currentData(),
+                     self._color_picker.current_color())
         self._reset()
         bus.company_data_changed.emit(self._company_id or 0)
 
@@ -267,8 +244,7 @@ class _GroupManagerPanel(SafeConnMixin, QWidget):
     def _reset(self):
         self._editing_id = None
         self.inp_name.clear()
-        self._color = "#607d8b"
-        self._apply_color_preview()
+        self._color_picker.set_color("#607d8b")
         self._lbl_mode.set_add_mode()
         self.btn_add.setVisible(True)
         self.btn_save.setVisible(False)

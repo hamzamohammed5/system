@@ -3,13 +3,13 @@ ui/widgets/shared/panels.py
 ============================
 مكونات UI مشتركة — re-export من panles_helper وملفات أخرى.
 
-[تحديث v3]:
-  - إضافة theme exports: ستايلات موحدة
-  - إضافة list_header exports: ListHeader, SearchBar, StatusBar
-  - إضافة form_row exports: form_label, required_label, hint_label, ...
-  - إضافة mode_label exports: ModeLabel
-  - إضافة amount_display exports: AmountLabel, BalanceDisplay, ...
-  - إضافة DualConnMixin للـ exports
+[تحديث v4]:
+  - إضافة empty_state_helpers exports
+  - إضافة color_picker_widget exports
+  - إضافة date_range_filter exports
+  - إضافة loading_spinner exports
+  - إضافة base_warning_bar exports
+  - إضافة accounts_combo_widget exports
 
 كل الملفات التانية تستورد من هنا مباشرة — مش من panles_helper.
 """
@@ -30,7 +30,7 @@ from .panles_helper.status_chip      import (                   # noqa: F401
     make_status_chip,
 )
 
-# ── theme (جديد) ──────────────────────────────────────────
+# ── theme ──────────────────────────────────────────────────
 from .panles_helper.theme import (                              # noqa: F401
     STATUS_COLORS,
     get_input_style,
@@ -53,7 +53,7 @@ from .panles_helper.theme import (                              # noqa: F401
     get_section_title_style,
 )
 
-# ── list_header (جديد) ────────────────────────────────────
+# ── list_header ────────────────────────────────────────────
 from .panles_helper.list_header import (                        # noqa: F401
     ListHeader,
     SearchBar,
@@ -61,7 +61,7 @@ from .panles_helper.list_header import (                        # noqa: F401
     make_list_header,
 )
 
-# ── form_row (جديد) ───────────────────────────────────────
+# ── form_row ───────────────────────────────────────────────
 from .panles_helper.form_row import (                           # noqa: F401
     form_label,
     required_label,
@@ -74,10 +74,10 @@ from .panles_helper.form_row import (                           # noqa: F401
     make_preview_label,
 )
 
-# ── mode_label (جديد) ─────────────────────────────────────
+# ── mode_label ─────────────────────────────────────────────
 from .panles_helper.mode_label import ModeLabel                 # noqa: F401
 
-# ── amount_display (جديد) ─────────────────────────────────
+# ── amount_display ─────────────────────────────────────────
 from .panles_helper.amount_display import (                     # noqa: F401
     AmountLabel,
     DebitCreditDisplay,
@@ -87,7 +87,7 @@ from .panles_helper.amount_display import (                     # noqa: F401
     dr_cr_color,
 )
 
-# ── stat_row ──────────────────────────────────────────────
+# ── stat_row ───────────────────────────────────────────────
 from .stat_row import (                                         # noqa: F401
     StatRow,
     StatItem,
@@ -95,14 +95,14 @@ from .stat_row import (                                         # noqa: F401
     stat_card_pair,
 )
 
-# ── tab_builder (جديد) ────────────────────────────────────
+# ── tab_builder ────────────────────────────────────────────
 from .tab_builder import (                                      # noqa: F401
     make_tabs,
     make_inner_tabs,
     make_financial_tabs,
 )
 
-# ── form_utils ────────────────────────────────────────────
+# ── form_utils ─────────────────────────────────────────────
 from .form_utils import (                                       # noqa: F401
     FormGroup,
     labeled_widget,
@@ -115,31 +115,31 @@ from .form_utils import (                                       # noqa: F401
     InlinePreview,
 )
 
-# ── base forms & panels ───────────────────────────────────
+# ── base forms & panels ────────────────────────────────────
 from .base_crud_form    import BaseCrudForm                     # noqa: F401
 from .base_list_panel   import BaseListPanel                    # noqa: F401
 from .base_detail_panel import BaseDetailPanel                  # noqa: F401
 from .base_section      import BaseSection                      # noqa: F401
 from .tab_section_base  import TabSectionBase                   # noqa: F401
 
-# ── connection ────────────────────────────────────────────
+# ── connection ─────────────────────────────────────────────
 from .connection_mixin import LiveConnMixin                     # noqa: F401
 from .safe_conn_mixin  import DualConnMixin                     # noqa: F401
 
-# ── dialog ───────────────────────────────────────────────
+# ── dialog ────────────────────────────────────────────────
 from .dialog_base      import BaseDialog                        # noqa: F401
 
-# ── confirm_dialog ────────────────────────────────────────
+# ── confirm_dialog ─────────────────────────────────────────
 from .confirm_dialog   import (                                 # noqa: F401
     confirm_delete,
     confirm_action,
     confirm_save,
 )
 
-# ── scroll ───────────────────────────────────────────────
+# ── scroll ────────────────────────────────────────────────
 from .scrollable_form import wrap_in_scroll, ScrollableFormWidget  # noqa: F401
 
-# ── جدول مرن ─────────────────────────────────────────────
+# ── flexible text ─────────────────────────────────────────
 from .flexible_text import (                                    # noqa: F401
     WrapDelegate,
     AutoTooltipDelegate,
@@ -151,7 +151,7 @@ from .flexible_text import (                                    # noqa: F401
     apply_tooltip_to_all,
 )
 
-# ── no-wheel ─────────────────────────────────────────────
+# ── no-wheel ──────────────────────────────────────────────
 from .no_wheel import (                                         # noqa: F401
     NoWheelCombo,
     NoWheelSpin,
@@ -161,14 +161,56 @@ from .no_wheel import (                                         # noqa: F401
     install_no_wheel_filter,
 )
 
-# ── وحدات ────────────────────────────────────────────────
+# ── وحدات ─────────────────────────────────────────────────
 from .unit_combo import UnitCombo, make_unit_combo              # noqa: F401
 
-# ── layout ───────────────────────────────────────────────
+# ── layout ────────────────────────────────────────────────
 from .flow_layout import FlowLayout                             # noqa: F401
 
-# ── مقارنة سيناريوهات ────────────────────────────────────
+# ── scenario comparison ────────────────────────────────────
 from .scenario_comparison_widget import ScenarioComparisonWidget  # noqa: F401
+
+# ── color picker [جديد] ────────────────────────────────────
+from .color_picker_widget import ColorPickerWidget              # noqa: F401
+
+# ── date range filter [جديد] ──────────────────────────────
+from .date_range_filter import DateRangeFilter                  # noqa: F401
+
+# ── loading [جديد] ────────────────────────────────────────
+from .loading_spinner import (                                  # noqa: F401
+    LoadingSpinner,
+    LoadingOverlay,
+    LoadingButton,
+)
+
+# ── empty state helpers [جديد] ────────────────────────────
+from .empty_state_helpers import (                              # noqa: F401
+    set_table_empty_state,
+    clear_table_empty_state,
+    EmptyPanelState,
+)
+
+# ── warning bar [جديد] ────────────────────────────────────
+from .base_warning_bar import BaseWarningBar                    # noqa: F401
+
+# ── accounts combo [جديد] ─────────────────────────────────
+from .accounts_combo_widget import AccountTypeFilter            # noqa: F401
+
+# ── table utils shortcuts [جديد] ──────────────────────────
+from .table_utils import (                                      # noqa: F401
+    make_detail_table,
+    make_compact_table,
+    make_list_table,
+    make_splitter_table,
+    make_splitter_table_guarded,
+    bold_table_item,
+    colored_table_item,
+    center_table_item,
+    set_row_background,
+    make_table_item,
+    insert_row,
+    auto_fit_columns,
+)
 
 
 __all__ = [
@@ -178,7 +220,7 @@ __all__ = [
     "_make_btn", "CardGrid", "StatusChip",
     "make_stat_card_simple", "make_status_chip",
 
-    # theme (جديد)
+    # theme
     "STATUS_COLORS",
     "get_input_style", "get_search_input_style",
     "get_card_style", "get_status_card_style",
@@ -190,18 +232,18 @@ __all__ = [
     "get_status_label_style", "get_muted_label_style",
     "get_section_title_style",
 
-    # list_header (جديد)
+    # list_header
     "ListHeader", "SearchBar", "ListStatusBar", "make_list_header",
 
-    # form_row (جديد)
+    # form_row
     "form_label", "required_label", "hint_label",
     "form_section_title", "separator_line",
     "field_row", "labeled_row", "make_form_layout", "make_preview_label",
 
-    # mode_label (جديد)
+    # mode_label
     "ModeLabel",
 
-    # amount_display (جديد)
+    # amount_display
     "AmountLabel", "DebitCreditDisplay", "BalanceDisplay",
     "format_amount", "amount_color", "dr_cr_color",
 
@@ -250,4 +292,29 @@ __all__ = [
 
     # scenario_comparison
     "ScenarioComparisonWidget",
+
+    # color_picker
+    "ColorPickerWidget",
+
+    # date_range_filter
+    "DateRangeFilter",
+
+    # loading
+    "LoadingSpinner", "LoadingOverlay", "LoadingButton",
+
+    # empty_state_helpers
+    "set_table_empty_state", "clear_table_empty_state", "EmptyPanelState",
+
+    # warning_bar
+    "BaseWarningBar",
+
+    # accounts_combo
+    "AccountTypeFilter",
+
+    # table_utils
+    "make_detail_table", "make_compact_table", "make_list_table",
+    "make_splitter_table", "make_splitter_table_guarded",
+    "bold_table_item", "colored_table_item", "center_table_item",
+    "set_row_background", "make_table_item", "insert_row",
+    "auto_fit_columns",
 ]

@@ -1,5 +1,5 @@
 File Tree Snapshot
-Generated : 2026-05-24 14:17:55
+Generated : 2026-05-24 14:25:24
 Source    : D:\My Workspace\Hg\Alhabaar\accountant\system
 Extensions: .py
 ────────────────────────────────────────────────────────────
@@ -111,6 +111,7 @@ system/
 │   │   │   │   ├── _group_filter.py
 │   │   │   │   └── _tree_builder.py
 │   │   │   ├── _conn_guard.py
+│   │   │   ├── _state_widgets.py
 │   │   │   ├── account_combo.py
 │   │   │   ├── accounting_tabs_builder.py
 │   │   │   ├── accounts_tree.py

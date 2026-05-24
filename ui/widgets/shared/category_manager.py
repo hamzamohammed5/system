@@ -3,18 +3,13 @@ ui/widgets/shared/category_manager.py
 ===============================
 CategoryManager — شجرة QTreeWidget لإدارة التصنيفات الهرمية.
 
-يرث من LiveConnMixin بدل كتابة _live_conn يدوياً.
-
-التقسيم:
-  category_combo.py → CategoryCombo
-  category_form.py  → _CategoryForm
-  category_manager.py (هذا الملف) → CategoryManager
+[تحسين]: استخدام confirm_delete بدل QMessageBox.question المباشر.
 """
 
 from PyQt5.QtWidgets import (
     QWidget, QVBoxLayout, QHBoxLayout,
     QTreeWidget, QTreeWidgetItem,
-    QPushButton, QMessageBox,
+    QMessageBox,
 )
 from PyQt5.QtCore import Qt
 from PyQt5.QtGui  import QColor
@@ -25,6 +20,7 @@ from db.shared.categories_repo import (
     build_tree, fetch_descendants,
 )
 from ui.widgets.shared.connection_mixin import LiveConnMixin
+from ui.widgets.shared.panels import _make_btn, confirm_delete, get_tree_style
 from ui.events import bus
 
 # إعادة تصدير للتوافق مع الكود القديم
@@ -57,17 +53,13 @@ class CategoryManager(QWidget, LiveConnMixin):
         self.tree.setColumnWidth(2, 80)
         self.tree.setAlternatingRowColors(True)
         self.tree.setAnimated(True)
+        self.tree.setStyleSheet(get_tree_style())
         self.tree.itemSelectionChanged.connect(self._on_select)
         root.addWidget(self.tree)
 
         btn_row = QHBoxLayout()
-        btn_edit = QPushButton("✏️  تعديل")
-        btn_del  = QPushButton("🗑️  حذف")
-        btn_del.setStyleSheet(
-            "background:#c62828; color:white; border-radius:4px;"
-        )
-        for btn in (btn_edit, btn_del):
-            btn.setMinimumHeight(30)
+        btn_edit = _make_btn("✏️  تعديل", "normal")
+        btn_del  = _make_btn("🗑️  حذف", "danger")
         btn_edit.clicked.connect(self._edit)
         btn_del.clicked.connect(self._delete)
         btn_row.addWidget(btn_edit)
@@ -179,17 +171,15 @@ class CategoryManager(QWidget, LiveConnMixin):
         total_items = sum(counts.values())
         child_cats  = len(descendants) - 1
 
-        msg = f"حذف تصنيف «{cat['name']}»؟"
+        extra = ""
         if child_cats:
-            msg += f"\n⚠️ يحتوي على {child_cats} تصنيف فرعي — سيتم حذفها جميعاً."
+            extra += f"⚠️ يحتوي على {child_cats} تصنيف فرعي — سيتم حذفها جميعاً.\n"
         if total_items:
             details = "، ".join(f"{v} {k}" for k, v in counts.items() if v)
-            msg += f"\n⚠️ {details} ستفقد تصنيفها."
+            extra += f"⚠️ {details} ستفقد تصنيفها."
 
-        if QMessageBox.question(
-            self, "تأكيد الحذف", msg,
-            QMessageBox.Yes | QMessageBox.No
-        ) == QMessageBox.Yes:
+        # ── استخدام confirm_delete الموحد ──
+        if confirm_delete(self, cat["name"], extra_msg=extra.strip()):
             for did in sorted(descendants, reverse=True):
                 delete_category(conn, did)
             bus.data_changed.emit()

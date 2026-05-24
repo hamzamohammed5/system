@@ -3,15 +3,14 @@ ui/widgets/shared/category_form.py
 ============================
 _CategoryForm — QGroupBox لإضافة وتعديل التصنيفات الهرمية.
 
-يرث من LiveConnMixin بدل كتابة _live_conn يدوياً.
+[تحسين]: استخدام ColorPickerWidget و confirm_action بدل كود محلي مكرر.
 """
 
 from PyQt5.QtWidgets import (
     QGroupBox, QFormLayout, QLineEdit, QPushButton,
-    QLabel, QComboBox, QColorDialog, QMessageBox, QHBoxLayout,
+    QLabel, QComboBox, QMessageBox, QHBoxLayout,
 )
 from PyQt5.QtCore import Qt
-from PyQt5.QtGui  import QColor
 
 from db.shared.categories_repo import (
     fetch_all_categories, fetch_category,
@@ -19,6 +18,7 @@ from db.shared.categories_repo import (
     build_tree, fetch_descendants,
 )
 from ui.widgets.shared.connection_mixin import LiveConnMixin
+from ui.widgets.shared.color_picker_widget import ColorPickerWidget
 from ui.events import bus
 
 
@@ -29,7 +29,6 @@ class _CategoryForm(QGroupBox, LiveConnMixin):
         self.scope        = scope
         self._tree        = tree_widget
         self._editing_id  = None
-        self._color       = "#607d8b"
         self._build()
 
     # ══════════════════════════════════════════════════════
@@ -37,12 +36,14 @@ class _CategoryForm(QGroupBox, LiveConnMixin):
     # ══════════════════════════════════════════════════════
 
     def _build(self):
+        from ui.widgets.shared.panles_helper.mode_label import ModeLabel
+        from ui.widgets.shared.panles_helper.make_btn import _make_btn
+
         form = QFormLayout(self)
         form.setSpacing(10)
         form.setLabelAlignment(Qt.AlignRight)
 
-        self.lbl_mode = QLabel("─── تصنيف جديد ───")
-        self.lbl_mode.setStyleSheet("font-weight:bold; color:#1565c0;")
+        self.lbl_mode = ModeLabel(add_text="تصنيف جديد")
         form.addRow(self.lbl_mode)
 
         self.inp_name = QLineEdit()
@@ -53,28 +54,16 @@ class _CategoryForm(QGroupBox, LiveConnMixin):
         self.cmb_parent.setMinimumHeight(30)
         form.addRow("تابع لـ :", self.cmb_parent)
 
-        color_row = QHBoxLayout()
-        self.lbl_color = QLabel()
-        self.lbl_color.setFixedSize(28, 28)
-        self.lbl_color.setStyleSheet(
-            f"background:{self._color}; border-radius:4px; border:1px solid #ccc;"
-        )
-        btn_color = QPushButton("اختر لون")
-        btn_color.setMinimumHeight(28)
-        btn_color.clicked.connect(self._pick_color)
-        color_row.addWidget(self.lbl_color)
-        color_row.addWidget(btn_color)
-        color_row.addStretch()
-        form.addRow("اللون :", color_row)
+        # ── ColorPickerWidget الموحد ──
+        self._color_picker = ColorPickerWidget(default="#607d8b")
+        form.addRow("اللون :", self._color_picker)
 
         btn_row = QHBoxLayout()
-        self.btn_add    = QPushButton("➕  إضافة")
-        self.btn_save   = QPushButton("💾  حفظ")
-        self.btn_cancel = QPushButton("✖  إلغاء")
+        self.btn_add    = _make_btn("➕  إضافة", "primary")
+        self.btn_save   = _make_btn("💾  حفظ", "success")
+        self.btn_cancel = _make_btn("✖  إلغاء", "ghost")
         self.btn_save.setVisible(False)
         self.btn_cancel.setVisible(False)
-        for btn in (self.btn_add, self.btn_save, self.btn_cancel):
-            btn.setMinimumHeight(30)
         self.btn_add.clicked.connect(self._add)
         self.btn_save.clicked.connect(self._save)
         self.btn_cancel.clicked.connect(self._reset)
@@ -131,14 +120,6 @@ class _CategoryForm(QGroupBox, LiveConnMixin):
     # إجراءات
     # ══════════════════════════════════════════════════════
 
-    def _pick_color(self):
-        col = QColorDialog.getColor(QColor(self._color), self, "اختر لون التصنيف")
-        if col.isValid():
-            self._color = col.name()
-            self.lbl_color.setStyleSheet(
-                f"background:{self._color}; border-radius:4px; border:1px solid #ccc;"
-            )
-
     def _add(self):
         name = self.inp_name.text().strip()
         if not name:
@@ -150,7 +131,8 @@ class _CategoryForm(QGroupBox, LiveConnMixin):
             QMessageBox.warning(self, "خطأ", str(e))
             return
         parent_id = self.cmb_parent.currentData()
-        insert_category(conn, name, self.scope, self._color, parent_id)
+        insert_category(conn, name, self.scope,
+                        self._color_picker.current_color(), parent_id)
         self._reset()
         bus.data_changed.emit()
 
@@ -169,7 +151,7 @@ class _CategoryForm(QGroupBox, LiveConnMixin):
         parent_id = self.cmb_parent.currentData()
         try:
             update_category(conn, self._editing_id, name,
-                            self.scope, self._color, parent_id)
+                            self.scope, self._color_picker.current_color(), parent_id)
         except ValueError as e:
             QMessageBox.warning(self, "خطأ", str(e))
             return
@@ -185,29 +167,23 @@ class _CategoryForm(QGroupBox, LiveConnMixin):
         if not cat:
             return
         self._editing_id = cat_id
-        self._color      = cat["color"]
         self.inp_name.setText(cat["name"])
-        self.lbl_color.setStyleSheet(
-            f"background:{self._color}; border-radius:4px; border:1px solid #ccc;"
-        )
+        self._color_picker.set_color(cat["color"])
         self._refresh_parent_combo(exclude_id=cat_id)
         for i in range(self.cmb_parent.count()):
             if self.cmb_parent.itemData(i) == cat["parent_id"]:
                 self.cmb_parent.setCurrentIndex(i)
                 break
-        self.lbl_mode.setText(f"─── تعديل: {cat['name']} ───")
+        self.lbl_mode.set_edit_mode(cat["name"])
         self.btn_add.setVisible(False)
         self.btn_save.setVisible(True)
         self.btn_cancel.setVisible(True)
 
     def _reset(self):
         self._editing_id = None
-        self._color      = "#607d8b"
+        self._color_picker.set_color("#607d8b")
         self.inp_name.clear()
-        self.lbl_color.setStyleSheet(
-            "background:#607d8b; border-radius:4px; border:1px solid #ccc;"
-        )
-        self.lbl_mode.setText("─── تصنيف جديد ───")
+        self.lbl_mode.set_add_mode()
         self.btn_add.setVisible(True)
         self.btn_save.setVisible(False)
         self.btn_cancel.setVisible(False)

@@ -3,8 +3,8 @@ ui/tabs/accounting/financial_statements.py
 ==========================================
 القوائم المالية — يجمع التبويبات الفرعية.
 
-[تحسين v5]:
-  - استخدام make_financial_tabs من tab_builder.
+[تحسين v6]:
+  - استيراد make_financial_tabs من panels مباشرة.
   - _rebuild أنظف مع تتبع صحيح للـ layout.
 """
 
@@ -16,7 +16,7 @@ from .financial.income_statement_tab import IncomeStatementTab
 from .financial.owners_equity_tab    import OwnersEquityTab
 from .financial.balance_sheet_tab    import BalanceSheetTab
 from ui.widgets.shared.safe_conn_mixin import SafeConnMixin
-from ui.widgets.shared.tab_builder    import make_financial_tabs
+from ui.widgets.shared.panels import make_financial_tabs
 from ui.events import bus
 
 

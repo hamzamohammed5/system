@@ -3,10 +3,9 @@ ui/tabs/accounting/investors_tab.py
 ====================================
 InvestorsTab — تبويب المستثمرين.
 
-[تحديث v6]:
-  - DualConnMixin بدل _get_erp_conn() المكررة يدوياً.
-  - منطق بناء الواجهة انتقل لـ investors/_investors_layout.py.
-  - هذا الملف يركز على دورة الحياة (lifecycle) فقط.
+[تحديث v7]:
+  - استخدام make_tabs من tab_builder بدل QTabWidget يدوي.
+  - DualConnMixin كما هو.
 """
 
 from PyQt5.QtWidgets import QWidget, QVBoxLayout, QTabWidget
@@ -28,6 +27,8 @@ class InvestorsTab(DualConnMixin, QWidget):
 
         self._details: _InvestorDetails | None = None
         self._tabs_widget: QTabWidget | None = None
+        self._root_layout = QVBoxLayout(self)
+        self._root_layout.setContentsMargins(0, 0, 0, 0)
 
         self._migrate()
         self._build()
@@ -44,8 +45,6 @@ class InvestorsTab(DualConnMixin, QWidget):
             QTimer.singleShot(0, self._rebuild)
 
     def _build(self):
-        self._root_layout = QVBoxLayout(self)
-        self._root_layout.setContentsMargins(0, 0, 0, 0)
         self._tabs_widget, self._details = build_investors_tabs(
             self._get_safe_conn(),
             self._get_erp_conn(),
@@ -54,7 +53,6 @@ class InvestorsTab(DualConnMixin, QWidget):
         self._root_layout.addWidget(self._tabs_widget)
 
     def _rebuild(self):
-        """يحذف الـ tabs القديمة وينشئ جديدة بـ connections للشركة النشطة."""
         if self._tabs_widget:
             self._root_layout.removeWidget(self._tabs_widget)
             self._tabs_widget.hide()
@@ -63,12 +61,7 @@ class InvestorsTab(DualConnMixin, QWidget):
             self._details = None
 
         self._migrate()
-        self._tabs_widget, self._details = build_investors_tabs(
-            self._get_safe_conn(),
-            self._get_erp_conn(),
-            self._on_investor_selected,
-        )
-        self._root_layout.addWidget(self._tabs_widget)
+        self._build()
 
     def _on_investor_selected(self, inv_id):
         if self._details is None:
