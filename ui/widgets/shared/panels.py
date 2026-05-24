@@ -3,6 +3,10 @@ ui/widgets/shared/panels.py
 ============================
 مكونات UI مشتركة — re-export من panles_helper وملفات أخرى.
 
+[تحديث v2]:
+  - إضافة tab_builder exports: make_tabs, make_inner_tabs, make_financial_tabs
+  - إضافة DualConnMixin للـ exports
+
 كل الملفات التانية تستورد من هنا مباشرة — مش من panles_helper.
 
 المتوفر:
@@ -11,8 +15,11 @@ ui/widgets/shared/panels.py
   _make_btn, make_stat_card_simple, make_status_chip, CardGrid,
   StatusChip,
 
-  --- stat_row (جديد) ---
+  --- stat_row ---
   StatRow, StatItem, make_stat_row, stat_card_pair,
+
+  --- tab_builder (جديد) ---
+  make_tabs, make_inner_tabs, make_financial_tabs,
 
   --- form_utils ---
   FormGroup, labeled_widget, spin_field, int_spin_field,
@@ -26,12 +33,12 @@ ui/widgets/shared/panels.py
   TabSectionBase,
 
   --- connection ---
-  LiveConnMixin,
+  LiveConnMixin, DualConnMixin (جديد),
 
   --- dialog ---
   BaseDialog,
 
-  --- confirm_dialog (جديد) ---
+  --- confirm_dialog ---
   confirm_delete, confirm_action, confirm_save,
 
   --- scroll ---
@@ -73,12 +80,19 @@ from .panles_helper.status_chip      import (                   # noqa: F401
     make_status_chip,
 )
 
-# ── stat_row (جديد — يوحد _stat_card في كل الأماكن) ──────
+# ── stat_row ──────────────────────────────────────────────
 from .stat_row import (                                         # noqa: F401
     StatRow,
     StatItem,
     make_stat_row,
     stat_card_pair,
+)
+
+# ── tab_builder (جديد) ────────────────────────────────────
+from .tab_builder import (                                      # noqa: F401
+    make_tabs,
+    make_inner_tabs,
+    make_financial_tabs,
 )
 
 # ── form_utils ────────────────────────────────────────────
@@ -103,11 +117,12 @@ from .tab_section_base  import TabSectionBase                   # noqa: F401
 
 # ── connection ────────────────────────────────────────────
 from .connection_mixin import LiveConnMixin                     # noqa: F401
+from .safe_conn_mixin  import DualConnMixin                     # noqa: F401
 
 # ── dialog ───────────────────────────────────────────────
 from .dialog_base      import BaseDialog                        # noqa: F401
 
-# ── confirm_dialog (جديد) ─────────────────────────────────
+# ── confirm_dialog ────────────────────────────────────────
 from .confirm_dialog   import (                                 # noqa: F401
     confirm_delete,
     confirm_action,
@@ -117,7 +132,7 @@ from .confirm_dialog   import (                                 # noqa: F401
 # ── scroll ───────────────────────────────────────────────
 from .scrollable_form import wrap_in_scroll, ScrollableFormWidget  # noqa: F401
 
-# ── جدول مرن (flexible_text) ─────────────────────────────
+# ── جدول مرن ─────────────────────────────────────────────
 from .flexible_text import (                                    # noqa: F401
     WrapDelegate,
     AutoTooltipDelegate,
@@ -157,6 +172,8 @@ __all__ = [
     "make_stat_card_simple", "make_status_chip",
     # stat_row
     "StatRow", "StatItem", "make_stat_row", "stat_card_pair",
+    # tab_builder (جديد)
+    "make_tabs", "make_inner_tabs", "make_financial_tabs",
     # form_utils
     "FormGroup", "labeled_widget", "spin_field", "int_spin_field",
     "ResultBadge", "ModeBadge", "build_inner_scroll",
@@ -168,7 +185,7 @@ __all__ = [
     "BaseSection",
     "TabSectionBase",
     # connection
-    "LiveConnMixin",
+    "LiveConnMixin", "DualConnMixin",
     # dialog
     "BaseDialog",
     # confirm_dialog

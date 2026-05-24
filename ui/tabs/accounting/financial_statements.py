@@ -3,10 +3,9 @@ ui/tabs/accounting/financial_statements.py
 ==========================================
 القوائم المالية — الملف الرئيسي يجمع التبويبات الفرعية.
 
-[إصلاح v3] FinancialStatementsTab أصبح يستخدم SafeConnMixin:
-  - يستمع لـ bus.company_data_changed ويعيد بناء الـ tabs بـ conn حي.
-  - هذا يضمن أن كل child يحصل على conn الشركة الصح عند تغيير الشركة.
-  - TrialBalanceTab أُضيف هنا داخل نفس الـ connection.
+[تحديث v4]:
+  - استخدام make_financial_tabs من tab_builder المشترك.
+  - باقي المنطق (SafeConnMixin, rebuild) كما هو.
 
 التقسيم الداخلي:
   financial/trial_balance_tab.py    → TrialBalanceTab
@@ -24,6 +23,7 @@ from .financial.income_statement_tab import IncomeStatementTab    # noqa: F401
 from .financial.owners_equity_tab    import OwnersEquityTab       # noqa: F401
 from .financial.balance_sheet_tab    import BalanceSheetTab       # noqa: F401
 from ui.widgets.shared.safe_conn_mixin import SafeConnMixin
+from ui.widgets.shared.tab_builder    import make_financial_tabs
 from ui.events import bus
 
 
@@ -31,10 +31,9 @@ class FinancialStatementsTab(SafeConnMixin, QWidget):
     """
     يجمع كل القوائم المالية في تبويبات تحت نفس الـ connection.
 
-    [إصلاح v3]:
-      - SafeConnMixin يضمن _get_safe_conn() دايماً للشركة النشطة.
-      - يستمع لـ bus.company_data_changed ويعيد بناء الـ tabs عند تغيير الشركة.
-      - _rebuild() يحذف الـ tabs القديمة وينشئ جديدة بـ conn حي.
+    [تحديث v4]:
+      - make_financial_tabs من tab_builder بدل بناء QTabWidget يدوي.
+      - باقي المنطق كما هو.
     """
 
     def __init__(self, conn, parent=None):
@@ -52,16 +51,14 @@ class FinancialStatementsTab(SafeConnMixin, QWidget):
             QTimer.singleShot(0, self._rebuild)
 
     def _build(self):
-        """ينشئ QTabWidget بـ conn حي من _get_safe_conn()."""
+        """ينشئ tabs بـ conn حي من _get_safe_conn()."""
         conn = self._get_safe_conn()
-        tabs = QTabWidget()
-        tabs.setStyleSheet(
-            "QTabBar::tab:selected { color:#1565c0; border-top:2px solid #1565c0; }"
+        tabs = make_financial_tabs(
+            ("📊 قائمة الدخل",        IncomeStatementTab(conn)),
+            ("👑 حقوق الملكية",       OwnersEquityTab(conn)),
+            ("🏛️ الميزانية العمومية", BalanceSheetTab(conn)),
+            ("⚖️ ميزان المراجعة",    TrialBalanceTab(conn)),
         )
-        tabs.addTab(IncomeStatementTab(conn), "📊 قائمة الدخل")
-        tabs.addTab(OwnersEquityTab(conn),    "👑 حقوق الملكية")
-        tabs.addTab(BalanceSheetTab(conn),    "🏛️ الميزانية العمومية")
-        tabs.addTab(TrialBalanceTab(conn),    "⚖️ ميزان المراجعة")
         self._tabs = tabs
         self._root_layout.addWidget(tabs)
 
