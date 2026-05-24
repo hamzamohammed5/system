@@ -16,7 +16,7 @@ from db.costing.operations_repo import fetch_all_labor_ops, delete_labor_op
 from ui.helpers import (
     make_table, buttons_row, section_label, confirm_delete, danger_button,
 )
-from ui.tabs.costing.costing.bulk_replace.bulk_replace_dialog import BulkReplaceDialog
+from ui.tabs.costing.shared.bulk_replace.bulk_replace_dialog import BulkReplaceDialog
 from ui.widgets.shared.filter_bar import FilterBar
 from ...companies.shared_items_mixin import (
     get_shared_labor_ops, is_shared_id, extract_shared_id,

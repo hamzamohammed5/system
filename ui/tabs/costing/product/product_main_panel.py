@@ -18,8 +18,8 @@ from db.shared.items_repo import (
     cleanup_empty_products_after_orphan_fix,
 )
 from ui.helpers import confirm_delete
-from ui.tabs.costing.costing.component_row import ComponentRow
-from ui.tabs.costing.costing.bom_tree      import BomTree
+from ui.tabs.costing.shared.component_row import ComponentRow
+from ui.tabs.costing.shared.bom_tree      import BomTree
 from ui.events import bus
 
 from .product_form  import _FormPanel

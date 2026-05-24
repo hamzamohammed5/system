@@ -13,7 +13,7 @@ from models.costing import calc_machine_op_cost
 from ui.helpers import (
     make_table, buttons_row, section_label, confirm_delete, danger_button,
 )
-from ui.tabs.costing.costing.bulk_replace.bulk_replace_dialog import BulkReplaceDialog
+from ui.tabs.costing.shared.bulk_replace.bulk_replace_dialog import BulkReplaceDialog
 from ui.widgets.shared.filter_bar import FilterBar
 from ui.events import bus
 from .machine_op_form import _MachineOpForm

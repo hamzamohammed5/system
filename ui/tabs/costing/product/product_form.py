@@ -18,10 +18,10 @@ from db.costing.bom_scenarios_repo import (
     fetch_bom_for_scenario, replace_bom_for_scenario,
 )
 from ui.helpers import success_button
-from ui.tabs.costing.costing.component_row    import ComponentRow
+from ui.tabs.costing.shared.component_row    import ComponentRow
 from ui.widgets.shared.category_manager import CategoryCombo
 from ui.widgets.shared.scrollable_form  import wrap_in_scroll
-from ui.tabs.costing.costing.bom_scenarios_panel import _BomScenariosPanel
+from ui.tabs.costing.shared.bom_scenarios_panel import _BomScenariosPanel
 from ui.events import bus
 
 
