@@ -3,47 +3,52 @@ ui/tabs/costing/product_tab.py
 ================================
 ProductTab — التبويب الرئيسي للمنتجات (نصف مصنع / منتج نهائي).
 
+يستخدم TabSectionBase للنمط الموحد.
+
 التقسيم:
-  product_form.py       → _FormPanel
-  product_table.py      → _ProductTable, _WarningBar
-  product_main_panel.py → _ProductMainPanel, _catalog_for_component_row
-  product_tab.py        → ProductTab  (هذا الملف)
+  product/product_form.py        → _FormPanel
+  product/product_table.py       → _ProductTable, _WarningBar
+  product/product_main_panel.py  → _ProductMainPanel
+  product_tab.py                 → ProductTab  (هذا الملف)
 """
 
-from PyQt5.QtWidgets import QWidget, QVBoxLayout, QTabWidget
+from PyQt5.QtWidgets import QTabWidget
 
-from db.shared.connection import get_connection
-from ui.widgets.shared.category_manager import CategoryManager
+from ui.widgets.shared.tab_section_base  import TabSectionBase
+from ui.widgets.shared.category_manager  import CategoryManager
 
 from .product.product_main_panel import _ProductMainPanel
 
-_PRODUCT_SCOPE = {
+_SCOPE_MAP = {
     "semi":  "semi",
     "final": "final",
 }
 
 
-class ProductTab(QWidget):
+class ProductTab(TabSectionBase):
+    """
+    التبويب الرئيسي للمنتجات.
+
+    المعاملات:
+        product_type : "semi" أو "final"
+
+    ملاحظة: product_type يجب أن يُضبط قبل استدعاء super().__init__()
+    لأن TabSectionBase يستدعي _build_tabs مباشرة.
+    """
+
     def __init__(self, product_type: str, parent=None):
-        super().__init__(parent)
-        self.product_type = product_type
-        self.conn = get_connection()
-        self._build()
+        self.product_type = product_type  # ← قبل super()
+        super().__init__(parent=parent)
 
-    def _build(self):
-        root = QVBoxLayout(self)
-        root.setContentsMargins(0, 0, 0, 0)
+    def _build_tabs(self, tabs: QTabWidget):
+        scope = _SCOPE_MAP.get(self.product_type, self.product_type)
+        icon  = "🔧" if self.product_type == "semi" else "🏭"
 
-        scope = _PRODUCT_SCOPE.get(self.product_type, self.product_type)
-        tabs  = QTabWidget()
-
-        icon       = "🔧" if self.product_type == "semi" else "🏭"
-        label_main = f"{icon}  المنتجات"
-        tabs.addTab(_ProductMainPanel(self.conn, self.product_type), label_main)
-        tabs.addTab(CategoryManager(self.conn, scope=scope), "🏷️  التصنيفات")
-
-        root.addWidget(tabs)
-
-    def closeEvent(self, event):
-        self.conn.close()
-        super().closeEvent(event)
+        tabs.addTab(
+            _ProductMainPanel(self.conn, self.product_type),
+            f"{icon}  المنتجات",
+        )
+        tabs.addTab(
+            CategoryManager(self.conn, scope=scope),
+            "🏷️  التصنيفات",
+        )

@@ -1,10 +1,17 @@
 """
 ui/tabs/costing/product/product_main_panel.py
-=======================================
+===============================================
 _ProductMainPanel — اللوحة الرئيسية: فورم + جدول + BOM tree + تحذير.
 
-الإصلاح: استخدام _live_conn() بدل self.conn مباشرة في كل العمليات
-عشان لما تتغير الشركة النشطة ويتغلق الـ connection القديم يشتغل صح.
+التقسيم الداخلي:
+  _catalog_provider.py  → build_product_catalog
+  _orphan_handler.py    → _OrphanHandler
+  product_form.py       → _FormPanel
+  product_table.py      → _ProductTable, _WarningBar
+  bom_tree.py           → BomTree
+
+الإصلاح: استخدام _live_conn() في كل العمليات عشان لما تتغير
+الشركة النشطة ويتغلق الـ connection القديم يشتغل صح.
 """
 
 from PyQt5.QtWidgets import (
@@ -12,63 +19,42 @@ from PyQt5.QtWidgets import (
 )
 from PyQt5.QtCore import Qt
 
-from db.shared.items_repo import (
-    fetch_item, delete_item,
-    fetch_orphan_bom_rows, delete_orphan_bom_rows,
-    cleanup_empty_products_after_orphan_fix,
-)
-from ui.helpers import confirm_delete
+from db.shared.items_repo import fetch_item, delete_item
+from ui.helpers            import confirm_delete
 from ui.tabs.costing.shared.component_row import ComponentRow
 from ui.tabs.costing.shared.bom_tree      import BomTree
 from ui.events import bus
 
 from .product_form  import _FormPanel
 from .product_table import _ProductTable, _WarningBar
+from ._catalog_provider import build_product_catalog
+from ._orphan_handler   import _OrphanHandler
 
-_SPLITTER_STYLE = """
-    QSplitter::handle {
-        background: #e0e0e0;
-        border-top: 1px solid #ccc;
-    }
-    QSplitter::handle:hover { background: #bbdefb; }
+from ui.app_settings import _C
+
+_SPLITTER_STYLE = f"""
+    QSplitter::handle {{
+        background: {_C['border']};
+        border-top: 1px solid {_C['border_med']};
+    }}
+    QSplitter::handle:hover {{ background: {_C['accent_mid']}; }}
+    QSplitter::handle:pressed {{ background: {_C['accent']}; }}
 """
 
 
-def _catalog_for_component_row(conn) -> dict:
-    from db.shared.items_repo       import fetch_items_by_type
-    from db.costing.operations_repo import fetch_all_labor_ops, fetch_all_machine_ops
-
-    result: dict[str, list] = {
-        "raw": [], "semi": [], "labor_op": [], "machine_op": []
-    }
-    for row in fetch_items_by_type(conn, "raw"):
-        result["raw"].append((
-            row["id"], row["name"], row["category_id"],
-            row["category_name"] or None,
-        ))
-    for row in fetch_items_by_type(conn, "semi"):
-        result["semi"].append((
-            row["id"], row["name"], row["category_id"],
-            row["category_name"] or None,
-        ))
-    for op in fetch_all_labor_ops(conn):
-        result["labor_op"].append((
-            op["id"], op["name"], op["category_id"],
-            op["category_name"] or None,
-        ))
-    for op in fetch_all_machine_ops(conn):
-        result["machine_op"].append((
-            op["id"], op["name"], op["category_id"],
-            op["category_name"] or None,
-        ))
-    return result
-
-
 class _ProductMainPanel(QWidget):
+    """
+    اللوحة الرئيسية للمنتجات — تجمع بين:
+      - الفورم (إضافة / تعديل) في الأعلى
+      - جدول المنتجات في المنتصف
+      - شجرة BOM في الأسفل
+    """
+
     def __init__(self, conn, product_type: str, parent=None):
         super().__init__(parent)
         self.conn         = conn
         self.product_type = product_type
+        self._orphan      = _OrphanHandler(parent=self)
         self._build()
         bus.data_changed.connect(self._on_data_changed)
 
@@ -84,11 +70,13 @@ class _ProductMainPanel(QWidget):
         from db.companies.company_state import company_state
         return company_state.get_erp_conn()
 
-    def _get_catalog(self):
+    def _get_catalog(self) -> dict:
         try:
-            return _catalog_for_component_row(self._live_conn())
+            return build_product_catalog(self._live_conn())
         except Exception:
             return {"raw": [], "semi": [], "labor_op": [], "machine_op": []}
+
+    # ── بناء الواجهة ──────────────────────────────────────
 
     def _build(self):
         root = QVBoxLayout(self)
@@ -99,28 +87,33 @@ class _ProductMainPanel(QWidget):
         splitter.setHandleWidth(6)
         splitter.setStyleSheet(_SPLITTER_STYLE)
 
+        # ── فورم الإضافة / التعديل ──
         self._form = _FormPanel(self.conn, self.product_type, self._get_catalog)
         bus.data_changed.connect(self._refresh_form_catalog)
 
-        mid_widget = QWidget()
-        mid_layout = QVBoxLayout(mid_widget)
+        # ── منطقة الجدول + التحذير ──
+        from PyQt5.QtWidgets import QWidget as _W
+        mid_widget  = _W()
+        mid_layout  = QVBoxLayout(mid_widget)
         mid_layout.setContentsMargins(0, 0, 0, 0)
         mid_layout.setSpacing(0)
 
         self._warning = _WarningBar(
             on_fix=self._fix_orphans,
-            on_edit=self._edit_selected
+            on_edit=self._edit_selected,
         )
         mid_layout.addWidget(self._warning)
 
         self._prod_table = _ProductTable(
-            self.conn, self.product_type,
+            self.conn,
+            self.product_type,
             on_select=self._on_product_selected,
             on_edit=self._edit_selected,
-            on_delete=self._delete_product
+            on_delete=self._delete_product,
         )
         mid_layout.addWidget(self._prod_table)
 
+        # ── شجرة BOM ──
         self._bom_tree = BomTree()
 
         splitter.addWidget(self._form)
@@ -133,29 +126,33 @@ class _ProductMainPanel(QWidget):
 
         root.addWidget(splitter)
 
+    # ── أحداث البيانات ────────────────────────────────────
+
     def _on_data_changed(self):
         pid = self._prod_table.selected_pid()
-        if pid is not None:
-            try:
-                conn = self._live_conn()
-                self._check_orphans(pid, conn)
-                self._bom_tree.load(conn, pid)
-            except Exception:
-                pass
+        if pid is None:
+            return
+        try:
+            conn = self._live_conn()
+            self._check_orphans(pid, conn)
+            self._bom_tree.load(conn, pid)
+        except Exception:
+            pass
 
-    def _on_product_selected(self, pid):
+    def _on_product_selected(self, pid: int | None):
         if pid is None:
             self._bom_tree.clear_tree()
             self._warning.setVisible(False)
-        else:
-            try:
-                conn = self._live_conn()
-                self._check_orphans(pid, conn)
-                self._bom_tree.load(conn, pid)
-            except Exception:
-                pass
+            return
+        try:
+            conn = self._live_conn()
+            self._check_orphans(pid, conn)
+            self._bom_tree.load(conn, pid)
+        except Exception:
+            pass
 
     def _refresh_form_catalog(self):
+        """يحدث الـ catalog في كل ComponentRow موجود في الفورم."""
         try:
             new_catalog = self._get_catalog()
         except Exception:
@@ -169,13 +166,15 @@ class _ProductMainPanel(QWidget):
             if isinstance(w, ComponentRow):
                 w.refresh_catalog(new_catalog)
 
-    def _check_orphans(self, pid, conn=None):
+    def _check_orphans(self, pid: int, conn=None):
         if conn is None:
             conn = self._live_conn()
-        orphans = fetch_orphan_bom_rows(conn, pid)
+        orphans = self._orphan.fetch(conn, pid)
         item    = fetch_item(conn, pid)
         name    = item["name"] if item else f"ID {pid}"
         self._warning.show_orphans(orphans, name)
+
+    # ── إجراءات ──────────────────────────────────────────
 
     def _fix_orphans(self):
         pid = self._prod_table.selected_pid()
@@ -186,39 +185,14 @@ class _ProductMainPanel(QWidget):
         except Exception as e:
             QMessageBox.warning(self, "خطأ", str(e))
             return
+        self._orphan.fix(
+            conn, pid,
+            warning_bar=self._warning,
+            bom_tree=self._bom_tree,
+            form=self._form,
+        )
 
-        orphans = fetch_orphan_bom_rows(conn, pid)
-        orphan_names = [
-            o["child_name"] or f"ID:{o['child_id']}" for o in orphans
-        ]
-        item      = fetch_item(conn, pid)
-        prod_name = item["name"] if item else f"ID {pid}"
-
-        n = delete_orphan_bom_rows(conn, pid)
-        self._warning.setVisible(False)
-        self._bom_tree.load(conn, pid)
-
-        auto_deleted = cleanup_empty_products_after_orphan_fix(conn, [pid])
-        bus.data_changed.emit()
-
-        if auto_deleted:
-            self._form.reset()
-            self._bom_tree.clear_tree()
-            QMessageBox.information(
-                self, "تم — وتم حذف المنتج",
-                f"✅ تم حذف {n} مكوّن ناقص:\n"
-                + "\n".join(f"  • {nm}" for nm in orphan_names)
-                + f"\n\nبما أن «{prod_name}» لم يعد يحتوي على أي مكونات،\n"
-                  "تم حذفه تلقائياً."
-            )
-        else:
-            QMessageBox.information(
-                self, "تم",
-                f"✅ تم حذف {n} مكوّن ناقص:\n"
-                + "\n".join(f"  • {nm}" for nm in orphan_names)
-            )
-
-    def _edit_selected(self, pid=None):
+    def _edit_selected(self, pid: int | None = None):
         if pid is None:
             pid = self._prod_table.selected_pid()
         if pid is None:
@@ -227,7 +201,7 @@ class _ProductMainPanel(QWidget):
         self._warning.setVisible(False)
         self._form.load_product(pid)
 
-    def _delete_product(self, pid):
+    def _delete_product(self, pid: int | None):
         if pid is None:
             QMessageBox.information(self, "تنبيه", "اختر منتجاً أولاً")
             return
@@ -236,9 +210,11 @@ class _ProductMainPanel(QWidget):
         except Exception as e:
             QMessageBox.warning(self, "خطأ", str(e))
             return
+
         item = fetch_item(conn, pid)
         if not item:
             return
+
         if confirm_delete(self, item["name"]):
             if self._form.is_editing and self._form._editing_id == pid:
                 self._form.reset()

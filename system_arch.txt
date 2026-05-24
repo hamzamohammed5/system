@@ -1,5 +1,5 @@
 File Tree Snapshot
-Generated : 2026-05-24 07:46:58
+Generated : 2026-05-24 08:30:19
 Source    : D:\My Workspace\Hg\Alhabaar\accountant\system
 Extensions: .py
 ────────────────────────────────────────────────────────────
@@ -131,14 +131,18 @@ system/
 │   │   │   │   ├── machine_op_table.py
 │   │   │   │   └── machine_table.py
 │   │   │   ├── product/
+│   │   │   │   ├── _catalog_provider.py
+│   │   │   │   ├── _orphan_handler.py
 │   │   │   │   ├── product_form.py
 │   │   │   │   ├── product_main_panel.py
 │   │   │   │   └── product_table.py
 │   │   │   ├── raw/
 │   │   │   │   ├── raw_input_panel.py
+│   │   │   │   ├── raw_section.py
 │   │   │   │   └── raw_table_panel.py
 │   │   │   ├── shared/
 │   │   │   │   ├── bulk_replace/
+│   │   │   │   │   ├── _operation_section.py
 │   │   │   │   │   ├── bulk_replace_dialog.py
 │   │   │   │   │   ├── bulk_replace_helpers.py
 │   │   │   │   │   └── bulk_replace_products_panel.py
@@ -258,6 +262,8 @@ system/
 │   │       ├── category_combo.py
 │   │       ├── category_form.py
 │   │       ├── category_manager.py
+│   │       ├── connection_mixin.py
+│   │       ├── dialog_base.py
 │   │       ├── filter_bar.py
 │   │       ├── flexible_text.py
 │   │       ├── flow_layout.py
@@ -270,6 +276,7 @@ system/
 │   │       ├── searchable_combo.py
 │   │       ├── splitter_scroll_guard.py
 │   │       ├── splitter_utils.py
+│   │       ├── tab_section_base.py
 │   │       ├── table_utils.py
 │   │       └── unit_combo.py
 │   ├── app_settings.py
