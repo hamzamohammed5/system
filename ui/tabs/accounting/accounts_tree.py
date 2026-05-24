@@ -2,11 +2,7 @@
 ui/tabs/accounting/accounts_tree.py
 =====================================
 AccountsTreePanel — شجرة الحسابات مع فورم الإضافة والتعديل.
-
-تغييرات (v2):
-  - يستمع لـ bus.company_data_changed بدل bus.data_changed العام.
-  - يتحقق من الـ company_id قبل إعادة التحميل لعزل بيانات الشركات.
-  - _AccountForm و _GroupFilterCombo يستخدمان نفس الـ company_id للعزل.
+SafeConnMixin (v3): _get_safe_conn() بدل self.conn في كل query.
 """
 
 from PyQt5.QtWidgets import (
@@ -25,6 +21,7 @@ from db.accounting.accounting_repo import (
 from db.accounting.accounting_schema import TYPE_AR, EQUITY_TYPES
 from ui.helpers import section_label, danger_button, confirm_delete
 from ui.events  import bus
+from ui.tabs.accounting.safe_conn_mixin import SafeConnMixin
 
 from .tree._tree_builder import (
     rows_to_tree, filter_by_group, add_acc_nodes, add_type_header, EQUITY_COLOR,
@@ -33,28 +30,20 @@ from .tree._account_form  import _AccountForm
 from .tree._group_filter  import _GroupFilterCombo
 
 
-def _get_current_company_id():
-    try:
-        from db.companies.company_state import company_state
-        return company_state.company_id if company_state.is_ready else None
-    except Exception:
-        return None
-
-
-class AccountsTreePanel(QWidget):
+class AccountsTreePanel(SafeConnMixin, QWidget):
     def __init__(self, conn, acc_types: list, title: str, parent=None):
         super().__init__(parent)
-        self.conn        = conn
+        self._init_safe_conn(conn, "accounting")
         self.acc_types   = acc_types
         self.title       = title
         self._loading    = False
-        self._company_id = _get_current_company_id()
+        self._company_id = self._get_company_id()
         self._build()
         self._load()
         bus.company_data_changed.connect(self._on_company_event)
 
     def _on_company_event(self, company_id: int):
-        if company_id == self._company_id:
+        if self._on_company_event_safe(company_id):
             self._load()
 
     def _build(self):
@@ -65,7 +54,6 @@ class AccountsTreePanel(QWidget):
         splitter = QSplitter(Qt.Horizontal)
         splitter.setHandleWidth(5)
 
-        # ══ يسار: الشجرة ══
         left = QWidget()
         ll   = QVBoxLayout(left)
         ll.setContentsMargins(10, 8, 6, 10)
@@ -74,7 +62,7 @@ class AccountsTreePanel(QWidget):
         ll.addWidget(section_label(f"── {self.title} ──"))
 
         filter_row = QHBoxLayout()
-        self.cmb_group_filter = _GroupFilterCombo(self.conn, self.acc_types)
+        self.cmb_group_filter = _GroupFilterCombo(self._get_safe_conn(), self.acc_types)
         self.cmb_group_filter.setMinimumHeight(26)
         self.cmb_group_filter.currentIndexChanged.connect(self._on_filter_changed)
         filter_row.addWidget(QLabel("🏷"))
@@ -106,46 +94,38 @@ class AccountsTreePanel(QWidget):
 
         splitter.addWidget(left)
 
-        # ══ يمين: فورم ══
-        self._form = _AccountForm(self.conn, self.acc_types)
+        self._form = _AccountForm(self._get_safe_conn(), self.acc_types)
         splitter.addWidget(self._form)
         splitter.setSizes([420, 280])
 
         main_layout.addWidget(splitter)
-
-    # ══════════════════════════════════════════════════════
-    # فلتر
-    # ══════════════════════════════════════════════════════
 
     def _on_filter_changed(self):
         if self._loading:
             return
         self._build_tree()
 
-    # ══════════════════════════════════════════════════════
-    # تحميل البيانات
-    # ══════════════════════════════════════════════════════
-
     def _load(self):
         if self._loading:
             return
         self._loading = True
         try:
-            self.cmb_group_filter.refresh()
-            self._form.refresh_group_combos()
+            conn = self._get_safe_conn()
+            self.cmb_group_filter.refresh(conn=conn)
+            self._form.refresh_group_combos(conn=conn)
             self._build_tree()
         finally:
             self._loading = False
 
     def _build_tree(self):
-        """يبني الشجرة مع تجميع أنواع حقوق الملكية تحت عقدة واحدة."""
         self.tree.clear()
+        conn       = self._get_safe_conn()
         gid_filter = self.cmb_group_filter.currentData()
 
         all_nodes_by_type: dict[str, list] = {}
         for acc_type in self.acc_types:
             try:
-                rows = fetch_all_accounts(self.conn, acc_type)
+                rows = fetch_all_accounts(conn, acc_type)
             except Exception as e:
                 print(f"[AccountsTreePanel] fetch error ({acc_type}): {e}")
                 rows = []
@@ -153,7 +133,7 @@ class AccountsTreePanel(QWidget):
                 continue
             nodes = rows_to_tree(rows)
             if gid_filter is not None:
-                nodes = filter_by_group(self.conn, nodes, gid_filter)
+                nodes = filter_by_group(conn, nodes, gid_filter)
             if nodes:
                 all_nodes_by_type[acc_type] = nodes
 
@@ -164,7 +144,7 @@ class AccountsTreePanel(QWidget):
             self.tree.addTopLevelItem(empty)
             return
 
-        non_equity = [t for t in self.acc_types if t not in EQUITY_TYPES]
+        non_equity    = [t for t in self.acc_types if t not in EQUITY_TYPES]
         equity_present = [
             t for t in self.acc_types
             if t in EQUITY_TYPES and t in all_nodes_by_type
@@ -173,7 +153,7 @@ class AccountsTreePanel(QWidget):
         for acc_type in non_equity:
             if acc_type not in all_nodes_by_type:
                 continue
-            add_type_header(self.tree, acc_type, all_nodes_by_type[acc_type], self.conn)
+            add_type_header(self.tree, acc_type, all_nodes_by_type[acc_type], conn)
 
         if equity_present:
             equity_item = QTreeWidgetItem()
@@ -205,16 +185,12 @@ class AccountsTreePanel(QWidget):
                 sub_item.setFont(1, sf)
                 sub_item.setForeground(1, QColor(TYPE_COLORS.get(acc_type, EQUITY_COLOR)))
                 equity_item.addChild(sub_item)
-                add_acc_nodes(self.conn, self.tree, nodes, sub_item)
+                add_acc_nodes(conn, self.tree, nodes, sub_item)
                 sub_item.setExpanded(True)
 
             equity_item.setExpanded(True)
 
         self.tree.expandToDepth(2)
-
-    # ══════════════════════════════════════════════════════
-    # CRUD
-    # ══════════════════════════════════════════════════════
 
     def _selected_id(self):
         items = self.tree.selectedItems()
@@ -233,13 +209,14 @@ class AccountsTreePanel(QWidget):
         aid = self._selected_id()
         if not aid:
             return
-        acc = fetch_account(self.conn, aid)
+        conn = self._get_safe_conn()
+        acc  = fetch_account(conn, aid)
         if not acc:
             return
 
         def get_all_descendants(account_id: int) -> list:
             result = [account_id]
-            children = self.conn.execute(
+            children = conn.execute(
                 "SELECT id FROM accounts WHERE parent_id=?", (account_id,)
             ).fetchall()
             for child in children:
@@ -250,7 +227,7 @@ class AccountsTreePanel(QWidget):
         placeholders = ",".join("?" * len(all_ids))
 
         try:
-            has_lines = self.conn.execute(
+            has_lines = conn.execute(
                 f"SELECT COUNT(*) as c FROM journal_lines "
                 f"WHERE account_id IN ({placeholders})",
                 all_ids
@@ -283,7 +260,7 @@ class AccountsTreePanel(QWidget):
 
         try:
             for del_id in reversed(all_ids):
-                self.conn.execute("DELETE FROM accounts WHERE id=?", (del_id,))
+                conn.execute("DELETE FROM accounts WHERE id=?", (del_id,))
             bus.company_data_changed.emit(self._company_id or 0)
         except Exception as e:
             QMessageBox.critical(self, "خطأ", f"فشل الحذف:\n{e}")

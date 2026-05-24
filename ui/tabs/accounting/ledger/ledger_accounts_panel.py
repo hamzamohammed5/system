@@ -3,9 +3,11 @@ ui/tabs/accounting/ledger/ledger_accounts_panel.py
 ===================================================
 _AccountsPanel — قائمة الحسابات في دفتر الأستاذ.
 
-تغييرات (v2):
-  - يستمع لـ bus.company_data_changed بدل bus.data_changed العام.
-  - يتحقق من الـ company_id قبل إعادة التحميل لعزل بيانات الشركات.
+إصلاحات (v3 — SafeConnMixin):
+  - SafeConnMixin بدل self.conn اليدوي.
+  - _get_safe_conn() في كل query بدل self.conn المحفوظ.
+  - لا يستمع للـ bus مباشرة — LedgerTab هو المسؤول ويستدعي _refresh_accounts().
+  - _refresh_accounts() public عشان LedgerTab يقدر يستدعيها.
 """
 
 from PyQt5.QtWidgets import (
@@ -18,32 +20,18 @@ from PyQt5.QtGui  import QColor
 
 from db.accounting.accounting_repo import fetch_all_accounts
 from db.accounting.accounting_schema import TYPE_AR
-from ui.events import bus
+from ui.tabs.accounting.safe_conn_mixin import SafeConnMixin
 from ui.tabs.accounting.helpers import TYPE_COLORS
 
 
-def _get_current_company_id():
-    try:
-        from db.companies.company_state import company_state
-        return company_state.company_id if company_state.is_ready else None
-    except Exception:
-        return None
-
-
-class _AccountsPanel(QWidget):
+class _AccountsPanel(SafeConnMixin, QWidget):
     def __init__(self, conn, on_select, parent=None):
         super().__init__(parent)
-        self.conn        = conn
+        self._init_safe_conn(conn, "accounting")
         self._on_select  = on_select
         self._all        = []
-        self._company_id = _get_current_company_id()
         self._build()
         self._refresh_accounts()
-        bus.company_data_changed.connect(self._on_company_event)
-
-    def _on_company_event(self, company_id: int):
-        if company_id == self._company_id:
-            self._refresh_accounts()
 
     def _build(self):
         root = QVBoxLayout(self)
@@ -52,13 +40,9 @@ class _AccountsPanel(QWidget):
 
         hdr = QLabel("📚  الحسابات")
         hdr.setStyleSheet("""
-            font-weight: bold;
-            font-size: 13px;
-            color: #1565c0;
-            background: #e8f4fd;
-            border: 1px solid #90caf9;
-            border-radius: 6px;
-            padding: 6px 12px;
+            font-weight: bold; font-size: 13px; color: #1565c0;
+            background: #e8f4fd; border: 1px solid #90caf9;
+            border-radius: 6px; padding: 6px 12px;
         """)
         hdr.setAlignment(Qt.AlignCenter)
         root.addWidget(hdr)
@@ -127,7 +111,15 @@ class _AccountsPanel(QWidget):
         root.addWidget(self.lbl_count)
 
     def _refresh_accounts(self):
-        self._all = fetch_all_accounts(self.conn)
+        """
+        يُعيد تحميل الحسابات — يُستدعى عند البناء وعند تغيير الشركة.
+        _get_safe_conn() يضمن استخدام connection الشركة النشطة دايماً.
+        """
+        try:
+            self._all = fetch_all_accounts(self._get_safe_conn())
+        except Exception as e:
+            print(f"[_AccountsPanel] _refresh_accounts error: {e}")
+            self._all = []
         self._filter_accounts()
 
     def _filter_accounts(self):
@@ -136,6 +128,9 @@ class _AccountsPanel(QWidget):
 
         self.lst.clear()
         count = 0
+
+        # _get_safe_conn() هنا يضمن أرصدة الشركة الصح
+        conn = self._get_safe_conn()
 
         for acc in self._all:
             if not acc["is_leaf"]:
@@ -146,7 +141,7 @@ class _AccountsPanel(QWidget):
                 continue
 
             try:
-                bal_row = self.conn.execute("""
+                bal_row = conn.execute("""
                     SELECT COALESCE(SUM(debit)-SUM(credit), 0) AS bal
                     FROM journal_lines WHERE account_id=?
                 """, (acc["id"],)).fetchone()

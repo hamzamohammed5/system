@@ -1,11 +1,8 @@
 """
 ui/tabs/accounting/group_manager.py
 =====================================
-_GroupManagerPanel — إدارة تصنيفات الحسابات (شجرة + فورم).
-
-تغييرات (v2):
-  - يستمع لـ bus.company_data_changed بدل bus.data_changed العام.
-  - يتحقق من الـ company_id قبل إعادة التحميل لعزل بيانات الشركات.
+_GroupManagerPanel — إدارة تصنيفات الحسابات.
+SafeConnMixin (v3): _get_safe_conn() بدل self.conn في كل query.
 """
 
 from PyQt5.QtWidgets import (
@@ -25,29 +22,22 @@ from db.accounting.accounting_repo import (
 from db.accounting.accounting_schema import TYPE_AR
 from ui.helpers import section_label, danger_button
 from ui.events  import bus
+from ui.tabs.accounting.safe_conn_mixin import SafeConnMixin
 
 
-def _get_current_company_id():
-    try:
-        from db.companies.company_state import company_state
-        return company_state.company_id if company_state.is_ready else None
-    except Exception:
-        return None
-
-
-class _GroupManagerPanel(QWidget):
+class _GroupManagerPanel(SafeConnMixin, QWidget):
     def __init__(self, conn, acc_type: str, parent=None):
         super().__init__(parent)
-        self.conn        = conn
+        self._init_safe_conn(conn, "accounting")
         self.acc_type    = acc_type
         self._editing_id = None
-        self._company_id = _get_current_company_id()
+        self._company_id = self._get_company_id()
         self._build()
         self._load()
         bus.company_data_changed.connect(self._on_company_event)
 
     def _on_company_event(self, company_id: int):
-        if company_id == self._company_id:
+        if self._on_company_event_safe(company_id):
             self._load()
 
     def _build(self):
@@ -138,25 +128,24 @@ class _GroupManagerPanel(QWidget):
         fl.addRow(btn_w)
         root.addWidget(grp)
 
-    # ── helpers ──────────────────────────────────────────
-
     def _make_combo(self):
         from PyQt5.QtWidgets import QComboBox
-        c = QComboBox()
-        return c
+        return QComboBox()
 
     def _load(self):
+        conn = self._get_safe_conn()
         self.tree.clear()
-        rows = fetch_all_groups(self.conn, self.acc_type)
+        rows = fetch_all_groups(conn, self.acc_type)
         tree = build_group_tree(rows)
         self._add_tree_nodes(tree, None)
         self.tree.expandAll()
         self._refresh_parent_combo()
 
     def _add_tree_nodes(self, nodes, parent):
+        conn = self._get_safe_conn()
         for node in nodes:
             try:
-                count = self.conn.execute(
+                count = conn.execute(
                     "SELECT COUNT(*) as c FROM accounts WHERE group_id=? AND is_leaf=1",
                     (node["id"],)
                 ).fetchone()["c"]
@@ -175,10 +164,11 @@ class _GroupManagerPanel(QWidget):
                 self._add_tree_nodes(node["children"], item)
 
     def _refresh_parent_combo(self, exclude_id=None):
+        conn = self._get_safe_conn()
         self.cmb_parent.blockSignals(True)
         self.cmb_parent.clear()
         self.cmb_parent.addItem("— بدون أب (رئيسي) —", None)
-        rows = fetch_all_groups(self.conn, self.acc_type)
+        rows = fetch_all_groups(conn, self.acc_type)
         tree = build_group_tree(rows)
         self._add_parent_nodes(tree, 0, exclude_id)
         self.cmb_parent.blockSignals(False)
@@ -210,7 +200,7 @@ class _GroupManagerPanel(QWidget):
         if not name:
             QMessageBox.warning(self, "تنبيه", "أدخل اسم التصنيف")
             return
-        insert_group(self.conn, name, self.acc_type,
+        insert_group(self._get_safe_conn(), name, self.acc_type,
                      self.cmb_parent.currentData(), self._color)
         self._reset()
         bus.company_data_changed.emit(self._company_id or 0)
@@ -220,7 +210,7 @@ class _GroupManagerPanel(QWidget):
         if not gid:
             QMessageBox.information(self, "تنبيه", "اختر تصنيفًا أولًا")
             return
-        grp = fetch_group(self.conn, gid)
+        grp = fetch_group(self._get_safe_conn(), gid)
         if not grp:
             return
         self._editing_id = gid
@@ -243,18 +233,19 @@ class _GroupManagerPanel(QWidget):
         name = self.inp_name.text().strip()
         if not name or not self._editing_id:
             return
-        update_group(self.conn, self._editing_id, name,
+        update_group(self._get_safe_conn(), self._editing_id, name,
                      self.cmb_parent.currentData(), self._color)
         self._reset()
         bus.company_data_changed.emit(self._company_id or 0)
 
     def _delete(self):
-        gid = self._selected_id()
+        gid  = self._selected_id()
         if not gid:
             return
-        grp = fetch_group(self.conn, gid)
+        conn = self._get_safe_conn()
+        grp  = fetch_group(conn, gid)
         try:
-            count = self.conn.execute(
+            count = conn.execute(
                 "SELECT COUNT(*) as c FROM accounts WHERE group_id=?", (gid,)
             ).fetchone()["c"]
         except Exception:
@@ -264,7 +255,7 @@ class _GroupManagerPanel(QWidget):
             msg += f"\n⚠️ {count} حساب سيفقد تصنيفه."
         if QMessageBox.question(self, "تأكيد", msg,
                                 QMessageBox.Yes | QMessageBox.No) == QMessageBox.Yes:
-            delete_group(self.conn, gid)
+            delete_group(conn, gid)
             bus.company_data_changed.emit(self._company_id or 0)
 
     def _reset(self):

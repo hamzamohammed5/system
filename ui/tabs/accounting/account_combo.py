@@ -2,13 +2,7 @@
 ui/tabs/accounting/account_combo.py
 =====================================
 _AccountCombo — Combo قابل للبحث والفلترة لاختيار الحسابات.
-- عرض الـ badge (DR↑/CR↑) نسبي من حجم الخط الأساسي
-
-تغييرات (v3):
-  - إصلاح race condition في QTimer.singleShot:
-    كانت ممكنة تشتغل بعد تغيير الشركة وتلوّث الـ combo بداتا شركة قديمة.
-    الحل: نخزن snapshot من company_id قبل الـ timer،
-    ونتحقق منه جوا الـ callback قبل ما نكمل.
+SafeConnMixin (v4): _get_safe_conn() بدل self.conn في كل query.
 """
 
 from PyQt5.QtWidgets import (
@@ -25,40 +19,28 @@ from db.accounting.accounting_repo import (
 from db.accounting.accounting_schema import TYPE_AR
 from ui.events import bus
 from ui.font_utils import badge_style, badge_width
+from ui.tabs.accounting.safe_conn_mixin import SafeConnMixin
 from .helpers import TYPE_COLORS
 
 
-def _get_current_company_id() -> int | None:
-    try:
-        from db.companies.company_state import company_state
-        return company_state.company_id if company_state.is_ready else None
-    except Exception:
-        return None
-
-
-class _AccountCombo(QWidget):
+class _AccountCombo(SafeConnMixin, QWidget):
     def __init__(self, conn, acc_types: list = None, parent=None):
         super().__init__(parent)
-        self.conn        = conn
+        self._init_safe_conn(conn, "accounting")
         self.acc_types   = acc_types
         self._all_accs   = []
-        self._company_id = _get_current_company_id()
+        self._company_id = self._get_company_id()
         self._build()
         self.refresh()
         bus.company_data_changed.connect(self._on_company_event)
 
     def _on_company_event(self, company_id: int):
-        """يُعيد التحميل فقط لو الحدث من نفس شركتنا."""
-        if company_id == self._company_id:
-            # --- إصلاح race condition ---
-            # نحفظ الـ company_id الحالي قبل الـ timer
-            # لو تغيّرت الشركة خلال فترة الانتظار نلغي العملية
+        if self._on_company_event_safe(company_id):
             snapshot_id = company_id
             QTimer.singleShot(0, lambda: self._safe_refresh(snapshot_id))
 
     def _safe_refresh(self, snapshot_id: int):
-        """يتحقق من الشركة قبل إعادة التحميل لتجنب race condition."""
-        if _get_current_company_id() == snapshot_id:
+        if self._get_company_id() == snapshot_id:
             self.refresh()
 
     def _build(self):
@@ -96,20 +78,19 @@ class _AccountCombo(QWidget):
         self._load_accounts()
 
     def _load_groups(self):
+        conn = self._get_safe_conn()
         self.cmb_group.blockSignals(True)
         prev = self.cmb_group.currentData()
         self.cmb_group.clear()
         self.cmb_group.addItem("— كل التصنيفات —", None)
-
         try:
-            all_groups  = fetch_all_groups(self.conn)
-            seen_types  = set(self.acc_types) if self.acc_types else set(TYPE_AR.keys())
-            groups      = [g for g in all_groups if g["acc_type"] in seen_types]
-            tree        = build_group_tree(groups)
+            all_groups = fetch_all_groups(conn)
+            seen_types = set(self.acc_types) if self.acc_types else set(TYPE_AR.keys())
+            groups     = [g for g in all_groups if g["acc_type"] in seen_types]
+            tree       = build_group_tree(groups)
             self._add_group_nodes(tree, depth=0)
         except Exception:
             pass
-
         for i in range(self.cmb_group.count()):
             if self.cmb_group.itemData(i) == prev:
                 self.cmb_group.setCurrentIndex(i)
@@ -127,8 +108,9 @@ class _AccountCombo(QWidget):
                 self._add_group_nodes(node["children"], depth + 1)
 
     def _load_accounts(self):
+        conn = self._get_safe_conn()
         try:
-            self._all_accs = list(fetch_leaf_accounts(self.conn))
+            self._all_accs = list(fetch_leaf_accounts(conn))
             if self.acc_types:
                 self._all_accs = [a for a in self._all_accs if a["type"] in self.acc_types]
         except Exception:
@@ -136,6 +118,7 @@ class _AccountCombo(QWidget):
         self._apply_filter()
 
     def _apply_filter(self):
+        conn    = self._get_safe_conn()
         prev_id = self.current_account_id()
         q       = self.inp_search.text().strip().lower()
         gid     = self.cmb_group.currentData()
@@ -145,11 +128,10 @@ class _AccountCombo(QWidget):
         self.cmb_account.addItem("— اختر الحساب —", None)
 
         last_type = None
-
         for acc in self._all_accs:
             if gid is not None:
                 try:
-                    desc = _get_group_descendants(self.conn, gid)
+                    desc = _get_group_descendants(conn, gid)
                     if acc["group_id"] not in desc:
                         continue
                 except Exception:
@@ -228,7 +210,7 @@ class _AccountCombo(QWidget):
             self.lbl_nb.setStyleSheet(badge_style())
             return
         try:
-            acc = fetch_account(self.conn, acc_id)
+            acc = fetch_account(self._get_safe_conn(), acc_id)
             if not acc:
                 return
             nb = get_normal_balance(acc["type"])

@@ -2,9 +2,7 @@
 ui/tabs/accounting/tree/_account_form.py
 ==================================================
 _AccountForm — فورم إضافة / تعديل حساب محاسبي.
-
-تغييرات (v2):
-  - يبعت bus.company_data_changed بدل bus.data_changed العام.
+SafeConnMixin (v3): _get_safe_conn() بدل self.conn.
 """
 
 from PyQt5.QtWidgets import (
@@ -22,6 +20,7 @@ from db.accounting.accounting_repo import (
 from db.accounting.accounting_schema import TYPE_AR
 from ui.helpers import danger_button
 from ui.events  import bus
+from ui.tabs.accounting.safe_conn_mixin import SafeConnMixin
 
 
 def _get_current_company_id():
@@ -33,7 +32,6 @@ def _get_current_company_id():
 
 
 def _emit_data_changed():
-    """يُطلق الحدث المقيّد بالشركة النشطة."""
     cid = _get_current_company_id()
     if cid is not None:
         bus.company_data_changed.emit(cid)
@@ -41,12 +39,10 @@ def _emit_data_changed():
         bus.data_changed.emit()
 
 
-class _AccountForm(QWidget):
-    """فورم إضافة وتعديل الحسابات على يمين الشجرة."""
-
+class _AccountForm(SafeConnMixin, QWidget):
     def __init__(self, conn, acc_types: list, parent=None):
         super().__init__(parent)
-        self.conn        = conn
+        self._init_safe_conn(conn, "accounting")
         self.acc_types   = acc_types
         self._editing_id = None
         self._build()
@@ -117,15 +113,16 @@ class _AccountForm(QWidget):
         root.addStretch()
         self.refresh_group_combos()
 
-    # ── Combo التصنيفات ──────────────────────────────────
-
-    def refresh_group_combos(self):
-        self._refresh_group_combo_for_type()
+    def refresh_group_combos(self, conn=None):
+        """يُستدعى من AccountsTreePanel عند تغيير الشركة."""
+        self._refresh_group_combo_for_type(conn=conn)
 
     def _on_type_changed(self):
         self._refresh_group_combo_for_type()
 
-    def _refresh_group_combo_for_type(self):
+    def _refresh_group_combo_for_type(self, conn=None):
+        if conn is None:
+            conn = self._get_safe_conn()
         acc_type = self.cmb_type.currentData()
         if not acc_type:
             return
@@ -134,7 +131,7 @@ class _AccountForm(QWidget):
         self.cmb_group.clear()
         self.cmb_group.addItem("— بدون تصنيف —", None)
         try:
-            rows = fetch_all_groups(self.conn, acc_type)
+            rows = fetch_all_groups(conn, acc_type)
             tree = build_group_tree(rows)
             self._add_group_nodes(tree, 0)
         except Exception as e:
@@ -157,9 +154,8 @@ class _AccountForm(QWidget):
             if node["children"]:
                 self._add_group_nodes(node["children"], depth + 1)
 
-    # ── CRUD ─────────────────────────────────────────────
-
     def _add(self):
+        conn = self._get_safe_conn()
         code = self.inp_code.text().strip()
         name = self.inp_name.text().strip()
         if not code or not name:
@@ -171,14 +167,14 @@ class _AccountForm(QWidget):
         parent_code = code[:-1] if len(code) > 1 else None
         if parent_code:
             try:
-                row = self.conn.execute(
+                row = conn.execute(
                     "SELECT id FROM accounts WHERE code=?", (parent_code,)
                 ).fetchone()
                 parent_id = row["id"] if row else None
             except Exception:
                 pass
         try:
-            insert_account(self.conn, code, name, acc_type, parent_id, group_id)
+            insert_account(conn, code, name, acc_type, parent_id, group_id)
             self.inp_code.clear()
             self.inp_name.clear()
             _emit_data_changed()
@@ -186,7 +182,8 @@ class _AccountForm(QWidget):
             QMessageBox.warning(self, "خطأ", str(e))
 
     def load_for_edit(self, acc_id: int):
-        acc = fetch_account(self.conn, acc_id)
+        conn = self._get_safe_conn()
+        acc  = fetch_account(conn, acc_id)
         if not acc:
             return
         self._editing_id = acc_id
@@ -210,7 +207,7 @@ class _AccountForm(QWidget):
         name = self.inp_name.text().strip()
         if not name or not self._editing_id:
             return
-        update_account(self.conn, self._editing_id, name,
+        update_account(self._get_safe_conn(), self._editing_id, name,
                        self.cmb_group.currentData())
         self._cancel_edit()
         _emit_data_changed()

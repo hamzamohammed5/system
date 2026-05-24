@@ -3,7 +3,10 @@ ui/tabs/accounting/ledger_tab.py
 =========================================
 LedgerTab — التبويب الرئيسي لدفتر الأستاذ.
 
-إصلاحات (v3): SafeConnMixin بدل conn property يدوي.
+إصلاحات (v4 — SafeConnMixin):
+  - SafeConnMixin بدل conn property يدوي (متسق مع باقي التبويبات).
+  - يستمع لـ bus.company_data_changed ويعيد تحميل الحسابات بـ conn محدث.
+  - _AccountsPanel و _TAccountPanel يستخدمان SafeConnMixin كمان.
 """
 
 from PyQt5.QtWidgets import (
@@ -14,13 +17,21 @@ from PyQt5.QtCore import Qt
 from .ledger.ledger_accounts_panel import _AccountsPanel
 from .ledger.ledger_t_account import _TAccountPanel
 from ui.tabs.accounting.safe_conn_mixin import SafeConnMixin
+from ui.events import bus
 
 
 class LedgerTab(SafeConnMixin, QWidget):
     def __init__(self, conn, parent=None):
         super().__init__(parent)
         self._init_safe_conn(conn, "accounting")
+        self._company_id = self._get_company_id()
         self._build()
+        bus.company_data_changed.connect(self._on_company_event)
+
+    def _on_company_event(self, company_id: int):
+        if self._on_company_event_safe(company_id):
+            self._accounts_panel._refresh_accounts()
+            self._t_panel.clear()
 
     def _build(self):
         root = QHBoxLayout(self)
