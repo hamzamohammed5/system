@@ -3,8 +3,9 @@ ui/widgets/shared/category_combo.py
 =============================
 CategoryCombo — QComboBox يعرض التصنيفات بشكل هرمي (indent).
 
-يرث من LiveConnMixin بدل كتابة _live_conn يدوياً.
-ملاحظة: الـ attribute هنا اسمه `conn` عشان يتوافق مع LiveConnMixin.
+[إصلاح v2]:
+  - Qt.ForegroundRole بدل Qt.ForegroundRole (كان صح لكن نوحد الأسلوب).
+  - _add_nodes مشتركة مع منطق filter_toolbar لتجنب التكرار.
 """
 
 from PyQt5.QtWidgets import QComboBox
@@ -16,6 +17,42 @@ from ui.widgets.shared.connection_mixin import LiveConnMixin
 from ui.events import bus
 
 
+def _populate_category_combo(combo: QComboBox, conn,
+                              scope: str = "all",
+                              all_label: str = "— الكل —") -> None:
+    """
+    دالة مساعدة مشتركة لملء أي QComboBox بالتصنيفات الهرمية.
+    تُستخدم من CategoryCombo وأي widget آخر يحتاج نفس المنطق.
+
+    combo     : الـ QComboBox المطلوب ملؤه
+    conn      : connection قاعدة البيانات
+    scope     : نطاق التصنيفات
+    all_label : نص الخيار الأول (None = لا يضيف خيار "الكل")
+    """
+    if all_label:
+        combo.addItem(all_label, None)
+
+    try:
+        rows = fetch_all_categories(conn, scope)
+    except Exception:
+        return
+
+    tree = build_tree(rows)
+    _add_tree_nodes(combo, tree, depth=0)
+
+
+def _add_tree_nodes(combo: QComboBox, nodes: list, depth: int) -> None:
+    """يضيف عقد الشجرة في الـ combo بشكل هرمي."""
+    indent = "    " * depth
+    arrow  = "↳ " if depth > 0 else ""
+    for node in nodes:
+        combo.addItem(f"{indent}{arrow}{node['name']}", node["id"])
+        idx = combo.count() - 1
+        combo.setItemData(idx, QColor(node["color"]), Qt.ForegroundRole)
+        if node["children"]:
+            _add_tree_nodes(combo, node["children"], depth + 1)
+
+
 class CategoryCombo(QComboBox, LiveConnMixin):
     """
     Combo يعرض التصنيفات بشكل هرمي:
@@ -24,6 +61,7 @@ class CategoryCombo(QComboBox, LiveConnMixin):
         ↳ فرعي
           ↳ تحت-فرعي
     """
+
     def __init__(self, conn, scope: str = "all", parent=None):
         super().__init__(parent)
         self.conn  = conn          # LiveConnMixin يقرأ self.conn
@@ -42,16 +80,8 @@ class CategoryCombo(QComboBox, LiveConnMixin):
         prev = self.currentData()
         self.blockSignals(True)
         self.clear()
-        self.addItem("— الكل —", None)
 
-        try:
-            rows = fetch_all_categories(conn, self.scope)
-        except Exception:
-            self.blockSignals(False)
-            return
-
-        tree = build_tree(rows)
-        self._add_nodes(tree, depth=0)
+        _populate_category_combo(self, conn, self.scope)
 
         # استعادة الاختيار السابق
         for i in range(self.count()):
@@ -59,16 +89,6 @@ class CategoryCombo(QComboBox, LiveConnMixin):
                 self.setCurrentIndex(i)
                 break
         self.blockSignals(False)
-
-    def _add_nodes(self, nodes: list, depth: int):
-        indent = "    " * depth
-        arrow  = "↳ " if depth > 0 else ""
-        for node in nodes:
-            self.addItem(f"{indent}{arrow}{node['name']}", node["id"])
-            idx = self.count() - 1
-            self.setItemData(idx, QColor(node["color"]), Qt.ForegroundRole)
-            if node["children"]:
-                self._add_nodes(node["children"], depth + 1)
 
     def get_category(self):
         return self.currentData()

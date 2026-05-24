@@ -1,23 +1,14 @@
 """
 ui/widgets/shared/shared_ops_mixin.py
 ======================================
-SharedOpsMixin — مكسن يوحّد منطق النشر والتعديل المشترك
-المتكرر في machine_table.py و labor_op_table.py.
+SharedOpsMixin — مكسن يوحّد منطق النشر والتعديل المشترك.
 
-يوفر:
-  _edit_shared_item(item_id, name)           → فتح نافذة تعديل مشترك
-  _edit_published_item(row, shared_type)     → فتح تعديل عنصر محلي منشور
-  _publish_item(row, shared_type, item_data) → نشر عنصر محلي كمشترك
-  _check_shared_id(item_id)                  → True لو الـ id مشترك
-
-الاستخدام:
-    class _MachineTable(QWidget, SharedOpsMixin):
-        def _edit_shared(self):
-            item_id, _ = self._selected_row_data()
-            self._edit_shared_item(item_id, "machine")
+[إصلاح v2]:
+  - msg_info / msg_warning / msg_question بدل QMessageBox مباشرة.
+  - _show_info / _show_warning helpers داخلية لتقليل التكرار.
 """
 
-from PyQt5.QtWidgets import QMessageBox
+from ui.widgets.shared.message_box import msg_info, msg_warning
 
 
 class SharedOpsMixin:
@@ -27,6 +18,14 @@ class SharedOpsMixin:
     يفترض وجود:
       - self._published_names: set[str]
     """
+
+    # ── مساعدات رسائل داخلية ─────────────────────────────
+
+    def _show_info(self, title: str, text: str):
+        msg_info(self, title, text)
+
+    def _show_warning(self, title: str, text: str):
+        msg_warning(self, title, text)
 
     # ── تحقق مبدئي ───────────────────────────────────────
 
@@ -53,10 +52,7 @@ class SharedOpsMixin:
     # ── تعديل مشترك ──────────────────────────────────────
 
     def _edit_shared_item(self, item_id, shared_type: str, parent=None):
-        """
-        يفتح نافذة تعديل العنصر المشترك.
-        يدعم أيضاً العناصر المحلية المنشورة.
-        """
+        """يفتح نافذة تعديل العنصر المشترك."""
         parent = parent or self
 
         if not self._check_shared_id(item_id):
@@ -64,10 +60,7 @@ class SharedOpsMixin:
             if row and self._is_published(row):
                 self._edit_published_item(row, shared_type, parent)
                 return
-            QMessageBox.information(
-                parent, "تنبيه",
-                "هذا عنصر عادي — استخدم «✏️ تعديل»."
-            )
+            msg_info(parent, "تنبيه", "هذا عنصر عادي — استخدم «✏️ تعديل».")
             return
 
         shared_id = self._extract_shared_id(item_id)
@@ -85,7 +78,7 @@ class SharedOpsMixin:
             from ui.events import bus
             bus.data_changed.emit()
         except Exception as e:
-            QMessageBox.warning(parent, "خطأ", str(e))
+            msg_warning(parent, "خطأ", str(e))
 
     def _edit_published_item(self, row: dict, shared_type: str, parent=None):
         """يفتح تعديل عنصر محلي منشور كمشترك."""
@@ -106,18 +99,13 @@ class SharedOpsMixin:
             from ui.events import bus
             bus.data_changed.emit()
         except Exception as e:
-            QMessageBox.warning(parent, "خطأ", str(e))
+            msg_warning(parent, "خطأ", str(e))
 
     # ── نشر كمشترك ───────────────────────────────────────
 
     def _publish_item(self, row: dict, shared_type: str,
                       item_data: dict, parent=None):
-        """
-        ينشر عنصراً محلياً كمشترك.
-        لو منشور بالفعل → يفتح تعديل الربط.
-
-        item_data: dict بالبيانات الإضافية للعنصر
-        """
+        """ينشر عنصراً محلياً كمشترك."""
         parent = parent or self
 
         if self._is_published(row):
@@ -146,7 +134,7 @@ class SharedOpsMixin:
             dlg.exec_()
             central.close()
         except Exception as e:
-            QMessageBox.warning(parent, "خطأ", str(e))
+            msg_warning(parent, "خطأ", str(e))
 
     # ── مساعد بحث ────────────────────────────────────────
 

@@ -3,36 +3,11 @@ ui/widgets/shared/panles_helper/filter_toolbar.py
 ==================================================
 FilterToolbar — شريط فلاتر موحد ومتكامل.
 
-يجمع في widget واحد:
-  - بحث نصي (SearchBar)
-  - فلتر تصنيف (CategoryCombo)
-  - فلتر نطاق تاريخ (DateRangeFilter) — اختياري
-  - عداد النتائج
-  - زر مسح الكل
-
-يحل التكرار بين:
-  - filter_bar.py
-  - _JournalFilterBar
-  - _LedgerFilterBar
-  - أي شريط فلاتر في التطبيق
-
-الاستخدام:
-    bar = FilterToolbar(
-        conn=conn,
-        scope="raw",
-        show_date=False,
-        placeholder="بحث في الخامات...",
-    )
-    bar.filter_changed.connect(self._apply_filter)
-    layout.addWidget(bar)
-
-    # في الفلترة:
-    def _apply_filter(self):
-        shown = 0
-        for row in self._all_rows:
-            if bar.match(name=row["name"], cat_id=row["category_id"]):
-                shown += 1
-        bar.set_count(shown, len(self._all_rows))
+[إصلاح v3]:
+  - يستخدم _populate_category_combo و _add_tree_nodes من category_combo
+    بدل تكرار منطق بناء الشجرة.
+  - Qt.ForegroundRole مضمون عبر الدالة المشتركة.
+  - show_presets ممرر لـ DateRangeFilter.
 """
 
 from __future__ import annotations
@@ -96,14 +71,12 @@ class FilterToolbar(QWidget):
             height=28,
         )
         self._search.search_changed.connect(lambda _: self.filter_changed.emit())
-        # كشف inp_search للتوافق مع الكود القديم
         self.inp_search = self._search.inp
         lay.addWidget(self._search, stretch=2)
 
         # ── التصنيف ──
         if self._show_cat:
-            sep = self._make_sep()
-            lay.addWidget(sep)
+            lay.addWidget(self._make_sep())
 
             lbl = QLabel("🏷")
             lbl.setStyleSheet(
@@ -126,8 +99,7 @@ class FilterToolbar(QWidget):
 
         # ── نطاق التاريخ ──
         if self._show_date:
-            sep = self._make_sep()
-            lay.addWidget(sep)
+            lay.addWidget(self._make_sep())
 
             from ui.widgets.shared.date_range_filter import DateRangeFilter
             self._date_filter = DateRangeFilter(
@@ -136,7 +108,6 @@ class FilterToolbar(QWidget):
                 show_presets=self._show_presets,
             )
             self._date_filter.range_changed.connect(self.filter_changed.emit)
-            # expose dt_from / dt_to للتوافق
             self.dt_from = self._date_filter.dt_from
             self.dt_to   = self._date_filter.dt_to
             lay.addWidget(self._date_filter)
@@ -145,7 +116,7 @@ class FilterToolbar(QWidget):
             self.dt_from = None
             self.dt_to   = None
 
-        # ── مسح الكل ──
+        # ── زر مسح الكل ──
         btn_reset = QPushButton("↺")
         btn_reset.setToolTip("مسح الكل")
         btn_reset.setMinimumHeight(28)
@@ -171,28 +142,25 @@ class FilterToolbar(QWidget):
         )
         lay.addWidget(self.lbl_count)
 
-    # ── تحميل التصنيفات ───────────────────────────────────
+    # ── تحميل التصنيفات — يستخدم الدالة المشتركة ──────────
 
     def _reload_categories(self):
         if self.cmb_cat is None or self._conn is None:
             return
 
-        try:
-            from db.shared.categories_repo import fetch_all_categories, build_tree
-        except ImportError:
-            return
-
         prev = self.cmb_cat.currentData() if self.cmb_cat.count() else None
         self.cmb_cat.blockSignals(True)
         self.cmb_cat.clear()
-        self.cmb_cat.addItem("— كل التصنيفات —", None)
 
+        # استخدام الدالة المشتركة من category_combo
         try:
-            rows = fetch_all_categories(self._conn, self._scope)
-            tree = build_tree(rows)
-            self._add_cat_nodes(tree, depth=0)
+            from ui.widgets.shared.category_combo import _populate_category_combo
+            _populate_category_combo(
+                self.cmb_cat, self._conn, self._scope,
+                all_label="— كل التصنيفات —"
+            )
         except Exception:
-            pass
+            self.cmb_cat.addItem("— كل التصنيفات —", None)
 
         # استعادة الاختيار
         for i in range(self.cmb_cat.count()):
@@ -202,22 +170,8 @@ class FilterToolbar(QWidget):
 
         self.cmb_cat.blockSignals(False)
 
-    def _add_cat_nodes(self, nodes: list, depth: int):
-        indent = "    " * depth
-        arrow  = "↳ " if depth > 0 else ""
-        for node in nodes:
-            self.cmb_cat.addItem(
-                f"{indent}{arrow}{node['name']}", node["id"]
-            )
-            idx = self.cmb_cat.count() - 1
-            self.cmb_cat.setItemData(
-                idx, QColor(node["color"]), 0x0100
-            )
-            if node["children"]:
-                self._add_cat_nodes(node["children"], depth + 1)
-
     def reload(self, conn=None):
-        """يعيد تحميل التصنيفات (استدعه بعد bus.data_changed)."""
+        """يعيد تحميل التصنيفات."""
         if conn:
             self._conn = conn
         self._reload_categories()
@@ -236,13 +190,7 @@ class FilterToolbar(QWidget):
 
     def match(self, name: str = "", cat_id=None,
               date_str: str = "") -> bool:
-        """
-        يتحقق من تطابق عنصر مع الفلاتر الحالية.
-
-        name    : اسم العنصر
-        cat_id  : تصنيف العنصر
-        date_str: تاريخ العنصر (yyyy-MM-dd) — يُستخدم لو show_date=True
-        """
+        """يتحقق من تطابق عنصر مع الفلاتر الحالية."""
         q = self.name_query
         if q and q not in (name or "").lower():
             return False
@@ -258,13 +206,11 @@ class FilterToolbar(QWidget):
         return True
 
     def in_date_range(self, date_str: str) -> bool:
-        """يتحقق من أن التاريخ في النطاق المحدد."""
         if self._date_filter is None:
             return True
         return self._date_filter.in_range(date_str)
 
     def set_count(self, shown: int, total: int):
-        """يحدّث عداد النتائج."""
         if shown == total:
             self.lbl_count.setText(f"({total})")
         else:

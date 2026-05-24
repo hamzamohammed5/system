@@ -3,10 +3,10 @@ ui/widgets/shared/component_row/_row_widget.py
 ====================================================
 ComponentRow — صف مكوّن واحد في BOM.
 
-[تقسيم v2]:
-  - _row_ui.py        → بناء الواجهة
-  - _op_rows_logic.py → منطق machine_op rows
-  - _variants_logic.py → منطق raw variants
+[تحسين v3]:
+  - _get_conn() مع connection cache بدل import في كل استدعاء.
+  - _conn_cache يُبطل تلقائياً لو الـ connection مات.
+  - باقي المنطق محتفظ به كما هو.
 """
 
 import weakref
@@ -62,7 +62,10 @@ class ComponentRow(QWidget, OpRowsMixin, VariantsMixin):
         self._init_child_id          = child_id
         self._skip_timer_load        = False
 
-        # بناء الواجهة من _row_ui.py
+        # cache للـ connection — يُبطل لو مات
+        self._conn_cache = None
+
+        # بناء الواجهة
         build_row_ui(self, child_type, child_id, qty, raw_total_qty,
                      waste_pct, variant_id, machine_op_row_id, show_total_qty)
 
@@ -96,13 +99,28 @@ class ComponentRow(QWidget, OpRowsMixin, VariantsMixin):
         )
 
     # ══════════════════════════════════════════════════════
-    # مساعد Connection
+    # Connection مع cache
     # ══════════════════════════════════════════════════════
 
     def _get_conn(self):
+        """
+        يرجع connection حي مع cache.
+        يتحقق من صحة الـ cache بـ SELECT 1 قبل الإرجاع.
+        """
+        # تحقق من الـ cache أولاً
+        if self._conn_cache is not None:
+            try:
+                self._conn_cache.execute("SELECT 1")
+                return self._conn_cache
+            except Exception:
+                self._conn_cache = None
+
+        # اجلب connection جديد
         try:
             from db.shared.connection import get_connection
-            return get_connection()
+            conn = get_connection()
+            self._conn_cache = conn
+            return conn
         except Exception:
             return None
 
@@ -244,7 +262,7 @@ class ComponentRow(QWidget, OpRowsMixin, VariantsMixin):
 
             if child_type == "raw":
                 self._auto_fill_total_qty()
-                item_id = data[1]
+                item_id   = data[1]
                 weak_self = weakref.ref(self)
                 QTimer.singleShot(50, lambda: (s := weak_self()) and s._load_variants(item_id))
                 self._hide_op_rows()

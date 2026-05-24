@@ -3,18 +3,18 @@ ui/widgets/shared/list_panel_with_shared.py
 ============================================
 SharedItemsListPanel — قاعدة مشتركة للجداول التي تدعم العناصر المشتركة.
 
-[إصلاح v2]:
-  - استخدام panels بدل ui.helpers
-  - استخدام DataTableWidget بدل make_table المباشر
-  - استخدام confirm_delete من panels
+[إصلاح v3]:
+  - msg_info / msg_warning بدل QMessageBox مباشرة.
+  - DataTableWidget.begin_fill / end_fill في _apply_filter.
+  - confirm_delete من panels.
 """
 
 from PyQt5.QtWidgets import (
-    QWidget, QVBoxLayout, QLabel, QPushButton,
-    QTableWidgetItem, QMessageBox,
+    QWidget, QVBoxLayout, QLabel, QTableWidgetItem,
 )
 from PyQt5.QtGui import QColor
 
+from ui.widgets.shared.message_box import msg_info, msg_warning
 from ui.widgets.shared.panels import (
     _make_btn,
     confirm_delete,
@@ -78,7 +78,7 @@ class SharedItemsListPanel(QWidget, LiveConnMixin, SharedOpsMixin):
         self._filter.filter_changed.connect(self._apply_filter)
         root.addWidget(self._filter)
 
-        # ── استخدام DataTableWidget بدل make_table المباشر ──
+        # DataTableWidget موحد
         self._data_table = DataTableWidget(
             columns=self.TABLE_COLS,
             stretch_col=1,
@@ -87,7 +87,7 @@ class SharedItemsListPanel(QWidget, LiveConnMixin, SharedOpsMixin):
         self.table = self._data_table.table
         self.table.setAlternatingRowColors(True)
         self._setup_column_widths(self.table)
-        # إخفاء الهيدر الداخلي لـ DataTableWidget لأن عندنا FilterBar خارجي
+        # إخفاء الهيدر الداخلي — عندنا FilterBar خارجي
         self._data_table.header.setVisible(False)
         root.addWidget(self._data_table)
 
@@ -95,44 +95,33 @@ class SharedItemsListPanel(QWidget, LiveConnMixin, SharedOpsMixin):
 
     def _build_buttons(self):
         from PyQt5.QtWidgets import QHBoxLayout
-        btn_edit        = _make_btn("✏️  تعديل", "normal")
-        btn_del         = _make_btn("🗑️  حذف", "danger")
+        btn_edit        = _make_btn("✏️  تعديل",         "normal")
+        btn_del         = _make_btn("🗑️  حذف",           "danger")
         btn_edit_shared = _make_btn("🔗  تعديل المشترك", "normal")
-        btn_publish     = _make_btn("📤  نشر كمشترك", "primary")
+        btn_publish     = _make_btn("📤  نشر كمشترك",    "primary")
 
         btn_edit_shared.setStyleSheet(f"""
             QPushButton {{
-                background: {_SHARED_BG};
-                color: {_SHARED_COLOR};
-                border: 1px solid #a5d6a7;
-                border-radius: 6px;
-                padding: 0 14px;
-                font-weight: bold;
-                min-height: 30px;
+                background: {_SHARED_BG}; color: {_SHARED_COLOR};
+                border: 1px solid #a5d6a7; border-radius: 6px;
+                padding: 0 14px; font-weight: bold; min-height: 30px;
             }}
             QPushButton:hover {{ background: #c8e6c9; }}
         """)
-
         btn_publish.setStyleSheet(f"""
             QPushButton {{
-                background: {_PUBLISHED_BG};
-                color: {_PUBLISHED_COLOR};
-                border: 1px solid #90caf9;
-                border-radius: 6px;
-                padding: 0 14px;
-                font-weight: bold;
-                min-height: 30px;
+                background: {_PUBLISHED_BG}; color: {_PUBLISHED_COLOR};
+                border: 1px solid #90caf9; border-radius: 6px;
+                padding: 0 14px; font-weight: bold; min-height: 30px;
             }}
             QPushButton:hover {{ background: #bbdefb; }}
         """)
 
         btns = [btn_edit, btn_del]
-
         if self.HAS_BULK_REPLACE:
             btn_replace = _make_btn("🔄  استبدال شامل", "danger")
             btn_replace.clicked.connect(self._on_bulk_replace)
             btns.append(btn_replace)
-
         btns += [btn_edit_shared, btn_publish]
 
         for btn in btns:
@@ -197,7 +186,8 @@ class SharedItemsListPanel(QWidget, LiveConnMixin, SharedOpsMixin):
         self._apply_filter()
 
     def _apply_filter(self):
-        self.table.setRowCount(0)
+        # استخدام begin_fill/end_fill الموحد
+        self._data_table.begin_fill()
         shown = 0
 
         for item in self._all_rows:
@@ -212,12 +202,12 @@ class SharedItemsListPanel(QWidget, LiveConnMixin, SharedOpsMixin):
             item["_is_shared"]    = is_shared
             item["_is_published"] = is_published
 
-            r = self.table.rowCount()
-            self.table.insertRow(r)
+            r = self._data_table.insert_row()
             self._fill_table_row(r, item)
             self._apply_row_colors(r, is_shared, is_published)
             shown += 1
 
+        self._data_table.end_fill(shown=shown)
         self._filter.set_count(shown, len(self._all_rows))
 
     def _apply_row_colors(self, r: int, is_shared: bool, is_published: bool):
@@ -250,57 +240,52 @@ class SharedItemsListPanel(QWidget, LiveConnMixin, SharedOpsMixin):
     def _on_edit(self):
         item_id, name = self._selected_row_data()
         if item_id is None:
-            QMessageBox.information(self, "تنبيه", "اختر عنصراً أولاً")
+            msg_info(self, "تنبيه", "اختر عنصراً أولاً")
             return
         if self._check_shared_id(item_id):
-            QMessageBox.information(
-                self, "عنصر مشترك",
-                "هذا عنصر مشترك — استخدم «🔗 تعديل المشترك»."
-            )
+            msg_info(self, "عنصر مشترك",
+                     "هذا عنصر مشترك — استخدم «🔗 تعديل المشترك».")
             return
         self._edit_item(int(item_id))
 
     def _on_delete(self):
         item_id, name = self._selected_row_data()
         if item_id is None:
-            QMessageBox.information(self, "تنبيه", "اختر عنصراً أولاً")
+            msg_info(self, "تنبيه", "اختر عنصراً أولاً")
             return
         if self._check_shared_id(item_id):
-            QMessageBox.warning(self, "عنصر مشترك", "لا يمكن حذف عنصر مشترك من هنا.")
+            msg_warning(self, "عنصر مشترك",
+                        "لا يمكن حذف عنصر مشترك من هنا.")
             return
         self._delete_item(int(item_id), name)
 
     def _on_bulk_replace(self):
         item_id, name = self._selected_row_data()
         if item_id is None:
-            QMessageBox.information(self, "تنبيه", "اختر عنصراً أولاً")
+            msg_info(self, "تنبيه", "اختر عنصراً أولاً")
             return
         if self._check_shared_id(item_id):
-            QMessageBox.information(
-                self, "تنبيه",
-                "الاستبدال الشامل غير متاح للعناصر المشتركة."
-            )
+            msg_info(self, "تنبيه",
+                     "الاستبدال الشامل غير متاح للعناصر المشتركة.")
             return
         self._bulk_replace_item(int(item_id), name)
 
     def _on_edit_shared(self):
         item_id, _ = self._selected_row_data()
         if item_id is None:
-            QMessageBox.information(self, "تنبيه", "اختر عنصراً أولاً")
+            msg_info(self, "تنبيه", "اختر عنصراً أولاً")
             return
         self._edit_shared_item(item_id, self.SHARED_TYPE, self)
 
     def _on_publish(self):
         item_id, _ = self._selected_row_data()
         if item_id is None:
-            QMessageBox.information(self, "تنبيه", "اختر عنصراً من الجدول أولاً")
+            msg_info(self, "تنبيه", "اختر عنصراً من الجدول أولاً")
             return
         if self._check_shared_id(item_id):
-            QMessageBox.information(
-                self, "مشترك بالفعل",
-                "هذا العنصر مشترك بالفعل.\n"
-                "استخدم «🔗 تعديل المشترك» لتعديل الربط."
-            )
+            msg_info(self, "مشترك بالفعل",
+                     "هذا العنصر مشترك بالفعل.\n"
+                     "استخدم «🔗 تعديل المشترك» لتعديل الربط.")
             return
         row = self._find_row_by_id(item_id)
         if not row:
@@ -308,7 +293,7 @@ class SharedItemsListPanel(QWidget, LiveConnMixin, SharedOpsMixin):
         item_data = self._get_item_data_for_publish(row)
         self._publish_item(row, self.SHARED_TYPE, item_data, self)
 
-    # ── للتوافق مع confirm_delete في panels ───────────────
+    # ── confirm_delete موحد ───────────────────────────────
 
     def _confirm_delete(self, name: str, extra: str = "") -> bool:
         return confirm_delete(self, name, extra_msg=extra)
