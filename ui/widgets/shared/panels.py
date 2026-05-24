@@ -15,6 +15,13 @@ ui/widgets/shared/panels.py
   FormGroup, labeled_widget, spin_field, int_spin_field,
   ResultBadge, ModeBadge, build_inner_scroll, CrudButtonsBar, InlinePreview,
 
+  --- base forms & panels ---
+  BaseCrudForm,
+  BaseListPanel,
+  BaseDetailPanel,
+  BaseSection,
+  TabSectionBase,
+
   --- connection ---
   LiveConnMixin,
 
@@ -73,6 +80,13 @@ from .form_utils import (                                       # noqa: F401
     InlinePreview,
 )
 
+# ── base forms & panels ───────────────────────────────────
+from .base_crud_form   import BaseCrudForm                      # noqa: F401
+from .base_list_panel  import BaseListPanel                     # noqa: F401
+from .base_detail_panel import BaseDetailPanel                  # noqa: F401
+from .base_section     import BaseSection                       # noqa: F401
+from .tab_section_base import TabSectionBase                    # noqa: F401
+
 # ── connection ────────────────────────────────────────────
 from .connection_mixin import LiveConnMixin                     # noqa: F401
 
@@ -124,6 +138,12 @@ __all__ = [
     "FormGroup", "labeled_widget", "spin_field", "int_spin_field",
     "ResultBadge", "ModeBadge", "build_inner_scroll",
     "CrudButtonsBar", "InlinePreview",
+    # base forms & panels
+    "BaseCrudForm",
+    "BaseListPanel",
+    "BaseDetailPanel",
+    "BaseSection",
+    "TabSectionBase",
     # connection
     "LiveConnMixin",
     # dialog

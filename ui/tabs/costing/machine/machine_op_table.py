@@ -1,141 +1,124 @@
 """
 ui/tabs/costing/machine/machine_op_table.py
 ============================================
-_MachineOpTable — جدول عمليات التشغيل مع فلتر واستبدال شامل.
+_MachineOpTable — جدول عمليات التشغيل مع دعم العناصر المشتركة.
+
+يرث من SharedItemsListPanel الذي يوحّد:
+  - legend العناصر المشتركة/المنشورة
+  - FilterBar
+  - أزرار تعديل/حذف/استبدال شامل/تعديل مشترك/نشر كمشترك
+  - منطق التلوين والتحميل
 """
 
-from PyQt5.QtWidgets import (
-    QWidget, QVBoxLayout, QPushButton, QTableWidgetItem, QMessageBox,
-)
+from PyQt5.QtWidgets import QTableWidgetItem, QMessageBox
 
 from db.costing.operations_repo import fetch_all_machine_ops, delete_machine_op
 from models.costing import calc_machine_op_cost
-from ui.helpers import (
-    make_table, buttons_row, section_label, confirm_delete, danger_button,
-)
+from ui.helpers import confirm_delete
+from ui.widgets.shared.list_panel_with_shared import SharedItemsListPanel
 from ui.tabs.costing.shared.bulk_replace.bulk_replace_dialog import BulkReplaceDialog
-from ui.widgets.shared.filter_bar import FilterBar
-from ui.widgets.shared.connection_mixin import LiveConnMixin
 from ui.events import bus
 from .machine_op_form import _MachineOpForm
 
 
-class _MachineOpTable(QWidget, LiveConnMixin):
+def _to_dict(row) -> dict:
+    if isinstance(row, dict):
+        return row
+    try:
+        return dict(row)
+    except Exception:
+        return {}
+
+
+class _MachineOpTable(SharedItemsListPanel):
+    SHARED_TYPE      = "machine_op"
+    TABLE_COLS       = ["ID", "اسم العملية", "التصنيف", "الماكينة", "الوضع", "القيمة", "التكلفة"]
+    FILTER_SCOPE     = "machine"
+    TABLE_TITLE      = "─── عمليات التشغيل المحفوظة ───"
+    HAS_BULK_REPLACE = True
+
     def __init__(self, conn, form: _MachineOpForm, parent=None):
-        super().__init__(parent)
-        self.conn      = conn
-        self._form     = form
-        self._all_rows = []
-        self._build()
-        self._load()
-        bus.data_changed.connect(self._load)
+        self._form = form
+        super().__init__(conn, parent)
 
-    def _build(self):
-        root = QVBoxLayout(self)
-        root.setContentsMargins(12, 8, 12, 12)
-        root.setSpacing(6)
-        root.addWidget(section_label("─── عمليات التشغيل المحفوظة ───"))
+    def _setup_column_widths(self, table):
+        table.setColumnWidth(0, 40)
+        table.setColumnWidth(1, 140)
+        table.setColumnWidth(2, 100)
+        table.setColumnWidth(3, 120)
+        table.setColumnWidth(4, 70)
+        table.setColumnWidth(5, 70)
+        table.setColumnWidth(6, 110)
+        table.setAlternatingRowColors(True)
 
-        self._filter = FilterBar(self._live_conn(), scope="machine")
-        self._filter.filter_changed.connect(self._apply_filter)
-        root.addWidget(self._filter)
+    def _fetch_local_rows(self) -> list:
+        return [_to_dict(op) for op in fetch_all_machine_ops(self._live_conn())]
 
-        self.table = make_table(
-            ["ID", "اسم العملية", "التصنيف", "الماكينة", "الوضع", "القيمة", "التكلفة"],
-            stretch_col=1
-        )
-        self.table.setColumnWidth(0, 40)
-        self.table.setColumnWidth(1, 140)
-        self.table.setColumnWidth(2, 100)
-        self.table.setColumnWidth(3, 120)
-        self.table.setColumnWidth(4, 70)
-        self.table.setColumnWidth(5, 70)
-        self.table.setColumnWidth(6, 110)
-        self.table.setAlternatingRowColors(True)
-        root.addWidget(self.table)
+    def _get_shared_rows(self, local_rows: list) -> list:
+        try:
+            from ui.tabs.companies.shared_items_mixin import get_shared_machine_ops
+            return get_shared_machine_ops(local_rows)
+        except Exception:
+            return []
 
-        btn_edit    = QPushButton("✏️  تعديل")
-        btn_del     = danger_button("🗑️  حذف")
-        btn_replace = QPushButton("🔄  استبدال شامل")
-        btn_replace.setStyleSheet(
-            "QPushButton { background:#e65100; color:white; border-radius:4px;"
-            "padding:4px 10px; font-weight:bold; }"
-            "QPushButton:hover { background:#bf360c; }"
-        )
-        for btn in (btn_edit, btn_del, btn_replace):
-            btn.setMinimumHeight(30)
+    def _fill_table_row(self, r: int, item: dict):
+        is_shared    = item.get("_is_shared", False)
+        is_published = item.get("_is_published", False)
 
-        btn_edit.clicked.connect(self._edit)
-        btn_del.clicked.connect(self._delete)
-        btn_replace.clicked.connect(self._bulk_replace)
-        root.addLayout(buttons_row(btn_edit, btn_del, btn_replace))
+        mode_ar     = "وقت" if item.get("mode") == "time" else "وحدة"
+        cat_display = item.get("category_name") or "—"
 
-    def _edit(self):
-        row = self.table.currentRow()
-        if row == -1:
-            QMessageBox.information(self, "تنبيه", "اختر عملية أولاً")
-            return
-        self._form.load_for_edit(int(self.table.item(row, 0).text()))
+        try:
+            conn  = self._live_conn()
+            cost  = calc_machine_op_cost(conn, item.get("id")) if not is_shared else 0.0
+        except Exception:
+            cost = 0.0
 
-    def _delete(self):
-        row = self.table.currentRow()
-        if row == -1:
-            QMessageBox.information(self, "تنبيه", "اختر عملية أولاً")
-            return
-        op_id   = int(self.table.item(row, 0).text())
-        op_name = self.table.item(row, 1).text()
-        if self._form.is_editing and self._form._editing_id == op_id:
+        if is_shared:
+            prefix  = "🔗 "
+            id_text = "🔗"
+        elif is_published:
+            prefix  = "📤 "
+            id_text = "📤"
+        else:
+            prefix  = ""
+            id_text = str(item.get("id", ""))
+
+        id_item = QTableWidgetItem(id_text)
+        id_item.setData(0x0100, item.get("id"))
+        self.table.setItem(r, 0, id_item)
+        self.table.setItem(r, 1, QTableWidgetItem(prefix + item.get("name", "")))
+        self.table.setItem(r, 2, QTableWidgetItem(cat_display))
+        self.table.setItem(r, 3, QTableWidgetItem(item.get("machine_name", "—")))
+        self.table.setItem(r, 4, QTableWidgetItem(mode_ar))
+        self.table.setItem(r, 5, QTableWidgetItem(f"{item.get('value', 0):.4f}"))
+        self.table.setItem(r, 6, QTableWidgetItem(f"{cost:.2f} جنيه"))
+
+    def _edit_item(self, item_id: int):
+        self._form.load_for_edit(item_id)
+
+    def _delete_item(self, item_id: int, item_name: str):
+        if self._form.is_editing and self._form._editing_id == item_id:
             self._form._reset()
-        if confirm_delete(self, op_name):
+        if confirm_delete(self, item_name):
             try:
-                delete_machine_op(self._live_conn(), op_id)
+                delete_machine_op(self._live_conn(), item_id)
             except Exception as e:
                 QMessageBox.warning(self, "خطأ", str(e))
                 return
             bus.data_changed.emit()
 
-    def _bulk_replace(self):
-        row = self.table.currentRow()
-        if row == -1:
-            QMessageBox.information(self, "تنبيه", "اختر عملية أولاً")
-            return
-        op_id   = int(self.table.item(row, 0).text())
-        op_name = self.table.item(row, 1).text()
+    def _bulk_replace_item(self, item_id: int, item_name: str):
         dlg = BulkReplaceDialog(
             conn=self._live_conn(), child_type="machine_op",
-            child_id=op_id, child_name=op_name, parent=self,
+            child_id=item_id, child_name=item_name, parent=self,
         )
         dlg.exec_()
 
-    def _load(self):
-        try:
-            conn = self._live_conn()
-            self._all_rows = list(fetch_all_machine_ops(conn))
-        except Exception:
-            self._all_rows = []
-        self._apply_filter()
-
-    def _apply_filter(self):
-        self.table.setRowCount(0)
-        shown = 0
-        try:
-            conn = self._live_conn()
-        except Exception:
-            self._filter.set_count(0, 0)
-            return
-        for op in self._all_rows:
-            if not self._filter.match(op["name"], op["category_id"]):
-                continue
-            cost    = calc_machine_op_cost(conn, op["id"])
-            mode_ar = "وقت" if op["mode"] == "time" else "وحدة"
-            r = self.table.rowCount()
-            self.table.insertRow(r)
-            self.table.setItem(r, 0, QTableWidgetItem(str(op["id"])))
-            self.table.setItem(r, 1, QTableWidgetItem(op["name"]))
-            self.table.setItem(r, 2, QTableWidgetItem(op["category_name"] or "—"))
-            self.table.setItem(r, 3, QTableWidgetItem(op["machine_name"]))
-            self.table.setItem(r, 4, QTableWidgetItem(mode_ar))
-            self.table.setItem(r, 5, QTableWidgetItem(f"{op['value']:.4f}"))
-            self.table.setItem(r, 6, QTableWidgetItem(f"{cost:.2f} جنيه"))
-            shown += 1
-        self._filter.set_count(shown, len(self._all_rows))
+    def _get_item_data_for_publish(self, row: dict) -> dict:
+        return {
+            "mode":          row.get("mode", "time"),
+            "value":         float(row.get("value", 0.0)),
+            "machine_name":  row.get("machine_name") or None,
+            "category_name": row.get("category_name") or None,
+        }
