@@ -3,10 +3,10 @@ ui/widgets/shared/panels.py
 ============================
 مكونات UI مشتركة — re-export من panles_helper وملفات أخرى.
 
-[تحديث v7]:
-  - إضافة company_utils exports
-  - إضافة tooltip_helper exports
-  - إضافة shared_ops_mixin exports
+[تحديث v8]:
+  - إضافة CrudSection
+  - إضافة FilterToolbar
+  - إضافة DetailSection, TwoColDetails, make_detail_row
   - تنظيم الـ exports
 
 كل الملفات التانية تستورد من هنا مباشرة — مش من panles_helper.
@@ -121,6 +121,19 @@ from .base_list_panel   import BaseListPanel                    # noqa: F401
 from .base_detail_panel import BaseDetailPanel                  # noqa: F401
 from .base_section      import BaseSection                      # noqa: F401
 from .tab_section_base  import TabSectionBase                   # noqa: F401
+
+# ── CrudSection ────────────────────────────────────────────
+from .panles_helper.crud_section import CrudSection             # noqa: F401
+
+# ── FilterToolbar ──────────────────────────────────────────
+from .panles_helper.filter_toolbar import FilterToolbar         # noqa: F401
+
+# ── DetailSection ──────────────────────────────────────────
+from .panles_helper.detail_section import (                     # noqa: F401
+    DetailSection,
+    TwoColDetails,
+    make_detail_row,
+)
 
 # ── connection ─────────────────────────────────────────────
 from .connection_mixin import LiveConnMixin                     # noqa: F401
@@ -311,6 +324,15 @@ __all__ = [
     # base forms & panels
     "BaseCrudForm", "BaseListPanel", "BaseDetailPanel",
     "BaseSection", "TabSectionBase",
+
+    # CrudSection (جديد)
+    "CrudSection",
+
+    # FilterToolbar (جديد)
+    "FilterToolbar",
+
+    # DetailSection (جديد)
+    "DetailSection", "TwoColDetails", "make_detail_row",
 
     # connection
     "LiveConnMixin", "DualConnMixin", "SafeConnMixin",

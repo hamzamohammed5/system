@@ -3,9 +3,12 @@ ui/widgets/shared/base_section.py
 ===================================
 BaseSection — قاعدة مشتركة للأقسام اللي فيها list + detail.
 
-[تحديث v2]:
+[تحديث v3]:
   - يستخدم get_splitter_style() من theme بدل inline style
-  - منطق _apply_sizes أنظف
+  - BusConnectedMixin للربط التلقائي بالـ bus
+  - _apply_sizes أنظف مع fallback timer
+  - refresh() يربط list + detail تلقائياً
+  - دعم LAYOUT_DIRECTION لتغيير ترتيب list/detail
 """
 
 from PyQt5.QtWidgets import (
@@ -14,22 +17,44 @@ from PyQt5.QtWidgets import (
 from PyQt5.QtCore import Qt, QTimer
 
 from ui.widgets.shared.panels import get_splitter_style
+from ui.widgets.shared.shared_ui_mixins import BusConnectedMixin
 
 
-class BaseSection(QWidget):
-    LIST_MIN_W : int = 280
-    LIST_MAX_W : int = 560
+class BaseSection(QWidget, BusConnectedMixin):
+    LIST_MIN_W      : int  = 280
+    LIST_MAX_W      : int  = 560
+    DETAIL_MIN_W    : int  = 320
+    CONNECT_BUS     : bool = False   # True = يربط bus.data_changed تلقائياً
+    LAYOUT_REVERSED : bool = False   # True = detail على اليسار، list على اليمين
 
     def __init__(self, conn=None, parent=None):
         super().__init__(parent)
         self.conn = conn
         self._build()
         self._connect_signals()
+        if self.CONNECT_BUS:
+            self._connect_bus(data=True)
         QTimer.singleShot(50, self._apply_sizes)
 
-    def _create_list(self):   raise NotImplementedError
-    def _create_detail(self): raise NotImplementedError
-    def _connect_signals(self): pass
+    # ── override ──────────────────────────────────────────
+
+    def _create_list(self):
+        raise NotImplementedError
+
+    def _create_detail(self):
+        raise NotImplementedError
+
+    def _connect_signals(self):
+        """Override لربط الـ signals بين list و detail."""
+        # الربط الافتراضي: item_selected → load_item
+        if hasattr(self._list, 'item_selected') and hasattr(self._detail, 'load_item'):
+            self._list.item_selected.connect(self._detail.load_item)
+
+    def _on_data_changed(self):
+        """Override أو اترك للـ subclass."""
+        self.refresh()
+
+    # ── بناء الواجهة ──────────────────────────────────────
 
     def _build(self):
         root = QHBoxLayout(self)
@@ -47,15 +72,23 @@ class BaseSection(QWidget):
         self._list.setMinimumWidth(self.LIST_MIN_W)
         self._list.setSizePolicy(QSizePolicy.Preferred, QSizePolicy.Expanding)
 
+        self._detail.setMinimumWidth(self.DETAIL_MIN_W)
         self._detail.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Expanding)
-        self._detail.setMinimumWidth(300)
 
-        self._splitter.addWidget(self._list)
-        self._splitter.addWidget(self._detail)
-        self._splitter.setCollapsible(0, False)
-        self._splitter.setCollapsible(1, False)
-        self._splitter.setStretchFactor(0, 0)
-        self._splitter.setStretchFactor(1, 1)
+        if self.LAYOUT_REVERSED:
+            self._splitter.addWidget(self._detail)
+            self._splitter.addWidget(self._list)
+            self._splitter.setCollapsible(0, False)
+            self._splitter.setCollapsible(1, False)
+            self._splitter.setStretchFactor(0, 1)
+            self._splitter.setStretchFactor(1, 0)
+        else:
+            self._splitter.addWidget(self._list)
+            self._splitter.addWidget(self._detail)
+            self._splitter.setCollapsible(0, False)
+            self._splitter.setCollapsible(1, False)
+            self._splitter.setStretchFactor(0, 0)
+            self._splitter.setStretchFactor(1, 1)
 
         root.addWidget(self._splitter)
 
@@ -66,17 +99,42 @@ class BaseSection(QWidget):
         if total <= 0:
             QTimer.singleShot(100, self._apply_sizes)
             return
-        list_w   = max(self.LIST_MIN_W,
-                       min(self._list.width() or self.LIST_MIN_W, self.LIST_MAX_W))
-        detail_w = max(300, total - list_w - self._splitter.handleWidth())
+        list_w = max(
+            self.LIST_MIN_W,
+            min(getattr(self._list, 'width', lambda: self.LIST_MIN_W)() or self.LIST_MIN_W,
+                self.LIST_MAX_W)
+        )
+        detail_w = max(
+            self.DETAIL_MIN_W,
+            total - list_w - self._splitter.handleWidth()
+        )
         self._splitter.blockSignals(True)
-        self._splitter.setSizes([list_w, detail_w])
+        if self.LAYOUT_REVERSED:
+            self._splitter.setSizes([detail_w, list_w])
+        else:
+            self._splitter.setSizes([list_w, detail_w])
         self._splitter.blockSignals(False)
 
-    def _fit_splitter_delayed(self, delay_ms: int = 80):
-        QTimer.singleShot(delay_ms, self._apply_sizes)
+    # ── API عام ───────────────────────────────────────────
 
     def refresh(self):
         if hasattr(self._list, 'refresh'):
             self._list.refresh()
-        self._fit_splitter_delayed()
+        QTimer.singleShot(80, self._apply_sizes)
+
+    def clear_detail(self):
+        if hasattr(self._detail, 'clear'):
+            self._detail.clear()
+
+    def _fit_splitter_delayed(self, delay_ms: int = 80):
+        QTimer.singleShot(delay_ms, self._apply_sizes)
+
+    # ── خصائص ────────────────────────────────────────────
+
+    @property
+    def list_panel(self) -> QWidget:
+        return self._list
+
+    @property
+    def detail_panel(self) -> QWidget:
+        return self._detail

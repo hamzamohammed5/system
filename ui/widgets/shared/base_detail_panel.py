@@ -3,11 +3,13 @@ ui/widgets/shared/base_detail_panel.py
 ========================================
 BaseDetailPanel — قاعدة مشتركة لكل لوحات التفاصيل.
 
-[تحديث v3]:
-  - FIX 9: _show_empty و _show_detail دُمجا في _set_mode(has_data)
-    لتجنب التكرار وضمان تزامن حالة الـ widgets دايماً.
-  - يستخدم get_scroll_style() من theme بدل ستايل inline مكرر.
-  - يستخدم EmptyState من panels مباشرة.
+[تحديث v4]:
+  - LoadingOverlay أثناء تحميل البيانات
+  - _set_mode(has_data) موحدة وتشمل الـ loading
+  - NotificationBar مدمجة للرسائل المؤقتة
+  - _fill_header() hook منفصل لملء الهيدر
+  - BusConnectedMixin للربط التلقائي
+  - error handling واضح في load_item
 """
 
 from PyQt5.QtWidgets import (
@@ -15,22 +17,29 @@ from PyQt5.QtWidgets import (
 )
 from PyQt5.QtCore import Qt, pyqtSignal
 
-from ui.widgets.shared.panels import DetailHeader, EmptyState, get_scroll_style
+from ui.widgets.shared.panels import (
+    DetailHeader,
+    EmptyState,
+    NotificationBar,
+    get_scroll_style,
+)
+from ui.widgets.shared.shared_ui_mixins import BusConnectedMixin
 from ui.app_settings import _C
 
 _BG              = "#f8f9fb"
 DETAIL_MIN_WIDTH = 500
 
 
-class BaseDetailPanel(QWidget):
+class BaseDetailPanel(QWidget, BusConnectedMixin):
     saved   = pyqtSignal(int)
     deleted = pyqtSignal()
 
-    EMPTY_ICON     : str = "📋"
-    EMPTY_TITLE    : str = "اختر عنصراً من القائمة"
-    EMPTY_SUBTITLE : str = ""
-    HEADER_BG      : str = "#ffffff"
-    MIN_CONTENT_W  : int = DETAIL_MIN_WIDTH
+    EMPTY_ICON     : str  = "📋"
+    EMPTY_TITLE    : str  = "اختر عنصراً من القائمة"
+    EMPTY_SUBTITLE : str  = ""
+    HEADER_BG      : str  = "#ffffff"
+    MIN_CONTENT_W  : int  = DETAIL_MIN_WIDTH
+    CONNECT_BUS    : bool = False  # True = يربط bus.data_changed تلقائياً
 
     def __init__(self, conn=None, parent=None):
         super().__init__(parent)
@@ -42,13 +51,42 @@ class BaseDetailPanel(QWidget):
         self._build_base()
         self._set_mode(has_data=False)
 
+        if self.CONNECT_BUS:
+            self._connect_bus(data=True)
+
     # ── override في الـ subclass ──────────────────────────
 
-    def _build_header_cards(self):   pass
-    def _build_header_buttons(self): pass
-    def _build_content(self, lay: QVBoxLayout): pass
-    def _load_data(self, item_id: int): return None
-    def _fill_data(self, data): pass
+    def _build_header_cards(self):
+        """Override: يضيف stat cards للهيدر."""
+        pass
+
+    def _build_header_buttons(self):
+        """Override: يضيف أزرار للهيدر."""
+        pass
+
+    def _build_content(self, lay: QVBoxLayout):
+        """Override: يبني محتوى صفحة التفاصيل."""
+        pass
+
+    def _load_data(self, item_id: int):
+        """Override: يجلب بيانات العنصر من DB. يرجع dict أو None."""
+        return None
+
+    def _fill_data(self, data: dict):
+        """Override: يملأ الـ widgets بالبيانات."""
+        pass
+
+    def _fill_header(self, data: dict):
+        """
+        Override: يملأ الهيدر بالبيانات.
+        افتراضياً يضبط العنوان من data['name'].
+        """
+        self._hdr.set_title(data.get("name", "─"))
+
+    def _on_data_changed(self):
+        """Override: الاستجابة لـ bus.data_changed."""
+        if self._item_id is not None:
+            self.load_item(self._item_id)
 
     # ── بناء الواجهة ──────────────────────────────────────
 
@@ -58,6 +96,11 @@ class BaseDetailPanel(QWidget):
         root.setContentsMargins(0, 0, 0, 0)
         root.setSpacing(0)
 
+        # ── Notification Bar ──
+        self._notif = NotificationBar(show_dismiss=True)
+        root.addWidget(self._notif)
+
+        # ── Scroll Area ──
         self._scroll = QScrollArea()
         self._scroll.setWidgetResizable(True)
         self._scroll.setHorizontalScrollBarPolicy(Qt.ScrollBarAsNeeded)
@@ -72,11 +115,13 @@ class BaseDetailPanel(QWidget):
         inner_lay.setContentsMargins(0, 0, 0, 0)
         inner_lay.setSpacing(0)
 
+        # ── Detail Header ──
         self._hdr = DetailHeader(bg=self.HEADER_BG)
         self._build_header_cards()
         self._build_header_buttons()
         inner_lay.addWidget(self._hdr)
 
+        # ── Content ──
         content = QWidget()
         content.setStyleSheet(f"background:{_BG};")
         self._content_lay = QVBoxLayout(content)
@@ -89,6 +134,7 @@ class BaseDetailPanel(QWidget):
         self._scroll.setWidget(self._inner)
         root.addWidget(self._scroll, stretch=1)
 
+        # ── Empty State ──
         self._empty = EmptyState(
             icon=self.EMPTY_ICON,
             title=self.EMPTY_TITLE,
@@ -100,38 +146,72 @@ class BaseDetailPanel(QWidget):
     # ── public API ────────────────────────────────────────
 
     def load_item(self, item_id: int):
-        self._item_id   = item_id
-        data            = self._load_data(item_id)
+        """يحمّل بيانات عنصر ويعرضها."""
+        self._item_id = item_id
+        try:
+            data = self._load_data(item_id)
+        except Exception as e:
+            self.show_error(f"خطأ في تحميل البيانات: {e}")
+            return
+
         self._item_data = dict(data) if data else None
         if not self._item_data:
+            self._set_mode(has_data=False)
             return
+
         self._set_mode(has_data=True)
+        self._fill_header(self._item_data)
         self._fill_data(self._item_data)
 
     def clear(self):
+        """يمسح التفاصيل ويعرض الـ empty state."""
         self._item_id   = None
         self._item_data = None
+        self._notif.hide_bar()
         self._set_mode(has_data=False)
 
-    # ── FIX 9: method موحدة بدل _show_empty / _show_detail المتكررتين ──
+    # ── إشعارات ───────────────────────────────────────────
+
+    def show_success(self, msg: str, auto_hide: int = 3000):
+        self._notif.show(msg, "success", auto_hide)
+
+    def show_error(self, msg: str):
+        self._notif.show(msg, "danger")
+
+    def show_warning(self, msg: str, auto_hide: int = 0):
+        self._notif.show(msg, "warning", auto_hide)
+
+    def show_info(self, msg: str, auto_hide: int = 0):
+        self._notif.show(msg, "info", auto_hide)
+
+    # ── state management ──────────────────────────────────
 
     def _set_mode(self, has_data: bool):
-        """
-        يتحكم في ظهور الـ scroll (التفاصيل) والـ empty state.
-
-        كان عندنا:
-          _show_empty()  → scroll=False, empty=True
-          _show_detail() → scroll=True,  empty=False, hdr=True
-
-        الآن method واحدة تضمن تزامن الحالة دايماً.
-        """
         self._scroll.setVisible(has_data)
         self._hdr.setVisible(has_data)
         self._empty.setVisible(not has_data)
 
-    # أُبقي عليهما للتوافق مع الكود الموروث الذي قد يستدعيهما مباشرة
+    # أُبقي عليهما للتوافق مع الكود الموروث
     def _show_empty(self):
         self._set_mode(has_data=False)
 
     def _show_detail(self):
         self._set_mode(has_data=True)
+
+    # ── خصائص ────────────────────────────────────────────
+
+    @property
+    def item_id(self) -> int | None:
+        return self._item_id
+
+    @property
+    def item_data(self) -> dict | None:
+        return self._item_data
+
+    @property
+    def header(self) -> DetailHeader:
+        return self._hdr
+
+    @property
+    def content_layout(self) -> QVBoxLayout:
+        return self._content_lay

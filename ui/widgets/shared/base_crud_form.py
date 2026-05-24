@@ -3,15 +3,17 @@ ui/widgets/shared/base_crud_form.py
 =====================================
 BaseCrudForm — قاعدة مشتركة لكل نماذج الإضافة/التعديل/الإلغاء.
 
-[إصلاح v2]:
-  - لا يستورد من ui.helpers — كل شيء من panels
-  - buttons_row مبني داخلياً بـ QHBoxLayout
-  - msg_warning من message_box بدل QMessageBox مباشرة
+[تحديث v3]:
+  - NotificationBar بدل msg_warning المنبثقة
+  - FormValidationMixin مدمجة
+  - _collect_and_validate() hook موحد
+  - set_conn() لتحديث الـ connection
+  - FORM_TITLE_ICON لإضافة أيقونة للعنوان
 """
 
 import logging
 from PyQt5.QtWidgets import (
-    QWidget, QPushButton, QLabel, QHBoxLayout,
+    QWidget, QPushButton, QHBoxLayout,
 )
 from PyQt5.QtCore import pyqtSignal
 
@@ -21,15 +23,16 @@ from ui.widgets.shared.panels import (
     FormGroup,
     build_inner_scroll,
     ModeLabel,
+    NotificationBar,
+    _make_btn,
 )
-from ui.widgets.shared.message_box import msg_warning
+from ui.widgets.shared.shared_ui_mixins import FormValidationMixin
 from ui.events import bus
 
 logger = logging.getLogger(__name__)
 
 
 def _buttons_row(*btns) -> QHBoxLayout:
-    """بديل لـ buttons_row من ui.helpers."""
     lay = QHBoxLayout()
     lay.setSpacing(6)
     for btn in btns:
@@ -38,7 +41,7 @@ def _buttons_row(*btns) -> QHBoxLayout:
     return lay
 
 
-class BaseCrudForm(QWidget, EditModeMixin, LiveConnMixin):
+class BaseCrudForm(QWidget, EditModeMixin, LiveConnMixin, FormValidationMixin):
     """
     قاعدة موحدة لكل نماذج CRUD.
 
@@ -52,16 +55,22 @@ class BaseCrudForm(QWidget, EditModeMixin, LiveConnMixin):
       _reset_fields()      → يمسح الحقول
 
     اختياري:
-      _after_insert(new_id)  → بعد الإضافة
-      _after_save()          → بعد الحفظ
-      _build_extra(root)     → widgets إضافية تحت الأزرار
+      _after_insert(new_id) → بعد الإضافة
+      _after_save()         → بعد الحفظ
+      _build_extra(root)    → widgets إضافية تحت الأزرار
+      _validate()           → تحقق إضافي قبل الحفظ، يرجع str أو None
     """
 
-    FORM_TITLE : str = "بيانات"
-    ADD_TEXT   : str = "➕  إضافة"
-    SAVE_TEXT  : str = "💾  حفظ التعديل"
-    CANCEL_TEXT: str = "✖  إلغاء"
-    MIN_WIDTH  : int = 260
+    # signals
+    item_added   = pyqtSignal(int)   # new_id
+    item_updated = pyqtSignal(int)   # item_id
+
+    FORM_TITLE      : str = "بيانات"
+    FORM_TITLE_ICON : str = ""
+    ADD_TEXT        : str = "➕  إضافة"
+    SAVE_TEXT       : str = "💾  حفظ التعديل"
+    CANCEL_TEXT     : str = "✖  إلغاء"
+    MIN_WIDTH       : int = 260
 
     def __init__(self, conn, parent=None):
         super().__init__(parent)
@@ -109,14 +118,28 @@ class BaseCrudForm(QWidget, EditModeMixin, LiveConnMixin):
     def _post_init(self) -> None:
         pass
 
+    def _validate(self) -> str | None:
+        """
+        تحقق إضافي قبل الحفظ.
+        يرجع str (رسالة خطأ) أو None (كل شيء صحيح).
+        """
+        return None
+
     # ── بناء الواجهة ──────────────────────────────────────
 
     def _build(self):
         _outer, _inner, root = build_inner_scroll(self, min_width=self.MIN_WIDTH)
 
-        grp = FormGroup(self.FORM_TITLE)
+        # Notification bar
+        self._notif = NotificationBar(show_dismiss=True)
+        root.addWidget(self._notif)
 
-        # ModeLabel بدل QLabel عادي
+        # عنوان الفورم
+        title = f"{self.FORM_TITLE_ICON}  {self.FORM_TITLE}" \
+                if self.FORM_TITLE_ICON else self.FORM_TITLE
+        grp = FormGroup(title)
+
+        # ModeLabel
         self.lbl_mode = ModeLabel(
             add_text=self.ADD_TEXT.lstrip("➕  "),
         )
@@ -125,9 +148,9 @@ class BaseCrudForm(QWidget, EditModeMixin, LiveConnMixin):
         self._build_fields(grp)
         root.addWidget(grp)
 
-        from ui.widgets.shared.panels import _make_btn
-        self.btn_add    = _make_btn(self.ADD_TEXT, "primary")
-        self.btn_save   = _make_btn(self.SAVE_TEXT, "success")
+        # أزرار
+        self.btn_add    = _make_btn(self.ADD_TEXT,    "primary")
+        self.btn_save   = _make_btn(self.SAVE_TEXT,   "success")
         self.btn_cancel = _make_btn(self.CANCEL_TEXT, "ghost")
         for btn in (self.btn_add, self.btn_save, self.btn_cancel):
             btn.setMinimumHeight(30)
@@ -143,43 +166,59 @@ class BaseCrudForm(QWidget, EditModeMixin, LiveConnMixin):
     # ── منطق الحفظ ────────────────────────────────────────
 
     def _on_add(self):
+        self._notif.hide_bar()
         data = self._collect()
         if data is None:
+            return
+        err = self._validate()
+        if err:
+            self._notif.show(err, "warning")
             return
         try:
             new_id = self._do_insert(data)
         except Exception as e:
             logger.warning("%s._on_add failed: %s", type(self).__name__, e)
-            self._warn(str(e))
+            self._notif.show(str(e), "danger")
             return
         bus.data_changed.emit()
+        self.item_added.emit(new_id)
         self._after_insert(new_id)
         self._reset()
+        self._notif.show("تم الإضافة بنجاح", "success", auto_hide=2500)
 
     def _on_save(self):
+        self._notif.hide_bar()
         data = self._collect()
         if data is None:
+            return
+        err = self._validate()
+        if err:
+            self._notif.show(err, "warning")
             return
         try:
             self._do_update(self._editing_id, data)
         except Exception as e:
             logger.warning("%s._on_save failed: %s", type(self).__name__, e)
-            self._warn(str(e))
+            self._notif.show(str(e), "danger")
             return
         self._reset()
         bus.data_changed.emit()
+        self.item_updated.emit(self._editing_id)
         self._after_save()
 
     def _on_cancel(self):
+        self._notif.hide_bar()
         self._reset()
 
     # ── تحميل للتعديل ─────────────────────────────────────
 
     def load_for_edit(self, item_id: int):
+        self._notif.hide_bar()
         try:
             data = self._do_load(item_id)
         except Exception as e:
             logger.warning("%s.load_for_edit failed: %s", type(self).__name__, e)
+            self._notif.show(f"خطأ في تحميل البيانات: {e}", "danger")
             return
         if not data:
             return
@@ -191,7 +230,13 @@ class BaseCrudForm(QWidget, EditModeMixin, LiveConnMixin):
 
     def _reset(self):
         self._reset_fields()
-        self.exit_edit_mode(f"─── {self.ADD_TEXT.lstrip('➕  ')} جديد ───")
+        add_label = self.ADD_TEXT.lstrip("➕  ")
+        self.exit_edit_mode(f"─── {add_label} جديد ───")
 
+    def set_conn(self, conn):
+        """يحدّث الـ connection (مفيد عند تغيير الشركة)."""
+        self.conn = conn
+
+    # alias للتوافق
     def _warn(self, msg: str) -> None:
-        msg_warning(self, "تنبيه", msg)
+        self._notif.show(msg, "warning")

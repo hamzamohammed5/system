@@ -1,5 +1,5 @@
 File Tree Snapshot
-Generated : 2026-05-24 15:39:03
+Generated : 2026-05-24 16:25:50
 Source    : D:\My Workspace\Hg\Alhabaar\accountant\system
 Extensions: .py
 ────────────────────────────────────────────────────────────
@@ -279,9 +279,12 @@ system/
 │   │       │   ├── card_grid.py
 │   │       │   ├── collapsible_card.py
 │   │       │   ├── colors_and_base.py
+│   │       │   ├── crud_section.py
 │   │       │   ├── data_table_widget.py
 │   │       │   ├── detail_header.py
+│   │       │   ├── detail_section.py
 │   │       │   ├── empty_state.py
+│   │       │   ├── filter_toolbar.py
 │   │       │   ├── form_row.py
 │   │       │   ├── info_row.py
 │   │       │   ├── list_header.py
