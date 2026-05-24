@@ -1,5 +1,5 @@
 File Tree Snapshot
-Generated : 2026-05-24 11:46:47
+Generated : 2026-05-24 12:01:02
 Source    : D:\My Workspace\Hg\Alhabaar\accountant\system
 Extensions: .py
 ────────────────────────────────────────────────────────────
@@ -274,6 +274,7 @@ system/
 │   │       ├── base_detail_panel.py
 │   │       ├── base_list_panel.py
 │   │       ├── base_section.py
+│   │       ├── base_warning_bar.py
 │   │       ├── category_combo.py
 │   │       ├── category_form.py
 │   │       ├── category_manager.py

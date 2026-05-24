@@ -3,11 +3,14 @@ ui/tabs/costing/product/product_table.py
 =================================
 _ProductTable  — جدول المنتجات المحفوظة مع FilterBar.
 _WarningBar    — شريط تحذير المكونات الناقصة (orphans).
+
+التحسين: _WarningBar الآن تستخدم BaseWarningBar من shared widgets
+         بدل بناء الشريط يدوياً
 """
 
 from PyQt5.QtWidgets import (
-    QWidget, QVBoxLayout, QHBoxLayout, QFrame,
-    QPushButton, QLabel, QTableWidgetItem, QMessageBox,
+    QWidget, QVBoxLayout,
+    QPushButton, QTableWidgetItem,
 )
 from PyQt5.QtCore import Qt
 
@@ -18,14 +21,8 @@ from ui.helpers import (
 )
 from ui.widgets.shared.filter_bar import FilterBar
 from ui.widgets.shared.connection_mixin import LiveConnMixin
+from ui.widgets.shared.base_warning_bar import BaseWarningBar
 from ui.events import bus
-
-_TYPE_AR = {
-    "raw":        "خامة",
-    "semi":       "نصف مصنع",
-    "labor_op":   "عملية عمالة",
-    "machine_op": "عملية تشغيل",
-}
 
 _PRODUCT_SCOPE = {
     "semi":  "semi",
@@ -33,67 +30,9 @@ _PRODUCT_SCOPE = {
 }
 
 
-class _WarningBar(QFrame):
-    def __init__(self, on_fix, on_edit, parent=None):
-        super().__init__(parent)
-        self.setObjectName("warningBar")
-        self.setStyleSheet("""
-            #warningBar {
-                background: #fff3e0;
-                border: 1px solid #e65100;
-                border-radius: 6px;
-            }
-        """)
-        self.setVisible(False)
-        lay = QHBoxLayout(self)
-        lay.setContentsMargins(10, 6, 10, 6)
-        lay.setSpacing(10)
-
-        self._icon = QLabel("⚠️")
-        self._icon.setStyleSheet("font-size:16px; background:transparent; border:none;")
-        self._lbl = QLabel()
-        self._lbl.setWordWrap(True)
-        self._lbl.setStyleSheet(
-            "color:#bf360c; font-weight:bold; background:transparent; border:none;"
-        )
-
-        btn_fix = QPushButton("🗑️ حذف الناقص")
-        btn_fix.setStyleSheet(
-            "background:#e65100; color:white; border:none; border-radius:4px; padding:4px 10px;"
-        )
-        btn_fix.clicked.connect(on_fix)
-
-        btn_edit = QPushButton("✏️ تعديل")
-        btn_edit.setStyleSheet(
-            "background:#1565c0; color:white; border:none; border-radius:4px; padding:4px 10px;"
-        )
-        btn_edit.clicked.connect(on_edit)
-
-        btn_dismiss = QPushButton("✖")
-        btn_dismiss.setStyleSheet(
-            "background:transparent; color:#888; border:1px solid #ccc;"
-            "border-radius:4px; padding:4px 8px;"
-        )
-        btn_dismiss.clicked.connect(lambda: self.setVisible(False))
-
-        lay.addWidget(self._icon)
-        lay.addWidget(self._lbl, stretch=1)
-        lay.addWidget(btn_fix)
-        lay.addWidget(btn_edit)
-        lay.addWidget(btn_dismiss)
-
-    def show_orphans(self, orphans, product_name):
-        if not orphans:
-            self.setVisible(False)
-            return
-        lines = []
-        for o in orphans:
-            type_ar  = _TYPE_AR.get(o["child_type"], o["child_type"])
-            display  = o["child_name"] or f"ID: {o['child_id']}"
-            lines.append(f"• {type_ar}: «{display}»")
-        msg = f"«{product_name}» — {len(orphans)} مكوّن محذوف:\n" + "  ".join(lines)
-        self._lbl.setText(msg)
-        self.setVisible(True)
+# ── إعادة تصدير للتوافق مع الكود الحالي في product_main_panel.py ──
+# product_main_panel.py يستورد _WarningBar من هنا
+_WarningBar = BaseWarningBar
 
 
 class _ProductTable(QWidget, LiveConnMixin):
@@ -175,7 +114,9 @@ class _ProductTable(QWidget, LiveConnMixin):
             ))
             self.table.setItem(r, 3, QTableWidgetItem(f"{cost:.4f}"))
             shown += 1
+
         self._filter.set_count(shown, len(self._all_rows))
+
         if prev is not None:
             for r in range(self.table.rowCount()):
                 if int(self.table.item(r, 0).text()) == prev:

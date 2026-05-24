@@ -3,7 +3,7 @@ ui/tabs/costing/product/product_main_panel.py
 ===============================================
 _ProductMainPanel — اللوحة الرئيسية: فورم + جدول + BOM tree + تحذير.
 
-يرث من LiveConnMixin بدل كتابة _live_conn يدوياً.
+التحسين: يستخدم BaseWarningBar.show_orphans() بدل الـ API القديم
 """
 
 from PyQt5.QtWidgets import (
@@ -14,12 +14,12 @@ from PyQt5.QtCore import Qt
 from db.shared.items_repo import fetch_item, delete_item
 from ui.helpers            import confirm_delete
 from ui.widgets.shared.connection_mixin import LiveConnMixin
-from ui.widgets.shared.component_row._row_widget import ComponentRow
+from ui.widgets.shared.base_warning_bar import BaseWarningBar
 from ui.tabs.costing.shared.bom_tree      import BomTree
 from ui.events import bus
 
 from .product_form  import _FormPanel
-from .product_table import _ProductTable, _WarningBar
+from .product_table import _ProductTable
 from ._catalog_provider import build_product_catalog
 from ._orphan_handler   import _OrphanHandler
 
@@ -36,13 +36,6 @@ _SPLITTER_STYLE = f"""
 
 
 class _ProductMainPanel(QWidget, LiveConnMixin):
-    """
-    اللوحة الرئيسية للمنتجات — تجمع بين:
-      - الفورم (إضافة / تعديل) في الأعلى
-      - جدول المنتجات في المنتصف
-      - شجرة BOM في الأسفل
-    """
-
     def __init__(self, conn, product_type: str, parent=None):
         super().__init__(parent)
         self.conn         = conn
@@ -56,8 +49,6 @@ class _ProductMainPanel(QWidget, LiveConnMixin):
             return build_product_catalog(self._live_conn())
         except Exception:
             return {"raw": [], "semi": [], "labor_op": [], "machine_op": []}
-
-    # ── بناء الواجهة ──────────────────────────────────────
 
     def _build(self):
         root = QVBoxLayout(self)
@@ -77,9 +68,12 @@ class _ProductMainPanel(QWidget, LiveConnMixin):
         mid_layout.setContentsMargins(0, 0, 0, 0)
         mid_layout.setSpacing(0)
 
-        self._warning = _WarningBar(
+        # ✅ استخدام BaseWarningBar بدل _WarningBar المخصصة
+        self._warning = BaseWarningBar(
             on_fix=self._fix_orphans,
             on_edit=self._edit_selected,
+            fix_text="🗑️ حذف الناقص",
+            edit_text="✏️ تعديل",
         )
         mid_layout.addWidget(self._warning)
 
@@ -103,8 +97,6 @@ class _ProductMainPanel(QWidget, LiveConnMixin):
         splitter.setCollapsible(2, True)
 
         root.addWidget(splitter)
-
-    # ── أحداث البيانات ────────────────────────────────────
 
     def _on_data_changed(self):
         pid = self._prod_table.selected_pid()
@@ -130,7 +122,6 @@ class _ProductMainPanel(QWidget, LiveConnMixin):
             pass
 
     def _refresh_form_catalog(self):
-        """يحدث الـ catalog في كل ComponentRow موجود في الفورم."""
         try:
             new_catalog = self._get_catalog()
         except Exception:
@@ -143,9 +134,8 @@ class _ProductMainPanel(QWidget, LiveConnMixin):
         orphans = self._orphan.fetch(conn, pid)
         item    = fetch_item(conn, pid)
         name    = item["name"] if item else f"ID {pid}"
+        # ✅ استخدام show_orphans() من BaseWarningBar
         self._warning.show_orphans(orphans, name)
-
-    # ── إجراءات ──────────────────────────────────────────
 
     def _fix_orphans(self):
         pid = self._prod_table.selected_pid()
