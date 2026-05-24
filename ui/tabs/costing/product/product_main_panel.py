@@ -3,15 +3,7 @@ ui/tabs/costing/product/product_main_panel.py
 ===============================================
 _ProductMainPanel — اللوحة الرئيسية: فورم + جدول + BOM tree + تحذير.
 
-التقسيم الداخلي:
-  _catalog_provider.py  → build_product_catalog
-  _orphan_handler.py    → _OrphanHandler
-  product_form.py       → _FormPanel
-  product_table.py      → _ProductTable, _WarningBar
-  bom_tree.py           → BomTree
-
-الإصلاح: استخدام _live_conn() في كل العمليات عشان لما تتغير
-الشركة النشطة ويتغلق الـ connection القديم يشتغل صح.
+يرث من LiveConnMixin بدل كتابة _live_conn يدوياً.
 """
 
 from PyQt5.QtWidgets import (
@@ -21,6 +13,7 @@ from PyQt5.QtCore import Qt
 
 from db.shared.items_repo import fetch_item, delete_item
 from ui.helpers            import confirm_delete
+from ui.widgets.shared.connection_mixin import LiveConnMixin
 from ui.tabs.costing.shared.component_row import ComponentRow
 from ui.tabs.costing.shared.bom_tree      import BomTree
 from ui.events import bus
@@ -42,7 +35,7 @@ _SPLITTER_STYLE = f"""
 """
 
 
-class _ProductMainPanel(QWidget):
+class _ProductMainPanel(QWidget, LiveConnMixin):
     """
     اللوحة الرئيسية للمنتجات — تجمع بين:
       - الفورم (إضافة / تعديل) في الأعلى
@@ -57,18 +50,6 @@ class _ProductMainPanel(QWidget):
         self._orphan      = _OrphanHandler(parent=self)
         self._build()
         bus.data_changed.connect(self._on_data_changed)
-
-    # ── connection صالح دايماً ────────────────────────────
-
-    def _live_conn(self):
-        if self.conn is not None:
-            try:
-                self.conn.execute("SELECT 1")
-                return self.conn
-            except Exception:
-                pass
-        from db.companies.company_state import company_state
-        return company_state.get_erp_conn()
 
     def _get_catalog(self) -> dict:
         try:
@@ -87,14 +68,12 @@ class _ProductMainPanel(QWidget):
         splitter.setHandleWidth(6)
         splitter.setStyleSheet(_SPLITTER_STYLE)
 
-        # ── فورم الإضافة / التعديل ──
         self._form = _FormPanel(self.conn, self.product_type, self._get_catalog)
         bus.data_changed.connect(self._refresh_form_catalog)
 
-        # ── منطقة الجدول + التحذير ──
         from PyQt5.QtWidgets import QWidget as _W
-        mid_widget  = _W()
-        mid_layout  = QVBoxLayout(mid_widget)
+        mid_widget = _W()
+        mid_layout = QVBoxLayout(mid_widget)
         mid_layout.setContentsMargins(0, 0, 0, 0)
         mid_layout.setSpacing(0)
 
@@ -113,7 +92,6 @@ class _ProductMainPanel(QWidget):
         )
         mid_layout.addWidget(self._prod_table)
 
-        # ── شجرة BOM ──
         self._bom_tree = BomTree()
 
         splitter.addWidget(self._form)
@@ -157,14 +135,7 @@ class _ProductMainPanel(QWidget):
             new_catalog = self._get_catalog()
         except Exception:
             return
-        layout = self._form.rows_layout
-        for i in range(layout.count()):
-            item = layout.itemAt(i)
-            if not item:
-                continue
-            w = item.widget()
-            if isinstance(w, ComponentRow):
-                w.refresh_catalog(new_catalog)
+        self._form._rows.refresh_catalog(new_catalog)
 
     def _check_orphans(self, pid: int, conn=None):
         if conn is None:

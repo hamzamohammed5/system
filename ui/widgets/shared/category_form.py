@@ -3,8 +3,7 @@ ui/widgets/shared/category_form.py
 ============================
 _CategoryForm — QGroupBox لإضافة وتعديل التصنيفات الهرمية.
 
-الإصلاح: استخدام _live_conn بدل self.conn مباشرة عشان لما تتغير
-الشركة النشطة ويتغلق الـ connection القديم، الـ form يشتغل صح.
+يرث من LiveConnMixin بدل كتابة _live_conn يدوياً.
 """
 
 from PyQt5.QtWidgets import (
@@ -19,10 +18,11 @@ from db.shared.categories_repo import (
     insert_category, update_category,
     build_tree, fetch_descendants,
 )
+from ui.widgets.shared.connection_mixin import LiveConnMixin
 from ui.events import bus
 
 
-class _CategoryForm(QGroupBox):
+class _CategoryForm(QGroupBox, LiveConnMixin):
     def __init__(self, conn, scope: str, tree_widget, parent=None):
         super().__init__("بيانات التصنيف", parent)
         self.conn         = conn
@@ -31,23 +31,6 @@ class _CategoryForm(QGroupBox):
         self._editing_id  = None
         self._color       = "#607d8b"
         self._build()
-
-    # ── connection صالح دايماً ────────────────────────────
-
-    def _live_conn(self):
-        """
-        يرجع connection حي:
-        - لو self.conn صالح → استخدمه
-        - لو لا → اجلب من company_state
-        """
-        if self.conn is not None:
-            try:
-                self.conn.execute("SELECT 1")
-                return self.conn
-            except Exception:
-                pass
-        from db.companies.company_state import company_state
-        return company_state.get_erp_conn()
 
     # ══════════════════════════════════════════════════════
     # بناء الواجهة
@@ -62,17 +45,14 @@ class _CategoryForm(QGroupBox):
         self.lbl_mode.setStyleSheet("font-weight:bold; color:#1565c0;")
         form.addRow(self.lbl_mode)
 
-        # الاسم
         self.inp_name = QLineEdit()
         self.inp_name.setMinimumHeight(30)
         form.addRow("الاسم :", self.inp_name)
 
-        # التصنيف الأب
         self.cmb_parent = QComboBox()
         self.cmb_parent.setMinimumHeight(30)
         form.addRow("تابع لـ :", self.cmb_parent)
 
-        # اللون
         color_row = QHBoxLayout()
         self.lbl_color = QLabel()
         self.lbl_color.setFixedSize(28, 28)
@@ -87,7 +67,6 @@ class _CategoryForm(QGroupBox):
         color_row.addStretch()
         form.addRow("اللون :", color_row)
 
-        # أزرار
         btn_row = QHBoxLayout()
         self.btn_add    = QPushButton("➕  إضافة")
         self.btn_save   = QPushButton("💾  حفظ")

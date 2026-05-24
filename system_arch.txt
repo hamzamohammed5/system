@@ -1,5 +1,5 @@
 File Tree Snapshot
-Generated : 2026-05-24 09:25:19
+Generated : 2026-05-24 10:19:43
 Source    : D:\My Workspace\Hg\Alhabaar\accountant\system
 Extensions: .py
 ────────────────────────────────────────────────────────────
@@ -131,6 +131,10 @@ system/
 │   │   │   │   ├── machine_op_table.py
 │   │   │   │   └── machine_table.py
 │   │   │   ├── product/
+│   │   │   │   ├── form/
+│   │   │   │   │   ├── _header_bar.py
+│   │   │   │   │   ├── _rows_manager.py
+│   │   │   │   │   └── _save_logic.py
 │   │   │   │   ├── _catalog_provider.py
 │   │   │   │   ├── _orphan_handler.py
 │   │   │   │   ├── product_form.py

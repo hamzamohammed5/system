@@ -3,8 +3,7 @@ ui/widgets/shared/category_manager.py
 ===============================
 CategoryManager — شجرة QTreeWidget لإدارة التصنيفات الهرمية.
 
-الإصلاح: استخدام _live_conn بدل self.conn مباشرة عشان لما تتغير
-الشركة النشطة ويتغلق الـ connection القديم، الـ manager يشتغل صح.
+يرث من LiveConnMixin بدل كتابة _live_conn يدوياً.
 
 التقسيم:
   category_combo.py → CategoryCombo
@@ -25,6 +24,7 @@ from db.shared.categories_repo import (
     delete_category, count_category_items,
     build_tree, fetch_descendants,
 )
+from ui.widgets.shared.connection_mixin import LiveConnMixin
 from ui.events import bus
 
 # إعادة تصدير للتوافق مع الكود القديم
@@ -32,7 +32,7 @@ from ui.widgets.shared.category_combo import CategoryCombo          # noqa: F401
 from ui.widgets.shared.category_form  import _CategoryForm          # noqa: F401
 
 
-class CategoryManager(QWidget):
+class CategoryManager(QWidget, LiveConnMixin):
     def __init__(self, conn, scope: str = "all", parent=None):
         super().__init__(parent)
         self.conn  = conn
@@ -40,23 +40,6 @@ class CategoryManager(QWidget):
         self._build()
         self._load()
         bus.data_changed.connect(self._load)
-
-    # ── connection صالح دايماً ────────────────────────────
-
-    def _live_conn(self):
-        """
-        يرجع connection حي:
-        - لو self.conn صالح → استخدمه
-        - لو لا → اجلب من company_state
-        """
-        if self.conn is not None:
-            try:
-                self.conn.execute("SELECT 1")
-                return self.conn
-            except Exception:
-                pass
-        from db.companies.company_state import company_state
-        return company_state.get_erp_conn()
 
     # ══════════════════════════════════════════════════════
     # بناء الواجهة
@@ -67,7 +50,6 @@ class CategoryManager(QWidget):
         root.setContentsMargins(12, 12, 12, 12)
         root.setSpacing(10)
 
-        # ── الشجرة ──
         self.tree = QTreeWidget()
         self.tree.setHeaderLabels(["التصنيف", "الأبناء", "العناصر"])
         self.tree.setColumnWidth(0, 260)
@@ -78,7 +60,6 @@ class CategoryManager(QWidget):
         self.tree.itemSelectionChanged.connect(self._on_select)
         root.addWidget(self.tree)
 
-        # ── أزرار ──
         btn_row = QHBoxLayout()
         btn_edit = QPushButton("✏️  تعديل")
         btn_del  = QPushButton("🗑️  حذف")
@@ -94,7 +75,6 @@ class CategoryManager(QWidget):
         btn_row.addStretch()
         root.addLayout(btn_row)
 
-        # ── الفورم ──
         self._form = _CategoryForm(self.conn, self.scope, self.tree)
         root.addWidget(self._form)
 

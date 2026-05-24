@@ -1,31 +1,34 @@
 """
 ui/tabs/costing/product/product_form.py
+========================================
+_FormPanel — فورم إضافة / تعديل المنتج.
+
+التقسيم الداخلي (مجلد form/):
+  _header_bar.py   → شريط الهيدر (اسم + تصنيف + أزرار + سيناريوهات)
+  _rows_manager.py → إدارة صفوف المكونات
+  _save_logic.py   → منطق الحفظ في DB
 """
 
-from PyQt5.QtWidgets import (
-    QWidget, QVBoxLayout, QHBoxLayout,
-    QLineEdit, QPushButton, QLabel, QScrollArea,
-    QSizePolicy, QMessageBox,
-)
-from PyQt5.QtCore import Qt, QTimer
+from PyQt5.QtWidgets import QWidget, QVBoxLayout, QMessageBox
+from PyQt5.QtCore    import Qt, QTimer
 
 from db.shared.items_repo import (
-    fetch_item, insert_item, update_item,
-    fetch_orphan_bom_rows,
+    fetch_item, fetch_orphan_bom_rows,
 )
 from db.costing.bom_scenarios_repo import (
     fetch_default_scenario, insert_scenario,
-    fetch_bom_for_scenario, replace_bom_for_scenario,
+    fetch_bom_for_scenario,
 )
-from ui.helpers import success_button
-from ui.tabs.costing.shared.component_row    import ComponentRow
-from ui.widgets.shared.category_manager import CategoryCombo
-from ui.widgets.shared.scrollable_form  import wrap_in_scroll
-from ui.tabs.costing.shared.bom_scenarios_panel import _BomScenariosPanel
+from ui.widgets.shared.connection_mixin import LiveConnMixin
+from ui.tabs.costing.shared.component_row import ComponentRow
 from ui.events import bus
 
+from .form._header_bar   import _FormHeaderBar
+from .form._rows_manager import _RowsManager
+from .form._save_logic   import _SaveLogic
 
-class _FormPanel(QWidget):
+
+class _FormPanel(QWidget, LiveConnMixin):
     def __init__(self, conn, product_type: str, catalog_fn, parent=None):
         super().__init__(parent)
         self.conn         = conn
@@ -37,165 +40,62 @@ class _FormPanel(QWidget):
         self._current_scenario_id = None
         self._build()
 
-    # ── connection صالح دايماً ────────────────────────────
-
-    def _live_conn(self):
-        if self.conn is not None:
-            try:
-                self.conn.execute("SELECT 1")
-                return self.conn
-            except Exception:
-                pass
-        from db.companies.company_state import company_state
-        return company_state.get_erp_conn()
-
     def _build(self):
         root = QVBoxLayout(self)
         root.setContentsMargins(0, 0, 0, 0)
         root.setSpacing(0)
 
-        header_inner = QWidget()
-        header_inner.setMinimumWidth(400)
-        header_inner.setSizePolicy(QSizePolicy.Preferred, QSizePolicy.Minimum)
+        # ── الهيدر ──
+        self._header = _FormHeaderBar(self._live_conn(), scope=self._scope)
+        self._header.add_row_clicked.connect(lambda: self._add_row())
+        self._header.save_clicked.connect(self.save)
+        self._header.cancel_clicked.connect(self._do_cancel)
+        self._header.scenario_changed.connect(self._on_scenario_changed)
+        root.addWidget(self._header)
 
-        header_scroll = wrap_in_scroll(header_inner)
-        header_scroll.setFixedHeight(150)
+        # ── صفوف المكونات ──
+        self._rows = _RowsManager(self._catalog_fn)
+        root.addWidget(self._rows, stretch=1)
 
-        header_lay = QVBoxLayout(header_inner)
-        header_lay.setContentsMargins(12, 8, 12, 8)
-        header_lay.setSpacing(6)
+        # ── saver ──
+        self._saver = _SaveLogic(conn_fn=self._live_conn)
 
-        top = QHBoxLayout()
-        top.setSpacing(8)
-
-        self.lbl_mode = QLabel("─── منتج جديد ───")
-        self.lbl_mode.setStyleSheet("font-weight:bold; color:#1565c0; font-size:12px;")
-        self.lbl_mode.setMinimumWidth(160)
-
-        self.inp_name = QLineEdit()
-        self.inp_name.setPlaceholderText("اسم المنتج...")
-        self.inp_name.setMinimumHeight(32)
-
-        self.cmb_category = CategoryCombo(self._live_conn(), scope=self._scope)
-        self.cmb_category.setMinimumHeight(32)
-        self.cmb_category.setFixedWidth(160)
-
-        self.btn_add_row = QPushButton("+ مكون")
-        self.btn_add_row.setMinimumHeight(32)
-        self.btn_add_row.clicked.connect(lambda: self._add_row())
-
-        self.btn_save   = success_button("حفظ")
-        self.btn_cancel = QPushButton("X الغاء")
-        self.btn_save.setMinimumHeight(32)
-        self.btn_cancel.setMinimumHeight(32)
-        self.btn_save.clicked.connect(self.save)
-        self.btn_cancel.clicked.connect(self._do_cancel)
-        self.btn_cancel.setVisible(False)
-
-        top.addWidget(self.lbl_mode)
-        top.addWidget(self.inp_name, stretch=3)
-        top.addSpacing(4)
-        top.addWidget(QLabel("التصنيف:"))
-        top.addWidget(self.cmb_category)
-        top.addSpacing(8)
-        top.addWidget(self.btn_add_row)
-        top.addWidget(self.btn_save)
-        top.addWidget(self.btn_cancel)
-        header_lay.addLayout(top)
-
-        self._scenarios_panel = _BomScenariosPanel(self._live_conn())
-        self._scenarios_panel.scenario_changed.connect(self._on_scenario_changed)
-        header_lay.addWidget(self._scenarios_panel)
-
-        headers = QWidget()
-        hlay = QHBoxLayout(headers)
-        hlay.setContentsMargins(0, 0, 0, 0)
-        hlay.setSpacing(6)
-
-        def _hdr(text, w=None, stretch=0):
-            lbl = QLabel(text)
-            lbl.setStyleSheet(
-                "font-size:11px; font-weight:bold; color:#555;"
-                "border-bottom:1px solid #ccc; padding-bottom:2px;"
-            )
-            if w:
-                lbl.setFixedWidth(w)
-            hlay.addWidget(lbl, stretch=stretch)
-
-        _hdr("النوع",          150)
-        _hdr("العنصر",         stretch=3)
-        _hdr("الصف / Variant", 160)
-        _hdr("تكلفة/قطعة",    80)
-        _hdr("الكمية",         80)
-        _hdr("الهادر %",       90)
-        _hdr("",               32)
-        header_lay.addWidget(headers)
-
-        root.addWidget(header_scroll)
-
-        self.rows_container = QWidget()
-        self.rows_layout    = QVBoxLayout(self.rows_container)
-        self.rows_layout.setSpacing(2)
-        self.rows_layout.setContentsMargins(12, 4, 12, 4)
-        self.rows_layout.addStretch()
-
-        scroll = QScrollArea()
-        scroll.setWidgetResizable(True)
-        scroll.setWidget(self.rows_container)
-        scroll.setMinimumHeight(80)
-        scroll.setStyleSheet("border:none;")
-        root.addWidget(scroll, stretch=1)
-
+        # صف افتراضي
         self._add_row()
+
+    # ── Shorthands للـ header ─────────────────────────────
+
+    @property
+    def rows_layout(self):
+        """للتوافق مع الكود القديم في _ProductMainPanel."""
+        return self._rows.rows_layout
+
+    @property
+    def lbl_mode(self):
+        return self._header.lbl_mode
 
     # ══════════════════════════════════════════════════════
     # صفوف المكونات
     # ══════════════════════════════════════════════════════
 
-    def _add_row(self, child_type="raw", child_id=None, qty=1.0,
-                 orphan_name: str = None, waste_pct: float = 0.0,
-                 variant_id: int = None, machine_op_row_id: int = None):
-        row = ComponentRow(
-            catalog_fn=self._catalog_fn,
-            child_type=child_type,
-            child_id=child_id,
-            qty=qty,
-            waste_pct=waste_pct,
-            variant_id=variant_id,
-            machine_op_row_id=machine_op_row_id,
+    def _add_row(self, child_type: str = "raw", child_id=None,
+                 qty: float = 1.0, orphan_name: str = None,
+                 waste_pct: float = 0.0, variant_id: int = None,
+                 machine_op_row_id: int = None) -> ComponentRow:
+        return self._rows.add_row(
+            child_type=child_type, child_id=child_id, qty=qty,
+            orphan_name=orphan_name, waste_pct=waste_pct,
+            variant_id=variant_id, machine_op_row_id=machine_op_row_id,
         )
-        if row.is_orphan() and orphan_name:
-            row.set_orphan_name(orphan_name)
-        row.removed.connect(self._remove_row)
-        self.rows_layout.insertWidget(self.rows_layout.count() - 1, row)
-        QTimer.singleShot(0, row.refresh_catalog)
-        return row
 
     def _remove_row(self, widget):
-        self.rows_layout.removeWidget(widget)
-        widget.deleteLater()
+        self._rows._remove_row(widget)
 
     def collect_rows(self):
-        result = []
-        for i in range(self.rows_layout.count()):
-            item = self.rows_layout.itemAt(i)
-            if not item:
-                continue
-            w = item.widget()
-            if isinstance(w, ComponentRow):
-                val = w.get_values()
-                if val:
-                    val = tuple(val)
-                    while len(val) < 6:
-                        val = val + (None,)
-                    result.append(val)
-        return result
+        return self._rows.collect_rows()
 
     def clear_rows(self):
-        while self.rows_layout.count() > 1:
-            item = self.rows_layout.takeAt(0)
-            if item and item.widget():
-                item.widget().deleteLater()
+        self._rows.clear_rows()
 
     # ══════════════════════════════════════════════════════
     # تحميل المنتج للتعديل
@@ -209,18 +109,15 @@ class _FormPanel(QWidget):
             return
         if not item:
             return
-        self.clear_rows()
-        self.inp_name.setText(item["name"])
-        self.cmb_category.set_category(item["category_id"])
 
-        self._scenarios_panel.load_item(pid)
+        self.clear_rows()
+        self._header.product_name = item["name"]
+        self._header.set_category(item["category_id"])
+        self._header.scenarios_panel.load_item(pid)
 
         try:
             sc = fetch_default_scenario(conn, pid)
-            if not sc:
-                sc_id = insert_scenario(conn, pid, "سيناريو 1", is_default=True)
-            else:
-                sc_id = sc["id"]
+            sc_id = sc["id"] if sc else insert_scenario(conn, pid, "سيناريو 1", is_default=True)
         except Exception:
             sc_id = None
 
@@ -232,12 +129,13 @@ class _FormPanel(QWidget):
             n_orphans = len(fetch_orphan_bom_rows(conn, pid))
         except Exception:
             n_orphans = 0
+
         label = (
             f"تعديل: {item['name']}  {n_orphans} مكون ناقص"
             if n_orphans else f"تعديل: {item['name']}"
         )
         self.enter_edit_mode(pid, label)
-        self.inp_name.setFocus()
+        self._header.inp_name.setFocus()
 
     def _load_bom_for_scenario(self, pid: int, scenario_id: int):
         self.clear_rows()
@@ -284,13 +182,9 @@ class _FormPanel(QWidget):
             o_name = orphan_map.get((child_type, child_id))
 
             component_row = self._add_row(
-                child_type=child_type,
-                child_id=child_id,
-                qty=qty,
-                orphan_name=o_name,
-                waste_pct=waste_pct,
-                variant_id=variant_id,
-                machine_op_row_id=machine_op_row_id,
+                child_type=child_type, child_id=child_id, qty=qty,
+                orphan_name=o_name, waste_pct=waste_pct,
+                variant_id=variant_id, machine_op_row_id=machine_op_row_id,
             )
 
             if child_type == "machine_op" and child_id is not None:
@@ -310,11 +204,9 @@ class _FormPanel(QWidget):
     # ══════════════════════════════════════════════════════
 
     def reset(self):
-        self.inp_name.clear()
-        self.cmb_category.setCurrentIndex(0)
+        self._header.reset()
         self.clear_rows()
         self._add_row()
-        self._scenarios_panel.clear()
         self._current_scenario_id = None
         self.exit_edit_mode("منتج جديد")
 
@@ -323,54 +215,34 @@ class _FormPanel(QWidget):
     # ══════════════════════════════════════════════════════
 
     def save(self):
-        name = self.inp_name.text().strip()
-        if not name:
-            QMessageBox.warning(self, "تنبيه", "ادخل اسم المنتج اولا")
-            return
-        rows = self.collect_rows()
-        if not rows:
-            QMessageBox.warning(self, "تنبيه", "اضف مكونا واحدا على الاقل")
-            return
+        pid = self._saver.save(
+            is_editing=self.is_editing,
+            editing_id=self._editing_id,
+            name=self._header.product_name,
+            product_type=self.product_type,
+            category_id=self._header.category_id,
+            current_scenario_id=self._current_scenario_id,
+            rows=self.collect_rows(),
+            scenarios_panel=self._header.scenarios_panel,
+            parent_widget=self,
+        )
+        if pid is not None:
+            self.reset()
+            QTimer.singleShot(0, bus.data_changed.emit)
 
-        try:
-            conn = self._live_conn()
-            if self.is_editing:
-                update_item(
-                    conn, self._editing_id, name, 0,
-                    category_id=self.cmb_category.get_category()
-                )
-                if self._current_scenario_id is None:
-                    self._current_scenario_id = self._scenarios_panel.ensure_default_scenario(
-                        self._editing_id
-                    )
-                replace_bom_for_scenario(conn, self._current_scenario_id, rows)
-            else:
-                pid = insert_item(
-                    conn, name, self.product_type, 0,
-                    category_id=self.cmb_category.get_category()
-                )
-                sc_id = insert_scenario(conn, pid, "سيناريو 1", is_default=True)
-                replace_bom_for_scenario(conn, sc_id, rows)
+    # ══════════════════════════════════════════════════════
+    # وضع التعديل
+    # ══════════════════════════════════════════════════════
 
-            conn.commit()
-        except Exception as e:
-            QMessageBox.warning(self, "خطأ", str(e))
-            return
-
-        self.reset()
-        QTimer.singleShot(0, bus.data_changed.emit)
-
-    def enter_edit_mode(self, pid, label=""):
+    def enter_edit_mode(self, pid, label: str = ""):
         self._editing_id = pid
         self.is_editing  = True
-        self.lbl_mode.setText(label)
-        self.btn_cancel.setVisible(True)
+        self._header.enter_edit_mode(label)
 
-    def exit_edit_mode(self, label=""):
+    def exit_edit_mode(self, label: str = ""):
         self._editing_id = None
         self.is_editing  = False
-        self.lbl_mode.setText(label)
-        self.btn_cancel.setVisible(False)
+        self._header.exit_edit_mode(label or "منتج جديد")
 
     def _do_cancel(self):
         self.reset()

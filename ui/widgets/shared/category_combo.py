@@ -3,8 +3,8 @@ ui/widgets/shared/category_combo.py
 =============================
 CategoryCombo — QComboBox يعرض التصنيفات بشكل هرمي (indent).
 
-الإصلاح: استخدام live_conn بدل self.conn مباشرة عشان لما تتغير
-الشركة النشطة ويتغلق الـ connection القديم، الـ combo يشتغل صح.
+يرث من LiveConnMixin بدل كتابة _live_conn يدوياً.
+ملاحظة: الـ attribute هنا اسمه `conn` عشان يتوافق مع LiveConnMixin.
 """
 
 from PyQt5.QtWidgets import QComboBox
@@ -12,10 +12,11 @@ from PyQt5.QtCore    import Qt
 from PyQt5.QtGui     import QColor
 
 from db.shared.categories_repo import fetch_all_categories, build_tree
+from ui.widgets.shared.connection_mixin import LiveConnMixin
 from ui.events import bus
 
 
-class CategoryCombo(QComboBox):
+class CategoryCombo(QComboBox, LiveConnMixin):
     """
     Combo يعرض التصنيفات بشكل هرمي:
       — الكل —
@@ -25,27 +26,10 @@ class CategoryCombo(QComboBox):
     """
     def __init__(self, conn, scope: str = "all", parent=None):
         super().__init__(parent)
-        self._conn  = conn
-        self.scope  = scope
+        self.conn  = conn          # LiveConnMixin يقرأ self.conn
+        self.scope = scope
         self.refresh()
         bus.data_changed.connect(self.refresh)
-
-    # ── connection صالح دايماً ────────────────────────────
-
-    def _live_conn(self):
-        """
-        يرجع connection حي:
-        - لو self._conn صالح → استخدمه
-        - لو لا → اجلب من company_state
-        """
-        if self._conn is not None:
-            try:
-                self._conn.execute("SELECT 1")
-                return self._conn
-            except Exception:
-                pass
-        from db.companies.company_state import company_state
-        return company_state.get_erp_conn()
 
     # ── refresh ───────────────────────────────────────────
 

@@ -3,28 +3,7 @@ ui/widgets/shared/filter_bar.py
 ========================
 FilterBar — شريط فلتر مشترك يُستخدم في كل التبويبات.
 
-يوفر:
-  - بحث نصي بالاسم (QLineEdit مع زر مسح)
-  - فلتر بالتصنيف (CategoryCombo)
-  - signal filter_changed يُطلق عند أي تغيير
-
-الإصلاح: استخدام _live_conn بدل self.conn مباشرة عشان لما تتغير
-الشركة النشطة ويتغلق الـ connection القديم، الـ FilterBar يشتغل صح.
-
-الاستخدام:
-    from ui.widgets.filter_bar import FilterBar
-
-    self._filter = FilterBar(conn, scope="raw")
-    self._filter.filter_changed.connect(self._apply_filter)
-    layout.addWidget(self._filter)
-
-    # في دالة التحميل:
-    def _apply_filter(self):
-        name_q  = self._filter.name_query      # str
-        cat_id  = self._filter.category_id     # int | None
-        rows = [r for r in self._all_rows
-                if self._filter.match(r["name"], r["category_id"])]
-        ...
+يرث من LiveConnMixin بدل كتابة _live_conn يدوياً.
 """
 
 from PyQt5.QtWidgets import (
@@ -34,10 +13,11 @@ from PyQt5.QtCore import pyqtSignal, Qt, QTimer
 from PyQt5.QtGui  import QColor
 
 from db.shared.categories_repo import fetch_all_categories, build_tree
+from ui.widgets.shared.connection_mixin import LiveConnMixin
 from ui.events import bus
 
 
-class FilterBar(QWidget):
+class FilterBar(QWidget, LiveConnMixin):
     """
     شريط فلتر أفقي:
       [🔍 بحث بالاسم ...]  [✖]   [🏷 التصنيف ▼]   [↺ مسح الكل]
@@ -49,25 +29,7 @@ class FilterBar(QWidget):
         self.conn  = conn
         self.scope = scope
         self._build()
-        # تحديث الـ combo لو تغيرت التصنيفات
         bus.data_changed.connect(self._reload_categories)
-
-    # ── connection صالح دايماً ────────────────────────────
-
-    def _live_conn(self):
-        """
-        يرجع connection حي:
-        - لو self.conn صالح → استخدمه
-        - لو لا → اجلب من company_state
-        """
-        if self.conn is not None:
-            try:
-                self.conn.execute("SELECT 1")
-                return self.conn
-            except Exception:
-                pass
-        from db.companies.company_state import company_state
-        return company_state.get_erp_conn()
 
     # ══════════════════════════════════════════════════════
     # بناء الواجهة
@@ -86,7 +48,6 @@ class FilterBar(QWidget):
         lay.setContentsMargins(8, 6, 8, 6)
         lay.setSpacing(8)
 
-        # ── أيقونة بحث ──
         lbl_icon = QLabel("🔍")
         lbl_icon.setStyleSheet(
             "background:transparent; border:none; font-size:13px;"
@@ -94,7 +55,6 @@ class FilterBar(QWidget):
         lbl_icon.setFixedWidth(20)
         lay.addWidget(lbl_icon)
 
-        # ── حقل البحث ──
         self.inp_search = QLineEdit()
         self.inp_search.setPlaceholderText("بحث بالاسم...")
         self.inp_search.setMinimumHeight(28)
@@ -106,11 +66,8 @@ class FilterBar(QWidget):
                 padding: 2px 8px;
                 font-size: 12px;
             }
-            QLineEdit:focus {
-                border-color: #1565c0;
-            }
+            QLineEdit:focus { border-color: #1565c0; }
         """)
-        # تأخير بسيط لتجنب البحث عند كل حرف
         self._search_timer = QTimer()
         self._search_timer.setSingleShot(True)
         self._search_timer.setInterval(250)
@@ -120,7 +77,6 @@ class FilterBar(QWidget):
         )
         lay.addWidget(self.inp_search, stretch=2)
 
-        # ── زر مسح البحث ──
         self.btn_clear_search = QPushButton("✖")
         self.btn_clear_search.setFixedSize(24, 24)
         self.btn_clear_search.setStyleSheet("""
@@ -136,14 +92,12 @@ class FilterBar(QWidget):
         self.btn_clear_search.clicked.connect(self._clear_search)
         lay.addWidget(self.btn_clear_search)
 
-        # ── فاصل ──
         sep = QLabel("│")
         sep.setStyleSheet(
             "color:#c5cae9; background:transparent; border:none; font-size:16px;"
         )
         lay.addWidget(sep)
 
-        # ── label التصنيف ──
         lbl_cat = QLabel("🏷")
         lbl_cat.setStyleSheet(
             "background:transparent; border:none; font-size:13px;"
@@ -151,7 +105,6 @@ class FilterBar(QWidget):
         lbl_cat.setFixedWidth(20)
         lay.addWidget(lbl_cat)
 
-        # ── combo التصنيف ──
         self.cmb_cat = QComboBox()
         self.cmb_cat.setMinimumHeight(28)
         self.cmb_cat.setMinimumWidth(160)
@@ -170,7 +123,6 @@ class FilterBar(QWidget):
         self.cmb_cat.currentIndexChanged.connect(self.filter_changed.emit)
         lay.addWidget(self.cmb_cat, stretch=1)
 
-        # ── زر مسح الكل ──
         btn_reset = QPushButton("↺ مسح الكل")
         btn_reset.setMinimumHeight(28)
         btn_reset.setStyleSheet("""
@@ -182,14 +134,11 @@ class FilterBar(QWidget):
                 font-size: 11px;
                 color: #3949ab;
             }
-            QPushButton:hover {
-                background: #c5cae9;
-            }
+            QPushButton:hover { background: #c5cae9; }
         """)
         btn_reset.clicked.connect(self.reset)
         lay.addWidget(btn_reset)
 
-        # ── عداد النتائج ──
         self.lbl_count = QLabel("")
         self.lbl_count.setStyleSheet(
             "color:#1565c0; font-size:10px; font-weight:bold;"
@@ -220,7 +169,6 @@ class FilterBar(QWidget):
         except Exception:
             pass
 
-        # استعادة الاختيار السابق
         for i in range(self.cmb_cat.count()):
             if self.cmb_cat.itemData(i) == prev:
                 self.cmb_cat.setCurrentIndex(i)
@@ -255,11 +203,6 @@ class FilterBar(QWidget):
         return self.cmb_cat.currentData()
 
     def match(self, name: str, cat_id) -> bool:
-        """
-        يرجع True لو الصف يطابق الفلتر الحالي.
-        name   : اسم العنصر
-        cat_id : category_id الخاص بالعنصر (ممكن None)
-        """
         q = self.name_query
         if q and q not in (name or "").lower():
             return False
@@ -269,7 +212,6 @@ class FilterBar(QWidget):
         return True
 
     def set_count(self, shown: int, total: int):
-        """يحدّث عداد النتائج."""
         if shown == total:
             self.lbl_count.setText(f"({total})")
         else:
