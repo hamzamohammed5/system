@@ -3,10 +3,10 @@ ui/tabs/accounting/investors/_movement_dialog.py
 =================================================
 _MovementDialog — نافذة إضافة حركة (capital / drawings) لمستثمر.
 
-تغييرات (v2):
-  - يبعت bus.company_data_changed بدل bus.data_changed العام.
-  - إزالة الاشتراك في bus.data_changed لتحديث الـ combos (كان بيأثر على كل الشركات).
-  - الـ combos بتتحدث فقط عند فتح النافذة.
+تغييرات (v3 — SafeConnMixin):
+  - SafeConnMixin على acc_conn.
+  - _get_erp_conn() بدل self.erp_conn الثابت.
+  - الـ combos تستخدم _get_safe_conn() عند الفتح — مش conn محفوظ.
 """
 
 from PyQt5.QtWidgets import (
@@ -17,33 +17,24 @@ from PyQt5.QtWidgets import (
 from PyQt5.QtCore import Qt, QDate
 
 from ui.events import bus
+from ui.tabs.accounting.safe_conn_mixin import SafeConnMixin
 from ._helpers import (
     _spin, _fill_capital_combo, _fill_drawings_combo, _fill_asset_combo,
     _post_capital_entry, _post_drawings_entry,
 )
 
 
-def _get_current_company_id():
-    try:
-        from db.companies.company_state import company_state
-        return company_state.company_id if company_state.is_ready else None
-    except Exception:
-        return None
-
-
-class _MovementDialog(QDialog):
-    """نافذة تسجيل رأس مال أو مسحوبات لمستثمر."""
-
+class _MovementDialog(SafeConnMixin, QDialog):
     def __init__(self, acc_conn, erp_conn,
                  investor_id, investor_name,
                  move_type="capital", parent=None):
         super().__init__(parent)
-        self.acc_conn      = acc_conn
-        self.erp_conn      = erp_conn
+        self._init_safe_conn(acc_conn, "accounting")
+        self._erp_conn_ref = erp_conn
         self.investor_id   = investor_id
         self.investor_name = investor_name
         self.move_type     = move_type
-        self._company_id   = _get_current_company_id()
+        self._company_id   = self._get_company_id()
 
         is_cap = move_type == "capital"
         title  = "💰  إضافة رأس مال" if is_cap else "💸  تسجيل مسحوبات"
@@ -52,13 +43,27 @@ class _MovementDialog(QDialog):
         self.setModal(True)
         self.setLayoutDirection(Qt.RightToLeft)
         self._build()
-        # لا نشترك في bus.data_changed — الـ combos بتتحدث عند الفتح فقط
+
+    def _get_erp_conn(self):
+        try:
+            self._erp_conn_ref.execute("SELECT 1")
+            return self._erp_conn_ref
+        except Exception:
+            pass
+        try:
+            from db.companies.company_state import company_state
+            new = company_state._get_conn("erp")
+            self._erp_conn_ref = new
+            return new
+        except Exception:
+            return self._erp_conn_ref
 
     def _build(self):
-        root = QVBoxLayout(self)
+        root   = QVBoxLayout(self)
         root.setSpacing(14)
         root.setContentsMargins(20, 16, 20, 16)
-
+        # نجلب conn حي عند البناء للـ combos
+        acc    = self._get_safe_conn()
         is_cap = self.move_type == "capital"
         color  = "#2e7d32" if is_cap else "#c62828"
         bg     = "#f1f8e9" if is_cap else "#fdecea"
@@ -73,7 +78,9 @@ class _MovementDialog(QDialog):
         root.addWidget(lbl_title)
 
         grp  = QGroupBox()
-        grp.setStyleSheet("QGroupBox { border:1px solid #e0e0e0; border-radius:8px; padding-top:10px; }")
+        grp.setStyleSheet(
+            "QGroupBox { border:1px solid #e0e0e0; border-radius:8px; padding-top:10px; }"
+        )
         form = QFormLayout(grp)
         form.setSpacing(12)
         form.setLabelAlignment(Qt.AlignRight)
@@ -91,15 +98,15 @@ class _MovementDialog(QDialog):
         self.cmb_equity_acc = QComboBox()
         self.cmb_equity_acc.setMinimumHeight(30)
         if is_cap:
-            _fill_capital_combo(self.cmb_equity_acc, self.acc_conn)
+            _fill_capital_combo(self.cmb_equity_acc, acc)
             form.addRow("حساب رأس المال:", self.cmb_equity_acc)
         else:
-            _fill_drawings_combo(self.cmb_equity_acc, self.acc_conn)
+            _fill_drawings_combo(self.cmb_equity_acc, acc)
             form.addRow("حساب المسحوبات:", self.cmb_equity_acc)
 
         self.cmb_asset_acc = QComboBox()
         self.cmb_asset_acc.setMinimumHeight(30)
-        _fill_asset_combo(self.cmb_asset_acc, self.acc_conn)
+        _fill_asset_combo(self.cmb_asset_acc, acc)
         asset_lbl = "حساب الإيداع (أصل):" if is_cap else "حساب الصرف (أصل):"
         form.addRow(asset_lbl, self.cmb_asset_acc)
 
@@ -172,20 +179,22 @@ class _MovementDialog(QDialog):
             return
         date  = self.dt_date.date().toString("yyyy-MM-dd")
         notes = self.inp_notes.text().strip() or None
+        # نجلب conn حي وقت الحفظ — مش وقت الإنشاء
+        acc = self._get_safe_conn()
+        erp = self._get_erp_conn()
         try:
             if self.move_type == "capital":
                 _post_capital_entry(
-                    self.acc_conn, self.erp_conn,
+                    acc, erp,
                     self.investor_id, self.investor_name,
                     equity_acc, asset_acc, amount, date, notes
                 )
             else:
                 _post_drawings_entry(
-                    self.acc_conn, self.erp_conn,
+                    acc, erp,
                     self.investor_id, self.investor_name,
                     equity_acc, asset_acc, amount, date, notes
                 )
-            # إطلاق الحدث المقيّد بالشركة النشطة
             if self._company_id is not None:
                 bus.company_data_changed.emit(self._company_id)
             else:

@@ -3,9 +3,10 @@ ui/tabs/accounting/investors/_investors_table.py
 ================================================
 _InvestorsTable — جدول المستثمرين مع أزرار الإضافة والتعديل والحذف.
 
-تغييرات (v2):
-  - يستمع لـ bus.company_data_changed بدل bus.data_changed العام.
-  - يتحقق من الـ company_id قبل إعادة التحميل لعزل بيانات الشركات.
+تغييرات (v3 — SafeConnMixin):
+  - SafeConnMixin على acc_conn.
+  - _get_erp_conn() بدل self.erp_conn الثابت.
+  - يستمع لـ bus.company_data_changed مع فلترة company_id.
 """
 
 from PyQt5.QtWidgets import (
@@ -23,34 +24,41 @@ from ui.helpers import (
     section_label, danger_button, confirm_delete,
 )
 from ui.events import bus
+from ui.tabs.accounting.safe_conn_mixin import SafeConnMixin
 from ._investor_form    import _InvestorForm
 from ._movement_dialog  import _MovementDialog
 
 
-def _get_current_company_id():
-    try:
-        from db.companies.company_state import company_state
-        return company_state.company_id if company_state.is_ready else None
-    except Exception:
-        return None
-
-
-class _InvestorsTable(QWidget):
+class _InvestorsTable(SafeConnMixin, QWidget):
     def __init__(self, acc_conn, erp_conn, form: _InvestorForm,
                  on_select, parent=None):
         super().__init__(parent)
-        self.acc_conn    = acc_conn
-        self.erp_conn    = erp_conn
-        self._form       = form
-        self._on_select  = on_select
-        self._company_id = _get_current_company_id()
+        self._init_safe_conn(acc_conn, "accounting")
+        self._erp_conn_ref = erp_conn
+        self._form         = form
+        self._on_select    = on_select
+        self._company_id   = self._get_company_id()
         self._build()
         self._load()
         bus.company_data_changed.connect(self._on_company_event)
 
     def _on_company_event(self, company_id: int):
-        if company_id == self._company_id:
+        if self._on_company_event_safe(company_id):
             self._load()
+
+    def _get_erp_conn(self):
+        try:
+            self._erp_conn_ref.execute("SELECT 1")
+            return self._erp_conn_ref
+        except Exception:
+            pass
+        try:
+            from db.companies.company_state import company_state
+            new = company_state._get_conn("erp")
+            self._erp_conn_ref = new
+            return new
+        except Exception:
+            return self._erp_conn_ref
 
     def _build(self):
         root = QVBoxLayout(self)
@@ -105,7 +113,7 @@ class _InvestorsTable(QWidget):
         return int(item.text()) if item else None
 
     def _load(self):
-        summaries = calc_all_investors_summary(self.erp_conn)
+        summaries = calc_all_investors_summary(self._get_erp_conn())
         self.table.setRowCount(0)
         for s in summaries:
             r = self.table.rowCount()
@@ -144,9 +152,10 @@ class _InvestorsTable(QWidget):
         if not inv_id:
             QMessageBox.information(self, "تنبيه", "اختر مستثمراً أولاً")
             return
-        inv = fetch_investor(self.erp_conn, inv_id)
+        erp = self._get_erp_conn()
+        inv = fetch_investor(erp, inv_id)
         if confirm_delete(self, inv["name"]):
-            delete_investor(self.erp_conn, inv_id)
+            delete_investor(erp, inv_id)
             bus.company_data_changed.emit(self._company_id or 0)
 
     def _open_movement(self, move_type: str):
@@ -154,9 +163,11 @@ class _InvestorsTable(QWidget):
         if not inv_id:
             QMessageBox.information(self, "تنبيه", "اختر مستثمراً أولاً")
             return
-        inv = fetch_investor(self.erp_conn, inv_id)
+        erp = self._get_erp_conn()
+        acc = self._get_safe_conn()
+        inv = fetch_investor(erp, inv_id)
         dlg = _MovementDialog(
-            self.acc_conn, self.erp_conn,
+            acc, erp,
             inv_id, inv["name"], move_type, parent=self
         )
         dlg.exec_()

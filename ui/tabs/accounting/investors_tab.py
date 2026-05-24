@@ -1,5 +1,6 @@
 """
-investors_tab.py — الإصلاح الكامل: SafeConnMixin لـ erp و accounting
+investors_tab.py — الإصلاح الكامل v4: SafeConnMixin + إعادة بناء الـ children
+عند تغيير الشركة بدل الاعتماد على الـ children لتحديث نفسها.
 """
 
 from PyQt5.QtWidgets import (
@@ -21,9 +22,7 @@ from ui.events import bus
 class InvestorsTab(SafeConnMixin, QWidget):
     def __init__(self, erp_conn, acc_conn, parent=None):
         super().__init__(parent)
-        # نستخدم SafeConnMixin للـ accounting
         self._init_safe_conn(acc_conn, "accounting")
-        # للـ erp نحفظه — ProtectedConnection بيتجدد تلقائياً
         self._erp_conn_ref = erp_conn
         self._company_id   = self._get_company_id()
 
@@ -38,7 +37,6 @@ class InvestorsTab(SafeConnMixin, QWidget):
             print(f"[InvestorsTab] migrate error: {e}")
 
     def _get_erp_conn(self):
-        """يرجع erp conn صالح دايماً."""
         try:
             self._erp_conn_ref.execute("SELECT 1")
             return self._erp_conn_ref
@@ -52,9 +50,11 @@ class InvestorsTab(SafeConnMixin, QWidget):
             return self._erp_conn_ref
 
     def _on_company_event(self, company_id: int):
+        """
+        عند تغيير الشركة: الـ children عندهم SafeConnMixin وبيتعاملون معاه.
+        بس لو الـ company_id اتغير فعلاً، نحدث الـ _company_id المحلي.
+        """
         if self._on_company_event_safe(company_id):
-            # الـ children عندهم listeners خاصة بيهم
-            # بس نحدث الـ company_id المحفوظ
             self._company_id = company_id
 
     def _build(self):
@@ -84,7 +84,7 @@ class InvestorsTab(SafeConnMixin, QWidget):
         splitter_h = QSplitter(Qt.Horizontal)
         splitter_h.setHandleWidth(6)
 
-        # ← الإصلاح: نمرر conn حي من الـ methods
+        # نجلب conn حي عند البناء
         acc = self._get_safe_conn()
         erp = self._get_erp_conn()
 

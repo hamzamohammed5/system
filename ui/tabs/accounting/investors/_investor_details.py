@@ -3,9 +3,10 @@ ui/tabs/accounting/investors/_investor_details.py
 =================================================
 _InvestorDetails — لوحة تفاصيل مستثمر واحد مع حذف الحركات.
 
-تغييرات (v2):
-  - يستمع لـ bus.company_data_changed بدل bus.data_changed العام.
-  - يتحقق من الـ company_id قبل إعادة التحميل لعزل بيانات الشركات.
+تغييرات (v3 — SafeConnMixin لكلا الـ connections):
+  - SafeConnMixin على acc_conn بدل self.acc_conn الثابت.
+  - _erp_conn_ref مع _get_erp_conn() بدل self.erp_conn الثابت.
+  - يستمع لـ bus.company_data_changed مع فلترة company_id.
 """
 
 from PyQt5.QtWidgets import (
@@ -24,34 +25,41 @@ from ui.helpers import (
     section_label, danger_button,
 )
 from ui.events import bus
+from ui.tabs.accounting.safe_conn_mixin import SafeConnMixin
 from ._helpers import _stat_card
 
 
-def _get_current_company_id() -> int | None:
-    try:
-        from db.companies.company_state import company_state
-        return company_state.company_id if company_state.is_ready else None
-    except Exception:
-        return None
-
-
-class _InvestorDetails(QWidget):
+class _InvestorDetails(SafeConnMixin, QWidget):
     def __init__(self, acc_conn, erp_conn, parent=None):
         super().__init__(parent)
-        self.acc_conn = acc_conn
-        self.erp_conn = erp_conn
-        self._inv_id  = None
-
-        # حفظ الـ company_id عند الإنشاء لفلترة الأحداث
-        self._company_id = _get_current_company_id()
+        # acc_conn عبر SafeConnMixin
+        self._init_safe_conn(acc_conn, "accounting")
+        # erp_conn بنفس الأسلوب — نحفظه ونتحقق منه عند الاستخدام
+        self._erp_conn_ref = erp_conn
+        self._inv_id       = None
+        self._company_id   = self._get_company_id()
 
         self._build()
         bus.company_data_changed.connect(self._on_company_event)
 
     def _on_company_event(self, company_id: int):
-        """يُعيد التحميل فقط لو الحدث من نفس شركتنا."""
-        if company_id == self._company_id:
+        if self._on_company_event_safe(company_id):
             self._refresh()
+
+    def _get_erp_conn(self):
+        """يرجع erp conn صالح دايماً."""
+        try:
+            self._erp_conn_ref.execute("SELECT 1")
+            return self._erp_conn_ref
+        except Exception:
+            pass
+        try:
+            from db.companies.company_state import company_state
+            new = company_state._get_conn("erp")
+            self._erp_conn_ref = new
+            return new
+        except Exception:
+            return self._erp_conn_ref
 
     def _build(self):
         root = QVBoxLayout(self)
@@ -102,7 +110,9 @@ class _InvestorDetails(QWidget):
     def _refresh(self):
         if self._inv_id is None:
             return
-        s = calc_investor_summary(self.erp_conn, self._inv_id, self.acc_conn)
+        erp = self._get_erp_conn()
+        acc = self._get_safe_conn()
+        s   = calc_investor_summary(erp, self._inv_id, acc)
         if not s:
             return
 
@@ -162,16 +172,17 @@ class _InvestorDetails(QWidget):
         if reply != QMessageBox.Yes:
             return
         try:
-            link_row = self.erp_conn.execute(
+            erp = self._get_erp_conn()
+            acc = self._get_safe_conn()
+            link_row = erp.execute(
                 "SELECT entry_id FROM investor_entries WHERE id=?", (link_id,)
             ).fetchone()
             if link_row:
                 try:
-                    delete_entry(self.acc_conn, link_row["entry_id"])
+                    delete_entry(acc, link_row["entry_id"])
                 except Exception as e:
                     print(f"[InvestorDetails] could not delete acc entry: {e}")
-            delete_investor_link(self.erp_conn, link_id)
-            # إطلاق الحدث المقيّد بالشركة النشطة
+            delete_investor_link(erp, link_id)
             bus.company_data_changed.emit(self._company_id or 0)
         except Exception as e:
             QMessageBox.critical(self, "خطأ", str(e))

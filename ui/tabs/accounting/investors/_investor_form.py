@@ -3,9 +3,10 @@ ui/tabs/accounting/investors/_investor_form.py
 ==============================================
 _InvestorForm — فورم إضافة / تعديل مستثمر مع رأس المال الأولي.
 
-تغييرات (v2):
-  - يستمع لـ bus.company_data_changed بدل bus.data_changed العام.
-  - يتحقق من الـ company_id قبل تحديث الـ combos لعزل بيانات الشركات.
+تغييرات (v3 — SafeConnMixin):
+  - SafeConnMixin على acc_conn.
+  - _get_erp_conn() بدل self.erp_conn الثابت.
+  - يستمع لـ bus.company_data_changed مع فلترة company_id.
 """
 
 from PyQt5.QtWidgets import (
@@ -20,37 +21,41 @@ from db.inventory.investors_repo import (
 )
 from ui.helpers import EditModeMixin
 from ui.events  import bus
+from ui.tabs.accounting.safe_conn_mixin import SafeConnMixin
 from ._helpers  import (
     _spin, _fill_capital_combo, _fill_asset_combo,
     _post_capital_entry,
 )
 
 
-def _get_current_company_id() -> int | None:
-    try:
-        from db.companies.company_state import company_state
-        return company_state.company_id if company_state.is_ready else None
-    except Exception:
-        return None
-
-
-class _InvestorForm(QWidget, EditModeMixin):
+class _InvestorForm(SafeConnMixin, QWidget, EditModeMixin):
     def __init__(self, acc_conn, erp_conn, parent=None):
         super().__init__(parent)
-        self.acc_conn = acc_conn
-        self.erp_conn = erp_conn
-
-        # حفظ الـ company_id عند الإنشاء لفلترة الأحداث
-        self._company_id = _get_current_company_id()
+        self._init_safe_conn(acc_conn, "accounting")
+        self._erp_conn_ref = erp_conn
+        self._company_id   = self._get_company_id()
 
         self._build()
         self.init_edit_mode(self.btn_add, self.btn_save, self.btn_cancel, self.lbl_mode)
         bus.company_data_changed.connect(self._on_company_event)
 
     def _on_company_event(self, company_id: int):
-        """يُحدّث الـ combos فقط لو الحدث من نفس شركتنا."""
-        if company_id == self._company_id:
+        if self._on_company_event_safe(company_id):
             self._refresh_account_combos()
+
+    def _get_erp_conn(self):
+        try:
+            self._erp_conn_ref.execute("SELECT 1")
+            return self._erp_conn_ref
+        except Exception:
+            pass
+        try:
+            from db.companies.company_state import company_state
+            new = company_state._get_conn("erp")
+            self._erp_conn_ref = new
+            return new
+        except Exception:
+            return self._erp_conn_ref
 
     def _build(self):
         root = QVBoxLayout(self)
@@ -100,7 +105,9 @@ class _InvestorForm(QWidget, EditModeMixin):
         init_lay.setLabelAlignment(Qt.AlignRight)
 
         lbl_init = QLabel("💰  رأس المال الأولي (اختياري)")
-        lbl_init.setStyleSheet("font-weight:bold; color:#2e7d32; background:transparent; border:none;")
+        lbl_init.setStyleSheet(
+            "font-weight:bold; color:#2e7d32; background:transparent; border:none;"
+        )
         init_lay.addRow(lbl_init)
 
         self.sp_initial = _spin()
@@ -109,12 +116,12 @@ class _InvestorForm(QWidget, EditModeMixin):
 
         self.cmb_capital_acc = QComboBox()
         self.cmb_capital_acc.setMinimumHeight(28)
-        _fill_capital_combo(self.cmb_capital_acc, self.acc_conn)
+        _fill_capital_combo(self.cmb_capital_acc, self._get_safe_conn())
         init_lay.addRow("حساب رأس المال:", self.cmb_capital_acc)
 
         self.cmb_asset_acc = QComboBox()
         self.cmb_asset_acc.setMinimumHeight(28)
-        _fill_asset_combo(self.cmb_asset_acc, self.acc_conn)
+        _fill_asset_combo(self.cmb_asset_acc, self._get_safe_conn())
         init_lay.addRow("حساب الإيداع:", self.cmb_asset_acc)
 
         self.lbl_init_preview = QLabel("─")
@@ -150,10 +157,11 @@ class _InvestorForm(QWidget, EditModeMixin):
         root.addStretch()
 
     def _refresh_account_combos(self):
+        conn       = self._get_safe_conn()
         prev_cap   = self.cmb_capital_acc.currentData()
         prev_asset = self.cmb_asset_acc.currentData()
-        _fill_capital_combo(self.cmb_capital_acc, self.acc_conn, prev_cap)
-        _fill_asset_combo(self.cmb_asset_acc, self.acc_conn, prev_asset)
+        _fill_capital_combo(self.cmb_capital_acc, conn, prev_cap)
+        _fill_asset_combo(self.cmb_asset_acc, conn, prev_asset)
         self._update_init_preview()
 
     def _update_init_preview(self):
@@ -183,7 +191,9 @@ class _InvestorForm(QWidget, EditModeMixin):
         data = self._collect()
         if not data:
             return
-        inv_id = insert_investor(self.erp_conn, **data)
+        erp    = self._get_erp_conn()
+        acc    = self._get_safe_conn()
+        inv_id = insert_investor(erp, **data)
         amount = self.sp_initial.value()
         if amount > 0:
             cap_acc   = self.cmb_capital_acc.currentData()
@@ -191,7 +201,7 @@ class _InvestorForm(QWidget, EditModeMixin):
             if cap_acc and asset_acc:
                 try:
                     _post_capital_entry(
-                        self.acc_conn, self.erp_conn,
+                        acc, erp,
                         inv_id, data["name"],
                         cap_acc, asset_acc, amount,
                         data["joined_at"],
@@ -201,24 +211,22 @@ class _InvestorForm(QWidget, EditModeMixin):
                     QMessageBox.warning(self, "تنبيه",
                                         f"تم إضافة المستثمر لكن فشل القيد:\n{e}")
         self._reset()
-        # إطلاق الحدث المقيّد بالشركة النشطة
         bus.company_data_changed.emit(self._company_id or 0)
 
     def _save_edit(self):
         data = self._collect()
         if not data:
             return
-        update_investor(self.erp_conn, self._editing_id,
+        update_investor(self._get_erp_conn(), self._editing_id,
                         data["name"], data["notes"], data["joined_at"])
         self._reset()
-        # إطلاق الحدث المقيّد بالشركة النشطة
         bus.company_data_changed.emit(self._company_id or 0)
 
     def _cancel(self):
         self._reset()
 
     def load_for_edit(self, inv_id: int):
-        inv = fetch_investor(self.erp_conn, inv_id)
+        inv = fetch_investor(self._get_erp_conn(), inv_id)
         if not inv:
             return
         self.inp_name.setText(inv["name"])

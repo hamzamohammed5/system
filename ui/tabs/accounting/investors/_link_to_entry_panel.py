@@ -3,9 +3,10 @@ ui/tabs/accounting/investors/_link_to_entry_panel.py
 =====================================================
 _LinkToEntryPanel — لوحة ربط مستثمر بقيد محاسبي موجود.
 
-تغييرات (v2):
-  - يستمع لـ bus.company_data_changed بدل bus.data_changed العام.
-  - يتحقق من الـ company_id قبل إعادة تحميل المستثمرين لعزل بيانات الشركات.
+تغييرات (v3 — SafeConnMixin):
+  - SafeConnMixin على acc_conn.
+  - _get_erp_conn() بدل self.erp_conn الثابت.
+  - يستمع لـ bus.company_data_changed مع فلترة company_id.
 """
 
 from PyQt5.QtWidgets import (
@@ -17,30 +18,36 @@ from PyQt5.QtCore import Qt
 
 from db.inventory.investors_repo import fetch_all_investors, link_investor_to_line
 from ui.events import bus
+from ui.tabs.accounting.safe_conn_mixin import SafeConnMixin
 from ._helpers import _spin
 
 
-def _get_current_company_id() -> int | None:
-    try:
-        from db.companies.company_state import company_state
-        return company_state.company_id if company_state.is_ready else None
-    except Exception:
-        return None
-
-
-class _LinkToEntryPanel(QWidget):
+class _LinkToEntryPanel(SafeConnMixin, QWidget):
     def __init__(self, acc_conn, erp_conn, parent=None):
         super().__init__(parent)
-        self.acc_conn    = acc_conn
-        self.erp_conn    = erp_conn
-        self._company_id = _get_current_company_id()
+        self._init_safe_conn(acc_conn, "accounting")
+        self._erp_conn_ref = erp_conn
+        self._company_id   = self._get_company_id()
         self._build()
         bus.company_data_changed.connect(self._on_company_event)
 
     def _on_company_event(self, company_id: int):
-        """يُعيد تحميل المستثمرين فقط لو الحدث من نفس شركتنا."""
-        if company_id == self._company_id:
+        if self._on_company_event_safe(company_id):
             self._reload_investors()
+
+    def _get_erp_conn(self):
+        try:
+            self._erp_conn_ref.execute("SELECT 1")
+            return self._erp_conn_ref
+        except Exception:
+            pass
+        try:
+            from db.companies.company_state import company_state
+            new = company_state._get_conn("erp")
+            self._erp_conn_ref = new
+            return new
+        except Exception:
+            return self._erp_conn_ref
 
     def _build(self):
         root = QVBoxLayout(self)
@@ -111,7 +118,7 @@ class _LinkToEntryPanel(QWidget):
         self.cmb_investor.blockSignals(True)
         self.cmb_investor.clear()
         try:
-            for inv in fetch_all_investors(self.erp_conn):
+            for inv in fetch_all_investors(self._get_erp_conn()):
                 self.cmb_investor.addItem(inv["name"], inv["id"])
         except Exception:
             pass
@@ -138,7 +145,10 @@ class _LinkToEntryPanel(QWidget):
             QMessageBox.warning(self, "تنبيه", "أدخل مبلغاً أكبر من صفر")
             return
 
-        entry_row = self.acc_conn.execute(
+        acc = self._get_safe_conn()
+        erp = self._get_erp_conn()
+
+        entry_row = acc.execute(
             "SELECT id FROM journal_entries WHERE ref_no=?", (ref_no,)
         ).fetchone()
         if not entry_row:
@@ -147,26 +157,24 @@ class _LinkToEntryPanel(QWidget):
 
         entry_id = entry_row["id"]
         if move_type == "capital":
-            line_row = self.acc_conn.execute(
+            line_row = acc.execute(
                 "SELECT id FROM journal_lines WHERE entry_id=? AND credit>0 LIMIT 1",
                 (entry_id,)
             ).fetchone()
         else:
-            line_row = self.acc_conn.execute(
+            line_row = acc.execute(
                 "SELECT id FROM journal_lines WHERE entry_id=? AND debit>0 LIMIT 1",
                 (entry_id,)
             ).fetchone()
+
         line_id = line_row["id"] if line_row else 0
         notes   = self.inp_notes.text().strip() or None
         try:
-            link_investor_to_line(
-                self.erp_conn, inv_id, entry_id, line_id,
-                move_type, amount, notes
-            )
+            link_investor_to_line(erp, inv_id, entry_id, line_id,
+                                  move_type, amount, notes)
             self.inp_entry_ref.clear()
             self.sp_amount.setValue(0)
             self.inp_notes.clear()
-            # إطلاق الحدث المقيّد بالشركة النشطة
             bus.company_data_changed.emit(self._company_id or 0)
             QMessageBox.information(self, "تم", "✅ تم ربط القيد بالمستثمر بنجاح")
         except Exception as e:
