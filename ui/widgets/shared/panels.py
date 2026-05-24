@@ -1,14 +1,22 @@
 """
 ui/widgets/shared/panels.py
 ============================
-مكونات UI مشتركة — re-export من panles_helper.
+مكونات UI مشتركة — re-export من panles_helper وملفات أخرى.
 
 كل الملفات التانية تستورد من هنا مباشرة — مش من panles_helper.
 
 المتوفر:
   DetailHeader, StatCard, SectionHeader, EmptyState,
   CollapsibleCard, ActionToolbar, BadgeLabel, InfoRow,
-  _make_btn, make_stat_card_simple, make_status_chip, CardGrid
+  _make_btn, make_stat_card_simple, make_status_chip, CardGrid,
+  StatusChip,
+
+  --- إضافات لتسهيل الاستيراد ---
+  FormGroup, labeled_widget, spin_field, ResultBadge, ModeBadge,
+  build_inner_scroll, CrudButtonsBar,
+  LiveConnMixin,
+  BaseDialog,
+  wrap_in_scroll, ScrollableFormWidget,
 """
 
 from .panles_helper.detail_header    import DetailHeader        # noqa: F401
@@ -27,9 +35,42 @@ from .panles_helper.status_chip      import (                   # noqa: F401
     make_status_chip,
 )
 
+# ── form_utils ────────────────────────────────────────────
+from .form_utils import (                                       # noqa: F401
+    FormGroup,
+    labeled_widget,
+    spin_field,
+    int_spin_field,
+    ResultBadge,
+    ModeBadge,
+    build_inner_scroll,
+    CrudButtonsBar,
+    InlinePreview,
+)
+
+# ── connection ────────────────────────────────────────────
+from .connection_mixin import LiveConnMixin                     # noqa: F401
+
+# ── dialog ───────────────────────────────────────────────
+from .dialog_base import BaseDialog                             # noqa: F401
+
+# ── scroll ───────────────────────────────────────────────
+from .scrollable_form import wrap_in_scroll, ScrollableFormWidget  # noqa: F401
+
 __all__ = [
+    # panles_helper
     "DetailHeader", "StatCard", "SectionHeader", "EmptyState",
     "CollapsibleCard", "ActionToolbar", "BadgeLabel", "InfoRow",
     "_make_btn", "CardGrid", "StatusChip",
     "make_stat_card_simple", "make_status_chip",
+    # form_utils
+    "FormGroup", "labeled_widget", "spin_field", "int_spin_field",
+    "ResultBadge", "ModeBadge", "build_inner_scroll",
+    "CrudButtonsBar", "InlinePreview",
+    # connection
+    "LiveConnMixin",
+    # dialog
+    "BaseDialog",
+    # scroll
+    "wrap_in_scroll", "ScrollableFormWidget",
 ]

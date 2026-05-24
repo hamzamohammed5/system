@@ -1,33 +1,27 @@
 """
 ui/tabs/costing/machine/machine_table.py
+========================================
+_MachineTable — جدول الماكينات مع دعم العناصر المشتركة.
+
+يرث من SharedItemsListPanel الذي يوحّد:
+  - legend العناصر المشتركة/المنشورة
+  - FilterBar
+  - أزرار تعديل/حذف/تعديل مشترك/نشر كمشترك
+  - منطق التلوين والتحميل
+
 إصلاحات:
 1. _load تمرر local_rows لـ get_shared_machines (منع التكرار)
 2. category_name يُعرض الحقيقي (أو "—")
 3. علامة 📤 على الماكينات المحلية المنشورة كمشتركة
 """
 
-from PyQt5.QtWidgets import (
-    QWidget, QVBoxLayout, QPushButton, QTableWidgetItem,
-    QMessageBox, QLabel,
-)
-from PyQt5.QtGui import QColor
+from PyQt5.QtWidgets import QTableWidgetItem, QMessageBox
 
 from db.costing.operations_repo import fetch_all_machines, delete_machine
-from ui.helpers import (
-    make_table, buttons_row, section_label, confirm_delete, danger_button,
-)
-from ui.widgets.shared.filter_bar import FilterBar
-from ui.tabs.companies.shared_items_mixin import (
-    get_shared_machines, is_shared_id, extract_shared_id,
-    get_published_local_names,
-)
-from ui.events import bus
+from ui.helpers import confirm_delete
+from ui.widgets.shared.list_panel_with_shared import SharedItemsListPanel
+from ui.tabs.companies.shared_items_mixin import get_shared_machines
 from .machine_form import _MachineForm
-
-_SHARED_COLOR    = "#2e7d52"
-_SHARED_BG       = "#e8f5e9"
-_PUBLISHED_COLOR = "#1565c0"
-_PUBLISHED_BG    = "#e3f2fd"
 
 
 def _to_dict(row) -> dict:
@@ -39,292 +33,80 @@ def _to_dict(row) -> dict:
         return {}
 
 
-class _MachineTable(QWidget):
+class _MachineTable(SharedItemsListPanel):
+    SHARED_TYPE      = "machine"
+    TABLE_COLS       = ["ID", "الاسم", "التصنيف", "جنيه/ساعة", "جنيه/وحدة"]
+    FILTER_SCOPE     = "machine"
+    TABLE_TITLE      = "─── الماكينات المحفوظة ───"
+    HAS_BULK_REPLACE = False
+
     def __init__(self, conn, form: _MachineForm, parent=None):
-        super().__init__(parent)
-        self.conn              = conn
-        self._form             = form
-        self._all_rows         = []
-        self._published_names  = set()
-        self._build()
-        self._load()
-        bus.data_changed.connect(self._load)
+        self._form = form
+        super().__init__(conn, parent)
 
-    def _live_conn(self):
-        if self.conn is not None:
-            try:
-                self.conn.execute("SELECT 1")
-                return self.conn
-            except Exception:
-                pass
-        from db.companies.company_state import company_state
-        return company_state.get_erp_conn()
+    def _setup_column_widths(self, table):
+        table.setColumnWidth(0, 40)
+        table.setColumnWidth(2, 110)
+        table.setColumnWidth(3, 90)
+        table.setColumnWidth(4, 90)
 
-    def _build(self):
-        root = QVBoxLayout(self)
-        root.setContentsMargins(12, 8, 12, 12)
-        root.setSpacing(6)
-        root.addWidget(section_label("─── الماكينات المحفوظة ───"))
+    def _fetch_local_rows(self) -> list:
+        return [_to_dict(m) for m in fetch_all_machines(self._live_conn())]
 
-        legend_shared = QLabel("🔗 أخضر = ماكينة مشتركة واردة من شركة أخرى")
-        legend_shared.setStyleSheet(
-            f"color:{_SHARED_COLOR}; background:{_SHARED_BG};"
-            "border-radius:4px; padding:3px 8px; font-size:9pt;"
-        )
-        root.addWidget(legend_shared)
+    def _get_shared_rows(self, local_rows: list) -> list:
+        return get_shared_machines(local_rows)
 
-        legend_published = QLabel("📤 أزرق = ماكينة محلية منشورة ومشتركة مع شركات أخرى")
-        legend_published.setStyleSheet(
-            f"color:{_PUBLISHED_COLOR}; background:{_PUBLISHED_BG};"
-            "border-radius:4px; padding:3px 8px; font-size:9pt;"
-        )
-        root.addWidget(legend_published)
+    def _fill_table_row(self, r: int, item: dict):
+        is_shared    = item.get("_is_shared", False)
+        is_published = item.get("_is_published", False)
+        cat_display  = item.get("category_name") or "—"
 
-        self._filter = FilterBar(self._live_conn(), scope="machine")
-        self._filter.filter_changed.connect(self._apply_filter)
-        root.addWidget(self._filter)
+        if is_shared:
+            prefix = "🔗 "
+            id_text = "🔗"
+        elif is_published:
+            prefix = "📤 "
+            id_text = "📤"
+        else:
+            prefix  = ""
+            id_text = str(item.get("id", ""))
 
-        self.table = make_table(
-            ["ID", "الاسم", "التصنيف", "جنيه/ساعة", "جنيه/وحدة"],
-            stretch_col=1
-        )
-        self.table.setColumnWidth(0, 40)
-        self.table.setColumnWidth(2, 110)
-        self.table.setColumnWidth(3, 90)
-        self.table.setColumnWidth(4, 90)
-        self.table.setAlternatingRowColors(True)
-        root.addWidget(self.table)
+        id_item = QTableWidgetItem(id_text)
+        id_item.setData(0x0100, item.get("id"))
+        self.table.setItem(r, 0, id_item)
+        self.table.setItem(r, 1, QTableWidgetItem(prefix + item.get("name", "")))
+        self.table.setItem(r, 2, QTableWidgetItem(cat_display))
+        self.table.setItem(r, 3, QTableWidgetItem(f"{item.get('rate_per_hour', 0):.2f}"))
+        self.table.setItem(r, 4, QTableWidgetItem(f"{item.get('rate_per_unit', 0):.2f}"))
 
-        btn_edit        = QPushButton("✏️  تعديل")
-        btn_del         = danger_button("🗑️  حذف")
-        btn_edit_shared = QPushButton("🔗  تعديل المشترك")
-        btn_publish     = QPushButton("📤  نشر كمشترك")
+    def _edit_item(self, item_id: int):
+        self._form.load_for_edit(item_id)
 
-        btn_edit_shared.setStyleSheet(
-            f"QPushButton {{ background:{_SHARED_BG}; color:{_SHARED_COLOR};"
-            "border:1px solid #a5d6a7; border-radius:4px; padding:4px 10px; font-weight:bold; }"
-            f"QPushButton:hover {{ background:#c8e6c9; }}"
-        )
-        btn_publish.setStyleSheet(
-            f"QPushButton {{ background:{_PUBLISHED_BG}; color:{_PUBLISHED_COLOR};"
-            "border:1px solid #90caf9; border-radius:4px;"
-            "padding:4px 10px; font-weight:bold; }"
-            "QPushButton:hover { background:#bbdefb; }"
-        )
-        for btn in (btn_edit, btn_del, btn_edit_shared, btn_publish):
-            btn.setMinimumHeight(30)
-
-        btn_edit.clicked.connect(self._edit)
-        btn_del.clicked.connect(self._delete)
-        btn_edit_shared.clicked.connect(self._edit_shared)
-        btn_publish.clicked.connect(self._publish_as_shared)
-        root.addLayout(buttons_row(btn_edit, btn_del, btn_edit_shared, btn_publish))
-
-    def _selected_row_data(self):
-        row = self.table.currentRow()
-        if row == -1:
-            return None, None
-        item_id   = self.table.item(row, 0).data(0x0100)
-        item_name = self.table.item(row, 1).text()
-        return item_id, item_name
-
-    def _selected_machine_dict(self):
-        row = self.table.currentRow()
-        if row == -1:
-            return None
-        item_id = self.table.item(row, 0).data(0x0100)
-        for r in self._all_rows:
-            if str(r.get("id")) == str(item_id):
-                return r
-        return None
-
-    def _edit(self):
-        item_id, _ = self._selected_row_data()
-        if item_id is None:
-            QMessageBox.information(self, "تنبيه", "اختر ماكينة أولاً")
-            return
-        if is_shared_id(item_id):
-            QMessageBox.information(self, "عنصر مشترك",
-                                    "هذه ماكينة مشتركة — استخدم «🔗 تعديل المشترك».")
-            return
-        self._form.load_for_edit(int(item_id))
-
-    def _edit_shared(self):
-        item_id, _ = self._selected_row_data()
-        if item_id is None:
-            QMessageBox.information(self, "تنبيه", "اختر ماكينة أولاً")
-            return
-
-        # لو محلية منشورة → افتح تعديل المشترك عن طريق الاسم
-        if not is_shared_id(item_id):
-            row = self._selected_machine_dict()
-            if row and str(row.get("name", "")).strip().lower() in self._published_names:
-                self._edit_published_as_shared(row)
-                return
-            QMessageBox.information(self, "تنبيه", "هذه ماكينة عادية — استخدم «✏️ تعديل».")
-            return
-
-        shared_id = extract_shared_id(item_id)
-        if shared_id is None:
-            return
-        from db.companies.companies_schema import get_central_connection, create_central_tables
-        from ui.tabs.companies.shared_items_dialog import SharedItemsDialog
-        central = get_central_connection()
-        create_central_tables(central)
-        dlg = SharedItemsDialog(central, shared_id, parent=self)
-        dlg.exec_()
-        central.close()
-
-    def _edit_published_as_shared(self, row: dict):
-        """يفتح نافذة تعديل المشترك للماكينة المحلية المنشورة."""
-        try:
-            from db.companies.companies_schema import get_central_connection, create_central_tables
-            from ui.tabs.companies.shared_items_dialog import SharedItemsDialog
-            central = get_central_connection()
-            create_central_tables(central)
-            shared_row = central.execute(
-                "SELECT id FROM shared_items WHERE name=? AND shared_type='machine' LIMIT 1",
-                (row["name"],)
-            ).fetchone()
-            if shared_row:
-                dlg = SharedItemsDialog(central, shared_row["id"], parent=self)
-                dlg.exec_()
-            central.close()
-        except Exception as e:
-            QMessageBox.warning(self, "خطأ", str(e))
-
-    def _delete(self):
-        item_id, name = self._selected_row_data()
-        if item_id is None:
-            QMessageBox.information(self, "تنبيه", "اختر ماكينة أولاً")
-            return
-        if is_shared_id(item_id):
-            QMessageBox.warning(self, "عنصر مشترك", "لا يمكن حذف ماكينة مشتركة من هنا.")
-            return
-        mid = int(item_id)
-        if self._form.is_editing and self._form._editing_id == mid:
+    def _delete_item(self, item_id: int, item_name: str):
+        if self._form.is_editing and self._form._editing_id == item_id:
             self._form._reset()
-        if confirm_delete(self, name):
+        if confirm_delete(self, item_name):
             try:
-                delete_machine(self._live_conn(), mid)
+                delete_machine(self._live_conn(), item_id)
             except Exception as e:
                 QMessageBox.warning(self, "خطأ", str(e))
                 return
+            from ui.events import bus
             bus.data_changed.emit()
 
-    def _publish_as_shared(self):
-        item_id, _ = self._selected_row_data()
-        if item_id is None:
-            QMessageBox.information(self, "تنبيه", "اختر ماكينة من الجدول أولاً")
-            return
-        if is_shared_id(item_id):
-            QMessageBox.information(
-                self, "مشترك بالفعل",
-                "هذه الماكينة مشتركة بالفعل.\n"
-                "استخدم «🔗 تعديل المشترك» لتعديل الربط."
-            )
-            return
-
-        row = self._selected_machine_dict()
-        if not row:
-            return
-
-        # لو محلية منشورة بالفعل → افتح تعديل الربط
-        if str(row.get("name", "")).strip().lower() in self._published_names:
-            self._edit_published_as_shared(row)
-            return
-
-        item_data = {
+    def _get_item_data_for_publish(self, row: dict) -> dict:
+        return {
             "rate_per_hour": float(row.get("rate_per_hour", 0.0)),
             "rate_per_unit": float(row.get("rate_per_unit", 0.0)),
             "category_name": row.get("category_name") or None,
         }
 
-        try:
-            from db.companies.companies_schema import (
-                get_central_connection, create_central_tables
-            )
-            from db.companies.shared_items_repo import create_shared_items_tables
-            from ui.tabs.companies.shared_items_manager_helper._add_shared_item_dialog import (
-                PublishAsSharedDialog
-            )
-            central = get_central_connection()
-            create_central_tables(central)
-            create_shared_items_tables(central)
+    # ── تعديل مشترك المشترك المحلي (override لـ machine) ──
 
-            dlg = PublishAsSharedDialog(
-                central_conn = central,
-                shared_type  = "machine",
-                item_name    = row.get("name", ""),
-                item_data    = item_data,
-                parent       = self,
-            )
-            dlg.exec_()
-            central.close()
-        except Exception as e:
-            QMessageBox.warning(self, "خطأ", str(e))
-
-    # ── الإصلاح الرئيسي: تمرير local_rows + published_names ──
-
-    def _load(self):
-        try:
-            conn = self._live_conn()
-            local_rows = [_to_dict(m) for m in fetch_all_machines(conn)]
-        except Exception:
-            local_rows = []
-
-        self._published_names = get_published_local_names("machine")
-
-        shared_rows = get_shared_machines(local_rows)
-        self._all_rows = local_rows + shared_rows
-        self._apply_filter()
-
-    def _apply_filter(self):
-        self.table.setRowCount(0)
-        shown = 0
-        for m in self._all_rows:
-            if not self._filter.match(m.get("name", ""), m.get("category_id")):
-                continue
-            is_shared    = m.get("is_shared", False)
-            is_published = (
-                not is_shared and
-                str(m.get("name", "")).strip().lower() in self._published_names
-            )
-
-            cat_display = m.get("category_name") or "—"
-
-            if is_shared:
-                name_prefix = "🔗 "
-            elif is_published:
-                name_prefix = "📤 "
-            else:
-                name_prefix = ""
-
-            r = self.table.rowCount()
-            self.table.insertRow(r)
-
-            id_item = QTableWidgetItem(
-                "🔗" if is_shared else ("📤" if is_published else str(m.get("id", "")))
-            )
-            id_item.setData(0x0100, m.get("id"))
-            self.table.setItem(r, 0, id_item)
-            self.table.setItem(r, 1, QTableWidgetItem(name_prefix + m.get("name", "")))
-            self.table.setItem(r, 2, QTableWidgetItem(cat_display))
-            self.table.setItem(r, 3, QTableWidgetItem(f"{m.get('rate_per_hour', 0):.2f}"))
-            self.table.setItem(r, 4, QTableWidgetItem(f"{m.get('rate_per_unit', 0):.2f}"))
-
-            if is_shared:
-                bg, fg = _SHARED_BG, _SHARED_COLOR
-            elif is_published:
-                bg, fg = _PUBLISHED_BG, _PUBLISHED_COLOR
-            else:
-                bg = fg = None
-
-            if bg:
-                for col in range(self.table.columnCount()):
-                    itm = self.table.item(r, col)
-                    if itm:
-                        itm.setBackground(QColor(bg))
-                        itm.setForeground(QColor(fg))
-            shown += 1
-        self._filter.set_count(shown, len(self._all_rows))
+    def _on_edit_shared(self):
+        item_id, _ = self._selected_row_data()
+        if item_id is None:
+            from PyQt5.QtWidgets import QMessageBox
+            QMessageBox.information(self, "تنبيه", "اختر ماكينة أولاً")
+            return
+        self._edit_shared_item(item_id, self.SHARED_TYPE, self)

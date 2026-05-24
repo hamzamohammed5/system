@@ -1,5 +1,5 @@
 File Tree Snapshot
-Generated : 2026-05-24 09:10:33
+Generated : 2026-05-24 09:25:19
 Source    : D:\My Workspace\Hg\Alhabaar\accountant\system
 Extensions: .py
 ────────────────────────────────────────────────────────────
@@ -142,7 +142,9 @@ system/
 │   │   │   │   └── raw_table_panel.py
 │   │   │   ├── shared/
 │   │   │   │   ├── bom_scenarios/
-│   │   │   │   │   └── _memory_manager.py
+│   │   │   │   │   ├── _db_scenarios.py
+│   │   │   │   │   ├── _memory_manager.py
+│   │   │   │   │   └── _memory_scenarios.py
 │   │   │   │   ├── bulk_replace/
 │   │   │   │   │   ├── _operation_section.py
 │   │   │   │   │   ├── bulk_replace_dialog.py
@@ -274,6 +276,7 @@ system/
 │   │       ├── flexible_text.py
 │   │       ├── flow_layout.py
 │   │       ├── form_utils.py
+│   │       ├── list_panel_with_shared.py
 │   │       ├── message_box.py
 │   │       ├── no_wheel.py
 │   │       ├── panels.py
@@ -281,6 +284,7 @@ system/
 │   │       ├── scenario_comparison_widget.py
 │   │       ├── scrollable_form.py
 │   │       ├── searchable_combo.py
+│   │       ├── shared_ops_mixin.py
 │   │       ├── splitter_scroll_guard.py
 │   │       ├── splitter_utils.py
 │   │       ├── tab_section_base.py
