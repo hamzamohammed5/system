@@ -3,15 +3,10 @@ ui/tabs/accounting/investors/_investors_layout.py
 =================================================
 _build_investors_tabs() — دالة بناء QTabWidget للمستثمرين.
 
-مُستخرجة من investors_tab.py لتقليل حجمه وفصل المنطق.
-يُستدعى فقط من InvestorsTab._make_tabs().
-
-يعيد:
-  (QTabWidget, _InvestorDetails)  — الـ details يحتاجه الـ parent
-  للاستجابة لـ _on_investor_selected.
+[تحديث v2]: يستخدم make_tabs من tab_builder بشكل صحيح.
 """
 
-from PyQt5.QtWidgets import QWidget, QVBoxLayout, QSplitter, QTabWidget
+from PyQt5.QtWidgets import QWidget, QVBoxLayout, QSplitter
 from PyQt5.QtCore import Qt
 
 from ui.widgets.shared.tab_builder import make_tabs
@@ -22,25 +17,11 @@ from ._investor_details    import _InvestorDetails
 from ._link_to_entry_panel import _LinkToEntryPanel
 
 
-def build_investors_tabs(acc_conn, erp_conn, on_investor_selected) -> tuple:
+def _build_main_tab(acc_conn, erp_conn, on_investor_selected) -> tuple:
     """
-    يبني QTabWidget كامل لقسم المستثمرين.
-
-    المعاملات:
-        acc_conn             : accounting connection حي
-        erp_conn             : erp connection حي
-        on_investor_selected : callback يُستدعى عند اختيار مستثمر
-
-    يرجع:
-        (QTabWidget, _InvestorDetails)
-        الـ caller يحتفظ بـ _InvestorDetails ليستدعي load/clear عليه.
+    يبني الـ tab الرئيسي للمستثمرين (جدول + فورم + تفاصيل).
+    يرجع (main_widget, details)
     """
-    tabs = make_tabs(style="minimal")
-    tabs.setStyleSheet("""
-        QTabBar::tab:selected { color:#1565c0; border-top:2px solid #1565c0; }
-    """)
-
-    # ── الـ tab الرئيسي (جدول + فورم + تفاصيل) ──
     main_widget = QWidget()
     main_lay    = QVBoxLayout(main_widget)
     main_lay.setContentsMargins(0, 0, 0, 0)
@@ -76,8 +57,22 @@ def build_investors_tabs(acc_conn, erp_conn, on_investor_selected) -> tuple:
     splitter_v.setSizes([320, 320])
 
     main_lay.addWidget(splitter_v)
+    return main_widget, details
 
-    tabs.addTab(main_widget,                    "👥  المستثمرون")
-    tabs.addTab(_LinkToEntryPanel(acc_conn, erp_conn), "🔗  ربط بقيد محاسبي")
+
+def build_investors_tabs(acc_conn, erp_conn, on_investor_selected) -> tuple:
+    """
+    يبني QTabWidget كامل لقسم المستثمرين.
+
+    يرجع: (QTabWidget, _InvestorDetails)
+    """
+    main_widget, details = _build_main_tab(acc_conn, erp_conn, on_investor_selected)
+
+    tabs = make_tabs(
+        ("👥  المستثمرون",       main_widget),
+        ("🔗  ربط بقيد محاسبي", _LinkToEntryPanel(acc_conn, erp_conn)),
+        style="minimal",
+        accent="#1565c0",
+    )
 
     return tabs, details

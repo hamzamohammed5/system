@@ -3,11 +3,13 @@ ui/tabs/accounting/_state_widgets.py
 ======================================
 _StateWidgets — widgets حالة الانتظار والخطأ لـ AccountingTab.
 
-مُستخرج من accounting_section.py لتقليل حجمه.
+[تحديث]: يستخدم EmptyPanelState من empty_state_helpers بدل QLabel المكرر.
 """
 
-from PyQt5.QtWidgets import QWidget, QVBoxLayout, QLabel
+from PyQt5.QtWidgets import QLabel
 from PyQt5.QtCore import Qt
+
+from ui.widgets.shared.empty_state_helpers import EmptyPanelState
 
 
 def make_no_company_widget() -> QLabel:
@@ -51,3 +53,16 @@ def make_init_failed_widget() -> QLabel:
         "background:#fdecea; border-radius:8px; margin:20px;"
     )
     return lbl
+
+
+def make_empty_state(icon: str = "📋",
+                     title: str = "لا توجد بيانات",
+                     subtitle: str = "") -> EmptyPanelState:
+    """
+    يبني EmptyPanelState موحد — بديل لـ QLabel المتناثر.
+
+    الاستخدام:
+        empty = make_empty_state("🏦", "لا توجد حسابات", "أضف حساباً جديداً")
+        layout.addWidget(empty)
+    """
+    return EmptyPanelState(icon=icon, title=title, subtitle=subtitle)

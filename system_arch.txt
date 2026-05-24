@@ -1,5 +1,5 @@
 File Tree Snapshot
-Generated : 2026-05-24 14:38:37
+Generated : 2026-05-24 14:52:18
 Source    : D:\My Workspace\Hg\Alhabaar\accountant\system
 Extensions: .py
 ────────────────────────────────────────────────────────────
@@ -283,11 +283,13 @@ system/
 │   │       │   ├── list_header.py
 │   │       │   ├── make_btn.py
 │   │       │   ├── mode_label.py
+│   │       │   ├── notification_bar.py
+│   │       │   ├── page_header.py
 │   │       │   ├── section_header.py
 │   │       │   ├── stat_card.py
 │   │       │   ├── status_chip.py
 │   │       │   └── theme.py
-│   │       ├── table_utils/
+│   │       ├── table_utils_helper/
 │   │       │   ├── table_builders.py
 │   │       │   ├── table_helpers.py
 │   │       │   └── table_styles.py

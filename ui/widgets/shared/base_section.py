@@ -3,22 +3,22 @@ ui/widgets/shared/base_section.py
 ===================================
 BaseSection — قاعدة مشتركة للأقسام اللي فيها list + detail.
 
-القواعد:
-  ✅ الـ splitter handle يتحرك بحرية بدون قيود
-  ✅ الـ list عنده حد أدنى LIST_MIN_W بس — مش حد أقصى
-  ✅ لو النافذة أكبر من المجموع → الـ detail يكبر، الـ list يفضل ثابت
+[تحديث v2]:
+  - يستخدم get_splitter_style() من theme بدل inline style
+  - منطق _apply_sizes أنظف
 """
 
 from PyQt5.QtWidgets import (
     QWidget, QHBoxLayout, QSizePolicy, QSplitter,
 )
 from PyQt5.QtCore import Qt, QTimer
-from ui.app_settings import _C
+
+from ui.widgets.shared.panels import get_splitter_style
 
 
 class BaseSection(QWidget):
     LIST_MIN_W : int = 280
-    LIST_MAX_W : int = 560   # محتفظ به للتوافق — مش بيُطبَّق على الحركة
+    LIST_MAX_W : int = 560
 
     def __init__(self, conn=None, parent=None):
         super().__init__(parent)
@@ -38,11 +38,7 @@ class BaseSection(QWidget):
 
         self._splitter = QSplitter(Qt.Horizontal)
         self._splitter.setHandleWidth(5)
-        self._splitter.setStyleSheet(f"""
-            QSplitter::handle {{ background: {_C['border']}; width: 5px; }}
-            QSplitter::handle:hover {{ background: {_C['accent_mid']}; }}
-            QSplitter::handle:pressed {{ background: {_C['accent']}; }}
-        """)
+        self._splitter.setStyleSheet(get_splitter_style())
         self._splitter.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Expanding)
 
         self._list   = self._create_list()

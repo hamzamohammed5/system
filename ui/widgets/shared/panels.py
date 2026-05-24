@@ -3,13 +3,9 @@ ui/widgets/shared/panels.py
 ============================
 مكونات UI مشتركة — re-export من panles_helper وملفات أخرى.
 
-[تحديث v4]:
-  - إضافة empty_state_helpers exports
-  - إضافة color_picker_widget exports
-  - إضافة date_range_filter exports
-  - إضافة loading_spinner exports
-  - إضافة base_warning_bar exports
-  - إضافة accounts_combo_widget exports
+[تحديث v5]:
+  - إضافة NotificationBar و PageHeader
+  - جميع المكونات المشتركة متاحة من هنا
 
 كل الملفات التانية تستورد من هنا مباشرة — مش من panles_helper.
 """
@@ -29,6 +25,8 @@ from .panles_helper.status_chip      import (                   # noqa: F401
     make_stat_card_simple,
     make_status_chip,
 )
+from .panles_helper.notification_bar import NotificationBar     # noqa: F401
+from .panles_helper.page_header      import PageHeader          # noqa: F401
 
 # ── theme ──────────────────────────────────────────────────
 from .panles_helper.theme import (                              # noqa: F401
@@ -170,33 +168,33 @@ from .flow_layout import FlowLayout                             # noqa: F401
 # ── scenario comparison ────────────────────────────────────
 from .scenario_comparison_widget import ScenarioComparisonWidget  # noqa: F401
 
-# ── color picker [جديد] ────────────────────────────────────
+# ── color picker ──────────────────────────────────────────
 from .color_picker_widget import ColorPickerWidget              # noqa: F401
 
-# ── date range filter [جديد] ──────────────────────────────
+# ── date range filter ─────────────────────────────────────
 from .date_range_filter import DateRangeFilter                  # noqa: F401
 
-# ── loading [جديد] ────────────────────────────────────────
+# ── loading ───────────────────────────────────────────────
 from .loading_spinner import (                                  # noqa: F401
     LoadingSpinner,
     LoadingOverlay,
     LoadingButton,
 )
 
-# ── empty state helpers [جديد] ────────────────────────────
+# ── empty state helpers ───────────────────────────────────
 from .empty_state_helpers import (                              # noqa: F401
     set_table_empty_state,
     clear_table_empty_state,
     EmptyPanelState,
 )
 
-# ── warning bar [جديد] ────────────────────────────────────
+# ── warning bar ───────────────────────────────────────────
 from .base_warning_bar import BaseWarningBar                    # noqa: F401
 
-# ── accounts combo [جديد] ─────────────────────────────────
+# ── accounts combo ────────────────────────────────────────
 from .accounts_combo_widget import AccountTypeFilter            # noqa: F401
 
-# ── table utils shortcuts [جديد] ──────────────────────────
+# ── table utils shortcuts ─────────────────────────────────
 from .table_utils import (                                      # noqa: F401
     make_detail_table,
     make_compact_table,
@@ -212,6 +210,25 @@ from .table_utils import (                                      # noqa: F401
     auto_fit_columns,
 )
 
+# ── shared UI mixins ──────────────────────────────────────
+from .shared_ui_mixins import (                                 # noqa: F401
+    RefreshableMixin,
+    BusConnectedMixin,
+    SelectionMixin,
+    FormValidationMixin,
+)
+
+# ── input widgets ─────────────────────────────────────────
+from .input_widgets import (                                    # noqa: F401
+    SearchLineEdit,
+    AmountSpinBox,
+    DateField,
+    LabeledInput,
+    RequiredLineEdit,
+    StyledComboBox,
+    NotesLineEdit,
+)
+
 
 __all__ = [
     # panles_helper
@@ -219,6 +236,7 @@ __all__ = [
     "CollapsibleCard", "ActionToolbar", "BadgeLabel", "InfoRow",
     "_make_btn", "CardGrid", "StatusChip",
     "make_stat_card_simple", "make_status_chip",
+    "NotificationBar", "PageHeader",
 
     # theme
     "STATUS_COLORS",
@@ -317,4 +335,12 @@ __all__ = [
     "bold_table_item", "colored_table_item", "center_table_item",
     "set_row_background", "make_table_item", "insert_row",
     "auto_fit_columns",
+
+    # shared_ui_mixins
+    "RefreshableMixin", "BusConnectedMixin",
+    "SelectionMixin", "FormValidationMixin",
+
+    # input_widgets
+    "SearchLineEdit", "AmountSpinBox", "DateField",
+    "LabeledInput", "RequiredLineEdit", "StyledComboBox", "NotesLineEdit",
 ]

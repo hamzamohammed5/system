@@ -6,18 +6,19 @@ ui/widgets/shared/no_wheel.py
 
 بدل ما العجلة تغيير القيمة، بتعدي الـ event للأب (scroll area أو الصفحة).
 
-الاستخدام — مكانين:
-  1. install_no_wheel_filter(app)  ← مرة واحدة في main()، يغطي كل التطبيق
-  2. NoWheelCombo / NoWheelSpin / NoWheelDouble ← لو محتاج widget منفرد
+الاستخدام — مكان واحد فقط:
+  install_no_wheel_filter(app)  ← مرة واحدة في main()، يغطي كل التطبيق
+
+أو استخدم الـ subclasses المخصصة:
+  NoWheelCombo / NoWheelSpin / NoWheelDouble ← لو محتاج widget منفرد
 """
 
 from PyQt5.QtCore    import QEvent, QObject, Qt
 from PyQt5.QtWidgets import (
     QApplication, QComboBox, QSpinBox, QDoubleSpinBox,
     QDateEdit, QTimeEdit, QSlider, QAbstractSpinBox,
-    QScrollArea, QAbstractScrollArea,
+    QAbstractScrollArea,
 )
-from PyQt5.QtGui import QWheelEvent
 
 
 _BLOCKED_TYPES = (
@@ -49,31 +50,12 @@ def _find_scrollable_parent(widget, horizontal: bool = False):
     return None
 
 
-def _find_horizontal_scrollable(widget):
-    """
-    يتسلق شجرة الـ parents ويرجع أول QAbstractScrollArea
-    له horizontal scrollbar مفعّل (maximum > 0).
-    """
-    target = widget
-    while target is not None:
-        if isinstance(target, QAbstractScrollArea):
-            sb = target.horizontalScrollBar()
-            if sb and sb.maximum() > 0:
-                return target
-        if not hasattr(target, 'parentWidget'):
-            break
-        target = target.parentWidget()
-    return None
-
-
 class _WheelFilter(QObject):
     """
     Filter واحد بيتعامل مع كل حالات الـ wheel:
 
       Shift + Wheel  → horizontal scroll في أقرب scroll area له
                        horizontal scrollbar مفعّل.
-                       يتسلق من الـ widget تحت الماوس مباشرة
-                       (مش بس الـ obj اللي وصله الـ event).
 
       Wheel على input widget → يبعته للـ parent (vertical scroll).
     """
@@ -84,25 +66,20 @@ class _WheelFilter(QObject):
 
         # ══ Shift + Wheel → Horizontal Scroll ══
         if event.modifiers() & Qt.ShiftModifier:
-            # ابدأ البحث من الـ widget اللي تحت الماوس فعلاً
-            # (أدق من obj اللي ممكن يكون parent)
             widget_under = QApplication.widgetAt(event.globalPos())
             start = widget_under if widget_under else obj
 
-            area = _find_horizontal_scrollable(start)
+            area = _find_scrollable_parent(start, horizontal=True)
             if area is None:
-                # fallback: ابدأ من obj نفسه
-                area = _find_horizontal_scrollable(obj)
+                area = _find_scrollable_parent(obj, horizontal=True)
 
             if area:
                 sb = area.horizontalScrollBar()
                 delta = event.angleDelta().y()
-                # angleDelta().y() موجب = scroll للفوق = اتجاه يمين (RTL)
-                # نعكسه عشان يكون طبيعي: scroll للفوق = يمين
                 sb.setValue(sb.value() - delta // 2)
-                return True  # consume الـ event
+                return True
 
-            return True  # بلوك حتى لو مفيش horizontal scroll
+            return True
 
         # ══ Wheel على input widget → منع التغيير ══
         if isinstance(obj, _BLOCKED_TYPES):
@@ -130,9 +107,8 @@ def install_no_wheel_filter(app: QApplication):
     app.installEventFilter(_wheel_filter_instance)
 
 
-def install_shift_wheel_filter(app: QApplication):
-    """موجودة للتوافق مع main.py — الـ filter الموحد بيتولى الاتنين."""
-    pass
+# للتوافق مع الكود القديم — تستدعي install_no_wheel_filter مباشرة
+install_shift_wheel_filter = install_no_wheel_filter
 
 
 # ══════════════════════════════════════════════════════════

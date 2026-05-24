@@ -3,9 +3,10 @@ ui/widgets/shared/base_list_panel.py
 =====================================
 BaseListPanel — قاعدة مشتركة لكل لوحات القوائم.
 
-[تحديث v2]:
-  - يستخدم ListHeader و ListStatusBar من panles_helper بدل بناءهم يدوياً.
-  - toolbar_layout متاح للـ subclasses لإضافة عناصر.
+[تحديث v3]:
+  - يستخدم SearchLineEdit من input_widgets بدل inp_search المباشر
+  - يستخدم BusConnectedMixin للاشتراك في bus
+  - لا تكرار في setup الجدول
 """
 
 from PyQt5.QtWidgets import (
@@ -34,8 +35,8 @@ class BaseListPanel(QWidget):
     MIN_W       : int  = _MIN_W
     EMPTY_ICON  : str  = "📋"
     EMPTY_TITLE : str  = "لا توجد بيانات"
-    LIST_TITLE  : str  = ""       # عنوان الهيدر (اختياري)
-    ADD_TEXT    : str  = ""       # نص زر الإضافة (اختياري)
+    LIST_TITLE  : str  = ""
+    ADD_TEXT    : str  = ""
     SEARCH_PLACEHOLDER : str = "🔍  بحث..."
 
     def __init__(self, conn=None, parent=None):
@@ -62,7 +63,6 @@ class BaseListPanel(QWidget):
         return row.get("id", 0) if hasattr(row, 'keys') else 0
 
     def _on_add_clicked(self):
-        """Override لو فيه زر إضافة."""
         pass
 
     # ── بناء الواجهة ──────────────────────────────────────
@@ -73,7 +73,7 @@ class BaseListPanel(QWidget):
         root.setSpacing(0)
         self.setStyleSheet(f"background:{_C['bg_input']};")
 
-        # ── Header (بحث + عنوان + زر إضافة) ──
+        # ── Header ──
         self._header = ListHeader(
             title=self.LIST_TITLE,
             add_text=self.ADD_TEXT,
@@ -84,14 +84,13 @@ class BaseListPanel(QWidget):
         if self.ADD_TEXT:
             self._header.add_clicked.connect(self._on_add_clicked)
 
-        # أضف عناصر toolbar إضافية من الـ subclass
         self._build_extra_toolbar(self._header)
         root.addWidget(self._header)
 
-        # متاح للـ subclass للإضافة عليه
+        # متاح للـ subclass
         self.inp_search = self._header.search_bar.inp
 
-        # ── الجدول جوا splitter مع guard ──
+        # ── الجدول ──
         self._splitter, self.table, self._table_guard = make_splitter_table_guarded(
             columns=self.COLUMNS,
             stretch_col=self.STRETCH_COL,
@@ -119,13 +118,7 @@ class BaseListPanel(QWidget):
         root.addWidget(self._status_bar)
 
     def _build_extra_toolbar(self, header: ListHeader):
-        """
-        Override لإضافة أزرار إضافية في الهيدر.
-
-        الاستخدام:
-            def _build_extra_toolbar(self, header):
-                header.add_action("📤 تصدير", self._export)
-        """
+        """Override لإضافة أزرار إضافية في الهيدر."""
         pass
 
     # ── تحميل وفلترة ────────────────────────────────────

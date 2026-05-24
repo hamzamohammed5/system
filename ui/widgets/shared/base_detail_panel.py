@@ -3,10 +3,9 @@ ui/widgets/shared/base_detail_panel.py
 ========================================
 BaseDetailPanel — قاعدة مشتركة لكل لوحات التفاصيل.
 
-القواعد:
-  - الهيدر + المحتوى كلهم جوا scroll area واحد
-  - الـ inner container عنده minimum width
-  - الهيدر Preferred size — يكبر مع الأزرار
+[تحديث v2]:
+  - يستخدم get_scroll_style() من theme بدل ستايل inline مكرر
+  - يستخدم EmptyState من panels مباشرة
 """
 
 from PyQt5.QtWidgets import (
@@ -14,31 +13,11 @@ from PyQt5.QtWidgets import (
 )
 from PyQt5.QtCore import Qt, pyqtSignal
 
-from ui.widgets.shared.panels import DetailHeader, EmptyState
+from ui.widgets.shared.panels import DetailHeader, EmptyState, get_scroll_style
 from ui.app_settings import _C
 
 _BG              = "#f8f9fb"
 DETAIL_MIN_WIDTH = 500
-
-_SCROLL_SS = f"""
-    QScrollArea {{ border: none; background: transparent; }}
-    QScrollBar:vertical {{
-        background: transparent; width: 6px; border-radius: 3px;
-    }}
-    QScrollBar::handle:vertical {{
-        background: {_C['border_med']}; border-radius: 3px; min-height: 30px;
-    }}
-    QScrollBar::handle:vertical:hover {{ background: {_C['border_strong']}; }}
-    QScrollBar::add-line:vertical, QScrollBar::sub-line:vertical {{ height: 0px; }}
-    QScrollBar:horizontal {{
-        background: transparent; height: 6px; border-radius: 3px;
-    }}
-    QScrollBar::handle:horizontal {{
-        background: {_C['border_med']}; border-radius: 3px; min-width: 30px;
-    }}
-    QScrollBar::handle:horizontal:hover {{ background: {_C['border_strong']}; }}
-    QScrollBar::add-line:horizontal, QScrollBar::sub-line:horizontal {{ width: 0px; }}
-"""
 
 
 class BaseDetailPanel(QWidget):
@@ -77,12 +56,12 @@ class BaseDetailPanel(QWidget):
         root.setContentsMargins(0, 0, 0, 0)
         root.setSpacing(0)
 
-        # Scroll يلف كل حاجة
+        # Scroll يلف كل حاجة — يستخدم get_scroll_style() الموحد
         self._scroll = QScrollArea()
         self._scroll.setWidgetResizable(True)
         self._scroll.setHorizontalScrollBarPolicy(Qt.ScrollBarAsNeeded)
         self._scroll.setVerticalScrollBarPolicy(Qt.ScrollBarAsNeeded)
-        self._scroll.setStyleSheet(_SCROLL_SS)
+        self._scroll.setStyleSheet(get_scroll_style(width=6))
 
         self._inner = QWidget()
         self._inner.setMinimumWidth(self.MIN_CONTENT_W)
