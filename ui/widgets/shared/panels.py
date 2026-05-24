@@ -3,10 +3,11 @@ ui/widgets/shared/panels.py
 ============================
 مكونات UI مشتركة — re-export من panles_helper وملفات أخرى.
 
-[تحديث v6]:
-  - إضافة exports ناقصة: fit_splitter_table, ROW_HEIGHT_*, calc_table_width
-  - إضافة make_fixed_table
-  - جميع المكونات المشتركة متاحة من هنا
+[تحديث v7]:
+  - إضافة company_utils exports
+  - إضافة tooltip_helper exports
+  - إضافة shared_ops_mixin exports
+  - تنظيم الـ exports
 
 كل الملفات التانية تستورد من هنا مباشرة — مش من panles_helper.
 """
@@ -123,7 +124,14 @@ from .tab_section_base  import TabSectionBase                   # noqa: F401
 
 # ── connection ─────────────────────────────────────────────
 from .connection_mixin import LiveConnMixin                     # noqa: F401
-from .safe_conn_mixin  import DualConnMixin                     # noqa: F401
+from .safe_conn_mixin  import DualConnMixin, SafeConnMixin      # noqa: F401
+
+# ── company utils ─────────────────────────────────────────
+from .company_utils import (                                    # noqa: F401
+    get_active_company_id,
+    emit_company_data_changed,
+    is_same_company,
+)
 
 # ── dialog ────────────────────────────────────────────────
 from .dialog_base      import BaseDialog                        # noqa: F401
@@ -195,6 +203,15 @@ from .base_warning_bar import BaseWarningBar                    # noqa: F401
 # ── accounts combo ────────────────────────────────────────
 from .accounts_combo_widget import AccountTypeFilter            # noqa: F401
 
+# ── tooltip helpers ───────────────────────────────────────
+from .tooltip_helper import (                                   # noqa: F401
+    apply_table_tooltips,
+    apply_tree_tooltips,
+)
+
+# ── shared ops mixin ──────────────────────────────────────
+from .shared_ops_mixin import SharedOpsMixin                    # noqa: F401
+
 # ── table utils shortcuts ─────────────────────────────────
 from .table_utils import (                                      # noqa: F401
     make_detail_table,
@@ -210,7 +227,6 @@ from .table_utils import (                                      # noqa: F401
     make_table_item,
     insert_row,
     auto_fit_columns,
-    # ← إضافات جديدة:
     fit_splitter_table,
     fit_splitter_to_table,
     ROW_HEIGHT_NORMAL,
@@ -238,14 +254,13 @@ from .input_widgets import (                                    # noqa: F401
     NotesLineEdit,
 )
 
-
-from .panles_helper.progress_bar import (                   # noqa: F401
+from .panles_helper.progress_bar import (                       # noqa: F401
     ProgressBar,
     MultiProgressBar,
 )
 
 # ── data_table_widget ──────────────────────────────────────
-from .panles_helper.data_table_widget import DataTableWidget  # noqa: F401
+from .panles_helper.data_table_widget import DataTableWidget    # noqa: F401
 
 __all__ = [
     # panles_helper
@@ -298,7 +313,10 @@ __all__ = [
     "BaseSection", "TabSectionBase",
 
     # connection
-    "LiveConnMixin", "DualConnMixin",
+    "LiveConnMixin", "DualConnMixin", "SafeConnMixin",
+
+    # company utils
+    "get_active_company_id", "emit_company_data_changed", "is_same_company",
 
     # dialog
     "BaseDialog",
@@ -346,6 +364,12 @@ __all__ = [
     # accounts_combo
     "AccountTypeFilter",
 
+    # tooltip_helper
+    "apply_table_tooltips", "apply_tree_tooltips",
+
+    # shared_ops_mixin
+    "SharedOpsMixin",
+
     # table_utils
     "make_detail_table", "make_compact_table", "make_list_table",
     "make_fixed_table",
@@ -353,7 +377,6 @@ __all__ = [
     "bold_table_item", "colored_table_item", "center_table_item",
     "set_row_background", "make_table_item", "insert_row",
     "auto_fit_columns",
-    # جديد:
     "fit_splitter_table", "fit_splitter_to_table",
     "ROW_HEIGHT_NORMAL", "ROW_HEIGHT_COMPACT", "ROW_HEIGHT_LARGE",
     "calc_table_width",

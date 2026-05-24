@@ -3,10 +3,10 @@ ui/tabs/accounting/journal/journal_filter.py
 ======================================
 _JournalFilterBar — شريط فلاتر القيود المحاسبية.
 
-تغييرات (v4 — DateRangeFilter):
-  - يستخدم DateRangeFilter الموحد بدل بناء حقول التاريخ يدوياً.
-  - SafeConnMixin + signal fix من v3 محافظ عليهم.
-  - _reload_group_combo() تُطلق signal group_reloaded بعد استبدال الـ widget.
+[v5]:
+  - DateRangeFilter الموحد بدل بناء حقول التاريخ يدوياً.
+  - SafeConnMixin + get_active_company_id() من company_utils.
+  - group_reloaded signal بعد استبدال الـ widget.
 """
 
 from PyQt5.QtWidgets import (
@@ -17,6 +17,7 @@ from PyQt5.QtCore import Qt, QDate, QTimer, pyqtSignal
 
 from ui.widgets.shared.safe_conn_mixin import SafeConnMixin
 from ui.widgets.shared.date_range_filter import DateRangeFilter
+from ui.widgets.shared.company_utils import get_active_company_id
 from ui.events import bus
 from .journal_group_combo import _TreeGroupCombo
 
@@ -30,7 +31,7 @@ class _JournalFilterBar(SafeConnMixin, QFrame):
     def __init__(self, conn, parent=None):
         super().__init__(parent)
         self._init_safe_conn(conn, "accounting")
-        self._company_id = self._get_company_id()
+        self._company_id = get_active_company_id()
         self.setStyleSheet("""
             QFrame {
                 background: #f0f4ff;
@@ -147,12 +148,11 @@ class _JournalFilterBar(SafeConnMixin, QFrame):
         lbl_date.setFixedWidth(20)
         row2.addWidget(lbl_date)
 
-        # ← استخدام DateRangeFilter الموحد بدل بناء حقول يدوياً
         self._date_filter = DateRangeFilter(
             default_from=QDate(2000, 1, 1),
             default_to=QDate.currentDate(),
         )
-        # كشف dt_from و dt_to للتوافق مع الكود الخارجي الذي يتصل بـ dateChanged
+        # كشف dt_from و dt_to للتوافق مع الكود الخارجي
         self.dt_from = self._date_filter.dt_from
         self.dt_to   = self._date_filter.dt_to
         row2.addWidget(self._date_filter)
@@ -220,7 +220,6 @@ class _JournalFilterBar(SafeConnMixin, QFrame):
             if bal_filt == "unbalanced" and is_balanced:
                 return False
 
-        # استخدام DateRangeFilter.in_range() الموحدة
         if not self._date_filter.in_range(entry.get("date", "")):
             return False
 

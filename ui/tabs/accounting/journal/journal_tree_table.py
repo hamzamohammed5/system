@@ -3,18 +3,16 @@ ui/tabs/accounting/journal/journal_tree_table.py
 ================================================
 _JournalTreeTable — جدول القيود المحاسبية.
 
-[تحسين v8]:
-  - استخدام ListHeader + ListStatusBar بدل section_label يدوي.
-  - استخدام bold_table_item / colored_table_item / center_table_item / set_row_background
-    من table_utils بدل دوال محلية.
-  - استخدام confirm_delete من panels بدل استيراد مباشر.
-  - إزالة دوال _bold_item / _colored_item المحلية المكررة.
+[v9]:
+  - استخدام emit_company_data_changed() من company_utils.
+  - جميع imports من panels (نقطة واحدة).
+  - كود أنظف وأقل تكراراً.
 """
 
 from PyQt5.QtWidgets import (
     QWidget, QVBoxLayout,
     QTableWidget, QTableWidgetItem, QHeaderView,
-    QPushButton, QMessageBox, QAbstractItemView,
+    QAbstractItemView, QMessageBox,
 )
 from PyQt5.QtCore import Qt, QTimer
 from PyQt5.QtGui  import QColor
@@ -25,12 +23,11 @@ from db.accounting.accounting_repo import (
 )
 from ui.events import bus
 from ui.widgets.shared.safe_conn_mixin import SafeConnMixin
+from ui.widgets.shared.company_utils import get_active_company_id
 from ui.widgets.shared.panels import (
     ListHeader, ListStatusBar,
     confirm_delete,
     _make_btn,
-)
-from ui.widgets.shared.table_utils import (
     bold_table_item, colored_table_item,
     center_table_item, set_row_background,
 )
@@ -50,7 +47,7 @@ class _JournalTreeTable(SafeConnMixin, QWidget):
         self._expanded: set[int] = set()
         self._entries_data = []
         self._row_meta     = {}
-        self._company_id   = self._get_company_id()
+        self._company_id   = get_active_company_id()
 
         self._build()
         self._load()
@@ -70,7 +67,6 @@ class _JournalTreeTable(SafeConnMixin, QWidget):
             title="── القيود المحاسبية المحفوظة ──",
             show_search=False,
         )
-        # أزرار التوسيع/الطي في الهيدر
         self._header.add_action("⊞ توسيع الكل",   self._expand_all,   "normal")
         self._header.add_action("⊟ طي الكل",      self._collapse_all, "normal")
         self._header.add_action("🗑️  حذف المحدد", self._delete_selected, "danger")
@@ -180,7 +176,6 @@ class _JournalTreeTable(SafeConnMixin, QWidget):
             self.table.insertRow(r)
             self._row_meta[r] = {"entry_id": eid, "is_parent": True, "is_child": False}
 
-            # ── استخدام table_utils بدل دوال محلية مكررة ──
             self.table.setItem(r, 0, center_table_item(
                 "▼" if expanded else "▶", color="#1565c0", bold=True,
             ))
@@ -276,4 +271,5 @@ class _JournalTreeTable(SafeConnMixin, QWidget):
         if confirm_delete(self, desc):
             delete_entry(self._get_safe_conn(), eid)
             self._expanded.discard(eid)
-            bus.company_data_changed.emit(self._company_id or 0)
+            from ui.widgets.shared.company_utils import emit_company_data_changed
+            emit_company_data_changed()

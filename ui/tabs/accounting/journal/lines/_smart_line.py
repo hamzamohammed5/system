@@ -3,8 +3,9 @@ ui/tabs/accounting/journal/lines/_smart_line.py
 ================================================
 _SmartLine — صف قيد واحد ذكي (حساب + اتجاه + مبلغ + بيان + ربط مستثمر).
 
-[إصلاح v5 — DualConnMixin]:
+[إصلاح v6]:
   - DualConnMixin بدل _get_erp_conn() المكرر يدوياً.
+  - get_active_company_id() من company_utils بدل الدالة المحلية.
 """
 
 from PyQt5.QtWidgets import (
@@ -19,17 +20,10 @@ from db.accounting.accounting_repo import fetch_account, get_normal_balance
 from db.accounting.accounting_schema import NORMAL_BALANCE
 from ui.events import bus
 from ui.widgets.shared.safe_conn_mixin import DualConnMixin
+from ui.widgets.shared.company_utils import get_active_company_id
 from ..journal_account_picker import _AccountPickerButton
 
 _INVESTOR_TYPES = {"capital", "drawings"}
-
-
-def _get_current_company_id() -> int | None:
-    try:
-        from db.companies.company_state import company_state
-        return company_state.company_id if company_state.is_ready else None
-    except Exception:
-        return None
 
 
 def _resolve_side(acc_type: str, is_increase: bool) -> str:
@@ -49,14 +43,14 @@ class _SmartLine(DualConnMixin, QFrame):
         self._on_move_up    = on_move_up
         self._on_move_dn    = on_move_dn
         self._resolved_side = "dr"
-        self._company_id    = _get_current_company_id()
+        self._company_id    = get_active_company_id()
 
         self._build()
         bus.company_data_changed.connect(self._on_company_event)
 
     def _on_company_event(self, company_id: int):
         """يُعيد تحميل المستثمرين فقط لو الحدث من نفس شركتنا."""
-        if company_id == self._company_id:
+        if self._on_company_event_safe(company_id):
             self._reload_investors()
 
     def _build(self):

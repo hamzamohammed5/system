@@ -2,11 +2,11 @@
 ui/tabs/accounting/journal/group_combo/_tree_group_combo.py
 ===========================================================
 _TreeGroupCombo — QComboBox مع QTreeView شجري لعرض تصنيفات الحسابات.
-مُستخرج من journal_group_combo.py لتقليل حجمه.
 
-التغييرات (v4 — SafeConnMixin):
+[v5]:
   - SafeConnMixin بدل self.conn الثابت.
-  - _get_safe_conn() في كل query بدل self.conn المحفوظ.
+  - استخدام get_active_company_id() من company_utils بدل الدالة المحلية.
+  - إزالة التكرار مع journal_group_combo.py.
 """
 
 from PyQt5.QtWidgets import QComboBox, QTreeView
@@ -17,6 +17,7 @@ from db.accounting.accounting_repo import fetch_all_groups, build_group_tree
 from db.accounting.accounting_schema import TYPE_AR, EQUITY_TYPES
 from ui.events import bus
 from ui.widgets.shared.safe_conn_mixin import SafeConnMixin
+from ui.widgets.shared.company_utils import get_active_company_id
 from ui.tabs.accounting.helpers import TYPE_COLORS
 from ._no_select_delegate import _NoSelectDelegate
 
@@ -38,14 +39,6 @@ _EQUITY_COLOR = "#2e7d32"
 _EQUITY_LABEL = "حقوق الملكية"
 
 
-def _get_current_company_id():
-    try:
-        from db.companies.company_state import company_state
-        return company_state.company_id if company_state.is_ready else None
-    except Exception:
-        return None
-
-
 class _TreeGroupCombo(SafeConnMixin, QComboBox):
     """
     QComboBox يعرض التصنيفات في شجرة هرمية.
@@ -57,7 +50,7 @@ class _TreeGroupCombo(SafeConnMixin, QComboBox):
         super().__init__(parent)
         self._init_safe_conn(conn, "accounting")
         self._group_entry_ids = None
-        self._company_id      = _get_current_company_id()
+        self._company_id      = get_active_company_id()
         self._destroyed       = False
 
         self._model = QStandardItemModel()
@@ -98,7 +91,7 @@ class _TreeGroupCombo(SafeConnMixin, QComboBox):
     def _on_company_event(self, company_id: int):
         if self._destroyed:
             return
-        if company_id == self._company_id:
+        if self._on_company_event_safe(company_id):
             self._reload()
 
     def closeEvent(self, event):

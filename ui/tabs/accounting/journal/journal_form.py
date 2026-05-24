@@ -3,8 +3,9 @@ ui/tabs/accounting/journal/journal_form.py
 ====================================
 _JournalForm — فورم إدخال القيد اليومي الكامل.
 
-[إصلاح v5 — DualConnMixin]:
+[إصلاح v6]:
   - DualConnMixin بدل _get_erp_conn() المكرر يدوياً.
+  - emit_company_data_changed() من company_utils بدل الدالة المحلية.
 """
 
 from PyQt5.QtWidgets import (
@@ -16,27 +17,11 @@ from db.accounting.accounting_repo import (
     insert_entry, add_entry_lines, validate_entry_balance,
 )
 from ui.helpers import buttons_row
-from ui.events  import bus
 from ui.widgets.shared.safe_conn_mixin import DualConnMixin
+from ui.widgets.shared.company_utils import emit_company_data_changed
 from .journal_lines import _LinesPanel
 from .form._balance_bar    import _BalanceBar
 from .form._journal_header import _JournalHeader
-
-
-def _get_current_company_id() -> int | None:
-    try:
-        from db.companies.company_state import company_state
-        return company_state.company_id if company_state.is_ready else None
-    except Exception:
-        return None
-
-
-def _emit_data_changed():
-    cid = _get_current_company_id()
-    if cid is not None:
-        bus.company_data_changed.emit(cid)
-    else:
-        bus.data_changed.emit()
 
 
 class _JournalForm(DualConnMixin, QWidget):
@@ -170,7 +155,7 @@ class _JournalForm(DualConnMixin, QWidget):
                     print(f"[JournalForm] investor link error: {e}")
 
         self._clear()
-        _emit_data_changed()
+        emit_company_data_changed()
         QMessageBox.information(self, "تم", "✅ تم حفظ القيد بنجاح")
 
     def _clear(self):
