@@ -3,10 +3,10 @@ ui/tabs/accounting/journal/account_picker/_account_picker_button.py
 ====================================================================
 _AccountPickerButton — زر يفتح _AccountTreePopup ويعرض الحساب المختار.
 
-[إصلاح v2]:
-  - SafeConnMixin بدل self.conn الثابت.
-  - عند فتح الـ popup يمرر _get_safe_conn() — conn الشركة النشطة دائماً.
-  - fetch_account تستخدم _get_safe_conn() كذلك.
+إصلاح (v3):
+  - _open_popup() تمرر conn لـ popup.get_selected_type(conn) صريحاً.
+  - لا يعتمد على self._conn المحفوظ في الـ popup.
+  - باقي SafeConnMixin شغال صح من v2.
 """
 
 from PyQt5.QtWidgets import (
@@ -62,7 +62,7 @@ class _AccountPickerButton(SafeConnMixin, QWidget):
         lay.addWidget(self.lbl_nb)
 
     def _open_popup(self):
-        # [إصلاح] conn حي دائماً عند فتح الـ popup
+        # conn حي دائماً من _get_safe_conn()
         conn = self._get_safe_conn()
         popup = _AccountTreePopup(conn, self.acc_types, parent=self)
         pos = self.btn.mapToGlobal(QPoint(0, self.btn.height()))
@@ -75,6 +75,8 @@ class _AccountPickerButton(SafeConnMixin, QWidget):
         if popup.exec_() == QDialog.Accepted:
             acc_id, acc_name = popup.get_selected()
             if acc_id:
+                # [إصلاح v3] نمرر conn صريح لـ get_selected_type
+                # بدل الاعتماد على conn محفوظ في الـ popup
                 acc = fetch_account(conn, acc_id)
                 self._account_id   = acc_id
                 self._account_name = acc_name

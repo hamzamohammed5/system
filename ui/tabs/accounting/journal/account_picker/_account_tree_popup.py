@@ -3,10 +3,10 @@ ui/tabs/accounting/journal/account_picker/_account_tree_popup.py
 =================================================================
 _AccountTreePopup — نافذة popup شجرية لاختيار حساب.
 
-[إصلاح v2]:
-  - لا تحفظ conn داخلياً — تستقبله في __init__ وتستخدمه فوراً لتحميل البيانات.
-  - المستدعي (_AccountPickerButton) مسؤول عن تمرير conn حي دائماً.
-  - fetch_account في get_selected_type تأخذ conn من المستدعي أيضاً.
+إصلاح (v3):
+  - self._conn أُزيل تماماً — الـ conn يُمرر فقط لـ _load_accounts() وقت الإنشاء.
+  - get_selected_type() تستقبل conn صريح من المستدعي بدل self._conn.
+  - هذا يمنع أي استخدام لـ conn قديم بعد تغيير الشركة.
 """
 
 from PyQt5.QtWidgets import (
@@ -44,15 +44,14 @@ class _AccountTreePopup(QDialog):
     """
     نافذة popup تعرض الحسابات في شجرة قابلة للطي مع بحث نصي.
 
-    [مهم] conn يُمرر عند الإنشاء ويُستخدم فوراً في _load_accounts().
-    المستدعي مسؤول عن تمرير conn صالح (حي) من _get_safe_conn().
+    [إصلاح v3] لا يحفظ conn إطلاقاً — يُمرر فقط لـ _load_accounts()
+    وقت الإنشاء. get_selected_type() تستقبل conn صريح.
+    المستدعي (_AccountPickerButton) مسؤول دائماً عن تمرير conn حي.
     """
 
     def __init__(self, conn, acc_types=None, parent=None):
         super().__init__(parent, Qt.Popup | Qt.FramelessWindowHint)
-        # نحفظ conn لاستخدامه في _load_accounts و get_selected_type فقط
-        # — لا نستخدمه بعد إغلاق الـ popup
-        self._conn          = conn
+        # [إصلاح] لا نحفظ conn — نستخدمه مباشرة في _load_accounts فقط
         self.acc_types      = acc_types or _TYPE_ORDER
         self._selected_id   = None
         self._selected_name = None
@@ -63,7 +62,7 @@ class _AccountTreePopup(QDialog):
         self._all_accounts = []
         self._filter_text  = ""
         self._build()
-        self._load_accounts()
+        self._load_accounts(conn)  # conn يُستخدم هنا فقط
 
     def _build(self):
         self.setMinimumWidth(440)
@@ -109,11 +108,12 @@ class _AccountTreePopup(QDialog):
         hint.setAlignment(Qt.AlignCenter)
         root.addWidget(hint)
 
-    def _load_accounts(self):
+    def _load_accounts(self, conn):
+        """يُستدعى مرة واحدة في __init__ بـ conn حي من المستدعي."""
         self._all_accounts = []
         for acc_type in self.acc_types:
             try:
-                rows = fetch_all_accounts(self._conn, acc_type)
+                rows = fetch_all_accounts(conn, acc_type)
                 for r in rows:
                     if r["is_leaf"]:
                         self._all_accounts.append({
@@ -308,8 +308,12 @@ class _AccountTreePopup(QDialog):
     def get_selected(self):
         return self._selected_id, self._selected_name
 
-    def get_selected_type(self):
+    def get_selected_type(self, conn):
+        """
+        [إصلاح v3] يستقبل conn صريح من المستدعي بدل self._conn.
+        المستدعي (_AccountPickerButton) يمرر _get_safe_conn() دايماً.
+        """
         if not self._selected_id:
             return None
-        acc = fetch_account(self._conn, self._selected_id)
+        acc = fetch_account(conn, self._selected_id)
         return acc["type"] if acc else None

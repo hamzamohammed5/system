@@ -1,12 +1,19 @@
 """
-investors_tab.py — الإصلاح الكامل v4: SafeConnMixin + إعادة بناء الـ children
-عند تغيير الشركة بدل الاعتماد على الـ children لتحديث نفسها.
+ui/tabs/accounting/investors_tab.py
+====================================
+InvestorsTab — تبويب المستثمرين.
+
+إصلاح (v5):
+  - يستمع لـ bus.company_data_changed ويعيد بناء كل الـ children
+    بـ connections حية للشركة الجديدة.
+  - _rebuild() يحذف الـ QTabWidget القديم وينشئ جديد.
+  - هذا يضمن إن كل child يبدأ بـ conn للشركة الصح من أول لحظة.
 """
 
 from PyQt5.QtWidgets import (
     QWidget, QVBoxLayout, QSplitter, QTabWidget,
 )
-from PyQt5.QtCore import Qt
+from PyQt5.QtCore import Qt, QTimer
 
 from db.inventory.investors_repo import _migrate_investors
 from db.companies.company_state import company_state
@@ -25,6 +32,10 @@ class InvestorsTab(SafeConnMixin, QWidget):
         self._init_safe_conn(acc_conn, "accounting")
         self._erp_conn_ref = erp_conn
         self._company_id   = self._get_company_id()
+
+        # مراجع للـ children الحية — نحتاجها لـ _on_investor_selected
+        self._details: _InvestorDetails | None = None
+        self._tabs_widget: QTabWidget | None = None
 
         self._migrate()
         self._build()
@@ -50,16 +61,33 @@ class InvestorsTab(SafeConnMixin, QWidget):
             return self._erp_conn_ref
 
     def _on_company_event(self, company_id: int):
-        """
-        عند تغيير الشركة: الـ children عندهم SafeConnMixin وبيتعاملون معاه.
-        بس لو الـ company_id اتغير فعلاً، نحدث الـ _company_id المحلي.
-        """
         if self._on_company_event_safe(company_id):
-            self._company_id = company_id
+            # [إصلاح] نعيد بناء كل الـ children بـ connections حية
+            QTimer.singleShot(0, self._rebuild)
 
     def _build(self):
-        root = QVBoxLayout(self)
-        root.setContentsMargins(0, 0, 0, 0)
+        self._root_layout = QVBoxLayout(self)
+        self._root_layout.setContentsMargins(0, 0, 0, 0)
+        self._tabs_widget = self._make_tabs()
+        self._root_layout.addWidget(self._tabs_widget)
+
+    def _rebuild(self):
+        """يحذف الـ tabs القديمة وينشئ جديدة بـ connections للشركة النشطة."""
+        if self._tabs_widget:
+            self._root_layout.removeWidget(self._tabs_widget)
+            self._tabs_widget.hide()
+            self._tabs_widget.deleteLater()
+            self._tabs_widget = None
+            self._details = None
+
+        self._migrate()
+        self._tabs_widget = self._make_tabs()
+        self._root_layout.addWidget(self._tabs_widget)
+
+    def _make_tabs(self) -> QTabWidget:
+        """ينشئ QTabWidget كامل بـ connections حية."""
+        acc = self._get_safe_conn()
+        erp = self._get_erp_conn()
 
         tabs = QTabWidget()
         tabs.setStyleSheet("""
@@ -84,39 +112,36 @@ class InvestorsTab(SafeConnMixin, QWidget):
         splitter_h = QSplitter(Qt.Horizontal)
         splitter_h.setHandleWidth(6)
 
-        # نجلب conn حي عند البناء
-        acc = self._get_safe_conn()
-        erp = self._get_erp_conn()
+        form = _InvestorForm(acc, erp)
+        splitter_h.addWidget(form)
 
-        self._form = _InvestorForm(acc, erp)
-        splitter_h.addWidget(self._form)
+        # نحتاج مرجع للـ details لـ _on_investor_selected
+        self._details = _InvestorDetails(acc, erp)
 
-        self._table = _InvestorsTable(
-            acc, erp,
-            self._form,
+        table = _InvestorsTable(
+            acc, erp, form,
             on_select=self._on_investor_selected
         )
-        splitter_h.addWidget(self._table)
+        splitter_h.addWidget(table)
         splitter_h.setSizes([310, 600])
 
         top_lay.addWidget(splitter_h)
         splitter_v.addWidget(top_widget)
-
-        self._details = _InvestorDetails(acc, erp)
         splitter_v.addWidget(self._details)
         splitter_v.setSizes([320, 320])
 
         main_lay.addWidget(splitter_v)
         tabs.addTab(main_widget, "👥  المستثمرون")
-
         tabs.addTab(
             _LinkToEntryPanel(acc, erp),
             "🔗  ربط بقيد محاسبي"
         )
 
-        root.addWidget(tabs)
+        return tabs
 
     def _on_investor_selected(self, inv_id):
+        if self._details is None:
+            return
         if inv_id:
             self._details.load(inv_id)
         else:
