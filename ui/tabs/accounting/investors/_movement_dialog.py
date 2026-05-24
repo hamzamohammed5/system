@@ -3,10 +3,8 @@ ui/tabs/accounting/investors/_movement_dialog.py
 =================================================
 _MovementDialog — نافذة إضافة حركة (capital / drawings) لمستثمر.
 
-تغييرات (v3 — SafeConnMixin):
-  - SafeConnMixin على acc_conn.
-  - _get_erp_conn() بدل self.erp_conn الثابت.
-  - الـ combos تستخدم _get_safe_conn() عند الفتح — مش conn محفوظ.
+[إصلاح v4 — DualConnMixin]:
+  - DualConnMixin بدل _get_erp_conn() المكرر يدوياً.
 """
 
 from PyQt5.QtWidgets import (
@@ -17,24 +15,22 @@ from PyQt5.QtWidgets import (
 from PyQt5.QtCore import Qt, QDate
 
 from ui.events import bus
-from ui.widgets.shared.safe_conn_mixin import SafeConnMixin
+from ui.widgets.shared.safe_conn_mixin import DualConnMixin
 from ._helpers import (
     _spin, _fill_capital_combo, _fill_drawings_combo, _fill_asset_combo,
     _post_capital_entry, _post_drawings_entry,
 )
 
 
-class _MovementDialog(SafeConnMixin, QDialog):
+class _MovementDialog(DualConnMixin, QDialog):
     def __init__(self, acc_conn, erp_conn,
                  investor_id, investor_name,
                  move_type="capital", parent=None):
         super().__init__(parent)
-        self._init_safe_conn(acc_conn, "accounting")
-        self._erp_conn_ref = erp_conn
+        self._init_dual_conn(acc_conn, erp_conn)
         self.investor_id   = investor_id
         self.investor_name = investor_name
         self.move_type     = move_type
-        self._company_id   = self._get_company_id()
 
         is_cap = move_type == "capital"
         title  = "💰  إضافة رأس مال" if is_cap else "💸  تسجيل مسحوبات"
@@ -44,25 +40,10 @@ class _MovementDialog(SafeConnMixin, QDialog):
         self.setLayoutDirection(Qt.RightToLeft)
         self._build()
 
-    def _get_erp_conn(self):
-        try:
-            self._erp_conn_ref.execute("SELECT 1")
-            return self._erp_conn_ref
-        except Exception:
-            pass
-        try:
-            from db.companies.company_state import company_state
-            new = company_state._get_conn("erp")
-            self._erp_conn_ref = new
-            return new
-        except Exception:
-            return self._erp_conn_ref
-
     def _build(self):
         root   = QVBoxLayout(self)
         root.setSpacing(14)
         root.setContentsMargins(20, 16, 20, 16)
-        # نجلب conn حي عند البناء للـ combos
         acc    = self._get_safe_conn()
         is_cap = self.move_type == "capital"
         color  = "#2e7d32" if is_cap else "#c62828"
@@ -179,7 +160,6 @@ class _MovementDialog(SafeConnMixin, QDialog):
             return
         date  = self.dt_date.date().toString("yyyy-MM-dd")
         notes = self.inp_notes.text().strip() or None
-        # نجلب conn حي وقت الحفظ — مش وقت الإنشاء
         acc = self._get_safe_conn()
         erp = self._get_erp_conn()
         try:

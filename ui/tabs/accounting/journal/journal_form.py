@@ -3,14 +3,8 @@ ui/tabs/accounting/journal/journal_form.py
 ====================================
 _JournalForm — فورم إدخال القيد اليومي الكامل.
 
-التقسيم الداخلي:
-  form/_balance_bar.py   → _BalanceBar   (شريط DR/CR/الفرق/الحالة)
-  form/_journal_header.py → _JournalHeader (صف التاريخ والوصف)
-
-[إصلاح v4 — erp_conn reconnect]:
-  - استبدال self.erp_conn الثابت بـ _get_erp_conn() helper.
-  - _get_erp_conn() تتحقق من الـ conn وتعمل reconnect تلقائي لو احتاج.
-  - _save() تجيب erp conn حي وقت الحفظ — مش وقت الإنشاء.
+[إصلاح v5 — DualConnMixin]:
+  - DualConnMixin بدل _get_erp_conn() المكرر يدوياً.
 """
 
 from PyQt5.QtWidgets import (
@@ -23,7 +17,7 @@ from db.accounting.accounting_repo import (
 )
 from ui.helpers import buttons_row
 from ui.events  import bus
-from ui.widgets.shared.safe_conn_mixin import SafeConnMixin
+from ui.widgets.shared.safe_conn_mixin import DualConnMixin
 from .journal_lines import _LinesPanel
 from .form._balance_bar    import _BalanceBar
 from .form._journal_header import _JournalHeader
@@ -45,33 +39,13 @@ def _emit_data_changed():
         bus.data_changed.emit()
 
 
-class _JournalForm(SafeConnMixin, QWidget):
+class _JournalForm(DualConnMixin, QWidget):
     """فورم كامل لإدخال قيد يومية جديد مع صفوف ذكية وشريط توازن."""
 
     def __init__(self, conn, erp_conn=None, parent=None):
         super().__init__(parent)
-        self._init_safe_conn(conn, "accounting")
-        self._erp_conn_ref = erp_conn
+        self._init_dual_conn(conn, erp_conn)
         self._build()
-
-    def _get_erp_conn(self):
-        """
-        يرجع erp conn صالح دايماً.
-        لو الـ connection مات أو لشركة مختلفة → يعمل reconnect تلقائي.
-        """
-        try:
-            if self._erp_conn_ref is not None:
-                self._erp_conn_ref.execute("SELECT 1")
-                return self._erp_conn_ref
-        except Exception:
-            pass
-        try:
-            from db.companies.company_state import company_state
-            new = company_state._get_conn("erp")
-            self._erp_conn_ref = new
-            return new
-        except Exception:
-            return self._erp_conn_ref
 
     def _build(self):
         root = QVBoxLayout(self)

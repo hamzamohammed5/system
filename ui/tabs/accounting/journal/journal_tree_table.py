@@ -35,9 +35,6 @@ from ..helpers  import TYPE_COLORS
 from .journal_filter  import _JournalFilterBar
 from .journal_form    import _JournalForm
 
-# ── إعادة تصدير JournalTab للتوافق مع الكود القديم ──────
-from .journal_tab_widget import JournalTab  # noqa: F401
-
 
 class _JournalTreeTable(SafeConnMixin, QWidget):
     """جدول القيود المحاسبية — SafeConnMixin يضمن conn الشركة الصح."""

@@ -3,10 +3,8 @@ ui/tabs/accounting/investors/_link_to_entry_panel.py
 =====================================================
 _LinkToEntryPanel — لوحة ربط مستثمر بقيد محاسبي موجود.
 
-تغييرات (v3 — SafeConnMixin):
-  - SafeConnMixin على acc_conn.
-  - _get_erp_conn() بدل self.erp_conn الثابت.
-  - يستمع لـ bus.company_data_changed مع فلترة company_id.
+[إصلاح v4 — DualConnMixin]:
+  - DualConnMixin بدل _get_erp_conn() المكرر يدوياً.
 """
 
 from PyQt5.QtWidgets import (
@@ -18,36 +16,20 @@ from PyQt5.QtCore import Qt
 
 from db.inventory.investors_repo import fetch_all_investors, link_investor_to_line
 from ui.events import bus
-from ui.widgets.shared.safe_conn_mixin import SafeConnMixin
+from ui.widgets.shared.safe_conn_mixin import DualConnMixin
 from ._helpers import _spin
 
 
-class _LinkToEntryPanel(SafeConnMixin, QWidget):
+class _LinkToEntryPanel(DualConnMixin, QWidget):
     def __init__(self, acc_conn, erp_conn, parent=None):
         super().__init__(parent)
-        self._init_safe_conn(acc_conn, "accounting")
-        self._erp_conn_ref = erp_conn
-        self._company_id   = self._get_company_id()
+        self._init_dual_conn(acc_conn, erp_conn)
         self._build()
         bus.company_data_changed.connect(self._on_company_event)
 
     def _on_company_event(self, company_id: int):
-        if self._on_company_event_safe(company_id):
+        if self._on_dual_company_event(company_id):
             self._reload_investors()
-
-    def _get_erp_conn(self):
-        try:
-            self._erp_conn_ref.execute("SELECT 1")
-            return self._erp_conn_ref
-        except Exception:
-            pass
-        try:
-            from db.companies.company_state import company_state
-            new = company_state._get_conn("erp")
-            self._erp_conn_ref = new
-            return new
-        except Exception:
-            return self._erp_conn_ref
 
     def _build(self):
         root = QVBoxLayout(self)

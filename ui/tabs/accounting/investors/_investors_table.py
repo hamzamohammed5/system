@@ -3,10 +3,8 @@ ui/tabs/accounting/investors/_investors_table.py
 ================================================
 _InvestorsTable — جدول المستثمرين مع أزرار الإضافة والتعديل والحذف.
 
-تغييرات (v3 — SafeConnMixin):
-  - SafeConnMixin على acc_conn.
-  - _get_erp_conn() بدل self.erp_conn الثابت.
-  - يستمع لـ bus.company_data_changed مع فلترة company_id.
+[إصلاح v4 — DualConnMixin]:
+  - DualConnMixin بدل _get_erp_conn() المكرر يدوياً.
 """
 
 from PyQt5.QtWidgets import (
@@ -24,41 +22,25 @@ from ui.helpers import (
     section_label, danger_button, confirm_delete,
 )
 from ui.events import bus
-from ui.widgets.shared.safe_conn_mixin import SafeConnMixin
+from ui.widgets.shared.safe_conn_mixin import DualConnMixin
 from ._investor_form    import _InvestorForm
 from ._movement_dialog  import _MovementDialog
 
 
-class _InvestorsTable(SafeConnMixin, QWidget):
+class _InvestorsTable(DualConnMixin, QWidget):
     def __init__(self, acc_conn, erp_conn, form: _InvestorForm,
                  on_select, parent=None):
         super().__init__(parent)
-        self._init_safe_conn(acc_conn, "accounting")
-        self._erp_conn_ref = erp_conn
-        self._form         = form
-        self._on_select    = on_select
-        self._company_id   = self._get_company_id()
+        self._init_dual_conn(acc_conn, erp_conn)
+        self._form      = form
+        self._on_select = on_select
         self._build()
         self._load()
         bus.company_data_changed.connect(self._on_company_event)
 
     def _on_company_event(self, company_id: int):
-        if self._on_company_event_safe(company_id):
+        if self._on_dual_company_event(company_id):
             self._load()
-
-    def _get_erp_conn(self):
-        try:
-            self._erp_conn_ref.execute("SELECT 1")
-            return self._erp_conn_ref
-        except Exception:
-            pass
-        try:
-            from db.companies.company_state import company_state
-            new = company_state._get_conn("erp")
-            self._erp_conn_ref = new
-            return new
-        except Exception:
-            return self._erp_conn_ref
 
     def _build(self):
         root = QVBoxLayout(self)

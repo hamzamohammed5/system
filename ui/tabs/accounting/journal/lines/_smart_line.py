@@ -3,10 +3,8 @@ ui/tabs/accounting/journal/lines/_smart_line.py
 ================================================
 _SmartLine — صف قيد واحد ذكي (حساب + اتجاه + مبلغ + بيان + ربط مستثمر).
 
-[إصلاح v4 — erp_conn reconnect]:
-  - استبدال self.erp_conn الثابت بـ _get_erp_conn() helper.
-  - _get_erp_conn() تتحقق من الـ conn وتعمل reconnect تلقائي.
-  - _reload_investors() و _update_side_style() يستخدمان _get_erp_conn().
+[إصلاح v5 — DualConnMixin]:
+  - DualConnMixin بدل _get_erp_conn() المكرر يدوياً.
 """
 
 from PyQt5.QtWidgets import (
@@ -20,7 +18,7 @@ from PyQt5.QtCore import Qt
 from db.accounting.accounting_repo import fetch_account, get_normal_balance
 from db.accounting.accounting_schema import NORMAL_BALANCE
 from ui.events import bus
-from ui.widgets.shared.safe_conn_mixin import SafeConnMixin
+from ui.widgets.shared.safe_conn_mixin import DualConnMixin
 from ..journal_account_picker import _AccountPickerButton
 
 _INVESTOR_TYPES = {"capital", "drawings"}
@@ -39,15 +37,13 @@ def _resolve_side(acc_type: str, is_increase: bool) -> str:
     return nb if is_increase else ("cr" if nb == "dr" else "dr")
 
 
-class _SmartLine(SafeConnMixin, QFrame):
+class _SmartLine(DualConnMixin, QFrame):
     """صف قيد واحد: حساب + زيادة/نقص + مبلغ + بيان + ربط مستثمر اختياري."""
 
     def __init__(self, conn, erp_conn, on_change, on_remove,
                  on_move_up, on_move_dn, parent=None):
         super().__init__(parent)
-        self._init_safe_conn(conn, "accounting")
-        # [إصلاح] نحفظ erp_conn كـ ref ونستخدم _get_erp_conn() دايماً
-        self._erp_conn_ref  = erp_conn
+        self._init_dual_conn(conn, erp_conn)
         self._on_change     = on_change
         self._on_remove     = on_remove
         self._on_move_up    = on_move_up
@@ -57,25 +53,6 @@ class _SmartLine(SafeConnMixin, QFrame):
 
         self._build()
         bus.company_data_changed.connect(self._on_company_event)
-
-    def _get_erp_conn(self):
-        """
-        يرجع erp conn صالح دايماً.
-        لو الـ connection مات أو لشركة مختلفة → يعمل reconnect تلقائي.
-        """
-        try:
-            if self._erp_conn_ref is not None:
-                self._erp_conn_ref.execute("SELECT 1")
-                return self._erp_conn_ref
-        except Exception:
-            pass
-        try:
-            from db.companies.company_state import company_state
-            new = company_state._get_conn("erp")
-            self._erp_conn_ref = new
-            return new
-        except Exception:
-            return self._erp_conn_ref
 
     def _on_company_event(self, company_id: int):
         """يُعيد تحميل المستثمرين فقط لو الحدث من نفس شركتنا."""
@@ -203,7 +180,6 @@ class _SmartLine(SafeConnMixin, QFrame):
         self._update_side_style()
 
     def _reload_investors(self):
-        # [إصلاح] استخدام _get_erp_conn() بدل self.erp_conn المباشر
         erp = self._get_erp_conn()
         if erp is None:
             return
@@ -238,7 +214,6 @@ class _SmartLine(SafeConnMixin, QFrame):
         show_investor = acc_type in _INVESTOR_TYPES if acc_type else False
         self._investor_row.setVisible(show_investor)
         if show_investor:
-            # [إصلاح] _reload_investors بتستخدم _get_erp_conn() داخلياً
             self._reload_investors()
 
         if acc_type:

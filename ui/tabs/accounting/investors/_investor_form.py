@@ -3,10 +3,8 @@ ui/tabs/accounting/investors/_investor_form.py
 ==============================================
 _InvestorForm — فورم إضافة / تعديل مستثمر مع رأس المال الأولي.
 
-تغييرات (v3 — SafeConnMixin):
-  - SafeConnMixin على acc_conn.
-  - _get_erp_conn() بدل self.erp_conn الثابت.
-  - يستمع لـ bus.company_data_changed مع فلترة company_id.
+[إصلاح v4 — DualConnMixin]:
+  - DualConnMixin بدل _get_erp_conn() المكرر يدوياً.
 """
 
 from PyQt5.QtWidgets import (
@@ -21,41 +19,25 @@ from db.inventory.investors_repo import (
 )
 from ui.helpers import EditModeMixin
 from ui.events  import bus
-from ui.widgets.shared.safe_conn_mixin import SafeConnMixin
+from ui.widgets.shared.safe_conn_mixin import DualConnMixin
 from ._helpers  import (
     _spin, _fill_capital_combo, _fill_asset_combo,
     _post_capital_entry,
 )
 
 
-class _InvestorForm(SafeConnMixin, QWidget, EditModeMixin):
+class _InvestorForm(DualConnMixin, QWidget, EditModeMixin):
     def __init__(self, acc_conn, erp_conn, parent=None):
         super().__init__(parent)
-        self._init_safe_conn(acc_conn, "accounting")
-        self._erp_conn_ref = erp_conn
-        self._company_id   = self._get_company_id()
+        self._init_dual_conn(acc_conn, erp_conn)
 
         self._build()
         self.init_edit_mode(self.btn_add, self.btn_save, self.btn_cancel, self.lbl_mode)
         bus.company_data_changed.connect(self._on_company_event)
 
     def _on_company_event(self, company_id: int):
-        if self._on_company_event_safe(company_id):
+        if self._on_dual_company_event(company_id):
             self._refresh_account_combos()
-
-    def _get_erp_conn(self):
-        try:
-            self._erp_conn_ref.execute("SELECT 1")
-            return self._erp_conn_ref
-        except Exception:
-            pass
-        try:
-            from db.companies.company_state import company_state
-            new = company_state._get_conn("erp")
-            self._erp_conn_ref = new
-            return new
-        except Exception:
-            return self._erp_conn_ref
 
     def _build(self):
         root = QVBoxLayout(self)
