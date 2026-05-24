@@ -21,7 +21,7 @@ from db.costing.machine_op_rows_repo import calc_op_total_cost
 from ui.helpers import EditModeMixin, buttons_row
 from ui.widgets.shared.category_manager import CategoryCombo
 from ui.widgets.shared.scrollable_form import wrap_in_scroll
-from ui.widgets.costing.machine_op_rows_editor import _OpRowsEditor
+from ui.tabs.costing.costing.machine_op_rows_editor import _OpRowsEditor
 from ui.events import bus
 
 

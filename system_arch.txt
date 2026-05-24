@@ -1,5 +1,5 @@
 File Tree Snapshot
-Generated : 2026-05-24 07:26:03
+Generated : 2026-05-24 07:28:39
 Source    : D:\My Workspace\Hg\Alhabaar\accountant\system
 Extensions: .py
 ────────────────────────────────────────────────────────────
@@ -137,6 +137,17 @@ system/
 │   │   │   ├── raw/
 │   │   │   │   ├── raw_input_panel.py
 │   │   │   │   └── raw_table_panel.py
+│   │   │   ├── shared/
+│   │   │   │   ├── bulk_replace/
+│   │   │   │   │   ├── bulk_replace_dialog.py
+│   │   │   │   │   ├── bulk_replace_helpers.py
+│   │   │   │   │   └── bulk_replace_products_panel.py
+│   │   │   │   ├── bom_scenarios_panel.py
+│   │   │   │   ├── bom_tree.py
+│   │   │   │   ├── catalog_builder.py
+│   │   │   │   ├── component_row.py
+│   │   │   │   ├── machine_op_rows_editor.py
+│   │   │   │   └── raw_variants_panel.py
 │   │   │   ├── labor_tab.py
 │   │   │   ├── machine_tab.py
 │   │   │   ├── product_tab.py
@@ -227,17 +238,6 @@ system/
 │   │   ├── orders_section.py
 │   │   └── pricing_section.py
 │   ├── widgets/
-│   │   ├── costing/
-│   │   │   ├── bulk_replace/
-│   │   │   │   ├── bulk_replace_dialog.py
-│   │   │   │   ├── bulk_replace_helpers.py
-│   │   │   │   └── bulk_replace_products_panel.py
-│   │   │   ├── bom_scenarios_panel.py
-│   │   │   ├── bom_tree.py
-│   │   │   ├── catalog_builder.py
-│   │   │   ├── component_row.py
-│   │   │   ├── machine_op_rows_editor.py
-│   │   │   └── raw_variants_panel.py
 │   │   └── shared/
 │   │       ├── panles_helper/
 │   │       │   ├── action_toolbar.py
