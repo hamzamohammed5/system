@@ -3,65 +3,15 @@ ui/widgets/shared/panels.py
 ============================
 مكونات UI مشتركة — re-export من panles_helper وملفات أخرى.
 
-[تحديث v2]:
-  - إضافة tab_builder exports: make_tabs, make_inner_tabs, make_financial_tabs
+[تحديث v3]:
+  - إضافة theme exports: ستايلات موحدة
+  - إضافة list_header exports: ListHeader, SearchBar, StatusBar
+  - إضافة form_row exports: form_label, required_label, hint_label, ...
+  - إضافة mode_label exports: ModeLabel
+  - إضافة amount_display exports: AmountLabel, BalanceDisplay, ...
   - إضافة DualConnMixin للـ exports
 
 كل الملفات التانية تستورد من هنا مباشرة — مش من panles_helper.
-
-المتوفر:
-  DetailHeader, StatCard, SectionHeader, EmptyState,
-  CollapsibleCard, ActionToolbar, BadgeLabel, InfoRow,
-  _make_btn, make_stat_card_simple, make_status_chip, CardGrid,
-  StatusChip,
-
-  --- stat_row ---
-  StatRow, StatItem, make_stat_row, stat_card_pair,
-
-  --- tab_builder (جديد) ---
-  make_tabs, make_inner_tabs, make_financial_tabs,
-
-  --- form_utils ---
-  FormGroup, labeled_widget, spin_field, int_spin_field,
-  ResultBadge, ModeBadge, build_inner_scroll, CrudButtonsBar, InlinePreview,
-
-  --- base forms & panels ---
-  BaseCrudForm,
-  BaseListPanel,
-  BaseDetailPanel,
-  BaseSection,
-  TabSectionBase,
-
-  --- connection ---
-  LiveConnMixin, DualConnMixin (جديد),
-
-  --- dialog ---
-  BaseDialog,
-
-  --- confirm_dialog ---
-  confirm_delete, confirm_action, confirm_save,
-
-  --- scroll ---
-  wrap_in_scroll, ScrollableFormWidget,
-
-  --- جدول مرن ---
-  WrapDelegate, AutoTooltipDelegate,
-  set_flexible_columns, make_flexible_table,
-  FlexibleTreeWidget, FlexItem, refresh_tooltips,
-  apply_tooltip_to_all,
-
-  --- no-wheel ---
-  NoWheelCombo, NoWheelSpin, NoWheelDouble,
-  NoWheelDate, NoWheelSlider, install_no_wheel_filter,
-
-  --- وحدات ---
-  UnitCombo, make_unit_combo,
-
-  --- layout ---
-  FlowLayout,
-
-  --- مقارنة سيناريوهات ---
-  ScenarioComparisonWidget,
 """
 
 from .panles_helper.detail_header    import DetailHeader        # noqa: F401
@@ -78,6 +28,63 @@ from .panles_helper.status_chip      import (                   # noqa: F401
     StatusChip,
     make_stat_card_simple,
     make_status_chip,
+)
+
+# ── theme (جديد) ──────────────────────────────────────────
+from .panles_helper.theme import (                              # noqa: F401
+    STATUS_COLORS,
+    get_input_style,
+    get_search_input_style,
+    get_card_style,
+    get_status_card_style,
+    get_table_header_style,
+    get_group_box_style,
+    get_filter_bar_style,
+    get_toolbar_style,
+    get_scroll_style,
+    get_splitter_style,
+    get_icon_btn_style,
+    get_link_btn_style,
+    get_tab_style,
+    get_tree_style,
+    get_list_style,
+    get_status_label_style,
+    get_muted_label_style,
+    get_section_title_style,
+)
+
+# ── list_header (جديد) ────────────────────────────────────
+from .panles_helper.list_header import (                        # noqa: F401
+    ListHeader,
+    SearchBar,
+    StatusBar as ListStatusBar,
+    make_list_header,
+)
+
+# ── form_row (جديد) ───────────────────────────────────────
+from .panles_helper.form_row import (                           # noqa: F401
+    form_label,
+    required_label,
+    hint_label,
+    section_title as form_section_title,
+    separator_line,
+    field_row,
+    labeled_row,
+    make_form_layout,
+    make_preview_label,
+)
+
+# ── mode_label (جديد) ─────────────────────────────────────
+from .panles_helper.mode_label import ModeLabel                 # noqa: F401
+
+# ── amount_display (جديد) ─────────────────────────────────
+from .panles_helper.amount_display import (                     # noqa: F401
+    AmountLabel,
+    DebitCreditDisplay,
+    BalanceDisplay,
+    format_amount,
+    amount_color,
+    dr_cr_color,
 )
 
 # ── stat_row ──────────────────────────────────────────────
@@ -170,40 +177,77 @@ __all__ = [
     "CollapsibleCard", "ActionToolbar", "BadgeLabel", "InfoRow",
     "_make_btn", "CardGrid", "StatusChip",
     "make_stat_card_simple", "make_status_chip",
+
+    # theme (جديد)
+    "STATUS_COLORS",
+    "get_input_style", "get_search_input_style",
+    "get_card_style", "get_status_card_style",
+    "get_table_header_style", "get_group_box_style",
+    "get_filter_bar_style", "get_toolbar_style",
+    "get_scroll_style", "get_splitter_style",
+    "get_icon_btn_style", "get_link_btn_style",
+    "get_tab_style", "get_tree_style", "get_list_style",
+    "get_status_label_style", "get_muted_label_style",
+    "get_section_title_style",
+
+    # list_header (جديد)
+    "ListHeader", "SearchBar", "ListStatusBar", "make_list_header",
+
+    # form_row (جديد)
+    "form_label", "required_label", "hint_label",
+    "form_section_title", "separator_line",
+    "field_row", "labeled_row", "make_form_layout", "make_preview_label",
+
+    # mode_label (جديد)
+    "ModeLabel",
+
+    # amount_display (جديد)
+    "AmountLabel", "DebitCreditDisplay", "BalanceDisplay",
+    "format_amount", "amount_color", "dr_cr_color",
+
     # stat_row
     "StatRow", "StatItem", "make_stat_row", "stat_card_pair",
-    # tab_builder (جديد)
+
+    # tab_builder
     "make_tabs", "make_inner_tabs", "make_financial_tabs",
+
     # form_utils
     "FormGroup", "labeled_widget", "spin_field", "int_spin_field",
     "ResultBadge", "ModeBadge", "build_inner_scroll",
     "CrudButtonsBar", "InlinePreview",
+
     # base forms & panels
-    "BaseCrudForm",
-    "BaseListPanel",
-    "BaseDetailPanel",
-    "BaseSection",
-    "TabSectionBase",
+    "BaseCrudForm", "BaseListPanel", "BaseDetailPanel",
+    "BaseSection", "TabSectionBase",
+
     # connection
     "LiveConnMixin", "DualConnMixin",
+
     # dialog
     "BaseDialog",
+
     # confirm_dialog
     "confirm_delete", "confirm_action", "confirm_save",
+
     # scroll
     "wrap_in_scroll", "ScrollableFormWidget",
+
     # flexible_text
     "WrapDelegate", "AutoTooltipDelegate",
     "set_flexible_columns", "make_flexible_table",
     "FlexibleTreeWidget", "FlexItem",
     "refresh_tooltips", "apply_tooltip_to_all",
+
     # no_wheel
     "NoWheelCombo", "NoWheelSpin", "NoWheelDouble",
     "NoWheelDate", "NoWheelSlider", "install_no_wheel_filter",
+
     # unit_combo
     "UnitCombo", "make_unit_combo",
+
     # flow_layout
     "FlowLayout",
+
     # scenario_comparison
     "ScenarioComparisonWidget",
 ]

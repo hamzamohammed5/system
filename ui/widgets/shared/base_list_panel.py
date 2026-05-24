@@ -2,11 +2,14 @@
 ui/widgets/shared/base_list_panel.py
 =====================================
 BaseListPanel — قاعدة مشتركة لكل لوحات القوائم.
+
+[تحديث v2]:
+  - يستخدم ListHeader و ListStatusBar من panles_helper بدل بناءهم يدوياً.
+  - toolbar_layout متاح للـ subclasses لإضافة عناصر.
 """
 
 from PyQt5.QtWidgets import (
-    QWidget, QVBoxLayout, QLabel, QFrame,
-    QLineEdit, QHBoxLayout, QSizePolicy,
+    QWidget, QVBoxLayout, QSizePolicy,
 )
 from PyQt5.QtCore import Qt, pyqtSignal, QTimer
 
@@ -14,7 +17,9 @@ from ui.widgets.shared.table_utils import (
     make_splitter_table_guarded, fit_splitter_table,
     ROW_HEIGHT_LARGE,
 )
-from ui.widgets.shared.panels import EmptyState
+from ui.widgets.shared.panels import (
+    EmptyState, ListHeader, ListStatusBar,
+)
 from ui.app_settings import _C
 
 _MIN_W = 260
@@ -29,6 +34,9 @@ class BaseListPanel(QWidget):
     MIN_W       : int  = _MIN_W
     EMPTY_ICON  : str  = "📋"
     EMPTY_TITLE : str  = "لا توجد بيانات"
+    LIST_TITLE  : str  = ""       # عنوان الهيدر (اختياري)
+    ADD_TEXT    : str  = ""       # نص زر الإضافة (اختياري)
+    SEARCH_PLACEHOLDER : str = "🔍  بحث..."
 
     def __init__(self, conn=None, parent=None):
         super().__init__(parent)
@@ -53,6 +61,10 @@ class BaseListPanel(QWidget):
     def _get_row_id(self, row) -> int:
         return row.get("id", 0) if hasattr(row, 'keys') else 0
 
+    def _on_add_clicked(self):
+        """Override لو فيه زر إضافة."""
+        pass
+
     # ── بناء الواجهة ──────────────────────────────────────
 
     def _build(self):
@@ -61,23 +73,23 @@ class BaseListPanel(QWidget):
         root.setSpacing(0)
         self.setStyleSheet(f"background:{_C['bg_input']};")
 
-        # ── Toolbar ──
-        self._toolbar = QFrame()
-        self._toolbar.setStyleSheet(f"""
-            QFrame {{
-                background: {_C['bg_input']};
-                border-bottom: 1px solid {_C['border']};
-            }}
-        """)
-        self._toolbar.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Fixed)
+        # ── Header (بحث + عنوان + زر إضافة) ──
+        self._header = ListHeader(
+            title=self.LIST_TITLE,
+            add_text=self.ADD_TEXT,
+            show_search=True,
+            search_placeholder=self.SEARCH_PLACEHOLDER,
+        )
+        self._header.search_changed.connect(lambda _: self._timer.start())
+        if self.ADD_TEXT:
+            self._header.add_clicked.connect(self._on_add_clicked)
 
-        self._toolbar_lay = QVBoxLayout(self._toolbar)
-        self._toolbar_lay.setContentsMargins(10, 10, 10, 10)
-        self._toolbar_lay.setSpacing(6)
+        # أضف عناصر toolbar إضافية من الـ subclass
+        self._build_extra_toolbar(self._header)
+        root.addWidget(self._header)
 
-        self._build_toolbar(self._toolbar_lay)
-        self._toolbar.adjustSize()
-        root.addWidget(self._toolbar)
+        # متاح للـ subclass للإضافة عليه
+        self.inp_search = self._header.search_bar.inp
 
         # ── الجدول جوا splitter مع guard ──
         self._splitter, self.table, self._table_guard = make_splitter_table_guarded(
@@ -103,35 +115,18 @@ class BaseListPanel(QWidget):
         root.addWidget(self._empty_state)
 
         # ── Status Bar ──
-        self._status_bar = QLabel("")
-        self._status_bar.setAlignment(Qt.AlignCenter)
-        self._status_bar.setFixedHeight(24)
-        self._status_bar.setStyleSheet(f"""
-            background: {_C['bg_surface_2']}; color: {_C['text_muted']};
-            padding: 5px 10px; font-size: 10px; font-weight: 600;
-            border-top: 1px solid {_C['border']};
-        """)
+        self._status_bar = ListStatusBar()
         root.addWidget(self._status_bar)
 
-    def _build_toolbar(self, lay: QVBoxLayout):
-        """الـ toolbar الافتراضي — حقل بحث فقط."""
-        row = QHBoxLayout()
+    def _build_extra_toolbar(self, header: ListHeader):
+        """
+        Override لإضافة أزرار إضافية في الهيدر.
 
-        self.inp_search = QLineEdit()
-        self.inp_search.setPlaceholderText("🔍  بحث...")
-        self.inp_search.setFixedHeight(34)
-        self.inp_search.setClearButtonEnabled(True)
-        self.inp_search.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Fixed)
-        self.inp_search.setStyleSheet(f"""
-            QLineEdit {{
-                background: {_C['bg_input']}; border: 1.5px solid {_C['border_med']};
-                border-radius: 6px; padding: 0 10px; font-size: 12px;
-            }}
-            QLineEdit:focus {{ border-color: {_C['accent']}; }}
-        """)
-        self.inp_search.textChanged.connect(lambda: self._timer.start())
-        row.addWidget(self.inp_search, stretch=1)
-        lay.addLayout(row)
+        الاستخدام:
+            def _build_extra_toolbar(self, header):
+                header.add_action("📤 تصدير", self._export)
+        """
+        pass
 
     # ── تحميل وفلترة ────────────────────────────────────
 
@@ -140,14 +135,11 @@ class BaseListPanel(QWidget):
         self._apply_filter()
 
     def _apply_filter(self):
-        q = getattr(self, 'inp_search', None)
-        q = q.text().strip().lower() if q else ""
+        q = self._header.search_text()
         filtered = [r for r in self._all_rows if self._match_filter(r, q)]
         self._fill_table(filtered)
 
-        cnt   = len(filtered)
-        total = len(self._all_rows)
-        self._status_bar.setText(f"{cnt}" if cnt == total else f"{cnt} / {total}")
+        self._status_bar.set_count(len(filtered), len(self._all_rows))
 
         has_data = bool(filtered)
         self.table.setVisible(has_data)
@@ -165,7 +157,7 @@ class BaseListPanel(QWidget):
 
         if rows:
             fit_splitter_table(self._splitter, self.table, extra_pad=24)
-            self._table_guard.refresh()   # ← guard يتحدث بعد ملء البيانات
+            self._table_guard.refresh()
 
     def _auto_resize(self):
         from ui.widgets.shared.table_utils import auto_fit_columns
