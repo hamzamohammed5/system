@@ -3,11 +3,10 @@ ui/tabs/accounting/journal/lines/_smart_line.py
 ================================================
 _SmartLine — صف قيد واحد ذكي (حساب + اتجاه + مبلغ + بيان + ربط مستثمر).
 
-تغييرات (v3):
-  - SafeConnMixin بدل self.conn الثابت.
-  - _get_safe_conn() في كل fetch_account بدل self.conn المحفوظ.
-  - يستمع لـ bus.company_data_changed بدل bus.data_changed العام.
-  - يتحقق من الـ company_id قبل إعادة تحميل المستثمرين.
+[إصلاح v4 — erp_conn reconnect]:
+  - استبدال self.erp_conn الثابت بـ _get_erp_conn() helper.
+  - _get_erp_conn() تتحقق من الـ conn وتعمل reconnect تلقائي.
+  - _reload_investors() و _update_side_style() يستخدمان _get_erp_conn().
 """
 
 from PyQt5.QtWidgets import (
@@ -46,19 +45,37 @@ class _SmartLine(SafeConnMixin, QFrame):
     def __init__(self, conn, erp_conn, on_change, on_remove,
                  on_move_up, on_move_dn, parent=None):
         super().__init__(parent)
-        # [إصلاح] SafeConnMixin بدل self.conn الثابت
         self._init_safe_conn(conn, "accounting")
-        self.erp_conn    = erp_conn
-        self._on_change  = on_change
-        self._on_remove  = on_remove
-        self._on_move_up = on_move_up
-        self._on_move_dn = on_move_dn
+        # [إصلاح] نحفظ erp_conn كـ ref ونستخدم _get_erp_conn() دايماً
+        self._erp_conn_ref  = erp_conn
+        self._on_change     = on_change
+        self._on_remove     = on_remove
+        self._on_move_up    = on_move_up
+        self._on_move_dn    = on_move_dn
         self._resolved_side = "dr"
-
-        self._company_id = _get_current_company_id()
+        self._company_id    = _get_current_company_id()
 
         self._build()
         bus.company_data_changed.connect(self._on_company_event)
+
+    def _get_erp_conn(self):
+        """
+        يرجع erp conn صالح دايماً.
+        لو الـ connection مات أو لشركة مختلفة → يعمل reconnect تلقائي.
+        """
+        try:
+            if self._erp_conn_ref is not None:
+                self._erp_conn_ref.execute("SELECT 1")
+                return self._erp_conn_ref
+        except Exception:
+            pass
+        try:
+            from db.companies.company_state import company_state
+            new = company_state._get_conn("erp")
+            self._erp_conn_ref = new
+            return new
+        except Exception:
+            return self._erp_conn_ref
 
     def _on_company_event(self, company_id: int):
         """يُعيد تحميل المستثمرين فقط لو الحدث من نفس شركتنا."""
@@ -99,7 +116,6 @@ class _SmartLine(SafeConnMixin, QFrame):
         ord_col.addWidget(self.btn_dn)
         main_row.addLayout(ord_col)
 
-        # [إصلاح] نمرر conn حي لـ _AccountPickerButton
         self._acc = _AccountPickerButton(self._get_safe_conn())
         self._acc.set_on_changed(self._on_acc_changed)
         main_row.addWidget(self._acc, stretch=4)
@@ -187,7 +203,9 @@ class _SmartLine(SafeConnMixin, QFrame):
         self._update_side_style()
 
     def _reload_investors(self):
-        if self.erp_conn is None:
+        # [إصلاح] استخدام _get_erp_conn() بدل self.erp_conn المباشر
+        erp = self._get_erp_conn()
+        if erp is None:
             return
         try:
             from db.inventory.investors_repo import fetch_all_investors
@@ -195,7 +213,7 @@ class _SmartLine(SafeConnMixin, QFrame):
             self.cmb_investor.blockSignals(True)
             self.cmb_investor.clear()
             self.cmb_investor.addItem("— لا يوجد ربط —", None)
-            for inv in fetch_all_investors(self.erp_conn):
+            for inv in fetch_all_investors(erp):
                 self.cmb_investor.addItem(f"👤 {inv['name']}", inv["id"])
             self.cmb_investor.blockSignals(False)
             if prev:
@@ -210,7 +228,6 @@ class _SmartLine(SafeConnMixin, QFrame):
         acc_id = self._acc.current_account_id()
         if not acc_id:
             return None
-        # [إصلاح] _get_safe_conn() بدل self.conn
         acc = fetch_account(self._get_safe_conn(), acc_id)
         return acc["type"] if acc else None
 
@@ -221,6 +238,7 @@ class _SmartLine(SafeConnMixin, QFrame):
         show_investor = acc_type in _INVESTOR_TYPES if acc_type else False
         self._investor_row.setVisible(show_investor)
         if show_investor:
+            # [إصلاح] _reload_investors بتستخدم _get_erp_conn() داخلياً
             self._reload_investors()
 
         if acc_type:

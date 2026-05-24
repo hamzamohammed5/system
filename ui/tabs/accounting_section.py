@@ -3,11 +3,12 @@ ui/tabs/accounting_section.py
 ==============================
 النافذة المحاسبية الرئيسية — مع دعم كامل لتعدد الشركات.
 
-إصلاحات (v8):
-  ١. _build_attempts counter — حد أقصى 5 محاولات (600ms) لتجنب الحلقة اللانهائية.
-  ٢. رسالة خطأ واضحة لو فشل التحقق بعد كل المحاولات.
-  ٣. إعادة تعيين _build_attempts عند نجاح البناء.
-  ٤. باقي الإصلاحات من v7 محافظ عليها.
+إصلاحات (v9):
+  ١. حذف acc_conn و erp_conn properties — كانوا يفتحون connection جديد في كل call.
+  ٢. _build() تجيب acc و erp مرة واحدة وتمررهم صريح لكل الدوال.
+  ٣. _init_schema استُبدلت بـ _init_schema_with_conn(acc, erp) تستقبل conn صريح.
+  ٤. _build_equity_tab و _build_financial_tab يستقبلان acc صريح (كانوا كذلك).
+  ٥. باقي الإصلاحات من v8 محافظ عليها.
 """
 
 from PyQt5.QtWidgets import (
@@ -145,18 +146,18 @@ class AccountingTab(QWidget):
         self._main_tabs: QTabWidget | None = None
         self._company_id: int | None = _current_company_id()
         self._initialized: dict[int, str] = {}
-        self._build_attempts = 0    # ← جديد: عداد محاولات التحقق من conn
+        self._build_attempts = 0
         self._build()
 
-    @property
-    def acc_conn(self):
-        return _get_acc_conn()
+    # ── تمت إزالة acc_conn و erp_conn properties ──────────────────────────
+    # كانتا تفتحان connection جديد في كل call عبر _get_acc_conn()/_get_erp_conn()
+    # الآن يُجلب acc و erp مرة واحدة في _build() ويُمرران صريحاً لكل الدوال.
 
-    @property
-    def erp_conn(self):
-        return _get_erp_conn()
-
-    def _init_schema(self):
+    def _init_schema_with_conn(self, acc, erp):
+        """
+        تهيئة Schema باستخدام conn مُمرر صريحاً.
+        استبدلت _init_schema() التي كانت تستخدم self.acc_conn property.
+        """
         if not _is_ready():
             return
 
@@ -169,13 +170,13 @@ class AccountingTab(QWidget):
 
         try:
             from db.accounting.accounting_schema import create_accounting_tables
-            create_accounting_tables(self.acc_conn)
+            create_accounting_tables(acc)
         except Exception as e:
             print(f"[AccountingTab] schema init error: {e}")
 
         try:
             from db.inventory.investors_repo import create_investors_tables
-            create_investors_tables(self.erp_conn)
+            create_investors_tables(erp)
         except Exception as e:
             print(f"[AccountingTab] investors schema error: {e}")
 
@@ -213,7 +214,22 @@ class AccountingTab(QWidget):
             return
 
         self._company_id = _current_company_id()
-        acc = self.acc_conn
+
+        # ── الإصلاح الجوهري: جيب acc و erp مرة واحدة فقط في _build ──────
+        # بدل properties كانت تفتح connection جديد في كل call
+        try:
+            acc = _get_acc_conn()
+            erp = _get_erp_conn()
+        except Exception as e:
+            lbl = QLabel(f"❌  خطأ في الاتصال بقاعدة البيانات:\n{e}")
+            lbl.setAlignment(Qt.AlignCenter)
+            lbl.setWordWrap(True)
+            lbl.setStyleSheet(
+                "font-size:13px; color:#c62828; padding:40px;"
+                "background:#fdecea; border-radius:8px; margin:20px;"
+            )
+            root.addWidget(lbl)
+            return
 
         if not _verify_conn_belongs_to_company(acc, self._company_id):
             # حد أقصى 5 محاولات (5 × 120ms = 600ms)
@@ -246,14 +262,15 @@ class AccountingTab(QWidget):
         # نجح التحقق — أعد العداد
         self._build_attempts = 0
 
-        self._init_schema()
-        erp = self.erp_conn
+        # ── تهيئة Schema بتمرير acc و erp صريحاً ─────────────────────────
+        self._init_schema_with_conn(acc, erp)
 
         main_tabs = QTabWidget()
         main_tabs.setStyleSheet(_TAB_STYLE)
         self._main_tabs = main_tabs
 
-        # ── تبويب الحسابات ──
+        # ── تبويب الحسابات ─────────────────────────────────────────────────
+        # acc يُمرر صريحاً لكل widget — لا properties، لا connections مخفية
         accounts_tabs = _make_inner_tabs(
             ("🏦  الأصول",
              _make_inner_tabs(
@@ -268,11 +285,11 @@ class AccountingTab(QWidget):
             ("👑  حقوق الملكية",
              self._build_equity_tab(acc)),
         )
-        main_tabs.addTab(accounts_tabs, "🏦  الحسابات")
-        main_tabs.addTab(JournalTab(acc, erp), "📒  قيود اليومية")
-        main_tabs.addTab(LedgerTab(acc), "📘  دفتر الأستاذ")
-        main_tabs.addTab(self._build_financial_tab(acc), "📊  القوائم المالية")
-        main_tabs.addTab(InvestorsTab(erp, acc), "👥  المستثمرون")
+        main_tabs.addTab(accounts_tabs,                   "🏦  الحسابات")
+        main_tabs.addTab(JournalTab(acc, erp),            "📒  قيود اليومية")
+        main_tabs.addTab(LedgerTab(acc),                  "📘  دفتر الأستاذ")
+        main_tabs.addTab(self._build_financial_tab(acc),  "📊  القوائم المالية")
+        main_tabs.addTab(InvestorsTab(erp, acc),          "👥  المستثمرون")
 
         root.addWidget(main_tabs)
 

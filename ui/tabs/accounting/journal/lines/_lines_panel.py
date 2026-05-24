@@ -3,9 +3,9 @@ ui/tabs/accounting/journal/lines/_lines_panel.py
 ================================================
 _LinesPanel — لوحة صفوف القيد كاملة مع scroll وإضافة/حذف/ترتيب.
 
-تغييرات (v2):
-  - SafeConnMixin بدل self.conn الثابت.
-  - add_line() تمرر _get_safe_conn() حي لكل _SmartLine جديدة.
+[إصلاح v3 — erp_conn reconnect]:
+  - استبدال self.erp_conn الثابت بـ _get_erp_conn() helper.
+  - add_line() تمرر _get_erp_conn() حي لكل _SmartLine جديدة.
 """
 
 from PyQt5.QtWidgets import (
@@ -23,12 +23,31 @@ class _LinesPanel(SafeConnMixin, QFrame):
 
     def __init__(self, conn, erp_conn, on_balance_changed, parent=None):
         super().__init__(parent)
-        # [إصلاح] SafeConnMixin بدل self.conn الثابت
         self._init_safe_conn(conn, "accounting")
-        self.erp_conn            = erp_conn
+        # [إصلاح] نحفظ erp_conn كـ ref ونستخدم _get_erp_conn() في add_line()
+        self._erp_conn_ref       = erp_conn
         self._on_balance_changed = on_balance_changed
         self._lines: list[_SmartLine] = []
         self._build()
+
+    def _get_erp_conn(self):
+        """
+        يرجع erp conn صالح دايماً.
+        لو الـ connection مات أو لشركة مختلفة → يعمل reconnect تلقائي.
+        """
+        try:
+            if self._erp_conn_ref is not None:
+                self._erp_conn_ref.execute("SELECT 1")
+                return self._erp_conn_ref
+        except Exception:
+            pass
+        try:
+            from db.companies.company_state import company_state
+            new = company_state._get_conn("erp")
+            self._erp_conn_ref = new
+            return new
+        except Exception:
+            return self._erp_conn_ref
 
     def _build(self):
         self.setStyleSheet("""
@@ -125,10 +144,10 @@ class _LinesPanel(SafeConnMixin, QFrame):
         root.addWidget(btn_add)
 
     def add_line(self) -> _SmartLine:
-        # [إصلاح] نمرر conn حي في كل مرة نضيف صف
+        # [إصلاح] كلا الـ connections حيان في كل إضافة صف
         line = _SmartLine(
             conn        = self._get_safe_conn(),
-            erp_conn    = self.erp_conn,
+            erp_conn    = self._get_erp_conn(),
             on_change   = self._on_line_changed,
             on_remove   = self._remove_line,
             on_move_up  = self._move_up,

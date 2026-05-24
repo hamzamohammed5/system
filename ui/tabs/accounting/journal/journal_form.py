@@ -3,11 +3,10 @@ ui/tabs/accounting/journal/journal_form.py
 ====================================
 _JournalForm — فورم إدخال القيد اليومي الكامل.
 
-[إصلاح v3 — SafeConnMixin]:
-  - SafeConnMixin بدل self.conn الثابت.
-  - _get_safe_conn() في كل عملية حفظ.
-  - _LinesPanel تستقبل conn حي من _get_safe_conn() عند الإنشاء.
-  - erp_conn يبقى كما هو (يأتي من InvestorsTab وهو ProtectedConnection).
+[إصلاح v4 — erp_conn reconnect]:
+  - استبدال self.erp_conn الثابت بـ _get_erp_conn() helper.
+  - _get_erp_conn() تتحقق من الـ conn وتعمل reconnect تلقائي لو احتاج.
+  - _save() تجيب erp conn حي وقت الحفظ — مش وقت الإنشاء.
 """
 
 from PyQt5.QtWidgets import (
@@ -48,8 +47,28 @@ class _JournalForm(SafeConnMixin, QWidget):
     def __init__(self, conn, erp_conn=None, parent=None):
         super().__init__(parent)
         self._init_safe_conn(conn, "accounting")
-        self.erp_conn = erp_conn
+        # [إصلاح] نحفظ erp_conn كـ ref ونستخدم _get_erp_conn() دايماً
+        self._erp_conn_ref = erp_conn
         self._build()
+
+    def _get_erp_conn(self):
+        """
+        يرجع erp conn صالح دايماً.
+        لو الـ connection مات أو لشركة مختلفة → يعمل reconnect تلقائي.
+        """
+        try:
+            if self._erp_conn_ref is not None:
+                self._erp_conn_ref.execute("SELECT 1")
+                return self._erp_conn_ref
+        except Exception:
+            pass
+        try:
+            from db.companies.company_state import company_state
+            new = company_state._get_conn("erp")
+            self._erp_conn_ref = new
+            return new
+        except Exception:
+            return self._erp_conn_ref
 
     def _build(self):
         root = QVBoxLayout(self)
@@ -83,9 +102,10 @@ class _JournalForm(SafeConnMixin, QWidget):
         info_row.addWidget(self.inp_desc, stretch=1)
         root.addLayout(info_row)
 
-        # لوحة الصفوف — تستقبل conn حي عند الإنشاء
+        # [إصلاح] _LinesPanel تستقبل _get_erp_conn() — conn حي وقت البناء
+        # و_LinesPanel نفسها بتستخدم SafeConnMixin + _get_safe_conn() في add_line()
         self._lines_panel = _LinesPanel(
-            self._get_safe_conn(), self.erp_conn, self._on_balance_changed
+            self._get_safe_conn(), self._get_erp_conn(), self._on_balance_changed
         )
         root.addWidget(self._lines_panel)
 
@@ -208,7 +228,9 @@ class _JournalForm(SafeConnMixin, QWidget):
             self.btn_save.setEnabled(False)
 
     def _save(self):
-        conn = self._get_safe_conn()   # [إصلاح] conn حي دائماً
+        # [إصلاح] كلا الـ connections حية وقت الحفظ
+        conn = self._get_safe_conn()
+        erp  = self._get_erp_conn()
 
         desc = self.inp_desc.text().strip()
         if not desc:
@@ -242,9 +264,9 @@ class _JournalForm(SafeConnMixin, QWidget):
         entry_id = insert_entry(conn, date, desc, "manual")
         add_entry_lines(conn, entry_id, all_lines)
 
-        # ربط المستثمرين
+        # [إصلاح] ربط المستثمرين يستخدم erp حي من _get_erp_conn()
         investor_links = self._lines_panel.get_all_investor_links()
-        if investor_links and self.erp_conn:
+        if investor_links and erp is not None:
             from db.inventory.investors_repo import link_investor_to_line
             for link in investor_links:
                 inv_id    = link["investor_id"]
@@ -264,7 +286,7 @@ class _JournalForm(SafeConnMixin, QWidget):
                 line_id = line_row["id"] if line_row else 0
                 try:
                     link_investor_to_line(
-                        self.erp_conn, inv_id, entry_id, line_id,
+                        erp, inv_id, entry_id, line_id,
                         move_type, amount, desc
                     )
                 except Exception as e:
