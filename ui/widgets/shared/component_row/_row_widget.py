@@ -1,47 +1,26 @@
 """
-ui/tabs/costing/shared/component_row/_row_widget.py
+ui/widgets/shared/component_row/_row_widget.py
 ====================================================
 ComponentRow — صف مكوّن واحد في BOM.
 
-يرث من OpRowsMixin و VariantsMixin اللي مُستخرجين في:
-  _op_rows_logic.py   — منطق machine_op rows
-  _variants_logic.py  — منطق raw variants
-
-الإصلاحات الجوهرية موثقة في الملف الأصلي component_row.py.
+[تقسيم v2]:
+  - _row_ui.py        → بناء الواجهة
+  - _op_rows_logic.py → منطق machine_op rows
+  - _variants_logic.py → منطق raw variants
 """
 
 import weakref
 from PyQt5 import sip
 
-from PyQt5.QtWidgets import (
-    QWidget, QVBoxLayout, QHBoxLayout, QComboBox, QLineEdit,
-    QPushButton, QSizePolicy, QLabel, QDoubleSpinBox, QFrame,
-)
-from PyQt5.QtCore import pyqtSignal, Qt, QTimer
-from PyQt5.QtGui  import QColor
+from PyQt5.QtWidgets import QWidget
+from PyQt5.QtCore import pyqtSignal, QTimer
 
-from ui.widgets.shared.searchable_combo import _SearchableCombo, _build_grouped_items
+from ui.widgets.shared.searchable_combo import _build_grouped_items
 from ui.events import bus
 
+from ._row_ui      import build_row_ui, _update_waste_style, _STYLE_NORMAL, _STYLE_ORPHAN
 from ._op_rows_logic   import OpRowsMixin
 from ._variants_logic  import VariantsMixin
-
-_TYPES = [
-    ("raw",        "🧱 خامة"),
-    ("semi",       "🔧 نصف مصنع"),
-    ("labor_op",   "👷 عملية عمالة"),
-    ("machine_op", "⚙️ عملية تشغيل"),
-]
-
-_STYLE_NORMAL = ""
-_STYLE_ORPHAN = """
-    QWidget { background-color: #fff3e0; border-radius: 4px; }
-    QComboBox, QLineEdit {
-        background-color: #fff3e0;
-        border: 1.5px solid #e65100;
-        border-radius: 4px;
-    }
-"""
 
 
 class ComponentRow(QWidget, OpRowsMixin, VariantsMixin):
@@ -83,190 +62,9 @@ class ComponentRow(QWidget, OpRowsMixin, VariantsMixin):
         self._init_child_id          = child_id
         self._skip_timer_load        = False
 
-        self._build(child_type, child_id, qty, raw_total_qty,
-                    waste_pct, variant_id, machine_op_row_id)
-        QTimer.singleShot(0, self._connect_signal)
-
-    def _connect_signal(self):
-        bus.data_changed.connect(
-            lambda: QTimer.singleShot(0, self._on_catalog_changed)
-        )
-
-    # ══════════════════════════════════════════════════════
-    # بناء الواجهة
-    # ══════════════════════════════════════════════════════
-
-    def _build(self, child_type, child_id, qty, raw_total_qty,
-               waste_pct=0.0, variant_id=None, machine_op_row_id=None):
-        outer = QVBoxLayout(self)
-        outer.setContentsMargins(0, 2, 0, 2)
-        outer.setSpacing(2)
-
-        main_row = QHBoxLayout()
-        main_row.setContentsMargins(0, 0, 0, 0)
-        main_row.setSpacing(6)
-
-        # ── النوع ──
-        self.cmb_type = QComboBox()
-        self.cmb_type.setSizePolicy(QSizePolicy.Preferred, QSizePolicy.Fixed)
-        self.cmb_type.setMinimumContentsLength(10)
-        self.cmb_type.setSizeAdjustPolicy(QComboBox.AdjustToContents)
-        for key, label in _TYPES:
-            self.cmb_type.addItem(label, key)
-
-        # ── بحث العناصر ──
-        self._item_combo = _SearchableCombo()
-        self._item_combo.item_selected.connect(self._on_item_selected)
-
-        # ── Variant (للخامات) ──
-        self.cmb_variant = QComboBox()
-        self.cmb_variant.setMinimumHeight(26)
-        self.cmb_variant.setMinimumWidth(130)
-        self.cmb_variant.setMaximumWidth(180)
-        self.cmb_variant.setToolTip("وحدة الإنتاج — تكلفة الوحدة = سعر الخامة ÷ عدد القطع")
-        self.cmb_variant.setStyleSheet("""
-            QComboBox {
-                background: #e8f5e9; border: 1px solid #a5d6a7;
-                border-radius: 4px; padding: 1px 6px;
-                font-size: 11px; color: #2e7d32;
-            }
-            QComboBox:focus { border-color: #2e7d32; }
-            QComboBox::drop-down { border: none; }
-        """)
-        self.cmb_variant.setVisible(False)
-        self.cmb_variant.currentIndexChanged.connect(self._on_variant_changed)
-
-        self.lbl_variant_cost = QLabel()
-        self.lbl_variant_cost.setStyleSheet(
-            "font-size:10px; color:#2e7d32; font-weight:bold;"
-            "background:#f1f8e9; border:1px solid #c8e6c9;"
-            "border-radius:3px; padding:1px 5px;"
-        )
-        self.lbl_variant_cost.setVisible(False)
-
-        # ── الكمية ──
-        self.qty_edit = QLineEdit()
-        self.qty_edit.setPlaceholderText("الكمية")
-        self.qty_edit.setSizePolicy(QSizePolicy.Preferred, QSizePolicy.Fixed)
-        self.qty_edit.setMinimumWidth(60)
-        self.qty_edit.setMaximumWidth(90)
-        self.qty_edit.setText(str(qty) if qty else "")
-
-        # ── الهادر ──
-        self.waste_spin = QDoubleSpinBox()
-        self.waste_spin.setRange(0, 100)
-        self.waste_spin.setDecimals(1)
-        self.waste_spin.setSuffix(" %")
-        self.waste_spin.setValue(waste_pct or 0.0)
-        self.waste_spin.setMinimumWidth(75)
-        self.waste_spin.setMaximumWidth(90)
-        self.waste_spin.setMinimumHeight(26)
-        self.waste_spin.setToolTip("نسبة الهادر %\nمثال: 10% → الكمية الفعلية = الكمية × 1.10")
-        self.waste_spin.setStyleSheet("""
-            QDoubleSpinBox {
-                background: #fff8e1; border: 1px solid #ffe082;
-                border-radius: 4px; padding: 1px 4px;
-                font-size: 11px; color: #e65100;
-            }
-            QDoubleSpinBox:focus { border-color: #ff8f00; background: #fffde7; }
-        """)
-
-        self.lbl_waste = QLabel("⚠️")
-        self.lbl_waste.setFixedWidth(18)
-        self.lbl_waste.setStyleSheet("color:#e65100; font-size:11px; background:transparent;")
-        self.lbl_waste.setToolTip("نسبة الهادر")
-        self.waste_spin.valueChanged.connect(self._on_waste_changed)
-        self._update_waste_style(waste_pct or 0.0)
-
-        # ── الكمية الكلية ──
-        self.total_qty_edit = QLineEdit()
-        self.total_qty_edit.setPlaceholderText("الكلي")
-        self.total_qty_edit.setSizePolicy(QSizePolicy.Preferred, QSizePolicy.Fixed)
-        self.total_qty_edit.setMinimumWidth(60)
-        self.total_qty_edit.setMaximumWidth(90)
-        self.total_qty_edit.setToolTip("الكمية الكلية للخامة.\nسعر الوحدة = السعر الكلي ÷ هذا الرقم.")
-        if raw_total_qty is not None:
-            self.total_qty_edit.setText(str(raw_total_qty))
-
-        self.lbl_total_qty = QLabel("÷")
-        self.lbl_total_qty.setStyleSheet("color:#888; font-size:11px;")
-        self.lbl_total_qty.setFixedWidth(14)
-
-        # ── حذف ──
-        del_btn = QPushButton("❌")
-        del_btn.setSizePolicy(QSizePolicy.Fixed, QSizePolicy.Fixed)
-        del_btn.setFixedWidth(32)
-        del_btn.clicked.connect(lambda: self.removed.emit(self))
-
-        # ── ترتيب الصف الرئيسي ──
-        main_row.addWidget(self.cmb_type)
-        main_row.addWidget(self._item_combo, stretch=1)
-        main_row.addWidget(self.cmb_variant)
-        main_row.addWidget(self.lbl_variant_cost)
-        main_row.addWidget(self.qty_edit)
-        main_row.addWidget(self.lbl_waste)
-        main_row.addWidget(self.waste_spin)
-
-        if self._show_total_qty:
-            main_row.addWidget(self.lbl_total_qty)
-            main_row.addWidget(self.total_qty_edit)
-        else:
-            self.lbl_total_qty.setVisible(False)
-            self.total_qty_edit.setVisible(False)
-
-        main_row.addWidget(del_btn)
-        outer.addLayout(main_row)
-
-        # ── السطر الفرعي لصفوف عملية التشغيل ──
-        self._sub_row_widget = QFrame()
-        self._sub_row_widget.setStyleSheet("""
-            QFrame {
-                background: #fce4ec; border: 1px solid #f48fb1;
-                border-radius: 4px; margin-right: 4px;
-            }
-        """)
-        sub_layout = QHBoxLayout(self._sub_row_widget)
-        sub_layout.setContentsMargins(8, 3, 8, 3)
-        sub_layout.setSpacing(8)
-
-        lbl_row_icon = QLabel("↳ صف العملية:")
-        lbl_row_icon.setStyleSheet(
-            "color:#880e4f; font-weight:bold; font-size:11px;"
-            "background:transparent; border:none;"
-        )
-        sub_layout.addWidget(lbl_row_icon)
-
-        self.cmb_op_row = QComboBox()
-        self.cmb_op_row.setMinimumHeight(26)
-        self.cmb_op_row.setMinimumWidth(280)
-        self.cmb_op_row.setStyleSheet("""
-            QComboBox {
-                background: white; border: 1px solid #f48fb1;
-                border-radius: 4px; padding: 1px 6px;
-                font-size: 11px; color: #880e4f;
-            }
-            QComboBox:focus { border-color: #880e4f; }
-            QComboBox::drop-down { border: none; }
-        """)
-        self.cmb_op_row.currentIndexChanged.connect(self._on_op_row_changed)
-        sub_layout.addWidget(self.cmb_op_row, stretch=1)
-
-        self.lbl_op_row_cost = QLabel()
-        self.lbl_op_row_cost.setStyleSheet(
-            "font-size:11px; color:#880e4f; font-weight:bold;"
-            "background:transparent; border:none;"
-        )
-        sub_layout.addWidget(self.lbl_op_row_cost)
-        sub_layout.addStretch()
-
-        self._sub_row_widget.setVisible(False)
-        outer.addWidget(self._sub_row_widget)
-
-        # ── تحديد النوع ──
-        self.cmb_type.blockSignals(True)
-        idx = next((i for i, (k, _) in enumerate(_TYPES) if k == child_type), 0)
-        self.cmb_type.setCurrentIndex(idx)
-        self.cmb_type.blockSignals(False)
+        # بناء الواجهة من _row_ui.py
+        build_row_ui(self, child_type, child_id, qty, raw_total_qty,
+                     waste_pct, variant_id, machine_op_row_id, show_total_qty)
 
         self._fill_items(child_type, selected_id=child_id)
         self._update_total_qty_visibility(child_type)
@@ -277,7 +75,6 @@ class ComponentRow(QWidget, OpRowsMixin, VariantsMixin):
             _weak = weakref.ref(self)
             _cid, _vid = child_id, variant_id
             QTimer.singleShot(50, lambda: (s := _weak()) and s._load_variants(_cid, _vid))
-
         elif child_type == "machine_op" and child_id is not None:
             _weak   = weakref.ref(self)
             _op_id  = child_id
@@ -290,6 +87,13 @@ class ComponentRow(QWidget, OpRowsMixin, VariantsMixin):
                 s._load_op_rows(_op_id, _row_id)
 
             QTimer.singleShot(50, _timer_load)
+
+        QTimer.singleShot(0, self._connect_signal)
+
+    def _connect_signal(self):
+        bus.data_changed.connect(
+            lambda: QTimer.singleShot(0, self._on_catalog_changed)
+        )
 
     # ══════════════════════════════════════════════════════
     # مساعد Connection
@@ -315,37 +119,7 @@ class ComponentRow(QWidget, OpRowsMixin, VariantsMixin):
     # ══════════════════════════════════════════════════════
 
     def _on_waste_changed(self, val: float):
-        self._update_waste_style(val)
-
-    def _update_waste_style(self, val: float):
-        if val > 0:
-            self.lbl_waste.setVisible(True)
-            if val >= 20:
-                color, border = "#ffcdd2", "#e53935"
-            elif val >= 10:
-                color, border = "#ffe0b2", "#f57c00"
-            else:
-                color, border = "#fff8e1", "#ffe082"
-            self.waste_spin.setStyleSheet(f"""
-                QDoubleSpinBox {{
-                    background: {color}; border: 1px solid {border};
-                    border-radius: 4px; padding: 1px 4px;
-                    font-size: 11px; color: #e65100; font-weight: bold;
-                }}
-                QDoubleSpinBox:focus {{ border-color: #ff8f00; }}
-            """)
-        else:
-            self.lbl_waste.setVisible(False)
-            self.waste_spin.setStyleSheet("""
-                QDoubleSpinBox {
-                    background: #f5f5f5; border: 1px solid #e0e0e0;
-                    border-radius: 4px; padding: 1px 4px;
-                    font-size: 11px; color: #999;
-                }
-                QDoubleSpinBox:focus {
-                    border-color: #ffe082; background: #fff8e1; color: #e65100;
-                }
-            """)
+        _update_waste_style(self, val)
 
     # ══════════════════════════════════════════════════════
     # إظهار/إخفاء حقل الكمية الكلية
@@ -474,7 +248,6 @@ class ComponentRow(QWidget, OpRowsMixin, VariantsMixin):
                 weak_self = weakref.ref(self)
                 QTimer.singleShot(50, lambda: (s := weak_self()) and s._load_variants(item_id))
                 self._hide_op_rows()
-
             elif child_type == "machine_op":
                 op_id = data[1]
                 self._hide_op_rows()
@@ -488,7 +261,8 @@ class ComponentRow(QWidget, OpRowsMixin, VariantsMixin):
                 self._hide_op_rows()
 
     def _on_catalog_changed(self):
-        valid_types = {k for k, _ in _TYPES}
+        from ._row_ui import _TYPES as _VALID_TYPES
+        valid_types = {k for k, _ in _VALID_TYPES}
         if self._pinned_type not in valid_types:
             from_combo = self.cmb_type.currentData()
             if from_combo in valid_types:
@@ -530,9 +304,7 @@ class ComponentRow(QWidget, OpRowsMixin, VariantsMixin):
     # ══════════════════════════════════════════════════════
 
     def get_values(self) -> tuple | None:
-        """
-        يرجع (child_type, child_id, qty, waste_pct, variant_id, machine_op_row_id)
-        """
+        """يرجع (child_type, child_id, qty, waste_pct, variant_id, machine_op_row_id)"""
         try:
             data = self._item_combo.current_data()
             qty  = float(self.qty_edit.text())

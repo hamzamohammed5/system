@@ -1,18 +1,17 @@
 """
 ui/tabs/accounting/investors/_helpers.py
 =========================================
-دوال مساعدة مشتركة لنظام المستثمرين:
-  - دوال جلب الحسابات (_fetch_*)
-  - دوال ملء القوائم (_fill_*)
-  - دوال تسجيل القيود (_post_*)
-  - _spin و _stat_card — مستوردة من helpers الموحد
+دوال مساعدة مشتركة لنظام المستثمرين.
 
-[تحديث]: استخدام spin_field و stat_card_pair مباشرة بدل تمريرهم عبر helpers.
+[تحديث v3 — إزالة التكرار الكامل]:
+  - _spin    → spin_field   من form_utils مباشرة (re-export فقط)
+  - _stat_card → stat_card_pair من stat_row مباشرة (re-export فقط)
+  - لا يوجد كود مكرر هنا
 """
 
 from PyQt5.QtWidgets import QComboBox
 
-# ── استيراد من الـ shared الموحد مباشرة ──
+# ── re-export من الـ shared الموحد ──
 from ui.widgets.shared.form_utils import spin_field as _spin          # noqa: F401
 from ui.widgets.shared.stat_row   import stat_card_pair as _stat_card  # noqa: F401
 

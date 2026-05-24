@@ -1,5 +1,5 @@
 File Tree Snapshot
-Generated : 2026-05-24 14:25:24
+Generated : 2026-05-24 14:38:37
 Source    : D:\My Workspace\Hg\Alhabaar\accountant\system
 Extensions: .py
 ────────────────────────────────────────────────────────────
@@ -266,6 +266,7 @@ system/
 │   │   └── shared/
 │   │       ├── component_row/
 │   │       │   ├── _op_rows_logic.py
+│   │       │   ├── _row_ui.py
 │   │       │   ├── _row_widget.py
 │   │       │   └── _variants_logic.py
 │   │       ├── panles_helper/
@@ -286,6 +287,10 @@ system/
 │   │       │   ├── stat_card.py
 │   │       │   ├── status_chip.py
 │   │       │   └── theme.py
+│   │       ├── table_utils/
+│   │       │   ├── table_builders.py
+│   │       │   ├── table_helpers.py
+│   │       │   └── table_styles.py
 │   │       ├── accounts_combo_widget.py
 │   │       ├── base_crud_form.py
 │   │       ├── base_detail_panel.py
@@ -305,6 +310,7 @@ system/
 │   │       ├── flexible_text.py
 │   │       ├── flow_layout.py
 │   │       ├── form_utils.py
+│   │       ├── input_widgets.py
 │   │       ├── list_panel_with_shared.py
 │   │       ├── loading_spinner.py
 │   │       ├── message_box.py
@@ -315,6 +321,7 @@ system/
 │   │       ├── scrollable_form.py
 │   │       ├── searchable_combo.py
 │   │       ├── shared_ops_mixin.py
+│   │       ├── shared_ui_mixins.py
 │   │       ├── splitter_scroll_guard.py
 │   │       ├── splitter_utils.py
 │   │       ├── stat_row.py

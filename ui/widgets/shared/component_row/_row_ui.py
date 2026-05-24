@@ -1,0 +1,248 @@
+"""
+ui/widgets/shared/component_row/_row_ui.py
+============================================
+بناء واجهة ComponentRow — مستخرج من _row_widget.py.
+
+يحتوي على:
+  - _build_main_row()   → الصف الرئيسي للمكون
+  - _build_sub_row()    → صف عملية التشغيل
+  - _update_waste_style() → تحديث ستايل الهادر
+  - _update_total_qty_visibility()
+
+لا يُستورد مباشرة — يُستخدم من _row_widget.py فقط.
+"""
+
+from PyQt5.QtWidgets import (
+    QWidget, QVBoxLayout, QHBoxLayout, QComboBox, QLineEdit,
+    QPushButton, QSizePolicy, QLabel, QDoubleSpinBox, QFrame,
+)
+
+from ui.widgets.shared.searchable_combo import _SearchableCombo
+
+_TYPES = [
+    ("raw",        "🧱 خامة"),
+    ("semi",       "🔧 نصف مصنع"),
+    ("labor_op",   "👷 عملية عمالة"),
+    ("machine_op", "⚙️ عملية تشغيل"),
+]
+
+_STYLE_NORMAL = ""
+_STYLE_ORPHAN = """
+    QWidget { background-color: #fff3e0; border-radius: 4px; }
+    QComboBox, QLineEdit {
+        background-color: #fff3e0;
+        border: 1.5px solid #e65100;
+        border-radius: 4px;
+    }
+"""
+
+
+def build_row_ui(widget, child_type: str, child_id,
+                 qty: float, raw_total_qty, waste_pct: float,
+                 variant_id, machine_op_row_id,
+                 show_total_qty: bool):
+    """
+    يبني كامل واجهة ComponentRow على الـ widget المعطى.
+    يُضيف كل الـ attributes المطلوبة مباشرة على widget.
+    """
+    outer = QVBoxLayout(widget)
+    outer.setContentsMargins(0, 2, 0, 2)
+    outer.setSpacing(2)
+
+    main_row = QHBoxLayout()
+    main_row.setContentsMargins(0, 0, 0, 0)
+    main_row.setSpacing(6)
+
+    # ── النوع ──
+    widget.cmb_type = QComboBox()
+    widget.cmb_type.setSizePolicy(QSizePolicy.Preferred, QSizePolicy.Fixed)
+    widget.cmb_type.setMinimumContentsLength(10)
+    widget.cmb_type.setSizeAdjustPolicy(QComboBox.AdjustToContents)
+    for key, label in _TYPES:
+        widget.cmb_type.addItem(label, key)
+
+    # ── بحث العناصر ──
+    widget._item_combo = _SearchableCombo()
+    widget._item_combo.item_selected.connect(widget._on_item_selected)
+
+    # ── Variant (للخامات) ──
+    widget.cmb_variant = QComboBox()
+    widget.cmb_variant.setMinimumHeight(26)
+    widget.cmb_variant.setMinimumWidth(130)
+    widget.cmb_variant.setMaximumWidth(180)
+    widget.cmb_variant.setToolTip("وحدة الإنتاج — تكلفة الوحدة = سعر الخامة ÷ عدد القطع")
+    widget.cmb_variant.setStyleSheet("""
+        QComboBox {
+            background: #e8f5e9; border: 1px solid #a5d6a7;
+            border-radius: 4px; padding: 1px 6px;
+            font-size: 11px; color: #2e7d32;
+        }
+        QComboBox:focus { border-color: #2e7d32; }
+        QComboBox::drop-down { border: none; }
+    """)
+    widget.cmb_variant.setVisible(False)
+    widget.cmb_variant.currentIndexChanged.connect(widget._on_variant_changed)
+
+    widget.lbl_variant_cost = QLabel()
+    widget.lbl_variant_cost.setStyleSheet(
+        "font-size:10px; color:#2e7d32; font-weight:bold;"
+        "background:#f1f8e9; border:1px solid #c8e6c9;"
+        "border-radius:3px; padding:1px 5px;"
+    )
+    widget.lbl_variant_cost.setVisible(False)
+
+    # ── الكمية ──
+    widget.qty_edit = QLineEdit()
+    widget.qty_edit.setPlaceholderText("الكمية")
+    widget.qty_edit.setSizePolicy(QSizePolicy.Preferred, QSizePolicy.Fixed)
+    widget.qty_edit.setMinimumWidth(60)
+    widget.qty_edit.setMaximumWidth(90)
+    widget.qty_edit.setText(str(qty) if qty else "")
+
+    # ── الهادر ──
+    widget.waste_spin = QDoubleSpinBox()
+    widget.waste_spin.setRange(0, 100)
+    widget.waste_spin.setDecimals(1)
+    widget.waste_spin.setSuffix(" %")
+    widget.waste_spin.setValue(waste_pct or 0.0)
+    widget.waste_spin.setMinimumWidth(75)
+    widget.waste_spin.setMaximumWidth(90)
+    widget.waste_spin.setMinimumHeight(26)
+    widget.waste_spin.setToolTip("نسبة الهادر %\nمثال: 10% → الكمية الفعلية = الكمية × 1.10")
+    widget.waste_spin.setStyleSheet("""
+        QDoubleSpinBox {
+            background: #fff8e1; border: 1px solid #ffe082;
+            border-radius: 4px; padding: 1px 4px;
+            font-size: 11px; color: #e65100;
+        }
+        QDoubleSpinBox:focus { border-color: #ff8f00; background: #fffde7; }
+    """)
+
+    widget.lbl_waste = QLabel("⚠️")
+    widget.lbl_waste.setFixedWidth(18)
+    widget.lbl_waste.setStyleSheet("color:#e65100; font-size:11px; background:transparent;")
+    widget.lbl_waste.setToolTip("نسبة الهادر")
+    widget.waste_spin.valueChanged.connect(widget._on_waste_changed)
+    _update_waste_style(widget, waste_pct or 0.0)
+
+    # ── الكمية الكلية ──
+    widget.total_qty_edit = QLineEdit()
+    widget.total_qty_edit.setPlaceholderText("الكلي")
+    widget.total_qty_edit.setSizePolicy(QSizePolicy.Preferred, QSizePolicy.Fixed)
+    widget.total_qty_edit.setMinimumWidth(60)
+    widget.total_qty_edit.setMaximumWidth(90)
+    widget.total_qty_edit.setToolTip("الكمية الكلية للخامة.")
+    if raw_total_qty is not None:
+        widget.total_qty_edit.setText(str(raw_total_qty))
+
+    widget.lbl_total_qty = QLabel("÷")
+    widget.lbl_total_qty.setStyleSheet("color:#888; font-size:11px;")
+    widget.lbl_total_qty.setFixedWidth(14)
+
+    # ── حذف ──
+    del_btn = QPushButton("❌")
+    del_btn.setSizePolicy(QSizePolicy.Fixed, QSizePolicy.Fixed)
+    del_btn.setFixedWidth(32)
+    del_btn.clicked.connect(lambda: widget.removed.emit(widget))
+
+    # ── ترتيب الصف الرئيسي ──
+    main_row.addWidget(widget.cmb_type)
+    main_row.addWidget(widget._item_combo, stretch=1)
+    main_row.addWidget(widget.cmb_variant)
+    main_row.addWidget(widget.lbl_variant_cost)
+    main_row.addWidget(widget.qty_edit)
+    main_row.addWidget(widget.lbl_waste)
+    main_row.addWidget(widget.waste_spin)
+
+    if show_total_qty:
+        main_row.addWidget(widget.lbl_total_qty)
+        main_row.addWidget(widget.total_qty_edit)
+    else:
+        widget.lbl_total_qty.setVisible(False)
+        widget.total_qty_edit.setVisible(False)
+
+    main_row.addWidget(del_btn)
+    outer.addLayout(main_row)
+
+    # ── السطر الفرعي لصفوف عملية التشغيل ──
+    widget._sub_row_widget = QFrame()
+    widget._sub_row_widget.setStyleSheet("""
+        QFrame {
+            background: #fce4ec; border: 1px solid #f48fb1;
+            border-radius: 4px; margin-right: 4px;
+        }
+    """)
+    sub_layout = QHBoxLayout(widget._sub_row_widget)
+    sub_layout.setContentsMargins(8, 3, 8, 3)
+    sub_layout.setSpacing(8)
+
+    lbl_row_icon = QLabel("↳ صف العملية:")
+    lbl_row_icon.setStyleSheet(
+        "color:#880e4f; font-weight:bold; font-size:11px;"
+        "background:transparent; border:none;"
+    )
+    sub_layout.addWidget(lbl_row_icon)
+
+    widget.cmb_op_row = QComboBox()
+    widget.cmb_op_row.setMinimumHeight(26)
+    widget.cmb_op_row.setMinimumWidth(280)
+    widget.cmb_op_row.setStyleSheet("""
+        QComboBox {
+            background: white; border: 1px solid #f48fb1;
+            border-radius: 4px; padding: 1px 6px;
+            font-size: 11px; color: #880e4f;
+        }
+        QComboBox:focus { border-color: #880e4f; }
+        QComboBox::drop-down { border: none; }
+    """)
+    widget.cmb_op_row.currentIndexChanged.connect(widget._on_op_row_changed)
+    sub_layout.addWidget(widget.cmb_op_row, stretch=1)
+
+    widget.lbl_op_row_cost = QLabel()
+    widget.lbl_op_row_cost.setStyleSheet(
+        "font-size:11px; color:#880e4f; font-weight:bold;"
+        "background:transparent; border:none;"
+    )
+    sub_layout.addWidget(widget.lbl_op_row_cost)
+    sub_layout.addStretch()
+
+    widget._sub_row_widget.setVisible(False)
+    outer.addWidget(widget._sub_row_widget)
+
+    # ── تحديد النوع الأولي ──
+    widget.cmb_type.blockSignals(True)
+    idx = next((i for i, (k, _) in enumerate(_TYPES) if k == child_type), 0)
+    widget.cmb_type.setCurrentIndex(idx)
+    widget.cmb_type.blockSignals(False)
+
+
+def _update_waste_style(widget, val: float):
+    """يحدّث ستايل الهادر حسب القيمة."""
+    if val > 0:
+        widget.lbl_waste.setVisible(True)
+        if val >= 20:
+            color, border = "#ffcdd2", "#e53935"
+        elif val >= 10:
+            color, border = "#ffe0b2", "#f57c00"
+        else:
+            color, border = "#fff8e1", "#ffe082"
+        widget.waste_spin.setStyleSheet(f"""
+            QDoubleSpinBox {{
+                background: {color}; border: 1px solid {border};
+                border-radius: 4px; padding: 1px 4px;
+                font-size: 11px; color: #e65100; font-weight: bold;
+            }}
+            QDoubleSpinBox:focus {{ border-color: #ff8f00; }}
+        """)
+    else:
+        widget.lbl_waste.setVisible(False)
+        widget.waste_spin.setStyleSheet("""
+            QDoubleSpinBox {
+                background: #f5f5f5; border: 1px solid #e0e0e0;
+                border-radius: 4px; padding: 1px 4px;
+                font-size: 11px; color: #999;
+            }
+            QDoubleSpinBox:focus {
+                border-color: #ffe082; background: #fff8e1; color: #e65100;
+            }
+        """)
