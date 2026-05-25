@@ -1,34 +1,53 @@
 """
-ui/widgets/components/stat_row.py
-==========================================
-StatRow — صف بطاقات إحصائية أفقية موحد.
+ui/refactored_widgets/components/stat_row.py
+=============================================
+StatItem  — dataclass لتعريف بطاقة إحصائية.
+_StatCard — بطاقة خفيفة مضمّنة (للاستخدام الداخلي فقط).
+StatRow   — صف أفقي من البطاقات مع فواصل.
+
+الاستخدام:
+    row = StatRow([
+        StatItem("المبيعات", color="#1565c0", value="150"),
+        StatItem("الأرباح",  color="#2e7d32", value="40,000 ج"),
+    ])
+    row.set_value(0, "200")
+    row.set_value_by_label("الأرباح", "50,000 ج", color="#2e7d32")
 """
+
 from __future__ import annotations
-from dataclasses import dataclass, field
+from dataclasses import dataclass
 from typing import Optional
 
-from PyQt5.QtWidgets import QWidget, QHBoxLayout, QLabel, QSizePolicy, QFrame
+from PyQt5.QtWidgets import QWidget, QFrame, QHBoxLayout, QVBoxLayout, QLabel, QSizePolicy
 from PyQt5.QtCore    import Qt
 from PyQt5.QtGui     import QFont
 
-from ui.app_settings import _C, fs
+from ui.app_settings import fs
 from ..core.settings import get_base
 from ..core.colors   import card_colors
 from ..theme.builders import v_divider
 
 
+# ══════════════════════════════════════════════════════════
+# DataClass
+# ══════════════════════════════════════════════════════════
+
 @dataclass
 class StatItem:
     """تعريف بطاقة إحصائية واحدة."""
     label      : str
-    color      : str   = "#1565c0"
-    icon       : str   = ""
-    value      : str   = "─"
-    bg         : Optional[str] = None
-    border     : Optional[str] = None
-    bold_value : bool  = True
-    compact    : bool  = False
+    color      : str            = "#1565c0"
+    icon       : str            = ""
+    value      : str            = "─"
+    bg         : Optional[str]  = None
+    border     : Optional[str]  = None
+    bold_value : bool           = True
+    compact    : bool           = False
 
+
+# ══════════════════════════════════════════════════════════
+# _StatCard — بطاقة خفيفة (داخلية)
+# ══════════════════════════════════════════════════════════
 
 class _StatCard(QFrame):
     """بطاقة إحصائية خفيفة — تُستخدم داخل StatRow فقط."""
@@ -36,6 +55,7 @@ class _StatCard(QFrame):
     def __init__(self, item: StatItem, parent=None):
         super().__init__(parent)
         self._item = item
+        self._lbl_value: QLabel = None  # type: ignore
         self._build()
 
     def _build(self):
@@ -45,16 +65,13 @@ class _StatCard(QFrame):
 
         self.setStyleSheet(f"""
             QFrame {{
-                background:{bg}; border:1px solid {border};
+                background:{bg};
+                border:1px solid {border};
                 border-radius:8px;
             }}
         """)
         self.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Fixed)
 
-        lay  = QWidget.__init__  # أعد الكتابة
-        lay  = QLabel.__init__   # مؤقت
-        self._lay = lay = None
-        from PyQt5.QtWidgets import QVBoxLayout
         lay  = QVBoxLayout(self)
         base = get_base()
 
@@ -65,6 +82,7 @@ class _StatCard(QFrame):
             lay.setContentsMargins(14, 10, 14, 10)
             lay.setSpacing(3)
 
+        # صف العنوان + أيقونة
         top = QHBoxLayout()
         top.setSpacing(4)
 
@@ -82,10 +100,10 @@ class _StatCard(QFrame):
         top.addWidget(lbl_label, stretch=1)
         lay.addLayout(top)
 
+        # القيمة
         self._lbl_value = QLabel(self._item.value)
         f = QFont()
-        sz = fs(base, +1 if self._item.compact else +3)
-        f.setPointSize(sz)
+        f.setPointSize(fs(base, +1 if self._item.compact else +3))
         if self._item.bold_value:
             f.setBold(True)
         self._lbl_value.setFont(f)
@@ -98,40 +116,41 @@ class _StatCard(QFrame):
     def set_value(self, text: str, color: str = None):
         self._lbl_value.setText(text)
         c = color or self._item.color
-        self._lbl_value.setStyleSheet(
-            f"color:{c}; background:transparent; border:none;"
-        )
+        self._lbl_value.setStyleSheet(f"color:{c}; background:transparent; border:none;")
 
     def value_label(self) -> QLabel:
         return self._lbl_value
 
 
+# ══════════════════════════════════════════════════════════
+# StatRow
+# ══════════════════════════════════════════════════════════
+
 class StatRow(QWidget):
     """
-    صف أفقي من البطاقات الإحصائية مع فواصل عمودية.
+    صف أفقي من البطاقات الإحصائية مع فواصل عمودية اختيارية.
 
     الاستخدام:
         row = StatRow([
             StatItem("المبيعات", color="#1565c0", value="150"),
             StatItem("الأرباح",  color="#2e7d32", value="40,000 ج"),
         ])
+        layout.addWidget(row)
         row.set_value(0, "200")
     """
 
     def __init__(self, items: list[StatItem],
                  separator: bool = True,
                  compact: bool = False,
-                 bg: str = None, parent=None):
+                 bg: str = None,
+                 parent=None):
         super().__init__(parent)
         self._cards: list[_StatCard] = []
         self._items = items
         self._build(separator, compact, bg)
 
     def _build(self, separator: bool, compact: bool, bg: str):
-        if bg:
-            self.setStyleSheet(f"background:{bg};")
-        else:
-            self.setStyleSheet("background:transparent;")
+        self.setStyleSheet(f"background:{bg};" if bg else "background:transparent;")
 
         lay = QHBoxLayout(self)
         lay.setContentsMargins(0, 0, 0, 0)
@@ -175,6 +194,18 @@ class StatRow(QWidget):
         return self._cards[index] if 0 <= index < len(self._cards) else None
 
 
-def make_stat_row(*items: StatItem, separator: bool = True,
-                  compact: bool = False, bg: str = None) -> StatRow:
+# ── دوال مساعدة ───────────────────────────────────────────
+
+def make_stat_row(*items: StatItem,
+                  separator: bool = True,
+                  compact: bool = False,
+                  bg: str = None) -> StatRow:
     return StatRow(list(items), separator=separator, compact=compact, bg=bg)
+
+
+def stat_card_pair(label: str, color: str = "#1565c0",
+                   icon: str = "") -> tuple[QFrame, QLabel]:
+    """يبني بطاقة مع label مرجع للتحديث السريع."""
+    item = StatItem(label=label, color=color, icon=icon)
+    card = _StatCard(item)
+    return card, card.value_label()
