@@ -3,21 +3,30 @@ ui/tabs/accounting/investors/_movement_dialog.py
 =================================================
 _MovementDialog — نافذة إضافة حركة (capital / drawings) لمستثمر.
 
-[إصلاح v4 — DualConnMixin]:
-  - DualConnMixin بدل _get_erp_conn() المكرر يدوياً.
+[إصلاح v5 — توحيد الـ UI]:
+  - FormGroup بدل QGroupBox اليدوي.
+  - _make_btn بدل QPushButton بستايل inline.
+  - DateField بدل QDateEdit اليدوي.
+  - AmountSpinBox بدل _spin المحلي.
+  - DualConnMixin كما هو.
 """
 
 from PyQt5.QtWidgets import (
-    QDialog, QVBoxLayout, QHBoxLayout, QFormLayout,
-    QLabel, QGroupBox, QPushButton,
-    QLineEdit, QComboBox, QDateEdit, QMessageBox,
+    QDialog, QVBoxLayout, QHBoxLayout,
+    QLabel, QComboBox, QLineEdit, QMessageBox,
 )
-from PyQt5.QtCore import Qt, QDate
+from PyQt5.QtCore import Qt
 
 from ui.events import bus
 from ui.widgets.shared.safe_conn_mixin import DualConnMixin
+from ui.widgets.shared.panels import (
+    FormGroup,
+    _make_btn,
+    NotesLineEdit,
+)
+from ui.widgets.shared.input_widgets import DateField, AmountSpinBox
 from ._helpers import (
-    _spin, _fill_capital_combo, _fill_drawings_combo, _fill_asset_combo,
+    _fill_capital_combo, _fill_drawings_combo, _fill_asset_combo,
     _post_capital_entry, _post_drawings_entry,
 )
 
@@ -47,49 +56,40 @@ class _MovementDialog(DualConnMixin, QDialog):
         acc    = self._get_safe_conn()
         is_cap = self.move_type == "capital"
         color  = "#2e7d32" if is_cap else "#c62828"
-        bg     = "#f1f8e9" if is_cap else "#fdecea"
         icon   = "💰" if is_cap else "💸"
         op_ar  = "إضافة رأس مال" if is_cap else "مسحوبات"
 
         lbl_title = QLabel(f"{icon}  {self.investor_name}  —  {op_ar}")
         lbl_title.setStyleSheet(
             f"font-size:13px; font-weight:bold; color:{color};"
-            f"background:{bg}; border-radius:6px; padding:8px 14px;"
+            f"background:{'#f1f8e9' if is_cap else '#fdecea'};"
+            "border-radius:6px; padding:8px 14px;"
         )
         root.addWidget(lbl_title)
 
-        grp  = QGroupBox()
-        grp.setStyleSheet(
-            "QGroupBox { border:1px solid #e0e0e0; border-radius:8px; padding-top:10px; }"
-        )
-        form = QFormLayout(grp)
-        form.setSpacing(12)
-        form.setLabelAlignment(Qt.AlignRight)
+        # ── FormGroup بدل QGroupBox اليدوي ──
+        grp = FormGroup(accent=color)
 
-        self.sp_amount = _spin()
-        form.addRow("المبلغ (جنيه):", self.sp_amount)
+        self.sp_amount = AmountSpinBox(max_=999_999_999, dec=2, height=30)
+        grp.add_row("المبلغ (جنيه):", self.sp_amount)
 
-        self.dt_date = QDateEdit(QDate.currentDate())
-        self.dt_date.setCalendarPopup(True)
-        self.dt_date.setDisplayFormat("yyyy-MM-dd")
-        self.dt_date.setFixedWidth(140)
-        self.dt_date.setMinimumHeight(30)
-        form.addRow("التاريخ:", self.dt_date)
+        self.dt_date = DateField(height=30, width=140)
+        grp.add_row("التاريخ:", self.dt_date)
 
         self.cmb_equity_acc = QComboBox()
         self.cmb_equity_acc.setMinimumHeight(30)
         if is_cap:
             _fill_capital_combo(self.cmb_equity_acc, acc)
-            form.addRow("حساب رأس المال:", self.cmb_equity_acc)
+            grp.add_row("حساب رأس المال:", self.cmb_equity_acc)
         else:
             _fill_drawings_combo(self.cmb_equity_acc, acc)
-            form.addRow("حساب المسحوبات:", self.cmb_equity_acc)
+            grp.add_row("حساب المسحوبات:", self.cmb_equity_acc)
 
         self.cmb_asset_acc = QComboBox()
         self.cmb_asset_acc.setMinimumHeight(30)
         _fill_asset_combo(self.cmb_asset_acc, acc)
         asset_lbl = "حساب الإيداع (أصل):" if is_cap else "حساب الصرف (أصل):"
-        form.addRow(asset_lbl, self.cmb_asset_acc)
+        grp.add_row(asset_lbl, self.cmb_asset_acc)
 
         self.lbl_preview = QLabel()
         self.lbl_preview.setStyleSheet(
@@ -100,33 +100,19 @@ class _MovementDialog(DualConnMixin, QDialog):
         self.sp_amount.valueChanged.connect(self._update_preview)
         self.cmb_equity_acc.currentIndexChanged.connect(self._update_preview)
         self.cmb_asset_acc.currentIndexChanged.connect(self._update_preview)
-        form.addRow("القيد المتوقع:", self.lbl_preview)
+        grp.add_row("القيد المتوقع:", self.lbl_preview)
         self._update_preview()
 
-        self.inp_notes = QLineEdit()
-        self.inp_notes.setPlaceholderText("ملاحظات اختيارية...")
-        self.inp_notes.setMinimumHeight(28)
-        form.addRow("ملاحظات:", self.inp_notes)
+        self.inp_notes = NotesLineEdit()
+        grp.add_row("ملاحظات:", self.inp_notes)
 
         root.addWidget(grp)
 
-        btn_ok     = QPushButton("✅  تسجيل")
-        btn_cancel = QPushButton("✖  إلغاء")
+        # ── أزرار (بدل QPushButton بستايل inline) ──
+        btn_ok     = _make_btn("✅  تسجيل",  "success" if is_cap else "danger")
+        btn_cancel = _make_btn("✖  إلغاء",   "ghost")
         btn_ok.setMinimumHeight(34)
         btn_cancel.setMinimumHeight(34)
-        btn_ok.setStyleSheet(f"""
-            QPushButton {{
-                background: {color}; color: white;
-                font-weight: bold; border-radius: 6px; padding: 0 20px;
-            }}
-            QPushButton:hover {{ background: {'#1b5e20' if is_cap else '#b71c1c'}; }}
-        """)
-        btn_cancel.setStyleSheet("""
-            QPushButton {
-                background: #f5f5f5; color: #555;
-                border: 1px solid #ddd; border-radius: 6px; padding: 0 14px;
-            }
-        """)
         btn_ok.clicked.connect(self._accept)
         btn_cancel.clicked.connect(self.reject)
 
@@ -158,7 +144,7 @@ class _MovementDialog(DualConnMixin, QDialog):
         if not equity_acc or not asset_acc:
             QMessageBox.warning(self, "تنبيه", "اختر الحسابات المطلوبة")
             return
-        date  = self.dt_date.date().toString("yyyy-MM-dd")
+        date  = self.dt_date.date_str()
         notes = self.inp_notes.text().strip() or None
         acc = self._get_safe_conn()
         erp = self._get_erp_conn()

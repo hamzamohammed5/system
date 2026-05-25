@@ -3,14 +3,17 @@ ui/tabs/accounting/investors/_investor_form.py
 ==============================================
 _InvestorForm — فورم إضافة / تعديل مستثمر مع رأس المال الأولي.
 
-[إصلاح v4 — DualConnMixin]:
-  - DualConnMixin بدل _get_erp_conn() المكرر يدوياً.
+[إصلاح v5 — توحيد الـ UI]:
+  - FormGroup بدل QGroupBox اليدوي.
+  - ModeLabel بدل lbl_mode اليدوي.
+  - DateField بدل QDateEdit اليدوي.
+  - _make_btn بدل QPushButton اليدوي.
+  - DualConnMixin كما هو.
 """
 
 from PyQt5.QtWidgets import (
-    QWidget, QVBoxLayout, QHBoxLayout, QFormLayout,
-    QLabel, QFrame, QGroupBox, QPushButton,
-    QLineEdit, QComboBox, QDateEdit, QMessageBox,
+    QWidget, QVBoxLayout, QHBoxLayout,
+    QFrame, QLabel, QComboBox, QLineEdit, QMessageBox,
 )
 from PyQt5.QtCore import Qt, QDate
 
@@ -20,8 +23,15 @@ from db.inventory.investors_repo import (
 from ui.helpers import EditModeMixin
 from ui.events  import bus
 from ui.widgets.shared.safe_conn_mixin import DualConnMixin
-from ._helpers  import (
-    _spin, _fill_capital_combo, _fill_asset_combo,
+from ui.widgets.shared.panels import (
+    FormGroup,
+    ModeLabel,
+    _make_btn,
+    NotesLineEdit,
+)
+from ui.widgets.shared.input_widgets import DateField, AmountSpinBox
+from ._helpers import (
+    _fill_capital_combo, _fill_asset_combo,
     _post_capital_entry,
 )
 
@@ -44,67 +54,40 @@ class _InvestorForm(DualConnMixin, QWidget, EditModeMixin):
         root.setContentsMargins(12, 10, 12, 10)
         root.setSpacing(8)
 
-        grp = QGroupBox("بيانات المستثمر")
-        grp.setStyleSheet("""
-            QGroupBox { font-weight:bold; color:#1565c0; border:1px solid #e0e0e0;
-                        border-radius:8px; margin-top:8px; padding-top:8px; }
-            QGroupBox::title { subcontrol-origin:margin; padding:0 6px; }
-        """)
-        form = QFormLayout(grp)
-        form.setSpacing(10)
-        form.setLabelAlignment(Qt.AlignRight)
+        # ── فورم بيانات المستثمر (FormGroup بدل QGroupBox) ──
+        grp = FormGroup("بيانات المستثمر")
 
-        self.lbl_mode = QLabel("─── مستثمر جديد ───")
-        self.lbl_mode.setStyleSheet("font-weight:bold; color:#1565c0;")
-        form.addRow(self.lbl_mode)
+        self.lbl_mode = ModeLabel(add_text="مستثمر جديد", icon="👤")
+        grp.add_label_row(self.lbl_mode)
 
         self.inp_name = QLineEdit()
         self.inp_name.setPlaceholderText("اسم المستثمر...")
         self.inp_name.setMinimumHeight(30)
+        grp.add_row("الاسم:", self.inp_name)
 
-        self.dt_joined = QDateEdit(QDate.currentDate())
-        self.dt_joined.setCalendarPopup(True)
-        self.dt_joined.setDisplayFormat("yyyy-MM-dd")
-        self.dt_joined.setFixedWidth(140)
-        self.dt_joined.setMinimumHeight(30)
+        self.dt_joined = DateField(height=30)
+        grp.add_row("تاريخ الانضمام:", self.dt_joined)
 
-        self.inp_notes = QLineEdit()
-        self.inp_notes.setPlaceholderText("ملاحظات...")
-        self.inp_notes.setMinimumHeight(28)
+        self.inp_notes = NotesLineEdit()
+        grp.add_row("ملاحظات:", self.inp_notes)
 
-        form.addRow("الاسم:", self.inp_name)
-        form.addRow("تاريخ الانضمام:", self.dt_joined)
-        form.addRow("ملاحظات:", self.inp_notes)
+        root.addWidget(grp)
 
         # ── رأس المال الأولي ──
-        self._initial_frame = QFrame()
-        self._initial_frame.setStyleSheet(
-            "QFrame { background:#f1f8e9; border:1px solid #c8e6c9;"
-            "border-radius:6px; padding:4px; }"
-        )
-        init_lay = QFormLayout(self._initial_frame)
-        init_lay.setSpacing(8)
-        init_lay.setLabelAlignment(Qt.AlignRight)
+        self._initial_grp = FormGroup("💰  رأس المال الأولي (اختياري)", accent="#2e7d32")
 
-        lbl_init = QLabel("💰  رأس المال الأولي (اختياري)")
-        lbl_init.setStyleSheet(
-            "font-weight:bold; color:#2e7d32; background:transparent; border:none;"
-        )
-        init_lay.addRow(lbl_init)
-
-        self.sp_initial = _spin()
-        self.sp_initial.setValue(0)
-        init_lay.addRow("المبلغ:", self.sp_initial)
+        self.sp_initial = AmountSpinBox(max_=999_999_999, dec=2, height=30)
+        self._initial_grp.add_row("المبلغ:", self.sp_initial)
 
         self.cmb_capital_acc = QComboBox()
         self.cmb_capital_acc.setMinimumHeight(28)
         _fill_capital_combo(self.cmb_capital_acc, self._get_safe_conn())
-        init_lay.addRow("حساب رأس المال:", self.cmb_capital_acc)
+        self._initial_grp.add_row("حساب رأس المال:", self.cmb_capital_acc)
 
         self.cmb_asset_acc = QComboBox()
         self.cmb_asset_acc.setMinimumHeight(28)
         _fill_asset_combo(self.cmb_asset_acc, self._get_safe_conn())
-        init_lay.addRow("حساب الإيداع:", self.cmb_asset_acc)
+        self._initial_grp.add_row("حساب الإيداع:", self.cmb_asset_acc)
 
         self.lbl_init_preview = QLabel("─")
         self.lbl_init_preview.setStyleSheet(
@@ -114,14 +97,14 @@ class _InvestorForm(DualConnMixin, QWidget, EditModeMixin):
         self.sp_initial.valueChanged.connect(self._update_init_preview)
         self.cmb_capital_acc.currentIndexChanged.connect(self._update_init_preview)
         self.cmb_asset_acc.currentIndexChanged.connect(self._update_init_preview)
-        init_lay.addRow("القيد:", self.lbl_init_preview)
+        self._initial_grp.add_row("القيد:", self.lbl_init_preview)
 
-        form.addRow(self._initial_frame)
-        root.addWidget(grp)
+        root.addWidget(self._initial_grp)
 
-        self.btn_add    = QPushButton("➕  إضافة مستثمر")
-        self.btn_save   = QPushButton("💾  حفظ التعديل")
-        self.btn_cancel = QPushButton("✖  إلغاء")
+        # ── أزرار (بدل QPushButton اليدوي) ──
+        self.btn_add    = _make_btn("➕  إضافة مستثمر", "primary")
+        self.btn_save   = _make_btn("💾  حفظ التعديل",  "success")
+        self.btn_cancel = _make_btn("✖  إلغاء",         "ghost")
         for btn in (self.btn_add, self.btn_save, self.btn_cancel):
             btn.setMinimumHeight(30)
         self.btn_add.clicked.connect(self._add)
@@ -165,7 +148,7 @@ class _InvestorForm(DualConnMixin, QWidget, EditModeMixin):
             return None
         return {
             "name":      name,
-            "joined_at": self.dt_joined.date().toString("yyyy-MM-dd"),
+            "joined_at": self.dt_joined.date_str(),
             "notes":     self.inp_notes.text().strip() or None,
         }
 
@@ -214,8 +197,8 @@ class _InvestorForm(DualConnMixin, QWidget, EditModeMixin):
         self.inp_name.setText(inv["name"])
         self.inp_notes.setText(inv["notes"] or "")
         if inv["joined_at"]:
-            self.dt_joined.setDate(QDate.fromString(inv["joined_at"], "yyyy-MM-dd"))
-        self._initial_frame.setVisible(False)
+            self.dt_joined.set_date_str(inv["joined_at"])
+        self._initial_grp.setVisible(False)
         self.enter_edit_mode(inv_id, f"─── تعديل: {inv['name']} ───")
 
     def _reset(self):
@@ -223,6 +206,6 @@ class _InvestorForm(DualConnMixin, QWidget, EditModeMixin):
         self.inp_notes.clear()
         self.dt_joined.setDate(QDate.currentDate())
         self.sp_initial.setValue(0)
-        self._initial_frame.setVisible(True)
+        self._initial_grp.setVisible(True)
         self.lbl_init_preview.setText("─")
         self.exit_edit_mode("─── مستثمر جديد ───")

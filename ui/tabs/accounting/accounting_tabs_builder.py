@@ -3,10 +3,10 @@ ui/tabs/accounting/accounting_tabs_builder.py
 ==============================================
 _AccountingTabsBuilder — دوال بناء التبويبات الفرعية للقسم المحاسبي.
 
-[تحديث v4]:
-  - _INNER_TAB_STYLE حُذف تماماً — لم يعد مطلوباً حيث أن
-    accounting_section.py يستخدم get_tab_style() مباشرة.
-  - كل الدوال تستخدم make_inner_tabs / make_financial_tabs من tab_builder.
+[تحديث v3]:
+  - استخدام make_inner_tabs و make_financial_tabs من tab_builder المشترك.
+  - _INNER_TAB_STYLE محتفظ به للتوافق مع accounting_section.py فقط،
+    لكن لا يُستخدم داخلياً — نستخدم make_inner_tabs بدلاً منه.
 """
 
 from PyQt5.QtWidgets import QWidget, QVBoxLayout, QSplitter
@@ -20,6 +20,28 @@ from .financial.owners_equity_tab    import OwnersEquityTab
 from .financial.balance_sheet_tab    import BalanceSheetTab
 from ui.widgets.shared.tab_builder   import make_inner_tabs, make_financial_tabs
 from ui.widgets.shared.panels        import get_splitter_style
+
+
+# للتوافق مع accounting_section.py الذي يستورد _INNER_TAB_STYLE
+# مستمد من tab_builder بدل تعريف محلي
+_INNER_TAB_STYLE = """
+    QTabWidget::pane { border: none; background: #fafafa; }
+    QTabBar::tab {
+        background: #f5f5f5;
+        border: 1px solid #e0e0e0;
+        border-bottom: none;
+        padding: 6px 12px;
+        font-size: 10px;
+        color: #666;
+    }
+    QTabBar::tab:selected {
+        background: white;
+        color: #1565c0;
+        font-weight: bold;
+        border-top: 2px solid #1565c0;
+    }
+    QTabBar::tab:hover:!selected { background: #eeeeee; }
+"""
 
 
 def build_accounts_tabs(acc):

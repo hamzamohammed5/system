@@ -3,11 +3,10 @@ ui/tabs/accounting/ledger/ledger_t_account.py
 ==============================================
 _TAccountPanel — لوحة حساب T في دفتر الأستاذ.
 
-[إصلاح v3]:
-  - لا يحفظ conn في __init__ إطلاقاً.
-  - load(conn, account_id) يستخدم الـ conn المُمرر مباشرةً من LedgerTab.
-  - LedgerTab هي المسؤولة عن تمرير conn صالح عبر _get_safe_conn().
-  - _apply_filter() تحفظ آخر conn صالح عبر self._last_conn للـ re-filter.
+[إصلاح v4 — توحيد الـ UI]:
+  - PageHeader بدل lbl_title اليدوي.
+  - BalanceDisplay بدل lbl_balance اليدوي.
+  - الباقي كما هو (conn isolation من v3).
 """
 
 from PyQt5.QtWidgets import (
@@ -21,6 +20,7 @@ from PyQt5.QtGui  import QColor, QFont
 from db.accounting.accounting_repo import fetch_t_account
 from db.accounting.accounting_schema import TYPE_AR
 from ui.tabs.accounting.helpers import TYPE_COLORS
+from ui.widgets.shared.panels import PageHeader, BalanceDisplay
 from .ledger_filter_bar import _LedgerFilterBar
 from .ledger_stat_cards import _StatCards
 
@@ -36,19 +36,14 @@ class _TAccountPanel(QWidget):
         root.setContentsMargins(0, 0, 0, 0)
         root.setSpacing(6)
 
-        self.lbl_title = QLabel("اختر حسابًا من القائمة لعرض حركاته")
-        self.lbl_title.setStyleSheet("""
-            font-size: 13px;
-            font-weight: bold;
-            color: #1565c0;
-            background: #e8f4fd;
-            border: 1px solid #90caf9;
-            border-radius: 8px;
-            padding: 8px 16px;
-        """)
-        self.lbl_title.setAlignment(Qt.AlignCenter)
-        self.lbl_title.setWordWrap(True)
-        root.addWidget(self.lbl_title)
+        # ── هيدر الحساب (بدل lbl_title اليدوي) ──
+        self._page_hdr = PageHeader(
+            title="اختر حسابًا من القائمة لعرض حركاته",
+            icon="📒",
+            accent="#1565c0",
+            compact=True,
+        )
+        root.addWidget(self._page_hdr)
 
         self._stats = _StatCards()
         root.addWidget(self._stats)
@@ -139,14 +134,9 @@ class _TAccountPanel(QWidget):
         t_lay.addWidget(cr_widget, stretch=1)
         root.addWidget(t_frame, stretch=1)
 
-        self.lbl_balance = QLabel("الرصيد: —")
-        self.lbl_balance.setAlignment(Qt.AlignCenter)
-        self.lbl_balance.setStyleSheet("""
-            font-size: 14px; font-weight: bold; color: #2e7d32;
-            background: #f0faf0; border: 1px solid #a5d6a7;
-            border-radius: 6px; padding: 6px 16px;
-        """)
-        root.addWidget(self.lbl_balance)
+        # ── رصيد الحساب (بدل lbl_balance اليدوي) ──
+        self._balance_disp = BalanceDisplay()
+        root.addWidget(self._balance_disp)
 
     def _make_t_table(self) -> QTableWidget:
         tbl = QTableWidget()
@@ -178,10 +168,6 @@ class _TAccountPanel(QWidget):
         return tbl
 
     def load(self, conn, account_id: int):
-        """
-        [مهم] conn يأتي دائماً من LedgerTab._get_safe_conn()
-        — لا نحفظه في self.conn، نحفظه فقط في _last_conn للـ re-filter.
-        """
         data = fetch_t_account(conn, account_id)
         if not data:
             return
@@ -193,14 +179,11 @@ class _TAccountPanel(QWidget):
         type_ar  = TYPE_AR.get(acc["type"], "")
         color    = TYPE_COLORS.get(acc["type"], "#1565c0")
         nb_ar    = "DR↑" if nb == "dr" else "CR↑"
-        self.lbl_title.setText(
-            f"📒  {acc['code']} — {acc['name']}  │  {type_ar}  │  رصيد طبيعي: {nb_ar}"
+
+        # تحديث PageHeader بدل lbl_title
+        self._page_hdr.set_title(
+            f"{acc['code']} — {acc['name']}  │  {type_ar}  │  رصيد طبيعي: {nb_ar}"
         )
-        self.lbl_title.setStyleSheet(f"""
-            font-size: 13px; font-weight: bold; color: {color};
-            background: #f8f9ff; border: 1px solid {color}44;
-            border-right: 4px solid {color}; border-radius: 6px; padding: 8px 14px;
-        """)
         self._apply_filter()
 
     def _apply_filter(self):
@@ -235,18 +218,12 @@ class _TAccountPanel(QWidget):
         self.lbl_dr_total.setText(f"الإجمالي: {filt_dr:,.2f}")
         self.lbl_cr_total.setText(f"الإجمالي: {filt_cr:,.2f}")
 
-        filt_bal = filt_dr - filt_cr
-        b_side   = "مدين" if filt_bal >= 0 else "دائن"
-        b_color  = "#1565c0" if filt_bal >= 0 else "#c62828"
-        self.lbl_balance.setText(f"الرصيد ({b_side}): {abs(filt_bal):,.2f}  ج")
-        self.lbl_balance.setStyleSheet(f"""
-            font-size:14px; font-weight:bold; color:{b_color};
-            background:#f0f8ff; border:1px solid #90caf9;
-            border-radius:6px; padding:6px 16px;
-        """)
+        # BalanceDisplay بدل lbl_balance اليدوي
+        self._balance_disp.set_debit_credit_balance(filt_dr, filt_cr)
 
         total_count = len(lines)
         filt_count  = len(filtered)
+        filt_bal    = filt_dr - filt_cr
         self._stats.update(
             filt_dr, filt_cr, filt_bal,
             filt_count, nb, acc["type"]
@@ -279,16 +256,11 @@ class _TAccountPanel(QWidget):
         tbl.setItem(r, 3, amt_item)
 
     def clear(self):
-        self._all_data  = None
+        self._all_data = None
         self.t_dr_table.setRowCount(0)
         self.t_cr_table.setRowCount(0)
         self.lbl_dr_total.setText("الإجمالي: 0.00")
         self.lbl_cr_total.setText("الإجمالي: 0.00")
-        self.lbl_balance.setText("الرصيد: —")
+        self._balance_disp.reset()
         self._stats.clear()
-        self.lbl_title.setText("اختر حسابًا من القائمة لعرض حركاته")
-        self.lbl_title.setStyleSheet("""
-            font-size: 13px; font-weight: bold; color: #1565c0;
-            background: #e8f4fd; border: 1px solid #90caf9;
-            border-radius: 8px; padding: 8px 16px;
-        """)
+        self._page_hdr.set_title("اختر حسابًا من القائمة لعرض حركاته")

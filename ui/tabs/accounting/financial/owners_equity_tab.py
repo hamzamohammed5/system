@@ -3,7 +3,10 @@ ui/tabs/accounting/financial/owners_equity_tab.py
 ==================================================
 OwnersEquityTab — تبويب قائمة حقوق الملكية.
 
-إصلاحات (v3): SafeConnMixin بدل conn property يدوي.
+[إصلاح v4 — توحيد الـ UI]:
+  - PageHeader بدل hdr اليدوي.
+  - StatRow بدل _stat_card اليدوية.
+  - SafeConnMixin كما هو.
 """
 
 from PyQt5.QtWidgets import (
@@ -16,8 +19,12 @@ from PyQt5.QtGui  import QColor
 from db.accounting.accounting_repo import owners_equity_statement
 from ui.helpers import make_table, section_label
 from ui.events  import bus
-from ui.tabs.accounting.helpers import _money, _stat_card
+from ui.widgets.shared.panels import (
+    PageHeader,
+    StatRow, StatItem,
+)
 from ui.widgets.shared.safe_conn_mixin import SafeConnMixin
+from ._financial_helpers import _money
 
 
 class OwnersEquityTab(SafeConnMixin, QWidget):
@@ -38,23 +45,21 @@ class OwnersEquityTab(SafeConnMixin, QWidget):
         root.setContentsMargins(12, 10, 12, 12)
         root.setSpacing(10)
 
-        hdr = QLabel("👑  قائمة حقوق الملكية")
-        hdr.setStyleSheet(
-            "font-size:15px; font-weight:bold; color:#2e7d32;"
-            "background:#f1f8e9; border:1px solid #a5d6a7;"
-            "border-radius:8px; padding:8px 16px;"
-        )
-        hdr.setAlignment(Qt.AlignCenter)
-        root.addWidget(hdr)
+        # ── هيدر الصفحة (بدل hdr اليدوي) ──
+        root.addWidget(PageHeader(
+            title="قائمة حقوق الملكية",
+            icon="👑",
+            accent="#2e7d32",
+        ))
 
-        cards = QHBoxLayout()
-        f1, self.lbl_cap   = _stat_card("رأس المال",          "#2e7d32")
-        f2, self.lbl_ni    = _stat_card("صافي الدخل",         "#1b5e20")
-        f3, self.lbl_draw  = _stat_card("المسحوبات",          "#4e342e")
-        f4, self.lbl_total = _stat_card("صافي حقوق الملكية",  "#1565c0")
-        for f in (f1, f2, f3, f4):
-            cards.addWidget(f, stretch=1)
-        root.addLayout(cards)
+        # ── البطاقات الإحصائية (بدل _stat_card اليدوية) ──
+        self._stats = StatRow([
+            StatItem("رأس المال",         color="#2e7d32", icon="💰"),
+            StatItem("صافي الدخل",        color="#1b5e20", icon="📈"),
+            StatItem("المسحوبات",         color="#4e342e", icon="💸"),
+            StatItem("صافي حقوق الملكية", color="#1565c0", icon="⚖️"),
+        ])
+        root.addWidget(self._stats)
 
         splitter = QSplitter(Qt.Horizontal)
         splitter.setHandleWidth(6)
@@ -150,16 +155,16 @@ class OwnersEquityTab(SafeConnMixin, QWidget):
             ai.setForeground(QColor("#4e342e"))
             self.table_dr.setItem(r, 3, ai)
 
-        self.lbl_cap.setText(_money(data["total_capital"]))
-        self.lbl_ni.setText(_money(ni))
-        self.lbl_draw.setText(_money(data["total_drawings"]))
+        # تحديث StatRow بدل lbls اليدوية
+        self._stats.set_value(0, _money(data["total_capital"]))
+        self._stats.set_value(1, _money(ni),
+                              color="#1b5e20" if ni >= 0 else "#b71c1c")
+        self._stats.set_value(2, _money(data["total_drawings"]))
+
         total = data["total_equity"]
-        self.lbl_total.setText(_money(total))
-        tc = "#1565c0" if total >= 0 else "#b71c1c"
-        self.lbl_total.setStyleSheet(
-            f"font-size:14px; font-weight:bold; color:{tc};"
-            "background:transparent; border:none;"
-        )
+        self._stats.set_value(3, _money(total),
+                              color="#1565c0" if total >= 0 else "#b71c1c")
+
         self.lbl_equation.setText(
             f"رأس المال  {data['total_capital']:,.2f}  +  "
             f"صافي الدخل  {ni:,.2f}  −  "

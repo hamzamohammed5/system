@@ -3,13 +3,12 @@ ui/widgets/shared/base_crud_form.py
 =====================================
 BaseCrudForm — قاعدة مشتركة لكل نماذج الإضافة/التعديل/الإلغاء.
 
-[تحديث v4]:
+[تحديث v3]:
   - NotificationBar بدل msg_warning المنبثقة
   - FormValidationMixin مدمجة
   - _collect_and_validate() hook موحد
   - set_conn() لتحديث الـ connection
   - FORM_TITLE_ICON لإضافة أيقونة للعنوان
-  - _warn() موحّد مع _notif.show() مباشرة (لا alias مكرر)
 """
 
 import logging
@@ -46,24 +45,25 @@ class BaseCrudForm(QWidget, EditModeMixin, LiveConnMixin, FormValidationMixin):
     """
     قاعدة موحدة لكل نماذج CRUD.
 
-    Override المطلوب:
-        _build_fields(grp)   → يضيف حقول الفورم في FormGroup
-        _collect()           → يجمع البيانات ويرجع dict أو None
-        _do_insert(data)     → يضيف في DB ويرجع ID
-        _do_update(id, data) → يحدّث في DB
-        _do_load(id)         → يجلب بيانات للتعديل ويرجع dict
-        _fill_fields(data)   → يملأ الحقول بالبيانات
-        _reset_fields()      → يمسح الحقول
+    للاستخدام override المطلوب:
+      _build_fields(grp)   → يضيف حقول الفورم في FormGroup
+      _collect()           → يجمع البيانات ويرجع dict أو None
+      _do_insert(data)     → يضيف في DB ويرجع ID
+      _do_update(id, data) → يحدّث في DB
+      _do_load(id)         → يجلب بيانات للتعديل ويرجع dict
+      _fill_fields(data)   → يملأ الحقول بالبيانات
+      _reset_fields()      → يمسح الحقول
 
-    Override الاختياري:
-        _after_insert(new_id) → بعد الإضافة
-        _after_save()         → بعد الحفظ
-        _build_extra(root)    → widgets إضافية تحت الأزرار
-        _validate()           → تحقق إضافي قبل الحفظ، يرجع str أو None
+    اختياري:
+      _after_insert(new_id) → بعد الإضافة
+      _after_save()         → بعد الحفظ
+      _build_extra(root)    → widgets إضافية تحت الأزرار
+      _validate()           → تحقق إضافي قبل الحفظ، يرجع str أو None
     """
 
-    item_added   = pyqtSignal(int)
-    item_updated = pyqtSignal(int)
+    # signals
+    item_added   = pyqtSignal(int)   # new_id
+    item_updated = pyqtSignal(int)   # item_id
 
     FORM_TITLE      : str = "بيانات"
     FORM_TITLE_ICON : str = ""
@@ -104,6 +104,8 @@ class BaseCrudForm(QWidget, EditModeMixin, LiveConnMixin, FormValidationMixin):
     def _reset_fields(self) -> None:
         raise NotImplementedError
 
+    # ── اختياري ───────────────────────────────────────────
+
     def _after_insert(self, new_id: int) -> None:
         pass
 
@@ -128,13 +130,16 @@ class BaseCrudForm(QWidget, EditModeMixin, LiveConnMixin, FormValidationMixin):
     def _build(self):
         _outer, _inner, root = build_inner_scroll(self, min_width=self.MIN_WIDTH)
 
+        # Notification bar
         self._notif = NotificationBar(show_dismiss=True)
         root.addWidget(self._notif)
 
+        # عنوان الفورم
         title = f"{self.FORM_TITLE_ICON}  {self.FORM_TITLE}" \
                 if self.FORM_TITLE_ICON else self.FORM_TITLE
         grp = FormGroup(title)
 
+        # ModeLabel
         self.lbl_mode = ModeLabel(
             add_text=self.ADD_TEXT.lstrip("➕  "),
         )
@@ -143,6 +148,7 @@ class BaseCrudForm(QWidget, EditModeMixin, LiveConnMixin, FormValidationMixin):
         self._build_fields(grp)
         root.addWidget(grp)
 
+        # أزرار
         self.btn_add    = _make_btn(self.ADD_TEXT,    "primary")
         self.btn_save   = _make_btn(self.SAVE_TEXT,   "success")
         self.btn_cancel = _make_btn(self.CANCEL_TEXT, "ghost")
@@ -231,6 +237,6 @@ class BaseCrudForm(QWidget, EditModeMixin, LiveConnMixin, FormValidationMixin):
         """يحدّث الـ connection (مفيد عند تغيير الشركة)."""
         self.conn = conn
 
+    # alias للتوافق
     def _warn(self, msg: str) -> None:
-        """يعرض تحذير — alias لـ _notif.show للتوافق."""
         self._notif.show(msg, "warning")

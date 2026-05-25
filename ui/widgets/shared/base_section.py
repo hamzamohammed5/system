@@ -3,10 +3,11 @@ ui/widgets/shared/base_section.py
 ===================================
 BaseSection — قاعدة مشتركة للأقسام اللي فيها list + detail.
 
-[تحديث v4]:
-  - get_splitter_style() مستوردة من panels مباشرة (لا inline CSS)
+[تحديث v3]:
+  - يستخدم get_splitter_style() من theme بدل inline style
   - BusConnectedMixin للربط التلقائي بالـ bus
   - _apply_sizes أنظف مع fallback timer
+  - refresh() يربط list + detail تلقائياً
   - دعم LAYOUT_DIRECTION لتغيير ترتيب list/detail
 """
 
@@ -15,7 +16,7 @@ from PyQt5.QtWidgets import (
 )
 from PyQt5.QtCore import Qt, QTimer
 
-from ui.widgets.shared.panles_helper.theme import get_splitter_style
+from ui.widgets.shared.panels import get_splitter_style
 from ui.widgets.shared.shared_ui_mixins import BusConnectedMixin
 
 
@@ -23,8 +24,8 @@ class BaseSection(QWidget, BusConnectedMixin):
     LIST_MIN_W      : int  = 280
     LIST_MAX_W      : int  = 560
     DETAIL_MIN_W    : int  = 320
-    CONNECT_BUS     : bool = False
-    LAYOUT_REVERSED : bool = False
+    CONNECT_BUS     : bool = False   # True = يربط bus.data_changed تلقائياً
+    LAYOUT_REVERSED : bool = False   # True = detail على اليسار، list على اليمين
 
     def __init__(self, conn=None, parent=None):
         super().__init__(parent)
@@ -44,10 +45,13 @@ class BaseSection(QWidget, BusConnectedMixin):
         raise NotImplementedError
 
     def _connect_signals(self):
+        """Override لربط الـ signals بين list و detail."""
+        # الربط الافتراضي: item_selected → load_item
         if hasattr(self._list, 'item_selected') and hasattr(self._detail, 'load_item'):
             self._list.item_selected.connect(self._detail.load_item)
 
     def _on_data_changed(self):
+        """Override أو اترك للـ subclass."""
         self.refresh()
 
     # ── بناء الواجهة ──────────────────────────────────────
@@ -124,6 +128,8 @@ class BaseSection(QWidget, BusConnectedMixin):
 
     def _fit_splitter_delayed(self, delay_ms: int = 80):
         QTimer.singleShot(delay_ms, self._apply_sizes)
+
+    # ── خصائص ────────────────────────────────────────────
 
     @property
     def list_panel(self) -> QWidget:

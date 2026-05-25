@@ -3,7 +3,10 @@ ui/tabs/accounting/financial/trial_balance_tab.py
 ==================================================
 TrialBalanceTab — تبويب ميزان المراجعة.
 
-إصلاحات (v3): SafeConnMixin بدل conn property يدوي.
+[إصلاح v4 — توحيد الـ UI]:
+  - PageHeader بدل section_label اليدوي.
+  - make_list_table من panels بدل make_table من helpers.
+  - SafeConnMixin كما هو.
 """
 
 from PyQt5.QtWidgets import (
@@ -13,8 +16,13 @@ from PyQt5.QtWidgets import (
 from PyQt5.QtGui import QColor
 
 from db.accounting.accounting_repo import trial_balance, get_normal_balance
-from ui.helpers import make_table, section_label
 from ui.events  import bus
+from ui.widgets.shared.panels import (
+    PageHeader,
+    make_list_table,
+    bold_table_item,
+    colored_table_item,
+)
 from ui.widgets.shared.safe_conn_mixin import SafeConnMixin
 
 
@@ -35,7 +43,14 @@ class TrialBalanceTab(SafeConnMixin, QWidget):
         root = QVBoxLayout(self)
         root.setContentsMargins(12, 10, 12, 12)
         root.setSpacing(8)
-        root.addWidget(section_label("── ميزان المراجعة ──"))
+
+        # ── هيدر الصفحة (بدل section_label اليدوي) ──
+        root.addWidget(PageHeader(
+            title="ميزان المراجعة",
+            icon="⚖️",
+            accent="#1565c0",
+            compact=True,
+        ))
 
         legend = QLabel(
             "  🔵 مدين (الرصيد الطبيعي DR)     🔴 دائن (الرصيد الطبيعي CR)   "
@@ -47,15 +62,11 @@ class TrialBalanceTab(SafeConnMixin, QWidget):
         )
         root.addWidget(legend)
 
-        self.table = make_table(
-            ["الكود", "اسم الحساب", "النوع", "مجموع المدين", "مجموع الدائن", "الرصيد"],
+        self.table = make_list_table(
+            columns=["الكود", "اسم الحساب", "النوع", "مجموع المدين", "مجموع الدائن", "الرصيد"],
             stretch_col=1,
+            col_widths={0: 70, 2: 100, 3: 120, 4: 120, 5: 110},
         )
-        self.table.setColumnWidth(0, 70)
-        self.table.setColumnWidth(2, 100)
-        self.table.setColumnWidth(3, 120)
-        self.table.setColumnWidth(4, 120)
-        self.table.setColumnWidth(5, 110)
         self.table.setAlternatingRowColors(True)
         root.addWidget(self.table, stretch=1)
 
@@ -109,9 +120,10 @@ class TrialBalanceTab(SafeConnMixin, QWidget):
             color   = ("#1565c0" if bal >= 0 else "#e65100") if nb == "dr" \
                       else ("#c62828" if bal <= 0 else "#e65100")
 
-            bal_item = QTableWidgetItem(f"{abs_bal:,.2f}")
-            bal_item.setForeground(QColor(color))
-            bal_item.setToolTip(f"{'مدين' if bal >= 0 else 'دائن'}  {abs_bal:,.2f}")
+            bal_item = colored_table_item(
+                f"{abs_bal:,.2f}", color,
+                tooltip=f"{'مدين' if bal >= 0 else 'دائن'}  {abs_bal:,.2f}"
+            )
             self.table.setItem(r, 5, bal_item)
 
             sd += row["total_debit"]

@@ -1,12 +1,11 @@
 """
 ui/widgets/shared/category_manager.py
-=======================================
+===============================
 CategoryManager — شجرة QTreeWidget لإدارة التصنيفات الهرمية.
 
-[إصلاح v3]:
-  - get_tree_style() مستوردة من panels (لا inline CSS)
+[إصلاح v2]:
+  - كل الـ imports من panels بدل مزيج من panels و panles_helper مباشرة
   - confirm_delete من panels
-  - كل الـ imports من panels بدل مزيج من مصادر متعددة
 """
 
 from PyQt5.QtWidgets import (
@@ -65,9 +64,9 @@ class CategoryManager(QWidget, LiveConnMixin):
         self.tree.itemSelectionChanged.connect(self._on_select)
         root.addWidget(self.tree)
 
-        btn_row  = QHBoxLayout()
+        btn_row = QHBoxLayout()
         btn_edit = _make_btn("✏️  تعديل", "normal")
-        btn_del  = _make_btn("🗑️  حذف",  "danger")
+        btn_del  = _make_btn("🗑️  حذف", "danger")
         btn_edit.clicked.connect(self._edit)
         btn_del.clicked.connect(self._delete)
         btn_row.addWidget(btn_edit)
