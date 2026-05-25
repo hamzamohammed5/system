@@ -1,5 +1,5 @@
 """
-ui/widgets/shared/components/label.py
+ui/widgets/components/label.py
 ========================================
 Labels متخصصة: InfoRow, ModeLabel, AmountLabel + دوال مساعدة.
 """
@@ -8,7 +8,7 @@ from PyQt5.QtCore    import Qt
 from PyQt5.QtGui     import QFont
 
 from ui.app_settings import _C, fs
-from ui.widgets.shared.core.settings import get_base
+from ..core.settings import get_base
 
 
 # ══════════════════════════════════════════════════════════════════

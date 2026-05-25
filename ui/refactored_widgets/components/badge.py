@@ -1,5 +1,5 @@
 """
-ui/widgets/shared/components/badge.py
+ui/widgets/components/badge.py
 ========================================
 BadgeLabel — شارة نصية ملونة.
 StatusChip — شريحة حالة مع أيقونة وعدد.
@@ -9,8 +9,8 @@ from PyQt5.QtCore    import Qt
 from PyQt5.QtGui     import QFont
 
 from ui.app_settings import _C, fs
-from ui.widgets.shared.core.settings import get_base
-from ui.widgets.shared.core.colors   import card_colors
+from ..core.settings import get_base
+from ..core.colors   import card_colors
 
 
 class BadgeLabel(QLabel):

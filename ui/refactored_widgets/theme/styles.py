@@ -1,12 +1,12 @@
 """
-ui/widgets/shared/theme/styles.py
+ui/widgets/theme/styles.py
 ===================================
 كل الـ stylesheet generators في مكان واحد.
 
 دمج: theme.py + table_styles.py + كل الستايلات المتفرقة
 """
 from ui.app_settings import _C, fs
-from ui.widgets.shared.core.settings import get_base
+from ..core.settings import get_base
 
 
 # ══════════════════════════════════════════════════════════════════
@@ -138,7 +138,7 @@ def card_style(bg: str = None, border: str = None, radius: int = 10) -> str:
 
 
 def status_card_style(status: str = "info", radius: int = 8) -> str:
-    from ui.widgets.shared.core.colors import status_colors
+    from ..core.colors import status_colors
     s = status_colors(status)
     return f"""
         QFrame {{
@@ -278,7 +278,7 @@ def toolbar_style() -> str:
 # ══════════════════════════════════════════════════════════════════
 
 def status_label_style(status: str = "info", font_offset: int = 0) -> str:
-    from ui.widgets.shared.core.colors import status_colors
+    from ..core.colors import status_colors
     base = get_base()
     s = status_colors(status)
     return (

@@ -1,5 +1,5 @@
 """
-ui/widgets/shared/mixins/bus.py
+ui/widgets/mixins/bus.py
 =================================
 BusConnectedMixin — ربط تلقائي بـ event bus.
 """

@@ -1,5 +1,5 @@
 """
-ui/widgets/shared/core/conn.py
+ui/widgets/core/conn.py
 ================================
 Mixins موحدة لإدارة اتصالات قاعدة البيانات.
 

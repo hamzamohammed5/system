@@ -1,5 +1,5 @@
 """
-ui/widgets/shared/components/button.py
+ui/widgets/components/button.py
 ========================================
 make_btn — المصنع الموحد لإنشاء أزرار التطبيق.
 """
@@ -8,7 +8,7 @@ from PyQt5.QtCore    import Qt
 from PyQt5.QtGui     import QFont, QFontMetrics
 
 from ui.app_settings import _C, fs
-from ui.widgets.shared.core.settings import get_base
+from ..core.settings import get_base
 
 
 # ── تعريف الأنماط ────────────────────────────────────────────────────────

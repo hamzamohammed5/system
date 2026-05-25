@@ -1,5 +1,5 @@
 """
-ui/widgets/shared/components/spinner.py
+ui/widgets/components/spinner.py
 =========================================
 LoadingSpinner / LoadingOverlay / LoadingButton — مؤشرات تحميل موحدة.
 """
@@ -10,7 +10,7 @@ from PyQt5.QtWidgets import (
 from PyQt5.QtCore import Qt, QTimer
 
 from ui.app_settings import _C, fs
-from ui.widgets.shared.core.settings import get_base
+from ..core.settings import get_base
 
 
 _FRAMES = ["⠋", "⠙", "⠸", "⠴", "⠦", "⠇"]

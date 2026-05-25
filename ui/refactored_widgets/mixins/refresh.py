@@ -1,5 +1,5 @@
 """
-ui/widgets/shared/mixins/refresh.py
+ui/widgets/mixins/refresh.py
 =====================================
 RefreshableMixin — نمط التحميل والعرض المنفصلين.
 """

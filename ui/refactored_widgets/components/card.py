@@ -1,5 +1,5 @@
 """
-ui/widgets/shared/components/card.py
+ui/widgets/components/card.py
 =======================================
 StatCard  — بطاقة إحصائية مستقلة (في detail headers).
 StatusCard — بطاقة حالة بسيطة.
@@ -13,8 +13,8 @@ from PyQt5.QtCore import Qt
 from PyQt5.QtGui  import QFont
 
 from ui.app_settings import fs
-from ui.widgets.shared.core.settings import get_base
-from ui.widgets.shared.core.colors   import card_colors
+from ..core.settings import get_base
+from ..core.colors   import card_colors
 
 
 class StatCard(QFrame):

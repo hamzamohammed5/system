@@ -1,5 +1,5 @@
 """
-ui/widgets/shared/core/events.py
+ui/widgets/core/events.py
 ==================================
 أدوات مساعدة موحدة للـ event bus.
 """

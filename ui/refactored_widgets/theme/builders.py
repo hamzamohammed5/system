@@ -1,5 +1,5 @@
 """
-ui/widgets/shared/theme/builders.py
+ui/widgets/theme/builders.py
 =====================================
 دوال بناء الـ QFrame widgets الأساسية (dividers, separators).
 """

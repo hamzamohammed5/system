@@ -1,5 +1,5 @@
 """
-ui/widgets/shared/components/notification.py
+ui/widgets/components/notification.py
 ==============================================
 NotificationBar — شريط إشعارات موحد.
 """
@@ -7,8 +7,8 @@ from PyQt5.QtWidgets import QFrame, QHBoxLayout, QLabel, QPushButton
 from PyQt5.QtCore    import QTimer, pyqtSignal
 
 from ui.app_settings import fs
-from ui.widgets.shared.core.settings import get_base
-from ui.widgets.shared.core.colors   import status_colors
+from ..core.settings import get_base
+from ..core.colors   import status_colors
 
 _ICONS = {
     "success": "✅",

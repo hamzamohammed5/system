@@ -1,5 +1,5 @@
 """
-ui/widgets/shared/components/stat_row.py
+ui/widgets/components/stat_row.py
 ==========================================
 StatRow — صف بطاقات إحصائية أفقية موحد.
 """
@@ -12,9 +12,9 @@ from PyQt5.QtCore    import Qt
 from PyQt5.QtGui     import QFont
 
 from ui.app_settings import _C, fs
-from ui.widgets.shared.core.settings import get_base
-from ui.widgets.shared.core.colors   import card_colors
-from ui.widgets.shared.theme.builders import v_divider
+from ..core.settings import get_base
+from ..core.colors   import card_colors
+from ..theme.builders import v_divider
 
 
 @dataclass

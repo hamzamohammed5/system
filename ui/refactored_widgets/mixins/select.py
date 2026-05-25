@@ -1,5 +1,5 @@
 """
-ui/widgets/shared/mixins/select.py
+ui/widgets/mixins/select.py
 =====================================
 SelectionMixin — منطق موحد لتحديد عناصر الجدول.
 """

@@ -1,5 +1,5 @@
 """
-ui/widgets/shared/core/settings.py
+ui/widgets/core/settings.py
 ===================================
 نقطة وصول موحدة لإعدادات التطبيق (حجم الخط، الألوان).
 

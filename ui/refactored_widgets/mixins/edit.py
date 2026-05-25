@@ -1,5 +1,5 @@
 """
-ui/widgets/shared/mixins/edit.py
+ui/widgets/mixins/edit.py
 ==================================
 EditModeMixin — إدارة وضع الإضافة/التعديل في الفورمات.
 """

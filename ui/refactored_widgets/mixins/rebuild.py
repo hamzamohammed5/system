@@ -1,5 +1,5 @@
 """
-ui/widgets/shared/mixins/rebuild.py
+ui/widgets/mixins/rebuild.py
 =====================================
 RebuildMixin — إعادة بناء محتوى الـ tab عند تغيير الشركة.
 """

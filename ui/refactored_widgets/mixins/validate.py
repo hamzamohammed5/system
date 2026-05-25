@@ -1,5 +1,5 @@
 """
-ui/widgets/shared/mixins/validate.py
+ui/widgets/mixins/validate.py
 ======================================
 FormValidationMixin — تحقق موحد من حقول الفورم.
 """

@@ -1,5 +1,5 @@
 """
-ui/widgets/shared/core/colors.py
+ui/widgets/core/colors.py
 ==================================
 لوحة الألوان الموحدة للتطبيق.
 
