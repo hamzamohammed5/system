@@ -1,5 +1,5 @@
 File Tree Snapshot
-Generated : 2026-05-25 14:43:29
+Generated : 2026-05-25 14:55:07
 Source    : D:\My Workspace\Hg\Alhabaar\accountant\system
 Extensions: .py
 ────────────────────────────────────────────────────────────
@@ -98,6 +98,14 @@ system/
 │   │   │   ├── select.py
 │   │   │   ├── shared_ops.py
 │   │   │   └── validate.py
+│   │   ├── panels/
+│   │   │   ├── _btn.py
+│   │   │   ├── cards.py
+│   │   │   ├── display.py
+│   │   │   ├── form_parts.py
+│   │   │   ├── header.py
+│   │   │   ├── notify.py
+│   │   │   └── state.py
 │   │   ├── tables/
 │   │   │   ├── builders.py
 │   │   │   ├── flexible.py
