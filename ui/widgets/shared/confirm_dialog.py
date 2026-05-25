@@ -3,6 +3,10 @@ ui/widgets/shared/confirm_dialog.py
 =====================================
 دوال تأكيد موحدة تستخدم _DialogShell للهيكل.
 
+[إصلاح v2]:
+  - _make_btn المحلية حُذفت — تُستخدم _make_btn من make_btn.py مباشرة
+    لتجنب تكرار تعريف ستايل الأزرار.
+
 الاستخدام:
     from ui.widgets.shared.confirm_dialog import confirm_delete, confirm_action
 
@@ -13,32 +17,22 @@ ui/widgets/shared/confirm_dialog.py
         do_send()
 """
 
-from PyQt5.QtWidgets import QLabel, QPushButton
+from PyQt5.QtWidgets import QLabel
 from PyQt5.QtCore    import Qt
 
 from ui.app_settings import _C, fs
-from ui.widgets.shared.panles_helper.dialog_shell import _DialogShell
+from ui.widgets.shared.panles_helper.dialog_shell    import _DialogShell
+from ui.widgets.shared.panles_helper.make_btn        import _make_btn
 from ui.widgets.shared.panles_helper.colors_and_base import _base
 
 
-def _make_btn(text: str, accent: str, ghost: bool = False) -> QPushButton:
-    btn = QPushButton(text)
-    base = _base()
+def _make_confirm_btn(text: str, accent: str, ghost: bool = False):
+    """يبني زر تأكيد بستايل مخصص فوق _make_btn الموحدة."""
+    btn = _make_btn(text, "ghost" if ghost else "primary")
     btn.setMinimumHeight(34)
     btn.setMinimumWidth(80)
-    if ghost:
-        btn.setStyleSheet(f"""
-            QPushButton {{
-                background: {_C.get('bg_surface_2', '#f5f5f5')};
-                color: {_C.get('text_sec', '#555')};
-                border: 1px solid {_C.get('border', '#e0e0e0')};
-                border-radius: 6px;
-                padding: 0 16px;
-                font-size: {fs(base, 0)}pt;
-            }}
-            QPushButton:hover {{ background: {_C.get('bg_hover', '#eeeeee')}; }}
-        """)
-    else:
+    # override اللون لو مش accent افتراضي
+    if not ghost and accent and accent != _C.get("accent", "#1565c0"):
         btn.setStyleSheet(f"""
             QPushButton {{
                 background: {accent};
@@ -47,7 +41,9 @@ def _make_btn(text: str, accent: str, ghost: bool = False) -> QPushButton:
                 border: none;
                 border-radius: 6px;
                 padding: 0 20px;
-                font-size: {fs(base, 0)}pt;
+                font-size: {fs(_base(), 0)}pt;
+                min-height: 34px;
+                min-width: 80px;
             }}
             QPushButton:hover {{ background: {accent}dd; }}
         """)
@@ -101,8 +97,8 @@ class _ConfirmDialog(_DialogShell):
         )
         self.body_layout.addWidget(lbl)
 
-        btn_cancel = _make_btn(cancel_text, accent, ghost=True)
-        btn_ok     = _make_btn(confirm_text, accent, ghost=False)
+        btn_cancel = _make_confirm_btn(cancel_text, accent, ghost=True)
+        btn_ok     = _make_confirm_btn(confirm_text, accent, ghost=False)
 
         btn_cancel.clicked.connect(self.reject)
         btn_ok.clicked.connect(self._on_confirm)

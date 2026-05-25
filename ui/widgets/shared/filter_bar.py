@@ -3,14 +3,14 @@ ui/widgets/shared/filter_bar.py
 ================================
 FilterBar — شريط فلتر مشترك.
 
-[إصلاح v4]:
-  - حذف تعريف filter_changed المكرر — الـ signal موروث من FilterToolbar
+[إصلاح v2]:
   - LiveConnMixin للـ connection مع lazy reload
-  - _on_data_changed أبسط بدون try/except مكرر
+  - filter_changed موروث من FilterToolbar — لا يُعاد تعريفه
+  - _on_data_changed أبسط
 """
 
 from ui.widgets.shared.panles_helper.filter_toolbar import FilterToolbar
-from ui.widgets.shared.connection_mixin import LiveConnMixin
+from ui.widgets.shared.connection_mixin             import LiveConnMixin
 from ui.events import bus
 
 
@@ -23,9 +23,7 @@ class FilterBar(FilterToolbar, LiveConnMixin):
       - ربط تلقائي بـ bus.data_changed لإعادة تحميل التصنيفات
       - set_count() للعداد (موروث من FilterToolbar)
 
-    ملاحظة: filter_changed موروث من FilterToolbar — لا يُعاد تعريفه.
-
-    الاستخدام (متوافق مع الكود القديم):
+    الاستخدام:
         bar = FilterBar(conn, scope="raw")
         bar.filter_changed.connect(self._apply_filter)
         layout.addWidget(bar)
@@ -36,7 +34,7 @@ class FilterBar(FilterToolbar, LiveConnMixin):
     """
 
     def __init__(self, conn, scope: str = "all", parent=None):
-        self.conn   = conn    # LiveConnMixin يقرأ self.conn
+        self.conn   = conn
         self._scope = scope
         super().__init__(
             conn=conn,

@@ -3,35 +3,25 @@ ui/widgets/shared/empty_state_helpers.py
 ==========================================
 أدوات مساعدة موحدة لحالات الـ Empty State في الجداول والـ panels.
 
-تحل محل الكود المكرر في كثير من الجداول عند عدم وجود بيانات.
+[إصلاح v2]:
+  - _make_btn مستوردة في أعلى الملف بدل lazy import داخل _build
 
 المتوفر:
-  EmptyTableMessage      — رسالة "لا توجد بيانات" داخل الجدول مباشرة
   set_table_empty_state  — يضيف صف رسالة في الجدول الفارغ
+  clear_table_empty_state — يمسح صف الحالة الفارغة
   EmptyPanelState        — widget حالة فارغة للـ panels
-  show_empty_row         — دالة سريعة لإظهار صف فارغ في الجدول
-
-الاستخدام:
-    # في الجدول:
-    if not rows:
-        set_table_empty_state(self.table, "لا توجد قيود بعد")
-    else:
-        # ملء الجدول...
-
-    # في الـ panel:
-    empty = EmptyPanelState("📋", "لا توجد بيانات", "أضف عنصراً جديداً")
-    layout.addWidget(empty)
 """
 
 from PyQt5.QtWidgets import (
     QWidget, QTableWidget, QTableWidgetItem,
-    QVBoxLayout, QLabel, QPushButton, QSizePolicy,
+    QVBoxLayout, QLabel, QSizePolicy,
 )
 from PyQt5.QtCore import Qt, pyqtSignal
 from PyQt5.QtGui  import QColor, QFont
 
 from ui.app_settings import _C, fs
 from ui.widgets.shared.panles_helper.colors_and_base import _base
+from ui.widgets.shared.panles_helper.make_btn import _make_btn
 
 
 # ══════════════════════════════════════════════════════════
@@ -51,8 +41,6 @@ def set_table_empty_state(table: QTableWidget,
         if not rows:
             set_table_empty_state(self.table, "لا توجد قيود")
             return
-        for row in rows:
-            # ملء الجدول ...
     """
     table.setRowCount(1)
     table.setRowHeight(0, 60)
@@ -66,26 +54,22 @@ def set_table_empty_state(table: QTableWidget,
     f = QFont()
     f.setItalic(True)
     item.setFont(f)
-    item.setFlags(Qt.ItemIsEnabled)  # غير قابل للاختيار
+    item.setFlags(Qt.ItemIsEnabled)
 
     table.setItem(0, 0, item)
 
-    # دمج الخلايا لو متاح (setSpan)
     if col_count > 1:
         table.setSpan(0, 0, 1, col_count)
 
 
 def clear_table_empty_state(table: QTableWidget):
-    """
-    يمسح صف الحالة الفارغة لو كان موجوداً.
-    يُستدعى قبل ملء الجدول بالبيانات.
-    """
+    """يمسح صف الحالة الفارغة لو كان موجوداً."""
     if table.rowCount() == 1:
         item = table.item(0, 0)
         if item and not (item.flags() & Qt.ItemIsSelectable):
             table.setRowCount(0)
             if table.columnCount() > 1:
-                table.setSpan(0, 0, 1, 1)  # إعادة الـ span
+                table.setSpan(0, 0, 1, 1)
 
 
 # ══════════════════════════════════════════════════════════
@@ -96,12 +80,6 @@ class EmptyPanelState(QWidget):
     """
     Widget يعرض حالة فارغة مع أيقونة ونص وزر إجراء اختياري.
 
-    مشابه لـ EmptyState في panles_helper لكن أبسط وأكثر مرونة.
-
-    الفرق:
-      - EmptyState في panles_helper: مصمم للـ panels الرئيسية، بحدود ومسافات محددة
-      - EmptyPanelState: أبسط، قابل للاستخدام في أي مكان
-
     الاستخدام:
         empty = EmptyPanelState(
             icon="📋",
@@ -111,9 +89,6 @@ class EmptyPanelState(QWidget):
         )
         empty.action_clicked.connect(self._add_new)
         layout.addWidget(empty)
-
-        # إخفاء/إظهار:
-        empty.setVisible(not bool(data))
     """
 
     action_clicked = pyqtSignal()
@@ -165,8 +140,7 @@ class EmptyPanelState(QWidget):
             lay.addWidget(lbl_sub)
 
         if action_text:
-            from ui.widgets.shared.panles_helper.make_btn import _make_btn
-            btn = _make_btn(action_text, "primary")
+            btn = _make_btn(action_text, "primary")   # ← لا lazy import
             btn.clicked.connect(self.action_clicked.emit)
             lay.addWidget(btn, alignment=Qt.AlignCenter)
 

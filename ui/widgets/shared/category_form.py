@@ -3,11 +3,14 @@ ui/widgets/shared/category_form.py
 ============================
 _CategoryForm — QGroupBox لإضافة وتعديل التصنيفات الهرمية.
 
-[تحسين]: استخدام ColorPickerWidget و confirm_action بدل كود محلي مكرر.
+[إصلاح v2]:
+  - _make_btn و ModeLabel مستوردتان من panels بدل lazy imports داخل _build
+  - ColorPickerWidget موحّد
+  - confirm_action من panels
 """
 
 from PyQt5.QtWidgets import (
-    QGroupBox, QFormLayout, QLineEdit, QPushButton,
+    QGroupBox, QFormLayout, QLineEdit,
     QLabel, QComboBox, QMessageBox, QHBoxLayout,
 )
 from PyQt5.QtCore import Qt
@@ -17,8 +20,12 @@ from db.shared.categories_repo import (
     insert_category, update_category,
     build_tree, fetch_descendants,
 )
-from ui.widgets.shared.connection_mixin import LiveConnMixin
+from ui.widgets.shared.connection_mixin    import LiveConnMixin
 from ui.widgets.shared.color_picker_widget import ColorPickerWidget
+from ui.widgets.shared.panels import (
+    _make_btn,
+    ModeLabel,
+)
 from ui.events import bus
 
 
@@ -36,9 +43,6 @@ class _CategoryForm(QGroupBox, LiveConnMixin):
     # ══════════════════════════════════════════════════════
 
     def _build(self):
-        from ui.widgets.shared.panles_helper.mode_label import ModeLabel
-        from ui.widgets.shared.panles_helper.make_btn import _make_btn
-
         form = QFormLayout(self)
         form.setSpacing(10)
         form.setLabelAlignment(Qt.AlignRight)
@@ -54,14 +58,13 @@ class _CategoryForm(QGroupBox, LiveConnMixin):
         self.cmb_parent.setMinimumHeight(30)
         form.addRow("تابع لـ :", self.cmb_parent)
 
-        # ── ColorPickerWidget الموحد ──
         self._color_picker = ColorPickerWidget(default="#607d8b")
         form.addRow("اللون :", self._color_picker)
 
         btn_row = QHBoxLayout()
         self.btn_add    = _make_btn("➕  إضافة", "primary")
-        self.btn_save   = _make_btn("💾  حفظ", "success")
-        self.btn_cancel = _make_btn("✖  إلغاء", "ghost")
+        self.btn_save   = _make_btn("💾  حفظ",   "success")
+        self.btn_cancel = _make_btn("✖  إلغاء",  "ghost")
         self.btn_save.setVisible(False)
         self.btn_cancel.setVisible(False)
         self.btn_add.clicked.connect(self._add)

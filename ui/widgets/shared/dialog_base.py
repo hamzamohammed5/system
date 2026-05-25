@@ -2,32 +2,17 @@
 ui/widgets/shared/dialog_base.py
 =================================
 BaseDialog — قاعدة مشتركة لكل الـ dialogs في التطبيق.
-يستخدم _DialogShell للهيكل البصري.
 
-الاستخدام:
-    from ui.widgets.shared.dialog_base import BaseDialog
-
-    class MyDialog(BaseDialog):
-        def __init__(self, parent=None):
-            super().__init__(
-                parent=parent,
-                title="عنوان النافذة",
-                icon="🔧",
-                subtitle="نص توضيحي",
-                min_size=(600, 500),
-            )
-            # أضف محتواك في self.body_layout
-
-        def _on_accept(self):
-            # منطق الحفظ
-            ...
+[إصلاح v2]:
+  - _add_default_buttons تستخدم _make_btn بدل inline QPushButton styles
 """
 
 from PyQt5.QtWidgets import QPushButton, QVBoxLayout
 from PyQt5.QtCore    import Qt
 
 from ui.app_settings import _C, fs
-from ui.widgets.shared.panles_helper.dialog_shell   import _DialogShell
+from ui.widgets.shared.panles_helper.dialog_shell    import _DialogShell
+from ui.widgets.shared.panles_helper.make_btn        import _make_btn
 from ui.widgets.shared.panles_helper.colors_and_base import _base
 
 
@@ -63,40 +48,34 @@ class BaseDialog(_DialogShell):
         if show_btns:
             self._add_default_buttons()
         else:
-            # dummy للتوافق مع الكود القديم
-            self._btn_ok = QPushButton()
+            self._btn_ok = QPushButton()   # dummy للتوافق
 
         self._build_content(self._body_layout)
 
     # ── أزرار افتراضية ────────────────────────────────────
 
     def _add_default_buttons(self):
-        base = _base()
-
-        btn_cancel = QPushButton("✖  إلغاء")
+        btn_cancel = _make_btn("✖  إلغاء", "ghost")
         btn_cancel.setMinimumHeight(36)
-        btn_cancel.setStyleSheet(f"""
-            QPushButton {{
-                background: {_C['bg_surface_2']}; color: {_C['text_sec']};
-                border: 1px solid {_C['border']}; border-radius: 6px;
-                padding: 0 16px; font-size: {fs(base, 0)}pt;
-            }}
-            QPushButton:hover {{ background: {_C['bg_hover']}; }}
-        """)
         btn_cancel.clicked.connect(self.reject)
 
-        self._btn_ok = QPushButton("✅  حفظ")
+        self._btn_ok = _make_btn("✅  حفظ", "primary")
         self._btn_ok.setMinimumHeight(36)
-        self._btn_ok.setStyleSheet(f"""
-            QPushButton {{
-                background: {self._accent}; color: white;
-                font-weight: bold; border-radius: 6px;
-                padding: 0 20px; font-size: {fs(base, 0)}pt;
-                border: none;
-            }}
-            QPushButton:hover {{ background: {self._accent}dd; }}
-            QPushButton:disabled {{ background: {_C['text_disabled']}; }}
-        """)
+
+        # override لون الـ accent لو مختلف
+        if self._accent and self._accent != _C.get("accent", "#1565c0"):
+            base = _base()
+            self._btn_ok.setStyleSheet(f"""
+                QPushButton {{
+                    background: {self._accent}; color: white;
+                    font-weight: bold; border-radius: 6px;
+                    padding: 0 20px; font-size: {fs(base, 0)}pt;
+                    border: none; min-height: 36px;
+                }}
+                QPushButton:hover {{ background: {self._accent}dd; }}
+                QPushButton:disabled {{ background: {_C['text_disabled']}; }}
+            """)
+
         self._btn_ok.clicked.connect(self._on_accept)
 
         self.btn_layout.addWidget(btn_cancel)
@@ -115,11 +94,9 @@ class BaseDialog(_DialogShell):
     # ── خصائص مساعدة ─────────────────────────────────────
 
     def set_ok_enabled(self, enabled: bool):
-        """يفعّل/يعطّل زر الحفظ."""
         if hasattr(self, "_btn_ok"):
             self._btn_ok.setEnabled(enabled)
 
     def set_ok_text(self, text: str):
-        """يغير نص زر الحفظ."""
         if hasattr(self, "_btn_ok"):
             self._btn_ok.setText(text)

@@ -3,6 +3,10 @@ ui/widgets/shared/base_warning_bar.py
 ======================================
 BaseWarningBar — شريط تحذير موحد قابل لإعادة الاستخدام.
 
+[إصلاح v2]:
+  - الأزرار تستخدم _make_btn من make_btn.py بدل hardcoded styles
+  - ألوان من _C و STATUS_COLORS بدل hardcoded hex
+
 يحل محل _WarningBar المكررة في:
   - ui/tabs/costing/product/product_table.py
 
@@ -30,9 +34,9 @@ from PyQt5.QtWidgets import (
     QFrame, QHBoxLayout, QLabel, QPushButton,
 )
 from PyQt5.QtCore import pyqtSignal
-from PyQt5.QtCore import Qt
 
-from ui.app_settings import _C
+from ui.widgets.shared.panles_helper.make_btn        import _make_btn
+from ui.widgets.shared.panles_helper.theme           import STATUS_COLORS
 
 
 class BaseWarningBar(QFrame):
@@ -70,13 +74,14 @@ class BaseWarningBar(QFrame):
     # ── بناء الواجهة ──────────────────────────────────────
 
     def _build(self, show_dismiss: bool):
+        s = STATUS_COLORS["warning"]
         self.setObjectName("warningBar")
-        self.setStyleSheet("""
-            #warningBar {
-                background: #fff3e0;
-                border: 1px solid #e65100;
+        self.setStyleSheet(f"""
+            #warningBar {{
+                background: {s['bg']};
+                border: 1px solid {s['border']};
                 border-radius: 6px;
-            }
+            }}
         """)
 
         lay = QHBoxLayout(self)
@@ -92,32 +97,20 @@ class BaseWarningBar(QFrame):
         self._lbl = QLabel()
         self._lbl.setWordWrap(True)
         self._lbl.setStyleSheet(
-            "color:#bf360c; font-weight:bold; background:transparent; border:none;"
+            f"color:{s['fg']}; font-weight:bold; background:transparent; border:none;"
         )
         lay.addWidget(self._lbl, stretch=1)
 
-        self._btn_fix = QPushButton(self._fix_text)
-        self._btn_fix.setStyleSheet(
-            "background:#e65100; color:white; border:none;"
-            "border-radius:4px; padding:4px 10px;"
-        )
+        self._btn_fix = _make_btn(self._fix_text, "danger")
         self._btn_fix.clicked.connect(self.fix_clicked.emit)
         lay.addWidget(self._btn_fix)
 
-        self._btn_edit = QPushButton(self._edit_text)
-        self._btn_edit.setStyleSheet(
-            "background:#1565c0; color:white; border:none;"
-            "border-radius:4px; padding:4px 10px;"
-        )
+        self._btn_edit = _make_btn(self._edit_text, "primary")
         self._btn_edit.clicked.connect(self.edit_clicked.emit)
         lay.addWidget(self._btn_edit)
 
         if show_dismiss:
-            btn_dismiss = QPushButton("✖")
-            btn_dismiss.setStyleSheet(
-                "background:transparent; color:#888; border:1px solid #ccc;"
-                "border-radius:4px; padding:4px 8px;"
-            )
+            btn_dismiss = _make_btn("✖", "ghost")
             btn_dismiss.clicked.connect(self._on_dismiss)
             lay.addWidget(btn_dismiss)
 

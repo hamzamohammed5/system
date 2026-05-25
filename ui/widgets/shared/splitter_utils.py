@@ -3,13 +3,16 @@ ui/widgets/shared/splitter_utils.py
 =====================================
 SmartSplitter — أدوات مساعدة للـ splitter.
 
-[إصلاح v2]:
-  - SmartSplitter._apply_style تستخدم get_splitter_style() من theme بدل inline style
-  - fit_list_panel_delayed توحّد delay=0 مع delay>0 في branch واحد
+[إصلاح v3]:
+  - SmartSplitter._apply_style تستخدم get_splitter_style() مستوردة في أعلى الملف
+    بدل lazy import داخل الدالة
+  - fit_list_panel_delayed موحّدة في branch واحد
 """
 
 from PyQt5.QtWidgets import QSplitter, QTableWidget, QWidget, QSizePolicy
 from PyQt5.QtCore    import Qt, QTimer
+
+from ui.widgets.shared.panles_helper.theme import get_splitter_style
 
 
 _MIN_LIST_W  = 280
@@ -77,8 +80,7 @@ def fit_list_panel_delayed(splitter: QSplitter,
                             max_w: int = _MAX_LIST_W):
     """
     يضبط عرض لوحة القائمة بعد delay اختياري.
-    delay_ms=0 يعمل synchronously عبر QTimer.singleShot(0, ...) لضمان
-    أن الـ layout اتحسب قبل الضبط.
+    delay_ms=0 يعمل synchronously عبر QTimer.singleShot(0, ...).
     """
     QTimer.singleShot(
         delay_ms,
@@ -89,9 +91,6 @@ def fit_list_panel_delayed(splitter: QSplitter,
 class SmartSplitter(QSplitter):
     """
     QSplitter مساعد — محتفظ به للتوافق مع الكود القديم.
-
-    [إصلاح v2]: _apply_style تستخدم get_splitter_style() من theme
-    بدل تكرار CSS inline.
     """
 
     def __init__(self, orientation=Qt.Horizontal, parent=None):
@@ -103,12 +102,7 @@ class SmartSplitter(QSplitter):
         self._list_widget = None
 
         self.setHandleWidth(4)
-        self._apply_style()
-
-    def _apply_style(self):
-        # استخدام get_splitter_style() الموحدة من theme بدل inline CSS
-        from ui.widgets.shared.panles_helper.theme import get_splitter_style
-        self.setStyleSheet(get_splitter_style())
+        self.setStyleSheet(get_splitter_style())   # ← مباشرة، لا lazy import
 
     def set_list_widget(self, widget: QWidget,
                         list_table: QTableWidget,

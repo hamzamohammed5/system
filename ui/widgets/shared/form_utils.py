@@ -3,30 +3,34 @@ ui/widgets/shared/form_utils.py
 ================================
 أدوات بناء الفورم المشتركة — تُستخدم في كل أقسام التطبيق.
 
-تحل محل الكود المتكرر في:
-  machine_form.py, labor_op_form.py, machine_op_form.py,
-  labor_settings.py, raw_variants_panel.py, machine_op_rows_editor.py
+[تحديث v2]:
+  - build_inner_scroll تستورد من scrollable_form بدل تكرار المنطق
+  - FormGroup._build_style موحدة مع get_group_box_style من theme
 
 المتوفر:
   labeled_widget(widget, unit)     — widget + label وحدة في سطر واحد
   spin_field(max_, dec)            — QDoubleSpinBox موحد
   int_spin_field(max_)             — QSpinBox موحد
-  ModeBadge                        — label لعرض الوضع الحالي (مثل وضع الحساب)
+  ModeBadge                        — label لعرض الوضع الحالي
   FormGroup                        — QGroupBox موحد مع QFormLayout جاهز
   CrudButtonsBar                   — شريط أزرار إضافة/حفظ/إلغاء موحد
   build_form_row(label, widget)    — صف فورم بـ QHBoxLayout
+  build_inner_scroll               — مستوردة من scrollable_form
 """
 
 from PyQt5.QtWidgets import (
     QWidget, QHBoxLayout, QVBoxLayout, QLabel,
     QPushButton, QDoubleSpinBox, QSpinBox,
-    QGroupBox, QFormLayout, QSizePolicy, QFrame,
+    QGroupBox, QFormLayout, QSizePolicy,
 )
 from PyQt5.QtCore import Qt, pyqtSignal
 from PyQt5.QtGui  import QFont
 
 from ui.app_settings import _C, fs
 from ui.widgets.shared.panles_helper.colors_and_base import _base
+
+# ── build_inner_scroll مستوردة مباشرة — لا تكرار ─────────
+from ui.widgets.shared.scrollable_form import wrap_in_scroll  # noqa: F401
 
 
 # ══════════════════════════════════════════════════════════
@@ -41,7 +45,6 @@ def labeled_widget(widget: QWidget, unit: str,
 
     الاستخدام:
         form.addRow("الراتب:", labeled_widget(sp_salary, "جنيه / شهر"))
-        form.addRow("الوقت:", labeled_widget(sp_minutes, "دقيقة"))
     """
     w = QWidget()
     w.setStyleSheet("background: transparent;")
@@ -69,12 +72,7 @@ def spin_field(max_: float = 999999,
                dec: int = 2,
                min_: float = 0,
                min_height: int = 30) -> QDoubleSpinBox:
-    """
-    يبني QDoubleSpinBox بإعدادات موحدة.
-
-    الاستخدام:
-        self.sp_salary = spin_field(max_=999999, dec=2)
-    """
+    """يبني QDoubleSpinBox بإعدادات موحدة."""
     s = QDoubleSpinBox()
     s.setRange(min_, max_)
     s.setDecimals(dec)
@@ -88,9 +86,7 @@ def spin_field(max_: float = 999999,
             font-size: {fs(_base(), 0)}pt;
             color: {_C['text_primary']};
         }}
-        QDoubleSpinBox:focus {{
-            border-color: {_C['accent']};
-        }}
+        QDoubleSpinBox:focus {{ border-color: {_C['accent']}; }}
         QDoubleSpinBox:disabled {{
             background: {_C['bg_surface_2']};
             color: {_C['text_disabled']};
@@ -102,12 +98,7 @@ def spin_field(max_: float = 999999,
 def int_spin_field(max_: int = 9999,
                    min_: int = 0,
                    min_height: int = 30) -> QSpinBox:
-    """
-    يبني QSpinBox بإعدادات موحدة.
-
-    الاستخدام:
-        self.sp_days = int_spin_field(max_=31)
-    """
+    """يبني QSpinBox بإعدادات موحدة."""
     s = QSpinBox()
     s.setRange(min_, max_)
     s.setMinimumHeight(min_height)
@@ -120,9 +111,7 @@ def int_spin_field(max_: int = 9999,
             font-size: {fs(_base(), 0)}pt;
             color: {_C['text_primary']};
         }}
-        QSpinBox:focus {{
-            border-color: {_C['accent']};
-        }}
+        QSpinBox:focus {{ border-color: {_C['accent']}; }}
     """)
     return s
 
@@ -134,10 +123,6 @@ def int_spin_field(max_: int = 9999,
 class ModeBadge(QLabel):
     """
     Label لعرض الوضع الحالي مع ستايل موحد.
-
-    الاستخدام:
-        self.badge_mode = ModeBadge()
-        self.badge_mode.set_mode("⏱ بالوقت  │  50.00 جنيه/ساعة", color="orange")
 
     الألوان المتاحة: "blue" (افتراضي), "orange", "green", "red", "purple"
     """
@@ -165,14 +150,12 @@ class ModeBadge(QLabel):
         )
 
     def set_mode(self, text: str, color: str = None):
-        """يحدّث النص والألوان."""
         self.setText(text)
         if color and color != self._color_key:
             self._color_key = color
             self._apply_style(color)
 
     def set_info(self, text: str):
-        """يحدّث النص فقط بدون تغيير اللون."""
         self.setText(text)
 
     def reset(self):
@@ -184,13 +167,7 @@ class ModeBadge(QLabel):
 # ══════════════════════════════════════════════════════════
 
 class ResultBadge(QLabel):
-    """
-    Label لعرض تكلفة أو نتيجة محسوبة.
-
-    الاستخدام:
-        self.lbl_cost = ResultBadge()
-        self.lbl_cost.set_value("50.25 جنيه / ساعة")
-    """
+    """Label لعرض تكلفة أو نتيجة محسوبة."""
 
     def __init__(self, text: str = "─", color: str = "#1a6e1a", parent=None):
         super().__init__(text, parent)
@@ -226,10 +203,7 @@ class FormGroup(QGroupBox):
     الاستخدام:
         grp = FormGroup("بيانات الماكينة")
         grp.add_row("الاسم:", self.inp_name)
-        grp.add_row("المعدل:", labeled_widget(self.sp_rate, "جنيه/ساعة"))
         layout.addWidget(grp)
-
-    يمكن الوصول للـ layout عبر grp.form
     """
 
     def __init__(self, title: str = "", accent: str = None, parent=None):
@@ -242,36 +216,17 @@ class FormGroup(QGroupBox):
         self.form.setContentsMargins(12, 14, 12, 12)
 
     def _build_style(self):
-        base = _base()
-        self.setStyleSheet(f"""
-            QGroupBox {{
-                font-weight: 700;
-                font-size: {fs(base, 0)}pt;
-                color: {_C['text_sec']};
-                background: {_C['bg_surface']};
-                border: 1px solid {_C['border']};
-                border-radius: 10px;
-                margin-top: 10px;
-                padding-top: 6px;
-            }}
-            QGroupBox::title {{
-                subcontrol-origin: margin;
-                subcontrol-position: top right;
-                padding: 0 8px;
-                color: {self._accent};
-            }}
-        """)
+        # يستخدم get_group_box_style من theme
+        from ui.widgets.shared.panles_helper.theme import get_group_box_style
+        self.setStyleSheet(get_group_box_style(self._accent))
 
     def add_row(self, label: str, widget: QWidget):
-        """يضيف صف للفورم."""
         self.form.addRow(label, widget)
 
     def add_label_row(self, label_widget: QWidget):
-        """يضيف label كامل العرض (بدون label يمين)."""
         self.form.addRow(label_widget)
 
     def add_separator(self):
-        """يضيف فاصل أفقي."""
         from ui.widgets.shared.panles_helper.divider_utils import make_divider
         self.form.addRow(make_divider())
 
@@ -284,24 +239,8 @@ class CrudButtonsBar(QWidget):
     """
     شريط أزرار موحد: إضافة / حفظ / إلغاء + label الوضع.
 
-    يعمل مع EditModeMixin من ui.helpers.
-
-    الاستخدام:
-        self._crud = CrudButtonsBar(add_text="➕ إضافة", save_text="💾 حفظ")
-        layout.addWidget(self._crud)
-
-        # ربط:
-        self.init_edit_mode(
-            self._crud.btn_add,
-            self._crud.btn_save,
-            self._crud.btn_cancel,
-            self._crud.lbl_mode
-        )
-
     Signals:
-        add_clicked    → زر الإضافة
-        save_clicked   → زر الحفظ
-        cancel_clicked → زر الإلغاء
+        add_clicked, save_clicked, cancel_clicked
     """
 
     add_clicked    = pyqtSignal()
@@ -348,7 +287,7 @@ class CrudButtonsBar(QWidget):
         lay.addLayout(btn_row)
 
         if not show_mode:
-            self.lbl_mode = QLabel()  # dummy — للتوافق مع EditModeMixin
+            self.lbl_mode = QLabel()  # dummy للتوافق
 
     def _make_btn(self, text: str, style: str) -> QPushButton:
         from ui.widgets.shared.panles_helper.make_btn import _make_btn
@@ -359,18 +298,13 @@ class CrudButtonsBar(QWidget):
 
 
 # ══════════════════════════════════════════════════════════
-# InlinePreview — صف معاينة حية (تكلفة / نتيجة)
+# InlinePreview — صف معاينة حية
 # ══════════════════════════════════════════════════════════
 
 class InlinePreview(QWidget):
     """
-    يعرض: [أيقونة] [label] [القيمة المحسوبة]
+    يعرض: [label] [القيمة المحسوبة]
     مفيد للمعاينة الحية في الفورم.
-
-    الاستخدام:
-        self.preview = InlinePreview("التكلفة المتوقعة:")
-        form.addRow(self.preview)
-        self.preview.set_value("50.25 جنيه")
     """
 
     def __init__(self, label: str = "النتيجة:",
@@ -400,7 +334,7 @@ class InlinePreview(QWidget):
 
 
 # ══════════════════════════════════════════════════════════
-# build_inner_scroll — wrapper موحد لبناء form بـ scroll
+# build_inner_scroll — wrapper موحد (تستورد من scrollable_form)
 # ══════════════════════════════════════════════════════════
 
 def build_inner_scroll(parent_widget: QWidget,
@@ -409,15 +343,7 @@ def build_inner_scroll(parent_widget: QWidget,
     يبني الهيكل الأساسي لأي form panel بـ scroll.
 
     Returns: (outer_layout, inner_widget, inner_layout)
-
-    الاستخدام:
-        outer, inner, lay = build_inner_scroll(self, min_width=280)
-        grp = FormGroup("بيانات")
-        lay.addWidget(grp)
-        lay.addStretch()
     """
-    from ui.widgets.shared.scrollable_form import wrap_in_scroll
-
     outer = QVBoxLayout(parent_widget)
     outer.setContentsMargins(0, 0, 0, 0)
     outer.setSpacing(0)

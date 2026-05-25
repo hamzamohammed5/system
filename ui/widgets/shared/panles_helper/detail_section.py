@@ -3,7 +3,31 @@ ui/widgets/shared/panles_helper/detail_section.py
 ==================================================
 DetailSection — قسم تفاصيل موحد يعرض أزواج (عنوان: قيمة) بشكل منظم.
 
-[تحديث]: add_separator يستخدم make_divider() من divider_utils.
+يحل التكرار في عشرات الملفات اللي بتبني صفوف تفاصيل يدوياً
+بـ QLabel + QLabel في كل مرة.
+
+المتوفر:
+  DetailSection   — QFrame لعرض تفاصيل منظمة
+  DetailRow       — صف تفاصيل واحد (عنوان + قيمة)
+  make_detail_row — دالة سريعة لبناء صف تفاصيل
+
+الاستخدام:
+    sec = DetailSection("بيانات المنتج")
+    sec.add_row("الاسم:", "منتج A")
+    sec.add_row("الكود:", "P001", color="#1565c0")
+    sec.add_row("التاريخ:", "2025-01-15")
+    layout.addWidget(sec)
+
+    # تحديث قيمة:
+    lbl = sec.add_row("الحالة:", "نشط")
+    lbl.setText("موقوف")
+
+    # أو باستخدام dict:
+    sec.set_data({
+        "الاسم:":   "منتج A",
+        "الكود:":   "P001",
+        "التاريخ:": "2025-01-15",
+    })
 """
 
 from PyQt5.QtWidgets import (
@@ -21,6 +45,11 @@ from .section_header import SectionHeader
 class DetailSection(QFrame):
     """
     قسم تفاصيل موحد — يعرض أزواج (عنوان: قيمة) في grid منظم.
+
+    المعاملات:
+        title    : عنوان القسم (يظهر في SectionHeader)
+        cols     : عدد الأعمدة (1 = عمود واحد، 2 = عمودان)
+        compact  : تباعد أقل بين الصفوف
     """
 
     def __init__(self, title: str = "",
@@ -60,18 +89,31 @@ class DetailSection(QFrame):
         self._grid.setHorizontalSpacing(16)
         self._grid.setVerticalSpacing(6 if self._compact else 10)
 
+        # أعمدة الـ labels التسميات بحجم ثابت، القيم بحجم متمدد
         for c in range(self._cols):
-            self._grid.setColumnStretch(c * 2, 0)
-            self._grid.setColumnStretch(c * 2 + 1, 1)
+            self._grid.setColumnStretch(c * 2, 0)      # label
+            self._grid.setColumnStretch(c * 2 + 1, 1)  # value
 
         root.addLayout(self._grid)
+
+    # ── إضافة صفوف ────────────────────────────────────────
 
     def add_row(self, label: str, value: str = "─",
                 color: str = None,
                 bold: bool = False,
                 icon: str = "") -> QLabel:
+        """
+        يضيف صف تفاصيل ويرجع الـ QLabel للقيمة للتحديث لاحقاً.
+
+        label : عنوان الحقل
+        value : قيمة الحقل
+        color : لون القيمة (None = افتراضي)
+        bold  : هل القيمة بخط عريض
+        icon  : أيقونة قبل القيمة
+        """
         base = _base()
 
+        # Label العنوان
         lbl_key = QLabel(label)
         lbl_key.setStyleSheet(
             f"color:{_C['text_muted']}; font-size:{fs(base,-1)}pt;"
@@ -80,6 +122,7 @@ class DetailSection(QFrame):
         lbl_key.setAlignment(Qt.AlignRight | Qt.AlignTop)
         lbl_key.setMinimumWidth(80)
 
+        # Label القيمة
         display = f"{icon} {value}" if icon else value
         lbl_val = QLabel(display)
         lbl_val.setWordWrap(True)
@@ -91,9 +134,10 @@ class DetailSection(QFrame):
         )
         lbl_val.setAlignment(Qt.AlignRight | Qt.AlignTop)
 
+        # حساب موقع الصف والعمود
         row   = self._count // self._cols
         col   = self._count % self._cols
-        g_col = col * 2
+        g_col = col * 2  # كل عمود يأخذ خانتين (label + value)
 
         self._grid.addWidget(lbl_key, row, g_col,     Qt.AlignRight | Qt.AlignTop)
         self._grid.addWidget(lbl_val, row, g_col + 1, Qt.AlignRight | Qt.AlignTop)
@@ -104,11 +148,22 @@ class DetailSection(QFrame):
 
     def add_separator(self):
         """يضيف فاصل أفقي."""
-        from ui.widgets.shared.panles_helper.divider_utils import make_divider
+        from PyQt5.QtWidgets import QFrame as _F
+        sep = _F()
+        sep.setFrameShape(_F.HLine)
+        sep.setFixedHeight(1)
+        sep.setStyleSheet(f"background:{_C['border']}; border:none;")
         row = (self._count + self._cols - 1) // self._cols
-        self._grid.addWidget(make_divider(), row, 0, 1, self._cols * 2)
+        self._grid.addWidget(sep, row, 0, 1, self._cols * 2)
 
     def set_data(self, data: dict):
+        """
+        يضبط كل الصفوف من dict.
+        {label: value, ...}
+
+        لو الصف موجود بالفعل → يحدّث القيمة فقط.
+        لو مش موجود → يضيف صف جديد.
+        """
         existing_labels = {
             lbl_key.text(): lbl_val
             for lbl_key, lbl_val in self._rows
@@ -120,6 +175,7 @@ class DetailSection(QFrame):
                 self.add_row(label, str(value) if value else "─")
 
     def clear_rows(self):
+        """يمسح كل الصفوف."""
         for lbl_key, lbl_val in self._rows:
             self._grid.removeWidget(lbl_key)
             self._grid.removeWidget(lbl_val)
@@ -129,6 +185,7 @@ class DetailSection(QFrame):
         self._count = 0
 
     def update_value(self, index: int, value: str, color: str = None):
+        """يحدّث قيمة صف بالـ index."""
         if 0 <= index < len(self._rows):
             _, lbl_val = self._rows[index]
             lbl_val.setText(value)
@@ -140,11 +197,13 @@ class DetailSection(QFrame):
                 )
 
     def value_label(self, index: int) -> QLabel | None:
+        """يرجع QLabel القيمة للتحديث المباشر."""
         if 0 <= index < len(self._rows):
             return self._rows[index][1]
         return None
 
     def reset_values(self):
+        """يعيد كل القيم لـ '─'."""
         for _, lbl_val in self._rows:
             lbl_val.setText("─")
 
@@ -156,6 +215,14 @@ class DetailSection(QFrame):
 def make_detail_row(label: str, value: str = "─",
                     color: str = None,
                     bold: bool = False) -> tuple[QLabel, QLabel]:
+    """
+    يبني صف تفاصيل واحد خارج DetailSection.
+    يرجع (label_widget, value_widget).
+
+    الاستخدام:
+        lbl_key, lbl_val = make_detail_row("الاسم:", "منتج A")
+        form_layout.addRow(lbl_key, lbl_val)
+    """
     base = _base()
 
     lbl_key = QLabel(label)
@@ -180,7 +247,15 @@ def make_detail_row(label: str, value: str = "─",
 
 class TwoColDetails(QWidget):
     """
-    عرض تفاصيل في عمودين.
+    عرض تفاصيل في عمودين (مثل بطاقات المعلومات في صفحة التفاصيل).
+
+    الاستخدام:
+        details = TwoColDetails()
+        details.add("الاسم:", "منتج A")
+        details.add("الكود:", "P001", color="#1565c0")
+        details.add("التاريخ:", "2025-01-15")
+        details.add("الحالة:", "نشط", bold=True)
+        layout.addWidget(details)
     """
 
     def __init__(self, parent=None):
@@ -197,6 +272,7 @@ class TwoColDetails(QWidget):
 
     def add(self, label: str, value: str = "─",
             color: str = None, bold: bool = False) -> QLabel:
+        """يضيف عنصر ويرجع label القيمة."""
         base = _base()
         lbl_key = QLabel(label)
         lbl_key.setStyleSheet(
@@ -216,7 +292,7 @@ class TwoColDetails(QWidget):
         lbl_val.setWordWrap(True)
 
         row = self._count // 2
-        col = (self._count % 2) * 2
+        col = (self._count % 2) * 2  # 0 أو 2
 
         self._grid.addWidget(lbl_key, row, col,     Qt.AlignRight)
         self._grid.addWidget(lbl_val, row, col + 1, Qt.AlignRight)
@@ -226,5 +302,6 @@ class TwoColDetails(QWidget):
         return lbl_val
 
     def reset(self):
+        """يعيد كل القيم لـ '─'."""
         for lbl in self._vals:
             lbl.setText("─")

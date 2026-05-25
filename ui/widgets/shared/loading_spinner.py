@@ -1,26 +1,19 @@
 """
 ui/widgets/shared/loading_spinner.py
 =====================================
-LoadingSpinner — مؤشر تحميل موحد للتطبيق.
+LoadingSpinner  — مؤشر تحميل موحد للتطبيق.
 LoadingOverlay  — طبقة تحميل فوق widget موجود.
+LoadingButton   — زر يتحول لـ spinner عند الضغط.
 
-الاستخدام:
-    # مؤشر بسيط:
-    spinner = LoadingSpinner("جارٍ التحميل...")
-    layout.addWidget(spinner)
-    spinner.start()
-    spinner.stop()
-
-    # طبقة فوق widget:
-    overlay = LoadingOverlay(parent_widget)
-    overlay.show_loading("جارٍ الحفظ...")
-    overlay.hide_loading()
+[إصلاح v2]:
+  - import لـ QPushButton نُقل لأعلى الملف بدل منتصفه
 """
 
 from PyQt5.QtWidgets import (
-    QWidget, QLabel, QVBoxLayout, QHBoxLayout, QFrame, QSizePolicy,
+    QWidget, QLabel, QVBoxLayout, QHBoxLayout, QFrame,
+    QSizePolicy, QPushButton,
 )
-from PyQt5.QtCore import Qt, QTimer, pyqtSignal
+from PyQt5.QtCore import Qt, QTimer
 from PyQt5.QtGui  import QFont
 
 from ui.app_settings import _C, fs
@@ -39,9 +32,7 @@ class LoadingSpinner(QWidget):
         spinner = LoadingSpinner("جارٍ التحميل...")
         layout.addWidget(spinner)
         spinner.start()
-        # عند الانتهاء:
         spinner.stop()
-        spinner.setVisible(False)
     """
 
     _FRAMES = ["⠋", "⠙", "⠸", "⠴", "⠦", "⠇"]
@@ -89,12 +80,10 @@ class LoadingSpinner(QWidget):
         self._lbl_icon.setText(self._FRAMES[self._frame])
 
     def start(self):
-        """يبدأ الدوران ويظهر الـ spinner."""
         self.setVisible(True)
         self._timer.start()
 
     def stop(self):
-        """يوقف الدوران."""
         self._timer.stop()
         self._lbl_icon.setText("✓")
 
@@ -117,7 +106,6 @@ class LoadingOverlay(QFrame):
     الاستخدام:
         overlay = LoadingOverlay(my_table)
         overlay.show_loading("جارٍ تحميل البيانات...")
-        # عند الانتهاء:
         overlay.hide_loading()
     """
 
@@ -142,7 +130,6 @@ class LoadingOverlay(QFrame):
         lay.addWidget(self._spinner, alignment=Qt.AlignCenter)
 
     def show_loading(self, text: str = "جارٍ التحميل..."):
-        """يظهر الطبقة ويبدأ التحميل."""
         self._spinner.set_text(text)
         if self.parent():
             self.resize(self.parent().size())
@@ -151,12 +138,10 @@ class LoadingOverlay(QFrame):
         self._spinner.start()
 
     def hide_loading(self):
-        """يخفي الطبقة."""
         self._spinner.stop()
         self.hide()
 
     def resizeEvent(self, event):
-        """يتكيف مع حجم الـ parent."""
         if self.parent():
             self.resize(self.parent().size())
         super().resizeEvent(event)
@@ -166,9 +151,6 @@ class LoadingOverlay(QFrame):
 # LoadingButton — زر يتحول لـ spinner عند الضغط
 # ══════════════════════════════════════════════════════════
 
-from PyQt5.QtWidgets import QPushButton
-
-
 class LoadingButton(QPushButton):
     """
     زر يعرض spinner بدل النص عند تفعيل التحميل.
@@ -176,11 +158,10 @@ class LoadingButton(QPushButton):
     الاستخدام:
         btn = LoadingButton("💾 حفظ")
         btn.clicked.connect(self._on_save)
-        layout.addWidget(btn)
 
         def _on_save(self):
             btn.set_loading(True)
-            # ... عمل غير متزامن ...
+            # ... عمل ...
             btn.set_loading(False)
     """
 
@@ -199,7 +180,6 @@ class LoadingButton(QPushButton):
         self.setText(f"{self._FRAMES[self._frame]}  جارٍ الحفظ...")
 
     def set_loading(self, loading: bool, text: str = None):
-        """يفعّل/يعطّل وضع التحميل."""
         self.setEnabled(not loading)
         if loading:
             self._timer.start()

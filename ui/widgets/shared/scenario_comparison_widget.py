@@ -1,15 +1,10 @@
 """
 ui/widgets/shared/scenario_comparison_widget.py
 ================================================
-ScenarioComparisonWidget — يقارن تكلفة السيناريو الافتراضي بأي سيناريو آخر
-ويحسب الفرق في الربح لو السعر ثابت.
+ScenarioComparisonWidget — يقارن تكلفة السيناريو الافتراضي بأي سيناريو آخر.
 
-[تحديث]: يستخدم stat_card_pair من stat_row بدل _stat_card المحلية.
-
-الاستخدام:
-    widget = ScenarioComparisonWidget(conn)
-    widget.load_product(item_id, current_price)
-    layout.addWidget(widget)
+[إصلاح v2]:
+  - stat_card_pair مستوردة من panels (الـ import الرئيسي الموحد)
 """
 
 from PyQt5.QtWidgets import (
@@ -19,13 +14,12 @@ from PyQt5.QtWidgets import (
 from PyQt5.QtCore import Qt
 
 from models.costing import calc_cost
-from ui.widgets.shared.stat_row import stat_card_pair   # ← الموحد بدل _stat_card المحلية
+from ui.widgets.shared.panels import stat_card_pair
 
 
 class ScenarioComparisonWidget(QFrame):
     """
-    يقارن السيناريو الافتراضي بسيناريو مختار.
-    يعرض:
+    يقارن السيناريو الافتراضي بسيناريو مختار ويعرض:
       - التكلفة في كل سيناريو
       - الفرق في التكلفة (زيادة / توفير)
       - الفرق في الربح (السعر ثابت)
@@ -70,8 +64,7 @@ class ScenarioComparisonWidget(QFrame):
 
         lbl_sc = QLabel("السيناريو المقارن:")
         lbl_sc.setStyleSheet(
-            "font-size:11px; color:#6a1b9a;"
-            "background:transparent; border:none;"
+            "font-size:11px; color:#6a1b9a; background:transparent; border:none;"
         )
 
         self.cmb_scenario = QComboBox()
@@ -79,12 +72,9 @@ class ScenarioComparisonWidget(QFrame):
         self.cmb_scenario.setMinimumWidth(180)
         self.cmb_scenario.setStyleSheet("""
             QComboBox {
-                background: white;
-                border: 1px solid #ce93d8;
-                border-radius: 4px;
-                padding: 2px 8px;
-                font-size: 11px;
-                color: #4a148c;
+                background: white; border: 1px solid #ce93d8;
+                border-radius: 4px; padding: 2px 8px;
+                font-size: 11px; color: #4a148c;
             }
             QComboBox:focus { border-color: #7b1fa2; }
             QComboBox::drop-down { border: none; }
@@ -98,7 +88,7 @@ class ScenarioComparisonWidget(QFrame):
         header_row.addWidget(self.cmb_scenario)
         root.addLayout(header_row)
 
-        # ── الصف الأول: التكاليف — يستخدم stat_card_pair الموحدة ──
+        # ── صف التكاليف ──
         cost_row = QHBoxLayout()
         cost_row.setSpacing(6)
         f1, self.lbl_default_cost = stat_card_pair("تكلفة السيناريو الافتراضي", "#1565c0")
@@ -108,7 +98,7 @@ class ScenarioComparisonWidget(QFrame):
             cost_row.addWidget(f, stretch=1)
         root.addLayout(cost_row)
 
-        # ── الصف الثاني: الربح (السعر ثابت) ──
+        # ── صف الربح ──
         profit_row = QHBoxLayout()
         profit_row.setSpacing(6)
         f4, self.lbl_fixed_price    = stat_card_pair("السعر الثابت",               "#555")
@@ -175,8 +165,7 @@ class ScenarioComparisonWidget(QFrame):
 
         for r in rows:
             star = "⭐ " if r["is_default"] else "📋 "
-            label = f"{star}{r['name']}"
-            self.cmb_scenario.addItem(label, r["id"])
+            self.cmb_scenario.addItem(f"{star}{r['name']}", r["id"])
 
         self.cmb_scenario.blockSignals(False)
         self._refresh_comparison()
@@ -286,12 +275,7 @@ class ScenarioComparisonWidget(QFrame):
     # ══════════════════════════════════════════════════════
 
     def _color_label(self, lbl: QLabel, value: float):
-        if value > 0:
-            color = "#1b5e20"
-        elif value < 0:
-            color = "#b71c1c"
-        else:
-            color = "#555555"
+        color = "#1b5e20" if value > 0 else ("#b71c1c" if value < 0 else "#555555")
         lbl.setStyleSheet(
             f"font-size:13px; font-weight:bold; color:{color};"
             "background:transparent; border:none;"

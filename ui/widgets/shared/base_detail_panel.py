@@ -3,11 +3,8 @@ ui/widgets/shared/base_detail_panel.py
 ========================================
 BaseDetailPanel — قاعدة مشتركة لكل لوحات التفاصيل.
 
-[تحديث v4]:
-  - LoadingOverlay أثناء تحميل البيانات
-  - _set_mode(has_data) موحدة وتشمل الـ loading
-  - NotificationBar مدمجة للرسائل المؤقتة
-  - _fill_header() hook منفصل لملء الهيدر
+[تحديث v5]:
+  - _DetailNotifMixin و _DetailStateMixin مستخرجتان لـ detail_panel_mixins.py
   - BusConnectedMixin للربط التلقائي
   - error handling واضح في load_item
 """
@@ -24,13 +21,29 @@ from ui.widgets.shared.panels import (
     get_scroll_style,
 )
 from ui.widgets.shared.shared_ui_mixins import BusConnectedMixin
+from ui.widgets.shared.detail_panel_mixins import _DetailNotifMixin, _DetailStateMixin
 from ui.app_settings import _C
 
 _BG              = "#f8f9fb"
 DETAIL_MIN_WIDTH = 500
 
 
-class BaseDetailPanel(QWidget, BusConnectedMixin):
+class BaseDetailPanel(QWidget, BusConnectedMixin, _DetailNotifMixin, _DetailStateMixin):
+    """
+    قاعدة موحدة لكل لوحات التفاصيل.
+
+    Override المطلوب:
+        _load_data(item_id)  → يجلب بيانات العنصر
+        _fill_data(data)     → يملأ الـ widgets بالبيانات
+
+    Override الاختياري:
+        _build_header_cards()   → stat cards في الهيدر
+        _build_header_buttons() → أزرار في الهيدر
+        _build_content(lay)     → محتوى صفحة التفاصيل
+        _fill_header(data)      → يملأ الهيدر (افتراضياً data['name'])
+        _on_data_changed()      → استجابة لـ bus
+    """
+
     saved   = pyqtSignal(int)
     deleted = pyqtSignal()
 
@@ -39,7 +52,7 @@ class BaseDetailPanel(QWidget, BusConnectedMixin):
     EMPTY_SUBTITLE : str  = ""
     HEADER_BG      : str  = "#ffffff"
     MIN_CONTENT_W  : int  = DETAIL_MIN_WIDTH
-    CONNECT_BUS    : bool = False  # True = يربط bus.data_changed تلقائياً
+    CONNECT_BUS    : bool = False
 
     def __init__(self, conn=None, parent=None):
         super().__init__(parent)
@@ -57,34 +70,24 @@ class BaseDetailPanel(QWidget, BusConnectedMixin):
     # ── override في الـ subclass ──────────────────────────
 
     def _build_header_cards(self):
-        """Override: يضيف stat cards للهيدر."""
         pass
 
     def _build_header_buttons(self):
-        """Override: يضيف أزرار للهيدر."""
         pass
 
     def _build_content(self, lay: QVBoxLayout):
-        """Override: يبني محتوى صفحة التفاصيل."""
         pass
 
     def _load_data(self, item_id: int):
-        """Override: يجلب بيانات العنصر من DB. يرجع dict أو None."""
         return None
 
     def _fill_data(self, data: dict):
-        """Override: يملأ الـ widgets بالبيانات."""
         pass
 
     def _fill_header(self, data: dict):
-        """
-        Override: يملأ الهيدر بالبيانات.
-        افتراضياً يضبط العنوان من data['name'].
-        """
         self._hdr.set_title(data.get("name", "─"))
 
     def _on_data_changed(self):
-        """Override: الاستجابة لـ bus.data_changed."""
         if self._item_id is not None:
             self.load_item(self._item_id)
 
@@ -169,34 +172,6 @@ class BaseDetailPanel(QWidget, BusConnectedMixin):
         self._item_data = None
         self._notif.hide_bar()
         self._set_mode(has_data=False)
-
-    # ── إشعارات ───────────────────────────────────────────
-
-    def show_success(self, msg: str, auto_hide: int = 3000):
-        self._notif.show(msg, "success", auto_hide)
-
-    def show_error(self, msg: str):
-        self._notif.show(msg, "danger")
-
-    def show_warning(self, msg: str, auto_hide: int = 0):
-        self._notif.show(msg, "warning", auto_hide)
-
-    def show_info(self, msg: str, auto_hide: int = 0):
-        self._notif.show(msg, "info", auto_hide)
-
-    # ── state management ──────────────────────────────────
-
-    def _set_mode(self, has_data: bool):
-        self._scroll.setVisible(has_data)
-        self._hdr.setVisible(has_data)
-        self._empty.setVisible(not has_data)
-
-    # أُبقي عليهما للتوافق مع الكود الموروث
-    def _show_empty(self):
-        self._set_mode(has_data=False)
-
-    def _show_detail(self):
-        self._set_mode(has_data=True)
 
     # ── خصائص ────────────────────────────────────────────
 

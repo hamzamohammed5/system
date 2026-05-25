@@ -3,11 +3,10 @@ ui/widgets/shared/base_list_panel.py
 =====================================
 BaseListPanel — قاعدة مشتركة لكل لوحات القوائم.
 
-[إصلاح v6]:
-  - _get_search_query و _get_category_filter بدل من الاستدعاء المباشر
-    بيستخدموا FilterToolbar.name_query و .category_id مباشرة
+[تحديث v7]:
+  - منطق الفلترة مستخرج لـ list_panel_filter.py (_ListPanelFilterMixin)
   - _build_header موحدة بدل branch مكرر
-  - إزالة تكرار show_search=False / show_search=True logic المنتشرة
+  - إزالة تكرار show_search=False / show_search=True logic
 """
 
 from PyQt5.QtWidgets import (
@@ -17,21 +16,36 @@ from PyQt5.QtCore import Qt, pyqtSignal, QTimer
 
 from .table_utils import (
     make_splitter_table_guarded,
-    auto_fit_columns,
-    fit_splitter_table,
     ROW_HEIGHT_LARGE,
 )
 from .panles_helper.empty_state    import EmptyState
 from .panles_helper.list_header    import ListHeader, StatusBar as ListStatusBar
 from .panles_helper.filter_toolbar import FilterToolbar
-from .shared_ui_mixins import BusConnectedMixin
+from .shared_ui_mixins             import BusConnectedMixin
+from .list_panel_filter            import _ListPanelFilterMixin
 
 from ui.app_settings import _C
 
 _MIN_W = 260
 
 
-class BaseListPanel(QWidget, BusConnectedMixin):
+class BaseListPanel(QWidget, BusConnectedMixin, _ListPanelFilterMixin):
+    """
+    قاعدة مشتركة لكل لوحات القوائم.
+
+    Override المطلوب في الـ subclass:
+        COLUMNS, STRETCH_COL, EMPTY_ICON, EMPTY_TITLE ...
+        _load_rows()  → يجلب الصفوف
+        _fill_row()   → يملأ صف واحد في الجدول
+
+    Override الاختياري:
+        _match_filter()    → تخصيص البحث النصي
+        _match_category()  → تخصيص فلترة التصنيف
+        _on_add_clicked()  → زر الإضافة
+        _on_data_changed() → استجابة لـ bus
+        _build_extra_header_actions() → أزرار إضافية
+    """
+
     item_selected = pyqtSignal(int)
 
     # ── إعدادات الـ subclass ──────────────────────────────
@@ -112,7 +126,6 @@ class BaseListPanel(QWidget, BusConnectedMixin):
         self.setStyleSheet(f"background:{_C['bg_input']};")
 
         # ── Header ──
-        # دايماً نبني ListHeader للعنوان والأزرار
         self._header = ListHeader(
             title=self.LIST_TITLE,
             add_text=self.ADD_TEXT,
@@ -139,7 +152,6 @@ class BaseListPanel(QWidget, BusConnectedMixin):
                 lambda: self._timer.start()
             )
             root.addWidget(self._filter_toolbar)
-            # expose inp_search للتوافق مع الكود القديم
             self.inp_search = self._filter_toolbar.inp_search
         else:
             self._filter_toolbar = None
@@ -175,74 +187,13 @@ class BaseListPanel(QWidget, BusConnectedMixin):
         self._status_bar = ListStatusBar()
         root.addWidget(self._status_bar)
 
-    # ── تحميل وفلترة ────────────────────────────────────
+    # ── تحميل ────────────────────────────────────────────
 
     def refresh(self):
         self._all_rows = self._load_rows()
         if self._filter_toolbar and self.conn:
             self._filter_toolbar.reload(self.conn)
         self._apply_filter()
-
-    def _apply_filter(self):
-        q      = self._get_search_query()
-        cat_id = self._get_category_filter()
-
-        filtered = [
-            row for row in self._all_rows
-            if self._match_filter(row, q) and self._match_category(row, cat_id)
-        ]
-
-        self._fill_table(filtered)
-        self._update_status(len(filtered))
-
-    def _get_search_query(self) -> str:
-        """يرجع نص البحث من أي مصدر متاح."""
-        if self._filter_toolbar:
-            return self._filter_toolbar.name_query
-        if self._header.search_bar:
-            return self._header.search_text()
-        return ""
-
-    def _get_category_filter(self):
-        """يرجع category_id المختار أو None."""
-        if self._filter_toolbar:
-            return self._filter_toolbar.category_id
-        return None
-
-    def _fill_table(self, rows: list):
-        self.table.setRowCount(0)
-        for row_data in rows:
-            r = self.table.rowCount()
-            self.table.insertRow(r)
-            self.table.setRowHeight(r, ROW_HEIGHT_LARGE)
-            self._fill_row(self.table, r, row_data)
-
-        has_data = bool(rows)
-        self.table.setVisible(has_data)
-        self._splitter.setVisible(has_data)
-        self._empty_state.setVisible(not has_data)
-
-        if has_data:
-            fit_splitter_table(self._splitter, self.table, extra_pad=24)
-            self._table_guard.refresh()
-            self._auto_resize()
-
-    def _update_status(self, shown: int):
-        total = len(self._all_rows)
-        self._status_bar.set_count(shown, total)
-        if self._filter_toolbar:
-            self._filter_toolbar.set_count(shown, total)
-
-    def _auto_resize(self):
-        all_cols = [i for i in range(self.table.columnCount())
-                    if i != self.STRETCH_COL]
-        auto_fit_columns(
-            self.table,
-            fixed_cols=all_cols,
-            stretch_col=self.STRETCH_COL,
-            min_width=40,
-            max_width=300,
-        )
 
     # ── selection ────────────────────────────────────────
 

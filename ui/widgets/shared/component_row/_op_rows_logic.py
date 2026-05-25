@@ -1,10 +1,13 @@
 """
-ui/tabs/costing/shared/component_row/_op_rows_logic.py
+ui/widgets/shared/component_row/_op_rows_logic.py
 =======================================================
 منطق تحميل وعرض صفوف عملية التشغيل (machine_op rows).
 
 مُستخرج من component_row.py لتقليل الحجم وتسهيل الصيانة.
 يُستخدم فقط من _row_widget.py.
+
+[تحديث v2]: الـ imports من DB repos أُنقلت لأعلى الملف بدل lazy imports
+متكررة داخل كل دالة — أفضل للأداء وأوضح للقراءة.
 """
 
 from PyQt5 import sip
