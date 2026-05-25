@@ -14,7 +14,7 @@ from PyQt5.QtCore    import Qt
 from PyQt5.QtGui     import QColor
 
 from db.shared.categories_repo import fetch_all_categories, build_tree
-from ui.refactored_widgets.core.conn import LiveConnMixin
+from ..core.conn import LiveConnMixin
 from ui.events import bus
 
 

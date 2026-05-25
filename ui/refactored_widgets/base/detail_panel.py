@@ -14,10 +14,10 @@ from PyQt5.QtWidgets import QWidget, QVBoxLayout, QScrollArea, QSizePolicy
 from PyQt5.QtCore    import Qt, pyqtSignal
 
 from ui.app_settings import _C
-from ui.refactored_widgets.panels.header  import DetailHeader
-from ui.refactored_widgets.panels.state   import EmptyState
-from ui.refactored_widgets.panels.notify  import NotificationBar
-from ui.refactored_widgets.mixins.bus     import BusConnectedMixin
+from ..panels.header  import DetailHeader
+from ..panels.state   import EmptyState
+from ..panels.notify  import NotificationBar
+from ..mixins.bus     import BusConnectedMixin
 
 _BG = "#f8f9fb"
 

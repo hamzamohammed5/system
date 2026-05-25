@@ -14,7 +14,7 @@ from PyQt5.QtWidgets import QWidget, QHBoxLayout, QSizePolicy, QSplitter
 from PyQt5.QtCore    import Qt, QTimer
 
 from ui.app_settings import _C
-from ui.refactored_widgets.mixins.bus import BusConnectedMixin
+from ..mixins.bus import BusConnectedMixin
 
 
 def _splitter_style() -> str:

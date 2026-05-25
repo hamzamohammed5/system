@@ -14,12 +14,12 @@ from PyQt5.QtWidgets import QWidget, QVBoxLayout, QSizePolicy
 from PyQt5.QtCore    import Qt, pyqtSignal, QTimer
 
 from ui.app_settings import _C
-from ui.refactored_widgets.tables.builders  import make_splitter_table_guarded, ROW_HEIGHT_LARGE
-from ui.refactored_widgets.tables.items     import auto_fit_columns, fit_splitter_table
-from ui.refactored_widgets.panels.state     import EmptyState
-from ui.refactored_widgets.panels.header    import ListHeader, StatusBar
-from ui.refactored_widgets.panels.filter    import FilterToolbar
-from ui.refactored_widgets.mixins.bus       import BusConnectedMixin
+from ..tables.builders  import make_splitter_table_guarded, ROW_HEIGHT_LARGE
+from ..tables.items     import auto_fit_columns, fit_splitter_table
+from ..panels.state     import EmptyState
+from ..panels.header    import ListHeader, StatusBar
+from ..panels.filter    import FilterToolbar
+from ..mixins.bus       import BusConnectedMixin
 
 
 class BaseListPanel(QWidget, BusConnectedMixin):

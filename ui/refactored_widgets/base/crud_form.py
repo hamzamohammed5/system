@@ -16,12 +16,12 @@ from PyQt5.QtWidgets import QWidget, QPushButton, QHBoxLayout, QVBoxLayout, QScr
 from PyQt5.QtCore    import pyqtSignal, Qt
 
 from ui.app_settings import _C
-from ui.refactored_widgets.panels.form_parts import FormGroup, ModeLabel
-from ui.refactored_widgets.panels.notify     import NotificationBar
-from ui.refactored_widgets.panels._btn       import make_btn
-from ui.refactored_widgets.mixins.edit       import EditModeMixin
-from ui.refactored_widgets.mixins.validate   import FormValidationMixin
-from ui.refactored_widgets.utils.scroll      import wrap_in_scroll
+from ..panels.form_parts import FormGroup, ModeLabel
+from ..panels.notify     import NotificationBar
+from ..panels._btn       import make_btn
+from ..mixins.edit       import EditModeMixin
+from ..mixins.validate   import FormValidationMixin
+from ..utils.scroll      import wrap_in_scroll
 from ui.events import bus
 
 logger = logging.getLogger(__name__)

@@ -10,7 +10,7 @@ from PyQt5.QtWidgets import QWidget, QHBoxLayout, QLabel, QColorDialog
 from PyQt5.QtCore    import pyqtSignal
 from PyQt5.QtGui     import QColor
 
-from ui.refactored_widgets.panels._btn import make_btn
+from ..panels._btn import make_btn
 
 
 class ColorPickerWidget(QWidget):
