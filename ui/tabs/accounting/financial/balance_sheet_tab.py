@@ -3,7 +3,9 @@ ui/tabs/accounting/financial/balance_sheet_tab.py
 ==================================================
 BalanceSheetTab — تبويب الميزانية العمومية.
 
-إصلاحات (v3): SafeConnMixin بدل conn property يدوي.
+[إعادة هيكلة]: استبدال الهيدر والبطاقات اليدوية بـ:
+  - PageHeader   بدل QLabel اليدوي
+  - StatRow      بدل QHBoxLayout + _stat_card
 """
 
 from PyQt5.QtWidgets import (
@@ -16,8 +18,13 @@ from PyQt5.QtGui  import QColor
 from db.accounting.accounting_repo import balance_sheet
 from ui.helpers import make_table, section_label
 from ui.events  import bus
-from ui.tabs.accounting.helpers import _money, _stat_card
+from ui.widgets.shared.panels import (
+    PageHeader,
+    StatRow, StatItem,
+    NotificationBar,
+)
 from ui.widgets.shared.safe_conn_mixin import SafeConnMixin
+from ._financial_helpers import _money
 
 
 class BalanceSheetTab(SafeConnMixin, QWidget):
@@ -38,29 +45,28 @@ class BalanceSheetTab(SafeConnMixin, QWidget):
         root.setContentsMargins(12, 10, 12, 12)
         root.setSpacing(10)
 
-        hdr = QLabel("🏛️  الميزانية العمومية")
-        hdr.setStyleSheet(
-            "font-size:15px; font-weight:bold; color:#1565c0;"
-            "background:#e8f4fd; border:1px solid #90caf9;"
-            "border-radius:8px; padding:8px 16px;"
+        # ── هيدر الصفحة (بدل QLabel اليدوي) ──
+        self._page_hdr = PageHeader(
+            title="الميزانية العمومية",
+            icon="🏛️",
+            accent="#1565c0",
         )
-        hdr.setAlignment(Qt.AlignCenter)
-        root.addWidget(hdr)
-
-        cards = QHBoxLayout()
-        f1, self.lbl_assets = _stat_card("إجمالي الأصول", "#1565c0")
-        f2, self.lbl_liab   = _stat_card("إجمالي الخصوم", "#c62828")
-        f3, self.lbl_equity = _stat_card("حقوق الملكية",  "#2e7d32")
-        self.lbl_balanced   = QLabel("✅ متوازنة")
-        self.lbl_balanced.setStyleSheet(
-            "font-weight:bold; color:#2e7d32; font-size:12px;"
+        # زر حالة التوازن في هيدر الصفحة
+        self._btn_balanced = self._page_hdr.add_action(
+            "✅ متوازنة", style="ghost"
         )
-        self.lbl_balanced.setAlignment(Qt.AlignCenter)
-        for f in (f1, f2, f3):
-            cards.addWidget(f, stretch=1)
-        cards.addWidget(self.lbl_balanced)
-        root.addLayout(cards)
+        self._btn_balanced.setEnabled(False)
+        root.addWidget(self._page_hdr)
 
+        # ── البطاقات الإحصائية (بدل QHBoxLayout + _stat_card) ──
+        self._stats = StatRow([
+            StatItem("إجمالي الأصول", color="#1565c0", icon="🏦"),
+            StatItem("إجمالي الخصوم", color="#c62828", icon="📋"),
+            StatItem("حقوق الملكية",  color="#2e7d32", icon="👑"),
+        ])
+        root.addWidget(self._stats)
+
+        # ── الجداول ──
         splitter = QSplitter(Qt.Horizontal)
         splitter.setHandleWidth(6)
 
@@ -136,14 +142,24 @@ class BalanceSheetTab(SafeConnMixin, QWidget):
             self.table_liab.setItem(r2, 2, ni_item)
             self.table_liab.setItem(r2, 3, QTableWidgetItem("حقوق ملكية"))
 
-        self.lbl_assets.setText(_money(data["total_assets"]))
-        self.lbl_liab.setText(_money(data["total_liab"]))
-        self.lbl_equity.setText(_money(data["total_equity"]))
+        # ── تحديث البطاقات عبر StatRow ──
+        self._stats.set_value(0, _money(data["total_assets"]))
+        self._stats.set_value(1, _money(data["total_liab"]))
+        self._stats.set_value(2, _money(data["total_equity"]))
 
+        # ── حالة التوازن في هيدر الصفحة ──
         diff = abs(data["total_assets"] - (data["total_liab"] + data["total_equity"]))
         if diff < 0.01:
-            self.lbl_balanced.setText("✅ الميزانية متوازنة")
-            self.lbl_balanced.setStyleSheet("font-weight:bold; color:#2e7d32; font-size:12px;")
+            self._btn_balanced.setText("✅ الميزانية متوازنة")
+            self._btn_balanced.setStyleSheet(
+                "QPushButton { background:#ecfdf5; color:#065f46;"
+                " border:1px solid #6ee7b7; border-radius:6px;"
+                " padding:0 12px; font-weight:bold; }"
+            )
         else:
-            self.lbl_balanced.setText(f"⚠️ فرق: {diff:,.2f}")
-            self.lbl_balanced.setStyleSheet("font-weight:bold; color:#c62828; font-size:12px;")
+            self._btn_balanced.setText(f"⚠️ فرق: {diff:,.2f}")
+            self._btn_balanced.setStyleSheet(
+                "QPushButton { background:#fef2f2; color:#c62828;"
+                " border:1px solid #fca5a5; border-radius:6px;"
+                " padding:0 12px; font-weight:bold; }"
+            )

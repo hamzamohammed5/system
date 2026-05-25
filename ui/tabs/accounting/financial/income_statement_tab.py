@@ -3,11 +3,14 @@ ui/tabs/accounting/financial/income_statement_tab.py
 =====================================================
 IncomeStatementTab — تبويب قائمة الدخل.
 
-إصلاحات (v3): SafeConnMixin بدل conn property يدوي.
+[إعادة هيكلة]: استبدال الهيدر والبطاقات اليدوية بـ:
+  - PageHeader   بدل QLabel اليدوي
+  - StatRow      بدل QHBoxLayout + _stat_card
+  - make_table   من helpers (لا تغيير)
 """
 
 from PyQt5.QtWidgets import (
-    QWidget, QVBoxLayout, QHBoxLayout, QSplitter,
+    QWidget, QVBoxLayout, QSplitter,
     QLabel, QTableWidgetItem,
 )
 from PyQt5.QtCore import Qt
@@ -16,8 +19,12 @@ from PyQt5.QtGui  import QColor
 from db.accounting.accounting_repo import income_statement
 from ui.helpers import make_table, section_label
 from ui.events  import bus
-from ui.tabs.accounting.helpers import _money, _stat_card
+from ui.widgets.shared.panels import (
+    PageHeader,
+    StatRow, StatItem,
+)
 from ui.widgets.shared.safe_conn_mixin import SafeConnMixin
+from ._financial_helpers import _money
 
 
 class IncomeStatementTab(SafeConnMixin, QWidget):
@@ -38,23 +45,22 @@ class IncomeStatementTab(SafeConnMixin, QWidget):
         root.setContentsMargins(12, 10, 12, 12)
         root.setSpacing(10)
 
-        hdr = QLabel("📊  قائمة الدخل")
-        hdr.setStyleSheet(
-            "font-size:15px; font-weight:bold; color:#6a1b9a;"
-            "background:#f3e5f5; border:1px solid #ce93d8;"
-            "border-radius:8px; padding:8px 16px;"
-        )
-        hdr.setAlignment(Qt.AlignCenter)
-        root.addWidget(hdr)
+        # ── هيدر الصفحة (بدل QLabel اليدوي) ──
+        root.addWidget(PageHeader(
+            title="قائمة الدخل",
+            icon="📊",
+            accent="#6a1b9a",
+        ))
 
-        cards = QHBoxLayout()
-        f1, self.lbl_rev = _stat_card("إجمالي الإيرادات",     "#6a1b9a")
-        f2, self.lbl_exp = _stat_card("إجمالي المصروفات",     "#e65100")
-        f3, self.lbl_net = _stat_card("صافي الربح / الخسارة", "#1b5e20")
-        for f in (f1, f2, f3):
-            cards.addWidget(f, stretch=1)
-        root.addLayout(cards)
+        # ── البطاقات الإحصائية (بدل QHBoxLayout + _stat_card اليدوية) ──
+        self._stats = StatRow([
+            StatItem("إجمالي الإيرادات",     color="#6a1b9a", icon="💹"),
+            StatItem("إجمالي المصروفات",     color="#e65100", icon="📤"),
+            StatItem("صافي الربح / الخسارة", color="#1b5e20", icon="📊"),
+        ])
+        root.addWidget(self._stats)
 
+        # ── الجداول ──
         splitter = QSplitter(Qt.Horizontal)
         splitter.setHandleWidth(6)
 
@@ -98,12 +104,10 @@ class IncomeStatementTab(SafeConnMixin, QWidget):
                 ai.setForeground(QColor(color))
                 tbl.setItem(r, 2, ai)
 
-        self.lbl_rev.setText(_money(data["total_rev"]))
-        self.lbl_exp.setText(_money(data["total_exp"]))
+        # ── تحديث البطاقات عبر StatRow ──
+        self._stats.set_value(0, _money(data["total_rev"]))
+        self._stats.set_value(1, _money(data["total_exp"]))
+
         net   = data["net_income"]
         color = "#1b5e20" if net >= 0 else "#b71c1c"
-        self.lbl_net.setText(_money(net))
-        self.lbl_net.setStyleSheet(
-            f"font-size:14px; font-weight:bold; color:{color};"
-            "background:transparent; border:none;"
-        )
+        self._stats.set_value(2, _money(net), color=color)
