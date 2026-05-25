@@ -1,7 +1,8 @@
 """
-ui/widgets/utils/no_wheel.py
-=============================
+ui/refactored_widgets/utils/no_wheel.py
+========================================
 يمنع عجلة الماوس من تغيير قيمة input widgets.
+نسخة موحدة من widgets/shared/no_wheel.py
 """
 from PyQt5.QtCore    import QEvent, QObject, Qt
 from PyQt5.QtWidgets import (
@@ -61,20 +62,25 @@ def install_no_wheel_filter(app: QApplication):
     app.installEventFilter(_wheel_filter_instance)
 
 
+# alias
 install_shift_wheel_filter = install_no_wheel_filter
 
 
 class NoWheelCombo(QComboBox):
     def wheelEvent(self, e): e.ignore()
 
+
 class NoWheelSpin(QSpinBox):
     def wheelEvent(self, e): e.ignore()
+
 
 class NoWheelDouble(QDoubleSpinBox):
     def wheelEvent(self, e): e.ignore()
 
+
 class NoWheelDate(QDateEdit):
     def wheelEvent(self, e): e.ignore()
+
 
 class NoWheelSlider(QSlider):
     def wheelEvent(self, e): e.ignore()

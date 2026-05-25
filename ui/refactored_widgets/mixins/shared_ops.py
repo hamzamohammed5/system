@@ -1,7 +1,8 @@
 """
-ui/widgets/shared/mixins/shared_ops.py
-========================================
+ui/refactored_widgets/mixins/shared_ops.py
+==========================================
 SharedOpsMixin — منطق النشر والتعديل المشترك.
+نسخة محدّثة تستخدم refactored dialogs.
 """
 import logging
 
@@ -10,10 +11,11 @@ logger = logging.getLogger(__name__)
 
 class SharedOpsMixin:
     """
-    Mixin يوحّد منطق عمليات العناصر المشتركة (publish / edit shared).
+    Mixin يوحّد منطق عمليات العناصر المشتركة.
 
-    يفترض: self._published_names: set[str]
-           self._all_rows: list[dict]
+    يفترض:
+        self._published_names: set[str]
+        self._all_rows: list[dict]
     """
 
     def _check_shared_id(self, item_id) -> bool:
@@ -34,7 +36,7 @@ class SharedOpsMixin:
         names = getattr(self, "_published_names", set())
         return str(row.get("name", "")).strip().lower() in names
 
-    def _find_row_by_id(self, item_id) -> dict | None:
+    def _find_row_by_id(self, item_id) -> "dict | None":
         for r in getattr(self, "_all_rows", []):
             if str(r.get("id")) == str(item_id):
                 return r
@@ -57,7 +59,9 @@ class SharedOpsMixin:
             return
 
         try:
-            from db.companies.companies_schema import get_central_connection, create_central_tables
+            from db.companies.companies_schema import (
+                get_central_connection, create_central_tables
+            )
             from ui.tabs.companies.shared_items_dialog import SharedItemsDialog
             central = get_central_connection()
             create_central_tables(central)
@@ -72,7 +76,9 @@ class SharedOpsMixin:
         from ..dialogs.message import msg_warning
         parent = parent or self
         try:
-            from db.companies.companies_schema import get_central_connection, create_central_tables
+            from db.companies.companies_schema import (
+                get_central_connection, create_central_tables
+            )
             from ui.tabs.companies.shared_items_dialog import SharedItemsDialog
             central = get_central_connection()
             create_central_tables(central)
@@ -98,7 +104,9 @@ class SharedOpsMixin:
             return
 
         try:
-            from db.companies.companies_schema import get_central_connection, create_central_tables
+            from db.companies.companies_schema import (
+                get_central_connection, create_central_tables
+            )
             from db.companies.shared_items_repo import create_shared_items_tables
             from ui.tabs.companies.shared_items_manager_helper._add_shared_item_dialog import (
                 PublishAsSharedDialog
@@ -107,8 +115,10 @@ class SharedOpsMixin:
             create_central_tables(central)
             create_shared_items_tables(central)
             PublishAsSharedDialog(
-                central_conn=central, shared_type=shared_type,
-                item_name=row.get("name", ""), item_data=item_data,
+                central_conn=central,
+                shared_type=shared_type,
+                item_name=row.get("name", ""),
+                item_data=item_data,
                 parent=parent,
             ).exec_()
             central.close()
