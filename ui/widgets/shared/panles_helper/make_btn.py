@@ -1,5 +1,9 @@
 """
 ui/widgets/shared/panles_helper/make_btn.py
+
+[تحديث v2]:
+  - _calc_btn_width() دالة مساعدة مشتركة بدل تكرار حساب العرض.
+  - fixed_size=False يستخدم setMinimumWidth بدل setFixedWidth.
 """
 from PyQt5.QtWidgets import QPushButton, QSizePolicy
 from PyQt5.QtCore import Qt
@@ -9,15 +13,11 @@ from ui.app_settings import _C, fs
 from .colors_and_base import _base
 
 
-def _make_btn(text: str, style: str = "normal",
-              fixed_size: bool = True) -> QPushButton:
-    btn = QPushButton(text)
-    btn.setCursor(Qt.PointingHandCursor)
-    base  = _base()
-    btn_h = base * 2 + 8
-    font_size = fs(base, 0)
+_STYLES = None   # cache للـ styles — يُبنى مرة واحدة
 
-    styles = {
+
+def _get_styles(font_size: int, btn_h: int) -> dict:
+    return {
         "primary": f"""
             QPushButton {{
                 background: {_C['accent_light']}; color: {_C['accent_text']};
@@ -103,20 +103,34 @@ def _make_btn(text: str, style: str = "normal",
             }}
         """,
     }
-    btn.setStyleSheet(styles.get(style, styles["normal"]))
 
-    # ── حجم ثابت ──
+
+def _calc_btn_width(text: str, font_size: int, padding: int = 32) -> int:
+    """يحسب العرض المثالي للزر بناءً على النص."""
     f = QFont()
     f.setPointSize(font_size)
-    fm    = QFontMetrics(f)
-    txt_w = fm.horizontalAdvance(text)
-    w     = txt_w + 32   # padding يمين + شمال
+    fm = QFontMetrics(f)
+    return fm.horizontalAdvance(text) + padding
 
+
+def _make_btn(text: str, style: str = "normal",
+              fixed_size: bool = True) -> QPushButton:
+    btn = QPushButton(text)
+    btn.setCursor(Qt.PointingHandCursor)
+    base      = _base()
+    btn_h     = base * 2 + 8
+    font_size = fs(base, 0)
+
+    styles = _get_styles(font_size, btn_h)
+    btn.setStyleSheet(styles.get(style, styles["normal"]))
+
+    w = _calc_btn_width(text, font_size)
     btn.setFixedHeight(btn_h)
-    btn.setFixedWidth(w)
-    btn.setSizePolicy(QSizePolicy.Fixed, QSizePolicy.Fixed)
 
-    if not fixed_size:
+    if fixed_size:
+        btn.setFixedWidth(w)
+        btn.setSizePolicy(QSizePolicy.Fixed, QSizePolicy.Fixed)
+    else:
         btn.setMinimumWidth(w)
         btn.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Fixed)
 

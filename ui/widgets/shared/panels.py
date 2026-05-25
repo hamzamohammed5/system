@@ -3,13 +3,10 @@ ui/widgets/shared/panels.py
 ============================
 مكونات UI مشتركة — re-export من panles_helper وملفات أخرى.
 
-[تحديث v8]:
-  - إضافة CrudSection
-  - إضافة FilterToolbar
-  - إضافة DetailSection, TwoColDetails, make_detail_row
+[تحديث v9]:
+  - إضافة RebuildMixin
+  - إضافة _calc_btn_width
   - تنظيم الـ exports
-
-كل الملفات التانية تستورد من هنا مباشرة — مش من panles_helper.
 """
 
 from .panles_helper.detail_header    import DetailHeader        # noqa: F401
@@ -20,7 +17,7 @@ from .panles_helper.collapsible_card import CollapsibleCard     # noqa: F401
 from .panles_helper.action_toolbar   import ActionToolbar       # noqa: F401
 from .panles_helper.badge_label      import BadgeLabel          # noqa: F401
 from .panles_helper.info_row         import InfoRow             # noqa: F401
-from .panles_helper.make_btn         import _make_btn           # noqa: F401
+from .panles_helper.make_btn         import _make_btn, _calc_btn_width  # noqa: F401
 from .panles_helper.card_grid        import CardGrid            # noqa: F401
 from .panles_helper.status_chip      import (                   # noqa: F401
     StatusChip,
@@ -225,6 +222,9 @@ from .tooltip_helper import (                                   # noqa: F401
 # ── shared ops mixin ──────────────────────────────────────
 from .shared_ops_mixin import SharedOpsMixin                    # noqa: F401
 
+# ── rebuild mixin (جديد) ──────────────────────────────────
+from .rebuild_mixin import RebuildMixin                         # noqa: F401
+
 # ── table utils shortcuts ─────────────────────────────────
 from .table_utils import (                                      # noqa: F401
     make_detail_table,
@@ -279,7 +279,7 @@ __all__ = [
     # panles_helper
     "DetailHeader", "StatCard", "SectionHeader", "EmptyState",
     "CollapsibleCard", "ActionToolbar", "BadgeLabel", "InfoRow",
-    "_make_btn", "CardGrid", "StatusChip",
+    "_make_btn", "_calc_btn_width", "CardGrid", "StatusChip",
     "make_stat_card_simple", "make_status_chip",
     "NotificationBar", "PageHeader",
 
@@ -325,13 +325,13 @@ __all__ = [
     "BaseCrudForm", "BaseListPanel", "BaseDetailPanel",
     "BaseSection", "TabSectionBase",
 
-    # CrudSection (جديد)
+    # CrudSection
     "CrudSection",
 
-    # FilterToolbar (جديد)
+    # FilterToolbar
     "FilterToolbar",
 
-    # DetailSection (جديد)
+    # DetailSection
     "DetailSection", "TwoColDetails", "make_detail_row",
 
     # connection
@@ -391,6 +391,9 @@ __all__ = [
 
     # shared_ops_mixin
     "SharedOpsMixin",
+
+    # rebuild_mixin
+    "RebuildMixin",
 
     # table_utils
     "make_detail_table", "make_compact_table", "make_list_table",

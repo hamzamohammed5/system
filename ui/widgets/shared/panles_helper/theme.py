@@ -3,9 +3,9 @@ ui/widgets/shared/panles_helper/theme.py
 =========================================
 ثيم موحد لكل مكونات UI — مصدر واحد للألوان والستايلات.
 
-[إصلاح v2]:
-  - إضافة make_divider() دالة مشتركة بدل تكرارها في كل ملف
-  - إضافة make_vline_sep() للفواصل العمودية في الـ toolbars
+[إصلاح v3]:
+  - get_tab_style: size="small" alias لـ size="inner" (للتوافق مع tab_builder).
+  - make_divider / make_vline_sep موحدتان مع divider_utils.
 """
 
 from PyQt5.QtWidgets import QFrame
@@ -30,17 +30,11 @@ STATUS_COLORS = {
 
 
 # ══════════════════════════════════════════════════════════
-# فواصل موحدة — تُستخدم في detail_header وغيره
+# فواصل موحدة
 # ══════════════════════════════════════════════════════════
 
 def make_divider(color: str = None, height: int = 1) -> QFrame:
-    """
-    يبني فاصل أفقي (HLine) بلون موحد من الـ theme.
-
-    الاستخدام:
-        root.addWidget(make_divider())
-        root.addWidget(make_divider(color="#e0e0e0"))
-    """
+    """فاصل أفقي (HLine) بلون موحد من الـ theme."""
     c = color or _C.get('border', '#e0e0e0')
     div = QFrame()
     div.setFrameShape(QFrame.HLine)
@@ -51,12 +45,7 @@ def make_divider(color: str = None, height: int = 1) -> QFrame:
 
 def make_vline_sep(color: str = None, width: int = 1,
                    margin_v: int = 4) -> QFrame:
-    """
-    يبني فاصل عمودي (VLine) للـ toolbars.
-
-    الاستخدام:
-        toolbar_lay.addWidget(make_vline_sep())
-    """
+    """فاصل عمودي (VLine) للـ toolbars."""
     c = color or _C.get('border_med', '#bdbdbd')
     sep = QFrame()
     sep.setFrameShape(QFrame.VLine)
@@ -72,7 +61,6 @@ def make_vline_sep(color: str = None, width: int = 1,
 # ══════════════════════════════════════════════════════════
 
 def get_input_style(height: int = 30, radius: int = 6) -> str:
-    """ستايل موحد لـ QLineEdit و QComboBox."""
     base = _base()
     return f"""
         QLineEdit, QComboBox, QDateEdit, QSpinBox, QDoubleSpinBox {{
@@ -101,7 +89,6 @@ def get_input_style(height: int = 30, radius: int = 6) -> str:
 
 
 def get_search_input_style(height: int = 30) -> str:
-    """ستايل خاص لـ input البحث."""
     base = _base()
     return f"""
         QLineEdit {{
@@ -126,7 +113,6 @@ def get_search_input_style(height: int = 30) -> str:
 
 def get_card_style(bg: str = None, border: str = None,
                    radius: int = 10) -> str:
-    """ستايل موحد لبطاقات المعلومات."""
     _bg = bg or _C['bg_surface']
     _border = border or _C['border']
     return f"""
@@ -139,7 +125,6 @@ def get_card_style(bg: str = None, border: str = None,
 
 
 def get_status_card_style(status: str = "info", radius: int = 8) -> str:
-    """ستايل بطاقة حسب الحالة."""
     s = STATUS_COLORS.get(status, STATUS_COLORS["neutral"])
     return f"""
         QFrame {{
@@ -155,7 +140,6 @@ def get_status_card_style(status: str = "info", radius: int = 8) -> str:
 # ══════════════════════════════════════════════════════════
 
 def get_table_header_style() -> str:
-    """ستايل موحد لرأس الجداول."""
     base = _base()
     return f"""
         QHeaderView::section {{
@@ -168,9 +152,7 @@ def get_table_header_style() -> str:
             border-right: 1px solid {_C['border']};
             padding: 6px 10px;
         }}
-        QHeaderView::section:last {{
-            border-right: none;
-        }}
+        QHeaderView::section:last {{ border-right: none; }}
         QHeaderView::section:hover {{
             background: {_C['bg_hover']};
             color: {_C['text_primary']};
@@ -183,7 +165,6 @@ def get_table_header_style() -> str:
 # ══════════════════════════════════════════════════════════
 
 def get_group_box_style(accent: str = None) -> str:
-    """ستايل موحد لـ QGroupBox."""
     base = _base()
     color = accent or _C['accent']
     return f"""
@@ -211,7 +192,6 @@ def get_group_box_style(accent: str = None) -> str:
 # ══════════════════════════════════════════════════════════
 
 def get_filter_bar_style() -> str:
-    """ستايل موحد لشريط الفلاتر."""
     return f"""
         QFrame {{
             background: {_C['bg_surface_2']};
@@ -222,7 +202,6 @@ def get_filter_bar_style() -> str:
 
 
 def get_toolbar_style() -> str:
-    """ستايل موحد لشريط الأدوات."""
     return f"""
         QFrame {{
             background: {_C['bg_input']};
@@ -236,7 +215,6 @@ def get_toolbar_style() -> str:
 # ══════════════════════════════════════════════════════════
 
 def get_scroll_style(width: int = 6) -> str:
-    """ستايل موحد لـ QScrollArea."""
     return f"""
         QScrollArea {{ border: none; background: transparent; }}
         QScrollBar:vertical {{
@@ -263,7 +241,6 @@ def get_scroll_style(width: int = 6) -> str:
 # ══════════════════════════════════════════════════════════
 
 def get_splitter_style() -> str:
-    """ستايل موحد لـ QSplitter."""
     return f"""
         QSplitter::handle {{ background: {_C['border']}; }}
         QSplitter::handle:hover {{ background: {_C['accent_mid']}; }}
@@ -277,7 +254,6 @@ def get_splitter_style() -> str:
 
 def get_icon_btn_style(color: str = "#aaa",
                        hover_color: str = "#e53935") -> str:
-    """ستايل زر أيقونة شفاف (مثل زر الحذف والمسح)."""
     return (
         f"QPushButton {{ background:transparent; border:none; color:{color}; }}"
         f"QPushButton:hover {{ color:{hover_color}; }}"
@@ -285,7 +261,6 @@ def get_icon_btn_style(color: str = "#aaa",
 
 
 def get_link_btn_style(color: str = None) -> str:
-    """ستايل زر رابط (بدون خلفية)."""
     c = color or _C['accent']
     base = _base()
     return f"""
@@ -306,11 +281,19 @@ def get_link_btn_style(color: str = None) -> str:
 # ══════════════════════════════════════════════════════════
 
 def get_tab_style(accent: str = None, size: str = "normal") -> str:
-    """ستايل موحد للتبويبات."""
+    """
+    ستايل موحد للتبويبات.
+
+    size: "normal" | "inner" | "small"  (small = alias لـ inner)
+    """
     base = _base()
     c = accent or _C['accent']
-    padding = "8px 16px" if size == "normal" else "6px 12px"
-    font_size = fs(base, 0) if size == "normal" else fs(base, -1)
+    # "small" هو alias لـ "inner" للتوافق مع tab_builder
+    is_small = size in ("inner", "small")
+    padding   = "6px 12px" if is_small else "8px 16px"
+    font_size = fs(base, -1) if is_small else fs(base, 0)
+    min_width = "60px" if is_small else "80px"
+
     return f"""
         QTabWidget::pane {{
             border: none;
@@ -324,7 +307,7 @@ def get_tab_style(accent: str = None, size: str = "normal") -> str:
             margin-left: 2px;
             font-size: {font_size}pt;
             color: {_C['text_muted']};
-            min-width: 80px;
+            min-width: {min_width};
         }}
         QTabBar::tab:selected {{
             background: {_C['bg_input']};
@@ -344,7 +327,6 @@ def get_tab_style(accent: str = None, size: str = "normal") -> str:
 # ══════════════════════════════════════════════════════════
 
 def get_tree_style() -> str:
-    """ستايل موحد لـ QTreeWidget."""
     return f"""
         QTreeWidget {{
             border: 1px solid {_C['border']};
@@ -368,7 +350,6 @@ def get_tree_style() -> str:
 # ══════════════════════════════════════════════════════════
 
 def get_list_style() -> str:
-    """ستايل موحد لـ QListWidget."""
     return f"""
         QListWidget {{
             border: 1px solid {_C['border']};
@@ -391,12 +372,11 @@ def get_list_style() -> str:
 
 
 # ══════════════════════════════════════════════════════════
-# رسائل الحالة (Status Labels)
+# رسائل الحالة
 # ══════════════════════════════════════════════════════════
 
 def get_status_label_style(status: str = "info",
                             font_size_offset: int = 0) -> str:
-    """ستايل label الحالة."""
     base = _base()
     s = STATUS_COLORS.get(status, STATUS_COLORS["neutral"])
     return (
@@ -407,7 +387,6 @@ def get_status_label_style(status: str = "info",
 
 
 def get_muted_label_style(font_size_offset: int = -1) -> str:
-    """ستايل label ثانوي."""
     base = _base()
     return (
         f"color: {_C['text_muted']}; font-size: {fs(base, font_size_offset)}pt;"
@@ -417,7 +396,6 @@ def get_muted_label_style(font_size_offset: int = -1) -> str:
 
 def get_section_title_style(color: str = None,
                              font_size_offset: int = 0) -> str:
-    """ستايل عنوان القسم."""
     base = _base()
     c = color or _C['text_primary']
     return (
