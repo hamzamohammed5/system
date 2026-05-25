@@ -41,7 +41,7 @@ class SharedOpsMixin:
         return None
 
     def _edit_shared_item(self, item_id, shared_type: str, parent=None):
-        from ui.widgets.shared.dialogs.message import msg_info, msg_warning
+        from ..dialogs.message import msg_info, msg_warning
         parent = parent or self
 
         if not self._check_shared_id(item_id):
@@ -69,7 +69,7 @@ class SharedOpsMixin:
             msg_warning(parent, "خطأ", str(e))
 
     def _edit_published_item(self, row: dict, shared_type: str, parent=None):
-        from ui.widgets.shared.dialogs.message import msg_warning
+        from ..dialogs.message import msg_warning
         parent = parent or self
         try:
             from db.companies.companies_schema import get_central_connection, create_central_tables
@@ -90,7 +90,7 @@ class SharedOpsMixin:
 
     def _publish_item(self, row: dict, shared_type: str,
                       item_data: dict, parent=None):
-        from ui.widgets.shared.dialogs.message import msg_warning
+        from ..dialogs.message import msg_warning
         parent = parent or self
 
         if self._is_published(row):

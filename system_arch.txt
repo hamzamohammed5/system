@@ -1,5 +1,5 @@
 File Tree Snapshot
-Generated : 2026-05-25 13:40:28
+Generated : 2026-05-25 14:38:59
 Source    : D:\My Workspace\Hg\Alhabaar\accountant\system
 Extensions: .py
 ────────────────────────────────────────────────────────────
@@ -333,30 +333,23 @@ system/
 │   │       ├── panles_helper/
 │   │       │   ├── action_toolbar.py
 │   │       │   ├── amount_display.py
-│   │       │   ├── badge_label.py
 │   │       │   ├── card_grid.py
 │   │       │   ├── collapsible_card.py
-│   │       │   ├── colors_and_base.py
 │   │       │   ├── crud_section.py
 │   │       │   ├── data_table_widget.py
 │   │       │   ├── detail_header.py
 │   │       │   ├── detail_section.py
-│   │       │   ├── dialog_shell.py
 │   │       │   ├── divider_utils.py
 │   │       │   ├── empty_state.py
 │   │       │   ├── filter_toolbar.py
 │   │       │   ├── form_row.py
 │   │       │   ├── info_row.py
 │   │       │   ├── list_header.py
-│   │       │   ├── make_btn.py
 │   │       │   ├── mode_label.py
-│   │       │   ├── notification_bar.py
 │   │       │   ├── page_header.py
 │   │       │   ├── progress_bar.py
 │   │       │   ├── section_header.py
-│   │       │   ├── stat_card.py
 │   │       │   ├── stat_card_row.py
-│   │       │   ├── status_chip.py
 │   │       │   └── theme.py
 │   │       ├── table_utils/
 │   │       ├── table_utils_helper/
@@ -374,30 +367,18 @@ system/
 │   │       ├── color_picker_widget.py
 │   │       ├── company_utils.py
 │   │       ├── confirm_dialog.py
-│   │       ├── connection_mixin.py
-│   │       ├── date_range_filter.py
 │   │       ├── detail_panel_mixins.py
 │   │       ├── dialog_base.py
 │   │       ├── empty_state_helpers.py
 │   │       ├── filter_bar.py
 │   │       ├── flexible_text.py
-│   │       ├── flow_layout.py
 │   │       ├── form_utils.py
 │   │       ├── input_widgets.py
 │   │       ├── list_panel_filter.py
 │   │       ├── list_panel_with_shared.py
 │   │       ├── loading_spinner.py
 │   │       ├── message_box.py
-│   │       ├── no_wheel.py
 │   │       ├── panels.py
-│   │       ├── rebuild_mixin.py
-│   │       ├── safe_conn_mixin.py
-│   │       ├── scrollable_form.py
-│   │       ├── searchable_combo.py
-│   │       ├── shared_ops_mixin.py
-│   │       ├── shared_ui_mixins.py
-│   │       ├── splitter_scroll_guard.py
-│   │       ├── splitter_utils.py
 │   │       ├── stat_row.py
 │   │       ├── tab_builder.py
 │   │       ├── tab_section_base.py
