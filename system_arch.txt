@@ -1,5 +1,5 @@
 File Tree Snapshot
-Generated : 2026-05-25 12:12:30
+Generated : 2026-05-25 12:59:16
 Source    : D:\My Workspace\Hg\Alhabaar\accountant\system
 Extensions: .py
 ────────────────────────────────────────────────────────────
@@ -68,6 +68,31 @@ system/
 │   │   ├── _section_label.py
 │   │   ├── _sidebar.py
 │   │   └── _toggle_button.py
+│   ├── refactored_widgets/
+│   │   ├── components/
+│   │   │   ├── badge.py
+│   │   │   ├── button.py
+│   │   │   ├── card.py
+│   │   │   ├── label.py
+│   │   │   ├── notification.py
+│   │   │   ├── spinner.py
+│   │   │   └── stat_row.py
+│   │   ├── core/
+│   │   │   ├── colors.py
+│   │   │   ├── conn.py
+│   │   │   ├── events.py
+│   │   │   └── settings.py
+│   │   ├── mixins/
+│   │   │   ├── bus.py
+│   │   │   ├── edit.py
+│   │   │   ├── rebuild.py
+│   │   │   ├── refresh.py
+│   │   │   ├── select.py
+│   │   │   ├── shared_ops.py
+│   │   │   └── validate.py
+│   │   └── theme/
+│   │       ├── builders.py
+│   │       └── styles.py
 │   ├── tabs/
 │   │   ├── accounting/
 │   │   │   ├── financial/
