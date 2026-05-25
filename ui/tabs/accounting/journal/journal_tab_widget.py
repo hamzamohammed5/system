@@ -5,19 +5,22 @@ JournalTab — التبويب الرئيسي لليومية.
 
 مُستخرج من journal_tree_table.py لتقليل حجمه.
 يستورد _JournalTreeTable و _JournalForm ويجمعهم في splitter.
+
+[إصلاح v2]:
+  - DualConnMixin بدل _get_erp_conn() المعرَّفة يدوياً مع fallback يدوي.
 """
 
 from PyQt5.QtWidgets import QWidget, QVBoxLayout, QSplitter
 from PyQt5.QtCore import Qt, QTimer
 
-from ui.widgets.shared.safe_conn_mixin import SafeConnMixin
+from ui.widgets.shared.safe_conn_mixin import DualConnMixin
 from ui.events import bus
 
 from .journal_tree_table import _JournalTreeTable
 from .journal_form       import _JournalForm
 
 
-class JournalTab(SafeConnMixin, QWidget):
+class JournalTab(DualConnMixin, QWidget):
     """
     التبويب الرئيسي لليومية — splitter رأسي بين الفورم والجدول.
 
@@ -27,9 +30,7 @@ class JournalTab(SafeConnMixin, QWidget):
 
     def __init__(self, conn, erp_conn=None, parent=None):
         super().__init__(parent)
-        self._init_safe_conn(conn, "accounting")
-        self._erp_conn   = erp_conn
-        self._company_id = self._get_company_id()
+        self._init_dual_conn(conn, erp_conn)
         self._splitter   = None
         self._form       = None
         self._tree_table = None
@@ -37,23 +38,8 @@ class JournalTab(SafeConnMixin, QWidget):
         bus.company_data_changed.connect(self._on_company_event)
 
     def _on_company_event(self, company_id: int):
-        if self._on_company_event_safe(company_id):
+        if self._on_dual_company_event(company_id):
             QTimer.singleShot(0, self._rebuild_children)
-
-    def _get_erp_conn(self):
-        try:
-            if self._erp_conn is not None:
-                self._erp_conn.execute("SELECT 1")
-                return self._erp_conn
-        except Exception:
-            pass
-        try:
-            from db.companies.company_state import company_state
-            new = company_state._get_conn("erp")
-            self._erp_conn = new
-            return new
-        except Exception:
-            return self._erp_conn
 
     def _build(self):
         root = QVBoxLayout(self)
@@ -66,11 +52,8 @@ class JournalTab(SafeConnMixin, QWidget):
             QSplitter::handle:hover { background:#bbdefb; }
         """)
 
-        conn = self._get_safe_conn()
-        erp  = self._get_erp_conn()
-
-        self._form       = _JournalForm(conn, erp)
-        self._tree_table = _JournalTreeTable(conn)
+        self._form       = _JournalForm(self._get_safe_conn(), self._get_erp_conn())
+        self._tree_table = _JournalTreeTable(self._get_safe_conn())
 
         self._splitter.addWidget(self._form)
         self._splitter.addWidget(self._tree_table)
@@ -98,11 +81,8 @@ class JournalTab(SafeConnMixin, QWidget):
             self._tree_table = None
             old_table.deleteLater()
 
-        conn = self._get_safe_conn()
-        erp  = self._get_erp_conn()
-
-        self._form       = _JournalForm(conn, erp)
-        self._tree_table = _JournalTreeTable(conn)
+        self._form       = _JournalForm(self._get_safe_conn(), self._get_erp_conn())
+        self._tree_table = _JournalTreeTable(self._get_safe_conn())
 
         self._splitter.addWidget(self._form)
         self._splitter.addWidget(self._tree_table)

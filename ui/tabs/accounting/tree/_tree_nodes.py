@@ -5,16 +5,15 @@ ui/tabs/accounting/tree/_tree_nodes.py
 
 مستخرجة من _tree_builder.py لتقليل حجم الملف وتسهيل الصيانة.
 
-المتوفر:
-  rows_to_tree(rows)                → يحوّل rows إلى شجرة nested
-  filter_by_group(conn, nodes, gid) → يفلتر الشجرة بالمجموعة
+[إصلاح v2]:
+  - نقل استيراد _get_group_descendants للأعلى بدل داخل الدالة.
 """
 
 from PyQt5.QtWidgets import QTreeWidget, QTreeWidgetItem
 from PyQt5.QtCore import Qt
 from PyQt5.QtGui  import QColor
 
-from db.accounting.accounting_repo import get_account_balance
+from db.accounting.accounting_repo import get_account_balance, _get_group_descendants
 from ui.tabs.accounting.helpers import TYPE_COLORS
 
 
@@ -50,7 +49,6 @@ def rows_to_tree(rows) -> list:
 
 
 def filter_by_group(conn, nodes: list, gid: int) -> list:
-    from db.accounting.accounting_repo import _get_group_descendants
     try:
         desc = _get_group_descendants(conn, gid)
     except Exception:

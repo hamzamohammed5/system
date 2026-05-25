@@ -6,11 +6,13 @@ ui/tabs/accounting_section.py
 [تحديث v12]:
   - _TAB_STYLE حُذف — يستخدم get_tab_style() من theme مباشرة.
   - _build_tabs موحدة مع make_tabs من tab_builder.
+
+[تحديث v13]:
+  - حذف الاستيراد المكرر لـ get_tab_style (كان يُستورد من panels ثم يُستبدل من theme).
+  - استخدام _state_widgets بدل بناء QLabel الأخطاء يدوياً.
 """
 
-from PyQt5.QtWidgets import (
-    QWidget, QVBoxLayout, QTabWidget, QLabel,
-)
+from PyQt5.QtWidgets import QWidget, QVBoxLayout, QTabWidget
 from PyQt5.QtCore import Qt, QTimer
 
 from .accounting.journal_tab   import JournalTab
@@ -29,8 +31,14 @@ from .accounting._conn_guard import (
     verify_conn_belongs_to_company,
     init_schemas,
 )
-from ui.widgets.shared.panels import make_tabs, get_tab_style
-from ui.widgets.shared.panles_helper.theme import get_tab_style
+from .accounting._state_widgets import (
+    make_no_company_widget,
+    make_conn_error_widget,
+    make_init_failed_widget,
+    make_loading_widget,
+)
+from ui.widgets.shared.panels import make_tabs
+from ui.widgets.shared.panles_helper.theme import get_tab_style  # noqa: F401
 
 
 class AccountingTab(QWidget):
@@ -64,10 +72,7 @@ class AccountingTab(QWidget):
         root.setContentsMargins(0, 0, 0, 0)
 
         if not is_ready():
-            lbl = QLabel("⚠️  اختر شركة أولاً لعرض الحسابات")
-            lbl.setAlignment(Qt.AlignCenter)
-            lbl.setStyleSheet("font-size:14px; color:#888; padding:40px;")
-            root.addWidget(lbl)
+            root.addWidget(make_no_company_widget())
             return
 
         self._company_id = get_current_company_id()
@@ -76,49 +81,28 @@ class AccountingTab(QWidget):
             acc = get_acc_conn()
             erp = get_erp_conn()
         except Exception as e:
-            lbl = QLabel(f"❌  خطأ في الاتصال بقاعدة البيانات:\n{e}")
-            lbl.setAlignment(Qt.AlignCenter)
-            lbl.setWordWrap(True)
-            lbl.setStyleSheet(
-                "font-size:13px; color:#c62828; padding:40px;"
-                "background:#fdecea; border-radius:8px; margin:20px;"
-            )
-            root.addWidget(lbl)
+            root.addWidget(make_conn_error_widget(e))
             return
 
         if not verify_conn_belongs_to_company(acc, self._company_id):
             if self._build_attempts >= 5:
-                lbl = QLabel(
-                    "❌  تعذّر تهيئة قاعدة بيانات المحاسبة\n"
-                    "جرّب إعادة تشغيل البرنامج أو تحديد الشركة مجدداً"
-                )
-                lbl.setAlignment(Qt.AlignCenter)
-                lbl.setWordWrap(True)
-                lbl.setStyleSheet(
-                    "font-size:13px; color:#c62828; padding:40px;"
-                    "background:#fdecea; border-radius:8px; margin:20px;"
-                )
-                root.addWidget(lbl)
+                root.addWidget(make_init_failed_widget())
                 self._build_attempts = 0
                 return
 
             QTimer.singleShot(120, self._build)
-            lbl = QLabel(f"⏳  جاري تهيئة قاعدة البيانات... ({self._build_attempts}/5)")
-            lbl.setAlignment(Qt.AlignCenter)
-            lbl.setStyleSheet("font-size:13px; color:#888; padding:40px;")
-            root.addWidget(lbl)
+            root.addWidget(make_loading_widget(self._build_attempts))
             return
 
         self._build_attempts = 0
         init_schemas(acc, erp, self._initialized)
 
-        # ← يستخدم make_tabs من tab_builder بدل QTabWidget يدوي
         main_tabs = make_tabs(
-            ("🏦  الحسابات",     build_accounts_tabs(acc)),
-            ("📒  قيود اليومية", JournalTab(acc, erp)),
-            ("📘  دفتر الأستاذ", LedgerTab(acc)),
+            ("🏦  الحسابات",        build_accounts_tabs(acc)),
+            ("📒  قيود اليومية",    JournalTab(acc, erp)),
+            ("📘  دفتر الأستاذ",    LedgerTab(acc)),
             ("📊  القوائم المالية", build_financial_tab(acc)),
-            ("👥  المستثمرون",  InvestorsTab(erp, acc)),
+            ("👥  المستثمرون",      InvestorsTab(erp, acc)),
             style="main",
         )
         self._main_tabs = main_tabs

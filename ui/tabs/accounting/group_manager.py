@@ -6,6 +6,10 @@ _GroupManagerPanel — إدارة تصنيفات الحسابات.
 [تحسين v5]:
   - ColorPickerWidget بدل لون picker مكرر يدوياً.
   - باقي التحسينات كما هي (FormGroup, ModeLabel, SafeConnMixin).
+
+[إصلاح v6]:
+  - _load(): عدّاد الـ status bar يحسب إجمالي التصنيفات (بما فيها الفرعية)
+    بدل topLevelItemCount() التي تعدّ الرئيسية فقط.
 """
 
 from PyQt5.QtWidgets import (
@@ -54,11 +58,9 @@ class _GroupManagerPanel(SafeConnMixin, QWidget):
         root.setContentsMargins(8, 8, 8, 8)
         root.setSpacing(8)
 
-        # ── هيدر القسم ──
         hdr = SectionHeader(f"تصنيفات {TYPE_AR.get(self.acc_type, '')}")
         root.addWidget(hdr)
 
-        # ── الشجرة ──
         self.tree = QTreeWidget()
         self.tree.setHeaderLabels(["التصنيف", "عدد الحسابات"])
         self.tree.header().setSectionResizeMode(0, QHeaderView.Stretch)
@@ -68,7 +70,6 @@ class _GroupManagerPanel(SafeConnMixin, QWidget):
         self.tree.setStyleSheet(get_tree_style())
         root.addWidget(self.tree, stretch=1)
 
-        # ── أزرار التعديل والحذف ──
         btn_row  = QHBoxLayout()
         btn_edit = _make_btn("✏️ تعديل", "normal")
         btn_del  = _make_btn("🗑️ حذف",  "danger")
@@ -79,11 +80,9 @@ class _GroupManagerPanel(SafeConnMixin, QWidget):
         btn_row.addStretch()
         root.addLayout(btn_row)
 
-        # ── شريط الحالة ──
         self._status = ListStatusBar()
         root.addWidget(self._status)
 
-        # ── فورم الإضافة/التعديل (FormGroup الموحد) ──
         grp = FormGroup(f"➕ إضافة / تعديل تصنيف {TYPE_AR.get(self.acc_type, '')}")
 
         self._lbl_mode = ModeLabel(add_text="تصنيف جديد")
@@ -98,11 +97,9 @@ class _GroupManagerPanel(SafeConnMixin, QWidget):
         self.cmb_parent.setMinimumHeight(28)
         grp.add_row("تابع لـ:", self.cmb_parent)
 
-        # ── ColorPickerWidget الموحد ──
         self._color_picker = ColorPickerWidget(default="#607d8b")
         grp.add_row("اللون:", self._color_picker)
 
-        # ── أزرار الفورم ──
         btn_w = QWidget()
         btn_w.setStyleSheet("background: transparent;")
         bl    = QHBoxLayout(btn_w)
@@ -132,7 +129,9 @@ class _GroupManagerPanel(SafeConnMixin, QWidget):
         self.tree.expandAll()
         self._refresh_parent_combo()
 
-        total = self.tree.topLevelItemCount()
+        # [إصلاح v6] نحسب إجمالي التصنيفات من rows مباشرة (يشمل الفرعية)
+        # بدل topLevelItemCount() التي تعدّ الرئيسية فقط
+        total = len(rows)
         self._status.set_count(total, total)
 
     def _add_tree_nodes(self, nodes, parent):

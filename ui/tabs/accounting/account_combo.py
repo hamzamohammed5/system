@@ -3,6 +3,10 @@ ui/tabs/accounting/account_combo.py
 =====================================
 _AccountCombo — Combo قابل للبحث والفلترة لاختيار الحسابات.
 SafeConnMixin (v4): _get_safe_conn() بدل self.conn في كل query.
+
+[إصلاح v5]:
+  - _on_company_event(): حذف snapshot_id الزائد —
+    _on_company_event_safe() تتحقق بالفعل من تطابق الشركة.
 """
 
 from PyQt5.QtWidgets import (
@@ -35,13 +39,10 @@ class _AccountCombo(SafeConnMixin, QWidget):
         bus.company_data_changed.connect(self._on_company_event)
 
     def _on_company_event(self, company_id: int):
+        # [إصلاح v5] _on_company_event_safe() تتحقق بالفعل من تطابق الشركة
+        # لا حاجة لـ snapshot_id إضافي
         if self._on_company_event_safe(company_id):
-            snapshot_id = company_id
-            QTimer.singleShot(0, lambda: self._safe_refresh(snapshot_id))
-
-    def _safe_refresh(self, snapshot_id: int):
-        if self._get_company_id() == snapshot_id:
-            self.refresh()
+            QTimer.singleShot(0, self.refresh)
 
     def _build(self):
         lay = QHBoxLayout(self)

@@ -3,6 +3,9 @@ ui/tabs/accounting/tree/_account_form.py
 ==================================================
 _AccountForm — فورم إضافة / تعديل حساب محاسبي.
 SafeConnMixin (v3): _get_safe_conn() بدل self.conn.
+
+[إصلاح v4]:
+  - استبدال SQL المباشر داخل _add() بـ fetch_account_by_code() من repo.
 """
 
 from PyQt5.QtWidgets import (
@@ -17,6 +20,7 @@ from db.accounting.accounting_repo import (
     fetch_account, insert_account, update_account,
     fetch_all_groups, build_group_tree,
 )
+from db.accounting.accounting_repo_ui_helpers import fetch_account_by_code
 from db.accounting.accounting_schema import TYPE_AR
 from ui.helpers import danger_button
 from ui.events  import bus
@@ -161,18 +165,14 @@ class _AccountForm(SafeConnMixin, QWidget):
         if not code or not name:
             QMessageBox.warning(self, "تنبيه", "أدخل الكود والاسم")
             return
-        acc_type  = self.cmb_type.currentData()
-        group_id  = self.cmb_group.currentData()
-        parent_id = None
+        acc_type    = self.cmb_type.currentData()
+        group_id    = self.cmb_group.currentData()
+        parent_id   = None
         parent_code = code[:-1] if len(code) > 1 else None
         if parent_code:
-            try:
-                row = conn.execute(
-                    "SELECT id FROM accounts WHERE code=?", (parent_code,)
-                ).fetchone()
-                parent_id = row["id"] if row else None
-            except Exception:
-                pass
+            # [إصلاح v4] fetch_account_by_code بدل SQL مباشر
+            parent_row = fetch_account_by_code(conn, parent_code)
+            parent_id  = parent_row["id"] if parent_row else None
         try:
             insert_account(conn, code, name, acc_type, parent_id, group_id)
             self.inp_code.clear()

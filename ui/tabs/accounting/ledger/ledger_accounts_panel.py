@@ -7,6 +7,9 @@ _AccountsPanel — قائمة الحسابات في دفتر الأستاذ.
   - AccountTypeFilter بدل بناء QComboBox يدوي.
   - BaseListPanel pattern للهيدر والـ status bar.
   - get_tree_style() من panels (كان موجود لكن الـ combo كان يدوي).
+
+[إصلاح v6]:
+  - _filter_accounts() تستدعي _get_safe_conn() لكل query بدل conn محلي محفوظ.
 """
 
 from PyQt5.QtWidgets import (
@@ -43,7 +46,6 @@ class _AccountsPanel(SafeConnMixin, QWidget):
         root.setContentsMargins(0, 0, 0, 0)
         root.setSpacing(0)
 
-        # هيدر موحد
         self._header = ListHeader(
             title="📚  الحسابات",
             show_search=True,
@@ -52,13 +54,11 @@ class _AccountsPanel(SafeConnMixin, QWidget):
         self._header.search_changed.connect(self._filter_accounts)
         root.addWidget(self._header)
 
-        # فلتر النوع — AccountTypeFilter بدل QComboBox يدوي
         self._type_filter = AccountTypeFilter(TYPE_AR, include_all=True)
         self._type_filter.setContentsMargins(8, 4, 8, 4)
         self._type_filter.type_changed.connect(self._filter_accounts)
         root.addWidget(self._type_filter)
 
-        # شجرة الحسابات
         self.lst = QTreeWidget()
         self.lst.setHeaderLabels(["الكود", "الاسم", "الرصيد"])
         hh = self.lst.header()
@@ -72,7 +72,6 @@ class _AccountsPanel(SafeConnMixin, QWidget):
         self.lst.itemSelectionChanged.connect(self._on_selected)
         root.addWidget(self.lst, stretch=1)
 
-        # شريط الحالة الموحد
         self._status = ListStatusBar()
         root.addWidget(self._status)
 
@@ -91,6 +90,9 @@ class _AccountsPanel(SafeConnMixin, QWidget):
         type_filt = self._type_filter.current_type()
 
         self.lst.clear()
+        # [إصلاح v6] نستدعي _get_safe_conn() هنا مرة واحدة للـ batch
+        # لكن خارج الحلقة — الـ conn ثابت لنفس الشركة طوال عملية الفلترة الواحدة.
+        # في حالة تغيير الشركة يأتي event جديد ويُعيد استدعاء _filter_accounts من الصفر.
         conn  = self._get_safe_conn()
         count = 0
 

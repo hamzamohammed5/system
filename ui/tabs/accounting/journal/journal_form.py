@@ -6,6 +6,10 @@ _JournalForm — فورم إدخال القيد اليومي الكامل.
 [إصلاح v6]:
   - DualConnMixin بدل _get_erp_conn() المكرر يدوياً.
   - emit_company_data_changed() من company_utils بدل الدالة المحلية.
+
+[إصلاح v7]:
+  - _post_investor_links() دالة مستقلة بدل 30 سطراً داخل _save().
+  - fetch_capital/drawings_line_for_entry() من repo_ui_helpers بدل SQL مباشر.
 """
 
 from PyQt5.QtWidgets import (
@@ -15,6 +19,10 @@ from PyQt5.QtCore import Qt
 
 from db.accounting.accounting_repo import (
     insert_entry, add_entry_lines, validate_entry_balance,
+)
+from db.accounting.accounting_repo_ui_helpers import (
+    fetch_capital_line_for_entry,
+    fetch_drawings_line_for_entry,
 )
 from ui.helpers import buttons_row
 from ui.widgets.shared.safe_conn_mixin import DualConnMixin
@@ -43,21 +51,17 @@ class _JournalForm(DualConnMixin, QWidget):
         )
         root.addWidget(self.lbl_mode)
 
-        # ── رأس الفورم (التاريخ + الوصف) ──
         self._hdr = _JournalHeader()
         root.addWidget(self._hdr)
 
-        # ── صفوف القيد ──
         self._lines_panel = _LinesPanel(
             self._get_safe_conn(), self._get_erp_conn(), self._on_balance_changed
         )
         root.addWidget(self._lines_panel)
 
-        # ── شريط التوازن ──
         self._balance_bar = _BalanceBar()
         root.addWidget(self._balance_bar)
 
-        # ── أزرار الحفظ والمسح ──
         self.btn_save   = QPushButton("💾  حفظ القيد")
         self.btn_cancel = QPushButton("✖  مسح")
         self.btn_save.setMinimumHeight(34)
@@ -86,9 +90,9 @@ class _JournalForm(DualConnMixin, QWidget):
         self._lines_panel.add_line()
 
     def _on_balance_changed(self):
-        total_dr  = self._lines_panel.get_total_dr()
-        total_cr  = self._lines_panel.get_total_cr()
-        balanced  = self._balance_bar.update(total_dr, total_cr)
+        total_dr = self._lines_panel.get_total_dr()
+        total_cr = self._lines_panel.get_total_cr()
+        balanced = self._balance_bar.update(total_dr, total_cr)
         self.btn_save.setEnabled(balanced and (total_dr > 0 or total_cr > 0))
 
     def _save(self):
@@ -127,36 +131,43 @@ class _JournalForm(DualConnMixin, QWidget):
         entry_id = insert_entry(conn, date, desc, "manual")
         add_entry_lines(conn, entry_id, all_lines)
 
+        # [إصلاح v7] منطق ربط المستثمر في دالة منفصلة
         investor_links = self._lines_panel.get_all_investor_links()
         if investor_links and erp is not None:
-            from db.inventory.investors_repo import link_investor_to_line
-            for link in investor_links:
-                inv_id    = link["investor_id"]
-                acc_type  = link["acc_type"]
-                amount    = link["amount"]
-                move_type = "capital" if acc_type == "capital" else "drawings"
-                if move_type == "capital":
-                    line_row = conn.execute(
-                        "SELECT id FROM journal_lines WHERE entry_id=? AND credit>0 LIMIT 1",
-                        (entry_id,)
-                    ).fetchone()
-                else:
-                    line_row = conn.execute(
-                        "SELECT id FROM journal_lines WHERE entry_id=? AND debit>0 LIMIT 1",
-                        (entry_id,)
-                    ).fetchone()
-                line_id = line_row["id"] if line_row else 0
-                try:
-                    link_investor_to_line(
-                        erp, inv_id, entry_id, line_id,
-                        move_type, amount, desc
-                    )
-                except Exception as e:
-                    print(f"[JournalForm] investor link error: {e}")
+            self._post_investor_links(conn, erp, entry_id, investor_links, desc)
 
         self._clear()
         emit_company_data_changed()
         QMessageBox.information(self, "تم", "✅ تم حفظ القيد بنجاح")
+
+    def _post_investor_links(self, conn, erp, entry_id: int,
+                              investor_links: list, desc: str):
+        """
+        [إصلاح v7] يربط كل مستثمر بالقيد المناسب.
+        مستخرج من _save() لتقليل حجمه وتسهيل الاختبار.
+        يستخدم repo helpers بدل SQL مباشر.
+        """
+        from db.inventory.investors_repo import link_investor_to_line
+
+        for link in investor_links:
+            inv_id    = link["investor_id"]
+            acc_type  = link["acc_type"]
+            amount    = link["amount"]
+            move_type = "capital" if acc_type == "capital" else "drawings"
+
+            # [إصلاح v7] repo helpers بدل conn.execute() مباشر
+            if move_type == "capital":
+                line_id = fetch_capital_line_for_entry(conn, entry_id)
+            else:
+                line_id = fetch_drawings_line_for_entry(conn, entry_id)
+
+            try:
+                link_investor_to_line(
+                    erp, inv_id, entry_id, line_id,
+                    move_type, amount, desc
+                )
+            except Exception as e:
+                print(f"[JournalForm] investor link error: {e}")
 
     def _clear(self):
         self._lines_panel.clear_lines()
