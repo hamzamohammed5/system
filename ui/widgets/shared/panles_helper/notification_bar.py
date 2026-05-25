@@ -1,43 +1,23 @@
 """
 ui/widgets/shared/panles_helper/notification_bar.py
-====================================================
-NotificationBar — شريط إشعارات موحد بمستويات مختلفة.
 
-يكمل BaseWarningBar (للأخطاء والتحذيرات الهيكلية) بدعم
-مستويات الإشعارات العامة: success, info, warning, danger.
-
-الاستخدام:
-    bar = NotificationBar()
-    layout.addWidget(bar)
-
-    bar.show("تم الحفظ بنجاح", "success", auto_hide=2000)
-    bar.show("تحقق من البيانات", "warning")
-    bar.hide_bar()
+التغييرات:
+  - _LEVELS حُذف — يستخدم STATUS_COLORS من theme مباشرة (مصدر واحد للألوان)
+  - icon مستخرج من STATUS_COLORS بدل تعريف منفصل
+  - باقي المنطق محتفظ به كما هو
 """
-
 from PyQt5.QtWidgets import QFrame, QHBoxLayout, QLabel, QPushButton
 from PyQt5.QtCore import QTimer, pyqtSignal
 
 from ui.app_settings import fs
 from .colors_and_base import _base
+from .theme import STATUS_COLORS
 
-_LEVELS = {
-    "success": {
-        "bg": "#ecfdf5", "border": "#6ee7b7",
-        "text": "#065f46", "icon": "✅",
-    },
-    "info": {
-        "bg": "#eff6ff", "border": "#93c5fd",
-        "text": "#1e40af", "icon": "ℹ️",
-    },
-    "warning": {
-        "bg": "#fffbeb", "border": "#fcd34d",
-        "text": "#92400e", "icon": "⚠️",
-    },
-    "danger": {
-        "bg": "#fef2f2", "border": "#fca5a5",
-        "text": "#991b1b", "icon": "❌",
-    },
+_LEVEL_ICONS = {
+    "success": "✅",
+    "info":    "ℹ️",
+    "warning": "⚠️",
+    "danger":  "❌",
 }
 
 
@@ -81,14 +61,13 @@ class NotificationBar(QFrame):
             btn = QPushButton("✖")
             btn.setFixedSize(22, 22)
             btn.setStyleSheet(
-                "QPushButton { background:transparent; border:none; color:#aaa; }"
-                "QPushButton:hover { color:#666; }"
+                "QPushButton{background:transparent;border:none;color:#aaa;}"
+                "QPushButton:hover{color:#666;}"
             )
             btn.clicked.connect(self._on_dismiss)
             lay.addWidget(btn)
 
-    def show(self, message: str, level: str = "info",
-             auto_hide: int = 0):
+    def show(self, message: str, level: str = "info", auto_hide: int = 0):
         """
         يعرض الإشعار.
 
@@ -96,21 +75,22 @@ class NotificationBar(QFrame):
         level    : "success" | "info" | "warning" | "danger"
         auto_hide: إخفاء تلقائي بعد N ms (0 = لا إخفاء تلقائي)
         """
-        cfg  = _LEVELS.get(level, _LEVELS["info"])
+        cfg  = STATUS_COLORS.get(level, STATUS_COLORS["info"])
+        icon = _LEVEL_ICONS.get(level, "ℹ️")
         base = _base()
 
         self.setStyleSheet(f"""
             #notifBar {{
-                background: {cfg['bg']};
-                border: 1px solid {cfg['border']};
-                border-radius: 6px;
+                background:{cfg['bg']};
+                border:1px solid {cfg['border']};
+                border-radius:6px;
             }}
         """)
-        self._lbl_icon.setText(cfg["icon"])
+        self._lbl_icon.setText(icon)
         self._lbl_msg.setText(message)
         self._lbl_msg.setStyleSheet(
             f"font-size:{fs(base,0)}pt; font-weight:600;"
-            f"color:{cfg['text']}; background:transparent; border:none;"
+            f"color:{cfg['fg']}; background:transparent; border:none;"
         )
         self.setVisible(True)
 

@@ -1,53 +1,41 @@
 """
 ui/widgets/shared/form_utils.py
-================================
-أدوات بناء الفورم المشتركة — تُستخدم في كل أقسام التطبيق.
 
-[تحديث v2]:
-  - build_inner_scroll تستورد من scrollable_form بدل تكرار المنطق
-  - FormGroup._build_style موحدة مع get_group_box_style من theme
-
-المتوفر:
-  labeled_widget(widget, unit)     — widget + label وحدة في سطر واحد
-  spin_field(max_, dec)            — QDoubleSpinBox موحد
-  int_spin_field(max_)             — QSpinBox موحد
-  ModeBadge                        — label لعرض الوضع الحالي
-  FormGroup                        — QGroupBox موحد مع QFormLayout جاهز
-  CrudButtonsBar                   — شريط أزرار إضافة/حفظ/إلغاء موحد
-  build_form_row(label, widget)    — صف فورم بـ QHBoxLayout
-  build_inner_scroll               — مستوردة من scrollable_form
+التغييرات:
+  - spin_field و int_spin_field يستخدمان _spinbox_style من input_widgets
+    بدل تعريف نفس الـ QDoubleSpinBox stylesheet من جديد
+  - FormGroup._build_style يستخدم get_group_box_style من theme (كان موجود، مُوحَّد)
+  - build_inner_scroll مستوردة من scrollable_form (لا تكرار)
+  - ModeBadge._COLORS: ألوان بتستخدم STATUS_COLORS لو متطابقة،
+    وإلا بتفضل كما هي (success/warning/danger)
 """
-
 from PyQt5.QtWidgets import (
     QWidget, QHBoxLayout, QVBoxLayout, QLabel,
     QPushButton, QDoubleSpinBox, QSpinBox,
     QGroupBox, QFormLayout, QSizePolicy,
 )
 from PyQt5.QtCore import Qt, pyqtSignal
-from PyQt5.QtGui  import QFont
+from PyQt5.QtGui import QFont
 
 from ui.app_settings import _C, fs
 from ui.widgets.shared.panles_helper.colors_and_base import _base
+from ui.widgets.shared.panles_helper.theme import STATUS_COLORS
 
-# ── build_inner_scroll مستوردة مباشرة — لا تكرار ─────────
 from ui.widgets.shared.scrollable_form import wrap_in_scroll  # noqa: F401
+
+# stylesheet مشترك مع AmountSpinBox في input_widgets
+from ui.widgets.shared.input_widgets import _spinbox_style
 
 
 # ══════════════════════════════════════════════════════════
-# labeled_widget — widget + وحدة في سطر
+# labeled_widget
 # ══════════════════════════════════════════════════════════
 
 def labeled_widget(widget: QWidget, unit: str,
                    unit_color: str = None,
                    spacing: int = 6) -> QWidget:
-    """
-    يلف widget مع label الوحدة في QHBoxLayout.
-
-    الاستخدام:
-        form.addRow("الراتب:", labeled_widget(sp_salary, "جنيه / شهر"))
-    """
     w = QWidget()
-    w.setStyleSheet("background: transparent;")
+    w.setStyleSheet("background:transparent;")
     lay = QHBoxLayout(w)
     lay.setContentsMargins(0, 0, 0, 0)
     lay.setSpacing(spacing)
@@ -55,9 +43,9 @@ def labeled_widget(widget: QWidget, unit: str,
 
     lbl = QLabel(unit)
     lbl.setStyleSheet(
-        f"color: {unit_color or _C['text_muted']};"
-        "background: transparent; border: none;"
-        f"font-size: {fs(_base(), -1)}pt;"
+        f"color:{unit_color or _C['text_muted']};"
+        "background:transparent; border:none;"
+        f"font-size:{fs(_base(),-1)}pt;"
     )
     lay.addWidget(lbl)
     lay.addStretch()
@@ -65,73 +53,56 @@ def labeled_widget(widget: QWidget, unit: str,
 
 
 # ══════════════════════════════════════════════════════════
-# spin_field — QDoubleSpinBox موحد
+# spin_field / int_spin_field — يستخدمان _spinbox_style المشتركة
 # ══════════════════════════════════════════════════════════
 
 def spin_field(max_: float = 999999,
                dec: int = 2,
                min_: float = 0,
                min_height: int = 30) -> QDoubleSpinBox:
-    """يبني QDoubleSpinBox بإعدادات موحدة."""
     s = QDoubleSpinBox()
     s.setRange(min_, max_)
     s.setDecimals(dec)
     s.setMinimumHeight(min_height)
-    s.setStyleSheet(f"""
-        QDoubleSpinBox {{
-            background: {_C['bg_input']};
-            border: 1.5px solid {_C['border_med']};
-            border-radius: 6px;
-            padding: 0 8px;
-            font-size: {fs(_base(), 0)}pt;
-            color: {_C['text_primary']};
-        }}
-        QDoubleSpinBox:focus {{ border-color: {_C['accent']}; }}
-        QDoubleSpinBox:disabled {{
-            background: {_C['bg_surface_2']};
-            color: {_C['text_disabled']};
-        }}
-    """)
+    s.setStyleSheet(_spinbox_style(min_height, widget="QDoubleSpinBox"))
     return s
 
 
 def int_spin_field(max_: int = 9999,
                    min_: int = 0,
                    min_height: int = 30) -> QSpinBox:
-    """يبني QSpinBox بإعدادات موحدة."""
     s = QSpinBox()
     s.setRange(min_, max_)
     s.setMinimumHeight(min_height)
-    s.setStyleSheet(f"""
-        QSpinBox {{
-            background: {_C['bg_input']};
-            border: 1.5px solid {_C['border_med']};
-            border-radius: 6px;
-            padding: 0 8px;
-            font-size: {fs(_base(), 0)}pt;
-            color: {_C['text_primary']};
-        }}
-        QSpinBox:focus {{ border-color: {_C['accent']}; }}
-    """)
+    s.setStyleSheet(_spinbox_style(min_height, widget="QSpinBox"))
     return s
 
 
 # ══════════════════════════════════════════════════════════
-# ModeBadge — label عرض الوضع الحالي
+# ModeBadge — يستخدم STATUS_COLORS للألوان المتطابقة
 # ══════════════════════════════════════════════════════════
 
 class ModeBadge(QLabel):
-    """
-    Label لعرض الوضع الحالي مع ستايل موحد.
+    """Label لعرض الوضع الحالي مع ستايل موحد."""
 
-    الألوان المتاحة: "blue" (افتراضي), "orange", "green", "red", "purple"
-    """
-
+    # الألوان المخصصة (blue/purple ليست في STATUS_COLORS بنفس المعنى)
     _COLORS = {
         "blue":   ("#e3f2fd", "#1565c0", "#90caf9"),
-        "orange": ("#fff3e0", "#e65100", "#ffcc80"),
-        "green":  ("#e8f5e9", "#2e7d32", "#a5d6a7"),
-        "red":    ("#ffebee", "#c62828", "#ef9a9a"),
+        "orange": (
+            STATUS_COLORS["warning"]["bg"],
+            STATUS_COLORS["warning"]["fg"],
+            STATUS_COLORS["warning"]["border"],
+        ),
+        "green": (
+            STATUS_COLORS["success"]["bg"],
+            STATUS_COLORS["success"]["fg"],
+            STATUS_COLORS["success"]["border"],
+        ),
+        "red": (
+            STATUS_COLORS["danger"]["bg"],
+            STATUS_COLORS["danger"]["fg"],
+            STATUS_COLORS["danger"]["border"],
+        ),
         "purple": ("#f3e5f5", "#6a1b9a", "#ce93d8"),
     }
 
@@ -144,9 +115,9 @@ class ModeBadge(QLabel):
         bg, fg, border = self._COLORS.get(color, self._COLORS["blue"])
         base = _base()
         self.setStyleSheet(
-            f"color: {fg}; font-weight: bold; font-size: {fs(base, -1)}pt;"
-            f"background: {bg}; border: 1px solid {border};"
-            "border-radius: 4px; padding: 3px 8px;"
+            f"color:{fg}; font-weight:bold; font-size:{fs(base,-1)}pt;"
+            f"background:{bg}; border:1px solid {border};"
+            "border-radius:4px; padding:3px 8px;"
         )
 
     def set_mode(self, text: str, color: str = None):
@@ -163,11 +134,11 @@ class ModeBadge(QLabel):
 
 
 # ══════════════════════════════════════════════════════════
-# ResultBadge — label لعرض نتيجة / تكلفة محسوبة
+# ResultBadge
 # ══════════════════════════════════════════════════════════
 
 class ResultBadge(QLabel):
-    """Label لعرض تكلفة أو نتيجة محسوبة."""
+    """Label لعرض نتيجة / تكلفة محسوبة."""
 
     def __init__(self, text: str = "─", color: str = "#1a6e1a", parent=None):
         super().__init__(text, parent)
@@ -177,9 +148,9 @@ class ResultBadge(QLabel):
     def _apply(self):
         base = _base()
         self.setStyleSheet(
-            f"color: {self._color}; font-weight: bold; font-size: {fs(base, 0)}pt;"
-            "background: #f0faf0; border: 1px solid #b2dfb2;"
-            "border-radius: 4px; padding: 4px 8px;"
+            f"color:{self._color}; font-weight:bold; font-size:{fs(base,0)}pt;"
+            "background:#f0faf0; border:1px solid #b2dfb2;"
+            "border-radius:4px; padding:4px 8px;"
         )
 
     def set_value(self, text: str, color: str = None):
@@ -193,32 +164,21 @@ class ResultBadge(QLabel):
 
 
 # ══════════════════════════════════════════════════════════
-# FormGroup — QGroupBox موحد مع QFormLayout
+# FormGroup
 # ══════════════════════════════════════════════════════════
 
 class FormGroup(QGroupBox):
-    """
-    QGroupBox مع QFormLayout جاهز وستايل موحد.
-
-    الاستخدام:
-        grp = FormGroup("بيانات الماكينة")
-        grp.add_row("الاسم:", self.inp_name)
-        layout.addWidget(grp)
-    """
+    """QGroupBox مع QFormLayout جاهز وستايل موحد."""
 
     def __init__(self, title: str = "", accent: str = None, parent=None):
         super().__init__(title, parent)
-        self._accent = accent or _C['accent']
-        self._build_style()
+        self._accent = accent or _C["accent"]
+        from ui.widgets.shared.panles_helper.theme import get_group_box_style
+        self.setStyleSheet(get_group_box_style(self._accent))
         self.form = QFormLayout(self)
         self.form.setSpacing(10)
         self.form.setLabelAlignment(Qt.AlignRight | Qt.AlignVCenter)
         self.form.setContentsMargins(12, 14, 12, 12)
-
-    def _build_style(self):
-        # يستخدم get_group_box_style من theme
-        from ui.widgets.shared.panles_helper.theme import get_group_box_style
-        self.setStyleSheet(get_group_box_style(self._accent))
 
     def add_row(self, label: str, widget: QWidget):
         self.form.addRow(label, widget)
@@ -232,16 +192,11 @@ class FormGroup(QGroupBox):
 
 
 # ══════════════════════════════════════════════════════════
-# CrudButtonsBar — شريط أزرار CRUD موحد
+# CrudButtonsBar
 # ══════════════════════════════════════════════════════════
 
 class CrudButtonsBar(QWidget):
-    """
-    شريط أزرار موحد: إضافة / حفظ / إلغاء + label الوضع.
-
-    Signals:
-        add_clicked, save_clicked, cancel_clicked
-    """
+    """شريط أزرار موحد: إضافة / حفظ / إلغاء + label الوضع."""
 
     add_clicked    = pyqtSignal()
     save_clicked   = pyqtSignal()
@@ -257,7 +212,7 @@ class CrudButtonsBar(QWidget):
         self._build(add_text, save_text, cancel_text, show_mode)
 
     def _build(self, add_text, save_text, cancel_text, show_mode):
-        self.setStyleSheet("background: transparent;")
+        self.setStyleSheet("background:transparent;")
         lay = QVBoxLayout(self)
         lay.setContentsMargins(0, 4, 0, 4)
         lay.setSpacing(6)
@@ -265,7 +220,7 @@ class CrudButtonsBar(QWidget):
         if show_mode:
             self.lbl_mode = QLabel("─── إضافة جديدة ───")
             self.lbl_mode.setStyleSheet(
-                f"font-weight: bold; color: {_C['accent']}; background: transparent;"
+                f"font-weight:bold; color:{_C['accent']}; background:transparent;"
             )
             lay.addWidget(self.lbl_mode)
 
@@ -280,16 +235,16 @@ class CrudButtonsBar(QWidget):
         self.btn_save.clicked.connect(self.save_clicked.emit)
         self.btn_cancel.clicked.connect(self.cancel_clicked.emit)
 
-        btn_row.addWidget(self.btn_add)
-        btn_row.addWidget(self.btn_save)
-        btn_row.addWidget(self.btn_cancel)
+        for btn in (self.btn_add, self.btn_save, self.btn_cancel):
+            btn_row.addWidget(btn)
         btn_row.addStretch()
         lay.addLayout(btn_row)
 
         if not show_mode:
-            self.lbl_mode = QLabel()  # dummy للتوافق
+            self.lbl_mode = QLabel()
 
-    def _make_btn(self, text: str, style: str) -> QPushButton:
+    @staticmethod
+    def _make_btn(text: str, style: str) -> QPushButton:
         from ui.widgets.shared.panles_helper.make_btn import _make_btn
         return _make_btn(text, style)
 
@@ -298,27 +253,24 @@ class CrudButtonsBar(QWidget):
 
 
 # ══════════════════════════════════════════════════════════
-# InlinePreview — صف معاينة حية
+# InlinePreview
 # ══════════════════════════════════════════════════════════
 
 class InlinePreview(QWidget):
-    """
-    يعرض: [label] [القيمة المحسوبة]
-    مفيد للمعاينة الحية في الفورم.
-    """
+    """يعرض: [label] [القيمة المحسوبة]"""
 
     def __init__(self, label: str = "النتيجة:",
                  color: str = "#1a6e1a", parent=None):
         super().__init__(parent)
-        self.setStyleSheet("background: transparent;")
+        self.setStyleSheet("background:transparent;")
         lay = QHBoxLayout(self)
         lay.setContentsMargins(0, 0, 0, 0)
         lay.setSpacing(8)
 
         lbl = QLabel(label)
         lbl.setStyleSheet(
-            f"color: {_C['text_sec']}; font-weight: 600;"
-            f"font-size: {fs(_base(), -1)}pt; background: transparent;"
+            f"color:{_C['text_sec']}; font-weight:600;"
+            f"font-size:{fs(_base(),-1)}pt; background:transparent;"
         )
         self._lbl_value = ResultBadge("─", color=color)
 
@@ -334,16 +286,12 @@ class InlinePreview(QWidget):
 
 
 # ══════════════════════════════════════════════════════════
-# build_inner_scroll — wrapper موحد (تستورد من scrollable_form)
+# build_inner_scroll
 # ══════════════════════════════════════════════════════════
 
 def build_inner_scroll(parent_widget: QWidget,
                        min_width: int = 280) -> tuple:
-    """
-    يبني الهيكل الأساسي لأي form panel بـ scroll.
-
-    Returns: (outer_layout, inner_widget, inner_layout)
-    """
+    """يبني الهيكل الأساسي لأي form panel بـ scroll."""
     outer = QVBoxLayout(parent_widget)
     outer.setContentsMargins(0, 0, 0, 0)
     outer.setSpacing(0)

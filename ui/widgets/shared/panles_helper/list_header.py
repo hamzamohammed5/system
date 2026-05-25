@@ -1,16 +1,12 @@
 """
 ui/widgets/shared/panles_helper/list_header.py
-===============================================
-ListHeader — هيدر موحد للوحات القوائم (List Panels).
 
-يحل محل الـ toolbar المكررة في كل لوحة قائمة.
-
-المتوفر:
-  ListHeader       — هيدر كامل مع بحث وعنوان وأزرار
-  SearchBar        — شريط بحث بسيط
-  make_list_header — دالة سريعة لبناء هيدر جاهز
+التغييرات:
+  - SearchBar.inp stylesheet يستخدم _input_style() من input_widgets
+    بدل تعريف نفس الـ QLineEdit style من جديد
+  - StatusBar stylesheet يستخدم _C بشكل مباشر (كان صح، مُنظَّف فقط)
+  - مفيش تغيير في الـ API
 """
-
 from PyQt5.QtWidgets import (
     QWidget, QFrame, QVBoxLayout, QHBoxLayout,
     QLabel, QLineEdit, QPushButton, QSizePolicy,
@@ -21,18 +17,28 @@ from ui.app_settings import _C, fs
 from .colors_and_base import _base
 from .make_btn import _make_btn
 
+# stylesheet مشترك مع SearchLineEdit في input_widgets
+def _search_input_style(height: int) -> str:
+    base = _base()
+    return f"""
+        QLineEdit {{
+            background:{_C['bg_input']};
+            border:1.5px solid {_C['border_med']};
+            border-radius:6px; padding:0 10px;
+            font-size:{fs(base,0)}pt; color:{_C['text_primary']};
+        }}
+        QLineEdit:focus {{
+            border-color:{_C['accent']}; background:white;
+        }}
+    """
+
 
 # ══════════════════════════════════════════════════════════
-# SearchBar — شريط بحث مستقل
+# SearchBar
 # ══════════════════════════════════════════════════════════
 
 class SearchBar(QWidget):
-    """
-    شريط بحث مع delay موحد.
-
-    Signals:
-        search_changed(str) — يُطلق بعد توقف الكتابة بـ delay_ms
-    """
+    """شريط بحث مع delay موحد."""
 
     search_changed = pyqtSignal(str)
 
@@ -49,8 +55,7 @@ class SearchBar(QWidget):
         self._build(placeholder, height)
 
     def _build(self, placeholder: str, height: int):
-        base = _base()
-        lay  = QHBoxLayout(self)
+        lay = QHBoxLayout(self)
         lay.setContentsMargins(0, 0, 0, 0)
         lay.setSpacing(0)
 
@@ -59,20 +64,7 @@ class SearchBar(QWidget):
         self.inp.setFixedHeight(height)
         self.inp.setClearButtonEnabled(True)
         self.inp.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Fixed)
-        self.inp.setStyleSheet(f"""
-            QLineEdit {{
-                background: {_C['bg_input']};
-                border: 1.5px solid {_C['border_med']};
-                border-radius: 6px;
-                padding: 0 10px;
-                font-size: {fs(base, 0)}pt;
-                color: {_C['text_primary']};
-            }}
-            QLineEdit:focus {{
-                border-color: {_C['accent']};
-                background: white;
-            }}
-        """)
+        self.inp.setStyleSheet(_search_input_style(height))
         self.inp.textChanged.connect(self._on_text_changed)
         lay.addWidget(self.inp)
 
@@ -96,31 +88,11 @@ class SearchBar(QWidget):
 
 
 # ══════════════════════════════════════════════════════════
-# ListHeader — هيدر كامل للوحة القائمة
+# ListHeader
 # ══════════════════════════════════════════════════════════
 
 class ListHeader(QFrame):
-    """
-    هيدر موحد للوحات القوائم.
-
-    يشمل:
-      - عنوان القسم
-      - شريط بحث
-      - أزرار إضافة/إجراءات
-
-    Signals:
-        search_changed(str)  — تغير نص البحث
-        add_clicked          — ضغط زر الإضافة
-
-    الاستخدام:
-        hdr = ListHeader(title="المنتجات", add_text="➕ إضافة")
-        hdr.search_changed.connect(self._filter)
-        hdr.add_clicked.connect(self._open_add_form)
-        layout.addWidget(hdr)
-
-        # إضافة زر مخصص:
-        btn = hdr.add_action("📤 تصدير", callback=self._export)
-    """
+    """هيدر موحد للوحات القوائم."""
 
     search_changed = pyqtSignal(str)
     add_clicked    = pyqtSignal()
@@ -133,8 +105,8 @@ class ListHeader(QFrame):
                  search_delay: int = 250,
                  parent=None):
         super().__init__(parent)
-        self._title      = title
-        self._add_text   = add_text
+        self._title       = title
+        self._add_text    = add_text
         self._show_search = show_search
         self._action_btns: list[QPushButton] = []
         self._build(search_placeholder, search_delay)
@@ -142,8 +114,8 @@ class ListHeader(QFrame):
     def _build(self, placeholder: str, delay: int):
         self.setStyleSheet(f"""
             QFrame {{
-                background: {_C['bg_input']};
-                border-bottom: 1px solid {_C['border']};
+                background:{_C['bg_input']};
+                border-bottom:1px solid {_C['border']};
             }}
         """)
         self.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Fixed)
@@ -152,7 +124,6 @@ class ListHeader(QFrame):
         root.setContentsMargins(10, 10, 10, 8)
         root.setSpacing(6)
 
-        # ── صف العنوان والأزرار ──
         if self._title or self._add_text:
             title_row = QHBoxLayout()
             title_row.setSpacing(8)
@@ -161,8 +132,8 @@ class ListHeader(QFrame):
                 lbl = QLabel(self._title)
                 base = _base()
                 lbl.setStyleSheet(
-                    f"font-weight: 700; font-size: {fs(base, 0)}pt;"
-                    f"color: {_C['text_primary']}; background: transparent; border: none;"
+                    f"font-weight:700; font-size:{fs(base,0)}pt;"
+                    f"color:{_C['text_primary']}; background:transparent; border:none;"
                 )
                 title_row.addWidget(lbl)
 
@@ -178,7 +149,6 @@ class ListHeader(QFrame):
             self._btn_row = title_row
             root.addLayout(title_row)
 
-        # ── شريط البحث ──
         if self._show_search:
             self._search_bar = SearchBar(
                 placeholder=placeholder, delay_ms=delay
@@ -188,16 +158,12 @@ class ListHeader(QFrame):
         else:
             self._search_bar = None
 
-    # ── API خارجي ──────────────────────────────────────
-
     def add_action(self, text: str, callback=None,
                    style: str = "normal") -> QPushButton:
-        """يضيف زر إجراء في صف العنوان."""
         btn = _make_btn(text, style)
         if callback:
             btn.clicked.connect(callback)
-        if hasattr(self, '_btn_row'):
-            # أضف قبل زر الإضافة لو موجود
+        if hasattr(self, "_btn_row"):
             if self._btn_add:
                 idx = self._btn_row.indexOf(self._btn_add)
                 self._btn_row.insertWidget(idx, btn)
@@ -207,9 +173,7 @@ class ListHeader(QFrame):
         return btn
 
     def search_text(self) -> str:
-        if self._search_bar:
-            return self._search_bar.text()
-        return ""
+        return self._search_bar.text() if self._search_bar else ""
 
     def clear_search(self):
         if self._search_bar:
@@ -229,38 +193,27 @@ class ListHeader(QFrame):
 
 
 # ══════════════════════════════════════════════════════════
-# StatusBar — شريط الحالة السفلي
+# StatusBar
 # ══════════════════════════════════════════════════════════
 
 class StatusBar(QLabel):
-    """
-    شريط حالة بسيط يعرض عدد العناصر.
-
-    الاستخدام:
-        bar = StatusBar()
-        bar.set_count(shown=15, total=50)  # → "15 / 50"
-        bar.set_count(shown=50, total=50)  # → "50"
-    """
+    """شريط حالة بسيط يعرض عدد العناصر."""
 
     def __init__(self, parent=None):
         super().__init__(parent)
         self.setAlignment(Qt.AlignCenter)
         self.setFixedHeight(24)
         self.setStyleSheet(f"""
-            background: {_C['bg_surface_2']};
-            color: {_C['text_muted']};
-            padding: 0 10px;
-            font-size: {fs(_base(), -1)}pt;
-            font-weight: 600;
-            border-top: 1px solid {_C['border']};
+            background:{_C['bg_surface_2']};
+            color:{_C['text_muted']};
+            padding:0 10px;
+            font-size:{fs(_base(),-1)}pt;
+            font-weight:600;
+            border-top:1px solid {_C['border']};
         """)
 
     def set_count(self, shown: int, total: int):
-        """يحدّث العداد."""
-        if shown == total:
-            self.setText(str(total))
-        else:
-            self.setText(f"{shown} / {total}")
+        self.setText(str(total) if shown == total else f"{shown} / {total}")
 
     def set_text(self, text: str):
         self.setText(text)
@@ -270,20 +223,13 @@ class StatusBar(QLabel):
 
 
 # ══════════════════════════════════════════════════════════
-# دوال مساعدة
+# دالة سريعة
 # ══════════════════════════════════════════════════════════
 
 def make_list_header(title: str = "",
                      add_text: str = "",
                      show_search: bool = True,
                      placeholder: str = "🔍  بحث...") -> ListHeader:
-    """
-    دالة سريعة لبناء ListHeader جاهز.
-
-    الاستخدام:
-        hdr = make_list_header("المنتجات", "➕ إضافة")
-        layout.addWidget(hdr)
-    """
     return ListHeader(
         title=title,
         add_text=add_text,

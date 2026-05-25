@@ -1,42 +1,75 @@
 """
 ui/widgets/shared/input_widgets.py
-====================================
-مكونات Input موحدة — تكمل form_utils.py للأنماط المتكررة.
 
-الناقص في الـ widgets الحالية:
-  - SearchLineEdit     : QLineEdit بحث موحد مع أيقونة ومسح
-  - LabeledInput       : حقل مع label في سطر أفقي
-  - RequiredLineEdit   : QLineEdit مع تحقق من الفراغ
-  - AmountSpinBox      : QDoubleSpinBox للمبالغ المالية بستايل موحد
-  - DateField          : QDateEdit موحد
-  - ComboWithLabel     : QComboBox مع label
-
-الاستخدام:
-    from ui.widgets.shared.input_widgets import (
-        SearchLineEdit, LabeledInput, AmountSpinBox, DateField
-    )
-
-    search = SearchLineEdit("🔍 بحث في المنتجات...")
-    search.text_changed.connect(self._filter)
-
-    amount = AmountSpinBox(max_=999999)
-    form.addRow("المبلغ:", amount)
-
-    date = DateField()
-    form.addRow("التاريخ:", date)
+التغييرات:
+  - _input_style() دالة مشتركة للـ stylesheet الأساسي بدل تكراره في كل كلاس
+  - _spinbox_style() مشتركة بين AmountSpinBox و spin_field في form_utils
+  - StyledComboBox و DateField يستخدمان _input_style مباشرة
+  - NotesLineEdit stylesheet مبسط (كان يعيد كتابة نفس pattern)
+  - RequiredLineEdit: _apply_style بتستخدم _input_style بدل hardcoded ألوان
 """
-
 from PyQt5.QtWidgets import (
-    QWidget, QHBoxLayout, QVBoxLayout,
+    QWidget, QHBoxLayout,
     QLineEdit, QLabel, QPushButton,
     QDoubleSpinBox, QSpinBox, QDateEdit,
     QComboBox, QSizePolicy,
 )
 from PyQt5.QtCore import Qt, QDate, QTimer, pyqtSignal
-from PyQt5.QtGui  import QFont
+from PyQt5.QtGui import QFont
 
 from ui.app_settings import _C, fs
 from ui.widgets.shared.panles_helper.colors_and_base import _base
+
+
+# ══════════════════════════════════════════════════════════
+# Shared style builders — مصدر واحد بدل تكرار في كل كلاس
+# ══════════════════════════════════════════════════════════
+
+def _input_style(height: int = 32, error: bool = False) -> str:
+    """Stylesheet موحد لكل الـ QLineEdit / QComboBox / QDateEdit."""
+    base = _base()
+    bg     = "#fef2f2" if error else _C["bg_input"]
+    border = "#f87171" if error else _C["border_med"]
+    focus  = "#f87171" if error else _C["accent"]
+    return f"""
+        background:{bg}; border:1.5px solid {border};
+        border-radius:6px; padding:0 8px;
+        font-size:{fs(base,0)}pt; color:{_C["text_primary"]};
+        min-height:{height}px;
+    """
+
+
+def _spinbox_style(height: int = 32,
+                   positive: bool = False,
+                   widget: str = "QDoubleSpinBox") -> str:
+    """Stylesheet موحد لكل الـ QDoubleSpinBox / QSpinBox."""
+    base = _base()
+    if positive:
+        bg, border, color = "#f0fdf4", "#86efac", "#15803d"
+        weight = "bold"
+    else:
+        bg, border, color = _C["bg_input"], _C["border_med"], _C["text_primary"]
+        weight = "normal"
+    return f"""
+        {widget} {{
+            background:{bg}; border:1.5px solid {border};
+            border-radius:6px; padding:0 8px;
+            font-size:{fs(base,0)}pt; color:{color};
+            font-weight:{weight}; min-height:{height}px;
+        }}
+        {widget}:focus {{ border-color:{_C["accent"]}; background:white; }}
+        {widget}:disabled {{
+            background:{_C["bg_surface_2"]}; color:{_C["text_disabled"]};
+        }}
+    """
+
+
+def _combo_style(height: int = 32) -> str:
+    """Stylesheet موحد لكل الـ QComboBox."""
+    return f"""
+        {_input_style(height)}
+        min-height:{height}px;
+    """
 
 
 # ══════════════════════════════════════════════════════════
@@ -45,19 +78,10 @@ from ui.widgets.shared.panles_helper.colors_and_base import _base
 
 class SearchLineEdit(QWidget):
     """
-    حقل بحث موحد مع:
-      - أيقونة بحث
-      - زر مسح (يظهر عند الكتابة)
-      - delay قبل إطلاق الـ signal
+    حقل بحث موحد مع delay قبل إطلاق الـ signal.
 
     Signals:
-        text_changed(str) — يُطلق بعد توقف الكتابة
-
-    الاستخدام:
-        s = SearchLineEdit("🔍 ابحث في المنتجات...")
-        s.text_changed.connect(self._on_search)
-        layout.addWidget(s)
-        query = s.text()
+        text_changed(str)
     """
 
     text_changed = pyqtSignal(str)
@@ -75,8 +99,7 @@ class SearchLineEdit(QWidget):
         self._build(placeholder, height)
 
     def _build(self, placeholder: str, height: int):
-        base = _base()
-        lay  = QHBoxLayout(self)
+        lay = QHBoxLayout(self)
         lay.setContentsMargins(0, 0, 0, 0)
         lay.setSpacing(0)
 
@@ -85,20 +108,7 @@ class SearchLineEdit(QWidget):
         self._inp.setFixedHeight(height)
         self._inp.setClearButtonEnabled(True)
         self._inp.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Fixed)
-        self._inp.setStyleSheet(f"""
-            QLineEdit {{
-                background: {_C['bg_input']};
-                border: 1.5px solid {_C['border_med']};
-                border-radius: 6px;
-                padding: 0 10px;
-                font-size: {fs(base, 0)}pt;
-                color: {_C['text_primary']};
-            }}
-            QLineEdit:focus {{
-                border-color: {_C['accent']};
-                background: white;
-            }}
-        """)
+        self._inp.setStyleSheet(_input_style(height))
         self._inp.textChanged.connect(self._on_change)
         lay.addWidget(self._inp)
 
@@ -130,17 +140,7 @@ class SearchLineEdit(QWidget):
 # ══════════════════════════════════════════════════════════
 
 class AmountSpinBox(QDoubleSpinBox):
-    """
-    QDoubleSpinBox للمبالغ المالية بستايل موحد.
-
-    يحل محل _spin() و spin_field() في الأماكن اللي محتاجة
-    ستايل خاص بالمبالغ (أخضر عند موجب، وخلفية مميزة).
-
-    الاستخدام:
-        sp = AmountSpinBox(max_=999999)
-        form.addRow("المبلغ:", sp)
-        amount = sp.value()
-    """
+    """QDoubleSpinBox للمبالغ المالية بستايل موحد."""
 
     def __init__(self, max_: float = 999_999_999,
                  dec: int = 2,
@@ -152,42 +152,14 @@ class AmountSpinBox(QDoubleSpinBox):
         self.setRange(min_, max_)
         self.setDecimals(dec)
         self.setMinimumHeight(height)
+        self._height = height
         if currency:
             self.setSuffix(f"  {currency}")
-        self._apply_style()
+        self.setStyleSheet(_spinbox_style(height))
         self.valueChanged.connect(self._on_value_changed)
 
-    def _apply_style(self, positive: bool = False):
-        base = _base()
-        if positive:
-            bg, border, color = "#f0fdf4", "#86efac", "#15803d"
-        else:
-            bg = _C['bg_input']
-            border = _C['border_med']
-            color = _C['text_primary']
-
-        self.setStyleSheet(f"""
-            QDoubleSpinBox {{
-                background: {bg};
-                border: 1.5px solid {border};
-                border-radius: 6px;
-                padding: 0 8px;
-                font-size: {fs(base, 0)}pt;
-                color: {color};
-                font-weight: {'bold' if positive else 'normal'};
-            }}
-            QDoubleSpinBox:focus {{
-                border-color: {_C['accent']};
-                background: white;
-            }}
-            QDoubleSpinBox:disabled {{
-                background: {_C['bg_surface_2']};
-                color: {_C['text_disabled']};
-            }}
-        """)
-
     def _on_value_changed(self, val: float):
-        self._apply_style(positive=val > 0)
+        self.setStyleSheet(_spinbox_style(self._height, positive=val > 0))
 
 
 # ══════════════════════════════════════════════════════════
@@ -195,17 +167,7 @@ class AmountSpinBox(QDoubleSpinBox):
 # ══════════════════════════════════════════════════════════
 
 class DateField(QDateEdit):
-    """
-    QDateEdit موحد مع:
-      - popup تقويم
-      - تنسيق yyyy-MM-dd
-      - ستايل موحد
-
-    الاستخدام:
-        dt = DateField()
-        form.addRow("التاريخ:", dt)
-        date_str = dt.date_str()   # → "2025-01-15"
-    """
+    """QDateEdit موحد مع popup تقويم."""
 
     def __init__(self, date: QDate = None,
                  height: int = 32,
@@ -217,31 +179,15 @@ class DateField(QDateEdit):
         self.setMinimumHeight(height)
         if width:
             self.setFixedWidth(width)
-        base = _base()
-        self.setStyleSheet(f"""
-            QDateEdit {{
-                background: {_C['bg_input']};
-                border: 1.5px solid {_C['border_med']};
-                border-radius: 6px;
-                padding: 0 8px;
-                font-size: {fs(base, 0)}pt;
-                color: {_C['text_primary']};
-            }}
-            QDateEdit:focus {{
-                border-color: {_C['accent']};
-            }}
-            QDateEdit::drop-down {{
-                border: none;
-                width: 24px;
-            }}
-        """)
+        self.setStyleSheet(
+            f"QDateEdit {{ {_input_style(height)} }}"
+            "QDateEdit::drop-down { border:none; width:24px; }"
+        )
 
     def date_str(self) -> str:
-        """يرجع التاريخ كـ string بتنسيق yyyy-MM-dd."""
         return self.date().toString("yyyy-MM-dd")
 
     def set_date_str(self, date_str: str):
-        """يضبط التاريخ من string بتنسيق yyyy-MM-dd."""
         if date_str:
             d = QDate.fromString(date_str, "yyyy-MM-dd")
             if d.isValid():
@@ -249,22 +195,29 @@ class DateField(QDateEdit):
 
 
 # ══════════════════════════════════════════════════════════
+# StyledComboBox — QComboBox بستايل موحد
+# ══════════════════════════════════════════════════════════
+
+class StyledComboBox(QComboBox):
+    """QComboBox بستايل موحد مع الـ theme."""
+
+    def __init__(self, height: int = 32, parent=None):
+        super().__init__(parent)
+        self.setMinimumHeight(height)
+        self.setStyleSheet(
+            f"QComboBox {{ {_input_style(height)} }}"
+            "QComboBox::drop-down { border:none; width:24px; }"
+            f"QComboBox:disabled {{ background:{_C['bg_surface_2']};"
+            f" color:{_C['text_disabled']}; }}"
+        )
+
+
+# ══════════════════════════════════════════════════════════
 # LabeledInput — حقل مع label أفقي
 # ══════════════════════════════════════════════════════════
 
 class LabeledInput(QWidget):
-    """
-    حقل مع label على اليمين في سطر أفقي.
-    مفيد لأي input خارج QFormLayout.
-
-    الاستخدام:
-        field = LabeledInput("الكمية:", QDoubleSpinBox())
-        layout.addWidget(field)
-
-        # مع وحدة قياس:
-        field = LabeledInput("السعر:", sp_price, unit="جنيه")
-        layout.addWidget(field)
-    """
+    """حقل مع label على اليمين في سطر أفقي."""
 
     def __init__(self, label: str, widget: QWidget,
                  unit: str = "",
@@ -273,7 +226,7 @@ class LabeledInput(QWidget):
                  parent=None):
         super().__init__(parent)
         self._widget = widget
-        self.setStyleSheet("background: transparent;")
+        self.setStyleSheet("background:transparent;")
         lay = QHBoxLayout(self)
         lay.setContentsMargins(0, 0, 0, 0)
         lay.setSpacing(spacing)
@@ -281,8 +234,8 @@ class LabeledInput(QWidget):
         base = _base()
         lbl = QLabel(label)
         lbl.setStyleSheet(
-            f"color: {_C['text_sec']}; font-size: {fs(base, 0)}pt; font-weight: 600;"
-            "background: transparent; border: none;"
+            f"color:{_C['text_sec']}; font-size:{fs(base,0)}pt; font-weight:600;"
+            "background:transparent; border:none;"
         )
         lbl.setAlignment(Qt.AlignRight | Qt.AlignVCenter)
         if label_width:
@@ -294,8 +247,8 @@ class LabeledInput(QWidget):
         if unit:
             lbl_unit = QLabel(unit)
             lbl_unit.setStyleSheet(
-                f"color: {_C['text_muted']}; font-size: {fs(base, -1)}pt;"
-                "background: transparent; border: none;"
+                f"color:{_C['text_muted']}; font-size:{fs(base,-1)}pt;"
+                "background:transparent; border:none;"
             )
             lay.addWidget(lbl_unit)
 
@@ -309,18 +262,7 @@ class LabeledInput(QWidget):
 # ══════════════════════════════════════════════════════════
 
 class RequiredLineEdit(QLineEdit):
-    """
-    QLineEdit مع تحقق بصري من الفراغ.
-    يُظهر حدوداً حمراء لو الحقل فارغ وتم التحقق.
-
-    الاستخدام:
-        inp = RequiredLineEdit("أدخل الاسم...")
-        form.addRow("الاسم:", inp)
-
-        if not inp.validate():   # يُظهر error state
-            return
-        name = inp.text_stripped()
-    """
+    """QLineEdit مع تحقق بصري من الفراغ."""
 
     def __init__(self, placeholder: str = "",
                  height: int = 32,
@@ -328,42 +270,23 @@ class RequiredLineEdit(QLineEdit):
         super().__init__(parent)
         self.setPlaceholderText(placeholder)
         self.setMinimumHeight(height)
-        self._error = False
-        self._apply_style(False)
+        self._height = height
+        self._error  = False
+        self._refresh_style()
         self.textChanged.connect(self._on_change)
 
-    def _apply_style(self, error: bool):
-        base = _base()
-        if error:
-            bg, border = "#fef2f2", "#f87171"
-        else:
-            bg, border = _C['bg_input'], _C['border_med']
-
-        self.setStyleSheet(f"""
-            QLineEdit {{
-                background: {bg};
-                border: 1.5px solid {border};
-                border-radius: 6px;
-                padding: 0 8px;
-                font-size: {fs(base, 0)}pt;
-                color: {_C['text_primary']};
-            }}
-            QLineEdit:focus {{
-                border-color: {'#f87171' if error else _C['accent']};
-                background: white;
-            }}
-        """)
+    def _refresh_style(self):
+        self.setStyleSheet(f"QLineEdit {{ {_input_style(self._height, self._error)} }}")
 
     def _on_change(self):
         if self._error and self.text().strip():
             self._error = False
-            self._apply_style(False)
+            self._refresh_style()
 
     def validate(self) -> bool:
-        """يتحقق ويُظهر error state لو فارغ. يرجع True لو صالح."""
         if not self.text().strip():
             self._error = True
-            self._apply_style(True)
+            self._refresh_style()
             self.setFocus()
             return False
         return True
@@ -373,50 +296,7 @@ class RequiredLineEdit(QLineEdit):
 
     def clear_error(self):
         self._error = False
-        self._apply_style(False)
-
-
-# ══════════════════════════════════════════════════════════
-# StyledComboBox — QComboBox بستايل موحد
-# ══════════════════════════════════════════════════════════
-
-class StyledComboBox(QComboBox):
-    """
-    QComboBox بستايل موحد مع الـ theme.
-    يحل محل الـ QComboBox العادي في الفورم.
-
-    الاستخدام:
-        cmb = StyledComboBox()
-        cmb.addItem("الخيار الأول", "value1")
-        form.addRow("النوع:", cmb)
-    """
-
-    def __init__(self, height: int = 32, parent=None):
-        super().__init__(parent)
-        self.setMinimumHeight(height)
-        base = _base()
-        self.setStyleSheet(f"""
-            QComboBox {{
-                background: {_C['bg_input']};
-                border: 1.5px solid {_C['border_med']};
-                border-radius: 6px;
-                padding: 0 8px;
-                font-size: {fs(base, 0)}pt;
-                color: {_C['text_primary']};
-                min-height: {height}px;
-            }}
-            QComboBox:focus {{
-                border-color: {_C['accent']};
-            }}
-            QComboBox::drop-down {{
-                border: none;
-                width: 24px;
-            }}
-            QComboBox:disabled {{
-                background: {_C['bg_surface_2']};
-                color: {_C['text_disabled']};
-            }}
-        """)
+        self._refresh_style()
 
 
 # ══════════════════════════════════════════════════════════
@@ -424,13 +304,7 @@ class StyledComboBox(QComboBox):
 # ══════════════════════════════════════════════════════════
 
 class NotesLineEdit(QLineEdit):
-    """
-    QLineEdit للملاحظات بستايل مخصص (خلفية أفتح).
-
-    الاستخدام:
-        notes = NotesLineEdit()
-        form.addRow("ملاحظات:", notes)
-    """
+    """QLineEdit للملاحظات بستايل مخصص."""
 
     def __init__(self, placeholder: str = "ملاحظات اختيارية...",
                  height: int = 30,
@@ -441,18 +315,14 @@ class NotesLineEdit(QLineEdit):
         base = _base()
         self.setStyleSheet(f"""
             QLineEdit {{
-                background: #fafafa;
-                border: 1px solid {_C['border']};
-                border-radius: 6px;
-                padding: 0 8px;
-                font-size: {fs(base, -1)}pt;
-                color: {_C['text_sec']};
-                font-style: italic;
+                background:#fafafa;
+                border:1px solid {_C['border']};
+                border-radius:6px; padding:0 8px;
+                font-size:{fs(base,-1)}pt; color:{_C['text_sec']};
+                font-style:italic; min-height:{height}px;
             }}
             QLineEdit:focus {{
-                border-color: {_C['border_med']};
-                background: white;
-                font-style: normal;
-                color: {_C['text_primary']};
+                border-color:{_C['border_med']}; background:white;
+                font-style:normal; color:{_C['text_primary']};
             }}
         """)
