@@ -3,10 +3,9 @@ ui/widgets/shared/panels.py
 ============================
 مكونات UI مشتركة — re-export من panles_helper وملفات أخرى.
 
-[تحديث v9]:
-  - إضافة RebuildMixin
-  - إضافة _calc_btn_width
-  - تنظيم الـ exports
+[تحديث v10]:
+  - AccountTypeFilter انتقل لـ ui/tabs/accounting/accounts_combo_widget.py
+  - ScenarioComparisonWidget انتقل لـ ui/tabs/costing/scenario_comparison_widget.py
 """
 
 from .panles_helper.detail_header    import DetailHeader        # noqa: F401
@@ -184,9 +183,6 @@ from .unit_combo import UnitCombo, make_unit_combo              # noqa: F401
 # ── layout ────────────────────────────────────────────────
 from .flow_layout import FlowLayout                             # noqa: F401
 
-# ── scenario comparison ────────────────────────────────────
-from ...tabs.costing.shared.scenario_comparison_widget import ScenarioComparisonWidget  # noqa: F401
-
 # ── color picker ──────────────────────────────────────────
 from .color_picker_widget import ColorPickerWidget              # noqa: F401
 
@@ -210,9 +206,6 @@ from .empty_state_helpers import (                              # noqa: F401
 # ── warning bar ───────────────────────────────────────────
 from .base_warning_bar import BaseWarningBar                    # noqa: F401
 
-# ── accounts combo ────────────────────────────────────────
-from ...tabs.accounting.accounts_combo_widget import AccountTypeFilter            # noqa: F401
-
 # ── tooltip helpers ───────────────────────────────────────
 from .tooltip_helper import (                                   # noqa: F401
     apply_table_tooltips,
@@ -222,7 +215,7 @@ from .tooltip_helper import (                                   # noqa: F401
 # ── shared ops mixin ──────────────────────────────────────
 from .shared_ops_mixin import SharedOpsMixin                    # noqa: F401
 
-# ── rebuild mixin (جديد) ──────────────────────────────────
+# ── rebuild mixin ──────────────────────────────────────────
 from .rebuild_mixin import RebuildMixin                         # noqa: F401
 
 # ── table utils shortcuts ─────────────────────────────────
@@ -365,9 +358,6 @@ __all__ = [
     # flow_layout
     "FlowLayout",
 
-    # scenario_comparison
-    "ScenarioComparisonWidget",
-
     # color_picker
     "ColorPickerWidget",
 
@@ -382,9 +372,6 @@ __all__ = [
 
     # warning_bar
     "BaseWarningBar",
-
-    # accounts_combo
-    "AccountTypeFilter",
 
     # tooltip_helper
     "apply_table_tooltips", "apply_tree_tooltips",

@@ -2,11 +2,6 @@
 ui/tabs/accounting/ledger/ledger_accounts_panel.py
 ===================================================
 _AccountsPanel — قائمة الحسابات في دفتر الأستاذ.
-
-[إصلاح v5]:
-  - AccountTypeFilter بدل بناء QComboBox يدوي.
-  - BaseListPanel pattern للهيدر والـ status bar.
-  - get_tree_style() من panels (كان موجود لكن الـ combo كان يدوي).
 """
 
 from PyQt5.QtWidgets import (
@@ -22,8 +17,9 @@ from ui.widgets.shared.panels import (
     ListHeader,
     ListStatusBar,
     get_tree_style,
-    AccountTypeFilter,
 )
+# انتقل لمجلد الحسابات — مخصص لـ TYPE_AR
+from ui.tabs.accounting.accounts_combo_widget import AccountTypeFilter
 from ui.tabs.accounting.helpers import TYPE_COLORS
 
 
@@ -36,14 +32,11 @@ class _AccountsPanel(SafeConnMixin, QWidget):
         self._build()
         self._refresh_accounts()
 
-    # ── بناء الواجهة ──────────────────────────────────────
-
     def _build(self):
         root = QVBoxLayout(self)
         root.setContentsMargins(0, 0, 0, 0)
         root.setSpacing(0)
 
-        # هيدر موحد
         self._header = ListHeader(
             title="📚  الحسابات",
             show_search=True,
@@ -52,13 +45,11 @@ class _AccountsPanel(SafeConnMixin, QWidget):
         self._header.search_changed.connect(self._filter_accounts)
         root.addWidget(self._header)
 
-        # فلتر النوع — AccountTypeFilter بدل QComboBox يدوي
         self._type_filter = AccountTypeFilter(TYPE_AR, include_all=True)
         self._type_filter.setContentsMargins(8, 4, 8, 4)
         self._type_filter.type_changed.connect(self._filter_accounts)
         root.addWidget(self._type_filter)
 
-        # شجرة الحسابات
         self.lst = QTreeWidget()
         self.lst.setHeaderLabels(["الكود", "الاسم", "الرصيد"])
         hh = self.lst.header()
@@ -72,11 +63,8 @@ class _AccountsPanel(SafeConnMixin, QWidget):
         self.lst.itemSelectionChanged.connect(self._on_selected)
         root.addWidget(self.lst, stretch=1)
 
-        # شريط الحالة الموحد
         self._status = ListStatusBar()
         root.addWidget(self._status)
-
-    # ── تحميل وفلترة ────────────────────────────────────
 
     def _refresh_accounts(self):
         try:
@@ -131,8 +119,6 @@ class _AccountsPanel(SafeConnMixin, QWidget):
 
         total = sum(1 for a in self._all if a["is_leaf"])
         self._status.set_count(count, total)
-
-    # ── selection ────────────────────────────────────────
 
     def _on_selected(self):
         items = self.lst.selectedItems()
