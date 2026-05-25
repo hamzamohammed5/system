@@ -23,7 +23,7 @@ from db.pricing.pricing_repo  import fetch_all_pricing, upsert_pricing, delete_p
 from models.costing   import calc_cost
 from ui.helpers       import make_table, buttons_row, section_label, danger_button
 from ui.widgets.shared.filter_bar import FilterBar
-from ui.widgets.shared.scenario_comparison_widget import ScenarioComparisonWidget
+from ui.tabs.costing.shared.scenario_comparison_widget import ScenarioComparisonWidget
 from ui.events import bus
 
 from ._stat_box import stat_box

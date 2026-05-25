@@ -1,5 +1,5 @@
 File Tree Snapshot
-Generated : 2026-05-25 11:27:25
+Generated : 2026-05-25 11:50:26
 Source    : D:\My Workspace\Hg\Alhabaar\accountant\system
 Extensions: .py
 ────────────────────────────────────────────────────────────
@@ -27,6 +27,7 @@ system/
 │   │   ├── operations_repo.py
 │   │   ├── raw_variants_repo.py
 │   │   └── schema.py
+│   ├── design/
 │   ├── designs/
 │   │   ├── design_item_categories_repo.py
 │   │   ├── design_schema.py
@@ -48,15 +49,15 @@ system/
 │   ├── pricing/
 │   │   ├── offers_repo.py
 │   │   └── pricing_repo.py
-│   ├── shared/
-│   │   ├── categories_repo.py
-│   │   ├── connection.py
-│   │   ├── items_repo.py
-│   │   ├── migrations.py
-│   │   ├── migrations_v2.py
-│   │   ├── migrations_v3.py
-│   │   ├── settings_repo.py
-│   │   └── shared_items_bridge.py
+│   └── shared/
+│       ├── categories_repo.py
+│       ├── connection.py
+│       ├── items_repo.py
+│       ├── migrations.py
+│       ├── migrations_v2.py
+│       ├── migrations_v3.py
+│       ├── settings_repo.py
+│       └── shared_items_bridge.py
 ├── models/
 │   ├── costing.py
 │   ├── costing_base.py
@@ -70,6 +71,7 @@ system/
 │   ├── tabs/
 │   │   ├── accounting/
 │   │   │   ├── financial/
+│   │   │   │   ├── _financial_helpers.py
 │   │   │   │   ├── balance_sheet_tab.py
 │   │   │   │   ├── income_statement_tab.py
 │   │   │   │   ├── owners_equity_tab.py
@@ -113,11 +115,14 @@ system/
 │   │   │   ├── tree/
 │   │   │   │   ├── _account_form.py
 │   │   │   │   ├── _group_filter.py
-│   │   │   │   └── _tree_builder.py
+│   │   │   │   ├── _tree_builder.py
+│   │   │   │   ├── _tree_headers.py
+│   │   │   │   └── _tree_nodes.py
 │   │   │   ├── _conn_guard.py
 │   │   │   ├── _state_widgets.py
 │   │   │   ├── account_combo.py
 │   │   │   ├── accounting_tabs_builder.py
+│   │   │   ├── accounts_combo_widget.py
 │   │   │   ├── accounts_tree.py
 │   │   │   ├── financial_statements.py
 │   │   │   ├── group_manager.py
@@ -136,6 +141,8 @@ system/
 │   │   │   ├── shared_items_manager.py
 │   │   │   └── shared_items_mixin.py
 │   │   ├── costing/
+│   │   │   ├── costing/
+│   │   │   │   └── bulk_replace/
 │   │   │   ├── labor/
 │   │   │   │   ├── labor_op_form.py
 │   │   │   │   ├── labor_op_table.py
@@ -164,6 +171,7 @@ system/
 │   │   │   │   │   ├── _db_scenarios.py
 │   │   │   │   │   ├── _memory_manager.py
 │   │   │   │   │   └── _memory_scenarios.py
+│   │   │   │   ├── bom_tree/
 │   │   │   │   ├── bom_tree_helper/
 │   │   │   │   │   └── _scenario_node_builder.py
 │   │   │   │   ├── bulk_replace/
@@ -176,13 +184,16 @@ system/
 │   │   │   │   ├── catalog_builder.py
 │   │   │   │   ├── component_row.py
 │   │   │   │   ├── machine_op_rows_editor.py
-│   │   │   │   └── raw_variants_panel.py
+│   │   │   │   ├── raw_variants_panel.py
+│   │   │   │   └── scenario_comparison_widget.py
 │   │   │   ├── labor_tab.py
 │   │   │   ├── machine_tab.py
 │   │   │   ├── product_tab.py
 │   │   │   └── raw_tab.py
+│   │   ├── costing_section/
 │   │   ├── design/
 │   │   │   ├── designs/
+│   │   │   │   ├── design_detail_panel/
 │   │   │   │   ├── designs_categories/
 │   │   │   │   │   └── _row_and_form.py
 │   │   │   │   ├── designs_table/
@@ -196,6 +207,8 @@ system/
 │   │   │   │   ├── _size_dialog.py
 │   │   │   │   └── _xcf_thumbnail.py
 │   │   │   ├── dimension_sets/
+│   │   │   │   ├── _GroupsPanel/
+│   │   │   │   ├── _GroupsPanel.py/
 │   │   │   │   ├── values_panel/
 │   │   │   │   │   ├── _instance_popup.py
 │   │   │   │   │   ├── _instances_table.py
@@ -219,6 +232,7 @@ system/
 │   │   │   ├── inventory_items_tab.py
 │   │   │   ├── inventory_outbound_tab.py
 │   │   │   └── inventory_report_tab.py
+│   │   ├── offers/
 │   │   ├── orders/
 │   │   │   ├── customers/
 │   │   │   │   ├── customer_detail_panel.py
@@ -298,13 +312,14 @@ system/
 │   │       │   ├── progress_bar.py
 │   │       │   ├── section_header.py
 │   │       │   ├── stat_card.py
+│   │       │   ├── stat_card_row.py
 │   │       │   ├── status_chip.py
 │   │       │   └── theme.py
+│   │       ├── table_utils/
 │   │       ├── table_utils_helper/
 │   │       │   ├── table_builders.py
 │   │       │   ├── table_helpers.py
 │   │       │   └── table_styles.py
-│   │       ├── accounts_combo_widget.py
 │   │       ├── base_crud_form.py
 │   │       ├── base_detail_panel.py
 │   │       ├── base_list_panel.py
@@ -318,6 +333,7 @@ system/
 │   │       ├── confirm_dialog.py
 │   │       ├── connection_mixin.py
 │   │       ├── date_range_filter.py
+│   │       ├── detail_panel_mixins.py
 │   │       ├── dialog_base.py
 │   │       ├── empty_state_helpers.py
 │   │       ├── filter_bar.py
@@ -325,13 +341,14 @@ system/
 │   │       ├── flow_layout.py
 │   │       ├── form_utils.py
 │   │       ├── input_widgets.py
+│   │       ├── list_panel_filter.py
 │   │       ├── list_panel_with_shared.py
 │   │       ├── loading_spinner.py
 │   │       ├── message_box.py
 │   │       ├── no_wheel.py
 │   │       ├── panels.py
+│   │       ├── rebuild_mixin.py
 │   │       ├── safe_conn_mixin.py
-│   │       ├── scenario_comparison_widget.py
 │   │       ├── scrollable_form.py
 │   │       ├── searchable_combo.py
 │   │       ├── shared_ops_mixin.py

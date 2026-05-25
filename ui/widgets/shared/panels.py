@@ -185,7 +185,7 @@ from .unit_combo import UnitCombo, make_unit_combo              # noqa: F401
 from .flow_layout import FlowLayout                             # noqa: F401
 
 # ── scenario comparison ────────────────────────────────────
-from .scenario_comparison_widget import ScenarioComparisonWidget  # noqa: F401
+from ...tabs.costing.shared.scenario_comparison_widget import ScenarioComparisonWidget  # noqa: F401
 
 # ── color picker ──────────────────────────────────────────
 from .color_picker_widget import ColorPickerWidget              # noqa: F401
@@ -211,7 +211,7 @@ from .empty_state_helpers import (                              # noqa: F401
 from .base_warning_bar import BaseWarningBar                    # noqa: F401
 
 # ── accounts combo ────────────────────────────────────────
-from .accounts_combo_widget import AccountTypeFilter            # noqa: F401
+from ...tabs.accounting.accounts_combo_widget import AccountTypeFilter            # noqa: F401
 
 # ── tooltip helpers ───────────────────────────────────────
 from .tooltip_helper import (                                   # noqa: F401
