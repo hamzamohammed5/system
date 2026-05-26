@@ -8,7 +8,7 @@ from PyQt5.QtCore    import Qt
 from PyQt5.QtGui     import QColor, QFont, QBrush
 
 from ui.app_settings import _C
-from .styles import ROW_HEIGHT_NORMAL
+from ..theme.styles import ROW_HEIGHT_NORMAL
 
 
 # ── بناء خلايا ────────────────────────────────────────────

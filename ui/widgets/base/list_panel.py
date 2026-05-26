@@ -17,7 +17,7 @@ from ui.app_settings import _C
 from ..tables.builders  import make_splitter_table_guarded, ROW_HEIGHT_LARGE
 from ..tables.items     import auto_fit_columns, fit_splitter_table
 from ..panels.state     import EmptyState
-from ..panels.header    import ListHeader, StatusBar
+from ..components.headers    import ListHeader, StatusBar
 from ..panels.filter    import FilterToolbar
 from ..mixins.bus       import BusConnectedMixin
 

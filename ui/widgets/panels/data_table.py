@@ -36,7 +36,7 @@ from PyQt5.QtCore    import Qt, pyqtSignal
 from ui.app_settings import _C
 from ..tables.builders import make_list_table, ROW_HEIGHT_LARGE
 from ..tables.items    import auto_fit_columns
-from ..panels.header   import ListHeader, StatusBar
+from ..components.headers   import ListHeader, StatusBar
 from ..panels.state    import EmptyState
 
 

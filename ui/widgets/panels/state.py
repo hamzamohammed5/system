@@ -10,7 +10,7 @@ ui/widgets/panels/state.py
 """
 
 from PyQt5.QtWidgets import (
-    QWidget, QFrame, QVBoxLayou, QLabel,
+    QWidget, QFrame, QVBoxLayout, QLabel,
     QTableWidget, QTableWidgetItem, QSizePolicy,
 )
 from PyQt5.QtCore import Qt, pyqtSignal
