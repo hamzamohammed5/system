@@ -1,5 +1,5 @@
 File Tree Snapshot
-Generated : 2026-05-26 09:50:13
+Generated : 2026-05-26 09:59:07
 Source    : D:\My Workspace\Hg\Alhabaar\accountant\system
 Extensions: .py
 ────────────────────────────────────────────────────────────
@@ -86,14 +86,18 @@ system/
 │   │   │   │   └── widget.py
 │   │   │   ├── action_toolbar.py
 │   │   │   ├── badge.py
+│   │   │   ├── badge_label.py
 │   │   │   ├── button.py
 │   │   │   ├── card.py
 │   │   │   ├── headers.py
 │   │   │   ├── label.py
 │   │   │   ├── notification.py
+│   │   │   ├── section_header.py
 │   │   │   ├── spinner.py
+│   │   │   ├── stat_card.py
 │   │   │   └── stat_row.py
 │   │   ├── core/
+│   │   │   ├── base.py
 │   │   │   ├── colors.py
 │   │   │   ├── conn.py
 │   │   │   ├── events.py
@@ -126,6 +130,7 @@ system/
 │   │   │   ├── data_table.py
 │   │   │   ├── detail_section.py
 │   │   │   ├── display.py
+│   │   │   ├── empty_state.py
 │   │   │   ├── filter.py
 │   │   │   ├── form_parts.py
 │   │   │   ├── header.py
@@ -383,8 +388,7 @@ system/
 │   │       ├── base_crud_form.py
 │   │       ├── base_detail_panel.py
 │   │       ├── base_list_panel.py
-│   │       ├── base_section.py
-│   │       └── panels.py
+│   │       └── base_section.py
 │   ├── app_settings.py
 │   ├── events.py
 │   ├── font_utils.py

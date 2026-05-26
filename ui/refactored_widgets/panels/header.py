@@ -1,8 +1,15 @@
 """
-ui/widgets/panels/header.py
-============================
-كل الـ headers في ملف واحد:
+ui/refactored_widgets/panels/headers.py
+========================================
+هيدرات موحدة — دمج panels/header.py و components/headers.py.
 
+كانت نفس الكلاسات متكررة في ملفين:
+  - ui/refactored_widgets/panels/header.py
+  - ui/refactored_widgets/components/headers.py
+
+دلوقتي في ملف واحد — الملفين القديمين بيستوردوا منه.
+
+المحتوى:
   SearchBar     — حقل بحث مع debounce
   StatusBar     — شريط عداد نتائج
   SectionHeader — هيدر قسم داخلي (accent bar + عنوان + أزرار)
@@ -28,7 +35,7 @@ def _base() -> int:
 
 
 def _make_btn(text: str, style: str = "normal") -> QPushButton:
-    from ._btn import make_btn
+    from ui.refactored_widgets.panels._btn import make_btn
     return make_btn(text, style)
 
 
@@ -42,7 +49,8 @@ class SearchBar(QWidget):
     search_changed = pyqtSignal(str)
 
     def __init__(self, placeholder: str = "🔍  بحث...",
-                 delay_ms: int = 250, height: int = 34, parent=None):
+                 delay_ms: int = 250, height: int = 34,
+                 parent=None):
         super().__init__(parent)
         self._delay = delay_ms
         self._timer = QTimer(self)
@@ -139,9 +147,12 @@ class SectionHeader(QWidget):
         lay.setContentsMargins(0, 6, 0, 6)
         lay.setSpacing(10)
 
+        # شريط accent
         bar = QLabel()
         bar.setFixedSize(3, 18)
-        bar.setStyleSheet(f"background:{_C['accent']}; border-radius:2px; border:none;")
+        bar.setStyleSheet(
+            f"background:{_C['accent']}; border-radius:2px; border:none;"
+        )
         lay.addWidget(bar)
 
         base = _base()
@@ -254,11 +265,11 @@ class ListHeader(QFrame):
             self._btn_add.setEnabled(enabled)
 
     @property
-    def search_bar(self) -> SearchBar | None:
+    def search_bar(self) -> "SearchBar | None":
         return self._search_bar
 
     @property
-    def btn_add(self) -> QPushButton | None:
+    def btn_add(self) -> "QPushButton | None":
         return self._btn_add
 
 
@@ -266,7 +277,8 @@ def make_list_header(title: str = "", add_text: str = "",
                      show_search: bool = True,
                      placeholder: str = "🔍  بحث...") -> ListHeader:
     return ListHeader(title=title, add_text=add_text,
-                      show_search=show_search, search_placeholder=placeholder)
+                      show_search=show_search,
+                      search_placeholder=placeholder)
 
 
 # ══════════════════════════════════════════════════════════
@@ -280,27 +292,27 @@ class PageHeader(QFrame):
                  icon: str = "", accent: str = None,
                  compact: bool = False, parent=None):
         super().__init__(parent)
-        self._accent  = accent or _C.get('accent', '#1565c0')
+        self._accent  = accent or _C.get("accent", "#1565c0")
         self._compact = compact
         self._build(title, subtitle, icon)
 
     def _build(self, title: str, subtitle: str, icon: str):
         self.setStyleSheet(f"""
             QFrame {{
-                background:{_C.get('bg_surface', 'white')};
-                border-bottom:1px solid {_C.get('border', '#e0e0e0')};
+                background:{_C.get('bg_surface','white')};
+                border-bottom:1px solid {_C.get('border','#e0e0e0')};
             }}
         """)
         self.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Fixed)
 
         h_pad = 12 if self._compact else 20
         v_pad = 8  if self._compact else 14
-
         lay = QHBoxLayout(self)
         lay.setContentsMargins(h_pad, v_pad, h_pad, v_pad)
         lay.setSpacing(12)
 
         base = _base()
+
         if icon:
             sz = fs(base, +1) if self._compact else fs(base, +2)
             lbl_icon = QLabel(icon)
@@ -320,7 +332,8 @@ class PageHeader(QFrame):
         f.setBold(True)
         self._lbl_title.setFont(f)
         self._lbl_title.setStyleSheet(
-            f"color:{_C.get('text_primary','#1c1b18')}; background:transparent; border:none;"
+            f"color:{_C.get('text_primary','#1c1b18')};"
+            "background:transparent; border:none;"
         )
         col.addWidget(self._lbl_title)
 
@@ -367,12 +380,9 @@ class DetailHeader(QFrame):
     def __init__(self, bg: str = None, parent=None):
         super().__init__(parent)
         self._stat_cards = []
-        self._build(bg or _C['bg_surface'])
+        self._build(bg or _C["bg_surface"])
 
     def _build(self, bg: str):
-        from .cards import BadgeLabel
-        from .header import InfoRow as _IR
-
         self.setStyleSheet(f"""
             QFrame {{
                 background:{bg};
@@ -412,6 +422,8 @@ class DetailHeader(QFrame):
             f"color:{_C['text_muted']}; font-size:{fs(base,0)}pt;"
             "background:transparent; border:none; font-weight:500;"
         )
+
+        from ui.refactored_widgets.panels.cards import BadgeLabel
         self._badge_status   = BadgeLabel()
         self._badge_priority = QLabel("")
         self._badge_priority.setStyleSheet("background:transparent; border:none;")
@@ -432,14 +444,14 @@ class DetailHeader(QFrame):
         self._lbl_customer.setVisible(False)
         top_lay.addWidget(self._lbl_customer)
 
-        from .display import InfoRow
+        from ui.refactored_widgets.panels.display import InfoRow
         self._info_row = InfoRow(separator="  ·  ")
         top_lay.addWidget(self._info_row)
 
         root.addWidget(top)
         root.addWidget(_h_divider())
 
-        # ── البطاقات ──
+        # ── البطاقات الإحصائية ──
         cards_sec = QWidget()
         cards_sec.setStyleSheet("background:transparent;")
         cards_lay = QVBoxLayout(cards_sec)
@@ -451,7 +463,7 @@ class DetailHeader(QFrame):
         root.addWidget(_h_divider())
 
         # ── شريط الأزرار ──
-        from ui.widgets.panels.toolbar import ActionToolbar
+        from ui.refactored_widgets.components.action_toolbar import ActionToolbar
         tb_sec = QWidget()
         tb_sec.setStyleSheet("background:transparent;")
         tb_sec.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Preferred)
@@ -498,7 +510,7 @@ class DetailHeader(QFrame):
 
     def add_stat_card(self, icon: str, title: str, value: str = "─",
                       color: str = "#1565c0", compact: bool = True):
-        from .cards import StatCard
+        from ui.refactored_widgets.components.card import StatCard
         card = StatCard(icon, title, value, color, compact=compact)
         self._cards_row.addWidget(card, stretch=1)
         self._stat_cards.append(card)
@@ -511,19 +523,11 @@ class DetailHeader(QFrame):
         self._stat_cards.clear()
 
 
-# ── helpers ───────────────────────────────────────────────
-
 def _h_divider(color: str = None) -> QFrame:
     f = QFrame()
     f.setFrameShape(QFrame.HLine)
     f.setFixedHeight(1)
-    f.setStyleSheet(f"background:{color or _C.get('border','#e0e0e0')}; border:none;")
+    f.setStyleSheet(
+        f"background:{color or _C.get('border','#e0e0e0')}; border:none;"
+    )
     return f
-
-
-# lazy import guard for InfoRow used in DetailHeader
-class InfoRow(QWidget):
-    """صف معلومات ثانوية — proxy يُعيد التوجيه لـ display.InfoRow."""
-    def __new__(cls, *args, **kwargs):
-        from .display import InfoRow as _Real
-        return _Real(*args, **kwargs)
