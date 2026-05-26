@@ -21,7 +21,7 @@ from ..core.conn          import LiveConnMixin
 from ..components.button  import make_btn
 from ..dialogs.confirm    import confirm_delete
 from ..theme.styles       import tree_style   # المصدر الوحيد — كان get_tree_style خطأ
-from ..panels.form_parts  import ModeLabel
+from ..components.label import ModeLabel
 from ui.events import bus
 
 
