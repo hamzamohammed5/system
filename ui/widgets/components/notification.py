@@ -8,7 +8,7 @@ from PyQt5.QtWidgets import QFrame, QHBoxLayout, QLabel, QPushButton
 from PyQt5.QtCore    import QTimer, pyqtSignal
 
 from ui.app_settings import fs
-from ..core.settings import get_base
+from ui.app_settings import get_font_size
 from ..core.colors   import status_colors
 
 _ICONS = {
@@ -84,7 +84,7 @@ class NotificationBar(QFrame):
         """
         cfg  = status_colors(level)
         icon = _ICONS.get(level, "ℹ️")
-        base = get_base()
+        base = get_font_size()
 
         self.setStyleSheet(f"""
             #notifBar {{

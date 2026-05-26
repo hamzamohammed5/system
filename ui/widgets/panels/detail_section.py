@@ -12,7 +12,7 @@ from PyQt5.QtWidgets import (
 from PyQt5.QtCore import Qt
 
 from ui.app_settings import _C, fs
-from ..core.settings  import get_base
+from ui.app_settings import get_font_size
 from ..components.headers         import SectionHeader
 
 
@@ -76,7 +76,7 @@ class DetailSection(QFrame):
     def add_row(self, label: str, value: str = "─",
                 color: str = None, bold: bool = False,
                 icon: str = "") -> QLabel:
-        base = get_base()
+        base = get_font_size()
 
         lbl_key = QLabel(label)
         lbl_key.setStyleSheet(
@@ -139,7 +139,7 @@ class DetailSection(QFrame):
             _, lbl_val = self._rows[index]
             lbl_val.setText(value)
             if color:
-                base = get_base()
+                base = get_font_size()
                 lbl_val.setStyleSheet(
                     f"color:{color}; font-size:{fs(base,0)}pt; font-weight:500;"
                     "background:transparent; border:none;"
@@ -163,7 +163,7 @@ def make_detail_row(label: str, value: str = "─",
                     color: str = None,
                     bold: bool = False) -> "tuple[QLabel, QLabel]":
     """يبني صف تفاصيل واحد خارج DetailSection."""
-    base = get_base()
+    base = get_font_size()
 
     lbl_key = QLabel(label)
     lbl_key.setStyleSheet(
@@ -214,7 +214,7 @@ class TwoColDetails(QWidget):
 
     def add(self, label: str, value: str = "─",
             color: str = None, bold: bool = False) -> QLabel:
-        base = get_base()
+        base = get_font_size()
 
         lbl_key = QLabel(label)
         lbl_key.setStyleSheet(

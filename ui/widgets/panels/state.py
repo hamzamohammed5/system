@@ -17,7 +17,7 @@ from PyQt5.QtCore import Qt, pyqtSignal
 from PyQt5.QtGui  import QColor, QFont
 
 from ui.app_settings import _C, fs
-from ..core.settings import get_base   # المصدر الوحيد — لا _base() محلية
+from ui.app_settings import get_font_size   # المصدر الوحيد — لا _base() محلية
 
 
 def _card_colors(color: str) -> tuple:
@@ -57,7 +57,7 @@ class EmptyState(QFrame):
         lay.setSpacing(6)
         lay.setContentsMargins(20, 16, 20, 16)
 
-        base = get_base()
+        base = get_font_size()
 
         if icon:
             lbl_icon = QLabel(icon)
@@ -116,7 +116,7 @@ class EmptyPanelState(QWidget):
         lay.setSpacing(8)
         lay.setContentsMargins(20, 30, 20, 30)
 
-        base = get_base()
+        base = get_font_size()
 
         if icon:
             lbl_icon = QLabel(icon)

@@ -23,7 +23,7 @@ from PyQt5.QtCore import Qt
 from PyQt5.QtGui  import QFont
 
 from ui.app_settings import _C, fs
-from ..core.settings import get_base
+from ui.app_settings import get_font_size
 from ..core.colors   import card_colors
 from ..theme.builders import v_divider
 
@@ -41,7 +41,7 @@ class BadgeLabel(QLabel):
         self._apply("#555", "#f5f5f5", "#e0e0e0")
 
     def _apply(self, fg: str, bg: str, border: str):
-        base = get_base()
+        base = get_font_size()
         self.setStyleSheet(
             f"font-weight:700; font-size:{fs(base,-1)}pt;"
             f"padding:3px 12px; border-radius:20px;"
@@ -88,7 +88,7 @@ class StatCard(QFrame):
         self.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Fixed)
 
         lay  = QVBoxLayout(self)
-        base = get_base()
+        base = get_font_size()
 
         if self._compact:
             lay.setContentsMargins(10, 8, 10, 8)
@@ -128,7 +128,7 @@ class StatCard(QFrame):
         self._lbl_value.setText(text)
 
     def set_color(self, color: str):
-        base = get_base()
+        base = get_font_size()
         self._color = color
         self._lbl_value.setStyleSheet(
             f"color:{color}; background:transparent; border:none;"
@@ -165,7 +165,7 @@ class StatusChip(QFrame):
             }}
         """)
         self.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Fixed)
-        base = get_base()
+        base = get_font_size()
         m = (10, 6, 10, 6) if compact else (12, 8, 12, 8)
         lay = QHBoxLayout(self)
         lay.setContentsMargins(*m)
@@ -244,7 +244,7 @@ class _StatCard(QFrame):
         self.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Fixed)
 
         lay  = QVBoxLayout(self)
-        base = get_base()
+        base = get_font_size()
 
         if self._item.compact:
             lay.setContentsMargins(10, 6, 10, 6)
@@ -411,7 +411,7 @@ class StatusCard(QFrame):
         lay.setContentsMargins(16, 14, 16, 14)
         lay.setSpacing(4)
 
-        base = get_base()
+        base = get_font_size()
         top  = QHBoxLayout()
 
         lbl_icon = QLabel(icon)

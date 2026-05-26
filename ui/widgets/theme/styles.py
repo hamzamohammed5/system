@@ -3,11 +3,16 @@ ui/widgets/theme/styles.py
 ===================================
 كل الـ stylesheet generators في مكان واحد.
 
-scroll_style() موجودة هنا — هي المصدر الوحيد.
-utils/scroll.py يستوردها من هنا.
+scroll_style()  — المصدر الوحيد للـ scroll stylesheet.
+h_divider()     — منقولة من theme/builders.py (المحذوف).
+v_divider()     — منقولة من theme/builders.py (المحذوف).
+wrap_in_scroll()— منقولة من utils/scroll.py   (المحذوف).
 """
+from PyQt5.QtWidgets import QFrame, QScrollArea, QWidget, QSizePolicy
+from PyQt5.QtCore    import Qt
+
 from ui.app_settings import _C, fs
-from ..core.settings import get_base
+from ui.app_settings import get_font_size
 
 
 # ══════════════════════════════════════════════════════════════════
@@ -16,7 +21,7 @@ from ..core.settings import get_base
 
 def input_style(height: int = 32, error: bool = False) -> str:
     """Stylesheet موحد لـ QLineEdit / QComboBox / QDateEdit."""
-    base   = get_base()
+    base   = get_font_size()
     bg     = "#fef2f2" if error else _C["bg_input"]
     border = "#f87171" if error else _C["border_med"]
     return (
@@ -30,7 +35,7 @@ def input_style(height: int = 32, error: bool = False) -> str:
 def spinbox_style(height: int = 32, positive: bool = False,
                   widget: str = "QDoubleSpinBox") -> str:
     """Stylesheet موحد لـ QDoubleSpinBox / QSpinBox."""
-    base = get_base()
+    base = get_font_size()
     if positive:
         bg, border, color, weight = "#f0fdf4", "#86efac", "#15803d", "bold"
     else:
@@ -54,7 +59,7 @@ def spinbox_style(height: int = 32, positive: bool = False,
 
 def search_input_style(height: int = 34) -> str:
     """Stylesheet لحقول البحث."""
-    base = get_base()
+    base = get_font_size()
     return f"""
         QLineEdit {{
             background:{_C['bg_input']};
@@ -77,7 +82,7 @@ ROW_HEIGHT_LARGE   = 48
 
 def table_style(variant: str = "normal") -> str:
     """Stylesheet موحد للجداول."""
-    base = get_base()
+    base = get_font_size()
     c    = _C
 
     padding_map = {
@@ -129,10 +134,7 @@ def splitter_style() -> str:
 # ══════════════════════════════════════════════════════════════════
 
 def scroll_style(width: int = 6) -> str:
-    """
-    Stylesheet موحد لـ QScrollArea / QScrollBar.
-    المصدر الوحيد — utils/scroll.py يستوردها من هنا.
-    """
+    """Stylesheet موحد لـ QScrollArea / QScrollBar."""
     r = width // 2
     return f"""
         QScrollArea {{ border:none; background:transparent; }}
@@ -181,7 +183,7 @@ def status_card_style(status: str = "info", radius: int = 8) -> str:
 
 
 def group_box_style(accent: str = None) -> str:
-    base  = get_base()
+    base  = get_font_size()
     color = accent or _C["accent"]
     return f"""
         QGroupBox {{
@@ -204,9 +206,9 @@ def group_box_style(accent: str = None) -> str:
 def tab_style(accent: str = None, size: str = "normal") -> str:
     """
     Stylesheet للتبويبات.
-    size: "normal" | "inner" | "small" (small = alias لـ inner)
+    size: "normal" | "inner" | "small"
     """
-    base     = get_base()
+    base     = get_font_size()
     c        = accent or _C["accent"]
     is_small = size in ("inner", "small")
     padding  = "6px 12px" if is_small else "8px 16px"
@@ -288,7 +290,7 @@ def toolbar_style() -> str:
 
 def status_label_style(status: str = "info", font_offset: int = 0) -> str:
     from ..core.colors import status_colors
-    base = get_base()
+    base = get_font_size()
     s = status_colors(status)
     return (
         f"font-size:{fs(base,font_offset)}pt; font-weight:bold;"
@@ -298,7 +300,7 @@ def status_label_style(status: str = "info", font_offset: int = 0) -> str:
 
 
 def muted_label_style(font_offset: int = -1) -> str:
-    base = get_base()
+    base = get_font_size()
     return (
         f"color:{_C['text_muted']}; font-size:{fs(base,font_offset)}pt;"
         "background:transparent; border:none;"
@@ -306,7 +308,7 @@ def muted_label_style(font_offset: int = -1) -> str:
 
 
 def section_title_style(color: str = None, font_offset: int = 0) -> str:
-    base = get_base()
+    base = get_font_size()
     c = color or _C["text_primary"]
     return (
         f"font-weight:bold; font-size:{fs(base,font_offset)}pt;"
@@ -322,7 +324,7 @@ def icon_btn_style(color: str = "#aaa", hover_color: str = "#e53935") -> str:
 
 
 def link_btn_style(color: str = None) -> str:
-    base = get_base()
+    base = get_font_size()
     c = color or _C["accent"]
     return f"""
         QPushButton {{
@@ -332,3 +334,49 @@ def link_btn_style(color: str = None) -> str:
         }}
         QPushButton:hover {{ color:{c}cc; }}
     """
+
+
+# ══════════════════════════════════════════════════════════════════
+# Dividers  ← منقولة من theme/builders.py (المحذوف)
+# ══════════════════════════════════════════════════════════════════
+
+def h_divider(color: str = None, height: int = 1) -> QFrame:
+    """فاصل أفقي موحد."""
+    sep = QFrame()
+    sep.setFrameShape(QFrame.HLine)
+    sep.setFixedHeight(height)
+    sep.setStyleSheet(f"background:{color or _C.get('border','#e0e0e0')}; border:none;")
+    return sep
+
+
+def v_divider(color: str = None, width: int = 1, margin_v: int = 4) -> QFrame:
+    """فاصل عمودي موحد — للـ toolbars."""
+    sep = QFrame()
+    sep.setFrameShape(QFrame.VLine)
+    sep.setFixedWidth(width)
+    sep.setStyleSheet(
+        f"background:{color or _C.get('border_med','#bdbdbd')};"
+        f"border:none; margin:{margin_v}px 2px;"
+    )
+    return sep
+
+
+# ══════════════════════════════════════════════════════════════════
+# Scroll Widget  ← منقول من utils/scroll.py (المحذوف)
+# ══════════════════════════════════════════════════════════════════
+
+def wrap_in_scroll(widget: QWidget,
+                   min_height: int = 0,
+                   horizontal: bool = False) -> QScrollArea:
+    """يلف أي widget في QScrollArea موحد."""
+    scroll = QScrollArea()
+    scroll.setWidgetResizable(True)
+    scroll.setWidget(widget)
+    scroll.setVerticalScrollBarPolicy(Qt.ScrollBarAsNeeded)
+    scroll.setHorizontalScrollBarPolicy(
+        Qt.ScrollBarAsNeeded if horizontal else Qt.ScrollBarAlwaysOff
+    )
+    scroll.setStyleSheet(scroll_style())
+    if min_height:
+        scroll.setMinimumHeight(min_height)
+    return scroll

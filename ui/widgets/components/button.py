@@ -8,7 +8,7 @@ from PyQt5.QtCore    import Qt
 from PyQt5.QtGui     import QFont, QFontMetrics
 
 from ui.app_settings import _C, fs
-from ..core.settings import get_base
+from ui.app_settings import get_font_size
 
 _STYLES = {
     "primary": dict(
@@ -50,7 +50,7 @@ def make_btn(text: str, style: str = "normal",
     fixed_size: True = عرض ثابت، False = عرض أدنى قابل للتمدد
     """
     s    = _STYLES.get(style, _STYLES["normal"])
-    base = get_base()
+    base = get_font_size()
     h    = base * 2 + 8
     fsz  = fs(base, 0)
 

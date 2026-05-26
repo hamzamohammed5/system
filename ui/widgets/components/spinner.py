@@ -10,7 +10,7 @@ from PyQt5.QtWidgets import (
 from PyQt5.QtCore import Qt, QTimer
 
 from ui.app_settings import _C, fs
-from ..core.settings import get_base
+from ui.app_settings import get_font_size
 
 
 _FRAMES = ["⠋", "⠙", "⠸", "⠴", "⠦", "⠇"]
@@ -37,7 +37,7 @@ class LoadingSpinner(QWidget):
         lay.setSpacing(8)
         lay.setAlignment(Qt.AlignCenter)
 
-        base = get_base()
+        base = get_font_size()
         sz   = fs(base, 0 if compact else +2)
 
         self._lbl_icon = QLabel(_FRAMES[0])

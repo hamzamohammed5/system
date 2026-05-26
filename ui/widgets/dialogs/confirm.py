@@ -7,7 +7,7 @@ from PyQt5.QtWidgets import QLabel
 from PyQt5.QtCore    import Qt
 
 from ui.app_settings import _C, fs
-from ..core          import get_base
+from ..core          import get_font_size
 from ..components.button import make_btn
 from .shell import DialogShell
 
@@ -22,7 +22,7 @@ def _confirm_btn(text: str, accent: str, ghost: bool = False) -> 'QPushButton':
             QPushButton {{
                 background:{accent}; color:white; font-weight:bold;
                 border:none; border-radius:6px; padding:0 20px;
-                font-size:{fs(get_base(),0)}pt; min-height:34px; min-width:80px;
+                font-size:{fs(get_font_size(),0)}pt; min-height:34px; min-width:80px;
             }}
             QPushButton:hover {{ background:{accent}dd; }}
         """)
@@ -44,7 +44,7 @@ class ConfirmDialog(DialogShell):
         self._build_body(message, confirm_text, cancel_text, _accent)
 
     def _build_body(self, message, confirm_text, cancel_text, accent):
-        base = get_base()
+        base = get_font_size()
         lbl = QLabel(message)
         lbl.setWordWrap(True)
         lbl.setAlignment(Qt.AlignRight | Qt.AlignTop)

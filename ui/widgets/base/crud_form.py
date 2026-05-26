@@ -1,27 +1,17 @@
 """
-widgets/base/crud_form.py
-==========================
-BaseCrudForm — قاعدة مشتركة لكل نماذج الإضافة/التعديل.
-
-التغييرات عن النسخة القديمة:
-  - NotificationBar بدل QMessageBox المنبثقة
-  - _collect_and_validate() hook موحد
-  - EditModeMixin مدمجة هنا مباشرة
-  - set_conn() لتحديث الـ connection
-  - build_inner_scroll من utils/scroll
+ui/widgets/base/crud_form.py
 """
-
 import logging
 from PyQt5.QtWidgets import QWidget, QPushButton, QHBoxLayout, QVBoxLayout, QScrollArea, QSizePolicy
 from PyQt5.QtCore    import pyqtSignal, Qt
 
 from ui.app_settings import _C
-from ..panels.form_parts import FormGroup, ModeLabel
-from ..components.notification     import NotificationBar
-from ..components.button       import make_btn
-from ..mixins.edit       import EditModeMixin
-from ..mixins.validate   import FormValidationMixin
-from ..utils.scroll      import wrap_in_scroll
+from ..panels.form_parts         import FormGroup, ModeLabel
+from ..components.notification   import NotificationBar
+from ..components.button         import make_btn
+from ..mixins.edit               import EditModeMixin
+from ..mixins.validate           import FormValidationMixin
+from ..theme.styles              import wrap_in_scroll   # ← كانت من utils/scroll
 from ui.events import bus
 
 logger = logging.getLogger(__name__)
@@ -228,6 +218,5 @@ class BaseCrudForm(QWidget, EditModeMixin, FormValidationMixin):
     def set_conn(self, conn):
         self.conn = conn
 
-    # alias
     def _warn(self, msg: str):
         self._notif.show(msg, "warning")

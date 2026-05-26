@@ -6,7 +6,7 @@ BaseDialog — قاعدة مشتركة لكل الـ dialogs.
 from PyQt5.QtWidgets import QPushButton, QVBoxLayout
 
 from ui.app_settings import _C, fs
-from ..core          import get_base
+from ..core          import get_font_size
 from ..components.button import make_btn
 from .shell import DialogShell
 
@@ -43,7 +43,7 @@ class BaseDialog(DialogShell):
         self._btn_ok.setMinimumHeight(36)
 
         if self._accent and self._accent != _C.get("accent", "#1565c0"):
-            base = get_base()
+            base = get_font_size()
             self._btn_ok.setStyleSheet(f"""
                 QPushButton {{
                     background:{self._accent}; color:white; font-weight:bold;

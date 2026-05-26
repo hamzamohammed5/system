@@ -15,7 +15,7 @@ from PyQt5.QtCore import Qt, QDate
 from PyQt5.QtGui  import QFont
 
 from ui.app_settings import _C, fs
-from ..core          import get_base
+from ..core          import get_font_size
 from ..theme.styles  import input_style as _input_style, spinbox_style as _spinbox_style
 
 
@@ -98,7 +98,7 @@ class LabeledInput(QWidget):
         lay.setContentsMargins(0, 0, 0, 0)
         lay.setSpacing(spacing)
 
-        base = get_base()
+        base = get_font_size()
         lbl  = QLabel(label)
         lbl.setStyleSheet(
             f"color:{_C['text_sec']}; font-size:{fs(base,0)}pt; font-weight:600;"
@@ -172,7 +172,7 @@ class NotesLineEdit(QLineEdit):
         super().__init__(parent)
         self.setPlaceholderText(placeholder)
         self.setMinimumHeight(height)
-        base = get_base()
+        base = get_font_size()
         self.setStyleSheet(f"""
             QLineEdit {{
                 background:#fafafa; border:1px solid {_C['border']};

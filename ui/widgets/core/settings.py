@@ -8,7 +8,7 @@ ui/widgets/core/settings.py
 from ui.app_settings import get_font_size, fs, _C  # noqa: F401
 
 
-def get_base() -> int:
+def get_font_size() -> int:
     """حجم الخط الأساسي الحالي."""
     return get_font_size()
 

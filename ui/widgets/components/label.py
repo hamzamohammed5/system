@@ -25,7 +25,7 @@ from PyQt5.QtCore import Qt
 from PyQt5.QtGui  import QFont
 
 from ui.app_settings import _C, fs
-from ..core.settings import get_base
+from ui.app_settings import get_font_size
 
 
 # ══════════════════════════════════════════════════════════
@@ -40,7 +40,7 @@ class InfoRow(QWidget):
         self._separator = separator
         self._lbl = QLabel()
         self._lbl.setStyleSheet(
-            f"color:{_C['text_muted']}; font-size:{fs(get_base(),-1)}pt;"
+            f"color:{_C['text_muted']}; font-size:{fs(get_font_size(),-1)}pt;"
             "background:transparent; border:none;"
         )
         self._lbl.setWordWrap(True)
@@ -82,7 +82,7 @@ class ModeLabel(QLabel):
         prefix  = f"{self._icon}  " if self._icon else ""
         display = text or self._add_text
         self.setText(f"─── {prefix}{display} ───")
-        base = get_base()
+        base = get_font_size()
         self.setStyleSheet(
             f"font-weight:bold; font-size:{fs(base,0)}pt;"
             f"color:{_C['accent']}; background:transparent; border:none;"
@@ -93,7 +93,7 @@ class ModeLabel(QLabel):
         prefix = f"{self._icon}  " if self._icon else ""
         suffix = f": {name}" if name else ""
         self.setText(f"─── {prefix}تعديل{suffix} ───")
-        base = get_base()
+        base = get_font_size()
         self.setStyleSheet(
             f"font-weight:bold; font-size:{fs(base,0)}pt;"
             "color:#e65100; background:transparent; border:none;"
@@ -101,7 +101,7 @@ class ModeLabel(QLabel):
 
     def set_custom(self, text: str, color: str = None):
         self.setText(text)
-        base = get_base()
+        base = get_font_size()
         self.setStyleSheet(
             f"font-weight:bold; font-size:{fs(base,0)}pt;"
             f"color:{color or _C['text_sec']}; background:transparent; border:none;"
@@ -150,7 +150,7 @@ class AmountLabel(QLabel):
         self._decimals   = decimals
         self._auto_color = auto_color
 
-        base = get_base()
+        base = get_font_size()
         f = QFont()
         f.setPointSize(fs(base, font_size_offset))
         if bold:
@@ -300,7 +300,7 @@ class ProgressBar(QWidget):
 
     def _build(self, label: str):
         self.setStyleSheet("background:transparent;")
-        base = get_base()
+        base = get_font_size()
         root = QVBoxLayout(self)
         root.setContentsMargins(0, 0, 0, 0)
         root.setSpacing(3)

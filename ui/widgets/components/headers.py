@@ -19,7 +19,7 @@ from PyQt5.QtCore import Qt, QTimer, pyqtSignal
 from PyQt5.QtGui  import QFont
 
 from ui.app_settings import _C, fs
-from ..core.settings  import get_base
+from ui.app_settings import get_font_size
 from ..theme.builders import h_divider, v_divider
 from .button          import make_btn
 from .stat_row        import BadgeLabel
@@ -51,7 +51,7 @@ class SearchBar(QWidget):
         lay = QHBoxLayout(self)
         lay.setContentsMargins(0, 0, 0, 0)
 
-        base = get_base()
+        base = get_font_size()
         self.inp = QLineEdit()
         self.inp.setPlaceholderText(placeholder)
         self.inp.setFixedHeight(height)
@@ -99,7 +99,7 @@ class StatusBar(QLabel):
         super().__init__(parent)
         self.setAlignment(Qt.AlignCenter)
         self.setFixedHeight(24)
-        base = get_base()
+        base = get_font_size()
         self.setStyleSheet(f"""
             background:{_C['bg_surface_2']};
             color:{_C['text_muted']};
@@ -148,7 +148,7 @@ class SectionHeader(QWidget):
         bar.setStyleSheet(f"background:{_C['accent']}; border-radius:2px; border:none;")
         lay.addWidget(bar)
 
-        base = get_base()
+        base = get_font_size()
         self._lbl = QLabel(title)
         self._lbl.setStyleSheet(
             f"font-weight:700; font-size:{fs(base,+1)}pt;"
@@ -203,7 +203,7 @@ class PageHeader(QFrame):
         lay.setContentsMargins(h_pad, v_pad, h_pad, v_pad)
         lay.setSpacing(12)
 
-        base = get_base()
+        base = get_font_size()
 
         if icon:
             sz = fs(base, +1) if self._compact else fs(base, +2)
@@ -298,7 +298,7 @@ class DetailHeader(QFrame):
         title_row.setSpacing(10)
         title_row.setAlignment(Qt.AlignVCenter)
 
-        base = get_base()
+        base = get_font_size()
         self._lbl_title = QLabel("─")
         f = QFont()
         f.setPointSize(fs(base, +4))
@@ -370,7 +370,7 @@ class DetailHeader(QFrame):
     def set_type_badge(self, text: str, color: str = None):
         self._lbl_type.setText(text)
         if color:
-            base = get_base()
+            base = get_font_size()
             self._lbl_type.setStyleSheet(
                 f"color:{color}; font-size:{fs(base,0)}pt;"
                 "background:transparent; border:none; font-weight:500;"
@@ -384,7 +384,7 @@ class DetailHeader(QFrame):
         self._badge_priority.setText(text)
         self._badge_priority.setStyleSheet(
             f"color:{color}; background:transparent; border:none;"
-            f"font-size:{fs(get_base(),+1)}pt;"
+            f"font-size:{fs(get_font_size(),+1)}pt;"
         )
 
     def set_customer_name(self, name: str):
@@ -455,7 +455,7 @@ class ListHeader(QFrame):
             self._btn_row.setSpacing(8)
 
             if self._title:
-                base = get_base()
+                base = get_font_size()
                 lbl = QLabel(self._title)
                 lbl.setStyleSheet(
                     f"font-weight:700; font-size:{fs(base,0)}pt;"

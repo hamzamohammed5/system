@@ -10,7 +10,7 @@ from PyQt5.QtWidgets import (
 from PyQt5.QtCore import Qt
 
 from ui.app_settings import _C, fs
-from ..core import get_base
+from ..core import get_font_size
 
 
 class DialogShell(QDialog):
@@ -93,7 +93,7 @@ class DialogShell(QDialog):
 
         col = QVBoxLayout()
         col.setSpacing(2)
-        base = get_base()
+        base = get_font_size()
 
         lbl_title = QLabel(title)
         lbl_title.setStyleSheet(

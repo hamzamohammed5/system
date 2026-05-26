@@ -7,7 +7,7 @@ from PyQt5.QtWidgets import QLabel
 from PyQt5.QtCore    import Qt
 
 from ui.app_settings import _C, fs
-from ..core          import get_base
+from ..core          import get_font_size
 from ..components.button import make_btn
 from .shell import DialogShell
 
@@ -31,7 +31,7 @@ class MessageDialog(DialogShell):
         self._build_body(text, yes_no, accent)
 
     def _build_body(self, text: str, yes_no: bool, accent: str):
-        base = get_base()
+        base = get_font_size()
         lbl = QLabel(text)
         lbl.setWordWrap(True)
         lbl.setAlignment(Qt.AlignRight | Qt.AlignVCenter)

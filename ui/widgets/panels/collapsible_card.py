@@ -7,7 +7,7 @@ from PyQt5.QtWidgets import QWidget, QFrame, QVBoxLayout, QPushButton
 from PyQt5.QtCore    import Qt, pyqtSignal
 
 from ui.app_settings import _C, fs
-from ..core.settings  import get_base
+from ui.app_settings import get_font_size
 from ..theme.builders import h_divider
 from ..theme.styles   import card_style
 
@@ -63,7 +63,7 @@ class CollapsibleCard(QFrame):
         self._update_header_text()
 
     def _update_header_style(self):
-        base = get_base()
+        base = get_font_size()
         self._header_btn.setStyleSheet(f"""
             QPushButton {{
                 background:{_C['bg_surface_2']};
