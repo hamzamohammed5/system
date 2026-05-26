@@ -1,283 +1,60 @@
 """
-ui/tabs/accounting/investors/_helpers.py
-=========================================
-دوال مساعدة مشتركة لنظام المستثمرين:
-  - دوال جلب الحسابات (_fetch_*)
-  - دوال ملء القوائم (_fill_*)
-  - دوال تسجيل القيود (_post_*)
-  - _spin و _stat_card
+ui/helpers.py
+=============
+مساعدات UI مشتركة — بعد الـ refactoring.
 
-تغييرات (v2):
-  - كل دالة تستقبل conn كـ parameter وتستخدمه مباشرة بدل أي conn محفوظ.
-  - المستدعي مسؤول عن تمرير conn حي من _get_safe_conn().
+يحتوي فقط على ما لا يوجد له مكان في ui/widgets/:
+  - SCROLL_SS / _SCROLL_SS
+  - _spin / _stat_card
+  - live_conn
+  - make_detail_scroll / set_detail_content
+  - EditModeMixin           ← من ui.widgets.mixins.edit
+  - buttons_row
+  - bold_label / section_label
+  - danger_button / success_button
+  - setup_table_columns / confirm_delete
 """
 
 from PyQt5.QtWidgets import (
-    QFrame, QVBoxLayout, QLabel, QHBoxLayout, QDoubleSpinBox, QComboBox,
-    QPushButton, QWidget,
-    QTableWidget, QMessageBox, QScrollArea
+    QLabel, QHBoxLayout,
+    QWidget, QTableWidget, QScrollArea, QPushButton,
 )
 from PyQt5.QtGui  import QFont
 from PyQt5.QtCore import Qt
 
+from ui.widgets.mixins.edit       import EditModeMixin         # noqa: F401
+from ui.widgets.dialogs.confirm   import confirm_delete        # noqa: F401
+from ui.widgets.components.button import make_btn
+from ui.widgets.theme.styles      import scroll_style
 
-from db.accounting.accounting_repo import insert_entry, add_entry_lines
-from db.inventory.investors_repo  import link_investor_to_line
-
-
-from ui.app_settings import _C
-
-from ui.widgets.shared.table_utils import (                                  
-    make_list_table as make_table,
-
-)
-
-SCROLL_SS = f"""
-    QScrollArea {{
-        border: none;
-        background: transparent;
-    }}
-    QScrollBar:vertical {{
-        background: transparent;
-        width: 6px;
-        border-radius: 3px;
-    }}
-    QScrollBar::handle:vertical {{
-        background: {_C['border_med']};
-        border-radius: 3px;
-        min-height: 30px;
-    }}
-    QScrollBar::handle:vertical:hover {{
-        background: {_C['border_strong']};
-    }}
-    QScrollBar::add-line:vertical,
-    QScrollBar::sub-line:vertical {{
-        height: 0px;
-    }}
-    QScrollBar:horizontal {{
-        background: transparent;
-        height: 6px;
-        border-radius: 3px;
-    }}
-    QScrollBar::handle:horizontal {{
-        background: {_C['border_med']};
-        border-radius: 3px;
-        min-width: 30px;
-    }}
-    QScrollBar::handle:horizontal:hover {{
-        background: {_C['border_strong']};
-    }}
-    QScrollBar::add-line:horizontal,
-    QScrollBar::sub-line:horizontal {{
-        width: 0px;
-    }}
-"""
-
+SCROLL_SS  = scroll_style()
 _SCROLL_SS = SCROLL_SS
 
 
-# ══════════════════════════════════════════════════════════
-# مساعدات UI
-# ══════════════════════════════════════════════════════════
+# ── _spin ────────────────────────────────────────────────────────────────
 
 def _spin(max_=999_999_999, dec=2):
-    s = QDoubleSpinBox()
-    s.setRange(0, max_)
-    s.setDecimals(dec)
-    s.setMinimumHeight(30)
-    return s
+    """
+    QDoubleSpinBox بسيط.
+    في الكود الجديد استخدم AmountSpinBox من ui.widgets.forms.inputs.
+    """
+    from ui.widgets.forms.inputs import AmountSpinBox
+    return AmountSpinBox(max_=max_, dec=dec, height=30)
 
+
+# ── _stat_card ───────────────────────────────────────────────────────────
 
 def _stat_card(label: str, color: str = "#1565c0"):
-    """يرجع (QFrame, QLabel_value)."""
-    f = QFrame()
-    f.setStyleSheet(f"""
-        QFrame {{
-            background: white;
-            border-left: 4px solid {color};
-            border-radius: 6px;
-        }}
-    """)
-    lay = QVBoxLayout(f)
-    lay.setContentsMargins(12, 8, 12, 8)
-    lt = QLabel(label)
-    lt.setStyleSheet("font-size:10px; color:#888; background:transparent; border:none;")
-    lv = QLabel("0.00  ج")
-    lv.setStyleSheet(
-        f"font-size:15px; font-weight:bold; color:{color};"
-        " background:transparent; border:none;"
-    )
-    lay.addWidget(lt)
-    lay.addWidget(lv)
-    return f, lv
+    """
+    يرجع (QFrame, QLabel_value).
+    في الكود الجديد استخدم StatCard من ui.widgets.components.stat_row.
+    """
+    from ui.widgets.components.stat_row import StatCard
+    card = StatCard(title=label, color=color, compact=True)
+    return card, card.value_label()
 
 
-# ══════════════════════════════════════════════════════════
-# جلب الحسابات
-# — كل دالة تستقبل acc_conn صريحاً من المستدعي
-# ══════════════════════════════════════════════════════════
-
-def _fetch_capital_accounts(acc_conn):
-    try:
-        return acc_conn.execute("""
-            SELECT id, code, name FROM accounts
-            WHERE type='capital' AND is_leaf=1 ORDER BY code
-        """).fetchall()
-    except Exception:
-        return []
-
-
-def _fetch_drawings_accounts(acc_conn):
-    try:
-        return acc_conn.execute("""
-            SELECT id, code, name FROM accounts
-            WHERE type='drawings' AND is_leaf=1 ORDER BY code
-        """).fetchall()
-    except Exception:
-        return []
-
-
-def _fetch_asset_accounts(acc_conn):
-    try:
-        return acc_conn.execute("""
-            SELECT id, code, name, COALESCE(subtype,'') AS subtype
-            FROM accounts WHERE type='asset' AND is_leaf=1 ORDER BY code
-        """).fetchall()
-    except Exception:
-        return []
-
-
-# ══════════════════════════════════════════════════════════
-# ملء القوائم
-# — كل دالة تستقبل acc_conn صريحاً من المستدعي
-# ══════════════════════════════════════════════════════════
-
-def _fill_asset_combo(cmb: QComboBox, acc_conn, prev_id=None):
-    cmb.blockSignals(True)
-    cmb.clear()
-    for acc in _fetch_asset_accounts(acc_conn):
-        sub  = acc["subtype"] if "subtype" in acc.keys() else ""
-        icon = "🏦" if sub == "bank" else ("💵" if sub == "cash" else "📦")
-        cmb.addItem(f"{icon} {acc['code']} — {acc['name']}", acc["id"])
-
-    restored = False
-    if prev_id is not None:
-        for i in range(cmb.count()):
-            if cmb.itemData(i) == prev_id:
-                cmb.setCurrentIndex(i)
-                restored = True
-                break
-
-    if not restored:
-        for i in range(cmb.count()):
-            txt = cmb.itemText(i)
-            if "111" in txt or "112" in txt or "صندوق" in txt or "بنك" in txt:
-                cmb.setCurrentIndex(i)
-                break
-
-    cmb.blockSignals(False)
-
-
-def _fill_capital_combo(cmb: QComboBox, acc_conn, prev_id=None):
-    cmb.blockSignals(True)
-    cmb.clear()
-    for acc in _fetch_capital_accounts(acc_conn):
-        cmb.addItem(f"{acc['code']} — {acc['name']}", acc["id"])
-    if prev_id is not None:
-        for i in range(cmb.count()):
-            if cmb.itemData(i) == prev_id:
-                cmb.setCurrentIndex(i)
-                break
-    cmb.blockSignals(False)
-
-
-def _fill_drawings_combo(cmb: QComboBox, acc_conn, prev_id=None):
-    cmb.blockSignals(True)
-    cmb.clear()
-    for acc in _fetch_drawings_accounts(acc_conn):
-        cmb.addItem(f"{acc['code']} — {acc['name']}", acc["id"])
-    if prev_id is not None:
-        for i in range(cmb.count()):
-            if cmb.itemData(i) == prev_id:
-                cmb.setCurrentIndex(i)
-                break
-    cmb.blockSignals(False)
-
-
-# ══════════════════════════════════════════════════════════
-# تسجيل القيود
-# — كل دالة تستقبل acc_conn و erp_conn صريحاً من المستدعي
-# ══════════════════════════════════════════════════════════
-
-def _post_capital_entry(acc_conn, erp_conn, investor_id, investor_name,
-                        capital_acc_id, asset_acc_id, amount, date, notes=None):
-    desc     = f"رأس مال — {investor_name}  {amount:,.2f} ج"
-    entry_id = insert_entry(acc_conn, date, desc, entry_type="manual", notes=notes)
-    lines = [
-        {"account_id": asset_acc_id,   "debit": amount, "credit": 0,
-         "description": desc},
-        {"account_id": capital_acc_id, "debit": 0,      "credit": amount,
-         "description": desc},
-    ]
-    add_entry_lines(acc_conn, entry_id, lines)
-    line_row = acc_conn.execute(
-        "SELECT id FROM journal_lines WHERE entry_id=? AND credit>0", (entry_id,)
-    ).fetchone()
-    line_id = line_row["id"] if line_row else 0
-    link_investor_to_line(erp_conn, investor_id, entry_id, line_id,
-                          "capital", amount, notes)
-    return entry_id
-
-
-def _post_drawings_entry(acc_conn, erp_conn, investor_id, investor_name,
-                         drawings_acc_id, asset_acc_id, amount, date, notes=None):
-    desc     = f"مسحوبات — {investor_name}  {amount:,.2f} ج"
-    entry_id = insert_entry(acc_conn, date, desc, entry_type="manual", notes=notes)
-    lines = [
-        {"account_id": drawings_acc_id, "debit": amount, "credit": 0,
-         "description": desc},
-        {"account_id": asset_acc_id,    "debit": 0,      "credit": amount,
-         "description": desc},
-    ]
-    add_entry_lines(acc_conn, entry_id, lines)
-    line_row = acc_conn.execute(
-        "SELECT id FROM journal_lines WHERE entry_id=? AND debit>0", (entry_id,)
-    ).fetchone()
-    line_id = line_row["id"] if line_row else 0
-    link_investor_to_line(erp_conn, investor_id, entry_id, line_id,
-                          "drawings", amount, notes)
-    return entry_id
-
-
-class EditModeMixin:
-    def init_edit_mode(self, add_btn, save_btn, cancel_btn, mode_label=None):
-        self._em_add_btn    = add_btn
-        self._em_save_btn   = save_btn
-        self._em_cancel_btn = cancel_btn
-        self._em_mode_label = mode_label
-        self._editing_id    = None
-        save_btn.setVisible(False)
-        cancel_btn.setVisible(False)
-
-    def enter_edit_mode(self, record_id: int, label_text: str = ""):
-        self._editing_id = record_id
-        self._em_add_btn.setVisible(False)
-        self._em_save_btn.setVisible(True)
-        self._em_cancel_btn.setVisible(True)
-        if self._em_mode_label and label_text:
-            self._em_mode_label.setText(label_text)
-
-    def exit_edit_mode(self, default_label: str = ""):
-        self._editing_id = None
-        self._em_add_btn.setVisible(True)
-        self._em_save_btn.setVisible(False)
-        self._em_cancel_btn.setVisible(False)
-        if self._em_mode_label and default_label:
-            self._em_mode_label.setText(default_label)
-
-    @property
-    def is_editing(self) -> bool:
-        return self._editing_id is not None
+# ── buttons_row ──────────────────────────────────────────────────────────
 
 def buttons_row(*buttons) -> QHBoxLayout:
     row = QHBoxLayout()
@@ -288,21 +65,12 @@ def buttons_row(*buttons) -> QHBoxLayout:
     return row
 
 
-# ══════════════════════════════════════════════════════════
-# live_conn — connection صالح دايماً
-# ══════════════════════════════════════════════════════════
+# ── live_conn ────────────────────────────────────────────────────────────
 
 def live_conn(stored_conn=None, db: str = "erp"):
     """
     يرجع connection صالح دايماً.
-
-    - لو stored_conn مش None وصالح → يستخدمه كما هو.
-    - لو stored_conn None أو مغلق أو فشل → يجيب connection
-      جديد من company_state.
-
-    الاستخدام:
-        conn = live_conn(self.conn)
-        rows = fetch_all_categories(conn, self.scope)
+    في الكود الجديد استخدم LiveConnMixin من ui.widgets.core.conn.
     """
     if stored_conn is not None:
         try:
@@ -314,13 +82,12 @@ def live_conn(stored_conn=None, db: str = "erp"):
     return company_state._get_conn(db)
 
 
+# ── make_detail_scroll / set_detail_content ──────────────────────────────
+
 def make_detail_scroll(min_content_width: int = 520) -> QScrollArea:
     """
-    QScrollArea للـ detail panels مع horizontal scroll حقيقي.
-
-    المهم: بعد ما تعمل make_detail_scroll، استخدم set_detail_content()
-    لوضع المحتوى جواه — هو بيضبط setMinimumWidth على الـ content
-    عشان الـ horizontal scroll يظهر فعلاً لما النافذة تضيق.
+    QScrollArea للـ detail panels.
+    في الكود الجديد استخدم wrap_in_scroll() من ui.widgets.theme.styles.
     """
     scroll = QScrollArea()
     scroll.setWidgetResizable(True)
@@ -333,15 +100,13 @@ def make_detail_scroll(min_content_width: int = 520) -> QScrollArea:
 
 def set_detail_content(scroll: QScrollArea, content: QWidget,
                        bg: str = "#f8f9fb"):
-    """
-    يضع الـ content جوا الـ scroll مع ضبط minimum width
-    عشان الـ horizontal scroll يظهر لما المحتوى أعرض من الـ panel.
-    """
     min_w = getattr(scroll, '_min_content_width', 520)
     content.setStyleSheet(f"background:{bg};")
     content.setMinimumWidth(min_w)
     scroll.setWidget(content)
 
+
+# ── label helpers ────────────────────────────────────────────────────────
 
 def bold_label(text: str) -> QLabel:
     lbl = QLabel(text)
@@ -352,49 +117,22 @@ def bold_label(text: str) -> QLabel:
 
 
 def section_label(text: str) -> QLabel:
-    lbl = QLabel(text)
-    lbl.setProperty("role", "section")
-    f = QFont()
-    f.setBold(True)
-    lbl.setFont(f)
-    lbl.setStyleSheet(f"color: {_C['text_sec']};")
-    return lbl
+    """في الكود الجديد استخدم section_title() من ui.widgets.panels.form_parts."""
+    from ui.widgets.panels.form_parts import section_title
+    return section_title(text)
 
+
+# ── button helpers ───────────────────────────────────────────────────────
 
 def danger_button(text: str) -> QPushButton:
-    btn = QPushButton(text)
-    btn.setStyleSheet(f"""
-        QPushButton {{
-            color: {_C['danger']};
-            background: {_C['danger_bg']};
-            border: 1px solid {_C['danger_border']};
-            border-radius: 5px;
-            padding: 3px 12px;
-        }}
-        QPushButton:hover {{
-            background: #FCDBD9;
-            border-color: {_C['danger']};
-        }}
-    """)
-    return btn
+    return make_btn(text, "danger")
 
 
 def success_button(text: str) -> QPushButton:
-    btn = QPushButton(text)
-    btn.setStyleSheet(f"""
-        QPushButton {{
-            background: {_C['success']};
-            color: white;
-            font-weight: 600;
-            border: none;
-            border-radius: 5px;
-            padding: 4px 16px;
-        }}
-        QPushButton:hover {{
-            background: #236B42;
-        }}
-    """)
-    return btn
+    return make_btn(text, "success")
+
+
+# ── setup_table_columns ──────────────────────────────────────────────────
 
 def setup_table_columns(
     table: QTableWidget,
@@ -402,6 +140,7 @@ def setup_table_columns(
     stretch_col: int = -1,
     min_width: int = 50,
 ):
+    """في الكود الجديد استخدم auto_fit_columns() من ui.widgets.tables.items."""
     from PyQt5.QtWidgets import QHeaderView
     hh = table.horizontalHeader()
     n  = table.columnCount()
@@ -413,9 +152,3 @@ def setup_table_columns(
             if widths and i in widths:
                 table.setColumnWidth(i, widths[i])
     hh.setMinimumSectionSize(min_width)
-
-def confirm_delete(parent, name: str) -> bool:
-    return QMessageBox.question(
-        parent, "تأكيد الحذف", f"هل تريد حذف «{name}»؟",
-        QMessageBox.Yes | QMessageBox.No
-    ) == QMessageBox.Yes

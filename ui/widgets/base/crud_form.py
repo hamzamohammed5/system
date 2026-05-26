@@ -2,17 +2,20 @@
 ui/widgets/base/crud_form.py
 """
 import logging
-from PyQt5.QtWidgets import QWidget, QPushButton, QHBoxLayout, QVBoxLayout, QScrollArea, QSizePolicy
-from PyQt5.QtCore    import pyqtSignal, Qt
+from PyQt5.QtWidgets import (
+    QWidget, QPushButton, QHBoxLayout, QVBoxLayout,
+    QScrollArea, QSizePolicy,
+)
+from PyQt5.QtCore import pyqtSignal
 
 from ui.app_settings import _C
-from ..panels.form_parts         import FormGroup
+from ..panels.form_parts       import FormGroup
 from ..components.label        import ModeLabel
 from ..components.notification import NotificationBar
-from ..components.button         import make_btn
-from ..mixins.edit               import EditModeMixin
-from ..mixins.validate           import FormValidationMixin
-from ..theme.styles              import wrap_in_scroll   # ← كانت من utils/scroll
+from ..components.button       import make_btn
+from ..mixins.edit             import EditModeMixin
+from ..mixins.validate         import FormValidationMixin
+from ..theme.styles            import wrap_in_scroll
 from ui.events import bus
 
 logger = logging.getLogger(__name__)
@@ -116,8 +119,8 @@ class BaseCrudForm(QWidget, EditModeMixin, FormValidationMixin):
         self._notif = NotificationBar(show_dismiss=True)
         root.addWidget(self._notif)
 
-        title = f"{self.FORM_TITLE_ICON}  {self.FORM_TITLE}" \
-                if self.FORM_TITLE_ICON else self.FORM_TITLE
+        title = (f"{self.FORM_TITLE_ICON}  {self.FORM_TITLE}"
+                 if self.FORM_TITLE_ICON else self.FORM_TITLE)
         grp = FormGroup(title)
 
         self.lbl_mode = ModeLabel(add_text=self.ADD_TEXT.lstrip("➕  "))

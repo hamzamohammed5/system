@@ -8,27 +8,32 @@ from PyQt5.QtWidgets import (
 )
 from PyQt5.QtCore import QDate, pyqtSignal
 
-from ui.app_settings import _C
-from ..utils.signals import blocked_signals
+from ui.app_settings    import _C, fs, get_font_size
+from ..utils.signals    import blocked_signals
+from ..theme.styles     import input_style
 
-_COMBO_STYLE = """
-    QComboBox {
-        background:white; border:1px solid #c5cae9;
-        border-radius:4px; padding:2px 8px; font-size:12px;
-    }
-    QComboBox:focus { border-color:#1565c0; }
-    QComboBox::drop-down { border:none; }
-"""
 
-_RESET_BTN_STYLE = f"""
-    QPushButton {{
-        background:{_C.get('bg_hover','#e8eaf6')};
-        border:1px solid {_C.get('border_med','#c5cae9')};
-        border-radius:4px; font-size:13px;
-        color:{_C.get('accent','#3949ab')};
-    }}
-    QPushButton:hover {{ background:{_C.get('border_med','#c5cae9')}; }}
-"""
+def _combo_style() -> str:
+    base = get_font_size()
+    return f"""
+        QComboBox {{
+            background:{_C['bg_input']}; border:1px solid {_C['border_med']};
+            border-radius:4px; padding:2px 8px; font-size:{fs(base,-1)}pt;
+            color:{_C['text_primary']};
+        }}
+        QComboBox:focus {{ border-color:{_C['accent']}; }}
+        QComboBox::drop-down {{ border:none; }}
+    """
+
+
+def _reset_btn_style() -> str:
+    return f"""
+        QPushButton {{
+            background:{_C['bg_hover']}; border:1px solid {_C['border_med']};
+            border-radius:4px; font-size:13px; color:{_C['accent']};
+        }}
+        QPushButton:hover {{ background:{_C['border_med']}; }}
+    """
 
 
 class FilterToolbar(QWidget):
@@ -55,8 +60,8 @@ class FilterToolbar(QWidget):
     def _build(self, placeholder: str):
         self.setStyleSheet(f"""
             QWidget {{
-                background:{_C.get('bg_surface_2','#f0f4ff')};
-                border:1px solid {_C.get('border','#d0d9f0')};
+                background:{_C['bg_surface_2']};
+                border:1px solid {_C['border']};
                 border-radius:6px;
             }}
         """)
@@ -80,7 +85,7 @@ class FilterToolbar(QWidget):
             self.cmb_cat = QComboBox()
             self.cmb_cat.setMinimumHeight(28)
             self.cmb_cat.setMinimumWidth(160)
-            self.cmb_cat.setStyleSheet(_COMBO_STYLE)
+            self.cmb_cat.setStyleSheet(_combo_style())
             self._reload_categories()
             self.cmb_cat.currentIndexChanged.connect(lambda _: self.filter_changed.emit())
             lay.addWidget(self.cmb_cat, stretch=1)
@@ -104,21 +109,24 @@ class FilterToolbar(QWidget):
         btn_reset.setToolTip("مسح الكل")
         btn_reset.setMinimumHeight(28)
         btn_reset.setFixedWidth(32)
-        btn_reset.setStyleSheet(_RESET_BTN_STYLE)
+        btn_reset.setStyleSheet(_reset_btn_style())
         btn_reset.clicked.connect(self.reset)
         lay.addWidget(btn_reset)
 
+        base = get_font_size()
         self.lbl_count = QLabel("")
         self.lbl_count.setStyleSheet(
-            f"color:{_C.get('accent','#1565c0')}; font-size:10px; font-weight:bold;"
+            f"color:{_C['accent']}; font-size:{fs(base,-2)}pt; font-weight:bold;"
             "background:transparent; border:none; min-width:50px;"
         )
         lay.addWidget(self.lbl_count)
 
-    @staticmethod
-    def _sep() -> QLabel:
+    def _sep(self) -> QLabel:
         sep = QLabel("│")
-        sep.setStyleSheet("color:#c5cae9; background:transparent; border:none; font-size:16px;")
+        sep.setStyleSheet(
+            f"color:{_C['border_med']}; background:transparent;"
+            "border:none; font-size:16px;"
+        )
         return sep
 
     # ── تصنيفات ───────────────────────────────────────────

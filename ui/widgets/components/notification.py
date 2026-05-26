@@ -1,15 +1,14 @@
 """
 ui/widgets/components/notification.py
 =======================================
-NotificationBar — شريط إشعارات مؤقت.
-BaseWarningBar  — شريط تحذير ثابت مع أزرار إصلاح وتعديل.
+NotificationBar  — شريط إشعارات مؤقت.
+BaseWarningBar   — شريط تحذير ثابت مع أزرار إصلاح وتعديل.
 """
 from PyQt5.QtWidgets import QFrame, QHBoxLayout, QLabel, QPushButton
 from PyQt5.QtCore    import QTimer, pyqtSignal
 
-from ui.app_settings import fs
-from ui.app_settings import get_font_size
-from ..core.colors   import status_colors
+from ui.app_settings    import _C, fs, get_font_size
+from ..core.colors      import status_colors
 
 _ICONS = {
     "success": "✅",
@@ -19,24 +18,12 @@ _ICONS = {
 }
 
 
-def _make_btn(text: str, style: str = "normal") -> QPushButton:
-    from ..components.button import make_btn
-    return make_btn(text, style)
-
-
 # ══════════════════════════════════════════════════════════
 # NotificationBar
 # ══════════════════════════════════════════════════════════
 
 class NotificationBar(QFrame):
-    """
-    شريط إشعارات مؤقت مع دعم الإغلاق والإخفاء التلقائي.
-
-    الاستخدام:
-        notif = NotificationBar()
-        notif.show("تم الحفظ بنجاح", "success", auto_hide=3000)
-        notif.hide_bar()
-    """
+    """شريط إشعارات مؤقت مع دعم الإغلاق والإخفاء التلقائي."""
 
     dismissed = pyqtSignal()
 
@@ -56,9 +43,7 @@ class NotificationBar(QFrame):
         lay.setSpacing(8)
 
         self._lbl_icon = QLabel()
-        self._lbl_icon.setStyleSheet(
-            "background:transparent; border:none; font-size:14px;"
-        )
+        self._lbl_icon.setStyleSheet("background:transparent; border:none; font-size:14px;")
         lay.addWidget(self._lbl_icon)
 
         self._lbl_msg = QLabel()
@@ -70,8 +55,9 @@ class NotificationBar(QFrame):
             btn = QPushButton("✖")
             btn.setFixedSize(22, 22)
             btn.setStyleSheet(
-                "QPushButton{background:transparent;border:none;color:#aaa;}"
-                "QPushButton:hover{color:#666;}"
+                f"QPushButton{{background:transparent;border:none;"
+                f"color:{_C['text_muted']};}}"
+                f"QPushButton:hover{{color:{_C['text_primary']};}}"
             )
             btn.clicked.connect(self._on_dismiss)
             lay.addWidget(btn)
@@ -117,14 +103,7 @@ class NotificationBar(QFrame):
 # ══════════════════════════════════════════════════════════
 
 class BaseWarningBar(QFrame):
-    """
-    شريط تحذير أفقي موحد مع أزرار إصلاح وتعديل.
-
-    Signals:
-        fix_clicked  — زر الإصلاح
-        edit_clicked — زر التعديل
-        dismissed    — زر الإغلاق
-    """
+    """شريط تحذير أفقي موحد مع أزرار إصلاح وتعديل."""
 
     fix_clicked  = pyqtSignal()
     edit_clicked = pyqtSignal()
@@ -146,12 +125,12 @@ class BaseWarningBar(QFrame):
             self.edit_clicked.connect(on_edit)
 
     def _build(self, show_dismiss: bool):
-        from ..core.colors import status_colors
         s = status_colors("warning")
         self.setObjectName("warningBar")
         self.setStyleSheet(f"""
             #warningBar {{
-                background:{s['bg']}; border:1px solid {s['border']}; border-radius:6px;
+                background:{s['bg']}; border:1px solid {s['border']};
+                border-radius:6px;
             }}
         """)
 
@@ -170,15 +149,16 @@ class BaseWarningBar(QFrame):
         )
         lay.addWidget(self._lbl, stretch=1)
 
-        self._btn_fix  = _make_btn(self._fix_text,  "danger")
-        self._btn_edit = _make_btn(self._edit_text, "primary")
+        from .button import make_btn
+        self._btn_fix  = make_btn(self._fix_text,  "danger")
+        self._btn_edit = make_btn(self._edit_text, "primary")
         self._btn_fix.clicked.connect(self.fix_clicked.emit)
         self._btn_edit.clicked.connect(self.edit_clicked.emit)
         lay.addWidget(self._btn_fix)
         lay.addWidget(self._btn_edit)
 
         if show_dismiss:
-            btn_x = _make_btn("✖", "ghost")
+            btn_x = make_btn("✖", "ghost")
             btn_x.clicked.connect(self._on_dismiss)
             lay.addWidget(btn_x)
 

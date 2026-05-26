@@ -9,8 +9,7 @@ from PyQt5.QtWidgets import (
 )
 from PyQt5.QtCore import Qt
 
-from ui.app_settings import _C, fs
-from ui.app_settings import get_font_size
+from ui.app_settings import _C, fs, get_font_size
 
 
 class DialogShell(QDialog):
@@ -23,7 +22,7 @@ class DialogShell(QDialog):
     """
 
     def __init__(self, parent=None, title: str = "", icon: str = "📋",
-                 subtitle: str = "", accent: str = "#1565c0",
+                 subtitle: str = "", accent: str = None,
                  min_width: int = 380, min_height: int = 0):
         super().__init__(
             parent,
@@ -35,12 +34,12 @@ class DialogShell(QDialog):
         if min_height:
             self.setMinimumHeight(min_height)
         self.setLayoutDirection(Qt.RightToLeft)
-        self._accent = accent
+        self._accent = accent or _C['accent']
         self._build(icon, title, subtitle)
 
     def _build(self, icon: str, title: str, subtitle: str):
         self.setStyleSheet(
-            f"QDialog {{ background:{_C.get('bg_page','#f9f9f9')}; }}"
+            f"QDialog {{ background:{_C['bg_page']}; }}"
         )
         root = QVBoxLayout(self)
         root.setSpacing(0)
@@ -49,7 +48,7 @@ class DialogShell(QDialog):
         root.addWidget(self._make_header(icon, title, subtitle))
 
         body = QWidget()
-        body.setStyleSheet(f"background:{_C.get('bg_page','#f9f9f9')};")
+        body.setStyleSheet(f"background:{_C['bg_page']};")
         self._body_layout = QVBoxLayout(body)
         self._body_layout.setContentsMargins(20, 16, 20, 12)
         self._body_layout.setSpacing(10)
@@ -58,11 +57,11 @@ class DialogShell(QDialog):
         sep = QFrame()
         sep.setFrameShape(QFrame.HLine)
         sep.setFixedHeight(1)
-        sep.setStyleSheet(f"background:{_C.get('border','#e0e0e0')}; border:none;")
+        sep.setStyleSheet(f"background:{_C['border']}; border:none;")
         root.addWidget(sep)
 
         bar = QWidget()
-        bar.setStyleSheet(f"background:{_C.get('bg_surface','white')};")
+        bar.setStyleSheet(f"background:{_C['bg_surface']};")
         bar.setFixedHeight(54)
         self._btn_layout = QHBoxLayout(bar)
         self._btn_layout.setContentsMargins(16, 0, 16, 0)
@@ -86,14 +85,17 @@ class DialogShell(QDialog):
         lay.setContentsMargins(16, 0, 16, 0)
         lay.setSpacing(10)
 
+        base = get_font_size()
+
         lbl_ico = QLabel(icon)
-        lbl_ico.setStyleSheet("font-size:22px; background:transparent; border:none;")
+        lbl_ico.setStyleSheet(
+            f"font-size:{fs(base,+2)}pt; background:transparent; border:none;"
+        )
         lbl_ico.setAlignment(Qt.AlignVCenter)
         lay.addWidget(lbl_ico)
 
         col = QVBoxLayout()
         col.setSpacing(2)
-        base = get_font_size()
 
         lbl_title = QLabel(title)
         lbl_title.setStyleSheet(

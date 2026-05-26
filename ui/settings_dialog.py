@@ -2,11 +2,6 @@
 ui/settings_dialog.py
 =====================
 نافذة الإعدادات — حجم الخط + مسار GIMP + إدارة وحدات القياس.
-
-الإصلاح:
-    استبدل get_connection() + conn.close() بـ company_state مباشرة
-    لأن get_connection() يرجع shared connection لا يجب إغلاقه.
-    بدلاً من ذلك نفتح connection مستقل مؤقت لعمليات الإعدادات.
 """
 
 import os
@@ -21,7 +16,9 @@ from PyQt5.QtWidgets import (
 )
 
 from ui.app_settings import get_font_size, set_font_size, apply_font
-from ui.widgets.shared.unit_combo import (
+
+# ── الـ import الصحيح من الـ widget system الجديد ─────────────────────────
+from ui.widgets.combo.unit import (
     load_units, add_unit, remove_unit,
     reset_units_to_default, _DEFAULT_UNITS,
 )
@@ -31,7 +28,6 @@ def _get_settings_conn():
     """
     يفتح connection مستقل مؤقت لقراءة/كتابة الإعدادات.
     يُغلق بواسطة المُستدعي بعد الانتهاء.
-    استخدم _make_conn() مباشرة بدل get_connection() الـ shared.
     """
     try:
         from db.companies.company_state import company_state
@@ -62,12 +58,10 @@ class SettingsDialog(QDialog):
         self._load_settings()
 
     def _build(self):
-        # ── الـ layout الخارجي للـ dialog ──────────────────
         outer = QVBoxLayout(self)
         outer.setContentsMargins(0, 0, 0, 12)
         outer.setSpacing(0)
 
-        # ── Scroll Area تحتوي كل المحتوى ──────────────────
         scroll = QScrollArea()
         scroll.setWidgetResizable(True)
         scroll.setHorizontalScrollBarPolicy(Qt.ScrollBarAlwaysOff)
@@ -93,11 +87,8 @@ class SettingsDialog(QDialog):
         scroll.setWidget(content)
         outer.addWidget(scroll, stretch=1)
 
-        # ── أزرار الحفظ/إلغاء خارج الـ scroll (دايماً ظاهرة) ──
         btn_bar = QWidget()
-        btn_bar.setStyleSheet(
-            "background: white; border-top: 1px solid #e0e0e0;"
-        )
+        btn_bar.setStyleSheet("background: white; border-top: 1px solid #e0e0e0;")
         btn_bar_lay = QHBoxLayout(btn_bar)
         btn_bar_lay.setContentsMargins(20, 8, 20, 0)
 
@@ -141,7 +132,6 @@ class SettingsDialog(QDialog):
         row.addWidget(self._lbl_val)
         font_lay.addLayout(row)
 
-        # نص معاينة شامل — يعكس حجم الخط المختار فقط
         self._preview = QLabel(
             "معاينة النص — Preview 123\n"
             "أبجد هوز حطي كلمن — The quick brown fox\n"
@@ -161,9 +151,7 @@ class SettingsDialog(QDialog):
             "اضغط حفظ لتطبيقه على كامل الواجهة"
         )
         lbl_hint_font.setWordWrap(True)
-        lbl_hint_font.setStyleSheet(
-            "color: #888; font-size: 10px; background: transparent;"
-        )
+        lbl_hint_font.setStyleSheet("color: #888; font-size: 10px; background: transparent;")
         font_lay.addWidget(lbl_hint_font)
         content_lay.addWidget(font_group)
 
@@ -210,12 +198,8 @@ class SettingsDialog(QDialog):
         gimp_row.addWidget(btn_clear)
         gimp_lay.addLayout(gimp_row)
 
-        lbl_hint_gimp = QLabel(
-            "💡  اتركه فارغاً للبحث التلقائي في المسارات الشائعة"
-        )
-        lbl_hint_gimp.setStyleSheet(
-            "color: #888; font-size: 10px; background: transparent;"
-        )
+        lbl_hint_gimp = QLabel("💡  اتركه فارغاً للبحث التلقائي في المسارات الشائعة")
+        lbl_hint_gimp.setStyleSheet("color: #888; font-size: 10px; background: transparent;")
         gimp_lay.addWidget(lbl_hint_gimp)
         content_lay.addWidget(gimp_group)
 
@@ -239,15 +223,10 @@ class SettingsDialog(QDialog):
         self._units_list.setMaximumHeight(130)
         self._units_list.setStyleSheet("""
             QListWidget {
-                border: 1px solid #c5cae9;
-                border-radius: 4px;
-                font-size: 11px;
+                border: 1px solid #c5cae9; border-radius: 4px; font-size: 11px;
             }
             QListWidget::item { padding: 4px 8px; }
-            QListWidget::item:selected {
-                background: #e8f0fe;
-                color: #1565c0;
-            }
+            QListWidget::item:selected { background: #e8f0fe; color: #1565c0; }
         """)
         units_lay.addWidget(self._units_list)
 
@@ -311,7 +290,7 @@ class SettingsDialog(QDialog):
             except Exception:
                 pass
             finally:
-                conn.close()   # connection مستقل مؤقت — يُغلق بأمان
+                conn.close()
         self._reload_units_list()
 
     def _reload_units_list(self):
@@ -323,7 +302,7 @@ class SettingsDialog(QDialog):
             except Exception:
                 units = list(_DEFAULT_UNITS)
             finally:
-                conn.close()   # connection مستقل مؤقت — يُغلق بأمان
+                conn.close()
         else:
             units = list(_DEFAULT_UNITS)
 
@@ -340,8 +319,7 @@ class SettingsDialog(QDialog):
 
     def _add_unit(self):
         val, ok = QInputDialog.getText(
-            self, "إضافة وحدة",
-            "اكتب رمز الوحدة (مثال: ft, yd, pt):",
+            self, "إضافة وحدة", "اكتب رمز الوحدة (مثال: ft, yd, pt):",
         )
         if not ok or not val.strip():
             return
@@ -367,9 +345,7 @@ class SettingsDialog(QDialog):
         if result:
             self._reload_units_list()
         else:
-            QMessageBox.information(
-                self, "تنبيه", f"الوحدة «{val}» موجودة بالفعل."
-            )
+            QMessageBox.information(self, "تنبيه", f"الوحدة «{val}» موجودة بالفعل.")
 
     def _del_unit(self):
         item = self._units_list.currentItem()
@@ -379,10 +355,7 @@ class SettingsDialog(QDialog):
         val = item.data(Qt.UserRole)
         default_vals = {u[0] for u in _DEFAULT_UNITS}
         if val in default_vals:
-            QMessageBox.warning(
-                self, "تنبيه",
-                f"لا يمكن حذف الوحدة الافتراضية «{val}»."
-            )
+            QMessageBox.warning(self, "تنبيه", f"لا يمكن حذف الوحدة الافتراضية «{val}».")
             return
         if QMessageBox.question(
             self, "تأكيد الحذف", f"حذف الوحدة «{item.text()}»؟",
@@ -433,10 +406,9 @@ class SettingsDialog(QDialog):
         if path:
             self._inp_gimp.setText(path)
 
-    # ── معاينة حجم الخط (بدون تطبيق على الواجهة) ────────
+    # ── معاينة حجم الخط ──────────────────────────────────
 
     def _on_font_change(self, val: int):
-        """يحدّث الـ label والـ preview فقط — بدون تطبيق على كامل الواجهة."""
         self._lbl_val.setText(f"{val} pt")
         self._preview.setStyleSheet(
             f"font-size: {val}pt; border: 1px solid #ccc; "
@@ -449,7 +421,7 @@ class SettingsDialog(QDialog):
     def _save(self):
         size = self._slider.value()
         set_font_size(size)
-        apply_font(self._app, size)   # ← التطبيق على الواجهة هنا فقط
+        apply_font(self._app, size)
 
         conn = _get_settings_conn()
         if conn:
@@ -461,8 +433,6 @@ class SettingsDialog(QDialog):
             finally:
                 conn.close()
         self.accept()
-
-    # ── إلغاء ─────────────────────────────────────────────
 
     def _cancel(self):
         self.reject()

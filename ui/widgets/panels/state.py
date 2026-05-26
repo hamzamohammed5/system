@@ -4,7 +4,6 @@ ui/widgets/panels/state.py
 مكونات الـ Empty State الموحدة:
 
   EmptyState              — QFrame حالة فارغة مع أيقونة ونص وزر
-                            (expandable=True يغني عن EmptyPanelState)
   EmptyPanelState         — alias للتوافق مع الكود القديم
   set_table_empty_state   — صف رسالة داخل الجدول
   clear_table_empty_state — مسح صف الرسالة
@@ -17,9 +16,8 @@ from PyQt5.QtWidgets import (
 from PyQt5.QtCore import Qt, pyqtSignal
 from PyQt5.QtGui  import QColor, QFont
 
-from ui.app_settings import _C, fs
-from ui.app_settings import get_font_size
-from ..core.colors   import card_colors   # المصدر الوحيد — لا wrapper محلي
+from ui.app_settings        import _C, fs, get_font_size
+from ..core.colors          import card_colors, status_colors
 
 
 # ══════════════════════════════════════════════════════════
@@ -30,7 +28,7 @@ class EmptyState(QFrame):
     """
     QFrame حالة فارغة مع أيقونة ونص وزر اختياري.
 
-    expandable=True → يتمدد ليملأ المساحة (يغني عن EmptyPanelState).
+    expandable=True → يتمدد ليملأ المساحة.
     expandable=False (افتراضي) → حجم ثابت حسب المحتوى.
     """
 
@@ -38,21 +36,20 @@ class EmptyState(QFrame):
 
     def __init__(self, icon: str = "📋", title: str = "لا توجد بيانات",
                  subtitle: str = "", action_text: str = "",
-                 style: str = "dashed", color: str = "#10b981",
+                 style: str = "dashed", color: str = None,
                  min_height: int = 80,
                  expandable: bool = False,
                  parent=None):
         super().__init__(parent)
         self._expandable = expandable
-        self._build(icon, title, subtitle, action_text, style, color, min_height)
+        _color = color or _C['text_muted']
+        self._build(icon, title, subtitle, action_text, style, _color, min_height)
 
     def _build(self, icon, title, subtitle, action_text, style, color, min_h):
         bg, border = card_colors(color)
-        border_css = {
-            "dashed": "dashed",
-            "solid":  "solid",
-            "plain":  "none",
-        }.get(style, "dashed")
+        border_css = {"dashed": "dashed", "solid": "solid", "plain": "none"}.get(
+            style, "dashed"
+        )
 
         self.setStyleSheet(f"""
             QFrame {{
@@ -68,8 +65,10 @@ class EmptyState(QFrame):
         lay = QVBoxLayout(self)
         lay.setAlignment(Qt.AlignCenter)
         lay.setSpacing(6 if not self._expandable else 8)
-        lay.setContentsMargins(20, 16 if not self._expandable else 30,
-                               20, 16 if not self._expandable else 30)
+        lay.setContentsMargins(
+            20, 16 if not self._expandable else 30,
+            20, 16 if not self._expandable else 30,
+        )
 
         base = get_font_size()
 
@@ -77,14 +76,14 @@ class EmptyState(QFrame):
             lbl_icon = QLabel(icon)
             lbl_icon.setAlignment(Qt.AlignCenter)
             lbl_icon.setStyleSheet(
-                f"background:transparent; border:none; font-size:{fs(base, +8)}pt;"
+                f"background:transparent; border:none; font-size:{fs(base,+8)}pt;"
             )
             lay.addWidget(lbl_icon)
 
         lbl_title = QLabel(title)
         lbl_title.setAlignment(Qt.AlignCenter)
         lbl_title.setStyleSheet(
-            f"color:{color}; font-weight:700; font-size:{fs(base, +1)}pt;"
+            f"color:{color}; font-weight:700; font-size:{fs(base,+1)}pt;"
             "background:transparent; border:none;"
         )
         lay.addWidget(lbl_title)
@@ -94,7 +93,7 @@ class EmptyState(QFrame):
             lbl_sub.setAlignment(Qt.AlignCenter)
             lbl_sub.setWordWrap(True)
             lbl_sub.setStyleSheet(
-                f"color:{_C['text_muted']}; font-size:{fs(base, -1)}pt;"
+                f"color:{_C['text_muted']}; font-size:{fs(base,-1)}pt;"
                 "background:transparent; border:none;"
             )
             lay.addWidget(lbl_sub)
@@ -113,14 +112,15 @@ class EmptyState(QFrame):
 
 def EmptyPanelState(icon: str = "📋", title: str = "لا توجد بيانات",
                     subtitle: str = "", action_text: str = "",
-                    color: str = "#9ca3af", parent=None) -> EmptyState:
+                    color: str = None, parent=None) -> EmptyState:
     """
     Alias لـ EmptyState(expandable=True).
-    محفوظ للتوافق مع الكود القديم — استخدم EmptyState مباشرة في الكود الجديد.
+    محفوظ للتوافق مع الكود القديم.
     """
     return EmptyState(
         icon=icon, title=title, subtitle=subtitle,
-        action_text=action_text, color=color,
+        action_text=action_text,
+        color=color or _C['text_muted'],
         style="plain", expandable=True, parent=parent,
     )
 
@@ -132,8 +132,9 @@ def EmptyPanelState(icon: str = "📋", title: str = "لا توجد بيانات
 def set_table_empty_state(table: QTableWidget,
                            message: str = "لا توجد بيانات",
                            icon: str = "📋",
-                           color: str = "#9ca3af"):
+                           color: str = None):
     """يضيف صفاً واحداً يعرض رسالة فارغة في الجدول."""
+    _color = color or _C['text_muted']
     table.setRowCount(1)
     table.setRowHeight(0, 60)
 
@@ -142,7 +143,7 @@ def set_table_empty_state(table: QTableWidget,
 
     item = QTableWidgetItem(msg_text)
     item.setTextAlignment(Qt.AlignCenter)
-    item.setForeground(QColor(color))
+    item.setForeground(QColor(_color))
     f = QFont()
     f.setItalic(True)
     item.setFont(f)
