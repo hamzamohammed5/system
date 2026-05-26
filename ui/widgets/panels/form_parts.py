@@ -193,29 +193,51 @@ def labeled_widget(widget: QWidget, unit: str,
 
 
 # ══════════════════════════════════════════════════════════
-# ResultBadge
+# ResultBadge — يستخدم status_colors بدل hardcoded
 # ══════════════════════════════════════════════════════════
 
 class ResultBadge(QLabel):
-    """Label لعرض نتيجة / تكلفة محسوبة."""
+    """
+    Label لعرض نتيجة / تكلفة محسوبة.
+    يستخدم status_colors من core/colors — لا hardcoded.
+    """
 
-    def __init__(self, text: str = "─", color: str = "#1a6e1a", parent=None):
+    def __init__(self, text: str = "─", color: str = None,
+                 status: str = "success", parent=None):
         super().__init__(text, parent)
-        self._color = color
+        # color يأخذ الأولوية لو مُعطى — وإلا نستخدم status_colors
+        self._custom_color = color
+        self._status       = status
         self._apply()
 
     def _apply(self):
         base = get_font_size()
-        self.setStyleSheet(
-            f"color:{self._color}; font-weight:bold; font-size:{fs(base,0)}pt;"
-            "background:#f0faf0; border:1px solid #b2dfb2;"
-            "border-radius:4px; padding:4px 8px;"
-        )
+        if self._custom_color:
+            # استخدام اللون المخصص مع خلفية خضراء فاتحة افتراضية
+            s = status_colors(self._status)
+            self.setStyleSheet(
+                f"color:{self._custom_color}; font-weight:bold; font-size:{fs(base,0)}pt;"
+                f"background:{s['bg']}; border:1px solid {s['border']};"
+                "border-radius:4px; padding:4px 8px;"
+            )
+        else:
+            s = status_colors(self._status)
+            self.setStyleSheet(
+                f"color:{s['fg']}; font-weight:bold; font-size:{fs(base,0)}pt;"
+                f"background:{s['bg']}; border:1px solid {s['border']};"
+                "border-radius:4px; padding:4px 8px;"
+            )
 
     def set_value(self, text: str, color: str = None):
         self.setText(text)
-        if color and color != self._color:
-            self._color = color
+        if color and color != self._custom_color:
+            self._custom_color = color
+            self._apply()
+
+    def set_status(self, status: str):
+        """يغير الـ status (success/warning/danger/info) ويعيد رسم الستايل."""
+        if status != self._status:
+            self._status = status
             self._apply()
 
     def reset(self):
@@ -235,7 +257,6 @@ class ModeBadge(QLabel):
         self._apply_style(color)
 
     def _apply_style(self, color: str):
-        # يستخدم status_colors من core/colors — المصدر الوحيد
         _map = {
             "blue":   "primary",
             "orange": "warning",
@@ -314,7 +335,8 @@ class FormGroup(QGroupBox):
 class InlinePreview(QWidget):
     """يعرض: [label] [القيمة المحسوبة]"""
 
-    def __init__(self, label: str = "النتيجة:", color: str = "#1a6e1a", parent=None):
+    def __init__(self, label: str = "النتيجة:", color: str = None,
+                 status: str = "success", parent=None):
         super().__init__(parent)
         self.setStyleSheet("background:transparent;")
         lay = QHBoxLayout(self)
@@ -326,7 +348,7 @@ class InlinePreview(QWidget):
             f"color:{_C['text_sec']}; font-weight:600;"
             f"font-size:{fs(get_font_size(),-1)}pt; background:transparent;"
         )
-        self._lbl_value = ResultBadge("─", color=color)
+        self._lbl_value = ResultBadge("─", color=color, status=status)
         lay.addWidget(lbl)
         lay.addWidget(self._lbl_value)
         lay.addStretch()

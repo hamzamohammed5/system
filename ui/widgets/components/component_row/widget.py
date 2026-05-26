@@ -5,6 +5,7 @@ ComponentRow — صف مكوّن واحد في BOM.
 
 مستخرج من widgets/shared/component_row/_row_widget.py مع:
   - _get_conn() مع connection cache
+  - _is_widget_deleted() مشتركة تُلغي تكرار try/except في المixins
   - OrphanState dataclass بدل attributes متفرقة
   - _fill_items() أوضح مع helper منفصل
   - فصل كامل بين UI / variants / op_rows / catalog
@@ -118,6 +119,20 @@ class ComponentRow(QWidget, OpRowsMixin, VariantsMixin):
         # ── QTimers للتحميل المؤجل ──────────────────────────
         self._schedule_deferred_loads(child_type, child_id, variant_id, machine_op_row_id)
         QTimer.singleShot(0, self._connect_bus)
+
+    # ── Shared deleted-check ───────────────────────────────
+
+    def _is_widget_deleted(self, *widgets) -> bool:
+        """
+        يتحقق إذا كان هذا الـ widget أو أي من الـ widgets المعطاة
+        قد حُذف من Qt. تُستخدم من OpRowsMixin و VariantsMixin.
+        """
+        try:
+            if sip.isdeleted(self):
+                return True
+            return any(sip.isdeleted(w) for w in widgets)
+        except Exception:
+            return True
 
     # ── Connection ─────────────────────────────────────────
 

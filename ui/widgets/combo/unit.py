@@ -6,13 +6,15 @@ UnitCombo — QComboBox موحد لاختيار وحدة القياس.
 التغييرات:
   - cache بسيط بدل _units_cache dict خارجي
   - load_units / save_units دوال نظيفة
-  - UnitCombo يستخدم blockSignals() بدل _loading flag
+  - UnitCombo يستخدم blocked_signals() بدل blockSignals() المكررة
 """
 
 import json
 import logging
 from PyQt5.QtWidgets import QComboBox
 from PyQt5.QtCore    import pyqtSignal
+
+from ..utils.signals import blocked_signals
 
 logger = logging.getLogger(__name__)
 
@@ -116,11 +118,12 @@ class UnitCombo(QComboBox):
 
     def _populate(self):
         prev = self.currentData()
-        self.blockSignals(True)
-        self.clear()
-        for val, label in load_units(self._conn):
-            self.addItem(label, val)
-        self.blockSignals(False)
+
+        with blocked_signals(self):
+            self.clear()
+            for val, label in load_units(self._conn):
+                self.addItem(label, val)
+
         if prev:
             self.set_unit(prev)
 

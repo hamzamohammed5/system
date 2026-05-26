@@ -4,12 +4,15 @@ ui/widgets/components/component_row/op_rows.py
 OpRowsMixin — منطق تحميل وعرض صفوف عمليات التشغيل في ComponentRow.
 
 مستخرج من widgets/shared/component_row/_op_rows_logic.py مع:
-  - دالة _is_deleted() مشتركة بدل تكرار try/except
+  - _is_widget_deleted() مشتركة (من widget.py) بدل تكرار try/except
   - _determine_target_id() لفصل منطق الأولوية
+  - blocked_signals() من utils/signals بدل blockSignals المكررة
   - أسماء واضحة ومتسقة
 """
 
 from PyQt5 import sip
+
+from ui.widgets.utils.signals import blocked_signals
 
 
 class OpRowsMixin:
@@ -103,30 +106,29 @@ class OpRowsMixin:
         )
 
     def _populate_op_row_combo(self, rows: list, target_id: "int | None"):
-        self.cmb_op_row.blockSignals(True)
-        self.cmb_op_row.clear()
+        # blocked_signals يغني عن blockSignals(True/False) المتكررة
+        with blocked_signals(self.cmb_op_row):
+            self.cmb_op_row.clear()
 
-        for row in rows:
-            cost  = self._calc_row_cost(row["id"])
-            label = row["label"] or f"صف {row['id']}"
-            display = (
-                f"{label}  "
-                f"({row['value']:.4g} ÷ {row['count']:.4g})"
-                f"  ≈ {cost:.3f} ج"
-            )
-            self.cmb_op_row.addItem(display, row["id"])
+            for row in rows:
+                cost    = self._calc_row_cost(row["id"])
+                label   = row["label"] or f"صف {row['id']}"
+                display = (
+                    f"{label}  "
+                    f"({row['value']:.4g} ÷ {row['count']:.4g})"
+                    f"  ≈ {cost:.3f} ج"
+                )
+                self.cmb_op_row.addItem(display, row["id"])
 
-        restored = self._restore_op_row_selection(target_id)
-        if not restored and self.cmb_op_row.count() > 0:
-            self.cmb_op_row.setCurrentIndex(0)
+            restored = self._restore_op_row_selection(target_id)
+            if not restored and self.cmb_op_row.count() > 0:
+                self.cmb_op_row.setCurrentIndex(0)
 
-        current = self.cmb_op_row.currentData()
-        if current is not None:
-            self._pinned_op_row_id = current
-            if self._init_machine_op_row_id is None:
-                self._init_machine_op_row_id = current
-
-        self.cmb_op_row.blockSignals(False)
+            current = self.cmb_op_row.currentData()
+            if current is not None:
+                self._pinned_op_row_id = current
+                if self._init_machine_op_row_id is None:
+                    self._init_machine_op_row_id = current
 
     def _restore_op_row_selection(self, target_id: "int | None") -> bool:
         if target_id is None:
@@ -167,7 +169,6 @@ class OpRowsMixin:
             self.lbl_op_row_cost.setText("")
             return
 
-        # sync الـ pinned id
         if row_id != self._pinned_op_row_id:
             self._pinned_op_row_id = row_id
 
@@ -185,11 +186,5 @@ class OpRowsMixin:
     # ── helper ─────────────────────────────────────────────
 
     def _is_op_row_deleted(self) -> bool:
-        try:
-            return (
-                sip.isdeleted(self)
-                or sip.isdeleted(self.cmb_op_row)
-                or sip.isdeleted(self._sub_row_widget)
-            )
-        except Exception:
-            return True
+        """يستخدم _is_widget_deleted المشتركة من widget.py."""
+        return self._is_widget_deleted(self.cmb_op_row, self._sub_row_widget)

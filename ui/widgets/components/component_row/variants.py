@@ -4,12 +4,13 @@ ui/widgets/components/component_row/variants.py
 VariantsMixin — منطق تحميل وعرض variants الخامة في ComponentRow.
 
 مستخرج من widgets/shared/component_row/_variants_logic.py مع:
-  - تنظيف الـ try/except المكررة في دالة واحدة _safe_deleted()
-  - فصل واضح بين التحقق من الـ widget والمنطق الفعلي
+  - _is_widget_deleted() مشتركة من widget.py بدل _safe_deleted() المحلية
+  - blocked_signals() من utils/signals بدل blockSignals المكررة
   - أسماء أوضح للدوال الداخلية
 """
 
-from PyQt5 import sip
+
+from ui.widgets.utils.signals import blocked_signals
 
 
 class VariantsMixin:
@@ -26,7 +27,7 @@ class VariantsMixin:
     # ── Public API ─────────────────────────────────────────
 
     def _load_variants(self, item_id: int, selected_variant_id: int = None):
-        if self._is_deleted() or item_id is None:
+        if self._is_variant_deleted() or item_id is None:
             self._hide_variants()
             return
 
@@ -38,7 +39,7 @@ class VariantsMixin:
         self._populate_variant_combo(variants, item_id, selected_variant_id)
 
     def _hide_variants(self):
-        if self._is_deleted():
+        if self._is_variant_deleted():
             return
         self.cmb_variant.setVisible(False)
         self.lbl_variant_cost.setVisible(False)
@@ -60,31 +61,31 @@ class VariantsMixin:
 
     def _populate_variant_combo(self, variants: list, item_id: int,
                                  selected_id: int = None):
-        if self._is_deleted():
+        if self._is_variant_deleted():
             return
 
         item_price = self._get_item_price(item_id)
 
-        self.cmb_variant.blockSignals(True)
-        self.cmb_variant.clear()
-        self.cmb_variant.addItem("─ بدون variant ─", None)
+        # blocked_signals يغني عن blockSignals(True/False) المكررة
+        with blocked_signals(self.cmb_variant):
+            self.cmb_variant.clear()
+            self.cmb_variant.addItem("─ بدون variant ─", None)
 
-        for var in variants:
-            pieces = float(var["pieces"])
-            if pieces > 0 and item_price > 0:
-                unit_cost = item_price / pieces
-                label = (
-                    f"📐 {var['name']}  "
-                    f"({pieces:.4g} قطعة → {unit_cost:.3f} ج/قطعة)"
-                )
-            else:
-                label = f"📐 {var['name']}  ({var['pieces']:.4g} قطعة)"
-            self.cmb_variant.addItem(label, var["id"])
+            for var in variants:
+                pieces = float(var["pieces"])
+                if pieces > 0 and item_price > 0:
+                    unit_cost = item_price / pieces
+                    label = (
+                        f"📐 {var['name']}  "
+                        f"({pieces:.4g} قطعة → {unit_cost:.3f} ج/قطعة)"
+                    )
+                else:
+                    label = f"📐 {var['name']}  ({var['pieces']:.4g} قطعة)"
+                self.cmb_variant.addItem(label, var["id"])
 
-        if selected_id is not None:
-            self._restore_variant_selection(selected_id)
+            if selected_id is not None:
+                self._restore_variant_selection(selected_id)
 
-        self.cmb_variant.blockSignals(False)
         self.cmb_variant.setVisible(True)
         self._update_variant_cost_label()
 
@@ -153,8 +154,6 @@ class VariantsMixin:
             pass
         return 0.0
 
-    def _is_deleted(self) -> bool:
-        try:
-            return sip.isdeleted(self) or sip.isdeleted(self.cmb_variant)
-        except Exception:
-            return True
+    def _is_variant_deleted(self) -> bool:
+        """يستخدم _is_widget_deleted المشتركة من widget.py."""
+        return self._is_widget_deleted(self.cmb_variant)

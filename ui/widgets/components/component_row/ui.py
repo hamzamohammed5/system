@@ -6,7 +6,7 @@ ui/widgets/components/component_row/ui.py
 مستخرج من widgets/shared/component_row/_row_ui.py مع:
   - تنظيف الـ styles في ثوابت منفصلة
   - دالة واحدة build_row_ui() تبني كل الـ UI
-  - _update_waste_style() منفصلة وأوضح
+  - update_waste_style() تستخدم waste_colors من core/colors (لا hardcoded)
 """
 
 from PyQt5.QtWidgets import (
@@ -15,6 +15,11 @@ from PyQt5.QtWidgets import (
 )
 
 from ui.widgets.utils.searchable_combo import SearchableCombo
+from ui.widgets.core.colors import (
+    waste_colors as _waste_colors,
+    waste_level  as _waste_level,
+    WASTE_TEXT_COLOR, WASTE_ZERO_BG, WASTE_ZERO_BORDER, WASTE_ZERO_COLOR,
+)
 
 # ── أنواع المكونات ─────────────────────────────────────────
 COMPONENT_TYPES = [
@@ -69,30 +74,17 @@ _OP_ROW_COMBO_STYLE = """
     QComboBox::drop-down { border: none; }
 """
 
-# ── ستايلات الـ waste ──────────────────────────────────────
-_WASTE_BASE = """
-    QDoubleSpinBox {
-        background: #fff8e1; border: 1px solid #ffe082;
+# ── ستايل الـ waste (zero) ────────────────────────────────
+_WASTE_ZERO_STYLE = f"""
+    QDoubleSpinBox {{
+        background: {WASTE_ZERO_BG}; border: 1px solid {WASTE_ZERO_BORDER};
         border-radius: 4px; padding: 1px 4px;
-        font-size: 11px; color: #e65100;
-    }
-    QDoubleSpinBox:focus { border-color: #ff8f00; background: #fffde7; }
+        font-size: 11px; color: {WASTE_ZERO_COLOR};
+    }}
+    QDoubleSpinBox:focus {{
+        border-color: #ffe082; background: #fff8e1; color: {WASTE_TEXT_COLOR};
+    }}
 """
-_WASTE_ZERO = """
-    QDoubleSpinBox {
-        background: #f5f5f5; border: 1px solid #e0e0e0;
-        border-radius: 4px; padding: 1px 4px;
-        font-size: 11px; color: #999;
-    }
-    QDoubleSpinBox:focus {
-        border-color: #ffe082; background: #fff8e1; color: #e65100;
-    }
-"""
-_WASTE_COLORS = {
-    "high":   ("#ffcdd2", "#e53935"),
-    "medium": ("#ffe0b2", "#f57c00"),
-    "low":    ("#fff8e1", "#ffe082"),
-}
 
 
 def build_row_ui(widget, child_type: str, child_id,
@@ -136,7 +128,6 @@ def _build_type_combo(widget, child_type: str, layout: QHBoxLayout):
     for key, label in COMPONENT_TYPES:
         widget.cmb_type.addItem(label, key)
 
-    # تحديد النوع الأولي
     widget.cmb_type.blockSignals(True)
     idx = next((i for i, (k, _) in enumerate(COMPONENT_TYPES) if k == child_type), 0)
     widget.cmb_type.setCurrentIndex(idx)
@@ -198,7 +189,7 @@ def _build_waste_widget(widget, waste_pct: float, layout: QHBoxLayout):
     widget.lbl_waste = QLabel("⚠️")
     widget.lbl_waste.setFixedWidth(18)
     widget.lbl_waste.setStyleSheet(
-        "color:#e65100; font-size:11px; background:transparent;"
+        "color:#e65100; font-size:11px; background:transparent; border:none;"
     )
     widget.lbl_waste.setToolTip("نسبة الهادر")
 
@@ -277,24 +268,21 @@ def _build_sub_row(widget, outer: QVBoxLayout):
 # ── تحديث ستايل الهادر ────────────────────────────────────
 
 def update_waste_style(widget, val: float):
-    """يحدّث ستايل الـ waste spinbox حسب القيمة."""
+    """
+    يحدّث ستايل الـ waste spinbox حسب القيمة.
+    يستخدم waste_colors من core/colors — لا hardcoded.
+    """
     if val > 0:
         widget.lbl_waste.setVisible(True)
-        if val >= 20:
-            bg, border = _WASTE_COLORS["high"]
-        elif val >= 10:
-            bg, border = _WASTE_COLORS["medium"]
-        else:
-            bg, border = _WASTE_COLORS["low"]
-
+        bg, border = _waste_colors(val)
         widget.waste_spin.setStyleSheet(f"""
             QDoubleSpinBox {{
                 background: {bg}; border: 1px solid {border};
                 border-radius: 4px; padding: 1px 4px;
-                font-size: 11px; color: #e65100; font-weight: bold;
+                font-size: 11px; color: {WASTE_TEXT_COLOR}; font-weight: bold;
             }}
             QDoubleSpinBox:focus {{ border-color: #ff8f00; }}
         """)
     else:
         widget.lbl_waste.setVisible(False)
-        widget.waste_spin.setStyleSheet(_WASTE_ZERO)
+        widget.waste_spin.setStyleSheet(_WASTE_ZERO_STYLE)

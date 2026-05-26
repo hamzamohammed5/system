@@ -3,7 +3,7 @@ ui/widgets/core/colors.py
 ==================================
 لوحة الألوان الموحدة للتطبيق.
 
-المصدر الوحيد لألوان البطاقات وحالات الـ status.
+المصدر الوحيد لألوان البطاقات وحالات الـ status والـ waste.
 """
 
 # ── لوحة ألوان البطاقات (لون → (خلفية، حدود)) ──────────────────────────
@@ -78,3 +78,34 @@ STATUS_COLORS: dict[str, dict[str, str]] = {
 def status_colors(level: str) -> dict[str, str]:
     """يرجع dict ألوان الـ status (fg, bg, border)."""
     return STATUS_COLORS.get(level, STATUS_COLORS["neutral"])
+
+
+# ── ألوان نسبة الهادر (waste) ─────────────────────────────────────────────
+# المصدر الوحيد — لا تعريف لهذه الألوان في أي ملف آخر
+WASTE_COLORS: dict[str, tuple[str, str]] = {
+    "high":   ("#ffcdd2", "#e53935"),   # >= 20%
+    "medium": ("#ffe0b2", "#f57c00"),   # >= 10%
+    "low":    ("#fff8e1", "#ffe082"),   # > 0%
+}
+
+WASTE_ZERO_BG     = "#f5f5f5"
+WASTE_ZERO_BORDER = "#e0e0e0"
+WASTE_ZERO_COLOR  = "#999"
+WASTE_TEXT_COLOR  = "#e65100"
+
+
+def waste_level(pct: float) -> str:
+    """يرجع مستوى الهادر: 'high' | 'medium' | 'low' | 'zero'."""
+    if pct >= 20:
+        return "high"
+    if pct >= 10:
+        return "medium"
+    if pct > 0:
+        return "low"
+    return "zero"
+
+
+def waste_colors(pct: float) -> tuple[str, str]:
+    """يرجع (bg, border) حسب نسبة الهادر."""
+    level = waste_level(pct)
+    return WASTE_COLORS.get(level, (WASTE_ZERO_BG, WASTE_ZERO_BORDER))

@@ -8,7 +8,8 @@ from PyQt5.QtCore    import Qt
 from PyQt5.QtGui     import QColor
 
 from db.shared.categories_repo import fetch_all_categories, build_tree
-from ..core.conn import LiveConnMixin
+from ..core.conn          import LiveConnMixin
+from ..utils.signals      import blocked_signals
 from ui.events import bus
 
 
@@ -64,15 +65,15 @@ class CategoryCombo(QComboBox, LiveConnMixin):
             return
 
         prev = self.currentData()
-        self.blockSignals(True)
-        self.clear()
-        populate_category_combo(self, conn, self.scope)
 
-        for i in range(self.count()):
-            if self.itemData(i) == prev:
-                self.setCurrentIndex(i)
-                break
-        self.blockSignals(False)
+        with blocked_signals(self):
+            self.clear()
+            populate_category_combo(self, conn, self.scope)
+
+            for i in range(self.count()):
+                if self.itemData(i) == prev:
+                    self.setCurrentIndex(i)
+                    break
 
     def get_category(self):
         return self.currentData()

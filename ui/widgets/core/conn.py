@@ -11,6 +11,20 @@ import logging
 logger = logging.getLogger(__name__)
 
 
+def _test_conn(conn):
+    """
+    يختبر الاتصال — يرجع conn لو سليم، أو None لو فشل.
+    دالة مساعدة مشتركة تُلغي تكرار try/except في كل Mixin.
+    """
+    if conn is None:
+        return None
+    try:
+        conn.execute("SELECT 1")
+        return conn
+    except Exception:
+        return None
+
+
 class LiveConnMixin:
     """
     Mixin يوفر _live_conn() لأي QWidget يحتفظ بـ DB connection.
@@ -31,36 +45,34 @@ class LiveConnMixin:
         """يرجع connection حي دائماً — يعمل fallback من company_state."""
         stored = getattr(self, self._conn_attr, None)
 
-        if stored is not None:
-            try:
-                stored.execute("SELECT 1")
-                return stored
-            except Exception as e:
-                logger.debug("%s._live_conn: stored conn failed (%s)", type(self).__name__, e)
+        if _test_conn(stored) is not None:
+            return stored
 
+        logger.debug("%s._live_conn: stored conn failed, trying fallback",
+                     type(self).__name__)
         try:
             from db.companies.company_state import company_state
             return company_state.get_erp_conn()
         except Exception as e:
-            logger.warning("%s._live_conn: fallback failed: %s", type(self).__name__, e)
+            logger.warning("%s._live_conn: fallback failed: %s",
+                           type(self).__name__, e)
             return stored
 
     def _live_acc_conn(self):
         """يرجع accounting connection حي."""
         stored = getattr(self, "acc_conn", None)
 
-        if stored is not None:
-            try:
-                stored.execute("SELECT 1")
-                return stored
-            except Exception as e:
-                logger.debug("%s._live_acc_conn: failed (%s)", type(self).__name__, e)
+        if _test_conn(stored) is not None:
+            return stored
 
+        logger.debug("%s._live_acc_conn: failed, trying fallback",
+                     type(self).__name__)
         try:
             from db.shared.connection import get_accounting_connection
             return get_accounting_connection()
         except Exception as e:
-            logger.warning("%s._live_acc_conn: fallback failed: %s", type(self).__name__, e)
+            logger.warning("%s._live_acc_conn: fallback failed: %s",
+                           type(self).__name__, e)
             return stored
 
 
@@ -79,19 +91,18 @@ class SafeConnMixin:
         self.__safe_db_name = db_name
 
     def _get_safe_conn(self):
-        try:
-            self.__safe_conn.execute("SELECT 1")
+        if _test_conn(self.__safe_conn) is not None:
             return self.__safe_conn
-        except Exception as e:
-            logger.debug("%s._get_safe_conn: reconnecting (%s)", type(self).__name__, e)
 
+        logger.debug("%s._get_safe_conn: reconnecting", type(self).__name__)
         try:
             from db.companies.company_state import company_state
             new_conn = company_state._get_conn(self.__safe_db_name)
             self.__safe_conn = new_conn
             return new_conn
         except Exception as e:
-            logger.warning("%s._get_safe_conn: reconnect failed: %s", type(self).__name__, e)
+            logger.warning("%s._get_safe_conn: reconnect failed: %s",
+                           type(self).__name__, e)
             return self.__safe_conn
 
     @staticmethod
@@ -135,20 +146,18 @@ class DualConnMixin(SafeConnMixin):
         self._company_id   = self._get_company_id()
 
     def _get_erp_conn(self):
-        try:
-            if self._erp_conn_ref is not None:
-                self._erp_conn_ref.execute("SELECT 1")
-                return self._erp_conn_ref
-        except Exception as e:
-            logger.debug("%s._get_erp_conn: reconnecting (%s)", type(self).__name__, e)
+        if _test_conn(self._erp_conn_ref) is not None:
+            return self._erp_conn_ref
 
+        logger.debug("%s._get_erp_conn: reconnecting", type(self).__name__)
         try:
             from db.companies.company_state import company_state
             new = company_state._get_conn("erp")
             self._erp_conn_ref = new
             return new
         except Exception as e:
-            logger.warning("%s._get_erp_conn: failed: %s", type(self).__name__, e)
+            logger.warning("%s._get_erp_conn: failed: %s",
+                           type(self).__name__, e)
             return self._erp_conn_ref
 
     def _on_dual_company_event(self, company_id: int) -> bool:

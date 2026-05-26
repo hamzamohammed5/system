@@ -9,6 +9,7 @@ from PyQt5.QtWidgets import (
 from PyQt5.QtCore import QDate, pyqtSignal
 
 from ui.app_settings import _C
+from ..utils.signals import blocked_signals
 
 _COMBO_STYLE = """
     QComboBox {
@@ -126,19 +127,20 @@ class FilterToolbar(QWidget):
         if self.cmb_cat is None or self._conn is None:
             return
         prev = self.cmb_cat.currentData() if self.cmb_cat.count() else None
-        self.cmb_cat.blockSignals(True)
-        self.cmb_cat.clear()
-        try:
-            from ..combo.category import populate_category_combo
-            populate_category_combo(self.cmb_cat, self._conn, self._scope,
-                                    all_label="— كل التصنيفات —")
-        except Exception:
-            self.cmb_cat.addItem("— كل التصنيفات —", None)
-        for i in range(self.cmb_cat.count()):
-            if self.cmb_cat.itemData(i) == prev:
-                self.cmb_cat.setCurrentIndex(i)
-                break
-        self.cmb_cat.blockSignals(False)
+
+        with blocked_signals(self.cmb_cat):
+            self.cmb_cat.clear()
+            try:
+                from ..combo.category import populate_category_combo
+                populate_category_combo(self.cmb_cat, self._conn, self._scope,
+                                        all_label="— كل التصنيفات —")
+            except Exception:
+                self.cmb_cat.addItem("— كل التصنيفات —", None)
+
+            for i in range(self.cmb_cat.count()):
+                if self.cmb_cat.itemData(i) == prev:
+                    self.cmb_cat.setCurrentIndex(i)
+                    break
 
     def reload(self, conn=None):
         if conn:
@@ -177,9 +179,8 @@ class FilterToolbar(QWidget):
     def reset(self):
         self._search.clear()
         if self.cmb_cat is not None:
-            self.cmb_cat.blockSignals(True)
-            self.cmb_cat.setCurrentIndex(0)
-            self.cmb_cat.blockSignals(False)
+            with blocked_signals(self.cmb_cat):
+                self.cmb_cat.setCurrentIndex(0)
         if self._date_filter is not None:
             self._date_filter.reset()
         else:

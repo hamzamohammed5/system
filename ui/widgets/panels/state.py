@@ -4,13 +4,14 @@ ui/widgets/panels/state.py
 مكونات الـ Empty State الموحدة:
 
   EmptyState              — QFrame حالة فارغة مع أيقونة ونص وزر
-  EmptyPanelState         — widget أوسع مع stretch
+                            (expandable=True يغني عن EmptyPanelState)
+  EmptyPanelState         — alias للتوافق مع الكود القديم
   set_table_empty_state   — صف رسالة داخل الجدول
   clear_table_empty_state — مسح صف الرسالة
 """
 
 from PyQt5.QtWidgets import (
-    QWidget, QFrame, QVBoxLayout, QLabel,
+    QFrame, QVBoxLayout, QLabel,
     QTableWidget, QTableWidgetItem, QSizePolicy,
 )
 from PyQt5.QtCore import Qt, pyqtSignal
@@ -26,32 +27,49 @@ from ..core.colors   import card_colors   # المصدر الوحيد — لا w
 # ══════════════════════════════════════════════════════════
 
 class EmptyState(QFrame):
-    """QFrame حالة فارغة مع أيقونة ونص وزر اختياري."""
+    """
+    QFrame حالة فارغة مع أيقونة ونص وزر اختياري.
+
+    expandable=True → يتمدد ليملأ المساحة (يغني عن EmptyPanelState).
+    expandable=False (افتراضي) → حجم ثابت حسب المحتوى.
+    """
 
     action_clicked = pyqtSignal()
 
     def __init__(self, icon: str = "📋", title: str = "لا توجد بيانات",
                  subtitle: str = "", action_text: str = "",
                  style: str = "dashed", color: str = "#10b981",
-                 min_height: int = 80, parent=None):
+                 min_height: int = 80,
+                 expandable: bool = False,
+                 parent=None):
         super().__init__(parent)
+        self._expandable = expandable
         self._build(icon, title, subtitle, action_text, style, color, min_height)
 
     def _build(self, icon, title, subtitle, action_text, style, color, min_h):
         bg, border = card_colors(color)
-        border_css = {"dashed": "dashed", "solid": "solid", "plain": "none"}.get(style, "dashed")
+        border_css = {
+            "dashed": "dashed",
+            "solid":  "solid",
+            "plain":  "none",
+        }.get(style, "dashed")
 
         self.setStyleSheet(f"""
             QFrame {{
-                background:{bg}; border:2px {border_css} {border}; border-radius:10px;
+                background:{bg}; border:2px {border_css} {border};
+                border-radius:10px;
             }}
         """)
         self.setMinimumHeight(min_h)
 
+        if self._expandable:
+            self.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Expanding)
+
         lay = QVBoxLayout(self)
         lay.setAlignment(Qt.AlignCenter)
-        lay.setSpacing(6)
-        lay.setContentsMargins(20, 16, 20, 16)
+        lay.setSpacing(6 if not self._expandable else 8)
+        lay.setContentsMargins(20, 16 if not self._expandable else 30,
+                               20, 16 if not self._expandable else 30)
 
         base = get_font_size()
 
@@ -59,14 +77,14 @@ class EmptyState(QFrame):
             lbl_icon = QLabel(icon)
             lbl_icon.setAlignment(Qt.AlignCenter)
             lbl_icon.setStyleSheet(
-                f"background:transparent; border:none; font-size:{fs(base,+8)}pt;"
+                f"background:transparent; border:none; font-size:{fs(base, +8)}pt;"
             )
             lay.addWidget(lbl_icon)
 
         lbl_title = QLabel(title)
         lbl_title.setAlignment(Qt.AlignCenter)
         lbl_title.setStyleSheet(
-            f"color:{color}; font-weight:700; font-size:{fs(base,+1)}pt;"
+            f"color:{color}; font-weight:700; font-size:{fs(base, +1)}pt;"
             "background:transparent; border:none;"
         )
         lay.addWidget(lbl_title)
@@ -74,77 +92,37 @@ class EmptyState(QFrame):
         if subtitle:
             lbl_sub = QLabel(subtitle)
             lbl_sub.setAlignment(Qt.AlignCenter)
-            lbl_sub.setStyleSheet(
-                f"color:{_C['text_muted']}; font-size:{fs(base,-1)}pt;"
-                "background:transparent; border:none;"
-            )
-            lay.addWidget(lbl_sub)
-
-        if action_text:
-            from ..components.button import make_btn
-            btn = make_btn(action_text, "success")
-            btn.setFixedWidth(140)
-            btn.clicked.connect(self.action_clicked.emit)
-            lay.addWidget(btn, alignment=Qt.AlignCenter)
-
-
-# ══════════════════════════════════════════════════════════
-# EmptyPanelState
-# ══════════════════════════════════════════════════════════
-
-class EmptyPanelState(QWidget):
-    """Widget حالة فارغة للـ panels مع تمدد."""
-
-    action_clicked = pyqtSignal()
-
-    def __init__(self, icon: str = "📋", title: str = "لا توجد بيانات",
-                 subtitle: str = "", action_text: str = "",
-                 color: str = "#9ca3af", parent=None):
-        super().__init__(parent)
-        self._build(icon, title, subtitle, action_text, color)
-
-    def _build(self, icon, title, subtitle, action_text, color):
-        self.setStyleSheet("background:transparent;")
-        self.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Expanding)
-
-        lay = QVBoxLayout(self)
-        lay.setAlignment(Qt.AlignCenter)
-        lay.setSpacing(8)
-        lay.setContentsMargins(20, 30, 20, 30)
-
-        base = get_font_size()
-
-        if icon:
-            lbl_icon = QLabel(icon)
-            lbl_icon.setAlignment(Qt.AlignCenter)
-            lbl_icon.setStyleSheet(
-                f"font-size:{fs(base,+8)}pt; background:transparent; border:none;"
-            )
-            lay.addWidget(lbl_icon)
-
-        lbl_title = QLabel(title)
-        lbl_title.setAlignment(Qt.AlignCenter)
-        lbl_title.setStyleSheet(
-            f"color:{color}; font-weight:700; font-size:{fs(base,+1)}pt;"
-            "background:transparent; border:none;"
-        )
-        lay.addWidget(lbl_title)
-
-        if subtitle:
-            lbl_sub = QLabel(subtitle)
-            lbl_sub.setAlignment(Qt.AlignCenter)
-            lbl_sub.setStyleSheet(
-                f"color:{_C.get('text_muted','#9ca3af')}; font-size:{fs(base,-1)}pt;"
-                "background:transparent; border:none;"
-            )
             lbl_sub.setWordWrap(True)
+            lbl_sub.setStyleSheet(
+                f"color:{_C['text_muted']}; font-size:{fs(base, -1)}pt;"
+                "background:transparent; border:none;"
+            )
             lay.addWidget(lbl_sub)
 
         if action_text:
             from ..components.button import make_btn
-            btn = make_btn(action_text, "primary")
+            btn_style = "primary" if self._expandable else "success"
+            btn = make_btn(action_text, btn_style)
+            if not self._expandable:
+                btn.setFixedWidth(140)
             btn.clicked.connect(self.action_clicked.emit)
             lay.addWidget(btn, alignment=Qt.AlignCenter)
+
+
+# ── alias للتوافق مع الكود القديم ─────────────────────────────────────────
+
+def EmptyPanelState(icon: str = "📋", title: str = "لا توجد بيانات",
+                    subtitle: str = "", action_text: str = "",
+                    color: str = "#9ca3af", parent=None) -> EmptyState:
+    """
+    Alias لـ EmptyState(expandable=True).
+    محفوظ للتوافق مع الكود القديم — استخدم EmptyState مباشرة في الكود الجديد.
+    """
+    return EmptyState(
+        icon=icon, title=title, subtitle=subtitle,
+        action_text=action_text, color=color,
+        style="plain", expandable=True, parent=parent,
+    )
 
 
 # ══════════════════════════════════════════════════════════
