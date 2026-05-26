@@ -2,6 +2,8 @@
 ui/widgets/forms/inputs.py
 ===========================
 Input widgets الموحدة للتطبيق.
+
+_input_style / _spinbox_style مستوردتان من theme/styles — لا تكرار.
 """
 from PyQt5.QtWidgets import (
     QWidget, QHBoxLayout, QLineEdit, QLabel,
@@ -12,47 +14,12 @@ from PyQt5.QtGui  import QFont
 
 from ui.app_settings import _C, fs
 from ..core          import get_base
-
-
-# ── Shared style builders ──────────────────────────────────
-
-def _input_style(height: int = 32, error: bool = False) -> str:
-    base   = get_base()
-    bg     = "#fef2f2" if error else _C["bg_input"]
-    border = "#f87171" if error else _C["border_med"]
-    return f"""
-        background:{bg}; border:1.5px solid {border};
-        border-radius:6px; padding:0 8px;
-        font-size:{fs(base,0)}pt; color:{_C["text_primary"]};
-        min-height:{height}px;
-    """
-
-
-def _spinbox_style(height: int = 32, positive: bool = False,
-                   widget: str = "QDoubleSpinBox") -> str:
-    base = get_base()
-    if positive:
-        bg, border, color, weight = "#f0fdf4", "#86efac", "#15803d", "bold"
-    else:
-        bg     = _C["bg_input"]
-        border = _C["border_med"]
-        color  = _C["text_primary"]
-        weight = "normal"
-    return f"""
-        {widget} {{
-            background:{bg}; border:1.5px solid {border};
-            border-radius:6px; padding:0 8px;
-            font-size:{fs(base,0)}pt; color:{color};
-            font-weight:{weight}; min-height:{height}px;
-        }}
-        {widget}:focus {{ border-color:{_C["accent"]}; background:white; }}
-        {widget}:disabled {{
-            background:{_C["bg_surface_2"]}; color:{_C["text_disabled"]};
-        }}
-    """
+from ..theme.styles  import input_style as _input_style, spinbox_style as _spinbox_style
 
 
 # ── SearchLineEdit ─────────────────────────────────────────
+# ملاحظة: SearchBar في components/headers توفر نفس الوظيفة.
+# SearchLineEdit تبقى للتوافق مع الكود الموجود.
 
 class SearchLineEdit(QWidget):
     """حقل بحث موحد مع delay."""

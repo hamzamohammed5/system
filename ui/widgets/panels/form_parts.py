@@ -23,6 +23,7 @@ from PyQt5.QtCore import Qt, pyqtSignal
 
 from ui.app_settings import _C, fs, get_font_size
 from ..components.button import make_btn
+from ..theme.styles      import spinbox_style  # المصدر الوحيد — لا تكرار
 
 # ModeLabel مصدرها الوحيد components/label — re-export للتوافق
 from ..components.label import ModeLabel  # noqa: F401
@@ -37,28 +38,6 @@ _STATUS_COLORS = {
 
 def _base() -> int:
     return get_font_size()
-
-
-def _spinbox_style(height: int = 32, positive: bool = False,
-                   widget: str = "QDoubleSpinBox") -> str:
-    base = _base()
-    if positive:
-        bg, border, color, weight = "#f0fdf4", "#86efac", "#15803d", "bold"
-    else:
-        bg = _C["bg_input"]; border = _C["border_med"]
-        color = _C["text_primary"]; weight = "normal"
-    return f"""
-        {widget} {{
-            background:{bg}; border:1.5px solid {border};
-            border-radius:6px; padding:0 8px;
-            font-size:{fs(base,0)}pt; color:{color};
-            font-weight:{weight}; min-height:{height}px;
-        }}
-        {widget}:focus {{ border-color:{_C["accent"]}; background:white; }}
-        {widget}:disabled {{
-            background:{_C["bg_surface_2"]}; color:{_C["text_disabled"]};
-        }}
-    """
 
 
 # ══════════════════════════════════════════════════════════
@@ -188,7 +167,7 @@ def make_preview_label(text: str = "─", status: str = "info") -> QLabel:
 
 
 # ══════════════════════════════════════════════════════════
-# Spin fields
+# Spin fields — يستخدم spinbox_style من theme/styles
 # ══════════════════════════════════════════════════════════
 
 def spin_field(max_: float = 999999, dec: int = 2,
@@ -197,7 +176,7 @@ def spin_field(max_: float = 999999, dec: int = 2,
     s.setRange(min_, max_)
     s.setDecimals(dec)
     s.setMinimumHeight(min_height)
-    s.setStyleSheet(_spinbox_style(min_height, widget="QDoubleSpinBox"))
+    s.setStyleSheet(spinbox_style(min_height, widget="QDoubleSpinBox"))
     return s
 
 
@@ -206,7 +185,7 @@ def int_spin_field(max_: int = 9999, min_: int = 0,
     s = QSpinBox()
     s.setRange(min_, max_)
     s.setMinimumHeight(min_height)
-    s.setStyleSheet(_spinbox_style(min_height, widget="QSpinBox"))
+    s.setStyleSheet(spinbox_style(min_height, widget="QSpinBox"))
     return s
 
 

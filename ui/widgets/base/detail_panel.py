@@ -2,22 +2,17 @@
 widgets/base/detail_panel.py
 =============================
 BaseDetailPanel — قاعدة مشتركة لكل لوحات التفاصيل.
-
-التغييرات عن النسخة القديمة:
-  - _DetailNotifMixin و _DetailStateMixin مدمجتان هنا مباشرة
-  - _set_mode موحدة بدون aliases قديمة
-  - _fill_header hook افتراضي يضبط العنوان من data['name']
-  - BusConnectedMixin بدل boilerplate يدوي
 """
 
 from PyQt5.QtWidgets import QWidget, QVBoxLayout, QScrollArea, QSizePolicy
 from PyQt5.QtCore    import Qt, pyqtSignal
 
 from ui.app_settings import _C
-from ..components.headers  import DetailHeader
-from ..panels.state   import EmptyState
-from ..components.notification  import NotificationBar
-from ..mixins.bus     import BusConnectedMixin
+from ..components.headers     import DetailHeader
+from ..panels.state           import EmptyState
+from ..components.notification import NotificationBar
+from ..mixins.bus             import BusConnectedMixin
+from ..theme.styles           import scroll_style   # المصدر الوحيد
 
 _BG = "#f8f9fb"
 
@@ -95,16 +90,14 @@ class BaseDetailPanel(QWidget, BusConnectedMixin):
         root.setContentsMargins(0, 0, 0, 0)
         root.setSpacing(0)
 
-        # notification bar
         self._notif = NotificationBar(show_dismiss=True)
         root.addWidget(self._notif)
 
-        # scroll area
         scroll = QScrollArea()
         scroll.setWidgetResizable(True)
         scroll.setHorizontalScrollBarPolicy(Qt.ScrollBarAsNeeded)
         scroll.setVerticalScrollBarPolicy(Qt.ScrollBarAsNeeded)
-        scroll.setStyleSheet(self._scroll_style())
+        scroll.setStyleSheet(scroll_style())
         self._scroll = scroll
 
         inner = QWidget()
@@ -114,13 +107,11 @@ class BaseDetailPanel(QWidget, BusConnectedMixin):
         inner_lay.setContentsMargins(0, 0, 0, 0)
         inner_lay.setSpacing(0)
 
-        # detail header
         self._hdr = DetailHeader(bg=self.HEADER_BG)
         self._build_header_cards()
         self._build_header_buttons()
         inner_lay.addWidget(self._hdr)
 
-        # content
         content = QWidget()
         content.setStyleSheet(f"background:{_BG};")
         self._content_lay = QVBoxLayout(content)
@@ -133,7 +124,6 @@ class BaseDetailPanel(QWidget, BusConnectedMixin):
         scroll.setWidget(inner)
         root.addWidget(scroll, stretch=1)
 
-        # empty state
         self._empty = EmptyState(
             icon=self.EMPTY_ICON, title=self.EMPTY_TITLE,
             subtitle=self.EMPTY_SUBTITLE,
@@ -204,17 +194,3 @@ class BaseDetailPanel(QWidget, BusConnectedMixin):
     @property
     def content_layout(self) -> QVBoxLayout:
         return self._content_lay
-
-    @staticmethod
-    def _scroll_style(width: int = 6) -> str:
-        r = width // 2
-        return f"""
-            QScrollArea {{ border:none; background:transparent; }}
-            QScrollBar:vertical {{
-                background:transparent; width:{width}px; border-radius:{r}px;
-            }}
-            QScrollBar::handle:vertical {{
-                background:{_C['border_med']}; border-radius:{r}px; min-height:30px;
-            }}
-            QScrollBar::add-line:vertical, QScrollBar::sub-line:vertical {{ height:0px; }}
-        """

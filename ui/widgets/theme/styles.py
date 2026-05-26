@@ -3,7 +3,8 @@ ui/widgets/theme/styles.py
 ===================================
 كل الـ stylesheet generators في مكان واحد.
 
-دمج: theme.py + table_styles.py + كل الستايلات المتفرقة
+scroll_style() موجودة هنا — هي المصدر الوحيد.
+utils/scroll.py يستوردها من هنا.
 """
 from ui.app_settings import _C, fs
 from ..core.settings import get_base
@@ -124,6 +125,37 @@ def splitter_style() -> str:
 
 
 # ══════════════════════════════════════════════════════════════════
+# Scroll  ← المصدر الوحيد لـ scroll_style
+# ══════════════════════════════════════════════════════════════════
+
+def scroll_style(width: int = 6) -> str:
+    """
+    Stylesheet موحد لـ QScrollArea / QScrollBar.
+    المصدر الوحيد — utils/scroll.py يستوردها من هنا.
+    """
+    r = width // 2
+    return f"""
+        QScrollArea {{ border:none; background:transparent; }}
+        QScrollBar:vertical {{
+            background:transparent; width:{width}px; border-radius:{r}px;
+        }}
+        QScrollBar::handle:vertical {{
+            background:{_C['border_med']}; border-radius:{r}px; min-height:30px;
+        }}
+        QScrollBar::handle:vertical:hover {{ background:{_C['border_strong']}; }}
+        QScrollBar::add-line:vertical, QScrollBar::sub-line:vertical {{ height:0px; }}
+        QScrollBar:horizontal {{
+            background:transparent; height:{width}px; border-radius:{r}px;
+        }}
+        QScrollBar::handle:horizontal {{
+            background:{_C['border_med']}; border-radius:{r}px; min-width:30px;
+        }}
+        QScrollBar::handle:horizontal:hover {{ background:{_C['border_strong']}; }}
+        QScrollBar::add-line:horizontal, QScrollBar::sub-line:horizontal {{ width:0px; }}
+    """
+
+
+# ══════════════════════════════════════════════════════════════════
 # Cards & Frames
 # ══════════════════════════════════════════════════════════════════
 
@@ -199,31 +231,8 @@ def tab_style(accent: str = None, size: str = "normal") -> str:
 
 
 # ══════════════════════════════════════════════════════════════════
-# Scroll / Misc
+# Misc
 # ══════════════════════════════════════════════════════════════════
-
-def scroll_style(width: int = 6) -> str:
-    r = width // 2
-    return f"""
-        QScrollArea {{ border:none; background:transparent; }}
-        QScrollBar:vertical {{
-            background:transparent; width:{width}px; border-radius:{r}px;
-        }}
-        QScrollBar::handle:vertical {{
-            background:{_C['border_med']}; border-radius:{r}px; min-height:30px;
-        }}
-        QScrollBar::handle:vertical:hover {{ background:{_C['border_strong']}; }}
-        QScrollBar::add-line:vertical, QScrollBar::sub-line:vertical {{ height:0px; }}
-        QScrollBar:horizontal {{
-            background:transparent; height:{width}px; border-radius:{r}px;
-        }}
-        QScrollBar::handle:horizontal {{
-            background:{_C['border_med']}; border-radius:{r}px; min-width:30px;
-        }}
-        QScrollBar::handle:horizontal:hover {{ background:{_C['border_strong']}; }}
-        QScrollBar::add-line:horizontal, QScrollBar::sub-line:horizontal {{ width:0px; }}
-    """
-
 
 def tree_style() -> str:
     return f"""
