@@ -26,7 +26,7 @@ from db.shared.categories_repo import (
 from ..core.conn     import LiveConnMixin
 from ..panels._btn  import make_btn
 from ..dialogs.confirm import confirm_delete
-from ..theme.styles  import tree_style
+from ..panels.theme  import get_tree_style
 from ..panels.form_parts import ModeLabel
 from ui.events import bus
 
@@ -210,7 +210,7 @@ class CategoryManager(QWidget, LiveConnMixin):
         self.tree.setColumnWidth(2, 80)
         self.tree.setAlternatingRowColors(True)
         self.tree.setAnimated(True)
-        self.tree.setStyleSheet(tree_style())
+        self.tree.setStyleSheet(get_tree_style())
         self.tree.itemSelectionChanged.connect(self._on_select)
         root.addWidget(self.tree)
 
