@@ -1,7 +1,12 @@
 """
 ui/widgets/utils/scroll.py
 ===========================
-ScrollableForm وأدوات الـ scroll الموحدة.
+أدوات الـ scroll الموحدة:
+
+  scroll_style()         — stylesheet للـ scrollbars
+  wrap_in_scroll()       — يلف أي widget في QScrollArea
+  build_inner_scroll()   — يبني هيكل form panel بـ scroll
+  ScrollableFormWidget   — base class للـ form panels
 """
 from PyQt5.QtWidgets import QWidget, QVBoxLayout, QScrollArea, QSizePolicy
 from PyQt5.QtCore    import Qt
@@ -10,7 +15,7 @@ from ui.app_settings import _C
 
 
 def scroll_style(width: int = 8) -> str:
-    r = width // 2
+    r   = width // 2
     bg  = _C.get('bg_surface_2', '#f5f5f5')
     bdr = _C.get('border_med',   '#bdbdbd')
     return f"""
@@ -35,9 +40,10 @@ def scroll_style(width: int = 8) -> str:
     """
 
 
-def wrap_in_scroll(widget: QWidget, min_height: int = 0,
+def wrap_in_scroll(widget: QWidget,
+                   min_height: int = 0,
                    horizontal: bool = False) -> QScrollArea:
-    """يلف أي widget في QScrollArea."""
+    """يلف أي widget في QScrollArea موحد."""
     scroll = QScrollArea()
     scroll.setWidgetResizable(True)
     scroll.setWidget(widget)
@@ -49,6 +55,29 @@ def wrap_in_scroll(widget: QWidget, min_height: int = 0,
     if min_height:
         scroll.setMinimumHeight(min_height)
     return scroll
+
+
+def build_inner_scroll(parent_widget: QWidget,
+                       min_width: int = 280) -> tuple:
+    """
+    يبني الهيكل الأساسي لأي form panel بـ scroll.
+    يرجع (outer_layout, inner_widget, inner_layout)
+    """
+    outer = QVBoxLayout(parent_widget)
+    outer.setContentsMargins(0, 0, 0, 0)
+    outer.setSpacing(0)
+
+    inner = QWidget()
+    inner.setMinimumWidth(min_width)
+    inner.setSizePolicy(QSizePolicy.Preferred, QSizePolicy.Minimum)
+
+    outer.addWidget(wrap_in_scroll(inner))
+
+    lay = QVBoxLayout(inner)
+    lay.setSpacing(10)
+    lay.setContentsMargins(12, 12, 12, 12)
+
+    return outer, inner, lay
 
 
 class ScrollableFormWidget(QWidget):

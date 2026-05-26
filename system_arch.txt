@@ -1,5 +1,5 @@
 File Tree Snapshot
-Generated : 2026-05-26 10:07:01
+Generated : 2026-05-26 10:21:48
 Source    : D:\My Workspace\Hg\Alhabaar\accountant\system
 Extensions: .py
 ────────────────────────────────────────────────────────────
@@ -298,15 +298,12 @@ system/
 │   │   │   │   └── widget.py
 │   │   │   ├── action_toolbar.py
 │   │   │   ├── badge.py
-│   │   │   ├── badge_label.py
 │   │   │   ├── button.py
 │   │   │   ├── card.py
 │   │   │   ├── headers.py
 │   │   │   ├── label.py
 │   │   │   ├── notification.py
-│   │   │   ├── section_header.py
 │   │   │   ├── spinner.py
-│   │   │   ├── stat_card.py
 │   │   │   └── stat_row.py
 │   │   ├── core/
 │   │   │   ├── base.py
@@ -336,19 +333,14 @@ system/
 │   │   ├── panels/
 │   │   │   ├── _btn.py
 │   │   │   ├── card_grid.py
-│   │   │   ├── cards.py
 │   │   │   ├── collapsible_card.py
 │   │   │   ├── crud_section.py
 │   │   │   ├── data_table.py
 │   │   │   ├── detail_section.py
 │   │   │   ├── display.py
-│   │   │   ├── empty_state.py
 │   │   │   ├── filter.py
 │   │   │   ├── form_parts.py
-│   │   │   ├── header.py
-│   │   │   ├── notify.py
-│   │   │   ├── state.py
-│   │   │   └── theme.py
+│   │   │   └── state.py
 │   │   ├── tables/
 │   │   │   ├── builders.py
 │   │   │   ├── flexible.py
@@ -362,7 +354,6 @@ system/
 │   │       ├── flow_layout.py
 │   │       ├── no_wheel.py
 │   │       ├── scroll.py
-│   │       ├── scrollable_form.py
 │   │       ├── searchable_combo.py
 │   │       ├── splitter.py
 │   │       └── tooltip.py

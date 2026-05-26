@@ -1,53 +1,224 @@
 """
 ui/widgets/components/stat_row.py
-=============================================
-StatItem  — dataclass لتعريف بطاقة إحصائية.
-_StatCard — بطاقة خفيفة مضمّنة (للاستخدام الداخلي فقط).
-StatRow   — صف أفقي من البطاقات مع فواصل.
+===================================
+كل البطاقات الإحصائية والشارات في مكان واحد:
 
-الاستخدام:
-    row = StatRow([
-        StatItem("المبيعات", color="#1565c0", value="150"),
-        StatItem("الأرباح",  color="#2e7d32", value="40,000 ج"),
-    ])
-    row.set_value(0, "200")
-    row.set_value_by_label("الأرباح", "50,000 ج", color="#2e7d32")
+  BadgeLabel    — شارة نصية ملونة
+  StatCard      — بطاقة إحصائية مستقلة (في detail headers)
+  StatusChip    — شريحة حالة (أيقونة + اسم + عدد)
+  StatItem      — dataclass لتعريف بطاقة
+  _StatCard     — بطاقة خفيفة مضمّنة في StatRow
+  StatRow       — صف أفقي من البطاقات
+  make_stat_row / stat_card_pair / make_stat_card_simple / make_status_chip
 """
 
 from __future__ import annotations
 from dataclasses import dataclass
 from typing import Optional
 
-from PyQt5.QtWidgets import QWidget, QFrame, QHBoxLayout, QVBoxLayout, QLabel, QSizePolicy
-from PyQt5.QtCore    import Qt
-from PyQt5.QtGui     import QFont
+from PyQt5.QtWidgets import (
+    QFrame, QHBoxLayout, QVBoxLayout, QLabel, QSizePolicy, QWidget,
+)
+from PyQt5.QtCore import Qt
+from PyQt5.QtGui  import QFont
 
-from ui.app_settings import fs
+from ui.app_settings import _C, fs
 from ..core.settings import get_base
 from ..core.colors   import card_colors
 from ..theme.builders import v_divider
 
 
 # ══════════════════════════════════════════════════════════
-# DataClass
+# BadgeLabel
+# ══════════════════════════════════════════════════════════
+
+class BadgeLabel(QLabel):
+    """شارة نصية ملونة."""
+
+    def __init__(self, parent=None):
+        super().__init__(parent)
+        self.setAlignment(Qt.AlignCenter)
+        self._apply("#555", "#f5f5f5", "#e0e0e0")
+
+    def _apply(self, fg: str, bg: str, border: str):
+        base = get_base()
+        self.setStyleSheet(
+            f"font-weight:700; font-size:{fs(base,-1)}pt;"
+            f"padding:3px 12px; border-radius:20px;"
+            f"color:{fg}; background:{bg}; border:1.5px solid {border};"
+        )
+
+    def set_badge(self, text: str, text_color: str = "#555",
+                  bg: str = "#f5f5f5", border: str = "#e0e0e0"):
+        self.setText(text)
+        self._apply(text_color, bg, border)
+
+    def clear_badge(self):
+        self.setText("")
+        self._apply("#555", "#f5f5f5", "#e0e0e0")
+
+
+# ══════════════════════════════════════════════════════════
+# StatCard — بطاقة مستقلة كاملة
+# ══════════════════════════════════════════════════════════
+
+class StatCard(QFrame):
+    """بطاقة إحصائية مستقلة — للـ detail headers."""
+
+    def __init__(self, icon: str = "", title: str = "",
+                 value: str = "─", color: str = "#1565c0",
+                 bg: str = None, border: str = None,
+                 compact: bool = False, parent=None):
+        super().__init__(parent)
+        self._color   = color
+        self._compact = compact
+        self._build(icon, title, value, color, bg, border)
+
+    def _build(self, icon, title, value, color, bg, border):
+        _bg, _bdr = card_colors(color)
+        if bg:     _bg  = bg
+        if border: _bdr = border
+
+        self.setStyleSheet(f"""
+            QFrame {{
+                background:{_bg}; border:1px solid {_bdr};
+                border-radius:10px;
+            }}
+        """)
+        self.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Fixed)
+
+        lay  = QVBoxLayout(self)
+        base = get_base()
+
+        if self._compact:
+            lay.setContentsMargins(10, 8, 10, 8)
+            lay.setSpacing(2)
+        else:
+            lay.setContentsMargins(14, 12, 14, 12)
+            lay.setSpacing(3)
+
+        top = QHBoxLayout()
+        self._lbl_title = QLabel(title)
+        self._lbl_title.setStyleSheet(
+            f"color:{color}; font-size:{fs(base,-1)}pt; font-weight:600;"
+            "background:transparent; border:none;"
+        )
+        top.addWidget(self._lbl_title)
+        top.addStretch()
+
+        if icon:
+            lbl_icon = QLabel(icon)
+            lbl_icon.setStyleSheet("background:transparent; border:none;")
+            top.addWidget(lbl_icon)
+
+        lay.addLayout(top)
+
+        self._lbl_value = QLabel(value)
+        f = QFont()
+        f.setPointSize(fs(base, +1 if self._compact else +3))
+        f.setBold(True)
+        self._lbl_value.setFont(f)
+        self._lbl_value.setStyleSheet(
+            f"color:{color}; background:transparent; border:none;"
+        )
+        self._lbl_value.setAlignment(Qt.AlignRight | Qt.AlignVCenter)
+        lay.addWidget(self._lbl_value)
+
+    def set_value(self, text: str):
+        self._lbl_value.setText(text)
+
+    def set_color(self, color: str):
+        base = get_base()
+        self._color = color
+        self._lbl_value.setStyleSheet(
+            f"color:{color}; background:transparent; border:none;"
+        )
+        self._lbl_title.setStyleSheet(
+            f"color:{color}; font-size:{fs(base,-1)}pt; font-weight:600;"
+            "background:transparent; border:none;"
+        )
+
+    def value_label(self) -> QLabel:
+        return self._lbl_value
+
+
+# ══════════════════════════════════════════════════════════
+# StatusChip
+# ══════════════════════════════════════════════════════════
+
+class StatusChip(QFrame):
+    """شريحة حالة: أيقونة + اسم + عدد."""
+
+    def __init__(self, icon: str = "", label: str = "", count: int = 0,
+                 color: str = "#6b7280", bg: str = None, border: str = None,
+                 compact: bool = False, parent=None):
+        super().__init__(parent)
+        _bg, _bdr = card_colors(color)
+        self._build(icon, label, count, color,
+                    bg or _bg, border or _bdr, compact)
+
+    def _build(self, icon, label, count, color, bg, border, compact):
+        self.setStyleSheet(f"""
+            QFrame {{
+                background:{bg}; border:1px solid {border};
+                border-radius:8px;
+            }}
+        """)
+        self.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Fixed)
+        base = get_base()
+        m = (10, 6, 10, 6) if compact else (12, 8, 12, 8)
+        lay = QHBoxLayout(self)
+        lay.setContentsMargins(*m)
+        lay.setSpacing(8)
+
+        if icon:
+            lbl_icon = QLabel(icon)
+            lbl_icon.setStyleSheet("background:transparent; border:none;")
+            lay.addWidget(lbl_icon)
+
+        lbl_label = QLabel(label)
+        lbl_label.setStyleSheet(
+            f"font-weight:600; color:{color}; background:transparent;"
+            f"border:none; font-size:{fs(base,0)}pt;"
+        )
+        lay.addWidget(lbl_label, stretch=1)
+
+        self._lbl_count = QLabel(str(count))
+        f = QFont()
+        f.setPointSize(fs(base, +1 if compact else +2))
+        f.setBold(True)
+        self._lbl_count.setFont(f)
+        self._lbl_count.setStyleSheet(
+            f"color:{color}; background:transparent; border:none;"
+        )
+        lay.addWidget(self._lbl_count)
+
+    def set_count(self, count: int):
+        self._lbl_count.setText(str(count))
+
+    def count(self) -> int:
+        try:
+            return int(self._lbl_count.text())
+        except ValueError:
+            return 0
+
+
+# ══════════════════════════════════════════════════════════
+# StatItem + _StatCard + StatRow
 # ══════════════════════════════════════════════════════════
 
 @dataclass
 class StatItem:
     """تعريف بطاقة إحصائية واحدة."""
     label      : str
-    color      : str            = "#1565c0"
-    icon       : str            = ""
-    value      : str            = "─"
-    bg         : Optional[str]  = None
-    border     : Optional[str]  = None
-    bold_value : bool           = True
-    compact    : bool           = False
+    color      : str           = "#1565c0"
+    icon       : str           = ""
+    value      : str           = "─"
+    bg         : Optional[str] = None
+    border     : Optional[str] = None
+    bold_value : bool          = True
+    compact    : bool          = False
 
-
-# ══════════════════════════════════════════════════════════
-# _StatCard — بطاقة خفيفة (داخلية)
-# ══════════════════════════════════════════════════════════
 
 class _StatCard(QFrame):
     """بطاقة إحصائية خفيفة — تُستخدم داخل StatRow فقط."""
@@ -82,7 +253,6 @@ class _StatCard(QFrame):
             lay.setContentsMargins(14, 10, 14, 10)
             lay.setSpacing(3)
 
-        # صف العنوان + أيقونة
         top = QHBoxLayout()
         top.setSpacing(4)
 
@@ -100,7 +270,6 @@ class _StatCard(QFrame):
         top.addWidget(lbl_label, stretch=1)
         lay.addLayout(top)
 
-        # القيمة
         self._lbl_value = QLabel(self._item.value)
         f = QFont()
         f.setPointSize(fs(base, +1 if self._item.compact else +3))
@@ -121,10 +290,6 @@ class _StatCard(QFrame):
     def value_label(self) -> QLabel:
         return self._lbl_value
 
-
-# ══════════════════════════════════════════════════════════
-# StatRow
-# ══════════════════════════════════════════════════════════
 
 class StatRow(QWidget):
     """
@@ -151,7 +316,6 @@ class StatRow(QWidget):
 
     def _build(self, separator: bool, compact: bool, bg: str):
         self.setStyleSheet(f"background:{bg};" if bg else "background:transparent;")
-
         lay = QHBoxLayout(self)
         lay.setContentsMargins(0, 0, 0, 0)
         lay.setSpacing(0)
@@ -164,8 +328,6 @@ class StatRow(QWidget):
             lay.addWidget(card, stretch=1)
             if separator and i < len(self._items) - 1:
                 lay.addWidget(v_divider(margin_v=4))
-
-    # ── API ──────────────────────────────────────────────
 
     def set_value(self, index: int, text: str, color: str = None):
         if 0 <= index < len(self._cards):
@@ -209,3 +371,14 @@ def stat_card_pair(label: str, color: str = "#1565c0",
     item = StatItem(label=label, color=color, icon=icon)
     card = _StatCard(item)
     return card, card.value_label()
+
+
+def make_stat_card_simple(label: str, value: str = "─",
+                           color: str = "#1565c0",
+                           icon: str = "") -> StatCard:
+    return StatCard(icon=icon, title=label, value=value, color=color)
+
+
+def make_status_chip(icon: str, label: str, count: int = 0,
+                     color: str = "#6b7280") -> StatusChip:
+    return StatusChip(icon=icon, label=label, count=count, color=color)
