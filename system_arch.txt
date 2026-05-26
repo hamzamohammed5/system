@@ -1,5 +1,5 @@
 File Tree Snapshot
-Generated : 2026-05-26 01:57:08
+Generated : 2026-05-26 09:28:52
 Source    : D:\My Workspace\Hg\Alhabaar\accountant\system
 Extensions: .py
 ────────────────────────────────────────────────────────────
@@ -73,7 +73,8 @@ system/
 │   │   │   ├── crud_form.py
 │   │   │   ├── detail_panel.py
 │   │   │   ├── list_panel.py
-│   │   │   └── section.py
+│   │   │   ├── section.py
+│   │   │   └── tab_section.py
 │   │   ├── combo/
 │   │   │   ├── category.py
 │   │   │   └── unit.py
@@ -113,7 +114,11 @@ system/
 │   │   │   └── validate.py
 │   │   ├── panels/
 │   │   │   ├── _btn.py
+│   │   │   ├── card_grid.py
 │   │   │   ├── cards.py
+│   │   │   ├── collapsible_card.py
+│   │   │   ├── crud_section.py
+│   │   │   ├── detail_section.py
 │   │   │   ├── display.py
 │   │   │   ├── filter.py
 │   │   │   ├── form_parts.py
@@ -359,7 +364,6 @@ system/
 │   │       │   └── _variants_logic.py
 │   │       ├── panles_helper/
 │   │       │   ├── action_toolbar.py
-│   │       │   ├── amount_display.py
 │   │       │   ├── card_grid.py
 │   │       │   ├── collapsible_card.py
 │   │       │   ├── crud_section.py
@@ -367,16 +371,9 @@ system/
 │   │       │   ├── detail_header.py
 │   │       │   ├── detail_section.py
 │   │       │   ├── divider_utils.py
-│   │       │   ├── empty_state.py
 │   │       │   ├── filter_toolbar.py
-│   │       │   ├── form_row.py
-│   │       │   ├── info_row.py
 │   │       │   ├── list_header.py
-│   │       │   ├── mode_label.py
 │   │       │   ├── page_header.py
-│   │       │   ├── progress_bar.py
-│   │       │   ├── section_header.py
-│   │       │   ├── stat_card_row.py
 │   │       │   └── theme.py
 │   │       ├── table_utils/
 │   │       ├── table_utils_helper/
@@ -392,9 +389,7 @@ system/
 │   │       ├── category_form.py
 │   │       ├── category_manager.py
 │   │       ├── confirm_dialog.py
-│   │       ├── detail_panel_mixins.py
 │   │       ├── dialog_base.py
-│   │       ├── empty_state_helpers.py
 │   │       ├── filter_bar.py
 │   │       ├── form_utils.py
 │   │       ├── list_panel_filter.py
@@ -404,8 +399,7 @@ system/
 │   │       ├── stat_row.py
 │   │       ├── tab_builder.py
 │   │       ├── tab_section_base.py
-│   │       ├── table_utils.py
-│   │       └── tooltip_helper.py
+│   │       └── table_utils.py
 │   ├── app_settings.py
 │   ├── events.py
 │   ├── font_utils.py
