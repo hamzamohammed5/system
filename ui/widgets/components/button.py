@@ -2,6 +2,8 @@
 ui/widgets/components/button.py
 ========================================
 make_btn — المصنع الموحد لإنشاء أزرار التطبيق.
+
+دمج: panels/_btn.py + components/button.py
 """
 from PyQt5.QtWidgets import QPushButton, QSizePolicy
 from PyQt5.QtCore    import Qt
@@ -10,57 +12,64 @@ from PyQt5.QtGui     import QFont, QFontMetrics
 from ui.app_settings import _C, fs
 from ..core.settings import get_base
 
-
-# ── تعريف الأنماط ────────────────────────────────────────────────────────
-# كل نمط: (bg, fg, border, hover_bg, hover_fg_or_None, hover_border)
-_STYLE_MAP = {
-    "primary": (
-        "_C['accent_light']", "_C['accent_text']", "_C['accent_mid']",
-        "_C['accent_mid']",   "_C['accent_text']", "_C['accent']",
+_STYLES = {
+    "primary": dict(
+        bg="_C['accent_light']", fg="_C['accent_text']", border="_C['accent_mid']",
+        h_bg="_C['accent_mid']", h_fg=None, h_bdr="_C['accent']", bold=True,
     ),
-    "success": ("#ecfdf5", "#065f46", "#6ee7b7", "#d1fae5", None, "#34d399"),
-    "danger":  ("#fef2f2", "#dc2626", "#fca5a5", "#fee2e2", None, "#f87171"),
-    "ghost":   (
-        "transparent",       "_C['text_sec']",  "_C['border_med']",
-        "_C['accent_light']","_C['accent_text']","_C['accent_mid']",
+    "success": dict(
+        bg="#ecfdf5", fg="#065f46", border="#6ee7b7",
+        h_bg="#d1fae5", h_fg=None, h_bdr="#34d399", bold=True,
     ),
-    "normal":  (
-        "_C['bg_surface_2']","_C['text_sec']",  "_C['border']",
-        "_C['bg_hover']",    None,              "_C['border_med']",
+    "danger": dict(
+        bg="#fef2f2", fg="#dc2626", border="#fca5a5",
+        h_bg="#fee2e2", h_fg=None, h_bdr="#f87171", bold=False,
+    ),
+    "ghost": dict(
+        bg="transparent", fg="_C['text_sec']", border="_C['border_med']",
+        h_bg="_C['accent_light']", h_fg="_C['accent_text']", h_bdr="_C['accent_mid']", bold=False,
+    ),
+    "normal": dict(
+        bg="_C['bg_surface_2']", fg="_C['text_sec']", border="_C['border']",
+        h_bg="_C['bg_hover']", h_fg=None, h_bdr="_C['border_med']", bold=False,
     ),
 }
 
 
-def _resolve(val: str) -> str:
-    if val is None:
+def _r(val: str | None) -> str:
+    if not val:
         return "transparent"
     if val.startswith("_C["):
-        key = val[4:-2]
-        return _C.get(key, val)
+        return _C.get(val[4:-2], val)
     return val
 
 
-def _build_style(key: str, font_size: int, btn_h: int) -> str:
-    bg, fg, border, h_bg, h_fg_raw, h_bdr = _STYLE_MAP.get(key, _STYLE_MAP["normal"])
-    bg     = _resolve(bg)
-    fg     = _resolve(fg)
-    border = _resolve(border)
-    h_bg   = _resolve(h_bg)
-    h_fg   = _resolve(h_fg_raw) if h_fg_raw else fg
-    h_bdr  = _resolve(h_bdr)
+def make_btn(text: str, style: str = "normal",
+             fixed_size: bool = True) -> QPushButton:
+    """
+    ينشئ QPushButton بالنمط المحدد.
+    style: "primary" | "success" | "danger" | "ghost" | "normal"
+    fixed_size: True = عرض ثابت، False = عرض أدنى قابل للتمدد
+    """
+    s    = _STYLES.get(style, _STYLES["normal"])
+    base = get_base()
+    h    = base * 2 + 8
+    fsz  = fs(base, 0)
 
-    bold = "font-weight:700;" if key in ("primary", "success") else ""
+    bg  = _r(s["bg"]);  fg  = _r(s["fg"]);  bdr = _r(s["border"])
+    hbg = _r(s["h_bg"]); hfg = _r(s["h_fg"]) or fg; hbdr = _r(s["h_bdr"])
+    bold = "font-weight:700;" if s["bold"] else ""
 
-    return f"""
+    stylesheet = f"""
         QPushButton {{
             background:{bg}; color:{fg};
-            border:1.5px solid {border};
-            font-size:{font_size}pt; border-radius:6px;
-            padding:0 14px; min-height:{btn_h}px;
+            border:1.5px solid {bdr};
+            font-size:{fsz}pt; border-radius:6px;
+            padding:0 14px; min-height:{h}px;
             {bold}
         }}
         QPushButton:hover {{
-            background:{h_bg}; color:{h_fg}; border-color:{h_bdr};
+            background:{hbg}; color:{hfg}; border-color:{hbdr};
         }}
         QPushButton:disabled {{
             background:{_C.get('bg_surface_2','#f5f5f5')};
@@ -68,32 +77,14 @@ def _build_style(key: str, font_size: int, btn_h: int) -> str:
             border-color:{_C.get('border','#e0e0e0')};
         }}
     """
-
-
-def calc_btn_width(text: str, font_size: int, padding: int = 32) -> int:
-    f = QFont()
-    f.setPointSize(font_size)
-    return QFontMetrics(f).horizontalAdvance(text) + padding
-
-
-def make_btn(text: str, style: str = "normal",
-             fixed_size: bool = True) -> QPushButton:
-    """
-    ينشئ QPushButton بالنمط المحدد.
-
-    style: "primary" | "success" | "danger" | "ghost" | "normal"
-    fixed_size: True = عرض ثابت، False = عرض أدنى قابل للتمدد
-    """
-    btn       = QPushButton(text)
-    base      = get_base()
-    btn_h     = base * 2 + 8
-    font_size = fs(base, 0)
-
+    btn = QPushButton(text)
     btn.setCursor(Qt.PointingHandCursor)
-    btn.setStyleSheet(_build_style(style, font_size, btn_h))
-    btn.setFixedHeight(btn_h)
+    btn.setStyleSheet(stylesheet)
+    btn.setFixedHeight(h)
 
-    w = calc_btn_width(text, font_size)
+    f = QFont()
+    f.setPointSize(fsz)
+    w = QFontMetrics(f).horizontalAdvance(text) + 32
     if fixed_size:
         btn.setFixedWidth(w)
         btn.setSizePolicy(QSizePolicy.Fixed, QSizePolicy.Fixed)
@@ -104,6 +95,12 @@ def make_btn(text: str, style: str = "normal",
     return btn
 
 
-# Alias للتوافق مع الكود القديم
-_make_btn = make_btn
+def calc_btn_width(text: str, font_size: int, padding: int = 32) -> int:
+    f = QFont()
+    f.setPointSize(font_size)
+    return QFontMetrics(f).horizontalAdvance(text) + padding
+
+
+# aliases للتوافق مع الكود القديم
+_make_btn       = make_btn
 _calc_btn_width = calc_btn_width

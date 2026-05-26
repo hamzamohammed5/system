@@ -11,8 +11,7 @@ from PyQt5.QtWidgets import (
 )
 from PyQt5.QtCore import Qt, QTimer
 
-from ui.app_settings import _C
-from ..components.button import make_btn
+from ..theme.styles  import splitter_style   # المصدر الوحيد
 
 
 class CrudSection(QWidget):
@@ -66,7 +65,7 @@ class CrudSection(QWidget):
 
         self._splitter = QSplitter(Qt.Horizontal)
         self._splitter.setHandleWidth(5)
-        self._splitter.setStyleSheet(self._splitter_style())
+        self._splitter.setStyleSheet(splitter_style())
         self._splitter.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Expanding)
 
         left          = self._build_left()
@@ -121,14 +120,6 @@ class CrudSection(QWidget):
         self._splitter.blockSignals(True)
         self._splitter.setSizes([list_w, detail_w])
         self._splitter.blockSignals(False)
-
-    @staticmethod
-    def _splitter_style() -> str:
-        return f"""
-            QSplitter::handle {{ background:{_C['border']}; }}
-            QSplitter::handle:hover {{ background:{_C['accent_mid']}; }}
-            QSplitter::handle:pressed {{ background:{_C['accent']}; }}
-        """
 
     # ── API ───────────────────────────────────────────────
 

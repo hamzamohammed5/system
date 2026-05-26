@@ -9,7 +9,7 @@ from PyQt5.QtWidgets import (
 )
 from PyQt5.QtCore import Qt, QTimer
 
-from .styles import (
+from ..theme.styles import (
     table_style, splitter_style,
     ROW_HEIGHT_NORMAL, ROW_HEIGHT_COMPACT, ROW_HEIGHT_LARGE,
 )
@@ -80,7 +80,6 @@ def make_table(columns: list, stretch_col: int = -1,
                col_widths: dict = None, max_height: int = None,
                min_height: int = 100,
                row_height: int = ROW_HEIGHT_NORMAL) -> QTableWidget:
-    """جدول عادي."""
     return _build_table(columns, stretch_col, col_widths,
                         max_height=max_height, min_height=min_height,
                         row_height=row_height)
@@ -89,7 +88,6 @@ def make_table(columns: list, stretch_col: int = -1,
 def make_compact_table(columns: list, stretch_col: int = -1,
                        col_widths: dict = None,
                        max_height: int = 200) -> QTableWidget:
-    """جدول مضغوط."""
     return _build_table(columns, stretch_col, col_widths,
                         variant="compact", max_height=max_height,
                         row_height=ROW_HEIGHT_COMPACT)
@@ -97,7 +95,6 @@ def make_compact_table(columns: list, stretch_col: int = -1,
 
 def make_list_table(columns: list, stretch_col: int = -1,
                     col_widths: dict = None) -> QTableWidget:
-    """جدول قايمة (صفوف كبيرة)."""
     table = _build_table(columns, stretch_col, col_widths,
                          row_height=ROW_HEIGHT_LARGE)
     table.setStyleSheet(table.styleSheet() + """
@@ -109,7 +106,6 @@ def make_list_table(columns: list, stretch_col: int = -1,
 def make_fixed_table(columns: list, col_widths: dict,
                      max_height: int = None, min_height: int = 60,
                      row_height: int = ROW_HEIGHT_NORMAL) -> QTableWidget:
-    """جدول بأعمدة ثابتة العرض."""
     table = _build_table(columns, stretch_col=-1, col_widths=col_widths,
                          max_height=max_height, min_height=min_height,
                          row_height=row_height)
@@ -130,7 +126,6 @@ def make_splitter_table(columns: list, stretch_col: int = -1,
                         min_height: int = 60, row_height: int = None,
                         variant: str = "normal",
                         extra_pad: int = 20) -> tuple:
-    """جدول داخل splitter. يرجع (QSplitter, QTableWidget)."""
     table = _build_table(columns, stretch_col, col_widths,
                          variant=variant, max_height=max_height,
                          min_height=min_height, row_height=row_height)
@@ -157,7 +152,6 @@ def make_splitter_table_guarded(columns: list, stretch_col: int = -1,
                                 min_height: int = 60, row_height: int = None,
                                 variant: str = "normal",
                                 extra_pad: int = 20) -> tuple:
-    """يرجع (QSplitter, QTableWidget, ScrollGuard)."""
     from ..utils.splitter import SplitterScrollGuard
 
     splitter, table = make_splitter_table(
@@ -171,7 +165,6 @@ def make_splitter_table_guarded(columns: list, stretch_col: int = -1,
 
 def fit_splitter_table(splitter: QSplitter, table: QTableWidget,
                        extra_pad: int = 20, delay_ms: int = 0):
-    """يعيد ضبط عرض الجدول في الـ splitter."""
     def _fit():
         table_w   = calc_width(table, extra_pad)
         total     = splitter.width()
@@ -184,5 +177,5 @@ def fit_splitter_table(splitter: QSplitter, table: QTableWidget,
         _fit()
 
 
-# ── Aliases للتوافق ────────────────────────────────────────
+# Alias للتوافق
 make_detail_table = make_table

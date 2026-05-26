@@ -7,7 +7,7 @@ import logging
 from PyQt5.QtWidgets import QSplitter, QTableWidget, QWidget, QSizePolicy
 from PyQt5.QtCore    import Qt, QTimer, QObject, QEvent
 
-from ui.app_settings import _C
+from ..theme.styles import splitter_style  # المصدر الوحيد — لا تكرار
 
 logger = logging.getLogger(__name__)
 
@@ -15,18 +15,9 @@ _MIN_LIST_W = 280
 _MAX_LIST_W = 620
 
 
-def splitter_style() -> str:
-    return f"""
-        QSplitter::handle {{ background:{_C['border']}; }}
-        QSplitter::handle:hover {{ background:{_C['accent_mid']}; }}
-        QSplitter::handle:pressed {{ background:{_C['accent']}; }}
-    """
-
-
 def fit_list_panel(splitter: QSplitter, list_index: int,
                    table: QTableWidget, min_w: int = _MIN_LIST_W,
                    max_w: int = _MAX_LIST_W, extra_pad: int = 24) -> int:
-    """يضبط عرض لوحة القائمة في الـ splitter."""
     from ..tables.items import calc_width
 
     sizes = splitter.sizes()
@@ -176,5 +167,5 @@ class SplitterScrollGuard(QObject):
         return super().eventFilter(obj, event)
 
 
-# aliases
+# alias
 _SplitterScrollGuard = SplitterScrollGuard

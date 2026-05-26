@@ -20,7 +20,7 @@ _ICONS = {
 
 
 def _make_btn(text: str, style: str = "normal") -> QPushButton:
-    from ..panels._btn import make_btn
+    from ..components.button import make_btn
     return make_btn(text, style)
 
 

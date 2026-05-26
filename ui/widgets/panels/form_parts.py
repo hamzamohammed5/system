@@ -7,10 +7,11 @@ ui/widgets/panels/form_parts.py
   separator_line / field_row / labeled_row
   make_form_layout / make_preview_label
   FormGroup      — QGroupBox مع QFormLayout جاهز
-  ModeLabel      — label وضع الفورم (إضافة / تعديل)
   spin_field / int_spin_field / labeled_widget
   ResultBadge / ModeBadge / InlinePreview
   CrudButtonsBar — شريط أزرار CRUD موحد
+
+  ModeLabel — مستوردة من components/label (مصدر واحد)
 """
 
 from PyQt5.QtWidgets import (
@@ -21,6 +22,10 @@ from PyQt5.QtWidgets import (
 from PyQt5.QtCore import Qt, pyqtSignal
 
 from ui.app_settings import _C, fs, get_font_size
+from ..components.button import make_btn
+
+# ModeLabel مصدرها الوحيد components/label — re-export للتوافق
+from ..components.label import ModeLabel  # noqa: F401
 
 _STATUS_COLORS = {
     "success": {"bg": "#ecfdf5", "fg": "#065f46", "border": "#6ee7b7"},
@@ -32,11 +37,6 @@ _STATUS_COLORS = {
 
 def _base() -> int:
     return get_font_size()
-
-
-def _make_btn(text: str, style: str = "normal") -> QPushButton:
-    from ..panels._btn import make_btn
-    return make_btn(text, style)
 
 
 def _spinbox_style(height: int = 32, positive: bool = False,
@@ -298,55 +298,6 @@ class ModeBadge(QLabel):
 
 
 # ══════════════════════════════════════════════════════════
-# ModeLabel
-# ══════════════════════════════════════════════════════════
-
-class ModeLabel(QLabel):
-    """Label وضع الفورم: أزرق = إضافة، برتقالي = تعديل."""
-
-    def __init__(self, add_text: str = "جديد", icon: str = "", parent=None):
-        super().__init__(parent)
-        self._add_text = add_text
-        self._icon     = icon
-        self._is_edit  = False
-        self.set_add_mode()
-
-    def set_add_mode(self, text: str = None):
-        self._is_edit = False
-        prefix  = f"{self._icon}  " if self._icon else ""
-        display = text or self._add_text
-        self.setText(f"─── {prefix}{display} ───")
-        base = _base()
-        self.setStyleSheet(
-            f"font-weight:bold; font-size:{fs(base,0)}pt;"
-            f"color:{_C['accent']}; background:transparent; border:none;"
-        )
-
-    def set_edit_mode(self, name: str = ""):
-        self._is_edit = True
-        prefix = f"{self._icon}  " if self._icon else ""
-        suffix = f": {name}" if name else ""
-        self.setText(f"─── {prefix}تعديل{suffix} ───")
-        base = _base()
-        self.setStyleSheet(
-            f"font-weight:bold; font-size:{fs(base,0)}pt;"
-            "color:#e65100; background:transparent; border:none;"
-        )
-
-    def set_custom(self, text: str, color: str = None):
-        self.setText(text)
-        base = _base()
-        self.setStyleSheet(
-            f"font-weight:bold; font-size:{fs(base,0)}pt;"
-            f"color:{color or _C['text_sec']}; background:transparent; border:none;"
-        )
-
-    @property
-    def is_edit_mode(self) -> bool:
-        return self._is_edit
-
-
-# ══════════════════════════════════════════════════════════
 # FormGroup
 # ══════════════════════════════════════════════════════════
 
@@ -457,9 +408,9 @@ class CrudButtonsBar(QWidget):
         btn_row = QHBoxLayout()
         btn_row.setSpacing(8)
 
-        self.btn_add    = _make_btn(add_text,    "primary")
-        self.btn_save   = _make_btn(save_text,   "success")
-        self.btn_cancel = _make_btn(cancel_text, "ghost")
+        self.btn_add    = make_btn(add_text,    "primary")
+        self.btn_save   = make_btn(save_text,   "success")
+        self.btn_cancel = make_btn(cancel_text, "ghost")
 
         self.btn_add.clicked.connect(self.add_clicked.emit)
         self.btn_save.clicked.connect(self.save_clicked.emit)

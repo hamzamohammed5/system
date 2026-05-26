@@ -2,27 +2,12 @@
 widgets/base/section.py
 ========================
 BaseSection — قاعدة مشتركة للأقسام اللي فيها list + detail.
-
-التغييرات عن النسخة القديمة:
-  - get_splitter_style() بدل inline style
-  - _connect_signals() يربط item_selected → load_item تلقائياً
-  - LAYOUT_REVERSED لتغيير ترتيب list/detail
-  - refresh() يشمل list + detail معاً
 """
-
 from PyQt5.QtWidgets import QWidget, QHBoxLayout, QSizePolicy, QSplitter
 from PyQt5.QtCore    import Qt, QTimer
 
-from ui.app_settings import _C
-from ..mixins.bus import BusConnectedMixin
-
-
-def _splitter_style() -> str:
-    return f"""
-        QSplitter::handle {{ background:{_C['border']}; }}
-        QSplitter::handle:hover {{ background:{_C['accent_mid']}; }}
-        QSplitter::handle:pressed {{ background:{_C['accent']}; }}
-    """
+from ..theme.styles  import splitter_style   # المصدر الوحيد
+from ..mixins.bus    import BusConnectedMixin
 
 
 class BaseSection(QWidget, BusConnectedMixin):
@@ -34,7 +19,7 @@ class BaseSection(QWidget, BusConnectedMixin):
         _create_detail() → QWidget
 
     Override الاختياري:
-        _connect_signals()   → ربط signals
+        _connect_signals()
         _on_data_changed()
         LIST_MIN_W, LIST_MAX_W, DETAIL_MIN_W
         CONNECT_BUS, LAYOUT_REVERSED
@@ -64,7 +49,6 @@ class BaseSection(QWidget, BusConnectedMixin):
         raise NotImplementedError
 
     def _connect_signals(self):
-        """الربط الافتراضي: item_selected → load_item."""
         if hasattr(self._list, "item_selected") and hasattr(self._detail, "load_item"):
             self._list.item_selected.connect(self._detail.load_item)
 
@@ -80,7 +64,7 @@ class BaseSection(QWidget, BusConnectedMixin):
 
         self._splitter = QSplitter(Qt.Horizontal)
         self._splitter.setHandleWidth(5)
-        self._splitter.setStyleSheet(_splitter_style())
+        self._splitter.setStyleSheet(splitter_style())
         self._splitter.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Expanding)
 
         self._list   = self._create_list()
@@ -92,10 +76,10 @@ class BaseSection(QWidget, BusConnectedMixin):
         self._detail.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Expanding)
 
         if self.LAYOUT_REVERSED:
-            widgets = [self._detail, self._list]
+            widgets  = [self._detail, self._list]
             stretches = [1, 0]
         else:
-            widgets = [self._list, self._detail]
+            widgets  = [self._list, self._detail]
             stretches = [0, 1]
 
         for i, w in enumerate(widgets):
