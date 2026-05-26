@@ -22,7 +22,7 @@ from ui.app_settings import _C, fs
 from ..core.settings  import get_base
 from ..theme.builders import h_divider, v_divider
 from .button          import make_btn
-from .badge           import BadgeLabel
+from .stat_row        import BadgeLabel
 from .label           import InfoRow
 
 
@@ -143,7 +143,6 @@ class SectionHeader(QWidget):
         lay.setContentsMargins(0, 6, 0, 6)
         lay.setSpacing(10)
 
-        # شريط accent
         bar = QLabel()
         bar.setFixedSize(3, 18)
         bar.setStyleSheet(f"background:{_C['accent']}; border-radius:2px; border:none;")
@@ -178,23 +177,11 @@ class SectionHeader(QWidget):
 class PageHeader(QFrame):
     """
     هيدر صفحة رئيسية: أيقونة + عنوان + subtitle + أزرار.
-
-    الاستخدام:
-        hdr = PageHeader(
-            title="إدارة المخزون",
-            subtitle="إضافة وتعديل المنتجات",
-            icon="📦",
-        )
-        hdr.add_action("📤 تصدير", callback=self._export)
-        layout.addWidget(hdr)
     """
 
-    def __init__(self, title: str = "",
-                 subtitle: str = "",
-                 icon: str = "",
-                 accent: str = None,
-                 compact: bool = False,
-                 parent=None):
+    def __init__(self, title: str = "", subtitle: str = "",
+                 icon: str = "", accent: str = None,
+                 compact: bool = False, parent=None):
         super().__init__(parent)
         self._accent  = accent or _C.get('accent', '#1565c0')
         self._compact = compact
@@ -221,11 +208,12 @@ class PageHeader(QFrame):
         if icon:
             sz = fs(base, +1) if self._compact else fs(base, +2)
             lbl_icon = QLabel(icon)
-            lbl_icon.setStyleSheet(f"font-size:{sz}pt; background:transparent; border:none;")
+            lbl_icon.setStyleSheet(
+                f"font-size:{sz}pt; background:transparent; border:none;"
+            )
             lbl_icon.setAlignment(Qt.AlignVCenter)
             lay.addWidget(lbl_icon)
 
-        # عمود العنوان
         col = QVBoxLayout()
         col.setSpacing(2)
         col.setContentsMargins(0, 0, 0, 0)
@@ -278,13 +266,6 @@ class PageHeader(QFrame):
 class DetailHeader(QFrame):
     """
     هيدر صفحة تفاصيل: عنوان + شارات + بطاقات إحصائية + toolbar أزرار.
-
-    الاستخدام:
-        hdr = DetailHeader()
-        hdr.set_title("منتج A")
-        hdr.set_type_badge("خامة", color="#1565c0")
-        card = hdr.add_stat_card("💰", "التكلفة", "250 ج")
-        layout.addWidget(hdr)
     """
 
     def __init__(self, bg: str = None, parent=None):
@@ -332,6 +313,7 @@ class DetailHeader(QFrame):
             f"color:{_C['text_muted']}; font-size:{fs(base,0)}pt;"
             "background:transparent; border:none; font-weight:500;"
         )
+
         self._badge_status   = BadgeLabel()
         self._badge_priority = QLabel("")
         self._badge_priority.setStyleSheet("background:transparent; border:none;")
@@ -370,7 +352,7 @@ class DetailHeader(QFrame):
         root.addWidget(h_divider())
 
         # ── شريط الأزرار ──
-        from ..components.action_toolbar import ActionToolbar
+        from .action_toolbar import ActionToolbar
         toolbar_section = QWidget()
         toolbar_section.setStyleSheet("background:transparent;")
         toolbar_section.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Preferred)
@@ -417,7 +399,7 @@ class DetailHeader(QFrame):
 
     def add_stat_card(self, icon: str, title: str, value: str = "─",
                       color: str = "#1565c0", compact: bool = True):
-        from .card import StatCard
+        from .stat_row import StatCard
         card = StatCard(icon, title, value, color, compact=compact)
         self._cards_row.addWidget(card, stretch=1)
         self._stat_cards.append(card)
@@ -437,23 +419,15 @@ class DetailHeader(QFrame):
 class ListHeader(QFrame):
     """
     هيدر لوحة قائمة: عنوان + بحث + زر إضافة + أزرار إضافية.
-
-    الاستخدام:
-        hdr = ListHeader(title="المنتجات", add_text="➕ إضافة")
-        hdr.add_clicked.connect(self._on_add)
-        hdr.search_changed.connect(self._on_search)
-        layout.addWidget(hdr)
     """
 
     search_changed = pyqtSignal(str)
     add_clicked    = pyqtSignal()
 
-    def __init__(self, title: str = "",
-                 add_text: str = "",
+    def __init__(self, title: str = "", add_text: str = "",
                  show_search: bool = True,
                  search_placeholder: str = "🔍  بحث...",
-                 search_delay: int = 250,
-                 parent=None):
+                 search_delay: int = 250, parent=None):
         super().__init__(parent)
         self._title       = title
         self._add_text    = add_text
@@ -535,8 +509,6 @@ class ListHeader(QFrame):
     def btn_add(self) -> QPushButton | None:
         return self._btn_add
 
-
-# ── دالة سريعة ────────────────────────────────────────────
 
 def make_list_header(title: str = "", add_text: str = "",
                      show_search: bool = True,

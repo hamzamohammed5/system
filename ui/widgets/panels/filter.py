@@ -71,7 +71,7 @@ class FilterToolbar(QWidget):
         lay.setSpacing(8)
 
         # بحث — SearchBar من panels/header
-        from ..panels.header import SearchBar
+        from ..components.headers import SearchBar
         self._search = SearchBar(placeholder=placeholder, delay_ms=250, height=28)
         self._search.search_changed.connect(lambda _: self.filter_changed.emit())
         self.inp_search = self._search.inp
@@ -141,7 +141,7 @@ class FilterToolbar(QWidget):
         self.cmb_cat.blockSignals(True)
         self.cmb_cat.clear()
         try:
-            from ui.widgets.shared.category_combo import _populate_category_combo
+            from ..combo.category import _populate_category_combo
             _populate_category_combo(self.cmb_cat, self._conn, self._scope,
                                      all_label="— كل التصنيفات —")
         except Exception:

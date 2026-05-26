@@ -13,7 +13,7 @@ from PyQt5.QtCore import Qt
 
 from ui.app_settings import _C, fs
 from ..core.settings  import get_base
-from .headers         import SectionHeader
+from ..components.headers         import SectionHeader
 
 
 class DetailSection(QFrame):

@@ -29,7 +29,7 @@ def _make_btn(text: str, style: str = "primary"):
 
 
 def _card_colors(color: str) -> tuple[str, str]:
-    from .cards import card_colors
+    from ..core.colors import card_colors
     return card_colors(color)
 
 
