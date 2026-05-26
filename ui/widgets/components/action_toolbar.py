@@ -7,7 +7,7 @@ ActionToolbar — شريط أزرار بـ FlowLayout.
 from PyQt5.QtWidgets import QWidget, QFrame, QPushButton, QSizePolicy
 
 from .button           import make_btn
-from ..theme.builders  import v_divider
+from ..theme.styles  import v_divider
 from ..utils.flow_layout import FlowLayout
 
 

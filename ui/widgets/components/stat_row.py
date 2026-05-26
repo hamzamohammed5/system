@@ -25,7 +25,7 @@ from PyQt5.QtGui  import QFont
 from ui.app_settings import _C, fs
 from ui.app_settings import get_font_size
 from ..core.colors   import card_colors
-from ..theme.builders import v_divider
+from ..theme.styles import v_divider
 
 
 # ══════════════════════════════════════════════════════════

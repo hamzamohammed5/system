@@ -8,7 +8,7 @@ from PyQt5.QtCore    import Qt, pyqtSignal
 
 from ui.app_settings import _C, fs
 from ui.app_settings import get_font_size
-from ..theme.builders import h_divider
+from ..theme.styles import h_divider
 from ..theme.styles   import card_style
 
 

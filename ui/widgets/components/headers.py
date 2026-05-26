@@ -20,7 +20,7 @@ from PyQt5.QtGui  import QFont
 
 from ui.app_settings import _C, fs
 from ui.app_settings import get_font_size
-from ..theme.builders import h_divider, v_divider
+from ..theme.styles import h_divider, v_divider
 from .button          import make_btn
 from .stat_row        import BadgeLabel
 from .label           import InfoRow
