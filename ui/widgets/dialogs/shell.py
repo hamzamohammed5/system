@@ -10,7 +10,7 @@ from PyQt5.QtWidgets import (
 from PyQt5.QtCore import Qt
 
 from ui.app_settings import _C, fs
-from ..core import get_font_size
+from ui.app_settings import get_font_size
 
 
 class DialogShell(QDialog):
