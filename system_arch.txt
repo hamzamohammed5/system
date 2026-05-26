@@ -1,5 +1,5 @@
 File Tree Snapshot
-Generated : 2026-05-26 09:47:42
+Generated : 2026-05-26 09:50:13
 Source    : D:\My Workspace\Hg\Alhabaar\accountant\system
 Extensions: .py
 ────────────────────────────────────────────────────────────
@@ -369,7 +369,6 @@ system/
 │   │       │   ├── _row_widget.py
 │   │       │   └── _variants_logic.py
 │   │       ├── panles_helper/
-│   │       │   ├── action_toolbar.py
 │   │       │   ├── card_grid.py
 │   │       │   ├── collapsible_card.py
 │   │       │   ├── crud_section.py
@@ -381,17 +380,11 @@ system/
 │   │       │   ├── list_header.py
 │   │       │   ├── page_header.py
 │   │       │   └── theme.py
-│   │       ├── table_utils/
-│   │       ├── table_utils_helper/
-│   │       │   ├── table_builders.py
-│   │       │   ├── table_helpers.py
-│   │       │   └── table_styles.py
 │   │       ├── base_crud_form.py
 │   │       ├── base_detail_panel.py
 │   │       ├── base_list_panel.py
 │   │       ├── base_section.py
-│   │       ├── panels.py
-│   │       └── table_utils.py
+│   │       └── panels.py
 │   ├── app_settings.py
 │   ├── events.py
 │   ├── font_utils.py
