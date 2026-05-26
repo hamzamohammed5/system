@@ -1,5 +1,5 @@
 File Tree Snapshot
-Generated : 2026-05-26 09:28:52
+Generated : 2026-05-26 09:32:12
 Source    : D:\My Workspace\Hg\Alhabaar\accountant\system
 Extensions: .py
 ────────────────────────────────────────────────────────────
@@ -384,21 +384,7 @@ system/
 │   │       ├── base_detail_panel.py
 │   │       ├── base_list_panel.py
 │   │       ├── base_section.py
-│   │       ├── base_warning_bar.py
-│   │       ├── category_combo.py
-│   │       ├── category_form.py
-│   │       ├── category_manager.py
-│   │       ├── confirm_dialog.py
-│   │       ├── dialog_base.py
-│   │       ├── filter_bar.py
-│   │       ├── form_utils.py
-│   │       ├── list_panel_filter.py
-│   │       ├── list_panel_with_shared.py
-│   │       ├── message_box.py
 │   │       ├── panels.py
-│   │       ├── stat_row.py
-│   │       ├── tab_builder.py
-│   │       ├── tab_section_base.py
 │   │       └── table_utils.py
 │   ├── app_settings.py
 │   ├── events.py
