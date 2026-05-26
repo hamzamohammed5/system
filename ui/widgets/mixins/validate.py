@@ -20,6 +20,7 @@ class FormValidationMixin:
     """
 
     def _warn(self, msg: str):
+        # ← استخدام msg_warning الموحد بدل QMessageBox.warning
         from ..dialogs.message import msg_warning
         msg_warning(self, "تنبيه", msg)
 

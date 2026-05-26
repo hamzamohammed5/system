@@ -42,6 +42,7 @@ class EmptyState(QFrame):
                  parent=None):
         super().__init__(parent)
         self._expandable = expandable
+        # ← استخدام _C بدل hardcoded fallback
         _color = color or _C['text_muted']
         self._build(icon, title, subtitle, action_text, style, _color, min_height)
 
@@ -76,14 +77,14 @@ class EmptyState(QFrame):
             lbl_icon = QLabel(icon)
             lbl_icon.setAlignment(Qt.AlignCenter)
             lbl_icon.setStyleSheet(
-                f"background:transparent; border:none; font-size:{fs(base,+8)}pt;"
+                f"background:transparent; border:none; font-size:{fs(base, +8)}pt;"
             )
             lay.addWidget(lbl_icon)
 
         lbl_title = QLabel(title)
         lbl_title.setAlignment(Qt.AlignCenter)
         lbl_title.setStyleSheet(
-            f"color:{color}; font-weight:700; font-size:{fs(base,+1)}pt;"
+            f"color:{color}; font-weight:700; font-size:{fs(base, +1)}pt;"
             "background:transparent; border:none;"
         )
         lay.addWidget(lbl_title)
@@ -93,7 +94,7 @@ class EmptyState(QFrame):
             lbl_sub.setAlignment(Qt.AlignCenter)
             lbl_sub.setWordWrap(True)
             lbl_sub.setStyleSheet(
-                f"color:{_C['text_muted']}; font-size:{fs(base,-1)}pt;"
+                f"color:{_C['text_muted']}; font-size:{fs(base, -1)}pt;"
                 "background:transparent; border:none;"
             )
             lay.addWidget(lbl_sub)
@@ -108,15 +109,12 @@ class EmptyState(QFrame):
             lay.addWidget(btn, alignment=Qt.AlignCenter)
 
 
-# ── alias للتوافق مع الكود القديم ─────────────────────────────────────────
+# ── alias للتوافق مع الكود القديم ─────────────────────────
 
 def EmptyPanelState(icon: str = "📋", title: str = "لا توجد بيانات",
                     subtitle: str = "", action_text: str = "",
                     color: str = None, parent=None) -> EmptyState:
-    """
-    Alias لـ EmptyState(expandable=True).
-    محفوظ للتوافق مع الكود القديم.
-    """
+    """Alias لـ EmptyState(expandable=True). محفوظ للتوافق مع الكود القديم."""
     return EmptyState(
         icon=icon, title=title, subtitle=subtitle,
         action_text=action_text,
@@ -134,6 +132,7 @@ def set_table_empty_state(table: QTableWidget,
                            icon: str = "📋",
                            color: str = None):
     """يضيف صفاً واحداً يعرض رسالة فارغة في الجدول."""
+    # ← استخدام _C بدل hardcoded "#9ca3af"
     _color = color or _C['text_muted']
     table.setRowCount(1)
     table.setRowHeight(0, 60)

@@ -42,8 +42,12 @@ class NotificationBar(QFrame):
         lay.setContentsMargins(10, 6, 10, 6)
         lay.setSpacing(8)
 
+        base = get_font_size()
         self._lbl_icon = QLabel()
-        self._lbl_icon.setStyleSheet("background:transparent; border:none; font-size:14px;")
+        # ← استخدام fs() بدل hardcoded "14px"
+        self._lbl_icon.setStyleSheet(
+            f"background:transparent; border:none; font-size:{fs(base, 0)}pt;"
+        )
         lay.addWidget(self._lbl_icon)
 
         self._lbl_msg = QLabel()
@@ -81,7 +85,7 @@ class NotificationBar(QFrame):
         self._lbl_icon.setText(icon)
         self._lbl_msg.setText(message)
         self._lbl_msg.setStyleSheet(
-            f"font-size:{fs(base,0)}pt; font-weight:600;"
+            f"font-size:{fs(base, 0)}pt; font-weight:600;"
             f"color:{cfg['fg']}; background:transparent; border:none;"
         )
         self.setVisible(True)
@@ -138,8 +142,12 @@ class BaseWarningBar(QFrame):
         lay.setContentsMargins(10, 6, 10, 6)
         lay.setSpacing(10)
 
+        base = get_font_size()
         lbl_icon = QLabel("⚠️")
-        lbl_icon.setStyleSheet("font-size:16px; background:transparent; border:none;")
+        # ← استخدام fs() بدل hardcoded "16px"
+        lbl_icon.setStyleSheet(
+            f"font-size:{fs(base, +2)}pt; background:transparent; border:none;"
+        )
         lay.addWidget(lbl_icon)
 
         self._lbl = QLabel()

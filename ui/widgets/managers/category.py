@@ -1,5 +1,5 @@
 """
-widgets/managers/category.py
+ui/widgets/managers/category.py
 =============================
 CategoryManager — شجرة لإدارة التصنيفات الهرمية.
 CategoryForm    — فورم إضافة/تعديل التصنيف.
@@ -7,7 +7,7 @@ CategoryForm    — فورم إضافة/تعديل التصنيف.
 
 from PyQt5.QtWidgets import (
     QWidget, QGroupBox, QVBoxLayout, QHBoxLayout, QFormLayout,
-    QTreeWidget, QTreeWidgetItem, QLineEdit, QComboBox, QMessageBox,
+    QTreeWidget, QTreeWidgetItem, QLineEdit, QComboBox,
 )
 from PyQt5.QtCore import Qt
 from PyQt5.QtGui  import QColor
@@ -20,8 +20,10 @@ from db.shared.categories_repo import (
 from ..core.conn          import LiveConnMixin
 from ..components.button  import make_btn
 from ..dialogs.confirm    import confirm_delete
-from ..theme.styles       import tree_style   # المصدر الوحيد — كان get_tree_style خطأ
-from ..components.label import ModeLabel
+# ← استبدال QMessageBox المباشر بـ msg_* الموحدة
+from ..dialogs.message    import msg_info, msg_warning
+from ..theme.styles       import tree_style
+from ..components.label   import ModeLabel
 from ui.events import bus
 
 
@@ -113,12 +115,13 @@ class CategoryForm(QGroupBox, LiveConnMixin):
     def _add(self):
         name = self.inp_name.text().strip()
         if not name:
-            QMessageBox.warning(self, "تنبيه", "أدخل اسم التصنيف")
+            # ← استخدام msg_warning بدل QMessageBox.warning
+            msg_warning(self, "تنبيه", "أدخل اسم التصنيف")
             return
         try:
             conn = self._live_conn()
         except Exception as e:
-            QMessageBox.warning(self, "خطأ", str(e))
+            msg_warning(self, "خطأ", str(e))
             return
         insert_category(conn, name, self.scope,
                         self._color_picker.current_color(),
@@ -131,19 +134,19 @@ class CategoryForm(QGroupBox, LiveConnMixin):
             return
         name = self.inp_name.text().strip()
         if not name:
-            QMessageBox.warning(self, "تنبيه", "أدخل اسم التصنيف")
+            msg_warning(self, "تنبيه", "أدخل اسم التصنيف")
             return
         try:
             conn = self._live_conn()
         except Exception as e:
-            QMessageBox.warning(self, "خطأ", str(e))
+            msg_warning(self, "خطأ", str(e))
             return
         try:
             update_category(conn, self._editing_id, name, self.scope,
                             self._color_picker.current_color(),
                             self.cmb_parent.currentData())
         except ValueError as e:
-            QMessageBox.warning(self, "خطأ", str(e))
+            msg_warning(self, "خطأ", str(e))
             return
         self._reset()
         bus.data_changed.emit()
@@ -205,7 +208,7 @@ class CategoryManager(QWidget, LiveConnMixin):
         self.tree.setColumnWidth(2, 80)
         self.tree.setAlternatingRowColors(True)
         self.tree.setAnimated(True)
-        self.tree.setStyleSheet(tree_style())   # ← كان get_tree_style() خطأ
+        self.tree.setStyleSheet(tree_style())
         self.tree.itemSelectionChanged.connect(self._on_select)
         root.addWidget(self.tree)
 
@@ -287,19 +290,20 @@ class CategoryManager(QWidget, LiveConnMixin):
     def _edit(self):
         cat_id = self._selected_id()
         if cat_id is None:
-            QMessageBox.information(self, "تنبيه", "اختر تصنيفاً أولاً")
+            # ← استخدام msg_info بدل QMessageBox.information
+            msg_info(self, "تنبيه", "اختر تصنيفاً أولاً")
             return
         self._form.load_for_edit(cat_id)
 
     def _delete(self):
         cat_id = self._selected_id()
         if cat_id is None:
-            QMessageBox.information(self, "تنبيه", "اختر تصنيفاً أولاً")
+            msg_info(self, "تنبيه", "اختر تصنيفاً أولاً")
             return
         try:
             conn = self._live_conn()
         except Exception as e:
-            QMessageBox.warning(self, "خطأ", str(e))
+            msg_warning(self, "خطأ", str(e))
             return
 
         cat         = fetch_category(conn, cat_id)

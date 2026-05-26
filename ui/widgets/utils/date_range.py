@@ -6,24 +6,9 @@ DateRangeFilter — فلتر نطاق التاريخ الموحد.
 from PyQt5.QtWidgets import QWidget, QHBoxLayout, QLabel, QDateEdit, QPushButton
 from PyQt5.QtCore    import QDate, pyqtSignal
 
-from ui.app_settings import _C
-
-_DATE_STYLE = f"""
-    QDateEdit {{
-        background:white; border:1px solid {_C.get('border_med','#c5cae9')};
-        border-radius:5px; padding:2px 6px; font-size:11px;
-    }}
-    QDateEdit:focus {{ border-color:{_C.get('accent','#1565c0')}; }}
-    QDateEdit::drop-down {{ border:none; width:20px; }}
-"""
-_LBL  = "background:transparent; border:none; font-weight:bold; font-size:11px; color:#555;"
-_BTN  = """
-    QPushButton {
-        background:#e8eaf6; border:1px solid #c5cae9; border-radius:4px;
-        color:#3949ab; font-size:10px; padding:2px 6px; min-height:22px;
-    }
-    QPushButton:hover { background:#c5cae9; }
-"""
+from ui.app_settings     import _C, fs, get_font_size
+from ..utils.signals     import blocked_signals
+from ..components.button import make_btn
 
 
 class DateRangeFilter(QWidget):
@@ -51,16 +36,34 @@ class DateRangeFilter(QWidget):
             d.setDate(default)
             d.setFixedWidth(width)
             d.setMinimumHeight(height)
-            d.setStyleSheet(_DATE_STYLE)
+            # ← استخدام _C بدل raw CSS strings hardcoded
+            base = get_font_size()
+            d.setStyleSheet(f"""
+                QDateEdit {{
+                    background:{_C['bg_input']};
+                    border:1px solid {_C['border_med']};
+                    border-radius:5px; padding:2px 6px;
+                    font-size:{fs(base, -1)}pt;
+                    color:{_C['text_primary']};
+                }}
+                QDateEdit:focus {{ border-color:{_C['accent']}; }}
+                QDateEdit::drop-down {{ border:none; width:20px; }}
+            """)
             return d
 
+        base     = get_font_size()
+        lbl_style = (
+            f"background:transparent; border:none; font-weight:bold;"
+            f"font-size:{fs(base, -1)}pt; color:{_C['text_sec']};"
+        )
+
         lbl_from = QLabel("من:")
-        lbl_from.setStyleSheet(_LBL)
+        lbl_from.setStyleSheet(lbl_style)
         self.dt_from = _date_edit(self._default_from)
         self.dt_from.dateChanged.connect(self.range_changed.emit)
 
         lbl_to = QLabel("إلى:")
-        lbl_to.setStyleSheet(_LBL)
+        lbl_to.setStyleSheet(lbl_style)
         self.dt_to = _date_edit(self._default_to)
         self.dt_to.dateChanged.connect(self.range_changed.emit)
 
@@ -71,18 +74,17 @@ class DateRangeFilter(QWidget):
             for label, slot in [("اليوم", self._preset_today),
                                  ("الشهر", self._preset_month),
                                  ("العام",  self._preset_year)]:
-                btn = QPushButton(label)
-                btn.setStyleSheet(_BTN)
+                # ← استخدام make_btn بدل raw QPushButton + stylesheet hardcoded
+                btn = make_btn(label, "normal")
+                btn.setMinimumHeight(height)
                 btn.clicked.connect(slot)
                 lay.addWidget(btn)
 
     def _set_range(self, from_date: QDate, to_date: QDate):
-        for d in (self.dt_from, self.dt_to):
-            d.blockSignals(True)
-        self.dt_from.setDate(from_date)
-        self.dt_to.setDate(to_date)
-        for d in (self.dt_from, self.dt_to):
-            d.blockSignals(False)
+        # ← استخدام blocked_signals بدل blockSignals يدوي
+        with blocked_signals(self.dt_from, self.dt_to):
+            self.dt_from.setDate(from_date)
+            self.dt_to.setDate(to_date)
         self.range_changed.emit()
 
     def _preset_today(self):

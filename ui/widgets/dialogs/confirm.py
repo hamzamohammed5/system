@@ -17,12 +17,14 @@ def _confirm_btn(text: str, accent: str, ghost: bool = False) -> 'QPushButton':
     btn = make_btn(text, "ghost" if ghost else "primary")
     btn.setMinimumHeight(34)
     btn.setMinimumWidth(80)
-    if not ghost and accent and accent != _C.get("accent", "#1565c0"):
+    # فقط نتجاوز الستايل لو الـ accent مختلف عن الـ accent الافتراضي
+    if not ghost and accent and accent != _C.get("accent"):
+        base = get_font_size()
         btn.setStyleSheet(f"""
             QPushButton {{
                 background:{accent}; color:white; font-weight:bold;
                 border:none; border-radius:6px; padding:0 20px;
-                font-size:{fs(get_font_size(),0)}pt; min-height:34px; min-width:80px;
+                font-size:{fs(base, 0)}pt; min-height:34px; min-width:80px;
             }}
             QPushButton:hover {{ background:{accent}dd; }}
         """)
@@ -36,7 +38,8 @@ class ConfirmDialog(DialogShell):
                  message: str = "", icon: str = "❓",
                  confirm_text: str = "تأكيد", cancel_text: str = "إلغاء",
                  danger: bool = False, accent: str = None):
-        _accent = accent or ("#c62828" if danger else _C.get("accent", "#1565c0"))
+        # ← استخدام _C بدل hardcoded "#c62828" و "#1565c0"
+        _accent = accent or (_C["danger"] if danger else _C.get("accent"))
         super().__init__(parent, title=title, icon=icon,
                          accent=_accent, min_width=380)
         self.setMaximumWidth(520)
@@ -49,7 +52,7 @@ class ConfirmDialog(DialogShell):
         lbl.setWordWrap(True)
         lbl.setAlignment(Qt.AlignRight | Qt.AlignTop)
         lbl.setStyleSheet(
-            f"font-size:{fs(base,0)}pt; color:{_C.get('text_primary','#1c1b18')};"
+            f"font-size:{fs(base, 0)}pt; color:{_C['text_primary']};"
             "background:transparent; border:none; line-height:1.6;"
         )
         self.body_layout.addWidget(lbl)
@@ -95,5 +98,7 @@ def confirm_save(parent, item_name: str = "", extra_msg: str = "") -> bool:
     msg = f"تأكيد حفظ «{item_name}»؟" if item_name else "تأكيد الحفظ؟"
     if extra_msg:
         msg += f"\n\n{extra_msg}"
+    # ← استخدام _C['success'] بدل hardcoded "#2e7d32"
     return confirm_action(parent, "تأكيد الحفظ", msg,
-                          icon="💾", confirm_text="حفظ", accent="#2e7d32")
+                          icon="💾", confirm_text="حفظ",
+                          accent=_C.get("success"))

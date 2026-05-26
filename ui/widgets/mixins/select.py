@@ -4,7 +4,6 @@ ui/widgets/mixins/select.py
 SelectionMixin — منطق موحد لتحديد عناصر الجدول.
 """
 from PyQt5.QtCore import Qt
-from PyQt5.QtWidgets import QMessageBox
 
 
 class SelectionMixin:
@@ -53,9 +52,11 @@ class SelectionMixin:
         return tbl.currentRow() if tbl else -1
 
     def _warn_no_selection(self, msg: str = "اختر عنصراً أولاً"):
-        QMessageBox.information(self, "تنبيه", msg)
+        # ← استخدام msg_info الموحد بدل QMessageBox.information
+        from ..dialogs.message import msg_info
+        msg_info(self, "تنبيه", msg)
 
-    def _require_selection(self, msg: str = "اختر عنصراً أولاً") -> int | None:
+    def _require_selection(self, msg: str = "اختر عنصراً أولاً") -> "int | None":
         item_id = self._selected_id()
         if item_id is None:
             self._warn_no_selection(msg)

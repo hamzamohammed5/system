@@ -9,26 +9,25 @@ import sqlite3
 from PyQt5.QtCore    import Qt
 from PyQt5.QtWidgets import (
     QDialog, QVBoxLayout, QHBoxLayout,
-    QLabel, QPushButton, QSlider, QDialogButtonBox,
+    QLabel, QSlider, QDialogButtonBox,
     QLineEdit, QFileDialog, QGroupBox,
-    QListWidget, QListWidgetItem, QMessageBox,
+    QListWidget, QListWidgetItem,
     QInputDialog, QScrollArea, QWidget,
 )
 
-from ui.app_settings import get_font_size, set_font_size, apply_font
+from ui.app_settings import get_font_size, set_font_size, apply_font, _C, fs
 
-# ── الـ import الصحيح من الـ widget system الجديد ─────────────────────────
 from ui.widgets.combo.unit import (
     load_units, add_unit, remove_unit,
     reset_units_to_default, _DEFAULT_UNITS,
 )
+# ← استبدال QMessageBox بـ msg_* الموحدة
+from ui.widgets.dialogs.message  import msg_info, msg_warning
+from ui.widgets.dialogs.confirm  import confirm_action
+from ui.widgets.components.button import make_btn
 
 
 def _get_settings_conn():
-    """
-    يفتح connection مستقل مؤقت لقراءة/كتابة الإعدادات.
-    يُغلق بواسطة المُستدعي بعد الانتهاء.
-    """
     try:
         from db.companies.company_state import company_state
         from db.companies.companies_schema import get_company_db_path
@@ -66,17 +65,18 @@ class SettingsDialog(QDialog):
         scroll.setWidgetResizable(True)
         scroll.setHorizontalScrollBarPolicy(Qt.ScrollBarAlwaysOff)
         scroll.setVerticalScrollBarPolicy(Qt.ScrollBarAsNeeded)
-        scroll.setStyleSheet("""
-            QScrollArea { border: none; background: transparent; }
-            QScrollBar:vertical {
-                background: #f5f5f5; width: 8px; border-radius: 4px;
-            }
-            QScrollBar::handle:vertical {
-                background: #bdbdbd; border-radius: 4px; min-height: 30px;
-            }
-            QScrollBar::handle:vertical:hover { background: #9e9e9e; }
+        # ← استخدام _C بدل hardcoded hex في الـ scrollbar style
+        scroll.setStyleSheet(f"""
+            QScrollArea {{ border: none; background: transparent; }}
+            QScrollBar:vertical {{
+                background:{_C['bg_surface_2']}; width: 8px; border-radius: 4px;
+            }}
+            QScrollBar::handle:vertical {{
+                background:{_C['border_med']}; border-radius: 4px; min-height: 30px;
+            }}
+            QScrollBar::handle:vertical:hover {{ background:{_C['border_strong']}; }}
             QScrollBar::add-line:vertical,
-            QScrollBar::sub-line:vertical { height: 0px; }
+            QScrollBar::sub-line:vertical {{ height: 0px; }}
         """)
 
         content = QWidget()
@@ -87,8 +87,9 @@ class SettingsDialog(QDialog):
         scroll.setWidget(content)
         outer.addWidget(scroll, stretch=1)
 
+        # ── شريط الأزرار ──
         btn_bar = QWidget()
-        btn_bar.setStyleSheet("background: white; border-top: 1px solid #e0e0e0;")
+        btn_bar.setStyleSheet(f"background:{_C['bg_surface']}; border-top:1px solid {_C['border']};")
         btn_bar_lay = QHBoxLayout(btn_bar)
         btn_bar_lay.setContentsMargins(20, 8, 20, 0)
 
@@ -102,7 +103,7 @@ class SettingsDialog(QDialog):
         btn_bar_lay.addWidget(btns)
         outer.addWidget(btn_bar)
 
-        # ══ قسم الخط ══════════════════════════════════════
+        # ══ قسم الخط ══
         font_group = QGroupBox("حجم الخط")
         font_lay   = QVBoxLayout(font_group)
 
@@ -140,9 +141,9 @@ class SettingsDialog(QDialog):
         self._preview.setAlignment(Qt.AlignCenter)
         self._preview.setWordWrap(True)
         self._preview.setStyleSheet(
-            f"font-size: {self._original_size}pt; border: 1px solid #ccc; "
-            "border-radius: 6px; padding: 12px; "
-            "background: #fafafa; color: #333;"
+            f"font-size: {self._original_size}pt;"
+            f"border: 1px solid {_C['border']}; border-radius: 6px;"
+            f"padding: 12px; background:{_C['bg_surface']}; color:{_C['text_primary']};"
         )
         font_lay.addWidget(self._preview)
 
@@ -151,11 +152,11 @@ class SettingsDialog(QDialog):
             "اضغط حفظ لتطبيقه على كامل الواجهة"
         )
         lbl_hint_font.setWordWrap(True)
-        lbl_hint_font.setStyleSheet("color: #888; font-size: 10px; background: transparent;")
+        lbl_hint_font.setStyleSheet(f"color:{_C['text_muted']}; font-size: 10px; background: transparent;")
         font_lay.addWidget(lbl_hint_font)
         content_lay.addWidget(font_group)
 
-        # ══ قسم GIMP ══════════════════════════════════════
+        # ══ قسم GIMP ══
         gimp_group = QGroupBox("مسار برنامج GIMP")
         gimp_lay   = QVBoxLayout(gimp_group)
         gimp_lay.setSpacing(6)
@@ -164,33 +165,17 @@ class SettingsDialog(QDialog):
         gimp_row.setSpacing(6)
 
         self._inp_gimp = QLineEdit()
-        self._inp_gimp.setPlaceholderText(
-            r"مثال: C:\Program Files\GIMP 2\bin\gimp-2.10.exe"
-        )
+        self._inp_gimp.setPlaceholderText(r"مثال: C:\Program Files\GIMP 2\bin\gimp-2.10.exe")
         self._inp_gimp.setMinimumHeight(34)
 
-        btn_browse = QPushButton("📂  تصفح")
+        # ← استخدام make_btn بدل QPushButton + raw CSS
+        btn_browse = make_btn("📂  تصفح", "primary", fixed_size=False)
         btn_browse.setMinimumHeight(34)
-        btn_browse.setStyleSheet("""
-            QPushButton {
-                background: #1565c0; color: white;
-                border: none; border-radius: 6px;
-                padding: 4px 14px; font-weight: bold;
-            }
-            QPushButton:hover { background: #0d47a1; }
-        """)
         btn_browse.clicked.connect(self._browse_gimp)
 
-        btn_clear = QPushButton("✖")
+        btn_clear = make_btn("✖", "danger", fixed_size=True)
         btn_clear.setFixedSize(34, 34)
         btn_clear.setToolTip("مسح المسار")
-        btn_clear.setStyleSheet("""
-            QPushButton {
-                background: #fdecea; color: #c62828;
-                border: 1px solid #ef9a9a; border-radius: 6px;
-            }
-            QPushButton:hover { background: #ffcdd2; }
-        """)
         btn_clear.clicked.connect(lambda: self._inp_gimp.clear())
 
         gimp_row.addWidget(self._inp_gimp, stretch=1)
@@ -199,74 +184,53 @@ class SettingsDialog(QDialog):
         gimp_lay.addLayout(gimp_row)
 
         lbl_hint_gimp = QLabel("💡  اتركه فارغاً للبحث التلقائي في المسارات الشائعة")
-        lbl_hint_gimp.setStyleSheet("color: #888; font-size: 10px; background: transparent;")
+        lbl_hint_gimp.setStyleSheet(f"color:{_C['text_muted']}; font-size: 10px; background: transparent;")
         gimp_lay.addWidget(lbl_hint_gimp)
         content_lay.addWidget(gimp_group)
 
-        # ══ قسم وحدات القياس ══════════════════════════════
+        # ══ قسم وحدات القياس ══
         units_group = QGroupBox("وحدات القياس")
         units_lay   = QVBoxLayout(units_group)
         units_lay.setSpacing(6)
 
+        from ui.widgets.core.colors import status_colors
+        hint_s = status_colors("warning")
         lbl_units_hint = QLabel(
             "💡  هذه الوحدات تظهر في كل dropdown اختيار الوحدة في التطبيق.\n"
             "الوحدات الافتراضية (px, mm, cm, m, inch) لا يمكن حذفها."
         )
         lbl_units_hint.setStyleSheet(
-            "color: #555; font-size: 10px; background: #fff8e1;"
-            "border: 1px solid #ffe082; border-radius: 4px; padding: 6px 8px;"
+            f"color:{hint_s['fg']}; font-size: 10px;"
+            f"background:{hint_s['bg']}; border:1px solid {hint_s['border']};"
+            "border-radius: 4px; padding: 6px 8px;"
         )
         lbl_units_hint.setWordWrap(True)
         units_lay.addWidget(lbl_units_hint)
 
         self._units_list = QListWidget()
         self._units_list.setMaximumHeight(130)
-        self._units_list.setStyleSheet("""
-            QListWidget {
-                border: 1px solid #c5cae9; border-radius: 4px; font-size: 11px;
-            }
-            QListWidget::item { padding: 4px 8px; }
-            QListWidget::item:selected { background: #e8f0fe; color: #1565c0; }
+        self._units_list.setStyleSheet(f"""
+            QListWidget {{
+                border:1px solid {_C['border_med']}; border-radius:4px;
+                font-size: 11px;
+            }}
+            QListWidget::item {{ padding: 4px 8px; }}
+            QListWidget::item:selected {{
+                background:{_C['accent_light']}; color:{_C['accent_text']};
+            }}
         """)
         units_lay.addWidget(self._units_list)
 
         units_btn_row = QHBoxLayout()
         units_btn_row.setSpacing(6)
 
-        btn_add_unit = QPushButton("➕  إضافة وحدة")
-        btn_add_unit.setMinimumHeight(30)
-        btn_add_unit.setStyleSheet("""
-            QPushButton {
-                background: #e8f5e9; color: #2e7d32;
-                border: 1px solid #a5d6a7; border-radius: 4px;
-                padding: 3px 10px; font-size: 11px;
-            }
-            QPushButton:hover { background: #c8e6c9; }
-        """)
+        # ← استخدام make_btn بدل raw QPushButton + CSS
+        btn_add_unit    = make_btn("➕  إضافة وحدة",       "success")
+        btn_del_unit    = make_btn("🗑️  حذف المحدد",       "danger")
+        btn_reset_units = make_btn("↺  استعادة الافتراضية", "ghost")
+
         btn_add_unit.clicked.connect(self._add_unit)
-
-        btn_del_unit = QPushButton("🗑️  حذف المحدد")
-        btn_del_unit.setMinimumHeight(30)
-        btn_del_unit.setStyleSheet("""
-            QPushButton {
-                background: #fdecea; color: #c62828;
-                border: 1px solid #ef9a9a; border-radius: 4px;
-                padding: 3px 10px; font-size: 11px;
-            }
-            QPushButton:hover { background: #ffcdd2; }
-        """)
         btn_del_unit.clicked.connect(self._del_unit)
-
-        btn_reset_units = QPushButton("↺  استعادة الافتراضية")
-        btn_reset_units.setMinimumHeight(30)
-        btn_reset_units.setStyleSheet("""
-            QPushButton {
-                background: #e8eaf6; color: #3949ab;
-                border: 1px solid #c5cae9; border-radius: 4px;
-                padding: 3px 10px; font-size: 11px;
-            }
-            QPushButton:hover { background: #c5cae9; }
-        """)
         btn_reset_units.clicked.connect(self._reset_units)
 
         units_btn_row.addWidget(btn_add_unit)
@@ -278,7 +242,7 @@ class SettingsDialog(QDialog):
 
         content_lay.addStretch()
 
-    # ── تحميل الإعدادات ──────────────────────────────────
+    # ── تحميل الإعدادات ──
 
     def _load_settings(self):
         conn = _get_settings_conn()
@@ -311,11 +275,12 @@ class SettingsDialog(QDialog):
             item = QListWidgetItem(label)
             item.setData(Qt.UserRole, val)
             if val in default_vals:
-                item.setForeground(Qt.gray)
+                from PyQt5.QtGui import QColor
+                item.setForeground(QColor(_C['text_muted']))
                 item.setToolTip("وحدة افتراضية — لا يمكن حذفها")
             self._units_list.addItem(item)
 
-    # ── إدارة الوحدات ────────────────────────────────────
+    # ── إدارة الوحدات ──
 
     def _add_unit(self):
         val, ok = QInputDialog.getText(
@@ -333,65 +298,63 @@ class SettingsDialog(QDialog):
             return
         conn = _get_settings_conn()
         if not conn:
-            QMessageBox.warning(self, "تنبيه", "لا توجد شركة نشطة")
+            msg_warning(self, "تنبيه", "لا توجد شركة نشطة")
             return
         try:
             result = add_unit(conn, val, label.strip())
         except Exception as e:
-            QMessageBox.warning(self, "خطأ", str(e))
+            msg_warning(self, "خطأ", str(e))
             return
         finally:
             conn.close()
         if result:
             self._reload_units_list()
         else:
-            QMessageBox.information(self, "تنبيه", f"الوحدة «{val}» موجودة بالفعل.")
+            # ← استخدام msg_info بدل QMessageBox.information
+            msg_info(self, "تنبيه", f"الوحدة «{val}» موجودة بالفعل.")
 
     def _del_unit(self):
         item = self._units_list.currentItem()
         if not item:
-            QMessageBox.information(self, "تنبيه", "اختر وحدة أولاً")
+            msg_info(self, "تنبيه", "اختر وحدة أولاً")
             return
         val = item.data(Qt.UserRole)
         default_vals = {u[0] for u in _DEFAULT_UNITS}
         if val in default_vals:
-            QMessageBox.warning(self, "تنبيه", f"لا يمكن حذف الوحدة الافتراضية «{val}».")
+            msg_warning(self, "تنبيه", f"لا يمكن حذف الوحدة الافتراضية «{val}».")
             return
-        if QMessageBox.question(
-            self, "تأكيد الحذف", f"حذف الوحدة «{item.text()}»؟",
-            QMessageBox.Yes | QMessageBox.No
-        ) == QMessageBox.Yes:
+        # ← استخدام confirm_action بدل QMessageBox.question
+        if confirm_action(self, "تأكيد الحذف", f"حذف الوحدة «{item.text()}»؟",
+                          icon="🗑️", confirm_text="حذف", danger=True):
             conn = _get_settings_conn()
             if not conn:
                 return
             try:
                 remove_unit(conn, val)
             except Exception as e:
-                QMessageBox.warning(self, "خطأ", str(e))
+                msg_warning(self, "خطأ", str(e))
                 return
             finally:
                 conn.close()
             self._reload_units_list()
 
     def _reset_units(self):
-        if QMessageBox.question(
-            self, "استعادة الافتراضية",
-            "حذف كل الوحدات المضافة والرجوع للقائمة الافتراضية؟",
-            QMessageBox.Yes | QMessageBox.No
-        ) == QMessageBox.Yes:
+        if confirm_action(self, "استعادة الافتراضية",
+                          "حذف كل الوحدات المضافة والرجوع للقائمة الافتراضية؟",
+                          icon="↺", confirm_text="استعادة"):
             conn = _get_settings_conn()
             if not conn:
                 return
             try:
                 reset_units_to_default(conn)
             except Exception as e:
-                QMessageBox.warning(self, "خطأ", str(e))
+                msg_warning(self, "خطأ", str(e))
                 return
             finally:
                 conn.close()
             self._reload_units_list()
 
-    # ── تصفح لملف GIMP ───────────────────────────────────
+    # ── تصفح لملف GIMP ──
 
     def _browse_gimp(self):
         start = self._inp_gimp.text().strip()
@@ -406,17 +369,17 @@ class SettingsDialog(QDialog):
         if path:
             self._inp_gimp.setText(path)
 
-    # ── معاينة حجم الخط ──────────────────────────────────
+    # ── معاينة حجم الخط ──
 
     def _on_font_change(self, val: int):
         self._lbl_val.setText(f"{val} pt")
         self._preview.setStyleSheet(
-            f"font-size: {val}pt; border: 1px solid #ccc; "
-            "border-radius: 6px; padding: 12px; "
-            "background: #fafafa; color: #333;"
+            f"font-size: {val}pt;"
+            f"border: 1px solid {_C['border']}; border-radius: 6px;"
+            f"padding: 12px; background:{_C['bg_surface']}; color:{_C['text_primary']};"
         )
 
-    # ── حفظ ───────────────────────────────────────────────
+    # ── حفظ ──
 
     def _save(self):
         size = self._slider.value()
