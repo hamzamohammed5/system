@@ -10,7 +10,7 @@ ui/widgets/panels/state.py
 """
 
 from PyQt5.QtWidgets import (
-    QWidget, QFrame, QVBoxLayout, QLabel,
+    QWidget, QFrame, QVBoxLayou, QLabel,
     QTableWidget, QTableWidgetItem, QSizePolicy,
 )
 from PyQt5.QtCore import Qt, pyqtSignal
@@ -24,12 +24,12 @@ def _base() -> int:
 
 
 def _make_btn(text: str, style: str = "primary"):
-    from ._btn import make_btn
+    from ..components.button import make_btn
     return make_btn(text, style)
 
 
 def _card_colors(color: str) -> tuple[str, str]:
-    from .cards import card_colors
+    from ..core.colors import card_colors
     return card_colors(color)
 
 

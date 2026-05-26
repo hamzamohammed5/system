@@ -17,8 +17,8 @@ from PyQt5.QtCore    import pyqtSignal, Qt
 
 from ui.app_settings import _C
 from ..panels.form_parts import FormGroup, ModeLabel
-from ..panels.notify     import NotificationBar
-from ..panels._btn       import make_btn
+from ..components.notification     import NotificationBar
+from ..components.button       import make_btn
 from ..mixins.edit       import EditModeMixin
 from ..mixins.validate   import FormValidationMixin
 from ..utils.scroll      import wrap_in_scroll

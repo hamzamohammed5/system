@@ -24,7 +24,7 @@ from db.shared.categories_repo import (
     build_tree, fetch_descendants,
 )
 from ..core.conn     import LiveConnMixin
-from ..panels._btn  import make_btn
+from ..components.button  import make_btn
 from ..dialogs.confirm import confirm_delete
 from ..panels.theme  import get_tree_style
 from ..panels.form_parts import ModeLabel
