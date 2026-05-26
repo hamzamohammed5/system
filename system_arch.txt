@@ -1,5 +1,5 @@
 File Tree Snapshot
-Generated : 2026-05-26 10:06:21
+Generated : 2026-05-26 10:07:01
 Source    : D:\My Workspace\Hg\Alhabaar\accountant\system
 Extensions: .py
 ────────────────────────────────────────────────────────────
@@ -68,92 +68,6 @@ system/
 │   │   ├── _section_label.py
 │   │   ├── _sidebar.py
 │   │   └── _toggle_button.py
-│   ├── refactored_widgets/
-│   │   ├── base/
-│   │   │   ├── crud_form.py
-│   │   │   ├── detail_panel.py
-│   │   │   ├── list_panel.py
-│   │   │   ├── section.py
-│   │   │   └── tab_section.py
-│   │   ├── combo/
-│   │   │   ├── category.py
-│   │   │   └── unit.py
-│   │   ├── components/
-│   │   │   ├── component_row/
-│   │   │   │   ├── op_rows.py
-│   │   │   │   ├── ui.py
-│   │   │   │   ├── variants.py
-│   │   │   │   └── widget.py
-│   │   │   ├── action_toolbar.py
-│   │   │   ├── badge.py
-│   │   │   ├── badge_label.py
-│   │   │   ├── button.py
-│   │   │   ├── card.py
-│   │   │   ├── headers.py
-│   │   │   ├── label.py
-│   │   │   ├── notification.py
-│   │   │   ├── section_header.py
-│   │   │   ├── spinner.py
-│   │   │   ├── stat_card.py
-│   │   │   └── stat_row.py
-│   │   ├── core/
-│   │   │   ├── base.py
-│   │   │   ├── colors.py
-│   │   │   ├── conn.py
-│   │   │   ├── events.py
-│   │   │   └── settings.py
-│   │   ├── dialogs/
-│   │   │   ├── base.py
-│   │   │   ├── confirm.py
-│   │   │   ├── message.py
-│   │   │   └── shell.py
-│   │   ├── forms/
-│   │   │   └── inputs.py
-│   │   ├── helpers/
-│   │   │   └── color_picker.py
-│   │   ├── managers/
-│   │   │   └── category.py
-│   │   ├── mixins/
-│   │   │   ├── bus.py
-│   │   │   ├── edit.py
-│   │   │   ├── rebuild.py
-│   │   │   ├── refresh.py
-│   │   │   ├── select.py
-│   │   │   ├── shared_ops.py
-│   │   │   └── validate.py
-│   │   ├── panels/
-│   │   │   ├── _btn.py
-│   │   │   ├── card_grid.py
-│   │   │   ├── cards.py
-│   │   │   ├── collapsible_card.py
-│   │   │   ├── crud_section.py
-│   │   │   ├── data_table.py
-│   │   │   ├── detail_section.py
-│   │   │   ├── display.py
-│   │   │   ├── empty_state.py
-│   │   │   ├── filter.py
-│   │   │   ├── form_parts.py
-│   │   │   ├── header.py
-│   │   │   ├── notify.py
-│   │   │   ├── state.py
-│   │   │   └── theme.py
-│   │   ├── tables/
-│   │   │   ├── builders.py
-│   │   │   ├── flexible.py
-│   │   │   ├── items.py
-│   │   │   └── styles.py
-│   │   ├── theme/
-│   │   │   ├── builders.py
-│   │   │   └── styles.py
-│   │   └── utils/
-│   │       ├── date_range.py
-│   │       ├── flow_layout.py
-│   │       ├── no_wheel.py
-│   │       ├── scroll.py
-│   │       ├── scrollable_form.py
-│   │       ├── searchable_combo.py
-│   │       ├── splitter.py
-│   │       └── tooltip.py
 │   ├── tabs/
 │   │   ├── accounting/
 │   │   │   ├── financial/
@@ -366,6 +280,92 @@ system/
 │   │   ├── inventory_section.py
 │   │   ├── orders_section.py
 │   │   └── pricing_section.py
+│   ├── widgets/
+│   │   ├── base/
+│   │   │   ├── crud_form.py
+│   │   │   ├── detail_panel.py
+│   │   │   ├── list_panel.py
+│   │   │   ├── section.py
+│   │   │   └── tab_section.py
+│   │   ├── combo/
+│   │   │   ├── category.py
+│   │   │   └── unit.py
+│   │   ├── components/
+│   │   │   ├── component_row/
+│   │   │   │   ├── op_rows.py
+│   │   │   │   ├── ui.py
+│   │   │   │   ├── variants.py
+│   │   │   │   └── widget.py
+│   │   │   ├── action_toolbar.py
+│   │   │   ├── badge.py
+│   │   │   ├── badge_label.py
+│   │   │   ├── button.py
+│   │   │   ├── card.py
+│   │   │   ├── headers.py
+│   │   │   ├── label.py
+│   │   │   ├── notification.py
+│   │   │   ├── section_header.py
+│   │   │   ├── spinner.py
+│   │   │   ├── stat_card.py
+│   │   │   └── stat_row.py
+│   │   ├── core/
+│   │   │   ├── base.py
+│   │   │   ├── colors.py
+│   │   │   ├── conn.py
+│   │   │   ├── events.py
+│   │   │   └── settings.py
+│   │   ├── dialogs/
+│   │   │   ├── base.py
+│   │   │   ├── confirm.py
+│   │   │   ├── message.py
+│   │   │   └── shell.py
+│   │   ├── forms/
+│   │   │   └── inputs.py
+│   │   ├── helpers/
+│   │   │   └── color_picker.py
+│   │   ├── managers/
+│   │   │   └── category.py
+│   │   ├── mixins/
+│   │   │   ├── bus.py
+│   │   │   ├── edit.py
+│   │   │   ├── rebuild.py
+│   │   │   ├── refresh.py
+│   │   │   ├── select.py
+│   │   │   ├── shared_ops.py
+│   │   │   └── validate.py
+│   │   ├── panels/
+│   │   │   ├── _btn.py
+│   │   │   ├── card_grid.py
+│   │   │   ├── cards.py
+│   │   │   ├── collapsible_card.py
+│   │   │   ├── crud_section.py
+│   │   │   ├── data_table.py
+│   │   │   ├── detail_section.py
+│   │   │   ├── display.py
+│   │   │   ├── empty_state.py
+│   │   │   ├── filter.py
+│   │   │   ├── form_parts.py
+│   │   │   ├── header.py
+│   │   │   ├── notify.py
+│   │   │   ├── state.py
+│   │   │   └── theme.py
+│   │   ├── tables/
+│   │   │   ├── builders.py
+│   │   │   ├── flexible.py
+│   │   │   ├── items.py
+│   │   │   └── styles.py
+│   │   ├── theme/
+│   │   │   ├── builders.py
+│   │   │   └── styles.py
+│   │   └── utils/
+│   │       ├── date_range.py
+│   │       ├── flow_layout.py
+│   │       ├── no_wheel.py
+│   │       ├── scroll.py
+│   │       ├── scrollable_form.py
+│   │       ├── searchable_combo.py
+│   │       ├── splitter.py
+│   │       └── tooltip.py
 │   ├── app_settings.py
 │   ├── events.py
 │   ├── font_utils.py
