@@ -1,5 +1,5 @@
 """
-ui/refactored_widgets/components/component_row/widget.py
+ui/widgets/components/component_row/widget.py
 =========================================================
 ComponentRow — صف مكوّن واحد في BOM.
 
@@ -17,7 +17,7 @@ from PyQt5 import sip
 from PyQt5.QtWidgets import QWidget
 from PyQt5.QtCore import pyqtSignal, QTimer
 
-from ui.refactored_widgets.utils.searchable_combo import (
+from ui.widgets.utils.searchable_combo import (
     SearchableCombo, build_grouped_items,
 )
 from ui.events import bus

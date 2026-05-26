@@ -1,5 +1,5 @@
 """
-ui/refactored_widgets/panels/crud_section.py
+ui/widgets/panels/crud_section.py
 =============================================
 CrudSection — قاعدة موحدة لأقسام CRUD الكاملة.
 

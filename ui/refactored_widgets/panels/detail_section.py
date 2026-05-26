@@ -1,5 +1,5 @@
 """
-ui/refactored_widgets/panels/detail_section.py
+ui/widgets/panels/detail_section.py
 ===============================================
 DetailSection  — قسم تفاصيل موحد (عنوان: قيمة) في grid.
 TwoColDetails  — عرض في عمودين.

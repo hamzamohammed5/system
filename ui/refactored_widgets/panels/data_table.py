@@ -1,5 +1,5 @@
 """
-ui/refactored_widgets/panels/data_table.py
+ui/widgets/panels/data_table.py
 ==========================================
 DataTableWidget — جدول بيانات موحد يجمع:
   - ListHeader  (بحث + عنوان + أزرار)

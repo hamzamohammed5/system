@@ -1,5 +1,5 @@
 """
-ui/refactored_widgets/components/headers.py
+ui/widgets/components/headers.py
 ============================================
 كل هيدرات التطبيق في ملف واحد:
 

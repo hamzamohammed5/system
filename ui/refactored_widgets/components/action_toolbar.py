@@ -1,5 +1,5 @@
 """
-ui/refactored_widgets/components/action_toolbar.py
+ui/widgets/components/action_toolbar.py
 ===================================================
 ActionToolbar — شريط أزرار بـ FlowLayout.
 نسخة refactored من panles_helper/action_toolbar.py

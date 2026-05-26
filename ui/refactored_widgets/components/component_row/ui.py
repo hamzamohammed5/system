@@ -1,5 +1,5 @@
 """
-ui/refactored_widgets/components/component_row/ui.py
+ui/widgets/components/component_row/ui.py
 =====================================================
 بناء واجهة ComponentRow.
 
@@ -14,7 +14,7 @@ from PyQt5.QtWidgets import (
     QPushButton, QSizePolicy, QLabel, QDoubleSpinBox, QFrame,
 )
 
-from ui.refactored_widgets.utils.searchable_combo import SearchableCombo
+from ui.widgets.utils.searchable_combo import SearchableCombo
 
 # ── أنواع المكونات ─────────────────────────────────────────
 COMPONENT_TYPES = [

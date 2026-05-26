@@ -1,5 +1,5 @@
 """
-ui/refactored_widgets/panels/collapsible_card.py
+ui/widgets/panels/collapsible_card.py
 =================================================
 CollapsibleCard — بطاقة قابلة للطي/التوسع.
 """

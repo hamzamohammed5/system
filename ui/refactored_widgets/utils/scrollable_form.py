@@ -1,5 +1,5 @@
 """
-ui/refactored_widgets/utils/scrollable_form.py
+ui/widgets/utils/scrollable_form.py
 ===============================================
 wrap_in_scroll + ScrollableFormWidget.
 """

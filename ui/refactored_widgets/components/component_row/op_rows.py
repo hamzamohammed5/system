@@ -1,5 +1,5 @@
 """
-ui/refactored_widgets/components/component_row/op_rows.py
+ui/widgets/components/component_row/op_rows.py
 ==========================================================
 OpRowsMixin — منطق تحميل وعرض صفوف عمليات التشغيل في ComponentRow.
 

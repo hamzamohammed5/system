@@ -1,5 +1,5 @@
 """
-ui/refactored_widgets/panels/card_grid.py
+ui/widgets/panels/card_grid.py
 ==========================================
 CardGrid — شبكة بطاقات متجاوبة بعدد أعمدة ثابت.
 

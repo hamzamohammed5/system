@@ -1,5 +1,5 @@
 """
-ui/refactored_widgets/components/stat_row.py
+ui/widgets/components/stat_row.py
 =============================================
 StatItem  — dataclass لتعريف بطاقة إحصائية.
 _StatCard — بطاقة خفيفة مضمّنة (للاستخدام الداخلي فقط).

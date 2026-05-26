@@ -1,5 +1,5 @@
 """
-ui/refactored_widgets/mixins/shared_ops.py
+ui/widgets/mixins/shared_ops.py
 ==========================================
 SharedOpsMixin — منطق النشر والتعديل المشترك.
 نسخة محدّثة تستخدم refactored dialogs.

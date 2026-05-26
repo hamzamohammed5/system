@@ -1,5 +1,5 @@
 File Tree Snapshot
-Generated : 2026-05-26 09:59:07
+Generated : 2026-05-26 10:06:21
 Source    : D:\My Workspace\Hg\Alhabaar\accountant\system
 Extensions: .py
 ────────────────────────────────────────────────────────────
@@ -366,29 +366,6 @@ system/
 │   │   ├── inventory_section.py
 │   │   ├── orders_section.py
 │   │   └── pricing_section.py
-│   ├── widgets/
-│   │   └── shared/
-│   │       ├── component_row/
-│   │       │   ├── _op_rows_logic.py
-│   │       │   ├── _row_ui.py
-│   │       │   ├── _row_widget.py
-│   │       │   └── _variants_logic.py
-│   │       ├── panles_helper/
-│   │       │   ├── card_grid.py
-│   │       │   ├── collapsible_card.py
-│   │       │   ├── crud_section.py
-│   │       │   ├── data_table_widget.py
-│   │       │   ├── detail_header.py
-│   │       │   ├── detail_section.py
-│   │       │   ├── divider_utils.py
-│   │       │   ├── filter_toolbar.py
-│   │       │   ├── list_header.py
-│   │       │   ├── page_header.py
-│   │       │   └── theme.py
-│   │       ├── base_crud_form.py
-│   │       ├── base_detail_panel.py
-│   │       ├── base_list_panel.py
-│   │       └── base_section.py
 │   ├── app_settings.py
 │   ├── events.py
 │   ├── font_utils.py

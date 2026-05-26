@@ -7,8 +7,8 @@ CategoryForm    — فورم إضافة/تعديل التصنيف.
 دمج category_manager.py + category_form.py في ملف واحد.
 التغييرات:
   - ColorPickerWidget مستوردة من widgets/helpers/color_picker
-  - confirm_delete من refactored_widgets/dialogs/confirm
-  - LiveConnMixin من refactored_widgets/core/conn
+  - confirm_delete من widgets/dialogs/confirm
+  - LiveConnMixin من widgets/core/conn
 """
 
 from PyQt5.QtWidgets import (

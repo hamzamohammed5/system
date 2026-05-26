@@ -1,5 +1,5 @@
 """
-ui/refactored_widgets/components/badge_label.py
+ui/widgets/components/badge_label.py
 ================================================
 BadgeLabel — شارة نصية ملونة مستقلة.
 

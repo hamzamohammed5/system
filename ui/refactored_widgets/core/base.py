@@ -1,5 +1,5 @@
 """
-ui/refactored_widgets/core/base.py
+ui/widgets/core/base.py
 ===================================
 _base() و helpers أساسية — يحل التكرار في كل الملفات.
 
@@ -10,7 +10,7 @@ _base() و helpers أساسية — يحل التكرار في كل الملفا
 دلوقتي مكانها واحد.
 
 الاستخدام:
-    from ui.refactored_widgets.core.base import _base
+    from ui.widgets.core.base import _base
 """
 from ui.app_settings import get_font_size, _C
 

@@ -1,5 +1,5 @@
 """
-ui/refactored_widgets/components/component_row/variants.py
+ui/widgets/components/component_row/variants.py
 ===========================================================
 VariantsMixin — منطق تحميل وعرض variants الخامة في ComponentRow.
 

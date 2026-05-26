@@ -1,5 +1,5 @@
 """
-ui/refactored_widgets/utils/no_wheel.py
+ui/widgets/utils/no_wheel.py
 ========================================
 يمنع عجلة الماوس من تغيير قيمة input widgets.
 نسخة موحدة من widgets/shared/no_wheel.py

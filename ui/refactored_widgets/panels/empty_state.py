@@ -1,5 +1,5 @@
 """
-ui/refactored_widgets/panels/empty_state.py
+ui/widgets/panels/empty_state.py
 ============================================
 EmptyState — re-export من state.py للتوافق مع
 (panles_helper/empty_state.py).

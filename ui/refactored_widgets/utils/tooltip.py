@@ -1,5 +1,5 @@
 """
-ui/refactored_widgets/utils/tooltip.py
+ui/widgets/utils/tooltip.py
 =======================================
 دوال مساعدة موحدة للـ tooltips في الجداول والـ widgets.
 """

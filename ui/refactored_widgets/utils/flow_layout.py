@@ -1,5 +1,5 @@
 """
-ui/refactored_widgets/utils/flow_layout.py
+ui/widgets/utils/flow_layout.py
 ===========================================
 FlowLayout — layout يرتب الـ widgets أفقياً وينزل لسطر تاني تلقائياً.
 """

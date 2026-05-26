@@ -6,7 +6,7 @@ CategoryCombo — QComboBox للتصنيفات الهرمية.
 التغييرات:
   - _populate_category_combo → populate_category_combo (اسم عام)
   - _add_tree_nodes داخلي فقط
-  - LiveConnMixin من refactored_widgets
+  - LiveConnMixin من widgets
 """
 
 from PyQt5.QtWidgets import QComboBox

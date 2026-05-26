@@ -1,5 +1,5 @@
 """
-ui/refactored_widgets/base/tab_section.py
+ui/widgets/base/tab_section.py
 ==========================================
 TabSectionBase — قاعدة مشتركة للأقسام التي تحتوي على QTabWidget.
 """

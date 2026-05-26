@@ -1,5 +1,5 @@
 """
-ui/refactored_widgets/panels/theme.py
+ui/widgets/panels/theme.py
 ======================================
 re-export من theme/styles.py + builders.py للتوافق مع الكود القديم.
 """

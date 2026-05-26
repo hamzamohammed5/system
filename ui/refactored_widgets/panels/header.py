@@ -1,11 +1,11 @@
 """
-ui/refactored_widgets/panels/headers.py
+ui/widgets/panels/headers.py
 ========================================
 هيدرات موحدة — دمج panels/header.py و components/headers.py.
 
 كانت نفس الكلاسات متكررة في ملفين:
-  - ui/refactored_widgets/panels/header.py
-  - ui/refactored_widgets/components/headers.py
+  - ui/widgets/panels/header.py
+  - ui/widgets/components/headers.py
 
 دلوقتي في ملف واحد — الملفين القديمين بيستوردوا منه.
 
@@ -35,7 +35,7 @@ def _base() -> int:
 
 
 def _make_btn(text: str, style: str = "normal") -> QPushButton:
-    from ui.refactored_widgets.panels._btn import make_btn
+    from ui.widgets.panels._btn import make_btn
     return make_btn(text, style)
 
 
@@ -423,7 +423,7 @@ class DetailHeader(QFrame):
             "background:transparent; border:none; font-weight:500;"
         )
 
-        from ui.refactored_widgets.panels.cards import BadgeLabel
+        from ui.widgets.panels.cards import BadgeLabel
         self._badge_status   = BadgeLabel()
         self._badge_priority = QLabel("")
         self._badge_priority.setStyleSheet("background:transparent; border:none;")
@@ -444,7 +444,7 @@ class DetailHeader(QFrame):
         self._lbl_customer.setVisible(False)
         top_lay.addWidget(self._lbl_customer)
 
-        from ui.refactored_widgets.panels.display import InfoRow
+        from ui.widgets.panels.display import InfoRow
         self._info_row = InfoRow(separator="  ·  ")
         top_lay.addWidget(self._info_row)
 
@@ -463,7 +463,7 @@ class DetailHeader(QFrame):
         root.addWidget(_h_divider())
 
         # ── شريط الأزرار ──
-        from ui.refactored_widgets.components.action_toolbar import ActionToolbar
+        from ui.widgets.components.action_toolbar import ActionToolbar
         tb_sec = QWidget()
         tb_sec.setStyleSheet("background:transparent;")
         tb_sec.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Preferred)
@@ -510,7 +510,7 @@ class DetailHeader(QFrame):
 
     def add_stat_card(self, icon: str, title: str, value: str = "─",
                       color: str = "#1565c0", compact: bool = True):
-        from ui.refactored_widgets.components.card import StatCard
+        from ui.widgets.components.card import StatCard
         card = StatCard(icon, title, value, color, compact=compact)
         self._cards_row.addWidget(card, stretch=1)
         self._stat_cards.append(card)
