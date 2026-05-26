@@ -1,11 +1,8 @@
 """
-ui/main_window.py  (نسخة multi-company — مُصلَحة v6)
+ui/main_window.py  (نسخة multi-company — مُصلَحة v7)
 =====================================================
-التغييرات عن النسخة السابقة (v5):
-  1. _destroy_tabs() تعمل blockSignals(True) على bus.company_data_changed
-     قبل حذف الـ widgets، وتُعيد blockSignals(False) بعدها.
-     هذا يمنع أي widget قديم من الاستجابة لأحداث أثناء فترة الحذف.
-  2. باقي المنطق محافظ عليه كما هو من v5.
+التغييرات عن v6:
+  - scrollbar الـ content_scroll يستخدم _C بدل hardcoded hex
 """
 
 from PyQt5.QtWidgets import (
@@ -66,16 +63,18 @@ class MainWindow(QMainWindow):
         self._content_scroll.setWidgetResizable(True)
         self._content_scroll.setHorizontalScrollBarPolicy(Qt.ScrollBarAsNeeded)
         self._content_scroll.setVerticalScrollBarPolicy(Qt.ScrollBarAlwaysOff)
-        self._content_scroll.setStyleSheet("""
-            QScrollArea { border:none;background:transparent; }
-            QScrollBar:horizontal {
-                background:transparent;height:6px;border-radius:3px;
-            }
-            QScrollBar::handle:horizontal {
-                background:#C8C4B8;border-radius:3px;min-width:30px;
-            }
-            QScrollBar::handle:horizontal:hover { background:#6B6760; }
-            QScrollBar::add-line:horizontal,QScrollBar::sub-line:horizontal { width:0px; }
+        # يستخدم _C بدل hardcoded hex
+        self._content_scroll.setStyleSheet(f"""
+            QScrollArea {{ border:none; background:transparent; }}
+            QScrollBar:horizontal {{
+                background:transparent; height:6px; border-radius:3px;
+            }}
+            QScrollBar::handle:horizontal {{
+                background:{_C['border_med']}; border-radius:3px; min-width:30px;
+            }}
+            QScrollBar::handle:horizontal:hover {{ background:{_C['border_strong']}; }}
+            QScrollBar::add-line:horizontal,
+            QScrollBar::sub-line:horizontal {{ width:0px; }}
         """)
         self._content_scroll.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Expanding)
 
@@ -107,10 +106,6 @@ class MainWindow(QMainWindow):
     # ──────────────────────────────────────────────────────
 
     def _build_tabs(self):
-        """
-        يبني تبويبات الشركة النشطة.
-        يُستدعى مرة واحدة عند أول شركة، ثم _refresh_tabs عند التغيير.
-        """
         if self._tabs_built:
             self._destroy_tabs()
 
@@ -137,10 +132,8 @@ class MainWindow(QMainWindow):
         self._tabs_built = True
 
     def _destroy_tabs(self):
-        # ── الخطوة 1: وقّف كل signals الـ bus أثناء الحذف ──
         bus.blockSignals(True)
 
-        # ── الخطوة 2: احذف الـ widgets ───────────────────────
         while self._stack.count() > 1:
             w = self._stack.widget(1)
             self._stack.removeWidget(w)
@@ -150,13 +143,9 @@ class MainWindow(QMainWindow):
             except Exception:
                 pass
 
-        # ── الخطوة 3: معالجة أحداث deleteLater() المعلقة ─────
         QApplication.processEvents()
-
-        # ── الخطوة 4: أعد تفعيل الـ signals ──────────────────
         bus.blockSignals(False)
 
-        # ── الخطوة 5: أغلق raw connections الشركة القديمة ────
         try:
             from db.companies.company_state import company_state
             company_state.refresh_connections()
@@ -167,7 +156,6 @@ class MainWindow(QMainWindow):
         self._tabs_built = False
 
     def _refresh_tabs(self):
-        """إعادة بناء كل التبويبات عند تغيير الشركة."""
         self._build_tabs()
 
     # ──────────────────────────────────────────────────────
@@ -175,26 +163,9 @@ class MainWindow(QMainWindow):
     # ──────────────────────────────────────────────────────
 
     def _on_company_changed(self, company_id: int):
-        """
-        يُستدعى عند اختيار شركة مختلفة من CompanySelector.
-
-        الخطوات:
-          1. تحديث عنوان النافذة.
-          2. إعادة بناء كل التبويبات على الـ DB الجديد
-             (يشمل _destroy_tabs مع blockSignals و processEvents
-              و refresh_connections).
-          3. إطلاق bus.company_data_changed بـ company_id
-             بعد اكتمال البناء — الـ widgets الجديدة فقط تستجيب.
-        """
         from db.companies.company_state import company_state
-
         self.setWindowTitle(f"ERP — {company_state.company_name}")
-
-        # أعد البناء أولاً (يشمل blockSignals و processEvents
-        # و refresh_connections داخل _destroy_tabs)
         self._refresh_tabs()
-
-        # ثم أطلق الإشعار — الـ widgets الجديدة جاهزة الآن للاستجابة
         bus.company_data_changed.emit(company_id)
 
     def _on_nav(self, clicked_btn):
@@ -233,7 +204,6 @@ class MainWindow(QMainWindow):
             self._stack.setCurrentIndex(index_map[key])
 
     def _open_shared_items(self):
-        """فتح نافذة إدارة العناصر المشتركة بين الشركات."""
         from db.companies.companies_schema import get_central_connection, create_central_tables
         from db.companies.shared_items_repo import create_shared_items_tables
         from ui.tabs.companies.shared_items_manager import SharedItemsManagerDialog

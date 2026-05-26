@@ -14,8 +14,6 @@ from ..components.notification import NotificationBar
 from ..mixins.bus             import BusConnectedMixin
 from ..theme.styles           import scroll_style   # المصدر الوحيد
 
-_BG = "#f8f9fb"
-
 
 class BaseDetailPanel(QWidget, BusConnectedMixin):
     """
@@ -41,7 +39,7 @@ class BaseDetailPanel(QWidget, BusConnectedMixin):
     EMPTY_ICON     : str  = "📋"
     EMPTY_TITLE    : str  = "اختر عنصراً من القائمة"
     EMPTY_SUBTITLE : str  = ""
-    HEADER_BG      : str  = "#ffffff"
+    HEADER_BG      : str  = None   # None → يستخدم _C['bg_surface'] تلقائياً
     MIN_CONTENT_W  : int  = 500
     CONNECT_BUS    : bool = False
 
@@ -85,7 +83,11 @@ class BaseDetailPanel(QWidget, BusConnectedMixin):
     # ── بناء الواجهة ──────────────────────────────────────
 
     def _build(self):
-        self.setStyleSheet(f"background:{_BG};")
+        # خلفية الـ panel — أفتح قليلاً من bg_surface للتمييز البصري
+        _bg = _C['bg_page']
+        header_bg = self.HEADER_BG or _C['bg_surface']
+
+        self.setStyleSheet(f"background:{_bg};")
         root = QVBoxLayout(self)
         root.setContentsMargins(0, 0, 0, 0)
         root.setSpacing(0)
@@ -102,18 +104,18 @@ class BaseDetailPanel(QWidget, BusConnectedMixin):
 
         inner = QWidget()
         inner.setMinimumWidth(self.MIN_CONTENT_W)
-        inner.setStyleSheet(f"background:{_BG};")
+        inner.setStyleSheet(f"background:{_bg};")
         inner_lay = QVBoxLayout(inner)
         inner_lay.setContentsMargins(0, 0, 0, 0)
         inner_lay.setSpacing(0)
 
-        self._hdr = DetailHeader(bg=self.HEADER_BG)
+        self._hdr = DetailHeader(bg=header_bg)
         self._build_header_cards()
         self._build_header_buttons()
         inner_lay.addWidget(self._hdr)
 
         content = QWidget()
-        content.setStyleSheet(f"background:{_BG};")
+        content.setStyleSheet(f"background:{_bg};")
         self._content_lay = QVBoxLayout(content)
         self._content_lay.setContentsMargins(16, 14, 16, 16)
         self._content_lay.setSpacing(12)
@@ -124,10 +126,11 @@ class BaseDetailPanel(QWidget, BusConnectedMixin):
         scroll.setWidget(inner)
         root.addWidget(scroll, stretch=1)
 
+        # يستخدم _C['text_muted'] بدل hardcoded "#6b7280"
         self._empty = EmptyState(
             icon=self.EMPTY_ICON, title=self.EMPTY_TITLE,
             subtitle=self.EMPTY_SUBTITLE,
-            style="plain", color="#6b7280", min_height=200,
+            style="plain", color=_C['text_muted'], min_height=200,
         )
         root.addWidget(self._empty)
 

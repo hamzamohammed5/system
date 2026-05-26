@@ -123,9 +123,10 @@ class BaseListPanel(QWidget, BusConnectedMixin):
         self.table.itemSelectionChanged.connect(self._on_select)
         root.addWidget(self._splitter, stretch=1)
 
+        # يستخدم _C['text_muted'] بدل hardcoded "#9ca3af"
         self._empty_state = EmptyState(
             icon=self.EMPTY_ICON, title=self.EMPTY_TITLE,
-            style="plain", color="#9ca3af", min_height=100,
+            style="plain", color=_C['text_muted'], min_height=100,
         )
         self._empty_state.setStyleSheet(
             f"QFrame {{ background:{_C['bg_input']}; border:none; }}"

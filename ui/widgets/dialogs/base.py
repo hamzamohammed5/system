@@ -22,7 +22,8 @@ class BaseDialog(DialogShell):
 
     def __init__(self, parent=None, title: str = "", icon: str = "📋",
                  subtitle: str = "", min_size: tuple = (500, 400),
-                 accent: str = "#1565c0", show_btns: bool = True):
+                 accent: str = None, show_btns: bool = True):
+        # accent=None → يستخدم _C['accent'] تلقائياً من DialogShell
         super().__init__(
             parent, title=title, icon=icon, subtitle=subtitle,
             accent=accent, min_width=min_size[0], min_height=min_size[1],
@@ -42,7 +43,8 @@ class BaseDialog(DialogShell):
         self._btn_ok = make_btn("✅  حفظ", "primary")
         self._btn_ok.setMinimumHeight(36)
 
-        if self._accent and self._accent != _C.get("accent", "#1565c0"):
+        # نقارن بـ _C['accent'] بدل hardcoded "#1565c0"
+        if self._accent and self._accent != _C.get("accent"):
             base = get_font_size()
             self._btn_ok.setStyleSheet(f"""
                 QPushButton {{

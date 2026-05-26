@@ -9,6 +9,8 @@ from PyQt5.QtWidgets import (
 from PyQt5.QtCore import pyqtSignal, Qt
 from PyQt5.QtGui  import QColor, QFont
 
+from ui.app_settings import _C, fs, get_font_size
+
 _SEP = ("__sep__", None)
 
 
@@ -63,25 +65,30 @@ class SearchableCombo(QWidget):
         lay.setContentsMargins(0, 0, 0, 0)
         lay.setSpacing(4)
 
+        base = get_font_size()
         self.inp_search = QLineEdit()
         self.inp_search.setPlaceholderText("🔍 بحث...")
         self.inp_search.setFixedWidth(90)
         self.inp_search.setMinimumHeight(28)
-        self.inp_search.setStyleSheet("""
-            QLineEdit {
-                background:#f0f4ff; border:1px solid #c5cae9;
-                border-radius:4px; padding:2px 6px; font-size:11px;
-            }
-            QLineEdit:focus { border-color:#1565c0; background:white; }
+        self.inp_search.setStyleSheet(f"""
+            QLineEdit {{
+                background:{_C['bg_surface_2']}; border:1px solid {_C['border_med']};
+                border-radius:4px; padding:2px 6px; font-size:{fs(base, -1)}pt;
+                color:{_C['text_primary']};
+            }}
+            QLineEdit:focus {{ border-color:{_C['accent']}; background:{_C['bg_input']}; }}
         """)
         self.inp_search.textChanged.connect(self._on_search)
 
         self.btn_clear = QPushButton("✖")
         self.btn_clear.setFixedSize(20, 20)
-        self.btn_clear.setStyleSheet(
-            "QPushButton{background:transparent;border:none;color:#aaa;font-size:10px;}"
-            "QPushButton:hover{color:#e53935;}"
-        )
+        self.btn_clear.setStyleSheet(f"""
+            QPushButton {{
+                background:transparent; border:none;
+                color:{_C['text_disabled']}; font-size:{fs(base, -2)}pt;
+            }}
+            QPushButton:hover {{ color:{_C['danger']}; }}
+        """)
         self.btn_clear.clicked.connect(self._clear_search)
         self.btn_clear.setVisible(False)
 
@@ -142,14 +149,14 @@ class SearchableCombo(QWidget):
             if is_sep:
                 self._style_sep(idx)
             elif user_data and user_data[0] == "__orphan__":
-                self.cmb.setItemData(idx, QColor("#e53935"), Qt.ForegroundRole)
+                self.cmb.setItemData(idx, QColor(_C['danger']), Qt.ForegroundRole)
 
         self._remove_empty_seps()
         self.cmb.blockSignals(False)
         self._restore(prev)
 
     def _style_sep(self, idx: int):
-        self.cmb.setItemData(idx, QColor("#78909c"), Qt.ForegroundRole)
+        self.cmb.setItemData(idx, QColor(_C['text_muted']), Qt.ForegroundRole)
         f = QFont()
         f.setBold(True)
         f.setPointSize(f.pointSize() - 1)
@@ -242,4 +249,4 @@ class SearchableCombo(QWidget):
 
     def add_item_at_start(self, text: str, data):
         self.cmb.insertItem(0, text, data)
-        self.cmb.setItemData(0, QColor("#e53935"), Qt.ForegroundRole)
+        self.cmb.setItemData(0, QColor(_C['danger']), Qt.ForegroundRole)
