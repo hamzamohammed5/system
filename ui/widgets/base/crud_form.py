@@ -7,7 +7,8 @@ from PyQt5.QtCore    import pyqtSignal, Qt
 
 from ui.app_settings import _C
 from ..panels.form_parts         import FormGroup
-from ..components.label          import ModeLabelfrom ..components.notification   import NotificationBar
+from ..components.label        import ModeLabel
+from ..components.notification import NotificationBar
 from ..components.button         import make_btn
 from ..mixins.edit               import EditModeMixin
 from ..mixins.validate           import FormValidationMixin
