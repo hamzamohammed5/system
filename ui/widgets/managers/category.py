@@ -3,12 +3,6 @@ widgets/managers/category.py
 =============================
 CategoryManager — شجرة لإدارة التصنيفات الهرمية.
 CategoryForm    — فورم إضافة/تعديل التصنيف.
-
-دمج category_manager.py + category_form.py في ملف واحد.
-التغييرات:
-  - ColorPickerWidget مستوردة من widgets/helpers/color_picker
-  - confirm_delete من widgets/dialogs/confirm
-  - LiveConnMixin من widgets/core/conn
 """
 
 from PyQt5.QtWidgets import (
@@ -23,12 +17,13 @@ from db.shared.categories_repo import (
     update_category, delete_category, count_category_items,
     build_tree, fetch_descendants,
 )
-from ..core.conn     import LiveConnMixin
+from ..core.conn          import LiveConnMixin
 from ..components.button  import make_btn
-from ..dialogs.confirm import confirm_delete
-from ..theme.styles import tree_style
-from ..panels.form_parts import ModeLabel
+from ..dialogs.confirm    import confirm_delete
+from ..theme.styles       import tree_style   # المصدر الوحيد — كان get_tree_style خطأ
+from ..panels.form_parts  import ModeLabel
 from ui.events import bus
+
 
 # ── CategoryForm ──────────────────────────────────────────
 
@@ -210,7 +205,7 @@ class CategoryManager(QWidget, LiveConnMixin):
         self.tree.setColumnWidth(2, 80)
         self.tree.setAlternatingRowColors(True)
         self.tree.setAnimated(True)
-        self.tree.setStyleSheet(get_tree_style())
+        self.tree.setStyleSheet(tree_style())   # ← كان get_tree_style() خطأ
         self.tree.itemSelectionChanged.connect(self._on_select)
         root.addWidget(self.tree)
 

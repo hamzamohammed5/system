@@ -3,8 +3,8 @@ ui/widgets/panels/state.py
 ===========================
 مكونات الـ Empty State الموحدة:
 
-  EmptyState          — QFrame حالة فارغة مع أيقونة ونص وزر
-  EmptyPanelState     — widget أوسع مع stretch
+  EmptyState              — QFrame حالة فارغة مع أيقونة ونص وزر
+  EmptyPanelState         — widget أوسع مع stretch
   set_table_empty_state   — صف رسالة داخل الجدول
   clear_table_empty_state — مسح صف الرسالة
 """
@@ -16,19 +16,11 @@ from PyQt5.QtWidgets import (
 from PyQt5.QtCore import Qt, pyqtSignal
 from PyQt5.QtGui  import QColor, QFont
 
-from ui.app_settings import _C, fs, get_font_size
+from ui.app_settings import _C, fs
+from ..core.settings import get_base   # المصدر الوحيد — لا _base() محلية
 
 
-def _base() -> int:
-    return get_font_size()
-
-
-def _make_btn(text: str, style: str = "primary"):
-    from ..components.button import make_btn
-    return make_btn(text, style)
-
-
-def _card_colors(color: str) -> tuple[str, str]:
+def _card_colors(color: str) -> tuple:
     from ..core.colors import card_colors
     return card_colors(color)
 
@@ -65,7 +57,7 @@ class EmptyState(QFrame):
         lay.setSpacing(6)
         lay.setContentsMargins(20, 16, 20, 16)
 
-        base = _base()
+        base = get_base()
 
         if icon:
             lbl_icon = QLabel(icon)
@@ -93,7 +85,8 @@ class EmptyState(QFrame):
             lay.addWidget(lbl_sub)
 
         if action_text:
-            btn = _make_btn(action_text, "success")
+            from ..components.button import make_btn
+            btn = make_btn(action_text, "success")
             btn.setFixedWidth(140)
             btn.clicked.connect(self.action_clicked.emit)
             lay.addWidget(btn, alignment=Qt.AlignCenter)
@@ -123,7 +116,7 @@ class EmptyPanelState(QWidget):
         lay.setSpacing(8)
         lay.setContentsMargins(20, 30, 20, 30)
 
-        base = _base()
+        base = get_base()
 
         if icon:
             lbl_icon = QLabel(icon)
@@ -152,7 +145,8 @@ class EmptyPanelState(QWidget):
             lay.addWidget(lbl_sub)
 
         if action_text:
-            btn = _make_btn(action_text, "primary")
+            from ..components.button import make_btn
+            btn = make_btn(action_text, "primary")
             btn.clicked.connect(self.action_clicked.emit)
             lay.addWidget(btn, alignment=Qt.AlignCenter)
 

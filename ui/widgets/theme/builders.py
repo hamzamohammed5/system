@@ -26,10 +26,3 @@ def v_divider(color: str = None, width: int = 1, margin_v: int = 4) -> QFrame:
         f"border:none; margin:{margin_v}px 2px;"
     )
     return sep
-
-
-# Aliases للتوافق
-make_divider    = h_divider
-make_vline_sep  = v_divider
-make_h_divider  = h_divider
-make_v_divider  = v_divider
