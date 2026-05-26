@@ -124,12 +124,3 @@ def apply_tooltips(table: QTableWidget, cols: list = None):
             item = table.item(r, c)
             if item and item.text() and not item.toolTip():
                 item.setToolTip(item.text())
-
-
-# ── Aliases للتوافق مع الكود القديم ───────────────────────
-make_table_item    = make_item
-bold_table_item    = bold_item
-colored_table_item = colored_item
-center_table_item  = center_item
-set_row_background = set_row_bg
-color_item         = lambda item, color: (item.setForeground(QColor(color)), item)[1]

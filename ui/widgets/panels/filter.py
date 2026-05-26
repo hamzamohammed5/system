@@ -2,14 +2,7 @@
 widgets/panels/filter.py
 =========================
 FilterToolbar — شريط فلاتر موحد (بحث + تصنيف + تاريخ).
-
-التغييرات عن النسخة القديمة (panles_helper/filter_toolbar.py):
-  - SearchBar مستوردة من panels/header بدل إعادة تعريف
-  - _style_combo / _make_sep مدمجتان مباشرة
-  - reset_button style يستخدم _C مباشرة
-  - لا يوجد تكرار لـ stylesheet الـ QLineEdit
 """
-
 from PyQt5.QtWidgets import (
     QWidget, QHBoxLayout, QLabel, QPushButton, QComboBox,
 )
@@ -70,14 +63,12 @@ class FilterToolbar(QWidget):
         lay.setContentsMargins(8, 6, 8, 6)
         lay.setSpacing(8)
 
-        # بحث — SearchBar من panels/header
         from ..components.headers import SearchBar
         self._search = SearchBar(placeholder=placeholder, delay_ms=250, height=28)
         self._search.search_changed.connect(lambda _: self.filter_changed.emit())
         self.inp_search = self._search.inp
         lay.addWidget(self._search, stretch=2)
 
-        # تصنيف
         self.cmb_cat = None
         if self._show_cat:
             lay.addWidget(self._sep())
@@ -93,7 +84,6 @@ class FilterToolbar(QWidget):
             self.cmb_cat.currentIndexChanged.connect(lambda _: self.filter_changed.emit())
             lay.addWidget(self.cmb_cat, stretch=1)
 
-        # نطاق التاريخ
         self._date_filter = None
         self.dt_from = self.dt_to = None
         if self._show_date:
@@ -109,7 +99,6 @@ class FilterToolbar(QWidget):
             self.dt_to   = self._date_filter.dt_to
             lay.addWidget(self._date_filter)
 
-        # زر مسح
         btn_reset = QPushButton("↺")
         btn_reset.setToolTip("مسح الكل")
         btn_reset.setMinimumHeight(28)
@@ -118,7 +107,6 @@ class FilterToolbar(QWidget):
         btn_reset.clicked.connect(self.reset)
         lay.addWidget(btn_reset)
 
-        # عداد
         self.lbl_count = QLabel("")
         self.lbl_count.setStyleSheet(
             f"color:{_C.get('accent','#1565c0')}; font-size:10px; font-weight:bold;"
@@ -141,9 +129,9 @@ class FilterToolbar(QWidget):
         self.cmb_cat.blockSignals(True)
         self.cmb_cat.clear()
         try:
-            from ..combo.category import _populate_category_combo
-            _populate_category_combo(self.cmb_cat, self._conn, self._scope,
-                                     all_label="— كل التصنيفات —")
+            from ..combo.category import populate_category_combo
+            populate_category_combo(self.cmb_cat, self._conn, self._scope,
+                                    all_label="— كل التصنيفات —")
         except Exception:
             self.cmb_cat.addItem("— كل التصنيفات —", None)
         for i in range(self.cmb_cat.count()):

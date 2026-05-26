@@ -2,8 +2,6 @@
 ui/widgets/components/button.py
 ========================================
 make_btn — المصنع الموحد لإنشاء أزرار التطبيق.
-
-دمج: panels/_btn.py + components/button.py
 """
 from PyQt5.QtWidgets import QPushButton, QSizePolicy
 from PyQt5.QtCore    import Qt
@@ -99,8 +97,3 @@ def calc_btn_width(text: str, font_size: int, padding: int = 32) -> int:
     f = QFont()
     f.setPointSize(font_size)
     return QFontMetrics(f).horizontalAdvance(text) + padding
-
-
-# aliases للتوافق مع الكود القديم
-_make_btn       = make_btn
-_calc_btn_width = calc_btn_width

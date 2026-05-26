@@ -165,6 +165,7 @@ def make_splitter_table_guarded(columns: list, stretch_col: int = -1,
 
 def fit_splitter_table(splitter: QSplitter, table: QTableWidget,
                        extra_pad: int = 20, delay_ms: int = 0):
+    """يضبط عرض الـ splitter حسب عرض الجدول — المصدر الوحيد."""
     def _fit():
         table_w   = calc_width(table, extra_pad)
         total     = splitter.width()
@@ -175,7 +176,3 @@ def fit_splitter_table(splitter: QSplitter, table: QTableWidget,
         QTimer.singleShot(delay_ms, _fit)
     else:
         _fit()
-
-
-# Alias للتوافق
-make_detail_table = make_table

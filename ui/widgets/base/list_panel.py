@@ -2,20 +2,17 @@
 widgets/base/list_panel.py
 ==========================
 BaseListPanel — قاعدة مشتركة لكل لوحات القوائم.
-
-التغييرات عن النسخة القديمة:
-  - منطق الفلترة مدمج هنا مباشرة بدل mixin خارجي
-  - _build_header / _build_filter / _build_table / _build_empty دوال منفصلة
-  - CONNECT_BUS=True يربط تلقائياً بدون boilerplate
-  - refresh() يستدعي _load_rows ثم _apply_filter مباشرة
 """
-
 from PyQt5.QtWidgets import QWidget, QVBoxLayout, QSizePolicy
 from PyQt5.QtCore    import Qt, pyqtSignal, QTimer
 
 from ui.app_settings import _C
-from ..tables.builders  import make_splitter_table_guarded, ROW_HEIGHT_LARGE
-from ..tables.items     import auto_fit_columns, fit_splitter_table
+from ..tables.builders  import (
+    make_splitter_table_guarded,
+    fit_splitter_table,
+    ROW_HEIGHT_LARGE,
+)
+from ..tables.items     import auto_fit_columns
 from ..panels.state     import EmptyState
 from ..components.headers    import ListHeader, StatusBar
 from ..panels.filter    import FilterToolbar

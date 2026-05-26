@@ -243,8 +243,3 @@ class SearchableCombo(QWidget):
     def add_item_at_start(self, text: str, data):
         self.cmb.insertItem(0, text, data)
         self.cmb.setItemData(0, QColor("#e53935"), Qt.ForegroundRole)
-
-
-# aliases للتوافق
-_SearchableCombo     = SearchableCombo
-_build_grouped_items = build_grouped_items

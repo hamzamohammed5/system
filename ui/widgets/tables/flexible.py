@@ -159,11 +159,9 @@ class FlexibleTreeWidget(QTreeWidget):
 
 
 def refresh_tooltips(table: QTableWidget):
+    """يضيف tooltip = النص الكامل لكل خلية فارغة الـ tooltip."""
     for r in range(table.rowCount()):
         for c in range(table.columnCount()):
             item = table.item(r, c)
             if item and item.text() and not item.toolTip():
                 item.setToolTip(item.text())
-
-
-apply_tooltip_to_all = refresh_tooltips

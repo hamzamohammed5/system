@@ -1,7 +1,7 @@
 """
 ui/widgets/dialogs/shell.py
 ============================
-_DialogShell — هيكل نافذة حوار موحد بدون منطق.
+DialogShell — هيكل نافذة حوار موحد بدون منطق.
 """
 from PyQt5.QtWidgets import (
     QDialog, QVBoxLayout, QHBoxLayout,
@@ -121,7 +121,3 @@ class DialogShell(QDialog):
     @property
     def btn_layout(self) -> QHBoxLayout:
         return self._btn_layout
-
-
-# alias للتوافق
-_DialogShell = DialogShell

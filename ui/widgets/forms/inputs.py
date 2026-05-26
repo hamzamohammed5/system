@@ -4,61 +4,19 @@ ui/widgets/forms/inputs.py
 Input widgets الموحدة للتطبيق.
 
 _input_style / _spinbox_style مستوردتان من theme/styles — لا تكرار.
+
+ملاحظة: للبحث استخدم SearchBar من components/headers مباشرة.
 """
 from PyQt5.QtWidgets import (
     QWidget, QHBoxLayout, QLineEdit, QLabel,
     QDoubleSpinBox, QSpinBox, QDateEdit, QComboBox, QSizePolicy,
 )
-from PyQt5.QtCore import Qt, QDate, QTimer, pyqtSignal
+from PyQt5.QtCore import Qt, QDate
 from PyQt5.QtGui  import QFont
 
 from ui.app_settings import _C, fs
 from ..core          import get_base
 from ..theme.styles  import input_style as _input_style, spinbox_style as _spinbox_style
-
-
-# ── SearchLineEdit ─────────────────────────────────────────
-# ملاحظة: SearchBar في components/headers توفر نفس الوظيفة.
-# SearchLineEdit تبقى للتوافق مع الكود الموجود.
-
-class SearchLineEdit(QWidget):
-    """حقل بحث موحد مع delay."""
-    text_changed = pyqtSignal(str)
-
-    def __init__(self, placeholder: str = "🔍  بحث...",
-                 delay_ms: int = 250, height: int = 34, parent=None):
-        super().__init__(parent)
-        self._delay = delay_ms
-        self._timer = QTimer(self)
-        self._timer.setSingleShot(True)
-        self._timer.setInterval(delay_ms)
-        self._timer.timeout.connect(self._emit)
-        self._build(placeholder, height)
-
-    def _build(self, placeholder, height):
-        lay = QHBoxLayout(self)
-        lay.setContentsMargins(0, 0, 0, 0)
-        self._inp = QLineEdit()
-        self._inp.setPlaceholderText(placeholder)
-        self._inp.setFixedHeight(height)
-        self._inp.setClearButtonEnabled(True)
-        self._inp.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Fixed)
-        self._inp.setStyleSheet(f"QLineEdit {{ {_input_style(height)} }}")
-        self._inp.textChanged.connect(lambda: self._timer.start() if self._delay else self._emit())
-        lay.addWidget(self._inp)
-
-    def _emit(self):
-        self.text_changed.emit(self._inp.text().strip().lower())
-
-    def text(self) -> str:
-        return self._inp.text().strip().lower()
-
-    def clear(self):
-        self._inp.clear()
-
-    @property
-    def line_edit(self) -> QLineEdit:
-        return self._inp
 
 
 # ── AmountSpinBox ─────────────────────────────────────────
