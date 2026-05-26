@@ -17,12 +17,8 @@ from PyQt5.QtCore import Qt, pyqtSignal
 from PyQt5.QtGui  import QColor, QFont
 
 from ui.app_settings import _C, fs
-from ui.app_settings import get_font_size   # المصدر الوحيد — لا _base() محلية
-
-
-def _card_colors(color: str) -> tuple:
-    from ..core.colors import card_colors
-    return card_colors(color)
+from ui.app_settings import get_font_size
+from ..core.colors   import card_colors   # المصدر الوحيد — لا wrapper محلي
 
 
 # ══════════════════════════════════════════════════════════
@@ -42,7 +38,7 @@ class EmptyState(QFrame):
         self._build(icon, title, subtitle, action_text, style, color, min_height)
 
     def _build(self, icon, title, subtitle, action_text, style, color, min_h):
-        bg, border = _card_colors(color)
+        bg, border = card_colors(color)
         border_css = {"dashed": "dashed", "solid": "solid", "plain": "none"}.get(style, "dashed")
 
         self.setStyleSheet(f"""

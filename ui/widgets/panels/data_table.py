@@ -7,8 +7,6 @@ DataTableWidget — جدول بيانات موحد يجمع:
   - EmptyState  (حالة فارغة)
   - StatusBar   (عداد الصفوف)
 
-يحل محل النمط المكرر في ملفات كثيرة.
-
 الاستخدام:
     tbl = DataTableWidget(
         columns=["ID", "الاسم", "التاريخ"],
@@ -31,16 +29,17 @@ DataTableWidget — جدول بيانات موحد يجمع:
 """
 
 from PyQt5.QtWidgets import QWidget, QVBoxLayout, QSizePolicy
-from PyQt5.QtCore    import Qt, pyqtSignal
+from PyQt5.QtCore    import pyqtSignal
 
 from ui.app_settings import _C
 from ..tables.builders import make_list_table, ROW_HEIGHT_LARGE
 from ..tables.items    import auto_fit_columns
 from ..components.headers   import ListHeader, StatusBar
 from ..panels.state    import EmptyState
+from ..mixins.select   import SelectionMixin
 
 
-class DataTableWidget(QWidget):
+class DataTableWidget(QWidget, SelectionMixin):
     """
     جدول بيانات موحد يحتوي على هيدر + جدول + حالة فارغة + عداد.
 
@@ -106,7 +105,9 @@ class DataTableWidget(QWidget):
             col_widths=col_widths,
         )
         self.table.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Expanding)
-        self.table.itemSelectionChanged.connect(self._on_select)
+        self.table.itemSelectionChanged.connect(
+            lambda: self._emit_selected(self.table, self.row_selected)
+        )
         root.addWidget(self.table, stretch=1)
 
         # Empty state
@@ -166,34 +167,16 @@ class DataTableWidget(QWidget):
             max_width=300,
         )
 
-    # ── Selection ─────────────────────────────────────────
-
-    def _on_select(self):
-        row = self.table.currentRow()
-        if row < 0:
-            return
-        item = self.table.item(row, 0)
-        if item:
-            data = item.data(Qt.UserRole)
-            if data is not None:
-                self.row_selected.emit(int(data))
+    # ── Selection API — من SelectionMixin ────────────────
+    # selected_id()       → self._selected_id(self.table)
+    # select_row_by_id()  → self.select_row_by_id(id, self.table)
+    # كلاهما موروثان وجاهزان
 
     def selected_id(self) -> "int | None":
-        row = self.table.currentRow()
-        if row < 0:
-            return None
-        item = self.table.item(row, 0)
-        if item:
-            data = item.data(Qt.UserRole)
-            return int(data) if data is not None else None
-        return None
+        return self._selected_id(self.table)
 
     def select_row_by_id(self, item_id: int):
-        for r in range(self.table.rowCount()):
-            item = self.table.item(r, 0)
-            if item and item.data(Qt.UserRole) == item_id:
-                self.table.selectRow(r)
-                return
+        super().select_row_by_id(item_id, self.table)
 
     # ── Header API ────────────────────────────────────────
 

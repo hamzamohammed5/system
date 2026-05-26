@@ -23,21 +23,11 @@ from PyQt5.QtCore import Qt, pyqtSignal
 
 from ui.app_settings import _C, fs, get_font_size
 from ..components.button import make_btn
-from ..theme.styles      import spinbox_style  # المصدر الوحيد — لا تكرار
+from ..theme.styles      import spinbox_style       # المصدر الوحيد — لا تكرار
+from ..core.colors       import status_colors       # المصدر الوحيد — لا _STATUS_COLORS محلية
 
 # ModeLabel مصدرها الوحيد components/label — re-export للتوافق
 from ..components.label import ModeLabel  # noqa: F401
-
-_STATUS_COLORS = {
-    "success": {"bg": "#ecfdf5", "fg": "#065f46", "border": "#6ee7b7"},
-    "warning": {"bg": "#fffbeb", "fg": "#92400e", "border": "#fcd34d"},
-    "danger":  {"bg": "#fef2f2", "fg": "#991b1b", "border": "#fca5a5"},
-    "info":    {"bg": "#eff6ff", "fg": "#1e40af", "border": "#93c5fd"},
-}
-
-
-def _base() -> int:
-    return get_font_size()
 
 
 # ══════════════════════════════════════════════════════════
@@ -46,7 +36,7 @@ def _base() -> int:
 
 def form_label(text: str, color: str = None) -> QLabel:
     lbl = QLabel(text)
-    base = _base()
+    base = get_font_size()
     lbl.setStyleSheet(
         f"color:{color or _C['text_sec']}; font-size:{fs(base,0)}pt; font-weight:600;"
         "background:transparent; border:none;"
@@ -56,7 +46,7 @@ def form_label(text: str, color: str = None) -> QLabel:
 
 
 def required_label(text: str) -> QLabel:
-    base = _base()
+    base = get_font_size()
     lbl = QLabel(f"<span style='color:#c62828;'>*</span> {text}")
     lbl.setStyleSheet(
         f"font-size:{fs(base,0)}pt; font-weight:600;"
@@ -69,7 +59,7 @@ def required_label(text: str) -> QLabel:
 
 def hint_label(text: str, color: str = None) -> QLabel:
     lbl = QLabel(text)
-    base = _base()
+    base = get_font_size()
     lbl.setStyleSheet(
         f"color:{color or _C['text_muted']}; font-size:{fs(base,-1)}pt;"
         "background:transparent; border:none;"
@@ -81,7 +71,7 @@ def hint_label(text: str, color: str = None) -> QLabel:
 def section_title(text: str, color: str = None, icon: str = "") -> QLabel:
     display = f"{icon}  {text}" if icon else text
     lbl = QLabel(display)
-    base = _base()
+    base = get_font_size()
     lbl.setStyleSheet(
         f"font-weight:700; font-size:{fs(base,0)}pt; color:{color or _C['accent']};"
         "background:transparent; border:none;"
@@ -150,17 +140,12 @@ def make_form_layout(spacing: int = 10,
 
 
 def make_preview_label(text: str = "─", status: str = "info") -> QLabel:
-    _styles = {
-        "info":    f"background:#f8f9ff; border:1px solid {_C.get('border_med','#c5cae9')}; color:#333;",
-        "success": "background:#f0faf0; border:1px solid #b2dfb2; color:#1a6e1a;",
-        "warning": "background:#fffde7; border:1px solid #ffe082; color:#e65100;",
-        "danger":  "background:#fdecea; border:1px solid #ef9a9a; color:#c62828;",
-    }
+    s = status_colors(status)
     lbl = QLabel(text)
-    base = _base()
+    base = get_font_size()
     lbl.setStyleSheet(
-        f"{_styles.get(status, _styles['info'])} border-radius:6px; padding:8px 12px;"
-        f"font-size:{fs(base,-1)}pt;"
+        f"background:{s['bg']}; border:1px solid {s['border']}; color:{s['fg']};"
+        f"border-radius:6px; padding:8px 12px; font-size:{fs(base,-1)}pt;"
     )
     lbl.setWordWrap(True)
     return lbl
@@ -200,7 +185,7 @@ def labeled_widget(widget: QWidget, unit: str,
     lbl = QLabel(unit)
     lbl.setStyleSheet(
         f"color:{unit_color or _C['text_muted']}; background:transparent; border:none;"
-        f"font-size:{fs(_base(),-1)}pt;"
+        f"font-size:{fs(get_font_size(),-1)}pt;"
     )
     lay.addWidget(lbl)
     lay.addStretch()
@@ -220,7 +205,7 @@ class ResultBadge(QLabel):
         self._apply()
 
     def _apply(self):
-        base = _base()
+        base = get_font_size()
         self.setStyleSheet(
             f"color:{self._color}; font-weight:bold; font-size:{fs(base,0)}pt;"
             "background:#f0faf0; border:1px solid #b2dfb2;"
@@ -244,25 +229,25 @@ class ResultBadge(QLabel):
 class ModeBadge(QLabel):
     """Label لعرض الوضع الحالي مع ستايل ملون."""
 
-    _COLORS = {
-        "blue":   ("#e3f2fd", "#1565c0", "#90caf9"),
-        "orange": (_STATUS_COLORS["warning"]["bg"], _STATUS_COLORS["warning"]["fg"], _STATUS_COLORS["warning"]["border"]),
-        "green":  (_STATUS_COLORS["success"]["bg"], _STATUS_COLORS["success"]["fg"], _STATUS_COLORS["success"]["border"]),
-        "red":    (_STATUS_COLORS["danger"]["bg"],  _STATUS_COLORS["danger"]["fg"],  _STATUS_COLORS["danger"]["border"]),
-        "purple": ("#f3e5f5", "#6a1b9a", "#ce93d8"),
-    }
-
     def __init__(self, text: str = "─", color: str = "blue", parent=None):
         super().__init__(text, parent)
         self._color_key = color
         self._apply_style(color)
 
     def _apply_style(self, color: str):
-        bg, fg, border = self._COLORS.get(color, self._COLORS["blue"])
-        base = _base()
+        # يستخدم status_colors من core/colors — المصدر الوحيد
+        _map = {
+            "blue":   "primary",
+            "orange": "warning",
+            "green":  "success",
+            "red":    "danger",
+            "purple": "purple",
+        }
+        s = status_colors(_map.get(color, "info"))
+        base = get_font_size()
         self.setStyleSheet(
-            f"color:{fg}; font-weight:bold; font-size:{fs(base,-1)}pt;"
-            f"background:{bg}; border:1px solid {border};"
+            f"color:{s['fg']}; font-weight:bold; font-size:{fs(base,-1)}pt;"
+            f"background:{s['bg']}; border:1px solid {s['border']};"
             "border-radius:4px; padding:3px 8px;"
         )
 
@@ -293,7 +278,7 @@ class FormGroup(QGroupBox):
         self.form.setContentsMargins(12, 14, 12, 12)
 
     def _apply_style(self):
-        base = _base()
+        base = get_font_size()
         color = self._accent
         self.setStyleSheet(f"""
             QGroupBox {{
@@ -339,7 +324,7 @@ class InlinePreview(QWidget):
         lbl = QLabel(label)
         lbl.setStyleSheet(
             f"color:{_C['text_sec']}; font-weight:600;"
-            f"font-size:{fs(_base(),-1)}pt; background:transparent;"
+            f"font-size:{fs(get_font_size(),-1)}pt; background:transparent;"
         )
         self._lbl_value = ResultBadge("─", color=color)
         lay.addWidget(lbl)
