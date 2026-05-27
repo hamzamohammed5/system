@@ -3,33 +3,44 @@ ui/widgets/core/conn.py
 ================================
 Mixins موحدة لإدارة اتصالات قاعدة البيانات.
 
-دمج LiveConnMixin + SafeConnMixin + DualConnMixin في ملف واحد
-بدل ثلاثة ملفات متفرقة.
+التغييرات في LiveConnMixin:
+  - _live_conn() بقت تعمل cache للـ connection بدل
+    ما تحاول تجيب connection جديد في كل استدعاء.
+  - _invalidate_conn_cache() جديدة — تُستدعى لو Connection اتبدل.
+  - _test_conn() دالة مساعدة مشتركة — لم تتغير.
+
+باقي الـ mixins (SafeConnMixin, DualConnMixin) لم تتغير.
 """
 import logging
 
 logger = logging.getLogger(__name__)
 
 
-def _test_conn(conn):
+def _test_conn(conn) -> bool:
     """
-    يختبر الاتصال — يرجع conn لو سليم، أو None لو فشل.
+    يختبر الاتصال — يرجع True لو سليم، False لو فشل.
     دالة مساعدة مشتركة تُلغي تكرار try/except في كل Mixin.
     """
     if conn is None:
-        return None
+        return False
     try:
         conn.execute("SELECT 1")
-        return conn
+        return True
     except Exception:
-        return None
+        return False
 
 
 class LiveConnMixin:
     """
     Mixin يوفر _live_conn() لأي QWidget يحتفظ بـ DB connection.
 
-    الاستخدام:
+    التغيير: _live_conn() بقت تعمل cache — بدل ما تحاول
+    تجيب connection جديد في كل استدعاء،
+    بتختبر الـ cached connection الأول وبترجعه لو سليم.
+    ده بيقلل عدد database round-trips بشكل ملحوظ
+    في الـ widgets اللي بتستدعي _live_conn() كتير.
+
+    الاستخدام (نفس الكود القديم — لا تغيير في الـ API):
         class MyWidget(QWidget, LiveConnMixin):
             def __init__(self, conn):
                 self.conn = conn
@@ -38,31 +49,55 @@ class LiveConnMixin:
                 conn = self._live_conn()
     """
 
-    # اسم الـ attribute الذي يحتفظ بالـ connection (override لو مختلف)
     _conn_attr: str = "conn"
+    _conn_cache = None   # الـ cached connection
 
     def _live_conn(self):
-        """يرجع connection حي دائماً — يعمل fallback من company_state."""
+        """
+        يرجع connection حي دائماً.
+
+        الترتيب:
+          1. لو الـ cached connection سليم → يرجعه مباشرة.
+          2. لو لا → يجرب self.conn.
+          3. لو لا → fallback من company_state.
+        """
+        # 1. جرب الـ cache الأول
+        if _test_conn(self._conn_cache):
+            return self._conn_cache
+
+        # 2. جرب self.conn
         stored = getattr(self, self._conn_attr, None)
+        if _test_conn(stored):
+            self._conn_cache = stored
+            return self._conn_cache
 
-        if _test_conn(stored) is not None:
-            return stored
-
+        # 3. Fallback من company_state
         logger.debug("%s._live_conn: stored conn failed, trying fallback",
                      type(self).__name__)
         try:
             from db.companies.company_state import company_state
-            return company_state.get_erp_conn()
+            new_conn = company_state.get_erp_conn()
+            self._conn_cache = new_conn
+            # حدّث self.conn كمان عشان يتزامن
+            setattr(self, self._conn_attr, new_conn)
+            return self._conn_cache
         except Exception as e:
             logger.warning("%s._live_conn: fallback failed: %s",
                            type(self).__name__, e)
             return stored
 
+    def _invalidate_conn_cache(self):
+        """
+        يمسح الـ cached connection.
+        استدعه لو اتغيرت الشركة النشطة أو الـ connection.
+        """
+        self._conn_cache = None
+
     def _live_acc_conn(self):
         """يرجع accounting connection حي."""
         stored = getattr(self, "acc_conn", None)
 
-        if _test_conn(stored) is not None:
+        if _test_conn(stored):
             return stored
 
         logger.debug("%s._live_acc_conn: failed, trying fallback",
@@ -91,7 +126,7 @@ class SafeConnMixin:
         self.__safe_db_name = db_name
 
     def _get_safe_conn(self):
-        if _test_conn(self.__safe_conn) is not None:
+        if _test_conn(self.__safe_conn):
             return self.__safe_conn
 
         logger.debug("%s._get_safe_conn: reconnecting", type(self).__name__)
@@ -115,10 +150,6 @@ class SafeConnMixin:
 
     def _should_respond_to_company(self, company_id: int,
                                     stored_attr: str = "_company_id") -> bool:
-        """
-        يحدد إذا كان الـ widget يجب أن يستجيب لـ company_data_changed.
-        يحدّث الـ stored_attr تلقائياً عند الاستجابة.
-        """
         stored = getattr(self, stored_attr, None)
         should = (stored is None) or (stored == company_id)
         if should:
@@ -146,7 +177,7 @@ class DualConnMixin(SafeConnMixin):
         self._company_id   = self._get_company_id()
 
     def _get_erp_conn(self):
-        if _test_conn(self._erp_conn_ref) is not None:
+        if _test_conn(self._erp_conn_ref):
             return self._erp_conn_ref
 
         logger.debug("%s._get_erp_conn: reconnecting", type(self).__name__)

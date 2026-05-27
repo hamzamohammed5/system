@@ -70,6 +70,16 @@ _C = {
     # Tab indicator
     "tab_active":    "#3D5A80",
     "tab_indicator": "#3D5A80",
+    
+    # Purple — للـ machine_op rows
+    "purple":         "#6a1b9a",
+    "purple_bg":      "#f3e5f5",
+    "purple_border":  "#ce93d8",
+ 
+    # Orange — للـ filters والـ warnings الثانوية
+    "orange":         "#e65100",
+    "orange_bg":      "#fff3e0",
+    "orange_border":  "#ffcc80",
 }
 
 

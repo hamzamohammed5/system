@@ -3,7 +3,14 @@ ui/widgets/core/colors.py
 ==================================
 لوحة الألوان الموحدة للتطبيق.
 
-المصدر الوحيد لألوان البطاقات وحالات الـ status والـ waste.
+التغييرات:
+  - status_colors() أصبحت دالة تقرأ من _C مباشرة
+    بدل dict ثابت بـ hardcoded hex.
+    هذا يضمن التزامن الكامل — لو غيّرت لون في _C
+    يتغير تلقائياً في كل مكان يستخدم status_colors().
+  - CARD_PALETTE لم يتغير — هو مصدر ألوان الكروت المستقل.
+  - purple/orange محفوظان مؤقتاً كـ hardcoded لحين
+    إضافتهم لـ _C في app_settings.
 """
 
 # ── لوحة ألوان البطاقات (لون → (خلفية، حدود)) ──────────────────────────
@@ -53,7 +60,6 @@ CARD_PALETTE: dict[str, tuple[str, str]] = {
     "#5d4037": ("#efebe9", "#bcaaa4"),
 }
 
-# Fallback لأي لون غير موجود في الـ palette
 _FALLBACK: tuple[str, str] = ("#f5f5f5", "#e0e0e0")
 
 
@@ -62,22 +68,62 @@ def card_colors(color: str) -> tuple[str, str]:
     return CARD_PALETTE.get(color, _FALLBACK)
 
 
-# ── ألوان حالات الـ status ────────────────────────────────────────────────
-STATUS_COLORS: dict[str, dict[str, str]] = {
-    "success": {"fg": "#065f46", "bg": "#ecfdf5", "border": "#6ee7b7"},
-    "warning": {"fg": "#92400e", "bg": "#fffbeb", "border": "#fcd34d"},
-    "danger":  {"fg": "#991b1b", "bg": "#fef2f2", "border": "#fca5a5"},
-    "info":    {"fg": "#1e40af", "bg": "#eff6ff", "border": "#93c5fd"},
-    "neutral": {"fg": "#374151", "bg": "#f9fafb", "border": "#d1d5db"},
-    "primary": {"fg": "#1565c0", "bg": "#e8f0fe", "border": "#90caf9"},
-    "purple":  {"fg": "#6a1b9a", "bg": "#f3e5f5", "border": "#ce93d8"},
-    "orange":  {"fg": "#e65100", "bg": "#fff3e0", "border": "#ffcc80"},
-}
-
+# ── status_colors — مبنية من _C (بدل dict ثابت) ─────────────────────────────
 
 def status_colors(level: str) -> dict[str, str]:
-    """يرجع dict ألوان الـ status (fg, bg, border)."""
-    return STATUS_COLORS.get(level, STATUS_COLORS["neutral"])
+    """
+    يرجع dict ألوان الـ status (fg, bg, border) من _C.
+
+    التغيير: بدل STATUS_COLORS dict ثابت بـ hardcoded hex،
+    الدالة دي بتبني الـ map من _C في كل استدعاء.
+
+    الفايدة: لو غيّرت _C["danger"] في app_settings،
+    كل widget بيستخدم status_colors("danger") يتحدث تلقائياً
+    بدون ما تحتاج تعدل ملف تاني.
+
+    ملاحظة: purple/orange مش موجودين في _C حالياً.
+    عشان تنظفهم 100%، أضف للـ _C في app_settings:
+        "purple": "#6a1b9a",  "purple_bg": "#f3e5f5",  "purple_border": "#ce93d8"
+        "orange": "#e65100",  "orange_bg": "#fff3e0",  "orange_border": "#ffcc80"
+    """
+    from ui.app_settings import _C
+
+    _map: dict[str, dict[str, str]] = {
+        "success": {
+            "fg":     _C["success"],
+            "bg":     _C["success_bg"],
+            "border": _C["success_border"],
+        },
+        "warning": {
+            "fg":     _C["warning"],
+            "bg":     _C["warning_bg"],
+            "border": _C["warning_border"],
+        },
+        "danger": {
+            "fg":     _C["danger"],
+            "bg":     _C["danger_bg"],
+            "border": _C["danger_border"],
+        },
+        "info": {
+            "fg":     _C["info"],
+            "bg":     _C["info_bg"],
+            "border": _C["info_border"],
+        },
+        "neutral": {
+            "fg":     _C["text_sec"],
+            "bg":     _C["bg_surface_2"],
+            "border": _C["border"],
+        },
+        "primary": {
+            "fg":     _C["accent_text"],
+            "bg":     _C["accent_light"],
+            "border": _C["accent_mid"],
+        },
+        # TODO: أضف لـ _C عشان تنظفهم
+        "purple": {"fg": "#6a1b9a", "bg": "#f3e5f5", "border": "#ce93d8"},
+        "orange": {"fg": "#e65100", "bg": "#fff3e0", "border": "#ffcc80"},
+    }
+    return _map.get(level, _map["neutral"])
 
 
 # ── ألوان نسبة الهادر (waste) ─────────────────────────────────────────────
@@ -96,12 +142,9 @@ WASTE_TEXT_COLOR  = "#e65100"
 
 def waste_level(pct: float) -> str:
     """يرجع مستوى الهادر: 'high' | 'medium' | 'low' | 'zero'."""
-    if pct >= 20:
-        return "high"
-    if pct >= 10:
-        return "medium"
-    if pct > 0:
-        return "low"
+    if pct >= 20: return "high"
+    if pct >= 10: return "medium"
+    if pct > 0:   return "low"
     return "zero"
 
 

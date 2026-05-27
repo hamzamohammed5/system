@@ -3,9 +3,10 @@ ui/widgets/forms/inputs.py
 ===========================
 Input widgets الموحدة للتطبيق.
 
-_input_style / _spinbox_style مستوردتان من theme/styles — لا تكرار.
-
-ملاحظة: للبحث استخدم SearchBar من components/headers مباشرة.
+التغييرات:
+  - NotesLineEdit: بدل background:#fafafa و background:white الـ hardcoded،
+    الآن يستخدم _C['bg_surface_2'] و _C['bg_input'].
+  - باقي الـ widgets لم تتغير.
 """
 from PyQt5.QtWidgets import (
     QWidget, QHBoxLayout, QLineEdit, QLabel,
@@ -165,7 +166,13 @@ class RequiredLineEdit(QLineEdit):
 # ── NotesLineEdit ─────────────────────────────────────────
 
 class NotesLineEdit(QLineEdit):
-    """حقل ملاحظات بستايل مخصص."""
+    """
+    حقل ملاحظات بستايل مخصص.
+
+    التغيير: بدل background:#fafafa و background:white الـ hardcoded،
+    الآن يستخدم _C['bg_surface_2'] و _C['bg_input'].
+    لو غيّرت الثيم، الحقل ده بيتغير معاه تلقائياً.
+    """
 
     def __init__(self, placeholder: str = "ملاحظات اختيارية...",
                  height: int = 30, parent=None):
@@ -175,13 +182,16 @@ class NotesLineEdit(QLineEdit):
         base = get_font_size()
         self.setStyleSheet(f"""
             QLineEdit {{
-                background:#fafafa; border:1px solid {_C['border']};
+                background:{_C['bg_surface_2']};
+                border:1px solid {_C['border']};
                 border-radius:6px; padding:0 8px;
                 font-size:{fs(base,-1)}pt; color:{_C['text_sec']};
                 font-style:italic; min-height:{height}px;
             }}
             QLineEdit:focus {{
-                border-color:{_C['border_med']}; background:white;
-                font-style:normal; color:{_C['text_primary']};
+                border-color:{_C['border_med']};
+                background:{_C['bg_input']};
+                font-style:normal;
+                color:{_C['text_primary']};
             }}
         """)
