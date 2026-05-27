@@ -120,8 +120,10 @@ def status_colors(level: str) -> dict[str, str]:
             "border": _C["accent_mid"],
         },
         # TODO: أضف لـ _C عشان تنظفهم
-        "purple": {"fg": "#6a1b9a", "bg": "#f3e5f5", "border": "#ce93d8"},
-        "orange": {"fg": "#e65100", "bg": "#fff3e0", "border": "#ffcc80"},
+        "purple": {"fg": _C["purple"], "bg": _C["purple_bg"], "border": _C["purple_border"]},
+        "orange": {"fg": _C["orange"], "bg": _C["orange_bg"], "border": _C["orange_border"]},
+        
+        
     }
     return _map.get(level, _map["neutral"])
 

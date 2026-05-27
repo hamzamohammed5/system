@@ -1,6 +1,9 @@
 """
 ui/main_window_helper/_nav_button.py
 ===================================================
+
+التغيير: الثوابت (SIDEBAR_EXPANDED_WIDTH، إلخ) نُقلت لـ app_settings.py
+وأصبحت مستوردة من هناك — لا تعريف مكرر.
 """
 
 from PyQt5.QtWidgets import (
@@ -9,13 +12,13 @@ from PyQt5.QtWidgets import (
 )
 from PyQt5.QtCore import Qt
 
-from ui.app_settings  import get_font_size, _C
-
-
-SIDEBAR_EXPANDED_WIDTH  = 224
-SIDEBAR_COLLAPSED_WIDTH = 56
-CONTENT_MIN_WIDTH       = 820
-WINDOW_DEFAULT_W        = SIDEBAR_EXPANDED_WIDTH + CONTENT_MIN_WIDTH
+from ui.app_settings import (
+    get_font_size, _C,
+    SIDEBAR_EXPANDED_WIDTH,   # noqa: F401 — مُعاد تصديرها للـ imports القديمة
+    SIDEBAR_COLLAPSED_WIDTH,  # noqa: F401
+    CONTENT_MIN_WIDTH,        # noqa: F401
+    WINDOW_DEFAULT_W,         # noqa: F401
+)
 
 
 # ══════════════════════════════════════════════════════════
@@ -125,4 +128,3 @@ class _NavButton(QPushButton):
         self.setFixedHeight(max(38, h))
         if not self._collapsed:
             self.setFixedWidth(SIDEBAR_EXPANDED_WIDTH - 16)
-

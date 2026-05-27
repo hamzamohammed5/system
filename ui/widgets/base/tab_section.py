@@ -2,11 +2,35 @@
 ui/widgets/base/tab_section.py
 ==========================================
 TabSectionBase — قاعدة مشتركة للأقسام التي تحتوي على QTabWidget.
+
+التغيير: closeEvent لم يعد يستدعي conn.close() بشكل أعمى.
+get_connection() ترجع shared connection من company_state،
+إغلاقها هنا يكسر كل الـ widgets الأخرى.
+الإغلاق الصحيح يحدث فقط في company_state عند تغيير الشركة.
 """
 from PyQt5.QtWidgets import QWidget, QVBoxLayout, QTabWidget
 
 from db.shared.connection      import get_connection
 from ..theme.styles            import tab_style
+
+
+def _is_owned_connection(conn) -> bool:
+    """
+    يتحقق إذا كان الـ connection ملك هذا الـ widget
+    (يعني مش shared من company_state).
+
+    الاتصالات المشتركة لا يجب إغلاقها من الـ widgets.
+    """
+    if conn is None:
+        return False
+    try:
+        from db.companies.company_state import company_state
+        # لو نفس الـ connection اللي company_state بيديه → shared → لا تقفله
+        shared = company_state._get_conn("erp")
+        return conn is not shared
+    except Exception:
+        # لو مش قادر يتحقق → الأأمن هو عدم الإغلاق
+        return False
 
 
 class TabSectionBase(QWidget):
@@ -41,7 +65,14 @@ class TabSectionBase(QWidget):
         raise NotImplementedError
 
     def closeEvent(self, event):
-        if self.conn:
+        """
+        لا يُغلق الـ connection إلا لو كان مملوكاً فعلاً لهذا الـ widget
+        (أي مش shared من company_state).
+
+        في الغالب الـ connection مشترك، لذا لا شيء يُغلق هنا —
+        الإغلاق يحدث في company_state عند تغيير الشركة.
+        """
+        if _is_owned_connection(self.conn):
             try:
                 self.conn.close()
             except Exception:

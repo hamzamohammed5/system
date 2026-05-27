@@ -7,6 +7,10 @@ UnitCombo — QComboBox موحد لاختيار وحدة القياس.
   - cache بسيط بدل _units_cache dict خارجي
   - load_units / save_units دوال نظيفة
   - UnitCombo يستخدم blocked_signals() بدل blockSignals() المكررة
+  - إصلاح _units_cache key:
+      id(conn) مش stable — ممكن يتكرر لو الـ object اتحذف وأُنشئ تاني.
+      الحل: نستخدم database_path كـ key لأنه ثابت ومميز لكل شركة.
+      لو مش قدرنا نجيب الـ path → fallback لـ id(conn) مع تحذير.
 """
 
 import json
@@ -27,22 +31,39 @@ _DEFAULT_UNITS = [
     ("inch", "inch — بوصة"),
 ]
 
-# cache: conn_id → list[tuple[str, str]]
+# cache: db_path (أو id(conn) كـ fallback) → list[tuple[str, str]]
 _units_cache: dict = {}
+
+
+def _cache_key(conn) -> str:
+    """
+    يبني cache key ثابت من database path بدل id(conn).
+
+    id(conn) مش reliable — Python ممكن يعيد استخدام نفس الـ id
+    لو الـ object القديم اتحذف وأُنشئ object جديد في نفس العنوان.
+
+    database_path ثابت ومميز لكل شركة → cache key أكثر أماناً.
+    """
+    try:
+        return conn.execute("PRAGMA database_list").fetchone()[2]
+    except Exception:
+        # fallback — أقل أماناً لكن أفضل من لا شيء
+        logger.debug("_cache_key: couldn't get db path, using id(conn)")
+        return str(id(conn))
 
 
 def invalidate_units_cache(conn=None):
     if conn is None:
         _units_cache.clear()
     else:
-        _units_cache.pop(id(conn), None)
+        _units_cache.pop(_cache_key(conn), None)
 
 
 # ── دوال الـ settings ─────────────────────────────────────
 
 def load_units(conn, force: bool = False) -> list:
     """يجلب قائمة الوحدات من settings مع cache."""
-    key = id(conn)
+    key = _cache_key(conn)
     if not force and key in _units_cache:
         return _units_cache[key]
 
