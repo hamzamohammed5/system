@@ -38,7 +38,7 @@ class BadgeLabel(QLabel):
     def __init__(self, parent=None):
         super().__init__(parent)
         self.setAlignment(Qt.AlignCenter)
-        self._apply("#555", "#f5f5f5", "#e0e0e0")
+        self._apply(_C["text_sec"], _C["bg_surface_2"], _C["border"])
 
     def _apply(self, fg: str, bg: str, border: str):
         base = get_font_size()
@@ -48,14 +48,18 @@ class BadgeLabel(QLabel):
             f"color:{fg}; background:{bg}; border:1.5px solid {border};"
         )
 
-    def set_badge(self, text: str, text_color: str = "#555",
-                  bg: str = "#f5f5f5", border: str = "#e0e0e0"):
+    def set_badge(self, text: str, text_color: str = None,
+                  bg: str = None, border: str = None):
         self.setText(text)
-        self._apply(text_color, bg, border)
+        self._apply(
+            text_color or _C["text_sec"],
+            bg         or _C["bg_surface_2"],
+            border     or _C["border"],
+        )
 
     def clear_badge(self):
         self.setText("")
-        self._apply("#555", "#f5f5f5", "#e0e0e0")
+        self._apply(_C["text_sec"], _C["bg_surface_2"], _C["border"])
 
 
 # ══════════════════════════════════════════════════════════
@@ -294,14 +298,6 @@ class _StatCard(QFrame):
 class StatRow(QWidget):
     """
     صف أفقي من البطاقات الإحصائية مع فواصل عمودية اختيارية.
-
-    الاستخدام:
-        row = StatRow([
-            StatItem("المبيعات", color="#1565c0", value="150"),
-            StatItem("الأرباح",  color="#2e7d32", value="40,000 ج"),
-        ])
-        layout.addWidget(row)
-        row.set_value(0, "200")
     """
 
     def __init__(self, items: list[StatItem],

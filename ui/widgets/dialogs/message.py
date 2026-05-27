@@ -12,10 +12,10 @@ from ..components.button import make_btn
 from .shell import DialogShell
 
 _ICONS = {
-    "question": ("❓", "#1565c0"),
-    "info":     ("ℹ️",  "#1565c0"),
-    "warning":  ("⚠️",  "#e65100"),
-    "critical": ("❌",  "#c62828"),
+    "question": ("❓", _C["accent"]),
+    "info":     ("ℹ️",  _C["accent"]),
+    "warning":  ("⚠️",  _C["warning"]),
+    "critical": ("❌",  _C["danger"]),
 }
 
 
@@ -24,7 +24,7 @@ class MessageDialog(DialogShell):
 
     def __init__(self, parent, title: str, text: str,
                  kind: str = "info", yes_no: bool = False):
-        icon, accent = _ICONS.get(kind, ("ℹ️", "#1565c0"))
+        icon, accent = _ICONS.get(kind, ("ℹ️", _C["accent"]))
         super().__init__(parent, title=title, icon=icon,
                          accent=accent, min_width=380)
         self._result = False
@@ -36,7 +36,7 @@ class MessageDialog(DialogShell):
         lbl.setWordWrap(True)
         lbl.setAlignment(Qt.AlignRight | Qt.AlignVCenter)
         lbl.setStyleSheet(
-            f"font-size:{fs(base,0)}pt; color:{_C.get('text_primary','#1c1b18')};"
+            f"font-size:{fs(base,0)}pt; color:{_C.get('text_primary')};"
             "background:transparent; border:none;"
         )
         self.body_layout.addWidget(lbl)

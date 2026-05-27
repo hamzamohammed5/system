@@ -23,10 +23,9 @@ from PyQt5.QtCore import Qt, pyqtSignal
 
 from ui.app_settings import _C, fs, get_font_size
 from ..components.button import make_btn
-from ..theme.styles      import spinbox_style       # المصدر الوحيد — لا تكرار
-from ..core.colors       import status_colors       # المصدر الوحيد — لا _STATUS_COLORS محلية
+from ..theme.styles      import spinbox_style
+from ..core.colors       import status_colors
 
-# ModeLabel مصدرها الوحيد components/label — re-export للتوافق
 from ..components.label import ModeLabel  # noqa: F401
 
 
@@ -47,7 +46,8 @@ def form_label(text: str, color: str = None) -> QLabel:
 
 def required_label(text: str) -> QLabel:
     base = get_font_size()
-    lbl = QLabel(f"<span style='color:#c62828;'>*</span> {text}")
+    # يستخدم _C['danger'] بدل hardcoded "#c62828"
+    lbl = QLabel(f"<span style='color:{_C[\"danger\"]};'>*</span> {text}")
     lbl.setStyleSheet(
         f"font-size:{fs(base,0)}pt; font-weight:600;"
         f"color:{_C['text_sec']}; background:transparent; border:none;"
@@ -152,7 +152,7 @@ def make_preview_label(text: str = "─", status: str = "info") -> QLabel:
 
 
 # ══════════════════════════════════════════════════════════
-# Spin fields — يستخدم spinbox_style من theme/styles
+# Spin fields
 # ══════════════════════════════════════════════════════════
 
 def spin_field(max_: float = 999999, dec: int = 2,
@@ -193,35 +193,29 @@ def labeled_widget(widget: QWidget, unit: str,
 
 
 # ══════════════════════════════════════════════════════════
-# ResultBadge — يستخدم status_colors بدل hardcoded
+# ResultBadge
 # ══════════════════════════════════════════════════════════
 
 class ResultBadge(QLabel):
-    """
-    Label لعرض نتيجة / تكلفة محسوبة.
-    يستخدم status_colors من core/colors — لا hardcoded.
-    """
+    """Label لعرض نتيجة / تكلفة محسوبة."""
 
     def __init__(self, text: str = "─", color: str = None,
                  status: str = "success", parent=None):
         super().__init__(text, parent)
-        # color يأخذ الأولوية لو مُعطى — وإلا نستخدم status_colors
         self._custom_color = color
         self._status       = status
         self._apply()
 
     def _apply(self):
         base = get_font_size()
+        s = status_colors(self._status)
         if self._custom_color:
-            # استخدام اللون المخصص مع خلفية خضراء فاتحة افتراضية
-            s = status_colors(self._status)
             self.setStyleSheet(
                 f"color:{self._custom_color}; font-weight:bold; font-size:{fs(base,0)}pt;"
                 f"background:{s['bg']}; border:1px solid {s['border']};"
                 "border-radius:4px; padding:4px 8px;"
             )
         else:
-            s = status_colors(self._status)
             self.setStyleSheet(
                 f"color:{s['fg']}; font-weight:bold; font-size:{fs(base,0)}pt;"
                 f"background:{s['bg']}; border:1px solid {s['border']};"
@@ -235,7 +229,6 @@ class ResultBadge(QLabel):
             self._apply()
 
     def set_status(self, status: str):
-        """يغير الـ status (success/warning/danger/info) ويعيد رسم الستايل."""
         if status != self._status:
             self._status = status
             self._apply()
@@ -386,8 +379,10 @@ class CrudButtonsBar(QWidget):
 
         if show_mode:
             self.lbl_mode = QLabel("─── إضافة جديدة ───")
+            base = get_font_size()
             self.lbl_mode.setStyleSheet(
-                f"font-weight:bold; color:{_C['accent']}; background:transparent;"
+                f"font-weight:bold; font-size:{fs(base,0)}pt;"
+                f"color:{_C['accent']}; background:transparent;"
             )
             lay.addWidget(self.lbl_mode)
 

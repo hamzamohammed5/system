@@ -95,7 +95,6 @@ class ModeLabel(QLabel):
         suffix = f": {name}" if name else ""
         self.setText(f"─── {prefix}تعديل{suffix} ───")
         base = get_font_size()
-        # ← استخدام _C['warning'] بدل hardcoded "#e65100"
         self.setStyleSheet(
             f"font-weight:bold; font-size:{fs(base, 0)}pt;"
             f"color:{_C['warning']}; background:transparent; border:none;"
@@ -127,7 +126,6 @@ def amount_color(value: float,
                  positive_color: str = None,
                  negative_color: str = None,
                  zero_color: str = None) -> str:
-    # ← استخدام _C بدل hardcoded hex
     pos  = positive_color or _C.get("success", "#2E7D52")
     neg  = negative_color or _C.get("danger",  "#C0392B")
     zero = zero_color     or _C["text_muted"]
@@ -139,7 +137,6 @@ def amount_color(value: float,
 
 
 def dr_cr_color(side: str) -> str:
-    # ← استخدام status_colors بدل hardcoded
     s = status_colors("primary" if side == "dr" else "danger")
     return s["fg"]
 
@@ -183,12 +180,10 @@ class AmountLabel(QLabel):
         self._set_color(color or (amount_color(value) if self._auto_color else _C["text_muted"]))
 
     def set_debit(self, value: float):
-        # ← استخدام status_colors بدل hardcoded "#1565c0"
         color = status_colors("primary")["fg"]
         self.set_amount(value, color) if value > 0 else self.reset()
 
     def set_credit(self, value: float):
-        # ← استخدام status_colors بدل hardcoded "#c62828"
         color = status_colors("danger")["fg"]
         self.set_amount(value, color) if value > 0 else self.reset()
 
@@ -217,9 +212,9 @@ class DebitCreditDisplay(QWidget):
         lay.setContentsMargins(0, 0, 0, 0)
         lay.setSpacing(12)
 
-        # ← استخدام status_colors بدل hardcoded
         dr_s = status_colors("primary")
         cr_s = status_colors("danger")
+        base = get_font_size()
 
         for attr, text, s in [
             ("_lbl_dr", "إجمالي DR:", dr_s),
@@ -232,7 +227,7 @@ class DebitCreditDisplay(QWidget):
             )
             lbl_v = QLabel("0.00")
             lbl_v.setStyleSheet(
-                f"font-size:14px; font-weight:bold; color:{s['fg']};"
+                f"font-size:{fs(base, +1)}pt; font-weight:bold; color:{s['fg']};"
                 f"background:{s['bg']}; border-radius:4px; padding:3px 10px;"
             )
             setattr(self, attr, lbl_v)
@@ -241,7 +236,7 @@ class DebitCreditDisplay(QWidget):
             if attr == "_lbl_dr":
                 sep = QLabel("│")
                 sep.setStyleSheet(
-                    f"color:{_C['border_med']}; font-size:18px;"
+                    f"color:{_C['border_med']}; font-size:{fs(base, +4)}pt;"
                     "background:transparent; border:none;"
                 )
                 lay.addWidget(sep)
@@ -278,16 +273,12 @@ class BalanceDisplay(QLabel):
         text += f": {abs_val:,.2f} {self._currency}"
         self.setText(text)
 
-        # ← استخدام status_colors بدل hardcoded "#1565c0" و "#c62828"
-        if color:
-            _color = color
-            s = status_colors("primary" if value >= 0 else "danger")
-        else:
-            s = status_colors("primary" if value >= 0 else "danger")
-            _color = s["fg"]
+        s = status_colors("primary" if value >= 0 else "danger")
+        _color = color or s["fg"]
+        base = get_font_size()
 
         self.setStyleSheet(
-            f"font-size:14px; font-weight:bold; color:{_color};"
+            f"font-size:{fs(base, +1)}pt; font-weight:bold; color:{_color};"
             f"background:{s['bg']}; border:1px solid {s['border']};"
             "border-radius:6px; padding:6px 16px;"
         )
@@ -301,9 +292,9 @@ class BalanceDisplay(QLabel):
         self._apply_neutral()
 
     def _apply_neutral(self):
-        # ← استخدام _C بدل hardcoded
+        base = get_font_size()
         self.setStyleSheet(
-            f"font-size:14px; font-weight:bold; color:{_C['text_muted']};"
+            f"font-size:{fs(base, +1)}pt; font-weight:bold; color:{_C['text_muted']};"
             f"background:{_C['bg_surface_2']}; border:1px solid {_C['border']};"
             "border-radius:6px; padding:6px 16px;"
         )
@@ -320,7 +311,6 @@ class ProgressBar(QWidget):
                  height: int = 8, show_pct: bool = True,
                  compact: bool = False, parent=None):
         super().__init__(parent)
-        # ← استخدام _C بدل hardcoded "#1565c0"
         self._color    = color or _C.get("accent")
         self._height   = height
         self._show_pct = show_pct
@@ -399,7 +389,6 @@ class ProgressBar(QWidget):
         self._update_color()
 
     def _update_color(self):
-        # ← استخدام _C بدل hardcoded
         s_success = status_colors("success")
         s_warning = status_colors("warning")
         s_danger  = status_colors("danger")
@@ -457,7 +446,6 @@ class MultiProgressBar(QWidget):
 
     def add_bar(self, label: str, value: float = 0,
                 color: str = None) -> ProgressBar:
-        # ← استخدام _C بدل hardcoded "#1565c0"
         bar = ProgressBar(label=label, color=color or _C.get("accent"))
         bar.set_value(value)
         self._lay.addWidget(bar)
