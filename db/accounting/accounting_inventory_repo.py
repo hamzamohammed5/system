@@ -8,6 +8,10 @@ db/accounting/accounting_inventory_repo.py
   - لو فشل الـ rollback نفسه → نسجّل CRITICAL log (بيانات غير متسقة)
     بدلاً من إخفاء الخطأ أو رفع exception غامض
   - entry_id=None guard يمنع rollback بدون قيد حقيقي
+
+مقترح 52: تسجيل عمليات الحذف في audit_log:
+  - لو نجح الـ rollback → يُسجّل في audit_log كـ 'delete' مع سبب الإلغاء
+  - لو فشل الـ rollback → يُسجّل CRITICAL في audit_log بكل التفاصيل
 """
 
 import logging
@@ -21,7 +25,8 @@ logger = logging.getLogger(__name__)
 def purchase_inventory(inv_conn, acc_conn,
                        inv_id: int, qty: float, unit_cost: float,
                        date: str, payment_account_id: int,
-                       notes: str = None) -> tuple:
+                       notes: str = None,
+                       changed_by: str = "system") -> tuple:
     """
     يسجل عملية شراء مخزن وقيدها المحاسبي في نفس الوقت.
 
@@ -34,6 +39,7 @@ def purchase_inventory(inv_conn, acc_conn,
         date               : تاريخ العملية (YYYY-MM-DD)
         payment_account_id : حساب الدفع (صندوق / بنك)
         notes              : ملاحظات اختيارية
+        changed_by         : المستخدم للـ audit log [مقترح 52]
 
     Returns:
         (entry_id, move_id)
@@ -131,6 +137,13 @@ def purchase_inventory(inv_conn, acc_conn,
         # ── محاولة rollback القيد المحاسبي ──────────────────
         rollback_ok = False
         try:
+            # [مقترح 52] snapshot قبل الحذف
+            _audit_rollback(
+                acc_conn, entry_id,
+                reason=str(inv_err),
+                changed_by=changed_by,
+            )
+
             acc_conn.execute(
                 "DELETE FROM journal_entries WHERE id=?", (entry_id,)
             )
@@ -138,6 +151,14 @@ def purchase_inventory(inv_conn, acc_conn,
             rollback_ok = True
         except Exception as rb_err:
             # الحالة الأسوأ: فشل الـ rollback → بيانات غير متسقة
+            # [مقترح 52] تسجيل CRITICAL في audit_log أيضاً
+            _audit_critical_inconsistency(
+                acc_conn, entry_id,
+                inv_err=inv_err, rb_err=rb_err,
+                inv_id=inv_id, qty=qty, unit_cost=unit_cost, date=date,
+                changed_by=changed_by,
+            )
+
             logger.critical(
                 "CRITICAL DATA INCONSISTENCY: "
                 "journal_entry id=%d orphaned after inventory move failure. "
@@ -160,3 +181,69 @@ def purchase_inventory(inv_conn, acc_conn,
             ) from inv_err
 
     return entry_id, move_id
+
+
+# ══════════════════════════════════════════════════════════
+# دوال مساعدة للـ Audit [مقترح 52]
+# ══════════════════════════════════════════════════════════
+
+def _audit_rollback(acc_conn, entry_id: int,
+                    reason: str, changed_by: str):
+    """
+    يُسجّل عملية الـ rollback في audit_log قبل حذف القيد.
+    الفشل لا يوقف الـ rollback نفسه.
+    """
+    try:
+        from db.accounting.accounting_audit_repo import (
+            snapshot_journal_entry, log_action
+        )
+        old_data = snapshot_journal_entry(acc_conn, entry_id) or {}
+        old_data["rollback_reason"] = reason
+
+        log_action(
+            acc_conn,
+            action="delete",
+            table_name="journal_entries",
+            record_id=entry_id,
+            old_data=old_data,
+            changed_by=changed_by,
+        )
+    except Exception as e:
+        logger.warning(
+            "[audit_log] فشل تسجيل rollback للقيد %d: %s", entry_id, e
+        )
+
+
+def _audit_critical_inconsistency(acc_conn, entry_id: int,
+                                   inv_err, rb_err,
+                                   inv_id, qty, unit_cost, date,
+                                   changed_by: str):
+    """
+    يُسجّل حالة التناقض الحرجة في audit_log.
+    يُحاوِل الكتابة حتى لو كانت الـ conn في حالة غير مستقرة.
+    """
+    try:
+        from db.accounting.accounting_audit_repo import log_action
+        log_action(
+            acc_conn,
+            action="delete",
+            table_name="journal_entries",
+            record_id=entry_id,
+            old_data={
+                "status":           "CRITICAL_INCONSISTENCY",
+                "entry_id":         entry_id,
+                "inventory_error":  str(inv_err),
+                "rollback_error":   str(rb_err),
+                "inv_id":           inv_id,
+                "qty":              qty,
+                "unit_cost":        unit_cost,
+                "date":             date,
+                "note": "القيد موجود في accounting.db لكن حركة المخزون فشلت ولم يُحذف",
+            },
+            changed_by=f"{changed_by}:CRITICAL_ROLLBACK_FAIL",
+        )
+    except Exception as e:
+        logger.error(
+            "[audit_log] فشل تسجيل CRITICAL inconsistency للقيد %d: %s",
+            entry_id, e
+        )

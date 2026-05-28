@@ -1,11 +1,13 @@
 """
 db/accounting/accounting_journal_repo.py
-==============================
+======================================
 عمليات CRUD لجداول journal_entries و journal_lines.
 
 إصلاح 29: إضافة fetch_entries_count() و fetch_all_entries_paginated()
 لمنع قطع البيانات بصمت عند limit=200.
 الـ UI يستخدم fetch_entries_count() لإظهار "يعرض X من أصل Y".
+
+مقترح 52: delete_entry تُسجّل snapshot في audit_log قبل الحذف.
 """
 
 from datetime import datetime
@@ -192,7 +194,32 @@ def add_entry_lines(conn, entry_id: int, lines: list):
     conn.commit()
 
 
-def delete_entry(conn, entry_id: int):
+def delete_entry(conn, entry_id: int, changed_by: str = "system"):
+    """
+    يحذف قيداً محاسبياً مع تسجيل snapshot كامل في audit_log قبل الحذف.
+
+    [مقترح 52] يأخذ snapshot للقيد وسطوره أولاً، ثم يُسجّل في audit_log،
+    ثم يُنفّذ الحذف. الفشل في تسجيل الـ audit لا يوقف الحذف.
+
+    Parameters:
+        conn       : connection على accounting.db
+        entry_id   : ID القيد المراد حذفه
+        changed_by : المستخدم أو الوحدة المنفذة (للـ audit)
+    """
+    # [مقترح 52] snapshot قبل الحذف
+    try:
+        from db.accounting.accounting_audit_repo import (
+            snapshot_journal_entry, log_delete
+        )
+        old_data = snapshot_journal_entry(conn, entry_id)
+        log_delete(conn, "journal_entries", entry_id,
+                   old_data=old_data, changed_by=changed_by)
+    except Exception as audit_err:
+        import logging
+        logging.getLogger(__name__).warning(
+            "[audit_log] فشل تسجيل حذف القيد %d: %s", entry_id, audit_err
+        )
+
     conn.execute("DELETE FROM journal_entries WHERE id=?", (entry_id,))
     conn.commit()
 
