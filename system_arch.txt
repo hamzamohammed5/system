@@ -1,5 +1,5 @@
 File Tree Snapshot
-Generated : 2026-05-28 08:29:52
+Generated : 2026-05-28 08:35:49
 Source    : D:\My Workspace\Hg\Alhabaar\accountant\system
 Extensions: .py
 ────────────────────────────────────────────────────────────
@@ -142,8 +142,6 @@ system/
 │   │   │   ├── shared_items_manager.py
 │   │   │   └── shared_items_mixin.py
 │   │   ├── costing/
-│   │   │   ├── costing/
-│   │   │   │   └── bulk_replace/
 │   │   │   ├── labor/
 │   │   │   │   ├── labor_op_form.py
 │   │   │   │   ├── labor_op_table.py
@@ -191,7 +189,6 @@ system/
 │   │   │   ├── machine_tab.py
 │   │   │   ├── product_tab.py
 │   │   │   └── raw_tab.py
-│   │   ├── costing_section/
 │   │   ├── design/
 │   │   │   ├── designs/
 │   │   │   │   ├── design_detail_panel/

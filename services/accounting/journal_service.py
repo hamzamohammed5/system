@@ -3,10 +3,12 @@ services/accounting/journal_service.py
 ========================================
 Business Logic للقيود المحاسبية.
 
-الاستخدام:
-    from services.accounting.journal_service import JournalService
-    svc = JournalService(conn)
-    entry_id = svc.post_entry(entry_data, lines)
+إصلاح 35: توحيد أسماء الاستيراد مع الدوال الفعلية في accounting_journal_repo:
+  - insert_journal_entry  → insert_entry
+  - insert_journal_line   → add_entry_lines  (تقبل list مش سطر واحد)
+  - update_journal_entry  → دالة جديدة update_entry في الـ repo
+  - delete_journal_lines  → دالة جديدة delete_entry_lines في الـ repo
+  - delete_journal_entry  → delete_entry
 """
 
 from dataclasses import dataclass, field
@@ -25,7 +27,6 @@ class JournalLine:
     note       : str   = ""
 
     def is_valid(self) -> bool:
-        """صف واحد فيه dr أو cr — مش الاتنين مع بعض."""
         return (self.dr > 0) != (self.cr > 0)
 
     def amount(self) -> float:
@@ -111,21 +112,13 @@ class JournalService:
 
     # ── Validation ────────────────────────────────────────
 
-    def check_balance(self,
-                      lines: list[JournalLine]) -> BalanceCheck:
-        """يتحقق من توازن القيد."""
+    def check_balance(self, lines: list[JournalLine]) -> BalanceCheck:
         total_dr = sum(l.dr for l in lines)
         total_cr = sum(l.cr for l in lines)
         return BalanceCheck(total_dr=total_dr, total_cr=total_cr)
 
-    def validate_lines(self,
-                       lines: list[JournalLine]) -> list[str]:
-        """
-        يتحقق من صحة الصفوف.
-        يرجع list من رسائل الخطأ — فاضية لو كل شيء تمام.
-        """
+    def validate_lines(self, lines: list[JournalLine]) -> list[str]:
         errors = []
-
         if not lines:
             errors.append("القيد يجب أن يحتوي على صف واحد على الأقل")
             return errors
@@ -151,7 +144,6 @@ class JournalService:
     def get_account_balance(self, account_id: int,
                             date_from: str = None,
                             date_to: str = None) -> AccountBalance:
-        """يحسب رصيد حساب في نطاق تاريخ."""
         where  = "WHERE jl.account_id = ?"
         params = [account_id]
 
@@ -166,8 +158,8 @@ class JournalService:
             SELECT
                 a.id,
                 a.name,
-                COALESCE(SUM(jl.dr), 0) AS total_dr,
-                COALESCE(SUM(jl.cr), 0) AS total_cr
+                COALESCE(SUM(jl.debit), 0)  AS total_dr,
+                COALESCE(SUM(jl.credit), 0) AS total_cr
             FROM journal_lines jl
             JOIN journal_entries je ON je.id = jl.entry_id
             JOIN accounts a ON a.id = jl.account_id
@@ -176,17 +168,13 @@ class JournalService:
         """, params).fetchone()
 
         if not row:
-            # الحساب موجود بس ما فيش حركات
             acc = self._conn.execute(
-                "SELECT id, name FROM accounts WHERE id=?",
-                (account_id,)
+                "SELECT id, name FROM accounts WHERE id=?", (account_id,)
             ).fetchone()
             name = acc["name"] if acc else f"حساب {account_id}"
             return AccountBalance(
-                account_id   = account_id,
-                account_name = name,
-                total_dr     = 0.0,
-                total_cr     = 0.0,
+                account_id=account_id, account_name=name,
+                total_dr=0.0, total_cr=0.0,
             )
 
         return AccountBalance(
@@ -203,46 +191,41 @@ class JournalService:
         """
         يسجل قيد محاسبي جديد.
 
-        entry_data: {
-            "date":        str,   ← "YYYY-MM-DD"
-            "description": str,
-            "ref":         str,   ← اختياري
-        }
+        entry_data: {"date": str, "description": str, "notes": str (optional)}
         """
-        # تحقق من الصفوف
         errors = self.validate_lines(lines)
         if errors:
             raise ValueError("\n".join(errors))
 
-        date = entry_data.get("date") or \
-               datetime.now().strftime("%Y-%m-%d")
+        date = entry_data.get("date") or datetime.now().strftime("%Y-%m-%d")
         desc = entry_data.get("description", "").strip()
-        ref  = entry_data.get("ref", "").strip()
+        notes = entry_data.get("notes", "")
 
         if not desc:
             raise ValueError("وصف القيد مطلوب")
 
-        from db.accounting.accounting_journal_repo import (
-            insert_journal_entry,
-            insert_journal_line,
-        )
+        # [إصلاح 35] استخدام الأسماء الفعلية من accounting_journal_repo
+        from db.accounting.accounting_journal_repo import insert_entry, add_entry_lines
 
-        entry_id = insert_journal_entry(
+        entry_id = insert_entry(
             self._conn,
-            date        = date,
-            description = desc,
-            ref         = ref,
+            date=date,
+            description=desc,
+            entry_type="manual",
+            notes=notes or None,
         )
 
-        for line in lines:
-            insert_journal_line(
-                self._conn,
-                entry_id   = entry_id,
-                account_id = line.account_id,
-                dr         = line.dr,
-                cr         = line.cr,
-                note       = line.note,
-            )
+        # add_entry_lines تقبل list من dicts
+        line_dicts = [
+            {
+                "account_id":  line.account_id,
+                "debit":       line.dr,
+                "credit":      line.cr,
+                "description": line.note,
+            }
+            for line in lines
+        ]
+        add_entry_lines(self._conn, entry_id, line_dicts)
 
         balance = self.check_balance(lines)
         return EntryResult(
@@ -257,41 +240,47 @@ class JournalService:
                      entry_data: dict,
                      lines: list[JournalLine]) -> EntryResult:
         """
-        يحدث قيد موجود — بيمسح الصفوف القديمة ويكتب الجديدة.
-        بيتحقق إن القيد مش مقفول.
+        يحدث قيد موجود — يمسح الـ lines القديمة ويكتب الجديدة.
         """
         entry = self._get_entry_or_raise(entry_id)
-        if entry.get("is_locked"):
-            raise ValueError("القيد مقفول ولا يمكن تعديله")
+        if entry.get("status") == "reversed":
+            raise ValueError("القيد معكوس ولا يمكن تعديله")
 
         errors = self.validate_lines(lines)
         if errors:
             raise ValueError("\n".join(errors))
 
-        from db.accounting.accounting_journal_repo import (
-            update_journal_entry,
-            delete_journal_lines,
-            insert_journal_line,
-        )
+        date  = entry_data.get("date", entry["date"])
+        desc  = entry_data.get("description", entry["description"]).strip()
+        notes = entry_data.get("notes", entry["notes"] or "")
 
-        update_journal_entry(
-            self._conn,
-            entry_id    = entry_id,
-            date        = entry_data.get("date"),
-            description = entry_data.get("description", "").strip(),
-            ref         = entry_data.get("ref", "").strip(),
-        )
+        if not desc:
+            raise ValueError("وصف القيد مطلوب")
 
-        delete_journal_lines(self._conn, entry_id)
-        for line in lines:
-            insert_journal_line(
-                self._conn,
-                entry_id   = entry_id,
-                account_id = line.account_id,
-                dr         = line.dr,
-                cr         = line.cr,
-                note       = line.note,
-            )
+        # [إصلاح 35] استخدام الدوال الفعلية
+        # تحديث بيانات القيد الأساسية
+        self._conn.execute(
+            """UPDATE journal_entries
+               SET date=?, description=?, notes=?
+               WHERE id=?""",
+            (date, desc, notes, entry_id)
+        )
+        # حذف الـ lines القديمة
+        self._conn.execute(
+            "DELETE FROM journal_lines WHERE entry_id=?", (entry_id,)
+        )
+        # إضافة الـ lines الجديدة
+        from db.accounting.accounting_journal_repo import add_entry_lines
+        line_dicts = [
+            {
+                "account_id":  line.account_id,
+                "debit":       line.dr,
+                "credit":      line.cr,
+                "description": line.note,
+            }
+            for line in lines
+        ]
+        add_entry_lines(self._conn, entry_id, line_dicts)
 
         balance = self.check_balance(lines)
         return EntryResult(
@@ -306,15 +295,11 @@ class JournalService:
 
     def reverse_entry(self, entry_id: int,
                       note: str = "") -> EntryResult:
-        """
-        ينشئ قيد عكسي للقيد المحدد.
-        يرجع EntryResult للقيد الجديد.
-        """
+        """ينشئ قيد عكسي للقيد المحدد."""
         entry = self._get_entry_or_raise(entry_id)
 
-        # جيب صفوف القيد الأصلي
         lines_rows = self._conn.execute(
-            "SELECT account_id, dr, cr, note "
+            "SELECT account_id, debit, credit, description "
             "FROM journal_lines WHERE entry_id=?",
             (entry_id,)
         ).fetchall()
@@ -322,13 +307,12 @@ class JournalService:
         if not lines_rows:
             raise ValueError("القيد لا يحتوي على صفوف")
 
-        # اعكس DR و CR
         reversed_lines = [
             JournalLine(
                 account_id = r["account_id"],
-                dr         = r["cr"],   # الدائن يصبح مدين
-                cr         = r["dr"],   # المدين يصبح دائن
-                note       = r["note"],
+                dr         = r["credit"],
+                cr         = r["debit"],
+                note       = r["description"] or "",
             )
             for r in lines_rows
         ]
@@ -337,69 +321,61 @@ class JournalService:
         if note:
             desc += f" — {note}"
 
-        return self.post_entry(
-            entry_data = {
-                "date":        datetime.now().strftime("%Y-%m-%d"),
-                "description": desc,
-                "ref":         entry.get("ref", ""),
-            },
-            lines = reversed_lines,
+        result = self.post_entry(
+            entry_data={"date": datetime.now().strftime("%Y-%m-%d"), "description": desc},
+            lines=reversed_lines,
         )
+
+        # علّم القيد الأصلي كـ reversed
+        self._conn.execute(
+            "UPDATE journal_entries SET status='reversed' WHERE id=?",
+            (entry_id,)
+        )
+        self._conn.commit()
+
+        return result
 
     # ── Delete ────────────────────────────────────────────
 
-    def get_delete_preview(self,
-                           entry_id: int) -> DeletePreview | None:
-        """يرجع معلومات الحذف قبل التنفيذ."""
+    def get_delete_preview(self, entry_id: int) -> DeletePreview | None:
         entry = self._conn.execute(
-            "SELECT id, description, is_locked "
-            "FROM journal_entries WHERE id=?",
+            "SELECT id, description, status FROM journal_entries WHERE id=?",
             (entry_id,)
         ).fetchone()
 
         if not entry:
             return None
 
-        ref       = entry["description"] or f"#{entry_id}"
-        is_locked = bool(entry["is_locked"])
+        ref    = entry["description"] or f"#{entry_id}"
+        status = entry["status"]
 
-        if is_locked:
+        if status == "reversed":
             return DeletePreview(
-                entry_id   = entry_id,
-                entry_ref  = ref,
-                is_posted  = True,
-                can_delete = False,
-                reason     = "القيد مقفول",
+                entry_id=entry_id, entry_ref=ref,
+                is_posted=True, can_delete=False,
+                reason="القيد معكوس",
             )
 
         return DeletePreview(
-            entry_id   = entry_id,
-            entry_ref  = ref,
-            is_posted  = False,
-            can_delete = True,
+            entry_id=entry_id, entry_ref=ref,
+            is_posted=(status == "posted"), can_delete=True,
         )
 
     def delete(self, entry_id: int) -> bool:
-        """
-        يحذف القيد وكل صفوفه.
-        يرجع True لو نجح، False لو مقفول.
-        """
         preview = self.get_delete_preview(entry_id)
         if not preview or not preview.can_delete:
             return False
 
-        from db.accounting.accounting_journal_repo import (
-            delete_journal_entry
-        )
-        delete_journal_entry(self._conn, entry_id)
+        # [إصلاح 35] استخدام الاسم الفعلي
+        from db.accounting.accounting_journal_repo import delete_entry
+        delete_entry(self._conn, entry_id)
         return True
 
     # ── Helpers ───────────────────────────────────────────
 
-    def _get_entry_or_raise(self, entry_id: int) -> dict:
+    def _get_entry_or_raise(self, entry_id: int):
         row = self._conn.execute(
-            "SELECT * FROM journal_entries WHERE id=?",
-            (entry_id,)
+            "SELECT * FROM journal_entries WHERE id=?", (entry_id,)
         ).fetchone()
         if not row:
             raise ValueError(f"القيد {entry_id} غير موجود")
