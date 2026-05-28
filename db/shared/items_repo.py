@@ -3,12 +3,89 @@ db/shared/items_repo.py
 ========================
 تحسين 11: fetch_shared_for_types() batch query بدل connection لكل نوع.
 إصلاح 33: استبدال json.loads/dumps المباشر بـ decode_json من json_utils.
+تحسين 8:  _get_central_conn_cached() تُعيد connection مشترك بدل فتح
+           connection جديد في كل استدعاء لـ fetch_shared_for_types.
+           الـ central DB للقراءة فقط (shared_items) — آمن للمشاركة.
+           الـ cache مرتبط بالـ company_id النشط ويُبطَل عند تغييره.
 """
 
 import logging
 from db.shared.json_utils import decode_json
 
 logger = logging.getLogger(__name__)
+
+
+# ══════════════════════════════════════════════════════════
+# Central Connection Cache
+# ══════════════════════════════════════════════════════════
+
+_central_conn_cache: dict = {
+    "conn":       None,
+    "company_id": None,
+}
+
+
+def _get_central_conn_cached():
+    """
+    [تحسين 8] يرجع central connection مشترك (cached).
+
+    المشكلة القديمة: كل استدعاء لـ fetch_shared_for_types يفتح central
+    connection جديد، ينفذ query، ثم يُغلقه. مع panels كثيرة تُحدِّث
+    نفسها عند كل data_changed، هذا يُنشئ عشرات الـ connections/ثانية.
+
+    الحل الجديد:
+      - connection واحد مشترك مرتبط بالـ company_id الحالي.
+      - لو تغير company_id أو مات الـ connection → ينشئ واحد جديد.
+      - read-only لجدول shared_items → آمن للمشاركة بين القراءات.
+
+    ملاحظة: هذا الـ cache module-level (process-global) — مقبول لأن:
+      1. الـ central DB للقراءة فقط هنا.
+      2. التطبيق single-threaded (PyQt main thread).
+      3. الـ invalidate يحدث عند تغيير الشركة.
+    """
+    from db.companies.company_state import company_state
+
+    try:
+        current_cid = company_state.company_id if company_state.is_ready else None
+    except Exception:
+        current_cid = None
+
+    cached_conn = _central_conn_cache["conn"]
+    cached_cid  = _central_conn_cache["company_id"]
+
+    # تحقق من أن الـ cache صالح
+    if (cached_conn is not None and
+            cached_cid == current_cid):
+        try:
+            cached_conn.execute("SELECT 1")
+            return cached_conn
+        except Exception:
+            pass  # الـ connection مات — ننشئ واحد جديد
+
+    # أنشئ connection جديد
+    from db.companies.companies_schema import get_central_connection
+    new_conn = get_central_connection()
+    _central_conn_cache["conn"]       = new_conn
+    _central_conn_cache["company_id"] = current_cid
+    return new_conn
+
+
+def invalidate_central_conn_cache():
+    """
+    [تحسين 8] يُبطل الـ central connection cache.
+    استدعه عند تغيير الشركة النشطة.
+
+    يُستدعى تلقائياً من company_state عند تغيير الشركة
+    (أضف الاستدعاء هناك إذا لم يكن موجوداً).
+    """
+    old_conn = _central_conn_cache.get("conn")
+    if old_conn is not None:
+        try:
+            old_conn.close()
+        except Exception:
+            pass
+    _central_conn_cache["conn"]       = None
+    _central_conn_cache["company_id"] = None
 
 
 # ══════════════════════════════════════════════════════════
@@ -88,6 +165,14 @@ def fetch_shared_for_types(company_id: int = None,
                             types: list = None) -> dict:
     """
     [تحسين 11] يجيب العناصر المشتركة لأكثر من نوع في connection واحد.
+    [تحسين 8]  يستخدم _get_central_conn_cached() بدل فتح connection جديد.
+
+    التغيير:
+      القديم: get_central_connection() + central.close() في كل استدعاء.
+      الجديد: connection مشترك من الـ cache — لا فتح/إغلاق متكرر.
+
+    ملاحظة: لا نُغلق الـ connection هنا لأنه من الـ cache.
+    الإغلاق يحدث فقط في invalidate_central_conn_cache().
     """
     if not types:
         return {}
@@ -101,20 +186,18 @@ def fetch_shared_for_types(company_id: int = None,
                 return result
             company_id = company_state.company_id
 
-        from db.companies.companies_schema import get_central_connection
-        central = get_central_connection()
-        try:
-            placeholders = ",".join("?" * len(types))
-            rows = central.execute(f"""
-                SELECT s.id, s.name, s.shared_type, s.data, s.updated_at
-                FROM company_shared_links lnk
-                JOIN shared_items s ON s.id = lnk.shared_item_id
-                WHERE lnk.company_id = ?
-                  AND s.shared_type IN ({placeholders})
-                ORDER BY s.shared_type, s.name
-            """, [company_id] + list(types)).fetchall()
-        finally:
-            central.close()
+        # [تحسين 8] connection مشترك من الـ cache
+        central = _get_central_conn_cached()
+
+        placeholders = ",".join("?" * len(types))
+        rows = central.execute(f"""
+            SELECT s.id, s.name, s.shared_type, s.data, s.updated_at
+            FROM company_shared_links lnk
+            JOIN shared_items s ON s.id = lnk.shared_item_id
+            WHERE lnk.company_id = ?
+              AND s.shared_type IN ({placeholders})
+            ORDER BY s.shared_type, s.name
+        """, [company_id] + list(types)).fetchall()
 
         for row in rows:
             item = _shared_row_to_item(row, row["shared_type"])
@@ -123,6 +206,8 @@ def fetch_shared_for_types(company_id: int = None,
 
     except Exception as e:
         logger.warning("[items_repo] fetch_shared_for_types error: %s", e)
+        # لو الـ cache تلف → نُبطله للمحاولة القادمة
+        _central_conn_cache["conn"] = None
 
     return result
 
@@ -132,7 +217,6 @@ def _shared_row_to_item(row, item_type: str) -> dict:
     يحول صف shared_items إلى dict يشبه صف items.
     [إصلاح 33] يستخدم decode_json من json_utils بدل json.loads المحلي.
     """
-    # decode_json آمنة — ترجع {} عند أي خطأ
     data = decode_json(row["data"])
 
     base = {
@@ -201,19 +285,16 @@ def fetch_item(conn, item_id):
 
 def _fetch_shared_item_as_row(shared_item_id: int):
     try:
-        from db.companies.companies_schema import get_central_connection
-        central = get_central_connection()
-        try:
-            row = central.execute(
-                "SELECT id, name, shared_type, data FROM shared_items WHERE id=?",
-                (shared_item_id,)
-            ).fetchone()
-        finally:
-            central.close()
+        # [تحسين 8] نستخدم الـ cached connection هنا أيضاً
+        central = _get_central_conn_cached()
+        row = central.execute(
+            "SELECT id, name, shared_type, data FROM shared_items WHERE id=?",
+            (shared_item_id,)
+        ).fetchone()
+
         if not row:
             return None
 
-        # [إصلاح 33] decode_json بدل json.loads المباشر
         data = decode_json(row["data"])
 
         return _SharedItemRow(
@@ -228,7 +309,9 @@ def _fetch_shared_item_as_row(shared_item_id: int):
             shared_item_id=row["id"],
             data=data,
         )
-    except Exception:
+    except Exception as e:
+        logger.warning("[items_repo] _fetch_shared_item_as_row error: %s", e)
+        _central_conn_cache["conn"] = None
         return None
 
 

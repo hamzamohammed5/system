@@ -140,7 +140,6 @@ def create_designs_tables(conn):
                             REFERENCES dimension_fields(id) ON DELETE SET NULL,
             dpi_field_id    INTEGER
                             REFERENCES dimension_fields(id) ON DELETE SET NULL,
-            -- [إصلاح 7] dpi_field_id أُضيف هنا ليتوافق مع designs_sizes_repo.py
             xcf_path        TEXT,
             notes           TEXT,
             sort_order      INTEGER NOT NULL DEFAULT 0,
@@ -178,9 +177,14 @@ def _run_migrations(conn):
     """
     Migrations آمنة للـ designs.db الموجودة.
 
-    [إصلاح 12] يضيف dpi_field_id لجدول design_sizes لو ناقص.
+    [إصلاح 7 + 12] يضيف dpi_field_id لجدول design_sizes لو ناقص.
     قواعد البيانات القديمة التي أُنشئت قبل إصلاح 7 لن تحتوي
     على هذا العمود وستفشل عند استدعاء fetch_design_sizes.
+
+    السلوك:
+      - لو العمود موجود → لا شيء يحدث (idempotent).
+      - لو الجدول غير موجود → لا شيء (create_designs_tables يتولى الإنشاء).
+      - لو فشل الـ ALTER → يُسجَّل warning ويكمل بدون crash.
     """
     if not _table_exists(conn, "design_sizes"):
         return

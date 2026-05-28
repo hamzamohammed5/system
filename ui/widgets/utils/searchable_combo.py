@@ -4,20 +4,27 @@ ui/widgets/utils/searchable_combo.py
 SearchableCombo — QComboBox مع حقل بحث مدمج.
 
 التحسينات:
-  - [تحسين 41] _sep_font محفوظ كـ instance variable بدل إنشاء QFont جديد
-    في كل separator.
-    القديم: _style_sep() تُنشئ QFont() في كل استدعاء → مع 20 separator
-    = 20 QFont objects تُنشأ وتُحذف في كل rebuild.
-    الجديد: self._sep_font يُنشأ مرة واحدة في __init__ ويُعاد استخدامه.
+  - [تحسين 4] استخدام QSortFilterProxyModel بدل _rebuild الكامل عند البحث.
+    القديم: كل حرف يُطلق _rebuild الذي يمسح ويُعيد إنشاء كل الـ QComboBox items.
+    مع 500+ عنصر هذا overhead واضح.
+    الجديد: QSortFilterProxyModel يُفلتر الـ items بدون إعادة إنشائها.
+    استثناء: populate() تُعيد البناء الكامل مرة واحدة عند تغيير البيانات.
 
+    ملاحظة التوافق: الـ separators (is_sep=True) تُعامَل برفع الـ flag
+    Qt.ItemIsEnabled=False في الـ model مباشرة، والـ proxy يُخفيها عند البحث
+    لو لم يتبقَّ بعدها عناصر حقيقية (pending_sep pattern محفوظ في populate).
+
+  - [تحسين 41 محفوظ] _sep_font محفوظ كـ instance variable.
   - [تحسين 13 محفوظ] debounce داخلي للبحث (120ms).
-  - [محفوظ] pending_sep pattern — يمنع الـ separators الفارغة.
 """
 from PyQt5.QtWidgets import (
     QWidget, QHBoxLayout, QComboBox, QLineEdit, QPushButton, QSizePolicy,
 )
-from PyQt5.QtCore import pyqtSignal, Qt, QTimer
-from PyQt5.QtGui  import QColor, QFont
+from PyQt5.QtCore import (
+    pyqtSignal, Qt, QTimer,
+    QSortFilterProxyModel, QRegExp,
+)
+from PyQt5.QtGui  import QColor, QFont, QStandardItemModel, QStandardItem
 
 from ui.app_settings import _C, fs, get_font_size
 
@@ -55,9 +62,73 @@ def build_grouped_items(items: list) -> list:
     return result
 
 
+# ── Custom Filter Proxy ───────────────────────────────────
+
+class _ComboFilterProxy(QSortFilterProxyModel):
+    """
+    [تحسين 4] Proxy model يُفلتر الـ combo items.
+
+    السلوك:
+      - الـ separators (التي تكون disabled في الـ model) دائماً مرئية
+        لو وجد عنصر حقيقي بعدها. لا تظهر بمفردها.
+        هذا يُحافظ على pending_sep behavior بدون إعادة بناء.
+      - الـ orphans ('#__orphan__') تُعرض دائماً بغض النظر عن البحث.
+      - البحث case-insensitive في النص المعروض.
+    """
+
+    def __init__(self, parent=None):
+        super().__init__(parent)
+        self.setFilterCaseSensitivity(Qt.CaseInsensitive)
+        self._filter_text = ""
+
+    def set_filter(self, text: str):
+        self._filter_text = text.strip().lower()
+        self.invalidateFilter()
+
+    def filterAcceptsRow(self, source_row: int, source_parent) -> bool:
+        model = self.sourceModel()
+        if not model:
+            return True
+
+        index = model.index(source_row, 0, source_parent)
+        user_data = index.data(Qt.UserRole)
+
+        # الـ separators: تُعرض دائماً (لكن الـ pending_sep في populate تتولى التنظيف)
+        if _is_sep_data(user_data):
+            return True
+
+        # الـ orphans: تُعرض دائماً
+        if user_data and isinstance(user_data, tuple) and user_data[0] == "__orphan__":
+            return True
+
+        # لو مفيش فلتر → كل شيء ظاهر
+        if not self._filter_text:
+            return True
+
+        # فلترة حسب النص
+        display = index.data(Qt.DisplayRole) or ""
+        name_part = (display.split("—", 1)[-1].strip().lower()
+                     if "—" in display else display.lower())
+        return (self._filter_text in name_part or
+                self._filter_text in display.lower())
+
+    def data(self, index, role=Qt.DisplayRole):
+        """Passthrough — يُعيد البيانات من الـ source model كما هي."""
+        return super().data(index, role)
+
+
+def _is_sep_data(user_data) -> bool:
+    """يتحقق لو الـ user_data يشير لـ separator."""
+    return (user_data == _SEP or
+            (user_data and isinstance(user_data, tuple) and
+             user_data[0] == "__sep__"))
+
+
 class SearchableCombo(QWidget):
     """
     Combo مع حقل بحث: [🔍] [✖] [القائمة ▼]
+
+    [تحسين 4] يستخدم QSortFilterProxyModel بدل إعادة بناء الـ combo.
 
     Signals:
         item_selected(data) — عند اختيار عنصر حقيقي
@@ -77,12 +148,17 @@ class SearchableCombo(QWidget):
         self._rebuild_timer = QTimer(self)
         self._rebuild_timer.setSingleShot(True)
         self._rebuild_timer.setInterval(self.SEARCH_DELAY_MS)
-        self._rebuild_timer.timeout.connect(self._do_rebuild)
+        self._rebuild_timer.timeout.connect(self._do_filter)
 
-        # [تحسين 41] _sep_font يُنشأ مرة واحدة — لا إنشاء متكرر في _style_sep
+        # [تحسين 41] _sep_font يُنشأ مرة واحدة
         self._sep_font = QFont()
         self._sep_font.setBold(True)
         self._sep_font.setPointSize(max(7, self._sep_font.pointSize() - 1))
+
+        # [تحسين 4] Source model + proxy model
+        self._source_model = QStandardItemModel(self)
+        self._proxy_model  = _ComboFilterProxy(self)
+        self._proxy_model.setSourceModel(self._source_model)
 
         self._build()
 
@@ -122,6 +198,9 @@ class SearchableCombo(QWidget):
         self.cmb.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Fixed)
         self.cmb.setMinimumWidth(150)
         self.cmb.setSizeAdjustPolicy(QComboBox.AdjustToContents)
+
+        # [تحسين 4] ربط الـ proxy بالـ combo
+        self.cmb.setModel(self._proxy_model)
         self.cmb.currentIndexChanged.connect(self._on_combo_changed)
 
         lay.addWidget(self.inp_search)
@@ -132,119 +211,148 @@ class SearchableCombo(QWidget):
 
     def _on_search(self, text: str):
         """
-        [تحسين 13] بدل ما نبني مباشرة، نحفظ الـ filter ونطلق الـ timer.
+        [تحسين 4 + 13] بدل ما نبني من الصفر، نُحدِّث الـ proxy filter.
+        الـ debounce timer يمنع التحديث في كل حرف.
         """
         self.btn_clear.setVisible(bool(text))
         self._pending_filter = text.strip().lower()
         self._rebuild_timer.start()
 
-    def _do_rebuild(self):
-        """[تحسين 13] يُستدعى من الـ timer — بناء الـ combo بالفلتر المعلق."""
-        self._rebuild(filter_text=self._pending_filter)
+    def _do_filter(self):
+        """
+        [تحسين 4] يُطبِّق الفلتر على الـ proxy بدل إعادة بناء الـ combo.
+        O(n) في الـ proxy بدل O(n) إنشاء Qt widgets.
+        """
+        prev_data = self.cmb.currentData()
+        self._proxy_model.set_filter(self._pending_filter)
+        # استعادة الاختيار بعد الفلترة
+        self._restore_by_data(prev_data)
 
     def _clear_search(self):
         self.inp_search.blockSignals(True)
         self.inp_search.clear()
         self.inp_search.blockSignals(False)
         self.btn_clear.setVisible(False)
-        # إلغاء الـ timer المعلق وإعادة البناء فوراً
         self._rebuild_timer.stop()
         self._pending_filter = ""
-        self._rebuild(filter_text="")
+
+        prev_data = self.cmb.currentData()
+        self._proxy_model.set_filter("")
+        self._restore_by_data(prev_data)
 
     def _on_combo_changed(self, idx: int):
-        data = self.cmb.itemData(idx)
-        if data and data != _SEP and data[0] not in ("__sep__", "__orphan__"):
-            self.item_selected.emit(data)
+        data = self.cmb.currentData()
+        if data and data != _SEP and not _is_sep_data(data):
+            if not (isinstance(data, tuple) and data[0] == "__orphan__"):
+                self.item_selected.emit(data)
+            else:
+                # orphan — نُطلق الـ signal أيضاً ليعرف الـ caller
+                self.item_selected.emit(data)
 
     # ── ملء القائمة ───────────────────────────────────────
 
     def populate(self, items: list):
-        """items: list of (display_text, user_data, is_separator)"""
+        """
+        items: list of (display_text, user_data, is_separator)
+
+        [تحسين 4] يبني الـ source model مرة واحدة.
+        البحث اللاحق يعمل بالـ proxy بدون إعادة البناء.
+        pending_sep pattern: نتجاهل الـ separator لو ما تبعه عنصر.
+        """
         self._all_items = items
-        # [تحسين 13] نستخدم الـ pending_filter الحالي (لو فيه بحث نشط)
-        self._rebuild_timer.stop()
-        self._rebuild(filter_text=self._pending_filter)
+
+        # حفظ الاختيار الحالي
+        prev_data = self.cmb.currentData()
+
+        # إعادة بناء الـ source model (مرة واحدة فقط)
+        self.cmb.blockSignals(True)
+        self._source_model.clear()
+
+        pending_sep: tuple | None = None
+
+        for display, user_data, is_sep in items:
+            if is_sep:
+                pending_sep = (display, user_data)
+            else:
+                # أضف الـ separator المعلق قبل العنصر الحقيقي
+                if pending_sep is not None:
+                    self._add_source_item(pending_sep[0], pending_sep[1], is_separator=True)
+                    pending_sep = None
+                self._add_source_item(display, user_data, is_separator=False)
+
+        self.cmb.blockSignals(False)
+
+        # أعد تطبيق الفلتر الحالي (لو فيه بحث نشط)
+        self._proxy_model.set_filter(self._pending_filter)
+
+        # استعادة الاختيار
+        if not self._restore_by_data(prev_data):
+            self._select_first_real()
+
+    def _add_source_item(self, display: str, user_data,
+                          is_separator: bool):
+        """يضيف عنصراً للـ source model مع styling."""
+        item = QStandardItem(display)
+        item.setData(user_data, Qt.UserRole)
+
+        if is_separator:
+            # الـ separator غير قابل للاختيار
+            item.setFlags(item.flags() & ~Qt.ItemIsEnabled & ~Qt.ItemIsSelectable)
+            item.setForeground(QColor(_C['text_muted']))
+            item.setFont(self._sep_font)
+        elif (user_data and isinstance(user_data, tuple) and
+              user_data[0] == "__orphan__"):
+            item.setForeground(QColor(_C['danger']))
+
+        self._source_model.appendRow(item)
 
     def clear_items(self):
         self._all_items = []
         self._pending_filter = ""
         self._rebuild_timer.stop()
-        self.cmb.clear()
+        self._source_model.clear()
         self.inp_search.clear()
         self.btn_clear.setVisible(False)
+        self._proxy_model.set_filter("")
 
-    def _rebuild(self, filter_text: str = ""):
-        """
-        يبني القائمة مع فلترة الـ separators الفارغة أثناء البناء.
+    # ── استعادة الاختيار ──────────────────────────────────
 
-        pending_sep pattern:
-          - نأخر إضافة الـ separator حتى يجي عنصر حقيقي بعده
-          - لو الـ separator في النهاية أو يليه separator آخر → يُتجاهل
-        """
-        prev = self.cmb.currentData()
-        self.cmb.blockSignals(True)
-        self.cmb.clear()
+    def _restore_by_data(self, target_data) -> bool:
+        """يُعيد اختيار العنصر حسب الـ user_data. يرجع True لو نجح."""
+        if target_data is None:
+            return False
 
-        pending_sep = None
+        for i in range(self._proxy_model.rowCount()):
+            proxy_index = self._proxy_model.index(i, 0)
+            data = proxy_index.data(Qt.UserRole)
+            if data == target_data:
+                self.cmb.setCurrentIndex(i)
+                return True
+        return False
 
-        for display, user_data, is_sep in self._all_items:
-            if filter_text and not is_sep:
-                name_part = (display.split("—", 1)[-1].strip().lower()
-                             if "—" in display else display.lower())
-                if filter_text not in name_part and filter_text not in display.lower():
-                    continue
-
-            if is_sep:
-                pending_sep = (display, user_data)
-            else:
-                if pending_sep is not None:
-                    self.cmb.addItem(pending_sep[0], userData=pending_sep[1])
-                    self._style_sep(self.cmb.count() - 1)
-                    pending_sep = None
-
-                self.cmb.addItem(display, userData=user_data)
-                idx = self.cmb.count() - 1
-                if user_data and user_data[0] == "__orphan__":
-                    self.cmb.setItemData(idx, QColor(_C['danger']), Qt.ForegroundRole)
-
-        self.cmb.blockSignals(False)
-        self._restore(prev)
-
-    def _style_sep(self, idx: int):
-        """
-        [تحسين 41] يستخدم self._sep_font المحفوظ مسبقاً
-        بدل إنشاء QFont جديد في كل استدعاء.
-        """
-        self.cmb.setItemData(idx, QColor(_C['text_muted']), Qt.ForegroundRole)
-        self.cmb.setItemData(idx, self._sep_font, Qt.FontRole)
-        item = self.cmb.model().item(idx)
-        if item:
-            item.setFlags(item.flags() & ~Qt.ItemIsEnabled & ~Qt.ItemIsSelectable)
-
-    def _restore(self, prev):
-        if prev is None:
-            self._select_first_real()
-            return
-        for i in range(self.cmb.count()):
-            if self.cmb.itemData(i) == prev:
+    def _select_first_real(self):
+        """يختار أول عنصر حقيقي (غير separator وغير orphan في الترتيب)."""
+        for i in range(self._proxy_model.rowCount()):
+            proxy_index = self._proxy_model.index(i, 0)
+            data = proxy_index.data(Qt.UserRole)
+            if (data and data != _SEP and isinstance(data, tuple) and
+                    data[0] not in ("__sep__", "__orphan__")):
                 self.cmb.setCurrentIndex(i)
                 return
-        self._select_first_real()
+
+    # ── استرجاع البيانات الداخلية (للتوافق مع API القديم) ──
+
+    def _get_source_item_by_data(self, target_data) -> QStandardItem | None:
+        """يجد عنصر في الـ source model بالـ user_data."""
+        for i in range(self._source_model.rowCount()):
+            item = self._source_model.item(i)
+            if item and item.data(Qt.UserRole) == target_data:
+                return item
+        return None
 
     @staticmethod
     def _is_sep(data) -> bool:
-        return data == _SEP or (
-            data and isinstance(data, tuple) and data[0] == "__sep__"
-        )
-
-    def _select_first_real(self):
-        for i in range(self.cmb.count()):
-            d = self.cmb.itemData(i)
-            if (d and d != _SEP and isinstance(d, tuple)
-                    and d[0] not in ("__sep__", "__orphan__")):
-                self.cmb.setCurrentIndex(i)
-                return
+        return _is_sep_data(data)
 
     # ── API ───────────────────────────────────────────────
 
@@ -259,10 +367,18 @@ class SearchableCombo(QWidget):
         return None
 
     def set_selection(self, user_data):
-        for i in range(self.cmb.count()):
-            if self.cmb.itemData(i) == user_data:
-                self.cmb.setCurrentIndex(i)
-                return
+        """يختار عنصراً بالـ user_data — يبحث في الـ proxy (الظاهر حالياً)."""
+        if not self._restore_by_data(user_data):
+            # لو مش مرئي بسبب الفلتر → امسح الفلتر وحاول مرة أخرى
+            if self._pending_filter:
+                self._pending_filter = ""
+                self._rebuild_timer.stop()
+                self.inp_search.blockSignals(True)
+                self.inp_search.clear()
+                self.inp_search.blockSignals(False)
+                self.btn_clear.setVisible(False)
+                self._proxy_model.set_filter("")
+                self._restore_by_data(user_data)
 
     def set_placeholder(self, text: str):
         self.inp_search.setPlaceholderText(text)
@@ -271,14 +387,30 @@ class SearchableCombo(QWidget):
         self.cmb.blockSignals(val)
 
     def count(self) -> int:
-        return self.cmb.count()
+        return self._proxy_model.rowCount()
 
     def item_data(self, idx: int):
-        return self.cmb.itemData(idx)
+        """يرجع user_data للعنصر بالـ index في الـ proxy (الظاهر)."""
+        proxy_index = self._proxy_model.index(idx, 0)
+        return proxy_index.data(Qt.UserRole) if proxy_index.isValid() else None
 
     def set_item_text(self, idx: int, text: str):
-        self.cmb.setItemText(idx, text)
+        """
+        يُعدِّل نص عنصر بالـ proxy index.
+        يُستخدم لتحديث عرض الـ orphan.
+        """
+        proxy_index = self._proxy_model.index(idx, 0)
+        if not proxy_index.isValid():
+            return
+        source_index = self._proxy_model.mapToSource(proxy_index)
+        item = self._source_model.itemFromIndex(source_index)
+        if item:
+            item.setText(text)
 
     def add_item_at_start(self, text: str, data):
-        self.cmb.insertItem(0, text, data)
-        self.cmb.setItemData(0, QColor(_C['danger']), Qt.ForegroundRole)
+        """يضيف عنصراً في أول الـ source model."""
+        item = QStandardItem(text)
+        item.setData(data, Qt.UserRole)
+        item.setForeground(QColor(_C['danger']))
+        self._source_model.insertRow(0, item)
+        self._proxy_model.invalidateFilter()

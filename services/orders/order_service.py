@@ -8,6 +8,12 @@ Business Logic للطلبات والعملاء.
   - update_order_status → change_order_status (الاسم الفعلي)
   - log_order_status    → _log_status (private في repo، نستخدم change_order_status مباشرة)
   - delete_order_items  → أُضيفت كدالة مساعدة داخلية هنا
+
+إصلاح 8: إزالة coupling بين orders.db و erp.db في _resolve_item_name.
+  المشكلة: كانت _resolve_item_name تفتح erp_conn لجلب اسم المنتج،
+  مما يُنشئ تبعية مخفية بين الـ databases.
+  الحل: item_name أصبح required parameter يُمرَّر من الـ caller مباشرة
+  عبر OrderItem.item_name. الفالباك "منتج #{id}" محفوظ للتوافق.
 """
 
 from dataclasses import dataclass, field
@@ -23,9 +29,14 @@ class OrderItem:
     qty        : float
     unit_price : float
     notes      : str = ""
+    item_name  : str = ""   # [إصلاح 8] الاسم يُمرَّر من الـ caller بدل استعلام erp.db
 
     def total(self) -> float:
         return self.qty * self.unit_price
+
+    def resolved_name(self) -> str:
+        """يرجع الاسم المُمرَّر أو fallback بسيط بدون DB query."""
+        return self.item_name.strip() if self.item_name.strip() else f"منتج #{self.product_id}"
 
 
 @dataclass
@@ -89,6 +100,7 @@ class OrderService:
     يدير: إنشاء / تعديل / حذف / تغيير الحالة / الإحصائيات.
 
     إصلاح 34: كل الـ imports مزامَنة مع الدوال الفعلية في orders_repo.
+    إصلاح 8:  _resolve_item_name أُزيلت — item_name يُمرَّر في OrderItem.item_name.
     """
 
     def __init__(self, conn):
@@ -102,6 +114,9 @@ class OrderService:
         """
         ينشئ طلب جديد ويرجع الـ ID.
         يتحقق من وجود العميل ومن وجود items.
+
+        ملاحظة: item_name في كل OrderItem يجب أن يكون محدداً من الـ caller.
+        لو فارغ → يُستخدم "منتج #{product_id}" كـ fallback.
         """
         if not customer_id:
             raise ValueError("العميل مطلوب")
@@ -125,7 +140,7 @@ class OrderService:
             insert_order_item(
                 self._conn,
                 order_id    = order_id,
-                item_name   = self._resolve_item_name(item.product_id),
+                item_name   = item.resolved_name(),   # [إصلاح 8] من OrderItem مباشرة
                 quantity    = item.qty,
                 unit_price  = item.unit_price,
                 notes       = item.notes,
@@ -166,7 +181,7 @@ class OrderService:
             insert_order_item(
                 self._conn,
                 order_id    = order_id,
-                item_name   = self._resolve_item_name(item.product_id),
+                item_name   = item.resolved_name(),   # [إصلاح 8] من OrderItem مباشرة
                 quantity    = item.qty,
                 unit_price  = item.unit_price,
                 notes       = item.notes,
@@ -353,21 +368,6 @@ class OrderService:
             raise ValueError(
                 f"العميل {customer_id} غير نشط — فعّله أولاً لإنشاء طلبات جديدة"
             )
-
-    def _resolve_item_name(self, product_id: int) -> str:
-        """يجيب اسم المنتج من erp.db — fallback لو مش موجود."""
-        try:
-            from db.companies.company_state import company_state
-            if company_state.is_ready:
-                erp = company_state.get_erp_conn()
-                row = erp.execute(
-                    "SELECT name FROM items WHERE id=?", (product_id,)
-                ).fetchone()
-                if row:
-                    return row["name"]
-        except Exception:
-            pass
-        return f"منتج #{product_id}"
 
     def _delete_order_items(self, order_id: int) -> None:
         """

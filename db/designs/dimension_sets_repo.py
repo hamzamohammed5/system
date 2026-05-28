@@ -1,12 +1,28 @@
 """
 db/designs/dimension_sets_repo.py
-==================================
+=================================
 عمليات قراءة/كتابة مجموعات المقاسات وحقولها واعتمادياتها.
 
 تحسين 46: تم تقسيم الملف الأصلي (700+ سطر) إلى 3 ملفات:
   - design_categories_repo.py     ← تصنيفات التصميمات (dimension_sets)
   - dimension_sets_repo.py        ← هذا الملف: المجموعات + الحقول + الاعتماديات
   - dimension_instances_repo.py   ← Instances + قيمها
+
+[تحسين 10] تحقق من Circular Imports:
+  هذا الملف يُعيد تصدير دوال من ملفين آخرين للتوافق مع الكود القديم.
+  ترتيب الاستيراد الآمن الحالي:
+    dimension_sets_repo  ← design_categories_repo   (آمن ✓)
+    dimension_sets_repo  ← dimension_instances_repo  (آمن ✓)
+
+  قاعدة منع الـ circular imports:
+    - design_categories_repo   يجب ألّا يستورد من dimension_sets_repo
+    - dimension_instances_repo يجب ألّا يستورد من dimension_sets_repo
+    - لو احتجت دالة من dimension_sets_repo داخل أحد الملفين
+      الفرعيين، انقلها لملف مساعد مستقل (مثلاً: dimension_utils_repo.py)
+      بدل إنشاء circular import.
+
+  التحقق الدوري: نفّذ `python -c "import db.designs.dimension_sets_repo"`
+  بعد أي تعديل على الملفات الثلاثة للتأكد من عدم وجود circular imports.
 
 للتوافق مع الكود القديم يُعاد تصدير كل الدوال من الملفات الجديدة:
 """

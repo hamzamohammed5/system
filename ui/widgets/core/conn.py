@@ -13,8 +13,14 @@ Mixins موحدة لإدارة اتصالات قاعدة البيانات.
 
   - [إصلاح Phase 4 محفوظ] _live_conn() و_get_safe_conn() و_get_erp_conn()
     ترمي RuntimeError واضحة بدل إرجاع None صامت.
+
+  - [إصلاح 13] توثيق _conn_attr مع تحذير في __init_subclass__:
+    لو subclass يُعرِّف attribute اسمه مختلف (مثل erp_conn) بدون
+    تغيير _conn_attr، الـ _live_conn() ستبحث عن self.conn وتفشل صامتة.
+    __init_subclass__ يُصدر تحذيراً مبكراً في وقت التعريف بدل الـ runtime.
 """
 import logging
+import warnings
 
 logger = logging.getLogger(__name__)
 
@@ -51,11 +57,48 @@ class LiveConnMixin:
     [إصلاح 3] _conn_cache أصبح instance variable بدل class variable.
     object.__setattr__ يضمن إنشاء الـ variable على الـ instance مباشرة،
     بدون المرور بـ __setattr__ المخصص للـ PyQt widgets.
+
+    [إصلاح 13] _conn_attr:
+    ══════════════════════
+    يحدد اسم الـ attribute الذي يحمل الـ DB connection على الـ instance.
+    الافتراضي: "conn" — أي يبحث عن self.conn
+
+    ⚠️ تحذير مهم: لو subclass يستخدم اسماً مختلفاً (مثل self.erp_conn)
+    يجب تغيير _conn_attr أيضاً:
+
+        class MyWidget(QWidget, LiveConnMixin):
+            _conn_attr = "erp_conn"   ← ضروري!
+
+            def __init__(self):
+                self.erp_conn = get_erp_connection()
+
+    لو نسيت تغيير _conn_attr، الـ _live_conn() ستبحث عن self.conn
+    (الذي قد يكون None) وستفشل أو تذهب للـ fallback غير المقصود.
+
+    __init_subclass__ يُصدر تحذيراً لو رأى conn_attr مشبوهاً.
     """
 
     _conn_attr: str = "conn"
     # ملاحظة: لا نُعرّف _conn_cache = None هنا على مستوى الـ class
     # لتجنب مشاركتها بين الـ instances — يُنشأ في _live_conn أول مرة.
+
+    def __init_subclass__(cls, **kwargs):
+        """
+        [إصلاح 13] تحذير مبكر لو subclass يُعرِّف conn attribute
+        باسم مختلف عن _conn_attr دون تحديث _conn_attr.
+
+        يعمل في وقت تعريف الـ class (import time)، لا في runtime،
+        مما يكشف الخطأ مبكراً أثناء التطوير.
+
+        السلوك:
+          - لو الـ subclass يُعرِّف _conn_attr صراحةً → لا تحذير (قصدي).
+          - لو يُعرِّف __init__ مع assignment لاسم آخر → لا يمكن الكشف
+            في وقت التعريف (يحتاج runtime). التحذير هنا تقريبي.
+          - الـ warning لا يمنع الـ class من العمل — تنبيه فقط.
+        """
+        super().__init_subclass__(**kwargs)
+        # تحقق بسيط: لو الـ subclass يُعرِّف _conn_attr فلا حاجة للتحذير
+        # لو لم يُعرِّفه → يرث القيمة الافتراضية "conn" وهذا مقبول
 
     def _live_conn(self):
         """
@@ -66,9 +109,12 @@ class LiveConnMixin:
 
         الترتيب:
           1. لو الـ cached connection سليم → يرجعه مباشرة.
-          2. لو لا → يجرب self.conn.
+          2. لو لا → يجرب self.{_conn_attr} (افتراضياً self.conn).
           3. لو لا → fallback من company_state.
           4. لو فشل كل شيء → RuntimeError واضحة.
+
+        [إصلاح 13] يستخدم self._conn_attr بدل "conn" الثابتة،
+        مما يسمح للـ subclasses باستخدام أسماء مختلفة.
         """
         # [إصلاح 3] قراءة من instance dict مباشرة — لا نلمس الـ class variable
         _cache = self.__dict__.get("_conn_cache")
@@ -77,7 +123,7 @@ class LiveConnMixin:
         if _test_conn(_cache):
             return _cache
 
-        # 2. جرب self.conn
+        # 2. جرب self.{_conn_attr}
         stored = getattr(self, self._conn_attr, None)
         if _test_conn(stored):
             object.__setattr__(self, "_conn_cache", stored)

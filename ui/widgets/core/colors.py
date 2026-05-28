@@ -9,8 +9,22 @@ ui/widgets/core/colors.py
     هذا يضمن التزامن الكامل — لو غيّرت لون في _C
     يتغير تلقائياً في كل مكان يستخدم status_colors().
   - CARD_PALETTE لم يتغير — هو مصدر ألوان الكروت المستقل.
-  - purple/orange محفوظان مؤقتاً كـ hardcoded لحين
-    إضافتهم لـ _C في app_settings.
+
+  [تحسين 10] تحقق من circular imports:
+    هذا الملف لا يستورد من أي ملف يستورد منه — آمن.
+    لكن يستورد من ui.app_settings داخل status_colors() (lazy import).
+    لا تضف import مباشر خارج الدالة لتجنب circular imports
+    مع app_settings التي تستورد _C منها بعض ملفات أخرى.
+
+  [تحسين 10 تابع] purple/orange: أُضيفا الآن بالقراءة من _C مباشرة
+    مع fallback آمن لو المفاتيح مش موجودة في _C بعد.
+    لإضافتهم بالكامل لـ _C، أضف في app_settings:
+        "purple":        "#6a1b9a",
+        "purple_bg":     "#f3e5f5",
+        "purple_border": "#ce93d8",
+        "orange":        "#e65100",
+        "orange_bg":     "#fff3e0",
+        "orange_border": "#ffcc80",
 """
 
 # ── لوحة ألوان البطاقات (لون → (خلفية، حدود)) ──────────────────────────
@@ -62,6 +76,15 @@ CARD_PALETTE: dict[str, tuple[str, str]] = {
 
 _FALLBACK: tuple[str, str] = ("#f5f5f5", "#e0e0e0")
 
+# ── Fallback ثوابت للألوان غير الموجودة في _C بعد ──────────────────────────
+# هذه القيم تُستخدم فقط إذا لم تُضَف المفاتيح لـ _C في app_settings
+_PURPLE_FALLBACK        = "#6a1b9a"
+_PURPLE_BG_FALLBACK     = "#f3e5f5"
+_PURPLE_BORDER_FALLBACK = "#ce93d8"
+_ORANGE_FALLBACK        = "#e65100"
+_ORANGE_BG_FALLBACK     = "#fff3e0"
+_ORANGE_BORDER_FALLBACK = "#ffcc80"
+
 
 def card_colors(color: str) -> tuple[str, str]:
     """يرجع (bg, border) للون المعطى، أو الـ fallback لو مش موجود."""
@@ -81,10 +104,12 @@ def status_colors(level: str) -> dict[str, str]:
     كل widget بيستخدم status_colors("danger") يتحدث تلقائياً
     بدون ما تحتاج تعدل ملف تاني.
 
-    ملاحظة: purple/orange مش موجودين في _C حالياً.
-    عشان تنظفهم 100%، أضف للـ _C في app_settings:
-        "purple": "#6a1b9a",  "purple_bg": "#f3e5f5",  "purple_border": "#ce93d8"
-        "orange": "#e65100",  "orange_bg": "#fff3e0",  "orange_border": "#ffcc80"
+    [تحسين 10] purple/orange: تُقرأ من _C مع fallback آمن.
+    لو أضفت المفاتيح لـ _C في app_settings يتحدث السلوك تلقائياً.
+    لو لم تُضَف بعد، يستخدم القيم الافتراضية الثابتة أعلاه.
+
+    ملاحظة الـ import: الـ import داخل الدالة (lazy) مقصود لتجنب
+    circular imports — لا تنقله خارج الدالة.
     """
     from ui.app_settings import _C
 
@@ -119,11 +144,20 @@ def status_colors(level: str) -> dict[str, str]:
             "bg":     _C["accent_light"],
             "border": _C["accent_mid"],
         },
-        # TODO: أضف لـ _C عشان تنظفهم
-        "purple": {"fg": _C["purple"], "bg": _C["purple_bg"], "border": _C["purple_border"]},
-        "orange": {"fg": _C["orange"], "bg": _C["orange_bg"], "border": _C["orange_border"]},
-        
-        
+        # [تحسين 10] قراءة من _C مع fallback آمن
+        # أضف هذه المفاتيح لـ _C في app_settings للتزامن الكامل مع الثيم:
+        #   "purple": "#6a1b9a", "purple_bg": "#f3e5f5", "purple_border": "#ce93d8"
+        #   "orange": "#e65100", "orange_bg": "#fff3e0", "orange_border": "#ffcc80"
+        "purple": {
+            "fg":     _C.get("purple",        _PURPLE_FALLBACK),
+            "bg":     _C.get("purple_bg",     _PURPLE_BG_FALLBACK),
+            "border": _C.get("purple_border", _PURPLE_BORDER_FALLBACK),
+        },
+        "orange": {
+            "fg":     _C.get("orange",        _ORANGE_FALLBACK),
+            "bg":     _C.get("orange_bg",     _ORANGE_BG_FALLBACK),
+            "border": _C.get("orange_border", _ORANGE_BORDER_FALLBACK),
+        },
     }
     return _map.get(level, _map["neutral"])
 

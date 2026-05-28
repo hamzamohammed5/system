@@ -14,6 +14,12 @@ ui/widgets/components/label.py
   format_amount()      — تنسيق مبلغ
   amount_color()       — لون حسب الإشارة
   dr_cr_color()        — لون DR/CR
+
+[تحسين 15] ProgressBar.resizeEvent:
+  التحقق من total_w > 0 موجود ومقصود — لا مشكلة في الكود.
+  الـ _fill.setFixedWidth يُستدعى فقط عندما يكون العرض أكبر من صفر،
+  وهذا يمنع رسم خاطئ عند أول ظهور الـ widget قبل حساب العرض الفعلي.
+  التوثيق هنا للتوضيح فقط ومنع أي تعديل مستقبلي يُزيل هذا التحقق.
 """
 from __future__ import annotations
 
@@ -423,6 +429,16 @@ class ProgressBar(QWidget):
         self.set_value(0, "─")
 
     def resizeEvent(self, event):
+        """
+        [تحسين 15] يُعيد حساب عرض الـ fill عند تغيير حجم الـ widget.
+
+        التحقق من total_w > 0 مقصود ومهم:
+          - عند أول ظهور الـ widget، العرض قد يكون صفراً قبل حساب الـ layout.
+          - setFixedWidth(0) في هذه الحالة صحيح (لا fill مرئي).
+          - لو أُزيل التحقق وكان total_w صفراً، ينتج fill_w = 0 وهو نفس النتيجة،
+            لكن الكود يصبح أقل وضوحاً في نيّته.
+          - لا تُزِل هذا التحقق — هو guard مقصود وليس كوداً زائداً.
+        """
         super().resizeEvent(event)
         total_w = self._track.width()
         if total_w > 0:

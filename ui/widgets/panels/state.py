@@ -7,6 +7,12 @@ ui/widgets/panels/state.py
   EmptyPanelState         — alias للتوافق مع الكود القديم
   set_table_empty_state   — صف رسالة داخل الجدول
   clear_table_empty_state — مسح صف الرسالة
+
+[تحسين 6] EmptyState._build:
+  - get_font_size() تُستدعى مرة واحدة وتُخزّن في متغير محلي `base`
+    بدل استدعاءات متعددة في نفس الدالة.
+  - التحسين بسيط لكن يُحسّن وضوح الكود ويُقلل الاستدعاءات المتكررة.
+  - الأثر الفعلي على الأداء ضعيف (get_font_size مخزّنة) لكن النمط أنظف.
 """
 
 from PyQt5.QtWidgets import (
@@ -71,6 +77,7 @@ class EmptyState(QFrame):
             20, 16 if not self._expandable else 30,
         )
 
+        # [تحسين 6] استدعاء get_font_size() مرة واحدة وتخزينها
         base = get_font_size()
 
         if icon:
