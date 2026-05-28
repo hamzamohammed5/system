@@ -16,19 +16,28 @@ def main():
     from PyQt5.QtWidgets import QApplication
     qt_app = QApplication(sys.argv)
 
-    # 3. تطبيق الخط بالحجم الافتراضي (بدون قراءة من DB)
-    from ui.app_settings import DEFAULT_FONT_SIZE, _build_stylesheet
-    qt_app.setStyleSheet(_build_stylesheet(DEFAULT_FONT_SIZE))
+    # 3. تحميل الثيم واللغة من DB قبل أي شيء
+    from ui.themes import theme_manager
+    from ui.i18n   import i18n_manager
+    theme_manager.load_from_db()
+    i18n_manager.load_from_db()
 
-    # 4. منع عجلة الماوس من تغيير قيم الـ inputs
-    from ui.widgets.shared.no_wheel import (
+    # 4. تطبيق الخط بالحجم المحفوظ
+    from ui.app_settings import DEFAULT_FONT_SIZE, _build_stylesheet, get_font_size
+    qt_app.setStyleSheet(_build_stylesheet(get_font_size()))
+
+    # 5. تطبيق اتجاه اللغة
+    qt_app.setLayoutDirection(i18n_manager.qt_direction)
+
+    # 6. منع عجلة الماوس من تغيير قيم الـ inputs
+    from ui.widgets.utils.no_wheel import (
         install_no_wheel_filter,
         install_shift_wheel_filter,
     )
     install_no_wheel_filter(qt_app)
     install_shift_wheel_filter(qt_app)
 
-    # 5. النافذة الرئيسية
+    # 7. النافذة الرئيسية
     from ui.main_window import MainWindow
     window = MainWindow(qt_app)
     window.show()
