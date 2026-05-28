@@ -2,6 +2,8 @@
 widgets/combo/category.py
 ==========================
 CategoryCombo — QComboBox للتصنيفات الهرمية.
+
+التغيير: بتسمع لـ bus.data_changed بدل ما تبعت — صح من الأساس.
 """
 from PyQt5.QtWidgets import QComboBox
 from PyQt5.QtCore    import Qt
@@ -56,6 +58,7 @@ class CategoryCombo(QComboBox, LiveConnMixin):
         self.conn  = conn
         self.scope = scope
         self.refresh()
+        # تسمع فقط — لا تبعت
         bus.data_changed.connect(self.refresh)
 
     def refresh(self):

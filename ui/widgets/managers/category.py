@@ -20,11 +20,10 @@ from db.shared.categories_repo import (
 from ..core.conn          import LiveConnMixin
 from ..components.button  import make_btn
 from ..dialogs.confirm    import confirm_delete
-# ← استبدال QMessageBox المباشر بـ msg_* الموحدة
 from ..dialogs.message    import msg_info, msg_warning
 from ..theme.styles       import tree_style
 from ..components.label   import ModeLabel
-from ui.events import bus
+from ui.widgets.core.events import emit_company_data_changed
 
 
 # ── CategoryForm ──────────────────────────────────────────
@@ -135,7 +134,7 @@ class CategoryForm(QGroupBox, LiveConnMixin):
             return
 
         self._reset()
-        bus.data_changed.emit()
+        emit_company_data_changed()
 
     def _save(self):
         if self._editing_id is None:
@@ -162,7 +161,7 @@ class CategoryForm(QGroupBox, LiveConnMixin):
             return
 
         self._reset()
-        bus.data_changed.emit()
+        emit_company_data_changed()
 
     def load_for_edit(self, cat_id: int):
         try:
@@ -207,6 +206,7 @@ class CategoryManager(QWidget, LiveConnMixin):
         self.scope = scope
         self._build()
         self._load()
+        from ui.events import bus
         bus.data_changed.connect(self._load)
 
     def _build(self):
@@ -303,7 +303,6 @@ class CategoryManager(QWidget, LiveConnMixin):
     def _edit(self):
         cat_id = self._selected_id()
         if cat_id is None:
-            # ← استخدام msg_info بدل QMessageBox.information
             msg_info(self, "تنبيه", "اختر تصنيفاً أولاً")
             return
         self._form.load_for_edit(cat_id)
@@ -328,4 +327,4 @@ class CategoryManager(QWidget, LiveConnMixin):
         if confirm_delete(self, preview.cat_name,
                         extra_msg=preview.warning_text()):
             svc.delete_cascade(cat_id)
-            bus.data_changed.emit()
+            emit_company_data_changed()

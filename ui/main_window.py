@@ -1,8 +1,8 @@
 """
-ui/main_window.py  (نسخة multi-company — مُصلَحة v7)
+ui/main_window.py  (نسخة multi-company — مُصلَحة v8)
 =====================================================
-التغييرات عن v6:
-  - scrollbar الـ content_scroll يستخدم _C بدل hardcoded hex
+التغييرات عن v7:
+  - _open_shared_items يستخدم emit_company_data_changed بدل bus.data_changed
 """
 
 from PyQt5.QtWidgets import (
@@ -14,6 +14,7 @@ from PyQt5.QtCore import Qt
 
 from ui.app_settings  import _C
 from ui.events        import bus
+from ui.widgets.core.events import emit_company_data_changed
 from .main_window_helper._sidebar import _Sidebar
 
 from .main_window_helper._nav_button import (
@@ -63,7 +64,6 @@ class MainWindow(QMainWindow):
         self._content_scroll.setWidgetResizable(True)
         self._content_scroll.setHorizontalScrollBarPolicy(Qt.ScrollBarAsNeeded)
         self._content_scroll.setVerticalScrollBarPolicy(Qt.ScrollBarAlwaysOff)
-        # يستخدم _C بدل hardcoded hex
         self._content_scroll.setStyleSheet(f"""
             QScrollArea {{ border:none; background:transparent; }}
             QScrollBar:horizontal {{
@@ -213,6 +213,6 @@ class MainWindow(QMainWindow):
         create_shared_items_tables(central)
 
         dlg = SharedItemsManagerDialog(central, parent=self)
-        dlg.items_changed.connect(lambda: bus.data_changed.emit())
+        dlg.items_changed.connect(emit_company_data_changed)
         dlg.exec_()
         central.close()

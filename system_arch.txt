@@ -1,5 +1,5 @@
 File Tree Snapshot
-Generated : 2026-05-28 06:12:23
+Generated : 2026-05-28 06:22:32
 Source    : D:\My Workspace\Hg\Alhabaar\accountant\system
 Extensions: .py
 ────────────────────────────────────────────────────────────
@@ -360,6 +360,7 @@ system/
 │   │       ├── splitter.py
 │   │       └── tooltip.py
 │   ├── app_settings.py
+│   ├── app_state.py
 │   ├── events.py
 │   ├── font_utils.py
 │   ├── helpers.py

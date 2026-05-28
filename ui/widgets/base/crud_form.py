@@ -16,7 +16,7 @@ from ..components.button       import make_btn
 from ..mixins.edit             import EditModeMixin
 from ..mixins.validate         import FormValidationMixin
 from ..theme.styles            import wrap_in_scroll
-from ui.events import bus
+from ui.widgets.core.events    import emit_company_data_changed
 
 logger = logging.getLogger(__name__)
 
@@ -166,7 +166,7 @@ class BaseCrudForm(QWidget, EditModeMixin, FormValidationMixin):
             logger.warning("%s._on_add failed: %s", type(self).__name__, e)
             self._notif.show(str(e), "danger")
             return
-        bus.data_changed.emit()
+        emit_company_data_changed()
         self.item_added.emit(new_id)
         self._after_insert(new_id)
         self._reset()
@@ -188,7 +188,7 @@ class BaseCrudForm(QWidget, EditModeMixin, FormValidationMixin):
             self._notif.show(str(e), "danger")
             return
         self._reset()
-        bus.data_changed.emit()
+        emit_company_data_changed()
         self.item_updated.emit(self._editing_id)
         self._after_save()
 

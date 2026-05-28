@@ -4,16 +4,12 @@ ui/app_settings.py
 يحفظ ويطبّق إعداد حجم الخط على التطبيق كله.
 تصميم محسّن — Warm Neutral System مع تفاصيل دقيقة.
 
-الإصلاح:
-    حُذف conn.close() من get_font_size() و set_font_size()
-    لأن get_connection() يرجع shared connection من company_state
-    ولا يجب إغلاقه — الإغلاق يحدث فقط عند تغيير الشركة النشطة.
-
-التغييرات (refactor):
-    - أُضيفت ثوابت الـ sidebar (SIDEBAR_EXPANDED_WIDTH، إلخ)
-      بدل تعريفها في _nav_button.py — مصدر واحد للحقيقة.
-    - _build_stylesheet انقسمت لدوال مساعدة منفصلة
-      لتسهيل القراءة والصيانة.
+التغييرات (v3 — AppState cache):
+  - get_font_size() أصبحت تستخدم AppState.font_size()
+    بدل DB query مباشرة في كل استدعاء.
+  - set_font_size() تحدّث DB + AppState cache معاً.
+  - apply_font() تستدعي AppState.on_font_changed() لإبطال الـ caches.
+  - conn.close() محذوف — shared connection لا يُغلق من هنا.
 """
 
 from PyQt5.QtWidgets import QApplication
@@ -23,7 +19,7 @@ MIN_FONT_SIZE     = 8
 MAX_FONT_SIZE     = 20
 
 # ══════════════════════════════════════════════════════════
-# Sidebar layout constants — المصدر الوحيد (نُقلت من _nav_button.py)
+# Sidebar layout constants
 # ══════════════════════════════════════════════════════════
 SIDEBAR_EXPANDED_WIDTH  = 224
 SIDEBAR_COLLAPSED_WIDTH = 56
@@ -98,31 +94,21 @@ _C = {
 
 
 def get_font_size() -> int:
-    try:
-        from db.shared.connection import get_connection
-        conn = get_connection()
-    except RuntimeError:
-        return DEFAULT_FONT_SIZE
-    except Exception:
-        return DEFAULT_FONT_SIZE
-
-    try:
-        from db.shared.settings_repo import get_setting, set_setting
-        raw = get_setting(conn, "font_size", None)
-        if raw is None:
-            set_setting(conn, "font_size", DEFAULT_FONT_SIZE)
-            return DEFAULT_FONT_SIZE
-        val = int(float(raw))
-        if val < MIN_FONT_SIZE or val > MAX_FONT_SIZE:
-            set_setting(conn, "font_size", DEFAULT_FONT_SIZE)
-            return DEFAULT_FONT_SIZE
-        return val
-    except Exception:
-        return DEFAULT_FONT_SIZE
+    """
+    يرجع حجم الخط الحالي من الـ cache.
+    DB query بتحصل مرة واحدة فقط عند أول استدعاء.
+    """
+    from ui.app_state import AppState
+    return AppState.font_size()
 
 
 def set_font_size(size: int):
+    """
+    يحفظ حجم الخط في DB ويحدّث الـ cache.
+    """
     size = max(MIN_FONT_SIZE, min(MAX_FONT_SIZE, size))
+
+    # حفظ في DB
     try:
         from db.shared.connection import get_connection
         conn = get_connection()
@@ -130,11 +116,16 @@ def set_font_size(size: int):
         return
     except Exception:
         return
+
     try:
         from db.shared.settings_repo import set_setting
         set_setting(conn, "font_size", size)
     except Exception:
         pass
+
+    # تحديث الـ cache — يبطّل stylesheet cache الأزرار تلقائياً
+    from ui.app_state import AppState
+    AppState.on_font_changed(size)
 
 
 def fs(base: int, delta: int = 0) -> int:
@@ -518,15 +509,6 @@ QLabel#nav_label {{ font-size: {normal}pt; background: transparent; border: none
 
 
 def _build_stylesheet(base: int) -> str:
-    """
-    يبني الـ global stylesheet للتطبيق.
-
-    مقسّمة لدوال مساعدة منفصلة لتسهيل الصيانة:
-      _ss_base_reset / _ss_message_box / _ss_dialog
-      _ss_typography / _ss_groupbox / _ss_buttons
-      _ss_inputs / _ss_combobox / _ss_tables / _ss_tree
-      _ss_tabs / _ss_scrollbars / _ss_misc
-    """
     base    = max(MIN_FONT_SIZE, min(MAX_FONT_SIZE, base))
     c       = _C
     tiny    = fs(base, -2)
@@ -536,7 +518,6 @@ def _build_stylesheet(base: int) -> str:
     input_h = normal * 2 + 6
     btn_h   = normal * 2 + 8
 
-    # kwargs مشتركة لكل الدوال
     kw = dict(
         base=base, c=c,
         tiny=tiny, small=small, normal=normal, large=large,
@@ -566,4 +547,7 @@ def apply_font(app: QApplication, size: int = None):
     if size is None:
         size = get_font_size()
     size = max(MIN_FONT_SIZE, min(MAX_FONT_SIZE, size))
+    # تحديث الـ cache وإبطال stylesheet cache الأزرار
+    from ui.app_state import AppState
+    AppState.on_font_changed(size)
     app.setStyleSheet(_build_stylesheet(size))

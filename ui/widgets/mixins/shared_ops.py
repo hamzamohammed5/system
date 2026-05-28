@@ -2,9 +2,11 @@
 ui/widgets/mixins/shared_ops.py
 ==========================================
 SharedOpsMixin — منطق النشر والتعديل المشترك.
-نسخة محدّثة تستخدم refactored dialogs.
+نسخة محدّثة تستخدم emit_company_data_changed بدل bus.data_changed.
 """
 import logging
+
+from ui.widgets.core.events import emit_company_data_changed
 
 logger = logging.getLogger(__name__)
 
@@ -67,8 +69,7 @@ class SharedOpsMixin:
             create_central_tables(central)
             SharedItemsDialog(central, shared_id, parent=parent).exec_()
             central.close()
-            from ui.events import bus
-            bus.data_changed.emit()
+            emit_company_data_changed()
         except Exception as e:
             msg_warning(parent, "خطأ", str(e))
 
@@ -89,8 +90,7 @@ class SharedOpsMixin:
             if shared_row:
                 SharedItemsDialog(central, shared_row["id"], parent=parent).exec_()
             central.close()
-            from ui.events import bus
-            bus.data_changed.emit()
+            emit_company_data_changed()
         except Exception as e:
             msg_warning(parent, "خطأ", str(e))
 
