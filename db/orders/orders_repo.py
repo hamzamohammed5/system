@@ -5,6 +5,8 @@ db/orders/orders_repo.py
 
 تحسين 21: delete_order يتحقق من paid_amount قبل الحذف.
 تحسين 22: insert_order يتحقق من وجود العميل وكونه نشطاً.
+إصلاح 16: _next_order_number تستخدم GLOB بدل LIKE للتحقق من
+           الصيغة الرقمية قبل CAST (نفس إصلاح 15 في customers_repo).
 """
 
 import datetime
@@ -15,12 +17,25 @@ import datetime
 # ══════════════════════════════════════════════════════════
 
 def _next_order_number(conn) -> str:
+    """
+    [إصلاح 16] يستخدم GLOB للتحقق من أن اللاحقة رقمية قبل CAST.
+
+    مشكلة النسخة القديمة:
+      - SUBSTR + CAST على نص غير رقمي يُعيد 0 بصمت
+      - قد ينتج رقماً مكرراً وينتهك UNIQUE constraint
+
+    الحل:
+      - GLOB 'ORD-YYYY-[0-9]*' يضمن أن اللاحقة رقمية دائماً
+      - CAST آمن بعد هذا التحقق
+    """
     year = datetime.date.today().year
     prefix = f"ORD-{year}-"
+    # نبحث عن أرقام صحيحة فقط: ORD-2025-0001 وليس ORD-2025-abc
+    glob_pattern = f"{prefix}[0-9]*"
     row = conn.execute(
         "SELECT MAX(CAST(SUBSTR(order_number, ?) AS INTEGER)) AS mx "
-        "FROM orders WHERE order_number LIKE ?",
-        (len(prefix) + 1, f"{prefix}%")
+        "FROM orders WHERE order_number GLOB ?",
+        (len(prefix) + 1, glob_pattern)
     ).fetchone()
     nxt = (row["mx"] or 0) + 1
     return f"{prefix}{nxt:04d}"

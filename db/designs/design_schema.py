@@ -2,6 +2,11 @@
 db/designs/design_schema.py
 ============================
 Schema قاعدة بيانات التصميمات (designs.db).
+
+إصلاح 7:  إضافة عمود dpi_field_id في جدول design_sizes
+           (كان موجوداً في designs_sizes_repo.py لكن ناقصاً من الـ schema).
+إصلاح 12: إضافة _run_migrations تُطبِّق migration آمن لـ dpi_field_id
+           على قواعد البيانات الموجودة.
 """
 
 import os
@@ -133,6 +138,9 @@ def create_designs_tables(conn):
                             REFERENCES dimension_fields(id) ON DELETE SET NULL,
             height_field_id INTEGER
                             REFERENCES dimension_fields(id) ON DELETE SET NULL,
+            dpi_field_id    INTEGER
+                            REFERENCES dimension_fields(id) ON DELETE SET NULL,
+            -- [إصلاح 7] dpi_field_id أُضيف هنا ليتوافق مع designs_sizes_repo.py
             xcf_path        TEXT,
             notes           TEXT,
             sort_order      INTEGER NOT NULL DEFAULT 0,
@@ -161,3 +169,32 @@ def create_designs_tables(conn):
         );
     """)
     conn.commit()
+
+    # [إصلاح 12] تطبيق migrations على قواعد البيانات الموجودة
+    _run_migrations(conn)
+
+
+def _run_migrations(conn):
+    """
+    Migrations آمنة للـ designs.db الموجودة.
+
+    [إصلاح 12] يضيف dpi_field_id لجدول design_sizes لو ناقص.
+    قواعد البيانات القديمة التي أُنشئت قبل إصلاح 7 لن تحتوي
+    على هذا العمود وستفشل عند استدعاء fetch_design_sizes.
+    """
+    if not _table_exists(conn, "design_sizes"):
+        return
+
+    if not _column_exists(conn, "design_sizes", "dpi_field_id"):
+        try:
+            conn.execute(
+                "ALTER TABLE design_sizes ADD COLUMN dpi_field_id INTEGER "
+                "REFERENCES dimension_fields(id) ON DELETE SET NULL"
+            )
+            conn.commit()
+        except Exception as e:
+            # لو فشل الـ migration نُسجّله ونكمل — لا نوقف التطبيق
+            import logging
+            logging.getLogger(__name__).warning(
+                "[design_schema] فشل إضافة dpi_field_id: %s", e
+            )

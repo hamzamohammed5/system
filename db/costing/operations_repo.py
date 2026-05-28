@@ -1,7 +1,12 @@
 """
-db/operations_repo.py
+db/costing/operations_repo.py
 =====================
 كل عمليات قراءة/كتابة جداول machines و labor_ops و machine_ops.
+
+تحسين 19: إضافة count_machine_ops() للتحقق من عدد عمليات الماكينة
+           قبل حذفها. الـ schema تحتوي CASCADE DELETE صامت على machine_ops
+           عند حذف الماكينة، مما يحذف عمليات تشغيل بدون تحذير.
+           الـ UI يجب أن يستدعي count_machine_ops() ويُظهر تأكيداً.
 """
 
 
@@ -51,7 +56,42 @@ def update_machine(conn, machine_id: int, name: str,
     conn.commit()
 
 
+def count_machine_ops(conn, machine_id: int) -> int:
+    """
+    [تحسين 19] يرجع عدد عمليات التشغيل المرتبطة بماكينة معينة.
+
+    يُستخدم قبل حذف الماكينة لتحذير المستخدم:
+        ops_count = count_machine_ops(conn, machine_id)
+        if ops_count > 0:
+            confirm = QMessageBox.warning(
+                self,
+                "تأكيد الحذف",
+                f"حذف هذه الماكينة سيحذف {ops_count} عملية تشغيل مرتبطة بها.\n"
+                "هل تريد المتابعة؟",
+                QMessageBox.Yes | QMessageBox.No
+            )
+            if confirm != QMessageBox.Yes:
+                return
+
+    المشكلة:
+        الـ schema تحتوي على:
+            machine_ops.machine_id → REFERENCES machines(id) ON DELETE CASCADE
+        مما يحذف كل machine_ops صامتاً عند حذف الماكينة.
+        المستخدم قد لا يعرف أنه فقد عمليات تشغيل مهمة.
+    """
+    row = conn.execute(
+        "SELECT COUNT(*) AS c FROM machine_ops WHERE machine_id=?",
+        (machine_id,)
+    ).fetchone()
+    return row["c"] if row else 0
+
+
 def delete_machine(conn, machine_id: int):
+    """
+    يحذف الماكينة وكل عمليات التشغيل المرتبطة بها (CASCADE).
+
+    تحذير: استدعِ count_machine_ops() أولاً في الـ UI لإبلاغ المستخدم.
+    """
     conn.execute("DELETE FROM machines WHERE id=?", (machine_id,))
     conn.commit()
 

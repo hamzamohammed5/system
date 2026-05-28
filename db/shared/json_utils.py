@@ -9,8 +9,13 @@ db/shared/json_utils.py
 إصلاح 33: مركزة الكود المكرر في مكان واحد.
 أي bug يُصلَح هنا يُطبَّق على كل الملفات تلقائياً.
 
+تحسين 13: decode_json_list وencode_json_list مُستخدمتان الآن في:
+  - db/shared/categories_repo.py → template_fields
+  بدل json.dumps/json.loads المباشرة.
+
 الاستخدام:
     from db.shared.json_utils import decode_json, encode_json
+    from db.shared.json_utils import decode_json_list, encode_json_list
 """
 
 import json
@@ -47,7 +52,15 @@ def encode_json(data: dict) -> str:
 def decode_json_list(data_str: str) -> list:
     """
     يحول نص JSON إلى list بشكل آمن.
-    يرجع list فارغة عند أي خطأ.
+    يرجع list فارغة عند أي خطأ (None، نص فارغ، JSON غير صالح).
+
+    [تحسين 13] مُستخدمة في categories_repo.py لـ template_fields
+    بدل json.loads المباشر الذي لا يعالج الأخطاء.
+
+    مثال:
+        fields = decode_json_list(row["template_fields"])
+        # → [] لو NULL أو نص فارغ أو JSON فاسد
+        # → [{"name": "width", "type": "number"}, ...] لو صحيح
     """
     if not data_str:
         return []
@@ -61,6 +74,14 @@ def decode_json_list(data_str: str) -> list:
 def encode_json_list(data: list) -> str:
     """
     يحول list إلى نص JSON مع دعم العربية.
+    يرجع '[]' عند أي خطأ.
+
+    [تحسين 13] مُستخدمة في categories_repo.py لـ template_fields
+    بدل json.dumps المباشر.
+
+    مثال:
+        fields_json = encode_json_list([{"name": "width"}, {"name": "height"}])
+        # → '[{"name": "width"}, {"name": "height"}]'
     """
     if not isinstance(data, list):
         return "[]"

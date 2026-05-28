@@ -9,9 +9,16 @@ db/shared/categories_repo.py
 
 إصلاح 5: build_tree تستخدم .get() بدل [] للوقاية من KeyError
 لو صف من DB ناقصه عمود (query قديمة أو migration ناقص).
+
+تحسين 5: fetch_descendants تستخدم SQLite Recursive CTE بدل
+          while loop مع individual queries لكل مستوى.
+          يُقلّص عدد الـ queries من O(عمق الشجرة) إلى O(1).
+
+تحسين 13: استخدام encode_json_list/decode_json_list من json_utils
+           بدل json.dumps/json.loads المباشرة في template_fields.
 """
 
-import json
+from db.shared.json_utils import encode_json_list, decode_json_list
 
 SCOPES = {
     "all":     "الكل",
@@ -82,7 +89,40 @@ def fetch_category(conn, cat_id: int):
 
 def fetch_descendants(conn, cat_id: int) -> list[int]:
     """
-    يرجع قائمة بـ IDs كل أبناء التصنيف (وأحفاده) + التصنيف نفسه.
+    [تحسين 5] يرجع قائمة بـ IDs كل أبناء التصنيف (وأحفاده) + التصنيف نفسه.
+
+    النسخة القديمة: while loop مع query منفصلة لكل مستوى = O(عمق الشجرة) queries.
+    النسخة الجديدة: SQLite Recursive CTE = O(1) query واحدة.
+
+    مثال: شجرة 5 مستويات × 10 أبناء كانت تُنفّذ 50+ queries،
+    الآن تُنفّذ query واحدة فقط.
+
+    Fallback للـ SQLite القديم: لو فشل الـ CTE (نادر جداً)،
+    يرجع للنسخة القديمة تلقائياً.
+    """
+    try:
+        rows = conn.execute("""
+            WITH RECURSIVE descendants AS (
+                -- نقطة البداية: التصنيف نفسه
+                SELECT id FROM categories WHERE id = ?
+                UNION ALL
+                -- الأبناء المتداخلون
+                SELECT c.id
+                FROM   categories c
+                JOIN   descendants d ON c.parent_id = d.id
+            )
+            SELECT id FROM descendants
+        """, (cat_id,)).fetchall()
+        return [r["id"] for r in rows]
+    except Exception:
+        # Fallback للنسخة القديمة لو الـ CTE غير مدعوم
+        return _fetch_descendants_fallback(conn, cat_id)
+
+
+def _fetch_descendants_fallback(conn, cat_id: int) -> list[int]:
+    """
+    النسخة القديمة من fetch_descendants — للـ fallback فقط.
+    يستخدم while loop مع individual queries.
     """
     result = set()
     queue  = [cat_id]
@@ -102,7 +142,8 @@ def insert_category(conn, name: str, scope: str = "all",
                     color: str = "#607d8b", parent_id: int = None,
                     template_fields: list = None,
                     default_unit: str = "mm") -> int:
-    fields_json = json.dumps(template_fields, ensure_ascii=False) if template_fields else None
+    # [تحسين 13] encode_json_list من json_utils بدل json.dumps المباشر
+    fields_json = encode_json_list(template_fields) if template_fields else None
     cur = conn.execute(
         """INSERT INTO categories
            (name, scope, color, parent_id, template_fields, default_unit)
@@ -121,7 +162,8 @@ def update_category(conn, cat_id: int, name: str, scope: str,
         descendants = fetch_descendants(conn, cat_id)
         if parent_id in descendants:
             raise ValueError("لا يمكن جعل تصنيف فرعياً لأحد أبنائه")
-    fields_json = json.dumps(template_fields, ensure_ascii=False) if template_fields else None
+    # [تحسين 13] encode_json_list من json_utils بدل json.dumps المباشر
+    fields_json = encode_json_list(template_fields) if template_fields else None
     conn.execute(
         """UPDATE categories
            SET name=?, scope=?, color=?, parent_id=?,
@@ -163,11 +205,9 @@ def _row_to_dict(r) -> dict:
     [إصلاح 5] تحويل آمن للصف إلى dict — يستخدم .get() أو keys() للتحقق
     من وجود الأعمدة قبل الوصول إليها. يمنع KeyError عند query قديمة.
     """
-    # sqlite3.Row يدعم keys() للحصول على أسماء الأعمدة
     try:
         available = set(r.keys())
     except AttributeError:
-        # fallback لو r هو dict عادي
         available = set(r.keys()) if hasattr(r, 'keys') else set()
 
     return {
@@ -185,8 +225,7 @@ def build_tree(rows) -> list[dict]:
     يحول قائمة صفوف مسطحة إلى شجرة هرمية.
     كل node: {id, name, scope, color, parent_id, children: [...]}
 
-    [إصلاح 5] يستخدم _row_to_dict() الآمنة بدل [] المباشر
-    لتفادي KeyError عند وجود أعمدة ناقصة في النتيجة.
+    [إصلاح 5] يستخدم _row_to_dict() الآمنة بدل [] المباشر.
     """
     nodes = {r["id"]: _row_to_dict(r) for r in rows}
     roots = []
@@ -209,16 +248,15 @@ def get_template_fields(conn, cat_id: int) -> list[dict]:
     ).fetchone()
     if not row or not row["template_fields"]:
         return []
-    try:
-        return json.loads(row["template_fields"])
-    except Exception:
-        return []
+    # [تحسين 13] decode_json_list من json_utils بدل json.loads المباشر
+    return decode_json_list(row["template_fields"])
 
 
 def set_template_fields(conn, cat_id: int, fields: list[dict]):
+    # [تحسين 13] encode_json_list من json_utils
     conn.execute(
         "UPDATE categories SET template_fields=? WHERE id=?",
-        (json.dumps(fields, ensure_ascii=False), cat_id)
+        (encode_json_list(fields), cat_id)
     )
     conn.commit()
 

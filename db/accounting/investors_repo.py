@@ -11,6 +11,11 @@ db/accounting/investors_repo.py
 
 إصلاح 40 (جزئي): calc_all_investors_summary تجلب كل entries دفعة واحدة
 بدل query منفصلة لكل مستثمر.
+
+تحسين 7: _get_db_path تستخدم fast path لـ ProtectedConnection
+          بقراءة _path مباشرة بدل PRAGMA database_list في كل استدعاء.
+          هذا يُقلّص overhead من O(PRAGMA + I/O) إلى O(1) للـ ProtectedConnection،
+          مع الحفاظ على slow path للـ connections العادية.
 """
 
 from datetime import datetime
@@ -24,7 +29,32 @@ _investors_migrated: set = set()
 
 
 def _get_db_path(conn) -> str:
-    """يستخرج مسار الـ DB من الـ connection — آمن مع ProtectedConnection."""
+    """
+    [تحسين 7] يستخرج مسار الـ DB من الـ connection بأكفأ طريقة ممكنة.
+
+    Fast path — ProtectedConnection:
+      يحفظ _path كـ object attribute → O(1) بدون أي I/O.
+      هذا يعمل لأن ProtectedConnection يخزن المسار في __init__.
+
+    Slow path — sqlite3.Connection العادي:
+      يستخدم PRAGMA database_list → O(PRAGMA + I/O).
+      يُستدعى فقط للـ connections التي لا تحتوي على _path.
+
+    المشكلة القديمة:
+      كانت كل الـ connections تمر بالـ PRAGMA في كل استدعاء
+      (_migrate_investors تُستدعى من fetch_all_investors, fetch_investor,
+       insert_investor, وغيرها).
+    """
+    # Fast path: ProtectedConnection يخزن _path كـ instance attribute
+    # نستخدم object.__getattribute__ لتجنب الـ __getattr__ الـ proxy
+    try:
+        path = object.__getattribute__(conn, '_path')
+        if path and isinstance(path, str):
+            return path
+    except AttributeError:
+        pass
+
+    # Slow path: sqlite3.Connection العادي أو أي connection آخر
     try:
         row = conn.execute("PRAGMA database_list").fetchone()
         return row[2] if row and len(row) > 2 else str(id(conn))
@@ -322,8 +352,7 @@ def calc_all_investors_summary(conn, acc_conn=None) -> list:
     for row in all_entries_rows:
         entries_by_inv[row["investor_id"]].append(dict(row))
 
-    # لو محتاجين بيانات القيود من acc_conn
-    # نجمعها دفعة واحدة بدل query لكل entry
+    # لو محتاجين بيانات القيود من acc_conn نجمعها دفعة واحدة
     je_cache: dict[int, dict] = {}
     jl_cache: dict[int, dict] = {}
     if acc_conn:
@@ -364,7 +393,6 @@ def calc_all_investors_summary(conn, acc_conn=None) -> list:
         inv_id  = inv["id"]
         raw_entries = entries_by_inv.get(inv_id, [])
 
-        # إثراء الـ entries ببيانات القيود من الـ cache
         entries = []
         for r in raw_entries:
             je = je_cache.get(r["entry_id"])

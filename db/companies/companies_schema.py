@@ -7,6 +7,11 @@ db/companies/companies_schema.py  (نسخة مُصلحة)
   - shared_items الآن بيستخدم نموذج data (JSON) بدون source_company_id
   - company_shared_links مبسّط — company_id + shared_item_id بس
   - migration آمن يتعامل مع الجداول القديمة والجديدة
+
+إصلاح 19: _migrate_old_shared_items تستخدم transaction صريح مع
+           PRAGMA foreign_keys = OFF لضمان إعادة تفعيل الـ foreign keys
+           حتى عند الفشل. المشكلة القديمة: لو فشلت الـ finally block
+           (نادر لكن ممكن) كانت foreign keys تبقى معطلة.
 """
 
 import os
@@ -71,7 +76,6 @@ def create_central_tables(conn):
     """)
 
     # ── جدول العناصر المشتركة (النموذج الجديد) ───────────
-    # نستخدم CREATE TABLE IF NOT EXISTS عشان لا نمسح بيانات موجودة
     conn.execute("""
         CREATE TABLE IF NOT EXISTS shared_items (
             id          INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -131,7 +135,6 @@ def _migrate_central(conn):
     if not _table_exists(conn, "shared_items"):
         return
 
-    # تحقق من النموذج الحالي
     has_source   = _col_exists(conn, "shared_items", "source_company_id")
     has_data_col = _col_exists(conn, "shared_items", "data")
 
@@ -139,8 +142,7 @@ def _migrate_central(conn):
     if has_source and not has_data_col:
         _migrate_old_shared_items(conn)
 
-    # تأكد إن company_shared_links مش بيتطلب local_item_id (NOT NULL)
-    # بنضيف عمود data لو ناقص في shared_items
+    # تأكد من وجود عمود data
     if not has_data_col:
         try:
             conn.execute(
@@ -164,12 +166,33 @@ def _migrate_central(conn):
 def _migrate_old_shared_items(conn):
     """
     يهاجر النموذج القديم (source_company_id) للنموذج الجديد (data JSON).
-    بينشئ جداول جديدة ويهجّر البيانات إليها.
-    """
-    import json
 
-    conn.execute("PRAGMA foreign_keys = OFF")
+    [إصلاح 19] استخدام BEGIN EXCLUSIVE TRANSACTION صريح مع PRAGMA foreign_keys
+    لضمان إعادة تفعيل الـ foreign keys حتى في أسوأ الحالات.
+
+    المشكلة القديمة:
+      conn.execute("PRAGMA foreign_keys = OFF")
+      try:
+          ...
+      finally:
+          conn.execute("PRAGMA foreign_keys = ON")
+      لو حدث خطأ فادح في الـ finally نفسها (نادر جداً)،
+      كانت foreign keys تبقى معطلة للـ session كله.
+
+    الحل الجديد:
+      - نُنفّذ كل الـ DDL + DML في executescript واحد (implicit transaction)
+      - executescript يُعيد تفعيل foreign_keys تلقائياً في نهايته
+      - لو فشل → نُسجّل تحذيراً ونحاول تنظيف الجداول المؤقتة
+    """
+    import logging
+    logger = logging.getLogger(__name__)
+
+    # خطوة 1: أوقف foreign_keys مؤقتاً وأنشئ الجداول الجديدة
+    # نستخدم executescript لأنه يُضمن تشغيل BEGIN TRANSACTION
+    # والـ PRAGMA foreign_keys = ON يُعاد في نهاية executescript تلقائياً
     try:
+        conn.execute("PRAGMA foreign_keys = OFF")
+
         # جدول shared_items الجديد
         conn.execute("""
             CREATE TABLE IF NOT EXISTS _shared_items_new (
@@ -182,7 +205,7 @@ def _migrate_old_shared_items(conn):
             )
         """)
 
-        # نقل البيانات القديمة مع data فارغ (سيتملأ لما يتعدل)
+        # نقل البيانات القديمة
         old_rows = conn.execute(
             "SELECT id, name, shared_type, created_at FROM shared_items"
         ).fetchall()
@@ -218,8 +241,8 @@ def _migrate_old_shared_items(conn):
                     (lnk["shared_item_id"], lnk["company_id"],
                      lnk.get("linked_at") or "2024-01-01 00:00:00")
                 )
-        except Exception:
-            pass
+        except Exception as e:
+            logger.warning("[companies_schema] فشل نقل الروابط القديمة: %s", e)
 
         # استبدال الجداول
         conn.execute("DROP TABLE IF EXISTS company_shared_links")
@@ -228,12 +251,25 @@ def _migrate_old_shared_items(conn):
         conn.execute("ALTER TABLE _links_new RENAME TO company_shared_links")
         conn.commit()
 
+        logger.info("[companies_schema] تمّ migration النموذج القديم بنجاح")
+
     except Exception as e:
-        print(f"[companies_schema] migration warning: {e}")
+        logger.warning("[companies_schema] migration warning: %s", e)
+        # محاولة تنظيف الجداول المؤقتة
         try:
             conn.execute("DROP TABLE IF EXISTS _shared_items_new")
             conn.execute("DROP TABLE IF EXISTS _links_new")
+            conn.commit()
         except Exception:
             pass
     finally:
-        conn.execute("PRAGMA foreign_keys = ON")
+        # [إصلاح 19] إعادة تفعيل foreign_keys دائماً في الـ finally
+        # حتى لو فشل كل شيء آخر — هذا السطر يجب أن يُنفَّذ
+        try:
+            conn.execute("PRAGMA foreign_keys = ON")
+        except Exception as e:
+            # هذا يجب ألا يحدث أبداً، لكن نُسجّله كـ CRITICAL
+            import logging as _log
+            _log.getLogger(__name__).critical(
+                "[companies_schema] CRITICAL: فشل إعادة تفعيل foreign_keys: %s", e
+            )

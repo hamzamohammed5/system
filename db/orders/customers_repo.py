@@ -2,6 +2,10 @@
 db/orders/customers_repo.py
 ============================
 عمليات CRUD للعملاء وجهات الاتصال.
+
+إصلاح 15: _next_customer_code تستخدم GLOB بدل LIKE للتحقق من
+           الصيغة الرقمية قبل CAST، لتجنب تكرار CUS-0001 عند وجود
+           كودات بصيغة غير رقمية مثل "CUS-abc".
 """
 
 
@@ -10,8 +14,21 @@ db/orders/customers_repo.py
 # ══════════════════════════════════════════════════════════
 
 def _next_customer_code(conn) -> str:
+    """
+    [إصلاح 15] يستخدم GLOB 'CUS-[0-9]*' للتحقق من الصيغة الرقمية
+    قبل CAST، بدلاً من LIKE 'CUS-%' الذي يقبل أي لاحقة نصية.
+
+    مشكلة النسخة القديمة:
+      - CAST("abc" AS INTEGER) = 0 بصمت → يُعيد CUS-0001 مجدداً
+      - ينتهك الـ UNIQUE constraint على عمود code
+
+    الحل:
+      - GLOB 'CUS-[0-9]*' تُطابق CUS- متبوعاً برقم واحد على الأقل
+      - بالتالي CAST آمن دائماً
+    """
     row = conn.execute(
-        "SELECT MAX(CAST(SUBSTR(code, 5) AS INTEGER)) as mx FROM customers WHERE code LIKE 'CUS-%'"
+        "SELECT MAX(CAST(SUBSTR(code, 5) AS INTEGER)) as mx "
+        "FROM customers WHERE code GLOB 'CUS-[0-9]*'"
     ).fetchone()
     nxt = (row["mx"] or 0) + 1
     return f"CUS-{nxt:04d}"
