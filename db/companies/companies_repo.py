@@ -7,9 +7,14 @@ db/companies/companies_repo.py
   - حذف الدوال القديمة التي تعمل JOIN على source_company_id (عمود محذوف)
   - fetch_all_shared_items و fetch_shared_items_for_company تُحوَّل لـ shared_items_repo
   - كل central connections تُفتح وتُغلق بشكل صحيح في try/finally
+
+[تحسين 47]:
+  - الدوال الـ legacy اللي تُفوَّض لـ shared_items_repo تعطي DeprecationWarning
+    ليسهل إزالتها تدريجياً وتوجيه الـ imports للمصدر الصح.
 """
 
 import os
+import warnings
 from db.companies.companies_schema import (
     get_central_connection,
     get_company_db_path,
@@ -151,24 +156,38 @@ def _init_company_databases(company_id: int):
 
 
 # ══════════════════════════════════════════════════════════
-# العناصر المشتركة — تُوجَّه لـ shared_items_repo
-# (الدوال هنا للتوافق مع الكود القديم فقط)
+# العناصر المشتركة — Legacy (مع DeprecationWarning)
 # ══════════════════════════════════════════════════════════
+# [تحسين 47] هذه الدوال موجودة للتوافق مع الكود القديم فقط.
+# استخدم db.companies.shared_items_repo مباشرة في الكود الجديد.
+# ستُزال هذه الدوال في إصدار مستقبلي.
 
 def fetch_all_shared_items(conn, shared_type: str = None) -> list:
     """
-    جلب العناصر المشتركة — النموذج الجديد بدون source_company_id.
-    يُفضَّل استخدام shared_items_repo.fetch_all_shared_items مباشرة.
+    .. deprecated::
+        استخدم ``db.companies.shared_items_repo.fetch_all_shared_items`` مباشرة.
     """
+    warnings.warn(
+        "fetch_all_shared_items في companies_repo مُهمَلة — "
+        "استورد من db.companies.shared_items_repo مباشرة.",
+        DeprecationWarning,
+        stacklevel=2,
+    )
     from db.companies.shared_items_repo import fetch_all_shared_items as _fetch
     return _fetch(conn, shared_type)
 
 
 def fetch_shared_items_for_company(conn, company_id: int) -> list:
     """
-    العناصر المشتركة التي تستخدمها شركة معينة.
-    يُفضَّل استخدام shared_items_repo.fetch_shared_items_for_company مباشرة.
+    .. deprecated::
+        استخدم ``db.companies.shared_items_repo.fetch_shared_items_for_company`` مباشرة.
     """
+    warnings.warn(
+        "fetch_shared_items_for_company في companies_repo مُهمَلة — "
+        "استورد من db.companies.shared_items_repo مباشرة.",
+        DeprecationWarning,
+        stacklevel=2,
+    )
     from db.companies.shared_items_repo import fetch_shared_items_for_company as _fetch
     return _fetch(conn, company_id)
 

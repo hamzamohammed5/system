@@ -2,10 +2,17 @@
 ui/settings_dialog.py
 =====================
 نافذة الإعدادات — حجم الخط + مسار GIMP + إدارة وحدات القياس.
+
+[تحسين 48]:
+  - _get_settings_conn() أصبحت تستخدم company_state.get_erp_conn()
+    بدل فتح sqlite3.connect() جديد منفصل.
+  - لو الشركة مش جاهزة ترجع None (نفس السلوك القديم).
+  - دوال الحفظ تستخدم _get_settings_conn_for_write() لو احتاجت
+    transaction منفصلة (حالياً WAL يكفي).
+  - الـ conn من company_state لا تُغلق — هي shared connection.
 """
 
 import os
-import sqlite3
 from PyQt5.QtCore    import Qt
 from PyQt5.QtWidgets import (
     QDialog, QVBoxLayout, QHBoxLayout,
@@ -27,19 +34,36 @@ from ui.widgets.components.button import make_btn
 
 
 def _get_settings_conn():
+    """
+    [تحسين 48] يرجع الـ shared ERP connection من company_state.
+
+    القديم: كان يفتح sqlite3.connect() جديد منفصل لكل استدعاء.
+    الجديد: يستخدم company_state.get_erp_conn() مباشرة — لا connection مكرر،
+    ولا حاجة لإغلاقه (هو shared).
+
+    يرجع None لو الشركة مش جاهزة — نفس السلوك القديم.
+    """
     try:
         from db.companies.company_state import company_state
-        from db.companies.companies_schema import get_company_db_path
         if not company_state.is_ready:
             return None
-        path = get_company_db_path(company_state.company_id, "erp")
-        conn = sqlite3.connect(path)
-        conn.row_factory     = sqlite3.Row
-        conn.isolation_level = None
-        conn.execute("PRAGMA foreign_keys = ON")
-        return conn
+        return company_state.get_erp_conn()
     except Exception:
         return None
+
+
+def _should_close_conn(conn) -> bool:
+    """
+    [تحسين 48] يتحقق لو الـ conn ملك هذا الكود أو shared.
+    الـ shared connections لا تُغلق من هنا.
+    """
+    if conn is None:
+        return False
+    try:
+        from db.companies.company_state import company_state
+        return conn is not company_state.get_erp_conn()
+    except Exception:
+        return False
 
 
 class SettingsDialog(QDialog):
@@ -247,6 +271,7 @@ class SettingsDialog(QDialog):
     # ── تحميل الإعدادات ──
 
     def _load_settings(self):
+        # [تحسين 48] استخدام shared connection — لا إغلاق هنا
         conn = _get_settings_conn()
         if conn:
             try:
@@ -255,20 +280,18 @@ class SettingsDialog(QDialog):
                 self._inp_gimp.setText(path)
             except Exception:
                 pass
-            finally:
-                conn.close()
+            # لا conn.close() — هو shared من company_state
         self._reload_units_list()
 
     def _reload_units_list(self):
         self._units_list.clear()
+        # [تحسين 48] shared connection — لا إغلاق
         conn = _get_settings_conn()
         if conn:
             try:
                 units = load_units(conn)
             except Exception:
                 units = list(_DEFAULT_UNITS)
-            finally:
-                conn.close()
         else:
             units = list(_DEFAULT_UNITS)
 
@@ -298,6 +321,8 @@ class SettingsDialog(QDialog):
         )
         if not ok2 or not label.strip():
             return
+
+        # [تحسين 48] shared connection — لا إغلاق
         conn = _get_settings_conn()
         if not conn:
             msg_warning(self, "تنبيه", "لا توجد شركة نشطة")
@@ -307,8 +332,7 @@ class SettingsDialog(QDialog):
         except Exception as e:
             msg_warning(self, "خطأ", str(e))
             return
-        finally:
-            conn.close()
+
         if result:
             self._reload_units_list()
         else:
@@ -326,6 +350,7 @@ class SettingsDialog(QDialog):
             return
         if confirm_action(self, "تأكيد الحذف", f"حذف الوحدة «{item.text()}»؟",
                           icon="🗑️", confirm_text="حذف", danger=True):
+            # [تحسين 48] shared connection — لا إغلاق
             conn = _get_settings_conn()
             if not conn:
                 return
@@ -334,14 +359,13 @@ class SettingsDialog(QDialog):
             except Exception as e:
                 msg_warning(self, "خطأ", str(e))
                 return
-            finally:
-                conn.close()
             self._reload_units_list()
 
     def _reset_units(self):
         if confirm_action(self, "استعادة الافتراضية",
                           "حذف كل الوحدات المضافة والرجوع للقائمة الافتراضية؟",
                           icon="↺", confirm_text="استعادة"):
+            # [تحسين 48] shared connection — لا إغلاق
             conn = _get_settings_conn()
             if not conn:
                 return
@@ -350,8 +374,6 @@ class SettingsDialog(QDialog):
             except Exception as e:
                 msg_warning(self, "خطأ", str(e))
                 return
-            finally:
-                conn.close()
             self._reload_units_list()
 
     # ── تصفح لملف GIMP ──
@@ -386,6 +408,7 @@ class SettingsDialog(QDialog):
         set_font_size(size)
         apply_font(self._app, size)
 
+        # [تحسين 48] shared connection — لا إغلاق
         conn = _get_settings_conn()
         if conn:
             try:
@@ -393,8 +416,6 @@ class SettingsDialog(QDialog):
                 set_setting(conn, "gimp_path", self._inp_gimp.text().strip())
             except Exception:
                 pass
-            finally:
-                conn.close()
         self.accept()
 
     def _cancel(self):
