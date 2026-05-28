@@ -4,9 +4,10 @@ ui/widgets/mixins/validate.py
 FormValidationMixin — تحقق موحد من حقول الفورم.
 
 التحسينات:
-  - [i18n] رسائل التحقق تمر بـ tr() لدعم الترجمة.
-    "أدخل {label}" و"اختر {label}" و"أدخل {label} أكبر من صفر"
-    يمكن الآن ترجمتها للغات الأخرى من خلال i18n_manager.
+  - [i18n] رسائل التحقق تستخدم مفاتيح الترجمة من i18n.py
+    بدل النصوص العربية المباشرة.
+    "enter_field", "select_field", "field_positive", "field_positive_enter"
+    يمكن الآن ترجمتها للغات الأخرى.
 """
 from PyQt5.QtWidgets import QLineEdit, QComboBox
 
@@ -21,44 +22,41 @@ class FormValidationMixin:
         class MyForm(QWidget, FormValidationMixin):
             def _save(self):
                 if not self.validate_required([
-                    (self.inp_name, "الاسم"),
+                    (self.inp_name, tr("name")),
                 ]):
                     return
     """
 
     def _warn(self, msg: str):
-        # ← استخدام msg_warning الموحد بدل QMessageBox.warning
         from ..dialogs.message import msg_warning
-        msg_warning(self, tr("تنبيه"), msg)
+        msg_warning(self, tr("warning"), msg)
 
     def validate_required(self, fields: list, parent=None) -> bool:
         for widget, label in fields:
             if isinstance(widget, QLineEdit):
                 if not widget.text().strip():
-                    # [i18n] رسالة "أدخل X" قابلة للترجمة
-                    self._warn(tr("أدخل {label}", label=label))
+                    self._warn(tr("enter_field", label=label))
                     widget.setFocus()
                     return False
             elif isinstance(widget, QComboBox):
                 if widget.currentData() is None:
-                    # [i18n] رسالة "اختر X" قابلة للترجمة
-                    self._warn(tr("اختر {label}", label=label))
+                    self._warn(tr("select_field", label=label))
                     return False
         return True
 
-    def validate_amount(self, spinbox, label: str = "المبلغ",
+    def validate_amount(self, spinbox, label: str = "",
                         min_val: float = 0.01, parent=None) -> bool:
+        _label = label or tr("amount")
         if spinbox.value() < min_val:
-            # [i18n] رسالة "أدخل X أكبر من صفر" قابلة للترجمة
-            self._warn(tr("أدخل {label} أكبر من صفر", label=label))
+            self._warn(tr("field_positive_enter", label=_label))
             spinbox.setFocus()
             return False
         return True
 
-    def validate_positive(self, value: float, label: str = "القيمة",
+    def validate_positive(self, value: float, label: str = "",
                           parent=None) -> bool:
+        _label = label or tr("amount")
         if value <= 0:
-            # [i18n] رسالة "X يجب أن يكون أكبر من صفر" قابلة للترجمة
-            self._warn(tr("{label} يجب أن يكون أكبر من صفر", label=label))
+            self._warn(tr("field_positive", label=_label))
             return False
         return True

@@ -11,6 +11,13 @@ ui/i18n.py
 
     i18n_manager.set_language("en")
     i18n_manager.language_changed.connect(my_fn)
+
+التغييرات:
+    - إضافة مفاتيح الرسائل والتحقق الناقصة:
+        enter_field, select_field, field_positive, field_positive_enter
+    - إضافة مفاتيح نصوص الـ panels الافتراضية:
+        list_search_placeholder, detail_select_item
+    - إضافة مفاتيح رسائل الأزرار الشائعة
 """
 
 from __future__ import annotations
@@ -82,6 +89,9 @@ _TRANSLATIONS: Dict[str, Dict[str, str]] = {
         "no_search_results":    "جرب تغيير كلمة البحث أو الفلتر",
         "select_item_first":    "اختر عنصراً أولاً",
         "select_company":       "اختر شركة نشطة أولاً",
+        # placeholder نصوص الـ panels
+        "list_search_placeholder": "🔍  بحث...",
+        "detail_select_item":      "اختر عنصراً من القائمة",
         # تأكيد
         "confirm_delete":       "تأكيد الحذف",
         "confirm_save":         "تأكيد الحفظ",
@@ -98,6 +108,11 @@ _TRANSLATIONS: Dict[str, Dict[str, str]] = {
         "warning":              "تنبيه",
         "error":                "خطأ",
         "info":                 "معلومة",
+        # رسائل التحقق من الحقول
+        "enter_field":          "أدخل {label}",
+        "select_field":         "اختر {label}",
+        "field_positive":       "{label} يجب أن يكون أكبر من صفر",
+        "field_positive_enter": "أدخل {label} أكبر من صفر",
         # حقول
         "name":                 "الاسم",
         "code":                 "الكود",
@@ -159,6 +174,13 @@ _TRANSLATIONS: Dict[str, Dict[str, str]] = {
         # شريط الحالة
         "showing_of":   "{shown} / {total}",
         "showing_all":  "{total}",
+        # أزرار فورم
+        "btn_add":      "➕  إضافة",
+        "btn_save":     "💾  حفظ التعديل",
+        "btn_cancel":   "✖  إلغاء",
+        "btn_delete":   "🗑️  حذف",
+        "btn_edit":     "✏️  تعديل",
+        "btn_refresh":  "🔄  تحديث",
     },
 
     "en": {
@@ -218,6 +240,9 @@ _TRANSLATIONS: Dict[str, Dict[str, str]] = {
         "no_search_results":    "Try changing the search term or filter",
         "select_item_first":    "Select an item first",
         "select_company":       "Please select an active company first",
+        # Panel placeholders
+        "list_search_placeholder": "🔍  Search...",
+        "detail_select_item":      "Select an item from the list",
         # Confirm
         "confirm_delete":       "Confirm Delete",
         "confirm_save":         "Confirm Save",
@@ -234,6 +259,11 @@ _TRANSLATIONS: Dict[str, Dict[str, str]] = {
         "warning":              "Warning",
         "error":                "Error",
         "info":                 "Info",
+        # Validation messages
+        "enter_field":          "Enter {label}",
+        "select_field":         "Select {label}",
+        "field_positive":       "{label} must be greater than zero",
+        "field_positive_enter": "Enter {label} greater than zero",
         # Fields
         "name":                 "Name",
         "code":                 "Code",
@@ -295,6 +325,13 @@ _TRANSLATIONS: Dict[str, Dict[str, str]] = {
         # Status bar
         "showing_of":   "{shown} / {total}",
         "showing_all":  "{total}",
+        # Form buttons
+        "btn_add":      "➕  Add",
+        "btn_save":     "💾  Save Changes",
+        "btn_cancel":   "✖  Cancel",
+        "btn_delete":   "🗑️  Delete",
+        "btn_edit":     "✏️  Edit",
+        "btn_refresh":  "🔄  Refresh",
     },
 }
 

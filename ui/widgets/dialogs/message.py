@@ -4,8 +4,8 @@ ui/widgets/dialogs/message.py
 نوافذ الرسائل الموحدة (info / warning / critical / question).
 
 التحسينات:
-  - [i18n] نصوص الأزرار ("حسناً"، "نعم"، "لا") أصبحت تمر بـ tr()
-    لدعم الترجمة متعددة اللغات.
+  - [i18n] نصوص الأزرار ("حسناً"، "نعم"، "لا") تستخدم مفاتيح الترجمة
+    بدل النصوص العربية المباشرة.
 """
 from PyQt5.QtWidgets import QLabel
 from PyQt5.QtCore    import Qt
@@ -47,8 +47,8 @@ class MessageDialog(DialogShell):
         self.body_layout.addWidget(lbl)
 
         if yes_no:
-            btn_yes = make_btn(tr("نعم"), "primary")
-            btn_no  = make_btn(tr("لا"),  "ghost")
+            btn_yes = make_btn(tr("yes"), "primary")
+            btn_no  = make_btn(tr("no"),  "ghost")
             btn_yes.setMinimumHeight(32)
             btn_no.setMinimumHeight(32)
             btn_yes.clicked.connect(self._on_yes)
@@ -57,7 +57,7 @@ class MessageDialog(DialogShell):
             self.btn_layout.addWidget(btn_no)
         else:
             self._result = True
-            btn_ok = make_btn(tr("حسناً"), "primary")
+            btn_ok = make_btn(tr("ok"), "primary")
             btn_ok.setMinimumHeight(32)
             btn_ok.clicked.connect(self.accept)
             self.btn_layout.addWidget(btn_ok)

@@ -2,8 +2,13 @@
 ui/widgets/mixins/select.py
 =====================================
 SelectionMixin — منطق موحد لتحديد عناصر الجدول.
+
+التحسينات:
+  - [i18n] رسالة "اختر عنصراً أولاً" تستخدم tr("select_item_first").
 """
 from PyQt5.QtCore import Qt
+
+from ..core.i18n import tr
 
 
 class SelectionMixin:
@@ -51,12 +56,12 @@ class SelectionMixin:
         tbl = table or getattr(self, "table", None)
         return tbl.currentRow() if tbl else -1
 
-    def _warn_no_selection(self, msg: str = "اختر عنصراً أولاً"):
-        # ← استخدام msg_info الموحد بدل QMessageBox.information
+    def _warn_no_selection(self, msg: str = ""):
         from ..dialogs.message import msg_info
-        msg_info(self, "تنبيه", msg)
+        _msg = msg or tr("select_item_first")
+        msg_info(self, tr("warning"), _msg)
 
-    def _require_selection(self, msg: str = "اختر عنصراً أولاً") -> "int | None":
+    def _require_selection(self, msg: str = "") -> "int | None":
         item_id = self._selected_id()
         if item_id is None:
             self._warn_no_selection(msg)
