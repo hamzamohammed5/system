@@ -8,6 +8,12 @@ db/shared/shared_items_bridge.py
   - الشركة تقرأ بياناتها مباشرة من companies.db — مفيش نسخ محلية
   - أي تعديل على shared_item يتعكس فوراً على كل الشركات المشتركة فيه
   - العناصر المشتركة تظهر مع أيقونة 🔗 وbadge "مشترك"
+
+تحسين (v2):
+  - كل method تقبل _conn اختياري لتجنب فتح/إغلاق connection في كل استدعاء.
+    لو _conn=None (الافتراضي) → تفتح connection جديد وتقفله تلقائياً.
+    لو _conn مُمرَّر من الخارج → المستدعي مسؤول عن الإغلاق.
+    هذا يقلل overhead في workflows المتعددة الخطوات.
 """
 
 import json
@@ -48,7 +54,7 @@ class SharedItemsBridge:
     def _get_central_conn(self):
         """
         يفتح connection جديد لـ companies.db.
-        المستدعي مسؤول عن إغلاقه بعد الاستخدام المباشر.
+        يُستخدم داخلياً فقط لو لم يُمرَّر _conn من الخارج.
         """
         from db.companies.companies_schema import get_central_connection
         return get_central_connection()
@@ -62,33 +68,37 @@ class SharedItemsBridge:
     # جلب العناصر المشتركة من companies.db
     # ══════════════════════════════════════════════════════
 
-    def fetch_shared_items_for_type(self, shared_type: str) -> list:
+    def fetch_shared_items_for_type(self, shared_type: str,
+                                     _conn=None) -> list:
         """
         يجيب العناصر المشتركة التي الشركة الحالية مشتركة فيها.
         كل عنصر يرجع كـ dict يشبه صف items لسهولة الاستخدام.
+
+        _conn: connection اختياري — لو None بيفتح/يقفل تلقائياً.
         """
+        owned = _conn is None
+        conn  = _conn or self._get_central_conn()
         try:
-            central = self._get_central_conn()
-            try:
-                rows = central.execute("""
-                    SELECT s.id, s.name, s.shared_type, s.data, s.updated_at
-                    FROM company_shared_links lnk
-                    JOIN shared_items s ON s.id = lnk.shared_item_id
-                    WHERE lnk.company_id = ? AND s.shared_type = ?
-                    ORDER BY s.name
-                """, (self.company_id, shared_type)).fetchall()
-            finally:
-                central.close()
+            rows = conn.execute("""
+                SELECT s.id, s.name, s.shared_type, s.data, s.updated_at
+                FROM company_shared_links lnk
+                JOIN shared_items s ON s.id = lnk.shared_item_id
+                WHERE lnk.company_id = ? AND s.shared_type = ?
+                ORDER BY s.name
+            """, (self.company_id, shared_type)).fetchall()
 
             result = []
             for row in rows:
-                d = _decode(row["data"])
+                d    = _decode(row["data"])
                 item = self._row_to_item(row, d, shared_type)
                 result.append(item)
             return result
         except Exception as e:
             print(f"[SharedItemsBridge] fetch_shared_items_for_type error: {e}")
             return []
+        finally:
+            if owned:
+                conn.close()
 
     def _row_to_item(self, row, data: dict, shared_type: str) -> dict:
         """يحول صف shared_items إلى dict يشبه صف items."""
@@ -144,94 +154,160 @@ class SharedItemsBridge:
     # ══════════════════════════════════════════════════════
 
     def fetch_shared_item_as_row(self, shared_item_id: int,
-                                  shared_type: str = None) -> Optional[dict]:
-        """يجيب عنصر مشترك واحد كـ dict."""
+                                  shared_type: str = None,
+                                  _conn=None) -> Optional[dict]:
+        """
+        يجيب عنصر مشترك واحد كـ dict.
+
+        _conn: connection اختياري — لو None بيفتح/يقفل تلقائياً.
+        """
+        owned = _conn is None
+        conn  = _conn or self._get_central_conn()
         try:
-            central = self._get_central_conn()
-            try:
-                row = central.execute(
-                    "SELECT id, name, shared_type, data, updated_at "
-                    "FROM shared_items WHERE id=?",
-                    (shared_item_id,)
-                ).fetchone()
-            finally:
-                central.close()
+            row = conn.execute(
+                "SELECT id, name, shared_type, data, updated_at "
+                "FROM shared_items WHERE id=?",
+                (shared_item_id,)
+            ).fetchone()
             if not row:
                 return None
             d = _decode(row["data"])
             return self._row_to_item(row, d, shared_type or row["shared_type"])
         except Exception:
             return None
+        finally:
+            if owned:
+                conn.close()
 
     # ══════════════════════════════════════════════════════
     # تحديث عنصر مشترك (يتعكس على كل الشركات فوراً)
     # ══════════════════════════════════════════════════════
 
-    def update_shared_item(self, shared_item_id: int, name: str, data: dict):
+    def update_shared_item(self, shared_item_id: int, name: str, data: dict,
+                            _conn=None):
         """
         يحدث بيانات عنصر مشترك في companies.db.
         التحديث يتعكس فوراً على كل الشركات لأنها تقرأ من companies.db مباشرة.
+
+        _conn: connection اختياري — لو None بيفتح/يقفل تلقائياً.
         """
-        central = self._get_central_conn()
+        owned = _conn is None
+        conn  = _conn or self._get_central_conn()
         try:
-            central.execute(
+            conn.execute(
                 "UPDATE shared_items SET name=?, data=?, updated_at=datetime('now') WHERE id=?",
                 (name, _encode(data), shared_item_id)
             )
-            central.commit()   # إصلاح: commit() كان ناقص — التغييرات لم تكن تُحفظ
+            conn.commit()
         finally:
-            central.close()
+            if owned:
+                conn.close()
 
     # ══════════════════════════════════════════════════════
     # ربط / فك ربط
     # ══════════════════════════════════════════════════════
 
-    def link_shared_item(self, shared_item_id: int):
-        """يربط عنصر مشترك بالشركة الحالية."""
-        central = self._get_central_conn()
+    def link_shared_item(self, shared_item_id: int, _conn=None):
+        """
+        يربط عنصر مشترك بالشركة الحالية.
+
+        _conn: connection اختياري — لو None بيفتح/يقفل تلقائياً.
+        """
+        owned = _conn is None
+        conn  = _conn or self._get_central_conn()
         try:
-            central.execute(
+            conn.execute(
                 "INSERT OR IGNORE INTO company_shared_links (shared_item_id, company_id) VALUES (?, ?)",
                 (shared_item_id, self.company_id)
             )
-            central.commit()
+            conn.commit()
         finally:
-            central.close()
+            if owned:
+                conn.close()
 
-    def unlink_shared_item(self, shared_item_id: int):
-        """يفك ربط عنصر مشترك من الشركة الحالية."""
-        central = self._get_central_conn()
+    def unlink_shared_item(self, shared_item_id: int, _conn=None):
+        """
+        يفك ربط عنصر مشترك من الشركة الحالية.
+
+        _conn: connection اختياري — لو None بيفتح/يقفل تلقائياً.
+        """
+        owned = _conn is None
+        conn  = _conn or self._get_central_conn()
         try:
-            central.execute(
+            conn.execute(
                 "DELETE FROM company_shared_links WHERE shared_item_id=? AND company_id=?",
                 (shared_item_id, self.company_id)
             )
-            central.commit()
+            conn.commit()
         finally:
-            central.close()
+            if owned:
+                conn.close()
 
-    def is_linked(self, shared_item_id: int) -> bool:
-        """هل الشركة الحالية مشتركة في هذا العنصر؟"""
+    def is_linked(self, shared_item_id: int, _conn=None) -> bool:
+        """
+        هل الشركة الحالية مشتركة في هذا العنصر؟
+
+        _conn: connection اختياري — لو None بيفتح/يقفل تلقائياً.
+        """
+        owned = _conn is None
+        conn  = _conn or self._get_central_conn()
         try:
-            central = self._get_central_conn()
-            try:
-                row = central.execute(
-                    "SELECT 1 FROM company_shared_links WHERE shared_item_id=? AND company_id=?",
-                    (shared_item_id, self.company_id)
-                ).fetchone()
-            finally:
-                central.close()
+            row = conn.execute(
+                "SELECT 1 FROM company_shared_links WHERE shared_item_id=? AND company_id=?",
+                (shared_item_id, self.company_id)
+            ).fetchone()
             return row is not None
         except Exception:
             return False
+        finally:
+            if owned:
+                conn.close()
+
+    # ══════════════════════════════════════════════════════
+    # عمليات batch (تستخدم connection واحد لأكثر من عملية)
+    # ══════════════════════════════════════════════════════
+
+    def batch_link(self, shared_item_ids: list[int]):
+        """
+        يربط قائمة من العناصر في connection واحد.
+        أكفأ من استدعاء link_shared_item() عدة مرات.
+        """
+        conn = self._get_central_conn()
+        try:
+            for sid in shared_item_ids:
+                conn.execute(
+                    "INSERT OR IGNORE INTO company_shared_links "
+                    "(shared_item_id, company_id) VALUES (?, ?)",
+                    (sid, self.company_id)
+                )
+            conn.commit()
+        finally:
+            conn.close()
+
+    def batch_unlink(self, shared_item_ids: list[int]):
+        """
+        يفك ربط قائمة من العناصر في connection واحد.
+        """
+        conn = self._get_central_conn()
+        try:
+            for sid in shared_item_ids:
+                conn.execute(
+                    "DELETE FROM company_shared_links "
+                    "WHERE shared_item_id=? AND company_id=?",
+                    (sid, self.company_id)
+                )
+            conn.commit()
+        finally:
+            conn.close()
 
     # ══════════════════════════════════════════════════════
     # حساب تكلفة عنصر مشترك
     # ══════════════════════════════════════════════════════
 
-    def calc_shared_raw_unit_price(self, shared_item_id: int) -> float:
+    def calc_shared_raw_unit_price(self, shared_item_id: int,
+                                    _conn=None) -> float:
         """يحسب سعر وحدة الخامة المشتركة."""
-        item = self.fetch_shared_item_as_row(shared_item_id, "raw")
+        item = self.fetch_shared_item_as_row(shared_item_id, "raw", _conn=_conn)
         if not item:
             return 0.0
         price     = float(item.get("price", 0.0))

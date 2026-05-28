@@ -7,11 +7,6 @@ db/costing/schema.py  (نسخة multi-company)
 بدلاً من إنشاء connection داخلياً — عشان تدعم multi-company.
 """
 
-from db.shared.migrations   import run_migrations
-from db.shared.migrations_v2 import run_migrations_v2
-from db.shared.migrations_v3 import run_migrations_v3
-
-
 # ══════════════════════════════════════════════════════════
 # الدالة الأساسية — تقبل connection جاهز
 # ══════════════════════════════════════════════════════════
@@ -84,9 +79,6 @@ def _init_erp_db(conn):
         ]
     )
 
-    run_migrations(conn)
-    run_migrations_v2(conn)
-    run_migrations_v3(conn)
 
 
 # ══════════════════════════════════════════════════════════

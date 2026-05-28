@@ -1,5 +1,5 @@
 File Tree Snapshot
-Generated : 2026-05-28 07:20:36
+Generated : 2026-05-28 07:32:10
 Source    : D:\My Workspace\Hg\Alhabaar\accountant\system
 Extensions: .py
 ────────────────────────────────────────────────────────────
@@ -13,7 +13,6 @@ system/
 │   │   ├── accounting_repo_ui_helpers.py
 │   │   ├── accounting_schema.py
 │   │   ├── accounting_schema_constants.py
-│   │   ├── accounting_schema_migrations.py
 │   │   ├── accounting_schema_seed.py
 │   │   └── accounting_statements_repo.py
 │   ├── companies/
@@ -27,17 +26,12 @@ system/
 │   │   ├── operations_repo.py
 │   │   ├── raw_variants_repo.py
 │   │   └── schema.py
-│   ├── design/
 │   ├── designs/
 │   │   ├── design_item_categories_repo.py
 │   │   ├── design_schema.py
 │   │   ├── designs_repo.py
 │   │   ├── designs_sizes_repo.py
-│   │   ├── dimension_sets_repo.py
-│   │   ├── migrations_v4.py
-│   │   ├── migrations_v5.py
-│   │   ├── migrations_v6.py
-│   │   └── migrations_v7.py
+│   │   └── dimension_sets_repo.py
 │   ├── inventory/
 │   │   ├── inventory_repo.py
 │   │   ├── inventory_schema.py
@@ -53,9 +47,6 @@ system/
 │       ├── categories_repo.py
 │       ├── connection.py
 │       ├── items_repo.py
-│       ├── migrations.py
-│       ├── migrations_v2.py
-│       ├── migrations_v3.py
 │       ├── settings_repo.py
 │       └── shared_items_bridge.py
 ├── models/

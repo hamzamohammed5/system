@@ -4,10 +4,14 @@ ui/app_settings.py
 يحفظ ويطبّق إعداد حجم الخط على التطبيق كله.
 تصميم محسّن — Warm Neutral System مع تفاصيل دقيقة.
 
-التغييرات (v4 — font_size order fix):
+التغييرات (v5 — stylesheet cache):
+  - _ss_cache: dict[int, str] يحفظ الـ stylesheet المبنية لكل font_size.
+    _build_stylesheet() تبني مرة واحدة لكل حجم خط ثم ترجع من الـ cache.
+    apply_font() تمسح الـ cache عند التغيير.
+    هذا يلغي إعادة بناء الـ string الضخمة في كل استدعاء.
+
   - set_font_size() تحدّث AppState cache أولاً (UI يتحدث فوراً)
     ثم تحفظ في DB (لو فشل DB، الـ UI يتحدث على أي حال).
-  - الترتيب القديم كان معكوساً: DB أولاً → لو فشل DB لا يتحدث الـ UI.
 """
 
 from PyQt5.QtWidgets import QApplication
@@ -15,6 +19,11 @@ from PyQt5.QtWidgets import QApplication
 DEFAULT_FONT_SIZE = 11
 MIN_FONT_SIZE     = 8
 MAX_FONT_SIZE     = 20
+
+# ══════════════════════════════════════════════════════════
+# Stylesheet cache — يحفظ نتيجة _build_stylesheet لكل font_size
+# ══════════════════════════════════════════════════════════
+_ss_cache: dict[int, str] = {}
 
 # ══════════════════════════════════════════════════════════
 # Sidebar layout constants
@@ -505,7 +514,16 @@ QLabel#nav_label {{ font-size: {normal}pt; background: transparent; border: none
 
 
 def _build_stylesheet(base: int) -> str:
-    base    = max(MIN_FONT_SIZE, min(MAX_FONT_SIZE, base))
+    """
+    يبني الـ stylesheet الكامل لحجم خط معين.
+    النتيجة تُحفظ في _ss_cache — تُبنى مرة واحدة فقط لكل حجم.
+    """
+    base = max(MIN_FONT_SIZE, min(MAX_FONT_SIZE, base))
+
+    # إرجاع من الـ cache لو موجود
+    if base in _ss_cache:
+        return _ss_cache[base]
+
     c       = _C
     tiny    = fs(base, -2)
     small   = fs(base, -1)
@@ -536,13 +554,18 @@ def _build_stylesheet(base: int) -> str:
         _ss_scrollbars(c=c),
         _ss_misc(**kw),
     ]
-    return "\n".join(sections)
+
+    result = "\n".join(sections)
+    _ss_cache[base] = result
+    return result
 
 
 def apply_font(app: QApplication, size: int = None):
     if size is None:
         size = get_font_size()
     size = max(MIN_FONT_SIZE, min(MAX_FONT_SIZE, size))
+    # امسح الـ cache عند تغيير الحجم — الحجم الجديد سيُبنى عند أول استدعاء
+    _ss_cache.clear()
     from ui.app_state import AppState
     AppState.on_font_changed(size)
     app.setStyleSheet(_build_stylesheet(size))

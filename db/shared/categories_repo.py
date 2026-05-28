@@ -6,6 +6,20 @@ db/shared/categories_repo.py
   - scope='design' للتصنيفات الخاصة بمجموعات المقاسات
   - template_fields (JSON) لتخزين الحقول الافتراضية لكل تصنيف
   - default_unit لتخزين الوحدة الافتراضية
+
+الفرق بين دالتَي الجلب الرئيسيتين:
+  ┌──────────────────────────┬──────────────────────────────────────┐
+  │ fetch_all_categories     │ fetch_categories_by_scope            │
+  ├──────────────────────────┼──────────────────────────────────────┤
+  │ لو scope محدد:           │ scope محدد فقط — بدون 'all'          │
+  │   scope='all' + scope=?  │                                      │
+  │ لو بدون scope:           │ مناسب للـ panels اللي بتعرض          │
+  │   كل التصنيفات           │ تصنيفات نوع واحد بالظبط              │
+  │                          │                                      │
+  │ مناسب للـ dropdowns اللي  │ مثال: CategoryManager لـ raw items   │
+  │ بتعرض 'الكل' + تصنيفات  │ يستخدمها عشان يعرض raw فقط           │
+  │ النوع                    │ بدون تصنيفات 'الكل' المشتركة          │
+  └──────────────────────────┴──────────────────────────────────────┘
 """
 
 import json
@@ -29,7 +43,17 @@ PRESET_COLORS = [
 
 
 def fetch_all_categories(conn, scope: str = None):
-    """كل التصنيفات مع اسم الأب — مفلترة بالـ scope لو محدد."""
+    """
+    كل التصنيفات مع اسم الأب — مفلترة بالـ scope لو محدد.
+
+    لو scope محدد: يرجع تصنيفات scope='all' + تصنيفات scope=? معاً.
+    لو بدون scope: يرجع كل التصنيفات بغض النظر عن الـ scope.
+
+    الاستخدام المثالي: الـ dropdowns اللي بتعرض 'الكل' + تصنيفات نوع معين،
+    مثل filter toolbar للخامات (تعرض تصنيفات 'الكل' + تصنيفات 'raw').
+
+    قارن بـ fetch_categories_by_scope() — ترجع scope محدد فقط بدون 'all'.
+    """
     if scope:
         return conn.execute("""
             SELECT c.id, c.name, c.scope, c.color, c.parent_id,
@@ -49,7 +73,14 @@ def fetch_all_categories(conn, scope: str = None):
 
 
 def fetch_categories_by_scope(conn, scope: str):
-    """تصنيفات scope محدد فقط — بدون 'all'."""
+    """
+    تصنيفات scope محدد فقط — بدون تصنيفات 'all'.
+
+    الاستخدام المثالي: الـ panels اللي بتعرض وتدير تصنيفات نوع واحد بالظبط،
+    مثل CategoryManager لـ raw items — يعرض raw فقط بدون تصنيفات 'الكل' المشتركة.
+
+    قارن بـ fetch_all_categories(scope=?) — تضم تصنيفات 'all' أيضاً.
+    """
     return conn.execute("""
         SELECT c.id, c.name, c.scope, c.color, c.parent_id,
                c.template_fields, c.default_unit,
@@ -71,6 +102,10 @@ def fetch_category(conn, cat_id: int):
 
 
 def fetch_descendants(conn, cat_id: int) -> list[int]:
+    """
+    يرجع قائمة بـ IDs كل أبناء التصنيف (وأحفاده) + التصنيف نفسه.
+    يُستخدم قبل الحذف لضمان cascade صحيح.
+    """
     result = set()
     queue  = [cat_id]
     while queue:
@@ -146,6 +181,10 @@ def count_category_items(conn, cat_id: int) -> dict:
 
 
 def build_tree(rows) -> list[dict]:
+    """
+    يحول قائمة صفوف مسطحة إلى شجرة هرمية.
+    كل node: {id, name, scope, color, parent_id, children: [...]}
+    """
     nodes = {
         r["id"]: {
             "id":        r["id"],

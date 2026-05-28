@@ -32,60 +32,6 @@ def _table_exists(conn, table: str) -> bool:
     return row is not None
 
 
-def _run_migrations(conn):
-    """Migrations آمنة على designs.db."""
-
-    # ══ 1. source_set_id في dimension_field_deps ══
-    if _table_exists(conn, "dimension_field_deps"):
-        if not _column_exists(conn, "dimension_field_deps", "source_set_id"):
-            try:
-                conn.execute(
-                    "ALTER TABLE dimension_field_deps "
-                    "ADD COLUMN source_set_id INTEGER "
-                    "REFERENCES dimension_sets(id) ON DELETE SET NULL"
-                )
-                conn.commit()
-            except Exception as e:
-                print(f"[design_schema] migration source_set_id: {e}")
-
-    # ══ 2. جدول dimension_set_values ══
-    if not _table_exists(conn, "dimension_set_values"):
-        try:
-            conn.execute("""
-                CREATE TABLE dimension_set_values (
-                    id          INTEGER PRIMARY KEY AUTOINCREMENT,
-                    set_id      INTEGER NOT NULL
-                                REFERENCES dimension_sets(id) ON DELETE CASCADE,
-                    field_id    INTEGER NOT NULL
-                                REFERENCES dimension_fields(id) ON DELETE CASCADE,
-                    instance_id INTEGER
-                                REFERENCES dimension_set_instances(id) ON DELETE CASCADE,
-                    value_num   REAL,
-                    value_text  TEXT,
-                    UNIQUE(instance_id, field_id)
-                )
-            """)
-            conn.commit()
-        except Exception as e:
-            print(f"[design_schema] migration dimension_set_values: {e}")
-
-    # ══ 3. migration v4 — نظام الـ instances ══
-    from db.designs.migrations_v4 import run_migrations_v4
-    run_migrations_v4(conn)
-
-    # ══ 4. migration v5 — design_sizes + GIMP integration ══
-    from db.designs.migrations_v5 import run_migrations_v5
-    run_migrations_v5(conn)
-
-    # ══ 5. migration v6 — preview_image في designs ══
-    from db.designs.migrations_v6 import run_migrations_v6
-    run_migrations_v6(conn)
-
-    # ══ 6. migration v7 — design_item_categories المستقل ══
-    from db.designs.migrations_v7 import run_migrations_v7
-    run_migrations_v7(conn)
-
-
 def create_designs_tables(conn):
     """إنشاء كل جداول designs.db ثم تنفيذ الـ migrations."""
 
@@ -215,5 +161,3 @@ def create_designs_tables(conn):
         );
     """)
     conn.commit()
-
-    _run_migrations(conn)

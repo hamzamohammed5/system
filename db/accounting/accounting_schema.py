@@ -18,16 +18,6 @@ from db.accounting.accounting_schema_constants import (
     _VALID_TYPES,
 )
 
-# ── Migrations ───────────────────────────────────────────
-from db.accounting.accounting_schema_migrations import (
-    _get_current_type_constraint,
-    _needs_migration,
-    _column_exists,
-    _table_exists,
-    _migrate_accounts_type_constraint,
-    _fix_is_leaf,
-    run_schema_migrations as _migrate_schema,
-)
 
 # ── Seed ─────────────────────────────────────────────────
 from db.accounting.accounting_schema_seed import seed_default_accounts as _seed_default_accounts
@@ -109,13 +99,6 @@ def create_accounting_tables(conn):
         print(f"[accounting_schema] journal tables error: {e}")
 
     try:
-        _migrate_schema(conn)
-    except Exception as e:
-        print(f"[accounting_schema] migrate_schema error: {e}")
-
-    try:
         _seed_default_accounts(conn)
     except Exception as e:
         print(f"[accounting_schema] seed error: {e}")
-
-    _fix_is_leaf(conn)
