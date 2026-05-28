@@ -27,9 +27,6 @@ import os
 _BASE_DIR   = os.path.join(os.path.dirname(__file__), "..", "..")
 CENTRAL_DB  = os.path.join(_BASE_DIR, "companies.db")
 
-# للتوافق مع الكود القديم — تشير لـ erp.db الشركة النشطة
-DB_PATH = None   # يُحدَّث عند تغيير الشركة النشطة
-
 
 def _make_conn(path: str) -> sqlite3.Connection:
     """إنشاء connection موحد الإعدادات."""
@@ -68,8 +65,6 @@ def get_connection(db: str = "erp") -> sqlite3.Connection:
 
     from db.companies.company_state import company_state
     if not company_state.is_ready:
-        # fallback: لو ما فيش شركة نشطة → ارجع connection فارغ مؤقت
-        # (حالة التشغيل الأولى قبل اختيار شركة)
         raise RuntimeError(
             "لم يتم تحديد شركة نشطة.\n"
             "اختر شركة من القائمة أولاً."

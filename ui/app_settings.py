@@ -4,12 +4,10 @@ ui/app_settings.py
 يحفظ ويطبّق إعداد حجم الخط على التطبيق كله.
 تصميم محسّن — Warm Neutral System مع تفاصيل دقيقة.
 
-التغييرات (v3 — AppState cache):
-  - get_font_size() أصبحت تستخدم AppState.font_size()
-    بدل DB query مباشرة في كل استدعاء.
-  - set_font_size() تحدّث DB + AppState cache معاً.
-  - apply_font() تستدعي AppState.on_font_changed() لإبطال الـ caches.
-  - conn.close() محذوف — shared connection لا يُغلق من هنا.
+التغييرات (v4 — font_size order fix):
+  - set_font_size() تحدّث AppState cache أولاً (UI يتحدث فوراً)
+    ثم تحفظ في DB (لو فشل DB، الـ UI يتحدث على أي حال).
+  - الترتيب القديم كان معكوساً: DB أولاً → لو فشل DB لا يتحدث الـ UI.
 """
 
 from PyQt5.QtWidgets import QApplication
@@ -104,28 +102,26 @@ def get_font_size() -> int:
 
 def set_font_size(size: int):
     """
-    يحفظ حجم الخط في DB ويحدّث الـ cache.
+    يحدّث حجم الخط — cache أولاً ثم DB.
+
+    الترتيب مهم:
+      1. AppState.on_font_changed() أولاً → الـ UI يتحدث فوراً
+      2. DB ثانياً → لو فشل DB، الـ UI يكون اتحدث بالفعل
     """
     size = max(MIN_FONT_SIZE, min(MAX_FONT_SIZE, size))
 
-    # حفظ في DB
+    # 1. حدّث الـ cache أولاً — الـ UI يتحدث بغض النظر عن DB
+    from ui.app_state import AppState
+    AppState.on_font_changed(size)
+
+    # 2. احفظ في DB — فشله لا يكسر الـ UI
     try:
         from db.shared.connection import get_connection
         conn = get_connection()
-    except RuntimeError:
-        return
-    except Exception:
-        return
-
-    try:
         from db.shared.settings_repo import set_setting
         set_setting(conn, "font_size", size)
     except Exception:
         pass
-
-    # تحديث الـ cache — يبطّل stylesheet cache الأزرار تلقائياً
-    from ui.app_state import AppState
-    AppState.on_font_changed(size)
 
 
 def fs(base: int, delta: int = 0) -> int:
@@ -547,7 +543,6 @@ def apply_font(app: QApplication, size: int = None):
     if size is None:
         size = get_font_size()
     size = max(MIN_FONT_SIZE, min(MAX_FONT_SIZE, size))
-    # تحديث الـ cache وإبطال stylesheet cache الأزرار
     from ui.app_state import AppState
     AppState.on_font_changed(size)
     app.setStyleSheet(_build_stylesheet(size))
