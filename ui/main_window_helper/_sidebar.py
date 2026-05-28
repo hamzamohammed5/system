@@ -1,6 +1,9 @@
 """
 ui/main_window_helper/_sidebar.py
 ===================================================
+[تحسين 20] refresh_all_buttons تحدّث الآن _SectionLabel أيضاً عند تغيير حجم الخط.
+القديم: refresh_all_buttons تحدّث الأزرار فقط وتتجاهل الـ section labels.
+الجديد: تستدعي lbl._apply_style() على كل label بعد تحديث الأزرار.
 """
 
 from PyQt5.QtWidgets import (
@@ -14,8 +17,6 @@ from ui.app_settings  import _C
 from ._section_label import _SectionLabel
 from ._nav_button import _NavButton, SIDEBAR_COLLAPSED_WIDTH, SIDEBAR_EXPANDED_WIDTH
 from ._toggle_button import _ToggleButton
-
-
 
 
 # ══════════════════════════════════════════════════════════
@@ -169,10 +170,21 @@ class _Sidebar(QFrame):
         self._toggle_btn.setFixedWidth(target)
 
     def refresh_all_buttons(self):
+        """
+        يحدّث أحجام كل الأزرار والـ section labels.
+
+        [تحسين 20] يستدعي _apply_style() على كل _SectionLabel بعد تحديث الأزرار،
+        بدلاً من تجاهلها (وهو ما كان يحدث من قبل). هذا يضمن أن الـ section labels
+        تتحدث عند تغيير حجم الخط من الإعدادات، مثلها مثل الأزرار تماماً.
+        """
         for btn in self._buttons:
             btn.refresh_sizes()
             if self._collapsed:
                 btn.set_collapsed(True)
+
+        # [تحسين 20] تحديث section labels بعد الأزرار
+        for lbl in self._section_labels:
+            lbl._apply_style()
 
     def get_buttons(self):
         return self._buttons

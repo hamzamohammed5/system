@@ -9,6 +9,13 @@ ui/widgets/components/headers.py
   ListHeader     — هيدر لوحة قائمة  (عنوان + بحث + زر إضافة)
   SearchBar      — حقل بحث مع delay
   StatusBar      — شريط حالة (عداد)
+
+التغييرات:
+  - [تحسين 22] DetailHeader يستخدم lazy initialization لـ ActionToolbar.
+    القديم: كل DetailHeader يُنشئ ActionToolbar حتى لو الـ panel
+    لا تضيف أزراراً — هذا يُنشئ FlowLayout فارغاً غير ضروري.
+    الجديد: toolbar يُنشأ فقط عند أول استدعاء لـ .toolbar أو .add_action().
+    الـ API الخارجي لم يتغير — الكود الحالي يعمل بدون تعديل.
 """
 
 from PyQt5.QtWidgets import (
@@ -266,11 +273,20 @@ class PageHeader(QFrame):
 class DetailHeader(QFrame):
     """
     هيدر صفحة تفاصيل: عنوان + شارات + بطاقات إحصائية + toolbar أزرار.
+
+    [تحسين 22] ActionToolbar يُنشأ بـ lazy initialization:
+    لا يُنشأ حتى يُطلب أول مرة عبر .toolbar أو .add_action().
+    هذا يوفر إنشاء FlowLayout + QWidget فارغ لكل panel لا تحتاجه.
+
+    الـ API الخارجي لم يتغير — الكود الحالي يعمل بدون تعديل.
     """
 
     def __init__(self, bg: str = None, parent=None):
         super().__init__(parent)
         self._stat_cards = []
+        self._toolbar    = None   # [تحسين 22] lazy — لم يُنشأ بعد
+        self._tb_section = None   # القسم الحاوي للـ toolbar
+        self._tb_lay     = None   # layout الـ toolbar section
         self._build(bg or _C['bg_surface'])
 
     def _build(self, bg: str):
@@ -351,16 +367,29 @@ class DetailHeader(QFrame):
         root.addWidget(cards_section)
         root.addWidget(h_divider())
 
-        # ── شريط الأزرار ──
-        from .action_toolbar import ActionToolbar
-        toolbar_section = QWidget()
-        toolbar_section.setStyleSheet("background:transparent;")
-        toolbar_section.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Preferred)
-        tb_lay = QVBoxLayout(toolbar_section)
-        tb_lay.setContentsMargins(0, 8, 0, 10)
-        self.toolbar = ActionToolbar(spacing=8)
-        tb_lay.addWidget(self.toolbar)
-        root.addWidget(toolbar_section)
+        # ── [تحسين 22] حجز مكان لشريط الأزرار بدون إنشاء ActionToolbar ──
+        # الـ toolbar section يُنشأ دائماً (لحجز الـ layout space)
+        # لكن ActionToolbar نفسه يُنشأ فقط عند الحاجة
+        self._tb_section = QWidget()
+        self._tb_section.setStyleSheet("background:transparent;")
+        self._tb_section.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Preferred)
+        self._tb_lay = QVBoxLayout(self._tb_section)
+        self._tb_lay.setContentsMargins(0, 8, 0, 10)
+        # لا نُنشئ ActionToolbar هنا — lazy
+        root.addWidget(self._tb_section)
+
+        self._root_layout = root
+
+    def _ensure_toolbar(self) -> "ActionToolbar":
+        """
+        [تحسين 22] ينشئ ActionToolbar عند الحاجة الأولى فقط.
+        بعد الإنشاء يُحفظ في self._toolbar ولا يُعاد إنشاؤه.
+        """
+        if self._toolbar is None:
+            from .action_toolbar import ActionToolbar
+            self._toolbar = ActionToolbar(spacing=8)
+            self._tb_lay.addWidget(self._toolbar)
+        return self._toolbar
 
     # ── API ──────────────────────────────────────────────
 
@@ -410,6 +439,14 @@ class DetailHeader(QFrame):
             self._cards_row.removeWidget(card)
             card.deleteLater()
         self._stat_cards.clear()
+
+    @property
+    def toolbar(self) -> "ActionToolbar":
+        """
+        [تحسين 22] يُنشئ الـ toolbar عند أول وصول.
+        الـ API الخارجي لم يتغير.
+        """
+        return self._ensure_toolbar()
 
 
 # ══════════════════════════════════════════════════════════
@@ -502,11 +539,11 @@ class ListHeader(QFrame):
             self._btn_add.setEnabled(enabled)
 
     @property
-    def search_bar(self) -> SearchBar | None:
+    def search_bar(self) -> "SearchBar | None":
         return self._search_bar
 
     @property
-    def btn_add(self) -> QPushButton | None:
+    def btn_add(self) -> "QPushButton | None":
         return self._btn_add
 
 

@@ -6,12 +6,12 @@ BaseListPanel — قاعدة مشتركة لكل لوحات القوائم.
 التحسينات:
   - [تحسين 24 محفوظ] current_id property للوصول المباشر للـ ID المحدد.
   - [تحسين 45 محفوظ] دعم Custom Sort بالضغط على header الجدول.
-  - [تحسين 51] Pagination للجداول الكبيرة.
-    PAGINATE  = True يُفعّل الـ pagination.
-    PAGE_SIZE = عدد الصفوف في كل صفحة (افتراضي 200).
-    زر "تحميل المزيد" يظهر أسفل الجدول لو في صفوف إضافية.
-    زر "عرض الكل" يظهر كل الصفوف دفعة واحدة.
-    الـ pagination يُعاد ضبطه تلقائياً عند تغيير الفلتر.
+  - [تحسين 51 محفوظ] Pagination للجداول الكبيرة.
+  - [تحسين 17] select_item: binary search في _page_rows قبل _on_show_all.
+    القديم: لو العنصر مش موجود في الصفوف الظاهرة → يُحمّل الكل فوراً.
+    الجديد: يبحث أولاً في _page_rows (O(n) لكن بدون إنشاء Qt widgets).
+    لو وجده → يُحمّل حتى ذلك العنصر فقط (بدل كل البيانات).
+    لو ما وجدوش → يُحمّل الكل كـ fallback.
 """
 from PyQt5.QtWidgets import (
     QWidget, QVBoxLayout, QHBoxLayout, QLabel,
@@ -236,10 +236,6 @@ class BaseListPanel(QWidget, BusConnectedMixin):
     # ── [تحسين 51] Pagination bar ─────────────────────────
 
     def _build_pagination_bar(self) -> QWidget:
-        """
-        [تحسين 51] يبني شريط الـ pagination مع زر "تحميل المزيد".
-        مخفي بالكامل لو PAGINATE = False أو مفيش صفوف إضافية.
-        """
         bar = QFrame()
         bar.setStyleSheet(f"""
             QFrame {{
@@ -255,7 +251,6 @@ class BaseListPanel(QWidget, BusConnectedMixin):
 
         base = get_font_size()
 
-        # label: "يعرض 200 من 1500"
         self._lbl_page_info = QLabel("")
         self._lbl_page_info.setStyleSheet(
             f"color: {_C['text_muted']}; font-size: {fs(base, -1)}pt;"
@@ -263,7 +258,6 @@ class BaseListPanel(QWidget, BusConnectedMixin):
         )
         lay.addWidget(self._lbl_page_info, stretch=1)
 
-        # زر "تحميل المزيد (+100)"
         self._btn_load_more = QPushButton()
         self._btn_load_more.setCursor(Qt.PointingHandCursor)
         self._btn_load_more.setFixedHeight(30)
@@ -280,7 +274,6 @@ class BaseListPanel(QWidget, BusConnectedMixin):
         self._btn_load_more.clicked.connect(self._on_load_more)
         lay.addWidget(self._btn_load_more)
 
-        # زر "عرض الكل"
         self._btn_show_all = QPushButton("عرض الكل")
         self._btn_show_all.setCursor(Qt.PointingHandCursor)
         self._btn_show_all.setFixedHeight(30)
@@ -301,10 +294,6 @@ class BaseListPanel(QWidget, BusConnectedMixin):
         return bar
 
     def _update_pagination_bar(self, total: int, shown: int):
-        """
-        [تحسين 51] يحدّث شريط الـ pagination.
-        يخفيه لو مفيش صفوف إضافية.
-        """
         remaining = total - shown
         if not self.PAGINATE or remaining <= 0:
             self._pagination_bar.setVisible(False)
@@ -318,10 +307,6 @@ class BaseListPanel(QWidget, BusConnectedMixin):
         self._pagination_bar.setVisible(True)
 
     def _on_load_more(self):
-        """
-        [تحسين 51] يضيف PAGE_SIZE صف إضافي للجدول.
-        يستكمل من حيث توقف بدون إعادة بناء الجدول كله.
-        """
         if not self._page_rows:
             return
 
@@ -343,7 +328,6 @@ class BaseListPanel(QWidget, BusConnectedMixin):
         self._table_guard.refresh()
 
     def _on_show_all(self):
-        """[تحسين 51] يعرض كل الصفوف المتبقية دفعة واحدة."""
         if not self._page_rows:
             return
 
@@ -436,21 +420,12 @@ class BaseListPanel(QWidget, BusConnectedMixin):
     def _fill_table(self, rows: list):
         """
         [تحسين 51] يملأ الجدول مع دعم الـ pagination.
-
-        لو PAGINATE = True وعدد الصفوف > PAGE_SIZE:
-          - يعرض الـ PAGE_SIZE الأولى فقط
-          - يُظهر شريط الـ pagination مع زر "تحميل المزيد"
-
-        لو PAGINATE = False (افتراضي):
-          - يعرض كل الصفوف دفعة واحدة (السلوك القديم)
         """
         self.table.setRowCount(0)
 
-        # [تحسين 51] ضبط state الـ pagination
         self._page_rows   = rows
         self._shown_count = 0
 
-        # تحديد الدفعة الأولى
         if self.PAGINATE and len(rows) > self.PAGE_SIZE:
             first_batch = rows[:self.PAGE_SIZE]
         else:
@@ -471,7 +446,6 @@ class BaseListPanel(QWidget, BusConnectedMixin):
         self._splitter.setVisible(has_data)
         self._empty_state.setVisible(not has_data)
 
-        # [تحسين 51] تحديث شريط الـ pagination
         self._update_pagination_bar(len(rows), self._shown_count)
 
         if has_data:
@@ -503,7 +477,20 @@ class BaseListPanel(QWidget, BusConnectedMixin):
                 self.item_selected.emit(int(data))
 
     def select_item(self, item_id: int):
-        # لو الـ item مش في الجدول حالياً (pagination) → حمّل الكل أولاً
+        """
+        يحدد العنصر بالـ ID المعطى في الجدول.
+
+        [تحسين 17] البحث الذكي مع Pagination:
+
+        الخطوة 1: ابحث في الصفوف الظاهرة حالياً (O(n) Qt items).
+        الخطوة 2: لو مش موجود والـ pagination مفعّل → ابحث في _page_rows
+                  (O(n) في Python بدون إنشاء Qt widgets).
+                  لو وجده → حمّل الصفوف حتى موقعه فقط (بدل الكل).
+        الخطوة 3: Fallback → حمّل الكل كحل أخير.
+
+        هذا أفضل من الـ _on_show_all() مباشرة مع بيانات كبيرة (>10,000 صف).
+        """
+        # الخطوة 1: ابحث في الصفوف الظاهرة
         for r in range(self.table.rowCount()):
             item = self.table.item(r, 0)
             if item and item.data(Qt.UserRole) == item_id:
@@ -511,15 +498,52 @@ class BaseListPanel(QWidget, BusConnectedMixin):
                 self.item_selected.emit(item_id)
                 return
 
-        # [تحسين 51] لو مش موجود في الصفوف الظاهرة → حمّل الكل وابحث
-        if self.PAGINATE and self._shown_count < len(self._page_rows):
+        # الخطوة 2: مش موجود في الصفوف الظاهرة — ابحث في _page_rows
+        if not (self.PAGINATE and self._shown_count < len(self._page_rows)):
+            return
+
+        # [تحسين 17] ابحث عن موقع العنصر في _page_rows أولاً
+        target_index = None
+        for i, row_data in enumerate(self._page_rows):
+            if row_data.get("id") == item_id:
+                target_index = i
+                break
+
+        if target_index is None:
+            # العنصر مش موجود في البيانات المفلترة أصلاً
+            return
+
+        if target_index < self._shown_count:
+            # موجود في النطاق المحمّل لكن مش موجود في الجدول (حالة نادرة)
+            # → حمّل الكل كـ fallback
             self._on_show_all()
-            for r in range(self.table.rowCount()):
-                item = self.table.item(r, 0)
-                if item and item.data(Qt.UserRole) == item_id:
-                    self.table.selectRow(r)
-                    self.item_selected.emit(item_id)
-                    return
+        else:
+            # [تحسين 17] حمّل الصفوف حتى هذا العنصر فقط (بدل الكل)
+            # نحسب عدد الدفعات المطلوبة
+            end_needed = target_index + 1  # نحتاج على الأقل حتى هذا الـ index
+
+            batch = self._page_rows[self._shown_count:end_needed]
+            if batch:
+                self.table.setUpdatesEnabled(False)
+                for row_data in batch:
+                    r = self.table.rowCount()
+                    self.table.insertRow(r)
+                    self.table.setRowHeight(r, ROW_HEIGHT_LARGE)
+                    self._fill_row(self.table, r, row_data)
+                self.table.setUpdatesEnabled(True)
+
+                self._shown_count = end_needed
+                self._update_pagination_bar(len(self._page_rows), self._shown_count)
+                self._auto_resize()
+                self._table_guard.refresh()
+
+        # الآن ابحث مرة أخرى في الجدول
+        for r in range(self.table.rowCount()):
+            item = self.table.item(r, 0)
+            if item and item.data(Qt.UserRole) == item_id:
+                self.table.selectRow(r)
+                self.item_selected.emit(item_id)
+                return
 
     def selected_id(self) -> "int | None":
         row = self.table.currentRow()
@@ -563,18 +587,15 @@ class BaseListPanel(QWidget, BusConnectedMixin):
     # ── [تحسين 51] Pagination API ─────────────────────────
 
     def reset_pagination(self):
-        """
-        [تحسين 51] يعيد ضبط الـ pagination ويرجع للصفحة الأولى.
-        مفيد لو حدث تغيير في البيانات وتريد البدء من الأول.
-        """
+        """يعيد ضبط الـ pagination ويرجع للصفحة الأولى."""
         self._apply_filter()
 
     @property
     def total_rows(self) -> int:
-        """[تحسين 51] إجمالي الصفوف المفلترة (كل الصفحات)."""
+        """إجمالي الصفوف المفلترة (كل الصفحات)."""
         return len(self._page_rows)
 
     @property
     def shown_rows(self) -> int:
-        """[تحسين 51] عدد الصفوف الظاهرة حالياً في الجدول."""
+        """عدد الصفوف الظاهرة حالياً في الجدول."""
         return self._shown_count

@@ -1,19 +1,22 @@
 """
-ui/main_window.py  (نسخة multi-company — مُصلَحة v9)
+ui/main_window.py  (نسخة multi-company — مُصلَحة v10)
 =====================================================
-التغييرات عن v8:
+التغييرات عن v9:
+  - [إصلاح 9] _build_tabs: استبدال الكود المُعلَّق بـ placeholder widget واضح
+    مع TODO comment، بدلاً من self._stack.setCurrentIndex(1) الذي كان
+    يُشير لـ index غير موجود ويعرض شاشة "لا توجد شركة" بشكل خاطئ.
   - _on_company_changed يستدعي AppState.invalidate() لمسح font_size cache
     عند تغيير الشركة — لأن كل شركة ممكن يكون ليها font_size مختلف
 """
 
 from PyQt5.QtWidgets import (
     QMainWindow, QWidget, QHBoxLayout, QVBoxLayout,
-    QStackedWidget, QFrame,
+    QStackedWidget, QFrame, QLabel,
     QScrollArea, QSizePolicy, QApplication,
 )
 from PyQt5.QtCore import Qt
 
-from ui.app_settings  import _C
+from ui.app_settings  import _C, fs, get_font_size
 from ui.events        import bus
 from ui.widgets.core.events import emit_company_data_changed
 from .main_window_helper._sidebar import _Sidebar
@@ -22,6 +25,49 @@ from .main_window_helper._nav_button import (
     WINDOW_DEFAULT_W,
     SIDEBAR_COLLAPSED_WIDTH, CONTENT_MIN_WIDTH,
 )
+
+
+def _make_placeholder_tab(section_name: str) -> QWidget:
+    """
+    TODO: استبدل هذا الـ placeholder بالـ widget الحقيقي للقسم.
+
+    مثال:
+        from ui.tabs.costing_section import CostingSection
+        return CostingSection()
+    """
+    w = QWidget()
+    w.setStyleSheet(f"background:{_C['bg_page']};")
+    lay = QVBoxLayout(w)
+    lay.setAlignment(Qt.AlignCenter)
+    lay.setSpacing(12)
+
+    base = get_font_size()
+
+    lbl_icon = QLabel("🚧")
+    lbl_icon.setAlignment(Qt.AlignCenter)
+    lbl_icon.setStyleSheet(
+        f"font-size:{fs(base, +8)}pt; background:transparent; border:none;"
+    )
+    lay.addWidget(lbl_icon)
+
+    lbl_title = QLabel(f"قسم {section_name}")
+    lbl_title.setAlignment(Qt.AlignCenter)
+    lbl_title.setStyleSheet(
+        f"font-size:{fs(base, +2)}pt; font-weight:bold;"
+        f"color:{_C['text_primary']}; background:transparent; border:none;"
+    )
+    lay.addWidget(lbl_title)
+
+    lbl_sub = QLabel("قيد التطوير — TODO: استبدل هذا الـ placeholder بالـ widget الحقيقي")
+    lbl_sub.setAlignment(Qt.AlignCenter)
+    lbl_sub.setWordWrap(True)
+    lbl_sub.setStyleSheet(
+        f"font-size:{fs(base, -1)}pt; color:{_C['text_muted']};"
+        "background:transparent; border:none;"
+    )
+    lay.addWidget(lbl_sub)
+
+    return w
 
 
 class MainWindow(QMainWindow):
@@ -110,26 +156,36 @@ class MainWindow(QMainWindow):
         if self._tabs_built:
             self._destroy_tabs()
 
-        # from ui.tabs.costing_section    import CostingSection
-        # from ui.tabs.pricing_section    import PricingSection
-        # from ui.tabs.accounting_section import AccountingTab
-        # from ui.tabs.inventory_section  import InventoryTab
-        # from ui.tabs.design_section     import DesignSection
-        # from ui.tabs.orders_section     import OrdersSection
+        # TODO: فك التعليق عن الـ imports واستبدل الـ placeholders بالـ widgets الحقيقية
+        # -----------------------------------------------------------------------
+        # from ui.tabs.costing_section    import CostingSection    # index 1
+        # from ui.tabs.pricing_section    import PricingSection     # index 2
+        # from ui.tabs.accounting_section import AccountingTab      # index 3
+        # from ui.tabs.inventory_section  import InventoryTab       # index 4
+        # from ui.tabs.design_section     import DesignSection      # index 5
+        # from ui.tabs.orders_section     import OrdersSection      # index 6
+        # -----------------------------------------------------------------------
 
-        # self._costing    = CostingSection()
-        # self._pricing    = PricingSection()
-        # self._accounting = AccountingTab()
-        # self._inventory  = InventoryTab()
-        # self._design     = DesignSection()
-        # self._orders     = OrdersSection()
+        _sections = [
+            ("حساب التكلفة", "costing"),
+            ("التسعير",      "pricing"),
+            ("الحسابات",     "accounting"),
+            ("المخزن",        "inventory"),
+            ("التصميمات",    "design"),
+            ("الطلبات",       "orders"),
+        ]
 
-        # for w in [self._costing, self._pricing, self._accounting,
-        #           self._inventory, self._design, self._orders]:
-        #     self._stack.addWidget(w)
+        for name, _key in _sections:
+            w = _make_placeholder_tab(name)
+            self._stack.addWidget(w)
 
-        self._stack.setCurrentIndex(1)
-        self._sidebar.get_buttons()[0].setChecked(True)
+        # الانتقال لأول tab حقيقية (index 1)
+        if self._stack.count() > 1:
+            self._stack.setCurrentIndex(1)
+            btns = self._sidebar.get_buttons()
+            if btns:
+                btns[0].setChecked(True)
+
         self._tabs_built = True
 
     def _destroy_tabs(self):

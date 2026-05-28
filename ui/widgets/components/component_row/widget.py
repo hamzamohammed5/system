@@ -9,6 +9,13 @@ ComponentRow — صف مكوّن واحد في BOM.
     حتى لو الـ connection سليم. بما إن ComponentRow بيتستدعى كتير،
     الـ overhead ده بيتراكم. الحل: ثق في الـ cache مباشرة،
     لو الـ connection مات أول query حقيقية هتفشل وبيعمل retry تلقائي.
+
+  - [إصلاح 20] _connect_bus تستخدم weakref لمنع dangling reference.
+    القديم: lambda تحتفظ بـ reference قوي للـ widget — عند حذف
+    ComponentRow، الـ lambda تبقى مرتبطة بالـ bus وتستدعي
+    _on_catalog_changed على widget محذوف.
+    الجديد: weakref.ref(self) داخل الـ lambda — لو الـ widget
+    محذوف، weak() ترجع None وتُتجاهل الاستدعاء بصمت.
 """
 
 import weakref
@@ -158,9 +165,30 @@ class ComponentRow(QWidget, OpRowsMixin, VariantsMixin):
     # ── Bus ────────────────────────────────────────────────
 
     def _connect_bus(self):
-        bus.data_changed.connect(
-            lambda: QTimer.singleShot(0, self._on_catalog_changed)
-        )
+        """
+        [إصلاح 20] يستخدم weakref لمنع dangling reference.
+
+        القديم:
+            bus.data_changed.connect(
+                lambda: QTimer.singleShot(0, self._on_catalog_changed)
+            )
+        المشكلة: الـ lambda تحتفظ بـ strong reference لـ self.
+        لو حُذف ComponentRow، الـ lambda تبقى مرتبطة بالـ bus
+        وتستدعي _on_catalog_changed على widget محذوف → crash.
+
+        الجديد: weakref.ref(self) — لو الـ widget محذوف،
+        weak() ترجع None وتُتجاهل الاستدعاء بصمت.
+        """
+        weak = weakref.ref(self)
+
+        def _on_bus_event():
+            s = weak()
+            if s is None:
+                # الـ widget محذوف — تجاهل الاستدعاء
+                return
+            QTimer.singleShot(0, s._on_catalog_changed)
+
+        bus.data_changed.connect(_on_bus_event)
 
     # ── Deferred loads ─────────────────────────────────────
 

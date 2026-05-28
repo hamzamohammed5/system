@@ -12,8 +12,15 @@ BusConnectedMixin — ربط تلقائي بـ event bus.
 
   - [إصلاح Phase 5 محفوظ] _refresh_guard كـ instance variable.
   - [تحسين 17 محفوظ] _disconnect_bus() للفصل الآمن.
+
+  - [تحسين 24] _on_data_changed_guarded تُسجّل debug log عند التخطي.
+    القديم: الـ guard يمنع double-refresh بصمت تاماً.
+    الجديد: logger.debug يُسجّل الاسم عند التخطي لتسهيل debugging.
 """
+import logging
 from PyQt5.QtCore import QTimer, Qt
+
+logger = logging.getLogger(__name__)
 
 
 class BusConnectedMixin:
@@ -116,8 +123,16 @@ class BusConnectedMixin:
         """
         Wrapper لـ _on_data_changed يتحقق من الـ guard أولاً.
         يمنع double-refresh لو company_data_changed أطلقه بالفعل.
+
+        [تحسين 24] يُسجّل debug log عند التخطي لتسهيل debugging.
+        القديم: بصمت تام.
+        الجديد: logger.debug يُسجّل اسم الـ class عند التخطي.
         """
         if getattr(self, "_refresh_guard", False):
+            logger.debug(
+                "%s: تخطّي data_changed المكرر (refresh_guard نشط)",
+                type(self).__name__,
+            )
             return
         self._on_data_changed()
 

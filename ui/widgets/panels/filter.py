@@ -2,6 +2,16 @@
 widgets/panels/filter.py
 =========================
 FilterToolbar — شريط فلاتر موحد (بحث + تصنيف + تاريخ).
+
+التغييرات:
+  - [إصلاح 14] FilterToolbar تستمع لـ bus.company_data_changed.
+    القديم: FilterToolbar لا تُحدّث categories عند تغيير الشركة
+    لأنها لا ترث BusConnectedMixin ولا تستمع لأي bus event.
+    الجديد: اشتراك في bus.company_data_changed يُعيد تحميل
+    التصنيفات تلقائياً مع الـ connection الجديد من company_state.
+
+  - [تحسين 16] reload() تُحدّث conn ثم تُعيد تحميل التصنيفات.
+    هذا كان موجوداً بالفعل لكن لم يكن يُستدعى عند تغيير الشركة.
 """
 from PyQt5.QtWidgets import (
     QWidget, QHBoxLayout, QLabel, QPushButton, QComboBox,
@@ -54,6 +64,9 @@ class FilterToolbar(QWidget):
         self._show_date    = show_date
         self._show_presets = show_presets
         self._build(placeholder)
+
+        # [إصلاح 14] الاستماع لتغيير الشركة لإعادة تحميل التصنيفات
+        self._connect_company_bus()
 
     # ── بناء ──────────────────────────────────────────────
 
@@ -129,6 +142,41 @@ class FilterToolbar(QWidget):
         )
         return sep
 
+    # ── [إصلاح 14] ربط الـ bus ────────────────────────────
+
+    def _connect_company_bus(self):
+        """
+        [إصلاح 14] يستمع لـ bus.company_data_changed لإعادة تحميل
+        التصنيفات تلقائياً عند تغيير الشركة النشطة.
+
+        يستخدم الـ conn الجديد من company_state مباشرة،
+        لأن self._conn قد يصبح قديماً بعد تغيير الشركة.
+        """
+        try:
+            from ui.events import bus
+            bus.company_data_changed.connect(self._on_company_changed)
+        except Exception:
+            pass  # bus غير متاح — مقبول
+
+    def _on_company_changed(self, company_id: int):
+        """
+        [إصلاح 14] يُعيد تحميل التصنيفات مع الـ connection الجديد.
+
+        يحاول جلب الـ connection من company_state مباشرة،
+        لأنه الأحدث بعد تغيير الشركة.
+        """
+        if self.cmb_cat is None:
+            return
+        try:
+            from db.companies.company_state import company_state
+            if company_state.is_ready:
+                new_conn = company_state.get_erp_conn()
+                if new_conn is not None:
+                    self._conn = new_conn
+        except Exception:
+            pass
+        self._reload_categories()
+
     # ── تصنيفات ───────────────────────────────────────────
 
     def _reload_categories(self):
@@ -151,6 +199,10 @@ class FilterToolbar(QWidget):
                     break
 
     def reload(self, conn=None):
+        """
+        [تحسين 16] يُحدّث conn ثم يُعيد تحميل التصنيفات.
+        استدعه من BaseListPanel._on_data_changed أو عند تغيير الشركة.
+        """
         if conn:
             self._conn = conn
         self._reload_categories()

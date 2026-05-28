@@ -7,6 +7,11 @@ TabSectionBase — قاعدة مشتركة للأقسام التي تحتوي ع
 get_connection() ترجع shared connection من company_state،
 إغلاقها هنا يكسر كل الـ widgets الأخرى.
 الإغلاق الصحيح يحدث فقط في company_state عند تغيير الشركة.
+
+[إصلاح 18] توضيح سلوك _is_owned_connection:
+  - دالة آمنة تماماً: عند أي exception ترجع False (لا تُغلق).
+  - السلوك المقصود: الشركة لم تتحمل بعد → company_state._get_conn يرمي → False → لا إغلاق.
+  - هذا مقصود لأن الأمان أهم من إغلاق connection ربما لا يحتاج إغلاقاً.
 """
 from PyQt5.QtWidgets import QWidget, QVBoxLayout, QTabWidget
 
@@ -20,6 +25,15 @@ def _is_owned_connection(conn) -> bool:
     (يعني مش shared من company_state).
 
     الاتصالات المشتركة لا يجب إغلاقها من الـ widgets.
+
+    السلوك المقصود عند الفشل:
+    - لو company_state لم يُحمَّل بعد → _get_conn يرمي RuntimeError → except → False
+    - لو conn is None → False
+    - لو conn هو نفس الـ shared connection → False (shared → لا تُغلق)
+    - لو conn مختلف (مُنشأ يدوياً) → True (owned → يُغلق)
+
+    الإرجاع بـ False عند الشك هو الاختيار الآمن:
+    أفضل من إغلاق connection لا يجب إغلاقه وكسر widgets أخرى.
     """
     if conn is None:
         return False
@@ -29,7 +43,8 @@ def _is_owned_connection(conn) -> bool:
         shared = company_state._get_conn("erp")
         return conn is not shared
     except Exception:
-        # لو مش قادر يتحقق → الأأمن هو عدم الإغلاق
+        # لو مش قادر يتحقق (شركة غير محملة، company_state غير جاهز)
+        # → الأأمن هو عدم الإغلاق
         return False
 
 
@@ -71,6 +86,9 @@ class TabSectionBase(QWidget):
 
         في الغالب الـ connection مشترك، لذا لا شيء يُغلق هنا —
         الإغلاق يحدث في company_state عند تغيير الشركة.
+
+        [إصلاح 18] _is_owned_connection ترجع False عند أي شك،
+        وهو السلوك الآمن المقصود. راجع docstring الدالة للتفاصيل.
         """
         if _is_owned_connection(self.conn):
             try:

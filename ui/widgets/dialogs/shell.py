@@ -2,6 +2,10 @@
 ui/widgets/dialogs/shell.py
 ============================
 DialogShell — هيكل نافذة حوار موحد بدون منطق.
+
+[تحسين 21] _make_header: استبدال `{a}dd` بـ `accent_transparent` واضح الاسم.
+القديم: `stop:1 {a}dd` — قد يُفسَّر بشكل خاطئ إذا كان `a` لا ينتهي بـ hex char.
+الجديد: `accent_transparent = a + "cc"` — صريح ولا لبس فيه.
 """
 from PyQt5.QtWidgets import (
     QDialog, QVBoxLayout, QHBoxLayout,
@@ -70,12 +74,17 @@ class DialogShell(QDialog):
         root.addWidget(bar)
 
     def _make_header(self, icon: str, title: str, subtitle: str) -> QFrame:
-        a   = self._accent
+        a = self._accent
+
+        # [تحسين 21] بدل `{a}dd` الغامض، نستخدم متغير واضح الاسم.
+        # "cc" تعني ~80% opacity في CSS hex alpha (0xCC / 0xFF ≈ 0.8)
+        accent_transparent = a + "cc"
+
         hdr = QFrame()
         hdr.setStyleSheet(f"""
             QFrame {{
                 background: qlineargradient(x1:0,y1:0,x2:1,y2:0,
-                    stop:0 {a}, stop:1 {a}dd);
+                    stop:0 {a}, stop:1 {accent_transparent});
                 border-bottom:2px solid {a}99;
             }}
         """)
