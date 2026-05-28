@@ -109,7 +109,7 @@ class DataTableWidget(QWidget):
         self.table.itemSelectionChanged.connect(self._on_select)
         root.addWidget(self.table, stretch=1)
 
-        # Empty state — يستخدم _C['text_muted'] بدل hardcoded "#9ca3af"
+        # Empty state
         self._empty = EmptyState(
             icon=self.EMPTY_ICON,
             title=self.EMPTY_TITLE,
@@ -144,12 +144,16 @@ class DataTableWidget(QWidget):
         """
         ينهي ملء الجدول ويحدث العداد والحالة الفارغة.
 
-        shown: عدد الصفوف الظاهرة (لو مختلفة عن الكل عند الفلترة)
+        shown: عدد الصفوف الظاهرة (لو مختلفة عن الكل عند الفلترة).
+
+        الإصلاح: has_data يعتمد على visible مش total،
+        عشان لو كل الصفوف متفلترة (visible=0, total=10)
+        يظهر الـ empty state بدل جدول فاضي.
         """
         total   = self.table.rowCount()
         visible = shown if shown is not None else total
 
-        has_data = total > 0
+        has_data = visible > 0          # ← الإصلاح: visible بدل total
         self.table.setVisible(has_data)
         self._empty.setVisible(not has_data)
         self._status.set_count(visible, total)

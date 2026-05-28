@@ -3,12 +3,12 @@ ui/widgets/components/component_row/widget.py
 =========================================================
 ComponentRow — صف مكوّن واحد في BOM.
 
-مستخرج من widgets/shared/component_row/_row_widget.py مع:
-  - _get_conn() مع connection cache
-  - _is_widget_deleted() مشتركة تُلغي تكرار try/except في المixins
-  - OrphanState dataclass بدل attributes متفرقة
-  - _fill_items() أوضح مع helper منفصل
-  - فصل كامل بين UI / variants / op_rows / catalog
+التغييرات (Phase 5):
+  - _get_conn: حذف SELECT 1 overhead من الـ cache check.
+    الـ cache كان بيتحقق من الـ connection بـ SELECT 1 في كل استدعاء
+    حتى لو الـ connection سليم. بما إن ComponentRow بيتستدعى كتير،
+    الـ overhead ده بيتراكم. الحل: ثق في الـ cache مباشرة،
+    لو الـ connection مات أول query حقيقية هتفشل وبيعمل retry تلقائي.
 """
 
 import weakref
@@ -137,13 +137,17 @@ class ComponentRow(QWidget, OpRowsMixin, VariantsMixin):
     # ── Connection ─────────────────────────────────────────
 
     def _get_conn(self):
-        """يرجع connection حي مع cache."""
+        """
+        يرجع connection حي مع cache.
+
+        الإصلاح (Phase 5): حذف SELECT 1 من الـ cache check.
+        الـ SELECT 1 كان بيتنفذ في كل استدعاء حتى لو الـ connection سليم،
+        وده overhead غير ضروري لأن ComponentRow بيتستدعى كتير جداً.
+        الحل: ثق في الـ cache مباشرة — لو الـ connection مات،
+        أول query حقيقية هتفشل وبيعمل retry تلقائي عن طريق get_connection().
+        """
         if self._conn_cache is not None:
-            try:
-                self._conn_cache.execute("SELECT 1")
-                return self._conn_cache
-            except Exception:
-                self._conn_cache = None
+            return self._conn_cache
         try:
             from db.shared.connection import get_connection
             self._conn_cache = get_connection()

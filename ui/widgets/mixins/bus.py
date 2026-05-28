@@ -3,10 +3,11 @@ ui/widgets/mixins/bus.py
 =================================
 BusConnectedMixin — ربط تلقائي بـ event bus.
 
-التغييرات في هذا الإصدار (Phase 4 — UniqueConnection):
-  - _connect_bus() تستخدم Qt.UniqueConnection لمنع تضاعف الـ slots
-    لو اتستدعت أكتر من مرة على نفس الـ widget.
-  - باقي الـ API والـ logic لم يتغير.
+التغييرات في هذا الإصدار (Phase 5):
+  - _refresh_guard أصبح instance variable بدل class variable.
+    الـ class variable القديم كان مشتركاً بين كل الـ instances،
+    يعني لو instance واحد عمله True، كل التانية بتتجاهل الـ refresh.
+    الإصلاح: self._refresh_guard = False في بداية _connect_bus.
 """
 from PyQt5.QtCore import QTimer, Qt
 
@@ -50,9 +51,6 @@ class BusConnectedMixin:
         الأفضل: استخدم emit_company_data_changed() من ui.widgets.core.events.
     """
 
-    # guard لمنع double-refresh في نفس الـ event loop cycle
-    _refresh_guard: bool = False
-
     def _connect_bus(self, data: bool = True, company: bool = False):
         """
         يربط الـ widget بالـ event bus.
@@ -63,6 +61,9 @@ class BusConnectedMixin:
 
         Qt.UniqueConnection: يمنع تضاعف الـ slots لو اتستدعى أكتر من مرة.
         """
+        # instance variable — يمنع التشارك بين الـ instances
+        self._refresh_guard = False
+
         from ui.events import bus
 
         if data:
@@ -95,7 +96,7 @@ class BusConnectedMixin:
         Wrapper لـ _on_data_changed يتحقق من الـ guard أولاً.
         يمنع double-refresh لو company_data_changed أطلقه بالفعل.
         """
-        if self._refresh_guard:
+        if getattr(self, "_refresh_guard", False):
             return
         self._on_data_changed()
 
