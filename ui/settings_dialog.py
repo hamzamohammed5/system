@@ -3,8 +3,10 @@ ui/settings_dialog.py
 =====================
 نافذة الإعدادات — حجم الخط + مسار GIMP + وحدات القياس + الثيم + اللغة.
 
-[تحسين 11] _get_settings_conn: بدل إرجاع None بصمت عند غياب الشركة،
-الآن يُعيد None مع flag يُمكّن _load_settings من إظهار رسالة للمستخدم.
+التغييرات:
+  - [i18n / themes] _save() يُطلق bus.language_changed عند تغيير اللغة،
+    بالإضافة لـ bus.theme_changed الذي يُطلق من theme_manager.set_theme() تلقائياً.
+  - [تحسين 11 محفوظ] _get_settings_conn و_show_no_company_notice.
 """
 
 import os
@@ -33,9 +35,7 @@ from ui.widgets.components.button import make_btn
 def _get_settings_conn():
     """
     يرجع الـ connection الحالي للشركة النشطة، أو None لو لا توجد شركة.
-
     [تحسين 11] لا يُظهر رسالة هنا — المسؤولية على المُستدعي.
-    يرجع None بصمت لأن بعض الإعدادات (مثل حجم الخط) لا تحتاج شركة.
     """
     try:
         from db.companies.company_state import company_state
@@ -545,16 +545,11 @@ class SettingsDialog(QDialog):
 
     def _load_settings(self):
         """
-        [تحسين 11] يُظهر تنبيهاً واضحاً للمستخدم إذا لم تكن الشركة محددة،
-        بدلاً من السكوت وترك الإعدادات المرتبطة بالشركة فارغة بدون تفسير.
-
-        إعدادات مستقلة عن الشركة (حجم الخط، الثيم، اللغة) تعمل دائماً.
-        إعدادات مرتبطة بالشركة (GIMP path، الوحدات) تتطلب شركة نشطة.
+        [تحسين 11] يُظهر تنبيهاً واضحاً للمستخدم إذا لم تكن الشركة محددة.
         """
         conn = _get_settings_conn()
 
         if conn is None and not _has_active_company():
-            # [تحسين 11] تنبيه مرئي للإعدادات المرتبطة بالشركة
             self._show_no_company_notice()
         elif conn:
             try:
@@ -567,10 +562,7 @@ class SettingsDialog(QDialog):
         self._reload_units_list()
 
     def _show_no_company_notice(self):
-        """
-        [تحسين 11] يُظهر تنبيهاً في تبويب الوحدات وGIMP عند غياب الشركة.
-        تبويبات الخط والثيم واللغة تعمل بدون شركة.
-        """
+        """[تحسين 11] يُظهر تنبيهاً في تبويب الوحدات وGIMP عند غياب الشركة."""
         base = get_font_size()
         from ui.widgets.core.colors import status_colors
         s = status_colors("warning")
@@ -582,7 +574,6 @@ class SettingsDialog(QDialog):
         )
         notice_text = "⚠️  اختر شركة نشطة لعرض وحدات القياس ومسار GIMP"
 
-        # أضف تنبيه في تبويب الوحدات (index 3)
         units_tab = self._tabs.widget(3)
         if units_tab:
             lbl = QLabel(notice_text)
@@ -592,7 +583,6 @@ class SettingsDialog(QDialog):
             if lay:
                 lay.insertWidget(0, lbl)
 
-        # أضف تنبيه في تبويب GIMP (index 4)
         gimp_tab = self._tabs.widget(4)
         if gimp_tab:
             lbl2 = QLabel(notice_text)
@@ -611,7 +601,6 @@ class SettingsDialog(QDialog):
             except Exception:
                 units = list(_DEFAULT_UNITS)
         else:
-            # [تحسين 11] عرض الوحدات الافتراضية كـ preview بدون شركة
             units = list(_DEFAULT_UNITS)
 
         default_vals = {u[0] for u in _DEFAULT_UNITS}
@@ -629,7 +618,6 @@ class SettingsDialog(QDialog):
     # ══════════════════════════════════════════════════════
 
     def _add_unit(self):
-        # [تحسين 11] تحقق صريح من الشركة مع رسالة واضحة
         conn = _get_settings_conn()
         if not conn:
             msg_warning(self, "تنبيه", "اختر شركة نشطة أولاً لإضافة وحدات قياس")
@@ -669,7 +657,6 @@ class SettingsDialog(QDialog):
             msg_warning(self, "تنبيه", f"لا يمكن حذف الوحدة الافتراضية «{val}».")
             return
 
-        # [تحسين 11] تحقق صريح من الشركة
         conn = _get_settings_conn()
         if not conn:
             msg_warning(self, "تنبيه", "اختر شركة نشطة أولاً لحذف وحدات القياس")
@@ -685,7 +672,6 @@ class SettingsDialog(QDialog):
             self._reload_units_list()
 
     def _reset_units(self):
-        # [تحسين 11] تحقق صريح من الشركة
         conn = _get_settings_conn()
         if not conn:
             msg_warning(self, "تنبيه", "اختر شركة نشطة أولاً لاستعادة الوحدات الافتراضية")
@@ -747,6 +733,7 @@ class SettingsDialog(QDialog):
         selected_theme = self._get_selected_theme()
         from ui.themes import theme_manager
         if selected_theme != theme_manager.current_theme:
+            # theme_manager.set_theme() يُطلق bus.theme_changed تلقائياً
             theme_manager.set_theme(selected_theme, save=True)
 
         # ── اللغة ──
@@ -755,8 +742,10 @@ class SettingsDialog(QDialog):
         if selected_lang != i18n_manager.language:
             i18n_manager.set_language(selected_lang, save=True)
             self._app.setLayoutDirection(i18n_manager.qt_direction)
+            # [i18n] إطلاق bus.language_changed لإشعار الـ widgets
+            bus.language_changed.emit(selected_lang)
 
-        # ── GIMP path (يتطلب شركة نشطة) ──
+        # ── GIMP path ──
         conn = _get_settings_conn()
         if conn:
             try:
@@ -764,7 +753,6 @@ class SettingsDialog(QDialog):
                 set_setting(conn, "gimp_path", self._inp_gimp.text().strip())
             except Exception:
                 pass
-        # لو مفيش شركة → لا نحفظ GIMP path (لا نُظهر error هنا لأن الحفظ نجح جزئياً)
 
         self.accept()
 

@@ -2,6 +2,11 @@
 ui/widgets/dialogs/confirm.py
 ==============================
 نوافذ التأكيد الموحدة.
+
+التحسينات:
+  - [i18n] نصوص الأزرار والرسائل الافتراضية تمر بـ tr()
+    لدعم الترجمة متعددة اللغات.
+  - confirm_delete, confirm_action, confirm_save تستخدم tr() للنصوص.
 """
 from PyQt5.QtWidgets import QLabel
 from PyQt5.QtCore    import Qt
@@ -9,6 +14,7 @@ from PyQt5.QtCore    import Qt
 from ui.app_settings import _C, fs
 from ..core          import get_font_size
 from ..components.button import make_btn
+from ..core.i18n         import tr
 from .shell import DialogShell
 
 
@@ -75,11 +81,19 @@ class ConfirmDialog(DialogShell):
 # ── API سريع ──────────────────────────────────────────────
 
 def confirm_delete(parent, item_name: str, extra_msg: str = "") -> bool:
-    msg = f"هل تريد حذف «{item_name}»؟"
+    # [i18n] استخدام tr() للنصوص
+    msg = tr("هل تريد حذف «{name}»؟", name=item_name)
     if extra_msg:
         msg += f"\n\n{extra_msg}"
-    dlg = ConfirmDialog(parent, title="تأكيد الحذف", message=msg,
-                        icon="🗑️", confirm_text="حذف", danger=True)
+    dlg = ConfirmDialog(
+        parent,
+        title=tr("تأكيد الحذف"),
+        message=msg,
+        icon="🗑️",
+        confirm_text=tr("حذف"),
+        cancel_text=tr("إلغاء"),
+        danger=True,
+    )
     dlg.exec_()
     return dlg.result_confirmed()
 
@@ -87,18 +101,35 @@ def confirm_delete(parent, item_name: str, extra_msg: str = "") -> bool:
 def confirm_action(parent, title: str, message: str, icon: str = "❓",
                    confirm_text: str = "تأكيد", cancel_text: str = "إلغاء",
                    danger: bool = False, accent: str = None) -> bool:
-    dlg = ConfirmDialog(parent, title=title, message=message, icon=icon,
-                        confirm_text=confirm_text, cancel_text=cancel_text,
-                        danger=danger, accent=accent)
+    # [i18n] النصوص الممررة من الخارج لا تُترجم هنا (المُستدعي مسؤول)
+    # لكن القيم الافتراضية تُترجم
+    dlg = ConfirmDialog(
+        parent,
+        title=title,
+        message=message,
+        icon=icon,
+        confirm_text=confirm_text or tr("تأكيد"),
+        cancel_text=cancel_text or tr("إلغاء"),
+        danger=danger,
+        accent=accent,
+    )
     dlg.exec_()
     return dlg.result_confirmed()
 
 
 def confirm_save(parent, item_name: str = "", extra_msg: str = "") -> bool:
-    msg = f"تأكيد حفظ «{item_name}»؟" if item_name else "تأكيد الحفظ؟"
+    if item_name:
+        msg = tr("تأكيد حفظ «{name}»؟", name=item_name)
+    else:
+        msg = tr("تأكيد الحفظ؟")
     if extra_msg:
         msg += f"\n\n{extra_msg}"
     # ← استخدام _C['success'] بدل hardcoded "#2e7d32"
-    return confirm_action(parent, "تأكيد الحفظ", msg,
-                          icon="💾", confirm_text="حفظ",
-                          accent=_C.get("success"))
+    return confirm_action(
+        parent,
+        title=tr("تأكيد الحفظ"),
+        message=msg,
+        icon="💾",
+        confirm_text=tr("حفظ"),
+        accent=_C.get("success"),
+    )

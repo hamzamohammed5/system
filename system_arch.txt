@@ -1,5 +1,5 @@
 File Tree Snapshot
-Generated : 2026-05-28 13:13:23
+Generated : 2026-05-28 13:29:51
 Source    : D:\My Workspace\Hg\Alhabaar\accountant\system
 Extensions: .py
 ────────────────────────────────────────────────────────────
@@ -68,6 +68,9 @@ system/
 │       ├── category_service.py
 │       └── item_service.py
 ├── ui/
+│   ├── i18n/
+│   │   ├── ar.py
+│   │   └── en.py
 │   ├── main_window_helper/
 │   │   ├── _nav_button.py
 │   │   ├── _section_label.py
@@ -282,6 +285,8 @@ system/
 │   │   ├── inventory_section.py
 │   │   ├── orders_section.py
 │   │   └── pricing_section.py
+│   ├── themes/
+│   │   └── theme_manager.py
 │   ├── widgets/
 │   │   ├── base/
 │   │   │   ├── crud_form.py
@@ -309,7 +314,8 @@ system/
 │   │   │   ├── colors.py
 │   │   │   ├── conn.py
 │   │   │   ├── events.py
-│   │   │   └── guard.py
+│   │   │   ├── guard.py
+│   │   │   └── i18n.py
 │   │   ├── dialogs/
 │   │   │   ├── base.py
 │   │   │   ├── confirm.py

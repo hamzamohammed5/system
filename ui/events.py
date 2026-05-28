@@ -18,6 +18,14 @@ Bus مركزي للإشعارات — أي tab يحفظ بيانات يبعت si
     # تغيير حجم الخط
     bus.font_changed.emit(12)
     bus.font_changed.connect(fn)
+
+    # تغيير الثيم — [جديد]
+    bus.theme_changed.emit("dark")
+    bus.theme_changed.connect(fn)   # fn(theme_name: str)
+
+    # تغيير اللغة — [جديد]
+    bus.language_changed.emit("en")
+    bus.language_changed.connect(fn)   # fn(lang_code: str)
 """
 
 from PyQt5.QtCore import QObject, pyqtSignal
@@ -33,6 +41,12 @@ class _EventBus(QObject):
 
     # تغيير حجم الخط
     font_changed = pyqtSignal(int)
+
+    # [i18n / themes] تغيير الثيم — يحمل اسم الثيم الجديد ("light" | "dark")
+    theme_changed = pyqtSignal(str)
+
+    # [i18n] تغيير اللغة — يحمل كود اللغة الجديدة ("ar" | "en")
+    language_changed = pyqtSignal(str)
 
 
 bus = _EventBus()
