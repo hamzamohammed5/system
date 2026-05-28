@@ -1,5 +1,5 @@
 File Tree Snapshot
-Generated : 2026-05-27 09:01:46
+Generated : 2026-05-28 06:12:23
 Source    : D:\My Workspace\Hg\Alhabaar\accountant\system
 Extensions: .py
 ────────────────────────────────────────────────────────────
@@ -62,6 +62,16 @@ system/
 │   ├── costing.py
 │   ├── costing_base.py
 │   └── costing_ops.py
+├── services/
+│   ├── accounting/
+│   │   └── journal_service.py
+│   ├── costing/
+│   │   └── product_service.py
+│   ├── orders/
+│   │   └── order_service.py
+│   └── shared/
+│       ├── category_service.py
+│       └── item_service.py
 ├── ui/
 │   ├── main_window_helper/
 │   │   ├── _nav_button.py

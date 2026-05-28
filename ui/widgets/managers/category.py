@@ -115,7 +115,6 @@ class CategoryForm(QGroupBox, LiveConnMixin):
     def _add(self):
         name = self.inp_name.text().strip()
         if not name:
-            # ← استخدام msg_warning بدل QMessageBox.warning
             msg_warning(self, "تنبيه", "أدخل اسم التصنيف")
             return
         try:
@@ -123,9 +122,18 @@ class CategoryForm(QGroupBox, LiveConnMixin):
         except Exception as e:
             msg_warning(self, "خطأ", str(e))
             return
-        insert_category(conn, name, self.scope,
-                        self._color_picker.current_color(),
-                        self.cmb_parent.currentData())
+
+        from services.shared.category_service import CategoryService
+        try:
+            CategoryService(conn).add(
+                name, self.scope,
+                self._color_picker.current_color(),
+                self.cmb_parent.currentData()
+            )
+        except ValueError as e:
+            msg_warning(self, "تنبيه", str(e))
+            return
+
         self._reset()
         bus.data_changed.emit()
 
@@ -141,13 +149,18 @@ class CategoryForm(QGroupBox, LiveConnMixin):
         except Exception as e:
             msg_warning(self, "خطأ", str(e))
             return
+
+        from services.shared.category_service import CategoryService
         try:
-            update_category(conn, self._editing_id, name, self.scope,
-                            self._color_picker.current_color(),
-                            self.cmb_parent.currentData())
+            CategoryService(conn).update(
+                self._editing_id, name, self.scope,
+                self._color_picker.current_color(),
+                self.cmb_parent.currentData()
+            )
         except ValueError as e:
-            msg_warning(self, "خطأ", str(e))
+            msg_warning(self, "تنبيه", str(e))
             return
+
         self._reset()
         bus.data_changed.emit()
 
@@ -306,22 +319,13 @@ class CategoryManager(QWidget, LiveConnMixin):
             msg_warning(self, "خطأ", str(e))
             return
 
-        cat         = fetch_category(conn, cat_id)
-        if not cat:
+        from services.shared.category_service import CategoryService
+        svc     = CategoryService(conn)
+        preview = svc.get_delete_preview(cat_id)
+        if not preview:
             return
-        descendants = fetch_descendants(conn, cat_id)
-        counts      = count_category_items(conn, cat_id)
-        total_items = sum(counts.values())
-        child_cats  = len(descendants) - 1
 
-        extra = ""
-        if child_cats:
-            extra += f"⚠️ يحتوي على {child_cats} تصنيف فرعي — سيتم حذفها جميعاً.\n"
-        if total_items:
-            details = "، ".join(f"{v} {k}" for k, v in counts.items() if v)
-            extra += f"⚠️ {details} ستفقد تصنيفها."
-
-        if confirm_delete(self, cat["name"], extra_msg=extra.strip()):
-            for did in sorted(descendants, reverse=True):
-                delete_category(conn, did)
+        if confirm_delete(self, preview.cat_name,
+                        extra_msg=preview.warning_text()):
+            svc.delete_cascade(cat_id)
             bus.data_changed.emit()
