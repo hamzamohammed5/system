@@ -4,13 +4,10 @@ widgets/combo/unit.py
 UnitCombo — QComboBox موحد لاختيار وحدة القياس.
 
 التغييرات:
-  - cache بسيط بدل _units_cache dict خارجي
-  - load_units / save_units دوال نظيفة
+  - _cache_key يرجع None لو مش قادر يجيب الـ path
+    بدل id(conn) اللي مش stable — يمنع cache corruption
+  - load_units / invalidate_units_cache محدّثين يدعمون None key
   - UnitCombo يستخدم blocked_signals() بدل blockSignals() المكررة
-  - إصلاح _units_cache key:
-      id(conn) مش stable — ممكن يتكرر لو الـ object اتحذف وأُنشئ تاني.
-      الحل: نستخدم database_path كـ key لأنه ثابت ومميز لكل شركة.
-      لو مش قدرنا نجيب الـ path → fallback لـ id(conn) مع تحذير.
 """
 
 import json
@@ -31,32 +28,32 @@ _DEFAULT_UNITS = [
     ("inch", "inch — بوصة"),
 ]
 
-# cache: db_path (أو id(conn) كـ fallback) → list[tuple[str, str]]
+# cache: db_path → list[tuple[str, str]]
+# المفتاح هو database path دايماً — لو مش قادر يجيب الـ path، مش بنعمل cache
 _units_cache: dict = {}
 
 
-def _cache_key(conn) -> str:
+def _cache_key(conn) -> "str | None":
     """
-    يبني cache key ثابت من database path بدل id(conn).
-
-    id(conn) مش reliable — Python ممكن يعيد استخدام نفس الـ id
-    لو الـ object القديم اتحذف وأُنشئ object جديد في نفس العنوان.
-
-    database_path ثابت ومميز لكل شركة → cache key أكثر أماناً.
+    يرجع database path كـ cache key.
+    يرجع None لو مش قادر يجيب الـ path — في الحالة دي لا نعمل cache
+    لتجنب corruption من id(conn) اللي ممكن يتكرر بعد حذف الـ object.
     """
     try:
         return conn.execute("PRAGMA database_list").fetchone()[2]
     except Exception:
-        # fallback — أقل أماناً لكن أفضل من لا شيء
-        logger.debug("_cache_key: couldn't get db path, using id(conn)")
-        return str(id(conn))
+        logger.debug("_cache_key: couldn't get db path, skipping cache")
+        return None
 
 
 def invalidate_units_cache(conn=None):
+    """يمسح الـ cache — استدعه بعد تغيير الوحدات أو تغيير الشركة."""
     if conn is None:
         _units_cache.clear()
     else:
-        _units_cache.pop(_cache_key(conn), None)
+        key = _cache_key(conn)
+        if key:
+            _units_cache.pop(key, None)
 
 
 # ── دوال الـ settings ─────────────────────────────────────
@@ -64,7 +61,9 @@ def invalidate_units_cache(conn=None):
 def load_units(conn, force: bool = False) -> list:
     """يجلب قائمة الوحدات من settings مع cache."""
     key = _cache_key(conn)
-    if not force and key in _units_cache:
+
+    # نستخدم الـ cache فقط لو الـ key صالح
+    if key and not force and key in _units_cache:
         return _units_cache[key]
 
     result = list(_DEFAULT_UNITS)
@@ -76,7 +75,9 @@ def load_units(conn, force: bool = False) -> list:
     except Exception as e:
         logger.debug("load_units failed, using defaults: %s", e)
 
-    _units_cache[key] = result
+    # نحفظ في الـ cache فقط لو الـ key صالح
+    if key:
+        _units_cache[key] = result
     return result
 
 

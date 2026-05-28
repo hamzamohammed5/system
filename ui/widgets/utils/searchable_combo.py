@@ -2,6 +2,12 @@
 ui/widgets/utils/searchable_combo.py
 =====================================
 SearchableCombo — QComboBox مع حقل بحث مدمج.
+
+التغييرات:
+  - _rebuild الجديدة تفلتر الـ separators الفارغة أثناء البناء
+    بدل ما تبنيها وتمسحها بعدين (_remove_empty_seps كانت O(n²))
+  - pending_sep pattern: نأخر إضافة الـ separator حتى يجي عنصر حقيقي بعده
+  - _remove_empty_seps محذوفة بالكامل
 """
 from PyQt5.QtWidgets import (
     QWidget, QHBoxLayout, QComboBox, QLineEdit, QPushButton, QSizePolicy,
@@ -134,9 +140,19 @@ class SearchableCombo(QWidget):
         self.btn_clear.setVisible(False)
 
     def _rebuild(self, filter_text: str = ""):
+        """
+        يبني القائمة مع فلترة الـ separators الفارغة أثناء البناء.
+
+        pending_sep pattern:
+          - نأخر إضافة الـ separator حتى يجي عنصر حقيقي بعده
+          - لو الـ separator في النهاية أو يليه separator آخر → يُتجاهل
+          - هذا يلغي الحاجة لـ _remove_empty_seps (كانت O(n²))
+        """
         prev = self.cmb.currentData()
         self.cmb.blockSignals(True)
         self.cmb.clear()
+
+        pending_sep = None  # (display, user_data) — ننتظر عنصر حقيقي قبل الإضافة
 
         for display, user_data, is_sep in self._all_items:
             if filter_text and not is_sep:
@@ -144,14 +160,24 @@ class SearchableCombo(QWidget):
                              if "—" in display else display.lower())
                 if filter_text not in name_part and filter_text not in display.lower():
                     continue
-            self.cmb.addItem(display, userData=user_data)
-            idx = self.cmb.count() - 1
-            if is_sep:
-                self._style_sep(idx)
-            elif user_data and user_data[0] == "__orphan__":
-                self.cmb.setItemData(idx, QColor(_C['danger']), Qt.ForegroundRole)
 
-        self._remove_empty_seps()
+            if is_sep:
+                # لا تضيف الـ separator فوراً — انتظر عنصر حقيقي بعده
+                pending_sep = (display, user_data)
+            else:
+                # عنصر حقيقي — أضف الـ separator المعلق أولاً لو موجود
+                if pending_sep is not None:
+                    self.cmb.addItem(pending_sep[0], userData=pending_sep[1])
+                    self._style_sep(self.cmb.count() - 1)
+                    pending_sep = None
+
+                self.cmb.addItem(display, userData=user_data)
+                idx = self.cmb.count() - 1
+                if user_data and user_data[0] == "__orphan__":
+                    self.cmb.setItemData(idx, QColor(_C['danger']), Qt.ForegroundRole)
+
+        # pending_sep في النهاية = separator فارغ → تجاهله (لا تضيفه)
+
         self.cmb.blockSignals(False)
         self._restore(prev)
 
@@ -165,37 +191,6 @@ class SearchableCombo(QWidget):
         if item:
             item.setFlags(item.flags() & ~Qt.ItemIsEnabled & ~Qt.ItemIsSelectable)
 
-    def _remove_empty_seps(self):
-        count = self.cmb.count()
-        if not count:
-            return
-
-        to_remove   = []
-        prev_real   = False
-
-        for i in range(count):
-            data   = self.cmb.itemData(i)
-            is_sep = self._is_sep(data)
-            if is_sep:
-                if not prev_real:
-                    to_remove.append(i)
-                else:
-                    prev_real = False
-            else:
-                prev_real = True
-
-        if count and self._is_sep(self.cmb.itemData(count - 1)):
-            to_remove.append(count - 1)
-
-        for i in sorted(set(to_remove), reverse=True):
-            self.cmb.removeItem(i)
-
-    @staticmethod
-    def _is_sep(data) -> bool:
-        return data == _SEP or (
-            data and isinstance(data, tuple) and data[0] == "__sep__"
-        )
-
     def _restore(self, prev):
         if prev is None:
             self._select_first_real()
@@ -205,6 +200,12 @@ class SearchableCombo(QWidget):
                 self.cmb.setCurrentIndex(i)
                 return
         self._select_first_real()
+
+    @staticmethod
+    def _is_sep(data) -> bool:
+        return data == _SEP or (
+            data and isinstance(data, tuple) and data[0] == "__sep__"
+        )
 
     def _select_first_real(self):
         for i in range(self.cmb.count()):

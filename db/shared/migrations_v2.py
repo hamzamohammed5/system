@@ -125,6 +125,7 @@ def run_migrations_v2(conn):
             print(f"[migrations_v2] scenario_id column warning: {e}")
 
     # ══ 5. تأكيد ربط كل BOM rows بسيناريو ══════════════
+    # يعالج أي صفوف BOM مش مربوطة بسيناريو بعد الخطوة 4
     try:
         orphan_bom = conn.execute(
             "SELECT DISTINCT parent_id FROM bom WHERE scenario_id IS NULL"
@@ -141,7 +142,6 @@ def run_migrations_v2(conn):
                     (pid,)
                 ).fetchone()
             if not sc:
-                # أنشئ سيناريو default جديد
                 cur = conn.execute(
                     "INSERT INTO bom_scenarios (item_id, name, is_default) VALUES (?, ?, 1)",
                     (pid, "سيناريو 1")

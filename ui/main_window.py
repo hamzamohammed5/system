@@ -1,8 +1,9 @@
 """
-ui/main_window.py  (نسخة multi-company — مُصلَحة v8)
+ui/main_window.py  (نسخة multi-company — مُصلَحة v9)
 =====================================================
-التغييرات عن v7:
-  - _open_shared_items يستخدم emit_company_data_changed بدل bus.data_changed
+التغييرات عن v8:
+  - _on_company_changed يستدعي AppState.invalidate() لمسح font_size cache
+    عند تغيير الشركة — لأن كل شركة ممكن يكون ليها font_size مختلف
 """
 
 from PyQt5.QtWidgets import (
@@ -163,6 +164,10 @@ class MainWindow(QMainWindow):
     # ──────────────────────────────────────────────────────
 
     def _on_company_changed(self, company_id: int):
+        # مسح font_size cache — كل شركة ممكن يكون ليها إعداد مختلف
+        from ui.app_state import AppState
+        AppState.invalidate()
+
         from db.companies.company_state import company_state
         self.setWindowTitle(f"ERP — {company_state.company_name}")
         self._refresh_tabs()
