@@ -4,11 +4,14 @@ ui/app_settings.py
 يحفظ ويطبّق إعداد حجم الخط على التطبيق كله.
 تصميم محسّن — Warm Neutral System مع تفاصيل دقيقة.
 
-التغييرات (v5 — stylesheet cache):
-  - _ss_cache: dict[int, str] يحفظ الـ stylesheet المبنية لكل font_size.
-    _build_stylesheet() تبني مرة واحدة لكل حجم خط ثم ترجع من الـ cache.
-    apply_font() تمسح الـ cache عند التغيير.
-    هذا يلغي إعادة بناء الـ string الضخمة في كل استدعاء.
+التغييرات (v6 — theme-aware stylesheet cache):
+  - [تحسين 37] _ss_cache key أصبح (font_size, theme_hash) بدل font_size فقط.
+    القديم: الـ cache مبني على font_size فقط — لو تغيّر الثيم مستقبلاً
+    (Dark Mode مثلاً) الـ stylesheet القديم يُعاد استخدامه بالألوان الغلط.
+    الجديد: _get_theme_hash() تحسب hash بسيط من _C عند أول استدعاء،
+    يُخزن في _current_theme_hash ويُستخدم كجزء من الـ cache key.
+    invalidate_stylesheet_cache() تمسح الـ cache وتُعيد حساب الـ hash.
+    AppState.invalidate() يستدعيها تلقائياً عند تغيير الشركة.
 
   - set_font_size() تحدّث AppState cache أولاً (UI يتحدث فوراً)
     ثم تحفظ في DB (لو فشل DB، الـ UI يتحدث على أي حال).
@@ -21,9 +24,11 @@ MIN_FONT_SIZE     = 8
 MAX_FONT_SIZE     = 20
 
 # ══════════════════════════════════════════════════════════
-# Stylesheet cache — يحفظ نتيجة _build_stylesheet لكل font_size
+# Stylesheet cache — يحفظ نتيجة _build_stylesheet لكل (font_size, theme_hash)
+# [تحسين 37] الـ key أصبح tuple بدل int فقط
 # ══════════════════════════════════════════════════════════
-_ss_cache: dict[int, str] = {}
+_ss_cache: dict[tuple, str] = {}
+_current_theme_hash: str    = ""   # يُحسب مرة عند أول استدعاء ثم عند تغيير الثيم
 
 # ══════════════════════════════════════════════════════════
 # Sidebar layout constants
@@ -100,13 +105,87 @@ _C = {
 }
 
 
+# ══════════════════════════════════════════════════════════
+# [تحسين 37] Theme hash helpers
+# ══════════════════════════════════════════════════════════
+
+def _compute_theme_hash() -> str:
+    """
+    يحسب hash بسيط من _C للكشف عن تغييرات الثيم.
+
+    نستخدم hash() على tuple من القيم بدل hashlib
+    لأن الأداء أهم من التشفير هنا.
+    الـ hash يتغير تلقائياً لو تغيّرت أي قيمة في _C.
+    """
+    try:
+        return str(hash(tuple(sorted(_C.items()))))
+    except Exception:
+        return "default"
+
+
+def _get_theme_hash() -> str:
+    """
+    يرجع الـ theme hash الحالي.
+    يُحسب مرة واحدة ثم يُحفظ في _current_theme_hash.
+    """
+    global _current_theme_hash
+    if not _current_theme_hash:
+        _current_theme_hash = _compute_theme_hash()
+    return _current_theme_hash
+
+
+def invalidate_stylesheet_cache():
+    """
+    [تحسين 37] يمسح الـ stylesheet cache ويُعيد حساب الـ theme hash.
+    [تحسين 43] يمسح _module_font_size أيضاً لإجبار إعادة القراءة من AppState.
+
+    استدعه عند:
+      - تغيير حجم الخط (يُستدعى تلقائياً من AppState)
+      - تغيير الثيم / Dark Mode مستقبلاً
+      - تغيير الشركة (يُستدعى من AppState.invalidate)
+    """
+    global _current_theme_hash
+    _ss_cache.clear()
+    _current_theme_hash = _compute_theme_hash()
+    # [تحسين 43] أبطل module cache لإجبار إعادة القراءة
+    _set_module_font_cache(None)
+
+
+# ══════════════════════════════════════════════════════════
+# [تحسين 43] Module-level font size cache
+# ══════════════════════════════════════════════════════════
+# المشكلة: get_font_size() تُستدعى في كل widget عند البناء.
+# كل استدعاء كان يمر بـ: get_font_size() → AppState.font_size()
+# → if cls._font_size is None → return cls._font_size
+# هذه طبقة method call إضافية في كل استدعاء.
+# الحل: _module_font_size على مستوى الـ module يُلغي الـ method call overhead.
+# get_font_size() تقرأ منه مباشرة لو موجود، وتفزع لـ AppState فقط عند None.
+# _set_module_font_cache() تُستدعى من set_font_size() و invalidate_stylesheet_cache()
+# للحفاظ على التزامن.
+_module_font_size: int | None = None
+
+
+def _set_module_font_cache(size: int | None):
+    """يحدّث الـ module-level font cache — يُستدعى عند التغيير أو الـ invalidate."""
+    global _module_font_size
+    _module_font_size = size
+
+
 def get_font_size() -> int:
     """
-    يرجع حجم الخط الحالي من الـ cache.
-    DB query بتحصل مرة واحدة فقط عند أول استدعاء.
+    يرجع حجم الخط الحالي.
+
+    [تحسين 43] يقرأ من _module_font_size أولاً (قراءة مباشرة بدون method call).
+    يفزع لـ AppState.font_size() فقط عند None (أول استدعاء أو بعد invalidate).
+    هذا يُلغي overhead الـ method call في مئات الـ widgets.
     """
+    global _module_font_size
+    if _module_font_size is not None:
+        return _module_font_size
     from ui.app_state import AppState
-    return AppState.font_size()
+    size = AppState.font_size()
+    _module_font_size = size
+    return size
 
 
 def set_font_size(size: int):
@@ -114,16 +193,19 @@ def set_font_size(size: int):
     يحدّث حجم الخط — cache أولاً ثم DB.
 
     الترتيب مهم:
-      1. AppState.on_font_changed() أولاً → الـ UI يتحدث فوراً
-      2. DB ثانياً → لو فشل DB، الـ UI يكون اتحدث بالفعل
+      1. _set_module_font_cache() أولاً → get_font_size() يرجع القيمة الجديدة فوراً
+      2. AppState.on_font_changed() → يُحدّث AppState cache ويبطّل button cache
+      3. DB ثانياً → لو فشل DB، الـ UI يكون اتحدث بالفعل
     """
     size = max(MIN_FONT_SIZE, min(MAX_FONT_SIZE, size))
 
-    # 1. حدّث الـ cache أولاً — الـ UI يتحدث بغض النظر عن DB
+    # [تحسين 43] حدّث module cache أولاً
+    _set_module_font_cache(size)
+
     from ui.app_state import AppState
     AppState.on_font_changed(size)
 
-    # 2. احفظ في DB — فشله لا يكسر الـ UI
+    # احفظ في DB — فشله لا يكسر الـ UI
     try:
         from db.shared.connection import get_connection
         conn = get_connection()
@@ -516,13 +598,18 @@ QLabel#nav_label {{ font-size: {normal}pt; background: transparent; border: none
 def _build_stylesheet(base: int) -> str:
     """
     يبني الـ stylesheet الكامل لحجم خط معين.
-    النتيجة تُحفظ في _ss_cache — تُبنى مرة واحدة فقط لكل حجم.
+
+    [تحسين 37] الـ cache key أصبح (base, theme_hash) بدل base فقط.
+    هذا يضمن إعادة البناء تلقائياً عند تغيير الثيم مستقبلاً.
     """
     base = max(MIN_FONT_SIZE, min(MAX_FONT_SIZE, base))
 
-    # إرجاع من الـ cache لو موجود
-    if base in _ss_cache:
-        return _ss_cache[base]
+    # [تحسين 37] cache key يشمل الـ theme hash
+    theme_hash = _get_theme_hash()
+    cache_key  = (base, theme_hash)
+
+    if cache_key in _ss_cache:
+        return _ss_cache[cache_key]
 
     c       = _C
     tiny    = fs(base, -2)
@@ -556,7 +643,7 @@ def _build_stylesheet(base: int) -> str:
     ]
 
     result = "\n".join(sections)
-    _ss_cache[base] = result
+    _ss_cache[cache_key] = result
     return result
 
 
@@ -564,13 +651,17 @@ def apply_font(app: QApplication, size: int = None):
     if size is None:
         size = get_font_size()
     size = max(MIN_FONT_SIZE, min(MAX_FONT_SIZE, size))
- 
-    # [تحسين 15] لو نفس الـ size موجود في الـ cache، لا تمسحه
-    # هذا يمنع double-build لو استُدعيت apply_font مرتين بنفس الـ size
-    # (يحدث مثلاً لو settings dialog يحفظ نفس الحجم)
-    if size not in _ss_cache:
+
+    theme_hash = _get_theme_hash()
+    cache_key  = (size, theme_hash)
+
+    # [تحسين 37] لو نفس الـ (size, theme_hash) موجود — لا تمسح الـ cache
+    if cache_key not in _ss_cache:
         _ss_cache.clear()
- 
+
+    # [تحسين 43] زامن module cache مع الحجم الجديد
+    _set_module_font_cache(size)
+
     from ui.app_state import AppState
     AppState.on_font_changed(size)
     app.setStyleSheet(_build_stylesheet(size))

@@ -110,23 +110,23 @@ class MainWindow(QMainWindow):
         if self._tabs_built:
             self._destroy_tabs()
 
-        from ui.tabs.costing_section    import CostingSection
-        from ui.tabs.pricing_section    import PricingSection
-        from ui.tabs.accounting_section import AccountingTab
-        from ui.tabs.inventory_section  import InventoryTab
-        from ui.tabs.design_section     import DesignSection
-        from ui.tabs.orders_section     import OrdersSection
+        # from ui.tabs.costing_section    import CostingSection
+        # from ui.tabs.pricing_section    import PricingSection
+        # from ui.tabs.accounting_section import AccountingTab
+        # from ui.tabs.inventory_section  import InventoryTab
+        # from ui.tabs.design_section     import DesignSection
+        # from ui.tabs.orders_section     import OrdersSection
 
-        self._costing    = CostingSection()
-        self._pricing    = PricingSection()
-        self._accounting = AccountingTab()
-        self._inventory  = InventoryTab()
-        self._design     = DesignSection()
-        self._orders     = OrdersSection()
+        # self._costing    = CostingSection()
+        # self._pricing    = PricingSection()
+        # self._accounting = AccountingTab()
+        # self._inventory  = InventoryTab()
+        # self._design     = DesignSection()
+        # self._orders     = OrdersSection()
 
-        for w in [self._costing, self._pricing, self._accounting,
-                  self._inventory, self._design, self._orders]:
-            self._stack.addWidget(w)
+        # for w in [self._costing, self._pricing, self._accounting,
+        #           self._inventory, self._design, self._orders]:
+        #     self._stack.addWidget(w)
 
         self._stack.setCurrentIndex(1)
         self._sidebar.get_buttons()[0].setChecked(True)

@@ -6,9 +6,12 @@ TwoColDetails  — عرض في عمودين.
 make_detail_row — دالة سريعة.
 
 التحسينات:
-  - [تحسين 19] set_data ترجع dict[str, QLabel] للتحديث المباشر.
-    القديم: لم تُرجع شيئاً، المستدعي يحتاج update_value(index).
-    الجديد: ترجع {label_text: value_QLabel} للتحديث بدون حاجة لمعرفة الـ index.
+  - [تحسين 19 محفوظ] set_data ترجع dict[str, QLabel] للتحديث المباشر.
+  - [تحسين 44] set_data تدعم clear_missing=True لإخفاء الصفوف الزائدة.
+    القديم: لو استُدعيت set_data بـ keys أقل من السابق، الصفوف القديمة
+    تبقى ظاهرة بقيمها القديمة.
+    الجديد: clear_missing=True يُخفي الصفوف غير الموجودة في data الجديدة،
+    clear_missing=False (الافتراضي) يحافظ على السلوك القديم للتوافق.
 """
 from PyQt5.QtWidgets import (
     QFrame, QVBoxLayout, QHBoxLayout, QLabel, QWidget,
@@ -114,11 +117,21 @@ class DetailSection(QFrame):
         row = (self._count + self._cols - 1) // self._cols
         self._grid.addWidget(sep, row, 0, 1, self._cols * 2)
 
-    def set_data(self, data: dict) -> "dict[str, QLabel]":
+    def set_data(self, data: dict,
+                 clear_missing: bool = False) -> "dict[str, QLabel]":
         """
         يعرض البيانات.
 
         [تحسين 19] ترجع {label_text: value_QLabel} للتحديث المباشر.
+
+        [تحسين 44] clear_missing=True يُخفي الصفوف الموجودة في الـ widget
+        لكن غير موجودة في data الجديدة.
+        المثال: عرض منتج A (5 خصائص) ثم منتج B (3 خصائص) →
+          - clear_missing=False (افتراضي): تظهر 5 صفوف، الـ 3 الأولى بقيم B والـ 2 بقيم A القديمة.
+          - clear_missing=True: تظهر 3 صفوف فقط، الباقي مخفية.
+
+        ملاحظة: الإخفاء لا يحذف الـ widgets من الذاكرة (مفيد للأداء لو
+        ستعود البيانات لنفس الـ keys لاحقاً).
 
         مثال:
             refs = section.set_data({"الاسم": "منتج A", "السعر": "100"})
@@ -126,14 +139,29 @@ class DetailSection(QFrame):
             refs["السعر"].setText("150")
         """
         result   = {}
-        existing = {lk.text(): lv for lk, lv in self._rows}
+        existing = {lk.text(): (lk, lv) for lk, lv in self._rows}
+
+        # [تحسين 44] أولاً أخفِ الصفوف الزائدة لو طُلب ذلك
+        if clear_missing:
+            new_keys = set(data.keys())
+            for key, (lk, lv) in existing.items():
+                if key not in new_keys:
+                    lk.setVisible(False)
+                    lv.setVisible(False)
+
         for label, value in data.items():
+            str_val = str(value) if value is not None else "─"
             if label in existing:
-                existing[label].setText(str(value) if value else "─")
-                result[label] = existing[label]
+                lk, lv = existing[label]
+                lv.setText(str_val)
+                # [تحسين 44] تأكد أن الصف ظاهر (ممكن كان مخفياً من set_data سابقة)
+                lk.setVisible(True)
+                lv.setVisible(True)
+                result[label] = lv
             else:
-                lbl = self.add_row(label, str(value) if value else "─")
+                lbl = self.add_row(label, str_val)
                 result[label] = lbl
+
         return result
 
     def clear_rows(self):
@@ -164,6 +192,15 @@ class DetailSection(QFrame):
     def reset_values(self):
         for _, lbl_val in self._rows:
             lbl_val.setText("─")
+
+    def show_all_rows(self):
+        """
+        [تحسين 44] يُظهر كل الصفوف المخفية.
+        مفيد لو تريد إعادة عرضها بعد set_data(clear_missing=True).
+        """
+        for lbl_key, lbl_val in self._rows:
+            lbl_key.setVisible(True)
+            lbl_val.setVisible(True)
 
 
 # ══════════════════════════════════════════════════════════

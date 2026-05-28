@@ -3,11 +3,15 @@ ui/widgets/mixins/bus.py
 =================================
 BusConnectedMixin — ربط تلقائي بـ event bus.
 
-الإصلاحات:
+التغييرات:
+  - [تحسين 39] إضافة _bus_connected guard في _connect_bus().
+    القديم: رغم Qt.UniqueConnection، لو استُدعيت _connect_bus مرتين
+    (compound inheritance أو rebuild) ممكن يتصل مرتين في بعض الحالات.
+    الجديد: guard instance variable يمنع أي استدعاء ثانٍ بصمت.
+    _disconnect_bus() تُعيد ضبط الـ guard عند الفصل.
+
   - [إصلاح Phase 5 محفوظ] _refresh_guard كـ instance variable.
-  - [تحسين 17] إضافة _disconnect_bus() للفصل الآمن عند حذف الـ widget.
-    بدون فصل، PyQt بيتعامل مع deleted objects في معظم الأحوال،
-    لكن في حالات الـ sip deleted objects أو الـ weak references ممكن crash.
+  - [تحسين 17 محفوظ] _disconnect_bus() للفصل الآمن.
 """
 from PyQt5.QtCore import QTimer, Qt
 
@@ -34,14 +38,22 @@ class BusConnectedMixin:
         """
         يربط الـ widget بالـ event bus.
 
+        [تحسين 39] Guard يمنع double-connect:
+        لو استُدعيت مرتين (compound inheritance، rebuild، إلخ)
+        تُتجاهل الاستدعاءات بعد الأولى بصمت.
+        Qt.UniqueConnection وحدها لا تكفي في كل الحالات.
+
         data=True    → يربط bus.data_changed (global، للتوافق مع الكود القديم)
                        و bus.company_data_changed مع filter تلقائي.
         company=True → يربط bus.company_data_changed فقط لـ _on_company_changed.
-
-        Qt.UniqueConnection: يمنع تضاعف الـ slots لو اتستدعى أكتر من مرة.
         """
-        # instance variable — يمنع التشارك بين الـ instances
-        self._refresh_guard = False
+        # [تحسين 39] منع double-connect
+        if getattr(self, "_bus_connected", False):
+            return
+
+        # instance variables — يمنع التشارك بين الـ instances
+        self._bus_connected  = True
+        self._refresh_guard  = False
 
         from ui.events import bus
 
@@ -61,6 +73,9 @@ class BusConnectedMixin:
     def _disconnect_bus(self):
         """
         [تحسين 17] يفصل الـ widget عن الـ bus.
+
+        [تحسين 39] يُعيد ضبط _bus_connected لو احتجت reconnect لاحقاً
+        (مثلاً بعد rebuild الـ widget).
 
         استدعه من closeEvent() أو cleanup() لضمان عدم وجود
         dangling references بعد حذف الـ widget.
@@ -82,6 +97,9 @@ class BusConnectedMixin:
                         pass  # لم يكن مربوطاً — مقبول
         except Exception:
             pass  # bus غير متاح — مقبول أيضاً
+
+        # [تحسين 39] أعد ضبط الـ guard لو احتجت reconnect
+        self._bus_connected = False
 
     def _on_company_data_changed(self, company_id: int):
         """

@@ -3,23 +3,11 @@ ui/app_state.py
 ================
 AppState — Cache مركزي لإعدادات التطبيق.
 
-المشكلة اللي بيحلها:
-  get_font_size() كانت بتعمل DB query في كل استدعاء،
-  وبتتستدعى في كل widget بيتبني → مئات الـ DB calls الزيادة.
-
-الحل:
-  AppState يحمّل الـ font_size مرة واحدة ويحفظه في memory.
-  لما المستخدم يغير الإعداد من settings_dialog → on_font_changed()
-  تبطّل الـ cache وتحدّث stylesheet cache الأزرار.
-
-الاستخدام:
-  من app_settings.py:
-    from ui.app_state import AppState
-    def get_font_size() -> int:
-        return AppState.font_size()
-
-  من settings_dialog.py عند الحفظ:
-    AppState.on_font_changed(size)
+التغييرات:
+  - [تحسين 37] invalidate() يستدعي invalidate_stylesheet_cache() من app_settings
+    بدل invalidate_button_cache() فقط.
+    هذا يضمن أن تغيير الشركة يمسح الـ stylesheet cache كاملاً
+    (مهم لو كان لكل شركة ثيم مختلف مستقبلاً).
 """
 
 from __future__ import annotations
@@ -61,6 +49,12 @@ class AppState:
         """
         size = max(MIN_FONT_SIZE, min(MAX_FONT_SIZE, size))
         cls._font_size = size
+        # [تحسين 43] زامن module-level cache في app_settings
+        try:
+            from ui.app_settings import _set_module_font_cache
+            _set_module_font_cache(size)
+        except Exception:
+            pass
         cls._invalidate_button_cache()
         logger.debug("AppState.on_font_changed: %d", size)
 
@@ -69,9 +63,13 @@ class AppState:
         """
         يبطّل كل الـ cache — للاستخدام عند تغيير الشركة النشطة.
         (الشركة الجديدة ممكن يكون ليها font_size مختلف)
+
+        [تحسين 37] يستدعي invalidate_stylesheet_cache() من app_settings
+        بدل _invalidate_button_cache() فقط، لضمان مسح الـ stylesheet cache
+        كاملاً عند تغيير الشركة (ضروري للـ Dark Mode مستقبلاً).
         """
         cls._font_size = None
-        cls._invalidate_button_cache()
+        cls._invalidate_stylesheet_cache()
         logger.debug("AppState.invalidate: cache cleared")
 
     # ── Internal ───────────────────────────────────────────
@@ -100,6 +98,20 @@ class AppState:
             return val
         except Exception:
             return DEFAULT_FONT_SIZE
+
+    @classmethod
+    def _invalidate_stylesheet_cache(cls):
+        """
+        [تحسين 37] يبطّل stylesheet cache الكامل من app_settings.
+        يشمل كل الـ stylesheets المبنية لكل (font_size, theme_hash).
+        """
+        try:
+            from ui.app_settings import invalidate_stylesheet_cache
+            invalidate_stylesheet_cache()
+        except Exception as e:
+            logger.debug("AppState._invalidate_stylesheet_cache: %s", e)
+            # fallback — ابطل button cache على الأقل
+            cls._invalidate_button_cache()
 
     @classmethod
     def _invalidate_button_cache(cls):

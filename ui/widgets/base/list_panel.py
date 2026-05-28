@@ -4,7 +4,13 @@ ui/widgets/base/list_panel.py
 BaseListPanel — قاعدة مشتركة لكل لوحات القوائم.
 
 التحسينات:
-  - [تحسين 24] إضافة current_id property للوصول المباشر للـ ID المحدد.
+  - [تحسين 24 محفوظ] current_id property للوصول المباشر للـ ID المحدد.
+  - [تحسين 45] دعم Custom Sort بالضغط على header الجدول.
+    SORTABLE = True يُفعّل الـ sort.
+    COL_KEYS  قائمة بمفاتيح dict للأعمدة بالترتيب (لازم عددها = COLUMNS).
+    _sort_key(col, row) override للـ sort المخصص.
+    الضغط على نفس العمود مرتين يعكس الاتجاه (ASC/DESC).
+    SORT_DEFAULT_COL / SORT_DEFAULT_ASC لضبط الترتيب الابتدائي.
 """
 from PyQt5.QtWidgets import QWidget, QVBoxLayout, QSizePolicy
 from PyQt5.QtCore    import Qt, pyqtSignal, QTimer
@@ -39,6 +45,13 @@ class BaseListPanel(QWidget, BusConnectedMixin):
         _build_extra_header_actions(header)
         COL_WIDTHS, LIST_TITLE, ADD_TEXT, SEARCH_PLACEHOLDER
         SHOW_CATEGORY, SHOW_DATE, FILTER_SCOPE
+
+    [تحسين 45] Sort-related overrides:
+        SORTABLE          → True لتفعيل Sort بالضغط على الهيدر
+        COL_KEYS          → list[str] مفاتيح dict بترتيب الأعمدة
+        SORT_DEFAULT_COL  → عمود الترتيب الابتدائي (-1 = بدون)
+        SORT_DEFAULT_ASC  → True = تصاعدي، False = تنازلي
+        _sort_key(col, row) → قيمة الـ sort المخصصة للعمود
     """
 
     item_selected = pyqtSignal(int)
@@ -58,6 +71,12 @@ class BaseListPanel(QWidget, BusConnectedMixin):
     FILTER_SCOPE       : str  = "all"
     CONNECT_BUS        : bool = True
 
+    # ── [تحسين 45] Sort settings ─────────────────────────
+    SORTABLE          : bool      = False
+    COL_KEYS          : list      = []   # مفاتيح dict للأعمدة بالترتيب
+    SORT_DEFAULT_COL  : int       = -1   # -1 = بدون ترتيب ابتدائي
+    SORT_DEFAULT_ASC  : bool      = True
+
     def __init__(self, conn=None, parent=None):
         super().__init__(parent)
         self.conn      = conn
@@ -66,6 +85,10 @@ class BaseListPanel(QWidget, BusConnectedMixin):
         self._timer.setSingleShot(True)
         self._timer.setInterval(250)
         self._timer.timeout.connect(self._apply_filter)
+
+        # [تحسين 45] Sort state
+        self._sort_col : int  = self.SORT_DEFAULT_COL
+        self._sort_asc : bool = self.SORT_DEFAULT_ASC
 
         self.setSizePolicy(QSizePolicy.Preferred, QSizePolicy.Expanding)
         self.setMinimumWidth(self.MIN_W)
@@ -100,6 +123,29 @@ class BaseListPanel(QWidget, BusConnectedMixin):
     def _build_extra_header_actions(self, header: ListHeader):
         pass
 
+    # ── [تحسين 45] Sort override ──────────────────────────
+
+    def _sort_key(self, col: int, row: dict):
+        """
+        [تحسين 45] يرجع قيمة الـ sort للعمود المحدد.
+
+        Override لتخصيص الـ sort:
+            def _sort_key(self, col, row):
+                if col == 2:  # عمود الرصيد
+                    return float(row.get("balance", 0))
+                return super()._sort_key(col, row)
+
+        الـ fallback الافتراضي: يستخدم COL_KEYS لو موجود، وإلا يرجع "".
+        """
+        if self.COL_KEYS and col < len(self.COL_KEYS):
+            val = row.get(self.COL_KEYS[col], "")
+            # حاول تحويل للرقم للـ numeric sort الصحيح
+            try:
+                return float(val) if val not in (None, "") else 0.0
+            except (TypeError, ValueError):
+                return str(val).lower() if val is not None else ""
+        return ""
+
     # ── بناء الواجهة ──────────────────────────────────────
 
     def _build(self):
@@ -124,6 +170,16 @@ class BaseListPanel(QWidget, BusConnectedMixin):
         self._splitter.setSizePolicy(QSizePolicy.Preferred, QSizePolicy.Expanding)
         self.table.setHorizontalScrollBarPolicy(Qt.ScrollBarAsNeeded)
         self.table.itemSelectionChanged.connect(self._on_select)
+
+        # [تحسين 45] ربط header click للـ sort
+        if self.SORTABLE:
+            hh = self.table.horizontalHeader()
+            hh.setSectionsClickable(True)
+            hh.sectionClicked.connect(self._on_header_clicked)
+            # أيقونة sort الابتدائية
+            if self.SORT_DEFAULT_COL >= 0:
+                self._update_sort_indicators()
+
         root.addWidget(self._splitter, stretch=1)
 
         self._empty_state = EmptyState(
@@ -168,6 +224,59 @@ class BaseListPanel(QWidget, BusConnectedMixin):
         self.inp_search = toolbar.inp_search
         return toolbar
 
+    # ── [تحسين 45] Sort logic ─────────────────────────────
+
+    def _on_header_clicked(self, col: int):
+        """
+        [تحسين 45] يُعالج الضغط على header العمود.
+        نفس العمود → عكس الاتجاه. عمود مختلف → تصاعدي.
+        """
+        if not self.SORTABLE:
+            return
+
+        if self._sort_col == col:
+            self._sort_asc = not self._sort_asc
+        else:
+            self._sort_col = col
+            self._sort_asc = True
+
+        self._update_sort_indicators()
+        self._apply_filter()
+
+    def _update_sort_indicators(self):
+        """
+        [تحسين 45] يحدّث أيقونات الـ sort في الهيدر.
+        يستخدم Qt built-in sort indicators بدل تعديل النص.
+        """
+        if not self.SORTABLE:
+            return
+        hh = self.table.horizontalHeader()
+        if self._sort_col >= 0:
+            hh.setSortIndicator(
+                self._sort_col,
+                Qt.AscendingOrder if self._sort_asc else Qt.DescendingOrder
+            )
+            hh.setSortIndicatorShown(True)
+        else:
+            hh.setSortIndicatorShown(False)
+
+    def _sorted_rows(self, rows: list) -> list:
+        """
+        [تحسين 45] يرتب الصفوف حسب العمود والاتجاه الحاليين.
+        يُستدعى من _apply_filter قبل _fill_table.
+        """
+        if not self.SORTABLE or self._sort_col < 0:
+            return rows
+        try:
+            return sorted(
+                rows,
+                key=lambda r: self._sort_key(self._sort_col, r),
+                reverse=not self._sort_asc,
+            )
+        except Exception:
+            # لو فشل الـ sort لأي سبب نرجع الصفوف بدون ترتيب
+            return rows
+
     # ── فلترة ─────────────────────────────────────────────
 
     def refresh(self):
@@ -184,6 +293,10 @@ class BaseListPanel(QWidget, BusConnectedMixin):
             row for row in self._all_rows
             if self._match_filter(row, query) and self._match_category(row, cat_id)
         ]
+
+        # [تحسين 45] رتّب قبل العرض
+        filtered = self._sorted_rows(filtered)
+
         self._fill_table(filtered)
         self._update_status(len(filtered))
 
@@ -269,3 +382,26 @@ class BaseListPanel(QWidget, BusConnectedMixin):
 
     def set_add_enabled(self, enabled: bool):
         self._header.set_add_enabled(enabled)
+
+    # ── [تحسين 45] Sort API ───────────────────────────────
+
+    def set_sort(self, col: int, ascending: bool = True):
+        """
+        [تحسين 45] يضبط الـ sort برمجياً بدون الضغط على الهيدر.
+
+        مثال:
+            self.list_panel.set_sort(col=2, ascending=False)
+        """
+        self._sort_col = col
+        self._sort_asc = ascending
+        if self.SORTABLE:
+            self._update_sort_indicators()
+        self._apply_filter()
+
+    def clear_sort(self):
+        """[تحسين 45] يلغي الـ sort ويرجع للترتيب الابتدائي."""
+        self._sort_col = self.SORT_DEFAULT_COL
+        self._sort_asc = self.SORT_DEFAULT_ASC
+        if self.SORTABLE:
+            self._update_sort_indicators()
+        self._apply_filter()

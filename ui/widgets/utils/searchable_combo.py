@@ -4,14 +4,14 @@ ui/widgets/utils/searchable_combo.py
 SearchableCombo — QComboBox مع حقل بحث مدمج.
 
 التحسينات:
-  - [تحسين 13] debounce داخلي للبحث (120ms).
-    القديم: كل ضغطة تعيد بناء الـ combo كاملاً.
-    الجديد: QTimer واحد يجمع الضغطات ثم يبني مرة واحدة.
-    أي مستدعي ينسى الـ debounce محمي تلقائياً.
-    قوائم > 200 عنصر لن تعاني من performance مرئي.
+  - [تحسين 41] _sep_font محفوظ كـ instance variable بدل إنشاء QFont جديد
+    في كل separator.
+    القديم: _style_sep() تُنشئ QFont() في كل استدعاء → مع 20 separator
+    = 20 QFont objects تُنشأ وتُحذف في كل rebuild.
+    الجديد: self._sep_font يُنشأ مرة واحدة في __init__ ويُعاد استخدامه.
 
-  - [محفوظ] pending_sep pattern — يمنع الـ separators الفارغة
-    بدون _remove_empty_seps (كانت O(n²)).
+  - [تحسين 13 محفوظ] debounce داخلي للبحث (120ms).
+  - [محفوظ] pending_sep pattern — يمنع الـ separators الفارغة.
 """
 from PyQt5.QtWidgets import (
     QWidget, QHBoxLayout, QComboBox, QLineEdit, QPushButton, QSizePolicy,
@@ -79,6 +79,11 @@ class SearchableCombo(QWidget):
         self._rebuild_timer.setInterval(self.SEARCH_DELAY_MS)
         self._rebuild_timer.timeout.connect(self._do_rebuild)
 
+        # [تحسين 41] _sep_font يُنشأ مرة واحدة — لا إنشاء متكرر في _style_sep
+        self._sep_font = QFont()
+        self._sep_font.setBold(True)
+        self._sep_font.setPointSize(max(7, self._sep_font.pointSize() - 1))
+
         self._build()
 
     def _build(self):
@@ -128,7 +133,6 @@ class SearchableCombo(QWidget):
     def _on_search(self, text: str):
         """
         [تحسين 13] بدل ما نبني مباشرة، نحفظ الـ filter ونطلق الـ timer.
-        الـ timer يجمع الضغطات السريعة ويبني مرة واحدة.
         """
         self.btn_clear.setVisible(bool(text))
         self._pending_filter = text.strip().lower()
@@ -208,11 +212,12 @@ class SearchableCombo(QWidget):
         self._restore(prev)
 
     def _style_sep(self, idx: int):
+        """
+        [تحسين 41] يستخدم self._sep_font المحفوظ مسبقاً
+        بدل إنشاء QFont جديد في كل استدعاء.
+        """
         self.cmb.setItemData(idx, QColor(_C['text_muted']), Qt.ForegroundRole)
-        f = QFont()
-        f.setBold(True)
-        f.setPointSize(f.pointSize() - 1)
-        self.cmb.setItemData(idx, f, Qt.FontRole)
+        self.cmb.setItemData(idx, self._sep_font, Qt.FontRole)
         item = self.cmb.model().item(idx)
         if item:
             item.setFlags(item.flags() & ~Qt.ItemIsEnabled & ~Qt.ItemIsSelectable)
