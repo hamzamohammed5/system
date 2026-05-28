@@ -18,10 +18,15 @@ db/shared/connection.py  (نسخة multi-company)
 للاستخدام الجديد:
   from db.companies.company_state import company_state
   erp_conn = company_state.get_erp_conn()
+
+إصلاح 10:
+  get_connection("costing") يُصدر DeprecationWarning ليساعد المطورين
+  على تحديث الكود بدل الاعتماد على الـ hidden alias.
 """
 
 import sqlite3
 import os
+import warnings
 
 # ── مسارات قاعدة بيانات الشركات المركزية ─────────────────
 _BASE_DIR   = os.path.join(os.path.dirname(__file__), "..", "..")
@@ -50,11 +55,25 @@ def get_connection(db: str = "erp") -> sqlite3.Connection:
 
     للتوافق مع الكود القديم:
       get_connection()           → erp.db
-      get_connection("costing")  → erp.db  (costing = erp)
+      get_connection("costing")  → erp.db  (مُهمَل — استخدم "erp")
+
+    [إصلاح 10] get_connection("costing") يُصدر DeprecationWarning:
+    الاسم القديم "costing" كان alias مخفي لـ "erp" مما يُسبب
+    ارتباكاً عند الـ debugging. الـ warning يساعد المطورين على
+    تحديث الكود تدريجياً.
     """
-    # mapping للتوافق مع الأسماء القديمة
+    # [إصلاح 10] DeprecationWarning للاسم القديم
+    if db == "costing":
+        warnings.warn(
+            "get_connection('costing') مُهمَل — "
+            "استخدم get_connection('erp') أو company_state.get_erp_conn() مباشرة.",
+            DeprecationWarning,
+            stacklevel=2,
+        )
+        db = "erp"
+
+    # mapping للتوافق مع أي أسماء أخرى غير متوقعة
     _alias = {
-        "costing":    "erp",
         "erp":        "erp",
         "accounting": "accounting",
         "inventory":  "inventory",
@@ -76,7 +95,18 @@ def get_connection(db: str = "erp") -> sqlite3.Connection:
 # ── دوال اختصار للتوافق مع الكود القديم ─────────────────
 
 def get_costing_connection() -> sqlite3.Connection:
-    """اختصار → erp.db للشركة النشطة."""
+    """
+    اختصار → erp.db للشركة النشطة.
+
+    .. deprecated::
+        استخدم company_state.get_erp_conn() أو get_connection("erp") مباشرة.
+    """
+    warnings.warn(
+        "get_costing_connection() مُهمَل — "
+        "استخدم company_state.get_erp_conn() مباشرة.",
+        DeprecationWarning,
+        stacklevel=2,
+    )
     return get_connection("erp")
 
 
@@ -102,13 +132,14 @@ def get_linked_connection(primary: str = "inventory",
     if not company_state.is_ready:
         raise RuntimeError("لم يتم تحديد شركة نشطة.")
 
-    primary_name = "erp" if primary == "costing" else primary
+    # normalize اسم الـ DB
+    primary_name = "erp" if primary in ("costing", "erp") else primary
     path = get_company_db_path(company_state.company_id, primary_name)
     conn = _make_conn(path)
 
     if attach:
         for db_name in attach:
-            real_name = "erp" if db_name == "costing" else db_name
+            real_name = "erp" if db_name in ("costing", "erp") else db_name
             att_path  = get_company_db_path(company_state.company_id, real_name)
             if os.path.exists(att_path):
                 conn.execute(f"ATTACH DATABASE '{att_path}' AS {db_name}")

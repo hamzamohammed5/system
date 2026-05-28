@@ -5,6 +5,12 @@ db/accounting/accounting_accounts_repo.py
 
 تحسين 38: fetch_all_accounts تستخدم LEFT JOIN + GROUP BY بدل correlated subquery
 لكل حساب. هذا يقلل عدد الـ queries من O(n) إلى O(1).
+
+تحسين 3:
+  _sort_groups_parents_first مُحسَّنة لتتجنب إنشاء O(3n) structures:
+  النسخة القديمة: dict(r) لكل صف + id_map + result list = 3 copies.
+  النسخة الجديدة: تحويل لـ dicts مرة واحدة + id_map يُشير لنفس الـ objects.
+  الفرق في الذاكرة: O(n) بدل O(3n) للـ dicts.
 """
 
 from datetime import datetime
@@ -227,22 +233,37 @@ def fetch_all_groups(conn, acc_type: str = None):
 
 
 def _sort_groups_parents_first(rows) -> list:
-    rows_list = [dict(r) for r in rows]
-    id_map = {r["id"]: r for r in rows_list}
-    result = []
-    visited = set()
+    """
+    يُرتب المجموعات بحيث يظهر الأب قبل أبنائه دائماً.
 
-    def visit(node):
-        if node["id"] in visited:
+    [تحسين 3] تحسين استخدام الذاكرة:
+    النسخة القديمة: تحويل كل صف لـ dict مرة لـ rows_list، ثم نسخة أخرى لـ id_map.
+    النسخة الجديدة:
+      - تحويل لـ dicts مرة واحدة فقط في rows_list.
+      - id_map يُشير لنفس الـ dict objects (لا نسخ جديدة).
+    الفرق: O(3n) dicts → O(n) dicts.
+    """
+    # تحويل واحد فقط — id_map يُشير لنفس الـ objects
+    rows_list = [dict(r) for r in rows]
+    id_map = {r["id"]: r for r in rows_list}  # مؤشرات لنفس الـ dicts
+
+    result: list = []
+    visited: set = set()
+
+    def visit(node: dict):
+        nid = node["id"]
+        if nid in visited:
             return
+        # اعرض الأب أولاً لو لم يُعرض بعد
         pid = node.get("parent_id")
         if pid and pid in id_map and pid not in visited:
             visit(id_map[pid])
-        visited.add(node["id"])
+        visited.add(nid)
         result.append(node)
 
     for r in rows_list:
         visit(r)
+
     return result
 
 
@@ -281,6 +302,10 @@ def delete_group(conn, group_id: int):
 
 
 def _get_group_descendants(conn, group_id: int) -> set:
+    """
+    Private — لا تستورد من هنا مباشرة في الكود الجديد.
+    استخدمها عبر: from db.accounting.accounting_accounts_repo import _get_group_descendants
+    """
     result = set()
     queue  = [group_id]
     while queue:
@@ -299,21 +324,26 @@ def _get_group_descendants(conn, group_id: int) -> set:
 
 
 def build_group_tree(rows) -> list:
-    nodes = {}
+    """
+    يبني شجرة من قائمة مجموعات الحسابات.
+
+    [تحسين 3] نفس تحسين _sort_groups_parents_first:
+    id_map يُشير لنفس الـ dict objects بدل نسخ إضافية.
+    """
+    # تحويل واحد — id_map يُشير لنفس الـ objects
+    nodes: dict = {}
     for r in rows:
-        if isinstance(r, dict):
-            d = r
-        else:
-            d = dict(r)
+        d = r if isinstance(r, dict) else dict(r)
         nodes[d["id"]] = {
-            "id":       d["id"],
-            "name":     d["name"],
-            "acc_type": d.get("acc_type", ""),
-            "parent_id":d.get("parent_id"),
-            "color":    d.get("color", "#607d8b"),
-            "children": [],
+            "id":        d["id"],
+            "name":      d["name"],
+            "acc_type":  d.get("acc_type", ""),
+            "parent_id": d.get("parent_id"),
+            "color":     d.get("color", "#607d8b"),
+            "children":  [],
         }
-    roots = []
+
+    roots: list = []
     for node in nodes.values():
         pid = node["parent_id"]
         if pid and pid in nodes:

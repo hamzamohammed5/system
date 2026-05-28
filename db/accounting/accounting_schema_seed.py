@@ -8,6 +8,12 @@ db/accounting/accounting_schema_seed.py
     بدل الاعتماد على اسم الملف — أكثر دقة وأقل هشاشة في أي بيئة.
     السبب: PRAGMA database_list قد يُعيد مسار ناقص أو نسبي في بعض البيئات،
     واسم الملف وحده لا يكفي للتمييز (مثلاً backup_accounting.db).
+
+إصلاح 11:
+  - _verify_conn_is_accounting تستعلم عن sqlite_master الـ main schema فقط
+    (عبر "main.sqlite_master") لتجنب الخلط مع جداول attached databases.
+    المشكلة: لو ATTACH DATABASE ربط erp.db، كانت items تظهر في sqlite_master
+    العام وتفشل الـ seed رغم أن الـ connection الأساسي هو accounting.db.
 """
 
 import os
@@ -27,25 +33,44 @@ def _verify_conn_is_accounting(conn) -> bool:
     عبر فحص الـ schema: يجب أن يحتوي على جدول accounts
     وألا يحتوي على جدول items (الذي هو حصري لـ erp.db).
 
+    [إصلاح 11] يستعلم عن "main.sqlite_master" تحديداً بدل "sqlite_master"
+    لتجنب رؤية جداول الـ attached databases.
+    مثال: لو erp.db مُرفق بـ ATTACH، كانت items تظهر في sqlite_master
+    العام وتفشل الدالة رغم أن الـ connection الأساسي هو accounting.db.
+
     هذا أكثر موثوقية من الاعتماد على اسم الملف.
     """
     try:
+        # [إصلاح 11] main.sqlite_master = الـ schema الأساسي فقط، بدون attached DBs
         has_accounts = conn.execute(
-            "SELECT name FROM sqlite_master WHERE type='table' AND name='accounts'"
+            "SELECT name FROM main.sqlite_master "
+            "WHERE type='table' AND name='accounts'"
         ).fetchone()
         has_items = conn.execute(
-            "SELECT name FROM sqlite_master WHERE type='table' AND name='items'"
+            "SELECT name FROM main.sqlite_master "
+            "WHERE type='table' AND name='items'"
         ).fetchone()
         return bool(has_accounts) and not bool(has_items)
     except Exception:
-        # backward compat: لو مش قادر يتحقق، نسمح بالمتابعة
-        return True
+        # backward compat: لو مش قادر يتحقق (مثلاً SQLite قديم لا يدعم main.*)،
+        # نحاول الـ fallback بدون التحديد
+        try:
+            has_accounts = conn.execute(
+                "SELECT name FROM sqlite_master WHERE type='table' AND name='accounts'"
+            ).fetchone()
+            has_items = conn.execute(
+                "SELECT name FROM sqlite_master WHERE type='table' AND name='items'"
+            ).fetchone()
+            return bool(has_accounts) and not bool(has_items)
+        except Exception:
+            # backward compat: لو مش قادر يتحقق، نسمح بالمتابعة
+            return True
 
 
 def seed_default_accounts(conn):
     """يُدرج الحسابات الافتراضية لو كانت قاعدة البيانات فارغة."""
 
-    # [إصلاح 9] تحقق من الـ schema بدل اسم الملف
+    # [إصلاح 9 + 11] تحقق من الـ schema بدل اسم الملف
     if not _verify_conn_is_accounting(conn):
         print("[accounting_schema_seed] تحذير: conn ليس لـ accounting.db — تم تخطي الـ seed")
         return

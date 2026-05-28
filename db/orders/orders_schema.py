@@ -9,10 +9,19 @@ Schema قاعدة بيانات العملاء والطلبات (orders.db).
   orders             — الطلبات (جديد / إعادة طلب)
   order_items        — بنود كل طلب
   order_status_log   — سجل تغييرات حالة الطلب
+
+تحسين 25:
+  - _run_migrations مُنفَّذة بـ framework حقيقي (مش pass فارغ).
+  - كل migration مُعرَّف كـ entry في _MIGRATIONS dict.
+  - جدول schema_migrations يحفظ الـ migrations المُطبَّقة.
+  - آمن للاستدعاء المتكرر (idempotent).
 """
 
 import os
 import sqlite3
+import logging
+
+logger = logging.getLogger(__name__)
 
 _BASE_DIR = os.path.join(os.path.dirname(__file__), "..", "..")
 ORDERS_DB_PATH = os.path.join(_BASE_DIR, "orders.db")
@@ -158,6 +167,160 @@ def create_orders_tables(conn):
     _run_migrations(conn)
 
 
+# ══════════════════════════════════════════════════════════
+# Migration Framework — تحسين 25
+# ══════════════════════════════════════════════════════════
+
+def _ensure_migrations_table(conn):
+    """
+    ينشئ جدول schema_migrations لتتبع الـ migrations المُطبَّقة.
+    آمن للاستدعاء المتكرر.
+    """
+    conn.execute("""
+        CREATE TABLE IF NOT EXISTS schema_migrations (
+            id         INTEGER PRIMARY KEY AUTOINCREMENT,
+            name       TEXT    NOT NULL UNIQUE,
+            applied_at TEXT    NOT NULL DEFAULT (datetime('now'))
+        )
+    """)
+    conn.commit()
+
+
+def _is_applied(conn, name: str) -> bool:
+    """هل تم تطبيق migration بهذا الاسم مسبقاً؟"""
+    try:
+        row = conn.execute(
+            "SELECT 1 FROM schema_migrations WHERE name=?", (name,)
+        ).fetchone()
+        return row is not None
+    except Exception:
+        return False
+
+
+def _mark_applied(conn, name: str):
+    """سجّل الـ migration كـ مُطبَّق."""
+    conn.execute(
+        "INSERT OR IGNORE INTO schema_migrations (name) VALUES (?)", (name,)
+    )
+    conn.commit()
+
+
+def _apply_migration(conn, name: str, fn):
+    """
+    يُطبّق migration واحد بشكل آمن.
+    - لو مطبَّق مسبقاً → يتخطاه
+    - لو فشل → يُسجّل تحذيراً ويكمل (لا يوقف التطبيق)
+    """
+    if _is_applied(conn, name):
+        return
+
+    try:
+        fn(conn)
+        _mark_applied(conn, name)
+        logger.info("[orders_schema] migration '%s' applied successfully", name)
+    except Exception as e:
+        logger.warning(
+            "[orders_schema] migration '%s' failed: %s — skipping", name, e
+        )
+
+
+# ══════════════════════════════════════════════════════════
+# تعريف الـ Migrations
+# ══════════════════════════════════════════════════════════
+
+def _m001_add_internal_notes(conn):
+    """
+    M001: إضافة عمود internal_notes لجدول orders لو ناقص.
+    (موجود في الـ schema الجديد لكن قد يكون ناقصاً في قواعد بيانات قديمة)
+    """
+    if _table_exists(conn, "orders") and not _column_exists(conn, "orders", "internal_notes"):
+        conn.execute("ALTER TABLE orders ADD COLUMN internal_notes TEXT")
+        conn.commit()
+
+
+def _m002_add_customers_phone2(conn):
+    """
+    M002: إضافة عمود phone2 لجدول customers لو ناقص.
+    """
+    if _table_exists(conn, "customers") and not _column_exists(conn, "customers", "phone2"):
+        conn.execute("ALTER TABLE customers ADD COLUMN phone2 TEXT")
+        conn.commit()
+
+
+def _m003_add_orders_priority(conn):
+    """
+    M003: إضافة عمود priority لجدول orders لو ناقص.
+    قواعد بيانات قديمة قد لا تحتوي على هذا العمود.
+    """
+    if _table_exists(conn, "orders") and not _column_exists(conn, "orders", "priority"):
+        conn.execute(
+            "ALTER TABLE orders ADD COLUMN priority TEXT NOT NULL DEFAULT 'normal'"
+        )
+        conn.commit()
+
+
+def _m004_add_idx_orders_priority(conn):
+    """
+    M004: إضافة index على priority للـ filtering السريع.
+    """
+    try:
+        conn.execute(
+            "CREATE INDEX IF NOT EXISTS idx_orders_priority ON orders(priority)"
+        )
+        conn.commit()
+    except Exception:
+        pass  # Index قد يكون موجوداً بالفعل
+
+
+def _m005_add_customer_contacts_role(conn):
+    """
+    M005: إضافة عمود role لجدول customer_contacts لو ناقص.
+    """
+    if (_table_exists(conn, "customer_contacts") and
+            not _column_exists(conn, "customer_contacts", "role")):
+        conn.execute("ALTER TABLE customer_contacts ADD COLUMN role TEXT")
+        conn.commit()
+
+
+# قائمة كل الـ migrations مرتبة
+# كل entry: (اسم فريد, الدالة)
+# الترتيب مهم — migrations تُطبَّق بالترتيب
+_MIGRATIONS = [
+    ("m001_add_internal_notes",       _m001_add_internal_notes),
+    ("m002_add_customers_phone2",     _m002_add_customers_phone2),
+    ("m003_add_orders_priority",      _m003_add_orders_priority),
+    ("m004_add_idx_orders_priority",  _m004_add_idx_orders_priority),
+    ("m005_add_customer_contacts_role", _m005_add_customer_contacts_role),
+]
+
+
 def _run_migrations(conn):
-    """Migrations آمنة مستقبلية."""
-    pass  # للتوسع لاحقاً
+    """
+    [تحسين 25] Framework كامل للـ migrations بدل pass الفارغ.
+
+    يُنشئ جدول schema_migrations لتتبع ما تم تطبيقه،
+    ويُطبّق كل migration مرة واحدة فقط بشكل آمن.
+
+    لإضافة migration جديد:
+      1. عرّف دالة: def _mXXX_description(conn): ...
+      2. أضفها لقائمة _MIGRATIONS بالترتيب الصحيح
+
+    مثال:
+      def _m006_add_order_tags(conn):
+          if not _column_exists(conn, "orders", "tags"):
+              conn.execute("ALTER TABLE orders ADD COLUMN tags TEXT")
+              conn.commit()
+
+      _MIGRATIONS.append(("m006_add_order_tags", _m006_add_order_tags))
+    """
+    try:
+        _ensure_migrations_table(conn)
+    except Exception as e:
+        logger.warning(
+            "[orders_schema] فشل إنشاء جدول schema_migrations: %s — "
+            "الـ migrations لن تُطبَّق", e
+        )
+        return
+
+    for name, fn in _MIGRATIONS:
+        _apply_migration(conn, name, fn)

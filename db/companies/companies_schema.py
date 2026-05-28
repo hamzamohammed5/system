@@ -8,10 +8,14 @@ db/companies/companies_schema.py  (نسخة مُصلحة)
   - company_shared_links مبسّط — company_id + shared_item_id بس
   - migration آمن يتعامل مع الجداول القديمة والجديدة
 
-إصلاح 19: _migrate_old_shared_items تستخدم transaction صريح مع
-           PRAGMA foreign_keys = OFF لضمان إعادة تفعيل الـ foreign keys
-           حتى عند الفشل. المشكلة القديمة: لو فشلت الـ finally block
-           (نادر لكن ممكن) كانت foreign keys تبقى معطلة.
+إصلاح 19 (v2):
+  - _migrate_old_shared_items تُغلف كل الكود بـ try/finally صريح
+    يضمن إعادة تفعيل PRAGMA foreign_keys = ON حتى لو:
+    (أ) فشل الـ migration نفسه
+    (ب) فشل الـ cleanup في except
+    (ج) أي exception غير متوقع
+  - إضافة SAVEPOINT للـ rollback الآمن بدون تأثير على transactions خارجية.
+  - التوثيق الكامل لكل مرحلة.
 """
 
 import os
@@ -167,33 +171,35 @@ def _migrate_old_shared_items(conn):
     """
     يهاجر النموذج القديم (source_company_id) للنموذج الجديد (data JSON).
 
-    [إصلاح 19] استخدام BEGIN EXCLUSIVE TRANSACTION صريح مع PRAGMA foreign_keys
-    لضمان إعادة تفعيل الـ foreign keys حتى في أسوأ الحالات.
+    [إصلاح 19 v2] بنية try/finally مزدوجة لضمان إعادة تفعيل foreign_keys:
 
-    المشكلة القديمة:
-      conn.execute("PRAGMA foreign_keys = OFF")
+    المشكلة القديمة (v1):
       try:
+          conn.execute("PRAGMA foreign_keys = OFF")
           ...
       finally:
-          conn.execute("PRAGMA foreign_keys = ON")
-      لو حدث خطأ فادح في الـ finally نفسها (نادر جداً)،
-      كانت foreign keys تبقى معطلة للـ session كله.
+          conn.execute("PRAGMA foreign_keys = ON")  # قد يُفشل إذا انقطع الـ conn
 
-    الحل الجديد:
-      - نُنفّذ كل الـ DDL + DML في executescript واحد (implicit transaction)
-      - executescript يُعيد تفعيل foreign_keys تلقائياً في نهايته
-      - لو فشل → نُسجّل تحذيراً ونحاول تنظيف الجداول المؤقتة
+    الحل الجديد (v2):
+      - نُفصل "تعطيل FK" عن "المنطق" عبر try/finally متداخلين.
+      - الـ finally الخارجي مسؤول فقط عن PRAGMA foreign_keys = ON.
+      - يُنفَّذ دائماً حتى لو فشل الـ cleanup في except.
+      - نُسجّل CRITICAL إذا فشل إعادة تفعيل FK (لا يجب أن يحدث).
+
+    ملاحظة: PRAGMA foreign_keys هو session-level setting، لا transaction-level.
+    لذا يجب إعادة تفعيله بشكل صريح بعد أي عملية تعطيل.
     """
     import logging
     logger = logging.getLogger(__name__)
 
-    # خطوة 1: أوقف foreign_keys مؤقتاً وأنشئ الجداول الجديدة
-    # نستخدم executescript لأنه يُضمن تشغيل BEGIN TRANSACTION
-    # والـ PRAGMA foreign_keys = ON يُعاد في نهاية executescript تلقائياً
-    try:
-        conn.execute("PRAGMA foreign_keys = OFF")
+    fk_disabled = False  # flag لتتبع هل أوقفنا FK بالفعل
 
-        # جدول shared_items الجديد
+    try:
+        # ── المرحلة 1: إيقاف FK ─────────────────────────────
+        conn.execute("PRAGMA foreign_keys = OFF")
+        fk_disabled = True
+
+        # ── المرحلة 2: إنشاء الجداول الجديدة ────────────────
         conn.execute("""
             CREATE TABLE IF NOT EXISTS _shared_items_new (
                 id          INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -205,7 +211,7 @@ def _migrate_old_shared_items(conn):
             )
         """)
 
-        # نقل البيانات القديمة
+        # ── المرحلة 3: نقل البيانات القديمة ──────────────────
         old_rows = conn.execute(
             "SELECT id, name, shared_type, created_at FROM shared_items"
         ).fetchall()
@@ -217,7 +223,7 @@ def _migrate_old_shared_items(conn):
                 (row["id"], row["name"], row["shared_type"], row["created_at"])
             )
 
-        # جدول company_shared_links الجديد
+        # ── المرحلة 4: إنشاء جدول الروابط الجديد ────────────
         conn.execute("""
             CREATE TABLE IF NOT EXISTS _links_new (
                 id             INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -228,7 +234,7 @@ def _migrate_old_shared_items(conn):
             )
         """)
 
-        # نقل الروابط الموجودة
+        # ── المرحلة 5: نقل الروابط الموجودة ──────────────────
         try:
             old_links = conn.execute(
                 "SELECT DISTINCT shared_item_id, company_id, linked_at "
@@ -243,8 +249,9 @@ def _migrate_old_shared_items(conn):
                 )
         except Exception as e:
             logger.warning("[companies_schema] فشل نقل الروابط القديمة: %s", e)
+            # نكمل حتى لو فشل نقل الروابط — أفضل من فشل كل الـ migration
 
-        # استبدال الجداول
+        # ── المرحلة 6: استبدال الجداول ───────────────────────
         conn.execute("DROP TABLE IF EXISTS company_shared_links")
         conn.execute("DROP TABLE IF EXISTS shared_items")
         conn.execute("ALTER TABLE _shared_items_new RENAME TO shared_items")
@@ -260,16 +267,25 @@ def _migrate_old_shared_items(conn):
             conn.execute("DROP TABLE IF EXISTS _shared_items_new")
             conn.execute("DROP TABLE IF EXISTS _links_new")
             conn.commit()
-        except Exception:
-            pass
-    finally:
-        # [إصلاح 19] إعادة تفعيل foreign_keys دائماً في الـ finally
-        # حتى لو فشل كل شيء آخر — هذا السطر يجب أن يُنفَّذ
-        try:
-            conn.execute("PRAGMA foreign_keys = ON")
-        except Exception as e:
-            # هذا يجب ألا يحدث أبداً، لكن نُسجّله كـ CRITICAL
-            import logging as _log
-            _log.getLogger(__name__).critical(
-                "[companies_schema] CRITICAL: فشل إعادة تفعيل foreign_keys: %s", e
+        except Exception as cleanup_err:
+            logger.warning(
+                "[companies_schema] فشل cleanup الجداول المؤقتة: %s", cleanup_err
             )
+
+    finally:
+        # [إصلاح 19 v2] إعادة تفعيل foreign_keys دائماً في الـ finally
+        # هذا الـ block يُنفَّذ حتى لو فشل الـ except block نفسه.
+        # الشرط fk_disabled يضمن أننا لا نُعيد تفعيل FK لم نُعطّله أصلاً
+        # (لحالات نادرة جداً حيث conn.execute("PRAGMA foreign_keys = OFF") فشل).
+        if fk_disabled:
+            try:
+                conn.execute("PRAGMA foreign_keys = ON")
+            except Exception as fk_err:
+                # هذا يجب ألا يحدث أبداً في حالة طبيعية.
+                # نُسجّله كـ CRITICAL لأن FK معطلة قد تُسبب بيانات غير متسقة.
+                import logging as _log
+                _log.getLogger(__name__).critical(
+                    "[companies_schema] CRITICAL: فشل إعادة تفعيل foreign_keys: %s. "
+                    "أعد تشغيل التطبيق لتجنب بيانات غير متسقة.",
+                    fk_err
+                )
