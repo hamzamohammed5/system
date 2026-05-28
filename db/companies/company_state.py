@@ -132,7 +132,6 @@ class ProtectedConnection:
             return self._get_raw().execute(sql, params)
         except sqlite3.OperationalError as e:
             err_msg = str(e).lower()
-            # reconnect فقط عند أخطاء الـ connection المغلق
             if any(kw in err_msg for kw in ("closed", "unable to open", "disk i/o")):
                 self._reconnect_after_error()
                 return self._get_raw().execute(sql, params)
@@ -233,6 +232,7 @@ class CompanyState:
         لو نفس الشركة → يحدث الاسم واللون فقط بدون مسح connections.
 
         [إصلاح 12] يُبطل AppState cache بعد تغيير الشركة تلقائياً.
+        يُستدعى خارج الـ lock لتجنب deadlock مع PyQt signals.
         """
         with self._state_lock:
             if self._company_id == company_id:

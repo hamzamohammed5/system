@@ -7,6 +7,9 @@ db/offers_repo.py
   - سعر المنتج في العرض = سعره من جدول pricing
   - الخصم % يتطرح من مجموع الأسعار
   - الربح = سعر البيع - إجمالي التكلفة
+
+تحسين 14: calc_offer_summary تستخدم cost cache لتجنب حساب calc_cost
+مرتين لنفس المنتج عند تكراره في العرض.
 """
 
 from datetime import datetime
@@ -138,6 +141,10 @@ def calc_offer_summary(conn, offer_id: int) -> dict:
     sell_price   = listed_price × (1 - discount/100)
     cost         = تكلفة الإنتاج × الكمية
     profit       = sell_price - cost
+
+    [تحسين 14] تحسب تكلفة كل item_id مرة واحدة فقط باستخدام cost_cache،
+    بدلاً من استدعاء calc_cost في كل iteration حتى لو تكرر المنتج.
+    هذا يُقلّص عدد الـ BOM traversals من O(n) إلى O(unique items).
     """
     offer = fetch_offer(conn, offer_id)
     if not offer:
@@ -145,7 +152,12 @@ def calc_offer_summary(conn, offer_id: int) -> dict:
 
     from models.costing import calc_cost
 
-    items        = fetch_offer_items(conn, offer_id)
+    items = fetch_offer_items(conn, offer_id)
+
+    # [تحسين 14] حساب تكلفة كل item_id فريد مرة واحدة فقط
+    unique_item_ids = {row["item_id"] for row in items}
+    cost_cache = {item_id: calc_cost(conn, item_id) for item_id in unique_item_ids}
+
     lines        = []
     total_listed = 0.0
     total_cost   = 0.0
@@ -153,7 +165,7 @@ def calc_offer_summary(conn, offer_id: int) -> dict:
     for row in items:
         item_id   = row["item_id"]
         qty       = row["qty"]
-        unit_cost = calc_cost(conn, item_id)
+        unit_cost = cost_cache[item_id]   # من الـ cache — لا نعيد الحساب
 
         pricing_row = conn.execute(
             "SELECT price FROM pricing WHERE item_id=?", (item_id,)

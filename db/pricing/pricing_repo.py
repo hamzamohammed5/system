@@ -3,6 +3,8 @@ db/pricing_repo.py
 ==================
 عمليات قراءة/كتابة جدول pricing.
 كل منتج نهائي ممكن يكون له سعر = margin × cost
+
+تحسين 23: upsert_pricing يتحقق من نوع المنتج قبل الحفظ.
 """
 
 
@@ -36,7 +38,23 @@ def fetch_pricing(conn, item_id: int):
 
 
 def upsert_pricing(conn, item_id: int, margin: float, price: float):
-    """حفظ أو تحديث سعر منتج."""
+    """
+    حفظ أو تحديث سعر منتج.
+
+    [تحسين 23] يتحقق أن المنتج موجود ونوعه 'final' قبل الحفظ.
+    التسعير مخصص للمنتجات النهائية فقط — الخامات والنصف مصنع لا تُسعَّر هنا.
+    """
+    item = conn.execute(
+        "SELECT type FROM items WHERE id=?", (item_id,)
+    ).fetchone()
+    if not item:
+        raise ValueError(f"المنتج رقم {item_id} غير موجود")
+    if item["type"] != "final":
+        raise ValueError(
+            f"التسعير متاح للمنتجات النهائية فقط "
+            f"(المنتج رقم {item_id} نوعه '{item['type']}')"
+        )
+
     conn.execute("""
         INSERT INTO pricing (item_id, margin, price)
         VALUES (?, ?, ?)

@@ -127,7 +127,9 @@ def record_inventory_move(conn, inv_id: int, move_type: str,
     """
     يسجل حركة مخزن ويحدث qty_on_hand و avg_cost (WACC).
 
-    [تحسين 20] يتحقق من qty سالبة في حالة adjust.
+    [تحسين 20] يتحقق من qty سالبة في حالة adjust:
+      - adjust بكمية سالبة غير منطقي (التسوية تضع كمية مطلقة جديدة).
+      - للتخفيض استخدم move_type='out'.
     """
     inv = fetch_inventory_item(conn, inv_id)
     if not inv:
@@ -140,19 +142,23 @@ def record_inventory_move(conn, inv_id: int, move_type: str,
         total_cost = qty * unit_cost
         new_qty = old_qty + qty
         new_avg = ((old_qty * old_avg) + total_cost) / new_qty if new_qty > 0 else unit_cost
+
     elif move_type == "out":
         if qty > old_qty + 0.0001:
-            raise ValueError(f"الكمية المطلوبة ({qty:,.4g}) أكبر من الرصيد ({old_qty:,.4g})")
+            raise ValueError(
+                f"الكمية المطلوبة ({qty:,.4g}) أكبر من الرصيد ({old_qty:,.4g})"
+            )
         new_qty    = max(0.0, old_qty - qty)
         new_avg    = old_avg
         total_cost = qty * old_avg
         unit_cost  = old_avg
+
     else:  # adjust
         # [تحسين 20] تحقق من الكمية السالبة
         if qty < 0:
             raise ValueError(
                 f"كمية التسوية ({qty:,.4g}) لا يمكن أن تكون سالبة. "
-                f"للتعديل لكمية أقل استخدم حركة صادر بدلاً من ذلك."
+                "للتعديل لكمية أقل استخدم حركة صادر بدلاً من ذلك."
             )
         new_qty    = qty
         new_avg    = old_avg

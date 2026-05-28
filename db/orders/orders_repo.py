@@ -139,7 +139,9 @@ def insert_order(conn,
     if not customer:
         raise ValueError(f"العميل رقم {customer_id} غير موجود")
     if not customer["is_active"]:
-        raise ValueError(f"العميل رقم {customer_id} غير نشط — فعّله أولاً لإنشاء طلبات جديدة")
+        raise ValueError(
+            f"العميل رقم {customer_id} غير نشط — فعّله أولاً لإنشاء طلبات جديدة"
+        )
 
     order_number = _next_order_number(conn)
     net_amount   = total_amount - discount
