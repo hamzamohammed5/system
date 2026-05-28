@@ -11,6 +11,19 @@ BaseListPanel — قاعدة مشتركة لكل لوحات القوائم.
     _sort_key(col, row) override للـ sort المخصص.
     الضغط على نفس العمود مرتين يعكس الاتجاه (ASC/DESC).
     SORT_DEFAULT_COL / SORT_DEFAULT_ASC لضبط الترتيب الابتدائي.
+
+مثال استخدام SORTABLE:
+    class RawPanel(BaseListPanel):
+        COLUMNS   = ["#", "الاسم", "التصنيف", "السعر"]
+        COL_KEYS  = ["id", "name", "category_name", "price"]
+        SORTABLE  = True
+        SORT_DEFAULT_COL = 1   # ترتيب ابتدائي بالاسم
+        SORT_DEFAULT_ASC = True
+
+        def _sort_key(self, col, row):
+            if col == 3:  # عمود السعر → رقمي
+                return float(row.get("price") or 0)
+            return super()._sort_key(col, row)
 """
 from PyQt5.QtWidgets import QWidget, QVBoxLayout, QSizePolicy
 from PyQt5.QtCore    import Qt, pyqtSignal, QTimer
@@ -52,6 +65,18 @@ class BaseListPanel(QWidget, BusConnectedMixin):
         SORT_DEFAULT_COL  → عمود الترتيب الابتدائي (-1 = بدون)
         SORT_DEFAULT_ASC  → True = تصاعدي، False = تنازلي
         _sort_key(col, row) → قيمة الـ sort المخصصة للعمود
+
+    مثال تفعيل Sort:
+        class MyPanel(BaseListPanel):
+            COLUMNS          = ["الاسم", "التاريخ", "المبلغ"]
+            COL_KEYS         = ["name", "date", "amount"]
+            SORTABLE         = True
+            SORT_DEFAULT_COL = 0
+
+            def _sort_key(self, col, row):
+                if col == 2:  # المبلغ → رقمي
+                    return float(row.get("amount") or 0)
+                return super()._sort_key(col, row)
     """
 
     item_selected = pyqtSignal(int)
@@ -72,10 +97,10 @@ class BaseListPanel(QWidget, BusConnectedMixin):
     CONNECT_BUS        : bool = True
 
     # ── [تحسين 45] Sort settings ─────────────────────────
-    SORTABLE          : bool      = False
-    COL_KEYS          : list      = []   # مفاتيح dict للأعمدة بالترتيب
-    SORT_DEFAULT_COL  : int       = -1   # -1 = بدون ترتيب ابتدائي
-    SORT_DEFAULT_ASC  : bool      = True
+    SORTABLE          : bool = False
+    COL_KEYS          : list = []   # مفاتيح dict للأعمدة بالترتيب
+    SORT_DEFAULT_COL  : int  = -1   # -1 = بدون ترتيب ابتدائي
+    SORT_DEFAULT_ASC  : bool = True
 
     def __init__(self, conn=None, parent=None):
         super().__init__(parent)
@@ -86,7 +111,7 @@ class BaseListPanel(QWidget, BusConnectedMixin):
         self._timer.setInterval(250)
         self._timer.timeout.connect(self._apply_filter)
 
-        # [تحسين 45] Sort state
+        # [تحسين 45] Sort state — instance variables لعزل كل instance
         self._sort_col : int  = self.SORT_DEFAULT_COL
         self._sort_asc : bool = self.SORT_DEFAULT_ASC
 
