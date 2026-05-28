@@ -1,33 +1,13 @@
 """
 ui/widgets/panels/data_table.py
 ==========================================
-DataTableWidget — جدول بيانات موحد يجمع:
-  - ListHeader  (بحث + عنوان + أزرار)
-  - QTableWidget (الجدول)
-  - EmptyState  (حالة فارغة)
-  - StatusBar   (عداد الصفوف)
+DataTableWidget — جدول بيانات موحد.
 
-يحل محل النمط المكرر في ملفات كثيرة.
-
-الاستخدام:
-    tbl = DataTableWidget(
-        columns=["ID", "الاسم", "التاريخ"],
-        stretch_col=1,
-        title="المنتجات",
-        add_text="➕ إضافة",
-    )
-    tbl.add_clicked.connect(self._on_add)
-    tbl.search_changed.connect(self._on_search)
-    tbl.row_selected.connect(self._on_select)
-    layout.addWidget(tbl)
-
-    # ملء الجدول:
-    tbl.begin_fill()
-    for row_data in data:
-        r = tbl.insert_row()
-        tbl.table.setItem(r, 0, QTableWidgetItem(str(row_data["id"])))
-        tbl.table.setItem(r, 1, QTableWidgetItem(row_data["name"]))
-    tbl.end_fill()
+الإصلاحات:
+  - [إصلاح 7] end_fill تفرق بين "لا بيانات أصلاً" و"لا نتائج للبحث".
+    القديم: لو shown=0 و total=10 → يظهر الـ empty state نفسه
+    بنفس الرسالة سواء كانت البيانات فاضية أو تم تفلترها.
+    الجديد: رسالة مختلفة لكل حالة.
 """
 
 from PyQt5.QtWidgets import QWidget, QVBoxLayout, QSizePolicy
@@ -109,7 +89,7 @@ class DataTableWidget(QWidget):
         self.table.itemSelectionChanged.connect(self._on_select)
         root.addWidget(self.table, stretch=1)
 
-        # Empty state
+        # Empty state — "لا بيانات" (الحالة الافتراضية)
         self._empty = EmptyState(
             icon=self.EMPTY_ICON,
             title=self.EMPTY_TITLE,
@@ -122,6 +102,21 @@ class DataTableWidget(QWidget):
         )
         self._empty.setVisible(False)
         root.addWidget(self._empty)
+
+        # [إصلاح 7] Empty state ثانية لـ "لا نتائج للبحث"
+        self._empty_filtered = EmptyState(
+            icon="🔍",
+            title="لا توجد نتائج",
+            subtitle="جرب تغيير كلمة البحث أو الفلتر",
+            style="plain",
+            color=_C['text_muted'],
+            min_height=100,
+        )
+        self._empty_filtered.setStyleSheet(
+            f"QFrame {{ background:{_C['bg_input']}; border:none; }}"
+        )
+        self._empty_filtered.setVisible(False)
+        root.addWidget(self._empty_filtered)
 
         # Status bar
         self._status = StatusBar()
@@ -146,16 +141,22 @@ class DataTableWidget(QWidget):
 
         shown: عدد الصفوف الظاهرة (لو مختلفة عن الكل عند الفلترة).
 
-        الإصلاح: has_data يعتمد على visible مش total،
-        عشان لو كل الصفوف متفلترة (visible=0, total=10)
-        يظهر الـ empty state بدل جدول فاضي.
+        [إصلاح 7] يفرق بين 3 حالات:
+          1. total == 0           → "لا توجد بيانات" (empty state افتراضي)
+          2. total > 0, shown > 0 → يعرض الجدول
+          3. total > 0, shown == 0 → "لا توجد نتائج" (filtered empty state)
         """
         total   = self.table.rowCount()
         visible = shown if shown is not None else total
 
-        has_data = visible > 0          # ← الإصلاح: visible بدل total
+        # [إصلاح 7] تحديد الحالة
+        has_data         = visible > 0
+        is_filtered_empty = (not has_data) and (total > 0)
+
         self.table.setVisible(has_data)
-        self._empty.setVisible(not has_data)
+        self._empty.setVisible(not has_data and not is_filtered_empty)
+        self._empty_filtered.setVisible(is_filtered_empty)
+
         self._status.set_count(visible, total)
 
         if has_data:

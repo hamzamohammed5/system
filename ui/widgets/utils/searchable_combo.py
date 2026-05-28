@@ -3,16 +3,20 @@ ui/widgets/utils/searchable_combo.py
 =====================================
 SearchableCombo — QComboBox مع حقل بحث مدمج.
 
-التغييرات:
-  - _rebuild الجديدة تفلتر الـ separators الفارغة أثناء البناء
-    بدل ما تبنيها وتمسحها بعدين (_remove_empty_seps كانت O(n²))
-  - pending_sep pattern: نأخر إضافة الـ separator حتى يجي عنصر حقيقي بعده
-  - _remove_empty_seps محذوفة بالكامل
+التحسينات:
+  - [تحسين 13] debounce داخلي للبحث (120ms).
+    القديم: كل ضغطة تعيد بناء الـ combo كاملاً.
+    الجديد: QTimer واحد يجمع الضغطات ثم يبني مرة واحدة.
+    أي مستدعي ينسى الـ debounce محمي تلقائياً.
+    قوائم > 200 عنصر لن تعاني من performance مرئي.
+
+  - [محفوظ] pending_sep pattern — يمنع الـ separators الفارغة
+    بدون _remove_empty_seps (كانت O(n²)).
 """
 from PyQt5.QtWidgets import (
     QWidget, QHBoxLayout, QComboBox, QLineEdit, QPushButton, QSizePolicy,
 )
-from PyQt5.QtCore import pyqtSignal, Qt
+from PyQt5.QtCore import pyqtSignal, Qt, QTimer
 from PyQt5.QtGui  import QColor, QFont
 
 from ui.app_settings import _C, fs, get_font_size
@@ -61,9 +65,20 @@ class SearchableCombo(QWidget):
 
     item_selected = pyqtSignal(object)
 
+    # [تحسين 13] delay البحث الداخلي بالـ ms
+    SEARCH_DELAY_MS: int = 120
+
     def __init__(self, parent=None):
         super().__init__(parent)
         self._all_items: list = []
+        self._pending_filter  = ""
+
+        # [تحسين 13] QTimer داخلي للـ debounce
+        self._rebuild_timer = QTimer(self)
+        self._rebuild_timer.setSingleShot(True)
+        self._rebuild_timer.setInterval(self.SEARCH_DELAY_MS)
+        self._rebuild_timer.timeout.connect(self._do_rebuild)
+
         self._build()
 
     def _build(self):
@@ -111,14 +126,26 @@ class SearchableCombo(QWidget):
     # ── handlers ──────────────────────────────────────────
 
     def _on_search(self, text: str):
+        """
+        [تحسين 13] بدل ما نبني مباشرة، نحفظ الـ filter ونطلق الـ timer.
+        الـ timer يجمع الضغطات السريعة ويبني مرة واحدة.
+        """
         self.btn_clear.setVisible(bool(text))
-        self._rebuild(filter_text=text.strip().lower())
+        self._pending_filter = text.strip().lower()
+        self._rebuild_timer.start()
+
+    def _do_rebuild(self):
+        """[تحسين 13] يُستدعى من الـ timer — بناء الـ combo بالفلتر المعلق."""
+        self._rebuild(filter_text=self._pending_filter)
 
     def _clear_search(self):
         self.inp_search.blockSignals(True)
         self.inp_search.clear()
         self.inp_search.blockSignals(False)
         self.btn_clear.setVisible(False)
+        # إلغاء الـ timer المعلق وإعادة البناء فوراً
+        self._rebuild_timer.stop()
+        self._pending_filter = ""
         self._rebuild(filter_text="")
 
     def _on_combo_changed(self, idx: int):
@@ -131,10 +158,14 @@ class SearchableCombo(QWidget):
     def populate(self, items: list):
         """items: list of (display_text, user_data, is_separator)"""
         self._all_items = items
-        self._rebuild(filter_text=self.inp_search.text().strip().lower())
+        # [تحسين 13] نستخدم الـ pending_filter الحالي (لو فيه بحث نشط)
+        self._rebuild_timer.stop()
+        self._rebuild(filter_text=self._pending_filter)
 
     def clear_items(self):
         self._all_items = []
+        self._pending_filter = ""
+        self._rebuild_timer.stop()
         self.cmb.clear()
         self.inp_search.clear()
         self.btn_clear.setVisible(False)
@@ -146,13 +177,12 @@ class SearchableCombo(QWidget):
         pending_sep pattern:
           - نأخر إضافة الـ separator حتى يجي عنصر حقيقي بعده
           - لو الـ separator في النهاية أو يليه separator آخر → يُتجاهل
-          - هذا يلغي الحاجة لـ _remove_empty_seps (كانت O(n²))
         """
         prev = self.cmb.currentData()
         self.cmb.blockSignals(True)
         self.cmb.clear()
 
-        pending_sep = None  # (display, user_data) — ننتظر عنصر حقيقي قبل الإضافة
+        pending_sep = None
 
         for display, user_data, is_sep in self._all_items:
             if filter_text and not is_sep:
@@ -162,10 +192,8 @@ class SearchableCombo(QWidget):
                     continue
 
             if is_sep:
-                # لا تضيف الـ separator فوراً — انتظر عنصر حقيقي بعده
                 pending_sep = (display, user_data)
             else:
-                # عنصر حقيقي — أضف الـ separator المعلق أولاً لو موجود
                 if pending_sep is not None:
                     self.cmb.addItem(pending_sep[0], userData=pending_sep[1])
                     self._style_sep(self.cmb.count() - 1)
@@ -175,8 +203,6 @@ class SearchableCombo(QWidget):
                 idx = self.cmb.count() - 1
                 if user_data and user_data[0] == "__orphan__":
                     self.cmb.setItemData(idx, QColor(_C['danger']), Qt.ForegroundRole)
-
-        # pending_sep في النهاية = separator فارغ → تجاهله (لا تضيفه)
 
         self.cmb.blockSignals(False)
         self._restore(prev)

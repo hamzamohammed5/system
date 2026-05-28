@@ -1,7 +1,10 @@
 """
-widgets/base/list_panel.py
+ui/widgets/base/list_panel.py
 ==========================
 BaseListPanel — قاعدة مشتركة لكل لوحات القوائم.
+
+التحسينات:
+  - [تحسين 24] إضافة current_id property للوصول المباشر للـ ID المحدد.
 """
 from PyQt5.QtWidgets import QWidget, QVBoxLayout, QSizePolicy
 from PyQt5.QtCore    import Qt, pyqtSignal, QTimer
@@ -123,7 +126,6 @@ class BaseListPanel(QWidget, BusConnectedMixin):
         self.table.itemSelectionChanged.connect(self._on_select)
         root.addWidget(self._splitter, stretch=1)
 
-        # يستخدم _C['text_muted'] بدل hardcoded "#9ca3af"
         self._empty_state = EmptyState(
             icon=self.EMPTY_ICON, title=self.EMPTY_TITLE,
             style="plain", color=_C['text_muted'], min_height=100,
@@ -253,6 +255,12 @@ class BaseListPanel(QWidget, BusConnectedMixin):
             data = item.data(Qt.UserRole)
             return int(data) if data is not None else None
         return None
+
+    # [تحسين 24] property للوصول المباشر للـ ID المحدد
+    @property
+    def current_id(self) -> "int | None":
+        """ID العنصر المحدد حالياً — None لو مفيش تحديد."""
+        return self.selected_id()
 
     # ── header API ────────────────────────────────────────
 

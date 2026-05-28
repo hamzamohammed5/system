@@ -4,6 +4,11 @@ ui/widgets/panels/detail_section.py
 DetailSection  — قسم تفاصيل موحد (عنوان: قيمة) في grid.
 TwoColDetails  — عرض في عمودين.
 make_detail_row — دالة سريعة.
+
+التحسينات:
+  - [تحسين 19] set_data ترجع dict[str, QLabel] للتحديث المباشر.
+    القديم: لم تُرجع شيئاً، المستدعي يحتاج update_value(index).
+    الجديد: ترجع {label_text: value_QLabel} للتحديث بدون حاجة لمعرفة الـ index.
 """
 from PyQt5.QtWidgets import (
     QFrame, QVBoxLayout, QHBoxLayout, QLabel, QWidget,
@@ -19,14 +24,6 @@ from ..components.headers         import SectionHeader
 class DetailSection(QFrame):
     """
     قسم تفاصيل موحد — يعرض أزواج (عنوان: قيمة) في grid منظم.
-
-    الاستخدام:
-        sec = DetailSection("بيانات المنتج", cols=2)
-        sec.add_row("الاسم:", "منتج A")
-        sec.add_row("الكود:", "P001", color="#1565c0")
-        lbl = sec.add_row("الحالة:", "نشط")
-        lbl.setText("موقوف")          # تحديث مباشر
-        layout.addWidget(sec)
     """
 
     def __init__(self, title: str = "",
@@ -117,13 +114,27 @@ class DetailSection(QFrame):
         row = (self._count + self._cols - 1) // self._cols
         self._grid.addWidget(sep, row, 0, 1, self._cols * 2)
 
-    def set_data(self, data: dict):
+    def set_data(self, data: dict) -> "dict[str, QLabel]":
+        """
+        يعرض البيانات.
+
+        [تحسين 19] ترجع {label_text: value_QLabel} للتحديث المباشر.
+
+        مثال:
+            refs = section.set_data({"الاسم": "منتج A", "السعر": "100"})
+            # لاحقاً:
+            refs["السعر"].setText("150")
+        """
+        result   = {}
         existing = {lk.text(): lv for lk, lv in self._rows}
         for label, value in data.items():
             if label in existing:
                 existing[label].setText(str(value) if value else "─")
+                result[label] = existing[label]
             else:
-                self.add_row(label, str(value) if value else "─")
+                lbl = self.add_row(label, str(value) if value else "─")
+                result[label] = lbl
+        return result
 
     def clear_rows(self):
         for lbl_key, lbl_val in self._rows:
@@ -162,7 +173,6 @@ class DetailSection(QFrame):
 def make_detail_row(label: str, value: str = "─",
                     color: str = None,
                     bold: bool = False) -> "tuple[QLabel, QLabel]":
-    """يبني صف تفاصيل واحد خارج DetailSection."""
     base = get_font_size()
 
     lbl_key = QLabel(label)
@@ -190,15 +200,7 @@ def make_detail_row(label: str, value: str = "─",
 # ══════════════════════════════════════════════════════════
 
 class TwoColDetails(QWidget):
-    """
-    عرض تفاصيل في عمودين.
-
-    الاستخدام:
-        details = TwoColDetails()
-        details.add("الاسم:", "منتج A")
-        details.add("الكود:", "P001", color="#1565c0")
-        layout.addWidget(details)
-    """
+    """عرض تفاصيل في عمودين."""
 
     def __init__(self, parent=None):
         super().__init__(parent)
@@ -234,7 +236,7 @@ class TwoColDetails(QWidget):
         lbl_val.setWordWrap(True)
 
         row = self._count // 2
-        col = (self._count % 2) * 2   # 0 أو 2
+        col = (self._count % 2) * 2
 
         self._grid.addWidget(lbl_key, row, col,     Qt.AlignRight)
         self._grid.addWidget(lbl_val, row, col + 1, Qt.AlignRight)

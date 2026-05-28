@@ -3,7 +3,12 @@ widgets/combo/category.py
 ==========================
 CategoryCombo — QComboBox للتصنيفات الهرمية.
 
-التغيير: بتسمع لـ bus.data_changed بدل ما تبعت — صح من الأساس.
+الإصلاحات:
+  - [إصلاح 2] CategoryCombo الآن يسمع لـ bus.company_data_changed
+    الكود الجديد يبعت company_data_changed بدل data_changed،
+    فالـ combo لم يكن يتحدث عند تغيير البيانات عبر النهج الجديد.
+    الحل: ربط الاتنين معاً — data_changed للتوافق القديم،
+    company_data_changed للنهج الجديد.
 """
 from PyQt5.QtWidgets import QComboBox
 from PyQt5.QtCore    import Qt
@@ -47,10 +52,7 @@ class CategoryCombo(QComboBox, LiveConnMixin):
     """
     QComboBox للتصنيفات الهرمية مع تحديث تلقائي.
 
-    الاستخدام:
-        cmb = CategoryCombo(conn, scope="raw")
-        cmb.get_category()    → int | None
-        cmb.set_category(5)
+    [إصلاح 2] يسمع الآن لـ company_data_changed إضافةً لـ data_changed.
     """
 
     def __init__(self, conn, scope: str = "all", parent=None):
@@ -60,6 +62,8 @@ class CategoryCombo(QComboBox, LiveConnMixin):
         self.refresh()
         # تسمع فقط — لا تبعت
         bus.data_changed.connect(self.refresh)
+        # [إصلاح 2] ربط bus.company_data_changed — النهج الجديد
+        bus.company_data_changed.connect(lambda _: self.refresh())
 
     def refresh(self):
         try:

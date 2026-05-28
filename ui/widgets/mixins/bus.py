@@ -3,11 +3,11 @@ ui/widgets/mixins/bus.py
 =================================
 BusConnectedMixin — ربط تلقائي بـ event bus.
 
-التغييرات في هذا الإصدار (Phase 5):
-  - _refresh_guard أصبح instance variable بدل class variable.
-    الـ class variable القديم كان مشتركاً بين كل الـ instances،
-    يعني لو instance واحد عمله True، كل التانية بتتجاهل الـ refresh.
-    الإصلاح: self._refresh_guard = False في بداية _connect_bus.
+الإصلاحات:
+  - [إصلاح Phase 5 محفوظ] _refresh_guard كـ instance variable.
+  - [تحسين 17] إضافة _disconnect_bus() للفصل الآمن عند حذف الـ widget.
+    بدون فصل، PyQt بيتعامل مع deleted objects في معظم الأحوال،
+    لكن في حالات الـ sip deleted objects أو الـ weak references ممكن crash.
 """
 from PyQt5.QtCore import QTimer, Qt
 
@@ -16,7 +16,7 @@ class BusConnectedMixin:
     """
     Mixin يوفر ربطاً موحداً بـ event bus.
 
-    الاستخدام الأساسي (data فقط — الأكثر شيوعاً):
+    الاستخدام الأساسي:
         class MyWidget(QWidget, BusConnectedMixin):
             def __init__(self):
                 self._connect_bus(data=True)
@@ -24,31 +24,10 @@ class BusConnectedMixin:
             def _on_data_changed(self):
                 self._load()
 
-    الاستخدام مع company filter (الأفضل للـ widgets المرتبطة بشركة):
-        class MyWidget(QWidget, BusConnectedMixin):
-            def __init__(self):
-                self._connect_bus(data=True, company=True)
-
-            def _on_data_changed(self):
-                self._load()
-
-    للـ widgets اللي محتاجة تعرف الـ company_id:
-        class MyWidget(QWidget, BusConnectedMixin):
-            def __init__(self):
-                self._connect_bus(company=True)
-
-            def _on_company_changed(self, company_id: int):
-                self._rebuild_for(company_id)
-
-    ⚠️  تحذير double-connect:
-        Qt.UniqueConnection تمنع تضاعف الـ slots لو _connect_bus()
-        اتستدعت أكتر من مرة على نفس الـ widget instance.
-
-    ⚠️  تحذير double-refresh:
-        لما data=True بنربط data_changed و company_data_changed معاً.
-        لو الكود القديم أطلق الاتنين في نفس الوقت، الـ widget هيعمل
-        refresh مرتين. الـ _refresh_guard بيمنع ده تلقائياً.
-        الأفضل: استخدم emit_company_data_changed() من ui.widgets.core.events.
+    للـ cleanup عند حذف الـ widget:
+        def closeEvent(self, event):
+            self._disconnect_bus()
+            super().closeEvent(event)
     """
 
     def _connect_bus(self, data: bool = True, company: bool = False):
@@ -79,11 +58,35 @@ class BusConnectedMixin:
                 self._on_company_changed, Qt.UniqueConnection
             )
 
+    def _disconnect_bus(self):
+        """
+        [تحسين 17] يفصل الـ widget عن الـ bus.
+
+        استدعه من closeEvent() أو cleanup() لضمان عدم وجود
+        dangling references بعد حذف الـ widget.
+
+        TypeError يُبلع بصمت لأن disconnect يرمي TypeError
+        لو الـ slot لم يكن مربوطاً أصلاً.
+        """
+        try:
+            from ui.events import bus
+            for signal in (bus.company_data_changed, bus.data_changed):
+                for slot in (
+                    self._on_company_data_changed,
+                    self._on_data_changed_guarded,
+                    self._on_company_changed,
+                ):
+                    try:
+                        signal.disconnect(slot)
+                    except (TypeError, RuntimeError):
+                        pass  # لم يكن مربوطاً — مقبول
+        except Exception:
+            pass  # bus غير متاح — مقبول أيضاً
+
     def _on_company_data_changed(self, company_id: int):
         """
         Handler داخلي لـ company_data_changed.
-        بيتحقق إذا كان company_id هو الشركة النشطة
-        قبل ما يستدعي _on_data_changed.
+        يتحقق إذا كان company_id هو الشركة النشطة.
         """
         from ui.widgets.core.events import is_same_company
         if is_same_company(company_id):

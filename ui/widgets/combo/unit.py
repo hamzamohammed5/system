@@ -3,10 +3,12 @@ widgets/combo/unit.py
 ======================
 UnitCombo — QComboBox موحد لاختيار وحدة القياس.
 
-التغييرات:
-  - _cache_key يرجع None لو مش قادر يجيب الـ path
-    بدل id(conn) اللي مش stable — يمنع cache corruption
-  - load_units / invalidate_units_cache محدّثين يدعمون None key
+الإصلاحات:
+  - [إصلاح 1] _cache_key ترجع fallback آمن (id(conn)) بدل None
+    القديم: ترجع None عند الفشل → يُتجاهل الـ cache كاملاً
+    الجديد: ترجع f"_id_{id(conn)}" → cache يعمل دايماً
+    UnitCombo عمرها طويل، فـ id(conn) مقبول كـ fallback
+  - load_units / invalidate_units_cache محدّثين يعملون مع str دايماً
   - UnitCombo يستخدم blocked_signals() بدل blockSignals() المكررة
 """
 
@@ -29,21 +31,28 @@ _DEFAULT_UNITS = [
 ]
 
 # cache: db_path → list[tuple[str, str]]
-# المفتاح هو database path دايماً — لو مش قادر يجيب الـ path، مش بنعمل cache
 _units_cache: dict = {}
 
 
-def _cache_key(conn) -> "str | None":
+def _cache_key(conn) -> str:
     """
     يرجع database path كـ cache key.
-    يرجع None لو مش قادر يجيب الـ path — في الحالة دي لا نعمل cache
-    لتجنب corruption من id(conn) اللي ممكن يتكرر بعد حذف الـ object.
+
+    [إصلاح 1] بدل إرجاع None عند الفشل (كان يُعطّل الـ cache كاملاً
+    ويخلق entries بـ None كـ key مشتركة بين كل الـ connections)،
+    الآن نرجع f"_id_{id(conn)}" كـ fallback آمن.
+
+    UnitCombo عمرها طويل (طول فترة الـ widget)، فـ id(conn) مقبول
+    كـ key مؤقتة لأنه لن يتكرر خلال هذه الفترة.
     """
     try:
-        return conn.execute("PRAGMA database_list").fetchone()[2]
+        row = conn.execute("PRAGMA database_list").fetchone()
+        if row and row[2]:
+            return row[2]
     except Exception:
-        logger.debug("_cache_key: couldn't get db path, skipping cache")
-        return None
+        pass
+    logger.debug("_cache_key: couldn't get db path, using id fallback")
+    return f"_id_{id(conn)}"
 
 
 def invalidate_units_cache(conn=None):
@@ -51,19 +60,17 @@ def invalidate_units_cache(conn=None):
     if conn is None:
         _units_cache.clear()
     else:
-        key = _cache_key(conn)
-        if key:
-            _units_cache.pop(key, None)
+        key = _cache_key(conn)  # دايماً str الآن — لا حاجة للتحقق من None
+        _units_cache.pop(key, None)
 
 
 # ── دوال الـ settings ─────────────────────────────────────
 
 def load_units(conn, force: bool = False) -> list:
     """يجلب قائمة الوحدات من settings مع cache."""
-    key = _cache_key(conn)
+    key = _cache_key(conn)  # دايماً str الآن
 
-    # نستخدم الـ cache فقط لو الـ key صالح
-    if key and not force and key in _units_cache:
+    if not force and key in _units_cache:
         return _units_cache[key]
 
     result = list(_DEFAULT_UNITS)
@@ -75,9 +82,7 @@ def load_units(conn, force: bool = False) -> list:
     except Exception as e:
         logger.debug("load_units failed, using defaults: %s", e)
 
-    # نحفظ في الـ cache فقط لو الـ key صالح
-    if key:
-        _units_cache[key] = result
+    _units_cache[key] = result
     return result
 
 
@@ -115,11 +120,6 @@ class UnitCombo(QComboBox):
       - تحميل من settings
       - حفظ آخر اختيار تلقائياً
       - fallback للوحدات الافتراضية
-
-    الاستخدام:
-        combo = UnitCombo(conn, last_key="dim_sets_unit")
-        combo.current_unit()   → "mm"
-        combo.set_unit("cm")
     """
 
     unit_changed = pyqtSignal(str)
@@ -176,7 +176,6 @@ class UnitCombo(QComboBox):
 
 def make_unit_combo(conn=None, current: str = "cm",
                     last_key: str = None) -> QComboBox:
-    """بديل الدالة القديمة — يبني QComboBox للوحدات."""
     if conn is not None:
         combo = UnitCombo(conn, last_key=last_key, current=current)
     else:

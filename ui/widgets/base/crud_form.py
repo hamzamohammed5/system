@@ -1,5 +1,11 @@
 """
 ui/widgets/base/crud_form.py
+
+التحسينات:
+  - [تحسين 18] set_conn يستدعي _on_conn_changed(conn) بعد التحديث.
+    القديم: set_conn يحدّث self.conn فقط، الـ sub-widgets (CategoryCombo)
+    تبقى بالـ conn القديم.
+    الجديد: hook يسمح للـ subclass بتحديث الـ sub-widgets عند تغيير الـ conn.
 """
 import logging
 from PyQt5.QtWidgets import (
@@ -40,6 +46,7 @@ class BaseCrudForm(QWidget, EditModeMixin, FormValidationMixin):
         _build_extra(root)      → widgets إضافية تحت الأزرار
         _validate()             → تحقق إضافي، يرجع str أو None
         _post_init()
+        _on_conn_changed(conn)  → [تحسين 18] يُستدعى عند تغيير الـ conn
     """
 
     item_added   = pyqtSignal(int)
@@ -98,6 +105,19 @@ class BaseCrudForm(QWidget, EditModeMixin, FormValidationMixin):
 
     def _validate(self) -> "str | None":
         return None
+
+    def _on_conn_changed(self, conn):
+        """
+        [تحسين 18] يُستدعى بعد تغيير self.conn عبر set_conn().
+
+        Override هنا لتحديث الـ sub-widgets بالـ conn الجديد.
+
+        مثال:
+            def _on_conn_changed(self, conn):
+                self.cmb_category.conn = conn
+                self.cmb_category.refresh()
+        """
+        pass
 
     # ── بناء الواجهة ──────────────────────────────────────
 
@@ -220,7 +240,14 @@ class BaseCrudForm(QWidget, EditModeMixin, FormValidationMixin):
         self.exit_edit_mode(f"─── {add_label} جديد ───")
 
     def set_conn(self, conn):
+        """
+        يحدّث الـ connection.
+
+        [تحسين 18] يستدعي _on_conn_changed بعد التحديث
+        ليتمكن الـ subclass من تحديث الـ sub-widgets.
+        """
         self.conn = conn
+        self._on_conn_changed(conn)
 
     def _warn(self, msg: str):
         self._notif.show(msg, "warning")
