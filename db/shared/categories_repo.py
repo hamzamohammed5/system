@@ -7,19 +7,8 @@ db/shared/categories_repo.py
   - template_fields (JSON) لتخزين الحقول الافتراضية لكل تصنيف
   - default_unit لتخزين الوحدة الافتراضية
 
-الفرق بين دالتَي الجلب الرئيسيتين:
-  ┌──────────────────────────┬──────────────────────────────────────┐
-  │ fetch_all_categories     │ fetch_categories_by_scope            │
-  ├──────────────────────────┼──────────────────────────────────────┤
-  │ لو scope محدد:           │ scope محدد فقط — بدون 'all'          │
-  │   scope='all' + scope=?  │                                      │
-  │ لو بدون scope:           │ مناسب للـ panels اللي بتعرض          │
-  │   كل التصنيفات           │ تصنيفات نوع واحد بالظبط              │
-  │                          │                                      │
-  │ مناسب للـ dropdowns اللي  │ مثال: CategoryManager لـ raw items   │
-  │ بتعرض 'الكل' + تصنيفات  │ يستخدمها عشان يعرض raw فقط           │
-  │ النوع                    │ بدون تصنيفات 'الكل' المشتركة          │
-  └──────────────────────────┴──────────────────────────────────────┘
+إصلاح 5: build_tree تستخدم .get() بدل [] للوقاية من KeyError
+لو صف من DB ناقصه عمود (query قديمة أو migration ناقص).
 """
 
 import json
@@ -48,11 +37,6 @@ def fetch_all_categories(conn, scope: str = None):
 
     لو scope محدد: يرجع تصنيفات scope='all' + تصنيفات scope=? معاً.
     لو بدون scope: يرجع كل التصنيفات بغض النظر عن الـ scope.
-
-    الاستخدام المثالي: الـ dropdowns اللي بتعرض 'الكل' + تصنيفات نوع معين،
-    مثل filter toolbar للخامات (تعرض تصنيفات 'الكل' + تصنيفات 'raw').
-
-    قارن بـ fetch_categories_by_scope() — ترجع scope محدد فقط بدون 'all'.
     """
     if scope:
         return conn.execute("""
@@ -75,11 +59,6 @@ def fetch_all_categories(conn, scope: str = None):
 def fetch_categories_by_scope(conn, scope: str):
     """
     تصنيفات scope محدد فقط — بدون تصنيفات 'all'.
-
-    الاستخدام المثالي: الـ panels اللي بتعرض وتدير تصنيفات نوع واحد بالظبط،
-    مثل CategoryManager لـ raw items — يعرض raw فقط بدون تصنيفات 'الكل' المشتركة.
-
-    قارن بـ fetch_all_categories(scope=?) — تضم تصنيفات 'all' أيضاً.
     """
     return conn.execute("""
         SELECT c.id, c.name, c.scope, c.color, c.parent_id,
@@ -104,7 +83,6 @@ def fetch_category(conn, cat_id: int):
 def fetch_descendants(conn, cat_id: int) -> list[int]:
     """
     يرجع قائمة بـ IDs كل أبناء التصنيف (وأحفاده) + التصنيف نفسه.
-    يُستخدم قبل الحذف لضمان cascade صحيح.
     """
     result = set()
     queue  = [cat_id]
@@ -180,22 +158,37 @@ def count_category_items(conn, cat_id: int) -> dict:
     return results
 
 
+def _row_to_dict(r) -> dict:
+    """
+    [إصلاح 5] تحويل آمن للصف إلى dict — يستخدم .get() أو keys() للتحقق
+    من وجود الأعمدة قبل الوصول إليها. يمنع KeyError عند query قديمة.
+    """
+    # sqlite3.Row يدعم keys() للحصول على أسماء الأعمدة
+    try:
+        available = set(r.keys())
+    except AttributeError:
+        # fallback لو r هو dict عادي
+        available = set(r.keys()) if hasattr(r, 'keys') else set()
+
+    return {
+        "id":        r["id"],
+        "name":      r["name"],
+        "scope":     r["scope"]     if "scope"     in available else "all",
+        "color":     r["color"]     if "color"     in available else "#607d8b",
+        "parent_id": r["parent_id"] if "parent_id" in available else None,
+        "children":  [],
+    }
+
+
 def build_tree(rows) -> list[dict]:
     """
     يحول قائمة صفوف مسطحة إلى شجرة هرمية.
     كل node: {id, name, scope, color, parent_id, children: [...]}
+
+    [إصلاح 5] يستخدم _row_to_dict() الآمنة بدل [] المباشر
+    لتفادي KeyError عند وجود أعمدة ناقصة في النتيجة.
     """
-    nodes = {
-        r["id"]: {
-            "id":        r["id"],
-            "name":      r["name"],
-            "scope":     r["scope"],
-            "color":     r["color"],
-            "parent_id": r["parent_id"],
-            "children":  [],
-        }
-        for r in rows
-    }
+    nodes = {r["id"]: _row_to_dict(r) for r in rows}
     roots = []
     for node in nodes.values():
         pid = node["parent_id"]
@@ -208,14 +201,9 @@ def build_tree(rows) -> list[dict]:
 
 # ══════════════════════════════════════════════════════════
 # Template Fields — حقول القالب الافتراضية للتصنيفات
-# (تُخزَّن كـ JSON في عمود template_fields)
 # ══════════════════════════════════════════════════════════
 
 def get_template_fields(conn, cat_id: int) -> list[dict]:
-    """
-    يرجع حقول القالب الافتراضية للتصنيف.
-    كل حقل: {name, label, unit, field_type, required, sort_order}
-    """
     row = conn.execute(
         "SELECT template_fields FROM categories WHERE id=?", (cat_id,)
     ).fetchone()
@@ -228,7 +216,6 @@ def get_template_fields(conn, cat_id: int) -> list[dict]:
 
 
 def set_template_fields(conn, cat_id: int, fields: list[dict]):
-    """يحفظ حقول القالب الافتراضية للتصنيف."""
     conn.execute(
         "UPDATE categories SET template_fields=? WHERE id=?",
         (json.dumps(fields, ensure_ascii=False), cat_id)
@@ -238,19 +225,10 @@ def set_template_fields(conn, cat_id: int, fields: list[dict]):
 
 def apply_template_to_dimension_set(conn_erp, conn_design,
                                      cat_id: int, set_id: int) -> int:
-    """
-    ينسخ حقول القالب من التصنيف (erp.db) إلى مجموعة المقاسات (designs.db).
-    يرجع عدد الحقول المنسوخة.
-    يتجاهل الحقول المكررة (نفس الـ name).
-
-    conn_erp    : connection لـ erp.db (فيه categories)
-    conn_design : connection لـ designs.db (فيه dimension_fields)
-    """
     fields = get_template_fields(conn_erp, cat_id)
     if not fields:
         return 0
 
-    # الحقول الموجودة فعلاً في المجموعة
     existing = {
         r["name"] for r in conn_design.execute(
             "SELECT name FROM dimension_fields WHERE set_id=?", (set_id,)

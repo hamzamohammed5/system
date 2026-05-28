@@ -3,17 +3,8 @@ db/shared/shared_items_bridge.py
 =================================
 جسر العناصر المشتركة — يقرأ من companies.db مباشرة ويدمجها مع erp.db.
 
-المبدأ:
-  - العناصر المشتركة مخزنة في companies.db (shared_items + company_shared_links)
-  - الشركة تقرأ بياناتها مباشرة من companies.db — مفيش نسخ محلية
-  - أي تعديل على shared_item يتعكس فوراً على كل الشركات المشتركة فيه
-  - العناصر المشتركة تظهر مع أيقونة 🔗 وbadge "مشترك"
-
-تحسين (v2):
-  - كل method تقبل _conn اختياري لتجنب فتح/إغلاق connection في كل استدعاء.
-    لو _conn=None (الافتراضي) → تفتح connection جديد وتقفله تلقائياً.
-    لو _conn مُمرَّر من الخارج → المستدعي مسؤول عن الإغلاق.
-    هذا يقلل overhead في workflows المتعددة الخطوات.
+إصلاح 6: _get_erp_conn() يتحقق من is_ready قبل الاستدعاء
+لإعطاء رسالة خطأ واضحة بدل exception غامض.
 """
 
 import json
@@ -60,8 +51,17 @@ class SharedItemsBridge:
         return get_central_connection()
 
     def _get_erp_conn(self):
-        """يرجع erp connection للشركة الحالية (shared — لا تُغلقه)."""
+        """
+        يرجع erp connection للشركة الحالية (shared — لا تُغلقه).
+
+        [إصلاح 6] يتحقق من is_ready قبل الاستدعاء
+        لإعطاء رسالة خطأ واضحة بدل RuntimeError غامض.
+        """
         from db.companies.company_state import company_state
+        if not company_state.is_ready:
+            raise RuntimeError(
+                "SharedItemsBridge: لا توجد شركة نشطة — اختر شركة أولاً."
+            )
         return company_state.get_erp_conn()
 
     # ══════════════════════════════════════════════════════
@@ -180,17 +180,11 @@ class SharedItemsBridge:
                 conn.close()
 
     # ══════════════════════════════════════════════════════
-    # تحديث عنصر مشترك (يتعكس على كل الشركات فوراً)
+    # تحديث عنصر مشترك
     # ══════════════════════════════════════════════════════
 
     def update_shared_item(self, shared_item_id: int, name: str, data: dict,
                             _conn=None):
-        """
-        يحدث بيانات عنصر مشترك في companies.db.
-        التحديث يتعكس فوراً على كل الشركات لأنها تقرأ من companies.db مباشرة.
-
-        _conn: connection اختياري — لو None بيفتح/يقفل تلقائياً.
-        """
         owned = _conn is None
         conn  = _conn or self._get_central_conn()
         try:
@@ -208,11 +202,6 @@ class SharedItemsBridge:
     # ══════════════════════════════════════════════════════
 
     def link_shared_item(self, shared_item_id: int, _conn=None):
-        """
-        يربط عنصر مشترك بالشركة الحالية.
-
-        _conn: connection اختياري — لو None بيفتح/يقفل تلقائياً.
-        """
         owned = _conn is None
         conn  = _conn or self._get_central_conn()
         try:
@@ -226,11 +215,6 @@ class SharedItemsBridge:
                 conn.close()
 
     def unlink_shared_item(self, shared_item_id: int, _conn=None):
-        """
-        يفك ربط عنصر مشترك من الشركة الحالية.
-
-        _conn: connection اختياري — لو None بيفتح/يقفل تلقائياً.
-        """
         owned = _conn is None
         conn  = _conn or self._get_central_conn()
         try:
@@ -244,11 +228,6 @@ class SharedItemsBridge:
                 conn.close()
 
     def is_linked(self, shared_item_id: int, _conn=None) -> bool:
-        """
-        هل الشركة الحالية مشتركة في هذا العنصر؟
-
-        _conn: connection اختياري — لو None بيفتح/يقفل تلقائياً.
-        """
         owned = _conn is None
         conn  = _conn or self._get_central_conn()
         try:
@@ -264,14 +243,10 @@ class SharedItemsBridge:
                 conn.close()
 
     # ══════════════════════════════════════════════════════
-    # عمليات batch (تستخدم connection واحد لأكثر من عملية)
+    # عمليات batch
     # ══════════════════════════════════════════════════════
 
     def batch_link(self, shared_item_ids: list[int]):
-        """
-        يربط قائمة من العناصر في connection واحد.
-        أكفأ من استدعاء link_shared_item() عدة مرات.
-        """
         conn = self._get_central_conn()
         try:
             for sid in shared_item_ids:
@@ -285,9 +260,6 @@ class SharedItemsBridge:
             conn.close()
 
     def batch_unlink(self, shared_item_ids: list[int]):
-        """
-        يفك ربط قائمة من العناصر في connection واحد.
-        """
         conn = self._get_central_conn()
         try:
             for sid in shared_item_ids:

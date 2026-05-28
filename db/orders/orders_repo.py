@@ -2,6 +2,9 @@
 db/orders/orders_repo.py
 =========================
 عمليات CRUD للطلبات وبنودها وسجل الحالة.
+
+تحسين 21: delete_order يتحقق من paid_amount قبل الحذف.
+تحسين 22: insert_order يتحقق من وجود العميل وكونه نشطاً.
 """
 
 import datetime
@@ -100,7 +103,6 @@ def fetch_order(conn, order_id: int):
 
 
 def fetch_customer_orders(conn, customer_id: int) -> list:
-    """كل طلبات عميل معين."""
     return conn.execute("""
         SELECT id, order_number, order_type, status, priority,
                order_date, due_date, net_amount, paid_amount
@@ -127,6 +129,18 @@ def insert_order(conn,
                  internal_notes: str = "",
                  reference_order: int = None,
                  created_by: str = "system") -> int:
+    """
+    [تحسين 22] يتحقق من وجود العميل وكونه نشطاً قبل إنشاء الطلب.
+    يمنع إنشاء طلبات لعملاء محذوفين أو معطّلين.
+    """
+    customer = conn.execute(
+        "SELECT id, is_active FROM customers WHERE id=?", (customer_id,)
+    ).fetchone()
+    if not customer:
+        raise ValueError(f"العميل رقم {customer_id} غير موجود")
+    if not customer["is_active"]:
+        raise ValueError(f"العميل رقم {customer_id} غير نشط — فعّله أولاً لإنشاء طلبات جديدة")
+
     order_number = _next_order_number(conn)
     net_amount   = total_amount - discount
     if order_date is None:
@@ -147,7 +161,6 @@ def insert_order(conn,
     conn.commit()
     order_id = cur.lastrowid
 
-    # سجل الحالة الأولى
     _log_status(conn, order_id, None, status, "إنشاء الطلب", created_by)
     return order_id
 
@@ -213,7 +226,6 @@ def reorder(conn, original_order_id: int,
     if not orig:
         return None
 
-    # نسخ بنود الطلب الأصلي
     new_id = insert_order(
         conn,
         customer_id=orig["customer_id"],
@@ -224,7 +236,6 @@ def reorder(conn, original_order_id: int,
         created_by=created_by,
     )
 
-    # نسخ البنود
     orig_items = fetch_order_items(conn, original_order_id)
     for item in orig_items:
         insert_order_item(
@@ -244,11 +255,21 @@ def reorder(conn, original_order_id: int,
 
 
 def delete_order(conn, order_id: int) -> bool:
-    """يحذف الطلب نهائياً — فقط لو كان pending."""
+    """
+    يحذف الطلب نهائياً — فقط لو كان pending أو cancelled.
+
+    [تحسين 21] يرفض الحذف لو paid_amount > 0
+    لتجنب حذف طلب له مدفوعات مسجّلة.
+    """
     row = conn.execute(
-        "SELECT status FROM orders WHERE id=?", (order_id,)
+        "SELECT status, paid_amount FROM orders WHERE id=?", (order_id,)
     ).fetchone()
-    if not row or row["status"] not in ("pending", "cancelled"):
+    if not row:
+        return False
+    if row["status"] not in ("pending", "cancelled"):
+        return False
+    # [تحسين 21] لا تحذف طلب له مدفوعات
+    if row["paid_amount"] and float(row["paid_amount"]) > 0:
         return False
     conn.execute("DELETE FROM orders WHERE id=?", (order_id,))
     conn.commit()
@@ -339,7 +360,6 @@ def delete_order_item(conn, item_id: int):
 
 
 def _recalc_order_total(conn, order_id: int):
-    """إعادة حساب إجمالي الطلب من بنوده."""
     row = conn.execute(
         "SELECT SUM(total_price) AS t FROM order_items WHERE order_id=?",
         (order_id,)

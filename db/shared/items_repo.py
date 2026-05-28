@@ -1,11 +1,7 @@
 """
-db/shared/items_repo.py  (مع دعم variant_id في BOM + العناصر المشتركة)
-================
-
-إصلاحات:
-  - _bom_cols_cache: cache لنتيجة PRAGMA table_info(bom) بدل query في كل استدعاء
-  - central.close() في _fetch_shared_for_type
-  - _SharedItemRow.__getattr__: debug warning لو attribute غير موجود
+db/shared/items_repo.py
+========================
+تحسين 11: fetch_shared_for_types() batch query بدل connection لكل نوع.
 """
 
 import json
@@ -18,16 +14,10 @@ logger = logging.getLogger(__name__)
 # BOM columns cache
 # ══════════════════════════════════════════════════════════
 
-# cache: db_path → set of column names
-# الـ schema مش بيتغير في runtime — نقرأه مرة واحدة لكل DB
 _bom_cols_cache: dict[str, set] = {}
 
 
 def _get_bom_cols(conn) -> set:
-    """
-    يجيب أسماء أعمدة جدول bom مع cache.
-    بدل PRAGMA table_info في كل استدعاء fetch_bom/insert/replace.
-    """
     try:
         path = conn.execute("PRAGMA database_list").fetchone()[2]
     except Exception:
@@ -41,10 +31,7 @@ def _get_bom_cols(conn) -> set:
 
 
 def invalidate_bom_cols_cache(conn=None):
-    """
-    يمسح الـ cache — استدعه لو اتضافت أعمدة جديدة (بعد migration).
-    conn=None → يمسح كل الـ cache.
-    """
+    """يمسح الـ cache — استدعه بعد أي migration يضيف أعمدة."""
     if conn is None:
         _bom_cols_cache.clear()
     else:
@@ -79,50 +66,75 @@ def fetch_items_by_type(conn, item_type: str):
 
 def fetch_items_by_type_with_shared(conn, item_type: str,
                                      company_id: int = None) -> list:
-    """
-    يجيب عناصر النوع المطلوب (محلية + مشتركة).
-    العناصر المشتركة تظهر مع is_shared=True وcategory_name="🔗 مشترك".
-    """
     local = [dict(r) for r in fetch_items_by_type(conn, item_type)]
     for item in local:
         item["is_shared"]      = False
         item["shared_item_id"] = None
 
     shared = _fetch_shared_for_type(item_type, company_id)
-
     return local + shared
 
 
 def _fetch_shared_for_type(item_type: str, company_id: int = None) -> list:
-    """يجيب العناصر المشتركة من companies.db."""
+    """يجيب العناصر المشتركة من companies.db لنوع واحد."""
+    try:
+        result = fetch_shared_for_types(
+            company_id=company_id,
+            types=[item_type]
+        )
+        return result.get(item_type, [])
+    except Exception as e:
+        logger.warning("[items_repo] _fetch_shared_for_type error: %s", e)
+        return []
+
+
+def fetch_shared_for_types(company_id: int = None,
+                            types: list = None) -> dict:
+    """
+    [تحسين 11] يجيب العناصر المشتركة لأكثر من نوع في connection واحد.
+    بدل فتح/إغلاق connection لكل نوع على حدة.
+
+    مثال:
+        result = fetch_shared_for_types(company_id=1, types=["raw", "machine_op"])
+        raw_items    = result["raw"]
+        machine_items = result["machine_op"]
+    """
+    if not types:
+        return {}
+
+    result = {t: [] for t in types}
+
     try:
         if company_id is None:
             from db.companies.company_state import company_state
             if not company_state.is_ready:
-                return []
+                return result
             company_id = company_state.company_id
 
         from db.companies.companies_schema import get_central_connection
         central = get_central_connection()
         try:
-            rows = central.execute("""
+            placeholders = ",".join("?" * len(types))
+            rows = central.execute(f"""
                 SELECT s.id, s.name, s.shared_type, s.data, s.updated_at
                 FROM company_shared_links lnk
                 JOIN shared_items s ON s.id = lnk.shared_item_id
-                WHERE lnk.company_id = ? AND s.shared_type = ?
-                ORDER BY s.name
-            """, (company_id, item_type)).fetchall()
+                WHERE lnk.company_id = ?
+                  AND s.shared_type IN ({placeholders})
+                ORDER BY s.shared_type, s.name
+            """, [company_id] + list(types)).fetchall()
         finally:
             central.close()
 
-        result = []
         for row in rows:
-            item = _shared_row_to_item(row, item_type)
-            result.append(item)
-        return result
+            item = _shared_row_to_item(row, row["shared_type"])
+            if row["shared_type"] in result:
+                result[row["shared_type"]].append(item)
+
     except Exception as e:
-        logger.warning("[items_repo] _fetch_shared_for_type error: %s", e)
-        return []
+        logger.warning("[items_repo] fetch_shared_for_types error: %s", e)
+
+    return result
 
 
 def _shared_row_to_item(row, item_type: str) -> dict:
@@ -167,12 +179,10 @@ def _shared_row_to_item(row, item_type: str) -> dict:
 
 
 def is_shared_id(item_id) -> bool:
-    """هل هذا ID لعنصر مشترك؟"""
     return isinstance(item_id, str) and str(item_id).startswith("shared:")
 
 
 def extract_shared_id(item_id) -> int | None:
-    """يستخرج shared_item_id الحقيقي من الـ composite id."""
     if is_shared_id(item_id):
         try:
             return int(str(item_id).split(":")[1])
@@ -182,10 +192,6 @@ def extract_shared_id(item_id) -> int | None:
 
 
 def fetch_item(conn, item_id):
-    """
-    يجيب عنصر واحد — يدعم shared items.
-    لو item_id يبدأ بـ "shared:" يجيب من companies.db.
-    """
     if is_shared_id(item_id):
         shared_id = extract_shared_id(item_id)
         if shared_id is None:
@@ -203,7 +209,6 @@ def fetch_item(conn, item_id):
 
 
 def _fetch_shared_item_as_row(shared_item_id: int):
-    """يجيب عنصر مشترك من companies.db كـ sqlite3.Row-like dict."""
     try:
         from db.companies.companies_schema import get_central_connection
         central = get_central_connection()
@@ -288,7 +293,7 @@ def delete_item(conn, item_id: int):
 
 
 # ══════════════════════════════════════════════════════════
-# BOM — مع waste_pct و variant_id
+# BOM
 # ══════════════════════════════════════════════════════════
 
 def _resolve_name(conn, child_type: str, child_id: int) -> str | None:
@@ -310,7 +315,6 @@ def _resolve_name(conn, child_type: str, child_id: int) -> str | None:
 
 
 def fetch_bom(conn, parent_id: int):
-    """يرجع صفوف BOM مع waste_pct و variant_id."""
     cols = _get_bom_cols(conn)
     if "variant_id" in cols:
         return conn.execute(
@@ -360,10 +364,6 @@ def delete_bom_row(conn, parent_id: int, child_type: str, child_id: int):
 
 
 def replace_bom(conn, parent_id: int, rows: list[tuple]):
-    """
-    rows: list of (child_type, child_id, qty, waste_pct) or
-          (child_type, child_id, qty, waste_pct, variant_id)
-    """
     conn.execute("DELETE FROM bom WHERE parent_id=?", (parent_id,))
     cols = _get_bom_cols(conn)
     has_variant = "variant_id" in cols

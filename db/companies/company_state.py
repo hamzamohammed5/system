@@ -3,11 +3,12 @@ db/companies/company_state.py
 ==============================
 Singleton يحفظ الشركة النشطة حالياً.
 
-إصلاح (v5):
-  - set_active() يتحقق من وجود ملفات DB قبل مسح الـ connections
-  - _get_conn() يتحقق من مسار الملف بعد الفتح ويتأكد أنه للشركة الصحيحة
-  - ProtectedConnection.real_close() + reconnect آمن مع lock
-  - إضافة validate_conn() للتحقق أن connection ما زال صالحاً
+إصلاح (v6):
+  - إصلاح 4: ProtectedConnection._get_raw() fast-path بدون SELECT 1
+    بمجرد أن يكون _raw موجود يُعاد مباشرة — الـ reconnect يحدث فقط
+    عند فشل أول query حقيقية (SQLite يرمي OperationalError)
+  - إصلاح 12: set_active() يُبطل AppState cache تلقائياً بعد تغيير الشركة
+  - validate() تبقى للتحقق الصريح من المسار (تُستدعى من set_active فقط)
 """
 
 import sqlite3
@@ -20,9 +21,13 @@ class ProtectedConnection:
     """
     Wrapper حول sqlite3.Connection مع:
     - منع الإغلاق العرضي (close() = no-op)
-    - إعادة الاتصال التلقائي الآمن (thread-safe) في كل الأحوال
+    - إعادة الاتصال التلقائي الآمن (thread-safe) عند الحاجة
     - الإغلاق الحقيقي المؤقت فقط عبر real_close() مع السماح بالـ reconnect
-    - validate() للتحقق من صلاحية الـ connection
+    - validate() للتحقق من صلاحية الـ connection (يُستخدم من set_active فقط)
+
+    إصلاح 4: _get_raw() تعيد الـ connection مباشرة لو موجود (fast-path)
+    بدون SELECT 1 — كل query فاشلة ستطلق reconnect تلقائياً.
+    هذا يقلل overhead من O(n) إلى O(1) لكل attribute access.
     """
 
     def __init__(self, path: str):
@@ -42,31 +47,23 @@ class ProtectedConnection:
 
     def _get_raw(self):
         """
-        يرجع raw connection صالح دايماً.
-        لو الـ connection مات أو أُغلق، يعمل reconnect تلقائي.
+        [إصلاح 4] Fast-path: يرجع الـ connection مباشرة لو موجود.
+        لا يُجري SELECT 1 في كل استدعاء.
+        لو الـ connection مات، أول query حقيقية ستفشل وتطلق reconnect.
+        Slow-path (reconnect) يُستدعى فقط لو _raw = None.
         """
         raw = object.__getattribute__(self, '_raw')
-
         if raw is not None:
-            try:
-                raw.execute("SELECT 1")
-                return raw
-            except Exception:
-                pass
+            # fast-path: ثق في الـ connection المفتوح
+            return raw
 
+        # slow-path: reconnect
         lock = object.__getattribute__(self, '_lock')
         with lock:
+            # double-check بعد الـ lock
             raw = object.__getattribute__(self, '_raw')
             if raw is not None:
-                try:
-                    raw.execute("SELECT 1")
-                    return raw
-                except Exception:
-                    try:
-                        raw.close()
-                    except Exception:
-                        pass
-                    object.__setattr__(self, '_raw', None)
+                return raw
 
             try:
                 self._open()
@@ -77,13 +74,39 @@ class ProtectedConnection:
                     f"{object.__getattribute__(self, '_path')}\n{e}"
                 )
 
+    def _reconnect_after_error(self):
+        """
+        يُستدعى داخلياً عند فشل query — يُعيد فتح الـ connection.
+        يُستخدم من execute/executemany/executescript لضمان الاتساق.
+        """
+        lock = object.__getattribute__(self, '_lock')
+        with lock:
+            raw = object.__getattribute__(self, '_raw')
+            if raw is not None:
+                try:
+                    raw.close()
+                except Exception:
+                    pass
+            object.__setattr__(self, '_raw', None)
+            try:
+                self._open()
+            except Exception as e:
+                raise sqlite3.OperationalError(
+                    f"تعذّر إعادة الاتصال: "
+                    f"{object.__getattribute__(self, '_path')}\n{e}"
+                )
+
     def validate(self, expected_path: str) -> bool:
         """
-        [جديد v5] يتحقق أن الـ connection فعلاً مفتوح على المسار المطلوب.
-        يُستخدم من AccountingTab._verify_conn_belongs_to_company.
+        يتحقق أن الـ connection فعلاً مفتوح على المسار المطلوب.
+        يُستخدم من _get_conn لتأكيد أن الـ connection للشركة الصحيحة.
+        ملاحظة: هذه الدالة تستدعي SELECT — لا تُستدعى في hot path.
         """
+        raw = object.__getattribute__(self, '_raw')
+        if raw is None:
+            return False
         try:
-            row = self._get_raw().execute("PRAGMA database_list").fetchone()
+            row = raw.execute("PRAGMA database_list").fetchone()
             if not row:
                 return False
             actual_path   = row[2] if len(row) > 2 else ""
@@ -105,13 +128,35 @@ class ProtectedConnection:
             setattr(self._get_raw(), name, value)
 
     def execute(self, sql, params=()):
-        return self._get_raw().execute(sql, params)
+        try:
+            return self._get_raw().execute(sql, params)
+        except sqlite3.OperationalError as e:
+            err_msg = str(e).lower()
+            # reconnect فقط عند أخطاء الـ connection المغلق
+            if any(kw in err_msg for kw in ("closed", "unable to open", "disk i/o")):
+                self._reconnect_after_error()
+                return self._get_raw().execute(sql, params)
+            raise
 
     def executemany(self, sql, seq):
-        return self._get_raw().executemany(sql, seq)
+        try:
+            return self._get_raw().executemany(sql, seq)
+        except sqlite3.OperationalError as e:
+            err_msg = str(e).lower()
+            if any(kw in err_msg for kw in ("closed", "unable to open", "disk i/o")):
+                self._reconnect_after_error()
+                return self._get_raw().executemany(sql, seq)
+            raise
 
     def executescript(self, script):
-        return self._get_raw().executescript(script)
+        try:
+            return self._get_raw().executescript(script)
+        except sqlite3.OperationalError as e:
+            err_msg = str(e).lower()
+            if any(kw in err_msg for kw in ("closed", "unable to open", "disk i/o")):
+                self._reconnect_after_error()
+                return self._get_raw().executescript(script)
+            raise
 
     def cursor(self):
         return self._get_raw().cursor()
@@ -186,6 +231,8 @@ class CompanyState:
         [إصلاح v5] يتحقق أولاً إذا الملفات موجودة قبل تغيير الحالة.
         لو الشركة جديدة → يمسح connections القديمة فوراً.
         لو نفس الشركة → يحدث الاسم واللون فقط بدون مسح connections.
+
+        [إصلاح 12] يُبطل AppState cache بعد تغيير الشركة تلقائياً.
         """
         with self._state_lock:
             if self._company_id == company_id:
@@ -200,6 +247,13 @@ class CompanyState:
             self._company_id    = company_id
             self._company_name  = name
             self._company_color = color or "#1565c0"
+
+        # [إصلاح 12] خارج الـ lock — لتجنب deadlock مع PyQt signals
+        try:
+            from ui.app_state import AppState
+            AppState.invalidate()
+        except (ImportError, Exception):
+            pass  # db layer يعمل بدون ui layer
 
     def clear(self):
         with self._state_lock:
@@ -230,7 +284,7 @@ class CompanyState:
         with self._state_lock:
             conn = self._connections.get(db_name)
 
-            # [إصلاح v5] تحقق أن الـ connection الموجود فعلاً للشركة الحالية
+            # تحقق أن الـ connection الموجود فعلاً للشركة الحالية
             if conn is not None:
                 expected_path = get_company_db_path(self._company_id, db_name)
                 if conn.validate(expected_path):

@@ -3,9 +3,11 @@ db/accounting/accounting_schema_seed.py
 ======================================
 البيانات الافتراضية للحسابات.
 
-إصلاح (v2):
-  - _verify_conn_is_accounting: تتحقق إن الـ conn فعلاً لـ accounting.db
-    قبل ما تعمل seed — يمنع إدراج بيانات في DB غلط.
+إصلاح 9 (v3):
+  - _verify_conn_is_accounting: تتحقق من الـ schema (وجود accounts + غياب items)
+    بدل الاعتماد على اسم الملف — أكثر دقة وأقل هشاشة في أي بيئة.
+    السبب: PRAGMA database_list قد يُعيد مسار ناقص أو نسبي في بعض البيئات،
+    واسم الملف وحده لا يكفي للتمييز (مثلاً backup_accounting.db).
 """
 
 import os
@@ -21,24 +23,29 @@ def _account_exists(conn) -> bool:
 
 def _verify_conn_is_accounting(conn) -> bool:
     """
-    يتحقق إن الـ conn مفتوح على ملف اسمه accounting.db.
-    يمنع الـ seed من الاشتغال على erp.db أو أي DB تاني بالغلط.
+    [إصلاح 9] يتحقق أن الـ conn مفتوح على accounting.db
+    عبر فحص الـ schema: يجب أن يحتوي على جدول accounts
+    وألا يحتوي على جدول items (الذي هو حصري لـ erp.db).
+
+    هذا أكثر موثوقية من الاعتماد على اسم الملف.
     """
     try:
-        row = conn.execute("PRAGMA database_list").fetchone()
-        if not row:
-            return False
-        path = row[2] if len(row) > 2 else ""
-        return os.path.basename(path).lower() == "accounting.db"
+        has_accounts = conn.execute(
+            "SELECT name FROM sqlite_master WHERE type='table' AND name='accounts'"
+        ).fetchone()
+        has_items = conn.execute(
+            "SELECT name FROM sqlite_master WHERE type='table' AND name='items'"
+        ).fetchone()
+        return bool(has_accounts) and not bool(has_items)
     except Exception:
-        # لو مش قادر يتحقق، نسمح بالمتابعة (backward compat)
+        # backward compat: لو مش قادر يتحقق، نسمح بالمتابعة
         return True
 
 
 def seed_default_accounts(conn):
     """يُدرج الحسابات الافتراضية لو كانت قاعدة البيانات فارغة."""
 
-    # [إصلاح] تحقق إن الـ conn للـ DB الصح
+    # [إصلاح 9] تحقق من الـ schema بدل اسم الملف
     if not _verify_conn_is_accounting(conn):
         print("[accounting_schema_seed] تحذير: conn ليس لـ accounting.db — تم تخطي الـ seed")
         return

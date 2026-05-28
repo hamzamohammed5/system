@@ -1,13 +1,8 @@
 """
-db/inventory_repo.py  (نسخة مصححة)
-====================
-عمليات قراءة/كتابة جداول المخزن في inventory.db.
-مع ربط بالحسابات في accounting.db عند الشراء.
-
-ملاحظة: الجدول inventory_items بيستخدم account_code (TEXT) مش account_id (INTEGER)
-        لأن accounting.db منفصل ولا يمكن عمل FOREIGN KEY بين DBs مختلفة.
+db/inventory/inventory_repo.py
+===================
+تحسين 20: record_inventory_move يتحقق من qty سالبة في adjust.
 """
-
 
 # ══════════════════════════════════════════════════════════
 # تصنيفات المخزن
@@ -131,7 +126,8 @@ def record_inventory_move(conn, inv_id: int, move_type: str,
                            ref_entry_no: str = None) -> int:
     """
     يسجل حركة مخزن ويحدث qty_on_hand و avg_cost (WACC).
-    يرجع id الحركة الجديدة.
+
+    [تحسين 20] يتحقق من qty سالبة في حالة adjust.
     """
     inv = fetch_inventory_item(conn, inv_id)
     if not inv:
@@ -149,9 +145,15 @@ def record_inventory_move(conn, inv_id: int, move_type: str,
             raise ValueError(f"الكمية المطلوبة ({qty:,.4g}) أكبر من الرصيد ({old_qty:,.4g})")
         new_qty    = max(0.0, old_qty - qty)
         new_avg    = old_avg
-        total_cost = qty * old_avg   # نقيّم بمتوسط التكلفة
+        total_cost = qty * old_avg
         unit_cost  = old_avg
     else:  # adjust
+        # [تحسين 20] تحقق من الكمية السالبة
+        if qty < 0:
+            raise ValueError(
+                f"كمية التسوية ({qty:,.4g}) لا يمكن أن تكون سالبة. "
+                f"للتعديل لكمية أقل استخدم حركة صادر بدلاً من ذلك."
+            )
         new_qty    = qty
         new_avg    = old_avg
         total_cost = abs(qty - old_qty) * old_avg

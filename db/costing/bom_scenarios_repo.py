@@ -1,34 +1,61 @@
 """
-db/bom_scenarios_repo.py  (نسخة مصلوحة - إصلاح _bom_cols_cache)
+db/costing/bom_scenarios_repo.py
 =========================
-الإصلاحات:
-1. إزالة _bom_cols_cache العالمي الخطير - كان يُسبب المشكلة الجذرية
-   لو اتحسب قبل ما migration يشتغل، كان بيحفظ قائمة أعمدة ناقصة
-   وكل الـ calls التالية كانت تعتقد إن machine_op_row_id مش موجود
-2. _get_bom_cols الآن بتعمل PRAGMA في كل call (أبطأ قليلاً لكن صح دايماً)
-3. machine_op_row_id بيتحفظ ويتقرأ صح في كل الحالات
+إصلاح 8: توحيد _bom_cols_cache مع items_repo.py
+
+النهج الموحد:
+  - cache بمفتاح db_path (مثل items_repo)
+  - invalidate_bom_cols_cache() يُستدعى بعد كل migration
+  - لا نعتمد على "no cache" الذي كان يسبب PRAGMA في كل استدعاء
+
+سبب التغيير في النسخة السابقة (بدون cache):
+  كانت migration تضيف أعمدة بعد أول استدعاء للـ cache القديم فكان يحفظ
+  قائمة ناقصة. الحل الصحيح هو cache + invalidate صريح بعد migration
+  وليس إلغاء الـ cache كلياً (كان يجعل كل query تعمل PRAGMA).
 """
 
 from datetime import datetime
 
 
 # ══════════════════════════════════════════════════════════
-# مساعدات الأعمدة — بدون cache عشان تكون دايماً محدثة
+# bom columns cache — موحد مع items_repo
 # ══════════════════════════════════════════════════════════
+
+_bom_cols_cache: dict[str, set] = {}
+
 
 def _get_bom_cols(conn) -> set:
     """
-    يجيب أعمدة جدول bom.
-    ⚠️ لا نستخدم cache عشان لو migration اشتغل بعد أول call
-    نضمن إننا نشوف الأعمدة الجديدة.
+    [إصلاح 8] يجيب أعمدة جدول bom مع cache بمفتاح db_path.
+    استدعِ invalidate_bom_cols_cache(conn) بعد أي migration يضيف أعمدة.
     """
     try:
-        return {
+        path = conn.execute("PRAGMA database_list").fetchone()[2]
+    except Exception:
+        path = str(id(conn))
+
+    if path not in _bom_cols_cache:
+        _bom_cols_cache[path] = {
             r["name"]
             for r in conn.execute("PRAGMA table_info(bom)").fetchall()
         }
-    except Exception:
-        return set()
+    return _bom_cols_cache[path]
+
+
+def invalidate_bom_cols_cache(conn=None):
+    """
+    يمسح الـ cache — استدعه بعد أي migration يضيف أعمدة لجدول bom.
+    conn=None → يمسح كل الـ cache.
+    conn=<connection> → يمسح cache هذا الملف فقط.
+    """
+    if conn is None:
+        _bom_cols_cache.clear()
+    else:
+        try:
+            path = conn.execute("PRAGMA database_list").fetchone()[2]
+        except Exception:
+            path = str(id(conn))
+        _bom_cols_cache.pop(path, None)
 
 
 def _col_exists(conn, table: str, col: str) -> bool:
@@ -187,9 +214,8 @@ def _insert_bom_row(conn, parent_id: int, child_type: str, child_id: int,
                     variant_id, machine_op_row_id, scenario_id):
     """
     INSERT آمن في جدول bom — يتعامل مع وجود/غياب الأعمدة.
-    يحفظ machine_op_row_id في كل الحالات اللي بيكون فيها العمود موجود.
+    يستخدم _get_bom_cols() مع cache (إصلاح 8).
     """
-    # ⚠️ لا نستخدم cache هنا - نجيب الأعمدة الفعلية في كل مرة
     cols = _get_bom_cols(conn)
     has_variant  = "variant_id"        in cols
     has_row_id   = "machine_op_row_id" in cols
@@ -198,7 +224,6 @@ def _insert_bom_row(conn, parent_id: int, child_type: str, child_id: int,
     if child_name is None:
         child_name = _resolve_name(conn, child_type, child_id)
 
-    # الحالة الكاملة (الأكثر شيوعاً بعد run_migrations_v2)
     if has_variant and has_row_id and has_scenario:
         conn.execute(
             "INSERT INTO bom "
@@ -260,10 +285,8 @@ def _insert_bom_row(conn, parent_id: int, child_type: str, child_id: int,
 def fetch_bom_for_scenario(conn, scenario_id: int) -> list:
     """
     يجيب صفوف BOM لسيناريو محدد.
-    دايماً بيرجع machine_op_row_id (NULL لو العمود مش موجود).
-    ⚠️ لا نستخدم cache - نتحقق من الأعمدة الفعلية في كل مرة.
+    يستخدم _get_bom_cols() مع cache (إصلاح 8).
     """
-    # نجيب الأعمدة الفعلية الآن (بدون cache)
     cols = _get_bom_cols(conn)
     has_row_id  = "machine_op_row_id" in cols
     has_variant = "variant_id"        in cols
@@ -310,8 +333,6 @@ def replace_bom_for_scenario(conn, scenario_id: int, rows):
     """
     rows: list/tuple of:
       (child_type, child_id, qty, waste_pct, variant_id, machine_op_row_id)
-
-    يضمن حفظ machine_op_row_id صح.
     """
     sc = fetch_scenario(conn, scenario_id)
     if not sc:
@@ -325,7 +346,6 @@ def replace_bom_for_scenario(conn, scenario_id: int, rows):
         qty       = row[2]
         waste_pct = float(row[3]) if len(row) > 3 and row[3] is not None else 0.0
         vid       = row[4] if len(row) > 4 else None
-        # machine_op_row_id هو العنصر السادس (index 5)
         mor_id    = row[5] if len(row) > 5 else None
 
         _insert_bom_row(
