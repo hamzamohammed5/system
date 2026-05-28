@@ -3,31 +3,12 @@ ui/widgets/mixins/bus.py
 =================================
 BusConnectedMixin — ربط تلقائي بـ event bus.
 
-التغييرات:
-  - _connect_bus() بقت تدعم company=True بشكل صح:
-    بدل ربط data_changed العام (بيعمل refresh لكل الـ widgets)،
-    الآن بتربط company_data_changed وبتتحقق من الشركة قبل الاستجابة.
-  - _on_company_data_changed() جديدة — تعمل filter على company_id
-    وبتستدعي _on_data_changed() بس لو نفس الشركة النشطة.
-  - الـ widgets اللي تورث منها تقدر تـ override أي من الدالتين.
-
-تحذير double-refresh (إصلاح #6):
-  لما data=True، بنربط الاتنين:
-    - bus.data_changed         → _on_data_changed() مباشرة
-    - bus.company_data_changed → _on_company_data_changed() → _on_data_changed()
-
-  لو حد emit الاتنين مع بعض (data_changed + company_data_changed)،
-  الـ widget هيعمل refresh مرتين.
-
-  الحل المُطبَّق: _on_company_data_changed بتستخدم _refresh_guard
-  لتجاهل الـ refresh التاني لو حصل في نفس الـ event loop cycle.
-
-  التوصية للكود الجديد:
-    - استخدم emit_company_data_changed() من ui.widgets.core.events
-      دايماً — بتطلق واحد بس (company أو global).
-    - تجنب emit data_changed و company_data_changed في نفس الوقت.
+التغييرات في هذا الإصدار (Phase 4 — UniqueConnection):
+  - _connect_bus() تستخدم Qt.UniqueConnection لمنع تضاعف الـ slots
+    لو اتستدعت أكتر من مرة على نفس الـ widget.
+  - باقي الـ API والـ logic لم يتغير.
 """
-from PyQt5.QtCore import QTimer
+from PyQt5.QtCore import QTimer, Qt
 
 
 class BusConnectedMixin:
@@ -49,7 +30,6 @@ class BusConnectedMixin:
 
             def _on_data_changed(self):
                 self._load()
-            # _on_data_changed بيتستدعى تلقائياً بس لو نفس الشركة
 
     للـ widgets اللي محتاجة تعرف الـ company_id:
         class MyWidget(QWidget, BusConnectedMixin):
@@ -58,6 +38,10 @@ class BusConnectedMixin:
 
             def _on_company_changed(self, company_id: int):
                 self._rebuild_for(company_id)
+
+    ⚠️  تحذير double-connect:
+        Qt.UniqueConnection تمنع تضاعف الـ slots لو _connect_bus()
+        اتستدعت أكتر من مرة على نفس الـ widget instance.
 
     ⚠️  تحذير double-refresh:
         لما data=True بنربط data_changed و company_data_changed معاً.
@@ -77,35 +61,33 @@ class BusConnectedMixin:
                        و bus.company_data_changed مع filter تلقائي.
         company=True → يربط bus.company_data_changed فقط لـ _on_company_changed.
 
-        ملاحظة: لو data=True وcompany=True،
-        _on_data_changed بتتستدعى بس لو نفس الشركة النشطة.
+        Qt.UniqueConnection: يمنع تضاعف الـ slots لو اتستدعى أكتر من مرة.
         """
         from ui.events import bus
 
         if data:
-            # الربط الجديد — مع filter على الشركة + guard لمنع double-refresh
-            bus.company_data_changed.connect(self._on_company_data_changed)
-            # الربط القديم — للتوافق مع الكود اللي بيطلق bus.data_changed مباشرة
-            bus.data_changed.connect(self._on_data_changed_guarded)
+            bus.company_data_changed.connect(
+                self._on_company_data_changed, Qt.UniqueConnection
+            )
+            bus.data_changed.connect(
+                self._on_data_changed_guarded, Qt.UniqueConnection
+            )
 
         if company:
-            bus.company_data_changed.connect(self._on_company_changed)
+            bus.company_data_changed.connect(
+                self._on_company_changed, Qt.UniqueConnection
+            )
 
     def _on_company_data_changed(self, company_id: int):
         """
         Handler داخلي لـ company_data_changed.
         بيتحقق إذا كان company_id هو الشركة النشطة
         قبل ما يستدعي _on_data_changed.
-
-        هذا يمنع كل الـ widgets من عمل refresh
-        عند تغيير بيانات شركة مختلفة.
         """
         from ui.widgets.core.events import is_same_company
         if is_same_company(company_id):
-            # نشغّل guard لمنع data_changed من إطلاق refresh ثانية
             self._refresh_guard = True
             self._on_data_changed()
-            # نرجع للـ False بعد الـ event loop الحالية تخلص
             QTimer.singleShot(0, self._clear_refresh_guard)
 
     def _on_data_changed_guarded(self):

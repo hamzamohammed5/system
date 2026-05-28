@@ -2,10 +2,53 @@
 db/shared/items_repo.py  (مع دعم variant_id في BOM + العناصر المشتركة)
 ================
 
-إصلاح: central.close() في _fetch_shared_for_type
+إصلاحات:
+  - _bom_cols_cache: cache لنتيجة PRAGMA table_info(bom) بدل query في كل استدعاء
+  - central.close() في _fetch_shared_for_type
 """
 
 import json
+
+
+# ══════════════════════════════════════════════════════════
+# BOM columns cache
+# ══════════════════════════════════════════════════════════
+
+# cache: db_path → set of column names
+# الـ schema مش بيتغير في runtime — نقرأه مرة واحدة لكل DB
+_bom_cols_cache: dict[str, set] = {}
+
+
+def _get_bom_cols(conn) -> set:
+    """
+    يجيب أسماء أعمدة جدول bom مع cache.
+    بدل PRAGMA table_info في كل استدعاء fetch_bom/insert/replace.
+    """
+    try:
+        path = conn.execute("PRAGMA database_list").fetchone()[2]
+    except Exception:
+        path = str(id(conn))
+
+    if path not in _bom_cols_cache:
+        _bom_cols_cache[path] = {
+            r["name"] for r in conn.execute("PRAGMA table_info(bom)").fetchall()
+        }
+    return _bom_cols_cache[path]
+
+
+def invalidate_bom_cols_cache(conn=None):
+    """
+    يمسح الـ cache — استدعه لو اتضافت أعمدة جديدة (بعد migration).
+    conn=None → يمسح كل الـ cache.
+    """
+    if conn is None:
+        _bom_cols_cache.clear()
+    else:
+        try:
+            path = conn.execute("PRAGMA database_list").fetchone()[2]
+        except Exception:
+            path = str(id(conn))
+        _bom_cols_cache.pop(path, None)
 
 
 # ══════════════════════════════════════════════════════════
@@ -258,7 +301,7 @@ def _resolve_name(conn, child_type: str, child_id: int) -> str | None:
 
 def fetch_bom(conn, parent_id: int):
     """يرجع صفوف BOM مع waste_pct و variant_id."""
-    cols = {r["name"] for r in conn.execute("PRAGMA table_info(bom)").fetchall()}
+    cols = _get_bom_cols(conn)
     if "variant_id" in cols:
         return conn.execute(
             "SELECT child_type, child_id, qty, "
@@ -280,7 +323,7 @@ def insert_bom_row(conn, parent_id: int, child_type: str, child_id: int,
                    qty: float, waste_pct: float = 0.0,
                    variant_id: int = None):
     name = _resolve_name(conn, child_type, child_id)
-    cols = {r["name"] for r in conn.execute("PRAGMA table_info(bom)").fetchall()}
+    cols = _get_bom_cols(conn)
     if "variant_id" in cols:
         conn.execute(
             """INSERT INTO bom
@@ -312,7 +355,7 @@ def replace_bom(conn, parent_id: int, rows: list[tuple]):
           (child_type, child_id, qty, waste_pct, variant_id)
     """
     conn.execute("DELETE FROM bom WHERE parent_id=?", (parent_id,))
-    cols = {r["name"] for r in conn.execute("PRAGMA table_info(bom)").fetchall()}
+    cols = _get_bom_cols(conn)
     has_variant = "variant_id" in cols
 
     for row in rows:

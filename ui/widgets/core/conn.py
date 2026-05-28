@@ -3,13 +3,13 @@ ui/widgets/core/conn.py
 ================================
 Mixins موحدة لإدارة اتصالات قاعدة البيانات.
 
-التغييرات في LiveConnMixin:
-  - _live_conn() بقت تعمل cache للـ connection بدل
-    ما تحاول تجيب connection جديد في كل استدعاء.
-  - _invalidate_conn_cache() جديدة — تُستدعى لو Connection اتبدل.
-  - _test_conn() دالة مساعدة مشتركة — لم تتغير.
-
-باقي الـ mixins (SafeConnMixin, DualConnMixin) لم تتغير.
+التغييرات في هذا الإصدار (v2 — Phase 4):
+  - _live_conn() لم تعد تُعيد None صامتة — ترمي RuntimeError واضحة
+    بدلاً من إرجاع stored (التي قد تكون None) بصمت.
+  - _get_safe_conn() نفس الإصلاح — RuntimeError بدل None.
+  - _get_erp_conn() نفس الإصلاح — RuntimeError بدل None.
+  - _conn_null_error() دالة مساعدة مشتركة تبني رسالة الخطأ.
+  - باقي الـ API لم يتغير.
 """
 import logging
 
@@ -30,15 +30,25 @@ def _test_conn(conn) -> bool:
         return False
 
 
+def _conn_null_error(class_name: str, method: str, db: str = "erp") -> RuntimeError:
+    """
+    يبني RuntimeError موحدة لحالة فشل الاتصال.
+    رسالة واضحة تساعد في التشخيص بدل crash صامت.
+    """
+    return RuntimeError(
+        f"{class_name}.{method}: تعذّر الحصول على اتصال بقاعدة بيانات «{db}».\n"
+        "تأكد من اختيار شركة نشطة من القائمة."
+    )
+
+
 class LiveConnMixin:
     """
     Mixin يوفر _live_conn() لأي QWidget يحتفظ بـ DB connection.
 
-    التغيير: _live_conn() بقت تعمل cache — بدل ما تحاول
-    تجيب connection جديد في كل استدعاء،
-    بتختبر الـ cached connection الأول وبترجعه لو سليم.
-    ده بيقلل عدد database round-trips بشكل ملحوظ
-    في الـ widgets اللي بتستدعي _live_conn() كتير.
+    التغيير (Phase 4):
+      بدل ما ترجع None صامتة عند فشل كل المحاولات،
+      دلوقتي بترمي RuntimeError واضحة بـ class name ومعلومات التشخيص.
+      هذا يوقف الـ crash في مكان تاني بدون سبب واضح.
 
     الاستخدام (نفس الكود القديم — لا تغيير في الـ API):
         class MyWidget(QWidget, LiveConnMixin):
@@ -60,6 +70,7 @@ class LiveConnMixin:
           1. لو الـ cached connection سليم → يرجعه مباشرة.
           2. لو لا → يجرب self.conn.
           3. لو لا → fallback من company_state.
+          4. لو فشل كل شيء → RuntimeError واضحة (بدل None).
         """
         # 1. جرب الـ cache الأول
         if _test_conn(self._conn_cache):
@@ -77,14 +88,16 @@ class LiveConnMixin:
         try:
             from db.companies.company_state import company_state
             new_conn = company_state.get_erp_conn()
-            self._conn_cache = new_conn
-            # حدّث self.conn كمان عشان يتزامن
-            setattr(self, self._conn_attr, new_conn)
-            return self._conn_cache
+            if _test_conn(new_conn):
+                self._conn_cache = new_conn
+                setattr(self, self._conn_attr, new_conn)
+                return self._conn_cache
         except Exception as e:
             logger.warning("%s._live_conn: fallback failed: %s",
                            type(self).__name__, e)
-            return stored
+
+        # 4. كل المحاولات فشلت — RuntimeError واضحة بدل None صامتة
+        raise _conn_null_error(type(self).__name__, "_live_conn")
 
     def _invalidate_conn_cache(self):
         """
@@ -104,16 +117,22 @@ class LiveConnMixin:
                      type(self).__name__)
         try:
             from db.shared.connection import get_accounting_connection
-            return get_accounting_connection()
+            new_conn = get_accounting_connection()
+            if _test_conn(new_conn):
+                return new_conn
         except Exception as e:
             logger.warning("%s._live_acc_conn: fallback failed: %s",
                            type(self).__name__, e)
-            return stored
+
+        raise _conn_null_error(type(self).__name__, "_live_acc_conn", "accounting")
 
 
 class SafeConnMixin:
     """
     Mixin متقدم يدعم إعادة الاتصال التلقائي.
+
+    التغيير (Phase 4):
+      _get_safe_conn() لم تعد تُعيد None — ترمي RuntimeError عند الفشل.
 
     الاستخدام:
         class MyWidget(QWidget, SafeConnMixin):
@@ -133,12 +152,17 @@ class SafeConnMixin:
         try:
             from db.companies.company_state import company_state
             new_conn = company_state._get_conn(self.__safe_db_name)
-            self.__safe_conn = new_conn
-            return new_conn
+            if _test_conn(new_conn):
+                self.__safe_conn = new_conn
+                return new_conn
         except Exception as e:
             logger.warning("%s._get_safe_conn: reconnect failed: %s",
                            type(self).__name__, e)
-            return self.__safe_conn
+
+        # الإصلاح: RuntimeError بدل إرجاع self.__safe_conn (اللي ممكن يكون None)
+        raise _conn_null_error(
+            type(self).__name__, "_get_safe_conn", self.__safe_db_name
+        )
 
     @staticmethod
     def _get_company_id() -> int | None:
@@ -160,6 +184,9 @@ class SafeConnMixin:
 class DualConnMixin(SafeConnMixin):
     """
     Mixin لأي widget يحتاج acc_conn + erp_conn معاً.
+
+    التغيير (Phase 4):
+      _get_erp_conn() لم تعد تُعيد None — ترمي RuntimeError عند الفشل.
 
     الاستخدام:
         class MyWidget(QWidget, DualConnMixin):
@@ -184,12 +211,15 @@ class DualConnMixin(SafeConnMixin):
         try:
             from db.companies.company_state import company_state
             new = company_state._get_conn("erp")
-            self._erp_conn_ref = new
-            return new
+            if _test_conn(new):
+                self._erp_conn_ref = new
+                return new
         except Exception as e:
             logger.warning("%s._get_erp_conn: failed: %s",
                            type(self).__name__, e)
-            return self._erp_conn_ref
+
+        # الإصلاح: RuntimeError بدل إرجاع self._erp_conn_ref (اللي ممكن يكون None)
+        raise _conn_null_error(type(self).__name__, "_get_erp_conn", "erp")
 
     def _on_dual_company_event(self, company_id: int) -> bool:
         return self._should_respond_to_company(company_id)

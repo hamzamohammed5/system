@@ -8,15 +8,6 @@ db/shared/shared_items_bridge.py
   - الشركة تقرأ بياناتها مباشرة من companies.db — مفيش نسخ محلية
   - أي تعديل على shared_item يتعكس فوراً على كل الشركات المشتركة فيه
   - العناصر المشتركة تظهر مع أيقونة 🔗 وbadge "مشترك"
-
-الاستخدام:
-  from db.shared.shared_items_bridge import SharedItemsBridge
-  bridge = SharedItemsBridge(company_id)
-  all_raws = bridge.fetch_items_by_type_with_shared("raw")
-
-ملاحظة:
-  لا نستدعي central.close() لأن get_central_connection() ترجع connection
-  جديد في كل مرة — وهو مسؤوليتنا نقفله بعد الاستخدام المباشر فقط.
 """
 
 import json
@@ -187,6 +178,7 @@ class SharedItemsBridge:
                 "UPDATE shared_items SET name=?, data=?, updated_at=datetime('now') WHERE id=?",
                 (name, _encode(data), shared_item_id)
             )
+            central.commit()   # إصلاح: commit() كان ناقص — التغييرات لم تكن تُحفظ
         finally:
             central.close()
 
@@ -202,6 +194,7 @@ class SharedItemsBridge:
                 "INSERT OR IGNORE INTO company_shared_links (shared_item_id, company_id) VALUES (?, ?)",
                 (shared_item_id, self.company_id)
             )
+            central.commit()
         finally:
             central.close()
 
@@ -213,6 +206,7 @@ class SharedItemsBridge:
                 "DELETE FROM company_shared_links WHERE shared_item_id=? AND company_id=?",
                 (shared_item_id, self.company_id)
             )
+            central.commit()
         finally:
             central.close()
 
