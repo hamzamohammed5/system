@@ -17,7 +17,7 @@ from PyQt5.QtWidgets import (
 )
 from PyQt5.QtCore import Qt, QDate
 
-from db.inventory.investors_repo import (
+from db.accounting.investors_repo import (
     fetch_investor, insert_investor, update_investor,
 )
 from ui.helpers import EditModeMixin

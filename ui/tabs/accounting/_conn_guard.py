@@ -115,7 +115,7 @@ def init_schemas(acc_conn, erp_conn, initialized_cache: dict) -> bool:
         print(f"[ConnGuard] accounting schema error: {e}")
 
     try:
-        from db.inventory.investors_repo import create_investors_tables
+        from db.accounting.investors_repo import create_investors_tables
         create_investors_tables(erp_conn)
     except Exception as e:
         print(f"[ConnGuard] investors schema error: {e}")

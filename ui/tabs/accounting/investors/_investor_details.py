@@ -14,7 +14,7 @@ from PyQt5.QtWidgets import (
 )
 from PyQt5.QtCore import Qt
 
-from db.inventory.investors_repo import (
+from db.accounting.investors_repo import (
     calc_investor_summary, delete_investor_link,
 )
 from db.accounting.accounting_repo import delete_entry

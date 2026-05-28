@@ -16,7 +16,7 @@ from PyQt5.QtWidgets import (
 )
 from PyQt5.QtGui  import QColor, QFont
 
-from db.inventory.investors_repo import (
+from db.accounting.investors_repo import (
     fetch_investor, delete_investor,
     calc_all_investors_summary,
 )

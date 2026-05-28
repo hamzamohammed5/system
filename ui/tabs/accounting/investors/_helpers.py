@@ -16,7 +16,7 @@ from ui.widgets.shared.form_utils import spin_field as _spin          # noqa: F4
 from ui.widgets.shared.stat_row   import stat_card_pair as _stat_card  # noqa: F401
 
 from db.accounting.accounting_repo import fetch_leaf_accounts, insert_entry, add_entry_lines
-from db.inventory.investors_repo  import link_investor_to_line
+from db.accounting.investors_repo  import link_investor_to_line
 
 
 # ══════════════════════════════════════════════════════════

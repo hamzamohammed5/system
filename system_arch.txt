@@ -1,5 +1,5 @@
 File Tree Snapshot
-Generated : 2026-05-28 08:23:59
+Generated : 2026-05-28 08:29:52
 Source    : D:\My Workspace\Hg\Alhabaar\accountant\system
 Extensions: .py
 ────────────────────────────────────────────────────────────
@@ -14,7 +14,8 @@ system/
 │   │   ├── accounting_schema.py
 │   │   ├── accounting_schema_constants.py
 │   │   ├── accounting_schema_seed.py
-│   │   └── accounting_statements_repo.py
+│   │   ├── accounting_statements_repo.py
+│   │   └── investors_repo.py
 │   ├── companies/
 │   │   ├── companies_repo.py
 │   │   ├── companies_schema.py
@@ -34,8 +35,7 @@ system/
 │   │   └── dimension_sets_repo.py
 │   ├── inventory/
 │   │   ├── inventory_repo.py
-│   │   ├── inventory_schema.py
-│   │   └── investors_repo.py
+│   │   └── inventory_schema.py
 │   ├── orders/
 │   │   ├── customers_repo.py
 │   │   ├── orders_repo.py

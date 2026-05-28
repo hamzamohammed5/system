@@ -177,7 +177,7 @@ class _SmartLine(DualConnMixin, QFrame):
         if erp is None:
             return
         try:
-            from db.inventory.investors_repo import fetch_all_investors
+            from db.accounting.investors_repo import fetch_all_investors
             prev = self.cmb_investor.currentData()
             self.cmb_investor.blockSignals(True)
             self.cmb_investor.clear()

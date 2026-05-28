@@ -17,7 +17,7 @@ from PyQt5.QtWidgets import (
 )
 from PyQt5.QtCore import Qt
 
-from db.inventory.investors_repo import fetch_all_investors, link_investor_to_line
+from db.accounting.investors_repo import fetch_all_investors, link_investor_to_line
 from ui.events import bus
 from ui.widgets.shared.safe_conn_mixin import DualConnMixin
 from ui.widgets.shared.panels import (

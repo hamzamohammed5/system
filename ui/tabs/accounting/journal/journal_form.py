@@ -147,7 +147,7 @@ class _JournalForm(DualConnMixin, QWidget):
         مستخرج من _save() لتقليل حجمه وتسهيل الاختبار.
         يستخدم repo helpers بدل SQL مباشر.
         """
-        from db.inventory.investors_repo import link_investor_to_line
+        from db.accounting.investors_repo import link_investor_to_line
 
         for link in investor_links:
             inv_id    = link["investor_id"]

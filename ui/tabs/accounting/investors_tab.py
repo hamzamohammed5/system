@@ -11,7 +11,7 @@ InvestorsTab — تبويب المستثمرين.
 from PyQt5.QtWidgets import QWidget, QVBoxLayout, QTabWidget
 from PyQt5.QtCore import Qt, QTimer
 
-from db.inventory.investors_repo import _migrate_investors
+from db.accounting.investors_repo import _migrate_investors
 from db.companies.company_state import company_state
 
 from .investors._investors_layout import build_investors_tabs
