@@ -5,30 +5,21 @@ BaseListPanel — قاعدة مشتركة لكل لوحات القوائم.
 
 التحسينات:
   - [تحسين 24 محفوظ] current_id property للوصول المباشر للـ ID المحدد.
-  - [تحسين 45] دعم Custom Sort بالضغط على header الجدول.
-    SORTABLE = True يُفعّل الـ sort.
-    COL_KEYS  قائمة بمفاتيح dict للأعمدة بالترتيب (لازم عددها = COLUMNS).
-    _sort_key(col, row) override للـ sort المخصص.
-    الضغط على نفس العمود مرتين يعكس الاتجاه (ASC/DESC).
-    SORT_DEFAULT_COL / SORT_DEFAULT_ASC لضبط الترتيب الابتدائي.
-
-مثال استخدام SORTABLE:
-    class RawPanel(BaseListPanel):
-        COLUMNS   = ["#", "الاسم", "التصنيف", "السعر"]
-        COL_KEYS  = ["id", "name", "category_name", "price"]
-        SORTABLE  = True
-        SORT_DEFAULT_COL = 1   # ترتيب ابتدائي بالاسم
-        SORT_DEFAULT_ASC = True
-
-        def _sort_key(self, col, row):
-            if col == 3:  # عمود السعر → رقمي
-                return float(row.get("price") or 0)
-            return super()._sort_key(col, row)
+  - [تحسين 45 محفوظ] دعم Custom Sort بالضغط على header الجدول.
+  - [تحسين 51] Pagination للجداول الكبيرة.
+    PAGINATE  = True يُفعّل الـ pagination.
+    PAGE_SIZE = عدد الصفوف في كل صفحة (افتراضي 200).
+    زر "تحميل المزيد" يظهر أسفل الجدول لو في صفوف إضافية.
+    زر "عرض الكل" يظهر كل الصفوف دفعة واحدة.
+    الـ pagination يُعاد ضبطه تلقائياً عند تغيير الفلتر.
 """
-from PyQt5.QtWidgets import QWidget, QVBoxLayout, QSizePolicy
+from PyQt5.QtWidgets import (
+    QWidget, QVBoxLayout, QHBoxLayout, QLabel,
+    QPushButton, QSizePolicy, QFrame,
+)
 from PyQt5.QtCore    import Qt, pyqtSignal, QTimer
 
-from ui.app_settings import _C
+from ui.app_settings import _C, fs, get_font_size
 from ..tables.builders  import (
     make_splitter_table_guarded,
     fit_splitter_table,
@@ -60,23 +51,17 @@ class BaseListPanel(QWidget, BusConnectedMixin):
         SHOW_CATEGORY, SHOW_DATE, FILTER_SCOPE
 
     [تحسين 45] Sort-related overrides:
-        SORTABLE          → True لتفعيل Sort بالضغط على الهيدر
-        COL_KEYS          → list[str] مفاتيح dict بترتيب الأعمدة
-        SORT_DEFAULT_COL  → عمود الترتيب الابتدائي (-1 = بدون)
-        SORT_DEFAULT_ASC  → True = تصاعدي، False = تنازلي
-        _sort_key(col, row) → قيمة الـ sort المخصصة للعمود
+        SORTABLE, COL_KEYS, SORT_DEFAULT_COL, SORT_DEFAULT_ASC
+        _sort_key(col, row)
 
-    مثال تفعيل Sort:
-        class MyPanel(BaseListPanel):
-            COLUMNS          = ["الاسم", "التاريخ", "المبلغ"]
-            COL_KEYS         = ["name", "date", "amount"]
-            SORTABLE         = True
-            SORT_DEFAULT_COL = 0
+    [تحسين 51] Pagination:
+        PAGINATE  = True  لتفعيل التقسيم لصفحات
+        PAGE_SIZE = عدد الصفوف في كل صفحة (افتراضي 200)
 
-            def _sort_key(self, col, row):
-                if col == 2:  # المبلغ → رقمي
-                    return float(row.get("amount") or 0)
-                return super()._sort_key(col, row)
+    مثال تفعيل Pagination:
+        class BigPanel(BaseListPanel):
+            PAGINATE  = True
+            PAGE_SIZE = 100
     """
 
     item_selected = pyqtSignal(int)
@@ -98,9 +83,13 @@ class BaseListPanel(QWidget, BusConnectedMixin):
 
     # ── [تحسين 45] Sort settings ─────────────────────────
     SORTABLE          : bool = False
-    COL_KEYS          : list = []   # مفاتيح dict للأعمدة بالترتيب
-    SORT_DEFAULT_COL  : int  = -1   # -1 = بدون ترتيب ابتدائي
+    COL_KEYS          : list = []
+    SORT_DEFAULT_COL  : int  = -1
     SORT_DEFAULT_ASC  : bool = True
+
+    # ── [تحسين 51] Pagination settings ───────────────────
+    PAGINATE  : bool = False
+    PAGE_SIZE : int  = 200
 
     def __init__(self, conn=None, parent=None):
         super().__init__(parent)
@@ -111,9 +100,13 @@ class BaseListPanel(QWidget, BusConnectedMixin):
         self._timer.setInterval(250)
         self._timer.timeout.connect(self._apply_filter)
 
-        # [تحسين 45] Sort state — instance variables لعزل كل instance
+        # [تحسين 45] Sort state
         self._sort_col : int  = self.SORT_DEFAULT_COL
         self._sort_asc : bool = self.SORT_DEFAULT_ASC
+
+        # [تحسين 51] Pagination state
+        self._page_rows    : list = []   # كل الصفوف المفلترة
+        self._shown_count  : int  = 0    # عدد الصفوف الظاهرة حالياً
 
         self.setSizePolicy(QSizePolicy.Preferred, QSizePolicy.Expanding)
         self.setMinimumWidth(self.MIN_W)
@@ -151,20 +144,8 @@ class BaseListPanel(QWidget, BusConnectedMixin):
     # ── [تحسين 45] Sort override ──────────────────────────
 
     def _sort_key(self, col: int, row: dict):
-        """
-        [تحسين 45] يرجع قيمة الـ sort للعمود المحدد.
-
-        Override لتخصيص الـ sort:
-            def _sort_key(self, col, row):
-                if col == 2:  # عمود الرصيد
-                    return float(row.get("balance", 0))
-                return super()._sort_key(col, row)
-
-        الـ fallback الافتراضي: يستخدم COL_KEYS لو موجود، وإلا يرجع "".
-        """
         if self.COL_KEYS and col < len(self.COL_KEYS):
             val = row.get(self.COL_KEYS[col], "")
-            # حاول تحويل للرقم للـ numeric sort الصحيح
             try:
                 return float(val) if val not in (None, "") else 0.0
             except (TypeError, ValueError):
@@ -201,7 +182,6 @@ class BaseListPanel(QWidget, BusConnectedMixin):
             hh = self.table.horizontalHeader()
             hh.setSectionsClickable(True)
             hh.sectionClicked.connect(self._on_header_clicked)
-            # أيقونة sort الابتدائية
             if self.SORT_DEFAULT_COL >= 0:
                 self._update_sort_indicators()
 
@@ -216,6 +196,10 @@ class BaseListPanel(QWidget, BusConnectedMixin):
         )
         self._empty_state.setVisible(False)
         root.addWidget(self._empty_state)
+
+        # [تحسين 51] شريط الـ pagination
+        self._pagination_bar = self._build_pagination_bar()
+        root.addWidget(self._pagination_bar)
 
         self._status_bar = StatusBar()
         root.addWidget(self._status_bar)
@@ -249,30 +233,151 @@ class BaseListPanel(QWidget, BusConnectedMixin):
         self.inp_search = toolbar.inp_search
         return toolbar
 
+    # ── [تحسين 51] Pagination bar ─────────────────────────
+
+    def _build_pagination_bar(self) -> QWidget:
+        """
+        [تحسين 51] يبني شريط الـ pagination مع زر "تحميل المزيد".
+        مخفي بالكامل لو PAGINATE = False أو مفيش صفوف إضافية.
+        """
+        bar = QFrame()
+        bar.setStyleSheet(f"""
+            QFrame {{
+                background: {_C['bg_surface_2']};
+                border-top: 1px solid {_C['border']};
+            }}
+        """)
+        bar.setFixedHeight(44)
+
+        lay = QHBoxLayout(bar)
+        lay.setContentsMargins(12, 6, 12, 6)
+        lay.setSpacing(10)
+
+        base = get_font_size()
+
+        # label: "يعرض 200 من 1500"
+        self._lbl_page_info = QLabel("")
+        self._lbl_page_info.setStyleSheet(
+            f"color: {_C['text_muted']}; font-size: {fs(base, -1)}pt;"
+            "background: transparent; border: none;"
+        )
+        lay.addWidget(self._lbl_page_info, stretch=1)
+
+        # زر "تحميل المزيد (+100)"
+        self._btn_load_more = QPushButton()
+        self._btn_load_more.setCursor(Qt.PointingHandCursor)
+        self._btn_load_more.setFixedHeight(30)
+        self._btn_load_more.setStyleSheet(f"""
+            QPushButton {{
+                background: {_C['accent_light']}; color: {_C['accent_text']};
+                border: 1px solid {_C['accent_mid']}; border-radius: 5px;
+                padding: 0 14px; font-size: {fs(base, -1)}pt; font-weight: bold;
+            }}
+            QPushButton:hover {{
+                background: {_C['accent_mid']}; border-color: {_C['accent']};
+            }}
+        """)
+        self._btn_load_more.clicked.connect(self._on_load_more)
+        lay.addWidget(self._btn_load_more)
+
+        # زر "عرض الكل"
+        self._btn_show_all = QPushButton("عرض الكل")
+        self._btn_show_all.setCursor(Qt.PointingHandCursor)
+        self._btn_show_all.setFixedHeight(30)
+        self._btn_show_all.setStyleSheet(f"""
+            QPushButton {{
+                background: transparent; color: {_C['text_muted']};
+                border: 1px solid {_C['border_med']}; border-radius: 5px;
+                padding: 0 12px; font-size: {fs(base, -1)}pt;
+            }}
+            QPushButton:hover {{
+                color: {_C['text_primary']}; border-color: {_C['border_strong']};
+            }}
+        """)
+        self._btn_show_all.clicked.connect(self._on_show_all)
+        lay.addWidget(self._btn_show_all)
+
+        bar.setVisible(False)
+        return bar
+
+    def _update_pagination_bar(self, total: int, shown: int):
+        """
+        [تحسين 51] يحدّث شريط الـ pagination.
+        يخفيه لو مفيش صفوف إضافية.
+        """
+        remaining = total - shown
+        if not self.PAGINATE or remaining <= 0:
+            self._pagination_bar.setVisible(False)
+            return
+
+        base = get_font_size()
+        self._lbl_page_info.setText(f"يعرض {shown} من {total}")
+        self._btn_load_more.setText(
+            f"تحميل {min(remaining, self.PAGE_SIZE):,} إضافي  ▼"
+        )
+        self._pagination_bar.setVisible(True)
+
+    def _on_load_more(self):
+        """
+        [تحسين 51] يضيف PAGE_SIZE صف إضافي للجدول.
+        يستكمل من حيث توقف بدون إعادة بناء الجدول كله.
+        """
+        if not self._page_rows:
+            return
+
+        start = self._shown_count
+        end   = min(start + self.PAGE_SIZE, len(self._page_rows))
+        batch = self._page_rows[start:end]
+
+        self.table.setUpdatesEnabled(False)
+        for row_data in batch:
+            r = self.table.rowCount()
+            self.table.insertRow(r)
+            self.table.setRowHeight(r, ROW_HEIGHT_LARGE)
+            self._fill_row(self.table, r, row_data)
+        self.table.setUpdatesEnabled(True)
+
+        self._shown_count = end
+        self._update_pagination_bar(len(self._page_rows), self._shown_count)
+        self._auto_resize()
+        self._table_guard.refresh()
+
+    def _on_show_all(self):
+        """[تحسين 51] يعرض كل الصفوف المتبقية دفعة واحدة."""
+        if not self._page_rows:
+            return
+
+        remaining = self._page_rows[self._shown_count:]
+        if not remaining:
+            return
+
+        self.table.setUpdatesEnabled(False)
+        for row_data in remaining:
+            r = self.table.rowCount()
+            self.table.insertRow(r)
+            self.table.setRowHeight(r, ROW_HEIGHT_LARGE)
+            self._fill_row(self.table, r, row_data)
+        self.table.setUpdatesEnabled(True)
+
+        self._shown_count = len(self._page_rows)
+        self._pagination_bar.setVisible(False)
+        self._auto_resize()
+        self._table_guard.refresh()
+
     # ── [تحسين 45] Sort logic ─────────────────────────────
 
     def _on_header_clicked(self, col: int):
-        """
-        [تحسين 45] يُعالج الضغط على header العمود.
-        نفس العمود → عكس الاتجاه. عمود مختلف → تصاعدي.
-        """
         if not self.SORTABLE:
             return
-
         if self._sort_col == col:
             self._sort_asc = not self._sort_asc
         else:
             self._sort_col = col
             self._sort_asc = True
-
         self._update_sort_indicators()
         self._apply_filter()
 
     def _update_sort_indicators(self):
-        """
-        [تحسين 45] يحدّث أيقونات الـ sort في الهيدر.
-        يستخدم Qt built-in sort indicators بدل تعديل النص.
-        """
         if not self.SORTABLE:
             return
         hh = self.table.horizontalHeader()
@@ -286,10 +391,6 @@ class BaseListPanel(QWidget, BusConnectedMixin):
             hh.setSortIndicatorShown(False)
 
     def _sorted_rows(self, rows: list) -> list:
-        """
-        [تحسين 45] يرتب الصفوف حسب العمود والاتجاه الحاليين.
-        يُستدعى من _apply_filter قبل _fill_table.
-        """
         if not self.SORTABLE or self._sort_col < 0:
             return rows
         try:
@@ -299,7 +400,6 @@ class BaseListPanel(QWidget, BusConnectedMixin):
                 reverse=not self._sort_asc,
             )
         except Exception:
-            # لو فشل الـ sort لأي سبب نرجع الصفوف بدون ترتيب
             return rows
 
     # ── فلترة ─────────────────────────────────────────────
@@ -319,9 +419,7 @@ class BaseListPanel(QWidget, BusConnectedMixin):
             if self._match_filter(row, query) and self._match_category(row, cat_id)
         ]
 
-        # [تحسين 45] رتّب قبل العرض
         filtered = self._sorted_rows(filtered)
-
         self._fill_table(filtered)
         self._update_status(len(filtered))
 
@@ -336,17 +434,45 @@ class BaseListPanel(QWidget, BusConnectedMixin):
         return self._filter_toolbar.category_id if self._filter_toolbar else None
 
     def _fill_table(self, rows: list):
+        """
+        [تحسين 51] يملأ الجدول مع دعم الـ pagination.
+
+        لو PAGINATE = True وعدد الصفوف > PAGE_SIZE:
+          - يعرض الـ PAGE_SIZE الأولى فقط
+          - يُظهر شريط الـ pagination مع زر "تحميل المزيد"
+
+        لو PAGINATE = False (افتراضي):
+          - يعرض كل الصفوف دفعة واحدة (السلوك القديم)
+        """
         self.table.setRowCount(0)
-        for row_data in rows:
+
+        # [تحسين 51] ضبط state الـ pagination
+        self._page_rows   = rows
+        self._shown_count = 0
+
+        # تحديد الدفعة الأولى
+        if self.PAGINATE and len(rows) > self.PAGE_SIZE:
+            first_batch = rows[:self.PAGE_SIZE]
+        else:
+            first_batch = rows
+
+        self.table.setUpdatesEnabled(False)
+        for row_data in first_batch:
             r = self.table.rowCount()
             self.table.insertRow(r)
             self.table.setRowHeight(r, ROW_HEIGHT_LARGE)
             self._fill_row(self.table, r, row_data)
+        self.table.setUpdatesEnabled(True)
 
-        has_data = bool(rows)
+        self._shown_count = len(first_batch)
+
+        has_data = bool(first_batch)
         self.table.setVisible(has_data)
         self._splitter.setVisible(has_data)
         self._empty_state.setVisible(not has_data)
+
+        # [تحسين 51] تحديث شريط الـ pagination
+        self._update_pagination_bar(len(rows), self._shown_count)
 
         if has_data:
             fit_splitter_table(self._splitter, self.table, extra_pad=24)
@@ -377,12 +503,23 @@ class BaseListPanel(QWidget, BusConnectedMixin):
                 self.item_selected.emit(int(data))
 
     def select_item(self, item_id: int):
+        # لو الـ item مش في الجدول حالياً (pagination) → حمّل الكل أولاً
         for r in range(self.table.rowCount()):
             item = self.table.item(r, 0)
             if item and item.data(Qt.UserRole) == item_id:
                 self.table.selectRow(r)
                 self.item_selected.emit(item_id)
                 return
+
+        # [تحسين 51] لو مش موجود في الصفوف الظاهرة → حمّل الكل وابحث
+        if self.PAGINATE and self._shown_count < len(self._page_rows):
+            self._on_show_all()
+            for r in range(self.table.rowCount()):
+                item = self.table.item(r, 0)
+                if item and item.data(Qt.UserRole) == item_id:
+                    self.table.selectRow(r)
+                    self.item_selected.emit(item_id)
+                    return
 
     def selected_id(self) -> "int | None":
         row = self.table.currentRow()
@@ -394,10 +531,9 @@ class BaseListPanel(QWidget, BusConnectedMixin):
             return int(data) if data is not None else None
         return None
 
-    # [تحسين 24] property للوصول المباشر للـ ID المحدد
+    # [تحسين 24]
     @property
     def current_id(self) -> "int | None":
-        """ID العنصر المحدد حالياً — None لو مفيش تحديد."""
         return self.selected_id()
 
     # ── header API ────────────────────────────────────────
@@ -411,12 +547,6 @@ class BaseListPanel(QWidget, BusConnectedMixin):
     # ── [تحسين 45] Sort API ───────────────────────────────
 
     def set_sort(self, col: int, ascending: bool = True):
-        """
-        [تحسين 45] يضبط الـ sort برمجياً بدون الضغط على الهيدر.
-
-        مثال:
-            self.list_panel.set_sort(col=2, ascending=False)
-        """
         self._sort_col = col
         self._sort_asc = ascending
         if self.SORTABLE:
@@ -424,9 +554,27 @@ class BaseListPanel(QWidget, BusConnectedMixin):
         self._apply_filter()
 
     def clear_sort(self):
-        """[تحسين 45] يلغي الـ sort ويرجع للترتيب الابتدائي."""
         self._sort_col = self.SORT_DEFAULT_COL
         self._sort_asc = self.SORT_DEFAULT_ASC
         if self.SORTABLE:
             self._update_sort_indicators()
         self._apply_filter()
+
+    # ── [تحسين 51] Pagination API ─────────────────────────
+
+    def reset_pagination(self):
+        """
+        [تحسين 51] يعيد ضبط الـ pagination ويرجع للصفحة الأولى.
+        مفيد لو حدث تغيير في البيانات وتريد البدء من الأول.
+        """
+        self._apply_filter()
+
+    @property
+    def total_rows(self) -> int:
+        """[تحسين 51] إجمالي الصفوف المفلترة (كل الصفحات)."""
+        return len(self._page_rows)
+
+    @property
+    def shown_rows(self) -> int:
+        """[تحسين 51] عدد الصفوف الظاهرة حالياً في الجدول."""
+        return self._shown_count
