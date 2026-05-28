@@ -2,6 +2,11 @@
 widgets/base/detail_panel.py
 =============================
 BaseDetailPanel — قاعدة مشتركة لكل لوحات التفاصيل.
+
+التغييرات:
+  - [i18n/themes] _connect_bus يدعم theme=True و lang=True.
+  - [i18n/themes] _on_theme_changed() يُعيد تطبيق الـ styles.
+  - [i18n/themes] _on_language_changed() يُحدّث نصوص الـ empty state.
 """
 
 from PyQt5.QtWidgets import QWidget, QVBoxLayout, QScrollArea, QSizePolicy
@@ -12,7 +17,15 @@ from ..components.headers     import DetailHeader
 from ..panels.state           import EmptyState
 from ..components.notification import NotificationBar
 from ..mixins.bus             import BusConnectedMixin
-from ..theme.styles           import scroll_style   # المصدر الوحيد
+from ..theme.styles           import scroll_style
+
+
+def _tr_safe(key: str) -> str:
+    try:
+        from ui.widgets.core.i18n import tr
+        return tr(key)
+    except Exception:
+        return key
 
 
 class BaseDetailPanel(QWidget, BusConnectedMixin):
@@ -39,7 +52,7 @@ class BaseDetailPanel(QWidget, BusConnectedMixin):
     EMPTY_ICON     : str  = "📋"
     EMPTY_TITLE    : str  = "اختر عنصراً من القائمة"
     EMPTY_SUBTITLE : str  = ""
-    HEADER_BG      : str  = None   # None → يستخدم _C['bg_surface'] تلقائياً
+    HEADER_BG      : str  = None
     MIN_CONTENT_W  : int  = 500
     CONNECT_BUS    : bool = False
 
@@ -54,7 +67,8 @@ class BaseDetailPanel(QWidget, BusConnectedMixin):
         self._set_mode(has_data=False)
 
         if self.CONNECT_BUS:
-            self._connect_bus(data=True)
+            # [i18n/themes] اشترك في theme وlang أيضاً
+            self._connect_bus(data=True, theme=True, lang=True)
 
     # ── override hooks ────────────────────────────────────
 
@@ -83,7 +97,6 @@ class BaseDetailPanel(QWidget, BusConnectedMixin):
     # ── بناء الواجهة ──────────────────────────────────────
 
     def _build(self):
-        # خلفية الـ panel — أفتح قليلاً من bg_surface للتمييز البصري
         _bg = _C['bg_page']
         header_bg = self.HEADER_BG or _C['bg_surface']
 
@@ -126,13 +139,51 @@ class BaseDetailPanel(QWidget, BusConnectedMixin):
         scroll.setWidget(inner)
         root.addWidget(scroll, stretch=1)
 
-        # يستخدم _C['text_muted'] بدل hardcoded "#6b7280"
         self._empty = EmptyState(
             icon=self.EMPTY_ICON, title=self.EMPTY_TITLE,
             subtitle=self.EMPTY_SUBTITLE,
             style="plain", color=_C['text_muted'], min_height=200,
         )
         root.addWidget(self._empty)
+
+        # حفظ reference للـ bg لاستخدامها في _on_theme_changed
+        self._bg_color = _bg
+
+    # ── [i18n/themes] Theme & Language handlers ───────────
+
+    def _on_theme_changed(self, theme_name: str):
+        """
+        [i18n/themes] يُعيد تطبيق الـ styles بعد تغيير الثيم.
+        """
+        _bg = _C['bg_page']
+        self._bg_color = _bg
+        header_bg = self.HEADER_BG or _C['bg_surface']
+
+        # إعادة تطبيق خلفية الـ panel
+        self.setStyleSheet(f"background:{_bg};")
+
+        # إعادة تطبيق scroll stylesheet
+        self._scroll.setStyleSheet(scroll_style())
+
+        # إعادة تطبيق الـ inner widgets background
+        inner = self._scroll.widget()
+        if inner:
+            inner.setStyleSheet(f"background:{_bg};")
+            # إعادة تطبيق content background
+            content_widget = None
+            for child in inner.children():
+                if isinstance(child, QWidget) and child is not self._hdr:
+                    child.setStyleSheet(f"background:{_bg};")
+
+    def _on_language_changed(self, lang_code: str):
+        """
+        [i18n/themes] يُحدّث نصوص الـ empty state بعد تغيير اللغة.
+        """
+        translated = _tr_safe(self.EMPTY_TITLE)
+        try:
+            self._empty.set_title(translated)
+        except Exception:
+            pass
 
     # ── public API ────────────────────────────────────────
 

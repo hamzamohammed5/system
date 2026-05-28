@@ -1,11 +1,11 @@
 """
 ui/widgets/base/crud_form.py
 
-التحسينات:
-  - [تحسين 18] set_conn يستدعي _on_conn_changed(conn) بعد التحديث.
-    القديم: set_conn يحدّث self.conn فقط، الـ sub-widgets (CategoryCombo)
-    تبقى بالـ conn القديم.
-    الجديد: hook يسمح للـ subclass بتحديث الـ sub-widgets عند تغيير الـ conn.
+التغييرات:
+  - [i18n/themes] رسائل النجاح والخطأ تستخدم tr() بدل النصوص العربية المباشرة.
+  - [i18n/themes] _on_language_changed() يُحدّث نصوص الأزرار وlbl_mode.
+  - [i18n/themes] BaseCrudForm يشترك في bus.language_changed.
+  - [تحسين 18 محفوظ] set_conn يستدعي _on_conn_changed(conn) بعد التحديث.
 """
 import logging
 from PyQt5.QtWidgets import (
@@ -27,6 +27,14 @@ from ui.widgets.core.events    import emit_company_data_changed
 logger = logging.getLogger(__name__)
 
 
+def _tr(key: str) -> str:
+    try:
+        from ui.widgets.core.i18n import tr
+        return tr(key)
+    except Exception:
+        return key
+
+
 class BaseCrudForm(QWidget, EditModeMixin, FormValidationMixin):
     """
     قاعدة موحدة لكل نماذج CRUD.
@@ -43,10 +51,10 @@ class BaseCrudForm(QWidget, EditModeMixin, FormValidationMixin):
     Override الاختياري:
         _after_insert(new_id)
         _after_save()
-        _build_extra(root)      → widgets إضافية تحت الأزرار
-        _validate()             → تحقق إضافي، يرجع str أو None
+        _build_extra(root)
+        _validate()
         _post_init()
-        _on_conn_changed(conn)  → [تحسين 18] يُستدعى عند تغيير الـ conn
+        _on_conn_changed(conn)  → [تحسين 18]
     """
 
     item_added   = pyqtSignal(int)
@@ -65,6 +73,43 @@ class BaseCrudForm(QWidget, EditModeMixin, FormValidationMixin):
         self._build()
         self.init_edit_mode(self.btn_add, self.btn_save, self.btn_cancel, self.lbl_mode)
         self._post_init()
+
+        # [i18n/themes] الاشتراك في language_changed
+        self._connect_language_bus()
+
+    # ── language bus ──────────────────────────────────────
+
+    def _connect_language_bus(self):
+        """[i18n/themes] يشترك في bus.language_changed."""
+        try:
+            from ui.events import bus
+            from PyQt5.QtCore import Qt
+            bus.language_changed.connect(
+                self._on_language_changed, Qt.UniqueConnection
+            )
+        except Exception:
+            pass
+
+    def _on_language_changed(self, lang_code: str):
+        """
+        [i18n/themes] يُحدّث نصوص الأزرار وlbl_mode عند تغيير اللغة.
+        """
+        # تحديث الأزرار
+        add_text    = _tr("btn_add")
+        save_text   = _tr("btn_save")
+        cancel_text = _tr("btn_cancel")
+
+        if hasattr(self, "btn_add"):
+            self.btn_add.setText(add_text)
+        if hasattr(self, "btn_save"):
+            self.btn_save.setText(save_text)
+        if hasattr(self, "btn_cancel"):
+            self.btn_cancel.setText(cancel_text)
+
+        # تحديث lbl_mode لو في وضع إضافة
+        if hasattr(self, "lbl_mode") and not self.is_edit_mode:
+            add_label = add_text.lstrip("➕  ")
+            self.lbl_mode.set_add_mode(add_label)
 
     # ── override hooks ────────────────────────────────────
 
@@ -107,16 +152,7 @@ class BaseCrudForm(QWidget, EditModeMixin, FormValidationMixin):
         return None
 
     def _on_conn_changed(self, conn):
-        """
-        [تحسين 18] يُستدعى بعد تغيير self.conn عبر set_conn().
-
-        Override هنا لتحديث الـ sub-widgets بالـ conn الجديد.
-
-        مثال:
-            def _on_conn_changed(self, conn):
-                self.cmb_category.conn = conn
-                self.cmb_category.refresh()
-        """
+        """[تحسين 18] يُستدعى بعد تغيير self.conn عبر set_conn()."""
         pass
 
     # ── بناء الواجهة ──────────────────────────────────────
@@ -190,7 +226,8 @@ class BaseCrudForm(QWidget, EditModeMixin, FormValidationMixin):
         self.item_added.emit(new_id)
         self._after_insert(new_id)
         self._reset()
-        self._notif.show("تم الإضافة بنجاح", "success", auto_hide=2500)
+        # [i18n/themes] استخدام tr() بدل النص المباشر
+        self._notif.show(_tr("success_add"), "success", auto_hide=2500)
 
     def _on_save(self):
         self._notif.hide_bar()
@@ -205,7 +242,8 @@ class BaseCrudForm(QWidget, EditModeMixin, FormValidationMixin):
             self._do_update(self._editing_id, data)
         except Exception as e:
             logger.warning("%s._on_save failed: %s", type(self).__name__, e)
-            self._notif.show(str(e), "danger")
+            # [i18n/themes] استخدام tr() للخطأ
+            self._notif.show(f"{_tr('error_save')}: {e}", "danger")
             return
         self._reset()
         emit_company_data_changed()
@@ -224,7 +262,8 @@ class BaseCrudForm(QWidget, EditModeMixin, FormValidationMixin):
             data = self._do_load(item_id)
         except Exception as e:
             logger.warning("%s.load_for_edit failed: %s", type(self).__name__, e)
-            self._notif.show(f"خطأ في تحميل البيانات: {e}", "danger")
+            # [i18n/themes] استخدام tr() للخطأ
+            self._notif.show(f"{_tr('error_load')}: {e}", "danger")
             return
         if not data:
             return
@@ -242,9 +281,7 @@ class BaseCrudForm(QWidget, EditModeMixin, FormValidationMixin):
     def set_conn(self, conn):
         """
         يحدّث الـ connection.
-
-        [تحسين 18] يستدعي _on_conn_changed بعد التحديث
-        ليتمكن الـ subclass من تحديث الـ sub-widgets.
+        [تحسين 18] يستدعي _on_conn_changed بعد التحديث.
         """
         self.conn = conn
         self._on_conn_changed(conn)

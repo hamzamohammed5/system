@@ -4,11 +4,14 @@ ui/widgets/components/button.py
 make_btn — المصنع الموحد لإنشاء أزرار التطبيق.
 
 التغييرات:
-  - _STYLES dict ثابت بـ hardcoded hex أُزيل.
-  - _styles() دالة جديدة تبني الأنماط من _C مباشرة.
-  - _stylesheet_cache يحفظ الـ stylesheet لكل (style, font_size)
-    بدل إعادة بنائها في كل استدعاء.
-  - _r() أُزيلت — لم تعد ضرورية بعد ما _styles() ترجع قيم مباشرة.
+  - [i18n/themes] make_btn يحفظ style على الزر كـ Qt property ("_btn_style").
+    هذا يسمح لـ refresh_visible_buttons() بإعادة تطبيق الـ stylesheet
+    على الأزرار الظاهرة بعد تغيير الثيم، بدون الحاجة لمعرفة الـ style
+    الأصلي لكل زر.
+  - [i18n/themes] إضافة refresh_visible_buttons(root_widget) لإعادة رسم
+    كل الأزرار في الـ widget tree بعد تغيير الثيم.
+  - [تحسين 37 محفوظ] _styles() dict ثابت بـ hardcoded hex أُزيل.
+  - [تحسين 43 محفوظ] _stylesheet_cache يحفظ الـ stylesheet لكل (style, font_size).
 """
 from PyQt5.QtWidgets import QPushButton, QSizePolicy
 from PyQt5.QtCore    import Qt
@@ -24,9 +27,6 @@ _stylesheet_cache: dict[tuple[str, int], str] = {}
 def _styles() -> dict[str, dict]:
     """
     يبني dict أنماط الأزرار من _C.
-
-    التغيير: بدل _STYLES = { "success": dict(bg="#ecfdf5", ...) }
-    اللي كان hardcoded، الدالة دي بتقرأ من _C مباشرة.
     يُستدعى في كل make_btn — الـ cache يمنع أي overhead.
     """
     return {
@@ -111,6 +111,9 @@ def make_btn(text: str, style: str = "normal",
     ينشئ QPushButton بالنمط المحدد.
     style: "primary" | "success" | "danger" | "ghost" | "normal"
     fixed_size: True = عرض ثابت، False = عرض أدنى قابل للتمدد
+
+    [i18n/themes] يحفظ style كـ Qt property ("_btn_style") على الزر
+    لاستخدامها في refresh_visible_buttons() عند تغيير الثيم.
     """
     base = get_font_size()
     h    = base * 2 + 8
@@ -120,6 +123,9 @@ def make_btn(text: str, style: str = "normal",
     btn.setCursor(Qt.PointingHandCursor)
     btn.setStyleSheet(_get_stylesheet(style, base))
     btn.setFixedHeight(h)
+
+    # [i18n/themes] حفظ الـ style على الزر للاستخدام لاحقاً
+    btn.setProperty("_btn_style", style)
 
     f = QFont()
     f.setPointSize(fsz)
@@ -132,6 +138,46 @@ def make_btn(text: str, style: str = "normal",
         btn.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Fixed)
 
     return btn
+
+
+def refresh_visible_buttons(root_widget) -> int:
+    """
+    [i18n/themes] يُعيد تطبيق stylesheet على كل QPushButton في الـ widget tree.
+
+    يُستدعى بعد تغيير الثيم لتحديث الأزرار الظاهرة فوراً بدون إعادة بناء الـ UI.
+
+    يعتمد على property("_btn_style") التي يحفظها make_btn على كل زر.
+    الأزرار التي لا تحمل هذا الـ property تُتجاهل (أزرار Qt الداخلية).
+
+    Returns:
+        عدد الأزرار التي تم تحديثها.
+
+    مثال:
+        from ui.widgets.components.button import refresh_visible_buttons
+        bus.theme_changed.connect(lambda _: refresh_visible_buttons(main_window))
+    """
+    invalidate_stylesheet_cache()
+    base = get_font_size()
+    count = 0
+
+    try:
+        for btn in root_widget.findChildren(QPushButton):
+            style = btn.property("_btn_style")
+            if style:
+                try:
+                    btn.setStyleSheet(_get_stylesheet(style, base))
+                    # تحديث الارتفاع أيضاً
+                    h = base * 2 + 8
+                    if btn.minimumHeight() > 0:
+                        btn.setFixedHeight(h)
+                    count += 1
+                except RuntimeError:
+                    # الزر محذوف من Qt
+                    pass
+    except RuntimeError:
+        pass
+
+    return count
 
 
 def calc_btn_width(text: str, font_size: int, padding: int = 32) -> int:

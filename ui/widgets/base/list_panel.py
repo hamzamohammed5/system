@@ -3,15 +3,17 @@ ui/widgets/base/list_panel.py
 ==========================
 BaseListPanel — قاعدة مشتركة لكل لوحات القوائم.
 
-التحسينات:
-  - [تحسين 24 محفوظ] current_id property للوصول المباشر للـ ID المحدد.
-  - [تحسين 45 محفوظ] دعم Custom Sort بالضغط على header الجدول.
-  - [تحسين 51 محفوظ] Pagination للجداول الكبيرة.
-  - [تحسين 17] select_item: binary search في _page_rows قبل _on_show_all.
-    القديم: لو العنصر مش موجود في الصفوف الظاهرة → يُحمّل الكل فوراً.
-    الجديد: يبحث أولاً في _page_rows (O(n) لكن بدون إنشاء Qt widgets).
-    لو وجده → يُحمّل حتى ذلك العنصر فقط (بدل كل البيانات).
-    لو ما وجدوش → يُحمّل الكل كـ fallback.
+التغييرات:
+  - [i18n/themes] _connect_bus يدعم theme=True و lang=True.
+  - [i18n/themes] _on_theme_changed() يُعيد تطبيق الـ styles على الـ widget.
+  - [i18n/themes] _on_language_changed() يُحدّث النصوص الظاهرة (search placeholder,
+    empty state title, pagination buttons).
+  - [i18n/themes] EmptyState تحمل reference للـ title label لتحديثه لاحقاً.
+    ملاحظة: يستخدم EMPTY_TITLE كـ key للترجمة لو أمكن، وإلا يعرض النص مباشرة.
+  - [تحسين 24 محفوظ] current_id property.
+  - [تحسين 45 محفوظ] Custom Sort.
+  - [تحسين 51 محفوظ] Pagination.
+  - [تحسين 17 محفوظ] select_item binary search.
 """
 from PyQt5.QtWidgets import (
     QWidget, QVBoxLayout, QHBoxLayout, QLabel,
@@ -30,6 +32,15 @@ from ..panels.state     import EmptyState
 from ..components.headers    import ListHeader, StatusBar
 from ..panels.filter    import FilterToolbar
 from ..mixins.bus       import BusConnectedMixin
+
+
+def _tr_safe(key: str) -> str:
+    """ترجمة آمنة — لو فشلت ترجع المفتاح كما هو."""
+    try:
+        from ui.widgets.core.i18n import tr
+        return tr(key)
+    except Exception:
+        return key
 
 
 class BaseListPanel(QWidget, BusConnectedMixin):
@@ -57,11 +68,6 @@ class BaseListPanel(QWidget, BusConnectedMixin):
     [تحسين 51] Pagination:
         PAGINATE  = True  لتفعيل التقسيم لصفحات
         PAGE_SIZE = عدد الصفوف في كل صفحة (افتراضي 200)
-
-    مثال تفعيل Pagination:
-        class BigPanel(BaseListPanel):
-            PAGINATE  = True
-            PAGE_SIZE = 100
     """
 
     item_selected = pyqtSignal(int)
@@ -105,15 +111,16 @@ class BaseListPanel(QWidget, BusConnectedMixin):
         self._sort_asc : bool = self.SORT_DEFAULT_ASC
 
         # [تحسين 51] Pagination state
-        self._page_rows    : list = []   # كل الصفوف المفلترة
-        self._shown_count  : int  = 0    # عدد الصفوف الظاهرة حالياً
+        self._page_rows    : list = []
+        self._shown_count  : int  = 0
 
         self.setSizePolicy(QSizePolicy.Preferred, QSizePolicy.Expanding)
         self.setMinimumWidth(self.MIN_W)
         self._build()
 
         if self.CONNECT_BUS:
-            self._connect_bus(data=True)
+            # [i18n/themes] اشترك في theme وlang أيضاً
+            self._connect_bus(data=True, theme=True, lang=True)
 
         self.refresh()
 
@@ -232,6 +239,109 @@ class BaseListPanel(QWidget, BusConnectedMixin):
         toolbar.filter_changed.connect(lambda: self._timer.start())
         self.inp_search = toolbar.inp_search
         return toolbar
+
+    # ── [i18n/themes] Theme & Language handlers ───────────
+
+    def _on_theme_changed(self, theme_name: str):
+        """
+        [i18n/themes] يُعيد تطبيق الـ styles بعد تغيير الثيم.
+        يُستدعى تلقائياً من BusConnectedMixin.
+        """
+        # إعادة تطبيق خلفية الـ widget الرئيسي
+        self.setStyleSheet(f"background:{_C['bg_input']};")
+
+        # إعادة تطبيق empty state background
+        self._empty_state.setStyleSheet(
+            f"QFrame {{ background:{_C['bg_input']}; border:none; }}"
+        )
+
+        # إعادة بناء pagination bar styles
+        self._rebuild_pagination_styles()
+
+        # إعادة بناء status bar style
+        self._rebuild_status_style()
+
+    def _on_language_changed(self, lang_code: str):
+        """
+        [i18n/themes] يُحدّث النصوص الظاهرة بعد تغيير اللغة.
+        """
+        # تحديث placeholder البحث
+        if self._header.search_bar:
+            placeholder = _tr_safe(self.SEARCH_PLACEHOLDER)
+            self._header.search_bar.set_placeholder(placeholder)
+
+        # تحديث نص الـ empty state
+        self._update_empty_state_title()
+
+        # تحديث أزرار الـ pagination
+        self._update_pagination_texts()
+
+    def _rebuild_pagination_styles(self):
+        """يُعيد بناء styles شريط الـ pagination بعد تغيير الثيم."""
+        base = get_font_size()
+        self._pagination_bar.setStyleSheet(f"""
+            QFrame {{
+                background: {_C['bg_surface_2']};
+                border-top: 1px solid {_C['border']};
+            }}
+        """)
+        self._lbl_page_info.setStyleSheet(
+            f"color: {_C['text_muted']}; font-size: {fs(base, -1)}pt;"
+            "background: transparent; border: none;"
+        )
+        self._btn_load_more.setStyleSheet(f"""
+            QPushButton {{
+                background: {_C['accent_light']}; color: {_C['accent_text']};
+                border: 1px solid {_C['accent_mid']}; border-radius: 5px;
+                padding: 0 14px; font-size: {fs(base, -1)}pt; font-weight: bold;
+            }}
+            QPushButton:hover {{
+                background: {_C['accent_mid']}; border-color: {_C['accent']};
+            }}
+        """)
+        self._btn_show_all.setStyleSheet(f"""
+            QPushButton {{
+                background: transparent; color: {_C['text_muted']};
+                border: 1px solid {_C['border_med']}; border-radius: 5px;
+                padding: 0 12px; font-size: {fs(base, -1)}pt;
+            }}
+            QPushButton:hover {{
+                color: {_C['text_primary']}; border-color: {_C['border_strong']};
+            }}
+        """)
+
+    def _rebuild_status_style(self):
+        """يُعيد بناء style الـ status bar."""
+        base = get_font_size()
+        self._status_bar.setStyleSheet(f"""
+            background:{_C['bg_surface_2']};
+            color:{_C['text_muted']};
+            padding:0 10px;
+            font-size:{fs(base,-1)}pt;
+            font-weight:600;
+            border-top:1px solid {_C['border']};
+        """)
+
+    def _update_empty_state_title(self):
+        """
+        يُحدّث نص الـ empty state بعد تغيير اللغة.
+        يستخدم set_title() من EmptyState مباشرة (أسرع وأوضح من findChildren).
+        """
+        translated = _tr_safe(self.EMPTY_TITLE)
+        try:
+            self._empty_state.set_title(translated)
+        except Exception:
+            pass
+
+    def _update_pagination_texts(self):
+        """يُحدّث نصوص أزرار الـ pagination بعد تغيير اللغة."""
+        try:
+            if self._pagination_bar.isVisible():
+                shown = self._shown_count
+                total = len(self._page_rows)
+                self._update_pagination_bar(total, shown)
+        except Exception:
+            pass
 
     # ── [تحسين 51] Pagination bar ─────────────────────────
 
@@ -478,17 +588,7 @@ class BaseListPanel(QWidget, BusConnectedMixin):
 
     def select_item(self, item_id: int):
         """
-        يحدد العنصر بالـ ID المعطى في الجدول.
-
-        [تحسين 17] البحث الذكي مع Pagination:
-
-        الخطوة 1: ابحث في الصفوف الظاهرة حالياً (O(n) Qt items).
-        الخطوة 2: لو مش موجود والـ pagination مفعّل → ابحث في _page_rows
-                  (O(n) في Python بدون إنشاء Qt widgets).
-                  لو وجده → حمّل الصفوف حتى موقعه فقط (بدل الكل).
-        الخطوة 3: Fallback → حمّل الكل كحل أخير.
-
-        هذا أفضل من الـ _on_show_all() مباشرة مع بيانات كبيرة (>10,000 صف).
+        [تحسين 17] البحث الذكي مع Pagination.
         """
         # الخطوة 1: ابحث في الصفوف الظاهرة
         for r in range(self.table.rowCount()):
@@ -502,7 +602,6 @@ class BaseListPanel(QWidget, BusConnectedMixin):
         if not (self.PAGINATE and self._shown_count < len(self._page_rows)):
             return
 
-        # [تحسين 17] ابحث عن موقع العنصر في _page_rows أولاً
         target_index = None
         for i, row_data in enumerate(self._page_rows):
             if row_data.get("id") == item_id:
@@ -510,17 +609,12 @@ class BaseListPanel(QWidget, BusConnectedMixin):
                 break
 
         if target_index is None:
-            # العنصر مش موجود في البيانات المفلترة أصلاً
             return
 
         if target_index < self._shown_count:
-            # موجود في النطاق المحمّل لكن مش موجود في الجدول (حالة نادرة)
-            # → حمّل الكل كـ fallback
             self._on_show_all()
         else:
-            # [تحسين 17] حمّل الصفوف حتى هذا العنصر فقط (بدل الكل)
-            # نحسب عدد الدفعات المطلوبة
-            end_needed = target_index + 1  # نحتاج على الأقل حتى هذا الـ index
+            end_needed = target_index + 1
 
             batch = self._page_rows[self._shown_count:end_needed]
             if batch:
@@ -537,7 +631,6 @@ class BaseListPanel(QWidget, BusConnectedMixin):
                 self._auto_resize()
                 self._table_guard.refresh()
 
-        # الآن ابحث مرة أخرى في الجدول
         for r in range(self.table.rowCount()):
             item = self.table.item(r, 0)
             if item and item.data(Qt.UserRole) == item_id:
@@ -587,15 +680,12 @@ class BaseListPanel(QWidget, BusConnectedMixin):
     # ── [تحسين 51] Pagination API ─────────────────────────
 
     def reset_pagination(self):
-        """يعيد ضبط الـ pagination ويرجع للصفحة الأولى."""
         self._apply_filter()
 
     @property
     def total_rows(self) -> int:
-        """إجمالي الصفوف المفلترة (كل الصفحات)."""
         return len(self._page_rows)
 
     @property
     def shown_rows(self) -> int:
-        """عدد الصفوف الظاهرة حالياً في الجدول."""
         return self._shown_count

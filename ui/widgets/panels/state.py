@@ -8,11 +8,10 @@ ui/widgets/panels/state.py
   set_table_empty_state   — صف رسالة داخل الجدول
   clear_table_empty_state — مسح صف الرسالة
 
-[تحسين 6] EmptyState._build:
-  - get_font_size() تُستدعى مرة واحدة وتُخزّن في متغير محلي `base`
-    بدل استدعاءات متعددة في نفس الدالة.
-  - التحسين بسيط لكن يُحسّن وضوح الكود ويُقلل الاستدعاءات المتكررة.
-  - الأثر الفعلي على الأداء ضعيف (get_font_size مخزّنة) لكن النمط أنظف.
+[تحسين 6 محفوظ] get_font_size() تُستدعى مرة واحدة.
+
+[i18n/themes] EmptyState تحفظ reference للـ title label (_lbl_title)
+لتحديثه مباشرة عند تغيير اللغة بدون إعادة بناء الـ widget.
 """
 
 from PyQt5.QtWidgets import (
@@ -36,6 +35,9 @@ class EmptyState(QFrame):
 
     expandable=True → يتمدد ليملأ المساحة.
     expandable=False (افتراضي) → حجم ثابت حسب المحتوى.
+
+    [i18n/themes] يحفظ reference للـ title label في _lbl_title
+    لتحديثه مباشرة من الخارج عند تغيير اللغة.
     """
 
     action_clicked = pyqtSignal()
@@ -48,7 +50,7 @@ class EmptyState(QFrame):
                  parent=None):
         super().__init__(parent)
         self._expandable = expandable
-        # ← استخدام _C بدل hardcoded fallback
+        self._lbl_title  = None   # [i18n/themes] reference للـ title label
         _color = color or _C['text_muted']
         self._build(icon, title, subtitle, action_text, style, _color, min_height)
 
@@ -96,6 +98,9 @@ class EmptyState(QFrame):
         )
         lay.addWidget(lbl_title)
 
+        # [i18n/themes] حفظ reference للـ title label
+        self._lbl_title = lbl_title
+
         if subtitle:
             lbl_sub = QLabel(subtitle)
             lbl_sub.setAlignment(Qt.AlignCenter)
@@ -114,6 +119,20 @@ class EmptyState(QFrame):
                 btn.setFixedWidth(140)
             btn.clicked.connect(self.action_clicked.emit)
             lay.addWidget(btn, alignment=Qt.AlignCenter)
+
+    def set_title(self, text: str):
+        """
+        [i18n/themes] يُحدّث نص العنوان مباشرة.
+        يُستخدم من _on_language_changed() في الـ panels.
+        """
+        if self._lbl_title is not None:
+            self._lbl_title.setText(text)
+
+    def title(self) -> str:
+        """يرجع النص الحالي للعنوان."""
+        if self._lbl_title is not None:
+            return self._lbl_title.text()
+        return ""
 
 
 # ── alias للتوافق مع الكود القديم ─────────────────────────
@@ -139,7 +158,6 @@ def set_table_empty_state(table: QTableWidget,
                            icon: str = "📋",
                            color: str = None):
     """يضيف صفاً واحداً يعرض رسالة فارغة في الجدول."""
-    # ← استخدام _C بدل hardcoded "#9ca3af"
     _color = color or _C['text_muted']
     table.setRowCount(1)
     table.setRowHeight(0, 60)
