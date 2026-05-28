@@ -2,6 +2,10 @@
 db/accounting/accounting_journal_repo.py
 ==============================
 عمليات CRUD لجداول journal_entries و journal_lines.
+
+إصلاح 29: إضافة fetch_entries_count() و fetch_all_entries_paginated()
+لمنع قطع البيانات بصمت عند limit=200.
+الـ UI يستخدم fetch_entries_count() لإظهار "يعرض X من أصل Y".
 """
 
 from datetime import datetime
@@ -26,7 +30,14 @@ def next_ref_no(conn) -> str:
 # قراءة القيود
 # ══════════════════════════════════════════════════════════
 
-def fetch_all_entries(conn, limit: int = 200):
+def fetch_all_entries(conn, limit: int = 200) -> list:
+    """
+    يجلب آخر القيود بحد أقصى limit.
+
+    إصلاح 29: استخدم fetch_entries_count() في الـ UI لمعرفة إجمالي القيود
+    وإظهار "يعرض X من أصل Y" لو كان الإجمالي أكبر من limit.
+    للفلترة والـ pagination الكامل استخدم fetch_all_entries_paginated().
+    """
     try:
         return conn.execute("""
             SELECT je.id, je.ref_no, je.date, je.description,
@@ -37,6 +48,95 @@ def fetch_all_entries(conn, limit: int = 200):
             ORDER BY je.date DESC, je.id DESC
             LIMIT ?
         """, (limit,)).fetchall()
+    except Exception:
+        return []
+
+
+def fetch_entries_count(conn) -> int:
+    """
+    [إصلاح 29] يرجع إجمالي عدد القيود في قاعدة البيانات.
+
+    يُستخدم في الـ UI جنباً إلى جنب مع fetch_all_entries() لإظهار
+    "يعرض 200 من أصل X" عند وجود قيود أكثر من الـ limit.
+
+    مثال:
+        total   = fetch_entries_count(conn)
+        entries = fetch_all_entries(conn, limit=200)
+        if total > len(entries):
+            label.setText(f"يعرض {len(entries)} من أصل {total} قيد")
+    """
+    try:
+        row = conn.execute(
+            "SELECT COUNT(*) as c FROM journal_entries"
+        ).fetchone()
+        return row["c"] if row else 0
+    except Exception:
+        return 0
+
+
+def fetch_all_entries_paginated(conn,
+                                limit: int = 200,
+                                offset: int = 0,
+                                date_from: str = None,
+                                date_to: str = None,
+                                search: str = None,
+                                entry_type: str = None) -> list:
+    """
+    [إصلاح 29] يجلب القيود مع دعم pagination وفلترة متكاملة.
+    بديل أفضل من fetch_all_entries(limit=200) الذي يقطع البيانات بصمت.
+
+    Parameters:
+        limit      : عدد النتائج في الصفحة (default 200)
+        offset     : بداية الصفحة (default 0)
+        date_from  : فلتر من تاريخ (YYYY-MM-DD)
+        date_to    : فلتر إلى تاريخ (YYYY-MM-DD)
+        search     : بحث في ref_no أو description
+        entry_type : فلتر نوع القيد (manual, purchase, sale, ...)
+
+    مثال الاستخدام في الـ UI:
+        PAGE = 200
+        page = 0   # رقم الصفحة الحالية
+
+        total   = fetch_entries_count(conn)
+        entries = fetch_all_entries_paginated(conn, limit=PAGE, offset=page * PAGE)
+
+        # إظهار label التنقل
+        start = page * PAGE + 1
+        end   = start + len(entries) - 1
+        label.setText(f"يعرض {start}–{end} من أصل {total} قيد")
+
+        # زر "الصفحة التالية" متاح لو:
+        has_next = (page + 1) * PAGE < total
+    """
+    conditions, params = [], []
+
+    if date_from:
+        conditions.append("je.date >= ?")
+        params.append(date_from)
+    if date_to:
+        conditions.append("je.date <= ?")
+        params.append(date_to)
+    if entry_type:
+        conditions.append("je.type = ?")
+        params.append(entry_type)
+    if search:
+        conditions.append("(je.ref_no LIKE ? OR je.description LIKE ?)")
+        q = f"%{search}%"
+        params.extend([q, q])
+
+    where_clause = ("WHERE " + " AND ".join(conditions)) if conditions else ""
+
+    try:
+        return conn.execute(f"""
+            SELECT je.id, je.ref_no, je.date, je.description,
+                   je.type, je.status, je.notes, je.created_at,
+                   (SELECT COALESCE(SUM(debit),0)  FROM journal_lines WHERE entry_id=je.id) AS total_debit,
+                   (SELECT COALESCE(SUM(credit),0) FROM journal_lines WHERE entry_id=je.id) AS total_credit
+            FROM journal_entries je
+            {where_clause}
+            ORDER BY je.date DESC, je.id DESC
+            LIMIT ? OFFSET ?
+        """, params + [limit, offset]).fetchall()
     except Exception:
         return []
 
