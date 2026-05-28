@@ -1,5 +1,5 @@
 File Tree Snapshot
-Generated : 2026-05-28 08:18:23
+Generated : 2026-05-28 08:23:59
 Source    : D:\My Workspace\Hg\Alhabaar\accountant\system
 Extensions: .py
 ────────────────────────────────────────────────────────────
@@ -307,7 +307,8 @@ system/
 │   │   ├── core/
 │   │   │   ├── colors.py
 │   │   │   ├── conn.py
-│   │   │   └── events.py
+│   │   │   ├── events.py
+│   │   │   └── guard.py
 │   │   ├── dialogs/
 │   │   │   ├── base.py
 │   │   │   ├── confirm.py
@@ -325,6 +326,7 @@ system/
 │   │   │   ├── rebuild.py
 │   │   │   ├── refresh.py
 │   │   │   ├── select.py
+│   │   │   ├── service.py
 │   │   │   ├── shared_ops.py
 │   │   │   └── validate.py
 │   │   ├── panels/

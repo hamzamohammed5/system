@@ -564,8 +564,13 @@ def apply_font(app: QApplication, size: int = None):
     if size is None:
         size = get_font_size()
     size = max(MIN_FONT_SIZE, min(MAX_FONT_SIZE, size))
-    # امسح الـ cache عند تغيير الحجم — الحجم الجديد سيُبنى عند أول استدعاء
-    _ss_cache.clear()
+ 
+    # [تحسين 15] لو نفس الـ size موجود في الـ cache، لا تمسحه
+    # هذا يمنع double-build لو استُدعيت apply_font مرتين بنفس الـ size
+    # (يحدث مثلاً لو settings dialog يحفظ نفس الحجم)
+    if size not in _ss_cache:
+        _ss_cache.clear()
+ 
     from ui.app_state import AppState
     AppState.on_font_changed(size)
     app.setStyleSheet(_build_stylesheet(size))
