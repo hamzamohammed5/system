@@ -3,6 +3,13 @@ services/accounting/journal_service.py
 ========================================
 Business Logic للقيود المحاسبية.
 
+إصلاح 35: مزامنة الـ imports مع الدوال الفعلية في accounting_journal_repo:
+  - insert_journal_entry → insert_entry
+  - insert_journal_line  → add_entry_lines (batch)
+  - update_journal_entry → update_entry (أُضيفت في repo)
+  - delete_journal_lines → دالة مساعدة داخلية
+  - delete_journal_entry → delete_entry
+
 الاستخدام:
     from services.accounting.journal_service import JournalService
     svc = JournalService(conn)
@@ -104,6 +111,9 @@ class JournalService:
     """
     Business Logic للقيود المحاسبية.
     يدير: إنشاء / تعديل / حذف / عكس القيود + حساب الأرصدة.
+
+    إصلاح 35: كل الـ imports مزامَنة مع الأسماء الفعلية في accounting_journal_repo:
+      insert_entry, add_entry_lines, delete_entry, fetch_entry, fetch_entry_lines
     """
 
     def __init__(self, conn):
@@ -166,8 +176,8 @@ class JournalService:
             SELECT
                 a.id,
                 a.name,
-                COALESCE(SUM(jl.dr), 0) AS total_dr,
-                COALESCE(SUM(jl.cr), 0) AS total_cr
+                COALESCE(SUM(jl.debit),  0) AS total_dr,
+                COALESCE(SUM(jl.credit), 0) AS total_cr
             FROM journal_lines jl
             JOIN journal_entries je ON je.id = jl.entry_id
             JOIN accounts a ON a.id = jl.account_id
@@ -176,7 +186,6 @@ class JournalService:
         """, params).fetchone()
 
         if not row:
-            # الحساب موجود بس ما فيش حركات
             acc = self._conn.execute(
                 "SELECT id, name FROM accounts WHERE id=?",
                 (account_id,)
@@ -208,8 +217,9 @@ class JournalService:
             "description": str,
             "ref":         str,   ← اختياري
         }
+
+        [إصلاح 35] يستخدم insert_entry + add_entry_lines (الأسماء الفعلية).
         """
-        # تحقق من الصفوف
         errors = self.validate_lines(lines)
         if errors:
             raise ValueError("\n".join(errors))
@@ -222,27 +232,31 @@ class JournalService:
         if not desc:
             raise ValueError("وصف القيد مطلوب")
 
+        # [إصلاح 35] الأسماء الفعلية في accounting_journal_repo
         from db.accounting.accounting_journal_repo import (
-            insert_journal_entry,
-            insert_journal_line,
+            insert_entry,
+            add_entry_lines,
         )
 
-        entry_id = insert_journal_entry(
+        entry_id = insert_entry(
             self._conn,
             date        = date,
             description = desc,
-            ref         = ref,
+            entry_type  = entry_data.get("entry_type", "manual"),
+            notes       = entry_data.get("notes"),
         )
 
-        for line in lines:
-            insert_journal_line(
-                self._conn,
-                entry_id   = entry_id,
-                account_id = line.account_id,
-                dr         = line.dr,
-                cr         = line.cr,
-                note       = line.note,
-            )
+        # تحويل JournalLine → dict format لـ add_entry_lines
+        lines_dicts = [
+            {
+                "account_id":  line.account_id,
+                "debit":       line.dr,
+                "credit":      line.cr,
+                "description": line.note,
+            }
+            for line in lines
+        ]
+        add_entry_lines(self._conn, entry_id, lines_dicts)
 
         balance = self.check_balance(lines)
         return EntryResult(
@@ -259,39 +273,41 @@ class JournalService:
         """
         يحدث قيد موجود — بيمسح الصفوف القديمة ويكتب الجديدة.
         بيتحقق إن القيد مش مقفول.
+
+        [إصلاح 35] يستخدم الدوال الفعلية بدل update_journal_entry / delete_journal_lines.
         """
         entry = self._get_entry_or_raise(entry_id)
-        if entry.get("is_locked"):
-            raise ValueError("القيد مقفول ولا يمكن تعديله")
+        if entry.get("status") == "reversed":
+            raise ValueError("القيد مُعكوس ولا يمكن تعديله")
 
         errors = self.validate_lines(lines)
         if errors:
             raise ValueError("\n".join(errors))
 
-        from db.accounting.accounting_journal_repo import (
-            update_journal_entry,
-            delete_journal_lines,
-            insert_journal_line,
-        )
+        # [إصلاح 35] تحديث القيد يدوياً (update_journal_entry غير موجودة في repo)
+        date = entry_data.get("date") or entry["date"]
+        desc = entry_data.get("description", "").strip() or entry["description"]
 
-        update_journal_entry(
-            self._conn,
-            entry_id    = entry_id,
-            date        = entry_data.get("date"),
-            description = entry_data.get("description", "").strip(),
-            ref         = entry_data.get("ref", "").strip(),
+        self._conn.execute(
+            "UPDATE journal_entries SET date=?, description=? WHERE id=?",
+            (date, desc, entry_id)
         )
+        self._conn.commit()
 
-        delete_journal_lines(self._conn, entry_id)
-        for line in lines:
-            insert_journal_line(
-                self._conn,
-                entry_id   = entry_id,
-                account_id = line.account_id,
-                dr         = line.dr,
-                cr         = line.cr,
-                note       = line.note,
-            )
+        # حذف الصفوف القديمة ثم إضافة الجديدة
+        self._delete_entry_lines(entry_id)
+
+        from db.accounting.accounting_journal_repo import add_entry_lines
+        lines_dicts = [
+            {
+                "account_id":  line.account_id,
+                "debit":       line.dr,
+                "credit":      line.cr,
+                "description": line.note,
+            }
+            for line in lines
+        ]
+        add_entry_lines(self._conn, entry_id, lines_dicts)
 
         balance = self.check_balance(lines)
         return EntryResult(
@@ -312,28 +328,25 @@ class JournalService:
         """
         entry = self._get_entry_or_raise(entry_id)
 
-        # جيب صفوف القيد الأصلي
-        lines_rows = self._conn.execute(
-            "SELECT account_id, dr, cr, note "
-            "FROM journal_lines WHERE entry_id=?",
-            (entry_id,)
-        ).fetchall()
+        # [إصلاح 35] يستخدم fetch_entry_lines (الاسم الفعلي)
+        from db.accounting.accounting_journal_repo import fetch_entry_lines
+        lines_rows = fetch_entry_lines(self._conn, entry_id)
 
         if not lines_rows:
             raise ValueError("القيد لا يحتوي على صفوف")
 
-        # اعكس DR و CR
+        # اعكس debit و credit
         reversed_lines = [
             JournalLine(
                 account_id = r["account_id"],
-                dr         = r["cr"],   # الدائن يصبح مدين
-                cr         = r["dr"],   # المدين يصبح دائن
-                note       = r["note"],
+                dr         = r["credit"],   # الدائن يصبح مدين
+                cr         = r["debit"],    # المدين يصبح دائن
+                note       = r["description"] or "",
             )
             for r in lines_rows
         ]
 
-        desc = f"عكس القيد #{entry_id}"
+        desc = f"عكس القيد رقم {entry.get('ref_no', entry_id)}"
         if note:
             desc += f" — {note}"
 
@@ -341,7 +354,7 @@ class JournalService:
             entry_data = {
                 "date":        datetime.now().strftime("%Y-%m-%d"),
                 "description": desc,
-                "ref":         entry.get("ref", ""),
+                "entry_type":  "manual",
             },
             lines = reversed_lines,
         )
@@ -352,7 +365,7 @@ class JournalService:
                            entry_id: int) -> DeletePreview | None:
         """يرجع معلومات الحذف قبل التنفيذ."""
         entry = self._conn.execute(
-            "SELECT id, description, is_locked "
+            "SELECT id, ref_no, description, status "
             "FROM journal_entries WHERE id=?",
             (entry_id,)
         ).fetchone()
@@ -360,38 +373,39 @@ class JournalService:
         if not entry:
             return None
 
-        ref       = entry["description"] or f"#{entry_id}"
-        is_locked = bool(entry["is_locked"])
+        ref       = entry["ref_no"] or entry["description"] or f"#{entry_id}"
+        is_posted = entry["status"] == "posted"
 
-        if is_locked:
+        # القيود المعكوسة لا يمكن حذفها
+        if entry["status"] == "reversed":
             return DeletePreview(
                 entry_id   = entry_id,
                 entry_ref  = ref,
-                is_posted  = True,
+                is_posted  = is_posted,
                 can_delete = False,
-                reason     = "القيد مقفول",
+                reason     = "القيد مُعكوس",
             )
 
         return DeletePreview(
             entry_id   = entry_id,
             entry_ref  = ref,
-            is_posted  = False,
+            is_posted  = is_posted,
             can_delete = True,
         )
 
     def delete(self, entry_id: int) -> bool:
         """
         يحذف القيد وكل صفوفه.
-        يرجع True لو نجح، False لو مقفول.
+        يرجع True لو نجح، False لو مقفول/معكوس.
+
+        [إصلاح 35] يستخدم delete_entry (الاسم الفعلي).
         """
         preview = self.get_delete_preview(entry_id)
         if not preview or not preview.can_delete:
             return False
 
-        from db.accounting.accounting_journal_repo import (
-            delete_journal_entry
-        )
-        delete_journal_entry(self._conn, entry_id)
+        from db.accounting.accounting_journal_repo import delete_entry
+        delete_entry(self._conn, entry_id)
         return True
 
     # ── Helpers ───────────────────────────────────────────
@@ -404,3 +418,14 @@ class JournalService:
         if not row:
             raise ValueError(f"القيد {entry_id} غير موجود")
         return row
+
+    def _delete_entry_lines(self, entry_id: int) -> None:
+        """
+        [إصلاح 35] دالة مساعدة داخلية لحذف صفوف القيد.
+        بديل عن delete_journal_lines الغير موجودة في repo.
+        journal_lines لديها CASCADE على entry_id، لكن نستخدم DELETE المباشر.
+        """
+        self._conn.execute(
+            "DELETE FROM journal_lines WHERE entry_id=?", (entry_id,)
+        )
+        self._conn.commit()

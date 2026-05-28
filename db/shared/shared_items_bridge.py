@@ -3,27 +3,12 @@ db/shared/shared_items_bridge.py
 =================================
 جسر العناصر المشتركة — يقرأ من companies.db مباشرة ويدمجها مع erp.db.
 
-إصلاح 6: _get_erp_conn() يتحقق من is_ready قبل الاستدعاء
-لإعطاء رسالة خطأ واضحة بدل exception غامض.
+إصلاح 6:  _get_erp_conn() يتحقق من is_ready قبل الاستدعاء.
+إصلاح 33: استبدال _decode/_encode المحلية بـ decode_json/encode_json من json_utils.
 """
 
-import json
 from typing import Optional
-
-
-# ══════════════════════════════════════════════════════════
-# مساعدات JSON
-# ══════════════════════════════════════════════════════════
-
-def _decode(data_str: str) -> dict:
-    try:
-        return json.loads(data_str) if data_str else {}
-    except Exception:
-        return {}
-
-
-def _encode(data: dict) -> str:
-    return json.dumps(data, ensure_ascii=False)
+from db.shared.json_utils import decode_json, encode_json
 
 
 # ══════════════════════════════════════════════════════════
@@ -43,19 +28,12 @@ class SharedItemsBridge:
         self.company_id = company_id
 
     def _get_central_conn(self):
-        """
-        يفتح connection جديد لـ companies.db.
-        يُستخدم داخلياً فقط لو لم يُمرَّر _conn من الخارج.
-        """
         from db.companies.companies_schema import get_central_connection
         return get_central_connection()
 
     def _get_erp_conn(self):
         """
-        يرجع erp connection للشركة الحالية (shared — لا تُغلقه).
-
-        [إصلاح 6] يتحقق من is_ready قبل الاستدعاء
-        لإعطاء رسالة خطأ واضحة بدل RuntimeError غامض.
+        [إصلاح 6] يتحقق من is_ready قبل الاستدعاء.
         """
         from db.companies.company_state import company_state
         if not company_state.is_ready:
@@ -70,12 +48,6 @@ class SharedItemsBridge:
 
     def fetch_shared_items_for_type(self, shared_type: str,
                                      _conn=None) -> list:
-        """
-        يجيب العناصر المشتركة التي الشركة الحالية مشتركة فيها.
-        كل عنصر يرجع كـ dict يشبه صف items لسهولة الاستخدام.
-
-        _conn: connection اختياري — لو None بيفتح/يقفل تلقائياً.
-        """
         owned = _conn is None
         conn  = _conn or self._get_central_conn()
         try:
@@ -89,7 +61,8 @@ class SharedItemsBridge:
 
             result = []
             for row in rows:
-                d    = _decode(row["data"])
+                # [إصلاح 33] decode_json بدل _decode المحلية
+                d    = decode_json(row["data"])
                 item = self._row_to_item(row, d, shared_type)
                 result.append(item)
             return result
@@ -101,7 +74,6 @@ class SharedItemsBridge:
                 conn.close()
 
     def _row_to_item(self, row, data: dict, shared_type: str) -> dict:
-        """يحول صف shared_items إلى dict يشبه صف items."""
         base = {
             "id":             f"shared:{row['id']}",
             "shared_item_id": row["id"],
@@ -133,20 +105,13 @@ class SharedItemsBridge:
     # ══════════════════════════════════════════════════════
 
     def fetch_items_by_type_with_shared(self, item_type: str) -> list:
-        """
-        يجيب عناصر النوع المطلوب (محلية + مشتركة).
-        العناصر المشتركة تأتي في آخر القائمة تحت تصنيف "🔗 مشترك".
-        """
         from db.shared.items_repo import fetch_items_by_type
         erp = self._get_erp_conn()
         local_items = [dict(r) for r in fetch_items_by_type(erp, item_type)]
-
         shared_items = self.fetch_shared_items_for_type(item_type)
-
         return local_items + shared_items
 
     def fetch_all_with_shared(self, item_type: str) -> list:
-        """نفس fetch_items_by_type_with_shared — alias."""
         return self.fetch_items_by_type_with_shared(item_type)
 
     # ══════════════════════════════════════════════════════
@@ -156,11 +121,6 @@ class SharedItemsBridge:
     def fetch_shared_item_as_row(self, shared_item_id: int,
                                   shared_type: str = None,
                                   _conn=None) -> Optional[dict]:
-        """
-        يجيب عنصر مشترك واحد كـ dict.
-
-        _conn: connection اختياري — لو None بيفتح/يقفل تلقائياً.
-        """
         owned = _conn is None
         conn  = _conn or self._get_central_conn()
         try:
@@ -171,7 +131,8 @@ class SharedItemsBridge:
             ).fetchone()
             if not row:
                 return None
-            d = _decode(row["data"])
+            # [إصلاح 33] decode_json بدل _decode المحلية
+            d = decode_json(row["data"])
             return self._row_to_item(row, d, shared_type or row["shared_type"])
         except Exception:
             return None
@@ -188,9 +149,10 @@ class SharedItemsBridge:
         owned = _conn is None
         conn  = _conn or self._get_central_conn()
         try:
+            # [إصلاح 33] encode_json بدل _encode المحلية
             conn.execute(
                 "UPDATE shared_items SET name=?, data=?, updated_at=datetime('now') WHERE id=?",
-                (name, _encode(data), shared_item_id)
+                (name, encode_json(data), shared_item_id)
             )
             conn.commit()
         finally:
@@ -278,7 +240,6 @@ class SharedItemsBridge:
 
     def calc_shared_raw_unit_price(self, shared_item_id: int,
                                     _conn=None) -> float:
-        """يحسب سعر وحدة الخامة المشتركة."""
         item = self.fetch_shared_item_as_row(shared_item_id, "raw", _conn=_conn)
         if not item:
             return 0.0
@@ -294,7 +255,6 @@ class SharedItemsBridge:
 # ══════════════════════════════════════════════════════════
 
 def get_bridge() -> Optional[SharedItemsBridge]:
-    """يرجع bridge للشركة النشطة حالياً."""
     try:
         from db.companies.company_state import company_state
         if not company_state.is_ready:
@@ -305,12 +265,10 @@ def get_bridge() -> Optional[SharedItemsBridge]:
 
 
 def is_shared_id(item_id) -> bool:
-    """هل الـ id ده لعنصر مشترك؟"""
     return isinstance(item_id, str) and item_id.startswith("shared:")
 
 
 def extract_shared_id(item_id) -> Optional[int]:
-    """يستخرج الـ shared_item_id من الـ composite id."""
     if is_shared_id(item_id):
         try:
             return int(item_id.split(":")[1])

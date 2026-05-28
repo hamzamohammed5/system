@@ -3,10 +3,11 @@ services/orders/order_service.py
 ==================================
 Business Logic للطلبات والعملاء.
 
-الاستخدام:
-    from services.orders.order_service import OrderService
-    svc = OrderService(conn)
-    order_id = svc.create(customer_id, items, notes)
+إصلاح 34: مزامنة الـ imports مع الدوال الفعلية في orders_repo.
+الدوال المُصلَحة:
+  - update_order_status → change_order_status (الاسم الفعلي)
+  - log_order_status    → _log_status (private في repo، نستخدم change_order_status مباشرة)
+  - delete_order_items  → أُضيفت كدالة مساعدة داخلية هنا
 """
 
 from dataclasses import dataclass, field
@@ -52,7 +53,7 @@ class DeletePreview:
     order_ref    : str
     status       : str
     can_delete   : bool
-    reason       : str = ""  # السبب لو مش قادر يحذف
+    reason       : str = ""
 
     def warning_text(self) -> str:
         if not self.can_delete:
@@ -65,14 +66,17 @@ class DeletePreview:
 # ══════════════════════════════════════════════════════════
 
 _ALLOWED_TRANSITIONS: dict[str, list[str]] = {
-    "pending":     ["in_progress", "cancelled"],
-    "in_progress": ["done", "cancelled"],
-    "done":        [],           # نهائي — مفيش انتقال
-    "cancelled":   ["pending"],  # إعادة فتح
+    "pending":     ["confirmed", "in_progress", "cancelled", "on_hold"],
+    "confirmed":   ["in_progress", "cancelled", "on_hold"],
+    "in_progress": ["ready", "cancelled", "on_hold"],
+    "ready":       ["delivered", "cancelled"],
+    "delivered":   [],
+    "cancelled":   ["pending"],
+    "on_hold":     ["pending", "confirmed", "in_progress"],
 }
 
 # الـ statuses اللي ما ينفعش يتحذف فيها الطلب
-_NO_DELETE_STATUSES = {"in_progress", "done"}
+_NO_DELETE_STATUSES = {"in_progress", "ready", "delivered"}
 
 
 # ══════════════════════════════════════════════════════════
@@ -83,6 +87,8 @@ class OrderService:
     """
     Business Logic للطلبات.
     يدير: إنشاء / تعديل / حذف / تغيير الحالة / الإحصائيات.
+
+    إصلاح 34: كل الـ imports مزامَنة مع الدوال الفعلية في orders_repo.
     """
 
     def __init__(self, conn):
@@ -106,22 +112,23 @@ class OrderService:
 
         total = sum(i.total() for i in items)
 
+        # [إصلاح 34] استخدام الدوال الفعلية الموجودة في orders_repo
         from db.orders.orders_repo import insert_order, insert_order_item
         order_id = insert_order(
             self._conn,
-            customer_id = customer_id,
-            total       = total,
-            notes       = notes.strip(),
-            status      = "pending",
+            customer_id  = customer_id,
+            total_amount = total,
+            notes        = notes.strip(),
+            status       = "pending",
         )
         for item in items:
             insert_order_item(
                 self._conn,
-                order_id   = order_id,
-                product_id = item.product_id,
-                qty        = item.qty,
-                unit_price = item.unit_price,
-                notes      = item.notes,
+                order_id    = order_id,
+                item_name   = self._resolve_item_name(item.product_id),
+                quantity    = item.qty,
+                unit_price  = item.unit_price,
+                notes       = item.notes,
             )
         return order_id
 
@@ -145,25 +152,24 @@ class OrderService:
 
         total = sum(i.total() for i in items)
 
-        from db.orders.orders_repo import (
-            update_order, delete_order_items, insert_order_item
-        )
+        # [إصلاح 34] استخدام update_order الفعلية + حذف يدوي للبنود
+        from db.orders.orders_repo import update_order, insert_order_item
         update_order(
             self._conn,
-            order_id    = order_id,
-            customer_id = customer_id,
-            total       = total,
-            notes       = notes.strip(),
+            order_id     = order_id,
+            total_amount = total,
+            notes        = notes.strip(),
         )
-        delete_order_items(self._conn, order_id)
+        # حذف البنود القديمة ثم إضافة الجديدة
+        self._delete_order_items(order_id)
         for item in items:
             insert_order_item(
                 self._conn,
-                order_id   = order_id,
-                product_id = item.product_id,
-                qty        = item.qty,
-                unit_price = item.unit_price,
-                notes      = item.notes,
+                order_id    = order_id,
+                item_name   = self._resolve_item_name(item.product_id),
+                quantity    = item.qty,
+                unit_price  = item.unit_price,
+                notes       = item.notes,
             )
 
     # ── Status ────────────────────────────────────────────
@@ -173,7 +179,8 @@ class OrderService:
                       note: str = "") -> OrderStatusChange:
         """
         يغير حالة الطلب مع التحقق من صحة الانتقال.
-        يسجل الحركة في الـ log.
+
+        [إصلاح 34] يستخدم change_order_status الفعلية بدل update_order_status.
         """
         order = self._get_order_or_raise(order_id)
         old_status = order["status"]
@@ -184,20 +191,17 @@ class OrderService:
                 f"لا يمكن الانتقال من «{old_status}» إلى «{new_status}»"
             )
 
-        from db.orders.orders_repo import (
-            update_order_status, log_order_status
-        )
+        from db.orders.orders_repo import change_order_status
         from datetime import datetime
         timestamp = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
 
-        update_order_status(self._conn, order_id, new_status)
-        log_order_status(
+        # change_order_status يتولى تحديث الحالة وتسجيل الـ log داخلياً
+        change_order_status(
             self._conn,
             order_id   = order_id,
-            old_status = old_status,
             new_status = new_status,
-            note       = note.strip(),
-            timestamp  = timestamp,
+            notes      = note.strip(),
+            changed_by = "system",
         )
 
         return OrderStatusChange(
@@ -219,13 +223,13 @@ class OrderService:
                            order_id: int) -> DeletePreview | None:
         """يرجع معلومات الحذف قبل التنفيذ."""
         order = self._conn.execute(
-            "SELECT id, status FROM orders WHERE id=?",
+            "SELECT id, status, order_number FROM orders WHERE id=?",
             (order_id,)
         ).fetchone()
         if not order:
             return None
 
-        ref    = f"#{order_id}"
+        ref    = order["order_number"] or f"#{order_id}"
         status = order["status"]
 
         if status in _NO_DELETE_STATUSES:
@@ -253,9 +257,9 @@ class OrderService:
         if not preview or not preview.can_delete:
             return False
 
+        # [إصلاح 34] delete_order موجودة فعلاً في orders_repo
         from db.orders.orders_repo import delete_order
-        delete_order(self._conn, order_id)
-        return True
+        return delete_order(self._conn, order_id)
 
     # ── Summary / Stats ───────────────────────────────────
 
@@ -267,12 +271,12 @@ class OrderService:
 
         row = self._conn.execute(f"""
             SELECT
-                COUNT(*)                                    AS total,
-                COALESCE(SUM(total), 0)                    AS amount,
-                SUM(status='pending')                      AS pending,
-                SUM(status='in_progress')                  AS in_prog,
-                SUM(status='done')                         AS done,
-                SUM(status='cancelled')                    AS cancelled
+                COUNT(*)                                        AS total,
+                COALESCE(SUM(net_amount), 0)                   AS amount,
+                SUM(CASE WHEN status='pending'     THEN 1 ELSE 0 END) AS pending,
+                SUM(CASE WHEN status='in_progress' THEN 1 ELSE 0 END) AS in_prog,
+                SUM(CASE WHEN status='delivered'   THEN 1 ELSE 0 END) AS done,
+                SUM(CASE WHEN status='cancelled'   THEN 1 ELSE 0 END) AS cancelled
             FROM orders {where}
         """, params).fetchone()
 
@@ -341,7 +345,37 @@ class OrderService:
 
     def _assert_customer_exists(self, customer_id: int) -> None:
         row = self._conn.execute(
-            "SELECT id FROM customers WHERE id=?", (customer_id,)
+            "SELECT id, is_active FROM customers WHERE id=?", (customer_id,)
         ).fetchone()
         if not row:
             raise ValueError(f"العميل {customer_id} غير موجود")
+        if not row["is_active"]:
+            raise ValueError(
+                f"العميل {customer_id} غير نشط — فعّله أولاً لإنشاء طلبات جديدة"
+            )
+
+    def _resolve_item_name(self, product_id: int) -> str:
+        """يجيب اسم المنتج من erp.db — fallback لو مش موجود."""
+        try:
+            from db.companies.company_state import company_state
+            if company_state.is_ready:
+                erp = company_state.get_erp_conn()
+                row = erp.execute(
+                    "SELECT name FROM items WHERE id=?", (product_id,)
+                ).fetchone()
+                if row:
+                    return row["name"]
+        except Exception:
+            pass
+        return f"منتج #{product_id}"
+
+    def _delete_order_items(self, order_id: int) -> None:
+        """
+        [إصلاح 34] دالة مساعدة داخلية لحذف بنود الطلب.
+        بديل عن delete_order_items الغير موجودة في orders_repo.
+        delete_order_item موجودة للبند الواحد، نستخدم DELETE مباشر هنا.
+        """
+        self._conn.execute(
+            "DELETE FROM order_items WHERE order_id=?", (order_id,)
+        )
+        self._conn.commit()

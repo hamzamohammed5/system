@@ -3,18 +3,10 @@ db/companies/shared_items_repo.py  (نسخة مُحدَّثة)
 ===================================
 إدارة العناصر المشتركة بين الشركات — نموذج موحّد.
 
-المبدأ:
-  - العناصر المشتركة مخزنة مركزياً في companies.db
-  - كل شركة مشتركة تقرأ البيانات مباشرة من المركزي
-  - أي تعديل يُطلق bus.data_changed → كل الجداول تتحدث فوراً
-  - لا نسخ محلية — نقرأ من companies.db دايماً
-
-الجداول في companies.db:
-  shared_items         — بيانات العنصر + data (JSON)
-  company_shared_links — ربط الشركات بالعناصر (company_id, shared_item_id)
+إصلاح 33: استبدال _decode/_encode المحلية بـ decode_json/encode_json من json_utils.
 """
 
-import json
+from db.shared.json_utils import decode_json, encode_json
 
 
 # ══════════════════════════════════════════════════════════
@@ -46,18 +38,12 @@ def create_shared_items_tables(conn):
 
 
 # ══════════════════════════════════════════════════════════
-# مساعدات الـ JSON
+# مساعدات الـ JSON — [إصلاح 33] من json_utils مباشرة
 # ══════════════════════════════════════════════════════════
 
-def _encode(data: dict) -> str:
-    return json.dumps(data, ensure_ascii=False)
-
-
-def _decode(data_str: str) -> dict:
-    try:
-        return json.loads(data_str) if data_str else {}
-    except Exception:
-        return {}
+# للتوافق مع أي كود داخلي يستدعيهم بالاسم القديم
+_decode = decode_json
+_encode = encode_json
 
 
 def _default_data(shared_type: str) -> dict:
@@ -78,7 +64,6 @@ def _default_data(shared_type: str) -> dict:
 # ══════════════════════════════════════════════════════════
 
 def fetch_all_shared_items(conn, shared_type: str = None) -> list:
-    """كل العناصر المشتركة — مفلترة بالنوع لو محدد."""
     if shared_type:
         return conn.execute(
             "SELECT id, name, shared_type, data, updated_at "
@@ -104,20 +89,16 @@ def insert_shared_item(conn, name: str, shared_type: str,
     d = data if data is not None else _default_data(shared_type)
     cur = conn.execute(
         "INSERT INTO shared_items (name, shared_type, data) VALUES (?, ?, ?)",
-        (name, shared_type, _encode(d))
+        (name, shared_type, encode_json(d))
     )
     conn.commit()
     return cur.lastrowid
 
 
 def update_shared_item(conn, item_id: int, name: str, data: dict):
-    """
-    يحدّث بيانات عنصر مشترك.
-    التغيير يُطبق فوراً على كل الشركات المشتركة (قراءة مباشرة من المركزي).
-    """
     conn.execute(
         "UPDATE shared_items SET name=?, data=?, updated_at=datetime('now') WHERE id=?",
-        (name, _encode(data), item_id)
+        (name, encode_json(data), item_id)
     )
     conn.commit()
 
@@ -132,7 +113,6 @@ def delete_shared_item(conn, item_id: int):
 # ══════════════════════════════════════════════════════════
 
 def fetch_linked_companies(conn, shared_item_id: int) -> list:
-    """الشركات المشتركة في عنصر معين."""
     return conn.execute(
         """SELECT c.id, c.name, c.color, lnk.linked_at
            FROM company_shared_links lnk
@@ -145,7 +125,6 @@ def fetch_linked_companies(conn, shared_item_id: int) -> list:
 
 def fetch_shared_items_for_company(conn, company_id: int,
                                     shared_type: str = None) -> list:
-    """العناصر المشتركة التي الشركة مشتركة فيها."""
     if shared_type:
         return conn.execute(
             """SELECT s.id, s.name, s.shared_type, s.data, s.updated_at
@@ -190,7 +169,6 @@ def unlink_company(conn, shared_item_id: int, company_id: int):
 
 
 def set_linked_companies(conn, shared_item_id: int, company_ids: list):
-    """يُعيّن الشركات المشتركة في عنصر (يحذف القديم ويضيف الجديد)."""
     conn.execute(
         "DELETE FROM company_shared_links WHERE shared_item_id=?",
         (shared_item_id,)
@@ -211,38 +189,20 @@ def get_item_data(conn, shared_item_id: int) -> dict:
     row = fetch_shared_item(conn, shared_item_id)
     if not row:
         return {}
-    return _decode(row["data"])
+    return decode_json(row["data"])
 
 
 def get_item_as_raw(conn, shared_item_id: int) -> dict | None:
-    """يرجع العنصر بصيغة تشبه صف items للخامة."""
     row = fetch_shared_item(conn, shared_item_id)
     if not row or row["shared_type"] != "raw":
         return None
-    d = _decode(row["data"])
-    return {
-        "id":           shared_item_id,
-        "name":         row["name"],
-        "type":         "raw",
-        "price":        d.get("price", 0.0),
-        "total_qty":    d.get("total_qty"),
-        "category_id":  None,
-        "category_name": "🔗 مشترك",
-        "is_shared":    True,
-        "shared_id":    shared_item_id,
-    }
-
-
-def get_item_as_machine(conn, shared_item_id: int) -> dict | None:
-    row = fetch_shared_item(conn, shared_item_id)
-    if not row or row["shared_type"] != "machine":
-        return None
-    d = _decode(row["data"])
+    d = decode_json(row["data"])
     return {
         "id":            shared_item_id,
         "name":          row["name"],
-        "rate_per_hour": d.get("rate_per_hour", 0.0),
-        "rate_per_unit": d.get("rate_per_unit", 0.0),
+        "type":          "raw",
+        "price":         d.get("price", 0.0),
+        "total_qty":     d.get("total_qty"),
         "category_id":   None,
         "category_name": "🔗 مشترك",
         "is_shared":     True,
@@ -250,17 +210,34 @@ def get_item_as_machine(conn, shared_item_id: int) -> dict | None:
     }
 
 
+def get_item_as_machine(conn, shared_item_id: int) -> dict | None:
+    row = fetch_shared_item(conn, shared_item_id)
+    if not row or row["shared_type"] != "machine":
+        return None
+    d = decode_json(row["data"])
+    return {
+        "id":             shared_item_id,
+        "name":           row["name"],
+        "rate_per_hour":  d.get("rate_per_hour", 0.0),
+        "rate_per_unit":  d.get("rate_per_unit", 0.0),
+        "category_id":    None,
+        "category_name":  "🔗 مشترك",
+        "is_shared":      True,
+        "shared_id":      shared_item_id,
+    }
+
+
 def get_item_as_labor_op(conn, shared_item_id: int) -> dict | None:
     row = fetch_shared_item(conn, shared_item_id)
     if not row or row["shared_type"] != "labor_op":
         return None
-    d = _decode(row["data"])
+    d = decode_json(row["data"])
     return {
-        "id":           shared_item_id,
-        "name":         row["name"],
-        "minutes":      d.get("minutes", 0.0),
-        "category_id":  None,
+        "id":            shared_item_id,
+        "name":          row["name"],
+        "minutes":       d.get("minutes", 0.0),
+        "category_id":   None,
         "category_name": "🔗 مشترك",
-        "is_shared":    True,
-        "shared_id":    shared_item_id,
+        "is_shared":     True,
+        "shared_id":     shared_item_id,
     }

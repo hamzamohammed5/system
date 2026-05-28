@@ -9,6 +9,12 @@ Singleton يحفظ الشركة النشطة حالياً.
     عند فشل أول query حقيقية (SQLite يرمي OperationalError)
   - إصلاح 12: set_active() يُبطل AppState cache تلقائياً بعد تغيير الشركة
   - validate() تبقى للتحقق الصريح من المسار (تُستدعى من set_active فقط)
+
+تحسين 42:
+  - _get_conn() لا يستدعي validate() (التي تنفذ PRAGMA) في كل access.
+  - بدلاً من ذلك يقارن _path المخزون على ProtectedConnection مباشرة.
+  - validate() أصبحت تُستدعى فقط عند الضرورة (تغيير الشركة).
+  - هذا يقلل overhead من O(PRAGMA + string compare) إلى O(string compare).
 """
 
 import sqlite3
@@ -23,11 +29,9 @@ class ProtectedConnection:
     - منع الإغلاق العرضي (close() = no-op)
     - إعادة الاتصال التلقائي الآمن (thread-safe) عند الحاجة
     - الإغلاق الحقيقي المؤقت فقط عبر real_close() مع السماح بالـ reconnect
-    - validate() للتحقق من صلاحية الـ connection (يُستخدم من set_active فقط)
+    - validate() للتحقق من صلاحية الـ connection (يُستدعى من set_active فقط)
 
-    إصلاح 4: _get_raw() تعيد الـ connection مباشرة لو موجود (fast-path)
-    بدون SELECT 1 — كل query فاشلة ستطلق reconnect تلقائياً.
-    هذا يقلل overhead من O(n) إلى O(1) لكل attribute access.
+    [تحسين 42]: _path محفوظ كـ attribute — يُقرأ مباشرة دون PRAGMA في hot path.
     """
 
     def __init__(self, path: str):
@@ -47,24 +51,20 @@ class ProtectedConnection:
 
     def _get_raw(self):
         """
-        [إصلاح 4] Fast-path: يرجع الـ connection مباشرة لو موجود.
+        Fast-path: يرجع الـ connection مباشرة لو موجود.
         لا يُجري SELECT 1 في كل استدعاء.
         لو الـ connection مات، أول query حقيقية ستفشل وتطلق reconnect.
         Slow-path (reconnect) يُستدعى فقط لو _raw = None.
         """
         raw = object.__getattribute__(self, '_raw')
         if raw is not None:
-            # fast-path: ثق في الـ connection المفتوح
             return raw
 
-        # slow-path: reconnect
         lock = object.__getattribute__(self, '_lock')
         with lock:
-            # double-check بعد الـ lock
             raw = object.__getattribute__(self, '_raw')
             if raw is not None:
                 return raw
-
             try:
                 self._open()
                 return object.__getattribute__(self, '_raw')
@@ -77,7 +77,6 @@ class ProtectedConnection:
     def _reconnect_after_error(self):
         """
         يُستدعى داخلياً عند فشل query — يُعيد فتح الـ connection.
-        يُستخدم من execute/executemany/executescript لضمان الاتساق.
         """
         lock = object.__getattribute__(self, '_lock')
         with lock:
@@ -96,11 +95,20 @@ class ProtectedConnection:
                     f"{object.__getattribute__(self, '_path')}\n{e}"
                 )
 
+    def path_matches(self, expected_path: str) -> bool:
+        """
+        [تحسين 42] يقارن المسار المخزون بالمسار المتوقع — بدون PRAGMA.
+        يُستدعى من _get_conn() في hot path بدل validate().
+        مقارنة string بسيطة: O(1) بدل PRAGMA + I/O.
+        """
+        stored_path = object.__getattribute__(self, '_path')
+        return (os.path.normcase(os.path.realpath(stored_path)) ==
+                os.path.normcase(os.path.realpath(expected_path)))
+
     def validate(self, expected_path: str) -> bool:
         """
-        يتحقق أن الـ connection فعلاً مفتوح على المسار المطلوب.
-        يُستخدم من _get_conn لتأكيد أن الـ connection للشركة الصحيحة.
-        ملاحظة: هذه الدالة تستدعي SELECT — لا تُستدعى في hot path.
+        يتحقق أن الـ connection فعلاً مفتوح على المسار المطلوب عبر PRAGMA.
+        [تحسين 42] لا يُستدعى في hot path — يُستخدم للتحقق الصريح فقط.
         """
         raw = object.__getattribute__(self, '_raw')
         if raw is None:
@@ -201,11 +209,11 @@ class CompanyState:
     """يحفظ حالة الشركة النشطة ويوفر connections لقواعد بياناتها."""
 
     def __init__(self):
-        self._company_id:    int | None = None
-        self._company_name:  str        = ""
-        self._company_color: str        = "#1565c0"
-        self._connections:   dict       = {}
-        self._state_lock                = threading.Lock()
+        self._company_id    : int | None = None
+        self._company_name  : str        = ""
+        self._company_color : str        = "#1565c0"
+        self._connections   : dict       = {}
+        self._state_lock                 = threading.Lock()
 
     @property
     def company_id(self) -> int | None:
@@ -227,12 +235,9 @@ class CompanyState:
         """
         تعيين الشركة النشطة.
 
-        [إصلاح v5] يتحقق أولاً إذا الملفات موجودة قبل تغيير الحالة.
         لو الشركة جديدة → يمسح connections القديمة فوراً.
         لو نفس الشركة → يحدث الاسم واللون فقط بدون مسح connections.
-
-        [إصلاح 12] يُبطل AppState cache بعد تغيير الشركة تلقائياً.
-        يُستدعى خارج الـ lock لتجنب deadlock مع PyQt signals.
+        يُبطل AppState cache بعد تغيير الشركة تلقائياً.
         """
         with self._state_lock:
             if self._company_id == company_id:
@@ -240,7 +245,6 @@ class CompanyState:
                 self._company_color = color or "#1565c0"
                 return
 
-            # شركة مختلفة — مسح الـ connections القديمة
             self._close_raw_connections_unsafe()
             self._connections.clear()
 
@@ -248,12 +252,12 @@ class CompanyState:
             self._company_name  = name
             self._company_color = color or "#1565c0"
 
-        # [إصلاح 12] خارج الـ lock — لتجنب deadlock مع PyQt signals
+        # خارج الـ lock — لتجنب deadlock مع PyQt signals
         try:
             from ui.app_state import AppState
             AppState.invalidate()
         except (ImportError, Exception):
-            pass  # db layer يعمل بدون ui layer
+            pass
 
     def clear(self):
         with self._state_lock:
@@ -278,16 +282,24 @@ class CompanyState:
         return self._get_conn("designs")
 
     def _get_conn(self, db_name: str) -> ProtectedConnection:
+        """
+        [تحسين 42] يستخدم path_matches() بدل validate() في hot path.
+
+        path_matches() = مقارنة string بسيطة: O(1)
+        validate()     = PRAGMA database_list + I/O: O(PRAGMA)
+
+        الفرق مهم عند استدعاء _get_conn في كل widget access.
+        """
         if not self._company_id:
             raise RuntimeError("لم يتم تحديد شركة نشطة بعد")
 
         with self._state_lock:
             conn = self._connections.get(db_name)
+            expected_path = get_company_db_path(self._company_id, db_name)
 
-            # تحقق أن الـ connection الموجود فعلاً للشركة الحالية
             if conn is not None:
-                expected_path = get_company_db_path(self._company_id, db_name)
-                if conn.validate(expected_path):
+                # [تحسين 42] path_matches() بدل validate() — بدون PRAGMA
+                if conn.path_matches(expected_path):
                     return conn
                 else:
                     # connection قديم لشركة مختلفة — أغلقه وأنشئ جديد
@@ -297,14 +309,13 @@ class CompanyState:
                         pass
                     del self._connections[db_name]
 
-            path = get_company_db_path(self._company_id, db_name)
-            if not os.path.exists(path):
+            if not os.path.exists(expected_path):
                 raise FileNotFoundError(
-                    f"ملف قاعدة البيانات غير موجود: {path}\n"
+                    f"ملف قاعدة البيانات غير موجود: {expected_path}\n"
                     f"تأكد من تهيئة الشركة أولاً."
                 )
 
-            conn = ProtectedConnection(path)
+            conn = ProtectedConnection(expected_path)
             self._connections[db_name] = conn
             return conn
 

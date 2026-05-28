@@ -2,10 +2,11 @@
 db/shared/items_repo.py
 ========================
 تحسين 11: fetch_shared_for_types() batch query بدل connection لكل نوع.
+إصلاح 33: استبدال json.loads/dumps المباشر بـ decode_json من json_utils.
 """
 
-import json
 import logging
+from db.shared.json_utils import decode_json
 
 logger = logging.getLogger(__name__)
 
@@ -31,7 +32,6 @@ def _get_bom_cols(conn) -> set:
 
 
 def invalidate_bom_cols_cache(conn=None):
-    """يمسح الـ cache — استدعه بعد أي migration يضيف أعمدة."""
     if conn is None:
         _bom_cols_cache.clear()
     else:
@@ -76,12 +76,8 @@ def fetch_items_by_type_with_shared(conn, item_type: str,
 
 
 def _fetch_shared_for_type(item_type: str, company_id: int = None) -> list:
-    """يجيب العناصر المشتركة من companies.db لنوع واحد."""
     try:
-        result = fetch_shared_for_types(
-            company_id=company_id,
-            types=[item_type]
-        )
+        result = fetch_shared_for_types(company_id=company_id, types=[item_type])
         return result.get(item_type, [])
     except Exception as e:
         logger.warning("[items_repo] _fetch_shared_for_type error: %s", e)
@@ -92,12 +88,6 @@ def fetch_shared_for_types(company_id: int = None,
                             types: list = None) -> dict:
     """
     [تحسين 11] يجيب العناصر المشتركة لأكثر من نوع في connection واحد.
-    بدل فتح/إغلاق connection لكل نوع على حدة.
-
-    مثال:
-        result = fetch_shared_for_types(company_id=1, types=["raw", "machine_op"])
-        raw_items    = result["raw"]
-        machine_items = result["machine_op"]
     """
     if not types:
         return {}
@@ -138,11 +128,12 @@ def fetch_shared_for_types(company_id: int = None,
 
 
 def _shared_row_to_item(row, item_type: str) -> dict:
-    """يحول صف shared_items إلى dict يشبه صف items."""
-    try:
-        data = json.loads(row["data"]) if row["data"] else {}
-    except Exception:
-        data = {}
+    """
+    يحول صف shared_items إلى dict يشبه صف items.
+    [إصلاح 33] يستخدم decode_json من json_utils بدل json.loads المحلي.
+    """
+    # decode_json آمنة — ترجع {} عند أي خطأ
+    data = decode_json(row["data"])
 
     base = {
         "id":             f"shared:{row['id']}",
@@ -221,10 +212,9 @@ def _fetch_shared_item_as_row(shared_item_id: int):
             central.close()
         if not row:
             return None
-        try:
-            data = json.loads(row["data"]) if row["data"] else {}
-        except Exception:
-            data = {}
+
+        # [إصلاح 33] decode_json بدل json.loads المباشر
+        data = decode_json(row["data"])
 
         return _SharedItemRow(
             id=f"shared:{row['id']}",
@@ -298,17 +288,11 @@ def delete_item(conn, item_id: int):
 
 def _resolve_name(conn, child_type: str, child_id: int) -> str | None:
     if child_type in ("raw", "semi"):
-        row = conn.execute(
-            "SELECT name FROM items WHERE id=?", (child_id,)
-        ).fetchone()
+        row = conn.execute("SELECT name FROM items WHERE id=?", (child_id,)).fetchone()
     elif child_type == "labor_op":
-        row = conn.execute(
-            "SELECT name FROM labor_ops WHERE id=?", (child_id,)
-        ).fetchone()
+        row = conn.execute("SELECT name FROM labor_ops WHERE id=?", (child_id,)).fetchone()
     elif child_type == "machine_op":
-        row = conn.execute(
-            "SELECT name FROM machine_ops WHERE id=?", (child_id,)
-        ).fetchone()
+        row = conn.execute("SELECT name FROM machine_ops WHERE id=?", (child_id,)).fetchone()
     else:
         return None
     return row["name"] if row else None
@@ -343,8 +327,7 @@ def insert_bom_row(conn, parent_id: int, child_type: str, child_id: int,
             """INSERT INTO bom
                (parent_id, child_type, child_id, qty, child_name, waste_pct, variant_id)
                VALUES (?, ?, ?, ?, ?, ?, ?)""",
-            (parent_id, child_type, child_id, qty, name,
-             waste_pct or 0.0, variant_id)
+            (parent_id, child_type, child_id, qty, name, waste_pct or 0.0, variant_id)
         )
     else:
         conn.execute(
@@ -408,17 +391,11 @@ def fetch_orphan_bom_rows(conn, parent_id: int) -> list[dict]:
         cid = row["child_id"]
 
         if ct in ("raw", "semi"):
-            exists = conn.execute(
-                "SELECT 1 FROM items WHERE id=?", (cid,)
-            ).fetchone()
+            exists = conn.execute("SELECT 1 FROM items WHERE id=?", (cid,)).fetchone()
         elif ct == "labor_op":
-            exists = conn.execute(
-                "SELECT 1 FROM labor_ops WHERE id=?", (cid,)
-            ).fetchone()
+            exists = conn.execute("SELECT 1 FROM labor_ops WHERE id=?", (cid,)).fetchone()
         elif ct == "machine_op":
-            exists = conn.execute(
-                "SELECT 1 FROM machine_ops WHERE id=?", (cid,)
-            ).fetchone()
+            exists = conn.execute("SELECT 1 FROM machine_ops WHERE id=?", (cid,)).fetchone()
         else:
             exists = True
 

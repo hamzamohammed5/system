@@ -2,22 +2,12 @@
 db/accounting/accounting_accounts_repo.py
 ===============================
 عمليات CRUD لجدول accounts وتصنيفاتها (account_groups).
+
+تحسين 38: fetch_all_accounts تستخدم LEFT JOIN + GROUP BY بدل correlated subquery
+لكل حساب. هذا يقلل عدد الـ queries من O(n) إلى O(1).
 """
 
 from datetime import datetime
-
-
-# ══════════════════════════════════════════════════════════
-# مساعد داخلي
-# ══════════════════════════════════════════════════════════
-
-def _balance_subquery(conn) -> str:
-    try:
-        conn.execute("SELECT 1 FROM journal_lines LIMIT 1")
-        return """(SELECT COALESCE(SUM(jl.debit)-SUM(jl.credit),0)
-                   FROM journal_lines jl WHERE jl.account_id = a.id)"""
-    except Exception:
-        return "0"
 
 
 # ══════════════════════════════════════════════════════════
@@ -25,30 +15,47 @@ def _balance_subquery(conn) -> str:
 # ══════════════════════════════════════════════════════════
 
 def fetch_all_accounts(conn, acc_type: str = None):
+    """
+    يجلب كل الحسابات مع أرصدتها.
+
+    [تحسين 38] يستخدم LEFT JOIN بدل correlated subquery لكل حساب.
+    هذا أسرع بكثير عند وجود حسابات وقيود كثيرة.
+
+    الـ query السابقة كانت تنفذ subquery منفصلة لكل حساب (O(n)).
+    الـ query الجديدة تجلب كل شيء دفعة واحدة (O(1) queries).
+    """
     try:
-        bal_sq = _balance_subquery(conn)
         if acc_type:
-            return conn.execute(f"""
+            return conn.execute("""
                 SELECT a.id, a.code, a.name, a.type, a.subtype,
                        a.parent_id, a.is_leaf, a.group_id,
                        p.name AS parent_name,
                        g.name AS group_name, g.color AS group_color,
-                       {bal_sq} AS balance
+                       COALESCE(SUM(jl.debit) - SUM(jl.credit), 0) AS balance
                 FROM accounts a
                 LEFT JOIN accounts p ON p.id = a.parent_id
                 LEFT JOIN account_groups g ON g.id = a.group_id
+                LEFT JOIN journal_lines jl ON jl.account_id = a.id
                 WHERE a.type = ?
+                GROUP BY a.id, a.code, a.name, a.type, a.subtype,
+                         a.parent_id, a.is_leaf, a.group_id,
+                         p.name, g.name, g.color
                 ORDER BY a.code
             """, (acc_type,)).fetchall()
-        return conn.execute(f"""
+
+        return conn.execute("""
             SELECT a.id, a.code, a.name, a.type, a.subtype,
                    a.parent_id, a.is_leaf, a.group_id,
                    p.name AS parent_name,
                    g.name AS group_name, g.color AS group_color,
-                   {bal_sq} AS balance
+                   COALESCE(SUM(jl.debit) - SUM(jl.credit), 0) AS balance
             FROM accounts a
             LEFT JOIN accounts p ON p.id = a.parent_id
             LEFT JOIN account_groups g ON g.id = a.group_id
+            LEFT JOIN journal_lines jl ON jl.account_id = a.id
+            GROUP BY a.id, a.code, a.name, a.type, a.subtype,
+                     a.parent_id, a.is_leaf, a.group_id,
+                     p.name, g.name, g.color
             ORDER BY a.code
         """).fetchall()
     except Exception as e:
