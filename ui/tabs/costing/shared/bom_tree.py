@@ -2,10 +2,6 @@
 ui/tabs/costing/shared/bom_tree.py
 ===================================
 BomTree — شجرة عرض BOM مع كل السيناريوهات كنودات منفصلة.
-
-التقسيم الداخلي:
-  bom_tree/_scenario_node_builder.py → منطق بناء الـ nodes
-  bom_tree.py (هذا الملف)            → الـ widget والـ UI
 """
 
 from PyQt5.QtWidgets import (
@@ -17,6 +13,8 @@ from PyQt5.QtCore import Qt
 
 from db.shared.items_repo import fetch_bom, delete_bom_row
 from ui.helpers import danger_button
+from ui.app_settings import _C
+from ui.widgets.core.i18n import tr
 
 from ui.tabs.costing.shared.bom_tree_helper._scenario_node_builder import (
     build_scenario_node,
@@ -36,20 +34,24 @@ class BomTree(QWidget):
         layout.setContentsMargins(0, 0, 0, 0)
 
         header = QHBoxLayout()
-        lbl = QLabel("🔩 هيكل BOM")
-        lbl.setStyleSheet("font-weight:bold; font-size:13px;")
+        lbl = QLabel(f"🔩 {tr('bom_tree')}")
+        lbl.setStyleSheet(
+            f"font-weight:bold; font-size:13px; color:{_C['text_primary']};"
+        )
 
         lbl_legend = QLabel(
-            "⚠️ = نسبة هادر   |   الكمية الفعلية = الكمية × (1 + هادر%)   |   ⭐ = السيناريو الافتراضي"
+            f"⚠️ = {tr('waste_pct')}   |   "
+            f"{tr('effective_qty')} = {tr('qty')} × (1 + {tr('waste_pct')}%)   |   "
+            f"⭐ = {tr('default_scenario')}"
         )
         lbl_legend.setStyleSheet(
-            "font-size:9px; color:#e65100; background:#fff8e1;"
-            "border:1px solid #ffe082; border-radius:3px; padding:2px 6px;"
+            f"font-size:9px; color:{_C['orange']}; background:{_C['warning_bg']};"
+            f"border:1px solid {_C['warning_border']}; border-radius:3px; padding:2px 6px;"
         )
 
-        self.btn_expand   = QPushButton("⊞ توسيع")
-        self.btn_collapse = QPushButton("⊟ طي")
-        self.btn_del_node = danger_button("🗑 حذف المحدد")
+        self.btn_expand   = QPushButton(f"⊞ {tr('expand_all')}")
+        self.btn_collapse = QPushButton(f"⊟ {tr('collapse_all')}")
+        self.btn_del_node = danger_button(f"🗑 {tr('delete_selected')}")
 
         for btn in (self.btn_expand, self.btn_collapse, self.btn_del_node):
             btn.setEnabled(False)
@@ -66,10 +68,26 @@ class BomTree(QWidget):
 
         self.tree = QTreeWidget()
         self.tree.setHeaderLabels([
-            "المكون / السيناريو", "الكمية", "هادر %", "الكمية الفعلية",
-            "تكلفة/وحدة", "التكلفة الكلية", "النوع"
+            tr("component_scenario"),
+            tr("qty"),
+            tr("waste_pct_col"),
+            tr("effective_qty"),
+            tr("cost_per_unit"),
+            tr("total_cost"),
+            tr("type"),
         ])
         self.tree.setSelectionMode(QTreeWidget.SingleSelection)
+        self.tree.setStyleSheet(f"""
+            QTreeWidget {{
+                background: {_C['bg_surface']};
+                border: 1px solid {_C['border']};
+                color: {_C['text_primary']};
+            }}
+            QTreeWidget::item:selected {{
+                background: {_C['accent_light']};
+                color: {_C['accent']};
+            }}
+        """)
 
         hh = self.tree.header()
         hh.setSectionResizeMode(0, QHeaderView.Stretch)
@@ -112,7 +130,7 @@ class BomTree(QWidget):
             self._refresh()
 
     # ══════════════════════════════════════════════════════
-    # _refresh — الجوهر: كل سيناريو = node منفصل
+    # _refresh
     # ══════════════════════════════════════════════════════
 
     def _refresh(self):
@@ -123,7 +141,6 @@ class BomTree(QWidget):
         scenarios = self._fetch_all_scenarios(self._pid)
 
         if not scenarios:
-            # Fallback: BOM عادي بدون scenarios
             bom_rows = self._fetch_bom_with_row_id_by_scenario(None)
             for row in bom_rows:
                 node = build_component_node(
@@ -141,7 +158,7 @@ class BomTree(QWidget):
         for sc in scenarios:
             sc_node = build_scenario_node(sc)
 
-            bom_rows     = self._fetch_bom_with_row_id_by_scenario(sc["id"])
+            bom_rows      = self._fetch_bom_with_row_id_by_scenario(sc["id"])
             total_sc_cost = 0.0
 
             for row in bom_rows:
@@ -161,7 +178,6 @@ class BomTree(QWidget):
 
             sc_node.setText(5, f"{total_sc_cost:.4f}")
 
-            # bold للإجمالي
             font = sc_node.font(0)
             sc_node.setFont(5, font)
 
@@ -184,7 +200,6 @@ class BomTree(QWidget):
             return []
 
     def _fetch_bom_with_row_id_by_scenario(self, scenario_id) -> list:
-        """يجيب BOM لسيناريو محدد."""
         try:
             if scenario_id is not None:
                 cols = {r["name"] for r in
@@ -222,7 +237,6 @@ class BomTree(QWidget):
         except Exception:
             pass
 
-        # Fallback: BOM القديم
         old_rows = fetch_bom(self._conn, self._pid)
         result = []
         for r in old_rows:
@@ -241,7 +255,6 @@ class BomTree(QWidget):
         return result
 
     def _get_sub_bom_for_item(self, item_id: int) -> list:
-        """يجيب BOM الافتراضي لنصف مصنع."""
         sc_id = self._get_scenario_id_for_item(item_id)
         return self._fetch_bom_with_row_id_by_scenario(sc_id)
 
@@ -309,8 +322,9 @@ class BomTree(QWidget):
                 child_type, child_id = data
                 sc_id = parent_data[1]
                 reply = QMessageBox.question(
-                    self, "تأكيد الحذف",
-                    f"حذف «{node.text(0)}» من السيناريو «{parent.text(0).strip()}»؟",
+                    self, tr("confirm_delete"),
+                    f"{tr('delete_from_scenario')} «{node.text(0)}» "
+                    f"{tr('from_scenario')} «{parent.text(0).strip()}»؟",
                     QMessageBox.Yes | QMessageBox.No
                 )
                 if reply == QMessageBox.Yes:
@@ -321,17 +335,16 @@ class BomTree(QWidget):
                         )
                         self._conn.commit()
                     except Exception as e:
-                        QMessageBox.warning(self, "خطأ", str(e))
+                        QMessageBox.warning(self, tr("error"), str(e))
                     self._refresh()
                 return
 
             QMessageBox.information(
-                self, "تنبيه",
-                "حذف المكونات الفرعية يتم من تبويب النصف مصنع مباشرةً."
+                self, tr("notice"),
+                tr("delete_sub_components_from_semi")
             )
             return
 
-        # top-level بدون scenarios
         child_type, child_id = data
         delete_bom_row(self._conn, self._pid, child_type, child_id)
         self._refresh()

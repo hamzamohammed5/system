@@ -2,11 +2,6 @@
 ui/tabs/costing/shared/bulk_replace/_operation_section.py
 ==========================================================
 _OperationSection — قسم اختيار العملية في نافذة الاستبدال الشامل.
-
-يعرض:
-  - خيارات العملية (استبدال / تعديل كمية / الاثنين)
-  - حقل اختيار العنصر البديل
-  - حقل الكمية الموحدة الاختياري
 """
 
 from PyQt5.QtWidgets import (
@@ -17,6 +12,9 @@ from PyQt5.QtWidgets import (
 from PyQt5.QtCore import Qt
 from PyQt5.QtGui  import QColor, QFont
 
+from ui.app_settings import _C
+from ui.widgets.core.i18n import tr
+
 
 class _OperationSection(QGroupBox):
     """
@@ -26,42 +24,30 @@ class _OperationSection(QGroupBox):
         .do_replace   → bool
         .do_qty       → bool
         .new_child_id → int | None
-        .uniform_qty  → float | None  (None = غير موحدة)
+        .uniform_qty  → float | None
     """
 
     def __init__(self, child_type: str, parent=None):
-        super().__init__("⚙️  العملية المطلوبة", parent)
+        super().__init__(f"⚙️  {tr('operation_required')}", parent)
         self._child_type = child_type
         self._build()
 
     def _build(self):
-        self.setStyleSheet("""
-            QGroupBox {
-                background: white;
-                border: 1px solid #e0e0e0;
-                border-radius: 8px;
-                font-weight: bold;
-                color: #1565c0;
-                padding-top: 10px;
-            }
-            QGroupBox::title {
-                subcontrol-origin: margin;
-                subcontrol-position: top right;
-                padding: 0 8px;
-            }
-        """)
+        self._apply_group_style()
 
         lay = QVBoxLayout(self)
         lay.setSpacing(10)
 
         # ── خيارات العملية ──
         ops_row = QHBoxLayout()
-        self._rdo_replace = QRadioButton("🔀  استبدال العنصر")
-        self._rdo_qty     = QRadioButton("🔢  تعديل الكمية فقط")
-        self._rdo_both    = QRadioButton("✅  الاثنين معاً")
+        self._rdo_replace = QRadioButton(f"🔀  {tr('replace_element')}")
+        self._rdo_qty     = QRadioButton(f"🔢  {tr('edit_qty_only')}")
+        self._rdo_both    = QRadioButton(f"✅  {tr('both_operations')}")
         self._rdo_both.setChecked(True)
         for rdo in (self._rdo_replace, self._rdo_qty, self._rdo_both):
-            rdo.setStyleSheet("font-size:12px;")
+            rdo.setStyleSheet(
+                f"font-size:12px; color:{_C['text_primary']};"
+            )
             ops_row.addWidget(rdo)
         ops_row.addStretch()
         lay.addLayout(ops_row)
@@ -78,17 +64,26 @@ class _OperationSection(QGroupBox):
         self._cmb_replacement = QComboBox()
         self._cmb_replacement.setMinimumHeight(32)
         self._cmb_replacement.setMinimumWidth(280)
+        self._cmb_replacement.setStyleSheet(
+            f"background:{_C['bg_input']}; border:1px solid {_C['border']};"
+            f"border-radius:4px; padding:2px 6px; color:{_C['text_primary']};"
+        )
 
-        lbl_new = {
-            "raw":        "🧱  الخامة البديلة :",
-            "labor_op":   "👷  العملية البديلة :",
-            "machine_op": "⚙️  العملية البديلة :",
-        }.get(self._child_type, "البديل :")
+        _child_labels = {
+            "raw":        f"🧱  {tr('replacement_raw')}:",
+            "labor_op":   f"👷  {tr('replacement_labor_op')}:",
+            "machine_op": f"⚙️  {tr('replacement_machine_op')}:",
+        }
+        lbl_new = _child_labels.get(self._child_type, f"{tr('replacement')}:")
         rf_lay.addRow(lbl_new, self._cmb_replacement)
 
         qty_row = QHBoxLayout()
-        self._chk_uniform = QCheckBox("تطبيق كمية موحدة على المنتجات المختارة:")
-        self._chk_uniform.setStyleSheet("font-size:11px;")
+        self._chk_uniform = QCheckBox(
+            f"{tr('apply_uniform_qty')}:"
+        )
+        self._chk_uniform.setStyleSheet(
+            f"font-size:11px; color:{_C['text_primary']};"
+        )
         self._sp_uniform = QDoubleSpinBox()
         self._sp_uniform.setRange(0.0001, 999999)
         self._sp_uniform.setDecimals(4)
@@ -102,10 +97,26 @@ class _OperationSection(QGroupBox):
         rf_lay.addRow("", qty_row)
         lay.addWidget(self._replace_frame)
 
-        # ربط الـ radio buttons
         for rdo in (self._rdo_replace, self._rdo_qty, self._rdo_both):
             rdo.toggled.connect(self._update_ui)
         self._update_ui()
+
+    def _apply_group_style(self):
+        self.setStyleSheet(f"""
+            QGroupBox {{
+                background: {_C['bg_input']};
+                border: 1px solid {_C['border']};
+                border-radius: 8px;
+                font-weight: bold;
+                color: {_C['accent']};
+                padding-top: 10px;
+            }}
+            QGroupBox::title {{
+                subcontrol-origin: margin;
+                subcontrol-position: top right;
+                padding: 0 8px;
+            }}
+        """)
 
     # ── خصائص الحالة ─────────────────────────────────────
 
@@ -133,16 +144,11 @@ class _OperationSection(QGroupBox):
     # ── تحميل البيانات ────────────────────────────────────
 
     def load_candidates(self, candidates: list[tuple]):
-        """
-        يملأ combo البديل بالعناصر البديلة.
-
-        candidates: list of (id, name, category_name)
-        """
         self._cmb_replacement.clear()
-        self._cmb_replacement.addItem("— اختر البديل —", None)
+        self._cmb_replacement.addItem(f"— {tr('select_replacement')} —", None)
 
         if not candidates:
-            self._cmb_replacement.addItem("لا توجد عناصر بديلة", "__empty__")
+            self._cmb_replacement.addItem(tr("no_alternatives"), "__empty__")
             self._cmb_replacement.setEnabled(False)
             self._rdo_qty.setChecked(True)
             self._rdo_replace.setEnabled(False)
@@ -152,7 +158,7 @@ class _OperationSection(QGroupBox):
         last_cat = object()
         for cid, cname, cat_name in candidates:
             if cat_name != last_cat:
-                sep_text = f"─── {cat_name or 'بدون تصنيف'} ───"
+                sep_text = f"─── {cat_name or tr('no_category')} ───"
                 self._cmb_replacement.addItem(sep_text, "__sep__")
                 idx   = self._cmb_replacement.count() - 1
                 model = self._cmb_replacement.model()
@@ -162,7 +168,7 @@ class _OperationSection(QGroupBox):
                     item.setFlags(
                         item.flags() & ~_Qt.ItemIsEnabled & ~_Qt.ItemIsSelectable
                     )
-                    item.setForeground(QColor("#78909c"))
+                    item.setForeground(QColor(_C['text_muted']))
                     f = QFont()
                     f.setBold(True)
                     f.setPointSize(f.pointSize() - 1)
@@ -180,11 +186,13 @@ class _OperationSection(QGroupBox):
     def _update_frame_style(self, active: bool):
         if active:
             self._replace_frame.setStyleSheet(
-                "QFrame { background:#f8fbff; border:1px solid #bbdefb;"
+                f"QFrame {{ background:{_C['info_bg']}; "
+                f"border:1px solid {_C['info_border']};"
                 "border-radius:6px; padding:4px; }"
             )
         else:
             self._replace_frame.setStyleSheet(
-                "QFrame { background:#f5f5f5; border:1px solid #e0e0e0;"
+                f"QFrame {{ background:{_C['bg_surface']}; "
+                f"border:1px solid {_C['border']};"
                 "border-radius:6px; padding:4px; }"
             )

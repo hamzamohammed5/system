@@ -1,13 +1,7 @@
 """
-ui/widgets/costing/bulk_replace/bulk_replace_products_panel.py
+ui/tabs/costing/shared/bulk_replace/bulk_replace_products_panel.py
 ==========================================
 _ProductsPanel — لوحة عرض المنتجات المتأثرة في نافذة الاستبدال الشامل.
-
-تحتوي على:
-  - فلتر بالتصنيف
-  - قائمة scrollable من ProductRow
-  - شريط التحديد السريع (الكل / لا شيء / عكس)
-  - عداد النتائج
 """
 
 from PyQt5.QtWidgets import (
@@ -17,6 +11,8 @@ from PyQt5.QtWidgets import (
 )
 from PyQt5.QtCore import Qt
 
+from ui.app_settings import _C
+from ui.widgets.core.i18n import tr
 from .bulk_replace_helpers import fetch_affected_products, ProductRow
 
 
@@ -34,8 +30,8 @@ class _ProductsPanel(QWidget):
         self.child_type = child_type
         self.child_id   = child_id
 
-        self._all_products: list  = []
-        self._product_rows: list  = []
+        self._all_products: list = []
+        self._product_rows: list = []
 
         self._build()
         self.load()
@@ -51,17 +47,21 @@ class _ProductsPanel(QWidget):
 
         # ── شريط الفلتر ──
         filter_row = QHBoxLayout()
-        filter_row.addWidget(QLabel("🏷  فلتر بالتصنيف:"))
+        filter_row.addWidget(QLabel(f"🏷  {tr('filter_by_category')}:"))
 
         self.cmb_cat_filter = QComboBox()
         self.cmb_cat_filter.setMinimumHeight(30)
         self.cmb_cat_filter.setFixedWidth(200)
-        self.cmb_cat_filter.addItem("— الكل —", None)
+        self.cmb_cat_filter.setStyleSheet(
+            f"background:{_C['bg_input']}; border:1px solid {_C['border']};"
+            f"border-radius:4px; padding:2px 6px; color:{_C['text_primary']};"
+        )
+        self.cmb_cat_filter.addItem(f"— {tr('all')} —", None)
         self.cmb_cat_filter.currentIndexChanged.connect(self._apply_filter)
 
         self.lbl_count = QLabel()
         self.lbl_count.setStyleSheet(
-            "color:#1565c0; font-weight:bold; font-size:11px;"
+            f"color:{_C['accent']}; font-weight:bold; font-size:11px;"
         )
 
         filter_row.addWidget(self.cmb_cat_filter)
@@ -82,12 +82,12 @@ class _ProductsPanel(QWidget):
         scroll.setWidgetResizable(True)
         scroll.setWidget(self._scroll_content)
         scroll.setMinimumHeight(200)
-        scroll.setStyleSheet("""
-            QScrollArea {
-                border: 1px solid #e0e0e0;
+        scroll.setStyleSheet(f"""
+            QScrollArea {{
+                border: 1px solid {_C['border']};
                 border-radius: 8px;
-                background: #f9f9f9;
-            }
+                background: {_C['bg_surface']};
+            }}
         """)
         lay.addWidget(scroll, stretch=1)
 
@@ -97,24 +97,27 @@ class _ProductsPanel(QWidget):
     def _build_quick_bar(self) -> QFrame:
         bar = QFrame()
         bar.setStyleSheet(
-            "QFrame { background:white; border:1px solid #e0e0e0;"
+            f"QFrame {{ background:{_C['bg_input']}; border:1px solid {_C['border']};"
             "border-radius:6px; padding:2px; }"
         )
         lay = QHBoxLayout(bar)
         lay.setContentsMargins(8, 4, 8, 4)
         lay.setSpacing(8)
 
-        lbl = QLabel("تحديد سريع:")
-        lbl.setStyleSheet("font-size:11px; color:#555;")
+        lbl = QLabel(f"{tr('quick_select')}:")
+        lbl.setStyleSheet(
+            f"font-size:11px; color:{_C['text_sec']};"
+        )
 
         _style = (
-            "QPushButton { background:#f5f5f5; border:1px solid #ddd;"
+            f"QPushButton {{ background:{_C['bg_surface']}; border:1px solid {_C['border']};"
             "border-radius:4px; padding:2px 10px; font-size:11px; }"
-            "QPushButton:hover { background:#e3f2fd; border-color:#90caf9; }"
+            f"QPushButton:hover {{ background:{_C['accent_light']}; "
+            f"border-color:{_C['border_focus']}; }}"
         )
-        btn_all  = QPushButton("✅ الكل")
-        btn_none = QPushButton("☐ لا شيء")
-        btn_inv  = QPushButton("⇄ عكس")
+        btn_all  = QPushButton(f"✅ {tr('select_all')}")
+        btn_none = QPushButton(f"☐ {tr('select_none')}")
+        btn_inv  = QPushButton(f"⇄ {tr('invert_selection')}")
         for btn in (btn_all, btn_none, btn_inv):
             btn.setMinimumHeight(26)
             btn.setStyleSheet(_style)
@@ -135,7 +138,6 @@ class _ProductsPanel(QWidget):
     # ══════════════════════════════════════════════════════
 
     def load(self):
-        """تحميل المنتجات من قاعدة البيانات وملء الفلتر."""
         self._all_products = fetch_affected_products(
             self.conn, self.child_type, self.child_id
         )
@@ -143,16 +145,13 @@ class _ProductsPanel(QWidget):
         self._rebuild_rows(self._all_products)
 
     def reload(self):
-        """إعادة تحميل بعد تطبيق تعديل."""
         self._all_products = fetch_affected_products(
             self.conn, self.child_type, self.child_id
         )
         self._apply_filter()
 
     def _fill_category_filter(self):
-        """ملء combo الفلتر بالتصنيفات الموجودة في المنتجات."""
         self.cmb_cat_filter.blockSignals(True)
-        # احتفظ بـ "الكل" فقط
         while self.cmb_cat_filter.count() > 1:
             self.cmb_cat_filter.removeItem(1)
 
@@ -183,8 +182,6 @@ class _ProductsPanel(QWidget):
         self._rebuild_rows(filtered)
 
     def _rebuild_rows(self, products: list):
-        """إعادة بناء صفوف المنتجات."""
-        # احذف الصفوف القديمة
         while self._rows_layout.count() > 1:
             item = self._rows_layout.takeAt(0)
             if item and item.widget():
@@ -192,9 +189,11 @@ class _ProductsPanel(QWidget):
         self._product_rows.clear()
 
         if not products:
-            lbl = QLabel("⚠️  لا توجد منتجات مرتبطة بهذا العنصر")
+            lbl = QLabel(f"⚠️  {tr('no_products_linked')}")
             lbl.setAlignment(Qt.AlignCenter)
-            lbl.setStyleSheet("color:#999; font-size:12px; padding:20px;")
+            lbl.setStyleSheet(
+                f"color:{_C['text_muted']}; font-size:12px; padding:20px;"
+            )
             self._rows_layout.insertWidget(0, lbl)
             self._update_count()
             return
@@ -210,7 +209,9 @@ class _ProductsPanel(QWidget):
     def _update_count(self):
         total    = len(self._product_rows)
         selected = sum(1 for r in self._product_rows if r.is_selected)
-        self.lbl_count.setText(f"إجمالي: {total}  │  محدد: {selected}")
+        self.lbl_count.setText(
+            f"{tr('total')}: {total}  │  {tr('selected')}: {selected}"
+        )
 
     # ══════════════════════════════════════════════════════
     # API خارجي
@@ -227,7 +228,6 @@ class _ProductsPanel(QWidget):
         self._update_count()
 
     def get_selected_rows(self) -> list:
-        """يرجع ProductRow اللي محدد فقط."""
         return [r for r in self._product_rows if r.is_selected]
 
     def has_products(self) -> bool:

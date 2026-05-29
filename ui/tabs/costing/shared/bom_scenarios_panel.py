@@ -9,7 +9,9 @@ from PyQt5.QtWidgets import (
     QComboBox, QMessageBox, QInputDialog,
 )
 from PyQt5.QtCore import Qt, pyqtSignal
-from PyQt5.QtGui  import QFont
+
+from ui.app_settings import _C
+from ui.widgets.core.i18n import tr
 
 from .bom_scenarios._memory_scenarios import MemoryScenariosMixin
 from .bom_scenarios._db_scenarios     import DbScenariosMixin
@@ -41,13 +43,7 @@ class _BomScenariosPanel(QFrame, MemoryScenariosMixin, DbScenariosMixin):
 
     def _build(self):
         self.setFrameShape(QFrame.StyledPanel)
-        self.setStyleSheet("""
-            QFrame {
-                background: #f3e5f5;
-                border: 1px solid #ce93d8;
-                border-radius: 6px;
-            }
-        """)
+        self._apply_frame_style()
         self.setFixedHeight(46)
 
         lay = QHBoxLayout(self)
@@ -58,9 +54,9 @@ class _BomScenariosPanel(QFrame, MemoryScenariosMixin, DbScenariosMixin):
         lbl_icon.setStyleSheet("background:transparent; border:none; font-size:14px;")
         lay.addWidget(lbl_icon)
 
-        lbl = QLabel("السيناريو:")
+        lbl = QLabel(f"{tr('scenario')}:")
         lbl.setStyleSheet(
-            "font-weight:bold; font-size:11px; color:#6a1b9a;"
+            f"font-weight:bold; font-size:11px; color:{_C['purple']};"
             "background:transparent; border:none;"
         )
         lay.addWidget(lbl)
@@ -68,21 +64,13 @@ class _BomScenariosPanel(QFrame, MemoryScenariosMixin, DbScenariosMixin):
         self.cmb_scenarios = QComboBox()
         self.cmb_scenarios.setMinimumWidth(200)
         self.cmb_scenarios.setMinimumHeight(30)
-        self.cmb_scenarios.setStyleSheet("""
-            QComboBox {
-                background: white; border: 1px solid #ce93d8;
-                border-radius: 4px; padding: 2px 8px;
-                font-size: 11px; color: #4a148c;
-            }
-            QComboBox:focus { border-color: #7b1fa2; }
-            QComboBox::drop-down { border: none; }
-        """)
+        self._apply_combo_style()
         self.cmb_scenarios.currentIndexChanged.connect(self._on_scenario_changed)
         lay.addWidget(self.cmb_scenarios)
 
-        self.lbl_default_badge = QLabel("⭐ افتراضي")
+        self.lbl_default_badge = QLabel(f"⭐ {tr('default_scenario')}")
         self.lbl_default_badge.setStyleSheet(
-            "color:#f57f17; font-weight:bold; font-size:10px;"
+            f"color:{_C['warning']}; font-weight:bold; font-size:10px;"
             "border:none; background:transparent;"
         )
         self.lbl_default_badge.setVisible(False)
@@ -91,32 +79,67 @@ class _BomScenariosPanel(QFrame, MemoryScenariosMixin, DbScenariosMixin):
         lay.addStretch()
 
         self.btn_set_default = self._make_btn(
-            "⭐ افتراضي", 100,
-            "#fff9c4", "#f57f17", "#f9a825", "#fff176"
+            f"⭐ {tr('default_scenario')}", 100,
+            _C['warning_bg'], _C['warning'], _C['warning_border'], _C['warning_bg'],
         )
-        self.btn_set_default.setToolTip("جعل هذا السيناريو هو الافتراضي")
+        self.btn_set_default.setToolTip(tr("set_as_default"))
         self.btn_set_default.clicked.connect(self._set_default)
         lay.addWidget(self.btn_set_default)
 
-        btn_rename = self._make_btn("✏️ تعديل", 80, "#fff3e0", "#e65100", "#ffcc80", "#ffe0b2")
-        btn_rename.setToolTip("تعديل اسم السيناريو الحالي")
+        btn_rename = self._make_btn(
+            f"✏️ {tr('edit')}", 80,
+            _C['orange_bg'], _C['orange'], _C['orange_border'], _C['orange_bg'],
+        )
+        btn_rename.setToolTip(tr("rename_scenario"))
         btn_rename.clicked.connect(self._rename)
         lay.addWidget(btn_rename)
 
-        btn_clone = self._make_btn("📋 نسخ", 70, "#e3f2fd", "#1565c0", "#90caf9", "#bbdefb")
-        btn_clone.setToolTip("نسخ السيناريو الحالي")
+        btn_clone = self._make_btn(
+            f"📋 {tr('clone')}", 70,
+            _C['info_bg'], _C['info'], _C['info_border'], _C['info_bg'],
+        )
+        btn_clone.setToolTip(tr("clone_scenario"))
         btn_clone.clicked.connect(self._clone)
         lay.addWidget(btn_clone)
 
-        btn_add = self._make_btn("➕ جديد", 70, "#e8f5e9", "#2e7d32", "#a5d6a7", "#c8e6c9")
-        btn_add.setToolTip("إضافة سيناريو جديد فارغ")
+        btn_add = self._make_btn(
+            f"➕ {tr('new')}", 70,
+            _C['success_bg'], _C['success'], _C['success_border'], _C['success_bg'],
+        )
+        btn_add.setToolTip(tr("add_scenario"))
         btn_add.clicked.connect(self._add_new)
         lay.addWidget(btn_add)
 
-        btn_del = self._make_btn("🗑", 36, "#ffebee", "#c62828", "#ef9a9a", "#ffcdd2")
-        btn_del.setToolTip("حذف السيناريو الحالي")
+        btn_del = self._make_btn(
+            "🗑", 36,
+            _C['danger_bg'], _C['danger'], _C['danger_border'], _C['danger_bg'],
+        )
+        btn_del.setToolTip(tr("delete"))
         btn_del.clicked.connect(self._delete)
         lay.addWidget(btn_del)
+
+    def _apply_frame_style(self):
+        self.setStyleSheet(f"""
+            QFrame {{
+                background: {_C['purple_bg']};
+                border: 1px solid {_C['purple_border']};
+                border-radius: 6px;
+            }}
+        """)
+
+    def _apply_combo_style(self):
+        self.cmb_scenarios.setStyleSheet(f"""
+            QComboBox {{
+                background: {_C['bg_input']};
+                border: 1px solid {_C['purple_border']};
+                border-radius: 4px;
+                padding: 2px 8px;
+                font-size: 11px;
+                color: {_C['purple']};
+            }}
+            QComboBox:focus {{ border-color: {_C['purple']}; }}
+            QComboBox::drop-down {{ border: none; }}
+        """)
 
     @staticmethod
     def _make_btn(text: str, width: int,
@@ -124,7 +147,6 @@ class _BomScenariosPanel(QFrame, MemoryScenariosMixin, DbScenariosMixin):
         btn = QPushButton(text)
         btn.setMinimumHeight(28)
         btn.setFixedWidth(width)
-        # ✅ f-string واحدة متكاملة — بدون string concatenation
         btn.setStyleSheet(f"""
             QPushButton {{
                 background: {bg};
@@ -137,9 +159,9 @@ class _BomScenariosPanel(QFrame, MemoryScenariosMixin, DbScenariosMixin):
             }}
             QPushButton:hover {{ background: {hover}; }}
             QPushButton:disabled {{
-                background: #f5f5f5;
-                color: #bbb;
-                border-color: #ddd;
+                background: {_C['bg_surface']};
+                color: {_C['text_disabled']};
+                border-color: {_C['border']};
             }}
         """)
         return btn
@@ -214,7 +236,7 @@ class _BomScenariosPanel(QFrame, MemoryScenariosMixin, DbScenariosMixin):
             ""
         )
         name, ok = QInputDialog.getText(
-            self, "تعديل اسم السيناريو", "الاسم الجديد:", text=current_name
+            self, tr("rename_scenario"), tr("new_name"), text=current_name
         )
         if not ok or not name.strip():
             return
@@ -230,9 +252,9 @@ class _BomScenariosPanel(QFrame, MemoryScenariosMixin, DbScenariosMixin):
             (sc["name"] for sc in self._scenarios if sc["id"] == self._current_id),
             ""
         )
-        default_name = f"نسخة من {current_name}" if current_name else "سيناريو جديد"
+        default_name = f"{tr('copy_of')} {current_name}" if current_name else tr("new_scenario")
         name, ok = QInputDialog.getText(
-            self, "نسخ السيناريو", "اسم السيناريو الجديد:", text=default_name
+            self, tr("clone_scenario"), tr("new_scenario_name"), text=default_name
         )
         if not ok or not name.strip():
             return
@@ -252,7 +274,8 @@ class _BomScenariosPanel(QFrame, MemoryScenariosMixin, DbScenariosMixin):
     def _add_new(self):
         count = len(self._scenarios) + 1
         name, ok = QInputDialog.getText(
-            self, "سيناريو جديد", "اسم السيناريو:", text=f"سيناريو {count}"
+            self, tr("new_scenario"), tr("scenario_name"),
+            text=f"{tr('scenario')} {count}"
         )
         if not ok or not name.strip():
             return
@@ -273,14 +296,15 @@ class _BomScenariosPanel(QFrame, MemoryScenariosMixin, DbScenariosMixin):
         if self._current_id is None:
             return
         if len(self._scenarios) <= 1:
-            QMessageBox.warning(self, "تنبيه", "لا يمكن حذف السيناريو الوحيد.")
+            QMessageBox.warning(self, tr("warning"), tr("cannot_delete_last_scenario"))
             return
         current_name = next(
             (sc["name"] for sc in self._scenarios if sc["id"] == self._current_id),
             ""
         )
         reply = QMessageBox.question(
-            self, "تأكيد الحذف", f"حذف السيناريو «{current_name}»؟",
+            self, tr("confirm_delete"),
+            f"{tr('delete_scenario_confirm')} «{current_name}»؟",
             QMessageBox.Yes | QMessageBox.No
         )
         if reply != QMessageBox.Yes:
@@ -296,4 +320,4 @@ class _BomScenariosPanel(QFrame, MemoryScenariosMixin, DbScenariosMixin):
                 self._current_id = None
                 self._reload()
             else:
-                QMessageBox.warning(self, "خطأ", "تعذر حذف السيناريو.")
+                QMessageBox.warning(self, tr("error"), tr("delete_scenario_failed"))

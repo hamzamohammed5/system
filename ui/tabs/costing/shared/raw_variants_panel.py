@@ -1,15 +1,7 @@
 """
-ui/widgets/costing/raw_variants_panel.py
+ui/tabs/costing/shared/raw_variants_panel.py
 =================================
 _RawVariantsPanel — لوحة إدارة variants الخامة (صفوف الإنتاج).
-
-تُستخدم داخل فورم الخامة (raw_input_panel.py) وتظهر بعد اختيار الخامة.
-
-كل variant بيحدد:
-  - الاسم (مثال: "قميص كبير")
-  - عدد القطع اللي بتنتجها من الخامة (مثال: 2)
-
-لو سعر الخامة 100 جنيه وعدد القطع 2 → تكلفة الوحدة = 50 جنيه
 """
 
 from PyQt5.QtWidgets import (
@@ -26,6 +18,8 @@ from db.costing.raw_variants_repo import (
     insert_variant, update_variant, delete_variant,
     fetch_variant,
 )
+from ui.app_settings import _C
+from ui.widgets.core.i18n import tr
 from ui.events import bus
 
 
@@ -48,28 +42,16 @@ class _RawVariantsPanel(QGroupBox):
     """
 
     def __init__(self, conn, parent=None):
-        super().__init__("📐  وحدات الإنتاج (Variants)", parent)
-        self.conn       = conn
-        self._item_id   = None
+        super().__init__(f"📐  {tr('raw_variants')}", parent)
+        self.conn        = conn
+        self._item_id    = None
         self._item_price = 0.0
         self._editing_id = None
         self._build()
-        self.setEnabled(False)   # معطل لحد ما يتحدد item_id
+        self.setEnabled(False)
 
     def _build(self):
-        self.setStyleSheet("""
-            QGroupBox {
-                font-weight: bold; color: #1565c0;
-                border: 1px solid #c5cae9;
-                border-radius: 8px;
-                margin-top: 8px;
-                padding-top: 8px;
-            }
-            QGroupBox::title {
-                subcontrol-origin: margin;
-                padding: 0 6px;
-            }
-        """)
+        self._apply_group_style()
 
         root = QVBoxLayout(self)
         root.setSpacing(8)
@@ -77,13 +59,13 @@ class _RawVariantsPanel(QGroupBox):
 
         # ── شرح ──
         lbl_info = QLabel(
-            "💡 كل variant بيحدد عدد القطع اللي بتنتجها من هذه الخامة.\n"
-            "   تكلفة الوحدة = سعر الخامة ÷ عدد القطع"
+            f"💡 {tr('variant_description_line1')}\n"
+            f"   {tr('variant_unit_cost_formula')}"
         )
         lbl_info.setStyleSheet(
-            "font-size:10px; color:#555; font-weight:normal;"
-            "background:#e8f0fe; border-radius:4px; padding:5px 8px;"
-            "border:1px solid #c5cae9;"
+            f"font-size:10px; color:{_C['text_sec']}; font-weight:normal;"
+            f"background:{_C['info_bg']}; border-radius:4px; padding:5px 8px;"
+            f"border:1px solid {_C['info_border']};"
         )
         lbl_info.setWordWrap(True)
         root.addWidget(lbl_info)
@@ -93,28 +75,32 @@ class _RawVariantsPanel(QGroupBox):
         form_row.setSpacing(8)
 
         self.inp_name = QLineEdit()
-        self.inp_name.setPlaceholderText("اسم الـ variant  (مثال: قميص كبير)")
+        self.inp_name.setPlaceholderText(tr("variant_name_placeholder"))
         self.inp_name.setMinimumHeight(30)
+        self.inp_name.setStyleSheet(
+            f"background:{_C['bg_input']}; border:1px solid {_C['border']};"
+            f"border-radius:4px; padding:2px 6px; color:{_C['text_primary']};"
+        )
 
-        lbl_pieces = QLabel("عدد القطع:")
-        lbl_pieces.setStyleSheet("font-weight:bold; font-size:11px;")
+        lbl_pieces = QLabel(f"{tr('pieces_count')}:")
+        lbl_pieces.setStyleSheet(
+            f"font-weight:bold; font-size:11px; color:{_C['text_primary']};"
+        )
 
         self.sp_pieces = _spin_pieces()
         self.sp_pieces.setFixedWidth(100)
         self.sp_pieces.setToolTip(
-            "عدد القطع اللي بتنتجها من الخامة دي\n"
-            "تكلفة الوحدة = سعر الخامة ÷ عدد القطع"
+            f"{tr('pieces_tooltip_line1')}\n{tr('variant_unit_cost_formula')}"
         )
 
-        # معاينة حية
         self.lbl_preview = QLabel("─")
         self.lbl_preview.setStyleSheet(
-            "color:#1565c0; font-weight:bold; font-size:11px; min-width:120px;"
+            f"color:{_C['accent']}; font-weight:bold; font-size:11px; min-width:120px;"
         )
         self.sp_pieces.valueChanged.connect(self._update_preview)
 
-        self.btn_add    = QPushButton("➕ إضافة")
-        self.btn_save   = QPushButton("💾 حفظ")
+        self.btn_add    = QPushButton(f"➕ {tr('add')}")
+        self.btn_save   = QPushButton(f"💾 {tr('save')}")
         self.btn_cancel = QPushButton("✖")
         self.btn_save.setVisible(False)
         self.btn_cancel.setVisible(False)
@@ -139,18 +125,29 @@ class _RawVariantsPanel(QGroupBox):
         # ── جدول الـ variants ──
         self.table = QTableWidget()
         self.table.setColumnCount(4)
-        self.table.setHorizontalHeaderLabels(["ID", "الاسم", "عدد القطع", "تكلفة/قطعة"])
+        self.table.setHorizontalHeaderLabels([
+            "ID",
+            tr("name"),
+            tr("pieces_count"),
+            tr("cost_per_unit"),
+        ])
         self.table.setSelectionBehavior(QAbstractItemView.SelectRows)
         self.table.setEditTriggers(QAbstractItemView.NoEditTriggers)
         self.table.setAlternatingRowColors(True)
         self.table.setMaximumHeight(160)
+        self.table.setStyleSheet(
+            f"QTableWidget {{ background:{_C['bg_surface']}; "
+            f"color:{_C['text_primary']}; border:1px solid {_C['border']}; }}"
+            f"QTableWidget::item:selected {{ background:{_C['accent_light']}; "
+            f"color:{_C['accent']}; }}"
+        )
 
         hh = self.table.horizontalHeader()
         hh.setSectionResizeMode(0, QHeaderView.Fixed)
         hh.setSectionResizeMode(1, QHeaderView.Stretch)
         hh.setSectionResizeMode(2, QHeaderView.Interactive)
         hh.setSectionResizeMode(3, QHeaderView.Interactive)
-        self.table.setColumnWidth(0, 0)   # إخفاء ID
+        self.table.setColumnWidth(0, 0)
         self.table.setColumnHidden(0, True)
         self.table.setColumnWidth(2, 90)
         self.table.setColumnWidth(3, 110)
@@ -159,9 +156,9 @@ class _RawVariantsPanel(QGroupBox):
 
         # ── أزرار التعديل والحذف ──
         btn_row = QHBoxLayout()
-        btn_edit = QPushButton("✏️ تعديل")
-        btn_del  = QPushButton("🗑️ حذف")
-        btn_del.setStyleSheet("color:#c0392b;")
+        btn_edit = QPushButton(f"✏️ {tr('edit')}")
+        btn_del  = QPushButton(f"🗑️ {tr('delete')}")
+        btn_del.setStyleSheet(f"color:{_C['danger']};")
         for btn in (btn_edit, btn_del):
             btn.setMinimumHeight(26)
         btn_edit.clicked.connect(self._edit)
@@ -171,12 +168,28 @@ class _RawVariantsPanel(QGroupBox):
         btn_row.addStretch()
         root.addLayout(btn_row)
 
+    def _apply_group_style(self):
+        self.setStyleSheet(f"""
+            QGroupBox {{
+                font-weight: bold;
+                color: {_C['accent']};
+                border: 1px solid {_C['info_border']};
+                border-radius: 8px;
+                margin-top: 8px;
+                padding-top: 8px;
+                background: {_C['bg_surface']};
+            }}
+            QGroupBox::title {{
+                subcontrol-origin: margin;
+                padding: 0 6px;
+            }}
+        """)
+
     # ══════════════════════════════════════════════════════
     # API خارجي
     # ══════════════════════════════════════════════════════
 
     def load_item(self, item_id: int, item_price: float):
-        """تحميل variants خامة معينة."""
         self._item_id    = item_id
         self._item_price = item_price
         self.setEnabled(True)
@@ -184,7 +197,6 @@ class _RawVariantsPanel(QGroupBox):
         self._load_table()
 
     def clear(self):
-        """مسح اللوحة لما لا توجد خامة محددة."""
         self._item_id    = None
         self._item_price = 0.0
         self._editing_id = None
@@ -195,7 +207,6 @@ class _RawVariantsPanel(QGroupBox):
         self.setEnabled(False)
 
     def refresh_price(self, new_price: float):
-        """تحديث السعر لو تغير في الفورم."""
         self._item_price = new_price
         self._update_preview()
         self._load_table()
@@ -221,11 +232,11 @@ class _RawVariantsPanel(QGroupBox):
             pieces = float(var["pieces"])
             if pieces > 0 and self._item_price > 0:
                 unit_cost = self._item_price / pieces
-                cost_text = f"{unit_cost:.4f}  ج"
+                cost_text = f"{unit_cost:.4f}  {tr('currency_abbr')}"
             else:
                 cost_text = "─"
             cost_item = QTableWidgetItem(cost_text)
-            cost_item.setForeground(QColor("#1565c0"))
+            cost_item.setForeground(QColor(_C['accent']))
             cost_item.setTextAlignment(Qt.AlignCenter)
             self.table.setItem(r, 3, cost_item)
 
@@ -237,7 +248,9 @@ class _RawVariantsPanel(QGroupBox):
         pieces = self.sp_pieces.value()
         if pieces > 0 and self._item_price > 0:
             unit_cost = self._item_price / pieces
-            self.lbl_preview.setText(f"= {unit_cost:.4f}  ج/قطعة")
+            self.lbl_preview.setText(
+                f"= {unit_cost:.4f}  {tr('currency_per_piece')}"
+            )
         else:
             self.lbl_preview.setText("─")
 
@@ -249,7 +262,7 @@ class _RawVariantsPanel(QGroupBox):
         name   = self.inp_name.text().strip()
         pieces = self.sp_pieces.value()
         if not name:
-            QMessageBox.warning(self, "تنبيه", "أدخل اسم الـ variant")
+            QMessageBox.warning(self, tr("warning"), tr("enter_variant_name"))
             return
         if self._item_id is None:
             return
@@ -261,7 +274,7 @@ class _RawVariantsPanel(QGroupBox):
     def _edit(self):
         row = self.table.currentRow()
         if row == -1:
-            QMessageBox.information(self, "تنبيه", "اختر variant أولاً")
+            QMessageBox.information(self, tr("notice"), tr("select_variant_first"))
             return
         vid = int(self.table.item(row, 0).text())
         var = fetch_variant(self.conn, vid)
@@ -288,12 +301,12 @@ class _RawVariantsPanel(QGroupBox):
     def _delete(self):
         row = self.table.currentRow()
         if row == -1:
-            QMessageBox.information(self, "تنبيه", "اختر variant أولاً")
+            QMessageBox.information(self, tr("notice"), tr("select_variant_first"))
             return
         vid  = int(self.table.item(row, 0).text())
         name = self.table.item(row, 1).text()
         if QMessageBox.question(
-            self, "تأكيد", f"حذف variant «{name}»؟",
+            self, tr("confirm"), f"{tr('delete_variant_confirm')} «{name}»؟",
             QMessageBox.Yes | QMessageBox.No
         ) == QMessageBox.Yes:
             delete_variant(self.conn, vid)
