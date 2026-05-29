@@ -1,5 +1,5 @@
 File Tree Snapshot
-Generated : 2026-05-29 12:11:21
+Generated : 2026-05-29 12:20:35
 Source    : D:\My Workspace\Hg\Alhabaar\accountant\system
 Extensions: .md, .py
 ────────────────────────────────────────────────────────────
@@ -66,10 +66,15 @@ system/
 │   ├── accounting/
 │   │   └── journal_service.py
 │   ├── costing/
+│   │   ├── bom_tree_service.py
 │   │   ├── bulk_replace_service.py
+│   │   ├── catalog_service.py
 │   │   ├── labor_op_service.py
+│   │   ├── machine_op_rows_service.py
 │   │   ├── machine_service.py
-│   │   └── product_service.py
+│   │   ├── product_service.py
+│   │   ├── scenario_service.py
+│   │   └── variant_service.py
 │   ├── orders/
 │   │   └── order_service.py
 │   └── shared/

@@ -1,380 +1,405 @@
-# خطة التحسينات — تحليل الكود الحالي
+# خطة إعادة الهيكلة — تحويل tabs/ إلى Orchestrators
 
-> تاريخ التحليل: مايو 2026  
-> المصدر: فحص ملفات `files_reference/` + ملفات UI الفعلية في السياق
+**الهدف:** `tabs/UI → services/ → repos/ (db/)` مع قواعد `widgets/base`
 
 ---
 
-## 1. مشاكل الـ Bus Events والأداء
+## المبادئ الأساسية
 
-### 1.1 استخدام `bus.data_changed` بدل `bus.company_data_changed`
+```
+tabs/          → Orchestrator فقط (لا repo مباشر، لا منطق حساب)
+services/      → Business logic + validation
+repos/ (db/)   → SQL فقط
+widgets/base   → Base classes (BaseListPanel, BaseCrudForm, ...)
+```
+
+---
+
+## المشاكل الموجودة حالياً (من تحليل الكود)
+
+### 1. استدعاء repos مباشرة من tabs/
+
+| الملف | المشكلة |
+|-------|---------|
+| `bom_tree.py` | `fetch_bom`, `delete_bom_row` من `db/shared/items_repo` مباشرة |
+| `bom_tree.py` | `fetch_bom_for_scenario` من `db/costing/bom_scenarios_repo` مباشرة |
+| `_scenario_node_builder.py` | `fetch_item`, `fetch_labor_op`, `fetch_machine_op` من repos مباشرة |
+| `scenario_comparison_widget.py` | `calc_cost` + منطق حساب معقد داخل الـ widget |
+| `product_form.py` | `fetch_item`, `fetch_orphan_bom_rows`, `fetch_default_scenario`, `insert_scenario` مباشرة |
+| `_orphan_handler.py` | `fetch_orphan_bom_rows`, `delete_orphan_bom_rows`, `cleanup_empty_products_after_orphan_fix` مباشرة |
+| `raw_variants_panel.py` | `insert_variant`, `update_variant`, `delete_variant`, `fetch_variant` مباشرة |
+| `machine_op_rows_editor.py` | `fetch_op_rows`, `insert_op_row`, `update_op_row`, `delete_op_row`, `calc_op_row_cost`, `calc_op_total_cost` مباشرة |
+| `_db_scenarios.py` | `fetch_scenarios`, `insert_scenario`, `update_scenario`, `delete_scenario`, `set_default_scenario`, `clone_scenario` مباشرة |
+| `bulk_replace_helpers.py` | SQL مباشر + `calc_cost` في UI layer |
+| `catalog_builder.py` | `fetch_items_by_type`, `fetch_all_labor_ops`, `fetch_all_machine_ops` مباشرة |
+
+### 2. منطق حساب داخل الـ widgets
+
+| الملف | المشكلة |
+|-------|---------|
+| `scenario_comparison_widget.py` | `_calc_scenario_cost()` — 40 سطر من business logic داخل QFrame |
+| `_scenario_node_builder.py` | `calc_cost`, `calc_labor_op_cost`, `calc_machine_op_cost`, `raw_unit_price` داخل builder |
+| `bom_tree.py` | `total_sc_cost` يُحسب داخل `_refresh()` |
+
+### 3. bus events غير موحدة
+
+| الملف | المشكلة |
+|-------|---------|
+| `raw_variants_panel.py` | ✅ محوَّل لـ `emit_company_data_changed` |
+| `machine_op_rows_editor.py` | ✅ محوَّل |
+| `_db_scenarios.py` | ✅ محوَّل |
+| `labor_op_form.py` | ❌ يستخدم `bus.data_changed.connect` — يجب مراجعة |
+| `machine_op_form.py` | ❌ `bus.data_changed.emit()` مباشرة |
+| `product_form.py` | ❌ `bus.data_changed.emit()` مباشرة |
+
+### 4. Hardcoded strings عربية بدل `tr()`
+
+| الملف | المشكلة |
+|-------|---------|
+| `labor_tab.py` | `"⚙️  إعدادات العمالة"`, `"📋  عمليات العمالة"`, `"🏷️  التصنيفات"` hardcoded |
+| `machine_tab.py` | كل labels hardcoded |
+| `product_main_panel.py` | `"🗑️ حذف الناقص"`, `"✏️ تعديل"` hardcoded |
+| `machine_op_form.py` | نصوص عربية كثيرة بدون `tr()` |
+| `machine_form.py` | نصوص hardcoded |
+
+### 5. `_SPLITTER_STYLE` مكررة
+
+في `labor_tab.py` و `machine_tab.py` نفس الـ style محروقة. لا يربط بـ `_C` ولا يستجيب لـ `bus.theme_changed`.
+
+### 6. `catalog_builder.py` في UI layer
+
+`catalog_builder.py` موجود في `ui/tabs/costing/shared/` لكنه يبني بيانات من DB — يجب نقله أو تغليفه بـ service.
+
+### 7. `product_main_panel.py` — `_build_extra_header_actions` hardcoded strings
+
+```python
+header.add_action("🗑️ حذف الناقص", ..., fix_text="🗑️ حذف الناقص")
+```
+
+---
+
+## الخطة التفصيلية
+
+### المرحلة 1 — Services جديدة (الأولوية الأعلى)
+
+#### 1.1 `services/costing/scenario_service.py` (جديد)
+
+يغلّف كل عمليات `bom_scenarios_repo` + حساب تكلفة السيناريو:
+
+```python
+ScenarioService(conn)
+
+svc.list(item_id) -> list[ScenarioResult]
+svc.get_default(item_id) -> ScenarioResult | None
+svc.create(item_id, name, is_default=False) -> int
+svc.rename(scenario_id, name)
+svc.clone(scenario_id, name) -> int
+svc.set_default(scenario_id)
+svc.delete(scenario_id) -> bool
+svc.ensure_default(item_id) -> int
+
+# الجديد — ينقل منطق _calc_scenario_cost من scenario_comparison_widget
+svc.calc_cost(scenario_id) -> float
+svc.get_bom(scenario_id) -> list[BomRow]
+svc.replace_bom(scenario_id, rows: list[BomComponent])
+```
 
 **الملفات المتأثرة:**
-- `ui/tabs/costing/labor/labor_op_table.py` — السطر: `emit_company_data_changed()` ✅ (مُعدَّل بالفعل)
-- `ui/tabs/costing/machine/machine_op_table.py` — يستخدم `bus.data_changed.emit()` مباشرة ❌
-- `ui/tabs/costing/machine/machine_table.py` — يستخدم `bus.data_changed.emit()` ❌
-- `ui/tabs/costing/shared/raw_variants_panel.py` — يستخدم `bus.data_changed.emit()` ❌
-- `ui/tabs/costing/shared/machine_op_rows_editor.py` — يستخدم `bus.data_changed.emit()` ❌
-- `ui/tabs/costing/shared/bom_scenarios/_db_scenarios.py` — يستخدم `bus.data_changed.emit()` ❌
+- `_db_scenarios.py` → يستدعي `ScenarioService` بدل repos مباشرة
+- `scenario_comparison_widget.py` → `_calc_scenario_cost` يُحذف، يُستبدل بـ `svc.calc_cost`
+- `product_form.py` → `fetch_default_scenario`, `insert_scenario` يُستبدلان
+- `_save_logic.py` → `ensure_default_scenario` يأتي من Service
 
-**الإصلاح المطلوب:**
+#### 1.2 `services/costing/bom_tree_service.py` (جديد)
+
+يغلّف جلب بيانات BOM Tree:
+
 ```python
-# من:
-from ui.events import bus
-bus.data_changed.emit()
+BomTreeService(conn)
 
-# إلى:
-from ui.widgets.core.events import emit_company_data_changed
-emit_company_data_changed()
+svc.get_scenarios(item_id) -> list[ScenarioWithBom]
+svc.get_bom_for_scenario(scenario_id) -> list[BomRow]
+svc.get_sub_bom(item_id) -> list[BomRow]          # للنصف مصنع
+svc.delete_bom_component(scenario_id, child_type, child_id)
+svc.delete_bom_row_direct(parent_id, child_type, child_id)  # بدون سيناريو
 ```
 
-**الأولوية:** عالية — يؤثر على الأداء عند وجود شركات متعددة
+**الملفات المتأثرة:**
+- `bom_tree.py` → يستدعي `BomTreeService` بدل repos مباشرة
+- `_fetch_bom_with_row_id_by_scenario` يُبسَّط
+
+#### 1.3 `services/costing/variant_service.py` (جديد)
+
+```python
+VariantService(conn)
+
+svc.list(item_id) -> list[VariantResult]
+svc.get(variant_id) -> VariantResult | None
+svc.add(item_id, name, pieces, notes=None) -> int
+svc.update(variant_id, name, pieces, notes=None)
+svc.delete(variant_id)
+svc.calc_unit_cost(item_id, variant_id, item_price) -> float
+```
+
+**الملفات المتأثرة:**
+- `raw_variants_panel.py` → كل `db.costing.raw_variants_repo` calls تُستبدل
+
+#### 1.4 `services/costing/machine_op_rows_service.py` (جديد)
+
+```python
+MachineOpRowsService(conn)
+
+svc.list(op_id) -> list[OpRowResult]
+svc.get(row_id) -> OpRowResult | None
+svc.add(op_id, label, value, count, sort_order=0) -> int
+svc.update(row_id, label, value, count, sort_order=0)
+svc.delete(row_id) -> bool          # يرفض لو آخر صف
+svc.calc_row_cost(row_id) -> float
+svc.calc_total_cost(op_id) -> float
+```
+
+**الملفات المتأثرة:**
+- `machine_op_rows_editor.py` → كل `db.costing.machine_op_rows_repo` calls تُستبدل
+
+#### 1.5 `services/costing/catalog_service.py` (جديد أو نقل)
+
+ينقل منطق `catalog_builder.py` إلى services layer:
+
+```python
+CatalogService(conn)
+
+svc.build() -> CatalogData
+svc.build_raw() -> list
+svc.build_labor_ops() -> list
+svc.build_machine_ops() -> list
+svc.build_semi() -> list
+```
+
+**الملفات المتأثرة:**
+- `catalog_builder.py` → يصبح thin wrapper أو يُحذف
+- `_catalog_provider.py` → يستدعي `CatalogService`
 
 ---
 
-### 1.2 تكرار الاشتراك في `bus.data_changed` بدون فصل
+### المرحلة 2 — تنظيف الـ Widgets
 
-في `ui/tabs/costing/machine/machine_op_form.py`:
+#### 2.1 `scenario_comparison_widget.py`
+
+**قبل:**
 ```python
-bus.data_changed.connect(self._refresh_machines)
-```
-هذا يعني أن أي `data_changed` في أي مكان يُعيد تحميل الماكينات — يجب استخدام `company_data_changed` بدلاً منه.
-
----
-
-## 2. مشاكل الـ Imports والمسارات
-
-### 2.1 `confirm_delete` — مسارات غير موحدة
-
-**المسار الصحيح الموثق في `ui_widgets.md`:**
-```python
-from ui.widgets.dialogs.confirm import confirm_delete
+def _calc_scenario_cost(self, scenario_id):
+    # 40 سطر من منطق حساب معقد مع imports داخلية
+    from db.costing.bom_scenarios_repo import fetch_bom_for_scenario
+    from db.shared.items_repo import fetch_item
+    from models.costing_base import raw_unit_price, effective_qty
+    ...
 ```
 
-**ملفات تستخدم مسار خاطئ:**
-- `ui/tabs/costing/machine/machine_table.py`:
-  ```python
-  from ui.helpers import confirm_delete  # ❌ غير موثق
-  ```
-- `ui/tabs/costing/raw/raw_table_panel.py`:
-  ```python
-  from ui.helpers import confirm_delete  # ❌ غير موثق
-  ```
-
-**ملفات بالمسار الصحيح (للمرجع):**
-- `ui/tabs/costing/labor/labor_op_table.py` ✅
-- `ui/tabs/costing/machine/machine_op_table.py` ✅
-- `ui/tabs/costing/product/product_main_panel.py` ✅
-
----
-
-### 2.2 `_SPLITTER_STYLE` — ألوان مُضمَّنة بدل `_C`
-
-في `ui/tabs/costing/labor_tab.py` و `ui/tabs/costing/machine_tab.py`:
+**بعد:**
 ```python
-_SPLITTER_STYLE = """
-    QSplitter::handle { background: #e0e0e0; border-top: 1px solid #ccc; }
-    QSplitter::handle:hover { background: #bbdefb; }
-"""
+def _calc_scenario_cost(self, scenario_id):
+    from services.costing.scenario_service import ScenarioService
+    return ScenarioService(self.conn).calc_cost(scenario_id)
 ```
 
-يجب استخدام `_C` و `splitter_style()` من `ui/widgets/theme/styles.py`:
+#### 2.2 `bom_tree.py`
+
+**قبل:**
+- `_fetch_bom_with_row_id_by_scenario` — 50 سطر SQL مع PRAGMA
+- `_fetch_all_scenarios` — SQL مباشر
+- `_get_scenario_id_for_item` — SQL مباشر
+
+**بعد:**
 ```python
-from ui.widgets.theme.styles import splitter_style
-# أو
-from ui.app_settings import _C
-_SPLITTER_STYLE = f"""
-    QSplitter::handle {{ background: {_C['border']}; border-top: 1px solid {_C['border_med']}; }}
-    QSplitter::handle:hover {{ background: {_C['accent_light']}; }}
-"""
+def _refresh(self):
+    svc = BomTreeService(self._conn)
+    scenarios = svc.get_scenarios(self._pid)
+    for sc in scenarios:
+        bom_rows = svc.get_bom_for_scenario(sc.id)
+        ...
 ```
 
-**الأولوية:** متوسطة — تأثير بصري عند تغيير الثيم
+#### 2.3 `raw_variants_panel.py`
 
----
-
-### 2.3 اشتراك `bus.theme_changed` مفقود في بعض المكونات
-
-الملفات التالية تستخدم `_C` مباشرة في `_build()` لكن **لا تربط** `bus.theme_changed`:
-- `ui/tabs/costing/shared/bom_scenarios_panel.py` — لا يوجد `bus.theme_changed.connect()`
-- `ui/tabs/costing/labor/labor_op_form.py` — لا يوجد `bus.theme_changed.connect()`
-- `ui/tabs/costing/product/form/_header_bar.py` ✅ موجود
-- `ui/tabs/costing/shared/bom_tree.py` ✅ موجود
-- `ui/tabs/costing/shared/machine_op_rows_editor.py` ✅ موجود
-
----
-
-## 3. مشاكل معمارية (Architecture)
-
-### 3.1 `_ProductMainPanel` — فصل مفقود في `_on_data_changed`
-
-في `product_main_panel.py`:
+**قبل:**
 ```python
-def _on_data_changed(self):
-    pid = self._prod_table.selected_pid()
-    if pid is not None:
-        self._refresh_for_product(pid)
+from db.costing.raw_variants_repo import (
+    fetch_variants_for_item, insert_variant, update_variant,
+    delete_variant, fetch_variant,
+)
 ```
 
-المشكلة: `_on_data_changed` يُستدعى لأي حدث في التطبيق كله، حتى لو لم يكن له علاقة بالمنتجات. يجب استخدام `company_data_changed` + `_should_respond_to_company()` من `SafeConnMixin`.
-
----
-
-### 3.2 `BomTree._fetch_bom_with_row_id_by_scenario` — PRAGMA على كل استدعاء
-
+**بعد:**
 ```python
-cols = {r["name"] for r in
-        self._conn.execute("PRAGMA table_info(bom)").fetchall()}
+from services.costing.variant_service import VariantService
+# كل العمليات عبر VariantService(self.conn)
 ```
 
-هذا الاستعلام يُنفَّذ في كل مرة يُحمَّل فيها سيناريو. يجب تخزينه مؤقتًا (cache) عند أول استدعاء.
+#### 2.4 `machine_op_rows_editor.py`
 
-**الإصلاح:**
+**قبل:** 8 imports من `db.costing.machine_op_rows_repo`
+
+**بعد:**
 ```python
-# في __init__:
-self._bom_cols: set | None = None
-
-def _get_bom_cols(self) -> set:
-    if self._bom_cols is None:
-        self._bom_cols = {r["name"] for r in
-            self._conn.execute("PRAGMA table_info(bom)").fetchall()}
-    return self._bom_cols
+from services.costing.machine_op_rows_service import MachineOpRowsService
+svc = MachineOpRowsService(self.conn)
 ```
 
----
+#### 2.5 `_db_scenarios.py`
 
-### 3.3 `_SaveLogic` — لا يتحقق من تعارض الأسماء
+**قبل:** 6 imports من `db.costing.bom_scenarios_repo`
 
-`ProductService.save()` لا يتحقق من وجود منتج بنفس الاسم. يجب إضافة تحقق قبل الحفظ:
+**بعد:**
 ```python
-# في _SaveLogic.save():
-existing = conn.execute(
-    "SELECT id FROM items WHERE name=? AND type=? AND id!=?",
-    (name, product_type, editing_id or -1)
-).fetchone()
-if existing:
-    QMessageBox.warning(parent_widget, "تنبيه", f"يوجد منتج بنفس الاسم: {name}")
-    return None
-```
-
----
-
-### 3.4 `ScenarioComparisonWidget._calc_scenario_cost` — تكرار منطق `calc_cost`
-
-الدالة تُعيد كتابة منطق حساب التكلفة الموجود في `models/costing.py` (`calc_product_cost`). يجب الاستفادة من:
-```python
-from models.costing import calc_product_cost
-total_cost, breakdown = calc_product_cost(self.conn, self._item_id, scenario_id=sc_id)
+from services.costing.scenario_service import ScenarioService
+svc = ScenarioService(self.conn)
 ```
 
 ---
 
-## 4. مشاكل UX/UI
+### المرحلة 3 — توحيد Bus Events
 
-### 4.1 `_LaborOpForm` — لا يُطلق `saved` signal
+**القاعدة:** كل `bus.data_changed.emit()` في tabs/ تُستبدل بـ `emit_company_data_changed()`.
 
-`BaseCrudForm` يوفر `saved = pyqtSignal(int)` لكن `LaborOpForm` لا يستفيد منه لتحديث الجدول مباشرة.
-الجدول يعتمد على `bus.data_changed` بدلاً من ربط مباشر — هذا مقبول لكن يمكن تحسينه.
-
----
-
-### 4.2 `_ProductMainPanel` — زر "تعديل المحدد" مخفي بدون وصول واضح
-
-عند تحميل منتج جديد، الزرار في `_ProductTable` تعمل لكن `BaseWarningBar` يختفي قبل أن يرى المستخدم المشكلة. يُقترح إضافة `auto_hide=0` للـ orphan warnings.
+| الملف | الإجراء |
+|-------|---------|
+| `machine_op_form.py` | استبدال `bus.data_changed.emit()` |
+| `product_form.py` | استبدال `bus.data_changed.emit()` (عبر `QTimer.singleShot`) |
+| `labor_op_form.py` | مراجعة — `bus.data_changed.connect` للاستماع صحيح، لكن `.emit()` يجب توحيده |
+| `machine_form.py` | استبدال `bus.data_changed.emit()` |
 
 ---
 
-### 4.3 `BulkReplaceDialog` — لا يُغلق تلقائيًا عند تعديل الكمية فقط
+### المرحلة 4 — توحيد `tr()` وإزالة Hardcoded Strings
+
+#### 4.1 `labor_tab.py`
 
 ```python
-if do_replace:
-    self.accept()
-else:
-    self._products_panel.reload()  # يبقى مفتوحًا
+# قبل
+tabs.addTab(self._settings, "⚙️  إعدادات العمالة")
+
+# بعد
+tabs.addTab(self._settings, f"⚙️  {tr('labor_settings')}")
 ```
 
-يُقترح إضافة زر "إغلاق بعد التطبيق" أو تغيير السلوك.
-
----
-
-### 4.4 `_BomScenariosPanel` — لا يعرض عدد المكونات في كل سيناريو
-
-الـ ComboBox يعرض اسم السيناريو فقط. يُقترح إضافة عدد المكونات:
-```python
-# بدل:
-f"{star}{sc['name']}"
-# الأفضل:
-f"{star}{sc['name']}  ({count} مكون)"
-```
-
----
-
-## 5. مشاكل الأداء
-
-### 5.1 `_ProductTable._fill_row` — `calc_cost` على كل صف
+#### 4.2 `machine_tab.py`
 
 ```python
-cost = calc_cost(self.conn, row["id"])
+# قبل
+tabs.addTab(_MachinesTab(self.conn), "🖥️  الماكينات")
+
+# بعد
+tabs.addTab(_MachinesTab(self.conn), f"🖥️  {tr('machines')}")
 ```
 
-يُستدعى لكل منتج في الجدول — إذا كان هناك 100 منتج، يُنفَّذ 100 استعلام متشعب. يجب:
-1. تحميل التكاليف في دفعة واحدة (batch)
-2. أو تأجيل الحساب (lazy loading) للصف المختار فقط
+#### 4.3 مفاتيح `tr()` الجديدة المطلوبة
+
+```
+labor_settings, labor_ops, machines, machine_ops
+delete_selected_node, from_scenario, delete_sub_components_from_semi
+op_rows_editor, row_description_placeholder, add_row, edit_row, delete_row
+time_minutes, by_time, by_unit, calc_mode, total_op_cost
+variant_description_line1, variant_unit_cost_formula, variant_name_placeholder
+pieces_count, pieces_tooltip_line1, pieces_tooltip_line2
+```
 
 ---
 
-### 5.2 `fetch_affected_products` في `bulk_replace_helpers.py` — `calc_cost` لكل منتج
+### المرحلة 5 — إصلاح `_SPLITTER_STYLE`
+
+#### 5.1 نقل الـ style لـ `ui/widgets/theme/styles.py`
 
 ```python
-"cost": calc_cost(conn, r["parent_id"]),
+# في styles.py — دالة جديدة
+def splitter_vertical_style() -> str:
+    return f"""
+        QSplitter::handle {{
+            background: {_C['border']};
+            border-top: 1px solid {_C['border_med']};
+        }}
+        QSplitter::handle:hover {{ background: {_C['accent_mid']}; }}
+    """
 ```
 
-نفس المشكلة — يجب إضافة خيار `include_cost=False` افتراضيًا.
+**الملفات المتأثرة:**
+- `labor_tab.py` → `_SPLITTER_STYLE` يُحذف، يُستبدل بـ `splitter_vertical_style()`
+- `machine_tab.py` → نفس الشيء
+- `product_main_panel.py` → نفس الشيء (له version محسّنة بالفعل لكن hardcoded)
 
 ---
 
-### 5.3 `catalog_builder._fetch_shared` — يفتح ويغلق `central_conn` في كل مرة
+### المرحلة 6 — `_scenario_node_builder.py`
+
+**المشكلة:** يستدعي repos مباشرة ويحسب تكاليف.
+
+**الخيار المقترح:** إنشاء `BomNodeData` dataclass يحمل البيانات المحسوبة مسبقاً من `BomTreeService`، والـ builder يتحول لـ pure presentation layer:
 
 ```python
-central = get_central_connection()
-rows = central.execute(...).fetchall()
-central.close()
+@dataclass
+class BomNodeData:
+    name: str
+    child_type: str
+    child_id: int
+    qty: float
+    waste_pct: float
+    unit_cost: float          # محسوب مسبقاً من service
+    total_cost: float
+    sub_nodes: list           # للنصف مصنع
+    machine_op_row_id: int | None = None
+    machine_op_label: str | None = None
 ```
-
-يُستدعى هذا مع كل `ComponentRow.refresh_catalog()`. يجب تخزينه مؤقتًا (TTL cache).
-
----
-
-## 6. مشاكل الـ Error Handling
-
-### 6.1 `_MachineOpForm._on_machine_changed` — يبتلع الأخطاء بصمت
 
 ```python
-try:
-    svc = MachineService(self._live_conn())
-    m   = svc.get(machine_id)
-except Exception:
-    return
+# _scenario_node_builder.py — يصبح:
+def build_component_node(node_data: BomNodeData) -> QTreeWidgetItem:
+    # pure presentation — لا DB access
 ```
 
-لو `_live_conn()` فشل (لا توجد شركة نشطة)، يرجع بصمت بدون إشعار المستخدم.
-
 ---
 
-### 6.2 `CostingSection._build` — try/except يلتقط كل الأخطاء ❓
+## ترتيب التنفيذ المقترح
 
-```python
-try:
-    widget = factory()
-except Exception as e:
-    widget = _make_error_tab(f"خطأ في تحميل التبويب: {e}")
+```
+الأسبوع 1:
+  ✅ ScenarioService         → يُبسّط 4 ملفات دفعة واحدة
+  ✅ VariantService          → يُبسّط raw_variants_panel
+  ✅ MachineOpRowsService    → يُبسّط machine_op_rows_editor
+
+الأسبوع 2:
+  ✅ BomTreeService          → يُبسّط bom_tree.py
+  ✅ CatalogService          → ينقل catalog_builder لـ services layer
+  ✅ توحيد bus events        → emit_company_data_changed في كل مكان
+
+الأسبوع 3:
+  ✅ splitter_vertical_style → إزالة _SPLITTER_STYLE المكررة
+  ✅ tr() في كل النصوص      → labor_tab, machine_tab, machine_op_form
+  ✅ BomNodeData dataclass   → فصل presentation عن data access في bom_tree
 ```
 
-هذا جيد ✅ لكن لا يُسجَّل الخطأ في أي log. يُقترح إضافة `logging.exception(e)`.
+---
+
+## ملخص الأثر المتوقع
+
+| المعيار | قبل | بعد |
+|---------|-----|-----|
+| repo imports مباشرة في tabs/ | ~25 import | 0 |
+| منطق حساب في widgets | ~80 سطر | 0 |
+| `bus.data_changed.emit()` غير موحّدة | 6 أماكن | 0 |
+| hardcoded strings عربية في tabs/ | ~40 نص | 0 |
+| `_SPLITTER_STYLE` مكررة | 3 أماكن | 0 |
+| services جديدة | 0 | 5 |
 
 ---
 
-## 7. تحسينات الكود (Code Quality)
+## ملاحظات مهمة
 
-### 7.1 `_SPLITTER_STYLE` — ثابت مكرر في ملفين
+1. **`cleanup_empty_products_after_orphan_fix`** — هذه الدالة مستخدمة في `_orphan_handler.py` لكنها غير موثقة في `db.md` → يجب التحقق من وجودها أو إضافتها لـ `ProductService.fix_orphans()` الموجود.
 
-نفس الثابت موجود في `labor_tab.py` و `machine_tab.py`. يجب نقله إلى ملف مشترك أو استخدام `splitter_style()` من `ui/widgets/theme/styles.py`.
+2. **`fetch_bom_with_row_id_by_scenario`** — الـ PRAGMA SQL الموجود في `bom_tree.py` يتحقق من وجود أعمدة ديناميكياً. هذا المنطق يجب أن ينتقل لـ `BomTreeService` أو يُعالج في migration آمن.
 
----
+3. **`catalog_builder._fetch_shared()`** — يفتح ويُغلق `central_conn` في كل استدعاء. في `CatalogService` يجب تحسين هذا بـ context manager أو تمرير `central_conn` اختياري.
 
-### 7.2 `LaborOpTable._fill_table_row` — حساب `cost` مع كل صف
-
-```python
-rate = self._settings.get_hourly_rate()
-minutes = item.get("minutes", 0)
-cost = (minutes / 60.0) * rate
-```
-
-يُستدعى `get_hourly_rate()` لكل صف. يجب حسابه مرة واحدة قبل حلقة الصفوف.
-
----
-
-### 7.3 `RawTablePanel._on_delete_item` — import داخل الدالة
-
-```python
-def _on_delete_item(self, item_id, item_name: str):
-    from PyQt5.QtWidgets import QMessageBox
-    from ui.helpers import confirm_delete
-    from db.shared.items_repo import delete_item
-```
-
-يُقترح نقل الـ imports للأعلى بدلاً من داخل الدالة.
-
----
-
-### 7.4 `BomTree._delete_node` — منطق معقد يستحق تقسيمًا
-
-الدالة تتعامل مع 3 حالات مختلفة (سيناريو، مكون فرعي في semi، مكون رئيسي). يُقترح تقسيمها إلى:
-- `_delete_from_scenario(node, parent)`
-- `_delete_from_main_bom(node)`
-
----
-
-## 8. ملاحظات على `_db_scenarios.py`
-
-### 8.1 `_db_delete` — لا يتحقق من أن السيناريو هو الأخير
-
-```python
-def _db_delete(self, scenario_id: int) -> bool:
-    result = delete_scenario(self.conn, scenario_id)
-```
-
-`delete_scenario` في `bom_scenarios_repo.py` يرفض لو آخر سيناريو ✅ لكن `_BomScenariosPanel._delete()` يتحقق أيضًا من `len(self._scenarios) <= 1` — التحقق مزدوج وغير ضروري.
-
----
-
-## 9. خلاصة الأولويات
-
-| الأولوية | المشكلة | الملفات المتأثرة | الجهد |
-|----------|---------|-----------------|-------|
-| 🔴 عالية | استخدام `emit_company_data_changed` بدل `bus.data_changed.emit()` | 6 ملفات | صغير |
-| 🔴 عالية | توحيد import `confirm_delete` | 2 ملفات | صغير |
-| 🟠 متوسطة | ربط `bus.theme_changed` في `_BomScenariosPanel` | 1 ملف | صغير |
-| 🟠 متوسطة | `_SPLITTER_STYLE` بألوان ثابتة — لا يتحدث مع الثيم | 2 ملفات | صغير |
-| 🟠 متوسطة | `PRAGMA table_info(bom)` يُنفَّذ بكثرة — يحتاج cache | 1 ملف | متوسط |
-| 🟠 متوسطة | `_on_data_changed` يستجيب لكل الأحداث — يحتاج فلترة | 1 ملف | متوسط |
-| 🟡 منخفضة | `calc_cost` على كل صف في `_ProductTable` — batch loading | 1 ملف | كبير |
-| 🟡 منخفضة | تكرار منطق الحساب في `ScenarioComparisonWidget` | 1 ملف | متوسط |
-| 🟡 منخفضة | `catalog_builder._fetch_shared` بدون cache | 1 ملف | متوسط |
-| 🟡 منخفضة | `import` داخل الدوال في `RawTablePanel` | 1 ملف | صغير |
-| ⚪ تحسين | إضافة عدد المكونات في عرض السيناريوهات | 1 ملف | صغير |
-| ⚪ تحسين | تقسيم `_delete_node` في `BomTree` | 1 ملف | متوسط |
-
----
-
-## 10. ترتيب التطبيق المقترح
-
-### المرحلة الأولى — إصلاحات سريعة (يوم واحد)
-
-1. استبدال `bus.data_changed.emit()` بـ `emit_company_data_changed()` في الملفات الـ6
-2. توحيد import `confirm_delete` في `machine_table.py` و `raw_table_panel.py`
-3. إضافة `bus.theme_changed.connect(self._apply_theme)` في `_BomScenariosPanel`
-4. إصلاح `_SPLITTER_STYLE` في `labor_tab.py` و `machine_tab.py`
-
-### المرحلة الثانية — تحسينات الأداء (يومان)
-
-5. إضافة cache لـ `PRAGMA table_info(bom)` في `BomTree`
-6. حساب `rate` مرة واحدة في `LaborOpTable._fill_table_row`
-7. إضافة TTL cache لـ `catalog_builder._fetch_shared`
-
-### المرحلة الثالثة — تحسينات معمارية (3 أيام)
-
-8. استخدام `calc_product_cost` في `ScenarioComparisonWidget`
-9. تقسيم `_delete_node` في `BomTree`
-10. إضافة فلترة `company_data_changed` في `_ProductMainPanel._on_data_changed`
-11. Batch loading للتكاليف في `_ProductTable`
-
----
-
-## ملاحظة
-
-جميع المسارات والأسماء الواردة في هذه الخطة مستخرجة من الملفات الفعلية في السياق. لم يُضف أي ملف أو دالة غير موثقة في `files_reference/`.
-
+4. **`_memory_scenarios.py`** — منطق الذاكرة صحيح ولا يحتاج تغيير جوهري، لكن عند بناء `ScenarioService` يجب التأكد من التوافق مع `switch_to_db_mode`.
 
 # بنية المشروع — المرحلة السادسة
 ### الأهداف البنيوية للمرحلة السابعة
