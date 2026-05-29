@@ -4,6 +4,7 @@ ui/tabs/costing/shared/raw_variants_panel.py
 _RawVariantsPanel — لوحة إدارة variants الخامة (صفوف الإنتاج).
 
 [Refactor] ربط bus.theme_changed لتحديث stylesheet ديناميكياً.
+[Refactor] استخدام VariantService بدل raw_variants_repo مباشرة.
 [Fix] استخدام emit_company_data_changed بدل bus.data_changed.emit()
       حسب توصية files_reference/models&services.md
 """
@@ -17,11 +18,7 @@ from PyQt5.QtWidgets import (
 from PyQt5.QtCore import Qt
 from PyQt5.QtGui  import QColor
 
-from db.costing.raw_variants_repo import (
-    fetch_variants_for_item,
-    insert_variant, update_variant, delete_variant,
-    fetch_variant,
-)
+from services.costing.variant_service import VariantService
 from ui.app_settings          import _C
 from ui.widgets.core.i18n     import tr
 from ui.widgets.core.events   import emit_company_data_changed
@@ -239,17 +236,22 @@ class _RawVariantsPanel(QGroupBox):
         self.table.setRowCount(0)
         if self._item_id is None:
             return
-        for var in fetch_variants_for_item(self.conn, self._item_id):
+
+        # [Refactor] استخدام VariantService بدل raw_variants_repo مباشرة
+        svc      = VariantService(self.conn)
+        variants = svc.list(self._item_id)
+
+        for var in variants:
             r = self.table.rowCount()
             self.table.insertRow(r)
-            self.table.setItem(r, 0, QTableWidgetItem(str(var["id"])))
-            self.table.setItem(r, 1, QTableWidgetItem(var["name"]))
+            self.table.setItem(r, 0, QTableWidgetItem(str(var.id)))
+            self.table.setItem(r, 1, QTableWidgetItem(var.name))
 
-            pieces_item = QTableWidgetItem(f"{var['pieces']:,.4g}")
+            pieces_item = QTableWidgetItem(f"{var.pieces:,.4g}")
             pieces_item.setTextAlignment(Qt.AlignCenter)
             self.table.setItem(r, 2, pieces_item)
 
-            pieces = float(var["pieces"])
+            pieces = float(var.pieces)
             if pieces > 0 and self._item_price > 0:
                 unit_cost = self._item_price / pieces
                 cost_text = f"{unit_cost:.4f}  {tr('currency_abbr')}"
@@ -275,7 +277,7 @@ class _RawVariantsPanel(QGroupBox):
             self.lbl_preview.setText("─")
 
     # ══════════════════════════════════════════════════════
-    # CRUD
+    # CRUD — [Refactor] كل العمليات عبر VariantService
     # ══════════════════════════════════════════════════════
 
     def _add(self):
@@ -286,10 +288,14 @@ class _RawVariantsPanel(QGroupBox):
             return
         if self._item_id is None:
             return
-        insert_variant(self.conn, self._item_id, name, pieces)
+        try:
+            svc = VariantService(self.conn)
+            svc.add(self._item_id, name, pieces)
+        except Exception as e:
+            QMessageBox.warning(self, tr("warning"), str(e))
+            return
         self._reset_form()
         self._load_table()
-        # [Fix] emit_company_data_changed بدل bus.data_changed.emit()
         emit_company_data_changed()
 
     def _edit(self):
@@ -298,12 +304,16 @@ class _RawVariantsPanel(QGroupBox):
             QMessageBox.information(self, tr("notice"), tr("select_variant_first"))
             return
         vid = int(self.table.item(row, 0).text())
-        var = fetch_variant(self.conn, vid)
+        try:
+            svc = VariantService(self.conn)
+            var = svc.get(vid)
+        except Exception:
+            var = None
         if not var:
             return
         self._editing_id = vid
-        self.inp_name.setText(var["name"])
-        self.sp_pieces.setValue(float(var["pieces"]))
+        self.inp_name.setText(var.name)
+        self.sp_pieces.setValue(float(var.pieces))
         self._update_preview()
         self.btn_add.setVisible(False)
         self.btn_save.setVisible(True)
@@ -314,10 +324,14 @@ class _RawVariantsPanel(QGroupBox):
         pieces = self.sp_pieces.value()
         if not name or self._editing_id is None:
             return
-        update_variant(self.conn, self._editing_id, name, pieces)
+        try:
+            svc = VariantService(self.conn)
+            svc.update(self._editing_id, name, pieces)
+        except Exception as e:
+            QMessageBox.warning(self, tr("warning"), str(e))
+            return
         self._reset_form()
         self._load_table()
-        # [Fix] emit_company_data_changed بدل bus.data_changed.emit()
         emit_company_data_changed()
 
     def _delete(self):
@@ -332,9 +346,13 @@ class _RawVariantsPanel(QGroupBox):
             f"{tr('delete_variant_confirm')} «{name}»؟",
             QMessageBox.Yes | QMessageBox.No
         ) == QMessageBox.Yes:
-            delete_variant(self.conn, vid)
+            try:
+                svc = VariantService(self.conn)
+                svc.delete(vid)
+            except Exception as e:
+                QMessageBox.warning(self, tr("warning"), str(e))
+                return
             self._load_table()
-            # [Fix] emit_company_data_changed بدل bus.data_changed.emit()
             emit_company_data_changed()
 
     def _reset_form(self):

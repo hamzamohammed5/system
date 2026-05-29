@@ -4,6 +4,7 @@ ui/tabs/costing/shared/scenario_comparison_widget.py
 ScenarioComparisonWidget — يقارن تكلفة السيناريو الافتراضي بأي سيناريو آخر.
 
 [Refactor] ربط bus.theme_changed لتحديث stylesheet ديناميكياً.
+[Refactor] استخدام ScenarioService بدل منطق الحساب المباشر داخل الـ widget.
 """
 
 from PyQt5.QtWidgets import (
@@ -13,6 +14,7 @@ from PyQt5.QtWidgets import (
 from PyQt5.QtCore import Qt
 
 from models.costing               import calc_cost
+from services.costing.scenario_service import ScenarioService
 from ui.app_settings              import _C
 from ui.widgets.core.i18n         import tr
 from ui.widgets.components.stat_row import stat_card_pair
@@ -183,17 +185,14 @@ class ScenarioComparisonWidget(QFrame):
             return
 
         try:
-            rows = self.conn.execute(
-                "SELECT id, name, is_default FROM bom_scenarios "
-                "WHERE item_id=? ORDER BY id",
-                (self._item_id,)
-            ).fetchall()
+            svc  = ScenarioService(self.conn)
+            rows = svc.list(self._item_id)
         except Exception:
             rows = []
 
-        for r in rows:
-            star = "⭐ " if r["is_default"] else "📋 "
-            self.cmb_scenario.addItem(f"{star}{r['name']}", r["id"])
+        for sc in rows:
+            star = "⭐ " if sc.is_default else "📋 "
+            self.cmb_scenario.addItem(f"{star}{sc.name}", sc.id)
 
         self.cmb_scenario.blockSignals(False)
         self._refresh_comparison()
@@ -202,45 +201,13 @@ class ScenarioComparisonWidget(QFrame):
         return calc_cost(self.conn, item_id)
 
     def _calc_scenario_cost(self, scenario_id: int) -> float:
+        """
+        [Refactor] استخدام ScenarioService.calc_cost بدل منطق الحساب
+        المعقد الذي كان داخل الـ widget مباشرة.
+        """
         try:
-            from db.costing.bom_scenarios_repo import fetch_bom_for_scenario
-            from db.shared.items_repo import fetch_item
-            from models.costing_base import raw_unit_price, effective_qty
-            from models.costing_ops  import calc_labor_op_cost, calc_machine_op_cost
-
-            bom_rows = fetch_bom_for_scenario(self.conn, scenario_id)
-            total    = 0.0
-            visited  = set()
-
-            for row in bom_rows:
-                child_type = row["child_type"]
-                child_id   = row["child_id"]
-                qty        = row["qty"]
-                waste_pct  = float(row["waste_pct"]) if row["waste_pct"] else 0.0
-                eff_qty    = effective_qty(qty, waste_pct)
-
-                if child_type == "raw":
-                    child     = fetch_item(self.conn, child_id)
-                    unit_cost = raw_unit_price(child) if child else 0.0
-                elif child_type == "semi":
-                    if child_id not in visited:
-                        visited.add(child_id)
-                    unit_cost = calc_cost(self.conn, child_id)
-                elif child_type == "labor_op":
-                    unit_cost = calc_labor_op_cost(self.conn, child_id)
-                elif child_type == "machine_op":
-                    mor_id = None
-                    try:
-                        mor_id = row["machine_op_row_id"]
-                    except (KeyError, IndexError):
-                        pass
-                    unit_cost = calc_machine_op_cost(self.conn, child_id, row_id=mor_id)
-                else:
-                    unit_cost = 0.0
-
-                total += unit_cost * eff_qty
-
-            return total
+            svc = ScenarioService(self.conn)
+            return svc.calc_cost(scenario_id)
         except Exception:
             return 0.0
 

@@ -4,6 +4,7 @@ ui/tabs/costing/shared/machine_op_rows_editor.py
 _OpRowsEditor — محرر صفوف عملية التشغيل.
 
 [Refactor] ربط bus.theme_changed لتحديث stylesheet ديناميكياً.
+[Refactor] استخدام MachineOpRowsService بدل machine_op_rows_repo مباشرة.
 [Fix] استخدام emit_company_data_changed بدل bus.data_changed.emit()
       حسب توصية files_reference/models&services.md
 """
@@ -17,10 +18,7 @@ from PyQt5.QtWidgets import (
 from PyQt5.QtCore import Qt
 from PyQt5.QtGui  import QColor
 
-from db.costing.machine_op_rows_repo import (
-    fetch_op_rows, insert_op_row, update_op_row,
-    delete_op_row, calc_op_row_cost, calc_op_total_cost,
-)
+from services.costing.machine_op_rows_service import MachineOpRowsService
 from ui.app_settings          import _C
 from ui.widgets.core.i18n     import tr
 from ui.widgets.core.events   import emit_company_data_changed
@@ -304,27 +302,31 @@ class _OpRowsEditor(QGroupBox):
         if self._op_id is None:
             return
         self.table.setRowCount(0)
-        rows = fetch_op_rows(self.conn, self._op_id)
+
+        # [Refactor] استخدام MachineOpRowsService بدل machine_op_rows_repo مباشرة
+        svc  = MachineOpRowsService(self.conn)
+        rows = svc.list(self._op_id)
+
         for row in rows:
             r = self.table.rowCount()
             self.table.insertRow(r)
-            self.table.setItem(r, 0, QTableWidgetItem(str(row["id"])))
-            self.table.setItem(r, 1, QTableWidgetItem(row["label"] or "—"))
+            self.table.setItem(r, 0, QTableWidgetItem(str(row.id)))
+            self.table.setItem(r, 1, QTableWidgetItem(row.label or "—"))
 
             val_txt = (
-                f"{row['value']:.4g} {tr('minutes_abbr')}"
+                f"{row.value:.4g} {tr('minutes_abbr')}"
                 if self._mode == "time"
-                else f"{row['value']:.4g} {tr('unit')}"
+                else f"{row.value:.4g} {tr('unit')}"
             )
             val_item = QTableWidgetItem(val_txt)
             val_item.setTextAlignment(Qt.AlignCenter)
             self.table.setItem(r, 2, val_item)
 
-            cnt_item = QTableWidgetItem(f"{row['count']:.4g}")
+            cnt_item = QTableWidgetItem(f"{row.count:.4g}")
             cnt_item.setTextAlignment(Qt.AlignCenter)
             self.table.setItem(r, 3, cnt_item)
 
-            row_cost  = calc_op_row_cost(self.conn, row["id"])
+            row_cost  = svc.calc_row_cost(row.id)
             cost_item = QTableWidgetItem(
                 f"{row_cost:.4f} {tr('currency_abbr')}"
             )
@@ -332,13 +334,13 @@ class _OpRowsEditor(QGroupBox):
             cost_item.setTextAlignment(Qt.AlignCenter)
             self.table.setItem(r, 4, cost_item)
 
-        total = calc_op_total_cost(self.conn, self._op_id)
+        total = svc.calc_total_cost(self._op_id)
         self.lbl_total.setText(
             f"{total:.4f} {tr('currency')} / {tr('piece')}"
         )
 
     # ══════════════════════════════════════════════════════
-    # CRUD
+    # CRUD — [Refactor] كل العمليات عبر MachineOpRowsService
     # ══════════════════════════════════════════════════════
 
     def _add_row(self):
@@ -347,13 +349,17 @@ class _OpRowsEditor(QGroupBox):
         value = self.sp_value.value()
         count = self.sp_count.value()
         label = self.inp_label.text().strip()
-        insert_op_row(
-            self.conn, self._op_id, label, value, count,
-            sort_order=self.table.rowCount()
-        )
+        try:
+            svc = MachineOpRowsService(self.conn)
+            svc.add(
+                self._op_id, label, value, count,
+                sort_order=self.table.rowCount()
+            )
+        except Exception as e:
+            QMessageBox.warning(self, tr("warning"), str(e))
+            return
         self._reset_form()
         self._load_table()
-        # [Fix] emit_company_data_changed بدل bus.data_changed.emit()
         emit_company_data_changed()
 
     def _edit_row(self):
@@ -361,15 +367,18 @@ class _OpRowsEditor(QGroupBox):
         if row == -1:
             QMessageBox.information(self, tr("notice"), tr("select_row_first"))
             return
-        from db.costing.machine_op_rows_repo import fetch_op_row
         rid = int(self.table.item(row, 0).text())
-        r   = fetch_op_row(self.conn, rid)
+        try:
+            svc = MachineOpRowsService(self.conn)
+            r   = svc.get(rid)
+        except Exception:
+            r = None
         if not r:
             return
         self._editing_row_id = rid
-        self.inp_label.setText(r["label"] or "")
-        self.sp_value.setValue(float(r["value"]))
-        self.sp_count.setValue(float(r["count"]))
+        self.inp_label.setText(r.label or "")
+        self.sp_value.setValue(float(r.value))
+        self.sp_count.setValue(float(r.count))
         self._update_preview()
         self.btn_add.setVisible(False)
         self.btn_save.setVisible(True)
@@ -378,15 +387,19 @@ class _OpRowsEditor(QGroupBox):
     def _save_edit(self):
         if self._editing_row_id is None:
             return
-        update_op_row(
-            self.conn, self._editing_row_id,
-            self.inp_label.text().strip(),
-            self.sp_value.value(),
-            self.sp_count.value(),
-        )
+        try:
+            svc = MachineOpRowsService(self.conn)
+            svc.update(
+                self._editing_row_id,
+                self.inp_label.text().strip(),
+                self.sp_value.value(),
+                self.sp_count.value(),
+            )
+        except Exception as e:
+            QMessageBox.warning(self, tr("warning"), str(e))
+            return
         self._reset_form()
         self._load_table()
-        # [Fix] emit_company_data_changed بدل bus.data_changed.emit()
         emit_company_data_changed()
 
     def _delete_row(self):
@@ -401,9 +414,13 @@ class _OpRowsEditor(QGroupBox):
             )
             return
         rid = int(self.table.item(row, 0).text())
-        delete_op_row(self.conn, rid)
+        try:
+            svc = MachineOpRowsService(self.conn)
+            svc.delete(rid)
+        except Exception as e:
+            QMessageBox.warning(self, tr("warning"), str(e))
+            return
         self._load_table()
-        # [Fix] emit_company_data_changed بدل bus.data_changed.emit()
         emit_company_data_changed()
 
     def _reset_form(self):

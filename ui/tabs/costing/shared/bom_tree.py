@@ -4,7 +4,7 @@ ui/tabs/costing/shared/bom_tree.py
 BomTree — شجرة عرض BOM مع كل السيناريوهات كنودات منفصلة.
 
 [Refactor] استخدام tr() لكل النصوص + _C للألوان.
-[Refactor] حذف db/ مباشرة من delete — الاعتماد على bom_scenarios_repo فقط.
+[Refactor] استخدام BomTreeService بدل SQL/repos مباشرة.
 
 [Fix #10] ربط bus.theme_changed لتحديث stylesheet ديناميكياً عند تغيير الثيم،
   توافقاً مع _OpRowsEditor و _RawVariantsPanel و ScenarioComparisonWidget.
@@ -17,8 +17,7 @@ from PyQt5.QtWidgets import (
 )
 from PyQt5.QtCore import Qt
 
-from db.shared.items_repo          import fetch_bom, delete_bom_row
-from db.costing.bom_scenarios_repo import fetch_bom_for_scenario
+from services.costing.bom_tree_service import BomTreeService
 from ui.app_settings               import _C
 from ui.widgets.core.i18n          import tr
 from ui.widgets.dialogs.confirm    import confirm_delete
@@ -200,7 +199,7 @@ class BomTree(QWidget):
             self._refresh()
 
     # ══════════════════════════════════════════════════════
-    # _refresh
+    # _refresh — [Refactor] استخدام BomTreeService بدل SQL مباشر
     # ══════════════════════════════════════════════════════
 
     def _refresh(self):
@@ -208,10 +207,13 @@ class BomTree(QWidget):
         if self._pid is None:
             return
 
-        scenarios = self._fetch_all_scenarios(self._pid)
+        # [Refactor] استخدام BomTreeService بدل _fetch_all_scenarios + SQL مباشر
+        svc       = BomTreeService(self._conn)
+        scenarios = svc.get_scenarios(self._pid)
 
         if not scenarios:
-            bom_rows = self._fetch_bom_with_row_id_by_scenario(None)
+            # بدون سيناريوهات — عرض BOM مباشر
+            bom_rows = svc.get_bom_for_scenario(None)
             for row in bom_rows:
                 node = build_component_node(
                     self._conn,
@@ -228,7 +230,8 @@ class BomTree(QWidget):
         for sc in scenarios:
             sc_node = build_scenario_node(sc)
 
-            bom_rows      = self._fetch_bom_with_row_id_by_scenario(sc["id"])
+            # [Refactor] استخدام BomTreeService بدل _fetch_bom_with_row_id_by_scenario
+            bom_rows      = svc.get_bom_for_scenario(sc["id"])
             total_sc_cost = 0.0
 
             for row in bom_rows:
@@ -254,93 +257,13 @@ class BomTree(QWidget):
             sc_node.setExpanded(bool(sc["is_default"]))
 
     # ══════════════════════════════════════════════════════
-    # مساعدات جلب البيانات
+    # مساعدات جلب البيانات — [Refactor] عبر BomTreeService
     # ══════════════════════════════════════════════════════
 
-    def _fetch_all_scenarios(self, item_id: int) -> list:
-        try:
-            rows = self._conn.execute(
-                "SELECT id, item_id, name, is_default "
-                "FROM bom_scenarios WHERE item_id=? ORDER BY id",
-                (item_id,)
-            ).fetchall()
-            return [dict(r) for r in rows]
-        except Exception:
-            return []
-
-    def _fetch_bom_with_row_id_by_scenario(self, scenario_id) -> list:
-        try:
-            if scenario_id is not None:
-                cols = {r["name"] for r in
-                        self._conn.execute("PRAGMA table_info(bom)").fetchall()}
-                has_row_id  = "machine_op_row_id" in cols
-                has_variant = "variant_id" in cols
-
-                if has_row_id and has_variant:
-                    rows = self._conn.execute(
-                        "SELECT child_type, child_id, qty, "
-                        "COALESCE(waste_pct,0) as waste_pct, "
-                        "variant_id, machine_op_row_id "
-                        "FROM bom WHERE scenario_id=? ORDER BY id",
-                        (scenario_id,)
-                    ).fetchall()
-                elif has_row_id:
-                    rows = self._conn.execute(
-                        "SELECT child_type, child_id, qty, "
-                        "COALESCE(waste_pct,0) as waste_pct, "
-                        "NULL as variant_id, machine_op_row_id "
-                        "FROM bom WHERE scenario_id=? ORDER BY id",
-                        (scenario_id,)
-                    ).fetchall()
-                else:
-                    rows = self._conn.execute(
-                        "SELECT child_type, child_id, qty, "
-                        "COALESCE(waste_pct,0) as waste_pct, "
-                        "NULL as variant_id, NULL as machine_op_row_id "
-                        "FROM bom WHERE scenario_id=? ORDER BY id",
-                        (scenario_id,)
-                    ).fetchall()
-
-                if rows:
-                    return [dict(r) for r in rows]
-        except Exception:
-            pass
-
-        old_rows = fetch_bom(self._conn, self._pid)
-        result = []
-        for r in old_rows:
-            d = {
-                "child_type":        r[0] if isinstance(r, tuple) else r["child_type"],
-                "child_id":          r[1] if isinstance(r, tuple) else r["child_id"],
-                "qty":               r[2] if isinstance(r, tuple) else r["qty"],
-                "waste_pct":         (
-                    r[3] if isinstance(r, tuple)
-                    else (r["waste_pct"] if "waste_pct" in r.keys() else 0.0)
-                ),
-                "variant_id":        None,
-                "machine_op_row_id": None,
-            }
-            result.append(d)
-        return result
-
     def _get_sub_bom_for_item(self, item_id: int) -> list:
-        sc_id = self._get_scenario_id_for_item(item_id)
-        return self._fetch_bom_with_row_id_by_scenario(sc_id)
-
-    def _get_scenario_id_for_item(self, item_id: int):
-        try:
-            sc = self._conn.execute(
-                "SELECT id FROM bom_scenarios WHERE item_id=? AND is_default=1 LIMIT 1",
-                (item_id,)
-            ).fetchone()
-            if not sc:
-                sc = self._conn.execute(
-                    "SELECT id FROM bom_scenarios WHERE item_id=? ORDER BY id LIMIT 1",
-                    (item_id,)
-                ).fetchone()
-            return sc["id"] if sc else None
-        except Exception:
-            return None
+        # [Refactor] استخدام BomTreeService بدل SQL مباشر
+        svc = BomTreeService(self._conn)
+        return svc.get_sub_bom(item_id)
 
     # ══════════════════════════════════════════════════════
     # Selection & Delete
@@ -400,13 +323,10 @@ class BomTree(QWidget):
                 ):
                     return
 
+                # [Refactor] استخدام BomTreeService بدل SQL مباشر
                 try:
-                    self._conn.execute(
-                        "DELETE FROM bom "
-                        "WHERE scenario_id=? AND child_type=? AND child_id=?",
-                        (sc_id, child_type, child_id)
-                    )
-                    self._conn.commit()
+                    svc = BomTreeService(self._conn)
+                    svc.delete_bom_component(sc_id, child_type, child_id)
                 except Exception as e:
                     QMessageBox.warning(self, tr("error"), str(e))
                 self._refresh()
@@ -426,5 +346,11 @@ class BomTree(QWidget):
         if not confirm_delete(self, node_name):
             return
 
-        delete_bom_row(self._conn, self._pid, child_type, child_id)
+        # [Refactor] استخدام BomTreeService بدل delete_bom_row مباشرة
+        try:
+            svc = BomTreeService(self._conn)
+            svc.delete_bom_row_direct(self._pid, child_type, child_id)
+        except Exception as e:
+            QMessageBox.warning(self, tr("error"), str(e))
+            return
         self._refresh()
