@@ -1,398 +1,380 @@
-# خطة التحسينات — وحدة costing UI
+# خطة التحسينات — تحليل الكود الحالي
 
-> **ملاحظة:** كل التحسينات مبنية على الملفات الموجودة فعلاً في السياق وموثقة في `files_reference/`.
-> لا يُستخدم أي import أو مسار غير موجود في الكود.
-
----
-
-## فهرس
-
-| # | التحسين | الأولوية | الملفات المتأثرة |
-|---|---------|----------|-----------------|
-| 1 | [توحيد import الـ LiveConnMixin](#1-توحيد-import-الـ-liveconnmixin) | عالية | `product_main_panel`, `product_form` |
-| 2 | [حذف import قديم في product_form](#2-حذف-import-قديم-في-product_form) | عالية | `product_form.py` |
-| 3 | [تبسيط _on_data_changed في product_main_panel](#3-تبسيط-_on_data_changed) | متوسطة | `product_main_panel.py` |
-| 4 | [توحيد _check_orphans — دمج الـ conn الاختياري](#4-توحيد-_check_orphans) | متوسطة | `product_main_panel.py` |
-| 5 | [استخدام emit_company_data_changed بدل bus.data_changed في _orphan_handler](#5-توحيد-bus-events-في-_orphan_handler) | متوسطة | `_orphan_handler.py` |
-| 6 | [توحيد import confirm_delete](#6-توحيد-import-confirm_delete) | منخفضة | `product_main_panel.py` |
-| 7 | [تحسين _build_extra_header_actions في product_table](#7-تحسين-_build_extra_header_actions) | منخفضة | `product_table.py` |
-| 8 | [إزالة cleanup_empty_products بعد orphan fix — مراجعة السلوك](#8-مراجعة-cleanup_empty_products) | منخفضة | `_orphan_handler.py` |
-| 9 | [توحيد tab_section_base — إضافة conn تلقائي في CostingSection](#9-conn-في-costingsection) | متوسطة | `costing_section.py` |
-| 10 | [ربط bus.theme_changed في BomTree](#10-ربط-bustheme_changed-في-bomtree) | منخفضة | `bom_tree.py` |
+> تاريخ التحليل: مايو 2026  
+> المصدر: فحص ملفات `files_reference/` + ملفات UI الفعلية في السياق
 
 ---
 
-## التفاصيل
+## 1. مشاكل الـ Bus Events والأداء
 
----
+### 1.1 استخدام `bus.data_changed` بدل `bus.company_data_changed`
 
-### 1. توحيد import الـ LiveConnMixin
+**الملفات المتأثرة:**
+- `ui/tabs/costing/labor/labor_op_table.py` — السطر: `emit_company_data_changed()` ✅ (مُعدَّل بالفعل)
+- `ui/tabs/costing/machine/machine_op_table.py` — يستخدم `bus.data_changed.emit()` مباشرة ❌
+- `ui/tabs/costing/machine/machine_table.py` — يستخدم `bus.data_changed.emit()` ❌
+- `ui/tabs/costing/shared/raw_variants_panel.py` — يستخدم `bus.data_changed.emit()` ❌
+- `ui/tabs/costing/shared/machine_op_rows_editor.py` — يستخدم `bus.data_changed.emit()` ❌
+- `ui/tabs/costing/shared/bom_scenarios/_db_scenarios.py` — يستخدم `bus.data_changed.emit()` ❌
 
-**المشكلة:**
-- `product_main_panel.py` يستورد من `ui.widgets.shared.connection_mixin`:
-  ```python
-  from ui.widgets.shared.connection_mixin import LiveConnMixin
-  ```
-- بينما ملفات أخرى في نفس المشروع (`machine_form.py`, `machine_op_form.py`) تستورد من المسار الموثق:
-  ```python
-  from ui.widgets.core.conn import LiveConnMixin
-  ```
-
-**التحسين:**
-تغيير import في `product_main_panel.py` و `product_form.py` للمسار الموثق في `files_reference/ui_widgets.md`.
-
-**الملفات:**
-- `ui/tabs/costing/product/product_main_panel.py` — السطر 13
-- `ui/tabs/costing/product/product_form.py` — استخدام `ui.widgets.shared.connection_mixin`
-
-**التغيير:**
+**الإصلاح المطلوب:**
 ```python
-# قبل
-from ui.widgets.shared.connection_mixin import LiveConnMixin
-
-# بعد
-from ui.widgets.core.conn import LiveConnMixin
-```
-
-**الملاحظة:** يجب التأكد أن `ui.widgets.shared.connection_mixin` هو alias أو أن `LiveConnMixin` موجود في كلا المسارين قبل التغيير. إن لم يكن كذلك، يُطبَّق التغيير بحذر مع اختبار.
-
----
-
-### 2. حذف import قديم في product_form
-
-**المشكلة:**
-`product_form.py` يستورد `ComponentRow` من مسار قديم:
-```python
-from ui.widgets.shared.component_row._row_widget import ComponentRow
-```
-بينما `_rows_manager.py` يستورد بشكل صحيح من:
-```python
-from ui.widgets.components.component_row.widget import ComponentRow
-```
-وهو المسار الموثق في `files_reference/ui_widgets.md`.
-
-**التحسين:**
-حذف أو تصحيح هذا الـ import في `product_form.py` لأنه يُستخدم فقط في type hint داخلي ولا يُستدعى مباشرة (الاستدعاء الفعلي يمر عبر `_RowsManager`).
-
-**الملف:** `ui/tabs/costing/product/product_form.py` — السطر 15
-
-```python
-# حذف هذا السطر (غير ضروري — ComponentRow يُستخدم فقط في _rows_manager)
-from ui.widgets.shared.component_row._row_widget import ComponentRow
-```
-
----
-
-### 3. تبسيط _on_data_changed
-
-**المشكلة:**
-في `product_main_panel.py`، دالتا `_on_data_changed` و `_on_product_selected` تكرران نفس المنطق بشكل كبير:
-
-```python
-def _on_data_changed(self):
-    pid = self._prod_table.selected_pid()
-    if pid is None:
-        return
-    try:
-        conn = self._live_conn()
-        self._check_orphans(pid, conn)
-        self._bom_tree.load(conn, pid)
-    except Exception:
-        pass
-
-def _on_product_selected(self, pid: int | None):
-    if pid is None:
-        self._bom_tree.clear_tree()
-        self._warning.setVisible(False)
-        return
-    try:
-        conn = self._live_conn()
-        self._check_orphans(pid, conn)
-        self._bom_tree.load(conn, pid)
-    except Exception:
-        pass
-```
-
-**التحسين:**
-استخراج المنطق المشترك في دالة واحدة `_refresh_for_product`:
-
-```python
-def _refresh_for_product(self, pid: int):
-    """تحديث الـ warning bar والـ BOM tree لمنتج محدد."""
-    try:
-        conn = self._live_conn()
-        self._check_orphans(pid, conn)
-        self._bom_tree.load(conn, pid)
-    except Exception:
-        pass
-
-def _on_data_changed(self):
-    pid = self._prod_table.selected_pid()
-    if pid is not None:
-        self._refresh_for_product(pid)
-
-def _on_product_selected(self, pid: int | None):
-    if pid is None:
-        self._bom_tree.clear_tree()
-        self._warning.setVisible(False)
-        return
-    self._refresh_for_product(pid)
-```
-
-**الملف:** `ui/tabs/costing/product/product_main_panel.py`
-
----
-
-### 4. توحيد _check_orphans
-
-**المشكلة:**
-`_check_orphans` تقبل `conn=None` وتُنشئ conn داخلياً إن لم يُمرر، لكن كل استدعاءاتها تمرر `conn` بالفعل. هذا يُربك القارئ.
-
-```python
-def _check_orphans(self, pid: int, conn=None):
-    if conn is None:
-        conn = self._live_conn()
-    ...
-```
-
-**التحسين:**
-إزالة القيمة الافتراضية وجعل `conn` معاملاً إلزامياً، بما يتوافق مع طريقة الاستخدام الفعلية:
-
-```python
-def _check_orphans(self, pid: int, conn):
-    orphans = self._orphan.fetch(conn, pid)
-    item    = fetch_item(conn, pid)
-    name    = item["name"] if item else f"ID {pid}"
-    self._warning.show_orphans(orphans, name)
-```
-
-**الملف:** `ui/tabs/costing/product/product_main_panel.py`
-
----
-
-### 5. توحيد bus events في _orphan_handler
-
-**المشكلة:**
-`_orphan_handler.py` يستخدم `bus.data_changed.emit()` مباشرة، بينما ملفات أخرى مثل `raw_table_panel.py` تستخدم:
-```python
-from ui.widgets.core.events import emit_company_data_changed
-```
-
-حسب `files_reference/models&services.md`:
-> استخدم `bus.company_data_changed.emit(cid)` بدل `bus.data_changed.emit()` — أكثر دقة وأفضل أداءً.
-
-**التحسين:**
-استبدال `bus.data_changed.emit()` بـ `emit_company_data_changed()` من `ui.widgets.core.events`:
-
-```python
-# قبل
+# من:
 from ui.events import bus
 bus.data_changed.emit()
 
-# بعد
+# إلى:
 from ui.widgets.core.events import emit_company_data_changed
 emit_company_data_changed()
 ```
 
-**الملف:** `ui/tabs/costing/product/_orphan_handler.py`
-
-**تحذير:** يجب مراجعة أن `emit_company_data_changed` متاحة وتحتاج company_id أو لا — راجع `ui/widgets/core/events.py` قبل التطبيق.
+**الأولوية:** عالية — يؤثر على الأداء عند وجود شركات متعددة
 
 ---
 
-### 6. توحيد import confirm_delete
+### 1.2 تكرار الاشتراك في `bus.data_changed` بدون فصل
 
-**المشكلة:**
-`product_main_panel.py` يستورد `confirm_delete` من:
+في `ui/tabs/costing/machine/machine_op_form.py`:
 ```python
-from ui.helpers import confirm_delete
+bus.data_changed.connect(self._refresh_machines)
 ```
-بينما الملفات الأخرى (`labor_op_table.py`, `machine_op_table.py`) تستورد من المسار الموثق:
+هذا يعني أن أي `data_changed` في أي مكان يُعيد تحميل الماكينات — يجب استخدام `company_data_changed` بدلاً منه.
+
+---
+
+## 2. مشاكل الـ Imports والمسارات
+
+### 2.1 `confirm_delete` — مسارات غير موحدة
+
+**المسار الصحيح الموثق في `ui_widgets.md`:**
 ```python
 from ui.widgets.dialogs.confirm import confirm_delete
 ```
 
-**التحسين:**
-```python
-# قبل
-from ui.helpers import confirm_delete
+**ملفات تستخدم مسار خاطئ:**
+- `ui/tabs/costing/machine/machine_table.py`:
+  ```python
+  from ui.helpers import confirm_delete  # ❌ غير موثق
+  ```
+- `ui/tabs/costing/raw/raw_table_panel.py`:
+  ```python
+  from ui.helpers import confirm_delete  # ❌ غير موثق
+  ```
 
-# بعد
-from ui.widgets.dialogs.confirm import confirm_delete
-```
-
-**الملف:** `ui/tabs/costing/product/product_main_panel.py` — السطر 8
-
-**تحذير:** يجب التأكد من وجود `confirm_delete` في `ui.widgets.dialogs.confirm` (مُوثق في `files_reference/ui_widgets.md` — نعم موجود).
-
----
-
-### 7. تحسين _build_extra_header_actions في product_table
-
-**المشكلة:**
-`product_table.py` يُضيف زر "تعديل المحدد" وزر "حذف المحدد" عبر `_build_extra_header_actions`، لكن بدون ربط الـ style الصحيح لزر الحذف:
-
-```python
-def _build_extra_header_actions(self, header):
-    header.add_action("✏️ تعديل المحدد", self._trigger_edit)
-    header.add_action("🗑️ حذف المحدد",   self._trigger_delete, style="danger")
-```
-
-الزر الأول بدون `style` محدد — سيأخذ `"normal"` كقيمة افتراضية. لتوحيد المظهر مع بقية الجداول:
-
-**التحسين:**
-```python
-def _build_extra_header_actions(self, header):
-    header.add_action("✏️ تعديل المحدد", self._trigger_edit,   style="normal")
-    header.add_action("🗑️ حذف المحدد",   self._trigger_delete, style="danger")
-```
-
-**الملف:** `ui/tabs/costing/product/product_table.py`
+**ملفات بالمسار الصحيح (للمرجع):**
+- `ui/tabs/costing/labor/labor_op_table.py` ✅
+- `ui/tabs/costing/machine/machine_op_table.py` ✅
+- `ui/tabs/costing/product/product_main_panel.py` ✅
 
 ---
 
-### 8. مراجعة cleanup_empty_products بعد orphan fix
+### 2.2 `_SPLITTER_STYLE` — ألوان مُضمَّنة بدل `_C`
 
-**المشكلة:**
-في `_orphan_handler.py`:
+في `ui/tabs/costing/labor_tab.py` و `ui/tabs/costing/machine_tab.py`:
 ```python
-auto_deleted = cleanup_empty_products_after_orphan_fix(conn, [pid])
-```
-هذه الدالة تحذف المنتج تلقائياً إن أصبح فارغاً بعد حذف الـ orphans — وهو سلوك قد يفاجئ المستخدم.
-
-**التحسين المقترح:**
-بدلاً من الحذف التلقائي الصامت، إضافة تأكيد من المستخدم قبل الحذف:
-
-```python
-# في fix():
-n = delete_orphan_bom_rows(conn, pid)
-
-# فحص هل المنتج فارغ الآن؟
-from db.shared.items_repo import fetch_bom
-remaining = fetch_bom(conn, pid)
-auto_deleted = []
-if not remaining:
-    from PyQt5.QtWidgets import QMessageBox
-    reply = QMessageBox.question(
-        self._parent, "المنتج فارغ",
-        f"«{prod_name}» لم يعد يحتوي على أي مكونات.\nهل تريد حذفه تلقائياً؟",
-        QMessageBox.Yes | QMessageBox.No
-    )
-    if reply == QMessageBox.Yes:
-        auto_deleted = cleanup_empty_products_after_orphan_fix(conn, [pid])
+_SPLITTER_STYLE = """
+    QSplitter::handle { background: #e0e0e0; border-top: 1px solid #ccc; }
+    QSplitter::handle:hover { background: #bbdefb; }
+"""
 ```
 
-**الملف:** `ui/tabs/costing/product/_orphan_handler.py`
+يجب استخدام `_C` و `splitter_style()` من `ui/widgets/theme/styles.py`:
+```python
+from ui.widgets.theme.styles import splitter_style
+# أو
+from ui.app_settings import _C
+_SPLITTER_STYLE = f"""
+    QSplitter::handle {{ background: {_C['border']}; border-top: 1px solid {_C['border_med']}; }}
+    QSplitter::handle:hover {{ background: {_C['accent_light']}; }}
+"""
+```
 
-**ملاحظة:** هذا تغيير في السلوك — يحتاج موافقة على المتطلبات قبل التطبيق.
+**الأولوية:** متوسطة — تأثير بصري عند تغيير الثيم
 
 ---
 
-### 9. conn في CostingSection
+### 2.3 اشتراك `bus.theme_changed` مفقود في بعض المكونات
 
-**المشكلة:**
-`CostingSection` يبني الـ tabs بدون تمرير `conn` صريح:
-```python
-self._tabs.addTab(RawTab(), ...)
-self._tabs.addTab(ProductTab("semi"), ...)
-```
-بينما كل الـ tabs ترث من `TabSectionBase` الذي يحصل على `conn` من `company_state` داخلياً.
-
-هذا يعني أي خطأ في `company_state` سيظهر متأخراً عند أول استخدام للـ tab بدلاً من وقت البناء.
-
-**التحسين:**
-إضافة `try/except` حول بناء الـ tabs مع رسالة خطأ واضحة، أو — إن كان `TabSectionBase` يدعم تمرير `conn` صريح — تمريره من `CostingSection`:
-
-```python
-# في CostingSection._build():
-try:
-    self._tabs.addTab(RawTab(),            f"📦  {tr('raw_materials')}")
-    self._tabs.addTab(ProductTab("semi"),  f"🔧  {tr('semi_product')}")
-    self._tabs.addTab(ProductTab("final"), f"🏭  {tr('final_product')}")
-    self._tabs.addTab(LaborTab(),          f"👷  {tr('labor')}")
-    self._tabs.addTab(MachineTab(),        f"⚙️  {tr('machine')}")
-except Exception as e:
-    from PyQt5.QtWidgets import QLabel
-    self._tabs.addTab(QLabel(f"⚠️ خطأ في تحميل التبويبات: {e}"), "خطأ")
-```
-
-**الملف:** `ui/tabs/costing_section.py`
+الملفات التالية تستخدم `_C` مباشرة في `_build()` لكن **لا تربط** `bus.theme_changed`:
+- `ui/tabs/costing/shared/bom_scenarios_panel.py` — لا يوجد `bus.theme_changed.connect()`
+- `ui/tabs/costing/labor/labor_op_form.py` — لا يوجد `bus.theme_changed.connect()`
+- `ui/tabs/costing/product/form/_header_bar.py` ✅ موجود
+- `ui/tabs/costing/shared/bom_tree.py` ✅ موجود
+- `ui/tabs/costing/shared/machine_op_rows_editor.py` ✅ موجود
 
 ---
 
-### 10. ربط bus.theme_changed في BomTree
+## 3. مشاكل معمارية (Architecture)
 
-**المشكلة:**
-`BomTree` يبني الـ stylesheet في `_build()` مرة واحدة ولا يُحدثه عند تغيير الثيم، بينما ملفات مثل `_OpRowsEditor`, `_RawVariantsPanel`, `ScenarioComparisonWidget` تربط `bus.theme_changed`.
+### 3.1 `_ProductMainPanel` — فصل مفقود في `_on_data_changed`
 
-**التحسين:**
-إضافة:
+في `product_main_panel.py`:
+```python
+def _on_data_changed(self):
+    pid = self._prod_table.selected_pid()
+    if pid is not None:
+        self._refresh_for_product(pid)
+```
+
+المشكلة: `_on_data_changed` يُستدعى لأي حدث في التطبيق كله، حتى لو لم يكن له علاقة بالمنتجات. يجب استخدام `company_data_changed` + `_should_respond_to_company()` من `SafeConnMixin`.
+
+---
+
+### 3.2 `BomTree._fetch_bom_with_row_id_by_scenario` — PRAGMA على كل استدعاء
+
+```python
+cols = {r["name"] for r in
+        self._conn.execute("PRAGMA table_info(bom)").fetchall()}
+```
+
+هذا الاستعلام يُنفَّذ في كل مرة يُحمَّل فيها سيناريو. يجب تخزينه مؤقتًا (cache) عند أول استدعاء.
+
+**الإصلاح:**
 ```python
 # في __init__:
-bus.theme_changed.connect(self._apply_theme)
+self._bom_cols: set | None = None
 
-# دالة جديدة:
-def _apply_theme(self, _=None):
-    self.tree.setStyleSheet(f"""
-        QTreeWidget {{
-            background: {_C['bg_surface']};
-            border: 1px solid {_C['border']};
-            color: {_C['text_primary']};
-        }}
-        QTreeWidget::item:selected {{
-            background: {_C['accent_light']};
-            color: {_C['accent']};
-        }}
-        QTreeWidget::item:hover {{
-            background: {_C['bg_hover']};
-        }}
-    """)
-    hh = self.tree.header()
-    hh.setStyleSheet(
-        f"QHeaderView::section {{"
-        f"  background:{_C['bg_surface_2']}; color:{_C['text_sec']};"
-        f"  border:none; border-bottom:1px solid {_C['border']};"
-        f"  padding:4px 6px; font-weight:bold; font-size:11px;"
-        f"}}"
-    )
-```
-
-**الملفات:**
-- `ui/tabs/costing/shared/bom_tree.py`
-- يجب إضافة `from ui.events import bus` (موجود بالفعل في الملف)
-
----
-
-## ترتيب التطبيق المقترح
-
-```
-المرحلة 1 — آمنة تماماً (تغيير imports فقط):
-  ① التحسين 6 — توحيد confirm_delete import
-  ② التحسين 2 — حذف import قديم في product_form
-  ③ التحسين 1 — توحيد LiveConnMixin import
-
-المرحلة 2 — تحسين هيكلي (refactor بدون تغيير سلوك):
-  ④ التحسين 3 — دمج _on_data_changed و _on_product_selected
-  ⑤ التحسين 4 — توحيد _check_orphans signature
-  ⑥ التحسين 7 — إضافة style صريح لأزرار product_table
-
-المرحلة 3 — تحسينات وظيفية:
-  ⑦ التحسين 10 — ربط theme_changed في BomTree
-  ⑧ التحسين 9  — error handling في CostingSection
-  ⑨ التحسين 5  — توحيد bus events (يحتاج مراجعة events.py أولاً)
-
-المرحلة 4 — تغيير سلوك (يحتاج موافقة):
-  ⑩ التحسين 8  — تأكيد المستخدم قبل حذف المنتج الفارغ
+def _get_bom_cols(self) -> set:
+    if self._bom_cols is None:
+        self._bom_cols = {r["name"] for r in
+            self._conn.execute("PRAGMA table_info(bom)").fetchall()}
+    return self._bom_cols
 ```
 
 ---
 
-## ما لم يُدرج (خارج النطاق)
+### 3.3 `_SaveLogic` — لا يتحقق من تعارض الأسماء
 
-- **ملفات `ui/widgets/shared/`** — لم تُوثَّق في `files_reference` ولا نعرف محتواها الكامل.
-- **`ui/helpers.py`** — غير موثق، يحتاج فحص قبل إزالة imports منه.
-- **تحسينات الأداء في `catalog_builder.py`** — يمكن إضافة caching لكن يحتاج تحليل أعمق للاستخدام.
-- **`TabSectionBase`** — غير موجود في السياق، لا يمكن تعديله بأمان.
+`ProductService.save()` لا يتحقق من وجود منتج بنفس الاسم. يجب إضافة تحقق قبل الحفظ:
+```python
+# في _SaveLogic.save():
+existing = conn.execute(
+    "SELECT id FROM items WHERE name=? AND type=? AND id!=?",
+    (name, product_type, editing_id or -1)
+).fetchone()
+if existing:
+    QMessageBox.warning(parent_widget, "تنبيه", f"يوجد منتج بنفس الاسم: {name}")
+    return None
+```
+
+---
+
+### 3.4 `ScenarioComparisonWidget._calc_scenario_cost` — تكرار منطق `calc_cost`
+
+الدالة تُعيد كتابة منطق حساب التكلفة الموجود في `models/costing.py` (`calc_product_cost`). يجب الاستفادة من:
+```python
+from models.costing import calc_product_cost
+total_cost, breakdown = calc_product_cost(self.conn, self._item_id, scenario_id=sc_id)
+```
+
+---
+
+## 4. مشاكل UX/UI
+
+### 4.1 `_LaborOpForm` — لا يُطلق `saved` signal
+
+`BaseCrudForm` يوفر `saved = pyqtSignal(int)` لكن `LaborOpForm` لا يستفيد منه لتحديث الجدول مباشرة.
+الجدول يعتمد على `bus.data_changed` بدلاً من ربط مباشر — هذا مقبول لكن يمكن تحسينه.
+
+---
+
+### 4.2 `_ProductMainPanel` — زر "تعديل المحدد" مخفي بدون وصول واضح
+
+عند تحميل منتج جديد، الزرار في `_ProductTable` تعمل لكن `BaseWarningBar` يختفي قبل أن يرى المستخدم المشكلة. يُقترح إضافة `auto_hide=0` للـ orphan warnings.
+
+---
+
+### 4.3 `BulkReplaceDialog` — لا يُغلق تلقائيًا عند تعديل الكمية فقط
+
+```python
+if do_replace:
+    self.accept()
+else:
+    self._products_panel.reload()  # يبقى مفتوحًا
+```
+
+يُقترح إضافة زر "إغلاق بعد التطبيق" أو تغيير السلوك.
+
+---
+
+### 4.4 `_BomScenariosPanel` — لا يعرض عدد المكونات في كل سيناريو
+
+الـ ComboBox يعرض اسم السيناريو فقط. يُقترح إضافة عدد المكونات:
+```python
+# بدل:
+f"{star}{sc['name']}"
+# الأفضل:
+f"{star}{sc['name']}  ({count} مكون)"
+```
+
+---
+
+## 5. مشاكل الأداء
+
+### 5.1 `_ProductTable._fill_row` — `calc_cost` على كل صف
+
+```python
+cost = calc_cost(self.conn, row["id"])
+```
+
+يُستدعى لكل منتج في الجدول — إذا كان هناك 100 منتج، يُنفَّذ 100 استعلام متشعب. يجب:
+1. تحميل التكاليف في دفعة واحدة (batch)
+2. أو تأجيل الحساب (lazy loading) للصف المختار فقط
+
+---
+
+### 5.2 `fetch_affected_products` في `bulk_replace_helpers.py` — `calc_cost` لكل منتج
+
+```python
+"cost": calc_cost(conn, r["parent_id"]),
+```
+
+نفس المشكلة — يجب إضافة خيار `include_cost=False` افتراضيًا.
+
+---
+
+### 5.3 `catalog_builder._fetch_shared` — يفتح ويغلق `central_conn` في كل مرة
+
+```python
+central = get_central_connection()
+rows = central.execute(...).fetchall()
+central.close()
+```
+
+يُستدعى هذا مع كل `ComponentRow.refresh_catalog()`. يجب تخزينه مؤقتًا (TTL cache).
+
+---
+
+## 6. مشاكل الـ Error Handling
+
+### 6.1 `_MachineOpForm._on_machine_changed` — يبتلع الأخطاء بصمت
+
+```python
+try:
+    svc = MachineService(self._live_conn())
+    m   = svc.get(machine_id)
+except Exception:
+    return
+```
+
+لو `_live_conn()` فشل (لا توجد شركة نشطة)، يرجع بصمت بدون إشعار المستخدم.
+
+---
+
+### 6.2 `CostingSection._build` — try/except يلتقط كل الأخطاء ❓
+
+```python
+try:
+    widget = factory()
+except Exception as e:
+    widget = _make_error_tab(f"خطأ في تحميل التبويب: {e}")
+```
+
+هذا جيد ✅ لكن لا يُسجَّل الخطأ في أي log. يُقترح إضافة `logging.exception(e)`.
+
+---
+
+## 7. تحسينات الكود (Code Quality)
+
+### 7.1 `_SPLITTER_STYLE` — ثابت مكرر في ملفين
+
+نفس الثابت موجود في `labor_tab.py` و `machine_tab.py`. يجب نقله إلى ملف مشترك أو استخدام `splitter_style()` من `ui/widgets/theme/styles.py`.
+
+---
+
+### 7.2 `LaborOpTable._fill_table_row` — حساب `cost` مع كل صف
+
+```python
+rate = self._settings.get_hourly_rate()
+minutes = item.get("minutes", 0)
+cost = (minutes / 60.0) * rate
+```
+
+يُستدعى `get_hourly_rate()` لكل صف. يجب حسابه مرة واحدة قبل حلقة الصفوف.
+
+---
+
+### 7.3 `RawTablePanel._on_delete_item` — import داخل الدالة
+
+```python
+def _on_delete_item(self, item_id, item_name: str):
+    from PyQt5.QtWidgets import QMessageBox
+    from ui.helpers import confirm_delete
+    from db.shared.items_repo import delete_item
+```
+
+يُقترح نقل الـ imports للأعلى بدلاً من داخل الدالة.
+
+---
+
+### 7.4 `BomTree._delete_node` — منطق معقد يستحق تقسيمًا
+
+الدالة تتعامل مع 3 حالات مختلفة (سيناريو، مكون فرعي في semi، مكون رئيسي). يُقترح تقسيمها إلى:
+- `_delete_from_scenario(node, parent)`
+- `_delete_from_main_bom(node)`
+
+---
+
+## 8. ملاحظات على `_db_scenarios.py`
+
+### 8.1 `_db_delete` — لا يتحقق من أن السيناريو هو الأخير
+
+```python
+def _db_delete(self, scenario_id: int) -> bool:
+    result = delete_scenario(self.conn, scenario_id)
+```
+
+`delete_scenario` في `bom_scenarios_repo.py` يرفض لو آخر سيناريو ✅ لكن `_BomScenariosPanel._delete()` يتحقق أيضًا من `len(self._scenarios) <= 1` — التحقق مزدوج وغير ضروري.
+
+---
+
+## 9. خلاصة الأولويات
+
+| الأولوية | المشكلة | الملفات المتأثرة | الجهد |
+|----------|---------|-----------------|-------|
+| 🔴 عالية | استخدام `emit_company_data_changed` بدل `bus.data_changed.emit()` | 6 ملفات | صغير |
+| 🔴 عالية | توحيد import `confirm_delete` | 2 ملفات | صغير |
+| 🟠 متوسطة | ربط `bus.theme_changed` في `_BomScenariosPanel` | 1 ملف | صغير |
+| 🟠 متوسطة | `_SPLITTER_STYLE` بألوان ثابتة — لا يتحدث مع الثيم | 2 ملفات | صغير |
+| 🟠 متوسطة | `PRAGMA table_info(bom)` يُنفَّذ بكثرة — يحتاج cache | 1 ملف | متوسط |
+| 🟠 متوسطة | `_on_data_changed` يستجيب لكل الأحداث — يحتاج فلترة | 1 ملف | متوسط |
+| 🟡 منخفضة | `calc_cost` على كل صف في `_ProductTable` — batch loading | 1 ملف | كبير |
+| 🟡 منخفضة | تكرار منطق الحساب في `ScenarioComparisonWidget` | 1 ملف | متوسط |
+| 🟡 منخفضة | `catalog_builder._fetch_shared` بدون cache | 1 ملف | متوسط |
+| 🟡 منخفضة | `import` داخل الدوال في `RawTablePanel` | 1 ملف | صغير |
+| ⚪ تحسين | إضافة عدد المكونات في عرض السيناريوهات | 1 ملف | صغير |
+| ⚪ تحسين | تقسيم `_delete_node` في `BomTree` | 1 ملف | متوسط |
+
+---
+
+## 10. ترتيب التطبيق المقترح
+
+### المرحلة الأولى — إصلاحات سريعة (يوم واحد)
+
+1. استبدال `bus.data_changed.emit()` بـ `emit_company_data_changed()` في الملفات الـ6
+2. توحيد import `confirm_delete` في `machine_table.py` و `raw_table_panel.py`
+3. إضافة `bus.theme_changed.connect(self._apply_theme)` في `_BomScenariosPanel`
+4. إصلاح `_SPLITTER_STYLE` في `labor_tab.py` و `machine_tab.py`
+
+### المرحلة الثانية — تحسينات الأداء (يومان)
+
+5. إضافة cache لـ `PRAGMA table_info(bom)` في `BomTree`
+6. حساب `rate` مرة واحدة في `LaborOpTable._fill_table_row`
+7. إضافة TTL cache لـ `catalog_builder._fetch_shared`
+
+### المرحلة الثالثة — تحسينات معمارية (3 أيام)
+
+8. استخدام `calc_product_cost` في `ScenarioComparisonWidget`
+9. تقسيم `_delete_node` في `BomTree`
+10. إضافة فلترة `company_data_changed` في `_ProductMainPanel._on_data_changed`
+11. Batch loading للتكاليف في `_ProductTable`
+
+---
+
+## ملاحظة
+
+جميع المسارات والأسماء الواردة في هذه الخطة مستخرجة من الملفات الفعلية في السياق. لم يُضف أي ملف أو دالة غير موثقة في `files_reference/`.
+
 
 # بنية المشروع — المرحلة السادسة
 ### الأهداف البنيوية للمرحلة السابعة

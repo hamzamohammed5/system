@@ -15,10 +15,10 @@ ui/tabs/costing_section.py
 from PyQt5.QtWidgets import QWidget, QVBoxLayout, QTabWidget, QLabel
 from PyQt5.QtCore    import Qt
 
-from ui.widgets.theme.styles import tab_style
-from ui.app_settings         import _C
-from ui.widgets.core.i18n    import tr
-from ui.events               import bus
+from ..widgets.theme.styles import tab_style
+from ..app_settings         import _C
+from ..widgets.core.i18n    import tr
+from ..events               import bus
 
 from .costing.raw_tab     import RawTab
 from .costing.product_tab import ProductTab
