@@ -4,6 +4,9 @@ ui/tabs/costing/labor/labor_op_form.py
 LaborOpForm — فورم إضافة / تعديل عملية عمالة.
 
 يرث من BaseCrudForm — لا EditModeMixin يدوي، لا repo مباشر.
+[Refactor] المسارات الموثقة في files_reference:
+  - CategoryCombo  → ui.widgets.combo.category
+  - ResultBadge    → ui.widgets.panels.form_parts
 """
 
 from ui.widgets.base.crud_form    import BaseCrudForm

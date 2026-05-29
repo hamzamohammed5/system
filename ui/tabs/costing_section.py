@@ -1,25 +1,24 @@
 """
-ui/tabs/costing/costing_section.py
+ui/tabs/costing_section.py
 ==========================
 قسم "حساب التكلفة" — تبويبات داخلية:
   📦 الخامات | 🔧 نصف مصنع | 🏭 منتج نهائي | 👷 العمالة | ⚙️ التشغيل
 
-التحسينات:
-  - يستخدم _tab_stylesheet() من tab_section_base بدل تعريف _TAB_STYLE محلياً
-  - يستخدم QLabel موحد للهيدر بدل ستايل مكرر
+[Refactor] استخدام _C و tr() بدل الألوان والنصوص المدمجة.
+استخدام tab_style من ui.widgets.theme.styles (الموثق في files_reference).
 """
 
 from PyQt5.QtWidgets import QWidget, QVBoxLayout, QTabWidget, QLabel
 from PyQt5.QtCore import Qt
 
-from ui.widgets.shared.tab_section_base import _tab_stylesheet
+from ui.widgets.theme.styles import tab_style
+from ui.app_settings import _C
+from ui.widgets.core.i18n import tr
 
 from .costing.raw_tab     import RawTab
 from .costing.product_tab import ProductTab
 from .costing.labor_tab   import LaborTab
 from .costing.machine_tab import MachineTab
-
-from ui.app_settings import _C
 
 
 class CostingSection(QWidget):
@@ -33,7 +32,7 @@ class CostingSection(QWidget):
         layout.setSpacing(0)
 
         # ── هيدر القسم ──
-        header = QLabel("  📊  حساب التكلفة")
+        header = QLabel(f"  📊  {tr('costing_section')}")
         header.setFixedHeight(42)
         header.setStyleSheet(f"""
             QLabel {{
@@ -51,20 +50,19 @@ class CostingSection(QWidget):
         self._tabs = QTabWidget()
         self._tabs.setTabPosition(QTabWidget.North)
 
-        # استخدام _tab_stylesheet() من tab_section_base بدل تعريف ستايل جديد
-        self._tabs.setStyleSheet(_tab_stylesheet())
+        # tab_style موثق في ui.widgets.theme.styles
+        self._tabs.setStyleSheet(tab_style())
 
-        # السماح للتبويبات بالتمرير عند الضيق
         self._tabs.setUsesScrollButtons(True)
         self._tabs.setElideMode(Qt.ElideNone)
         tab_bar = self._tabs.tabBar()
         tab_bar.setExpanding(False)
         tab_bar.setDrawBase(True)
 
-        self._tabs.addTab(RawTab(),            "📦  الخامات")
-        self._tabs.addTab(ProductTab("semi"),  "🔧  نصف مصنع")
-        self._tabs.addTab(ProductTab("final"), "🏭  منتج نهائي")
-        self._tabs.addTab(LaborTab(),          "👷  العمالة")
-        self._tabs.addTab(MachineTab(),        "⚙️  التشغيل")
+        self._tabs.addTab(RawTab(),            f"📦  {tr('raw_materials')}")
+        self._tabs.addTab(ProductTab("semi"),  f"🔧  {tr('semi_product')}")
+        self._tabs.addTab(ProductTab("final"), f"🏭  {tr('final_product')}")
+        self._tabs.addTab(LaborTab(),          f"👷  {tr('labor')}")
+        self._tabs.addTab(MachineTab(),        f"⚙️  {tr('machine')}")
 
         layout.addWidget(self._tabs)

@@ -3,34 +3,22 @@ ui/tabs/costing/machine/machine_table.py
 ========================================
 _MachineTable — جدول الماكينات مع دعم العناصر المشتركة.
 
+[Refactor] استخدام MachineService في الحذف بدل operations_repo مباشرة.
+
 يرث من SharedItemsListPanel الذي يوحّد:
   - legend العناصر المشتركة/المنشورة
   - FilterBar
   - أزرار تعديل/حذف/تعديل مشترك/نشر كمشترك
   - منطق التلوين والتحميل
-
-إصلاحات:
-1. _load تمرر local_rows لـ get_shared_machines (منع التكرار)
-2. category_name يُعرض الحقيقي (أو "—")
-3. علامة 📤 على الماكينات المحلية المنشورة كمشتركة
 """
 
 from PyQt5.QtWidgets import QTableWidgetItem, QMessageBox
 
-from db.costing.operations_repo import fetch_all_machines, delete_machine
 from ui.helpers import confirm_delete
 from ui.widgets.shared.list_panel_with_shared import SharedItemsListPanel
 from ui.tabs.companies.shared_items_mixin import get_shared_machines
+from ui.tabs.costing.shared._utils import to_dict
 from .machine_form import _MachineForm
-
-
-def _to_dict(row) -> dict:
-    if isinstance(row, dict):
-        return row
-    try:
-        return dict(row)
-    except Exception:
-        return {}
 
 
 class _MachineTable(SharedItemsListPanel):
@@ -51,7 +39,18 @@ class _MachineTable(SharedItemsListPanel):
         table.setColumnWidth(4, 90)
 
     def _fetch_local_rows(self) -> list:
-        return [_to_dict(m) for m in fetch_all_machines(self._live_conn())]
+        from services.costing.machine_service import MachineService
+        return [
+            {
+                "id":            m.id,
+                "name":          m.name,
+                "rate_per_hour": m.rate_per_hour,
+                "rate_per_unit": m.rate_per_unit,
+                "category_id":   m.category_id,
+                "category_name": m.category_name,
+            }
+            for m in MachineService(self._live_conn()).list()
+        ]
 
     def _get_shared_rows(self, local_rows: list) -> list:
         return get_shared_machines(local_rows)
@@ -87,7 +86,8 @@ class _MachineTable(SharedItemsListPanel):
             self._form._reset()
         if confirm_delete(self, item_name):
             try:
-                delete_machine(self._live_conn(), item_id)
+                from services.costing.machine_service import MachineService
+                MachineService(self._live_conn()).delete(item_id)
             except Exception as e:
                 QMessageBox.warning(self, "خطأ", str(e))
                 return
@@ -101,7 +101,7 @@ class _MachineTable(SharedItemsListPanel):
             "category_name": row.get("category_name") or None,
         }
 
-    # ── تعديل مشترك المشترك المحلي (override لـ machine) ──
+    # ── تعديل مشترك (override لـ machine) ──
 
     def _on_edit_shared(self):
         item_id, _ = self._selected_row_data()

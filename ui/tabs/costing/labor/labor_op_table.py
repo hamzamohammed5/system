@@ -4,17 +4,18 @@ ui/tabs/costing/labor/labor_op_table.py
 LaborOpTable — جدول عمليات العمالة.
 
 يرث من SharedItemsListPanel (النمط الموجود والجيد).
-التحسين: استخدام LaborOpService بدل repo مباشر في _fetch_local_rows.
+[Refactor] استخدام LaborOpService بدل repo مباشر في _fetch_local_rows.
+[Refactor] استخدام confirm_delete من ui.widgets.dialogs.confirm (الموثق).
 """
 
 from PyQt5.QtWidgets import QTableWidgetItem, QMessageBox
 
-from ui.helpers                            import confirm_delete
-from ui.widgets.shared.list_panel_with_shared import SharedItemsListPanel
-from ui.tabs.companies.shared_items_mixin  import get_shared_labor_ops
-from ui.tabs.costing.shared._utils         import to_dict
+from ui.widgets.dialogs.confirm                            import confirm_delete
+from ui.widgets.shared.list_panel_with_shared              import SharedItemsListPanel
+from ui.tabs.companies.shared_items_mixin                  import get_shared_labor_ops
+from ui.tabs.costing.shared._utils                         import to_dict
 from ui.tabs.costing.shared.bulk_replace.bulk_replace_dialog import BulkReplaceDialog
-from ui.widgets.core.events                import emit_company_data_changed
+from ui.widgets.core.events                                import emit_company_data_changed
 
 
 class LaborOpTable(SharedItemsListPanel):

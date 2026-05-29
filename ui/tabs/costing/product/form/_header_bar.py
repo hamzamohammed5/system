@@ -2,6 +2,11 @@
 ui/tabs/costing/product/form/_header_bar.py
 ============================================
 _FormHeaderBar — شريط الهيدر العلوي للفورم (اسم المنتج + التصنيف + الأزرار).
+
+[Refactor] المسارات الموثقة في files_reference:
+  - make_btn(style="success") → ui.widgets.components.button  (بدل success_button من ui.helpers)
+  - CategoryCombo             → ui.widgets.combo.category      (بدل ui.widgets.shared.category_manager)
+  - wrap_in_scroll            → ui.widgets.theme.styles        (بدل ui.widgets.shared.scrollable_form)
 """
 
 from PyQt5.QtWidgets import (
@@ -13,9 +18,9 @@ from PyQt5.QtCore import pyqtSignal
 
 from ui.app_settings import _C
 from ui.widgets.core.i18n import tr
-from ui.helpers import success_button
-from ui.widgets.shared.category_manager import CategoryCombo
-from ui.widgets.shared.scrollable_form  import wrap_in_scroll
+from ui.widgets.components.button  import make_btn
+from ui.widgets.combo.category     import CategoryCombo
+from ui.widgets.theme.styles       import wrap_in_scroll
 from ui.tabs.costing.shared.bom_scenarios_panel import _BomScenariosPanel
 
 
@@ -87,7 +92,8 @@ class _FormHeaderBar(QWidget):
         self.btn_add_row.setMinimumHeight(32)
         self.btn_add_row.clicked.connect(self.add_row_clicked.emit)
 
-        self.btn_save   = success_button(tr("save"))
+        # make_btn مع style="success" بديل عن success_button من ui.helpers
+        self.btn_save   = make_btn(tr("save"), style="success")
         self.btn_cancel = QPushButton(f"X {tr('cancel')}")
         self.btn_save.setMinimumHeight(32)
         self.btn_cancel.setMinimumHeight(32)

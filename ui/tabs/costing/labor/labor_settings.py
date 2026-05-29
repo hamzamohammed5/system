@@ -3,19 +3,22 @@ ui/tabs/costing/labor/labor_settings.py
 ========================================
 _LaborSettingsPanel — لوحة إعدادات معايير حساب تكلفة العمالة.
 
-التحسينات:
-  - يستخدم form_utils: FormGroup, labeled_widget, spin_field, ResultBadge
-  - يستخدم build_inner_scroll بدل بناء الـ scroll يدوياً
+[Refactor] استخدام المسارات الموثقة في files_reference:
+  - FormGroup, labeled_widget, spin_field, ResultBadge → ui.widgets.panels.form_parts
+  - wrap_in_scroll → ui.widgets.theme.styles
+  (بديل عن form_utils غير الموثق في السياق)
 """
 
 from PyQt5.QtWidgets import (
-    QWidget, QPushButton, QMessageBox, QSizePolicy,
+    QWidget, QVBoxLayout, QPushButton, QMessageBox,
 )
 
 from db.shared.settings_repo import get_setting, set_setting
-from ui.widgets.shared.form_utils import (
-    FormGroup, labeled_widget, spin_field, ResultBadge, build_inner_scroll,
+from ui.widgets.panels.form_parts import (
+    FormGroup, labeled_widget, spin_field, ResultBadge,
 )
+from ui.widgets.theme.styles import wrap_in_scroll
+from ui.widgets.core.i18n import tr
 from ui.events import bus
 
 
@@ -27,7 +30,18 @@ class _LaborSettingsPanel(QWidget):
         self._load()
 
     def _build(self):
-        _outer, _inner, layout = build_inner_scroll(self, min_width=260)
+        outer_layout = QVBoxLayout(self)
+        outer_layout.setContentsMargins(0, 0, 0, 0)
+        outer_layout.setSpacing(0)
+
+        inner = QWidget()
+        inner.setMinimumWidth(260)
+        layout = QVBoxLayout(inner)
+        layout.setContentsMargins(8, 8, 8, 8)
+        layout.setSpacing(8)
+
+        scroll = wrap_in_scroll(inner)
+        outer_layout.addWidget(scroll)
 
         grp = FormGroup("معايير حساب تكلفة العمالة")
 
@@ -37,21 +51,21 @@ class _LaborSettingsPanel(QWidget):
         self.sp_hours    = spin_field(max_=24,     dec=1)
         self.sp_overhead = spin_field(max_=10,     dec=2)
 
-        grp.add_row("الراتب الأساسي :",         labeled_widget(self.sp_salary,   "جنيه / شهر"))
-        grp.add_row("أيام العمل :",             labeled_widget(self.sp_days,     "يوم / شهر"))
-        grp.add_row("أيام الإجازات :",          labeled_widget(self.sp_holidays, "يوم / شهر"))
-        grp.add_row("ساعات العمل / يوم :",      labeled_widget(self.sp_hours,    "ساعة / يوم"))
+        grp.add_row("الراتب الأساسي :",         labeled_widget(self.sp_salary,   f"{tr('currency')} / {tr('month')}"))
+        grp.add_row("أيام العمل :",             labeled_widget(self.sp_days,     f"{tr('day')} / {tr('month')}"))
+        grp.add_row("أيام الإجازات :",          labeled_widget(self.sp_holidays, f"{tr('day')} / {tr('month')}"))
+        grp.add_row("ساعات العمل / يوم :",      labeled_widget(self.sp_hours,    f"{tr('hour')} / {tr('day')}"))
         grp.add_row("معامل الأعباء الإدارية :", labeled_widget(self.sp_overhead, "×"))
 
         self.lbl_rate = ResultBadge()
-        grp.add_row("➡  معدل الأجر / ساعة :", self.lbl_rate)
+        grp.add_row(f"➡  {tr('hourly_rate')} :", self.lbl_rate)
         layout.addWidget(grp)
 
         for sp in (self.sp_salary, self.sp_days, self.sp_holidays,
                    self.sp_hours, self.sp_overhead):
             sp.valueChanged.connect(self._update_preview)
 
-        btn = QPushButton("💾  حفظ إعدادات العمالة")
+        btn = QPushButton(f"💾  {tr('save_labor_settings')}")
         btn.setMinimumHeight(32)
         btn.clicked.connect(self._save)
         layout.addWidget(btn)
@@ -63,7 +77,7 @@ class _LaborSettingsPanel(QWidget):
         return (self.sp_salary.value() / net_hours) * self.sp_overhead.value() if net_hours else 0.0
 
     def _update_preview(self):
-        self.lbl_rate.set_value(f"{self._calc_rate():.2f}  جنيه / ساعة")
+        self.lbl_rate.set_value(f"{self._calc_rate():.2f}  {tr('currency_per_hour')}")
 
     def _load(self):
         self.sp_salary.setValue(  get_setting(self.conn, "monthly_salary",    3000))
@@ -79,7 +93,7 @@ class _LaborSettingsPanel(QWidget):
         set_setting(self.conn, "holiday_days",      self.sp_holidays.value())
         set_setting(self.conn, "working_hours_day", self.sp_hours.value())
         set_setting(self.conn, "overhead_factor",   self.sp_overhead.value())
-        QMessageBox.information(self, "تم", "✅  تم حفظ إعدادات العمالة")
+        QMessageBox.information(self, tr("done"), f"✅  {tr('labor_settings_saved')}")
         bus.data_changed.emit()
 
     def get_hourly_rate(self):
