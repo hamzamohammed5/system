@@ -1,64 +1,46 @@
 """
 ui/tabs/costing/raw/raw_section.py
 ====================================
-_RawSection — القسم الرئيسي للخامات باستخدام BaseSection.
+RawSection — القسم الرئيسي للخامات.
 
-يستخدم النمط المشترك من BaseSection لعرض:
-  - _InputPanel  (الجزء العلوي — فورم الإضافة/التعديل)
-  - _TablePanel  (الجزء السفلي — جدول الخامات)
-
-ملاحظة: لأن هذا القسم يختلف عن pattern الـ list+detail العادي
-(هو input+table عمودي)، نستخدم QSplitter مباشرة مع تطبيق
-نفس الأسلوب المتسق مع بقية التطبيق.
+يرث من BaseSection — لا QSplitter يدوي، لا style مكررة.
 """
 
-from PyQt5.QtWidgets import QWidget, QVBoxLayout, QSplitter
-from PyQt5.QtCore    import Qt
+from ui.widgets.base.section import BaseSection
 
-from ui.app_settings import _C
-
-_SPLITTER_STYLE = f"""
-    QSplitter::handle {{
-        background: {_C['border']};
-        border-top: 1px solid {_C['border_med']};
-    }}
-    QSplitter::handle:hover {{ background: {_C['accent_mid']}; }}
-    QSplitter::handle:pressed {{ background: {_C['accent']}; }}
-"""
+from .raw_input_panel import RawInputPanel
+from .raw_table_panel import RawTablePanel
 
 
-class _RawSection(QWidget):
+class RawSection(BaseSection):
     """
-    قسم الخامات — input panel فوق + table panel تحت.
+    قسم الخامات:
+      - الفورم فوق  (FORM_POSITION = "top")
+      - الجدول تحت
 
-    المعاملات:
-        conn : اتصال قاعدة البيانات
+    BaseSection يبني الـ QSplitter تلقائياً بالـ style الموحد.
     """
 
-    def __init__(self, conn, parent=None):
-        super().__init__(parent)
-        self._conn = conn
-        self._build()
+    FORM_POSITION = "top"
+    LIST_MIN_W    = 400
+    CONNECT_BUS   = False    # كل panel بيتعامل مع bus بنفسه
 
-    def _build(self):
-        from .raw_input_panel import _InputPanel
-        from .raw_table_panel import _TablePanel
+    def _create_form(self):
+        self._form_panel = RawInputPanel(conn=self.conn)
+        return self._form_panel
 
-        root = QVBoxLayout(self)
-        root.setContentsMargins(0, 0, 0, 0)
-        root.setSpacing(0)
+    def _create_list(self):
+        self._table_panel = RawTablePanel(
+            conn=self.conn,
+            input_panel=self._form_panel,
+        )
+        return self._table_panel
 
-        splitter = QSplitter(Qt.Vertical)
-        splitter.setHandleWidth(6)
-        splitter.setStyleSheet(_SPLITTER_STYLE)
-
-        self._input = _InputPanel(self._conn)
-        self._table = _TablePanel(self._conn, self._input)
-
-        splitter.addWidget(self._input)
-        splitter.addWidget(self._table)
-        splitter.setSizes([300, 400])
-        splitter.setCollapsible(0, True)
-        splitter.setCollapsible(1, False)
-
-        root.addWidget(splitter)
+    def _connect_signals(self):
+        # بعد حفظ الفورم → نحدّث الجدول
+        self._form_panel.saved.connect(self._table_panel.refresh)
+        # double-click على صف → نفتحه في الفورم
+        if hasattr(self._table_panel, "item_double_clicked"):
+            self._table_panel.item_double_clicked.connect(
+                self._form_panel.load_for_edit
+            )

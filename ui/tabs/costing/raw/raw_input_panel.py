@@ -1,82 +1,70 @@
 """
 ui/tabs/costing/raw/raw_input_panel.py
 =======================================
-_InputPanel — فورم إضافة / تعديل الخامة مع لوحة Variants.
+RawInputPanel — فورم إضافة / تعديل الخامة مع لوحة Variants.
+
+يرث من BaseCrudForm ويستدعي ItemService بدل repos مباشرة.
 """
 
-from PyQt5.QtWidgets import (
-    QWidget, QVBoxLayout, QHBoxLayout, QFormLayout,
-    QLineEdit, QPushButton, QLabel, QGroupBox, QMessageBox,
-    QScrollArea, QSizePolicy,
-)
+from PyQt5.QtWidgets import QWidget, QHBoxLayout, QLabel, QSizePolicy
 from PyQt5.QtCore import Qt
 
-from db.shared.items_repo import fetch_item, insert_item, update_item
-from ui.helpers import EditModeMixin, buttons_row
-from ui.widgets.shared.category_manager import CategoryCombo
+from ui.widgets.base.crud_form         import BaseCrudForm
+from ui.widgets.panels.form_parts      import (
+    FormGroup, spin_field, labeled_widget, hint_label,
+)
+from ui.widgets.forms.inputs           import RequiredLineEdit, AmountSpinBox
+from ui.widgets.combo.category         import CategoryCombo
 from ui.tabs.costing.shared.raw_variants_panel import _RawVariantsPanel
-from ui.widgets.shared.scrollable_form import wrap_in_scroll
-from ui.widgets.shared.connection_mixin import LiveConnMixin
-from ui.events import bus
 
 
-def _labeled(widget, unit: str) -> QWidget:
-    w = QWidget()
-    lay = QHBoxLayout(w)
-    lay.setContentsMargins(0, 0, 0, 0)
-    lay.setSpacing(6)
-    lay.addWidget(widget)
-    lay.addWidget(QLabel(unit))
-    lay.addStretch()
-    return w
+def _live_price(inp_price) -> float:
+    """يقرأ سعر من QLineEdit بأمان."""
+    try:
+        return float(inp_price.text() or "0")
+    except ValueError:
+        return 0.0
 
 
-class _InputPanel(QWidget, EditModeMixin, LiveConnMixin):
+class RawInputPanel(BaseCrudForm):
+    """
+    فورم الخامة — يرث من BaseCrudForm.
+
+    BaseCrudForm يوفر:
+      - _build()    : يبني الـ form تلقائياً من _build_fields
+      - _add()      : يستدعي _collect ثم _do_insert
+      - _save_edit(): يستدعي _collect ثم _do_update
+      - _cancel()   : يستدعي _reset_fields
+      - EditModeMixin + LiveConnMixin
+    """
+
+    FORM_TITLE = "بيانات الخامة"
+    ADD_TEXT   = "➕  إضافة خامة"
+    SAVE_TEXT  = "💾  حفظ التعديل"
+
     def __init__(self, conn, parent=None):
-        super().__init__(parent)
-        self.conn = conn
-        self._build()
-        self.init_edit_mode(self.btn_add, self.btn_save, self.btn_cancel, self.lbl_mode)
+        super().__init__(conn, parent)
+        # ربط live preview بعد بناء الـ fields
+        self.inp_price.textChanged.connect(self._on_price_changed)
+        self.sp_total_qty.valueChanged.connect(self._update_hint)
 
-    def _build(self):
-        outer = QVBoxLayout(self)
-        outer.setContentsMargins(0, 0, 0, 0)
-        outer.setSpacing(0)
+    # ══════════════════════════════════════════════════════
+    # بناء الحقول
+    # ══════════════════════════════════════════════════════
 
-        self._inner = QWidget()
-        self._inner.setMinimumWidth(280)
-        self._inner.setSizePolicy(QSizePolicy.Preferred, QSizePolicy.Minimum)
-
-        scroll = wrap_in_scroll(self._inner)
-        outer.addWidget(scroll)
-
-        root = QVBoxLayout(self._inner)
-        root.setSpacing(8)
-        root.setContentsMargins(12, 12, 12, 12)
-
-        grp = QGroupBox("بيانات الخامة")
-        grp_layout = QVBoxLayout(grp)
-        grp_layout.setSpacing(10)
-
-        self.lbl_mode = QLabel("─── إضافة خامة جديدة ───")
-        self.lbl_mode.setStyleSheet("font-weight: bold; color: #1565c0; font-size: 12px;")
-        grp_layout.addWidget(self.lbl_mode)
-
-        form = QFormLayout()
-        form.setSpacing(8)
-        form.setLabelAlignment(Qt.AlignRight)
-
-        self.inp_name = QLineEdit()
-        self.inp_name.setPlaceholderText("أدخل اسم الخامة...")
+    def _build_fields(self, group: FormGroup):
+        self.inp_name    = RequiredLineEdit("أدخل اسم الخامة...")
         self.inp_name.setMinimumHeight(32)
 
-        self.inp_price = QLineEdit()
-        self.inp_price.setPlaceholderText("0.00")
+        self.inp_price   = AmountSpinBox(dec=2)
         self.inp_price.setFixedWidth(120)
 
-        self.inp_total_qty = QLineEdit()
-        self.inp_total_qty.setPlaceholderText("اتركه فارغاً لو السعر بالوحدة")
-        self.inp_total_qty.setFixedWidth(120)
+        self.sp_total_qty = spin_field(max_=999999, dec=4)
+        self.sp_total_qty.setFixedWidth(120)
+        self.sp_total_qty.setToolTip(
+            "اتركه صفراً لو السعر بالوحدة\n"
+            "سعر الوحدة = السعر الكلي ÷ الكمية الإجمالية"
+        )
 
         self.lbl_hint = QLabel()
         self.lbl_hint.setStyleSheet(
@@ -84,60 +72,34 @@ class _InputPanel(QWidget, EditModeMixin, LiveConnMixin):
             "background: #e8f0fe; border-radius: 4px; padding: 4px 8px;"
         )
         self.lbl_hint.setWordWrap(True)
-        self._update_hint()
 
-        self.inp_price.textChanged.connect(lambda _: self._on_price_changed())
-        self.inp_total_qty.textChanged.connect(lambda _: self._update_hint())
+        self.cmb_category = CategoryCombo(self.conn, scope="raw")
 
-        self.cmb_category = CategoryCombo(self._live_conn(), scope="raw")
+        group.add_row("اسم الخامة *",      self.inp_name)
+        group.add_row("السعر الكلي :",      labeled_widget(self.inp_price, "جنيه"))
+        group.add_row("الكمية الإجمالية :", labeled_widget(self.sp_total_qty, "وحدة"))
+        group.add_row("",                   self.lbl_hint)
+        group.add_row("التصنيف :",          self.cmb_category)
 
-        form.addRow("اسم الخامة :",       self.inp_name)
-        form.addRow("السعر الكلي :",       _labeled(self.inp_price,     "جنيه"))
-        form.addRow("الكمية الإجمالية :",  _labeled(self.inp_total_qty, "وحدة"))
-        form.addRow("",                   self.lbl_hint)
-        form.addRow("التصنيف :",          self.cmb_category)
-        grp_layout.addLayout(form)
+        # لوحة variants تُضاف بعد الـ group عبر _build_extra
+        self._variants = _RawVariantsPanel(self.conn)
 
-        self.btn_add    = QPushButton("➕  إضافة خامة")
-        self.btn_save   = QPushButton("💾  حفظ التعديل")
-        self.btn_cancel = QPushButton("✖  إلغاء")
-        for btn in (self.btn_add, self.btn_save, self.btn_cancel):
-            btn.setMinimumHeight(32)
-        self.btn_add.clicked.connect(self._add)
-        self.btn_save.clicked.connect(self._save_edit)
-        self.btn_cancel.clicked.connect(self._cancel_edit)
-        grp_layout.addLayout(buttons_row(self.btn_add, self.btn_save, self.btn_cancel))
-
-        root.addWidget(grp)
-
-        self._variants_panel = _RawVariantsPanel(self._live_conn())
-        root.addWidget(self._variants_panel)
-
-        root.addStretch()
+    def _build_extra(self, root_layout):
+        """يُضاف بعد الـ FormGroup — hook في BaseCrudForm."""
+        root_layout.addWidget(self._variants)
 
     # ══════════════════════════════════════════════════════
-    # تحديث تلميح السعر
+    # Live preview
     # ══════════════════════════════════════════════════════
 
     def _on_price_changed(self):
         self._update_hint()
         if self._editing_id is not None:
-            try:
-                price = float(self.inp_price.text() or "0")
-                self._variants_panel.refresh_price(price)
-            except ValueError:
-                pass
+            self._variants.refresh_price(_live_price(self.inp_price))
 
     def _update_hint(self):
-        try:
-            price = float(self.inp_price.text() or "0")
-        except ValueError:
-            price = 0.0
-        tq_text = self.inp_total_qty.text().strip()
-        try:
-            tq = float(tq_text) if tq_text else None
-        except ValueError:
-            tq = None
+        price = _live_price(self.inp_price)
+        tq    = self.sp_total_qty.value() if self.sp_total_qty.value() > 0 else None
 
         if tq and tq > 0 and price > 0:
             unit = price / tq
@@ -152,100 +114,78 @@ class _InputPanel(QWidget, EditModeMixin, LiveConnMixin):
             )
 
     # ══════════════════════════════════════════════════════
-    # تحميل للتعديل
+    # BaseCrudForm interface
     # ══════════════════════════════════════════════════════
 
-    def load_for_edit(self, item_id: int):
-        try:
-            item = fetch_item(self._live_conn(), item_id)
-        except Exception:
-            return
-        if not item:
-            return
-        self.inp_name.setText(item["name"])
-        self.inp_price.setText(str(item["price"]))
-        tq = item["total_qty"]
-        self.inp_total_qty.setText(str(tq) if tq is not None else "")
-        self.cmb_category.set_category(item["category_id"])
-        self.inp_name.setFocus()
-        self.enter_edit_mode(item_id, f"─── تعديل: {item['name']} ───")
+    def _collect(self) -> dict | None:
+        if not self.inp_name.validate():
+            return None
+        price     = float(self.inp_price.value()) if hasattr(self.inp_price, "value") \
+                    else _live_price(self.inp_price)
+        total_qty = self.sp_total_qty.value() if self.sp_total_qty.value() > 0 else None
+        return {
+            "name":        self.inp_name.text_stripped(),
+            "price":       price,
+            "total_qty":   total_qty,
+            "category_id": self.cmb_category.get_category(),
+        }
 
-        try:
-            price = float(item["price"])
-        except (TypeError, ValueError):
-            price = 0.0
-        self._variants_panel.load_item(item_id, price)
-
-    # ══════════════════════════════════════════════════════
-    # CRUD
-    # ══════════════════════════════════════════════════════
-
-    def _add(self):
-        name, price, total_qty = self._collect()
-        if name is None:
-            return
-        try:
-            conn   = self._live_conn()
-            new_id = insert_item(conn, name, "raw", price,
-                                 category_id=self.cmb_category.get_category(),
-                                 total_qty=total_qty)
-        except Exception as e:
-            QMessageBox.warning(self, "خطأ", str(e))
-            return
-        self._variants_panel.load_item(new_id, price)
-        self.enter_edit_mode(new_id, f"─── أضف وحدات إنتاج لـ: {name} ───")
+    def _do_insert(self, data: dict) -> int:
+        from services.shared.item_service import ItemService
+        new_id = ItemService(self.conn).add(
+            data["name"], data["price"], "raw",
+            category_id=data["category_id"],
+            total_qty=data["total_qty"],
+        )
+        self._variants.load_item(new_id, data["price"])
+        # إبقاء الفورم في وضع التعديل لإضافة variants
+        self.enter_edit_mode(new_id, f"─── أضف وحدات إنتاج لـ: {data['name']} ───")
         self.btn_add.setVisible(False)
         self.btn_save.setVisible(True)
         self.btn_cancel.setVisible(True)
-        bus.data_changed.emit()
+        return new_id
 
-    def _save_edit(self):
-        name, price, total_qty = self._collect()
-        if name is None:
-            return
-        try:
-            update_item(self._live_conn(), self._editing_id, name, price,
-                        category_id=self.cmb_category.get_category(),
-                        total_qty=total_qty)
-        except Exception as e:
-            QMessageBox.warning(self, "خطأ", str(e))
-            return
-        self._reset()
-        bus.data_changed.emit()
+    def _do_update(self, item_id: int, data: dict) -> None:
+        from services.shared.item_service import ItemService
+        ItemService(self.conn).update(
+            item_id, data["name"], data["price"],
+            category_id=data["category_id"],
+            total_qty=data["total_qty"],
+        )
 
-    def _cancel_edit(self):
-        self._reset()
+    def _do_load(self, item_id: int) -> dict | None:
+        from services.shared.item_service import ItemService
+        result = ItemService(self.conn).get(item_id)
+        if result is None:
+            return None
+        return {
+            "id":          result.id,
+            "name":        result.name,
+            "price":       result.price,
+            "total_qty":   result.total_qty,
+            "category_id": result.category_id,
+        }
 
-    def _collect(self):
-        name = self.inp_name.text().strip()
-        if not name:
-            QMessageBox.warning(self, "تنبيه", "أدخل اسم الخامة")
-            return None, None, None
-        try:
-            price = float(self.inp_price.text() or "0")
-        except ValueError:
-            QMessageBox.warning(self, "خطأ", "السعر يجب أن يكون رقماً")
-            return None, None, None
-
-        tq_text = self.inp_total_qty.text().strip()
-        if tq_text:
-            try:
-                total_qty = float(tq_text)
-                if total_qty <= 0:
-                    raise ValueError
-            except ValueError:
-                QMessageBox.warning(self, "خطأ", "الكمية الإجمالية يجب أن تكون رقماً موجباً")
-                return None, None, None
+    def _fill_fields(self, data: dict) -> None:
+        self.inp_name.setText(data["name"])
+        # AmountSpinBox أو QLineEdit حسب الـ base
+        if hasattr(self.inp_price, "setValue"):
+            self.inp_price.setValue(data.get("price", 0))
         else:
-            total_qty = None
+            self.inp_price.setText(str(data.get("price", "")))
+        tq = data.get("total_qty")
+        self.sp_total_qty.setValue(float(tq) if tq else 0.0)
+        self.cmb_category.set_category(data.get("category_id"))
+        self._update_hint()
+        self._variants.load_item(data["id"], data.get("price", 0))
 
-        return name, price, total_qty
-
-    def _reset(self):
+    def _reset_fields(self) -> None:
         self.inp_name.clear()
-        self.inp_price.clear()
-        self.inp_total_qty.clear()
+        if hasattr(self.inp_price, "setValue"):
+            self.inp_price.setValue(0)
+        else:
+            self.inp_price.clear()
+        self.sp_total_qty.setValue(0)
         self.cmb_category.setCurrentIndex(0)
         self._update_hint()
-        self._variants_panel.clear()
-        self.exit_edit_mode("─── إضافة خامة جديدة ───")
+        self._variants.clear()

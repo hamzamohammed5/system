@@ -1,217 +1,200 @@
 """
 ui/tabs/costing/raw/raw_table_panel.py
-إصلاحات:
-1. _load تمرر local_rows لـ get_shared_raws (منع التكرار)
-2. العناصر الأصلية المنشورة تظهر بعلامة 🔗 مع تلوين مختلف
-3. category_name الحقيقي في كل الحالات
-4. يرث من LiveConnMixin بدل كتابة _live_conn يدوياً
+========================================
+RawTablePanel — جدول الخامات مع دعم العناصر المشتركة/المنشورة.
+
+يرث من BaseListPanel + SharedOpsMixin.
+- لا بناء جدول يدوي
+- لا _load / _apply_filter يدوي
+- كل shared logic عبر SharedOpsMixin
 """
 
-from PyQt5.QtWidgets import (
-    QWidget, QVBoxLayout, QPushButton, QTableWidgetItem,
-    QMessageBox, QLabel,
-)
-from PyQt5.QtGui import QColor
+from PyQt5.QtGui  import QColor
+from PyQt5.QtCore import Qt
 
-from db.shared.items_repo import fetch_items_by_type, delete_item
-from models.costing import raw_unit_price
-from ui.helpers import (
-    make_table, buttons_row, section_label, confirm_delete, danger_button,
+from ui.widgets.base.list_panel        import BaseListPanel
+from ui.widgets.mixins.shared_ops      import SharedOpsMixin
+from ui.widgets.tables.items           import make_item, colored_item
+from ui.tabs.costing.shared._utils     import (
+    to_dict, SHARED_COLOR, SHARED_BG, PUBLISHED_COLOR, PUBLISHED_BG,
 )
-from ui.tabs.costing.shared.bulk_replace.bulk_replace_dialog import BulkReplaceDialog
-from ui.widgets.shared.filter_bar import FilterBar
-from ui.widgets.shared.connection_mixin import LiveConnMixin
 from ui.tabs.companies.shared_items_mixin import (
-    get_shared_raws, get_published_local_names,
-    is_shared_id, extract_shared_id,
+    get_shared_raws, get_published_local_names, is_shared_id,
 )
-from ui.events import bus
-
-_SHARED_COLOR    = "#2e7d52"
-_SHARED_BG       = "#e8f5e9"
-_PUBLISHED_COLOR = "#1565c0"
-_PUBLISHED_BG    = "#e3f2fd"
 
 
-def _to_dict(row) -> dict:
-    if isinstance(row, dict):
-        return row
-    try:
-        return dict(row)
-    except Exception:
-        return {}
+class RawTablePanel(BaseListPanel, SharedOpsMixin):
+    """
+    جدول الخامات — يرث من BaseListPanel.
 
+    BaseListPanel يوفر:
+      - بناء الجدول
+      - FilterBar (بحث + تصنيف)
+      - _load / _apply_filter
+      - section label
+      - bus.data_changed auto-connect
+    """
 
-class _TablePanel(QWidget, LiveConnMixin):
-    def __init__(self, conn, input_panel, parent=None):
-        super().__init__(parent)
-        self.conn              = conn
+    COLUMNS            = ["ID", "الاسم", "التصنيف", "السعر الكلي", "الكمية", "سعر الوحدة"]
+    STRETCH_COL        = 1
+    EMPTY_ICON         = "🧱"
+    EMPTY_TITLE        = "لا توجد خامات"
+    LIST_TITLE         = "─── الخامات المحفوظة ───"
+    ADD_TEXT           = ""           # بدون زر Add — الفورم منفصل
+    SHOW_CATEGORY      = True
+    FILTER_SCOPE       = "raw"
+    COL_WIDTHS         = {0: 45, 2: 110, 3: 90, 4: 90, 5: 95}
+    CONNECT_BUS        = True
+
+    def __init__(self, conn, input_panel=None, parent=None):
         self._input_panel      = input_panel
-        self._all_rows         = []
         self._published_names  = set()
-        self._build()
-        self._load()
-        bus.data_changed.connect(self._load)
-
-    def _build(self):
-        root = QVBoxLayout(self)
-        root.setSpacing(6)
-        root.setContentsMargins(12, 8, 12, 12)
-
-        root.addWidget(section_label("─── الخامات المحفوظة ───"))
-
-        legend_shared = QLabel("🔗 أخضر = خامة مشتركة واردة من شركة أخرى")
-        legend_shared.setStyleSheet(
-            f"color:{_SHARED_COLOR}; background:{_SHARED_BG};"
-            "border-radius:4px; padding:3px 8px; font-size:9pt;"
-        )
-        root.addWidget(legend_shared)
-
-        legend_published = QLabel("📤 أزرق = خامة محلية منشورة ومشتركة مع شركات أخرى")
-        legend_published.setStyleSheet(
-            f"color:{_PUBLISHED_COLOR}; background:{_PUBLISHED_BG};"
-            "border-radius:4px; padding:3px 8px; font-size:9pt;"
-        )
-        root.addWidget(legend_published)
-
-        self._filter = FilterBar(self._live_conn(), scope="raw")
-        self._filter.filter_changed.connect(self._apply_filter)
-        root.addWidget(self._filter)
-
-        self.table = make_table(
-            ["ID", "الاسم", "التصنيف", "السعر الكلي", "الكمية الكلية", "سعر الوحدة"],
-            stretch_col=1,
-        )
-        self.table.setColumnWidth(0, 45)
-        self.table.setColumnWidth(2, 110)
-        self.table.setColumnWidth(3, 90)
-        self.table.setColumnWidth(4, 90)
-        self.table.setColumnWidth(5, 95)
-        root.addWidget(self.table)
-
-        btn_edit        = QPushButton("✏️  تعديل المحدد")
-        btn_del         = danger_button("🗑️  حذف المحدد")
-        btn_replace     = QPushButton("🔄  استبدال شامل")
-        btn_edit_shared = QPushButton("🔗  تعديل المشترك")
-        btn_publish     = QPushButton("📤  نشر كمشترك")
-
-        btn_replace.setStyleSheet(
-            "QPushButton { background:#e65100; color:white; border-radius:4px;"
-            "padding:4px 10px; font-weight:bold; }"
-            "QPushButton:hover { background:#bf360c; }"
-        )
-        btn_edit_shared.setStyleSheet(
-            f"QPushButton {{ background:{_SHARED_BG}; color:{_SHARED_COLOR};"
-            "border:1px solid #a5d6a7; border-radius:4px;"
-            "padding:4px 10px; font-weight:bold; }"
-            f"QPushButton:hover {{ background:#c8e6c9; }}"
-        )
-        btn_publish.setStyleSheet(
-            f"QPushButton {{ background:{_PUBLISHED_BG}; color:{_PUBLISHED_COLOR};"
-            "border:1px solid #90caf9; border-radius:4px;"
-            "padding:4px 10px; font-weight:bold; }"
-            "QPushButton:hover { background:#bbdefb; }"
-        )
-        for btn in (btn_edit, btn_del, btn_replace, btn_edit_shared, btn_publish):
-            btn.setMinimumHeight(30)
-
-        btn_edit.clicked.connect(self._edit)
-        btn_del.clicked.connect(self._delete)
-        btn_replace.clicked.connect(self._bulk_replace)
-        btn_edit_shared.clicked.connect(self._edit_shared)
-        btn_publish.clicked.connect(self._publish_as_shared)
-        root.addLayout(buttons_row(btn_edit, btn_del, btn_replace,
-                                    btn_edit_shared, btn_publish))
+        super().__init__(conn, parent)
 
     # ══════════════════════════════════════════════════════
-    # مساعدات التحديد
+    # تحميل البيانات
     # ══════════════════════════════════════════════════════
 
-    def _selected_row_data(self):
-        row = self.table.currentRow()
-        if row == -1:
-            return None, None
-        item_id   = self.table.item(row, 0).data(0x0100)
-        item_name = self.table.item(row, 1).text()
-        return item_id, item_name
-
-    def _selected_raw_dict(self):
-        row = self.table.currentRow()
-        if row == -1:
-            return None
-        item_id = self.table.item(row, 0).data(0x0100)
-        for r in self._all_rows:
-            if str(r.get("id")) == str(item_id):
-                return r
-        return None
+    def _load_rows(self) -> list:
+        from db.shared.items_repo import fetch_items_by_type
+        local_rows = [to_dict(r) for r in fetch_items_by_type(self.conn, "raw")]
+        self._published_names = get_published_local_names("raw")
+        shared_rows = get_shared_raws(local_rows)
+        return local_rows + shared_rows
 
     # ══════════════════════════════════════════════════════
-    # أحداث الأزرار
+    # ملء الجدول
     # ══════════════════════════════════════════════════════
 
-    def _edit(self):
-        item_id, _ = self._selected_row_data()
+    def _fill_row(self, table, r: int, row: dict):
+        from models.costing_base import raw_unit_price
+
+        is_shared    = row.get("_is_shared", False) or row.get("is_shared", False)
+        is_published = (
+            not is_shared and
+            str(row.get("name", "")).strip().lower() in self._published_names
+        )
+
+        prefix = "🔗 " if is_shared else ("📤 " if is_published else "")
+        color  = SHARED_COLOR    if is_shared    else \
+                 PUBLISHED_COLOR if is_published else None
+
+        tq     = row.get("total_qty")
+        price  = float(row.get("price", 0))
+        unit   = (price / float(tq)) if (tq and float(tq) > 0 and is_shared) \
+                 else raw_unit_price(row)
+
+        id_text = "🔗" if is_shared else ("📤" if is_published else str(row.get("id", "")))
+        id_item = make_item(id_text, user_data=row.get("id"))
+        table.setItem(r, 0, id_item)
+        table.setItem(r, 1, make_item(prefix + row.get("name", ""), color=color))
+        table.setItem(r, 2, make_item(row.get("category_name") or "—", color=color))
+        table.setItem(r, 3, make_item(f"{price:.2f}", color=color))
+        table.setItem(r, 4, make_item(str(tq) if tq is not None else "—", color=color))
+        table.setItem(r, 5, make_item(f"{unit:.4f}", color=color))
+
+        if color:
+            bg = SHARED_BG if is_shared else PUBLISHED_BG
+            for col in range(table.columnCount()):
+                itm = table.item(r, col)
+                if itm:
+                    itm.setBackground(QColor(bg))
+                    itm.setForeground(QColor(color))
+
+    # ══════════════════════════════════════════════════════
+    # فلترة مخصصة (يدعم shared rows)
+    # ══════════════════════════════════════════════════════
+
+    def _match_filter(self, row: dict, query: str) -> bool:
+        name = row.get("name", "")
+        cat  = row.get("category_id")
+        return self._filter.match(name, cat) if hasattr(self, "_filter") \
+               else query.lower() in name.lower()
+
+    # ══════════════════════════════════════════════════════
+    # أزرار إضافية
+    # ══════════════════════════════════════════════════════
+
+    def _build_extra_header_actions(self, header):
+        header.add_action("🔄 استبدال شامل",  self._bulk_replace,     "primary")
+        header.add_action("🔗 تعديل المشترك", self._edit_shared_selected)
+        header.add_action("📤 نشر كمشترك",    self._publish_selected)
+
+    # ══════════════════════════════════════════════════════
+    # إجراءات الأزرار
+    # ══════════════════════════════════════════════════════
+
+    def _on_add_clicked(self):
+        pass  # الإضافة تتم عبر الـ input panel المنفصل
+
+    def _on_row_double_clicked(self, item_id):
+        if self._input_panel and not is_shared_id(item_id):
+            self._input_panel.load_for_edit(int(item_id))
+
+    def _bulk_replace(self):
+        from PyQt5.QtWidgets import QMessageBox
+        from ui.tabs.costing.shared.bulk_replace.bulk_replace_dialog import BulkReplaceDialog
+
+        item_id = self.selected_id()
         if item_id is None:
             QMessageBox.information(self, "تنبيه", "اختر خامة من الجدول أولاً")
             return
+        if is_shared_id(item_id):
+            QMessageBox.information(self, "تنبيه",
+                                    "الاستبدال الشامل غير متاح للعناصر المشتركة.")
+            return
+        row = self._get_current_row_dict()
+        name = row.get("name", f"ID:{item_id}") if row else f"ID:{item_id}"
+        BulkReplaceDialog(
+            conn=self.conn, child_type="raw",
+            child_id=int(item_id), child_name=name, parent=self,
+        ).exec_()
+
+    def _edit_shared_selected(self):
+        from PyQt5.QtWidgets import QMessageBox
+        item_id = self.selected_id()
+        if item_id is None:
+            QMessageBox.information(self, "تنبيه", "اختر خامة من الجدول أولاً")
+            return
+        self._edit_shared_item(item_id, "raw", self)
+
+    def _publish_selected(self):
+        from PyQt5.QtWidgets import QMessageBox
+        item_id = self.selected_id()
+        if item_id is None:
+            QMessageBox.information(self, "تنبيه", "اختر خامة من الجدول أولاً")
+            return
+        row = self._get_current_row_dict()
+        if not row:
+            return
+        item_data = {
+            "price":         float(row.get("price", 0.0)),
+            "total_qty":     row.get("total_qty"),
+            "category_name": row.get("category_name") or None,
+        }
+        self._publish_item(row, "raw", item_data, self)
+
+    # ══════════════════════════════════════════════════════
+    # تعديل / حذف (يُعرَّف في BaseListPanel بالـ hooks التالية)
+    # ══════════════════════════════════════════════════════
+
+    def _on_edit_item(self, item_id):
+        from PyQt5.QtWidgets import QMessageBox
         if is_shared_id(item_id):
             QMessageBox.information(
                 self, "عنصر مشترك",
                 "هذه خامة مشتركة واردة — استخدم زر «🔗 تعديل المشترك» لتعديلها."
             )
             return
-        self._input_panel.load_for_edit(int(item_id))
+        if self._input_panel:
+            self._input_panel.load_for_edit(int(item_id))
 
-    def _edit_shared(self):
-        item_id, _ = self._selected_row_data()
-        if item_id is None:
-            QMessageBox.information(self, "تنبيه", "اختر خامة من الجدول أولاً")
-            return
-        if not is_shared_id(item_id):
-            row = self._selected_raw_dict()
-            if row and str(row.get("name", "")).strip().lower() in self._published_names:
-                self._edit_published_as_shared(row)
-                return
-            QMessageBox.information(
-                self, "تنبيه",
-                "هذه خامة عادية — استخدم زر «✏️ تعديل المحدد» لتعديلها."
-            )
-            return
-        shared_id = extract_shared_id(item_id)
-        if shared_id is not None:
-            self._open_shared_editor(shared_id)
+    def _on_delete_item(self, item_id, item_name: str):
+        from PyQt5.QtWidgets import QMessageBox
+        from ui.helpers import confirm_delete
+        from db.shared.items_repo import delete_item
+        from ui.widgets.core.events import emit_company_data_changed
 
-    def _edit_published_as_shared(self, row: dict):
-        try:
-            from db.companies.companies_schema import get_central_connection, create_central_tables
-            from ui.tabs.companies.shared_items_dialog import SharedItemsDialog
-            central = get_central_connection()
-            create_central_tables(central)
-            shared_row = central.execute(
-                "SELECT id FROM shared_items WHERE name=? AND shared_type='raw' LIMIT 1",
-                (row["name"],)
-            ).fetchone()
-            if shared_row:
-                dlg = SharedItemsDialog(central, shared_row["id"], parent=self)
-                dlg.exec_()
-            central.close()
-        except Exception as e:
-            QMessageBox.warning(self, "خطأ", str(e))
-
-    def _open_shared_editor(self, shared_id: int):
-        from db.companies.companies_schema import get_central_connection, create_central_tables
-        from ui.tabs.companies.shared_items_dialog import SharedItemsDialog
-        central = get_central_connection()
-        create_central_tables(central)
-        dlg = SharedItemsDialog(central, shared_id, parent=self)
-        dlg.exec_()
-        central.close()
-
-    def _delete(self):
-        item_id, item_name = self._selected_row_data()
-        if item_id is None:
-            QMessageBox.information(self, "تنبيه", "اختر خامة أولاً")
-            return
         if is_shared_id(item_id):
             QMessageBox.warning(
                 self, "عنصر مشترك",
@@ -220,149 +203,27 @@ class _TablePanel(QWidget, LiveConnMixin):
             )
             return
         item_id_int = int(item_id)
-        if self._input_panel.is_editing and self._input_panel._editing_id == item_id_int:
+        if (self._input_panel and
+                getattr(self._input_panel, "is_editing", False) and
+                getattr(self._input_panel, "_editing_id", None) == item_id_int):
             self._input_panel._reset()
         if confirm_delete(self, item_name):
             try:
-                delete_item(self._live_conn(), item_id_int)
+                delete_item(self.conn, item_id_int)
             except Exception as e:
                 QMessageBox.warning(self, "خطأ", str(e))
                 return
-            bus.data_changed.emit()
-
-    def _bulk_replace(self):
-        item_id, item_name = self._selected_row_data()
-        if item_id is None:
-            QMessageBox.information(self, "تنبيه", "اختر خامة من الجدول أولاً")
-            return
-        if is_shared_id(item_id):
-            QMessageBox.information(self, "تنبيه",
-                                    "الاستبدال الشامل غير متاح للعناصر المشتركة.")
-            return
-        dlg = BulkReplaceDialog(
-            conn=self._live_conn(), child_type="raw",
-            child_id=int(item_id), child_name=item_name, parent=self,
-        )
-        dlg.exec_()
-
-    def _publish_as_shared(self):
-        item_id, _ = self._selected_row_data()
-        if item_id is None:
-            QMessageBox.information(self, "تنبيه", "اختر خامة من الجدول أولاً")
-            return
-        if is_shared_id(item_id):
-            QMessageBox.information(
-                self, "مشترك بالفعل",
-                "هذه خامة مشتركة واردة — استخدم «🔗 تعديل المشترك» لتعديل الربط."
-            )
-            return
-
-        row = self._selected_raw_dict()
-        if not row:
-            return
-
-        if str(row.get("name", "")).strip().lower() in self._published_names:
-            self._edit_published_as_shared(row)
-            return
-
-        item_data = {
-            "price":         float(row.get("price", 0.0)),
-            "total_qty":     row.get("total_qty"),
-            "category_name": row.get("category_name") or None,
-        }
-
-        try:
-            from db.companies.companies_schema import get_central_connection, create_central_tables
-            from db.companies.shared_items_repo import create_shared_items_tables
-            from ui.tabs.companies.shared_items_manager_helper._add_shared_item_dialog import (
-                PublishAsSharedDialog
-            )
-            central = get_central_connection()
-            create_central_tables(central)
-            create_shared_items_tables(central)
-            dlg = PublishAsSharedDialog(
-                central_conn=central, shared_type="raw",
-                item_name=row.get("name", ""), item_data=item_data, parent=self,
-            )
-            dlg.exec_()
-            central.close()
-        except Exception as e:
-            QMessageBox.warning(self, "خطأ", str(e))
+            emit_company_data_changed()
 
     # ══════════════════════════════════════════════════════
-    # تحميل البيانات
+    # مساعد
     # ══════════════════════════════════════════════════════
 
-    def _load(self):
-        try:
-            conn       = self._live_conn()
-            local_rows = [_to_dict(r) for r in fetch_items_by_type(conn, "raw")]
-        except Exception:
-            local_rows = []
-
-        self._published_names = get_published_local_names("raw")
-        shared_rows    = get_shared_raws(local_rows)
-        self._all_rows = local_rows + shared_rows
-        self._apply_filter()
-
-    def _apply_filter(self):
-        self.table.setRowCount(0)
-        shown = 0
-
-        for row in self._all_rows:
-            if not self._filter.match(row.get("name", ""), row.get("category_id")):
-                continue
-
-            is_shared    = row.get("is_shared", False)
-            is_published = (
-                not is_shared and
-                str(row.get("name", "")).strip().lower() in self._published_names
-            )
-            tq    = row.get("total_qty")
-            price = row.get("price", 0.0)
-
-            if is_shared:
-                unit = (price / float(tq)) if (tq and float(tq) > 0) else price
-            else:
-                unit = raw_unit_price(row)
-
-            cat_display = row.get("category_name") or "—"
-
-            if is_shared:
-                name_prefix = "🔗 "
-            elif is_published:
-                name_prefix = "📤 "
-            else:
-                name_prefix = ""
-
-            r = self.table.rowCount()
-            self.table.insertRow(r)
-
-            id_item = QTableWidgetItem(
-                "🔗" if is_shared else ("📤" if is_published else str(row.get("id", "")))
-            )
-            id_item.setData(0x0100, row.get("id"))
-            self.table.setItem(r, 0, id_item)
-            self.table.setItem(r, 1, QTableWidgetItem(name_prefix + row.get("name", "")))
-            self.table.setItem(r, 2, QTableWidgetItem(cat_display))
-            self.table.setItem(r, 3, QTableWidgetItem(f"{price:.2f}"))
-            self.table.setItem(r, 4, QTableWidgetItem(str(tq) if tq is not None else "—"))
-            self.table.setItem(r, 5, QTableWidgetItem(f"{unit:.4f}"))
-
-            if is_shared:
-                bg, fg = _SHARED_BG, _SHARED_COLOR
-            elif is_published:
-                bg, fg = _PUBLISHED_BG, _PUBLISHED_COLOR
-            else:
-                bg = fg = None
-
-            if bg:
-                for col in range(self.table.columnCount()):
-                    itm = self.table.item(r, col)
-                    if itm:
-                        itm.setBackground(QColor(bg))
-                        itm.setForeground(QColor(fg))
-
-            shown += 1
-
-        self._filter.set_count(shown, len(self._all_rows))
+    def _get_current_row_dict(self) -> dict | None:
+        item_id = self.selected_id()
+        if item_id is None:
+            return None
+        for row in self._rows:
+            if str(row.get("id")) == str(item_id):
+                return row
+        return None

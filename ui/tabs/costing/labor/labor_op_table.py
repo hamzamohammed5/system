@@ -1,39 +1,23 @@
 """
 ui/tabs/costing/labor/labor_op_table.py
-========================================
-_LaborOpTable — جدول عمليات العمالة مع دعم العناصر المشتركة.
+=========================================
+LaborOpTable — جدول عمليات العمالة.
 
-يرث من SharedItemsListPanel الذي يوحّد:
-  - legend العناصر المشتركة/المنشورة
-  - FilterBar
-  - أزرار تعديل/حذف/استبدال شامل/تعديل مشترك/نشر كمشترك
-  - منطق التلوين والتحميل
-
-إصلاحات:
-1. _load تمرر local_rows لـ get_shared_labor_ops (منع التكرار)
-2. category_name يُعرض الحقيقي (أو "—")
-3. علامة 📤 على العمليات المحلية المنشورة كمشتركة
+يرث من SharedItemsListPanel (النمط الموجود والجيد).
+التحسين: استخدام LaborOpService بدل repo مباشر في _fetch_local_rows.
 """
 
 from PyQt5.QtWidgets import QTableWidgetItem, QMessageBox
 
-from db.costing.operations_repo import fetch_all_labor_ops, delete_labor_op
-from ui.helpers import confirm_delete
+from ui.helpers                            import confirm_delete
 from ui.widgets.shared.list_panel_with_shared import SharedItemsListPanel
-from ui.tabs.companies.shared_items_mixin import get_shared_labor_ops
+from ui.tabs.companies.shared_items_mixin  import get_shared_labor_ops
+from ui.tabs.costing.shared._utils         import to_dict
 from ui.tabs.costing.shared.bulk_replace.bulk_replace_dialog import BulkReplaceDialog
+from ui.widgets.core.events                import emit_company_data_changed
 
 
-def _to_dict(row) -> dict:
-    if isinstance(row, dict):
-        return row
-    try:
-        return dict(row)
-    except Exception:
-        return {}
-
-
-class _LaborOpTable(SharedItemsListPanel):
+class LaborOpTable(SharedItemsListPanel):
     SHARED_TYPE      = "labor_op"
     TABLE_COLS       = ["ID", "اسم العملية", "التصنيف", "الوقت (دقيقة)", "التكلفة / وحدة"]
     FILTER_SCOPE     = "labor"
@@ -52,7 +36,17 @@ class _LaborOpTable(SharedItemsListPanel):
         table.setColumnWidth(4, 130)
 
     def _fetch_local_rows(self) -> list:
-        return [_to_dict(op) for op in fetch_all_labor_ops(self._live_conn())]
+        from services.costing.labor_op_service import LaborOpService
+        return [
+            {
+                "id":            r.id,
+                "name":          r.name,
+                "minutes":       r.minutes,
+                "category_id":   r.category_id,
+                "category_name": r.category_name,
+            }
+            for r in LaborOpService(self._live_conn()).list()
+        ]
 
     def _get_shared_rows(self, local_rows: list) -> list:
         return get_shared_labor_ops(local_rows)
@@ -87,23 +81,23 @@ class _LaborOpTable(SharedItemsListPanel):
         self._form.load_for_edit(item_id)
 
     def _delete_item(self, item_id: int, item_name: str):
-        if self._form.is_editing and self._form._editing_id == item_id:
+        if (getattr(self._form, "is_editing", False) and
+                getattr(self._form, "_editing_id", None) == item_id):
             self._form._reset()
         if confirm_delete(self, item_name):
             try:
-                delete_labor_op(self._live_conn(), item_id)
+                from services.costing.labor_op_service import LaborOpService
+                LaborOpService(self._live_conn()).delete(item_id)
             except Exception as e:
                 QMessageBox.warning(self, "خطأ", str(e))
                 return
-            from ui.events import bus
-            bus.data_changed.emit()
+            emit_company_data_changed()
 
     def _bulk_replace_item(self, item_id: int, item_name: str):
-        dlg = BulkReplaceDialog(
+        BulkReplaceDialog(
             conn=self._live_conn(), child_type="labor_op",
             child_id=item_id, child_name=item_name, parent=self,
-        )
-        dlg.exec_()
+        ).exec_()
 
     def _get_item_data_for_publish(self, row: dict) -> dict:
         return {
