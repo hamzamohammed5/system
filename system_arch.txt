@@ -1,5 +1,5 @@
 File Tree Snapshot
-Generated : 2026-05-29 06:45:06
+Generated : 2026-05-29 07:28:35
 Source    : D:\My Workspace\Hg\Alhabaar\accountant\system
 Extensions: .py
 ────────────────────────────────────────────────────────────
@@ -366,6 +366,5 @@ system/
 │   ├── helpers.py
 │   ├── i18n.py
 │   ├── main_window.py
-│   ├── settings_dialog.py
-│   └── themes.py
+│   └── settings_dialog.py
 ├── main.py

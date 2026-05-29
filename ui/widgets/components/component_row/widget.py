@@ -5,17 +5,15 @@ ComponentRow — صف مكوّن واحد في BOM.
 
 التغييرات (Phase 5):
   - _get_conn: حذف SELECT 1 overhead من الـ cache check.
-    الـ cache كان بيتحقق من الـ connection بـ SELECT 1 في كل استدعاء
-    حتى لو الـ connection سليم. بما إن ComponentRow بيتستدعى كتير،
-    الـ overhead ده بيتراكم. الحل: ثق في الـ cache مباشرة،
-    لو الـ connection مات أول query حقيقية هتفشل وبيعمل retry تلقائي.
 
   - [إصلاح 20] _connect_bus تستخدم weakref لمنع dangling reference.
-    القديم: lambda تحتفظ بـ reference قوي للـ widget — عند حذف
-    ComponentRow، الـ lambda تبقى مرتبطة بالـ bus وتستدعي
-    _on_catalog_changed على widget محذوف.
-    الجديد: weakref.ref(self) داخل الـ lambda — لو الـ widget
-    محذوف، weak() ترجع None وتُتجاهل الاستدعاء بصمت.
+
+  - [A-06] حفظ مرجع الـ bus connection وفصله صريحاً في closeEvent.
+    القديم: كل ComponentRow يُنشئ lambda ويربطها بـ bus.data_changed
+    بدون حفظ مرجع للـ connection. عند إعادة إنشاء الـ rows، القديمة
+    تبقى مرتبطة بالـ bus (weakref يمنع الـ crash لكن الـ slot ما زال مسجلاً).
+    الجديد: _bus_slot محفوظ كـ instance variable ويُفصل صريحاً في
+    closeEvent() لضمان إزالة الـ connection من الـ bus تماماً.
 """
 
 import weakref
@@ -76,6 +74,8 @@ class ComponentRow(QWidget, OpRowsMixin, VariantsMixin):
       - كمية + هادر
       - variants للخامات
       - صفوف العملية لعمليات التشغيل
+
+    [A-06] _bus_slot: مرجع الـ bus connection محفوظ ويُفصل في closeEvent.
     """
 
     removed = pyqtSignal(QWidget)
@@ -97,6 +97,9 @@ class ComponentRow(QWidget, OpRowsMixin, VariantsMixin):
         self._show_total_qty = show_total_qty
         self._orphan         = _OrphanState()
         self._conn_cache     = None
+
+        # [A-06] مرجع الـ bus slot لفصله لاحقاً
+        self._bus_slot = None
 
         # pinned state (يُحفظ عند التنقل بين الأنواع)
         self._pinned_type      = child_type
@@ -167,6 +170,7 @@ class ComponentRow(QWidget, OpRowsMixin, VariantsMixin):
     def _connect_bus(self):
         """
         [إصلاح 20] يستخدم weakref لمنع dangling reference.
+        [A-06] يحفظ مرجع الـ slot في self._bus_slot لفصله لاحقاً.
 
         القديم:
             bus.data_changed.connect(
@@ -176,8 +180,9 @@ class ComponentRow(QWidget, OpRowsMixin, VariantsMixin):
         لو حُذف ComponentRow، الـ lambda تبقى مرتبطة بالـ bus
         وتستدعي _on_catalog_changed على widget محذوف → crash.
 
-        الجديد: weakref.ref(self) — لو الـ widget محذوف،
-        weak() ترجع None وتُتجاهل الاستدعاء بصمت.
+        الجديد:
+        - weakref.ref(self) — لو الـ widget محذوف، weak() ترجع None وتُتجاهل.
+        - _bus_slot محفوظ — يُفصل صريحاً في closeEvent() لضمان تنظيف كامل.
         """
         weak = weakref.ref(self)
 
@@ -188,7 +193,28 @@ class ComponentRow(QWidget, OpRowsMixin, VariantsMixin):
                 return
             QTimer.singleShot(0, s._on_catalog_changed)
 
-        bus.data_changed.connect(_on_bus_event)
+        # [A-06] حفظ مرجع الـ slot
+        self._bus_slot = _on_bus_event
+        bus.data_changed.connect(self._bus_slot)
+
+    def _disconnect_bus(self):
+        """
+        [A-06] يفصل الـ slot من الـ bus صريحاً.
+        يُستدعى من closeEvent() لضمان إزالة الـ connection تماماً.
+        """
+        if self._bus_slot is not None:
+            try:
+                bus.data_changed.disconnect(self._bus_slot)
+            except (TypeError, RuntimeError):
+                pass
+            self._bus_slot = None
+
+    def closeEvent(self, event):
+        """
+        [A-06] يفصل الـ bus connection عند إغلاق الـ widget.
+        """
+        self._disconnect_bus()
+        super().closeEvent(event)
 
     # ── Deferred loads ─────────────────────────────────────
 

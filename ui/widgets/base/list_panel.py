@@ -14,6 +14,11 @@ BaseListPanel — قاعدة مشتركة لكل لوحات القوائم.
   - [تحسين 45 محفوظ] Custom Sort.
   - [تحسين 51 محفوظ] Pagination.
   - [تحسين 17 محفوظ] select_item binary search.
+  - [E-02] إصلاح تطبيق date filter في _apply_filter:
+    القديم: FilterToolbar يُبنى لكن in_date_range لا يُطبَّق في الـ base class
+            عند SHOW_DATE=True — الفلتر الزمني كان للعرض فقط بدون تأثير.
+    الجديد: _apply_filter تستدعي _match_date() التي تستدعي
+            _filter_toolbar.in_date_range() لو كانت SHOW_DATE=True.
 """
 from PyQt5.QtWidgets import (
     QWidget, QVBoxLayout, QHBoxLayout, QLabel,
@@ -55,6 +60,7 @@ class BaseListPanel(QWidget, BusConnectedMixin):
     Override الاختياري:
         _match_filter(row, query)      → bool
         _match_category(row, cat_id)   → bool
+        _match_date(row)               → bool  ← [E-02] جديد
         _on_add_clicked()
         _on_data_changed()
         _build_extra_header_actions(header)
@@ -68,6 +74,10 @@ class BaseListPanel(QWidget, BusConnectedMixin):
     [تحسين 51] Pagination:
         PAGINATE  = True  لتفعيل التقسيم لصفحات
         PAGE_SIZE = عدد الصفوف في كل صفحة (افتراضي 200)
+
+    [E-02] Date filter:
+        DATE_COL = اسم الـ key في dict البيانات اللي بيحتوي التاريخ
+                   الافتراضي "date" — override لو كان اسم مختلف.
     """
 
     item_selected = pyqtSignal(int)
@@ -86,6 +96,9 @@ class BaseListPanel(QWidget, BusConnectedMixin):
     SHOW_DATE          : bool = False
     FILTER_SCOPE       : str  = "all"
     CONNECT_BUS        : bool = True
+
+    # [E-02] اسم الـ key اللي بيحتوي التاريخ في dict البيانات
+    DATE_COL           : str  = "date"
 
     # ── [تحسين 45] Sort settings ─────────────────────────
     SORTABLE          : bool = False
@@ -138,6 +151,20 @@ class BaseListPanel(QWidget, BusConnectedMixin):
 
     def _match_category(self, row: dict, cat_id) -> bool:
         return cat_id is None or row.get("category_id") == cat_id
+
+    def _match_date(self, row: dict) -> bool:
+        """
+        [E-02] يتحقق من وقوع التاريخ ضمن النطاق المحدد في FilterToolbar.
+
+        يُستدعى فقط لو SHOW_DATE=True والـ _filter_toolbar موجود.
+        يقرأ التاريخ من row[DATE_COL] — override DATE_COL لو كان اسم مختلف.
+
+        Override هذه الدالة لو أردت منطق مقارنة مخصص.
+        """
+        if not self._filter_toolbar:
+            return True
+        date_str = str(row.get(self.DATE_COL, ""))
+        return self._filter_toolbar.in_date_range(date_str)
 
     def _on_add_clicked(self):
         pass
@@ -508,10 +535,16 @@ class BaseListPanel(QWidget, BusConnectedMixin):
         query  = self._get_search_query()
         cat_id = self._get_category_filter()
 
-        filtered = [
-            row for row in self._all_rows
-            if self._match_filter(row, query) and self._match_category(row, cat_id)
-        ]
+        filtered = []
+        for row in self._all_rows:
+            if not self._match_filter(row, query):
+                continue
+            if not self._match_category(row, cat_id):
+                continue
+            # [E-02] تطبيق فلتر التاريخ لو كان SHOW_DATE=True
+            if self.SHOW_DATE and not self._match_date(row):
+                continue
+            filtered.append(row)
 
         filtered = self._sorted_rows(filtered)
         self._fill_table(filtered)
