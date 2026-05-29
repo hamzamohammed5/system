@@ -3,6 +3,10 @@ ui/widgets/managers/category.py
 =============================
 CategoryManager — شجرة لإدارة التصنيفات الهرمية.
 CategoryForm    — فورم إضافة/تعديل التصنيف.
+
+التغييرات:
+  - [i18n] كل النصوص الظاهرة للمستخدم تستخدم tr() بدل النصوص العربية المباشرة.
+  - [i18n] CategoryForm و CategoryManager يشتركان في bus.language_changed.
 """
 
 from PyQt5.QtWidgets import (
@@ -18,6 +22,7 @@ from db.shared.categories_repo import (
     build_tree, fetch_descendants,
 )
 from ..core.conn          import LiveConnMixin
+from ..core.i18n          import tr
 from ..components.button  import make_btn
 from ..dialogs.confirm    import confirm_delete
 from ..dialogs.message    import msg_info, msg_warning
@@ -32,12 +37,30 @@ class CategoryForm(QGroupBox, LiveConnMixin):
     """فورم إضافة/تعديل التصنيف."""
 
     def __init__(self, conn, scope: str, tree_widget, parent=None):
-        super().__init__("بيانات التصنيف", parent)
+        super().__init__(tr("category_data"), parent)
         self.conn        = conn
         self.scope       = scope
         self._tree       = tree_widget
         self._editing_id = None
         self._build()
+        self._connect_language_bus()
+
+    def _connect_language_bus(self):
+        """[i18n] يشترك في bus.language_changed لتحديث النصوص."""
+        try:
+            from ui.events import bus
+            bus.language_changed.connect(
+                self._on_language_changed, Qt.UniqueConnection
+            )
+        except Exception:
+            pass
+
+    def _on_language_changed(self, lang_code: str):
+        """[i18n] يُحدّث نصوص الـ groupbox والأزرار."""
+        self.setTitle(tr("category_data"))
+        self.btn_add.setText(tr("btn_add"))
+        self.btn_save.setText(tr("btn_save"))
+        self.btn_cancel.setText(tr("btn_cancel"))
 
     def _build(self):
         from ..helpers.color_picker import ColorPickerWidget
@@ -46,24 +69,25 @@ class CategoryForm(QGroupBox, LiveConnMixin):
         form.setSpacing(10)
         form.setLabelAlignment(Qt.AlignRight)
 
-        self.lbl_mode = ModeLabel(add_text="تصنيف جديد")
+        self.lbl_mode = ModeLabel(add_text=tr("category_add"))
         form.addRow(self.lbl_mode)
 
         self.inp_name = QLineEdit()
         self.inp_name.setMinimumHeight(30)
-        form.addRow("الاسم :", self.inp_name)
+        self.inp_name.setPlaceholderText(tr("category_name"))
+        form.addRow(f"{tr('category_name')} :", self.inp_name)
 
         self.cmb_parent = QComboBox()
         self.cmb_parent.setMinimumHeight(30)
-        form.addRow("تابع لـ :", self.cmb_parent)
+        form.addRow(f"{tr('category_parent')} :", self.cmb_parent)
 
         self._color_picker = ColorPickerWidget(default="#607d8b")
-        form.addRow("اللون :", self._color_picker)
+        form.addRow(f"{tr('category_color')} :", self._color_picker)
 
         btn_row = QHBoxLayout()
-        self.btn_add    = make_btn("➕  إضافة", "primary")
-        self.btn_save   = make_btn("💾  حفظ",   "success")
-        self.btn_cancel = make_btn("✖  إلغاء",  "ghost")
+        self.btn_add    = make_btn(tr("btn_add"),    "primary")
+        self.btn_save   = make_btn(tr("btn_save"),   "success")
+        self.btn_cancel = make_btn(tr("btn_cancel"), "ghost")
         self.btn_save.setVisible(False)
         self.btn_cancel.setVisible(False)
         self.btn_add.clicked.connect(self._add)
@@ -83,7 +107,7 @@ class CategoryForm(QGroupBox, LiveConnMixin):
 
         self.cmb_parent.blockSignals(True)
         self.cmb_parent.clear()
-        self.cmb_parent.addItem("— بدون أب (رئيسي) —", None)
+        self.cmb_parent.addItem(tr("filter_all"), None)
 
         try:
             rows = fetch_all_categories(conn, self.scope)
@@ -114,12 +138,12 @@ class CategoryForm(QGroupBox, LiveConnMixin):
     def _add(self):
         name = self.inp_name.text().strip()
         if not name:
-            msg_warning(self, "تنبيه", "أدخل اسم التصنيف")
+            msg_warning(self, tr("warning"), tr("category_name_required"))
             return
         try:
             conn = self._live_conn()
         except Exception as e:
-            msg_warning(self, "خطأ", str(e))
+            msg_warning(self, tr("error"), str(e))
             return
 
         from services.shared.category_service import CategoryService
@@ -130,7 +154,7 @@ class CategoryForm(QGroupBox, LiveConnMixin):
                 self.cmb_parent.currentData()
             )
         except ValueError as e:
-            msg_warning(self, "تنبيه", str(e))
+            msg_warning(self, tr("warning"), str(e))
             return
 
         self._reset()
@@ -141,12 +165,12 @@ class CategoryForm(QGroupBox, LiveConnMixin):
             return
         name = self.inp_name.text().strip()
         if not name:
-            msg_warning(self, "تنبيه", "أدخل اسم التصنيف")
+            msg_warning(self, tr("warning"), tr("category_name_required"))
             return
         try:
             conn = self._live_conn()
         except Exception as e:
-            msg_warning(self, "خطأ", str(e))
+            msg_warning(self, tr("error"), str(e))
             return
 
         from services.shared.category_service import CategoryService
@@ -157,7 +181,7 @@ class CategoryForm(QGroupBox, LiveConnMixin):
                 self.cmb_parent.currentData()
             )
         except ValueError as e:
-            msg_warning(self, "تنبيه", str(e))
+            msg_warning(self, tr("warning"), str(e))
             return
 
         self._reset()
@@ -208,6 +232,25 @@ class CategoryManager(QWidget, LiveConnMixin):
         self._load()
         from ui.events import bus
         bus.data_changed.connect(self._load)
+        self._connect_language_bus()
+
+    def _connect_language_bus(self):
+        """[i18n] يشترك في bus.language_changed لتحديث النصوص."""
+        try:
+            from ui.events import bus
+            bus.language_changed.connect(
+                self._on_language_changed, Qt.UniqueConnection
+            )
+        except Exception:
+            pass
+
+    def _on_language_changed(self, lang_code: str):
+        """[i18n] يُحدّث عناوين الأعمدة ونصوص الأزرار."""
+        self.tree.setHeaderLabels([
+            tr("category"), tr("category_new"), tr("quantity")
+        ])
+        self.btn_edit.setText(tr("btn_edit"))
+        self.btn_del.setText(tr("btn_delete"))
 
     def _build(self):
         root = QVBoxLayout(self)
@@ -215,7 +258,10 @@ class CategoryManager(QWidget, LiveConnMixin):
         root.setSpacing(10)
 
         self.tree = QTreeWidget()
-        self.tree.setHeaderLabels(["التصنيف", "الأبناء", "العناصر"])
+        # [i18n] استخدام tr() لعناوين الأعمدة
+        self.tree.setHeaderLabels([
+            tr("category"), tr("category_new"), tr("quantity")
+        ])
         self.tree.setColumnWidth(0, 260)
         self.tree.setColumnWidth(1, 60)
         self.tree.setColumnWidth(2, 80)
@@ -225,13 +271,13 @@ class CategoryManager(QWidget, LiveConnMixin):
         self.tree.itemSelectionChanged.connect(self._on_select)
         root.addWidget(self.tree)
 
-        btn_row  = QHBoxLayout()
-        btn_edit = make_btn("✏️  تعديل", "normal")
-        btn_del  = make_btn("🗑️  حذف",   "danger")
-        btn_edit.clicked.connect(self._edit)
-        btn_del.clicked.connect(self._delete)
-        btn_row.addWidget(btn_edit)
-        btn_row.addWidget(btn_del)
+        btn_row = QHBoxLayout()
+        self.btn_edit = make_btn(tr("btn_edit"),   "normal")
+        self.btn_del  = make_btn(tr("btn_delete"), "danger")
+        self.btn_edit.clicked.connect(self._edit)
+        self.btn_del.clicked.connect(self._delete)
+        btn_row.addWidget(self.btn_edit)
+        btn_row.addWidget(self.btn_del)
         btn_row.addStretch()
         root.addLayout(btn_row)
 
@@ -303,19 +349,19 @@ class CategoryManager(QWidget, LiveConnMixin):
     def _edit(self):
         cat_id = self._selected_id()
         if cat_id is None:
-            msg_info(self, "تنبيه", "اختر تصنيفاً أولاً")
+            msg_info(self, tr("warning"), tr("category_select_first"))
             return
         self._form.load_for_edit(cat_id)
 
     def _delete(self):
         cat_id = self._selected_id()
         if cat_id is None:
-            msg_info(self, "تنبيه", "اختر تصنيفاً أولاً")
+            msg_info(self, tr("warning"), tr("category_select_first"))
             return
         try:
             conn = self._live_conn()
         except Exception as e:
-            msg_warning(self, "خطأ", str(e))
+            msg_warning(self, tr("error"), str(e))
             return
 
         from services.shared.category_service import CategoryService

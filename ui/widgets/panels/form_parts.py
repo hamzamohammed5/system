@@ -12,6 +12,10 @@ ui/widgets/panels/form_parts.py
   CrudButtonsBar — شريط أزرار CRUD موحد
 
   ModeLabel — مستوردة من components/label (مصدر واحد)
+
+التغييرات:
+  - [i18n] CrudButtonsBar يستخدم tr() لنصوص الأزرار والـ label.
+  - [i18n] required_label يستخدم _C['danger'] بدل hardcoded.
 """
 
 from PyQt5.QtWidgets import (
@@ -25,6 +29,7 @@ from ui.app_settings import _C, fs, get_font_size
 from ..components.button import make_btn
 from ..theme.styles      import spinbox_style
 from ..core.colors       import status_colors
+from ..core.i18n         import tr
 
 from ..components.label import ModeLabel  # noqa: F401
 
@@ -46,7 +51,6 @@ def form_label(text: str, color: str = None) -> QLabel:
 
 def required_label(text: str) -> QLabel:
     base = get_font_size()
-    # يستخدم _C['danger'] بدل hardcoded "#c62828"
     lbl = QLabel(f"<span style='color:{_C[\"danger\"]};'>*</span> {text}")
     lbl.setStyleSheet(
         f"font-size:{fs(base,0)}pt; font-weight:600;"
@@ -358,27 +362,38 @@ class InlinePreview(QWidget):
 # ══════════════════════════════════════════════════════════
 
 class CrudButtonsBar(QWidget):
-    """شريط أزرار موحد: إضافة / حفظ / إلغاء + label الوضع."""
+    """
+    شريط أزرار موحد: إضافة / حفظ / إلغاء + label الوضع.
+
+    [i18n] نصوص الأزرار والـ label تستخدم tr() بدل النصوص العربية المباشرة.
+    يشترك في bus.language_changed لتحديث النصوص تلقائياً.
+    """
 
     add_clicked    = pyqtSignal()
     save_clicked   = pyqtSignal()
     cancel_clicked = pyqtSignal()
 
-    def __init__(self, add_text: str = "➕  إضافة",
-                 save_text: str = "💾  حفظ التعديل",
-                 cancel_text: str = "✖  إلغاء",
+    def __init__(self, add_text: str = "",
+                 save_text: str = "",
+                 cancel_text: str = "",
                  show_mode: bool = True, parent=None):
         super().__init__(parent)
-        self._build(add_text, save_text, cancel_text, show_mode)
+        # [i18n] استخدام tr() كـ fallback لو النص فارغ
+        self._add_text    = add_text    or tr("btn_add")
+        self._save_text   = save_text   or tr("btn_save")
+        self._cancel_text = cancel_text or tr("btn_cancel")
+        self._show_mode   = show_mode
+        self._build(show_mode)
+        self._connect_language_bus()
 
-    def _build(self, add_text, save_text, cancel_text, show_mode):
+    def _build(self, show_mode):
         self.setStyleSheet("background:transparent;")
         lay = QVBoxLayout(self)
         lay.setContentsMargins(0, 4, 0, 4)
         lay.setSpacing(6)
 
         if show_mode:
-            self.lbl_mode = QLabel("─── إضافة جديدة ───")
+            self.lbl_mode = QLabel(f"─── {tr('add')} ───")
             base = get_font_size()
             self.lbl_mode.setStyleSheet(
                 f"font-weight:bold; font-size:{fs(base,0)}pt;"
@@ -389,9 +404,9 @@ class CrudButtonsBar(QWidget):
         btn_row = QHBoxLayout()
         btn_row.setSpacing(8)
 
-        self.btn_add    = make_btn(add_text,    "primary")
-        self.btn_save   = make_btn(save_text,   "success")
-        self.btn_cancel = make_btn(cancel_text, "ghost")
+        self.btn_add    = make_btn(self._add_text,    "primary")
+        self.btn_save   = make_btn(self._save_text,   "success")
+        self.btn_cancel = make_btn(self._cancel_text, "ghost")
 
         self.btn_add.clicked.connect(self.add_clicked.emit)
         self.btn_save.clicked.connect(self.save_clicked.emit)
@@ -404,6 +419,23 @@ class CrudButtonsBar(QWidget):
 
         if not show_mode:
             self.lbl_mode = QLabel()
+
+    def _connect_language_bus(self):
+        """[i18n] يشترك في bus.language_changed لتحديث النصوص."""
+        try:
+            from ui.events import bus
+            from PyQt5.QtCore import Qt as _Qt
+            bus.language_changed.connect(
+                self._on_language_changed, _Qt.UniqueConnection
+            )
+        except Exception:
+            pass
+
+    def _on_language_changed(self, lang_code: str):
+        """[i18n] يُحدّث نصوص الأزرار عند تغيير اللغة."""
+        self.btn_add.setText(tr("btn_add"))
+        self.btn_save.setText(tr("btn_save"))
+        self.btn_cancel.setText(tr("btn_cancel"))
 
     def set_mode_text(self, text: str):
         self.lbl_mode.setText(text)

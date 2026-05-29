@@ -3,19 +3,18 @@ ui/widgets/components/headers.py
 ============================================
 كل هيدرات التطبيق في ملف واحد:
 
-  SectionHeader  — هيدر قسم داخلي (accent bar + عنوان + أزرار)
-  PageHeader     — هيدر صفحة كاملة (أيقونة + عنوان + subtitle + أزرار)
-  DetailHeader   — هيدر صفحة تفاصيل (عنوان + بطاقات + toolbar)
-  ListHeader     — هيدر لوحة قائمة  (عنوان + بحث + زر إضافة)
+  SectionHeader  — هيدر قسم داخلي
+  PageHeader     — هيدر صفحة كاملة
+  DetailHeader   — هيدر صفحة تفاصيل
+  ListHeader     — هيدر لوحة قائمة
   SearchBar      — حقل بحث مع delay
-  StatusBar      — شريط حالة (عداد)
+  StatusBar      — شريط حالة
 
 التغييرات:
-  - [تحسين 22] DetailHeader يستخدم lazy initialization لـ ActionToolbar.
-    القديم: كل DetailHeader يُنشئ ActionToolbar حتى لو الـ panel
-    لا تضيف أزراراً — هذا يُنشئ FlowLayout فارغاً غير ضروري.
-    الجديد: toolbar يُنشأ فقط عند أول استدعاء لـ .toolbar أو .add_action().
-    الـ API الخارجي لم يتغير — الكود الحالي يعمل بدون تعديل.
+  - [i18n] SearchBar placeholder يستخدم tr("list_search_placeholder").
+  - [i18n] StatusBar يستخدم tr() لنصوص العداد.
+  - [i18n] ListHeader يشترك في bus.language_changed لتحديث النصوص.
+  - [تحسين 22] DetailHeader lazy initialization لـ ActionToolbar محفوظ.
 """
 
 from PyQt5.QtWidgets import (
@@ -31,6 +30,7 @@ from ..theme.styles import h_divider, v_divider
 from .button          import make_btn
 from .stat_row        import BadgeLabel
 from .label           import InfoRow
+from ..core.i18n      import tr
 
 
 # ══════════════════════════════════════════════════════════
@@ -42,17 +42,19 @@ class SearchBar(QWidget):
 
     search_changed = pyqtSignal(str)
 
-    def __init__(self, placeholder: str = "🔍  بحث...",
+    def __init__(self, placeholder: str = "",
                  delay_ms: int = 250,
                  height: int = 34,
                  parent=None):
         super().__init__(parent)
+        # [i18n] استخدام tr() للـ placeholder الافتراضي
+        _placeholder = placeholder or tr("list_search_placeholder")
         self._delay = delay_ms
         self._timer = QTimer(self)
         self._timer.setSingleShot(True)
         self._timer.setInterval(delay_ms)
         self._timer.timeout.connect(self._emit)
-        self._build(placeholder, height)
+        self._build(_placeholder, height)
 
     def _build(self, placeholder: str, height: int):
         lay = QHBoxLayout(self)
@@ -106,6 +108,11 @@ class StatusBar(QLabel):
         super().__init__(parent)
         self.setAlignment(Qt.AlignCenter)
         self.setFixedHeight(24)
+        self._apply_style()
+        self._shown = 0
+        self._total = 0
+
+    def _apply_style(self):
         base = get_font_size()
         self.setStyleSheet(f"""
             background:{_C['bg_surface_2']};
@@ -117,13 +124,21 @@ class StatusBar(QLabel):
         """)
 
     def set_count(self, shown: int, total: int):
-        self.setText(str(total) if shown == total else f"{shown} / {total}")
+        self._shown = shown
+        self._total = total
+        # [i18n] استخدام tr() لنصوص العداد
+        if shown == total:
+            self.setText(tr("showing_all", total=total))
+        else:
+            self.setText(tr("showing_of", shown=shown, total=total))
 
     def set_text(self, text: str):
         self.setText(text)
 
     def clear_count(self):
         self.setText("")
+        self._shown = 0
+        self._total = 0
 
 
 # ══════════════════════════════════════════════════════════
@@ -133,11 +148,6 @@ class StatusBar(QLabel):
 class SectionHeader(QWidget):
     """
     هيدر قسم داخلي: accent bar + عنوان + أزرار.
-
-    الاستخدام:
-        hdr = SectionHeader("بيانات المنتج")
-        hdr.add_button("➕ إضافة", callback=self._add)
-        layout.addWidget(hdr)
     """
 
     def __init__(self, title: str = "", parent=None):
@@ -274,19 +284,15 @@ class DetailHeader(QFrame):
     """
     هيدر صفحة تفاصيل: عنوان + شارات + بطاقات إحصائية + toolbar أزرار.
 
-    [تحسين 22] ActionToolbar يُنشأ بـ lazy initialization:
-    لا يُنشأ حتى يُطلب أول مرة عبر .toolbar أو .add_action().
-    هذا يوفر إنشاء FlowLayout + QWidget فارغ لكل panel لا تحتاجه.
-
-    الـ API الخارجي لم يتغير — الكود الحالي يعمل بدون تعديل.
+    [تحسين 22] ActionToolbar يُنشأ بـ lazy initialization.
     """
 
     def __init__(self, bg: str = None, parent=None):
         super().__init__(parent)
         self._stat_cards = []
-        self._toolbar    = None   # [تحسين 22] lazy — لم يُنشأ بعد
-        self._tb_section = None   # القسم الحاوي للـ toolbar
-        self._tb_lay     = None   # layout الـ toolbar section
+        self._toolbar    = None
+        self._tb_section = None
+        self._tb_lay     = None
         self._build(bg or _C['bg_surface'])
 
     def _build(self, bg: str):
@@ -303,7 +309,6 @@ class DetailHeader(QFrame):
         root.setContentsMargins(20, 14, 20, 0)
         root.setSpacing(0)
 
-        # ── القسم العلوي ──
         top = QWidget()
         top.setStyleSheet("background:transparent;")
         top_lay = QVBoxLayout(top)
@@ -356,7 +361,6 @@ class DetailHeader(QFrame):
         root.addWidget(top)
         root.addWidget(h_divider())
 
-        # ── البطاقات الإحصائية ──
         cards_section = QWidget()
         cards_section.setStyleSheet("background:transparent;")
         cards_lay = QVBoxLayout(cards_section)
@@ -367,24 +371,17 @@ class DetailHeader(QFrame):
         root.addWidget(cards_section)
         root.addWidget(h_divider())
 
-        # ── [تحسين 22] حجز مكان لشريط الأزرار بدون إنشاء ActionToolbar ──
-        # الـ toolbar section يُنشأ دائماً (لحجز الـ layout space)
-        # لكن ActionToolbar نفسه يُنشأ فقط عند الحاجة
         self._tb_section = QWidget()
         self._tb_section.setStyleSheet("background:transparent;")
         self._tb_section.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Preferred)
         self._tb_lay = QVBoxLayout(self._tb_section)
         self._tb_lay.setContentsMargins(0, 8, 0, 10)
-        # لا نُنشئ ActionToolbar هنا — lazy
         root.addWidget(self._tb_section)
 
         self._root_layout = root
 
     def _ensure_toolbar(self) -> "ActionToolbar":
-        """
-        [تحسين 22] ينشئ ActionToolbar عند الحاجة الأولى فقط.
-        بعد الإنشاء يُحفظ في self._toolbar ولا يُعاد إنشاؤه.
-        """
+        """[تحسين 22] ينشئ ActionToolbar عند الحاجة الأولى فقط."""
         if self._toolbar is None:
             from .action_toolbar import ActionToolbar
             self._toolbar = ActionToolbar(spacing=8)
@@ -440,12 +437,14 @@ class DetailHeader(QFrame):
             card.deleteLater()
         self._stat_cards.clear()
 
+    def add_action(self, text: str, callback=None,
+                   style: str = "primary") -> QPushButton:
+        """إضافة زر للـ toolbar — alias لـ toolbar.add_action()."""
+        return self._ensure_toolbar().add_action(text, style, callback)
+
     @property
     def toolbar(self) -> "ActionToolbar":
-        """
-        [تحسين 22] يُنشئ الـ toolbar عند أول وصول.
-        الـ API الخارجي لم يتغير.
-        """
+        """[تحسين 22] يُنشئ الـ toolbar عند أول وصول."""
         return self._ensure_toolbar()
 
 
@@ -456,6 +455,8 @@ class DetailHeader(QFrame):
 class ListHeader(QFrame):
     """
     هيدر لوحة قائمة: عنوان + بحث + زر إضافة + أزرار إضافية.
+
+    [i18n] يشترك في bus.language_changed لتحديث placeholder البحث وزر الإضافة.
     """
 
     search_changed = pyqtSignal(str)
@@ -463,7 +464,7 @@ class ListHeader(QFrame):
 
     def __init__(self, title: str = "", add_text: str = "",
                  show_search: bool = True,
-                 search_placeholder: str = "🔍  بحث...",
+                 search_placeholder: str = "",
                  search_delay: int = 250, parent=None):
         super().__init__(parent)
         self._title       = title
@@ -472,7 +473,10 @@ class ListHeader(QFrame):
         self._btn_add     = None
         self._search_bar  = None
         self._btn_row     = None
-        self._build(search_placeholder, search_delay)
+        # [i18n] placeholder افتراضي من tr()
+        _placeholder = search_placeholder or tr("list_search_placeholder")
+        self._build(_placeholder, search_delay)
+        self._connect_language_bus()
 
     def _build(self, placeholder: str, delay: int):
         self.setStyleSheet(f"""
@@ -514,6 +518,21 @@ class ListHeader(QFrame):
             self._search_bar.search_changed.connect(self.search_changed.emit)
             root.addWidget(self._search_bar)
 
+    def _connect_language_bus(self):
+        """[i18n] يشترك في bus.language_changed."""
+        try:
+            from ui.events import bus
+            bus.language_changed.connect(
+                self._on_language_changed, Qt.UniqueConnection
+            )
+        except Exception:
+            pass
+
+    def _on_language_changed(self, lang_code: str):
+        """[i18n] يُحدّث placeholder البحث."""
+        if self._search_bar:
+            self._search_bar.set_placeholder(tr("list_search_placeholder"))
+
     def add_action(self, text: str, callback=None,
                    style: str = "normal") -> QPushButton:
         btn = make_btn(text, style)
@@ -549,7 +568,7 @@ class ListHeader(QFrame):
 
 def make_list_header(title: str = "", add_text: str = "",
                      show_search: bool = True,
-                     placeholder: str = "🔍  بحث...") -> ListHeader:
+                     placeholder: str = "") -> ListHeader:
     return ListHeader(title=title, add_text=add_text,
                       show_search=show_search,
-                      search_placeholder=placeholder)
+                      search_placeholder=placeholder or tr("list_search_placeholder"))

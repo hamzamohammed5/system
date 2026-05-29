@@ -6,18 +6,22 @@ ui/i18n.py
 الاستخدام:
     from ui.i18n import tr, i18n_manager
 
-    text = tr("save")                          # "حفظ" أو "Save"
-    text = tr("delete_confirm_msg", name="X")  # "هل تريد حذف «X»؟"
+    text = tr("save")
+    text = tr("delete_confirm_msg", name="X")
 
     i18n_manager.set_language("en")
     i18n_manager.language_changed.connect(my_fn)
 
 التغييرات:
-    - إضافة مفاتيح الرسائل والتحقق الناقصة:
-        enter_field, select_field, field_positive, field_positive_enter
-    - إضافة مفاتيح نصوص الـ panels الافتراضية:
-        list_search_placeholder, detail_select_item
-    - إضافة مفاتيح رسائل الأزرار الشائعة
+  - [i18n] يستورد الآن من ui/i18n/ar.py و ui/i18n/en.py ويدمجهم مع
+    الـ _TRANSLATIONS الداخلي — الملفات الخارجية لها الأولوية.
+    هذا يسمح بتوسيع الترجمات بدون تعديل هذا الملف.
+  - إضافة مفاتيح التحقق الناقصة:
+      enter_field, select_field, field_positive, field_positive_enter
+  - إضافة مفاتيح نصوص الـ panels الافتراضية:
+      list_search_placeholder, detail_select_item
+  - إضافة مفاتيح رسائل الأزرار الشائعة.
+  - إضافة مفاتيح التصنيفات (category_*).
 """
 
 from __future__ import annotations
@@ -27,7 +31,7 @@ from PyQt5.QtCore import QObject, pyqtSignal, Qt
 
 
 # ══════════════════════════════════════════════════════════
-# قاموس الترجمات
+# قاموس الترجمات الداخلي (fallback)
 # ══════════════════════════════════════════════════════════
 
 _TRANSLATIONS: Dict[str, Dict[str, str]] = {
@@ -181,158 +185,50 @@ _TRANSLATIONS: Dict[str, Dict[str, str]] = {
         "btn_delete":   "🗑️  حذف",
         "btn_edit":     "✏️  تعديل",
         "btn_refresh":  "🔄  تحديث",
+        # تصنيفات
+        "category_data":         "بيانات التصنيف",
+        "category_name":         "الاسم",
+        "category_parent":       "تابع لـ",
+        "category_color":        "اللون",
+        "category_add":          "تصنيف جديد",
+        "category_new":          "الأبناء",
+        "category_edit":         "تعديل",
+        "category_delete":       "حذف",
+        "category_select_first": "اختر تصنيفاً أولاً",
+        "category_name_required":"أدخل اسم التصنيف",
+        # عمليات عامة
+        "operation_add":        "إضافة",
+        "operation_edit":       "تعديل",
+        "operation_delete":     "حذف",
+        "operation_save":       "حفظ",
+        "operation_cancel":     "إلغاء",
+        # تصميمات
+        "designs":              "التصميمات",
+        "design_add":           "إضافة تصميم",
+        "design_categories":    "تصنيفات التصميم",
+        "dimension_sets":       "مجموعات الأبعاد",
+        # طلبات
+        "orders":               "الطلبات",
+        "order_add":            "إضافة طلب",
+        "customers":            "العملاء",
+        "customer_add":         "إضافة عميل",
+        "order_status":         "حالة الطلب",
+        "order_date":           "تاريخ الطلب",
+        # تسعير
+        "pricing":              "التسعير",
+        "offers":               "العروض",
+        "offer_add":            "إضافة عرض",
+        # رسائل حذف مخصصة
+        "delete_has_children":  "لا يمكن الحذف — يحتوي على عناصر فرعية",
+        "delete_has_items":     "لا يمكن الحذف — مرتبط بعناصر أخرى",
+        # شركات مشتركة
+        "shared_items":         "العناصر المشتركة",
+        "publish":              "نشر",
+        "published":            "منشور",
+        "not_published":        "غير منشور",
     },
 
-    "en": {
-        # Buttons
-        "save":              "Save",
-        "save_edit":         "Save Changes",
-        "add":               "Add",
-        "edit":              "Edit",
-        "delete":            "Delete",
-        "cancel":            "Cancel",
-        "confirm":           "Confirm",
-        "close":             "Close",
-        "search":            "Search",
-        "reset":             "Reset",
-        "refresh":           "Refresh",
-        "export":            "Export",
-        "import":            "Import",
-        "print":             "Print",
-        "back":              "Back",
-        "next":              "Next",
-        "previous":          "Previous",
-        "yes":               "Yes",
-        "no":                "No",
-        "ok":                "OK",
-        "apply":             "Apply",
-        "browse":            "Browse",
-        "select":            "Select",
-        "clear":             "Clear",
-        "copy":              "Copy",
-        "paste":             "Paste",
-        "open":              "Open",
-        "new":               "New",
-        # Navigation
-        "nav_costing":       "Costing",
-        "nav_pricing":       "Pricing",
-        "nav_accounting":    "Accounting",
-        "nav_inventory":     "Inventory",
-        "nav_design":        "Designs",
-        "nav_orders":        "Orders",
-        "nav_shared":        "Shared Items",
-        "nav_settings":      "Settings",
-        # Settings
-        "settings":          "Settings",
-        "settings_font":     "Font Size",
-        "settings_gimp":     "GIMP Path",
-        "settings_units":    "Measurement Units",
-        "settings_theme":    "Appearance",
-        "settings_language": "Language",
-        "theme_light":       "Light",
-        "theme_dark":        "Dark",
-        "lang_ar":           "العربية",
-        "lang_en":           "English",
-        "preview":           "Preview",
-        # Empty states
-        "no_data":              "No Data",
-        "no_results":           "No Results",
-        "no_search_results":    "Try changing the search term or filter",
-        "select_item_first":    "Select an item first",
-        "select_company":       "Please select an active company first",
-        # Panel placeholders
-        "list_search_placeholder": "🔍  Search...",
-        "detail_select_item":      "Select an item from the list",
-        # Confirm
-        "confirm_delete":       "Confirm Delete",
-        "confirm_save":         "Confirm Save",
-        "confirm_action":       "Confirm",
-        "delete_confirm_msg":   "Delete «{name}»?",
-        "save_confirm_msg":     "Save «{name}»?",
-        # Success/Error
-        "success_add":          "Added successfully",
-        "success_save":         "Saved successfully",
-        "success_delete":       "Deleted successfully",
-        "error_load":           "Error loading data",
-        "error_save":           "Error saving",
-        "error_delete":         "Error deleting",
-        "warning":              "Warning",
-        "error":                "Error",
-        "info":                 "Info",
-        # Validation messages
-        "enter_field":          "Enter {label}",
-        "select_field":         "Select {label}",
-        "field_positive":       "{label} must be greater than zero",
-        "field_positive_enter": "Enter {label} greater than zero",
-        # Fields
-        "name":                 "Name",
-        "code":                 "Code",
-        "description":          "Description",
-        "notes":                "Notes",
-        "date":                 "Date",
-        "amount":               "Amount",
-        "price":                "Price",
-        "quantity":             "Quantity",
-        "unit":                 "Unit",
-        "category":             "Category",
-        "status":               "Status",
-        "type":                 "Type",
-        "total":                "Total",
-        "subtotal":             "Subtotal",
-        "discount":             "Discount",
-        "tax":                  "Tax",
-        # Accounting
-        "accounts":             "Accounts",
-        "journal_entries":      "Journal Entries",
-        "trial_balance":        "Trial Balance",
-        "income_statement":     "Income Statement",
-        "balance_sheet":        "Balance Sheet",
-        "debit":                "Debit",
-        "credit":               "Credit",
-        "balance":              "Balance",
-        "ref_no":               "Reference No.",
-        # Inventory
-        "inventory":            "Inventory",
-        "stock_in":             "In",
-        "stock_out":            "Out",
-        "current_stock":        "Current Stock",
-        # Companies
-        "company":              "Company",
-        "select_company_msg":   "Select a company to start",
-        "no_company":           "No active company",
-        "manage_companies":     "Manage Companies",
-        # Costing
-        "cost":                 "Cost",
-        "cost_per_unit":        "Cost per Unit",
-        "selling_price":        "Selling Price",
-        "profit_margin":        "Profit Margin",
-        "waste":                "Waste",
-        "waste_pct":            "Waste %",
-        # BOM
-        "components":           "Components",
-        "raw_material":         "Raw Material",
-        "semi_product":         "Semi-Product",
-        "labor_op":             "Labor Operation",
-        "machine_op":           "Machine Operation",
-        # Filters
-        "filter_all":               "— All —",
-        "filter_all_categories":    "— All Categories —",
-        "date_from":                "From:",
-        "date_to":                  "To:",
-        "today":                    "Today",
-        "this_month":               "Month",
-        "this_year":                "Year",
-        # Status bar
-        "showing_of":   "{shown} / {total}",
-        "showing_all":  "{total}",
-        # Form buttons
-        "btn_add":      "➕  Add",
-        "btn_save":     "💾  Save Changes",
-        "btn_cancel":   "✖  Cancel",
-        "btn_delete":   "🗑️  Delete",
-        "btn_edit":     "✏️  Edit",
-        "btn_refresh":  "🔄  Refresh",
-    },
+    "en": {},  # سيُملأ من ui/i18n/en.py عند التهيئة
 }
 
 _LANGUAGE_DIRECTION: Dict[str, str] = {
@@ -344,6 +240,30 @@ _LANGUAGE_DISPLAY_NAMES: Dict[str, str] = {
     "ar": "العربية",
     "en": "English",
 }
+
+
+def _load_external_translations():
+    """
+    يحمّل الترجمات من ui/i18n/ar.py و ui/i18n/en.py ويدمجها.
+    الملفات الخارجية لها الأولوية على الـ _TRANSLATIONS الداخلي.
+    """
+    # تحميل العربية من ar.py
+    try:
+        from ui.i18n.ar import AR_STRINGS
+        _TRANSLATIONS["ar"].update(AR_STRINGS)
+    except Exception:
+        pass
+
+    # تحميل الإنجليزية من en.py
+    try:
+        from ui.i18n.en import EN_STRINGS
+        _TRANSLATIONS["en"].update(EN_STRINGS)
+    except Exception:
+        pass
+
+
+# تحميل الترجمات الخارجية عند استيراد الملف
+_load_external_translations()
 
 
 # ══════════════════════════════════════════════════════════
@@ -394,6 +314,7 @@ class I18nManager(QObject):
         target = lang or self._language
         text   = _TRANSLATIONS.get(target, {}).get(key)
         if text is None:
+            # fallback للعربية
             text = _TRANSLATIONS["ar"].get(key, key)
         if kwargs:
             try:
@@ -426,6 +347,7 @@ class I18nManager(QObject):
         ]
 
     def add_translations(self, lang_code: str, translations: Dict[str, str]):
+        """إضافة ترجمات جديدة أو تحديث موجودة."""
         if lang_code not in _TRANSLATIONS:
             _TRANSLATIONS[lang_code] = {}
         _TRANSLATIONS[lang_code].update(translations)
