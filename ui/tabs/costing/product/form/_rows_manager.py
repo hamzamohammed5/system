@@ -9,6 +9,10 @@ _RowsManager — إدارة صفوف مكونات BOM في فورم المنتج
   - جمع قيم الصفوف (collect_rows)
   - مسح كل الصفوف
   - تحديث الـ catalog في الصفوف الموجودة
+
+[Refactor] تغيير import إلى ComponentRow الجديد:
+  من: ui.widgets.shared.component_row._row_widget
+  إلى: ui.widgets.components.component_row.widget
 """
 
 from PyQt5.QtWidgets import (
@@ -16,7 +20,8 @@ from PyQt5.QtWidgets import (
 )
 from PyQt5.QtCore import QTimer
 
-from ui.widgets.shared.component_row._row_widget import ComponentRow
+# ✅ [Refactor] استخدام ComponentRow الجديد بدل القديم
+from ui.widgets.components.component_row.widget import ComponentRow
 
 
 class _RowsManager(QWidget):

@@ -3,23 +3,39 @@ ui/tabs/costing/machine/machine_form.py
 =======================================
 _MachineForm — فورم إضافة / تعديل الماكينة.
 
-التحسينات:
-  - يرث من LiveConnMixin بدل كتابة _live_conn يدوياً
-  - يستخدم form_utils: FormGroup, labeled_widget, spin_field, build_inner_scroll
+[Refactor] استخدام MachineService بدل operations_repo مباشرة.
+[Refactor] imports من المسارات الموثقة في files_reference:
+  - EditModeMixin  → ui.widgets.mixins.edit
+  - LiveConnMixin  → ui.widgets.core.conn
+  - CategoryCombo  → ui.widgets.combo.category
+  - FormGroup, spin_field, labeled_widget → ui.widgets.panels.form_parts
+  - wrap_in_scroll → ui.widgets.theme.styles
 """
 
 from PyQt5.QtWidgets import (
-    QWidget, QMessageBox, QPushButton, QSizePolicy,
+    QWidget, QVBoxLayout, QHBoxLayout,
+    QLineEdit, QPushButton, QLabel, QMessageBox,
 )
 
-from db.costing.operations_repo import fetch_machine, insert_machine, update_machine
-from ui.helpers import EditModeMixin, buttons_row
-from ui.widgets.shared.category_manager import CategoryCombo
-from ui.widgets.shared.connection_mixin import LiveConnMixin
-from ui.widgets.shared.form_utils import (
-    FormGroup, labeled_widget, spin_field, build_inner_scroll,
+from services.costing.machine_service import MachineService
+from ui.widgets.mixins.edit   import EditModeMixin
+from ui.widgets.core.conn     import LiveConnMixin
+from ui.widgets.combo.category import CategoryCombo
+from ui.widgets.panels.form_parts import (
+    FormGroup, spin_field, labeled_widget,
 )
+from ui.widgets.theme.styles import wrap_in_scroll
 from ui.events import bus
+
+
+def _buttons_row(*buttons) -> QHBoxLayout:
+    """صف أزرار أفقي — بديل عن buttons_row غير الموثوق."""
+    row = QHBoxLayout()
+    row.setSpacing(6)
+    for btn in buttons:
+        row.addWidget(btn)
+    row.addStretch()
+    return row
 
 
 class _MachineForm(QWidget, EditModeMixin, LiveConnMixin):
@@ -30,16 +46,26 @@ class _MachineForm(QWidget, EditModeMixin, LiveConnMixin):
         self.init_edit_mode(self.btn_add, self.btn_save, self.btn_cancel, self.lbl_mode)
 
     def _build(self):
-        _outer, _inner, root = build_inner_scroll(self, min_width=260)
+        # بناء scroll يدوياً بدل build_inner_scroll غير الموثوق
+        outer_layout = QVBoxLayout(self)
+        outer_layout.setContentsMargins(0, 0, 0, 0)
+        outer_layout.setSpacing(0)
+
+        inner = QWidget()
+        inner.setMinimumWidth(260)
+        root = QVBoxLayout(inner)
+        root.setContentsMargins(8, 8, 8, 8)
+        root.setSpacing(8)
+
+        scroll = wrap_in_scroll(inner)
+        outer_layout.addWidget(scroll)
 
         grp = FormGroup("بيانات الماكينة")
 
-        from PyQt5.QtWidgets import QLabel
         self.lbl_mode = QLabel("─── إضافة ماكينة جديدة ───")
         self.lbl_mode.setStyleSheet("font-weight:bold; color:#1565c0;")
         grp.add_label_row(self.lbl_mode)
 
-        from PyQt5.QtWidgets import QLineEdit
         self.inp_name = QLineEdit()
         self.inp_name.setPlaceholderText("مثال: ماكينة خياطة، فرن، مكبس...")
         self.inp_name.setMinimumHeight(30)
@@ -62,21 +88,22 @@ class _MachineForm(QWidget, EditModeMixin, LiveConnMixin):
         self.btn_add.clicked.connect(self._add)
         self.btn_save.clicked.connect(self._save_edit)
         self.btn_cancel.clicked.connect(self._cancel)
-        root.addLayout(buttons_row(self.btn_add, self.btn_save, self.btn_cancel))
+        root.addLayout(_buttons_row(self.btn_add, self.btn_save, self.btn_cancel))
         root.addStretch()
 
     def load_for_edit(self, machine_id: int):
         try:
-            m = fetch_machine(self._live_conn(), machine_id)
+            svc = MachineService(self._live_conn())
+            m   = svc.get(machine_id)
         except Exception:
             return
         if not m:
             return
-        self.inp_name.setText(m["name"])
-        self.sp_rate_hour.setValue(m["rate_per_hour"])
-        self.sp_rate_unit.setValue(m["rate_per_unit"])
-        self.cmb_category.set_category(m["category_id"])
-        self.enter_edit_mode(machine_id, f"─── تعديل: {m['name']} ───")
+        self.inp_name.setText(m.name)
+        self.sp_rate_hour.setValue(m.rate_per_hour)
+        self.sp_rate_unit.setValue(m.rate_per_unit)
+        self.cmb_category.set_category(m.category_id)
+        self.enter_edit_mode(machine_id, f"─── تعديل: {m.name} ───")
 
     def _add(self):
         name = self.inp_name.text().strip()
@@ -84,9 +111,13 @@ class _MachineForm(QWidget, EditModeMixin, LiveConnMixin):
             QMessageBox.warning(self, "تنبيه", "أدخل اسم الماكينة")
             return
         try:
-            insert_machine(self._live_conn(), name,
-                           self.sp_rate_hour.value(), self.sp_rate_unit.value(),
-                           category_id=self.cmb_category.get_category())
+            svc = MachineService(self._live_conn())
+            svc.add(
+                name,
+                self.sp_rate_hour.value(),
+                self.sp_rate_unit.value(),
+                category_id=self.cmb_category.get_category(),
+            )
         except Exception as e:
             QMessageBox.warning(self, "خطأ", str(e))
             return
@@ -99,9 +130,14 @@ class _MachineForm(QWidget, EditModeMixin, LiveConnMixin):
             QMessageBox.warning(self, "تنبيه", "أدخل الاسم")
             return
         try:
-            update_machine(self._live_conn(), self._editing_id, name,
-                           self.sp_rate_hour.value(), self.sp_rate_unit.value(),
-                           category_id=self.cmb_category.get_category())
+            svc = MachineService(self._live_conn())
+            svc.update(
+                self._editing_id,
+                name,
+                self.sp_rate_hour.value(),
+                self.sp_rate_unit.value(),
+                category_id=self.cmb_category.get_category(),
+            )
         except Exception as e:
             QMessageBox.warning(self, "خطأ", str(e))
             return

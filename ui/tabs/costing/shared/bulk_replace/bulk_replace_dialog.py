@@ -13,6 +13,10 @@ ui/tabs/costing/shared/bulk_replace/bulk_replace_dialog.py
   _operation_section.py           → _OperationSection
   bulk_replace_dialog.py          → BulkReplaceDialog (هذا الملف)
 
+[Refactor] استخدام BulkReplaceService بدل repos مباشرة:
+  من: db.shared.items_repo.fetch_item / replace_bom / fetch_bom
+  إلى: services.costing.bulk_replace_service.BulkReplaceService
+
 الاستخدام:
     dlg = BulkReplaceDialog(conn, child_type, child_id, child_name, parent)
     dlg.exec_()
@@ -24,9 +28,8 @@ from PyQt5.QtWidgets import (
 )
 from PyQt5.QtCore import Qt
 
-from db.shared.items_repo import fetch_item, replace_bom, fetch_bom
+from services.costing.bulk_replace_service import BulkReplaceService
 from ui.events import bus
-from ui.widgets.shared.panels import _make_btn  # noqa — للتوافق
 
 from .bulk_replace_helpers        import get_element_name, fetch_candidates
 from .bulk_replace_products_panel import _ProductsPanel
@@ -42,6 +45,7 @@ class BulkReplaceDialog(QDialog):
         self.conn       = conn
         self.child_type = child_type
         self.child_id   = child_id
+        # ✅ [Refactor] استخدام get_element_name من helpers (لا تغيير هنا)
         self.child_name = child_name or get_element_name(conn, child_type, child_id)
 
         self.setWindowTitle("🔄  استبدال / تعديل شامل")
@@ -152,6 +156,7 @@ class BulkReplaceDialog(QDialog):
 
     def _load_candidates(self):
         """يملأ قسم العملية بالعناصر البديلة."""
+        # ✅ استخدام fetch_candidates من helpers (يبقى كما هو للتوافق)
         candidates = fetch_candidates(self.conn, self.child_type, self.child_id)
         self._op_section.load_candidates(candidates)
 
@@ -183,7 +188,12 @@ class BulkReplaceDialog(QDialog):
         # رسالة التأكيد
         op_desc = []
         if do_replace:
-            new_name = get_element_name(self.conn, self.child_type, new_child_id)
+            # ✅ [Refactor] BulkReplaceService.get_element_name
+            try:
+                svc      = BulkReplaceService(self.conn)
+                new_name = svc.get_element_name(self.child_type, new_child_id)
+            except Exception:
+                new_name = get_element_name(self.conn, self.child_type, new_child_id)
             op_desc.append(f"• استبدال  «{self.child_name}»  بـ  «{new_name}»")
         if do_qty:
             if uniform_qty is not None:
@@ -201,34 +211,29 @@ class BulkReplaceDialog(QDialog):
         ) != QMessageBox.Yes:
             return
 
-        # التطبيق الفعلي
-        errors  = []
-        updated = 0
+        # ✅ [Refactor] استخدام BulkReplaceService.apply بدل حلقة يدوية
+        try:
+            svc = BulkReplaceService(self.conn)
 
-        for prod_row in selected_rows:
-            pid = prod_row.product_id
-            try:
-                bom     = fetch_bom(self.conn, pid)
-                new_bom = []
-                for child_type, child_id, qty, waste_pct in bom:
-                    if child_type == self.child_type and child_id == self.child_id:
-                        final_cid = new_child_id if do_replace else child_id
-                        if uniform_qty is not None:
-                            final_qty = uniform_qty
-                        elif do_qty:
-                            final_qty = prod_row.new_qty
-                        else:
-                            final_qty = qty
-                        new_bom.append((child_type, final_cid, final_qty, waste_pct))
-                    else:
-                        new_bom.append((child_type, child_id, qty, waste_pct))
+            # بناء product_rows: [(product_id, qty), ...]
+            product_rows = [
+                (r.product_id, r.new_qty)
+                for r in selected_rows
+            ]
 
-                replace_bom(self.conn, pid, new_bom)
-                updated += 1
-            except Exception as e:
-                item = fetch_item(self.conn, pid)
-                name = item["name"] if item else f"ID:{pid}"
-                errors.append(f"• {name}: {e}")
+            updated, errors = svc.apply(
+                child_type=self.child_type,
+                old_child_id=self.child_id,
+                new_child_id=new_child_id if do_replace else None,
+                product_rows=product_rows,
+                uniform_qty=uniform_qty,
+                do_replace=do_replace,
+                do_qty=do_qty,
+            )
+
+        except Exception as e:
+            QMessageBox.warning(self, "خطأ", str(e))
+            return
 
         bus.data_changed.emit()
 
