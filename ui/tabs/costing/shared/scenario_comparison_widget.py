@@ -2,6 +2,8 @@
 ui/tabs/costing/shared/scenario_comparison_widget.py
 ================================================
 ScenarioComparisonWidget — يقارن تكلفة السيناريو الافتراضي بأي سيناريو آخر.
+
+[Refactor] ربط bus.theme_changed لتحديث stylesheet ديناميكياً.
 """
 
 from PyQt5.QtWidgets import (
@@ -10,10 +12,11 @@ from PyQt5.QtWidgets import (
 )
 from PyQt5.QtCore import Qt
 
-from models.costing import calc_cost
-from ui.app_settings import _C
-from ui.widgets.core.i18n import tr
+from models.costing               import calc_cost
+from ui.app_settings              import _C
+from ui.widgets.core.i18n         import tr
 from ui.widgets.components.stat_row import stat_card_pair
+from ui.events                    import bus
 
 
 class ScenarioComparisonWidget(QFrame):
@@ -32,6 +35,7 @@ class ScenarioComparisonWidget(QFrame):
         self._fixed_price  = 0.0
         self._default_cost = 0.0
         self._build()
+        bus.theme_changed.connect(self._apply_theme)
 
     # ══════════════════════════════════════════════════════
     # بناء الواجهة
@@ -50,37 +54,19 @@ class ScenarioComparisonWidget(QFrame):
         lbl_icon.setStyleSheet(
             "font-size:14px; background:transparent; border:none;"
         )
-        lbl_title = QLabel(tr("scenario_comparison"))
-        lbl_title.setStyleSheet(
-            f"font-weight:bold; font-size:12px; color:{_C['purple']};"
-            "background:transparent; border:none;"
-        )
-        lbl_title.setAlignment(Qt.AlignRight | Qt.AlignVCenter)
+        self.lbl_title = QLabel(tr("scenario_comparison"))
+        self.lbl_title.setAlignment(Qt.AlignRight | Qt.AlignVCenter)
 
         lbl_sc = QLabel(f"{tr('compare_scenario')}:")
-        lbl_sc.setStyleSheet(
-            f"font-size:11px; color:{_C['purple']}; background:transparent; border:none;"
-        )
+        self._lbl_sc = lbl_sc
 
         self.cmb_scenario = QComboBox()
         self.cmb_scenario.setMinimumHeight(28)
         self.cmb_scenario.setMinimumWidth(180)
-        self.cmb_scenario.setStyleSheet(f"""
-            QComboBox {{
-                background: {_C['bg_input']};
-                border: 1px solid {_C['purple_border']};
-                border-radius: 4px;
-                padding: 2px 8px;
-                font-size: 11px;
-                color: {_C['purple']};
-            }}
-            QComboBox:focus {{ border-color: {_C['purple']}; }}
-            QComboBox::drop-down {{ border: none; }}
-        """)
         self.cmb_scenario.currentIndexChanged.connect(self._on_scenario_changed)
 
         header_row.addWidget(lbl_icon)
-        header_row.addWidget(lbl_title)
+        header_row.addWidget(self.lbl_title)
         header_row.addStretch()
         header_row.addWidget(lbl_sc)
         header_row.addWidget(self.cmb_scenario)
@@ -116,11 +102,10 @@ class ScenarioComparisonWidget(QFrame):
 
         # ── رسالة التوجيه ──
         self.lbl_note = QLabel(tr("select_scenario_to_compare"))
-        self.lbl_note.setStyleSheet(
-            f"font-size:10px; color:{_C['purple']}; background:transparent; border:none;"
-        )
         self.lbl_note.setAlignment(Qt.AlignCenter)
         root.addWidget(self.lbl_note)
+
+        self._apply_theme()
 
     def _apply_frame_style(self):
         self.setStyleSheet(f"""
@@ -130,6 +115,36 @@ class ScenarioComparisonWidget(QFrame):
                 border-radius: 8px;
             }}
         """)
+
+    def _apply_theme(self, _=None):
+        """يُطبق الـ stylesheet عند تغيير الثيم."""
+        self._apply_frame_style()
+        if hasattr(self, "lbl_title"):
+            self.lbl_title.setStyleSheet(
+                f"font-weight:bold; font-size:12px; color:{_C['purple']};"
+                "background:transparent; border:none;"
+            )
+        if hasattr(self, "_lbl_sc"):
+            self._lbl_sc.setStyleSheet(
+                f"font-size:11px; color:{_C['purple']}; background:transparent; border:none;"
+            )
+        if hasattr(self, "cmb_scenario"):
+            self.cmb_scenario.setStyleSheet(f"""
+                QComboBox {{
+                    background: {_C['bg_input']};
+                    border: 1px solid {_C['purple_border']};
+                    border-radius: 4px;
+                    padding: 2px 8px;
+                    font-size: 11px;
+                    color: {_C['purple']};
+                }}
+                QComboBox:focus {{ border-color: {_C['purple']}; }}
+                QComboBox::drop-down {{ border: none; }}
+            """)
+        if hasattr(self, "lbl_note"):
+            self.lbl_note.setStyleSheet(
+                f"font-size:10px; color:{_C['purple']}; background:transparent; border:none;"
+            )
 
     # ══════════════════════════════════════════════════════
     # API خارجي
@@ -191,7 +206,7 @@ class ScenarioComparisonWidget(QFrame):
             from db.costing.bom_scenarios_repo import fetch_bom_for_scenario
             from db.shared.items_repo import fetch_item
             from models.costing_base import raw_unit_price, effective_qty
-            from models.costing_ops import calc_labor_op_cost, calc_machine_op_cost
+            from models.costing_ops  import calc_labor_op_cost, calc_machine_op_cost
 
             bom_rows = fetch_bom_for_scenario(self.conn, scenario_id)
             total    = 0.0

@@ -2,6 +2,8 @@
 ui/tabs/costing/shared/machine_op_rows_editor.py
 =====================================
 _OpRowsEditor — محرر صفوف عملية التشغيل.
+
+[Refactor] ربط bus.theme_changed لتحديث stylesheet ديناميكياً.
 """
 
 from PyQt5.QtWidgets import (
@@ -17,9 +19,9 @@ from db.costing.machine_op_rows_repo import (
     fetch_op_rows, insert_op_row, update_op_row,
     delete_op_row, calc_op_row_cost, calc_op_total_cost,
 )
-from ui.app_settings import _C
+from ui.app_settings      import _C
 from ui.widgets.core.i18n import tr
-from ui.events import bus
+from ui.events            import bus
 
 
 class _OpRowsEditor(QGroupBox):
@@ -41,6 +43,7 @@ class _OpRowsEditor(QGroupBox):
         self._editing_row_id = None
         self._build()
         self.setEnabled(False)
+        bus.theme_changed.connect(self._apply_theme)
 
     # ══════════════════════════════════════════════════════
     # بناء الواجهة
@@ -63,22 +66,12 @@ class _OpRowsEditor(QGroupBox):
         form_row.setSpacing(8)
 
         lbl_label = QLabel(f"{tr('description')}:")
-        lbl_label.setStyleSheet(
-            f"font-weight:bold; font-size:11px; color:{_C['text_primary']};"
-        )
+        self._lbl_label = lbl_label
         self.inp_label = QLineEdit()
         self.inp_label.setPlaceholderText(tr("row_description_placeholder"))
         self.inp_label.setMinimumHeight(28)
-        self.inp_label.setStyleSheet(
-            f"background:{_C['bg_input']}; border:1px solid {_C['border']};"
-            f"border-radius:4px; padding:2px 6px; color:{_C['text_primary']};"
-        )
 
-        # تتغير حسب mode
         self.lbl_value = QLabel(f"{tr('value_minutes')}:")
-        self.lbl_value.setStyleSheet(
-            f"font-weight:bold; font-size:11px; color:{_C['text_primary']};"
-        )
         self.sp_value = QDoubleSpinBox()
         self.sp_value.setRange(0, 999999)
         self.sp_value.setDecimals(4)
@@ -87,9 +80,7 @@ class _OpRowsEditor(QGroupBox):
         self.sp_value.valueChanged.connect(self._update_preview)
 
         lbl_count = QLabel(f"{tr('count')}:")
-        lbl_count.setStyleSheet(
-            f"font-weight:bold; font-size:11px; color:{_C['text_primary']};"
-        )
+        self._lbl_count = lbl_count
         self.sp_count = QDoubleSpinBox()
         self.sp_count.setRange(0.0001, 999999)
         self.sp_count.setDecimals(4)
@@ -99,9 +90,7 @@ class _OpRowsEditor(QGroupBox):
         self.sp_count.valueChanged.connect(self._update_preview)
 
         self.lbl_preview = QLabel("= ─")
-        self.lbl_preview.setStyleSheet(
-            f"color:{_C['orange']}; font-weight:bold; font-size:11px; min-width:130px;"
-        )
+        self.lbl_preview.setMinimumWidth(130)
 
         self.btn_add    = QPushButton(f"➕ {tr('add_row')}")
         self.btn_save   = QPushButton(f"💾 {tr('save')}")
@@ -143,12 +132,6 @@ class _OpRowsEditor(QGroupBox):
         self.table.setAlternatingRowColors(True)
         self.table.setMaximumHeight(180)
         self.table.setMinimumHeight(80)
-        self.table.setStyleSheet(
-            f"QTableWidget {{ background:{_C['bg_surface']}; "
-            f"color:{_C['text_primary']}; border:1px solid {_C['border']}; }}"
-            f"QTableWidget::item:selected {{ background:{_C['accent_light']}; "
-            f"color:{_C['accent']}; }}"
-        )
 
         hh = self.table.horizontalHeader()
         hh.setSectionResizeMode(0, QHeaderView.Fixed)
@@ -162,39 +145,33 @@ class _OpRowsEditor(QGroupBox):
         self.table.setColumnWidth(4, 110)
         self.table.verticalHeader().setVisible(False)
         self.table.horizontalHeader().setDefaultAlignment(Qt.AlignRight)
-
         root.addWidget(self.table)
 
         # ── مجموع التكلفة ──
         total_row = QHBoxLayout()
         total_row.addStretch()
         lbl_total_lbl = QLabel(f"{tr('total_op_cost')}:")
-        lbl_total_lbl.setStyleSheet(
-            f"font-size:11px; font-weight:bold; color:{_C['text_primary']};"
-        )
+        self._lbl_total_lbl = lbl_total_lbl
         self.lbl_total = QLabel("─")
-        self.lbl_total.setStyleSheet(
-            f"color:{_C['success']}; font-weight:bold; font-size:12px; min-width:140px;"
-            f"background:{_C['success_bg']}; border:1px solid {_C['success_border']};"
-            "border-radius:4px; padding:3px 8px;"
-        )
+        self.lbl_total.setMinimumWidth(140)
         total_row.addWidget(lbl_total_lbl)
         total_row.addWidget(self.lbl_total)
         root.addLayout(total_row)
 
         # ── أزرار تعديل/حذف ──
         btn_row = QHBoxLayout()
-        btn_edit = QPushButton(f"✏️ {tr('edit_row')}")
-        btn_del  = QPushButton(f"🗑️ {tr('delete_row')}")
-        btn_del.setStyleSheet(f"color:{_C['danger']};")
-        for btn in (btn_edit, btn_del):
+        self.btn_edit_row = QPushButton(f"✏️ {tr('edit_row')}")
+        self.btn_del_row  = QPushButton(f"🗑️ {tr('delete_row')}")
+        for btn in (self.btn_edit_row, self.btn_del_row):
             btn.setMinimumHeight(26)
-        btn_edit.clicked.connect(self._edit_row)
-        btn_del.clicked.connect(self._delete_row)
-        btn_row.addWidget(btn_edit)
-        btn_row.addWidget(btn_del)
+        self.btn_edit_row.clicked.connect(self._edit_row)
+        self.btn_del_row.clicked.connect(self._delete_row)
+        btn_row.addWidget(self.btn_edit_row)
+        btn_row.addWidget(self.btn_del_row)
         btn_row.addStretch()
         root.addLayout(btn_row)
+
+        self._apply_theme()
 
     def _apply_group_style(self):
         self.setStyleSheet(f"""
@@ -219,6 +196,45 @@ class _OpRowsEditor(QGroupBox):
             f"background:{_C['info_bg']}; border-radius:4px; padding:4px 8px;"
             f"border:1px solid {_C['info_border']};"
         )
+
+    def _apply_theme(self, _=None):
+        """يُطبق الـ stylesheet عند تغيير الثيم."""
+        self._apply_group_style()
+        if hasattr(self, "lbl_mode_info"):
+            self._apply_info_style()
+        if hasattr(self, "inp_label"):
+            self.inp_label.setStyleSheet(
+                f"background:{_C['bg_input']}; border:1px solid {_C['border']};"
+                f"border-radius:4px; padding:2px 6px; color:{_C['text_primary']};"
+            )
+        if hasattr(self, "lbl_preview"):
+            self.lbl_preview.setStyleSheet(
+                f"color:{_C['orange']}; font-weight:bold; font-size:11px;"
+            )
+        if hasattr(self, "table"):
+            self.table.setStyleSheet(
+                f"QTableWidget {{ background:{_C['bg_surface']}; "
+                f"color:{_C['text_primary']}; border:1px solid {_C['border']}; }}"
+                f"QTableWidget::item:selected {{ background:{_C['accent_light']}; "
+                f"color:{_C['accent']}; }}"
+            )
+        if hasattr(self, "lbl_total"):
+            self.lbl_total.setStyleSheet(
+                f"color:{_C['success']}; font-weight:bold; font-size:12px;"
+                f"background:{_C['success_bg']}; border:1px solid {_C['success_border']};"
+                "border-radius:4px; padding:3px 8px;"
+            )
+        if hasattr(self, "_lbl_label"):
+            for lbl in (self._lbl_label, self._lbl_count, self.lbl_value):
+                lbl.setStyleSheet(
+                    f"font-weight:bold; font-size:11px; color:{_C['text_primary']};"
+                )
+        if hasattr(self, "_lbl_total_lbl"):
+            self._lbl_total_lbl.setStyleSheet(
+                f"font-size:11px; font-weight:bold; color:{_C['text_primary']};"
+            )
+        if hasattr(self, "btn_del_row"):
+            self.btn_del_row.setStyleSheet(f"color:{_C['danger']};")
 
     # ══════════════════════════════════════════════════════
     # API خارجي
@@ -305,7 +321,7 @@ class _OpRowsEditor(QGroupBox):
             cnt_item.setTextAlignment(Qt.AlignCenter)
             self.table.setItem(r, 3, cnt_item)
 
-            row_cost = calc_op_row_cost(self.conn, row["id"])
+            row_cost  = calc_op_row_cost(self.conn, row["id"])
             cost_item = QTableWidgetItem(
                 f"{row_cost:.4f} {tr('currency_abbr')}"
             )

@@ -6,7 +6,7 @@ _LaborSettingsPanel — لوحة إعدادات معايير حساب تكلفة
 [Refactor] استخدام المسارات الموثقة في files_reference:
   - FormGroup, labeled_widget, spin_field, ResultBadge → ui.widgets.panels.form_parts
   - wrap_in_scroll → ui.widgets.theme.styles
-  (بديل عن form_utils غير الموثق في السياق)
+[Refactor] كل النصوص عبر tr() + _C للألوان.
 """
 
 from PyQt5.QtWidgets import (
@@ -43,7 +43,7 @@ class _LaborSettingsPanel(QWidget):
         scroll = wrap_in_scroll(inner)
         outer_layout.addWidget(scroll)
 
-        grp = FormGroup("معايير حساب تكلفة العمالة")
+        grp = FormGroup(tr("labor_cost_settings"))
 
         self.sp_salary   = spin_field(max_=999999, dec=2)
         self.sp_days     = spin_field(max_=31,     dec=0)
@@ -51,11 +51,26 @@ class _LaborSettingsPanel(QWidget):
         self.sp_hours    = spin_field(max_=24,     dec=1)
         self.sp_overhead = spin_field(max_=10,     dec=2)
 
-        grp.add_row("الراتب الأساسي :",         labeled_widget(self.sp_salary,   f"{tr('currency')} / {tr('month')}"))
-        grp.add_row("أيام العمل :",             labeled_widget(self.sp_days,     f"{tr('day')} / {tr('month')}"))
-        grp.add_row("أيام الإجازات :",          labeled_widget(self.sp_holidays, f"{tr('day')} / {tr('month')}"))
-        grp.add_row("ساعات العمل / يوم :",      labeled_widget(self.sp_hours,    f"{tr('hour')} / {tr('day')}"))
-        grp.add_row("معامل الأعباء الإدارية :", labeled_widget(self.sp_overhead, "×"))
+        grp.add_row(
+            f"{tr('base_salary')} :",
+            labeled_widget(self.sp_salary,   f"{tr('currency')} / {tr('month')}")
+        )
+        grp.add_row(
+            f"{tr('working_days')} :",
+            labeled_widget(self.sp_days,     f"{tr('day')} / {tr('month')}")
+        )
+        grp.add_row(
+            f"{tr('holiday_days')} :",
+            labeled_widget(self.sp_holidays, f"{tr('day')} / {tr('month')}")
+        )
+        grp.add_row(
+            f"{tr('working_hours_per_day')} :",
+            labeled_widget(self.sp_hours,    f"{tr('hour')} / {tr('day')}")
+        )
+        grp.add_row(
+            f"{tr('overhead_factor')} :",
+            labeled_widget(self.sp_overhead, "×")
+        )
 
         self.lbl_rate = ResultBadge()
         grp.add_row(f"➡  {tr('hourly_rate')} :", self.lbl_rate)
@@ -74,7 +89,8 @@ class _LaborSettingsPanel(QWidget):
     def _calc_rate(self):
         net_days  = max(self.sp_days.value() - self.sp_holidays.value(), 1)
         net_hours = net_days * max(self.sp_hours.value(), 1)
-        return (self.sp_salary.value() / net_hours) * self.sp_overhead.value() if net_hours else 0.0
+        return (self.sp_salary.value() / net_hours) * self.sp_overhead.value() \
+               if net_hours else 0.0
 
     def _update_preview(self):
         self.lbl_rate.set_value(f"{self._calc_rate():.2f}  {tr('currency_per_hour')}")
@@ -93,7 +109,10 @@ class _LaborSettingsPanel(QWidget):
         set_setting(self.conn, "holiday_days",      self.sp_holidays.value())
         set_setting(self.conn, "working_hours_day", self.sp_hours.value())
         set_setting(self.conn, "overhead_factor",   self.sp_overhead.value())
-        QMessageBox.information(self, tr("done"), f"✅  {tr('labor_settings_saved')}")
+        QMessageBox.information(
+            self, tr("done"),
+            f"✅  {tr('labor_settings_saved')}"
+        )
         bus.data_changed.emit()
 
     def get_hourly_rate(self):

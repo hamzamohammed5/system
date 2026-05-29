@@ -2,6 +2,9 @@
 ui/tabs/costing/shared/bom_tree.py
 ===================================
 BomTree — شجرة عرض BOM مع كل السيناريوهات كنودات منفصلة.
+
+[Refactor] استخدام tr() لكل النصوص + _C للألوان.
+[Refactor] حذف db/ مباشرة من delete — الاعتماد على bom_scenarios_repo فقط.
 """
 
 from PyQt5.QtWidgets import (
@@ -11,10 +14,11 @@ from PyQt5.QtWidgets import (
 )
 from PyQt5.QtCore import Qt
 
-from db.shared.items_repo import fetch_bom, delete_bom_row
-from ui.helpers import danger_button
-from ui.app_settings import _C
-from ui.widgets.core.i18n import tr
+from db.shared.items_repo          import fetch_bom, delete_bom_row
+from db.costing.bom_scenarios_repo import fetch_bom_for_scenario
+from ui.app_settings               import _C
+from ui.widgets.core.i18n          import tr
+from ui.widgets.dialogs.confirm    import confirm_delete
 
 from ui.tabs.costing.shared.bom_tree_helper._scenario_node_builder import (
     build_scenario_node,
@@ -34,6 +38,7 @@ class BomTree(QWidget):
         layout.setContentsMargins(0, 0, 0, 0)
 
         header = QHBoxLayout()
+
         lbl = QLabel(f"🔩 {tr('bom_tree')}")
         lbl.setStyleSheet(
             f"font-weight:bold; font-size:13px; color:{_C['text_primary']};"
@@ -51,10 +56,11 @@ class BomTree(QWidget):
 
         self.btn_expand   = QPushButton(f"⊞ {tr('expand_all')}")
         self.btn_collapse = QPushButton(f"⊟ {tr('collapse_all')}")
-        self.btn_del_node = danger_button(f"🗑 {tr('delete_selected')}")
+        self.btn_del_node = self._make_danger_btn(f"🗑 {tr('delete_selected')}")
 
         for btn in (self.btn_expand, self.btn_collapse, self.btn_del_node):
             btn.setEnabled(False)
+            btn.setMinimumHeight(28)
 
         self.btn_expand.clicked.connect(lambda: self.tree.expandAll())
         self.btn_collapse.clicked.connect(lambda: self.tree.collapseAll())
@@ -87,9 +93,19 @@ class BomTree(QWidget):
                 background: {_C['accent_light']};
                 color: {_C['accent']};
             }}
+            QTreeWidget::item:hover {{
+                background: {_C['bg_hover']};
+            }}
         """)
 
         hh = self.tree.header()
+        hh.setStyleSheet(
+            f"QHeaderView::section {{"
+            f"  background:{_C['bg_surface_2']}; color:{_C['text_sec']};"
+            f"  border:none; border-bottom:1px solid {_C['border']};"
+            f"  padding:4px 6px; font-weight:bold; font-size:11px;"
+            f"}}"
+        )
         hh.setSectionResizeMode(0, QHeaderView.Stretch)
         for col in range(1, 7):
             hh.setSectionResizeMode(col, QHeaderView.Interactive)
@@ -105,10 +121,32 @@ class BomTree(QWidget):
         self.tree.setEditTriggers(QTreeWidget.NoEditTriggers)
         self.tree.setExpandsOnDoubleClick(True)
         self.tree.setWordWrap(True)
+        self.tree.setAlternatingRowColors(True)
         self.tree.itemSelectionChanged.connect(self._on_selection)
 
         layout.addLayout(header)
         layout.addWidget(self.tree)
+
+    @staticmethod
+    def _make_danger_btn(text: str) -> QPushButton:
+        btn = QPushButton(text)
+        btn.setStyleSheet(f"""
+            QPushButton {{
+                background: {_C['danger_bg']};
+                color: {_C['danger']};
+                border: 1px solid {_C['danger_border']};
+                border-radius: 4px;
+                padding: 2px 8px;
+                font-size: 11px;
+            }}
+            QPushButton:hover {{ background: {_C['danger']}; color: white; }}
+            QPushButton:disabled {{
+                background: {_C['bg_surface']};
+                color: {_C['text_disabled']};
+                border-color: {_C['border']};
+            }}
+        """)
+        return btn
 
     # ── API عام ──────────────────────────────────────────
 
@@ -177,7 +215,6 @@ class BomTree(QWidget):
                         pass
 
             sc_node.setText(5, f"{total_sc_cost:.4f}")
-
             font = sc_node.font(0)
             sc_node.setFont(5, font)
 
@@ -319,41 +356,43 @@ class BomTree(QWidget):
         if parent is not None:
             parent_data = parent.data(0, Qt.UserRole)
             if parent_data and parent_data[0] == "__scenario__":
+                # حذف من سيناريو محدد
                 child_type, child_id = data
-                sc_id = parent_data[1]
-                reply = QMessageBox.question(
-                    self, tr("confirm_delete"),
-                    f"{tr('delete_from_scenario')} «{node.text(0)}» "
-                    f"{tr('from_scenario')} «{parent.text(0).strip()}»؟",
-                    QMessageBox.Yes | QMessageBox.No
-                )
-                if reply == QMessageBox.Yes:
-                    try:
-                        self._conn.execute(
-                            "DELETE FROM bom WHERE scenario_id=? AND child_type=? AND child_id=?",
-                            (sc_id, child_type, child_id)
-                        )
-                        self._conn.commit()
-                    except Exception as e:
-                        QMessageBox.warning(self, tr("error"), str(e))
-                    self._refresh()
+                sc_id      = parent_data[1]
+                node_name  = node.text(0)
+                sc_name    = parent.text(0).strip()
+
+                if not confirm_delete(
+                    self,
+                    f"{node_name} {tr('from_scenario')} «{sc_name}»"
+                ):
+                    return
+
+                try:
+                    self._conn.execute(
+                        "DELETE FROM bom "
+                        "WHERE scenario_id=? AND child_type=? AND child_id=?",
+                        (sc_id, child_type, child_id)
+                    )
+                    self._conn.commit()
+                except Exception as e:
+                    QMessageBox.warning(self, tr("error"), str(e))
+                self._refresh()
                 return
 
+            # مكون فرعي داخل نصف مصنع — لا يمكن حذفه من هنا
             QMessageBox.information(
                 self, tr("notice"),
                 tr("delete_sub_components_from_semi")
             )
             return
 
+        # حذف من BOM الرئيسي (بدون سيناريوهات)
         child_type, child_id = data
+        node_name = node.text(0)
+
+        if not confirm_delete(self, node_name):
+            return
+
         delete_bom_row(self._conn, self._pid, child_type, child_id)
         self._refresh()
-
-
-def _get_tr_keys() -> set:
-    """يرجع مجموعة مفاتيح الترجمة المتوفرة — للتحقق الآمن."""
-    try:
-        from ui.widgets.core.i18n import _TRANSLATIONS
-        return set(_TRANSLATIONS.keys())
-    except Exception:
-        return set()

@@ -2,6 +2,8 @@
 ui/tabs/costing/shared/raw_variants_panel.py
 =================================
 _RawVariantsPanel — لوحة إدارة variants الخامة (صفوف الإنتاج).
+
+[Refactor] ربط bus.theme_changed لتحديث stylesheet ديناميكياً.
 """
 
 from PyQt5.QtWidgets import (
@@ -18,9 +20,9 @@ from db.costing.raw_variants_repo import (
     insert_variant, update_variant, delete_variant,
     fetch_variant,
 )
-from ui.app_settings import _C
+from ui.app_settings      import _C
 from ui.widgets.core.i18n import tr
-from ui.events import bus
+from ui.events            import bus
 
 
 def _spin_pieces(max_=999999, dec=4):
@@ -49,6 +51,7 @@ class _RawVariantsPanel(QGroupBox):
         self._editing_id = None
         self._build()
         self.setEnabled(False)
+        bus.theme_changed.connect(self._apply_theme)
 
     def _build(self):
         self._apply_group_style()
@@ -58,17 +61,12 @@ class _RawVariantsPanel(QGroupBox):
         root.setContentsMargins(10, 12, 10, 10)
 
         # ── شرح ──
-        lbl_info = QLabel(
+        self.lbl_info = QLabel(
             f"💡 {tr('variant_description_line1')}\n"
             f"   {tr('variant_unit_cost_formula')}"
         )
-        lbl_info.setStyleSheet(
-            f"font-size:10px; color:{_C['text_sec']}; font-weight:normal;"
-            f"background:{_C['info_bg']}; border-radius:4px; padding:5px 8px;"
-            f"border:1px solid {_C['info_border']};"
-        )
-        lbl_info.setWordWrap(True)
-        root.addWidget(lbl_info)
+        self.lbl_info.setWordWrap(True)
+        root.addWidget(self.lbl_info)
 
         # ── فورم إضافة/تعديل ──
         form_row = QHBoxLayout()
@@ -77,15 +75,9 @@ class _RawVariantsPanel(QGroupBox):
         self.inp_name = QLineEdit()
         self.inp_name.setPlaceholderText(tr("variant_name_placeholder"))
         self.inp_name.setMinimumHeight(30)
-        self.inp_name.setStyleSheet(
-            f"background:{_C['bg_input']}; border:1px solid {_C['border']};"
-            f"border-radius:4px; padding:2px 6px; color:{_C['text_primary']};"
-        )
 
         lbl_pieces = QLabel(f"{tr('pieces_count')}:")
-        lbl_pieces.setStyleSheet(
-            f"font-weight:bold; font-size:11px; color:{_C['text_primary']};"
-        )
+        self._lbl_pieces = lbl_pieces
 
         self.sp_pieces = _spin_pieces()
         self.sp_pieces.setFixedWidth(100)
@@ -94,9 +86,7 @@ class _RawVariantsPanel(QGroupBox):
         )
 
         self.lbl_preview = QLabel("─")
-        self.lbl_preview.setStyleSheet(
-            f"color:{_C['accent']}; font-weight:bold; font-size:11px; min-width:120px;"
-        )
+        self.lbl_preview.setMinimumWidth(120)
         self.sp_pieces.valueChanged.connect(self._update_preview)
 
         self.btn_add    = QPushButton(f"➕ {tr('add')}")
@@ -135,12 +125,6 @@ class _RawVariantsPanel(QGroupBox):
         self.table.setEditTriggers(QAbstractItemView.NoEditTriggers)
         self.table.setAlternatingRowColors(True)
         self.table.setMaximumHeight(160)
-        self.table.setStyleSheet(
-            f"QTableWidget {{ background:{_C['bg_surface']}; "
-            f"color:{_C['text_primary']}; border:1px solid {_C['border']}; }}"
-            f"QTableWidget::item:selected {{ background:{_C['accent_light']}; "
-            f"color:{_C['accent']}; }}"
-        )
 
         hh = self.table.horizontalHeader()
         hh.setSectionResizeMode(0, QHeaderView.Fixed)
@@ -156,17 +140,18 @@ class _RawVariantsPanel(QGroupBox):
 
         # ── أزرار التعديل والحذف ──
         btn_row = QHBoxLayout()
-        btn_edit = QPushButton(f"✏️ {tr('edit')}")
-        btn_del  = QPushButton(f"🗑️ {tr('delete')}")
-        btn_del.setStyleSheet(f"color:{_C['danger']};")
-        for btn in (btn_edit, btn_del):
+        self.btn_edit = QPushButton(f"✏️ {tr('edit')}")
+        self.btn_del  = QPushButton(f"🗑️ {tr('delete')}")
+        for btn in (self.btn_edit, self.btn_del):
             btn.setMinimumHeight(26)
-        btn_edit.clicked.connect(self._edit)
-        btn_del.clicked.connect(self._delete)
-        btn_row.addWidget(btn_edit)
-        btn_row.addWidget(btn_del)
+        self.btn_edit.clicked.connect(self._edit)
+        self.btn_del.clicked.connect(self._delete)
+        btn_row.addWidget(self.btn_edit)
+        btn_row.addWidget(self.btn_del)
         btn_row.addStretch()
         root.addLayout(btn_row)
+
+        self._apply_theme()
 
     def _apply_group_style(self):
         self.setStyleSheet(f"""
@@ -184,6 +169,38 @@ class _RawVariantsPanel(QGroupBox):
                 padding: 0 6px;
             }}
         """)
+
+    def _apply_theme(self, _=None):
+        """يُطبق الـ stylesheet عند تغيير الثيم."""
+        self._apply_group_style()
+        if hasattr(self, "lbl_info"):
+            self.lbl_info.setStyleSheet(
+                f"font-size:10px; color:{_C['text_sec']}; font-weight:normal;"
+                f"background:{_C['info_bg']}; border-radius:4px; padding:5px 8px;"
+                f"border:1px solid {_C['info_border']};"
+            )
+        if hasattr(self, "inp_name"):
+            self.inp_name.setStyleSheet(
+                f"background:{_C['bg_input']}; border:1px solid {_C['border']};"
+                f"border-radius:4px; padding:2px 6px; color:{_C['text_primary']};"
+            )
+        if hasattr(self, "_lbl_pieces"):
+            self._lbl_pieces.setStyleSheet(
+                f"font-weight:bold; font-size:11px; color:{_C['text_primary']};"
+            )
+        if hasattr(self, "lbl_preview"):
+            self.lbl_preview.setStyleSheet(
+                f"color:{_C['accent']}; font-weight:bold; font-size:11px;"
+            )
+        if hasattr(self, "table"):
+            self.table.setStyleSheet(
+                f"QTableWidget {{ background:{_C['bg_surface']}; "
+                f"color:{_C['text_primary']}; border:1px solid {_C['border']}; }}"
+                f"QTableWidget::item:selected {{ background:{_C['accent_light']}; "
+                f"color:{_C['accent']}; }}"
+            )
+        if hasattr(self, "btn_del"):
+            self.btn_del.setStyleSheet(f"color:{_C['danger']};")
 
     # ══════════════════════════════════════════════════════
     # API خارجي
@@ -306,7 +323,8 @@ class _RawVariantsPanel(QGroupBox):
         vid  = int(self.table.item(row, 0).text())
         name = self.table.item(row, 1).text()
         if QMessageBox.question(
-            self, tr("confirm"), f"{tr('delete_variant_confirm')} «{name}»؟",
+            self, tr("confirm"),
+            f"{tr('delete_variant_confirm')} «{name}»؟",
             QMessageBox.Yes | QMessageBox.No
         ) == QMessageBox.Yes:
             delete_variant(self.conn, vid)

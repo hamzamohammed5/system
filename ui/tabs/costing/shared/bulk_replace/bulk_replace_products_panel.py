@@ -2,6 +2,8 @@
 ui/tabs/costing/shared/bulk_replace/bulk_replace_products_panel.py
 ==========================================
 _ProductsPanel — لوحة عرض المنتجات المتأثرة في نافذة الاستبدال الشامل.
+
+[Refactor] ربط bus.theme_changed لتحديث stylesheet ديناميكياً.
 """
 
 from PyQt5.QtWidgets import (
@@ -13,6 +15,7 @@ from PyQt5.QtCore import Qt
 
 from ui.app_settings        import _C
 from ui.widgets.core.i18n   import tr
+from ui.events              import bus
 from .bulk_replace_helpers  import fetch_affected_products, ProductRow
 
 
@@ -35,6 +38,7 @@ class _ProductsPanel(QWidget):
 
         self._build()
         self.load()
+        bus.theme_changed.connect(self._apply_theme)
 
     # ══════════════════════════════════════════════════════
     # بناء الواجهة
@@ -47,23 +51,17 @@ class _ProductsPanel(QWidget):
 
         # ── شريط الفلتر ──
         filter_row = QHBoxLayout()
-        filter_row.addWidget(QLabel(f"🏷  {tr('filter_by_category')}:"))
+
+        self._lbl_filter = QLabel(f"🏷  {tr('filter_by_category')}:")
+        filter_row.addWidget(self._lbl_filter)
 
         self.cmb_cat_filter = QComboBox()
         self.cmb_cat_filter.setMinimumHeight(30)
         self.cmb_cat_filter.setFixedWidth(200)
-        self.cmb_cat_filter.setStyleSheet(
-            f"background:{_C['bg_input']}; border:1px solid {_C['border']};"
-            f"border-radius:4px; padding:2px 6px; color:{_C['text_primary']};"
-        )
         self.cmb_cat_filter.addItem(f"— {tr('all')} —", None)
         self.cmb_cat_filter.currentIndexChanged.connect(self._apply_filter)
 
         self.lbl_count = QLabel()
-        self.lbl_count.setStyleSheet(
-            f"color:{_C['accent']}; font-weight:bold; font-size:11px;"
-        )
-
         filter_row.addWidget(self.cmb_cat_filter)
         filter_row.addSpacing(16)
         filter_row.addWidget(self.lbl_count)
@@ -78,58 +76,85 @@ class _ProductsPanel(QWidget):
         self._rows_layout.setContentsMargins(0, 0, 4, 0)
         self._rows_layout.addStretch()
 
-        scroll = QScrollArea()
-        scroll.setWidgetResizable(True)
-        scroll.setWidget(self._scroll_content)
-        scroll.setMinimumHeight(200)
-        scroll.setStyleSheet(f"""
-            QScrollArea {{
-                border: 1px solid {_C['border']};
-                border-radius: 8px;
-                background: {_C['bg_surface']};
-            }}
-        """)
-        lay.addWidget(scroll, stretch=1)
+        self._scroll = QScrollArea()
+        self._scroll.setWidgetResizable(True)
+        self._scroll.setWidget(self._scroll_content)
+        self._scroll.setMinimumHeight(200)
+        lay.addWidget(self._scroll, stretch=1)
 
         # ── شريط التحديد السريع ──
-        lay.addWidget(self._build_quick_bar())
+        self._quick_bar = self._build_quick_bar()
+        lay.addWidget(self._quick_bar)
+
+        self._apply_theme()
 
     def _build_quick_bar(self) -> QFrame:
         bar = QFrame()
-        bar.setStyleSheet(
-            f"QFrame {{ background:{_C['bg_input']}; border:1px solid {_C['border']};"
-            "border-radius:6px; padding:2px; }"
-        )
+        self._bar_ref = bar
         lay = QHBoxLayout(bar)
         lay.setContentsMargins(8, 4, 8, 4)
         lay.setSpacing(8)
 
         lbl = QLabel(f"{tr('quick_select')}:")
-        lbl.setStyleSheet(f"font-size:11px; color:{_C['text_sec']};")
+        self._lbl_quick = lbl
+        lay.addWidget(lbl)
 
-        _style = (
+        self.btn_all  = QPushButton(f"✅ {tr('select_all')}")
+        self.btn_none = QPushButton(f"☐ {tr('select_none')}")
+        self.btn_inv  = QPushButton(f"⇄ {tr('invert_selection')}")
+        for btn in (self.btn_all, self.btn_none, self.btn_inv):
+            btn.setMinimumHeight(26)
+
+        self.btn_all.clicked.connect(lambda: self.select_all(True))
+        self.btn_none.clicked.connect(lambda: self.select_all(False))
+        self.btn_inv.clicked.connect(self.invert_selection)
+        lay.addWidget(self.btn_all)
+        lay.addWidget(self.btn_none)
+        lay.addWidget(self.btn_inv)
+        lay.addStretch()
+        return bar
+
+    def _apply_theme(self, _=None):
+        """يُطبق الـ stylesheet عند تغيير الثيم."""
+        if hasattr(self, "cmb_cat_filter"):
+            self.cmb_cat_filter.setStyleSheet(
+                f"background:{_C['bg_input']}; border:1px solid {_C['border']};"
+                f"border-radius:4px; padding:2px 6px; color:{_C['text_primary']};"
+            )
+        if hasattr(self, "lbl_count"):
+            self.lbl_count.setStyleSheet(
+                f"color:{_C['accent']}; font-weight:bold; font-size:11px;"
+            )
+        if hasattr(self, "_lbl_filter"):
+            self._lbl_filter.setStyleSheet(
+                f"font-size:11px; color:{_C['text_sec']};"
+            )
+        if hasattr(self, "_scroll"):
+            self._scroll.setStyleSheet(f"""
+                QScrollArea {{
+                    border: 1px solid {_C['border']};
+                    border-radius: 8px;
+                    background: {_C['bg_surface']};
+                }}
+            """)
+        if hasattr(self, "_bar_ref"):
+            self._bar_ref.setStyleSheet(
+                f"QFrame {{ background:{_C['bg_input']}; border:1px solid {_C['border']};"
+                "border-radius:6px; padding:2px; }"
+            )
+        if hasattr(self, "_lbl_quick"):
+            self._lbl_quick.setStyleSheet(
+                f"font-size:11px; color:{_C['text_sec']};"
+            )
+        _btn_style = (
             f"QPushButton {{ background:{_C['bg_surface']}; border:1px solid {_C['border']};"
             "border-radius:4px; padding:2px 10px; font-size:11px; }"
             f"QPushButton:hover {{ background:{_C['accent_light']}; "
             f"border-color:{_C['border_focus']}; }}"
         )
-        btn_all  = QPushButton(f"✅ {tr('select_all')}")
-        btn_none = QPushButton(f"☐ {tr('select_none')}")
-        btn_inv  = QPushButton(f"⇄ {tr('invert_selection')}")
-        for btn in (btn_all, btn_none, btn_inv):
-            btn.setMinimumHeight(26)
-            btn.setStyleSheet(_style)
-
-        btn_all.clicked.connect(lambda: self.select_all(True))
-        btn_none.clicked.connect(lambda: self.select_all(False))
-        btn_inv.clicked.connect(self.invert_selection)
-
-        lay.addWidget(lbl)
-        lay.addWidget(btn_all)
-        lay.addWidget(btn_none)
-        lay.addWidget(btn_inv)
-        lay.addStretch()
-        return bar
+        for btn in (self.btn_all, self.btn_none, self.btn_inv):
+            if btn:
+                btn.setStyleSheet(_btn_style)
 
     # ══════════════════════════════════════════════════════
     # تحميل البيانات
