@@ -12,8 +12,10 @@ from PyQt5.QtWidgets import (
 from PyQt5.QtCore import Qt
 
 from db.shared.items_repo import fetch_item, delete_item
-from ui.helpers            import confirm_delete
-from ui.widgets.shared.connection_mixin import LiveConnMixin
+# [Fix #6] توحيد import confirm_delete من المسار الموثق في ui_widgets.md
+from ui.widgets.dialogs.confirm import confirm_delete
+# [Fix #1] توحيد import LiveConnMixin من المسار الموثق في ui_widgets.md
+from ui.widgets.core.conn import LiveConnMixin
 from ui.widgets.shared.base_warning_bar import BaseWarningBar
 from ui.tabs.costing.shared.bom_tree      import BomTree
 from ui.events import bus
@@ -68,7 +70,6 @@ class _ProductMainPanel(QWidget, LiveConnMixin):
         mid_layout.setContentsMargins(0, 0, 0, 0)
         mid_layout.setSpacing(0)
 
-        # ✅ استخدام BaseWarningBar بدل _WarningBar المخصصة
         self._warning = BaseWarningBar(
             on_fix=self._fix_orphans,
             on_edit=self._edit_selected,
@@ -98,10 +99,9 @@ class _ProductMainPanel(QWidget, LiveConnMixin):
 
         root.addWidget(splitter)
 
-    def _on_data_changed(self):
-        pid = self._prod_table.selected_pid()
-        if pid is None:
-            return
+    # [Fix #3] دمج المنطق المشترك في دالة واحدة بدل التكرار
+    def _refresh_for_product(self, pid: int):
+        """تحديث الـ warning bar والـ BOM tree لمنتج محدد."""
         try:
             conn = self._live_conn()
             self._check_orphans(pid, conn)
@@ -109,17 +109,17 @@ class _ProductMainPanel(QWidget, LiveConnMixin):
         except Exception:
             pass
 
+    def _on_data_changed(self):
+        pid = self._prod_table.selected_pid()
+        if pid is not None:
+            self._refresh_for_product(pid)
+
     def _on_product_selected(self, pid: int | None):
         if pid is None:
             self._bom_tree.clear_tree()
             self._warning.setVisible(False)
             return
-        try:
-            conn = self._live_conn()
-            self._check_orphans(pid, conn)
-            self._bom_tree.load(conn, pid)
-        except Exception:
-            pass
+        self._refresh_for_product(pid)
 
     def _refresh_form_catalog(self):
         try:
@@ -128,13 +128,11 @@ class _ProductMainPanel(QWidget, LiveConnMixin):
             return
         self._form._rows.refresh_catalog(new_catalog)
 
-    def _check_orphans(self, pid: int, conn=None):
-        if conn is None:
-            conn = self._live_conn()
+    # [Fix #4] conn معامل إلزامي — كل الاستدعاءات تمرره فعلاً
+    def _check_orphans(self, pid: int, conn):
         orphans = self._orphan.fetch(conn, pid)
         item    = fetch_item(conn, pid)
         name    = item["name"] if item else f"ID {pid}"
-        # ✅ استخدام show_orphans() من BaseWarningBar
         self._warning.show_orphans(orphans, name)
 
     def _fix_orphans(self):

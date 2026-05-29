@@ -19,13 +19,22 @@ from db.costing.bom_scenarios_repo import (
     fetch_default_scenario, insert_scenario,
     fetch_bom_for_scenario,
 )
-from ui.widgets.shared.connection_mixin import LiveConnMixin
-from ui.widgets.shared.component_row._row_widget import ComponentRow
+# [Fix #1] توحيد import LiveConnMixin من المسار الموثق في ui_widgets.md
+from ui.widgets.core.conn import LiveConnMixin
+# [Fix #2] حذف import ComponentRow القديم — يُستخدم فقط في _rows_manager.py
+#          from ui.widgets.shared.component_row._row_widget import ComponentRow  ← محذوف
 from ui.events import bus
 
 from .form._header_bar   import _FormHeaderBar
 from .form._rows_manager import _RowsManager
 from .form._save_logic   import _SaveLogic
+
+# ComponentRow مُستورد في _rows_manager.py من المسار الصحيح:
+# from ui.widgets.components.component_row.widget import ComponentRow
+# نُبقي type hint هنا بدون import مباشر
+from typing import TYPE_CHECKING
+if TYPE_CHECKING:
+    from ui.widgets.components.component_row.widget import ComponentRow
 
 
 class _FormPanel(QWidget, LiveConnMixin):
@@ -81,7 +90,7 @@ class _FormPanel(QWidget, LiveConnMixin):
     def _add_row(self, child_type: str = "raw", child_id=None,
                  qty: float = 1.0, orphan_name: str = None,
                  waste_pct: float = 0.0, variant_id: int = None,
-                 machine_op_row_id: int = None) -> ComponentRow:
+                 machine_op_row_id: int = None) -> "ComponentRow":
         return self._rows.add_row(
             child_type=child_type, child_id=child_id, qty=qty,
             orphan_name=orphan_name, waste_pct=waste_pct,

@@ -13,9 +13,8 @@ _ProductTable  — جدول المنتجات المحفوظة مع FilterBar.
 التحسين: حذف _WarningBar alias الزائد —
          استخدم BaseWarningBar مباشرة من:
          ui/widgets/components/notification.py
+[Fix #7] إضافة style="normal" صريح لزر التعديل لتوحيد المظهر
 """
-
-from PyQt5.QtCore import Qt
 
 from db.shared.items_repo  import fetch_items_by_type
 from models.costing        import calc_cost
@@ -106,7 +105,8 @@ class _ProductTable(BaseListPanel):
 
     def _build_extra_header_actions(self, header):
         """إضافة أزرار تعديل وحذف في الهيدر."""
-        header.add_action("✏️ تعديل المحدد", self._trigger_edit)
+        # [Fix #7] style="normal" صريح لتوحيد المظهر مع بقية الجداول
+        header.add_action("✏️ تعديل المحدد", self._trigger_edit,   style="normal")
         header.add_action("🗑️ حذف المحدد",   self._trigger_delete, style="danger")
 
     # ══════════════════════════════════════════════════════
