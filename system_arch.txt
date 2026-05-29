@@ -1,5 +1,5 @@
 File Tree Snapshot
-Generated : 2026-05-29 11:34:20
+Generated : 2026-05-29 11:51:44
 Source    : D:\My Workspace\Hg\Alhabaar\accountant\system
 Extensions: .md, .py
 ────────────────────────────────────────────────────────────
@@ -185,7 +185,6 @@ system/
 │   │   │   │   ├── bom_scenarios/
 │   │   │   │   │   ├── _db_scenarios.py
 │   │   │   │   │   └── _memory_scenarios.py
-│   │   │   │   ├── bom_tree/
 │   │   │   │   ├── bom_tree_helper/
 │   │   │   │   │   └── _scenario_node_builder.py
 │   │   │   │   ├── bulk_replace/
@@ -297,6 +296,7 @@ system/
 │   │   └── theme_manager.py
 │   ├── widgets/
 │   │   ├── base/
+│   │   │   ├── crud_form.py
 │   │   │   ├── detail_panel.py
 │   │   │   ├── list_panel.py
 │   │   │   ├── section.py
@@ -352,6 +352,8 @@ system/
 │   │   │   ├── filter.py
 │   │   │   ├── form_parts.py
 │   │   │   └── state.py
+│   │   ├── shared/
+│   │   │   └── list_panel_with_shared.py
 │   │   ├── tables/
 │   │   │   ├── builders.py
 │   │   │   ├── flexible.py

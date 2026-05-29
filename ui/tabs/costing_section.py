@@ -7,6 +7,9 @@ ui/tabs/costing_section.py
 [Refactor] استخدام _C و tr() بدل الألوان والنصوص المدمجة.
 استخدام tab_style من ui.widgets.theme.styles (الموثق في files_reference).
 ربط bus.theme_changed لتحديث الـ stylesheet عند تغيير الثيم.
+
+[Fix #9] إضافة try/except حول بناء الـ tabs مع عرض رسالة واضحة عند الفشل
+  بدلاً من تفجير صامت عند خطأ في company_state أو الاتصال.
 """
 
 from PyQt5.QtWidgets import QWidget, QVBoxLayout, QTabWidget, QLabel
@@ -21,6 +24,18 @@ from .costing.raw_tab     import RawTab
 from .costing.product_tab import ProductTab
 from .costing.labor_tab   import LaborTab
 from .costing.machine_tab import MachineTab
+
+
+def _make_error_tab(msg: str) -> QLabel:
+    """يُنشئ تبويب خطأ بسيط لعرض رسالة الفشل."""
+    lbl = QLabel(f"⚠️  {msg}")
+    lbl.setAlignment(Qt.AlignCenter)
+    lbl.setStyleSheet(
+        f"color:{_C['danger']}; font-size:13px;"
+        f"background:{_C['danger_bg']}; border:1px solid {_C['danger_border']};"
+        "border-radius:6px; padding:12px;"
+    )
+    return lbl
 
 
 class CostingSection(QWidget):
@@ -51,11 +66,21 @@ class CostingSection(QWidget):
         tab_bar.setExpanding(False)
         tab_bar.setDrawBase(True)
 
-        self._tabs.addTab(RawTab(),            f"📦  {tr('raw_materials')}")
-        self._tabs.addTab(ProductTab("semi"),  f"🔧  {tr('semi_product')}")
-        self._tabs.addTab(ProductTab("final"), f"🏭  {tr('final_product')}")
-        self._tabs.addTab(LaborTab(),          f"👷  {tr('labor')}")
-        self._tabs.addTab(MachineTab(),        f"⚙️  {tr('machine')}")
+        # [Fix #9] try/except حول كل tab على حدة لعزل الأخطاء
+        _tab_defs = [
+            (lambda: RawTab(),            f"📦  {tr('raw_materials')}"),
+            (lambda: ProductTab("semi"),  f"🔧  {tr('semi_product')}"),
+            (lambda: ProductTab("final"), f"🏭  {tr('final_product')}"),
+            (lambda: LaborTab(),          f"👷  {tr('labor')}"),
+            (lambda: MachineTab(),        f"⚙️  {tr('machine')}"),
+        ]
+
+        for factory, label in _tab_defs:
+            try:
+                widget = factory()
+            except Exception as e:
+                widget = _make_error_tab(f"خطأ في تحميل التبويب: {e}")
+            self._tabs.addTab(widget, label)
 
         layout.addWidget(self._tabs)
 

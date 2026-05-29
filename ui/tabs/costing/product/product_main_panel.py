@@ -4,6 +4,13 @@ ui/tabs/costing/product/product_main_panel.py
 _ProductMainPanel — اللوحة الرئيسية: فورم + جدول + BOM tree + تحذير.
 
 التحسين: يستخدم BaseWarningBar.show_orphans() بدل الـ API القديم
+
+[Fix #1] توحيد import LiveConnMixin من المسار الموثق في ui_widgets.md:
+  من: ui.widgets.shared.connection_mixin
+  إلى: ui.widgets.core.conn
+[Fix #3] دمج المنطق المشترك في دالة _refresh_for_product بدل التكرار
+[Fix #4] conn معامل إلزامي في _check_orphans — كل الاستدعاءات تمرره فعلاً
+[Fix #6] توحيد import confirm_delete من المسار الموثق في ui_widgets.md
 """
 
 from PyQt5.QtWidgets import (

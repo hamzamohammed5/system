@@ -7,6 +7,14 @@ _FormPanel — فورم إضافة / تعديل المنتج.
   _header_bar.py   → شريط الهيدر (اسم + تصنيف + أزرار + سيناريوهات)
   _rows_manager.py → إدارة صفوف المكونات
   _save_logic.py   → منطق الحفظ في DB
+
+[Fix #1] توحيد import LiveConnMixin من المسار الموثق في ui_widgets.md:
+  من: ui.widgets.shared.connection_mixin
+  إلى: ui.widgets.core.conn
+[Fix #2] حذف import ComponentRow القديم — يُستخدم فقط في _rows_manager.py
+         from ui.widgets.shared.component_row._row_widget import ComponentRow ← محذوف
+         الاستخدام الفعلي يمر عبر _RowsManager من المسار الصحيح:
+         ui.widgets.components.component_row.widget
 """
 
 from PyQt5.QtWidgets import QWidget, QVBoxLayout, QMessageBox
@@ -21,15 +29,13 @@ from db.costing.bom_scenarios_repo import (
 )
 # [Fix #1] توحيد import LiveConnMixin من المسار الموثق في ui_widgets.md
 from ui.widgets.core.conn import LiveConnMixin
-# [Fix #2] حذف import ComponentRow القديم — يُستخدم فقط في _rows_manager.py
-#          from ui.widgets.shared.component_row._row_widget import ComponentRow  ← محذوف
 from ui.events import bus
 
 from .form._header_bar   import _FormHeaderBar
 from .form._rows_manager import _RowsManager
 from .form._save_logic   import _SaveLogic
 
-# ComponentRow مُستورد في _rows_manager.py من المسار الصحيح:
+# [Fix #2] ComponentRow مُستورد في _rows_manager.py من المسار الصحيح:
 # from ui.widgets.components.component_row.widget import ComponentRow
 # نُبقي type hint هنا بدون import مباشر
 from typing import TYPE_CHECKING

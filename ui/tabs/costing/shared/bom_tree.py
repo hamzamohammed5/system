@@ -5,6 +5,9 @@ BomTree — شجرة عرض BOM مع كل السيناريوهات كنودات 
 
 [Refactor] استخدام tr() لكل النصوص + _C للألوان.
 [Refactor] حذف db/ مباشرة من delete — الاعتماد على bom_scenarios_repo فقط.
+
+[Fix #10] ربط bus.theme_changed لتحديث stylesheet ديناميكياً عند تغيير الثيم،
+  توافقاً مع _OpRowsEditor و _RawVariantsPanel و ScenarioComparisonWidget.
 """
 
 from PyQt5.QtWidgets import (
@@ -19,6 +22,7 @@ from db.costing.bom_scenarios_repo import fetch_bom_for_scenario
 from ui.app_settings               import _C
 from ui.widgets.core.i18n          import tr
 from ui.widgets.dialogs.confirm    import confirm_delete
+from ui.events                     import bus
 
 from ui.tabs.costing.shared.bom_tree_helper._scenario_node_builder import (
     build_scenario_node,
@@ -32,6 +36,8 @@ class BomTree(QWidget):
         self._pid  : int | None = None
         self._conn = None
         self._build()
+        # [Fix #10] ربط bus.theme_changed لتحديث الـ stylesheet ديناميكياً
+        bus.theme_changed.connect(self._apply_theme)
 
     def _build(self):
         layout = QVBoxLayout(self)
@@ -83,29 +89,9 @@ class BomTree(QWidget):
             tr("type"),
         ])
         self.tree.setSelectionMode(QTreeWidget.SingleSelection)
-        self.tree.setStyleSheet(f"""
-            QTreeWidget {{
-                background: {_C['bg_surface']};
-                border: 1px solid {_C['border']};
-                color: {_C['text_primary']};
-            }}
-            QTreeWidget::item:selected {{
-                background: {_C['accent_light']};
-                color: {_C['accent']};
-            }}
-            QTreeWidget::item:hover {{
-                background: {_C['bg_hover']};
-            }}
-        """)
+        self.tree.setAlternatingRowColors(True)
 
         hh = self.tree.header()
-        hh.setStyleSheet(
-            f"QHeaderView::section {{"
-            f"  background:{_C['bg_surface_2']}; color:{_C['text_sec']};"
-            f"  border:none; border-bottom:1px solid {_C['border']};"
-            f"  padding:4px 6px; font-weight:bold; font-size:11px;"
-            f"}}"
-        )
         hh.setSectionResizeMode(0, QHeaderView.Stretch)
         for col in range(1, 7):
             hh.setSectionResizeMode(col, QHeaderView.Interactive)
@@ -121,11 +107,13 @@ class BomTree(QWidget):
         self.tree.setEditTriggers(QTreeWidget.NoEditTriggers)
         self.tree.setExpandsOnDoubleClick(True)
         self.tree.setWordWrap(True)
-        self.tree.setAlternatingRowColors(True)
         self.tree.itemSelectionChanged.connect(self._on_selection)
 
         layout.addLayout(header)
         layout.addWidget(self.tree)
+
+        # تطبيق الـ theme الأولي
+        self._apply_theme()
 
     @staticmethod
     def _make_danger_btn(text: str) -> QPushButton:
@@ -147,6 +135,50 @@ class BomTree(QWidget):
             }}
         """)
         return btn
+
+    # [Fix #10] دالة تطبيق الـ theme — تُستدعى عند البناء وعند تغيير الثيم
+    def _apply_theme(self, _=None):
+        """يُطبق الـ stylesheet عند تغيير الثيم."""
+        if hasattr(self, "tree"):
+            self.tree.setStyleSheet(f"""
+                QTreeWidget {{
+                    background: {_C['bg_surface']};
+                    border: 1px solid {_C['border']};
+                    color: {_C['text_primary']};
+                }}
+                QTreeWidget::item:selected {{
+                    background: {_C['accent_light']};
+                    color: {_C['accent']};
+                }}
+                QTreeWidget::item:hover {{
+                    background: {_C['bg_hover']};
+                }}
+            """)
+            hh = self.tree.header()
+            hh.setStyleSheet(
+                f"QHeaderView::section {{"
+                f"  background:{_C['bg_surface_2']}; color:{_C['text_sec']};"
+                f"  border:none; border-bottom:1px solid {_C['border']};"
+                f"  padding:4px 6px; font-weight:bold; font-size:11px;"
+                f"}}"
+            )
+        if hasattr(self, "btn_del_node"):
+            self.btn_del_node.setStyleSheet(f"""
+                QPushButton {{
+                    background: {_C['danger_bg']};
+                    color: {_C['danger']};
+                    border: 1px solid {_C['danger_border']};
+                    border-radius: 4px;
+                    padding: 2px 8px;
+                    font-size: 11px;
+                }}
+                QPushButton:hover {{ background: {_C['danger']}; color: white; }}
+                QPushButton:disabled {{
+                    background: {_C['bg_surface']};
+                    color: {_C['text_disabled']};
+                    border-color: {_C['border']};
+                }}
+            """)
 
     # ── API عام ──────────────────────────────────────────
 

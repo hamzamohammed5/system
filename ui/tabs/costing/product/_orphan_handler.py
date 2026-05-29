@@ -9,6 +9,11 @@ _OrphanHandler — منطق معالجة المكونات الناقصة (Orphan
   - التنظيف التلقائي للمنتجات الفارغة
 
 يُستخدم من _ProductMainPanel.
+
+[Fix #5] استبدال bus.data_changed.emit() بـ emit_company_data_changed()
+  من: ui.events.bus  → bus.data_changed.emit()
+  إلى: ui.widgets.core.events → emit_company_data_changed()
+  السبب: أكثر دقة وأفضل أداءً حسب files_reference/models&services.md
 """
 
 from PyQt5.QtWidgets import QMessageBox
@@ -19,7 +24,8 @@ from db.shared.items_repo import (
     delete_orphan_bom_rows,
     cleanup_empty_products_after_orphan_fix,
 )
-from ui.events import bus
+# [Fix #5] استخدام emit_company_data_changed بدل bus.data_changed
+from ui.widgets.core.events import emit_company_data_changed
 
 
 class _OrphanHandler:
@@ -66,7 +72,8 @@ class _OrphanHandler:
 
         warning_bar.setVisible(False)
         bom_tree.load(conn, pid)
-        bus.data_changed.emit()
+        # [Fix #5] emit_company_data_changed بدل bus.data_changed.emit()
+        emit_company_data_changed()
 
         if auto_deleted:
             form.reset()
