@@ -1,7 +1,7 @@
 File Tree Snapshot
-Generated : 2026-05-29 08:45:23
+Generated : 2026-05-29 09:14:44
 Source    : D:\My Workspace\Hg\Alhabaar\accountant\system
-Extensions: .py
+Extensions: .md, .py
 ────────────────────────────────────────────────────────────
 system/
 ├── db/
@@ -54,6 +54,9 @@ system/
 │       ├── settings_repo.py
 │       └── shared_items_bridge.py
 ├── files_reference/
+│   ├── db.md
+│   ├── models&services.md
+│   └── ui_widgets.md
 ├── models/
 │   ├── costing.py
 │   ├── costing_base.py
@@ -367,3 +370,5 @@ system/
 │   ├── main_window.py
 │   └── settings_dialog.py
 ├── main.py
+├── README.md
+└── refactory.md
