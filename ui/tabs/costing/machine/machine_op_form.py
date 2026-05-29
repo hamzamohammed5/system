@@ -10,6 +10,8 @@ _MachineOpForm — فورم إضافة / تعديل عملية تشغيل.
   - CategoryCombo   → ui.widgets.combo.category
   - FormGroup, ModeBadge, ResultBadge → ui.widgets.panels.form_parts
   - wrap_in_scroll  → ui.widgets.theme.styles
+[Fix] استخدام emit_company_data_changed بدل bus.data_changed.emit()
+      حسب توصية files_reference/models&services.md
 """
 
 from PyQt5.QtWidgets import (
@@ -27,6 +29,7 @@ from ui.widgets.panels.form_parts       import (
 )
 from ui.widgets.theme.styles            import wrap_in_scroll
 from ui.tabs.costing.shared.machine_op_rows_editor import _OpRowsEditor
+from ui.widgets.core.events             import emit_company_data_changed
 from ui.events import bus
 
 
@@ -249,7 +252,9 @@ class _MachineOpForm(QWidget, EditModeMixin, LiveConnMixin):
         except Exception as e:
             QMessageBox.warning(self, "خطأ", str(e))
             return
-        bus.data_changed.emit()
+
+        # [Fix] emit_company_data_changed بدل bus.data_changed.emit()
+        emit_company_data_changed()
 
         try:
             m_svc  = MachineService(self._live_conn())
@@ -290,7 +295,8 @@ class _MachineOpForm(QWidget, EditModeMixin, LiveConnMixin):
             QMessageBox.warning(self, "خطأ", str(e))
             return
         self._reset()
-        bus.data_changed.emit()
+        # [Fix] emit_company_data_changed بدل bus.data_changed.emit()
+        emit_company_data_changed()
 
     def _cancel(self):
         self._reset()

@@ -10,7 +10,7 @@
 |-------|---------|
 | [Models — الحسابات](#models--الحسابات) | `costing_base`, `costing_ops`, `costing` |
 | [Services — مشترك](#services--مشترك) | `item_service`, `category_service` |
-| [Services — التكلفة](#services--التكلفة) | `product_service`, `labor_op_service`, `machine_service`, `bulk_replace_service` |
+| [Services — التكلفة](#services--التكلفة) | `product_service`, `scenario_service`, `labor_op_service`, `machine_service`, `machine_op_rows_service`, `variant_service`, `catalog_service`, `bulk_replace_service`, `bom_tree_service` |
 | [Services — الطلبات](#services--الطلبات) | `order_service` |
 | [Services — المحاسبة](#services--المحاسبة) | `journal_service` |
 
@@ -153,6 +153,42 @@ svc.delete(product_id)
 
 ---
 
+### `services/costing/scenario_service.py`
+
+```python
+ScenarioService(conn)
+
+# ── قراءة ──
+svc.list(item_id) -> list[ScenarioResult]
+svc.get(scenario_id) -> ScenarioResult | None
+svc.get_default(item_id) -> ScenarioResult | None
+svc.get_bom(scenario_id) -> list[BomRowResult]
+
+# ── كتابة ──
+svc.create(item_id, name, is_default=False) -> int
+svc.rename(scenario_id, name)
+svc.set_default(scenario_id)
+svc.clone(scenario_id, new_name) -> int
+svc.delete(scenario_id) -> bool  # يرفض لو آخر سيناريو
+svc.replace_bom(scenario_id, rows: list)
+# rows: [(child_type, child_id, qty, waste_pct, variant_id, machine_op_row_id), ...]
+
+# ── مساعدات ──
+svc.ensure_default(item_id) -> int
+# يتأكد من وجود default scenario — ينشئ "سيناريو 1" لو مفيش
+
+svc.calc_cost(scenario_id) -> float
+# يحسب التكلفة الكاملة للسيناريو
+```
+
+**`ScenarioResult`:** `id, item_id, name, is_default, notes`
+- `.from_row(row) -> ScenarioResult`
+
+**`BomRowResult`:** `child_type, child_id, qty, waste_pct, variant_id, machine_op_row_id`
+- `.from_row(row) -> BomRowResult`
+
+---
+
 ### `services/costing/labor_op_service.py`
 
 ```python
@@ -212,6 +248,92 @@ svc.calc_cost(op_id, row_id=None) -> float
 
 ---
 
+### `services/costing/machine_op_rows_service.py`
+
+```python
+MachineOpRowsService(conn)
+
+# ── قراءة ──
+svc.list(op_id) -> list[OpRowResult]
+svc.get(row_id) -> OpRowResult | None
+
+# ── كتابة ──
+svc.add(op_id, label="", value=0.0, count=1.0, sort_order=0) -> int
+svc.update(row_id, label, value, count, sort_order=0)
+svc.delete(row_id, op_id) -> bool  # يرفض لو آخر صف في العملية
+svc.replace(op_id, rows: list)
+# rows: [(label, value, count), ...]
+
+# ── حساب ──
+svc.calc_row_cost(row_id) -> float
+# mode="time": (value/60) × rate_per_hour
+# mode="unit": value × rate_per_unit
+
+svc.calc_total_cost(op_id) -> float
+# مجموع تكلفة كل الصفوف
+```
+
+**`OpRowResult`:** `id, op_id, label, value, count, sort_order`
+- `.from_row(row) -> OpRowResult`
+
+---
+
+### `services/costing/variant_service.py`
+
+```python
+VariantService(conn)
+
+# ── قراءة ──
+svc.list(item_id) -> list[VariantResult]
+svc.get(variant_id) -> VariantResult | None
+
+# ── كتابة ──
+svc.add(item_id, name, pieces, notes=None) -> int
+# Raises: ValueError لو name فارغ أو pieces <= 0
+
+svc.update(variant_id, name, pieces, notes=None)
+# Raises: ValueError لو name فارغ أو pieces <= 0
+
+svc.delete(variant_id)
+
+# ── حساب ──
+svc.calc_unit_cost(variant_id, item_price) -> float
+# = item_price ÷ pieces
+```
+
+**`VariantResult`:** `id, item_id, name, pieces, notes`
+- `.from_row(row) -> VariantResult`
+- `.calc_unit_cost(item_price) -> float` — سعر الوحدة = السعر ÷ عدد القطع
+
+---
+
+### `services/costing/catalog_service.py`
+
+```python
+CatalogService(conn, central_conn=None)
+# central_conn اختياري — يُحسّن الأداء عند استدعاءات متعددة
+
+svc.build() -> dict
+# يبني الـ catalog الكامل لكل الأنواع:
+# {
+#   "raw":        [(id, name, category_name, price, total_qty), ...],
+#   "semi":       [(id, name, category_name, price, None), ...],
+#   "final":      [(id, name, category_name, price, None), ...],
+#   "labor_op":   [(id, name, category_name, minutes), ...],
+#   "machine_op": [(id, name, category_name, mode, machine_name), ...],
+# }
+
+svc.build_raw() -> list         # خامات محلية + مشتركة
+svc.build_semi() -> list        # نصف مصنع محلي فقط
+svc.build_final() -> list       # منتج نهائي محلي فقط
+svc.build_labor_ops() -> list   # عمليات عمالة محلية + مشتركة
+svc.build_machine_ops() -> list # عمليات تشغيل محلية + مشتركة
+```
+
+**ملاحظة:** العناصر المشتركة تأتي بـ `id = "shared:{n}"` وتصنيف `"🔗 مشترك"`.
+
+---
+
 ### `services/costing/bulk_replace_service.py`
 
 ```python
@@ -244,6 +366,40 @@ svc.fetch_affected_products(child_type, child_id) -> list[dict]
 ```
 
 **ملاحظة:** `fetch_candidates` و`fetch_affected_products` يعتمدان داخلياً على `ui/tabs/costing/shared/bulk_replace/bulk_replace_helpers.py`.
+
+---
+
+### `services/costing/bom_tree_service.py`
+
+```python
+BomTreeService(conn)
+
+# ── قراءة ──
+svc.get_scenarios(item_id) -> list[ScenarioInfo]
+svc.get_bom_for_scenario(scenario_id) -> list[BomComponentRow]
+# يتعامل تلقائياً مع schemas مختلفة (مع/بدون waste_pct, variant_id, machine_op_row_id)
+
+svc.get_sub_bom(item_id) -> list[BomComponentRow]
+# BOM الفرعي للنصف مصنع — يستخدم default scenario أو أول سيناريو
+
+svc.get_default_scenario_id(item_id) -> int | None
+
+# ── حذف ──
+svc.delete_component(scenario_id, child_type, child_id)
+svc.delete_bom_row(parent_id, child_type, child_id)
+
+# ── مساعدات ──
+svc.invalidate_columns_cache()
+# يُصفَّر cache أعمدة BOM — يُستدعى بعد migration
+```
+
+**`ScenarioInfo`:** `id, item_id, name, is_default`
+- `.from_row(row) -> ScenarioInfo`
+
+**`BomComponentRow`:** `child_type, child_id, qty, waste_pct, variant_id, machine_op_row_id`
+- `.from_dict(d) -> BomComponentRow`
+
+**ملاحظة:** يخزّن نتيجة `PRAGMA table_info(bom)` في cache داخلي لتجنب تكرار الاستعلام.
 
 ---
 
@@ -352,7 +508,7 @@ result = svc.post_entry(
 from services.costing.bulk_replace_service import BulkReplaceService
 
 svc = BulkReplaceService(conn)
-affected = svc.fetch_affected_products("raw", old_item_id=5)
+affected = svc.fetch_affected_products("raw", child_id=5)
 product_rows = [(p["id"], p["qty"]) for p in affected]
 
 updated, errors = svc.apply(
@@ -375,6 +531,41 @@ op   = svc.get(op_id=3)
 # op.minutes, op.category_name
 ```
 
+### بناء catalog للـ ComponentRow
+
+```python
+from services.costing.catalog_service import CatalogService
+
+svc = CatalogService(conn)
+catalog = svc.build()
+# catalog["raw"]        → خامات
+# catalog["labor_op"]   → عمليات عمالة
+# catalog["machine_op"] → عمليات تشغيل
+```
+
+### إدارة سيناريوهات BOM
+
+```python
+from services.costing.scenario_service import ScenarioService
+
+svc = ScenarioService(conn)
+default_id = svc.ensure_default(item_id=5)
+cost = svc.calc_cost(default_id)
+scenarios = svc.list(item_id=5)
+clone_id = svc.clone(default_id, "سيناريو 2")
+```
+
+### جلب BOM tree مع دعم migration
+
+```python
+from services.costing.bom_tree_service import BomTreeService
+
+svc = BomTreeService(conn)
+scenarios = svc.get_scenarios(item_id=5)
+bom = svc.get_bom_for_scenario(scenarios[0].id)
+sub = svc.get_sub_bom(item_id=3)  # BOM النصف مصنع
+```
+
 ---
 
 ## ملاحظات مهمة
@@ -386,3 +577,9 @@ op   = svc.get(op_id=3)
 **3. `tr()` function:** تقبل مفاتيح الترجمة أو نصوص عربية مباشرة — تحول `"حفظ"` تلقائياً لـ `"save"`.
 
 **4. `BulkReplaceService.fetch_candidates`:** يعتمد على `bulk_replace_helpers` في الـ UI layer — انتبه لهذا الـ coupling عند نقل الـ service لبيئة بدون UI.
+
+**5. `BomTreeService` و cache الأعمدة:** استدعي `invalidate_columns_cache()` بعد أي migration يضيف أعمدة لجدول bom، أو أنشئ instance جديد من الـ service.
+
+**6. `CatalogService` والعناصر المشتركة:** تعتمد على `company_state.is_ready` — تأكد من وجود شركة نشطة قبل استدعاء `build()`.
+
+**7. `ScenarioService.calc_cost`:** يحسب التكلفة مباشرة من BOM الخاص بالسيناريو بدون المرور بـ `calc_product_cost` في models — مناسب للمقارنة بين سيناريوهات متعددة.
