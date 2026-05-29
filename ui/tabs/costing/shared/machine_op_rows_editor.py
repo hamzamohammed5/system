@@ -4,6 +4,8 @@ ui/tabs/costing/shared/machine_op_rows_editor.py
 _OpRowsEditor — محرر صفوف عملية التشغيل.
 
 [Refactor] ربط bus.theme_changed لتحديث stylesheet ديناميكياً.
+[Fix] استخدام emit_company_data_changed بدل bus.data_changed.emit()
+      حسب توصية files_reference/models&services.md
 """
 
 from PyQt5.QtWidgets import (
@@ -19,9 +21,10 @@ from db.costing.machine_op_rows_repo import (
     fetch_op_rows, insert_op_row, update_op_row,
     delete_op_row, calc_op_row_cost, calc_op_total_cost,
 )
-from ui.app_settings      import _C
-from ui.widgets.core.i18n import tr
-from ui.events            import bus
+from ui.app_settings          import _C
+from ui.widgets.core.i18n     import tr
+from ui.widgets.core.events   import emit_company_data_changed
+from ui.events                import bus
 
 
 class _OpRowsEditor(QGroupBox):
@@ -350,7 +353,8 @@ class _OpRowsEditor(QGroupBox):
         )
         self._reset_form()
         self._load_table()
-        bus.data_changed.emit()
+        # [Fix] emit_company_data_changed بدل bus.data_changed.emit()
+        emit_company_data_changed()
 
     def _edit_row(self):
         row = self.table.currentRow()
@@ -382,7 +386,8 @@ class _OpRowsEditor(QGroupBox):
         )
         self._reset_form()
         self._load_table()
-        bus.data_changed.emit()
+        # [Fix] emit_company_data_changed بدل bus.data_changed.emit()
+        emit_company_data_changed()
 
     def _delete_row(self):
         row = self.table.currentRow()
@@ -398,7 +403,8 @@ class _OpRowsEditor(QGroupBox):
         rid = int(self.table.item(row, 0).text())
         delete_op_row(self.conn, rid)
         self._load_table()
-        bus.data_changed.emit()
+        # [Fix] emit_company_data_changed بدل bus.data_changed.emit()
+        emit_company_data_changed()
 
     def _reset_form(self):
         self._editing_row_id = None

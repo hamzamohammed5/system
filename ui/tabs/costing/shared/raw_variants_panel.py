@@ -4,6 +4,8 @@ ui/tabs/costing/shared/raw_variants_panel.py
 _RawVariantsPanel — لوحة إدارة variants الخامة (صفوف الإنتاج).
 
 [Refactor] ربط bus.theme_changed لتحديث stylesheet ديناميكياً.
+[Fix] استخدام emit_company_data_changed بدل bus.data_changed.emit()
+      حسب توصية files_reference/models&services.md
 """
 
 from PyQt5.QtWidgets import (
@@ -20,9 +22,10 @@ from db.costing.raw_variants_repo import (
     insert_variant, update_variant, delete_variant,
     fetch_variant,
 )
-from ui.app_settings      import _C
-from ui.widgets.core.i18n import tr
-from ui.events            import bus
+from ui.app_settings          import _C
+from ui.widgets.core.i18n     import tr
+from ui.widgets.core.events   import emit_company_data_changed
+from ui.events                import bus
 
 
 def _spin_pieces(max_=999999, dec=4):
@@ -286,7 +289,8 @@ class _RawVariantsPanel(QGroupBox):
         insert_variant(self.conn, self._item_id, name, pieces)
         self._reset_form()
         self._load_table()
-        bus.data_changed.emit()
+        # [Fix] emit_company_data_changed بدل bus.data_changed.emit()
+        emit_company_data_changed()
 
     def _edit(self):
         row = self.table.currentRow()
@@ -313,7 +317,8 @@ class _RawVariantsPanel(QGroupBox):
         update_variant(self.conn, self._editing_id, name, pieces)
         self._reset_form()
         self._load_table()
-        bus.data_changed.emit()
+        # [Fix] emit_company_data_changed بدل bus.data_changed.emit()
+        emit_company_data_changed()
 
     def _delete(self):
         row = self.table.currentRow()
@@ -329,7 +334,8 @@ class _RawVariantsPanel(QGroupBox):
         ) == QMessageBox.Yes:
             delete_variant(self.conn, vid)
             self._load_table()
-            bus.data_changed.emit()
+            # [Fix] emit_company_data_changed بدل bus.data_changed.emit()
+            emit_company_data_changed()
 
     def _reset_form(self):
         self._editing_id = None
