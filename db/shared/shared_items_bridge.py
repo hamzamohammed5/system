@@ -5,10 +5,16 @@ db/shared/shared_items_bridge.py
 
 إصلاح 6:  _get_erp_conn() يتحقق من is_ready قبل الاستدعاء.
 إصلاح 33: استبدال _decode/_encode المحلية بـ decode_json/encode_json من json_utils.
+
+[A-02] is_shared_id و extract_shared_id يُعادان تصديرهما من items_repo
+       بدل تعريفهما هنا مجدداً — مصدر واحد للحقيقة.
 """
 
 from typing import Optional
 from db.shared.json_utils import decode_json, encode_json
+
+# [A-02] استيراد من المصدر الوحيد بدل تعريف مكرر
+from db.shared.items_repo import is_shared_id, extract_shared_id
 
 
 # ══════════════════════════════════════════════════════════
@@ -61,7 +67,6 @@ class SharedItemsBridge:
 
             result = []
             for row in rows:
-                # [إصلاح 33] decode_json بدل _decode المحلية
                 d    = decode_json(row["data"])
                 item = self._row_to_item(row, d, shared_type)
                 result.append(item)
@@ -131,7 +136,6 @@ class SharedItemsBridge:
             ).fetchone()
             if not row:
                 return None
-            # [إصلاح 33] decode_json بدل _decode المحلية
             d = decode_json(row["data"])
             return self._row_to_item(row, d, shared_type or row["shared_type"])
         except Exception:
@@ -149,7 +153,6 @@ class SharedItemsBridge:
         owned = _conn is None
         conn  = _conn or self._get_central_conn()
         try:
-            # [إصلاح 33] encode_json بدل _encode المحلية
             conn.execute(
                 "UPDATE shared_items SET name=?, data=?, updated_at=datetime('now') WHERE id=?",
                 (name, encode_json(data), shared_item_id)
@@ -264,14 +267,11 @@ def get_bridge() -> Optional[SharedItemsBridge]:
         return None
 
 
-def is_shared_id(item_id) -> bool:
-    return isinstance(item_id, str) and item_id.startswith("shared:")
-
-
-def extract_shared_id(item_id) -> Optional[int]:
-    if is_shared_id(item_id):
-        try:
-            return int(item_id.split(":")[1])
-        except Exception:
-            return None
-    return None
+# [A-02] إعادة تصدير من المصدر الوحيد — للتوافق مع الكود القديم
+# الكود الجديد يستورد مباشرة من db.shared.items_repo
+__all__ = [
+    "SharedItemsBridge",
+    "get_bridge",
+    "is_shared_id",
+    "extract_shared_id",
+]

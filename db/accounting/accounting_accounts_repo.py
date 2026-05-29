@@ -11,6 +11,11 @@ db/accounting/accounting_accounts_repo.py
   النسخة القديمة: dict(r) لكل صف + id_map + result list = 3 copies.
   النسخة الجديدة: تحويل لـ dicts مرة واحدة + id_map يُشير لنفس الـ objects.
   الفرق في الذاكرة: O(n) بدل O(3n) للـ dicts.
+
+[P-01] تقسيم fetch_all_accounts إلى دالتين:
+  - fetch_all_accounts_basic()       → بدون balance (سريعة للـ dropdowns)
+  - fetch_all_accounts_with_balance() → مع balance (للتقارير والقوائم المالية)
+  - fetch_all_accounts()             → يُبقى للتوافق = يستدعي النسخة الكاملة
 """
 
 from datetime import datetime
@@ -20,15 +25,60 @@ from datetime import datetime
 # قراءة الحسابات
 # ══════════════════════════════════════════════════════════
 
-def fetch_all_accounts(conn, acc_type: str = None):
+def fetch_all_accounts_basic(conn, acc_type: str = None):
     """
-    يجلب كل الحسابات مع أرصدتها.
+    [P-01] يجلب الحسابات بدون حساب الأرصدة — سريعة للـ dropdowns والـ combos.
 
-    [تحسين 38] يستخدم LEFT JOIN بدل correlated subquery لكل حساب.
-    هذا أسرع بكثير عند وجود حسابات وقيود كثيرة.
+    استخدمها عند:
+      - ملء combo اختيار الحساب في الـ journal entry
+      - عرض شجرة الحسابات بدون أرصدة
+      - أي مكان يحتاج قائمة الحسابات فقط
 
-    الـ query السابقة كانت تنفذ subquery منفصلة لكل حساب (O(n)).
-    الـ query الجديدة تجلب كل شيء دفعة واحدة (O(1) queries).
+    أسرع بكثير من fetch_all_accounts_with_balance() لأنها
+    لا تحتاج JOIN مع journal_lines ولا GROUP BY.
+    """
+    try:
+        if acc_type:
+            return conn.execute("""
+                SELECT a.id, a.code, a.name, a.type, a.subtype,
+                       a.parent_id, a.is_leaf, a.group_id,
+                       p.name AS parent_name,
+                       g.name AS group_name, g.color AS group_color
+                FROM accounts a
+                LEFT JOIN accounts p ON p.id = a.parent_id
+                LEFT JOIN account_groups g ON g.id = a.group_id
+                WHERE a.type = ?
+                ORDER BY a.code
+            """, (acc_type,)).fetchall()
+
+        return conn.execute("""
+            SELECT a.id, a.code, a.name, a.type, a.subtype,
+                   a.parent_id, a.is_leaf, a.group_id,
+                   p.name AS parent_name,
+                   g.name AS group_name, g.color AS group_color
+            FROM accounts a
+            LEFT JOIN accounts p ON p.id = a.parent_id
+            LEFT JOIN account_groups g ON g.id = a.group_id
+            ORDER BY a.code
+        """).fetchall()
+    except Exception as e:
+        print(f"[accounting_accounts_repo] fetch_all_accounts_basic error: {e}")
+        return []
+
+
+def fetch_all_accounts_with_balance(conn, acc_type: str = None):
+    """
+    [P-01] يجلب الحسابات مع أرصدتها — للتقارير والقوائم المالية فقط.
+
+    استخدمها عند:
+      - ميزان المراجعة
+      - عرض الحسابات مع أرصدتها الحالية
+      - أي تقرير يحتاج balance
+
+    أبطأ من fetch_all_accounts_basic() بسبب LEFT JOIN + GROUP BY
+    مع journal_lines — تجنب استخدامها في الـ dropdowns.
+
+    [تحسين 38] تستخدم LEFT JOIN بدل correlated subquery لكل حساب.
     """
     try:
         if acc_type:
@@ -65,8 +115,23 @@ def fetch_all_accounts(conn, acc_type: str = None):
             ORDER BY a.code
         """).fetchall()
     except Exception as e:
-        print(f"[accounting_accounts_repo] fetch_all_accounts error: {e}")
+        print(f"[accounting_accounts_repo] fetch_all_accounts_with_balance error: {e}")
         return []
+
+
+def fetch_all_accounts(conn, acc_type: str = None):
+    """
+    يجلب كل الحسابات مع أرصدتها.
+
+    [P-01] للتوافق مع الكود القديم — يُفوَّض لـ fetch_all_accounts_with_balance.
+    الكود الجديد يستخدم:
+      - fetch_all_accounts_basic()       للـ dropdowns والـ combos
+      - fetch_all_accounts_with_balance() للتقارير
+
+    [تحسين 38] يستخدم LEFT JOIN بدل correlated subquery لكل حساب.
+    هذا أسرع بكثير عند وجود آلاف القيود.
+    """
+    return fetch_all_accounts_with_balance(conn, acc_type)
 
 
 def fetch_account(conn, account_id: int):
@@ -243,9 +308,8 @@ def _sort_groups_parents_first(rows) -> list:
       - id_map يُشير لنفس الـ dict objects (لا نسخ جديدة).
     الفرق: O(3n) dicts → O(n) dicts.
     """
-    # تحويل واحد فقط — id_map يُشير لنفس الـ objects
     rows_list = [dict(r) for r in rows]
-    id_map = {r["id"]: r for r in rows_list}  # مؤشرات لنفس الـ dicts
+    id_map = {r["id"]: r for r in rows_list}
 
     result: list = []
     visited: set = set()
@@ -254,7 +318,6 @@ def _sort_groups_parents_first(rows) -> list:
         nid = node["id"]
         if nid in visited:
             return
-        # اعرض الأب أولاً لو لم يُعرض بعد
         pid = node.get("parent_id")
         if pid and pid in id_map and pid not in visited:
             visit(id_map[pid])
@@ -330,7 +393,6 @@ def build_group_tree(rows) -> list:
     [تحسين 3] نفس تحسين _sort_groups_parents_first:
     id_map يُشير لنفس الـ dict objects بدل نسخ إضافية.
     """
-    # تحويل واحد — id_map يُشير لنفس الـ objects
     nodes: dict = {}
     for r in rows:
         d = r if isinstance(r, dict) else dict(r)

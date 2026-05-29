@@ -7,6 +7,9 @@ db/shared/items_repo.py
            connection جديد في كل استدعاء لـ fetch_shared_for_types.
            الـ central DB للقراءة فقط (shared_items) — آمن للمشاركة.
            الـ cache مرتبط بالـ company_id النشط ويُبطَل عند تغييره.
+
+[A-02] is_shared_id و extract_shared_id هنا هي المصدر الوحيد الموثوق.
+       الملفات الأخرى (shared_items_bridge.py) تُعيد تصديرهما من هنا.
 """
 
 import logging
@@ -117,6 +120,35 @@ def invalidate_bom_cols_cache(conn=None):
         except Exception:
             path = str(id(conn))
         _bom_cols_cache.pop(path, None)
+
+
+# ══════════════════════════════════════════════════════════
+# Shared ID Utilities — [A-02] المصدر الوحيد لهذه الدوال
+# ══════════════════════════════════════════════════════════
+
+def is_shared_id(item_id) -> bool:
+    """
+    يتحقق هل الـ ID يُشير لعنصر مشترك.
+    العناصر المشتركة تبدأ بـ "shared:" مثل "shared:42".
+
+    [A-02] هذا هو التعريف الوحيد — الملفات الأخرى تستورد من هنا.
+    """
+    return isinstance(item_id, str) and str(item_id).startswith("shared:")
+
+
+def extract_shared_id(item_id) -> "int | None":
+    """
+    يستخرج الـ integer ID من "shared:42" → 42.
+    يرجع None لو الصيغة غير صحيحة.
+
+    [A-02] هذا هو التعريف الوحيد — الملفات الأخرى تستورد من هنا.
+    """
+    if is_shared_id(item_id):
+        try:
+            return int(str(item_id).split(":")[1])
+        except Exception:
+            return None
+    return None
 
 
 # ══════════════════════════════════════════════════════════
@@ -253,19 +285,6 @@ def _shared_row_to_item(row, item_type: str) -> dict:
     return base
 
 
-def is_shared_id(item_id) -> bool:
-    return isinstance(item_id, str) and str(item_id).startswith("shared:")
-
-
-def extract_shared_id(item_id) -> int | None:
-    if is_shared_id(item_id):
-        try:
-            return int(str(item_id).split(":")[1])
-        except Exception:
-            return None
-    return None
-
-
 def fetch_item(conn, item_id):
     if is_shared_id(item_id):
         shared_id = extract_shared_id(item_id)
@@ -369,7 +388,7 @@ def delete_item(conn, item_id: int):
 # BOM
 # ══════════════════════════════════════════════════════════
 
-def _resolve_name(conn, child_type: str, child_id: int) -> str | None:
+def _resolve_name(conn, child_type: str, child_id: int) -> "str | None":
     if child_type in ("raw", "semi"):
         row = conn.execute("SELECT name FROM items WHERE id=?", (child_id,)).fetchone()
     elif child_type == "labor_op":
@@ -532,7 +551,7 @@ def cleanup_empty_products_after_orphan_fix(conn, parent_ids: list[int]) -> list
     return deleted
 
 
-def update_item_category(conn, item_id: int, category_id: int | None):
+def update_item_category(conn, item_id: int, category_id: "int | None"):
     conn.execute(
         "UPDATE items SET category_id=? WHERE id=?",
         (category_id, item_id)

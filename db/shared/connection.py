@@ -6,7 +6,7 @@ db/shared/connection.py  (نسخة multi-company)
 الوضع الجديد:
   - كل شركة لها مجلد خاص بملفات DB الخاصة بها
   - company_state يحفظ الشركة النشطة حالياً
-  - الدوال القديمة (get_connection / get_costing_connection ...) 
+  - الدوال القديمة (get_connection / get_accounting_connection ...) 
     مازالت تعمل لكن ترجع connections الشركة النشطة
 
 للتوافق مع الكود القديم:
@@ -22,6 +22,11 @@ db/shared/connection.py  (نسخة multi-company)
 إصلاح 10:
   get_connection("costing") يُصدر DeprecationWarning ليساعد المطورين
   على تحديث الكود بدل الاعتماد على الـ hidden alias.
+
+[T-03] حذف get_costing_connection() — كانت تُصدر DeprecationWarning
+  ولم تكن تُستخدم في أي مكان خارج الملف. الكود القديم الذي يستوردها
+  سيحصل على ImportError واضح يساعد في تحديده وإصلاحه.
+  بديلها: company_state.get_erp_conn() أو get_connection("erp").
 """
 
 import sqlite3
@@ -62,7 +67,6 @@ def get_connection(db: str = "erp") -> sqlite3.Connection:
     ارتباكاً عند الـ debugging. الـ warning يساعد المطورين على
     تحديث الكود تدريجياً.
     """
-    # [إصلاح 10] DeprecationWarning للاسم القديم
     if db == "costing":
         warnings.warn(
             "get_connection('costing') مُهمَل — "
@@ -72,7 +76,6 @@ def get_connection(db: str = "erp") -> sqlite3.Connection:
         )
         db = "erp"
 
-    # mapping للتوافق مع أي أسماء أخرى غير متوقعة
     _alias = {
         "erp":        "erp",
         "accounting": "accounting",
@@ -94,21 +97,8 @@ def get_connection(db: str = "erp") -> sqlite3.Connection:
 
 # ── دوال اختصار للتوافق مع الكود القديم ─────────────────
 
-def get_costing_connection() -> sqlite3.Connection:
-    """
-    اختصار → erp.db للشركة النشطة.
-
-    .. deprecated::
-        استخدم company_state.get_erp_conn() أو get_connection("erp") مباشرة.
-    """
-    warnings.warn(
-        "get_costing_connection() مُهمَل — "
-        "استخدم company_state.get_erp_conn() مباشرة.",
-        DeprecationWarning,
-        stacklevel=2,
-    )
-    return get_connection("erp")
-
+# [T-03] get_costing_connection() محذوفة — استخدم company_state.get_erp_conn() مباشرة.
+# الكود الذي يستوردها سيحصل على ImportError يساعد في تحديده.
 
 def get_accounting_connection() -> sqlite3.Connection:
     """اختصار → accounting.db للشركة النشطة."""
@@ -132,7 +122,6 @@ def get_linked_connection(primary: str = "inventory",
     if not company_state.is_ready:
         raise RuntimeError("لم يتم تحديد شركة نشطة.")
 
-    # normalize اسم الـ DB
     primary_name = "erp" if primary in ("costing", "erp") else primary
     path = get_company_db_path(company_state.company_id, primary_name)
     conn = _make_conn(path)

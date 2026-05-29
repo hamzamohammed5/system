@@ -8,13 +8,13 @@ db/companies/companies_repo.py
   - fetch_all_shared_items و fetch_shared_items_for_company تُحوَّل لـ shared_items_repo
   - كل central connections تُفتح وتُغلق بشكل صحيح في try/finally
 
-[تحسين 47]:
-  - الدوال الـ legacy اللي تُفوَّض لـ shared_items_repo تعطي DeprecationWarning
-    ليسهل إزالتها تدريجياً وتوجيه الـ imports للمصدر الصح.
+[T-01] حذف الدوال المهملة (Deprecated):
+  - fetch_all_shared_items     → محذوفة، استورد من db.companies.shared_items_repo
+  - fetch_shared_items_for_company → محذوفة، استورد من db.companies.shared_items_repo
+  الكود القديم الذي يستدعيهما سيحصل على ImportError واضح بدل DeprecationWarning صامت.
 """
 
 import os
-import warnings
 from db.companies.companies_schema import (
     get_central_connection,
     get_company_db_path,
@@ -156,41 +156,8 @@ def _init_company_databases(company_id: int):
 
 
 # ══════════════════════════════════════════════════════════
-# العناصر المشتركة — Legacy (مع DeprecationWarning)
+# العناصر المشتركة — دوال فعلية (غير مهملة)
 # ══════════════════════════════════════════════════════════
-# [تحسين 47] هذه الدوال موجودة للتوافق مع الكود القديم فقط.
-# استخدم db.companies.shared_items_repo مباشرة في الكود الجديد.
-# ستُزال هذه الدوال في إصدار مستقبلي.
-
-def fetch_all_shared_items(conn, shared_type: str = None) -> list:
-    """
-    .. deprecated::
-        استخدم ``db.companies.shared_items_repo.fetch_all_shared_items`` مباشرة.
-    """
-    warnings.warn(
-        "fetch_all_shared_items في companies_repo مُهمَلة — "
-        "استورد من db.companies.shared_items_repo مباشرة.",
-        DeprecationWarning,
-        stacklevel=2,
-    )
-    from db.companies.shared_items_repo import fetch_all_shared_items as _fetch
-    return _fetch(conn, shared_type)
-
-
-def fetch_shared_items_for_company(conn, company_id: int) -> list:
-    """
-    .. deprecated::
-        استخدم ``db.companies.shared_items_repo.fetch_shared_items_for_company`` مباشرة.
-    """
-    warnings.warn(
-        "fetch_shared_items_for_company في companies_repo مُهمَلة — "
-        "استورد من db.companies.shared_items_repo مباشرة.",
-        DeprecationWarning,
-        stacklevel=2,
-    )
-    from db.companies.shared_items_repo import fetch_shared_items_for_company as _fetch
-    return _fetch(conn, company_id)
-
 
 def publish_item_as_shared(central_conn,
                             source_company_id: int,
@@ -206,11 +173,9 @@ def publish_item_as_shared(central_conn,
         fetch_all_shared_items, insert_shared_item, link_company, _default_data
     )
 
-    # تحقق من وجود عنصر بنفس الاسم والنوع
     existing_list = fetch_all_shared_items(central_conn, shared_type)
     for ex in existing_list:
         if ex["name"].strip().lower() == name.strip().lower():
-            # ربط الشركة بالعنصر الموجود
             link_company(central_conn, ex["id"], source_company_id)
             return ex["id"]
 
@@ -258,3 +223,16 @@ def sync_shared_item(central_conn,
     هذه الدالة أصبحت no-op للتوافق مع الكود القديم.
     """
     pass
+
+
+# ══════════════════════════════════════════════════════════
+# [T-01] الدوال المهملة محذوفة — ارجع لـ shared_items_repo مباشرة
+# ══════════════════════════════════════════════════════════
+#
+# الدوال التالية كانت موجودة هنا مع DeprecationWarning وتم حذفها:
+#   - fetch_all_shared_items()        → استورد من db.companies.shared_items_repo
+#   - fetch_shared_items_for_company() → استورد من db.companies.shared_items_repo
+#
+# مثال للكود الجديد:
+#   from db.companies.shared_items_repo import fetch_all_shared_items
+#   from db.companies.shared_items_repo import fetch_shared_items_for_company
