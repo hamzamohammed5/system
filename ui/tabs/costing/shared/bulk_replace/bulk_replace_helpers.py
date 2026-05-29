@@ -1,7 +1,7 @@
 """
-ui/widgets/costing/bulk_replace/bulk_replace_helpers.py
+ui/tabs/costing/shared/bulk_replace/bulk_replace_helpers.py
 ====================================
-دوال مساعدة وـ _ProductRow لنافذة الاستبدال الشامل.
+دوال مساعدة وـ ProductRow لنافذة الاستبدال الشامل.
 """
 
 from PyQt5.QtWidgets import (
@@ -10,9 +10,11 @@ from PyQt5.QtWidgets import (
 )
 from PyQt5.QtCore import Qt
 
-from db.shared.items_repo      import fetch_items_by_type, fetch_item, fetch_bom
+from db.shared.items_repo       import fetch_items_by_type
 from db.costing.operations_repo import fetch_all_labor_ops, fetch_all_machine_ops
-from models.costing     import calc_cost
+from models.costing             import calc_cost
+from ui.app_settings            import _C
+from ui.widgets.core.i18n       import tr
 
 
 # ══════════════════════════════════════════════════════════
@@ -91,7 +93,7 @@ def fetch_affected_products(conn, child_type: str, child_id: int) -> list:
 
 
 # ══════════════════════════════════════════════════════════
-# _ProductRow — صف منتج واحد في اللوحة
+# ProductRow — صف منتج واحد في اللوحة
 # ══════════════════════════════════════════════════════════
 
 class ProductRow(QFrame):
@@ -135,57 +137,59 @@ class ProductRow(QFrame):
         info.setSpacing(2)
         self.lbl_name = QLabel(self._product["name"])
         self.lbl_name.setStyleSheet(
-            "font-weight:bold; font-size:12px; color:#212121;"
+            f"font-weight:bold; font-size:12px; color:{_C['text_primary']};"
         )
         lbl_cat = QLabel(
             f"🏷 {self._product['category_name']}  "
-            f"│  💰 {self._product['cost']:.2f} جنيه"
+            f"│  💰 {self._product['cost']:.2f} {tr('currency_abbr')}"
         )
-        lbl_cat.setStyleSheet("color:#757575; font-size:10px;")
+        lbl_cat.setStyleSheet(f"color:{_C['text_sec']}; font-size:10px;")
         info.addWidget(self.lbl_name)
         info.addWidget(lbl_cat)
         lay.addLayout(info, stretch=1)
 
         # ── الكمية الحالية ──
-        lay.addWidget(QLabel("الكمية:"))
+        lay.addWidget(QLabel(f"{tr('qty')}:"))
         self.sp_qty = QDoubleSpinBox()
         self.sp_qty.setRange(0.0001, 999999)
         self.sp_qty.setDecimals(4)
         self.sp_qty.setValue(self._product["qty"])
         self.sp_qty.setFixedWidth(90)
         self.sp_qty.setMinimumHeight(28)
-        self.sp_qty.setToolTip("الكمية المستخدمة من هذا العنصر في هذا المنتج")
+        self.sp_qty.setToolTip(
+            f"{tr('qty')} — {tr('element')}"
+        )
         lay.addWidget(self.sp_qty)
 
     def _apply_style(self, checked: bool):
         if checked:
-            self.setStyleSheet("""
-                QFrame {
-                    background: #ffffff;
-                    border: 1px solid #e0e0e0;
+            self.setStyleSheet(f"""
+                QFrame {{
+                    background: {_C['bg_input']};
+                    border: 1px solid {_C['border']};
                     border-radius: 6px;
                     margin: 1px 0;
-                }
-                QFrame:hover {
-                    border-color: #90caf9;
-                    background: #f8fbff;
-                }
+                }}
+                QFrame:hover {{
+                    border-color: {_C['border_focus']};
+                    background: {_C['accent_light']};
+                }}
             """)
         else:
-            self.setStyleSheet("""
-                QFrame {
-                    background: #fafafa;
-                    border: 1px solid #f0f0f0;
+            self.setStyleSheet(f"""
+                QFrame {{
+                    background: {_C['bg_surface']};
+                    border: 1px solid {_C['border']};
                     border-radius: 6px;
                     margin: 1px 0;
-                }
+                }}
             """)
 
     def _on_toggle(self, checked: bool):
         self.sp_qty.setEnabled(checked)
         self._apply_style(checked)
         if hasattr(self, 'lbl_name'):
-            color = "#212121" if checked else "#bdbdbd"
+            color = _C['text_primary'] if checked else _C['text_disabled']
             self.lbl_name.setStyleSheet(
                 f"font-weight:bold; font-size:12px; color:{color};"
             )

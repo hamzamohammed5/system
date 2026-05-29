@@ -12,7 +12,7 @@ from PyQt5.QtWidgets import (
 from PyQt5.QtCore import Qt
 from PyQt5.QtGui  import QColor, QFont
 
-from ui.app_settings import _C
+from ui.app_settings      import _C
 from ui.widgets.core.i18n import tr
 
 

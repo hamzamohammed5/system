@@ -7,13 +7,13 @@ _ProductsPanel — لوحة عرض المنتجات المتأثرة في ناف
 from PyQt5.QtWidgets import (
     QWidget, QVBoxLayout, QHBoxLayout,
     QLabel, QComboBox, QPushButton,
-    QScrollArea, QFrame, QMessageBox,
+    QScrollArea, QFrame,
 )
 from PyQt5.QtCore import Qt
 
-from ui.app_settings import _C
-from ui.widgets.core.i18n import tr
-from .bulk_replace_helpers import fetch_affected_products, ProductRow
+from ui.app_settings        import _C
+from ui.widgets.core.i18n   import tr
+from .bulk_replace_helpers  import fetch_affected_products, ProductRow
 
 
 class _ProductsPanel(QWidget):
@@ -105,9 +105,7 @@ class _ProductsPanel(QWidget):
         lay.setSpacing(8)
 
         lbl = QLabel(f"{tr('quick_select')}:")
-        lbl.setStyleSheet(
-            f"font-size:11px; color:{_C['text_sec']};"
-        )
+        lbl.setStyleSheet(f"font-size:11px; color:{_C['text_sec']};")
 
         _style = (
             f"QPushButton {{ background:{_C['bg_surface']}; border:1px solid {_C['border']};"

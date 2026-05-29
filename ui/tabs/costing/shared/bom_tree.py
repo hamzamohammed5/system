@@ -348,3 +348,12 @@ class BomTree(QWidget):
         child_type, child_id = data
         delete_bom_row(self._conn, self._pid, child_type, child_id)
         self._refresh()
+
+
+def _get_tr_keys() -> set:
+    """يرجع مجموعة مفاتيح الترجمة المتوفرة — للتحقق الآمن."""
+    try:
+        from ui.widgets.core.i18n import _TRANSLATIONS
+        return set(_TRANSLATIONS.keys())
+    except Exception:
+        return set()
