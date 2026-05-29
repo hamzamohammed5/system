@@ -1,5 +1,5 @@
 File Tree Snapshot
-Generated : 2026-05-29 08:21:14
+Generated : 2026-05-29 08:45:23
 Source    : D:\My Workspace\Hg\Alhabaar\accountant\system
 Extensions: .py
 ────────────────────────────────────────────────────────────
@@ -53,6 +53,7 @@ system/
 │       ├── json_utils.py
 │       ├── settings_repo.py
 │       └── shared_items_bridge.py
+├── files_reference/
 ├── models/
 │   ├── costing.py
 │   ├── costing_base.py
