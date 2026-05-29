@@ -9,7 +9,10 @@
 | القسم | الملفات |
 |-------|---------|
 | [Models — الحسابات](#models--الحسابات) | `costing_base`, `costing_ops`, `costing` |
-| [Services](#services) | `item_service`, `category_service`, `product_service`, `order_service`, `journal_service` |
+| [Services — مشترك](#services--مشترك) | `item_service`, `category_service` |
+| [Services — التكلفة](#services--التكلفة) | `product_service`, `labor_op_service`, `machine_service`, `bulk_replace_service` |
+| [Services — الطلبات](#services--الطلبات) | `order_service` |
+| [Services — المحاسبة](#services--المحاسبة) | `journal_service` |
 
 ---
 
@@ -76,7 +79,7 @@ calc_cost_breakdown(conn, item_id, central_conn=None) -> dict
 
 ---
 
-## Services
+## Services — مشترك
 
 ### `services/shared/item_service.py`
 
@@ -93,6 +96,9 @@ svc.update(item_id, name, price, category_id=None, total_qty=None)
 svc.get_delete_preview(item_id) -> DeletePreview | None
 # DeletePreview.usage_count — عدد المنتجات التي تستخدمه في BOM
 # DeletePreview.can_delete() -> bool
+
+svc.get_usage_count(item_id) -> int
+# يشمل كل child_types: raw, semi, labor_op, machine_op
 
 svc.delete(item_id) -> bool  # يرفض لو مستخدم في BOM
 svc.force_delete(item_id)    # يحذف حتى لو مستخدم
@@ -121,6 +127,8 @@ svc.delete_cascade(cat_id) -> int  # يرجع عدد التصنيفات المح
 
 ---
 
+## Services — التكلفة
+
 ### `services/costing/product_service.py`
 
 ```python
@@ -141,13 +149,111 @@ svc.delete(product_id)
 ```
 
 **`BomComponent`:** `child_type, child_id, qty, waste_pct=0, variant_id=None, machine_op_row_id=None`
+- `.to_tuple() -> tuple` — `(child_type, child_id, qty, waste_pct, variant_id, machine_op_row_id)`
 
 ---
+
+### `services/costing/labor_op_service.py`
+
+```python
+LaborOpService(conn)
+
+svc.list() -> list[LaborOpResult]
+svc.get(op_id) -> LaborOpResult | None
+
+svc.add(name, minutes, category_id=None) -> int
+svc.update(op_id, name, minutes, category_id=None)
+svc.delete(op_id)
+
+svc.calc_cost(op_id) -> float
+# يستدعي models.costing_ops.calc_labor_op_cost داخلياً
+```
+
+**`LaborOpResult`:** `id, name, minutes, category_id, category_name`
+- `.from_row(row) -> LaborOpResult` — classmethod يقبل dict أو sqlite3.Row
+
+---
+
+### `services/costing/machine_service.py`
+
+```python
+MachineService(conn)
+
+svc.list() -> list[MachineResult]
+svc.get(machine_id) -> MachineResult | None
+
+svc.add(name, rate_per_hour, rate_per_unit, category_id=None) -> int
+svc.update(machine_id, name, rate_per_hour, rate_per_unit, category_id=None)
+svc.delete(machine_id)
+```
+
+**`MachineResult`:** `id, name, rate_per_hour, rate_per_unit, category_id, category_name`
+- `.from_row(row) -> MachineResult` — classmethod يقبل dict أو sqlite3.Row
+- `.mode -> str` — property: `"time"` لو `rate_per_hour > 0`، وإلا `"unit"`
+
+```python
+MachineOpService(conn)
+
+svc.list() -> list[MachineOpResult]
+svc.get(op_id) -> MachineOpResult | None
+
+svc.add(machine_id, name, mode, value, category_id=None) -> int
+# mode: "time" | "unit"
+svc.update(op_id, machine_id, name, mode, value, category_id=None)
+svc.delete(op_id)
+
+svc.calc_cost(op_id, row_id=None) -> float
+# row_id محدد: تكلفة صف واحد | row_id=None: مجموع كل الصفوف
+# يستدعي models.costing_ops.calc_machine_op_cost داخلياً
+```
+
+**`MachineOpResult`:** `id, name, machine_id, machine_name, mode, value, category_id, category_name`
+- `.from_row(row) -> MachineOpResult` — classmethod يقبل dict أو sqlite3.Row
+
+---
+
+### `services/costing/bulk_replace_service.py`
+
+```python
+BulkReplaceService(conn)
+
+svc.apply(
+    child_type:   str,
+    old_child_id: int,
+    new_child_id: int | None,
+    product_rows: list[tuple[int, float]],  # [(product_id, qty), ...]
+    uniform_qty:  float | None = None,
+    do_replace:   bool = True,
+    do_qty:       bool = True,
+) -> tuple[int, list[str]]
+# يرجع (عدد_المحدَّثين, قائمة_أخطاء)
+# uniform_qty=None → يستخدم qty من product_rows لكل منتج
+# do_replace=False → يبقي child_id كما هو (تعديل qty فقط)
+# do_qty=False     → يبقي qty كما هو (استبدال العنصر فقط)
+
+svc.get_element_name(child_type, child_id) -> str
+# يرجع اسم العنصر من الجدول المناسب (items / labor_ops / machine_ops)
+
+svc.fetch_candidates(child_type, exclude_id) -> list[tuple[int, str, str]]
+# عناصر بديلة من نفس النوع بدون العنصر الحالي
+# list of (id, name, category_name)
+
+svc.fetch_affected_products(child_type, child_id) -> list[dict]
+# المنتجات التي تستخدم العنصر في BOM
+# كل dict: {id, name, type, qty, category_id, category_name, cost}
+```
+
+**ملاحظة:** `fetch_candidates` و`fetch_affected_products` يعتمدان داخلياً على `ui/tabs/costing/shared/bulk_replace/bulk_replace_helpers.py`.
+
+---
+
+## Services — الطلبات
 
 ### `services/orders/order_service.py`
 
 ```python
 OrderService(conn, erp_conn=None)
+# erp_conn اختياري — لربط المنتجات وإثراء OrderItem تلقائياً
 
 svc.create(customer_id, items: list[OrderItem], notes="") -> int
 svc.update(order_id, customer_id, items, notes="")
@@ -169,6 +275,12 @@ svc.get_customer_summary(customer_id) -> OrderSummary
 - `.total() -> float`
 - `.resolved_name() -> str`
 
+**دالة مساعدة:**
+```python
+resolve_product_info(erp_conn, product_id) -> dict | None
+# {"name": str, "price": float} أو None لو غير موجود
+```
+
 **الانتقالات المسموح بها:**
 
 | من | إلى |
@@ -182,6 +294,8 @@ svc.get_customer_summary(customer_id) -> OrderSummary
 | `on_hold` | pending, confirmed, in_progress |
 
 ---
+
+## Services — المحاسبة
 
 ### `services/accounting/journal_service.py`
 
@@ -214,7 +328,9 @@ svc.delete(entry_id) -> bool
 
 ---
 
-## مثال: إنشاء قيد محاسبي
+## أمثلة
+
+### إنشاء قيد محاسبي
 
 ```python
 from services.accounting.journal_service import JournalService, JournalLine
@@ -230,6 +346,35 @@ result = svc.post_entry(
 # result.entry_id, result.total_dr, result.total_cr
 ```
 
+### استبدال شامل في BOM
+
+```python
+from services.costing.bulk_replace_service import BulkReplaceService
+
+svc = BulkReplaceService(conn)
+affected = svc.fetch_affected_products("raw", old_item_id=5)
+product_rows = [(p["id"], p["qty"]) for p in affected]
+
+updated, errors = svc.apply(
+    child_type="raw",
+    old_child_id=5,
+    new_child_id=7,
+    product_rows=product_rows,
+)
+# updated: عدد المنتجات المحدَّثة | errors: رسائل الفشل
+```
+
+### حساب تكلفة عملية عمالة
+
+```python
+from services.costing.labor_op_service import LaborOpService
+
+svc = LaborOpService(conn)
+cost = svc.calc_cost(op_id=3)
+op   = svc.get(op_id=3)
+# op.minutes, op.category_name
+```
+
 ---
 
 ## ملاحظات مهمة
@@ -239,3 +384,5 @@ result = svc.post_entry(
 **2. `_C` dictionary:** لا تُعدّل مباشرة — استخدم `apply_theme(colors)` فقط.
 
 **3. `tr()` function:** تقبل مفاتيح الترجمة أو نصوص عربية مباشرة — تحول `"حفظ"` تلقائياً لـ `"save"`.
+
+**4. `BulkReplaceService.fetch_candidates`:** يعتمد على `bulk_replace_helpers` في الـ UI layer — انتبه لهذا الـ coupling عند نقل الـ service لبيئة بدون UI.
