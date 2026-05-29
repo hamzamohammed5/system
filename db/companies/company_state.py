@@ -5,16 +5,38 @@ Singleton يحفظ الشركة النشطة حالياً.
 
 إصلاح (v6):
   - إصلاح 4: ProtectedConnection._get_raw() fast-path بدون SELECT 1
-    بمجرد أن يكون _raw موجود يُعاد مباشرة — الـ reconnect يحدث فقط
-    عند فشل أول query حقيقية (SQLite يرمي OperationalError)
   - إصلاح 12: set_active() يُبطل AppState cache تلقائياً بعد تغيير الشركة
-  - validate() تبقى للتحقق الصريح من المسار (تُستدعى من set_active فقط)
+  - validate() تبقى للتحقق الصريح من المسار
 
 تحسين 42:
-  - _get_conn() لا يستدعي validate() (التي تنفذ PRAGMA) في كل access.
-  - بدلاً من ذلك يقارن _path المخزون على ProtectedConnection مباشرة.
-  - validate() أصبحت تُستدعى فقط عند الضرورة (تغيير الشركة).
-  - هذا يقلل overhead من O(PRAGMA + string compare) إلى O(string compare).
+  - _get_conn() لا يستدعي validate() في كل access.
+  - path_matches() بدل PRAGMA في hot path.
+
+[C-03] إصلاح race condition في set_active() / AppState.invalidate():
+  المشكلة:
+    استدعاء AppState.invalidate() يحدث بعد `with self._state_lock` مما
+    يسبب نافذة زمنية قصيرة: الشركة تغيّرت لكن AppState cache لم يُبطَل بعد.
+    في بيئة multi-threaded، thread آخر يقرأ AppState في هذه النافذة
+    قد يحصل على بيانات الشركة القديمة.
+
+  الحل المطبَّق:
+    إضافة threading.Event (_invalidate_pending) كـ signal للـ threads الأخرى:
+    1. داخل الـ lock: نرفع الـ event (set_active يحدث الآن)
+    2. خارج الـ lock: ننادي AppState.invalidate()
+    3. بعد invalidate: نُنزل الـ event
+
+    AppState.get_*() تتحقق من الـ event قبل القراءة وتنتظر لو كان مرفوعاً.
+
+    ملاحظة عملية:
+      التطبيق single-threaded (PyQt main thread) في الحالة الطبيعية.
+      الـ race condition تظهر فقط لو:
+        - استُخدمت QThreads مع database access مباشر (غير موصى به)
+        - أو concurrent workers يقرأون AppState
+      في كلا الحالتين الـ Event يحل المشكلة بدون deadlock.
+
+    لاستخدام الـ guard في AppState:
+      from db.companies.company_state import company_state
+      company_state.wait_for_invalidate()  # ينتظر انتهاء الـ set_active
 """
 
 import sqlite3
@@ -29,7 +51,7 @@ class ProtectedConnection:
     - منع الإغلاق العرضي (close() = no-op)
     - إعادة الاتصال التلقائي الآمن (thread-safe) عند الحاجة
     - الإغلاق الحقيقي المؤقت فقط عبر real_close() مع السماح بالـ reconnect
-    - validate() للتحقق من صلاحية الـ connection (يُستدعى من set_active فقط)
+    - validate() للتحقق من صلاحية الـ connection
 
     [تحسين 42]: _path محفوظ كـ attribute — يُقرأ مباشرة دون PRAGMA في hot path.
     """
@@ -75,9 +97,6 @@ class ProtectedConnection:
                 )
 
     def _reconnect_after_error(self):
-        """
-        يُستدعى داخلياً عند فشل query — يُعيد فتح الـ connection.
-        """
         lock = object.__getattribute__(self, '_lock')
         with lock:
             raw = object.__getattribute__(self, '_raw')
@@ -98,8 +117,6 @@ class ProtectedConnection:
     def path_matches(self, expected_path: str) -> bool:
         """
         [تحسين 42] يقارن المسار المخزون بالمسار المتوقع — بدون PRAGMA.
-        يُستدعى من _get_conn() في hot path بدل validate().
-        مقارنة string بسيطة: O(1) بدل PRAGMA + I/O.
         """
         stored_path = object.__getattribute__(self, '_path')
         return (os.path.normcase(os.path.realpath(stored_path)) ==
@@ -107,8 +124,8 @@ class ProtectedConnection:
 
     def validate(self, expected_path: str) -> bool:
         """
-        يتحقق أن الـ connection فعلاً مفتوح على المسار المطلوب عبر PRAGMA.
-        [تحسين 42] لا يُستدعى في hot path — يُستخدم للتحقق الصريح فقط.
+        يتحقق أن الـ connection مفتوح على المسار المطلوب عبر PRAGMA.
+        [تحسين 42] لا يُستدعى في hot path.
         """
         raw = object.__getattribute__(self, '_raw')
         if raw is None:
@@ -179,9 +196,6 @@ class ProtectedConnection:
         pass
 
     def real_close(self):
-        """
-        يُغلق الـ raw connection الحالي لكن يسمح بالـ reconnect لاحقاً.
-        """
         lock = object.__getattribute__(self, '_lock')
         with lock:
             raw = object.__getattribute__(self, '_raw')
@@ -206,7 +220,22 @@ class ProtectedConnection:
 
 
 class CompanyState:
-    """يحفظ حالة الشركة النشطة ويوفر connections لقواعد بياناتها."""
+    """
+    يحفظ حالة الشركة النشطة ويوفر connections لقواعد بياناتها.
+
+    [C-03] Thread Safety في set_active():
+      set_active() تُغيِّر الشركة ثم تستدعي AppState.invalidate()
+      خارج الـ lock. هذا يترك نافذة زمنية قصيرة بين تغيير الشركة
+      وإبطال الـ cache.
+
+      للتعامل مع هذا:
+        1. _invalidate_pending: threading.Event يرتفع لحظة بدء الـ transition
+        2. AppState يتحقق من wait_for_invalidate() قبل القراءة
+        3. الـ Event ينزل بعد اكتمال AppState.invalidate()
+
+      في التطبيقات single-threaded (PyQt main thread فقط) هذا لا يُشكّل
+      مشكلة عملية — لكن الـ guard يحمي عند استخدام QThread مع DB access.
+    """
 
     def __init__(self):
         self._company_id    : int | None = None
@@ -214,6 +243,11 @@ class CompanyState:
         self._company_color : str        = "#1565c0"
         self._connections   : dict       = {}
         self._state_lock                 = threading.Lock()
+
+        # [C-03] Event للتنسيق بين set_active وقراء AppState
+        # مرفوع (set) = جارٍ تحديث الشركة / الـ cache لم يُبطَل بعد
+        # منزول (clear) = الحالة مستقرة ويمكن القراءة
+        self._invalidate_pending         = threading.Event()
 
     @property
     def company_id(self) -> int | None:
@@ -231,19 +265,48 @@ class CompanyState:
     def is_ready(self) -> bool:
         return self._company_id is not None
 
+    def wait_for_invalidate(self, timeout: float = 1.0):
+        """
+        [C-03] ينتظر انتهاء عملية تغيير الشركة لو كانت جارية.
+
+        يُستدعى من AppState.get_*() قبل القراءة لضمان:
+          - الشركة انتهى تغييرها
+          - AppState cache أُبطِل بالكامل
+
+        timeout=1.0: لو الـ invalidate لم ينتهِ خلال ثانية
+        نكمل بدون انتظار (fail-safe).
+
+        مثال في AppState:
+          def get_font_size(cls) -> float:
+              company_state.wait_for_invalidate()
+              if cls._font_size is None:
+                  ...
+        """
+        if self._invalidate_pending.is_set():
+            self._invalidate_pending.wait(timeout=timeout)
+
     def set_active(self, company_id: int, name: str = "", color: str = "#1565c0"):
         """
         تعيين الشركة النشطة.
 
-        لو الشركة جديدة → يمسح connections القديمة فوراً.
+        [C-03] ترتيب العمليات لتقليل نافذة race condition:
+          1. داخل الـ lock: رفع _invalidate_pending + تغيير الشركة
+          2. خارج الـ lock: AppState.invalidate()
+          3. بعد invalidate: إنزال _invalidate_pending
+
+        هذا يضمن أن أي thread يقرأ AppState بعد رفع الـ event
+        سيرى الـ pending وينتظر أو يستخدم القيمة الجديدة.
+
         لو نفس الشركة → يحدث الاسم واللون فقط بدون مسح connections.
-        يُبطل AppState cache بعد تغيير الشركة تلقائياً.
         """
         with self._state_lock:
             if self._company_id == company_id:
                 self._company_name  = name
                 self._company_color = color or "#1565c0"
                 return
+
+            # [C-03] أشعر الـ threads الأخرى أن الانتقال بدأ
+            self._invalidate_pending.set()
 
             self._close_raw_connections_unsafe()
             self._connections.clear()
@@ -258,6 +321,9 @@ class CompanyState:
             AppState.invalidate()
         except (ImportError, Exception):
             pass
+        finally:
+            # [C-03] أعلن انتهاء الانتقال — القراء يمكنهم المتابعة
+            self._invalidate_pending.clear()
 
     def clear(self):
         with self._state_lock:
@@ -265,6 +331,7 @@ class CompanyState:
             self._connections.clear()
             self._company_id   = None
             self._company_name = ""
+        self._invalidate_pending.clear()
 
     def get_erp_conn(self) -> ProtectedConnection:
         return self._get_conn("erp")
@@ -284,11 +351,6 @@ class CompanyState:
     def _get_conn(self, db_name: str) -> ProtectedConnection:
         """
         [تحسين 42] يستخدم path_matches() بدل validate() في hot path.
-
-        path_matches() = مقارنة string بسيطة: O(1)
-        validate()     = PRAGMA database_list + I/O: O(PRAGMA)
-
-        الفرق مهم عند استدعاء _get_conn في كل widget access.
         """
         if not self._company_id:
             raise RuntimeError("لم يتم تحديد شركة نشطة بعد")
@@ -298,11 +360,9 @@ class CompanyState:
             expected_path = get_company_db_path(self._company_id, db_name)
 
             if conn is not None:
-                # [تحسين 42] path_matches() بدل validate() — بدون PRAGMA
                 if conn.path_matches(expected_path):
                     return conn
                 else:
-                    # connection قديم لشركة مختلفة — أغلقه وأنشئ جديد
                     try:
                         conn.real_close()
                     except Exception:
@@ -320,22 +380,16 @@ class CompanyState:
             return conn
 
     def refresh_connections(self):
-        """يُغلق كل الـ raw connections — ستُعاد تلقائياً عند الاستخدام."""
         with self._state_lock:
             self._close_raw_connections_unsafe()
 
     def _close_raw_connections_unsafe(self):
-        """
-        يُغلق الـ raw connections فقط بدون حذف الـ ProtectedConnection objects.
-        يُستدعى من داخل كود محمي بـ _state_lock.
-        """
         for conn in list(self._connections.values()):
             try:
                 conn.real_close()
             except Exception:
                 pass
 
-    # للتوافق مع الكود القديم
     def _close_all(self):
         with self._state_lock:
             self._close_raw_connections_unsafe()

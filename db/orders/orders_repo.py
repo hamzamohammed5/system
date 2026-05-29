@@ -7,6 +7,12 @@ db/orders/orders_repo.py
 تحسين 22: insert_order يتحقق من وجود العميل وكونه نشطاً.
 إصلاح 16: _next_order_number تستخدم GLOB بدل LIKE للتحقق من
            الصيغة الرقمية قبل CAST (نفس إصلاح 15 في customers_repo).
+
+[C-04] إصلاح: update_order يدعم تغيير العميل (customer_id اختياري).
+  المشكلة القديمة: update_order لم تقبل customer_id، مما يعني أن
+  أي محاولة لتغيير العميل بعد إنشاء الطلب كانت تُهمَل بصمت.
+  الحل: إضافة customer_id كـ parameter اختياري (None = لا تغيير).
+  التحقق من وجود العميل وكونه نشطاً قبل التحديث.
 """
 
 import datetime
@@ -30,7 +36,6 @@ def _next_order_number(conn) -> str:
     """
     year = datetime.date.today().year
     prefix = f"ORD-{year}-"
-    # نبحث عن أرقام صحيحة فقط: ORD-2025-0001 وليس ORD-2025-abc
     glob_pattern = f"{prefix}[0-9]*"
     row = conn.execute(
         "SELECT MAX(CAST(SUBSTR(order_number, ?) AS INTEGER)) AS mx "
@@ -189,7 +194,67 @@ def update_order(conn, order_id: int,
                  discount: float = 0,
                  paid_amount: float = 0,
                  notes: str = "",
-                 internal_notes: str = ""):
+                 internal_notes: str = "",
+                 customer_id: int = None,
+                 changed_by: str = "system") -> bool:
+    """
+    يُحدِّث بيانات الطلب.
+
+    [C-04] إضافة customer_id اختياري:
+      - None (الافتراضي) → لا يُغيِّر العميل الحالي
+      - قيمة صحيحة → يتحقق من وجود العميل وكونه نشطاً ثم يُغيِّره
+
+    المشكلة القديمة:
+      تغيير العميل لم يكن مدعوماً — أي customer_id يمرره الـ caller
+      كان يُهمَل بصمت بدون خطأ أو تحذير.
+
+    السلوك الجديد:
+      - customer_id=None → لا تغيير في العميل (backward-compatible)
+      - customer_id=X    → تحقق + تحديث العميل
+      - عميل غير موجود  → ValueError
+      - عميل غير نشط   → ValueError
+
+    يُسجَّل تغيير العميل في order_status_log كملاحظة.
+
+    Returns:
+        True لو نجح التحديث، False لو الطلب غير موجود.
+    """
+    # تحقق من وجود الطلب
+    existing = conn.execute(
+        "SELECT id, customer_id FROM orders WHERE id=?", (order_id,)
+    ).fetchone()
+    if not existing:
+        return False
+
+    # [C-04] تحقق من العميل الجديد لو مُحدَّد
+    if customer_id is not None and customer_id != existing["customer_id"]:
+        customer = conn.execute(
+            "SELECT id, is_active, name FROM customers WHERE id=?", (customer_id,)
+        ).fetchone()
+        if not customer:
+            raise ValueError(f"العميل رقم {customer_id} غير موجود")
+        if not customer["is_active"]:
+            raise ValueError(
+                f"العميل رقم {customer_id} غير نشط — لا يمكن تعيينه للطلب"
+            )
+
+        # نُحدِّث العميل ونُسجِّل الملاحظة
+        old_customer = conn.execute(
+            "SELECT name FROM customers WHERE id=?", (existing["customer_id"],)
+        ).fetchone()
+        old_name = old_customer["name"] if old_customer else f"#{existing['customer_id']}"
+        new_name = customer["name"]
+
+        conn.execute(
+            "UPDATE orders SET customer_id=?, updated_at=datetime('now') WHERE id=?",
+            (customer_id, order_id)
+        )
+        _log_status(
+            conn, order_id, None, None,
+            f"تغيير العميل: {old_name} → {new_name}",
+            changed_by
+        )
+
     net_amount = total_amount - discount
     conn.execute("""
         UPDATE orders
@@ -201,6 +266,7 @@ def update_order(conn, order_id: int,
     """, (priority, due_date, total_amount, discount, net_amount,
           paid_amount, notes or "", internal_notes or "", order_id))
     conn.commit()
+    return True
 
 
 def change_order_status(conn, order_id: int,
@@ -285,7 +351,6 @@ def delete_order(conn, order_id: int) -> bool:
         return False
     if row["status"] not in ("pending", "cancelled"):
         return False
-    # [تحسين 21] لا تحذف طلب له مدفوعات
     if row["paid_amount"] and float(row["paid_amount"]) > 0:
         return False
     conn.execute("DELETE FROM orders WHERE id=?", (order_id,))
@@ -401,8 +466,12 @@ def _recalc_order_total(conn, order_id: int):
 # سجل الحالة
 # ══════════════════════════════════════════════════════════
 
-def _log_status(conn, order_id: int, old_status, new_status: str,
+def _log_status(conn, order_id: int, old_status, new_status,
                 notes: str = "", changed_by: str = "system"):
+    """
+    يُسجِّل تغيير حالة أو ملاحظة في سجل الطلب.
+    new_status=None مسموح للملاحظات الإدارية (مثل تغيير العميل).
+    """
     conn.execute("""
         INSERT INTO order_status_log
             (order_id, old_status, new_status, notes, changed_by)

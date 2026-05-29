@@ -3,6 +3,20 @@ db/designs/design_item_categories_repo.py
 ==========================================
 عمليات CRUD لجدول design_item_categories —
 تصنيفات التصميمات المستقلة (منفصلة عن تصنيفات مجموعات المقاسات).
+
+[P-03] تحسين: دمج count_designs_per_category في fetch_all_item_categories.
+  المشكلة القديمة:
+    كل مكان يحتاج عرض التصنيفات مع عدد التصميمات كان يُنفِّذ query-ين:
+      1. fetch_all_item_categories()      → جلب التصنيفات
+      2. count_designs_per_category()     → جلب الأعداد
+    ثم يدمجهما في الـ UI.
+
+  الحل:
+    إضافة fetch_all_item_categories_with_count() تدمج العدد في نفس الـ JOIN.
+    query واحدة بدل اثنتين.
+
+    count_designs_per_category() تبقى للتوافق مع الكود القديم.
+    الكود الجديد يستخدم fetch_all_item_categories_with_count() مباشرة.
 """
 
 
@@ -11,11 +25,53 @@ db/designs/design_item_categories_repo.py
 # ══════════════════════════════════════════════════════════
 
 def fetch_all_item_categories(conn) -> list:
+    """
+    كل التصنيفات مع اسم الأب.
+    للتوافق مع الكود القديم — بدون عدد التصميمات.
+    الكود الجديد يستخدم fetch_all_item_categories_with_count().
+    """
     return conn.execute("""
         SELECT c.id, c.name, c.color, c.parent_id, c.notes,
                p.name AS parent_name
         FROM   design_item_categories c
         LEFT JOIN design_item_categories p ON p.id = c.parent_id
+        ORDER  BY c.parent_id NULLS FIRST, c.name
+    """).fetchall()
+
+
+def fetch_all_item_categories_with_count(conn) -> list:
+    """
+    [P-03] كل التصنيفات مع عدد التصميمات المباشرة في كل تصنيف.
+
+    يدمج count في نفس الـ query بدل استدعاء منفصل لـ count_designs_per_category.
+
+    كل صف يحتوي على:
+      id, name, color, parent_id, notes, parent_name, designs_count
+
+    designs_count = عدد التصميمات المباشرة فقط (غير المتداخلة).
+    لو أردت الأبناء المتداخلين استخدم fetch_item_category_descendants()
+    لكل تصنيف وجمع أعداد أبنائه.
+
+    مثال في الـ UI:
+      # قديم (query-ين):
+      cats   = fetch_all_item_categories(conn)
+      counts = count_designs_per_category(conn)
+      for cat in cats:
+          count = counts.get(cat["id"], 0)
+
+      # جديد (query واحدة):
+      cats = fetch_all_item_categories_with_count(conn)
+      for cat in cats:
+          count = cat["designs_count"]
+    """
+    return conn.execute("""
+        SELECT c.id, c.name, c.color, c.parent_id, c.notes,
+               p.name AS parent_name,
+               COUNT(d.id) AS designs_count
+        FROM   design_item_categories c
+        LEFT JOIN design_item_categories p ON p.id = c.parent_id
+        LEFT JOIN designs d ON d.item_category_id = c.id
+        GROUP  BY c.id, c.name, c.color, c.parent_id, c.notes, p.name
         ORDER  BY c.parent_id NULLS FIRST, c.name
     """).fetchall()
 
@@ -59,7 +115,6 @@ def insert_item_category(conn, name: str, color: str = "#7c3aed",
 
 def update_item_category(conn, cat_id: int, name: str,
                           color: str, parent_id: int = None, notes: str = ""):
-    # منع الحلقات
     if parent_id is not None:
         desc = fetch_item_category_descendants(conn, cat_id)
         if parent_id in desc:
@@ -84,13 +139,18 @@ def delete_item_category(conn, cat_id: int):
 # ══════════════════════════════════════════════════════════
 
 def build_item_category_tree(rows) -> list[dict]:
+    """
+    يبني شجرة من قائمة صفوف مسطحة.
+    يعمل مع fetch_all_item_categories و fetch_all_item_categories_with_count.
+    """
     nodes = {
         r["id"]: {
-            "id":        r["id"],
-            "name":      r["name"],
-            "color":     r["color"],
-            "parent_id": r["parent_id"],
-            "children":  [],
+            "id":             r["id"],
+            "name":           r["name"],
+            "color":          r["color"],
+            "parent_id":      r["parent_id"],
+            "designs_count":  r["designs_count"] if "designs_count" in r.keys() else 0,
+            "children":       [],
         }
         for r in rows
     }
@@ -109,7 +169,12 @@ def build_item_category_tree(rows) -> list[dict]:
 # ══════════════════════════════════════════════════════════
 
 def count_designs_per_category(conn) -> dict[int, int]:
-    """يرجع {category_id: count} للتصميمات المباشرة فقط."""
+    """
+    يرجع {category_id: count} للتصميمات المباشرة فقط.
+
+    للتوافق مع الكود القديم — الكود الجديد يستخدم
+    fetch_all_item_categories_with_count() بدلاً منه.
+    """
     try:
         rows = conn.execute(
             "SELECT item_category_id, COUNT(*) as cnt "

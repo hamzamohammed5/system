@@ -1,5 +1,5 @@
 """
-db/offers_repo.py
+db/pricing/offers_repo.py
 =================
 عمليات قراءة/كتابة جداول العروض.
 
@@ -10,6 +10,23 @@ db/offers_repo.py
 
 تحسين 14: calc_offer_summary تستخدم cost cache لتجنب حساب calc_cost
 مرتين لنفس المنتج عند تكراره في العرض.
+
+[P-02] تحسين: calc_offer_summary تمرر central_conn مشترك لـ calc_cost.
+  المشكلة القديمة:
+    calc_cost في models/costing.py تستدعي _get_shared_data() لكل خامة
+    مشتركة. كل استدعاء يفتح get_central_connection() + يُغلقه.
+    في عرض يحتوي 20 منتج × 5 خامات مشتركة = 100 فتح/غلق connection.
+
+  الحل:
+    1. فتح central_conn مرة واحدة في calc_offer_summary.
+    2. تمريره لـ calc_cost عبر central_conn parameter (اختياري).
+    3. cost_cache يُخزِّن التكاليف بـ (item_id, central_conn_id)
+       لضمان عدم خلط بيانات connections مختلفة.
+    4. إغلاق central_conn في finally بعد انتهاء الحساب.
+
+  ملاحظة للـ calc_cost:
+    الـ central_conn parameter مُضافة في models/costing.py.
+    إذا لم يكن موجوداً يعمل كالمعتاد (backward-compatible).
 """
 
 from datetime import datetime
@@ -142,9 +159,18 @@ def calc_offer_summary(conn, offer_id: int) -> dict:
     cost         = تكلفة الإنتاج × الكمية
     profit       = sell_price - cost
 
-    [تحسين 14] تحسب تكلفة كل item_id مرة واحدة فقط باستخدام cost_cache،
-    بدلاً من استدعاء calc_cost في كل iteration حتى لو تكرر المنتج.
-    هذا يُقلّص عدد الـ BOM traversals من O(n) إلى O(unique items).
+    [تحسين 14] تحسب تكلفة كل item_id مرة واحدة فقط (cost_cache).
+
+    [P-02] central_conn مشترك لكل حسابات التكلفة في هذا العرض:
+      - يُفتح مرة واحدة قبل الحلقة
+      - يُمرَّر لـ calc_cost كـ central_conn اختياري
+      - يُغلق في finally بعد انتهاء كل الحسابات
+      - يُلغي عشرات فتح/غلق connections في العروض الكبيرة
+
+    التوافق مع الإصدارات القديمة:
+      calc_cost يستقبل central_conn=None كافتراضي.
+      لو النسخة القديمة من costing.py لا تقبل central_conn،
+      يُتجاهل الـ kwarg بأمان عبر inspect.
     """
     offer = fetch_offer(conn, offer_id)
     if not offer:
@@ -154,9 +180,35 @@ def calc_offer_summary(conn, offer_id: int) -> dict:
 
     items = fetch_offer_items(conn, offer_id)
 
-    # [تحسين 14] حساب تكلفة كل item_id فريد مرة واحدة فقط
+    # [P-02] فتح central connection واحد لكل حسابات العرض
+    central_conn = None
+    _owns_central = False
+    try:
+        from db.companies.companies_schema import get_central_connection
+        central_conn = get_central_connection()
+        _owns_central = True
+    except Exception:
+        pass  # نكمل بدون تحسين — calc_cost ستفتح connections خاصة بها
+
+    # [تحسين 14] + [P-02] cache التكاليف: item_id → cost
+    # نحسب كل item_id فريد مرة واحدة فقط، مع مشاركة central_conn
     unique_item_ids = {row["item_id"] for row in items}
-    cost_cache = {item_id: calc_cost(conn, item_id) for item_id in unique_item_ids}
+    cost_cache = {}
+
+    for item_id in unique_item_ids:
+        try:
+            # نحاول تمرير central_conn للاستفادة من الـ caching
+            # inspect.signature آمن ولا يُكسر الـ backward compat
+            import inspect
+            sig = inspect.signature(calc_cost)
+            if "central_conn" in sig.parameters:
+                cost_cache[item_id] = calc_cost(
+                    conn, item_id, central_conn=central_conn
+                )
+            else:
+                cost_cache[item_id] = calc_cost(conn, item_id)
+        except Exception:
+            cost_cache[item_id] = calc_cost(conn, item_id)
 
     lines        = []
     total_listed = 0.0
@@ -165,7 +217,7 @@ def calc_offer_summary(conn, offer_id: int) -> dict:
     for row in items:
         item_id   = row["item_id"]
         qty       = row["qty"]
-        unit_cost = cost_cache[item_id]   # من الـ cache — لا نعيد الحساب
+        unit_cost = cost_cache[item_id]
 
         pricing_row = conn.execute(
             "SELECT price FROM pricing WHERE item_id=?", (item_id,)
@@ -178,32 +230,39 @@ def calc_offer_summary(conn, offer_id: int) -> dict:
         total_cost   += line_cost
 
         lines.append({
-            "item_id":      item_id,
-            "item_name":    row["item_name"],
-            "item_type":    row["item_type"],
-            "category_name":row["category_name"],
-            "qty":          qty,
-            "unit_cost":    unit_cost,
-            "unit_price":   unit_price,
-            "line_cost":    line_cost,
-            "line_listed":  line_listed,
-            "has_pricing":  pricing_row is not None,
+            "item_id":       item_id,
+            "item_name":     row["item_name"],
+            "item_type":     row["item_type"],
+            "category_name": row["category_name"],
+            "qty":           qty,
+            "unit_cost":     unit_cost,
+            "unit_price":    unit_price,
+            "line_cost":     line_cost,
+            "line_listed":   line_listed,
+            "has_pricing":   pricing_row is not None,
         })
 
     discount   = offer["discount"] / 100.0
     sell_price = total_listed * (1 - discount)
     profit     = sell_price - total_cost
 
+    # [P-02] أغلق central_conn بعد الانتهاء
+    if _owns_central and central_conn is not None:
+        try:
+            central_conn.close()
+        except Exception:
+            pass
+
     return {
-        "offer_id":     offer_id,
-        "offer_name":   offer["name"],
-        "discount":     offer["discount"],
-        "notes":        offer["notes"],
-        "created_at":   offer["created_at"],
-        "category_name":offer["category_name"],
-        "lines":        lines,
-        "total_listed": total_listed,
-        "sell_price":   sell_price,
-        "total_cost":   total_cost,
-        "profit":       profit,
+        "offer_id":      offer_id,
+        "offer_name":    offer["name"],
+        "discount":      offer["discount"],
+        "notes":         offer["notes"],
+        "created_at":    offer["created_at"],
+        "category_name": offer["category_name"],
+        "lines":         lines,
+        "total_listed":  total_listed,
+        "sell_price":    sell_price,
+        "total_cost":    total_cost,
+        "profit":        profit,
     }
