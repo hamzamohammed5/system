@@ -8,6 +8,14 @@ Facade يُعيد تصدير الدوال الأساسية ويضيف calc_cost 
   - بياناتها في companies.db مباشرة
   - is_shared_id() تتحقق من الـ string prefix
   - الحسابات تقرأ من companies.db دون نسخ محلية
+
+[C-01 / E-01] إضافة calc_product_cost(conn, product_id, scenario_id=None)
+  - يدعم scenario_id محدد أو يرجع للـ default
+  - يرجع (total_cost, breakdown) كـ tuple
+  - يُستخدم من ProductService.calculate_cost
+
+[P-02] _get_shared_data يستخدم _get_central_conn_cached من items_repo
+  بدل فتح/غلق central connection في كل استدعاء.
 """
 
 from models.costing_base import (
@@ -19,7 +27,13 @@ from models.costing_ops import (
     calc_labor_op_cost,
     calc_machine_op_cost,
 )
-from db.shared.items_repo import fetch_item, fetch_bom, is_shared_id, extract_shared_id
+from db.shared.items_repo import (
+    fetch_item,
+    fetch_bom,
+    is_shared_id,
+    extract_shared_id,
+    _get_central_conn_cached,   # [P-02] cached connection بدل فتح/غلق متكرر
+)
 
 
 def _get_variant_id(row) -> int | None:
@@ -51,19 +65,23 @@ def _raw_cost_with_variant(conn, item_row, variant_id: int | None) -> float:
 # ══════════════════════════════════════════════════════════
 
 def _get_shared_data(shared_item_id: int) -> dict:
-    """يجيب بيانات عنصر مشترك من companies.db."""
+    """
+    يجيب بيانات عنصر مشترك من companies.db.
+
+    [P-02] يستخدم _get_central_conn_cached() بدل get_central_connection()
+    لتجنب فتح/غلق connection في كل استدعاء.
+    في العروض والمنتجات المعقدة، قد يُستدعى هذا عشرات المرات.
+    """
     try:
-        import json
-        from db.companies.companies_schema import get_central_connection
-        central = get_central_connection()
+        from db.shared.json_utils import decode_json
+        central = _get_central_conn_cached()
         row = central.execute(
             "SELECT shared_type, data FROM shared_items WHERE id=?",
             (shared_item_id,)
         ).fetchone()
-        central.close()
         if not row:
             return {}
-        data = json.loads(row["data"]) if row["data"] else {}
+        data = decode_json(row["data"])
         data["_shared_type"] = row["shared_type"]
         return data
     except Exception:
@@ -106,13 +124,63 @@ def _shared_machine_op_cost(shared_item_id: int) -> float:
 
 
 # ══════════════════════════════════════════════════════════
-# جلب BOM من الـ default scenario مع machine_op_row_id
+# جلب BOM — بدعم scenario_id صريح أو الـ default
 # ══════════════════════════════════════════════════════════
+
+def _col_exists(conn, table: str, col: str) -> bool:
+    try:
+        rows = conn.execute(f"PRAGMA table_info({table})").fetchall()
+        return any(r["name"] == col for r in rows)
+    except Exception:
+        return False
+
+
+def _fetch_bom_for_scenario_id(conn, scenario_id: int) -> list:
+    """
+    يجيب BOM من scenario_id صريح.
+    يتعامل مع وجود/غياب أعمدة variant_id و machine_op_row_id.
+    """
+    has_row_id  = _col_exists(conn, "bom", "machine_op_row_id")
+    has_variant = _col_exists(conn, "bom", "variant_id")
+
+    if has_row_id and has_variant:
+        return conn.execute(
+            "SELECT child_type, child_id, qty, "
+            "COALESCE(waste_pct, 0) AS waste_pct, "
+            "variant_id, machine_op_row_id "
+            "FROM bom WHERE scenario_id=? ORDER BY id",
+            (scenario_id,)
+        ).fetchall()
+    elif has_variant:
+        return conn.execute(
+            "SELECT child_type, child_id, qty, "
+            "COALESCE(waste_pct, 0) AS waste_pct, "
+            "variant_id, NULL AS machine_op_row_id "
+            "FROM bom WHERE scenario_id=? ORDER BY id",
+            (scenario_id,)
+        ).fetchall()
+    elif has_row_id:
+        return conn.execute(
+            "SELECT child_type, child_id, qty, "
+            "COALESCE(waste_pct, 0) AS waste_pct, "
+            "NULL AS variant_id, machine_op_row_id "
+            "FROM bom WHERE scenario_id=? ORDER BY id",
+            (scenario_id,)
+        ).fetchall()
+    else:
+        return conn.execute(
+            "SELECT child_type, child_id, qty, "
+            "COALESCE(waste_pct, 0) AS waste_pct, "
+            "NULL AS variant_id, NULL AS machine_op_row_id "
+            "FROM bom WHERE scenario_id=? ORDER BY id",
+            (scenario_id,)
+        ).fetchall()
+
 
 def _fetch_bom_default(conn, item_id: int) -> list:
     """
     يجيب BOM من الـ default scenario مع كل الأعمدة.
-    Fallback: لو مفيش scenarios → يرجع للـ fetch_bom القديم مع NULL لـ machine_op_row_id.
+    Fallback: لو مفيش scenarios → يرجع للـ fetch_bom القديم.
     """
     try:
         sc = conn.execute(
@@ -125,40 +193,38 @@ def _fetch_bom_default(conn, item_id: int) -> list:
                 (item_id,)
             ).fetchone()
         if sc:
-            has_row_id  = _col_exists(conn, "bom", "machine_op_row_id")
-            has_variant = _col_exists(conn, "bom", "variant_id")
-
-            if has_row_id and has_variant:
-                rows = conn.execute(
-                    "SELECT child_type, child_id, qty, "
-                    "COALESCE(waste_pct,0) as waste_pct, "
-                    "variant_id, machine_op_row_id "
-                    "FROM bom WHERE scenario_id=? ORDER BY id",
-                    (sc["id"],)
-                ).fetchall()
-            elif has_variant:
-                rows = conn.execute(
-                    "SELECT child_type, child_id, qty, "
-                    "COALESCE(waste_pct,0) as waste_pct, "
-                    "variant_id, NULL as machine_op_row_id "
-                    "FROM bom WHERE scenario_id=? ORDER BY id",
-                    (sc["id"],)
-                ).fetchall()
-            else:
-                rows = conn.execute(
-                    "SELECT child_type, child_id, qty, "
-                    "COALESCE(waste_pct,0) as waste_pct, "
-                    "NULL as variant_id, NULL as machine_op_row_id "
-                    "FROM bom WHERE scenario_id=? ORDER BY id",
-                    (sc["id"],)
-                ).fetchall()
-
+            rows = _fetch_bom_for_scenario_id(conn, sc["id"])
             if rows:
                 return rows
     except Exception:
         pass
 
     return _fetch_bom_fallback(conn, item_id)
+
+
+def _fetch_bom_by_scenario(conn, item_id: int,
+                            scenario_id: int | None) -> list:
+    """
+    [C-01 / E-01] يجيب BOM بناءً على scenario_id.
+    - scenario_id محدد  → يجلب BOM ذلك السيناريو مباشرة
+    - scenario_id=None  → يرجع للـ default (_fetch_bom_default)
+
+    يُستخدم من calc_product_cost.
+    """
+    if scenario_id is not None:
+        try:
+            # تحقق أن السيناريو موجود وينتمي للمنتج
+            sc = conn.execute(
+                "SELECT id FROM bom_scenarios WHERE id=? AND item_id=? LIMIT 1",
+                (scenario_id, item_id)
+            ).fetchone()
+            if sc:
+                rows = _fetch_bom_for_scenario_id(conn, scenario_id)
+                return rows  # قد تكون قائمة فارغة — صح
+        except Exception:
+            pass
+        # لو السيناريو غير موجود أو مش للمنتج → fallback للـ default
+    return _fetch_bom_default(conn, item_id)
 
 
 def _fetch_bom_fallback(conn, item_id: int) -> list:
@@ -169,7 +235,7 @@ def _fetch_bom_fallback(conn, item_id: int) -> list:
         if has_row_id and has_variant:
             return conn.execute(
                 "SELECT child_type, child_id, qty, "
-                "COALESCE(waste_pct,0) as waste_pct, "
+                "COALESCE(waste_pct, 0) AS waste_pct, "
                 "variant_id, machine_op_row_id "
                 "FROM bom WHERE parent_id=? ORDER BY id",
                 (item_id,)
@@ -177,29 +243,21 @@ def _fetch_bom_fallback(conn, item_id: int) -> list:
         elif has_variant:
             return conn.execute(
                 "SELECT child_type, child_id, qty, "
-                "COALESCE(waste_pct,0) as waste_pct, "
-                "variant_id, NULL as machine_op_row_id "
+                "COALESCE(waste_pct, 0) AS waste_pct, "
+                "variant_id, NULL AS machine_op_row_id "
                 "FROM bom WHERE parent_id=? ORDER BY id",
                 (item_id,)
             ).fetchall()
         else:
             return conn.execute(
                 "SELECT child_type, child_id, qty, "
-                "COALESCE(waste_pct,0) as waste_pct, "
-                "NULL as variant_id, NULL as machine_op_row_id "
+                "COALESCE(waste_pct, 0) AS waste_pct, "
+                "NULL AS variant_id, NULL AS machine_op_row_id "
                 "FROM bom WHERE parent_id=? ORDER BY id",
                 (item_id,)
             ).fetchall()
     except Exception:
         return fetch_bom(conn, item_id)
-
-
-def _col_exists(conn, table: str, col: str) -> bool:
-    try:
-        rows = conn.execute(f"PRAGMA table_info({table})").fetchall()
-        return any(r["name"] == col for r in rows)
-    except Exception:
-        return False
 
 
 # ══════════════════════════════════════════════════════════
@@ -224,7 +282,6 @@ def _calc_child_cost(conn, child_type: str, child_id,
         elif child_type == "machine_op":
             return _shared_machine_op_cost(sid)
         elif child_type == "semi":
-            # نصف مصنع مشترك — نحاول نحسب تكلفته
             return _shared_raw_unit_price(sid)
         return 0.0
 
@@ -248,16 +305,18 @@ def _calc_child_cost(conn, child_type: str, child_id,
 
 
 # ══════════════════════════════════════════════════════════
-# التكلفة الكاملة (متكررة عبر BOM)
+# calc_cost — التكلفة الكاملة (default scenario)
 # ══════════════════════════════════════════════════════════
 
 def calc_cost(conn, item_id, _visited: set = None) -> float:
     """
-    يحسب التكلفة الكاملة لمنتج أو خامة.
+    يحسب التكلفة الكاملة لمنتج أو خامة باستخدام الـ default scenario.
     يدعم:
       - العناصر المحلية (int IDs)
       - العناصر المشتركة (str "shared:{n}")
       - BOM متعدد السيناريوهات (يستخدم الـ default)
+
+    للحساب بسيناريو محدد استخدم calc_product_cost.
     """
     if _visited is None:
         _visited = set()
@@ -268,7 +327,7 @@ def calc_cost(conn, item_id, _visited: set = None) -> float:
         return _shared_raw_unit_price(sid) if sid else 0.0
 
     # تجنب الحلقات اللانهائية
-    item_id_int = int(item_id) if not is_shared_id(item_id) else item_id
+    item_id_int = int(item_id)
     if item_id_int in _visited:
         return 0.0
     _visited.add(item_id_int)
@@ -302,19 +361,120 @@ def calc_cost(conn, item_id, _visited: set = None) -> float:
 
 
 # ══════════════════════════════════════════════════════════
-# تفصيل التكلفة للعرض
+# calc_product_cost — [C-01 / E-01] مع دعم scenario_id
+# ══════════════════════════════════════════════════════════
+
+def calc_product_cost(conn, product_id: int,
+                      scenario_id: int | None = None) -> tuple[float, dict]:
+    """
+    [C-01 / E-01] يحسب تكلفة المنتج مع تفاصيل التكاليف.
+
+    Parameters:
+        conn        : erp connection للشركة النشطة
+        product_id  : ID المنتج (semi أو final)
+        scenario_id : ID السيناريو (None = default)
+
+    Returns:
+        (total_cost: float, breakdown: dict)
+        breakdown = {
+            "raw":     float,   ← تكلفة الخامات
+            "labor":   float,   ← تكلفة العمالة
+            "machine": float,   ← تكلفة التشغيل
+            "semi":    float,   ← تكلفة نصف المصنع
+            "total":   float,
+        }
+
+    الفرق عن calc_cost:
+      - يدعم scenario_id صريح بدل الـ default دائماً
+      - يرجع breakdown مفصّل بـ 4 categories
+      - يُستخدم من ProductService.calculate_cost
+
+    ملاحظة: calc_cost تبقى للاستخدام البسيط (كالعروض والتسعير).
+    """
+    item = fetch_item(conn, product_id)
+    if not item:
+        empty = {"raw": 0.0, "labor": 0.0, "machine": 0.0, "semi": 0.0, "total": 0.0}
+        return 0.0, empty
+
+    if item["type"] == "raw":
+        price = raw_unit_price(item)
+        breakdown = {
+            "raw":     price,
+            "labor":   0.0,
+            "machine": 0.0,
+            "semi":    0.0,
+            "total":   price,
+        }
+        return price, breakdown
+
+    raw_cost     = 0.0
+    labor_cost   = 0.0
+    machine_cost = 0.0
+    semi_cost    = 0.0
+
+    bom_rows = _fetch_bom_by_scenario(conn, product_id, scenario_id)
+    visited  = {int(product_id)}
+
+    for row in bom_rows:
+        child_type        = row["child_type"]
+        child_id          = row["child_id"]
+        qty               = row["qty"]
+        waste_pct         = row["waste_pct"] if "waste_pct" in row.keys() else 0.0
+        variant_id        = _get_variant_id(row)
+        machine_op_row_id = _get_machine_op_row_id(row)
+        eff_qty           = effective_qty(qty, waste_pct)
+
+        unit_cost = _calc_child_cost(
+            conn, child_type, child_id,
+            variant_id=variant_id,
+            machine_op_row_id=machine_op_row_id,
+            _visited=visited,
+        )
+        line_cost = unit_cost * eff_qty
+
+        if child_type == "raw":
+            raw_cost += line_cost
+        elif child_type == "labor_op":
+            labor_cost += line_cost
+        elif child_type == "machine_op":
+            machine_cost += line_cost
+        elif child_type == "semi":
+            semi_cost += line_cost
+
+    total = raw_cost + labor_cost + machine_cost + semi_cost
+    breakdown = {
+        "raw":     raw_cost,
+        "labor":   labor_cost,
+        "machine": machine_cost,
+        "semi":    semi_cost,
+        "total":   total,
+    }
+    return total, breakdown
+
+
+# ══════════════════════════════════════════════════════════
+# calc_cost_breakdown — تفصيل التكلفة (للعرض)
 # ══════════════════════════════════════════════════════════
 
 def calc_cost_breakdown(conn, item_id: int) -> dict:
+    """
+    يحسب تفاصيل التكلفة باستخدام الـ default scenario.
+    يرجع dict بـ materials/labor/machine/total (للتوافق مع الكود القديم).
+
+    للحصول على breakdown بـ 4 categories استخدم:
+        total, breakdown = calc_product_cost(conn, item_id)
+    """
     item = fetch_item(conn, item_id)
     if not item:
-        return {"materials": 0, "labor": 0, "machine": 0, "total": 0}
+        return {"materials": 0.0, "labor": 0.0, "machine": 0.0, "total": 0.0}
 
     if item["type"] == "raw":
         p = raw_unit_price(item)
-        return {"materials": p, "labor": 0, "machine": 0, "total": p}
+        return {"materials": p, "labor": 0.0, "machine": 0.0, "total": p}
 
-    materials = labor = machine = 0.0
+    materials = 0.0
+    labor     = 0.0
+    machine   = 0.0
 
     for row in _fetch_bom_default(conn, item_id):
         child_type        = row["child_type"]
@@ -347,11 +507,15 @@ def calc_cost_breakdown(conn, item_id: int) -> dict:
 
 
 __all__ = [
+    # re-exports من costing_base
     "calc_worker_hourly_rate",
     "raw_unit_price",
     "effective_qty",
+    # re-exports من costing_ops
     "calc_labor_op_cost",
     "calc_machine_op_cost",
+    # دوال هذا الملف
     "calc_cost",
+    "calc_product_cost",       # [C-01 / E-01] الجديدة
     "calc_cost_breakdown",
 ]

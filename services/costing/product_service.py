@@ -7,6 +7,18 @@ Business Logic للمنتجات والـ BOM.
     from services.costing.product_service import ProductService
     svc = ProductService(conn)
     result = svc.save(product_data, components)
+
+[C-02 / A-03] _save_bom يستخدم replace_bom_for_scenario() من الـ repo
+  بدل SQL مباشر. هذا يضمن:
+    1. التعامل الصحيح مع كل حالات أعمدة BOM (variant_id, machine_op_row_id)
+       سواء أُضيفت عبر migration أم لا.
+    2. عدم رمي OperationalError صامت على قواعد بيانات قديمة.
+    3. مركزية منطق الـ INSERT في مكان واحد (bom_scenarios_repo).
+
+[C-01] calculate_cost يستخدم calc_product_cost الجديدة التي تدعم scenario_id.
+
+إصلاح اسم الدالة:
+  fetch_scenario_bom → fetch_bom_for_scenario (الاسم الصحيح في bom_scenarios_repo)
 """
 
 from dataclasses import dataclass, field
@@ -24,7 +36,8 @@ from db.costing.bom_scenarios_repo import (
     fetch_scenarios,
     fetch_default_scenario,
     insert_scenario,
-    fetch_scenario_bom,
+    fetch_bom_for_scenario,         # [إصلاح] الاسم الصحيح (كان fetch_scenario_bom خطأ)
+    replace_bom_for_scenario,       # [C-02 / A-03] للاستخدام في _save_bom
 )
 
 
@@ -42,6 +55,10 @@ class BomComponent:
     machine_op_row_id : int | None = None
 
     def to_tuple(self) -> tuple:
+        """
+        يحول الـ component لـ tuple بالصيغة التي تتوقعها replace_bom_for_scenario.
+        الصيغة: (child_type, child_id, qty, waste_pct, variant_id, machine_op_row_id)
+        """
         return (
             self.child_type,
             self.child_id,
@@ -75,7 +92,8 @@ class CostResult:
     product_name : str
     total_cost   : float
     breakdown    : dict = field(default_factory=dict)
-    # breakdown: {"raw": 120.5, "labor": 30.0, "machine": 45.0}
+    # breakdown: {"raw": float, "labor": float, "machine": float,
+    #             "semi": float, "total": float}
 
 
 # ══════════════════════════════════════════════════════════
@@ -107,6 +125,9 @@ class ProductService:
             "price": float,
             "category_id": int | None,
         }
+
+        components: list[BomComponent] — لازم فيه عنصر واحد على الأقل
+        scenario_id: int | None — None = يُحدَّد تلقائياً (default أو جديد)
         """
         name = product_data.get("name", "").strip()
         if not name:
@@ -141,7 +162,7 @@ class ProductService:
         )
 
         # ── حفظ الـ BOM ──
-        self._save_bom(product_id, scenario_id, components)
+        self._save_bom(scenario_id, components)
 
         return ProductSaveResult(
             product_id  = product_id,
@@ -171,60 +192,22 @@ class ProductService:
             self._conn, product_id, scenario_name, is_default=True
         )
 
-    def _save_bom(self, product_id: int,
-                  scenario_id: int,
+    def _save_bom(self, scenario_id: int,
                   components: list[BomComponent]) -> None:
-        """يمسح الـ BOM القديم ويكتب الجديد."""
-        self._conn.execute(
-            "DELETE FROM bom WHERE parent_id=? AND scenario_id=?",
-            (product_id, scenario_id)
-        )
-        for comp in components:
-            self._insert_bom_row(product_id, scenario_id, comp)
-        self._conn.commit()
+        """
+        يمسح الـ BOM القديم للسيناريو ويكتب الجديد.
 
-    def _insert_bom_row(self, parent_id: int,
-                        scenario_id: int,
-                        comp: BomComponent) -> None:
-        """يضيف صف واحد في الـ BOM."""
-        # جيب اسم العنصر
-        name = self._resolve_child_name(comp.child_type, comp.child_id)
+        [C-02 / A-03] يستخدم replace_bom_for_scenario() من bom_scenarios_repo
+        بدل SQL مباشر. الـ repo يتعامل مع:
+          - وجود/غياب أعمدة variant_id و machine_op_row_id (migration-safe)
+          - بناء الـ INSERT الصحيح تلقائياً حسب الأعمدة الموجودة
+          - لا خطر من OperationalError على قواعد بيانات قديمة
 
-        self._conn.execute(
-            """INSERT INTO bom
-               (parent_id, scenario_id, child_type, child_id,
-                qty, child_name, waste_pct, variant_id,
-                machine_op_row_id)
-               VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)""",
-            (
-                parent_id, scenario_id,
-                comp.child_type, comp.child_id,
-                comp.qty, name,
-                comp.waste_pct,
-                comp.variant_id,
-                comp.machine_op_row_id,
-            )
-        )
-
-    def _resolve_child_name(self, child_type: str,
-                             child_id: int) -> str | None:
-        """يجيب اسم العنصر حسب نوعه."""
-        table_map = {
-            "raw":        "items",
-            "semi":       "items",
-            "labor_op":   "labor_ops",
-            "machine_op": "machine_ops",
-        }
-        table = table_map.get(child_type)
-        if not table:
-            return None
-        try:
-            row = self._conn.execute(
-                f"SELECT name FROM {table} WHERE id=?", (child_id,)
-            ).fetchone()
-            return row["name"] if row else None
-        except Exception:
-            return None
+        الصيغة المتوقعة لكل tuple:
+          (child_type, child_id, qty, waste_pct, variant_id, machine_op_row_id)
+        """
+        rows = [comp.to_tuple() for comp in components]
+        replace_bom_for_scenario(self._conn, scenario_id, rows)
 
     # ── Orphans ───────────────────────────────────────────
 
@@ -250,20 +233,22 @@ class ProductService:
     # ── Cost Calculation ──────────────────────────────────
 
     def calculate_cost(self, product_id: int,
-                       scenario_id: int = None) -> CostResult:
-        """يحسب تكلفة المنتج ويرجع التفاصيل."""
+                       scenario_id: int | None = None) -> CostResult:
+        """
+        يحسب تكلفة المنتج ويرجع التفاصيل.
+
+        [C-01] يستخدم calc_product_cost الجديدة التي تدعم scenario_id.
+        calc_product_cost ترجع (total_cost, breakdown) بـ 4 categories:
+          raw, labor, machine, semi, total.
+        """
         product = fetch_item(self._conn, product_id)
         if not product:
             raise ValueError(f"المنتج {product_id} غير موجود")
 
-        try:
-            from models.costing import calc_product_cost
-            total, breakdown = calc_product_cost(
-                self._conn, product_id, scenario_id
-            )
-        except Exception:
-            total     = 0.0
-            breakdown = {}
+        from models.costing import calc_product_cost
+        total, breakdown = calc_product_cost(
+            self._conn, product_id, scenario_id
+        )
 
         return CostResult(
             product_id   = product_id,
@@ -300,23 +285,29 @@ class ProductService:
         try:
             sc = fetch_default_scenario(self._conn, product_id)
             if sc:
-                bom_rows = fetch_scenario_bom(self._conn, sc["id"])
+                bom_rows = fetch_bom_for_scenario(self._conn, sc["id"])
                 new_sc_id = insert_scenario(
                     self._conn, new_id, "سيناريو 1", is_default=True
                 )
-                for row in bom_rows:
-                    comp = BomComponent(
-                        child_type        = row["child_type"],
-                        child_id          = row["child_id"],
-                        qty               = row["qty"],
-                        waste_pct         = row.get("waste_pct", 0),
-                        variant_id        = row.get("variant_id"),
-                        machine_op_row_id = row.get("machine_op_row_id"),
+                # استخدم replace_bom_for_scenario مباشرة مع نفس الصيغة
+                rows = [
+                    (
+                        row["child_type"],
+                        row["child_id"],
+                        row["qty"],
+                        float(row["waste_pct"]) if row["waste_pct"] is not None else 0.0,
+                        row["variant_id"]        if "variant_id"        in row.keys() else None,
+                        row["machine_op_row_id"] if "machine_op_row_id" in row.keys() else None,
                     )
-                    self._insert_bom_row(new_id, new_sc_id, comp)
-                self._conn.commit()
+                    for row in bom_rows
+                ]
+                replace_bom_for_scenario(self._conn, new_sc_id, rows)
         except Exception as e:
-            print(f"[ProductService.clone] BOM copy warning: {e}")
+            import logging
+            logging.getLogger(__name__).warning(
+                "[ProductService.clone] BOM copy warning for product %d: %s",
+                product_id, e
+            )
 
         return new_id
 
