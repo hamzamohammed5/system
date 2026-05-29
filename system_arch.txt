@@ -1,5 +1,5 @@
 File Tree Snapshot
-Generated : 2026-05-29 09:14:44
+Generated : 2026-05-29 09:43:52
 Source    : D:\My Workspace\Hg\Alhabaar\accountant\system
 Extensions: .md, .py
 ────────────────────────────────────────────────────────────
@@ -56,6 +56,7 @@ system/
 ├── files_reference/
 │   ├── db.md
 │   ├── models&services.md
+│   ├── ui_structure.md
 │   └── ui_widgets.md
 ├── models/
 │   ├── costing.py
@@ -180,7 +181,6 @@ system/
 │   │   │   ├── shared/
 │   │   │   │   ├── bom_scenarios/
 │   │   │   │   │   ├── _db_scenarios.py
-│   │   │   │   │   ├── _memory_manager.py
 │   │   │   │   │   └── _memory_scenarios.py
 │   │   │   │   ├── bom_tree/
 │   │   │   │   ├── bom_tree_helper/

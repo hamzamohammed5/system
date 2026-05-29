@@ -2,10 +2,10 @@
 ui/tabs/costing/product/product_table.py
 =================================
 _ProductTable  — جدول المنتجات المحفوظة مع FilterBar.
-_WarningBar    — شريط تحذير المكونات الناقصة (orphans).
 
-التحسين: _WarningBar الآن تستخدم BaseWarningBar من shared widgets
-         بدل بناء الشريط يدوياً
+التحسين: حذف _WarningBar alias الزائد —
+         استخدم BaseWarningBar مباشرة من:
+         ui/widgets/components/notification.py
 """
 
 from PyQt5.QtWidgets import (
@@ -21,18 +21,12 @@ from ui.helpers import (
 )
 from ui.widgets.shared.filter_bar import FilterBar
 from ui.widgets.shared.connection_mixin import LiveConnMixin
-from ui.widgets.shared.base_warning_bar import BaseWarningBar
 from ui.events import bus
 
 _PRODUCT_SCOPE = {
     "semi":  "semi",
     "final": "final",
 }
-
-
-# ── إعادة تصدير للتوافق مع الكود الحالي في product_main_panel.py ──
-# product_main_panel.py يستورد _WarningBar من هنا
-_WarningBar = BaseWarningBar
 
 
 class _ProductTable(QWidget, LiveConnMixin):
