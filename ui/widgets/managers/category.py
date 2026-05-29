@@ -7,6 +7,37 @@ CategoryForm    — فورم إضافة/تعديل التصنيف.
 التغييرات:
   - [i18n] كل النصوص الظاهرة للمستخدم تستخدم tr() بدل النصوص العربية المباشرة.
   - [i18n] CategoryForm و CategoryManager يشتركان في bus.language_changed.
+  - [Q-03] تمرير conn مباشرة لـ CategoryService بدل استدعاء _live_conn()
+    في كل عملية (add, save, delete, load, _load).
+
+    المشكلة القديمة:
+      كل عملية كانت تستدعي self._live_conn() بشكل منفصل:
+        def _add(self):
+            conn = self._live_conn()   ← استدعاء
+            CategoryService(conn).add(...)
+
+        def _save(self):
+            conn = self._live_conn()   ← استدعاء ثانٍ
+            CategoryService(conn).update(...)
+
+        def _load(self):
+            conn = self._live_conn()   ← استدعاء ثالث
+            rows = fetch_all_categories(conn, ...)
+
+      رغم أن الـ LiveConnMixin يحفظ الـ connection داخلياً (cache)،
+      إلا أن البنية مربكة وتُنشئ coupling خفياً بين كل عملية وحالة الـ connection.
+
+    الحل الجديد [Q-03]:
+      - CategoryForm و CategoryManager يُجريان _live_conn() مرة واحدة
+        في بداية كل action ويمررانه لـ CategoryService مباشرة.
+      - الدوال الداخلية (مثل _refresh_parent_combo, _add_items)
+        تستقبل conn كـ parameter بدل إعادة استدعاء _live_conn() من جديد.
+      - هذا يضمن أن كل action يستخدم نفس الـ connection طوال تنفيذه
+        بدل فتح connections متعددة (حتى لو هي نفس الـ cached connection).
+
+    ملاحظة: _live_conn() في LiveConnMixin يُعيد connection من company_state
+    ولا يفتح connection جديد في كل استدعاء — لذا التأثير الأداء ضئيل.
+    لكن الوضوح الكودي يتحسن بشكل ملحوظ.
 """
 
 from PyQt5.QtWidgets import (
@@ -99,11 +130,16 @@ class CategoryForm(QGroupBox, LiveConnMixin):
 
         self._refresh_parent_combo()
 
-    def _refresh_parent_combo(self, exclude_id: int = None):
-        try:
-            conn = self._live_conn()
-        except Exception:
-            return
+    def _refresh_parent_combo(self, conn=None, exclude_id: int = None):
+        """
+        [Q-03] يستقبل conn اختياري بدل استدعاء _live_conn() داخلياً.
+        لو conn=None يستدعي _live_conn() مرة واحدة فقط.
+        """
+        if conn is None:
+            try:
+                conn = self._live_conn()
+            except Exception:
+                return
 
         self.cmb_parent.blockSignals(True)
         self.cmb_parent.clear()
@@ -140,6 +176,8 @@ class CategoryForm(QGroupBox, LiveConnMixin):
         if not name:
             msg_warning(self, tr("warning"), tr("category_name_required"))
             return
+
+        # [Q-03] _live_conn() مرة واحدة فقط لكل action
         try:
             conn = self._live_conn()
         except Exception as e:
@@ -157,7 +195,7 @@ class CategoryForm(QGroupBox, LiveConnMixin):
             msg_warning(self, tr("warning"), str(e))
             return
 
-        self._reset()
+        self._reset(conn=conn)
         emit_company_data_changed()
 
     def _save(self):
@@ -167,6 +205,8 @@ class CategoryForm(QGroupBox, LiveConnMixin):
         if not name:
             msg_warning(self, tr("warning"), tr("category_name_required"))
             return
+
+        # [Q-03] _live_conn() مرة واحدة فقط لكل action
         try:
             conn = self._live_conn()
         except Exception as e:
@@ -184,21 +224,26 @@ class CategoryForm(QGroupBox, LiveConnMixin):
             msg_warning(self, tr("warning"), str(e))
             return
 
-        self._reset()
+        self._reset(conn=conn)
         emit_company_data_changed()
 
     def load_for_edit(self, cat_id: int):
+        # [Q-03] _live_conn() مرة واحدة — نمررها لـ _refresh_parent_combo
         try:
             conn = self._live_conn()
         except Exception:
             return
+
         cat = fetch_category(conn, cat_id)
         if not cat:
             return
         self._editing_id = cat_id
         self.inp_name.setText(cat["name"])
         self._color_picker.set_color(cat["color"])
-        self._refresh_parent_combo(exclude_id=cat_id)
+
+        # [Q-03] تمرير conn المحفوظ بدل استدعاء _live_conn() مرة أخرى
+        self._refresh_parent_combo(conn=conn, exclude_id=cat_id)
+
         for i in range(self.cmb_parent.count()):
             if self.cmb_parent.itemData(i) == cat["parent_id"]:
                 self.cmb_parent.setCurrentIndex(i)
@@ -208,7 +253,11 @@ class CategoryForm(QGroupBox, LiveConnMixin):
         self.btn_save.setVisible(True)
         self.btn_cancel.setVisible(True)
 
-    def _reset(self):
+    def _reset(self, conn=None):
+        """
+        [Q-03] يستقبل conn اختياري لتمريره لـ _refresh_parent_combo.
+        لو conn=None، _refresh_parent_combo ستستدعي _live_conn() بنفسها.
+        """
         self._editing_id = None
         self._color_picker.set_color("#607d8b")
         self.inp_name.clear()
@@ -216,7 +265,7 @@ class CategoryForm(QGroupBox, LiveConnMixin):
         self.btn_add.setVisible(True)
         self.btn_save.setVisible(False)
         self.btn_cancel.setVisible(False)
-        self._refresh_parent_combo()
+        self._refresh_parent_combo(conn=conn)
 
 
 # ── CategoryManager ───────────────────────────────────────
@@ -285,6 +334,10 @@ class CategoryManager(QWidget, LiveConnMixin):
         root.addWidget(self._form)
 
     def _load(self):
+        """
+        [Q-03] _live_conn() مرة واحدة — يُمرر لـ _add_items بدل
+        استدعاء جديد من الدالة الفرعية.
+        """
         try:
             conn = self._live_conn()
         except Exception:
@@ -307,11 +360,16 @@ class CategoryManager(QWidget, LiveConnMixin):
         except Exception:
             return
 
+        # [Q-03] تمرير conn بدل إعادة استدعائه في _add_items
         self._add_items(build_tree(rows), parent=None,
                         expanded=expanded, conn=conn)
         self.tree.expandAll()
 
     def _add_items(self, nodes, parent, expanded, conn):
+        """
+        [Q-03] conn يُمرر كـ parameter بدل استدعاء _live_conn() من جديد.
+        يضمن استخدام نفس الـ connection الذي فتحه _load().
+        """
         for node in nodes:
             item = QTreeWidgetItem()
             item.setText(0, node["name"])
@@ -358,6 +416,8 @@ class CategoryManager(QWidget, LiveConnMixin):
         if cat_id is None:
             msg_info(self, tr("warning"), tr("category_select_first"))
             return
+
+        # [Q-03] _live_conn() مرة واحدة فقط لكل action
         try:
             conn = self._live_conn()
         except Exception as e:

@@ -158,12 +158,12 @@ class MainWindow(QMainWindow):
 
         # TODO: فك التعليق عن الـ imports واستبدل الـ placeholders بالـ widgets الحقيقية
         # -----------------------------------------------------------------------
-        # from ui.tabs.costing_section    import CostingSection    # index 1
-        # from ui.tabs.pricing_section    import PricingSection     # index 2
-        # from ui.tabs.accounting_section import AccountingTab      # index 3
-        # from ui.tabs.inventory_section  import InventoryTab       # index 4
-        # from ui.tabs.design_section     import DesignSection      # index 5
-        # from ui.tabs.orders_section     import OrdersSection      # index 6
+        from ui.tabs.costing_section    import CostingSection    # index 1
+        from ui.tabs.pricing_section    import PricingSection     # index 2
+        from ui.tabs.accounting_section import AccountingTab      # index 3
+        from ui.tabs.inventory_section  import InventoryTab       # index 4
+        from ui.tabs.design_section     import DesignSection      # index 5
+        from ui.tabs.orders_section     import OrdersSection      # index 6
         # -----------------------------------------------------------------------
 
         _sections = [

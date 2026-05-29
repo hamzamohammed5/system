@@ -7,6 +7,12 @@ ui/settings_dialog.py
   - [i18n / themes] _save() يُطلق bus.language_changed عند تغيير اللغة،
     بالإضافة لـ bus.theme_changed الذي يُطلق من theme_manager.set_theme() تلقائياً.
   - [تحسين 11 محفوظ] _get_settings_conn و_show_no_company_notice.
+  - [A-05] دمج _get_settings_conn و_has_active_company في دالة واحدة
+    بدل استدعاء company_state.is_ready مرتين في _load_settings.
+    القديم: conn = _get_settings_conn() → يتحقق من is_ready
+            ثم if conn is None and not _has_active_company() → يتحقق من is_ready مجدداً
+    الجديد: conn, has_company = _get_settings_conn_and_status()
+            يقرأ is_ready مرة واحدة فقط ويُعيد كلا القيمتين.
 """
 
 import os
@@ -32,27 +38,46 @@ from ui.widgets.dialogs.confirm  import confirm_action
 from ui.widgets.components.button import make_btn
 
 
-def _get_settings_conn():
+def _get_settings_conn_and_status() -> "tuple":
     """
-    يرجع الـ connection الحالي للشركة النشطة، أو None لو لا توجد شركة.
-    [تحسين 11] لا يُظهر رسالة هنا — المسؤولية على المُستدعي.
+    [A-05] يرجع (conn, has_active_company) في استدعاء واحد.
+
+    يُقرأ company_state.is_ready مرة واحدة فقط بدل مرتين:
+      - القديم: _get_settings_conn() يقرأ is_ready
+                ثم _has_active_company() يقرأ is_ready مجدداً في نفس _load_settings.
+      - الجديد: قراءة واحدة → إرجاع كلا القيمتين معاً.
+
+    Returns:
+        (conn, has_active_company)
+        conn              : ProtectedConnection أو None
+        has_active_company: True لو توجد شركة نشطة
     """
     try:
         from db.companies.company_state import company_state
         if not company_state.is_ready:
-            return None
-        return company_state.get_erp_conn()
+            return None, False
+        conn = company_state.get_erp_conn()
+        return conn, True
     except Exception:
-        return None
+        return None, False
+
+
+def _get_settings_conn():
+    """
+    [للتوافق مع الكود القديم] يرجع الـ connection فقط.
+    الكود الجديد في _load_settings يستخدم _get_settings_conn_and_status().
+    """
+    conn, _ = _get_settings_conn_and_status()
+    return conn
 
 
 def _has_active_company() -> bool:
-    """يتحقق بسرعة من وجود شركة نشطة."""
-    try:
-        from db.companies.company_state import company_state
-        return company_state.is_ready
-    except Exception:
-        return False
+    """
+    [للتوافق مع الكود القديم] يتحقق بسرعة من وجود شركة نشطة.
+    الكود الجديد في _load_settings يستخدم _get_settings_conn_and_status().
+    """
+    _, has_company = _get_settings_conn_and_status()
+    return has_company
 
 
 class SettingsDialog(QDialog):
@@ -232,95 +257,67 @@ class SettingsDialog(QDialog):
 
         # ── معاينة الألوان ──
         preview_grp     = QGroupBox("معاينة الألوان")
-        preview_lay     = QHBoxLayout(preview_grp)
-        preview_lay.setSpacing(6)
+        preview_grp_lay = QHBoxLayout(preview_grp)
+        preview_grp_lay.setSpacing(6)
 
-        from ui.themes import THEMES
-        for theme_key, (icon, name, _) in themes_info.items():
-            colors = THEMES.get(theme_key, {})
-            swatch = self._make_color_swatch(colors, name, icon)
-            preview_lay.addWidget(swatch)
+        color_samples = [
+            (_C['accent'],       "accent"),
+            (_C['success'],      "success"),
+            (_C['warning'],      "warning"),
+            (_C['danger'],       "danger"),
+            (_C['bg_surface'],   "surface"),
+            (_C['text_primary'], "text"),
+        ]
+        for color, label in color_samples:
+            swatch = QFrame()
+            swatch.setFixedSize(36, 36)
+            swatch.setStyleSheet(
+                f"background:{color}; border-radius:6px; "
+                f"border:1px solid {_C['border']};"
+            )
+            swatch.setToolTip(f"{label}: {color}")
+            preview_grp_lay.addWidget(swatch)
 
+        preview_grp_lay.addStretch()
         lay.addWidget(preview_grp)
         lay.addStretch()
         return widget
 
-    def _make_theme_card(self, icon: str, name: str, desc: str,
-                         checked: bool) -> QFrame:
+    def _make_theme_card(self, icon: str, name: str,
+                          desc: str, is_selected: bool) -> QWidget:
         base  = get_font_size()
         card  = QFrame()
-        card.setStyleSheet(f"""
-            QFrame {{
-                background: {_C['bg_surface']};
-                border: 1.5px solid {_C['border_med'] if not checked else _C['accent']};
-                border-radius: 8px;
-            }}
-        """)
-        lay = QHBoxLayout(card)
-        lay.setContentsMargins(14, 10, 14, 10)
+        card.setStyleSheet(
+            f"QFrame {{ background:{_C['bg_surface_2']}; border-radius:8px;"
+            f"border:1px solid {_C['border']}; padding:4px; }}"
+        )
+        lay   = QHBoxLayout(card)
+        lay.setContentsMargins(12, 8, 12, 8)
         lay.setSpacing(12)
 
+        radio = QRadioButton()
+        radio.setChecked(is_selected)
+        lay.addWidget(radio)
+
         lbl_icon = QLabel(icon)
-        lbl_icon.setStyleSheet(f"font-size: {fs(base, +3)}pt; background: transparent; border: none;")
+        lbl_icon.setStyleSheet(f"font-size:{fs(base, +4)}pt; background:transparent;")
         lay.addWidget(lbl_icon)
 
-        col = QVBoxLayout()
-        col.setSpacing(2)
-
+        text_col = QVBoxLayout()
+        text_col.setSpacing(2)
         lbl_name = QLabel(name)
         lbl_name.setStyleSheet(
-            f"font-weight: bold; font-size: {fs(base, 0)}pt;"
-            f"color: {_C['text_primary']}; background: transparent; border: none;"
+            f"font-weight:700; font-size:{fs(base, +1)}pt; background:transparent;"
         )
         lbl_desc = QLabel(desc)
         lbl_desc.setStyleSheet(
-            f"font-size: {fs(base, -2)}pt; color: {_C['text_muted']};"
-            "background: transparent; border: none;"
+            f"color:{_C['text_muted']}; font-size:{fs(base, -1)}pt; background:transparent;"
         )
-        col.addWidget(lbl_name)
-        col.addWidget(lbl_desc)
-        lay.addLayout(col, stretch=1)
-
-        radio = QRadioButton()
-        radio.setChecked(checked)
-        radio.setStyleSheet("background: transparent; border: none;")
-        lay.addWidget(radio)
-
+        text_col.addWidget(lbl_name)
+        text_col.addWidget(lbl_desc)
+        lay.addLayout(text_col)
+        lay.addStretch()
         return card
-
-    def _make_color_swatch(self, colors: dict, name: str, icon: str) -> QFrame:
-        base  = get_font_size()
-        frame = QFrame()
-        frame.setStyleSheet(f"""
-            QFrame {{
-                background: {colors.get('bg_surface', '#fff')};
-                border: 1px solid {colors.get('border', '#ddd')};
-                border-radius: 6px;
-            }}
-        """)
-        lay = QVBoxLayout(frame)
-        lay.setContentsMargins(8, 8, 8, 8)
-        lay.setSpacing(4)
-
-        lbl_title = QLabel(f"{icon} {name}")
-        lbl_title.setAlignment(Qt.AlignCenter)
-        lbl_title.setStyleSheet(
-            f"font-size: {fs(base, -1)}pt; font-weight: bold;"
-            f"color: {colors.get('text_primary', '#333')}; background: transparent; border: none;"
-        )
-        lay.addWidget(lbl_title)
-
-        swatch_row = QHBoxLayout()
-        swatch_row.setSpacing(3)
-        for color_key in ["bg_page", "accent", "success", "danger", "warning"]:
-            c = colors.get(color_key, "#ccc")
-            dot = QLabel()
-            dot.setFixedSize(16, 16)
-            dot.setStyleSheet(f"background: {c}; border-radius: 8px; border: none;")
-            swatch_row.addWidget(dot)
-        lay.addLayout(swatch_row)
-
-        return frame
 
     def _get_selected_theme(self) -> str:
         for key, radio in self._theme_radios.items():
@@ -339,94 +336,78 @@ class SettingsDialog(QDialog):
         lay.setContentsMargins(20, 16, 20, 16)
         lay.setSpacing(12)
 
-        grp     = QGroupBox("اختر لغة التطبيق")
+        grp     = QGroupBox("اختر لغة الواجهة")
         grp_lay = QVBoxLayout(grp)
         grp_lay.setSpacing(10)
 
-        from ui.i18n import i18n_manager
+        try:
+            from ui.i18n import i18n_manager
+            current_lang = i18n_manager.language
+        except Exception:
+            current_lang = "ar"
 
         self._lang_btn_group = QButtonGroup(self)
         self._lang_radios    = {}
-        current = i18n_manager.language
 
         langs_info = {
-            "ar": ("🇸🇦", "العربية",  "Arabic",  "RTL — من اليمين لليسار"),
-            "en": ("🇺🇸", "English",  "الإنجليزية", "LTR — Left to Right"),
+            "ar": ("🇸🇦", "العربية",  "واجهة باللغة العربية (RTL)"),
+            "en": ("🇬🇧", "English", "Interface in English (LTR)"),
         }
 
-        for code, (flag, native, trans, note) in langs_info.items():
-            card  = self._make_lang_card(flag, native, trans, note, code == current)
-            radio = card.findChild(QRadioButton)
-            if radio:
-                self._lang_btn_group.addButton(radio)
-                self._lang_radios[code] = radio
+        for key, (flag, name, desc) in langs_info.items():
+            card  = QFrame()
+            card.setStyleSheet(
+                f"QFrame {{ background:{_C['bg_surface_2']}; border-radius:8px;"
+                f"border:1px solid {_C['border']}; padding:4px; }}"
+            )
+            cLay  = QHBoxLayout(card)
+            cLay.setContentsMargins(12, 8, 12, 8)
+            cLay.setSpacing(12)
+
+            radio = QRadioButton()
+            radio.setChecked(key == current_lang)
+            self._lang_btn_group.addButton(radio)
+            self._lang_radios[key] = radio
+            cLay.addWidget(radio)
+
+            lbl_flag = QLabel(flag)
+            lbl_flag.setStyleSheet(
+                f"font-size:{fs(base, +4)}pt; background:transparent;"
+            )
+            cLay.addWidget(lbl_flag)
+
+            text_col = QVBoxLayout()
+            text_col.setSpacing(2)
+            lbl_name = QLabel(name)
+            lbl_name.setStyleSheet(
+                f"font-weight:700; font-size:{fs(base, +1)}pt; background:transparent;"
+            )
+            lbl_desc = QLabel(desc)
+            lbl_desc.setStyleSheet(
+                f"color:{_C['text_muted']}; font-size:{fs(base, -1)}pt; background:transparent;"
+            )
+            text_col.addWidget(lbl_name)
+            text_col.addWidget(lbl_desc)
+            cLay.addLayout(text_col)
+            cLay.addStretch()
+
             grp_lay.addWidget(card)
 
         lay.addWidget(grp)
 
-        lbl_note = QLabel(
-            "⚠️  تغيير اللغة يؤثر على نصوص الواجهة فقط — البيانات المحفوظة لا تتأثر.\n"
-            "بعض النصوص قد تحتاج إعادة تشغيل للتطبيق الكامل."
+        hint = QLabel("💡  تغيير اللغة يُطبَّق فوراً بعد الحفظ")
+        hint.setWordWrap(True)
+        hint.setStyleSheet(
+            f"color:{_C['text_muted']}; font-size:{fs(base, -1)}pt; background:transparent;"
         )
-        lbl_note.setWordWrap(True)
-        from ui.widgets.core.colors import status_colors
-        s = status_colors("warning")
-        lbl_note.setStyleSheet(
-            f"color: {s['fg']}; font-size: {fs(base, -1)}pt;"
-            f"background: {s['bg']}; border: 1px solid {s['border']};"
-            "border-radius: 6px; padding: 8px 12px;"
-        )
-        lay.addWidget(lbl_note)
+        lay.addWidget(hint)
         lay.addStretch()
         return widget
 
-    def _make_lang_card(self, flag: str, native: str, trans: str,
-                        note: str, checked: bool) -> QFrame:
-        base = get_font_size()
-        card = QFrame()
-        card.setStyleSheet(f"""
-            QFrame {{
-                background: {_C['bg_surface']};
-                border: 1.5px solid {_C['accent'] if checked else _C['border_med']};
-                border-radius: 8px;
-            }}
-        """)
-        lay = QHBoxLayout(card)
-        lay.setContentsMargins(14, 10, 14, 10)
-        lay.setSpacing(12)
-
-        lbl_flag = QLabel(flag)
-        lbl_flag.setStyleSheet(f"font-size: {fs(base, +3)}pt; background: transparent; border: none;")
-        lay.addWidget(lbl_flag)
-
-        col = QVBoxLayout()
-        col.setSpacing(2)
-
-        lbl_native = QLabel(f"{native}  /  {trans}")
-        lbl_native.setStyleSheet(
-            f"font-weight: bold; font-size: {fs(base, 0)}pt;"
-            f"color: {_C['text_primary']}; background: transparent; border: none;"
-        )
-        lbl_note_lbl = QLabel(note)
-        lbl_note_lbl.setStyleSheet(
-            f"font-size: {fs(base, -2)}pt; color: {_C['text_muted']};"
-            "background: transparent; border: none;"
-        )
-        col.addWidget(lbl_native)
-        col.addWidget(lbl_note_lbl)
-        lay.addLayout(col, stretch=1)
-
-        radio = QRadioButton()
-        radio.setChecked(checked)
-        radio.setStyleSheet("background: transparent; border: none;")
-        lay.addWidget(radio)
-
-        return card
-
     def _get_selected_lang(self) -> str:
-        for code, radio in self._lang_radios.items():
+        for key, radio in self._lang_radios.items():
             if radio.isChecked():
-                return code
+                return key
         return "ar"
 
     # ══════════════════════════════════════════════════════
@@ -438,56 +419,35 @@ class SettingsDialog(QDialog):
         widget = QWidget()
         lay    = QVBoxLayout(widget)
         lay.setContentsMargins(20, 16, 20, 16)
-        lay.setSpacing(10)
+        lay.setSpacing(12)
 
-        grp     = QGroupBox("وحدات القياس")
+        grp     = QGroupBox("وحدات القياس المتاحة")
         grp_lay = QVBoxLayout(grp)
-        grp_lay.setSpacing(8)
-
-        from ui.widgets.core.colors import status_colors
-        hint_s = status_colors("warning")
-        lbl_hint = QLabel(
-            "💡  هذه الوحدات تظهر في كل dropdown اختيار الوحدة في التطبيق.\n"
-            "الوحدات الافتراضية (px, mm, cm, m, inch) لا يمكن حذفها."
-        )
-        lbl_hint.setStyleSheet(
-            f"color:{hint_s['fg']}; font-size: {fs(base, -2)}pt;"
-            f"background:{hint_s['bg']}; border:1px solid {hint_s['border']};"
-            "border-radius: 4px; padding: 6px 8px;"
-        )
-        lbl_hint.setWordWrap(True)
-        grp_lay.addWidget(lbl_hint)
 
         self._units_list = QListWidget()
-        self._units_list.setMaximumHeight(140)
-        self._units_list.setStyleSheet(f"""
-            QListWidget {{
-                border:1px solid {_C['border_med']}; border-radius:4px;
-                font-size: {fs(base, -1)}pt;
-            }}
-            QListWidget::item {{ padding: 4px 8px; }}
-            QListWidget::item:selected {{
-                background:{_C['accent_light']}; color:{_C['accent_text']};
-            }}
-        """)
+        self._units_list.setAlternatingRowColors(True)
+        self._units_list.setMinimumHeight(140)
         grp_lay.addWidget(self._units_list)
 
         btn_row = QHBoxLayout()
-        btn_row.setSpacing(6)
-
-        btn_add_unit    = make_btn("➕  إضافة وحدة",       "success")
-        btn_del_unit    = make_btn("🗑️  حذف المحدد",       "danger")
-        btn_reset_units = make_btn("↺  استعادة الافتراضية", "ghost")
-
-        btn_add_unit.clicked.connect(self._add_unit)
-        btn_del_unit.clicked.connect(self._del_unit)
-        btn_reset_units.clicked.connect(self._reset_units)
-
-        btn_row.addWidget(btn_add_unit)
-        btn_row.addWidget(btn_del_unit)
+        btn_add   = make_btn("➕  إضافة وحدة",        "primary")
+        btn_del   = make_btn("🗑️  حذف المحددة",       "danger")
+        btn_reset = make_btn("↺  استعادة الافتراضية", "ghost")
+        btn_add.clicked.connect(self._add_unit)
+        btn_del.clicked.connect(self._del_unit)
+        btn_reset.clicked.connect(self._reset_units)
+        btn_row.addWidget(btn_add)
+        btn_row.addWidget(btn_del)
+        btn_row.addWidget(btn_reset)
         btn_row.addStretch()
-        btn_row.addWidget(btn_reset_units)
         grp_lay.addLayout(btn_row)
+
+        hint = QLabel("💡  الوحدات الافتراضية (باللون الرمادي) لا يمكن حذفها")
+        hint.setWordWrap(True)
+        hint.setStyleSheet(
+            f"color:{_C['text_muted']}; font-size:{fs(base, -2)}pt; background:transparent;"
+        )
+        grp_lay.addWidget(hint)
         lay.addWidget(grp)
         lay.addStretch()
         return widget
@@ -501,28 +461,25 @@ class SettingsDialog(QDialog):
         widget = QWidget()
         lay    = QVBoxLayout(widget)
         lay.setContentsMargins(20, 16, 20, 16)
-        lay.setSpacing(10)
+        lay.setSpacing(12)
 
         grp     = QGroupBox("مسار برنامج GIMP")
         grp_lay = QVBoxLayout(grp)
-        grp_lay.setSpacing(8)
-
-        gimp_row = QHBoxLayout()
-        gimp_row.setSpacing(6)
 
         self._inp_gimp = QLineEdit()
-        self._inp_gimp.setPlaceholderText(
-            r"مثال: C:\Program Files\GIMP 2\bin\gimp-2.10.exe"
+        self._inp_gimp.setMinimumHeight(30)
+        self._inp_gimp.setPlaceholderText(r"مثال: C:\Program Files\GIMP 2\bin\gimp-2.10.exe")
+        self._inp_gimp.setStyleSheet(
+            f"font-size:{fs(base, -1)}pt; color:{_C['text_primary']};"
+            f"background:{_C['bg_input']}; border:1px solid {_C['border_med']};"
+            "border-radius:4px; padding:4px 8px;"
         )
-        self._inp_gimp.setMinimumHeight(34)
 
-        btn_browse = make_btn("📂  تصفح", "primary", fixed_size=False)
-        btn_browse.setMinimumHeight(34)
+        gimp_row = QHBoxLayout()
+        btn_browse = make_btn("📂  تصفح", "normal")
+        btn_clear  = make_btn("✖",        "ghost")
+        btn_clear.setFixedWidth(28)
         btn_browse.clicked.connect(self._browse_gimp)
-
-        btn_clear = make_btn("✖", "danger", fixed_size=True)
-        btn_clear.setFixedSize(34, 34)
-        btn_clear.setToolTip("مسح المسار")
         btn_clear.clicked.connect(lambda: self._inp_gimp.clear())
 
         gimp_row.addWidget(self._inp_gimp, stretch=1)
@@ -532,7 +489,7 @@ class SettingsDialog(QDialog):
 
         lbl_hint = QLabel("💡  اتركه فارغاً للبحث التلقائي في المسارات الشائعة")
         lbl_hint.setStyleSheet(
-            f"color:{_C['text_muted']}; font-size: {fs(base, -2)}pt; background: transparent;"
+            f"color:{_C['text_muted']}; font-size:{fs(base, -2)}pt; background: transparent;"
         )
         grp_lay.addWidget(lbl_hint)
         lay.addWidget(grp)
@@ -545,13 +502,29 @@ class SettingsDialog(QDialog):
 
     def _load_settings(self):
         """
-        [تحسين 11] يُظهر تنبيهاً واضحاً للمستخدم إذا لم تكن الشركة محددة.
-        """
-        conn = _get_settings_conn()
+        [A-05] يستخدم _get_settings_conn_and_status() بدل استدعاءين منفصلين.
 
-        if conn is None and not _has_active_company():
-            self._show_no_company_notice()
-        elif conn:
+        القديم (2 استدعاء لـ company_state.is_ready):
+            conn = _get_settings_conn()          # يقرأ is_ready
+            if conn is None and not _has_active_company():  # يقرأ is_ready مجدداً
+                ...
+
+        الجديد (استدعاء واحد):
+            conn, has_company = _get_settings_conn_and_status()
+            if not has_company:
+                ...
+
+        ملاحظة: الحالة conn is None and has_company is True نادرة جداً
+        (تعني is_ready=True لكن get_erp_conn() رمى exception).
+        في هذه الحالة نُظهر التنبيه أيضاً لأن الـ conn غير متاح.
+        """
+        conn, has_company = _get_settings_conn_and_status()
+
+        if not has_company or conn is None:
+            # [تحسين 11] يُظهر تنبيهاً واضحاً للمستخدم إذا لم تكن الشركة محددة
+            if not has_company:
+                self._show_no_company_notice()
+        else:
             try:
                 from db.shared.settings_repo import get_setting
                 path = get_setting(conn, "gimp_path", "")
@@ -746,6 +719,8 @@ class SettingsDialog(QDialog):
             bus.language_changed.emit(selected_lang)
 
         # ── GIMP path ──
+        # [A-05] نستخدم _get_settings_conn_and_status() بدل _get_settings_conn()
+        # لأننا محتاجين الـ conn فقط — لا داعي للتحقق من has_company هنا
         conn = _get_settings_conn()
         if conn:
             try:

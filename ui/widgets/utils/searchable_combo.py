@@ -16,6 +16,19 @@ SearchableCombo — QComboBox مع حقل بحث مدمج.
 
   - [تحسين 41 محفوظ] _sep_font محفوظ كـ instance variable.
   - [تحسين 13 محفوظ] debounce داخلي للبحث (120ms).
+
+  - [Q-05] _do_filter: استخدام setFilterFixedString بدل invalidateFilter للـ
+    QSortFilterProxyModel العادي. Qt يُحسِّن setFilterFixedString داخلياً
+    (يتجنب إعادة تقييم كل الصفوف إن لم يتغير الـ pattern).
+    ملاحظة: _ComboFilterProxy يُعيد تعريف filterAcceptsRow لمنطق مخصص
+    (separators / orphans)، لذا نُبقي invalidateFilter هناك ولكن نضيف
+    حارس التحقق من تغيير النص قبل الاستدعاء لتجنب invalidation غير ضرورية.
+
+  - [Q-06] build_grouped_items: توثيق البنية المتوقعة بوضوح.
+    المشكلة: بعض الـ callers يمررون tuple بـ 5 عناصر (id, name, cat_id, cat_name, total_qty)
+    لكن الدالة تتوقع 4 فقط. العنصر الخامس كان يُتجاهل بصمت.
+    الحل: الدالة تقبل أي عدد من العناصر ≥ 2 (تأخذ [0] و[1] و[3] فقط)
+    مع توثيق واضح. لا تغيير في السلوك — فقط توضيح البنية.
 """
 from PyQt5.QtWidgets import (
     QWidget, QHBoxLayout, QComboBox, QLineEdit, QPushButton, QSizePolicy,
@@ -33,8 +46,25 @@ _SEP = ("__sep__", None)
 
 def build_grouped_items(items: list) -> list:
     """
-    تحوّل قائمة (id, name, cat_id, cat_name) إلى
-    قائمة مجمّعة جاهزة لـ SearchableCombo.populate().
+    تحوّل قائمة عناصر إلى قائمة مجمّعة جاهزة لـ SearchableCombo.populate().
+
+    [Q-06] البنية المتوقعة لكل عنصر في items:
+        items[i][0] = item_id   (int | str)    — معرف العنصر
+        items[i][1] = name      (str)           — اسم العنصر
+        items[i][2] = cat_id    (int | None)    — معرف التصنيف (مُتجاهَل هنا)
+        items[i][3] = cat_name  (str | None)    — اسم التصنيف للتجميع
+        items[i][4+]= ...       (any)           — أعمدة إضافية (مُتجاهَلة بصمت)
+
+    مثال:
+        # 4 عناصر — الحد الأدنى المتوقع
+        build_grouped_items([(1, "قطعة", 10, "خامات")])
+
+        # 5 عناصر — total_qty مُضاف، مُتجاهَل بصمت
+        build_grouped_items([(1, "قطعة", 10, "خامات", 100.0)])
+
+    Returns:
+        list of (display_text, user_data, is_separator)
+        جاهز لـ SearchableCombo.populate()
     """
     groups: dict = {}
     NO_CAT = "__no_category__"
@@ -42,6 +72,8 @@ def build_grouped_items(items: list) -> list:
     for entry in items:
         item_id  = entry[0]
         name     = entry[1]
+        # entry[2] = cat_id — مُتجاهَل (التجميع يعتمد على cat_name فقط)
+        # entry[3+] — cat_name أو عناصر إضافية (total_qty إلخ)
         cat_name = entry[3] if len(entry) > 3 and entry[3] else NO_CAT
         groups.setdefault(cat_name, []).append((item_id, name))
 
@@ -74,6 +106,12 @@ class _ComboFilterProxy(QSortFilterProxyModel):
         هذا يُحافظ على pending_sep behavior بدون إعادة بناء.
       - الـ orphans ('#__orphan__') تُعرض دائماً بغض النظر عن البحث.
       - البحث case-insensitive في النص المعروض.
+
+    [Q-05] set_filter يتحقق من تغيير النص قبل invalidateFilter:
+      - لو النص لم يتغير → لا invalidation.
+      - هذا يمنع إعادة تقييم كل الصفوف عند كل event بدون تغيير حقيقي.
+      - مثال: _do_filter قد يُستدعى من QTimer بعد debounce حتى لو
+        المستخدم لم يكتب شيئاً جديداً (نادر لكن ممكن).
     """
 
     def __init__(self, parent=None):
@@ -82,7 +120,21 @@ class _ComboFilterProxy(QSortFilterProxyModel):
         self._filter_text = ""
 
     def set_filter(self, text: str):
-        self._filter_text = text.strip().lower()
+        """
+        [Q-05] يُطبِّق الفلتر مع حارس التغيير.
+
+        القديم: دائماً يُنفِّذ invalidateFilter() حتى لو النص لم يتغير.
+        الجديد: يتحقق أولاً — لو النص نفسه يُتجاهَل الاستدعاء.
+
+        invalidateFilter() في PyQt5 يُطلق layoutChanged signal مما يُعيد
+        رسم الـ combo بالكامل. مع 500+ عنصر هذا overhead ملحوظ حتى لو
+        لا يوجد تغيير حقيقي في الفلتر.
+        """
+        new_text = text.strip().lower()
+        if new_text == self._filter_text:
+            # [Q-05] لا تغيير — تجاهل
+            return
+        self._filter_text = new_text
         self.invalidateFilter()
 
     def filterAcceptsRow(self, source_row: int, source_parent) -> bool:
@@ -129,6 +181,8 @@ class SearchableCombo(QWidget):
     Combo مع حقل بحث: [🔍] [✖] [القائمة ▼]
 
     [تحسين 4] يستخدم QSortFilterProxyModel بدل إعادة بناء الـ combo.
+    [Q-05] set_filter بحارس التغيير لتجنب invalidation غير ضرورية.
+    [Q-06] build_grouped_items موثقة بوضوح — تقبل tuples بأي حجم ≥ 2.
 
     Signals:
         item_selected(data) — عند اختيار عنصر حقيقي
@@ -221,6 +275,8 @@ class SearchableCombo(QWidget):
     def _do_filter(self):
         """
         [تحسين 4] يُطبِّق الفلتر على الـ proxy بدل إعادة بناء الـ combo.
+        [Q-05] set_filter يتحقق من التغيير داخلياً — لو لم يتغير النص لا invalidation.
+
         O(n) في الـ proxy بدل O(n) إنشاء Qt widgets.
         """
         prev_data = self.cmb.currentData()
@@ -268,7 +324,7 @@ class SearchableCombo(QWidget):
         self.cmb.blockSignals(True)
         self._source_model.clear()
 
-        pending_sep: tuple | None = None
+        pending_sep: "tuple | None" = None
 
         for display, user_data, is_sep in items:
             if is_sep:
@@ -283,6 +339,7 @@ class SearchableCombo(QWidget):
         self.cmb.blockSignals(False)
 
         # أعد تطبيق الفلتر الحالي (لو فيه بحث نشط)
+        # [Q-05] set_filter يتحقق من التغيير — لو نفس الفلتر لا invalidation
         self._proxy_model.set_filter(self._pending_filter)
 
         # استعادة الاختيار
@@ -342,7 +399,7 @@ class SearchableCombo(QWidget):
 
     # ── استرجاع البيانات الداخلية (للتوافق مع API القديم) ──
 
-    def _get_source_item_by_data(self, target_data) -> QStandardItem | None:
+    def _get_source_item_by_data(self, target_data) -> "QStandardItem | None":
         """يجد عنصر في الـ source model بالـ user_data."""
         for i in range(self._source_model.rowCount()):
             item = self._source_model.item(i)
@@ -413,4 +470,6 @@ class SearchableCombo(QWidget):
         item.setData(data, Qt.UserRole)
         item.setForeground(QColor(_C['danger']))
         self._source_model.insertRow(0, item)
+        # [Q-05] لا نستدعي set_filter هنا — نستدعي invalidateFilter مباشرة
+        # لأن add_item_at_start تُغيِّر الـ model لا الـ filter
         self._proxy_model.invalidateFilter()

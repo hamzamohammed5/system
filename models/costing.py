@@ -16,6 +16,26 @@ Facade يُعيد تصدير الدوال الأساسية ويضيف calc_cost 
 
 [P-02] _get_shared_data يستخدم _get_central_conn_cached من items_repo
   بدل فتح/غلق central connection في كل استدعاء.
+
+[P-02b] calc_cost يقبل central_conn اختياري:
+  المشكلة: offers_repo.calc_offer_summary تستدعي calc_cost لكل منتج.
+  كل منتج قد يحتوي خامات مشتركة تستدعي _get_shared_data.
+  رغم أن _get_shared_data يستخدم _get_central_conn_cached (module cache)،
+  إلا أن تمرير central_conn صريح يُمكِّن الـ caller من استخدام
+  connection منفصل (مفيد في الـ unit tests والـ multi-company scenarios).
+
+  الـ API:
+    calc_cost(conn, item_id)                          → كالمعتاد
+    calc_cost(conn, item_id, central_conn=my_conn)    → يستخدم my_conn للـ shared data
+
+  الـ central_conn parameter لا يُستخدم مباشرة في calc_cost نفسها —
+  بل يُمرَّر لـ _calc_child_cost التي تمرره لـ _get_shared_data عبر
+  thread-local override. هذا يحافظ على الـ API الداخلي بدون تغيير.
+
+  Implementation note:
+    نستخدم _central_conn_override: dict = {} كـ thread-local store بسيط.
+    لأن التطبيق single-threaded (PyQt main thread)، هذا كافٍ وآمن.
+    في بيئة multi-threaded حقيقية يُستبدل بـ threading.local().
 """
 
 from models.costing_base import (
@@ -34,6 +54,11 @@ from db.shared.items_repo import (
     extract_shared_id,
     _get_central_conn_cached,   # [P-02] cached connection بدل فتح/غلق متكرر
 )
+
+
+# [P-02b] override store للـ central_conn الممرر من الـ caller
+# single-threaded safe — كافٍ للتطبيق الحالي
+_central_conn_override: dict = {"conn": None}
 
 
 def _get_variant_id(row) -> int | None:
@@ -70,11 +95,17 @@ def _get_shared_data(shared_item_id: int) -> dict:
 
     [P-02] يستخدم _get_central_conn_cached() بدل get_central_connection()
     لتجنب فتح/غلق connection في كل استدعاء.
-    في العروض والمنتجات المعقدة، قد يُستدعى هذا عشرات المرات.
+
+    [P-02b] لو في _central_conn_override نشط (من calc_cost مع central_conn)،
+    يستخدمه أولاً — fallback للـ cache العادي.
     """
     try:
         from db.shared.json_utils import decode_json
-        central = _get_central_conn_cached()
+
+        # [P-02b] استخدم الـ override لو موجود
+        override = _central_conn_override.get("conn")
+        central  = override if override is not None else _get_central_conn_cached()
+
         row = central.execute(
             "SELECT shared_type, data FROM shared_items WHERE id=?",
             (shared_item_id,)
@@ -208,22 +239,18 @@ def _fetch_bom_by_scenario(conn, item_id: int,
     [C-01 / E-01] يجيب BOM بناءً على scenario_id.
     - scenario_id محدد  → يجلب BOM ذلك السيناريو مباشرة
     - scenario_id=None  → يرجع للـ default (_fetch_bom_default)
-
-    يُستخدم من calc_product_cost.
     """
     if scenario_id is not None:
         try:
-            # تحقق أن السيناريو موجود وينتمي للمنتج
             sc = conn.execute(
                 "SELECT id FROM bom_scenarios WHERE id=? AND item_id=? LIMIT 1",
                 (scenario_id, item_id)
             ).fetchone()
             if sc:
                 rows = _fetch_bom_for_scenario_id(conn, scenario_id)
-                return rows  # قد تكون قائمة فارغة — صح
+                return rows
         except Exception:
             pass
-        # لو السيناريو غير موجود أو مش للمنتج → fallback للـ default
     return _fetch_bom_default(conn, item_id)
 
 
@@ -270,6 +297,8 @@ def _calc_child_cost(conn, child_type: str, child_id,
     """
     يحسب تكلفة وحدة من child_id سواء كان محلي أو مشترك.
     child_id يمكن أن يكون int (محلي) أو str "shared:{n}" (مشترك).
+
+    يستخدم _central_conn_override تلقائياً لو كان نشطاً.
     """
     if is_shared_id(child_id):
         sid = extract_shared_id(child_id)
@@ -308,9 +337,24 @@ def _calc_child_cost(conn, child_type: str, child_id,
 # calc_cost — التكلفة الكاملة (default scenario)
 # ══════════════════════════════════════════════════════════
 
-def calc_cost(conn, item_id, _visited: set = None) -> float:
+def calc_cost(conn, item_id, _visited: set = None,
+              central_conn=None) -> float:
     """
     يحسب التكلفة الكاملة لمنتج أو خامة باستخدام الـ default scenario.
+
+    Parameters:
+        conn         : erp connection للشركة النشطة
+        item_id      : ID المنتج (int محلي أو str "shared:{n}")
+        _visited     : internal — لمنع الحلقات اللانهائية
+        central_conn : [P-02b] connection اختياري لـ companies.db.
+                       None = يستخدم _get_central_conn_cached() (الافتراضي).
+                       قيمة = يُمرَّر هذا الـ connection لكل استدعاءات
+                       _get_shared_data في هذه العملية الحسابية.
+                       مفيد في:
+                         - offers_repo: connection واحد لكل العرض
+                         - unit tests: connection مُتحكَّم فيه
+                         - multi-company: connection صريح للشركة الصح
+
     يدعم:
       - العناصر المحلية (int IDs)
       - العناصر المشتركة (str "shared:{n}")
@@ -318,15 +362,30 @@ def calc_cost(conn, item_id, _visited: set = None) -> float:
 
     للحساب بسيناريو محدد استخدم calc_product_cost.
     """
+    # [P-02b] ضبط الـ override للـ central connection
+    _prev_override = _central_conn_override.get("conn")
+    if central_conn is not None:
+        _central_conn_override["conn"] = central_conn
+
+    try:
+        return _calc_cost_impl(conn, item_id, _visited)
+    finally:
+        # استعادة الـ override السابق دائماً (حتى عند الخطأ)
+        _central_conn_override["conn"] = _prev_override
+
+
+def _calc_cost_impl(conn, item_id, _visited: set = None) -> float:
+    """
+    التنفيذ الفعلي لـ calc_cost — بدون إدارة الـ central_conn override.
+    يُستدعى من calc_cost بعد ضبط الـ override.
+    """
     if _visited is None:
         _visited = set()
 
-    # دعم shared items مباشرة
     if is_shared_id(item_id):
         sid = extract_shared_id(item_id)
         return _shared_raw_unit_price(sid) if sid else 0.0
 
-    # تجنب الحلقات اللانهائية
     item_id_int = int(item_id)
     if item_id_int in _visited:
         return 0.0
@@ -365,32 +424,41 @@ def calc_cost(conn, item_id, _visited: set = None) -> float:
 # ══════════════════════════════════════════════════════════
 
 def calc_product_cost(conn, product_id: int,
-                      scenario_id: int | None = None) -> tuple[float, dict]:
+                      scenario_id: int | None = None,
+                      central_conn=None) -> tuple[float, dict]:
     """
     [C-01 / E-01] يحسب تكلفة المنتج مع تفاصيل التكاليف.
 
     Parameters:
-        conn        : erp connection للشركة النشطة
-        product_id  : ID المنتج (semi أو final)
-        scenario_id : ID السيناريو (None = default)
+        conn         : erp connection للشركة النشطة
+        product_id   : ID المنتج (semi أو final)
+        scenario_id  : ID السيناريو (None = default)
+        central_conn : [P-02b] connection اختياري لـ companies.db
 
     Returns:
         (total_cost: float, breakdown: dict)
         breakdown = {
-            "raw":     float,   ← تكلفة الخامات
-            "labor":   float,   ← تكلفة العمالة
-            "machine": float,   ← تكلفة التشغيل
-            "semi":    float,   ← تكلفة نصف المصنع
+            "raw":     float,
+            "labor":   float,
+            "machine": float,
+            "semi":    float,
             "total":   float,
         }
-
-    الفرق عن calc_cost:
-      - يدعم scenario_id صريح بدل الـ default دائماً
-      - يرجع breakdown مفصّل بـ 4 categories
-      - يُستخدم من ProductService.calculate_cost
-
-    ملاحظة: calc_cost تبقى للاستخدام البسيط (كالعروض والتسعير).
     """
+    # [P-02b] ضبط الـ override
+    _prev_override = _central_conn_override.get("conn")
+    if central_conn is not None:
+        _central_conn_override["conn"] = central_conn
+
+    try:
+        return _calc_product_cost_impl(conn, product_id, scenario_id)
+    finally:
+        _central_conn_override["conn"] = _prev_override
+
+
+def _calc_product_cost_impl(conn, product_id: int,
+                             scenario_id: int | None) -> tuple[float, dict]:
+    """التنفيذ الفعلي لـ calc_product_cost."""
     item = fetch_item(conn, product_id)
     if not item:
         empty = {"raw": 0.0, "labor": 0.0, "machine": 0.0, "semi": 0.0, "total": 0.0}
@@ -456,14 +524,29 @@ def calc_product_cost(conn, product_id: int,
 # calc_cost_breakdown — تفصيل التكلفة (للعرض)
 # ══════════════════════════════════════════════════════════
 
-def calc_cost_breakdown(conn, item_id: int) -> dict:
+def calc_cost_breakdown(conn, item_id: int,
+                        central_conn=None) -> dict:
     """
     يحسب تفاصيل التكلفة باستخدام الـ default scenario.
     يرجع dict بـ materials/labor/machine/total (للتوافق مع الكود القديم).
 
+    [P-02b] يقبل central_conn اختياري — نفس منطق calc_cost.
+
     للحصول على breakdown بـ 4 categories استخدم:
         total, breakdown = calc_product_cost(conn, item_id)
     """
+    _prev_override = _central_conn_override.get("conn")
+    if central_conn is not None:
+        _central_conn_override["conn"] = central_conn
+
+    try:
+        return _calc_cost_breakdown_impl(conn, item_id)
+    finally:
+        _central_conn_override["conn"] = _prev_override
+
+
+def _calc_cost_breakdown_impl(conn, item_id: int) -> dict:
+    """التنفيذ الفعلي لـ calc_cost_breakdown."""
     item = fetch_item(conn, item_id)
     if not item:
         return {"materials": 0.0, "labor": 0.0, "machine": 0.0, "total": 0.0}
@@ -516,6 +599,6 @@ __all__ = [
     "calc_machine_op_cost",
     # دوال هذا الملف
     "calc_cost",
-    "calc_product_cost",       # [C-01 / E-01] الجديدة
+    "calc_product_cost",       # [C-01 / E-01]
     "calc_cost_breakdown",
 ]
