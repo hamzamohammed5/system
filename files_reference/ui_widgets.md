@@ -9,7 +9,7 @@
 | القسم | الملفات |
 |-------|---------|
 | [UI — App Settings](#ui--app-settings) | `app_settings`, `app_state`, `events`, `themes`, `i18n` |
-| [UI — Widgets Base](#ui--widgets-base) | `base/list_panel`, `base/detail_panel`, `base/section`, `base/tab_section` |
+| [UI — Widgets Base](#ui--widgets-base) | `base/list_panel`, `base/detail_panel`, `base/section`, `base/tab_section`, `base/crud_form` |
 | [UI — Widgets Components](#ui--widgets-components) | `button`, `label`, `headers`, `notification`, `spinner`, `stat_row`, `action_toolbar` |
 | [UI — Widgets Panels](#ui--widgets-panels) | `crud_section`, `state`, `filter`, `detail_section`, `collapsible_card`, `card_grid`, `data_table` |
 | [UI — Widgets Mixins](#ui--widgets-mixins) | `bus`, `refresh`, `edit`, `rebuild`, `select`, `validate`, `service`, `shared_ops` |
@@ -22,6 +22,8 @@
 | [UI — Managers](#ui--managers) | `managers/category` |
 | [UI — Main](#ui--main) | `main_window`, `settings_dialog` |
 | [UI — ComponentRow](#ui--componentrow) | `component_row/widget`, `component_row/ui`, `component_row/op_rows`, `component_row/variants` |
+| [UI — Widgets Shared](#ui--widgets-shared) | `shared/list_panel_with_shared` |
+
 
 ---
 
@@ -244,6 +246,82 @@ section.form_panel -> QWidget | None
 ```
 
 ---
+
+### `ui/widgets/base/crud_form.py` — `BaseCrudForm`
+ 
+قاعدة مشتركة لكل فورمات CRUD. يوفر `QWidget + EditModeMixin + LiveConnMixin` مع `FormGroup` وأزرار add/save/cancel داخل scroll.
+ 
+**Signals:** `saved = pyqtSignal(int)` — يُطلق بعد نجاح الإضافة أو التعديل مع ID العنصر.
+ 
+**إعدادات الـ subclass:**
+```python
+FORM_TITLE : str = "بيانات العنصر"  # عنوان الـ FormGroup
+ADD_TEXT   : str = "➕  إضافة"       # نص زر الإضافة
+SAVE_TEXT  : str = "💾  حفظ التعديل" # نص زر الحفظ
+```
+ 
+**Hooks المطلوبة (override إلزامي):**
+```python
+_build_fields(group: FormGroup)       # إضافة الحقول داخل FormGroup
+_collect() → dict | None              # جمع قيم الحقول — None عند فشل التحقق
+_do_insert(data: dict) → int          # إدراج سجل جديد — يرجع ID
+_do_update(item_id: int, data: dict)  # تحديث سجل موجود
+_do_load(item_id: int) → dict | None  # تحميل بيانات للتعديل
+_fill_fields(data: dict)              # ملء الحقول بالبيانات
+_reset_fields()                       # مسح الحقول وإعادة الضبط
+```
+ 
+**Hook اختياري:**
+```python
+_build_extra(root_layout: QVBoxLayout)  # إضافة widgets إضافية بعد FormGroup
+```
+ 
+**API:**
+```python
+form.load_for_edit(item_id: int)
+# يُحمِّل عنصراً للتعديل ويدخل edit mode تلقائياً
+# يستدعي _do_load → _fill_fields → enter_edit_mode
+ 
+# Attributes المُنشأة تلقائياً:
+form.btn_add    → QPushButton
+form.btn_save   → QPushButton
+form.btn_cancel → QPushButton
+form.lbl_mode   → QLabel
+```
+ 
+**مثال:**
+```python
+class MyForm(BaseCrudForm):
+    FORM_TITLE = "بيانات العنصر"
+    ADD_TEXT   = "➕ إضافة"
+    SAVE_TEXT  = "💾 حفظ التعديل"
+ 
+    def _build_fields(self, group):
+        self.inp_name = RequiredLineEdit("اسم...")
+        group.add_row("الاسم :", self.inp_name)
+ 
+    def _collect(self):
+        if not self.inp_name.validate():
+            return None
+        return {"name": self.inp_name.text_stripped()}
+ 
+    def _do_insert(self, data) -> int:
+        return ItemService(self.conn).add(data["name"], 0, "raw")
+ 
+    def _do_update(self, item_id, data):
+        ItemService(self.conn).update(item_id, data["name"], 0)
+ 
+    def _do_load(self, item_id):
+        r = ItemService(self.conn).get(item_id)
+        return vars(r) if r else None
+ 
+    def _fill_fields(self, data):
+        self.inp_name.setText(data.get("name", ""))
+ 
+    def _reset_fields(self):
+        self.inp_name.clear()
+```
+
 
 ## UI — Widgets Components
 
@@ -638,6 +716,104 @@ def _publish_item(row, shared_type, item_data, parent=None)
 ```
 
 ---
+
+
+## UI — Widgets Shared
+ 
+### `ui/widgets/shared/list_panel_with_shared.py` — `SharedItemsListPanel`
+ 
+قاعدة مشتركة للجداول التي تدعم العناصر المشتركة/المنشورة بين الشركات.
+يرث من `BaseListPanel + SharedOpsMixin + LiveConnMixin`.
+ 
+**إعدادات الـ subclass:**
+```python
+SHARED_TYPE      : str  = "raw"    # "raw" | "machine" | "labor_op" | "machine_op"
+TABLE_COLS       : list = []       # أسماء الأعمدة — تُحوَّل تلقائياً لـ COLUMNS
+TABLE_TITLE      : str  = ""       # عنوان الجدول
+HAS_BULK_REPLACE : bool = False    # يُظهر زر "استبدال شامل" في الهيدر
+SHOW_CATEGORY    : bool = True     # افتراضياً مفعَّل
+CONNECT_BUS      : bool = True
+```
+ 
+**ملاحظة:** العمود 0 يُخفى تلقائياً (`setColumnHidden(0, True)`) ويُستخدم لحمل الـ ID.
+`STRETCH_COL` يُضبط على 1 تلقائياً.
+ 
+**Hooks المطلوبة (override إلزامي):**
+```python
+_fetch_local_rows() → list[dict]
+# جلب الصفوف المحلية من DB
+ 
+_fill_table_row(r: int, item: dict)
+# ملء صف واحد في الجدول (r = رقم الصف)
+ 
+_edit_item(item_id: int)
+# فتح فورم التعديل للعنصر المحدد
+ 
+_delete_item(item_id: int, item_name: str)
+# حذف العنصر (مع confirm_delete عادةً)
+```
+ 
+**Hooks الاختيارية:**
+```python
+_get_shared_rows(local_rows: list) → list[dict]
+# جلب الصفوف المشتركة — افتراضي: []
+# كل dict يجب أن يحتوي: {"_is_shared": True, ...}
+ 
+_get_item_data_for_publish(row: dict) → dict
+# بيانات العنصر عند النشر كمشترك — افتراضي: {}
+ 
+_bulk_replace_item(item_id: int, item_name: str)
+# منطق الاستبدال الشامل (يُفعَّل لو HAS_BULK_REPLACE=True)
+ 
+_setup_column_widths(table)
+# ضبط عروض الأعمدة بعد بناء الجدول
+ 
+_on_edit_shared()
+# تخصيص سلوك زر "تعديل المشترك" — افتراضياً يستدعي _edit_shared_item()
+```
+ 
+**السلوك التلقائي:**
+- `_load_rows()` يدمج `_fetch_local_rows()` + `_get_shared_rows()` تلقائياً.
+- تلوين تلقائي للصفوف: المشترك بـ `SHARED_COLOR/SHARED_BG`، المنشور بـ `PUBLISHED_COLOR/PUBLISHED_BG`.
+- أزرار مضافة تلقائياً في الهيدر: **تعديل المحدد، حذف المحدد، استبدال شامل** (لو `HAS_BULK_REPLACE`)، **تعديل المشترك، نشر كمشترك**.
+**مساعدات:**
+```python
+panel._selected_row_data() → tuple[int | None, str]
+# (item_id, item_name) للصف المختار حالياً
+ 
+panel._get_current_row_dict() → dict | None
+# يرجع dict بيانات الصف المختار من _all_rows
+```
+ 
+**مثال:**
+```python
+class RawTablePanel(SharedItemsListPanel):
+    SHARED_TYPE      = "raw"
+    TABLE_COLS       = ["#", "الاسم", "السعر", "التصنيف"]
+    TABLE_TITLE      = "الخامات"
+    HAS_BULK_REPLACE = True
+    FILTER_SCOPE     = "raw"
+ 
+    def _fetch_local_rows(self):
+        return [vars(r) for r in ItemService(self.conn).list_by_type("raw")]
+ 
+    def _fill_table_row(self, r, item):
+        from ui.widgets.tables.items import make_item
+        self.table.setItem(r, 0, make_item(str(item["id"]), item["id"]))
+        self.table.setItem(r, 1, make_item(item["name"]))
+        self.table.setItem(r, 2, make_item(f"{item['price']:,.2f}"))
+        self.table.setItem(r, 3, make_item(item.get("category_name", "—")))
+ 
+    def _edit_item(self, item_id):
+        self._form.load_for_edit(item_id)
+ 
+    def _delete_item(self, item_id, item_name):
+        if confirm_delete(self, item_name):
+            ItemService(self.conn).delete(item_id)
+            emit_company_data_changed()
+```
+
+
 
 ## UI — Widgets Utils
 
