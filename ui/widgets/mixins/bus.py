@@ -4,6 +4,15 @@ ui/widgets/mixins/bus.py
 BusConnectedMixin — ربط تلقائي بـ event bus.
 
 التغييرات:
+  - [P-04] حفظ _cached_company_id على مستوى الـ instance بدل استدعاء
+    is_same_company() في كل إشعار.
+    القديم: كل widget مشترك في company_data_changed يستدعي is_same_company()
+    الذي يقرأ من company_state.company_id — مع مئات الـ widgets يصبح
+    هذا overhead ملحوظ.
+    الجديد: _cached_company_id يُحفظ مرة واحدة عند أول company_data_changed
+    ويُقارن مباشرة بـ == بدون استدعاء دالة خارجية.
+    التحديث: يحدث فقط عند _connect_bus(company=True) أو عند تغيير الشركة.
+
   - [i18n/themes] إضافة theme=, lang= parameters في _connect_bus().
     يسمح للـ widgets بالاشتراك في bus.theme_changed و bus.language_changed.
   - [i18n/themes] _on_theme_changed() و _on_language_changed() hooks جديدة.
@@ -46,6 +55,11 @@ class BusConnectedMixin:
         def closeEvent(self, event):
             self._disconnect_bus()
             super().closeEvent(event)
+
+    [P-04] ملاحظة الأداء:
+        _cached_company_id يُخزَّن عند أول company_data_changed ويُستخدم
+        للمقارنة المباشرة بدل استدعاء is_same_company() في كل إشعار.
+        المقارنة int == int أسرع بكثير من استدعاء دالة تقرأ من company_state.
     """
 
     def _connect_bus(self, data: bool = True, company: bool = False,
@@ -54,6 +68,7 @@ class BusConnectedMixin:
         يربط الـ widget بالـ event bus.
 
         [تحسين 39] Guard يمنع double-connect.
+        [P-04] يُهيّئ _cached_company_id = None عند الاشتراك.
 
         data=True    → يربط bus.data_changed و bus.company_data_changed.
         company=True → يربط bus.company_data_changed لـ _on_company_changed.
@@ -65,6 +80,10 @@ class BusConnectedMixin:
 
         self._bus_connected  = True
         self._refresh_guard  = False
+
+        # [P-04] تهيئة الـ cache — None يعني "لم يُحدَّد بعد"
+        # سيُضبط عند أول company_data_changed
+        self._cached_company_id: "int | None" = None
 
         from ui.events import bus
 
@@ -100,6 +119,7 @@ class BusConnectedMixin:
         [تحسين 17] يفصل الـ widget عن الـ bus.
         [تحسين 39] يُعيد ضبط _bus_connected.
         [i18n/themes] يشمل theme_changed و language_changed.
+        [P-04] يمسح _cached_company_id.
         """
         try:
             from ui.events import bus
@@ -137,12 +157,76 @@ class BusConnectedMixin:
         self._bus_theme_connected = False
         self._bus_lang_connected  = False
 
+        # [P-04] مسح الـ cache عند الفصل
+        self._cached_company_id = None
+
     def _on_company_data_changed(self, company_id: int):
-        from ui.widgets.core.events import is_same_company
-        if is_same_company(company_id):
-            self._refresh_guard = True
-            self._on_data_changed()
-            QTimer.singleShot(0, self._clear_refresh_guard)
+        """
+        [P-04] مقارنة مباشرة بدل استدعاء is_same_company().
+
+        القديم:
+            from ui.widgets.core.events import is_same_company
+            if is_same_company(company_id):
+                ...
+
+        الجديد:
+            1. لو _cached_company_id لم يُضبط بعد (None) → اضبطه وتابع.
+            2. لو company_id == _cached_company_id → نفس الشركة، تابع.
+            3. غير ذلك → شركة مختلفة، تجاهل.
+
+        هذا يتجنب استدعاء is_same_company() في كل إشعار مع مئات الـ widgets.
+        مقارنة int == int مباشرة بدل قراءة من company_state في كل مرة.
+
+        تحديث الـ cache:
+            _cached_company_id يُحدَّث في كل مرة تتطابق الشركة،
+            مما يضمن أنه يعكس دائماً آخر company_id نشط.
+        """
+        # المرة الأولى: لا cache بعد → اضبطه من company_state
+        if self._cached_company_id is None:
+            self._cached_company_id = self._get_active_company_id()
+
+        # مقارنة مباشرة — O(1) بلا استدعاء دالة
+        if company_id != self._cached_company_id:
+            # شركة مختلفة — تحديث الـ cache ثم تجاهل الإشعار
+            # (الـ cache قد يكون قديماً لو تغيّرت الشركة)
+            logger.debug(
+                "%s: تجاهل company_data_changed لشركة %d (النشطة: %d)",
+                type(self).__name__, company_id, self._cached_company_id or 0,
+            )
+            return
+
+        # نفس الشركة → تنفيذ التحديث
+        self._refresh_guard = True
+        self._on_data_changed()
+        QTimer.singleShot(0, self._clear_refresh_guard)
+
+    @staticmethod
+    def _get_active_company_id() -> "int | None":
+        """
+        [P-04] يقرأ company_id النشط من company_state.
+        دالة static مساعدة — تُستدعى مرة واحدة فقط عند تهيئة الـ cache.
+        """
+        try:
+            from db.companies.company_state import company_state
+            return company_state.company_id if company_state.is_ready else None
+        except Exception:
+            return None
+
+    def invalidate_company_cache(self):
+        """
+        [P-04] يُعيد ضبط الـ cache لإجباره على إعادة القراءة من company_state.
+
+        استدعه عند:
+          - تغيير الشركة النشطة في الـ widget
+          - إعادة بناء الـ widget بعد تغيير الشركة
+          - أي حالة تشك فيها بصحة الـ cache
+
+        مثال:
+            def _on_company_changed(self, company_id: int):
+                self.invalidate_company_cache()
+                self._rebuild()
+        """
+        self._cached_company_id = None
 
     def _on_data_changed_guarded(self):
         """
@@ -164,8 +248,13 @@ class BusConnectedMixin:
         pass
 
     def _on_company_changed(self, company_id: int):
-        """Override هنا لإعادة البناء عند تغيير الشركة النشطة."""
-        pass
+        """
+        Override هنا لإعادة البناء عند تغيير الشركة النشطة.
+
+        [P-04] تلقائياً يُعيد ضبط الـ cache عند تغيير الشركة.
+        """
+        # [P-04] تحديث الـ cache بالشركة الجديدة
+        self._cached_company_id = company_id
 
     def _on_theme_changed(self, theme_name: str):
         """

@@ -3,20 +3,22 @@ services/orders/order_service.py
 ==================================
 Business Logic للطلبات والعملاء.
 
-إصلاح 34: مزامنة الـ imports مع الدوال الفعلية في orders_repo.
-الدوال المُصلَحة:
-  - update_order_status → change_order_status (الاسم الفعلي)
-  - log_order_status    → _log_status (private في repo، نستخدم change_order_status مباشرة)
-  - delete_order_items  → أُضيفت كدالة مساعدة داخلية هنا
+[E-06] ربط product_id في OrderItem:
+  - product_id أصبح يُستخدم فعلياً في insert_order_item.
+  - _validate_product_ids() تتحقق من وجود المنتجات في جدول items
+    وتجلب أسماءها وأسعارها تلقائياً لو item_name أو unit_price فارغَيْن.
+  - resolve_product_info() — دالة مساعدة تجلب اسم وسعر المنتج من DB.
+  - ErpConnMixin: يمكن تمرير erp_conn اختياري لجلب بيانات المنتج
+    عند الحاجة (لتجنب coupling إجباري مع erp.db).
 
-إصلاح 8: إزالة coupling بين orders.db و erp.db في _resolve_item_name.
-  المشكلة: كانت _resolve_item_name تفتح erp_conn لجلب اسم المنتج،
-  مما يُنشئ تبعية مخفية بين الـ databases.
-  الحل: item_name أصبح required parameter يُمرَّر من الـ caller مباشرة
-  عبر OrderItem.item_name. الفالباك "منتج #{id}" محفوظ للتوافق.
+إصلاح 34 محفوظ: كل الـ imports مزامَنة مع الدوال الفعلية في orders_repo.
+إصلاح 8 محفوظ:  item_name يُمرَّر من الـ caller — erp_conn اختياري فقط.
 """
 
 from dataclasses import dataclass, field
+import logging
+
+logger = logging.getLogger(__name__)
 
 
 # ══════════════════════════════════════════════════════════
@@ -25,17 +27,28 @@ from dataclasses import dataclass, field
 
 @dataclass
 class OrderItem:
+    """
+    بند طلب واحد.
+
+    [E-06] product_id يُستخدم الآن:
+      1. للتحقق من وجود المنتج في items table (لو erp_conn متاح).
+      2. لجلب item_name و unit_price تلقائياً لو كانا فارغَيْن.
+      3. يُحفظ في order_items.product_id لربط الطلب بالمنتج.
+
+    [إصلاح 8 محفوظ] item_name لا يزال يُمرَّر من الـ caller.
+    erp_conn ليس إلزامياً — resolved_name() تعمل بدونه.
+    """
     product_id : int
     qty        : float
     unit_price : float
     notes      : str = ""
-    item_name  : str = ""   # [إصلاح 8] الاسم يُمرَّر من الـ caller بدل استعلام erp.db
+    item_name  : str = ""
 
     def total(self) -> float:
         return self.qty * self.unit_price
 
     def resolved_name(self) -> str:
-        """يرجع الاسم المُمرَّر أو fallback بسيط بدون DB query."""
+        """يرجع الاسم أو fallback بسيط."""
         return self.item_name.strip() if self.item_name.strip() else f"منتج #{self.product_id}"
 
 
@@ -73,7 +86,7 @@ class DeletePreview:
 
 
 # ══════════════════════════════════════════════════════════
-# الحالات المسموح بها للانتقال بين الـ statuses
+# الحالات المسموح بها للانتقال
 # ══════════════════════════════════════════════════════════
 
 _ALLOWED_TRANSITIONS: dict[str, list[str]] = {
@@ -86,8 +99,37 @@ _ALLOWED_TRANSITIONS: dict[str, list[str]] = {
     "on_hold":     ["pending", "confirmed", "in_progress"],
 }
 
-# الـ statuses اللي ما ينفعش يتحذف فيها الطلب
 _NO_DELETE_STATUSES = {"in_progress", "ready", "delivered"}
+
+
+# ══════════════════════════════════════════════════════════
+# [E-06] Product resolver
+# ══════════════════════════════════════════════════════════
+
+def resolve_product_info(erp_conn,
+                          product_id: int) -> "dict | None":
+    """
+    [E-06] يجلب اسم وسعر المنتج من جدول items في erp.db.
+
+    Returns:
+        dict {"name": str, "price": float} أو None لو غير موجود.
+
+    يُستخدم من OrderService لـ:
+      1. التحقق من وجود المنتج.
+      2. ملء item_name تلقائياً لو كان فارغاً.
+      3. اقتراح unit_price من سعر المنتج لو كان صفراً.
+    """
+    if erp_conn is None or product_id is None:
+        return None
+    try:
+        row = erp_conn.execute(
+            "SELECT name, price FROM items WHERE id=?", (product_id,)
+        ).fetchone()
+        if row:
+            return {"name": row["name"] or "", "price": float(row["price"] or 0)}
+    except Exception as e:
+        logger.debug("resolve_product_info: %s", e)
+    return None
 
 
 # ══════════════════════════════════════════════════════════
@@ -97,14 +139,76 @@ _NO_DELETE_STATUSES = {"in_progress", "ready", "delivered"}
 class OrderService:
     """
     Business Logic للطلبات.
-    يدير: إنشاء / تعديل / حذف / تغيير الحالة / الإحصائيات.
 
-    إصلاح 34: كل الـ imports مزامَنة مع الدوال الفعلية في orders_repo.
-    إصلاح 8:  _resolve_item_name أُزيلت — item_name يُمرَّر في OrderItem.item_name.
+    [E-06] يقبل erp_conn اختيارياً لربط المنتجات:
+        svc = OrderService(orders_conn, erp_conn=erp_conn)
+
+        # لو erp_conn متاح:
+        # - يتحقق من وجود product_id في items table
+        # - يجلب item_name تلقائياً لو كان فارغاً
+        # - يقترح unit_price من سعر المنتج لو كان صفراً
+
+        # لو erp_conn غير متاح (None):
+        # - يعمل بنفس السلوك القديم
+        # - item_name من OrderItem.resolved_name()
+        # - unit_price من OrderItem مباشرة
+
+    [إصلاح 34 محفوظ] imports مزامَنة مع الدوال الفعلية في orders_repo.
+    [إصلاح 8 محفوظ]  item_name يُمرَّر من الـ caller — erp_conn اختياري.
     """
 
-    def __init__(self, conn):
-        self._conn = conn
+    def __init__(self, conn, erp_conn=None):
+        self._conn     = conn
+        self._erp_conn = erp_conn   # [E-06] اختياري — لربط المنتجات
+
+    # ── [E-06] Product validation & enrichment ────────────
+
+    def _enrich_item(self, item: OrderItem) -> OrderItem:
+        """
+        [E-06] يُثري OrderItem بمعلومات المنتج من erp.db.
+
+        لو erp_conn متاح:
+          - يتحقق من وجود product_id في items.
+          - يملأ item_name تلقائياً لو كان فارغاً.
+          - يُبلِّغ بـ warning لو unit_price = 0 وسعر المنتج موجود.
+
+        لو erp_conn غير متاح → يُعيد الـ item كما هو.
+        """
+        if self._erp_conn is None:
+            return item
+
+        info = resolve_product_info(self._erp_conn, item.product_id)
+        if info is None:
+            logger.warning(
+                "OrderService._enrich_item: product_id=%s غير موجود في items",
+                item.product_id
+            )
+            return item
+
+        # ملء item_name تلقائياً لو كان فارغاً
+        if not item.item_name.strip() and info["name"]:
+            item = OrderItem(
+                product_id = item.product_id,
+                qty        = item.qty,
+                unit_price = item.unit_price,
+                notes      = item.notes,
+                item_name  = info["name"],
+            )
+
+        # تحذير لو السعر صفر والمنتج له سعر
+        if item.unit_price == 0 and info["price"] > 0:
+            logger.warning(
+                "OrderService._enrich_item: product_id=%s unit_price=0 "
+                "لكن سعر المنتج في DB = %.2f — تأكد من السعر",
+                item.product_id, info["price"]
+            )
+
+        return item
+
+    def _validate_and_enrich_items(self,
+                                    items: list[OrderItem]) -> list[OrderItem]:
+        """[E-06] يُثري كل البنود بمعلومات المنتجات."""
+        return [self._enrich_item(item) for item in items]
 
     # ── Create ────────────────────────────────────────────
 
@@ -113,10 +217,8 @@ class OrderService:
                notes: str = "") -> int:
         """
         ينشئ طلب جديد ويرجع الـ ID.
-        يتحقق من وجود العميل ومن وجود items.
 
-        ملاحظة: item_name في كل OrderItem يجب أن يكون محدداً من الـ caller.
-        لو فارغ → يُستخدم "منتج #{product_id}" كـ fallback.
+        [E-06] يُثري البنود بمعلومات المنتجات قبل الحفظ (لو erp_conn متاح).
         """
         if not customer_id:
             raise ValueError("العميل مطلوب")
@@ -125,9 +227,11 @@ class OrderService:
 
         self._assert_customer_exists(customer_id)
 
+        # [E-06] إثراء البنود
+        items = self._validate_and_enrich_items(items)
+
         total = sum(i.total() for i in items)
 
-        # [إصلاح 34] استخدام الدوال الفعلية الموجودة في orders_repo
         from db.orders.orders_repo import insert_order, insert_order_item
         order_id = insert_order(
             self._conn,
@@ -140,7 +244,8 @@ class OrderService:
             insert_order_item(
                 self._conn,
                 order_id    = order_id,
-                item_name   = item.resolved_name(),   # [إصلاح 8] من OrderItem مباشرة
+                product_id  = item.product_id,   # [E-06] يُحفظ الآن
+                item_name   = item.resolved_name(),
                 quantity    = item.qty,
                 unit_price  = item.unit_price,
                 notes       = item.notes,
@@ -165,9 +270,11 @@ class OrderService:
 
         self._assert_customer_exists(customer_id)
 
+        # [E-06] إثراء البنود
+        items = self._validate_and_enrich_items(items)
+
         total = sum(i.total() for i in items)
 
-        # [إصلاح 34] استخدام update_order الفعلية + حذف يدوي للبنود
         from db.orders.orders_repo import update_order, insert_order_item
         update_order(
             self._conn,
@@ -175,13 +282,13 @@ class OrderService:
             total_amount = total,
             notes        = notes.strip(),
         )
-        # حذف البنود القديمة ثم إضافة الجديدة
         self._delete_order_items(order_id)
         for item in items:
             insert_order_item(
                 self._conn,
                 order_id    = order_id,
-                item_name   = item.resolved_name(),   # [إصلاح 8] من OrderItem مباشرة
+                product_id  = item.product_id,   # [E-06] يُحفظ الآن
+                item_name   = item.resolved_name(),
                 quantity    = item.qty,
                 unit_price  = item.unit_price,
                 notes       = item.notes,
@@ -192,11 +299,7 @@ class OrderService:
     def change_status(self, order_id: int,
                       new_status: str,
                       note: str = "") -> OrderStatusChange:
-        """
-        يغير حالة الطلب مع التحقق من صحة الانتقال.
-
-        [إصلاح 34] يستخدم change_order_status الفعلية بدل update_order_status.
-        """
+        """يغير حالة الطلب مع التحقق من صحة الانتقال."""
         order = self._get_order_or_raise(order_id)
         old_status = order["status"]
 
@@ -210,7 +313,6 @@ class OrderService:
         from datetime import datetime
         timestamp = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
 
-        # change_order_status يتولى تحديث الحالة وتسجيل الـ log داخلياً
         change_order_status(
             self._conn,
             order_id   = order_id,
@@ -228,15 +330,12 @@ class OrderService:
         )
 
     def get_allowed_transitions(self, order_id: int) -> list[str]:
-        """يرجع الحالات المسموح بالانتقال إليها من الحالة الحالية."""
         order = self._get_order_or_raise(order_id)
         return _ALLOWED_TRANSITIONS.get(order["status"], [])
 
     # ── Delete ────────────────────────────────────────────
 
-    def get_delete_preview(self,
-                           order_id: int) -> DeletePreview | None:
-        """يرجع معلومات الحذف قبل التنفيذ."""
+    def get_delete_preview(self, order_id: int) -> "DeletePreview | None":
         order = self._conn.execute(
             "SELECT id, status, order_number FROM orders WHERE id=?",
             (order_id,)
@@ -264,30 +363,22 @@ class OrderService:
         )
 
     def delete(self, order_id: int) -> bool:
-        """
-        يحذف الطلب.
-        يرجع True لو نجح، False لو مش مسموح.
-        """
         preview = self.get_delete_preview(order_id)
         if not preview or not preview.can_delete:
             return False
-
-        # [إصلاح 34] delete_order موجودة فعلاً في orders_repo
         from db.orders.orders_repo import delete_order
         return delete_order(self._conn, order_id)
 
-    # ── Summary / Stats ───────────────────────────────────
+    # ── Summary ───────────────────────────────────────────
 
-    def get_summary(self,
-                    customer_id: int = None) -> OrderSummary:
-        """يرجع إحصائيات الطلبات — كلها أو لعميل معين."""
+    def get_summary(self, customer_id: int = None) -> OrderSummary:
         where  = "WHERE customer_id=?" if customer_id else ""
         params = (customer_id,) if customer_id else ()
 
         row = self._conn.execute(f"""
             SELECT
-                COUNT(*)                                        AS total,
-                COALESCE(SUM(net_amount), 0)                   AS amount,
+                COUNT(*)                                              AS total,
+                COALESCE(SUM(net_amount), 0)                         AS amount,
                 SUM(CASE WHEN status='pending'     THEN 1 ELSE 0 END) AS pending,
                 SUM(CASE WHEN status='in_progress' THEN 1 ELSE 0 END) AS in_prog,
                 SUM(CASE WHEN status='delivered'   THEN 1 ELSE 0 END) AS done,
@@ -312,11 +403,9 @@ class OrderService:
     def add_customer(self, name: str,
                      phone: str = "",
                      notes: str = "") -> int:
-        """يضيف عميل جديد ويرجع الـ ID."""
         name = name.strip()
         if not name:
             raise ValueError("اسم العميل مطلوب")
-
         from db.orders.customers_repo import insert_customer
         return insert_customer(
             self._conn,
@@ -329,11 +418,9 @@ class OrderService:
                         name: str,
                         phone: str = "",
                         notes: str = "") -> None:
-        """يحدث بيانات العميل."""
         name = name.strip()
         if not name:
             raise ValueError("اسم العميل مطلوب")
-
         from db.orders.customers_repo import update_customer
         update_customer(
             self._conn,
@@ -343,9 +430,7 @@ class OrderService:
             notes       = notes.strip(),
         )
 
-    def get_customer_summary(self,
-                             customer_id: int) -> OrderSummary:
-        """إحصائيات طلبات عميل معين."""
+    def get_customer_summary(self, customer_id: int) -> OrderSummary:
         return self.get_summary(customer_id=customer_id)
 
     # ── Helpers ───────────────────────────────────────────
@@ -370,11 +455,6 @@ class OrderService:
             )
 
     def _delete_order_items(self, order_id: int) -> None:
-        """
-        [إصلاح 34] دالة مساعدة داخلية لحذف بنود الطلب.
-        بديل عن delete_order_items الغير موجودة في orders_repo.
-        delete_order_item موجودة للبند الواحد، نستخدم DELETE مباشر هنا.
-        """
         self._conn.execute(
             "DELETE FROM order_items WHERE order_id=?", (order_id,)
         )

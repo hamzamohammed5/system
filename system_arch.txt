@@ -1,5 +1,5 @@
 File Tree Snapshot
-Generated : 2026-05-29 08:00:35
+Generated : 2026-05-29 08:21:14
 Source    : D:\My Workspace\Hg\Alhabaar\accountant\system
 Extensions: .py
 ────────────────────────────────────────────────────────────
@@ -132,6 +132,7 @@ system/
 │   │   │   ├── accounting_tabs_builder.py
 │   │   │   ├── accounts_combo_widget.py
 │   │   │   ├── accounts_tree.py
+│   │   │   ├── audit_log_tab.py
 │   │   │   ├── financial_statements.py
 │   │   │   ├── group_manager.py
 │   │   │   ├── helpers.py
@@ -289,7 +290,6 @@ system/
 │   │   └── theme_manager.py
 │   ├── widgets/
 │   │   ├── base/
-│   │   │   ├── crud_form.py
 │   │   │   ├── detail_panel.py
 │   │   │   ├── list_panel.py
 │   │   │   ├── section.py
@@ -362,8 +362,6 @@ system/
 │   ├── app_settings.py
 │   ├── app_state.py
 │   ├── events.py
-│   ├── font_utils.py
-│   ├── helpers.py
 │   ├── i18n.py
 │   ├── main_window.py
 │   └── settings_dialog.py

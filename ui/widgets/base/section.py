@@ -1,13 +1,42 @@
 """
-widgets/base/section.py
-========================
+ui/widgets/base/section.py
+==========================
 BaseSection — قاعدة مشتركة للأقسام اللي فيها list + detail.
-"""
-from PyQt5.QtWidgets import QWidget, QHBoxLayout, QSizePolicy, QSplitter
-from PyQt5.QtCore    import Qt, QTimer
 
-from ..theme.styles  import splitter_style   # المصدر الوحيد
-from ..mixins.bus    import BusConnectedMixin
+[T-05] توحيد BaseSection و CrudSection:
+  - BaseSection أُضيفت إليها خصائص CrudSection:
+      LIST_MAX_W, SPLITTER_RATIO, FORM_POSITION
+      _create_form() → QWidget | None
+      form_panel property
+
+  - CrudSection في panels/crud_section.py أصبحت alias لـ BaseSection
+    للتوافق مع الكود القديم.
+
+  - السلوك الموحَّد:
+      FORM_POSITION = "none"   → لا فورم (السلوك الأصلي لـ BaseSection)
+      FORM_POSITION = "bottom" → فورم أسفل القائمة (السلوك الأصلي لـ CrudSection)
+      FORM_POSITION = "left"   → القائمة فقط (نفس "none" من ناحية الـ splitter)
+
+  - override المطلوب:
+      _create_list()   → QWidget
+      _create_detail() → QWidget
+
+  - override الاختياري:
+      _create_form()        → QWidget | None
+      _connect_signals()
+      _on_data_changed()
+      _on_item_selected(item_id)
+      LIST_MIN_W, LIST_MAX_W, DETAIL_MIN_W
+      CONNECT_BUS, LAYOUT_REVERSED, FORM_POSITION, SPLITTER_RATIO
+"""
+from PyQt5.QtWidgets import (
+    QWidget, QHBoxLayout, QVBoxLayout,
+    QSizePolicy, QSplitter,
+)
+from PyQt5.QtCore import Qt, QTimer
+
+from ..theme.styles import splitter_style
+from ..mixins.bus   import BusConnectedMixin
 
 
 class BaseSection(QWidget, BusConnectedMixin):
@@ -19,28 +48,40 @@ class BaseSection(QWidget, BusConnectedMixin):
         _create_detail() → QWidget
 
     Override الاختياري:
+        _create_form()        → QWidget | None  (افتراضي: None)
         _connect_signals()
         _on_data_changed()
+        _on_item_selected(item_id)
         LIST_MIN_W, LIST_MAX_W, DETAIL_MIN_W
-        CONNECT_BUS, LAYOUT_REVERSED
+        CONNECT_BUS, LAYOUT_REVERSED, FORM_POSITION, SPLITTER_RATIO
     """
 
-    LIST_MIN_W      : int  = 280
-    LIST_MAX_W      : int  = 560
-    DETAIL_MIN_W    : int  = 320
-    CONNECT_BUS     : bool = False
-    LAYOUT_REVERSED : bool = False
+    LIST_MIN_W      : int   = 280
+    LIST_MAX_W      : int   = 560
+    DETAIL_MIN_W    : int   = 320
+    CONNECT_BUS     : bool  = False
+    LAYOUT_REVERSED : bool  = False
+
+    # [T-05] من CrudSection — موضع الفورم
+    # "none"   → لا فورم
+    # "bottom" → أسفل لوحة القائمة
+    # "left"   → نفس list panel (لا يُضاف splitter منفصل)
+    FORM_POSITION   : str   = "none"
+
+    # [T-05] من CrudSection — نسبة الـ splitter
+    SPLITTER_RATIO  : tuple = (1, 2)
 
     def __init__(self, conn=None, parent=None):
         super().__init__(parent)
         self.conn = conn
+        self._form: "QWidget | None" = None
         self._build()
         self._connect_signals()
         if self.CONNECT_BUS:
             self._connect_bus(data=True)
         QTimer.singleShot(50, self._apply_sizes)
 
-    # ── override ──────────────────────────────────────────
+    # ── override المطلوب ──────────────────────────────────
 
     def _create_list(self) -> QWidget:
         raise NotImplementedError
@@ -48,12 +89,30 @@ class BaseSection(QWidget, BusConnectedMixin):
     def _create_detail(self) -> QWidget:
         raise NotImplementedError
 
+    # ── override الاختياري ────────────────────────────────
+
+    def _create_form(self) -> "QWidget | None":
+        """
+        [T-05] يُنشئ فورم الإضافة/التعديل.
+        افتراضياً: None (لا فورم).
+        Override لإضافة فورم.
+        """
+        return None
+
     def _connect_signals(self):
         if hasattr(self._list, "item_selected") and hasattr(self._detail, "load_item"):
             self._list.item_selected.connect(self._detail.load_item)
 
     def _on_data_changed(self):
         self.refresh()
+
+    def _on_item_selected(self, item_id: int):
+        """
+        [T-05] من CrudSection — يُستدعى عند اختيار عنصر.
+        Override لتنفيذ منطق مخصص.
+        """
+        if hasattr(self._detail, "load_item"):
+            self._detail.load_item(item_id)
 
     # ── بناء الواجهة ──────────────────────────────────────
 
@@ -70,17 +129,21 @@ class BaseSection(QWidget, BusConnectedMixin):
         self._list   = self._create_list()
         self._detail = self._create_detail()
 
-        self._list.setMinimumWidth(self.LIST_MIN_W)
-        self._list.setSizePolicy(QSizePolicy.Preferred, QSizePolicy.Expanding)
+        # [T-05] بناء الجانب الأيسر مع الفورم (لو وُجد)
+        left_widget = self._build_left_panel()
+
+        left_widget.setMinimumWidth(self.LIST_MIN_W)
+        left_widget.setSizePolicy(QSizePolicy.Preferred, QSizePolicy.Expanding)
+
         self._detail.setMinimumWidth(self.DETAIL_MIN_W)
         self._detail.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Expanding)
 
         if self.LAYOUT_REVERSED:
-            widgets  = [self._detail, self._list]
-            stretches = [1, 0]
+            widgets   = [self._detail, left_widget]
+            stretches = [self.SPLITTER_RATIO[1], self.SPLITTER_RATIO[0]]
         else:
-            widgets  = [self._list, self._detail]
-            stretches = [0, 1]
+            widgets   = [left_widget, self._detail]
+            stretches = [self.SPLITTER_RATIO[0], self.SPLITTER_RATIO[1]]
 
         for i, w in enumerate(widgets):
             self._splitter.addWidget(w)
@@ -88,6 +151,35 @@ class BaseSection(QWidget, BusConnectedMixin):
             self._splitter.setStretchFactor(i, stretches[i])
 
         root.addWidget(self._splitter)
+
+    def _build_left_panel(self) -> QWidget:
+        """
+        [T-05] يبني لوحة القائمة مع الفورم (لو FORM_POSITION != "none").
+
+        FORM_POSITION = "none"   → يرجع self._list مباشرة
+        FORM_POSITION = "bottom" → يرجع container(list + form)
+        FORM_POSITION = "left"   → يرجع self._list (الفورم خارج الـ splitter)
+        """
+        form = self._create_form()
+
+        if form is None or self.FORM_POSITION == "none":
+            self._form = None
+            return self._list
+
+        if self.FORM_POSITION == "bottom":
+            container = QWidget()
+            container.setStyleSheet("background:transparent;")
+            lay = QVBoxLayout(container)
+            lay.setContentsMargins(0, 0, 0, 0)
+            lay.setSpacing(0)
+            lay.addWidget(self._list, stretch=1)
+            lay.addWidget(form)
+            self._form = form
+            return container
+
+        # FORM_POSITION = "left" أو أي قيمة أخرى → list فقط
+        self._form = form
+        return self._list
 
     def _apply_sizes(self):
         total = self._splitter.width() or self.width()
@@ -99,8 +191,10 @@ class BaseSection(QWidget, BusConnectedMixin):
         detail_w = max(self.DETAIL_MIN_W, total - list_w - self._splitter.handleWidth())
 
         self._splitter.blockSignals(True)
-        sizes = [detail_w, list_w] if self.LAYOUT_REVERSED else [list_w, detail_w]
-        self._splitter.setSizes(sizes)
+        if self.LAYOUT_REVERSED:
+            self._splitter.setSizes([detail_w, list_w])
+        else:
+            self._splitter.setSizes([list_w, detail_w])
         self._splitter.blockSignals(False)
 
     # ── API ───────────────────────────────────────────────
@@ -114,6 +208,12 @@ class BaseSection(QWidget, BusConnectedMixin):
         if hasattr(self._detail, "clear"):
             self._detail.clear()
 
+    def select_item(self, item_id: int):
+        """[T-05] من CrudSection — يختار عنصراً برمجياً."""
+        if hasattr(self._list, "select_item"):
+            self._list.select_item(item_id)
+        self._on_item_selected(item_id)
+
     @property
     def list_panel(self) -> QWidget:
         return self._list
@@ -121,3 +221,8 @@ class BaseSection(QWidget, BusConnectedMixin):
     @property
     def detail_panel(self) -> QWidget:
         return self._detail
+
+    @property
+    def form_panel(self) -> "QWidget | None":
+        """[T-05] من CrudSection — يرجع لوحة الفورم (أو None)."""
+        return self._form
