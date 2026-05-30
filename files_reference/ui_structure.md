@@ -29,16 +29,21 @@
 تسلسل التشغيل:
 
 ```
-1. init_db()                        ← تهيئة companies.db فقط
+1. init_db()                                      ← تهيئة companies.db فقط
 2. QApplication(sys.argv)
-3. theme_manager.load_from_db()     ← تحميل الثيم المحفوظ
-4. i18n_manager.load_from_db()      ← تحميل اللغة المحفوظة
+3. theme_manager.load_from_db()                   ← تحميل الثيم المحفوظ
+4. i18n_manager.load_from_db()                    ← تحميل اللغة المحفوظة
 5. app.setStyleSheet(_build_stylesheet(get_font_size()))
 6. app.setLayoutDirection(i18n_manager.qt_direction)
-7. install_no_wheel_filter(app)     ← منع عجلة الماوس على inputs
-8. install_shift_wheel_filter(app)  ← Shift+Wheel مسموح
+7. install_no_wheel_filter(app)                   ← منع عجلة الماوس على inputs
+8. install_shift_wheel_filter(app)                ← Shift+Wheel مسموح
 9. MainWindow(app).show()
 10. app.exec_()
+```
+
+**الاستيراد:**
+```python
+from ui.widgets.core.i18n import i18n_manager
 ```
 
 **ملاحظة:** لا يُنشئ أي connection لشركة — كل الـ connections تُنشأ لاحقاً عبر `company_state`.
@@ -141,7 +146,6 @@ QVBoxLayout
 sidebar.get_buttons() -> list[_NavButton]
 sidebar.get_company_selector() -> CompanySelector
 sidebar.refresh_all_buttons()
-# يحدث أحجام الأزرار + _SectionLabels عند تغيير حجم الخط
 ```
 
 **الـ collapse animation:**
@@ -163,20 +167,17 @@ _NavButton(icon: str, label: str, badge: str = "", parent=None)
 ```
 [_txt_lbl (stretch=1)] [_badge_lbl] [_ico_lbl (22px)]
 ```
-الترتيب RTL: أيقونة يمين، نص يسار.
 
 **API:**
 ```python
-btn.set_badge(text)           # يُظهر/يُخفي الـ badge
-btn.set_collapsed(collapsed)  # يُخفي النص والـ badge + يغير العرض
-btn.refresh_sizes()           # يحدث أحجام الخط عند تغيير الإعدادات
-btn.setChecked(v)             # يغير الـ style (active/inactive)
-
-# nav_key property:
-btn.property("nav_key")       # "costing" | "pricing" | etc.
+btn.set_badge(text)
+btn.set_collapsed(collapsed)
+btn.refresh_sizes()
+btn.setChecked(v)
+btn.property("nav_key")  # "costing" | "pricing" | etc.
 ```
 
-**الثوابت المُعاد تصديرها (للـ imports القديمة):**
+**الثوابت المُعاد تصديرها:**
 ```python
 from ui.main_window_helper._nav_button import (
     SIDEBAR_EXPANDED_WIDTH,   # 224
@@ -197,11 +198,9 @@ _SectionLabel(text: str, parent=None)
 
 **API:**
 ```python
-lbl._apply_style()        # يُطبق الـ stylesheet الحالي (يُستدعى من refresh_all_buttons)
+lbl._apply_style()
 lbl.set_collapsed(collapsed)  # setVisible(not collapsed)
 ```
-
-**Style:** `color: sidebar_muted | font-size: fs(base, -2) | font-weight: 700 | letter-spacing: 1.5px`
 
 ---
 
@@ -210,28 +209,20 @@ lbl.set_collapsed(collapsed)  # setVisible(not collapsed)
 ```python
 _ToggleButton(parent=None)
 # height: 36px
-# cursor: PointingHandCursor
-```
 
-**API:**
-```python
 btn.toggle_state() -> bool
-# يبدل الحالة ويرجع: True = collapsed, False = expanded
-# يغير النص: "◀" (expanded) أو "▶" (collapsed)
-# يغير الـ tooltip: "طي الشريط الجانبي" / "فرد الشريط الجانبي"
+# True = collapsed, False = expanded
 ```
 
 ---
 
 ## Tabs — Sections الرئيسية
 
-كل section هي الـ widget اللي بتتحط في الـ `_stack` في `MainWindow`.
-
 ### `ui/tabs/costing_section.py` — `CostingSection` → index 1
 
 ```python
 CostingSection()
-# QTabWidget داخلي بتبويبات:
+# QTabWidget داخلي:
 # ├── "المنتجات"    → ProductTab(conn)
 # ├── "الخامات"     → RawTab(conn)
 # ├── "العمالة"     → LaborTab(conn)
@@ -255,7 +246,6 @@ PricingSection()
 
 ```python
 AccountingTab()
-# يُبنى عبر accounting_tabs_builder.py
 # QTabWidget داخلي:
 # ├── "الحسابات"        → AccountsTree(conn)
 # ├── "القيود"           → JournalTab(conn)
@@ -309,30 +299,28 @@ OrdersSection()
 
 ```python
 ProductTab(conn)
-# قسم CRUD للمنتجات (semi + final)
-# يشمل: قائمة المنتجات + فورم BOM + حساب التكلفة
 # Sub-widgets:
-#   product_table.py  → ProductTable     (قائمة المنتجات)
-#   product_form.py   → ProductForm      (فورم الإضافة/التعديل)
+#   product_table.py      → ProductTable
+#   product_form.py       → ProductForm
 #   product_main_panel.py → ProductMainPanel
 ```
 
-**`ProductMainPanel`** — اللوحة الرئيسية:
-- `_header_bar.py` → `_HeaderBar` — شريط العنوان + أزرار الإجراءات
-- `_rows_manager.py` → `_RowsManager` — إدارة صفوف BOM
-- `_save_logic.py` → `_SaveLogic` — منطق الحفظ
+**`ProductMainPanel`:**
+- `_header_bar.py` → `_HeaderBar`
+- `_rows_manager.py` → `_RowsManager`
+- `_save_logic.py` → `_SaveLogic`
 
 **مكونات BOM المشتركة:**
 ```python
 # ui/tabs/costing/shared/
-bom_scenarios_panel.py   → BomScenariosPanel    # إدارة السيناريوهات
-bom_tree.py              → BomTree              # شجرة عرض BOM
-component_row.py         → ComponentRow         # صف مكون واحد
-catalog_builder.py       → CatalogBuilder       # بناء الكاتالوج
-raw_variants_panel.py    → RawVariantsPanel     # إدارة variants الخامات
-machine_op_rows_editor.py → MachineOpRowsEditor # محرر صفوف عمليات التشغيل
+bom_scenarios_panel.py        → BomScenariosPanel
+bom_tree.py                   → BomTree
+component_row.py              → ComponentRow
+catalog_builder.py            → CatalogBuilder
+raw_variants_panel.py         → RawVariantsPanel
+machine_op_rows_editor.py     → MachineOpRowsEditor
 scenario_comparison_widget.py → ScenarioComparisonWidget
-bulk_replace/            → BulkReplaceDialog    # استبدال مكون في منتجات متعددة
+bulk_replace/                 → BulkReplaceDialog
 ```
 
 ---
@@ -341,11 +329,10 @@ bulk_replace/            → BulkReplaceDialog    # استبدال مكون في
 
 ```python
 RawTab(conn)
-# قسم CRUD للخامات
 # Sub-widgets:
-#   raw/raw_table_panel.py  → RawTablePanel   (جدول الخامات)
-#   raw/raw_section.py      → RawSection      (القسم الكامل)
-#   raw/raw_input_panel.py  → RawInputPanel   (فورم الإدخال)
+#   raw/raw_table_panel.py → RawTablePanel
+#   raw/raw_section.py     → RawSection
+#   raw/raw_input_panel.py → RawInputPanel
 ```
 
 ---
@@ -354,11 +341,10 @@ RawTab(conn)
 
 ```python
 LaborTab(conn)
-# قسم CRUD لعمليات العمالة
 # Sub-widgets:
 #   labor/labor_op_table.py  → LaborOpTable
 #   labor/labor_op_form.py   → LaborOpForm
-#   labor/labor_settings.py  → LaborSettings  (إعدادات الراتب/ساعات العمل)
+#   labor/labor_settings.py  → LaborSettings
 ```
 
 ---
@@ -367,7 +353,6 @@ LaborTab(conn)
 
 ```python
 MachineTab(conn)
-# قسم CRUD للماكينات وعمليات التشغيل
 # Sub-widgets:
 #   machine/machine_table.py    → MachineTable
 #   machine/machine_form.py     → MachineForm
@@ -383,10 +368,9 @@ MachineTab(conn)
 
 ```python
 PricingTab(conn)
-# جدول أسعار المنتجات النهائية مع هامش الربح
 # Sub-widgets:
 #   pricing/_pricing_panel.py → _PricingPanel
-#   pricing/_stat_box.py      → _StatBox      (إجماليات)
+#   pricing/_stat_box.py      → _StatBox
 ```
 
 ---
@@ -395,12 +379,11 @@ PricingTab(conn)
 
 ```python
 OffersTab(conn)
-# CRUD للعروض
 # Sub-widgets:
-#   offers/offers_table.py  → OffersTable
-#   offers/offer_form.py    → OfferForm
-#   offers/offer_details.py → OfferDetails
-#   offers/offer_item_row.py → OfferItemRow  (صف منتج في العرض)
+#   offers/offers_table.py   → OffersTable
+#   offers/offer_form.py     → OfferForm
+#   offers/offer_details.py  → OfferDetails
+#   offers/offer_item_row.py → OfferItemRow
 ```
 
 ---
@@ -411,7 +394,6 @@ OffersTab(conn)
 
 ```python
 AccountsTree(conn)
-# شجرة الحسابات مع CRUD + مجموعات الحسابات
 # Sub-widgets:
 #   tree/_account_form.py  → _AccountForm
 #   tree/_group_filter.py  → _GroupFilter
@@ -426,24 +408,19 @@ AccountsTree(conn)
 
 ```python
 JournalTab(conn)
-# قيود محاسبية — قائمة + فورم
 # Sub-widgets:
-#   journal/journal_tab_widget.py   → JournalTabWidget   (الهيكل الكامل)
-#   journal/journal_form.py         → JournalForm        (فورم القيد)
-#   journal/journal_tree_table.py   → JournalTreeTable   (جدول القيود)
-#   journal/journal_filter.py       → JournalFilter      (فلتر بحث)
-#   journal/journal_lines.py        → JournalLines       (صفوف القيد)
+#   journal/journal_tab_widget.py    → JournalTabWidget
+#   journal/journal_form.py          → JournalForm
+#   journal/journal_tree_table.py    → JournalTreeTable
+#   journal/journal_filter.py        → JournalFilter
+#   journal/journal_lines.py         → JournalLines
 #   journal/journal_account_picker.py → JournalAccountPicker
-#   journal/journal_group_combo.py  → JournalGroupCombo
-
-# form/ sub-widgets:
-#   form/_balance_bar.py   → _BalanceBar   (شريط التوازن)
-#   form/_entry_meta.py    → _EntryMeta    (بيانات القيد)
-#   form/_journal_header.py → _JournalHeader
-
-# lines/ sub-widgets:
-#   lines/_lines_panel.py  → _LinesPanel   (لوحة الصفوف)
-#   lines/_smart_line.py   → _SmartLine    (صف ذكي)
+#   journal/journal_group_combo.py   → JournalGroupCombo
+#   form/_balance_bar.py             → _BalanceBar
+#   form/_entry_meta.py              → _EntryMeta
+#   form/_journal_header.py          → _JournalHeader
+#   lines/_lines_panel.py            → _LinesPanel
+#   lines/_smart_line.py             → _SmartLine
 ```
 
 ---
@@ -452,12 +429,11 @@ JournalTab(conn)
 
 ```python
 LedgerTab(conn)
-# دفتر الأستاذ — حركات الحساب
 # Sub-widgets:
 #   ledger/ledger_accounts_panel.py → LedgerAccountsPanel
 #   ledger/ledger_filter_bar.py     → LedgerFilterBar
 #   ledger/ledger_stat_cards.py     → LedgerStatCards
-#   ledger/ledger_t_account.py      → LedgerTAccount  (حساب T)
+#   ledger/ledger_t_account.py      → LedgerTAccount
 ```
 
 ---
@@ -480,13 +456,6 @@ FinancialStatements(conn)
 # ├── "قائمة الدخل"     → IncomeStatementTab
 # ├── "الميزانية"        → BalanceSheetTab
 # └── "حقوق الملكية"    → OwnersEquityTab
-
-# financial/ sub-widgets:
-#   financial/trial_balance_tab.py     → TrialBalanceTab
-#   financial/income_statement_tab.py  → IncomeStatementTab
-#   financial/balance_sheet_tab.py     → BalanceSheetTab
-#   financial/owners_equity_tab.py     → OwnersEquityTab
-#   financial/_financial_helpers.py    → helpers مشتركة
 ```
 
 ---
@@ -495,29 +464,15 @@ FinancialStatements(conn)
 
 ```python
 InvestorsTab(conn)
-# CRUD للمستثمرين + ربطهم بالقيود
 # Sub-widgets (investors/):
-#   _investors_layout.py    → _InvestorsLayout   (الهيكل الكامل)
-#   _investors_panel.py     → _InvestorsPanel    (قائمة المستثمرين)
-#   _investors_table.py     → _InvestorsTable    (الجدول)
-#   _investor_form.py       → _InvestorForm      (فورم الإضافة/التعديل)
-#   _investor_details.py    → _InvestorDetails   (تفاصيل المستثمر)
-#   _details_table.py       → _DetailsTable      (جدول الحركات)
-#   _helpers.py             → helpers
-#   _movement_dialog.py     → _MovementDialog    (dialog إضافة حركة)
-#   _link_to_entry_panel.py → _LinkToEntryPanel  (ربط بقيد)
-```
-
-**Helper tabs:**
-```python
-# ui/tabs/accounting/
-accounting_tabs_builder.py   → AccountingTabsBuilder   # يبني كل الـ tabs
-_conn_guard.py               → _ConnGuard              # حماية الاتصال
-_state_widgets.py            → _StateWidgets           # شاشات الحالة الفارغة
-account_combo.py             → AccountCombo            # combo اختيار الحساب
-accounts_combo_widget.py     → AccountsComboWidget
-group_manager.py             → GroupManager            # إدارة مجموعات الحسابات
-helpers.py                   → helpers مشتركة
+#   _investors_layout.py    → _InvestorsLayout
+#   _investors_panel.py     → _InvestorsPanel
+#   _investors_table.py     → _InvestorsTable
+#   _investor_form.py       → _InvestorForm
+#   _investor_details.py    → _InvestorDetails
+#   _details_table.py       → _DetailsTable
+#   _movement_dialog.py     → _MovementDialog
+#   _link_to_entry_panel.py → _LinkToEntryPanel
 ```
 
 ---
@@ -528,7 +483,6 @@ helpers.py                   → helpers مشتركة
 
 ```python
 InventoryItemsTab(conn)
-# CRUD لأصناف المخزن
 # Sub-widgets (items/):
 #   _item_form.py   → _ItemForm
 #   _items_tab.py   → _ItemsTab
@@ -541,7 +495,6 @@ InventoryItemsTab(conn)
 
 ```python
 InventoryInboundTab(conn)
-# تسجيل حركات الوارد (stock in)
 ```
 
 ---
@@ -550,7 +503,6 @@ InventoryInboundTab(conn)
 
 ```python
 InventoryOutboundTab(conn)
-# تسجيل حركات الصادر (stock out)
 ```
 
 ---
@@ -559,7 +511,6 @@ InventoryOutboundTab(conn)
 
 ```python
 InventoryReportTab(conn)
-# تقارير المخزن — رصيد + حركات + تقييم
 ```
 
 ---
@@ -570,18 +521,13 @@ InventoryReportTab(conn)
 
 ```python
 DesignsTab(conn)
-# CRUD للتصميمات
 # Sub-widgets (designs/):
 #   _design_detail_panel.py      → _DesignDetailPanel
 #   _designs_categories_panel.py → _DesignsCategoriesPanel
 #   _designs_table.py            → _DesignsTable
-#   _size_card.py                → _SizeCard          (بطاقة مقاس)
+#   _size_card.py                → _SizeCard
 #   _size_dialog.py              → _SizeDialog
-#   _xcf_thumbnail.py            → _XcfThumbnail      (معاينة ملف GIMP)
-#   designs_categories/          → _row_and_form.py
-#   designs_table/_design_card.py → _DesignCard
-#   size_card/helper.py
-#   design_detail_panel/         → sub-components
+#   _xcf_thumbnail.py            → _XcfThumbnail
 ```
 
 ---
@@ -590,22 +536,14 @@ DesignsTab(conn)
 
 ```python
 DimensionSetsTab(conn)
-# إدارة مجموعات الأبعاد والحقول والقيم
 # Sub-widgets (dimension_sets/):
-#   _categories_panel.py → _CategoriesPanel
-#   _sets_panel.py       → _SetsPanel        (قائمة المجموعات)
-#   _fields_panel.py     → _FieldsPanel      (حقول المجموعة)
-#   _groups_panel.py     → _GroupsPanel
-#   _field_dialog.py     → _FieldDialog      (dialog إضافة/تعديل حقل)
-#   _values_panel.py     → _ValuesPanel      (قيم الـ instances)
+#   _categories_panel.py     → _CategoriesPanel
+#   _sets_panel.py           → _SetsPanel
+#   _fields_panel.py         → _FieldsPanel
+#   _groups_panel.py         → _GroupsPanel
+#   _field_dialog.py         → _FieldDialog
+#   _values_panel.py         → _ValuesPanel
 #   _source_picker_dialog.py → _SourcePickerDialog
-#   values_panel/        → _instance_popup, _instances_table, _sets_list_panel
-```
-
-**Design styles مشتركة:**
-```python
-# ui/tabs/design/design_styles.py
-design_styles.py  → دوال style مشتركة للتصميمات
 ```
 
 ---
@@ -616,12 +554,11 @@ design_styles.py  → دوال style مشتركة للتصميمات
 
 ```python
 DashboardTab(conn)
-# لوحة تحكم الطلبات — إحصائيات + آخر الطلبات
 # Sub-widgets (dashboard/):
-#   _config.py       → _Config         (إعدادات الألوان والحالات)
-#   _top_cards.py    → _TopCards       (بطاقات الإحصاء العلوية)
-#   _status_grid.py  → _StatusGrid     (شبكة الحالات)
-#   _recent_table.py → _RecentTable    (جدول آخر الطلبات)
+#   _config.py       → _Config
+#   _top_cards.py    → _TopCards
+#   _status_grid.py  → _StatusGrid
+#   _recent_table.py → _RecentTable
 ```
 
 ---
@@ -630,26 +567,18 @@ DashboardTab(conn)
 
 ```python
 OrdersTab(conn)
-# CRUD للطلبات
 # Sub-widgets:
-#   _order_form.py   → _OrderForm      (فورم الطلب)
-#   _order_detail.py → _OrderDetail    (تفاصيل الطلب)
-#
-# orders/
-#   _filter_toolbar.py    → _FilterToolbar
-#   _orders_list_panel.py → _OrdersListPanel
-#   _status_delegate.py   → _StatusDelegate  (delegate لعرض حالة الطلب)
-#
-# order_form/
-#   _item_row_widget.py  → _ItemRowWidget   (صف منتج في الطلب)
-#   _products_fetcher.py → _ProductsFetcher (جلب المنتجات)
-#
-# order_detail/
-#   _header_fill.py   → _HeaderFill
-#   _items_section.py → _ItemsSection
-#   _log_section.py   → _LogSection    (سجل تغيير الحالة)
-#   _status_config.py → _StatusConfig
-#   _status_dialog.py → _StatusDialog  (dialog تغيير الحالة)
+#   _order_form.py              → _OrderForm
+#   _order_detail.py            → _OrderDetail
+#   orders/_filter_toolbar.py   → _FilterToolbar
+#   orders/_orders_list_panel.py → _OrdersListPanel
+#   orders/_status_delegate.py  → _StatusDelegate
+#   order_form/_item_row_widget.py  → _ItemRowWidget
+#   order_form/_products_fetcher.py → _ProductsFetcher
+#   order_detail/_header_fill.py    → _HeaderFill
+#   order_detail/_items_section.py  → _ItemsSection
+#   order_detail/_log_section.py    → _LogSection
+#   order_detail/_status_dialog.py  → _StatusDialog
 ```
 
 ---
@@ -658,13 +587,10 @@ OrdersTab(conn)
 
 ```python
 CustomersTab(conn)
-# CRUD للعملاء
 # Sub-widgets:
-#   _customer_form.py  → _CustomerForm
-#
-# customers/
-#   customers_list_panel.py  → CustomersListPanel
-#   customer_detail_panel.py → CustomerDetailPanel
+#   _customer_form.py                    → _CustomerForm
+#   customers/customers_list_panel.py    → CustomersListPanel
+#   customers/customer_detail_panel.py   → CustomerDetailPanel
 ```
 
 ---
@@ -676,11 +602,7 @@ CustomersTab(conn)
 ```python
 CompanySelector()
 # Signals: company_changed(int)
-# الـ widget العلوي في الـ Sidebar
-# يُطلق company_changed عند تغيير الشركة النشطة
-# يفتح CompaniesDialog عند الضغط على "إدارة"
-
-selector._open_manager()   # يفتح نافذة إدارة الشركات
+selector._open_manager()
 ```
 
 ---
@@ -689,7 +611,6 @@ selector._open_manager()   # يفتح نافذة إدارة الشركات
 
 ```python
 CompaniesDialog(parent=None)
-# نافذة إدارة الشركات (إضافة، تعديل، تفعيل/تعطيل، حذف)
 ```
 
 ---
@@ -699,8 +620,7 @@ CompaniesDialog(parent=None)
 ```python
 NoCompanyScreen()
 # Signals: open_manager
-# شاشة "لا توجد شركة نشطة" — index 0 في الـ stack
-# تظهر عند بدء التطبيق بدون شركة محددة
+# index 0 في الـ stack
 ```
 
 ---
@@ -710,17 +630,6 @@ NoCompanyScreen()
 ```python
 SharedItemsManagerDialog(central_conn, parent=None)
 # Signals: items_changed
-# نافذة إدارة العناصر المشتركة بين الشركات
-# Sub-widgets:
-#   shared_items_manager_helper/_add_shared_item_dialog.py → _AddSharedItemDialog
-```
-
-**دوال مساعدة أخرى:**
-```python
-# ui/tabs/companies/
-shared_items_dialog.py  → SharedItemsDialog   # dialog اختيار عناصر مشتركة
-shared_items_mixin.py   → SharedItemsMixin    # Mixin للـ tabs اللي تدعم العناصر المشتركة
-_link_item_picker.py    → _LinkItemPicker     # picker لربط عنصر بشركة
 ```
 
 ---
@@ -751,6 +660,9 @@ _NavButton("🔑", "اسم القسم", key="my_key")
 **4. الـ Placeholder tabs:**
 ```python
 _make_placeholder_tab(section_name) -> QWidget
-# يُستخدم مؤقتاً أثناء التطوير بدل الـ widget الحقيقي
 # يظهر "🚧 قيد التطوير"
 ```
+ENDOFFILE
+Output
+
+exit code 0

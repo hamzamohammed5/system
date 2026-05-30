@@ -100,18 +100,21 @@ theme_manager.get_available_themes() -> list[{key, name, active}]
 
 ---
 
-### `ui/i18n.py` (i18n_manager)
+### `ui/widgets/core/i18n.py` (i18n_manager + tr)
+
+المصدر الوحيد لنظام الترجمة في التطبيق.
 
 ```python
+from ui.widgets.core.i18n import tr, i18n_manager
+
 i18n_manager.language -> str
 i18n_manager.is_rtl -> bool
 i18n_manager.qt_direction -> Qt.LayoutDirection
 i18n_manager.set_language(lang, save=True)
-i18n_manager.translate(key, lang=None, **kwargs) -> str
 i18n_manager.load_from_db()
+i18n_manager.get_available_languages() -> list[{code, name, active, is_rtl}]
 
 tr(key, lang=None, **kwargs) -> str
-# الدالة السريعة للترجمة
 # مثال: tr("save") → "حفظ" | "Save"
 # مثال: tr("delete_confirm_msg", name="X") → "هل تريد حذف «X»؟"
 ```
@@ -741,79 +744,27 @@ CONNECT_BUS      : bool = True
 **Hooks المطلوبة (override إلزامي):**
 ```python
 _fetch_local_rows() → list[dict]
-# جلب الصفوف المحلية من DB
- 
 _fill_table_row(r: int, item: dict)
-# ملء صف واحد في الجدول (r = رقم الصف)
- 
 _edit_item(item_id: int)
-# فتح فورم التعديل للعنصر المحدد
- 
 _delete_item(item_id: int, item_name: str)
-# حذف العنصر (مع confirm_delete عادةً)
 ```
  
 **Hooks الاختيارية:**
 ```python
 _get_shared_rows(local_rows: list) → list[dict]
-# جلب الصفوف المشتركة — افتراضي: []
-# كل dict يجب أن يحتوي: {"_is_shared": True, ...}
- 
 _get_item_data_for_publish(row: dict) → dict
-# بيانات العنصر عند النشر كمشترك — افتراضي: {}
- 
 _bulk_replace_item(item_id: int, item_name: str)
-# منطق الاستبدال الشامل (يُفعَّل لو HAS_BULK_REPLACE=True)
- 
 _setup_column_widths(table)
-# ضبط عروض الأعمدة بعد بناء الجدول
- 
 _on_edit_shared()
-# تخصيص سلوك زر "تعديل المشترك" — افتراضياً يستدعي _edit_shared_item()
 ```
  
-**السلوك التلقائي:**
-- `_load_rows()` يدمج `_fetch_local_rows()` + `_get_shared_rows()` تلقائياً.
-- تلوين تلقائي للصفوف: المشترك بـ `SHARED_COLOR/SHARED_BG`، المنشور بـ `PUBLISHED_COLOR/PUBLISHED_BG`.
-- أزرار مضافة تلقائياً في الهيدر: **تعديل المحدد، حذف المحدد، استبدال شامل** (لو `HAS_BULK_REPLACE`)، **تعديل المشترك، نشر كمشترك**.
 **مساعدات:**
 ```python
 panel._selected_row_data() → tuple[int | None, str]
-# (item_id, item_name) للصف المختار حالياً
- 
 panel._get_current_row_dict() → dict | None
-# يرجع dict بيانات الصف المختار من _all_rows
-```
- 
-**مثال:**
-```python
-class RawTablePanel(SharedItemsListPanel):
-    SHARED_TYPE      = "raw"
-    TABLE_COLS       = ["#", "الاسم", "السعر", "التصنيف"]
-    TABLE_TITLE      = "الخامات"
-    HAS_BULK_REPLACE = True
-    FILTER_SCOPE     = "raw"
- 
-    def _fetch_local_rows(self):
-        return [vars(r) for r in ItemService(self.conn).list_by_type("raw")]
- 
-    def _fill_table_row(self, r, item):
-        from ui.widgets.tables.items import make_item
-        self.table.setItem(r, 0, make_item(str(item["id"]), item["id"]))
-        self.table.setItem(r, 1, make_item(item["name"]))
-        self.table.setItem(r, 2, make_item(f"{item['price']:,.2f}"))
-        self.table.setItem(r, 3, make_item(item.get("category_name", "—")))
- 
-    def _edit_item(self, item_id):
-        self._form.load_for_edit(item_id)
- 
-    def _delete_item(self, item_id, item_name):
-        if confirm_delete(self, item_name):
-            ItemService(self.conn).delete(item_id)
-            emit_company_data_changed()
 ```
 
-
+---
 
 ## UI — Widgets Utils
 
@@ -822,10 +773,6 @@ class RawTablePanel(SharedItemsListPanel):
 ```python
 @contextmanager
 blocked_signals(*widgets)
-# مثال:
-# with blocked_signals(cmb_a, cmb_b):
-#     cmb_a.clear()
-#     cmb_b.clear()
 ```
 
 ---
@@ -836,7 +783,6 @@ blocked_signals(*widgets)
 SearchableCombo()
 # Signals: item_selected(data)
   .populate(items: list)
-  # items: [(display_text, user_data, is_separator), ...]
   .clear_items()
   .current_data()
   .get_selected_id()
@@ -847,8 +793,6 @@ SearchableCombo()
   .add_item_at_start(text, data)
 
 build_grouped_items(items: list) -> list
-# يحول: [(id, name, cat_id, cat_name, ...), ...]
-# إلى: [(display, user_data, is_separator), ...]
 ```
 
 ---
@@ -857,9 +801,7 @@ build_grouped_items(items: list) -> list
 
 ```python
 install_no_wheel_filter(app: QApplication)
-# يمنع عجلة الماوس من تغيير قيم inputs
 
-# Classes جاهزة:
 NoWheelCombo(QComboBox)
 NoWheelSpin(QSpinBox)
 NoWheelDouble(QDoubleSpinBox)
@@ -882,7 +824,6 @@ apply_tree_tooltips(tree, item=None, cols=None, recursive=True)
 
 ```python
 FlowLayout(parent=None, h_spacing=6, v_spacing=4)
-# QLayout يرتب الـ widgets أفقياً وينزل لسطر جديد تلقائياً
 ```
 
 ---
@@ -943,7 +884,6 @@ make_splitter_table_guarded(columns, ...) -> tuple[QSplitter, QTableWidget, Spli
 
 fit_splitter_table(splitter, table, extra_pad=20, delay_ms=0)
 
-# ثوابت
 ROW_HEIGHT_COMPACT = 34
 ROW_HEIGHT_NORMAL  = 40
 ROW_HEIGHT_LARGE   = 48
@@ -1091,7 +1031,6 @@ ResultBadge(text="─", color=None, status="success")
   .reset()
 
 ModeBadge(text="─", color="blue")
-# color: "blue" | "orange" | "green" | "red" | "purple"
   .set_mode(text, color=None)
   .reset()
 
@@ -1112,7 +1051,6 @@ CrudButtonsBar(add_text="", save_text="", cancel_text="", show_mode=True)
   .lbl_mode -> QLabel
   .set_mode_text(text)
 
-# re-export:
 ModeLabel  # من components/label.py
 ```
 
@@ -1211,7 +1149,6 @@ v_divider(color=None, width=1, margin_v=4) -> QFrame
 # ── Scroll ──
 wrap_in_scroll(widget, min_height=0, horizontal=False) -> QScrollArea
 
-# ثوابت
 ROW_HEIGHT_COMPACT = 34
 ROW_HEIGHT_NORMAL  = 40
 ROW_HEIGHT_LARGE   = 48
@@ -1230,8 +1167,6 @@ status_colors(level: str) -> dict
 # Returns: {fg, bg, border}
 
 waste_level(pct) -> str
-# "high"(>=20%) | "medium"(>=10%) | "low"(>0%) | "zero"
-
 waste_colors(pct) -> tuple[str, str]
 ```
 
@@ -1284,16 +1219,6 @@ def _load_rows(self) -> list: ...
 
 ---
 
-### `ui/widgets/core/i18n.py`
-
-```python
-tr(text, fallback="", **kwargs) -> str
-# مثال: tr("حفظ") → يحول تلقائياً لـ tr("save")
-# مثال: tr("delete_confirm_msg", name="X")
-```
-
----
-
 ## UI — Managers
 
 ### `ui/widgets/managers/category.py`
@@ -1315,7 +1240,6 @@ CategoryForm(conn, scope, tree_widget)
 
 ```python
 MainWindow(app: QApplication)
-# النافذة الرئيسية
 
 # index_map:
 # "costing":    1
@@ -1344,7 +1268,7 @@ SettingsDialog(app, parent=None)
 
 ```python
 ComponentRow(catalog_fn,
-             child_type="raw",    # "raw"|"semi"|"labor_op"|"machine_op"
+             child_type="raw",
              child_id=None,
              qty=1.0,
              waste_pct=0.0,
@@ -1366,8 +1290,7 @@ ComponentRow(catalog_fn,
   .expose_load_op_rows(op_id, selected_row_id=None)
 ```
 
-**Attributes على الـ widget:**
-`cmb_type`, `_item_combo`, `cmb_variant`, `lbl_variant_cost`, `qty_edit`, `waste_spin`, `total_qty_edit`, `cmb_op_row`, `lbl_op_row_cost`, `_sub_row_widget`
+**Attributes:** `cmb_type`, `_item_combo`, `cmb_variant`, `lbl_variant_cost`, `qty_edit`, `waste_spin`, `total_qty_edit`, `cmb_op_row`, `lbl_op_row_cost`, `_sub_row_widget`
 
 ---
 
