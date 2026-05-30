@@ -55,7 +55,9 @@ clear_table_empty_state(table: QTableWidget)
 FilterToolbar(conn=None, scope="all", show_category=True,
               show_date=False, placeholder="بحث...",
               show_presets=False)
-# يستمع لـ bus.company_data_changed لإعادة تحميل التصنيفات + تحديث conn من company_state
+# [إصلاح 14] يستمع لـ bus.company_data_changed لإعادة تحميل
+#   التصنيفات تلقائياً عند تغيير الشركة النشطة
+# يُحدِّث self._conn من company_state عند تغيير الشركة
 # Signals: filter_changed
 
 toolbar.name_query -> str
@@ -64,10 +66,14 @@ toolbar.in_date_range(date_str: str) -> bool
 toolbar.match(name, cat_id, date_str="") -> bool
 toolbar.set_count(shown: int, total: int)
 toolbar.reload(conn=None)
-# يُحدّث self._conn لو conn محدد، ثم يُعيد تحميل التصنيفات
+# [تحسين 16] يُحدّث self._conn لو conn محدد، ثم يُعيد تحميل التصنيفات
 toolbar.reset()
 # يمسح البحث + يُعيد الـ category لـ index 0 + يُعيد DateRangeFilter
 ```
+
+**ملاحظة [إصلاح 14]:**
+`_on_company_changed(company_id)` يُستدعى تلقائياً عند `bus.company_data_changed`.
+يجلب الـ connection الجديد من `company_state.get_erp_conn()` ويُعيد تحميل التصنيفات.
 
 ---
 
@@ -138,10 +144,10 @@ DataTableWidget(columns: list, stretch_col=-1, col_widths=None,
                 row_height=ROW_HEIGHT_LARGE, empty_icon="📋",
                 empty_title="لا توجد بيانات")
 # Signals: add_clicked, search_changed(str), row_selected(int)
-# يفرق بين 3 حالات:
+# [إصلاح 7] يفرق بين 3 حالات:
 #   total=0         → empty state "لا توجد بيانات"
 #   total>0,shown>0 → يعرض الجدول
-#   total>0,shown=0 → empty state "لا توجد نتائج" (icon=🔍)
+#   total>0,shown=0 → empty state "لا توجد نتائج" (icon=🔍، subtitle=جرب تغيير البحث)
 
   .begin_fill()
   .insert_row() -> int

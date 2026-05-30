@@ -171,12 +171,23 @@ theme_manager.load_from_db()
 # يحمّل الثيم المحفوظ + يطبّقه بدون save — يُستدعى عند بدء التطبيق
 
 theme_manager.get_available_themes() -> list[{key, name, active}]
-
-# ثوابت الثيمات:
-# THEMES: {"light": _LIGHT_THEME, "dark": _DARK_THEME}
-# THEME_DISPLAY_NAMES: {"light": "فاتح", "dark": "داكن"}
-# كل ثيم dict يحتوي على نفس مفاتيح _C في app_settings (شامل purple/orange)
 ```
+
+**الثيمات المُعرَّفة في `ui/themes/theme_manager.py`:**
+
+```python
+THEMES: dict = {
+    "light": _LIGHT_THEME,   # Warm Neutral — خلفية بيضاء دافئة (الافتراضي)
+    "dark":  _DARK_THEME,    # خلفية داكنة للاستخدام الليلي
+}
+
+THEME_DISPLAY_NAMES: dict = {
+    "light": "فاتح",
+    "dark":  "داكن",
+}
+```
+
+كل ثيم dict يحتوي على نفس مفاتيح `_C` في app_settings (شامل purple/orange).
 
 **تدفق تغيير الثيم:**
 ```
@@ -187,20 +198,13 @@ SettingsDialog._save()
       → كل widget مشترك في _on_theme_changed يُعيد تطبيق styles
 ```
 
-**الثيمات المتاحة:**
-
-| الثيم | الوصف |
-|-------|-------|
-| `"light"` | Warm Neutral — خلفية بيضاء دافئة (الافتراضي) |
-| `"dark"` | خلفية داكنة للاستخدام الليلي |
-
 ---
 
 ## i18n
 
 ### `ui/widgets/core/i18n.py` — `I18nManager` + `tr()`
 
-المصدر الوحيد لنظام الترجمة. راجع `files_reference/i18n_reference.md` للتفاصيل الكاملة.
+المصدر الوحيد لنظام الترجمة. يحمّل الترجمات تلقائياً من `ui/i18n/ar.py` و`ui/i18n/en.py` عند الاستيراد عبر `_load_translations()`.
 
 ```python
 from ui.widgets.core.i18n import tr, i18n_manager
@@ -259,7 +263,7 @@ status_colors(level: str) -> dict[str, str]
 # هذا يضمن التزامن التلقائي مع تغييرات الثيم
 # level: "success" | "warning" | "danger" | "info" | "neutral" | "primary" | "purple" | "orange"
 # يرجع: {"fg": str, "bg": str, "border": str}
-# purple/orange: من _C.get() مع fallback آمن (مفاتيحهم موجودة في _C)
+# purple/orange: من _C.get() مع fallback آمن
 # ملاحظة: الـ import داخل الدالة (lazy) مقصود لتجنب circular imports
 
 waste_level(pct: float) -> str   # "high" | "medium" | "low" | "zero"

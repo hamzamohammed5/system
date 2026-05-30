@@ -44,6 +44,7 @@ FILTER_SCOPE: str = "all"
 DATE_COL: str = "date"
 # [E-02] اسم الـ key في dict البيانات الذي يحتوي التاريخ
 # يُستخدم في _match_date() لقراءة التاريخ من row[DATE_COL]
+# override لو اسم الحقل مختلف عن "date"
 CONNECT_BUS: bool = True
 
 # Sort settings
@@ -63,6 +64,7 @@ _match_category(row, cat_id) -> bool
 _match_date(row) -> bool
 # [E-02] يُستدعى فقط لو SHOW_DATE=True
 # يقرأ row[DATE_COL] ويمرره لـ _filter_toolbar.in_date_range()
+# override لو أردت منطق مقارنة مخصص
 _on_add_clicked()
 _on_data_changed()                # افتراضياً: self.refresh()
 _build_extra_header_actions(header: ListHeader)
@@ -120,6 +122,7 @@ class MyListPanel(BaseListPanel):
     LIST_TITLE  = tr("raw_materials")
     ADD_TEXT    = tr("btn_add")
     CONNECT_BUS = True
+    DATE_COL    = "created_at"  # لو اسم حقل التاريخ مختلف
 
     def _load_rows(self):
         return fetch_items_by_type(self.conn, "raw")

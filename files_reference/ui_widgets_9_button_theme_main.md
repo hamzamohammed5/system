@@ -1,6 +1,6 @@
-# دليل الكود — UI / Widgets (9): Button & Theme Utilities
+# دليل الكود — UI / Widgets (9): Button, Theme Utilities, MainWindow & Settings
 
-> ملف مرجع لمكونات الأزرار، ومساعدات الثيم، وصف الـ settings dialog.
+> ملف مرجع لمكونات الأزرار، ومساعدات الثيم، وصف الـ settings dialog، والـ main window.
 
 ---
 
@@ -115,6 +115,7 @@ set_setting(conn, "gimp_path", path)
 _get_settings_conn_and_status() -> tuple[conn, has_company]
 # [A-05] يقرأ company_state.is_ready مرة واحدة فقط
 # يرجع (conn, True) | (None, False)
+# الكود الجديد يستخدم هذه الدالة دائماً بدل الاستدعاءين المنفصلين
 
 _get_settings_conn() -> conn | None
 # للتوافق مع الكود القديم — يستخدم _get_settings_conn_and_status() داخلياً
@@ -122,6 +123,8 @@ _get_settings_conn() -> conn | None
 _has_active_company() -> bool
 # للتوافق مع الكود القديم
 ```
+
+**_show_no_company_notice:** يُظهر تنبيهاً في تبويبات الوحدات وGIMP لو لا توجد شركة نشطة.
 
 ---
 
@@ -169,6 +172,28 @@ _try_build_section(builder_fn, section_name) -> QWidget
 
 _make_placeholder_tab(section_name, error="") -> QWidget
 # placeholder مؤقت بـ "🚧" + رسالة الخطأ
+```
+
+**_build_tabs:**
+```python
+# كل section يُبنى بشكل آمن عبر _try_build_section()
+# الترتيب ثابت ويتطابق مع index_map
+# عند فشل أي section يُعرض placeholder بدلاً منه
+
+# مثال بناء section:
+def _build_costing():
+    from ui.tabs.costing_section import CostingSection
+    return CostingSection(conn_fn=lambda: conn)
+
+w = _try_build_section(_build_costing, "حساب التكلفة")
+self._stack.addWidget(w)
+```
+
+**_destroy_tabs:**
+```python
+# يُزيل كل tabs غير index 0
+# يستدعي company_state.refresh_connections() بعد الإزالة
+# يُعيد ضبط _accounting = None و _tabs_built = False
 ```
 
 **إضافة Tab جديدة:**
