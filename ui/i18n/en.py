@@ -222,7 +222,7 @@ EN_STRINGS: dict[str, str] = {
     "category_edit":         "Edit",
     "category_delete":       "Delete",
     "category_select_first": "Select a category first",
-    "category_name_required":"Enter category name",
+    "category_name_required": "Enter category name",
     "no_category":           "No Category",
 
     # ══════════════════════════════════════════════
@@ -370,7 +370,7 @@ EN_STRINGS: dict[str, str] = {
     "replacement":            "Replacement",
     "select_replacement":     "Select Replacement",
     "no_alternatives":        "No alternatives available",
-    "apply_uniform_qty":      "Apply Uniform Qty:",
+    "apply_uniform_qty":      "Apply Uniform Qty",    # FIX: كان "Apply Uniform Qty:" — الـ colon لا يكون في الـ translation string
     "filter_by_category":     "Filter by Category",
     "select_all":             "All",
     "select_none":            "None",
@@ -382,23 +382,23 @@ EN_STRINGS: dict[str, str] = {
     # ══════════════════════════════════════════════
     # Machine Op Rows
     # ══════════════════════════════════════════════
-    "op_rows_editor":             "Operation Rows",
-    "add_row":                    "Add Row",
-    "edit_row":                   "Edit Row",
-    "delete_row":                 "Delete Row",
+    "op_rows_editor":              "Operation Rows",
+    "add_row":                     "Add Row",
+    "edit_row":                    "Edit Row",
+    "delete_row":                  "Delete Row",
     "row_description_placeholder": "Row description...",
-    "value_minutes":              "Value (minutes)",
-    "time_minutes":               "Time (minutes)",
-    "units":                      "Units",
-    "value":                      "Value",
-    "count":                      "Count",
-    "total_op_cost":              "Total Operation Cost",
-    "select_row_first":           "Please select a row first",
-    "min_one_row_required":       "At least one row is required",
-    "calc_mode":                  "Calculation Mode",
-    "by_time":                    "By Time",
-    "by_unit":                    "By Unit",
-    "rate":                       "Rate",
+    "value_minutes":               "Value (minutes)",
+    "time_minutes":                "Time (minutes)",
+    "units":                       "Units",
+    "value":                       "Value",
+    "count":                       "Count",
+    "total_op_cost":               "Total Operation Cost",
+    "select_row_first":            "Please select a row first",
+    "min_one_row_required":        "At least one row is required",
+    "calc_mode":                   "Calculation Mode",
+    "by_time":                     "By Time",
+    "by_unit":                     "By Unit",
+    "rate":                        "Rate",
 
     # ══════════════════════════════════════════════
     # Raw Variants

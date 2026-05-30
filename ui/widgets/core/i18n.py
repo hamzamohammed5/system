@@ -17,8 +17,9 @@ ui/widgets/core/i18n.py
 
 ملاحظة:
     tr() تقبل نوعين من الـ keys:
-    1. key قصير مثل "save" أو "delete" → يبحث في قاموس _TRANSLATIONS
+    1. key قصير مثل "save" أو "delete" → يبحث في i18n_manager
     2. نص عربي مباشر مثل "إضافة" → يُستخدم كـ fallback لو مفيش ترجمة
+       (للتوافق مع الكود القديم فقط — الكود الجديد يستخدم المفاتيح مباشرة)
 """
 
 from __future__ import annotations
@@ -26,6 +27,7 @@ from __future__ import annotations
 
 # ── الـ key map: نص عربي مباشر → translation key ─────────────────────────
 # يسمح بكتابة tr("إضافة") بدل tr("add") في الكود القديم
+# لا تضيف مفاتيح جديدة هنا — الكود الجديد يستخدم المفاتيح مباشرة
 _AR_TO_KEY: dict[str, str] = {
     # أزرار وإجراءات
     "إضافة":            "add",
@@ -51,6 +53,7 @@ _AR_TO_KEY: dict[str, str] = {
     "تطبيق":            "apply",
     "مسح":              "clear",
     "جديد":             "new",
+    "استنساخ":          "clone",   # FIX: كان "نسخ" — يتعارض مع "copy". clone = استنساخ
     # حالات فارغة
     "لا توجد بيانات":           "no_data",
     "لا توجد نتائج":            "no_results",
@@ -93,6 +96,7 @@ _AR_TO_KEY: dict[str, str] = {
 }
 
 # ── رسائل بـ format placeholders ──────────────────────────────────────────
+# للتوافق مع الكود القديم الذي يمرر النص العربي مع {} مباشرة
 _FORMAT_KEYS: dict[str, str] = {
     "هل تريد حذف «{name}»؟":       "delete_confirm_msg",
     "تأكيد حفظ «{name}»؟":          "save_confirm_msg",
@@ -100,14 +104,6 @@ _FORMAT_KEYS: dict[str, str] = {
     "اختر {label}":                  "select_field",
     "{label} يجب أن يكون أكبر من صفر": "field_positive",
     "أدخل {label} أكبر من صفر":      "field_positive_enter",
-}
-
-# ── قاموس إضافي للرسائل غير الموجودة في i18n.py ──────────────────────────
-_EXTRA_EN: dict[str, str] = {
-    "enter_field":          "Enter {label}",
-    "select_field":         "Select {label}",
-    "field_positive":       "{label} must be greater than zero",
-    "field_positive_enter": "Enter {label} greater than zero",
 }
 
 
@@ -156,10 +152,9 @@ def _translate(text: str, fallback: str = "") -> str:
     """
     البحث عن الترجمة بالترتيب:
     1. النص كـ key مباشر في i18n_manager
-    2. النص كـ Arabic text → map إلى key
-    3. البحث في format keys
-    4. البحث في _EXTRA_EN
-    5. Fallback
+    2. النص كـ Arabic text → map إلى key عبر _AR_TO_KEY
+    3. البحث في _FORMAT_KEYS (للنصوص العربية مع format placeholders)
+    4. Fallback
     """
     _fb = fallback or text
 
@@ -182,20 +177,12 @@ def _translate(text: str, fallback: str = "") -> str:
             if translated and translated != key:
                 return translated
 
-        # 3. البحث في format keys (بالنص بدون format)
+        # 3. البحث في _FORMAT_KEYS (بالنص بدون format)
         format_key = _FORMAT_KEYS.get(text)
         if format_key:
-            # جرب من i18n_manager أولاً
             translated = i18n_manager.translate(format_key)
             if translated and translated != format_key:
                 return translated
-            # جرب من _EXTRA_EN
-            if format_key in _EXTRA_EN:
-                return _EXTRA_EN[format_key]
-
-        # 4. البحث في _EXTRA_EN مباشرة
-        if text in _EXTRA_EN:
-            return _EXTRA_EN[text]
 
     except Exception:
         pass

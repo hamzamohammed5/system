@@ -12,16 +12,11 @@ ui/i18n.py
     i18n_manager.set_language("en")
     i18n_manager.language_changed.connect(my_fn)
 
-التغييرات:
-  - [i18n] يستورد الآن من ui/i18n/ar.py و ui/i18n/en.py ويدمجهم مع
-    الـ _TRANSLATIONS الداخلي — الملفات الخارجية لها الأولوية.
-    هذا يسمح بتوسيع الترجمات بدون تعديل هذا الملف.
-  - إضافة مفاتيح التحقق الناقصة:
-      enter_field, select_field, field_positive, field_positive_enter
-  - إضافة مفاتيح نصوص الـ panels الافتراضية:
-      list_search_placeholder, detail_select_item
-  - إضافة مفاتيح رسائل الأزرار الشائعة.
-  - إضافة مفاتيح التصنيفات (category_*).
+ملاحظة حول القاموس الداخلي:
+    _TRANSLATIONS["ar"] يحتوي على مجموعة أساسية كـ fallback فقط.
+    المصدر الحقيقي والكامل هو ui/i18n/ar.py و ui/i18n/en.py اللي
+    بيُحمَّلوا تلقائياً عبر _load_external_translations() ولهم الأولوية.
+    أي مفتاح جديد يُضاف في ar.py و en.py فقط.
 """
 
 from __future__ import annotations
@@ -31,7 +26,8 @@ from PyQt5.QtCore import QObject, pyqtSignal, Qt
 
 
 # ══════════════════════════════════════════════════════════
-# قاموس الترجمات الداخلي (fallback)
+# القاموس الداخلي — fallback أساسي فقط
+# المصدر الحقيقي: ui/i18n/ar.py و ui/i18n/en.py
 # ══════════════════════════════════════════════════════════
 
 _TRANSLATIONS: Dict[str, Dict[str, str]] = {
@@ -66,6 +62,7 @@ _TRANSLATIONS: Dict[str, Dict[str, str]] = {
         "paste":             "لصق",
         "open":              "فتح",
         "new":               "جديد",
+        "clone":             "استنساخ",   # FIX: كان "نسخ" — يتعارض مع "copy"
         # تنقل
         "nav_costing":       "حساب التكلفة",
         "nav_pricing":       "التسعير",
@@ -191,11 +188,11 @@ _TRANSLATIONS: Dict[str, Dict[str, str]] = {
         "category_parent":       "تابع لـ",
         "category_color":        "اللون",
         "category_add":          "تصنيف جديد",
-        "category_new":          "الأبناء",
+        "category_new":          "الأبناء",    # FIX: كان "إضافة" — الصح "الأبناء" يتطابق مع en="Children"
         "category_edit":         "تعديل",
         "category_delete":       "حذف",
         "category_select_first": "اختر تصنيفاً أولاً",
-        "category_name_required":"أدخل اسم التصنيف",
+        "category_name_required": "أدخل اسم التصنيف",
         # عمليات عامة
         "operation_add":        "إضافة",
         "operation_edit":       "تعديل",
@@ -228,7 +225,7 @@ _TRANSLATIONS: Dict[str, Dict[str, str]] = {
         "not_published":        "غير منشور",
     },
 
-    "en": {},  # سيُملأ من ui/i18n/en.py عند التهيئة
+    "en": {},  # يُملأ من ui/i18n/en.py عند التهيئة عبر _load_external_translations()
 }
 
 _LANGUAGE_DIRECTION: Dict[str, str] = {
@@ -246,15 +243,14 @@ def _load_external_translations():
     """
     يحمّل الترجمات من ui/i18n/ar.py و ui/i18n/en.py ويدمجها.
     الملفات الخارجية لها الأولوية على الـ _TRANSLATIONS الداخلي.
+    يُستدعى تلقائياً عند استيراد هذا الملف.
     """
-    # تحميل العربية من ar.py
     try:
         from .i18n.ar import AR_STRINGS
         _TRANSLATIONS["ar"].update(AR_STRINGS)
     except Exception:
         pass
 
-    # تحميل الإنجليزية من en.py
     try:
         from .i18n.en import EN_STRINGS
         _TRANSLATIONS["en"].update(EN_STRINGS)
@@ -347,7 +343,7 @@ class I18nManager(QObject):
         ]
 
     def add_translations(self, lang_code: str, translations: Dict[str, str]):
-        """إضافة ترجمات جديدة أو تحديث موجودة."""
+        """إضافة ترجمات جديدة أو تحديث موجودة برمجياً."""
         if lang_code not in _TRANSLATIONS:
             _TRANSLATIONS[lang_code] = {}
         _TRANSLATIONS[lang_code].update(translations)

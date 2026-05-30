@@ -45,7 +45,7 @@ AR_STRINGS: dict[str, str] = {
     "open":              "فتح",
     "new":               "جديد",
     "all":               "الكل",
-    "clone":             "نسخ",
+    "clone":             "استنساخ",     # FIX: كان "نسخ" = نفس "copy" — clone يعني نسخة طبق الأصل
     "selected":          "محدد",
 
     # ══════════════════════════════════════════════
@@ -222,11 +222,11 @@ AR_STRINGS: dict[str, str] = {
     "category_parent":       "تابع لـ",
     "category_color":        "اللون",
     "category_add":          "تصنيف جديد",
-    "category_new":          "إضافة",
+    "category_new":          "الأبناء",    # FIX: كان "إضافة" — الصح "الأبناء" (يتطابق مع en "Children" وi18n.py الداخلي)
     "category_edit":         "تعديل",
     "category_delete":       "حذف",
     "category_select_first": "اختر تصنيفاً أولاً",
-    "category_name_required":"أدخل اسم التصنيف",
+    "category_name_required": "أدخل اسم التصنيف",
     "no_category":           "بدون تصنيف",
 
     # ══════════════════════════════════════════════
@@ -295,8 +295,8 @@ AR_STRINGS: dict[str, str] = {
     "product_name_placeholder": "اسم المنتج...",
     "saved_products":           "المنتجات المحفوظة",
     "no_products":              "لا توجد منتجات",
-    "enter_product_name":       "ادخل اسم المنتج اولاً",
-    "add_one_component":        "اضف مكوناً واحداً على الأقل",
+    "enter_product_name":       "أدخل اسم المنتج أولاً",    # FIX: كان "ادخل اسم المنتج اولاً" — همزتان ناقصتان
+    "add_one_component":        "أضف مكوناً واحداً على الأقل",  # FIX: كان "اضف" — همزة ناقصة
     "product_name":             "اسم المنتج",
     "add_component":            "مكون",
 
@@ -327,7 +327,7 @@ AR_STRINGS: dict[str, str] = {
     # ══════════════════════════════════════════════
     "scenario":                        "السيناريو",
     "add_scenario":                    "إضافة سيناريو",
-    "clone_scenario":                  "نسخ السيناريو",
+    "clone_scenario":                  "استنساخ السيناريو",   # FIX: كان "نسخ السيناريو" — يتوافق مع "clone" = "استنساخ"
     "rename_scenario":                 "إعادة تسمية",
     "set_as_default":                  "تعيين كافتراضي",
     "new_scenario":                    "سيناريو جديد",
