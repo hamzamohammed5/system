@@ -431,13 +431,6 @@ EN_STRINGS: dict[str, str] = {
     # Machine
     # ══════════════════════════════════════════════
     "machine_ops":       "Machine Operations",
-    
-    """
-إضافات مفاتيح الترجمة لـ ui/i18n/en.py
-يُضاف هذا المحتوى داخل EN_STRINGS dict في نهايته.
-"""
-
-ENGLISH_ADDITIONS = {
 
     # ══════════════════════════════════════════════
     # Accounting
@@ -567,5 +560,4 @@ ENGLISH_ADDITIONS = {
     "min_price":                "Minimum Price",
     "suggested_price":          "Suggested Price",
     "customer_price":           "Customer Price",
-}
 }
