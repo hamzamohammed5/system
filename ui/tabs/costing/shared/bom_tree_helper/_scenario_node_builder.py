@@ -1,23 +1,54 @@
 """
-ui/tabs/costing/shared/bom_tree/_scenario_node_builder.py
+ui/tabs/costing/shared/bom_tree_helper/_scenario_node_builder.py
 ==========================================================
 _ScenarioNodeBuilder — منطق بناء nodes السيناريو والمكونات في BOM tree.
 
 مُستخرج من bom_tree.py لتقليل الحجم وتسهيل الاختبار.
 يُستخدم فقط من BomTree.
+
+[Refactor] إزالة استدعاء repos مباشرة من هذا الملف:
+  - fetch_item, fetch_labor_op, fetch_machine_op من repos → محذوفة
+  - منطق الحساب (calc_cost, calc_labor_op_cost, calc_machine_op_cost, raw_unit_price)
+    يُمرَّر عبر دالة data_fetcher من BomTree الذي يملك الـ conn
+
+  الواجهة الجديدة:
+    build_component_node(data_fetcher, child_type, child_id, qty, waste_pct, ...)
+    حيث data_fetcher: Callable[[str, int, int|None], BomNodeRawData | None]
+
+  BomNodeRawData — dataclass بسيط يحمل:
+    name, unit_cost, [op_row_label]
 """
+
+from __future__ import annotations
+
+from dataclasses import dataclass, field
+from typing      import Callable, Optional
 
 from PyQt5.QtWidgets import QTreeWidgetItem
 from PyQt5.QtCore    import Qt
 from PyQt5.QtGui     import QFont, QColor, QBrush
 
-from db.shared.items_repo       import fetch_item
-from db.costing.operations_repo import fetch_labor_op, fetch_machine_op
-from models.costing import (
-    calc_cost, calc_labor_op_cost, calc_machine_op_cost, raw_unit_price,
-)
 from models.costing_base import effective_qty
 
+
+# ══════════════════════════════════════════════════════════
+# Data containers
+# ══════════════════════════════════════════════════════════
+
+@dataclass
+class BomNodeRawData:
+    """
+    البيانات الأولية اللازمة لبناء node واحد في شجرة BOM.
+    تُملأ من BomTree الذي يملك الـ conn.
+    """
+    name:            str
+    unit_cost:       float
+    op_row_label:    Optional[str] = None    # للـ machine_op فقط
+
+
+# ══════════════════════════════════════════════════════════
+# ألوان وتصنيفات
+# ══════════════════════════════════════════════════════════
 
 _TYPE_LABELS = {
     "raw":        "🧱 خامة",
@@ -38,6 +69,10 @@ SCENARIO_DEFAULT_FG = QColor("#1b5e20")
 SCENARIO_NORMAL_BG  = QColor("#e3f2fd")
 SCENARIO_NORMAL_FG  = QColor("#0d47a1")
 
+
+# ══════════════════════════════════════════════════════════
+# بناء node السيناريو
+# ══════════════════════════════════════════════════════════
 
 def build_scenario_node(sc: dict) -> QTreeWidgetItem:
     """
@@ -70,56 +105,40 @@ def build_scenario_node(sc: dict) -> QTreeWidgetItem:
     return node
 
 
-def build_component_node(conn, child_type: str, child_id: int,
-                          qty: float, waste_pct: float = 0.0,
-                          qty_multiplier: float = 1.0,
-                          machine_op_row_id: int = None,
-                          fetch_sub_bom_fn=None) -> QTreeWidgetItem | None:
+# ══════════════════════════════════════════════════════════
+# بناء node المكوّن — نسخة جديدة بدون repos مباشرة
+# ══════════════════════════════════════════════════════════
+
+def build_component_node(
+    data_fetcher:       Callable[[str, int, Optional[int]], Optional[BomNodeRawData]],
+    child_type:         str,
+    child_id:           int,
+    qty:                float,
+    waste_pct:          float = 0.0,
+    qty_multiplier:     float = 1.0,
+    machine_op_row_id:  Optional[int] = None,
+    fetch_sub_bom_fn:   Optional[Callable[[int], list]] = None,
+) -> Optional[QTreeWidgetItem]:
     """
     يبني QTreeWidgetItem لمكوّن BOM واحد.
 
-    fetch_sub_bom_fn: دالة تجيب BOM الفرعي للنصف مصنع
-                      fn(item_id) → list[dict]
+    المعاملات:
+        data_fetcher      : دالة تجيب BomNodeRawData بدون DB access مباشر
+                            fn(child_type, child_id, machine_op_row_id) → BomNodeRawData | None
+        fetch_sub_bom_fn  : دالة تجيب BOM الفرعي للنصف مصنع
+                            fn(item_id) → list[dict]
     """
-    if child_type == "raw":
-        row = fetch_item(conn, child_id)
-        if not row:
-            return None
-        name      = row["name"]
-        unit_cost = raw_unit_price(row)
-
-    elif child_type == "semi":
-        row = fetch_item(conn, child_id)
-        if not row:
-            return None
-        name      = row["name"]
-        unit_cost = calc_cost(conn, child_id)
-
-    elif child_type == "labor_op":
-        op = fetch_labor_op(conn, child_id)
-        if not op:
-            return None
-        name      = op["name"]
-        unit_cost = calc_labor_op_cost(conn, child_id)
-
-    elif child_type == "machine_op":
-        op = fetch_machine_op(conn, child_id)
-        if not op:
-            return None
-        name      = op["name"]
-        unit_cost = calc_machine_op_cost(conn, child_id, row_id=machine_op_row_id)
-        if machine_op_row_id is not None:
-            try:
-                row_info = conn.execute(
-                    "SELECT label FROM machine_op_rows WHERE id=?",
-                    (machine_op_row_id,)
-                ).fetchone()
-                if row_info and row_info["label"]:
-                    name = f"{op['name']} [{row_info['label']}]"
-            except Exception:
-                pass
-    else:
+    node_data = data_fetcher(child_type, child_id, machine_op_row_id)
+    if node_data is None:
         return None
+
+    name      = node_data.name
+    unit_cost = node_data.unit_cost
+
+    # لو machine_op بصف محدد — إضافة label الصف للاسم
+    if child_type == "machine_op" and machine_op_row_id is not None:
+        if node_data.op_row_label:
+            name = f"{name} [{node_data.op_row_label}]"
 
     eff_qty    = effective_qty(qty, waste_pct)
     total_eff  = eff_qty * qty_multiplier
@@ -178,9 +197,11 @@ def build_component_node(conn, child_type: str, child_id: int,
             sub_bom = fetch_sub_bom_fn(child_id)
             for sub in sub_bom:
                 sub_node = build_component_node(
-                    conn,
-                    sub["child_type"], sub["child_id"],
-                    sub["qty"], sub.get("waste_pct") or 0.0,
+                    data_fetcher=data_fetcher,
+                    child_type=sub["child_type"],
+                    child_id=sub["child_id"],
+                    qty=sub["qty"],
+                    waste_pct=sub.get("waste_pct") or 0.0,
                     qty_multiplier=total_eff,
                     machine_op_row_id=sub.get("machine_op_row_id"),
                     fetch_sub_bom_fn=fetch_sub_bom_fn,
@@ -190,6 +211,10 @@ def build_component_node(conn, child_type: str, child_id: int,
 
     return node
 
+
+# ══════════════════════════════════════════════════════════
+# مساعد تنسيق
+# ══════════════════════════════════════════════════════════
 
 def _fmt_qty(qty: float) -> str:
     """تنسيق الكمية — بدون أصفار زائدة."""

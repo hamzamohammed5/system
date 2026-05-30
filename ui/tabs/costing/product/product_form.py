@@ -15,6 +15,8 @@ _FormPanel — فورم إضافة / تعديل المنتج.
          from ui.widgets.shared.component_row._row_widget import ComponentRow ← محذوف
          الاستخدام الفعلي يمر عبر _RowsManager من المسار الصحيح:
          ui.widgets.components.component_row.widget
+[Fix #3] استبدال bus.data_changed.emit() بـ emit_company_data_changed()
+         حسب توصية files_reference/models&services.md
 """
 
 from PyQt5.QtWidgets import QWidget, QVBoxLayout, QMessageBox
@@ -28,7 +30,9 @@ from db.costing.bom_scenarios_repo import (
     fetch_bom_for_scenario,
 )
 # [Fix #1] توحيد import LiveConnMixin من المسار الموثق في ui_widgets.md
-from ui.widgets.core.conn import LiveConnMixin
+from ui.widgets.core.conn   import LiveConnMixin
+# [Fix #3] استخدام emit_company_data_changed بدل bus.data_changed.emit()
+from ui.widgets.core.events import emit_company_data_changed
 from ui.events import bus
 
 from .form._header_bar   import _FormHeaderBar
@@ -243,7 +247,8 @@ class _FormPanel(QWidget, LiveConnMixin):
         )
         if pid is not None:
             self.reset()
-            QTimer.singleShot(0, bus.data_changed.emit)
+            # [Fix #3] استخدام emit_company_data_changed بدل bus.data_changed.emit()
+            QTimer.singleShot(0, emit_company_data_changed)
 
     # ══════════════════════════════════════════════════════
     # وضع التعديل

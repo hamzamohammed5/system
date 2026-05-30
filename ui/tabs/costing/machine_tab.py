@@ -4,6 +4,9 @@ ui/tabs/costing/machine_tab.py
 MachineTab — التبويب الرئيسي للماكينات وعمليات التشغيل.
 
 يرث من TabSectionBase للتوحيد مع RawTab و ProductTab و LaborTab.
+
+[Refactor] استبدال hardcoded strings بـ tr().
+[Refactor] ربط _SPLITTER_STYLE بـ _C بدل ألوان ثابتة.
 """
 
 from PyQt5.QtWidgets import QTabWidget, QWidget, QVBoxLayout, QSplitter
@@ -11,16 +14,25 @@ from PyQt5.QtCore import Qt
 
 from ui.widgets.shared.tab_section_base import TabSectionBase
 from ui.widgets.shared.category_manager import CategoryManager
+from ui.widgets.core.i18n               import tr
+from ui.app_settings                    import _C
 
 from .machine.machine_form     import _MachineForm
 from .machine.machine_table    import _MachineTable
 from .machine.machine_op_form  import _MachineOpForm
 from .machine.machine_op_table import _MachineOpTable
 
-_SPLITTER_STYLE = """
-    QSplitter::handle { background: #e0e0e0; border-top: 1px solid #ccc; }
-    QSplitter::handle:hover { background: #bbdefb; }
-"""
+
+def _splitter_style() -> str:
+    """style موحد للـ QSplitter مربوط بـ _C."""
+    return f"""
+        QSplitter::handle {{
+            background: {_C['border']};
+            border-top: 1px solid {_C['border_med']};
+        }}
+        QSplitter::handle:hover {{ background: {_C['accent_mid']}; }}
+        QSplitter::handle:pressed {{ background: {_C['accent']}; }}
+    """
 
 
 class _MachinesTab(QWidget):
@@ -28,7 +40,7 @@ class _MachinesTab(QWidget):
         super().__init__(parent)
         splitter = QSplitter(Qt.Vertical)
         splitter.setHandleWidth(6)
-        splitter.setStyleSheet(_SPLITTER_STYLE)
+        splitter.setStyleSheet(_splitter_style())
 
         form  = _MachineForm(conn)
         table = _MachineTable(conn, form)
@@ -48,7 +60,7 @@ class _MachineOpsTab(QWidget):
         super().__init__(parent)
         splitter = QSplitter(Qt.Vertical)
         splitter.setHandleWidth(6)
-        splitter.setStyleSheet(_SPLITTER_STYLE)
+        splitter.setStyleSheet(_splitter_style())
 
         form  = _MachineOpForm(conn)
         table = _MachineOpTable(conn, form)
@@ -69,6 +81,9 @@ class MachineTab(TabSectionBase):
     """
 
     def _build_tabs(self, tabs: QTabWidget):
-        tabs.addTab(_MachinesTab(self.conn),                       "🖥️  الماكينات")
-        tabs.addTab(_MachineOpsTab(self.conn),                     "⚙️  عمليات التشغيل")
-        tabs.addTab(CategoryManager(self.conn, scope="machine"),   "🏷️  التصنيفات")
+        tabs.addTab(_MachinesTab(self.conn),
+                    f"🖥️  {tr('الماكينات')}")
+        tabs.addTab(_MachineOpsTab(self.conn),
+                    f"⚙️  {tr('عمليات التشغيل')}")
+        tabs.addTab(CategoryManager(self.conn, scope="machine"),
+                    f"🏷️  {tr('التصنيفات')}")

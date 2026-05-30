@@ -5,6 +5,8 @@ BomTree — شجرة عرض BOM مع كل السيناريوهات كنودات 
 
 [Refactor] استخدام tr() لكل النصوص + _C للألوان.
 [Refactor] استخدام BomTreeService بدل SQL/repos مباشرة.
+[Refactor] توفير data_fetcher لـ _scenario_node_builder بدل تمرير conn مباشرة،
+           مما يزيل repo access من الـ builder تماماً.
 
 [Fix #10] ربط bus.theme_changed لتحديث stylesheet ديناميكياً عند تغيير الثيم،
   توافقاً مع _OpRowsEditor و _RawVariantsPanel و ScenarioComparisonWidget.
@@ -24,6 +26,7 @@ from ui.widgets.dialogs.confirm    import confirm_delete
 from ui.events                     import bus
 
 from ui.tabs.costing.shared.bom_tree_helper._scenario_node_builder import (
+    BomNodeRawData,
     build_scenario_node,
     build_component_node,
 )
@@ -199,7 +202,83 @@ class BomTree(QWidget):
             self._refresh()
 
     # ══════════════════════════════════════════════════════
-    # _refresh — [Refactor] استخدام BomTreeService بدل SQL مباشر
+    # data_fetcher — يوفر BomNodeRawData بدون repo access في builder
+    # ══════════════════════════════════════════════════════
+
+    def _fetch_node_data(self, child_type: str, child_id: int,
+                         machine_op_row_id: int | None) -> BomNodeRawData | None:
+        """
+        يجلب بيانات المكوّن اللازمة لبناء الـ node.
+        هذه الدالة تملك الـ conn وتتعامل مع repos/models مباشرة.
+        تُمرَّر لـ build_component_node كـ data_fetcher.
+        """
+        try:
+            if child_type == "raw":
+                from db.shared.items_repo  import fetch_item
+                from models.costing_base   import raw_unit_price
+                row = fetch_item(self._conn, child_id)
+                if not row:
+                    return None
+                return BomNodeRawData(
+                    name=row["name"],
+                    unit_cost=raw_unit_price(row),
+                )
+
+            elif child_type == "semi":
+                from db.shared.items_repo import fetch_item
+                from models.costing       import calc_cost
+                row = fetch_item(self._conn, child_id)
+                if not row:
+                    return None
+                return BomNodeRawData(
+                    name=row["name"],
+                    unit_cost=calc_cost(self._conn, child_id),
+                )
+
+            elif child_type == "labor_op":
+                from db.costing.operations_repo import fetch_labor_op
+                from models.costing_ops         import calc_labor_op_cost
+                op = fetch_labor_op(self._conn, child_id)
+                if not op:
+                    return None
+                return BomNodeRawData(
+                    name=op["name"],
+                    unit_cost=calc_labor_op_cost(self._conn, child_id),
+                )
+
+            elif child_type == "machine_op":
+                from db.costing.operations_repo import fetch_machine_op
+                from models.costing_ops         import calc_machine_op_cost
+                op = fetch_machine_op(self._conn, child_id)
+                if not op:
+                    return None
+                # جلب label الصف لو محدد
+                op_row_label = None
+                if machine_op_row_id is not None:
+                    try:
+                        row_info = self._conn.execute(
+                            "SELECT label FROM machine_op_rows WHERE id=?",
+                            (machine_op_row_id,)
+                        ).fetchone()
+                        if row_info and row_info["label"]:
+                            op_row_label = row_info["label"]
+                    except Exception:
+                        pass
+                return BomNodeRawData(
+                    name=op["name"],
+                    unit_cost=calc_machine_op_cost(
+                        self._conn, child_id, row_id=machine_op_row_id
+                    ),
+                    op_row_label=op_row_label,
+                )
+
+        except Exception:
+            return None
+
+        return None
+
+    # ══════════════════════════════════════════════════════
+    # _refresh — يستخدم BomTreeService + data_fetcher
     # ══════════════════════════════════════════════════════
 
     def _refresh(self):
@@ -207,7 +286,7 @@ class BomTree(QWidget):
         if self._pid is None:
             return
 
-        # [Refactor] استخدام BomTreeService بدل _fetch_all_scenarios + SQL مباشر
+        # استخدام BomTreeService بدل SQL مباشر
         svc       = BomTreeService(self._conn)
         scenarios = svc.get_scenarios(self._pid)
 
@@ -216,9 +295,11 @@ class BomTree(QWidget):
             bom_rows = svc.get_bom_for_scenario(None)
             for row in bom_rows:
                 node = build_component_node(
-                    self._conn,
-                    row["child_type"], row["child_id"],
-                    row["qty"], row.get("waste_pct") or 0.0,
+                    data_fetcher=self._fetch_node_data,
+                    child_type=row["child_type"],
+                    child_id=row["child_id"],
+                    qty=row["qty"],
+                    waste_pct=row.get("waste_pct") or 0.0,
                     machine_op_row_id=row.get("machine_op_row_id"),
                     fetch_sub_bom_fn=self._get_sub_bom_for_item,
                 )
@@ -230,15 +311,16 @@ class BomTree(QWidget):
         for sc in scenarios:
             sc_node = build_scenario_node(sc)
 
-            # [Refactor] استخدام BomTreeService بدل _fetch_bom_with_row_id_by_scenario
             bom_rows      = svc.get_bom_for_scenario(sc["id"])
             total_sc_cost = 0.0
 
             for row in bom_rows:
                 child_node = build_component_node(
-                    self._conn,
-                    row["child_type"], row["child_id"],
-                    row["qty"], row.get("waste_pct") or 0.0,
+                    data_fetcher=self._fetch_node_data,
+                    child_type=row["child_type"],
+                    child_id=row["child_id"],
+                    qty=row["qty"],
+                    waste_pct=row.get("waste_pct") or 0.0,
                     machine_op_row_id=row.get("machine_op_row_id"),
                     fetch_sub_bom_fn=self._get_sub_bom_for_item,
                 )
@@ -257,11 +339,10 @@ class BomTree(QWidget):
             sc_node.setExpanded(bool(sc["is_default"]))
 
     # ══════════════════════════════════════════════════════
-    # مساعدات جلب البيانات — [Refactor] عبر BomTreeService
+    # مساعدات جلب البيانات — عبر BomTreeService
     # ══════════════════════════════════════════════════════
 
     def _get_sub_bom_for_item(self, item_id: int) -> list:
-        # [Refactor] استخدام BomTreeService بدل SQL مباشر
         svc = BomTreeService(self._conn)
         return svc.get_sub_bom(item_id)
 
@@ -323,7 +404,6 @@ class BomTree(QWidget):
                 ):
                     return
 
-                # [Refactor] استخدام BomTreeService بدل SQL مباشر
                 try:
                     svc = BomTreeService(self._conn)
                     svc.delete_bom_component(sc_id, child_type, child_id)
@@ -346,7 +426,6 @@ class BomTree(QWidget):
         if not confirm_delete(self, node_name):
             return
 
-        # [Refactor] استخدام BomTreeService بدل delete_bom_row مباشرة
         try:
             svc = BomTreeService(self._conn)
             svc.delete_bom_row_direct(self._pid, child_type, child_id)

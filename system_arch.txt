@@ -1,5 +1,5 @@
 File Tree Snapshot
-Generated : 2026-05-30 11:20:54
+Generated : 2026-05-30 14:32:10
 Source    : D:\My Workspace\Hg\Alhabaar\accountant\system
 Extensions: .md, .py
 ────────────────────────────────────────────────────────────
@@ -200,7 +200,6 @@ system/
 │   │   │   │   ├── _utils.py
 │   │   │   │   ├── bom_scenarios_panel.py
 │   │   │   │   ├── bom_tree.py
-│   │   │   │   ├── catalog_builder.py
 │   │   │   │   ├── machine_op_rows_editor.py
 │   │   │   │   ├── raw_variants_panel.py
 │   │   │   │   └── scenario_comparison_widget.py

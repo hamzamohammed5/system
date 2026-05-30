@@ -11,6 +11,7 @@ _ProductMainPanel — اللوحة الرئيسية: فورم + جدول + BOM t
 [Fix #3] دمج المنطق المشترك في دالة _refresh_for_product بدل التكرار
 [Fix #4] conn معامل إلزامي في _check_orphans — كل الاستدعاءات تمرره فعلاً
 [Fix #6] توحيد import confirm_delete من المسار الموثق في ui_widgets.md
+[Fix #7] استبدال hardcoded strings بـ tr()
 """
 
 from PyQt5.QtWidgets import (
@@ -22,9 +23,11 @@ from db.shared.items_repo import fetch_item, delete_item
 # [Fix #6] توحيد import confirm_delete من المسار الموثق في ui_widgets.md
 from ui.widgets.dialogs.confirm import confirm_delete
 # [Fix #1] توحيد import LiveConnMixin من المسار الموثق في ui_widgets.md
-from ui.widgets.core.conn import LiveConnMixin
+from ui.widgets.core.conn       import LiveConnMixin
+from ui.widgets.core.i18n       import tr
 from ui.widgets.shared.base_warning_bar import BaseWarningBar
-from ui.tabs.costing.shared.bom_tree      import BomTree
+from ui.tabs.costing.shared.bom_tree    import BomTree
+from ui.app_settings import _C
 from ui.events import bus
 
 from .product_form  import _FormPanel
@@ -32,16 +35,17 @@ from .product_table import _ProductTable
 from ._catalog_provider import build_product_catalog
 from ._orphan_handler   import _OrphanHandler
 
-from ui.app_settings import _C
 
-_SPLITTER_STYLE = f"""
-    QSplitter::handle {{
-        background: {_C['border']};
-        border-top: 1px solid {_C['border_med']};
-    }}
-    QSplitter::handle:hover {{ background: {_C['accent_mid']}; }}
-    QSplitter::handle:pressed {{ background: {_C['accent']}; }}
-"""
+def _splitter_style() -> str:
+    """style موحد للـ QSplitter مربوط بـ _C."""
+    return f"""
+        QSplitter::handle {{
+            background: {_C['border']};
+            border-top: 1px solid {_C['border_med']};
+        }}
+        QSplitter::handle:hover {{ background: {_C['accent_mid']}; }}
+        QSplitter::handle:pressed {{ background: {_C['accent']}; }}
+    """
 
 
 class _ProductMainPanel(QWidget, LiveConnMixin):
@@ -66,7 +70,8 @@ class _ProductMainPanel(QWidget, LiveConnMixin):
 
         splitter = QSplitter(Qt.Vertical)
         splitter.setHandleWidth(6)
-        splitter.setStyleSheet(_SPLITTER_STYLE)
+        # [Fix #7] style مربوط بـ _C بدل hardcoded
+        splitter.setStyleSheet(_splitter_style())
 
         self._form = _FormPanel(self.conn, self.product_type, self._get_catalog)
         bus.data_changed.connect(self._refresh_form_catalog)
@@ -77,11 +82,12 @@ class _ProductMainPanel(QWidget, LiveConnMixin):
         mid_layout.setContentsMargins(0, 0, 0, 0)
         mid_layout.setSpacing(0)
 
+        # [Fix #7] استخدام tr() بدل hardcoded
         self._warning = BaseWarningBar(
             on_fix=self._fix_orphans,
             on_edit=self._edit_selected,
-            fix_text="🗑️ حذف الناقص",
-            edit_text="✏️ تعديل",
+            fix_text=f"🗑️ {tr('حذف الناقص')}",
+            edit_text=f"✏️ {tr('تعديل')}",
         )
         mid_layout.addWidget(self._warning)
 
@@ -149,7 +155,7 @@ class _ProductMainPanel(QWidget, LiveConnMixin):
         try:
             conn = self._live_conn()
         except Exception as e:
-            QMessageBox.warning(self, "خطأ", str(e))
+            QMessageBox.warning(self, tr("خطأ"), str(e))
             return
         self._orphan.fix(
             conn, pid,
@@ -162,19 +168,19 @@ class _ProductMainPanel(QWidget, LiveConnMixin):
         if pid is None:
             pid = self._prod_table.selected_pid()
         if pid is None:
-            QMessageBox.information(self, "تنبيه", "اختر منتجاً من الجدول أولاً")
+            QMessageBox.information(self, tr("تنبيه"), tr("اختر منتجاً من الجدول أولاً"))
             return
         self._warning.setVisible(False)
         self._form.load_product(pid)
 
     def _delete_product(self, pid: int | None):
         if pid is None:
-            QMessageBox.information(self, "تنبيه", "اختر منتجاً أولاً")
+            QMessageBox.information(self, tr("تنبيه"), tr("اختر منتجاً أولاً"))
             return
         try:
             conn = self._live_conn()
         except Exception as e:
-            QMessageBox.warning(self, "خطأ", str(e))
+            QMessageBox.warning(self, tr("خطأ"), str(e))
             return
 
         item = fetch_item(conn, pid)
