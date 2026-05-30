@@ -1,6 +1,6 @@
 # دليل الكود — DB (4): المخزن والطلبات
 
-> `inventory.db` و `orders.db` — أصناف المخزن، الحركات، الطلبات، العملاء.
+> `inventory.db` و `orders.db` — schema، أصناف المخزن، الحركات، الطلبات، العملاء.
 
 ---
 
@@ -8,11 +8,27 @@
 
 | القسم | الملفات |
 |-------|---------|
+| [inventory_schema](#inventory_schema) | `db/inventory/inventory_schema.py` |
 | [هيكل جداول inventory.db](#هيكل-جداول-inventorydb) | — |
 | [inventory_repo](#inventory_repo) | `db/inventory/inventory_repo.py` |
+| [orders_schema](#orders_schema) | `db/orders/orders_schema.py` |
 | [هيكل جداول orders.db](#هيكل-جداول-ordersdb) | — |
 | [customers_repo](#customers_repo) | `db/orders/customers_repo.py` |
 | [orders_repo](#orders_repo) | `db/orders/orders_repo.py` |
+
+---
+
+## inventory_schema
+
+### `db/inventory/inventory_schema.py`
+
+```python
+create_inventory_tables(conn)
+# ينشئ في inventory.db:
+#   inventory_categories — تصنيفات المخزن
+#   inventory_items      — أصناف المخزن
+#   inventory_moves      — حركات المخزن
+```
 
 ---
 
@@ -21,8 +37,13 @@
 | الجدول | الأعمدة الرئيسية |
 |--------|-----------------|
 | `inventory_categories` | `id, name, color, notes` |
-| `inventory_items` | `id, name, unit, category_id, qty_on_hand, qty_min, avg_cost, costing_item_id, account_code, notes` |
-| `inventory_moves` | `id, inventory_id→CASCADE, move_type["in"\|"out"\|"adjust"], qty, unit_cost, total_cost, date, ref_entry_id, ref_entry_no, notes` |
+| `inventory_items` | `id, name, unit, category_id→SET NULL, qty_on_hand, qty_min, avg_cost, costing_item_id, account_code DEFAULT "114", notes, created_at` |
+| `inventory_moves` | `id, inventory_id→CASCADE, move_type["in"\|"out"\|"adjust"], qty, unit_cost, total_cost, date, ref_entry_id, ref_entry_no, notes, created_at` |
+
+**ربط المخزن بالمحاسبة:**
+- `ref_entry_id` → يُشير لـ `journal_entries.id` في `accounting.db` (بدون FK عبر DBs)
+- `account_code` → كود الحساب في `accounting.db` للمخزون (افتراضي `"114"`)
+- التحقق يتم يدوياً في `accounting_inventory_repo.purchase_inventory()`
 
 ---
 
@@ -70,6 +91,55 @@ record_inventory_move(conn, inv_id, move_type, qty, unit_cost, date,
 | `"adjust"` | يضع `qty` مباشرة — `ValueError` لو `qty` سالبة [تحسين 20] |
 
 > ⚠️ حساب `avg_cost` تلقائي في `record_inventory_move()` — لا تحسبه يدوياً.
+
+---
+
+## orders_schema
+
+### `db/orders/orders_schema.py`
+
+```python
+create_orders_tables(conn)
+# ينشئ في orders.db جداول + indexes + يُشغِّل _run_migrations()
+
+get_orders_connection() -> sqlite3.Connection
+# isolation_level=None, foreign_keys=ON, journal_mode=WAL
+```
+
+**Migration Framework [تحسين 25]:**
+
+```python
+_ensure_migrations_table(conn)
+_is_applied(conn, name: str) -> bool
+_mark_applied(conn, name: str)
+_apply_migration(conn, name: str, fn)
+_run_migrations(conn)
+```
+
+**الـ Migrations المُعرَّفة:**
+
+| الاسم | الوصف |
+|-------|-------|
+| `m001_add_internal_notes` | يضيف `internal_notes` لـ `orders` |
+| `m002_add_customers_phone2` | يضيف `phone2` لـ `customers` |
+| `m003_add_orders_priority` | يضيف `priority` لـ `orders` |
+| `m004_add_idx_orders_priority` | يضيف index على `priority` |
+| `m005_add_customer_contacts_role` | يضيف `role` لـ `customer_contacts` |
+
+**إضافة migration جديد:**
+```python
+def _m006_add_order_tags(conn):
+    if not _column_exists(conn, "orders", "tags"):
+        conn.execute("ALTER TABLE orders ADD COLUMN tags TEXT")
+        conn.commit()
+
+_MIGRATIONS = [
+    ...,
+    ("m006_add_order_tags", _m006_add_order_tags),
+]
+```
+
+> ⚠️ كل migration يجب أن يكون **idempotent** — استخدم `IF NOT EXISTS`, `OR IGNORE`, `_column_exists()`. [Q-02]
 
 ---
 
@@ -152,16 +222,11 @@ update_order(conn, order_id, priority="normal", due_date=None,
              total_amount=0, discount=0, paid_amount=0, notes="",
              internal_notes="", customer_id=None,
              changed_by="system") -> bool
-# [C-04] customer_id اختياري:
-#   None (الافتراضي) → لا يُغيِّر العميل الحالي (backward-compatible)
-#   قيمة صحيحة     → يتحقق من وجود العميل وكونه نشطاً ثم يُغيِّره
-#   يُسجَّل تغيير العميل في order_status_log كملاحظة
+# [C-04] customer_id اختياري
 
 change_order_status(conn, order_id, new_status, notes="", changed_by="system") -> bool
 cancel_order(conn, order_id, reason="", changed_by="system") -> bool
 reorder(conn, original_order_id, notes="", created_by="system") -> int
-# ينسخ الطلب القديم كطلب جديد من نوع "reorder"
-
 delete_order(conn, order_id) -> bool
 # [تحسين 21] يرفض لو paid_amount > 0
 # يرفض لو status ليس pending/cancelled
@@ -199,5 +264,3 @@ fetch_orders_summary(conn) -> dict
 | `delivered` | — |
 | `cancelled` | pending |
 | `on_hold` | pending, confirmed, in_progress |
-
-> ⚠️ Migration Framework (orders.db): كل migration في `_MIGRATIONS` يجب أن يكون idempotent. يُسجَّل في `schema_migrations` ويتخطى المُطبَّق [تحسين 25].

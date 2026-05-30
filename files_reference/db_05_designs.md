@@ -8,11 +8,29 @@
 
 | القسم | الملفات |
 |-------|---------|
+| [design_schema](#design_schema) | `db/designs/design_schema.py` |
 | [هيكل الجداول](#هيكل-الجداول) | — |
 | [designs_repo](#designs_repo) | `db/designs/designs_repo.py` |
 | [designs_sizes_repo](#designs_sizes_repo) | `db/designs/designs_sizes_repo.py` |
 | [dimension_sets_repo](#dimension_sets_repo) | `db/designs/dimension_sets_repo.py` (Facade) |
 | [design_item_categories_repo](#design_item_categories_repo) | `db/designs/design_item_categories_repo.py` |
+
+---
+
+## design_schema
+
+### `db/designs/design_schema.py`
+
+```python
+create_design_tables(conn)
+# ينشئ في designs.db كل الجداول + يُشغِّل _run_migrations()
+# الترتيب: design_categories → design_item_categories → dimension_sets
+#          → dimension_fields → dimension_field_deps
+#          → dimension_set_instances → dimension_set_values
+#          → designs → design_sizes
+```
+
+> **ملاحظة [إصلاح 7 + 12]:** `dpi_field_id` يُضاف تلقائياً عبر `_run_migrations()` على قواعد البيانات القديمة.
 
 ---
 
@@ -29,8 +47,6 @@
 | `dimension_set_values` | `id, set_id, field_id, instance_id→CASCADE, value_num, value_text, UNIQUE(instance_id,field_id)` |
 | `designs` | `id, name, category_id, item_category_id, notes, preview_image, created_at, updated_at` |
 | `design_sizes` | `id, design_id→CASCADE, set_id, instance_id, width_field_id, height_field_id, dpi_field_id, xcf_path, notes, sort_order, UNIQUE(design_id,instance_id)` |
-
-> **ملاحظة:** `dpi_field_id` يُضاف تلقائياً عبر `_run_migrations()` على قواعد البيانات القديمة [إصلاح 7 + 12].
 
 ---
 
