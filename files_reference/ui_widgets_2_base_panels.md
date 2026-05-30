@@ -10,7 +10,8 @@
 |-------|---------|
 | [BaseListPanel](#baselistpanel) | `base/list_panel` |
 | [BaseDetailPanel](#basedetailpanel) | `base/detail_panel` |
-| [BaseSection / CrudSection](#basesection--crudsection) | `base/section`, `panels/crud_section` |
+| [BaseSection](#basesection) | `base/section` |
+| [CrudSection (alias)](#crudsection-alias) | `panels/crud_section` |
 | [TabSectionBase](#tabsectionbase) | `base/tab_section` |
 | [BaseCrudForm](#basecrudform) | `base/crud_form` |
 
@@ -41,7 +42,7 @@ SHOW_CATEGORY: bool = False
 SHOW_DATE: bool = False
 FILTER_SCOPE: str = "all"
 DATE_COL: str = "date"
-# اسم الـ key في dict البيانات الذي يحتوي التاريخ
+# [E-02] اسم الـ key في dict البيانات الذي يحتوي التاريخ
 # يُستخدم في _match_date() لقراءة التاريخ من row[DATE_COL]
 CONNECT_BUS: bool = True
 
@@ -60,7 +61,7 @@ _match_filter(row, query) -> bool
 _match_category(row, cat_id) -> bool
 # افتراضياً: يقارن row["category_id"]
 _match_date(row) -> bool
-# يُستدعى فقط لو SHOW_DATE=True
+# [E-02] يُستدعى فقط لو SHOW_DATE=True
 # يقرأ row[DATE_COL] ويمرره لـ _filter_toolbar.in_date_range()
 _on_add_clicked()
 _on_data_changed()                # افتراضياً: self.refresh()
@@ -71,15 +72,18 @@ _sort_key(col, row)               # يُستدعى فقط لو SORTABLE=True
 **Bus (عند `CONNECT_BUS=True`):**
 يشترك في `company_data_changed` + `data_changed` + `theme_changed` + `language_changed`.
 
-- `_on_theme_changed(theme_name)`:
-  - يُعيد تطبيق `background` على الـ widget الرئيسي
-  - يُعيد تطبيق stylesheet على `_empty_state`
-  - يُعيد بناء styles الـ pagination bar والـ status bar
+```python
+def _on_theme_changed(theme_name: str):
+    # يُعيد تطبيق background على الـ widget الرئيسي
+    # يُعيد تطبيق stylesheet على _empty_state
+    # يُعيد بناء styles الـ pagination bar والـ status bar
+    # يستدعي _rebuild_pagination_styles() + _rebuild_status_style()
 
-- `_on_language_changed(lang_code)`:
-  - يُحدّث placeholder البحث عبر `_header.search_bar.set_placeholder()`
-  - يُحدّث نص empty state عبر `_empty_state.set_title(_tr_safe(EMPTY_TITLE))`
-  - يُحدّث نصوص أزرار الـ pagination
+def _on_language_changed(lang_code: str):
+    # يُحدّث placeholder البحث عبر _header.search_bar.set_placeholder()
+    # يُحدّث نص empty state عبر _empty_state.set_title(_tr_safe(EMPTY_TITLE))
+    # يُحدّث نصوص أزرار الـ pagination
+```
 
 **API:**
 ```python
@@ -159,7 +163,8 @@ _fill_header(data: dict)           # افتراضياً: self._hdr.set_title(dat
 _on_data_changed()                 # افتراضياً: load_item(self._item_id)
 
 _on_theme_changed(theme_name: str)
-# يُعيد تطبيق bg_page على الـ panel وscroll area والـ inner widgets
+# يُعيد تطبيق bg_page على الـ panel + scroll area + inner widgets
+# يُعيد تطبيق scroll_style() على الـ scroll area
 
 _on_language_changed(lang_code: str)
 # يُحدّث نص _empty عبر _empty.set_title(_tr_safe(EMPTY_TITLE))
@@ -187,11 +192,13 @@ panel.content_layout -> QVBoxLayout
 
 ---
 
-## BaseSection / CrudSection
+## BaseSection
 
 ### `ui/widgets/base/section.py` — `BaseSection`
 
-> **ملاحظة:** `CrudSection` في `panels/crud_section.py` هو **alias** لـ `BaseSection` للتوافق مع الكود القديم. استخدم `BaseSection` مباشرة في الكود الجديد.
+> **[T-05] توحيد BaseSection و CrudSection:**
+> `BaseSection` استوعبت كل خصائص `CrudSection` — استخدمها مباشرة في الكود الجديد.
+> `CrudSection` في `panels/crud_section.py` أصبحت alias للتوافق فقط.
 
 **Override المطلوب:**
 ```python
@@ -205,28 +212,32 @@ LIST_MIN_W: int = 280
 LIST_MAX_W: int = 560
 DETAIL_MIN_W: int = 320
 CONNECT_BUS: bool = False
-LAYOUT_REVERSED: bool = False
-FORM_POSITION: str = "none"
-# "none"   → لا فورم
-# "bottom" → فورم أسفل لوحة القائمة
-# "left"   → list فقط في الـ splitter
-SPLITTER_RATIO: tuple = (1, 2)
+LAYOUT_REVERSED: bool = False  # يعكس ترتيب list/detail
 
-_create_form() -> QWidget | None
+# [T-05] من CrudSection:
+FORM_POSITION: str = "none"
+# "none"   → لا فورم (الافتراضي)
+# "bottom" → فورم أسفل لوحة القائمة
+# "left"   → list panel فقط (الفورم خارج الـ splitter)
+
+SPLITTER_RATIO: tuple = (1, 2)   # نسبة list:detail
+
+_create_form() -> QWidget | None   # [T-05] افتراضياً: None
 _connect_signals()
 # افتراضياً: list.item_selected → detail.load_item
-_on_data_changed()
+_on_data_changed()     # افتراضياً: self.refresh()
 _on_item_selected(item_id: int)
+# افتراضياً: detail.load_item(item_id)
 ```
 
 **API:**
 ```python
 section.refresh()
 section.clear_detail()
-section.select_item(item_id)
+section.select_item(item_id)   # [T-05] يختار عنصراً برمجياً
 section.list_panel -> QWidget
 section.detail_panel -> QWidget
-section.form_panel -> QWidget | None
+section.form_panel -> QWidget | None   # [T-05]
 ```
 
 **مثال:**
@@ -234,8 +245,9 @@ section.form_panel -> QWidget | None
 from ui.widgets.base.section import BaseSection
 
 class MySection(BaseSection):
-    LIST_MIN_W  = 300
-    CONNECT_BUS = True
+    LIST_MIN_W   = 300
+    CONNECT_BUS  = True
+    FORM_POSITION = "bottom"   # فورم أسفل القائمة
 
     def _create_list(self):
         return MyListPanel(self.conn)
@@ -243,8 +255,25 @@ class MySection(BaseSection):
     def _create_detail(self):
         return MyDetailPanel(self.conn)
 
+    def _create_form(self):
+        return MyAddForm(self.conn)   # [T-05]
+
     def _connect_signals(self):
         self._list.item_selected.connect(self._detail.load_item)
+```
+
+---
+
+## CrudSection (alias)
+
+### `ui/widgets/panels/crud_section.py`
+
+> **تنبيه:** `CrudSection` أصبح alias لـ `BaseSection` للتوافق مع الكود القديم.
+> الكود الجديد يستخدم `BaseSection` من `ui/widgets/base/section.py` مباشرة.
+
+```python
+from ui.widgets.panels.crud_section import CrudSection
+# مطابق تماماً لـ BaseSection
 ```
 
 ---
@@ -264,7 +293,17 @@ section.conn -> ProtectedConnection
 section.current_tab -> QWidget | None
 
 # closeEvent:
-# يُغلق conn فقط لو كان مملوكاً (_is_owned_connection) وليس shared من company_state
+# [إصلاح 18] يُغلق conn فقط لو _is_owned_connection() = True
+# في الغالب الـ connection مشترك من company_state → لا يُغلق هنا
+# الإغلاق يحدث في company_state عند تغيير الشركة
+```
+
+**مثال:**
+```python
+class RawTab(TabSectionBase):
+    def _build_tabs(self, tabs: QTabWidget):
+        tabs.addTab(RawSection(self.conn),        tr("raw_tab"))
+        tabs.addTab(CategoryManager(self.conn),   tr("categories_tab"))
 ```
 
 ---

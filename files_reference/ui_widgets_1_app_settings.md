@@ -34,7 +34,9 @@
 
 ```python
 get_font_size() -> int
-# يقرأ من module cache (_module_font_size) أولاً ثم AppState
+# [تحسين 43] يقرأ من _module_font_size أولاً (module-level cache)
+# ثم AppState.font_size() مع حفظ النتيجة في الـ cache
+# لا DB call إذا كان الـ cache سليم
 
 set_font_size(size: int)
 # يحدث module cache + AppState + DB
@@ -45,19 +47,20 @@ fs(base: int, delta: int = 0) -> int
 
 apply_font(app: QApplication, size=None)
 # يبني stylesheet + يُطبّقه على الـ app
+# يمسح الـ cache أولاً لو size اختلف
 
-apply_theme(theme_colors: dict, app=None)
-# يحدث _C بالألوان الجديدة (مفاتيح موجودة + مفاتيح جديدة)
+apply_theme(theme_colors: dict, app: QApplication = None)
+# [themes] يُحدّث _C بألوان الثيم الجديد (يقبل مفاتيح موجودة + جديدة)
 # يمسح كل الـ caches (stylesheet + button)
 # يُطبّق stylesheet الجديد على الـ app فوراً
-# يُستدعى من ThemeManager.set_theme() عند تغيير الثيم
+# يُستدعى من ThemeManager.set_theme() — لا تستدعه مباشرة من الـ UI
 
 get_theme_color(key, fallback="#000000") -> str
 # يرجع لون من _C بأمان مع fallback
 
 invalidate_stylesheet_cache()
 # يمسح _ss_cache + يُعيد حساب _current_theme_hash
-# يمسح _module_font_size أيضاً (يُجبر إعادة القراءة من AppState)
+# [تحسين 43] يمسح _module_font_size أيضاً (يُجبر إعادة القراءة من AppState)
 # يُستدعى عند تغيير الخط أو الثيم أو الشركة
 
 _set_module_font_cache(size: int | None)
@@ -67,21 +70,27 @@ _set_module_font_cache(size: int | None)
 **Stylesheet cache:** `_ss_cache` — key هو `(font_size, theme_hash)`.
 يُبنى الـ stylesheet مرة واحدة لكل مجموعة (حجم خط + ثيم) ثم يُعاد استخدامه.
 
+**Theme hash:** `_current_theme_hash` — يُحسب من `hash(tuple(sorted(_C.items())))`.
+يُعاد حسابه عند استدعاء `invalidate_stylesheet_cache()`.
+
 ---
 
 ### `ui/app_state.py`
 
 ```python
-AppState.font_size() -> int          # من DB مع cache — يُحمَّل مرة واحدة فقط
-AppState.on_font_changed(size)
-# يحدث _font_size cache
-# يُزامن _module_font_size في app_settings عبر _set_module_font_cache
+AppState.font_size() -> int
+# يحمّل من DB مرة واحدة فقط ثم يُعيد من الـ cache
+
+AppState.on_font_changed(size: int)
+# يحدّث _font_size cache
+# [تحسين 43] يُزامن _module_font_size في app_settings عبر _set_module_font_cache
 # يُبطل button stylesheet cache
 
 AppState.invalidate()
 # يمسح _font_size = None
 # يستدعي invalidate_stylesheet_cache() الكامل من app_settings
-# مهم عند تغيير الشركة
+# [تحسين 37] يشمل stylesheet cache + theme hash + module font cache
+# مهم عند تغيير الشركة النشطة — يُستدعى من MainWindow._on_company_changed()
 
 DEFAULT_FONT_SIZE = 11
 MIN_FONT_SIZE     = 8
@@ -123,18 +132,31 @@ bus.data_changed.emit()
 ```python
 theme_manager.current_theme -> str  # "light" | "dark"
 theme_manager.is_dark -> bool
+
 theme_manager.set_theme(theme_name, save=True)
+# يُحدّث _current_theme
 # يستدعي apply_theme() من app_settings (يُحدّث _C + يمسح cache + يُطبّق stylesheet)
 # يُطلق bus.theme_changed تلقائياً بعد التطبيق
 # يحفظ في DB لو save=True
+
 theme_manager.load_from_db()
-# يحمّل الثيم المحفوظ + يطبّقه بدون save
+# يحمّل الثيم المحفوظ + يطبّقه بدون save — يُستدعى عند بدء التطبيق
+
 theme_manager.get_available_themes() -> list[{key, name, active}]
 
 # ثوابت الثيمات:
 # THEMES: {"light": _LIGHT_THEME, "dark": _DARK_THEME}
 # THEME_DISPLAY_NAMES: {"light": "فاتح", "dark": "داكن"}
-# كل ثيم يحتوي على نفس مفاتيح _C في app_settings
+# كل ثيم dict يحتوي على نفس مفاتيح _C في app_settings
+```
+
+**تدفق تغيير الثيم:**
+```
+SettingsDialog._save()
+  → theme_manager.set_theme("dark")
+    → apply_theme(colors)          # يُحدّث _C + يمسح cache + يُطبّق stylesheet
+    → bus.theme_changed.emit("dark")
+      → كل widget مشترك في _on_theme_changed يُعيد تطبيق styles
 ```
 
 ---
@@ -143,7 +165,7 @@ theme_manager.get_available_themes() -> list[{key, name, active}]
 
 ### `ui/widgets/core/i18n.py` — `I18nManager` + `tr()`
 
-المصدر الوحيد لنظام الترجمة. يُحمِّل الترجمات تلقائياً من `ui/i18n/ar.py` و`ui/i18n/en.py` عند الاستيراد.
+المصدر الوحيد لنظام الترجمة. راجع `files_reference/i18n_reference.md` للتفاصيل الكاملة.
 
 ```python
 from ui.widgets.core.i18n import tr, i18n_manager
@@ -152,24 +174,26 @@ i18n_manager.language -> str          # "ar" | "en"
 i18n_manager.is_rtl -> bool
 i18n_manager.qt_direction -> Qt.LayoutDirection
 i18n_manager.set_language(lang, save=True)
-# يُحدّث _language + يُطبّق اتجاه Layout + يحفظ في DB + يُطلق language_changed
 i18n_manager.translate(key, lang=None, **kwargs) -> str
-# fallback للعربية لو المفتاح ناقص في اللغة المطلوبة
 i18n_manager.load_from_db()
-# يحمّل اللغة المحفوظة + يُطبّق الاتجاه
 i18n_manager.get_available_languages() -> list[{code, name, active, is_rtl}]
 i18n_manager.add_translations(lang_code, translations: dict)
-# يضيف/يحدث ترجمات برمجياً
 
 def tr(key: str, lang=None, **kwargs) -> str
-# دالة الترجمة الرئيسية
 # مثال: tr("save")                           → "حفظ" | "Save"
 # مثال: tr("delete_confirm_msg", name="X")   → "هل تريد حذف «X»؟" | "Delete «X»?"
 # مثال: tr("showing_of", shown=5, total=100) → "5 / 100"
 ```
 
 > **ملاحظة:** لا تمرر نصاً عربياً مباشرة لـ `tr()` — استخدم المفتاح المقابل دائماً.
-> راجع `files_reference/i18n_reference.md` لمزيد من التفاصيل.
+
+**تدفق تغيير اللغة:**
+```
+SettingsDialog._save()
+  → i18n_manager.set_language("en")   # يُحدّث + يُطبّق direction + يحفظ
+  → bus.language_changed.emit("en")
+    → كل widget مشترك في _on_language_changed يُحدّث النصوص بـ tr()
+```
 
 ---
 
@@ -195,7 +219,8 @@ status_colors(level: str) -> dict[str, str]
 # هذا يضمن التزامن التلقائي مع تغييرات الثيم
 # level: "success" | "warning" | "danger" | "info" | "neutral" | "primary" | "purple" | "orange"
 # يرجع: {"fg": str, "bg": str, "border": str}
-# purple/orange: من _C.get() مع fallback آمن
+# purple/orange: من _C.get() مع fallback آمن (مفاتيحهم موجودة في _C)
+# ملاحظة: الـ import داخل الدالة (lazy) مقصود لتجنب circular imports
 
 waste_level(pct: float) -> str   # "high" | "medium" | "low" | "zero"
 waste_colors(pct: float) -> tuple[str, str]
@@ -226,25 +251,26 @@ is_same_company(company_id: int) -> bool
 # ── LiveConnMixin ──
 # _conn_attr: str = "conn" — اسم الـ attribute الذي يحمل الـ connection
 # ⚠️ لو subclass يستخدم self.erp_conn → حدد _conn_attr = "erp_conn"
-# _conn_cache: instance variable (object.__setattr__) — لا class variable مشترك
+# [إصلاح 3] _conn_cache: instance variable (object.__setattr__) — لا class variable مشترك
+# [إصلاح 13] __init_subclass__ يُصدر تحذيراً لو _conn_attr مشبوه
 
   ._live_conn() -> Connection
   # 1. self.__dict__["_conn_cache"] لو سليم
   # 2. self.{_conn_attr} لو سليم
   # 3. company_state.get_erp_conn() كـ fallback
-  # 4. RuntimeError واضحة لو كل شيء فشل
+  # 4. RuntimeError واضحة لو كل شيء فشل — لا None صامتة
   ._invalidate_conn_cache()
   ._live_acc_conn() -> Connection
 
 # ── SafeConnMixin ──
   ._init_safe_conn(conn, db_name="accounting")
-  ._get_safe_conn() -> Connection      # RuntimeError لو فشل
+  ._get_safe_conn() -> Connection      # RuntimeError لو فشل — لا None
   ._get_company_id() -> int | None
   ._should_respond_to_company(company_id, stored_attr="_company_id") -> bool
 
 # ── DualConnMixin(SafeConnMixin) ──
   ._init_dual_conn(acc_conn, erp_conn, acc_db="accounting")
-  ._get_erp_conn() -> Connection       # RuntimeError لو فشل
+  ._get_erp_conn() -> Connection       # RuntimeError لو فشل — لا None
   ._on_dual_company_event(company_id) -> bool
 ```
 
@@ -262,6 +288,7 @@ def _load_rows(self) -> list: ...
 
 @requires_company(return_value_factory=list)
 def _load_rows(self) -> list: ...
+# return_value_factory تتجنب mutable default sharing
 
 @requires_company(message="رسالة مخصصة")
 def my_method(self): ...

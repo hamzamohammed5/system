@@ -30,35 +30,53 @@ def _connect_bus(data=True, company=False, theme=False, lang=False)
 # company=True → يربط company_data_changed لـ _on_company_changed (بدون فلتر شركة)
 # theme=True   → يربط theme_changed لـ _on_theme_changed
 # lang=True    → يربط language_changed لـ _on_language_changed
-# guard يمنع double-connect (عبر _bus_connected flag)
+# [تحسين 39] guard يمنع double-connect (عبر _bus_connected flag)
+# [P-04] يُهيّئ _cached_company_id = None عند الاشتراك
 
 def _disconnect_bus()
 # يفصل كل الـ signals المرتبطة (data + company + theme + lang)
 # يُعيد ضبط _bus_connected = False
-# يمسح _cached_company_id = None
+# [P-04] يمسح _cached_company_id = None
 
-# Data changed handlers:
+# ── Data changed handlers ──
+
 def _on_company_data_changed(company_id: int)
-# مقارنة مباشرة بـ _cached_company_id بدل استدعاء is_same_company()
-# المرة الأولى: يُضبط _cached_company_id من company_state
-# لو شركة مختلفة → تجاهل + تحديث الـ cache
-# لو نفس الشركة → _on_data_changed() + _refresh_guard
+# [P-04] مقارنة مباشرة بـ _cached_company_id بدل استدعاء is_same_company()
+# المرة الأولى (cache=None): يُضبط _cached_company_id من company_state
+# لو شركة مختلفة → تجاهل + تحديث الـ cache + debug log
+# لو نفس الشركة → _on_data_changed() + _refresh_guard=True + QTimer.singleShot(clear)
+
 def _on_data_changed_guarded()
-# يتجاهل لو _refresh_guard=True (يمنع data_changed المكرر)
-def _on_data_changed()            # Override
+# [تحسين 24] يتجاهل لو _refresh_guard=True (يمنع data_changed المكرر بعد company_data_changed)
+# يُسجّل debug log عند التخطي
 
-# Company changed handler:
+def _on_data_changed()   # Override — يُنفَّذ عند تغيير البيانات
+
+# ── Company changed handler ──
+
 def _on_company_changed(company_id: int)
-# تلقائياً يُحدث _cached_company_id بالشركة الجديدة
-# Override لإعادة البناء عند تغيير الشركة
+# [P-04] تلقائياً يُحدّث _cached_company_id بالشركة الجديدة
+# Override لإعادة البناء الكامل عند تغيير الشركة
 
-# Theme & language handlers:
-def _on_theme_changed(theme_name: str)    # Override — يُعيد بناء الـ styles
-def _on_language_changed(lang_code: str)  # Override — يُحدّث النصوص بـ tr()
+# ── Theme & language handlers ──
+
+def _on_theme_changed(theme_name: str)
+# Override — يُعيد تطبيق الـ styles عند تغيير الثيم
+# يُستدعى فقط لو _connect_bus(theme=True)
+
+def _on_language_changed(lang_code: str)
+# Override — يُحدّث النصوص بـ tr() عند تغيير اللغة
+# يُستدعى فقط لو _connect_bus(lang=True)
+
+# ── Cache management ──
 
 def invalidate_company_cache()
-# يُعيد ضبط _cached_company_id = None
+# [P-04] يُعيد ضبط _cached_company_id = None
+# استدعه لو الشركة تغيرت من خارج الـ bus العادي
 ```
+
+**[P-04] لماذا _cached_company_id أسرع من is_same_company():**
+مع مئات الـ widgets المشتركة، كل `company_data_changed` كان يستدعي `is_same_company()` التي تقرأ من `company_state.company_id`. الآن المقارنة `int == int` مباشرة بدون أي استدعاء خارجي.
 
 **مثال كامل مع theme وlanguage:**
 ```python
@@ -77,7 +95,8 @@ class MyPanel(QWidget, BusConnectedMixin):
         self.refresh()
 
     def _on_theme_changed(self, theme_name: str):
-        self.setStyleSheet(f"background:{_C['bg_page']};")
+        # إعادة تطبيق الألوان من _C (تم تحديثها بالفعل من apply_theme)
+        self.setStyleSheet(f"background:{_C['bg_input']};")
         self._empty_state.setStyleSheet(
             f"QFrame {{ background:{_C['bg_input']}; border:none; }}"
         )
@@ -86,6 +105,10 @@ class MyPanel(QWidget, BusConnectedMixin):
         self.btn_add.setText(tr("btn_add"))
         self._empty_state.set_title(tr(self.EMPTY_TITLE))
         self._header.search_bar.set_placeholder(tr("list_search_placeholder"))
+
+    def closeEvent(self, event):
+        self._disconnect_bus()
+        super().closeEvent(event)
 ```
 
 ---
@@ -112,7 +135,9 @@ def _on_refresh_error(error: Exception)
 ```python
 def init_edit_mode(btn_add, btn_save, btn_cancel, lbl_mode=None)
 def enter_edit_mode(item_id: int, mode_text: str = "")
+# يُخفي btn_add ويُظهر btn_save + btn_cancel
 def exit_edit_mode(add_text: str = "")
+# يُعيد للحالة الابتدائية
 def _set_add_state()   # يُظهر btn_add ويُخفي btn_save/btn_cancel
 def is_edit_mode -> bool   # property — True لو _editing_id ≠ None
 # _editing_id: int | None
@@ -128,6 +153,7 @@ def is_edit_mode -> bool   # property — True لو _editing_id ≠ None
 # يفترض: self._root_layout (QVBoxLayout)
 def _replace_widget(new_widget: QWidget)
 # يُزيل القديم (hide + deleteLater) ثم يُضيف الجديد
+# يحفظ reference في self._current_widget
 def _schedule_rebuild(delay_ms: int = 0)
 # QTimer.singleShot(delay_ms, self._rebuild)
 def _rebuild()   # Override
@@ -147,9 +173,9 @@ def _selected_id(table=None) -> int | None
 # يقرأ من item.data(UserRole) أولاً، ثم item.text() كـ fallback
 def _selected_row(table=None) -> int
 def _warn_no_selection(msg: str = "")
-# عنوان من tr("warning") + رسالة افتراضية من tr("select_item_first")
+# عنوان: tr("warning") + رسالة افتراضية: tr("select_item_first")
 def _require_selection(msg: str = "") -> int | None
-# يستدعي _warn_no_selection لو مفيش اختيار
+# يستدعي _warn_no_selection لو مفيش اختيار، يرجع None
 ```
 
 ---
@@ -182,7 +208,7 @@ def validate_positive(value: float, label="", parent=None) -> bool
 ### `ui/widgets/mixins/service.py` — `ServiceMixin`
 
 ```python
-# Properties كسولة — instance جديد في كل وصول (لأن conn ممكن يتغير)
+# Properties كسولة — instance جديد في كل وصول (لأن conn ممكن يتغير بعد تغيير الشركة)
 # يفترض: self.conn موجود ويشير لـ DB connection صالح
 ._item_service     -> ItemService(self.conn)
 ._category_service -> CategoryService(self.conn)
@@ -205,7 +231,10 @@ def _is_published(row: dict) -> bool
 def _find_row_by_id(item_id) -> dict | None
 
 def _edit_shared_item(item_id, shared_type: str, parent=None)
+# لو عنصر محلي منشور → يفتح SharedItemsDialog
+# لو عنصر عادي → msg_info
 def _edit_published_item(row: dict, shared_type: str, parent=None)
 def _publish_item(row: dict, shared_type: str, item_data: dict, parent=None)
+# لو منشور → يعدّله | لو لم يُنشر → يفتح PublishAsSharedDialog
 # كل العمليات تستخدم emit_company_data_changed() بعد نجاحها
 ```
