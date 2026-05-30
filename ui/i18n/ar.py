@@ -44,6 +44,9 @@ AR_STRINGS: dict[str, str] = {
     "paste":             "لصق",
     "open":              "فتح",
     "new":               "جديد",
+    "all":               "الكل",
+    "clone":             "نسخ",
+    "selected":          "محدد",
 
     # ══════════════════════════════════════════════
     # أزرار فورم
@@ -116,6 +119,7 @@ AR_STRINGS: dict[str, str] = {
     "warning":              "تنبيه",
     "error":                "خطأ",
     "info":                 "معلومة",
+    "notice":               "ملاحظة",
 
     # ══════════════════════════════════════════════
     # رسائل التحقق من الحقول
@@ -213,16 +217,17 @@ AR_STRINGS: dict[str, str] = {
     # ══════════════════════════════════════════════
     # تصنيفات
     # ══════════════════════════════════════════════
-    "category_data":        "بيانات التصنيف",
-    "category_name":        "الاسم",
-    "category_parent":      "تابع لـ",
-    "category_color":       "اللون",
-    "category_add":         "تصنيف جديد",
-    "category_new":         "إضافة",
-    "category_edit":        "تعديل",
-    "category_delete":      "حذف",
-    "category_select_first":"اختر تصنيفاً أولاً",
+    "category_data":         "بيانات التصنيف",
+    "category_name":         "الاسم",
+    "category_parent":       "تابع لـ",
+    "category_color":        "اللون",
+    "category_add":          "تصنيف جديد",
+    "category_new":          "إضافة",
+    "category_edit":         "تعديل",
+    "category_delete":       "حذف",
+    "category_select_first": "اختر تصنيفاً أولاً",
     "category_name_required":"أدخل اسم التصنيف",
+    "no_category":           "بدون تصنيف",
 
     # ══════════════════════════════════════════════
     # عمليات عامة
@@ -265,63 +270,79 @@ AR_STRINGS: dict[str, str] = {
     "delete_has_items":     "لا يمكن الحذف — مرتبط بعناصر أخرى",
 
     # ══════════════════════════════════════════════
-    # شركات مشتركة
+    # عناصر مشتركة
     # ══════════════════════════════════════════════
     "shared_items":         "العناصر المشتركة",
     "publish":              "نشر",
     "published":            "منشور",
     "not_published":        "غير منشور",
-    
-    # ── المنتجات ─────────────────────────────────────────
-    "new_product":             "منتج جديد",
+
+    # ══════════════════════════════════════════════
+    # العملة والوحدات
+    # ══════════════════════════════════════════════
+    "currency_abbr":          "جنيه",
+    "currency":               "جنيه",
+    "currency_per_piece":     "جنيه / قطعة",
+    "currency_per_hour":      "جنيه / ساعة",
+    "currency_per_unit":      "جنيه / وحدة",
+    "piece":                  "قطعة",
+    "minutes_abbr":           "د",
+
+    # ══════════════════════════════════════════════
+    # المنتجات
+    # ══════════════════════════════════════════════
+    "new_product":              "منتج جديد",
     "product_name_placeholder": "اسم المنتج...",
-    "saved_products":          "المنتجات المحفوظة",
-    "no_products":             "لا توجد منتجات",
-    "enter_product_name":      "ادخل اسم المنتج اولاً",
-    "add_one_component":       "اضف مكوناً واحداً على الأقل",
-    "product_name":            "اسم المنتج",
-    "add_component":           "مكون",
-    
-    # ── المكونات / BOM ────────────────────────────────────
-    "element":          "العنصر",
-    "row_or_variant":   "الصف / الـ variant",
-    "cost_per_unit":    "تكلفة / وحدة",
-    "qty":              "الكمية",
-    "waste_pct_col":    "هادر %",
-    "waste_pct":        "نسبة الهادر %",
-    "effective_qty":    "الكمية الفعلية",
-    "component_scenario": "المكون / السيناريو",
-    "type":             "النوع",
-    
-     # ── BOM Tree ─────────────────────────────────────────
-    "bom_tree":           "هيكل BOM",
-    "expand_all":         "فتح الكل",
-    "collapse_all":       "إغلاق الكل",
-    "delete_selected":    "حذف المحدد",
-    "default_scenario":   "سيناريو افتراضي",
-    "confirm_delete":     "تأكيد الحذف",
-    "delete_from_scenario":  "حذف",
-    "from_scenario":         "من السيناريو",
-    "delete_sub_components_from_semi": "احذف المكونات الفرعية من المنتج النصف مصنع نفسه",
-    "notice":              "ملاحظة",
-    
-    # ── السيناريوهات ──────────────────────────────────────
-    "scenario":                 "السيناريو",
-    "add_scenario":             "إضافة سيناريو",
-    "clone_scenario":           "نسخ السيناريو",
-    "rename_scenario":          "إعادة تسمية",
-    "set_as_default":           "تعيين كافتراضي",
-    "new_scenario":             "سيناريو جديد",
-    "new_scenario_name":        "اسم السيناريو الجديد",
-    "scenario_name":            "اسم السيناريو",
-    "new_name":                 "الاسم الجديد",
-    "copy_of":                  "نسخة من",
-    "cannot_delete_last_scenario": "لا يمكن حذف السيناريو الوحيد",
-    "delete_scenario_confirm":  "هل تريد حذف السيناريو",
-    "delete_scenario_failed":   "فشل حذف السيناريو",
-    "select_scenario":          "اختر سيناريو",
- 
-    # ── مقارنة السيناريوهات ───────────────────────────────
+    "saved_products":           "المنتجات المحفوظة",
+    "no_products":              "لا توجد منتجات",
+    "enter_product_name":       "ادخل اسم المنتج اولاً",
+    "add_one_component":        "اضف مكوناً واحداً على الأقل",
+    "product_name":             "اسم المنتج",
+    "add_component":            "مكون",
+
+    # ══════════════════════════════════════════════
+    # المكونات / BOM
+    # ══════════════════════════════════════════════
+    "element":                "العنصر",
+    "row_or_variant":         "الصف / الـ variant",
+    "qty":                    "الكمية",
+    "waste_pct_col":          "هادر %",
+    "effective_qty":          "الكمية الفعلية",
+    "component_scenario":     "المكون / السيناريو",
+
+    # ══════════════════════════════════════════════
+    # BOM Tree
+    # ══════════════════════════════════════════════
+    "bom_tree":                         "هيكل BOM",
+    "expand_all":                       "فتح الكل",
+    "collapse_all":                     "إغلاق الكل",
+    "delete_selected":                  "حذف المحدد",
+    "default_scenario":                 "سيناريو افتراضي",
+    "delete_from_scenario":             "حذف",
+    "from_scenario":                    "من السيناريو",
+    "delete_sub_components_from_semi":  "احذف المكونات الفرعية من المنتج النصف مصنع نفسه",
+
+    # ══════════════════════════════════════════════
+    # السيناريوهات
+    # ══════════════════════════════════════════════
+    "scenario":                        "السيناريو",
+    "add_scenario":                    "إضافة سيناريو",
+    "clone_scenario":                  "نسخ السيناريو",
+    "rename_scenario":                 "إعادة تسمية",
+    "set_as_default":                  "تعيين كافتراضي",
+    "new_scenario":                    "سيناريو جديد",
+    "new_scenario_name":               "اسم السيناريو الجديد",
+    "scenario_name":                   "اسم السيناريو",
+    "new_name":                        "الاسم الجديد",
+    "copy_of":                         "نسخة من",
+    "cannot_delete_last_scenario":     "لا يمكن حذف السيناريو الوحيد",
+    "delete_scenario_confirm":         "هل تريد حذف السيناريو",
+    "delete_scenario_failed":          "فشل حذف السيناريو",
+    "select_scenario":                 "اختر سيناريو",
+
+    # ══════════════════════════════════════════════
+    # مقارنة السيناريوهات
+    # ══════════════════════════════════════════════
     "scenario_comparison":        "مقارنة السيناريوهات",
     "compare_scenario":           "مقارنة مع",
     "default_scenario_cost":      "تكلفة الافتراضي",
@@ -339,48 +360,53 @@ AR_STRINGS: dict[str, str] = {
     "profit_increases":           "الربح يرتفع بـ",
     "equal_cost_scenarios":       "السيناريوان متساويان في التكلفة",
     "select_product_to_compare":  "اختر منتجاً لبدء المقارنة",
- 
-    # ── الاستبدال الشامل ─────────────────────────────────
-    "operation_required":    "العملية المطلوبة",
-    "replace_element":       "استبدال العنصر",
-    "edit_qty_only":         "تعديل الكمية فقط",
-    "both_operations":       "الاثنين معاً",
-    "replacement_raw":       "الخامة البديلة",
-    "replacement_labor_op":  "عملية العمالة البديلة",
+
+    # ══════════════════════════════════════════════
+    # الاستبدال الشامل
+    # ══════════════════════════════════════════════
+    "operation_required":     "العملية المطلوبة",
+    "replace_element":        "استبدال العنصر",
+    "edit_qty_only":          "تعديل الكمية فقط",
+    "both_operations":        "الاثنين معاً",
+    "replacement_raw":        "الخامة البديلة",
+    "replacement_labor_op":   "عملية العمالة البديلة",
     "replacement_machine_op": "عملية التشغيل البديلة",
-    "replacement":           "البديل",
-    "select_replacement":    "اختر البديل",
-    "no_alternatives":       "لا توجد بدائل",
-    "apply_uniform_qty":     "تطبيق كمية موحدة",
-    "filter_by_category":    "فلتر بالتصنيف",
-    "select_all":            "الكل",
-    "select_none":           "لا شيء",
-    "invert_selection":      "عكس",
-    "no_products_linked":    "لا توجد منتجات مرتبطة بهذا العنصر",
-    "quick_select":          "تحديد سريع",
-    "apply_to_selected":     "تطبيق على المحدد",
- 
-    # ── صفوف عمليات التشغيل ──────────────────────────────
-    "op_rows_editor":        "صفوف العملية",
-    "add_row":               "إضافة صف",
-    "edit_row":              "تعديل الصف",
-    "delete_row":            "حذف الصف",
-    "description":           "الوصف",
+    "replacement":            "البديل",
+    "select_replacement":     "اختر البديل",
+    "no_alternatives":        "لا توجد بدائل",
+    "apply_uniform_qty":      "تطبيق كمية موحدة",
+    "filter_by_category":     "فلتر بالتصنيف",
+    "select_all":             "الكل",
+    "select_none":            "لا شيء",
+    "invert_selection":       "عكس",
+    "no_products_linked":     "لا توجد منتجات مرتبطة بهذا العنصر",
+    "quick_select":           "تحديد سريع",
+    "apply_to_selected":      "تطبيق على المحدد",
+
+    # ══════════════════════════════════════════════
+    # صفوف عمليات التشغيل
+    # ══════════════════════════════════════════════
+    "op_rows_editor":              "صفوف العملية",
+    "add_row":                     "إضافة صف",
+    "edit_row":                    "تعديل الصف",
+    "delete_row":                  "حذف الصف",
     "row_description_placeholder": "وصف الصف...",
-    "value_minutes":         "القيمة (دقائق)",
-    "time_minutes":          "الوقت (دقائق)",
-    "units":                 "الوحدات",
-    "value":                 "القيمة",
-    "count":                 "العدد",
-    "total_op_cost":         "إجمالي تكلفة العملية",
-    "select_row_first":      "اختر صفاً أولاً",
-    "min_one_row_required":  "يجب وجود صف واحد على الأقل",
-    "calc_mode":             "وضع الحساب",
-    "by_time":               "بالوقت",
-    "by_unit":               "بالوحدة",
-    "rate":                  "المعدل",
- 
-    # ── Variants الخامة ───────────────────────────────────
+    "value_minutes":               "القيمة (دقائق)",
+    "time_minutes":                "الوقت (دقائق)",
+    "units":                       "الوحدات",
+    "value":                       "القيمة",
+    "count":                       "العدد",
+    "total_op_cost":               "إجمالي تكلفة العملية",
+    "select_row_first":            "اختر صفاً أولاً",
+    "min_one_row_required":        "يجب وجود صف واحد على الأقل",
+    "calc_mode":                   "وضع الحساب",
+    "by_time":                     "بالوقت",
+    "by_unit":                     "بالوحدة",
+    "rate":                        "المعدل",
+
+    # ══════════════════════════════════════════════
+    # Variants الخامة
+    # ══════════════════════════════════════════════
     "raw_variants":                "وحدات الإنتاج (Variants)",
     "variant_description_line1":   "كل variant يُعرِّف عدد القطع الناتجة من وحدة الخامة",
     "variant_unit_cost_formula":   "سعر الوحدة = السعر الكلي ÷ عدد القطع",
@@ -392,59 +418,21 @@ AR_STRINGS: dict[str, str] = {
     "select_variant_first":        "اختر variant أولاً",
     "delete_variant_confirm":      "هل تريد حذف الـ variant",
     "currency_per_piece_short":    "جنيه/قطعة",
- 
-    # ── التصنيفات ─────────────────────────────────────────
-    "no_category":       "بدون تصنيف",
-    "add_category":      "إضافة تصنيف",
-    "edit_category":     "تعديل التصنيف",
-    "delete_category":   "حذف التصنيف",
- 
-    # ── الخامات ──────────────────────────────────────────
-    "raw_material":      "خامة",
+
+    # ══════════════════════════════════════════════
+    # الخامات
+    # ══════════════════════════════════════════════
     "raw_materials":     "الخامات",
     "no_raws":           "لا توجد خامات",
     "saved_raws":        "الخامات المحفوظة",
- 
-    # ── العمالة ──────────────────────────────────────────
-    "labor_op":          "عملية عمالة",
+
+    # ══════════════════════════════════════════════
+    # العمالة
+    # ══════════════════════════════════════════════
     "labor_ops":         "عمليات العمالة",
- 
-    # ── التشغيل ──────────────────────────────────────────
-    "machine_op":        "عملية تشغيل",
+
+    # ══════════════════════════════════════════════
+    # التشغيل
+    # ══════════════════════════════════════════════
     "machine_ops":       "عمليات التشغيل",
-    
-    # ── عام ─────────────────────────────────────────────
-    "save":           "حفظ",
-    "cancel":         "إلغاء",
-    "add":            "إضافة",
-    "edit":           "تعديل",
-    "delete":         "حذف",
-    "close":          "إغلاق",
-    "confirm":        "تأكيد",
-    "warning":        "تنبيه",
-    "error":          "خطأ",
-    "notice":         "ملاحظة",
-    "yes":            "نعم",
-    "no":             "لا",
-    "all":            "الكل",
-    "search":         "بحث",
-    "category":       "التصنيف",
-    "name":           "الاسم",
-    "notes":          "ملاحظات",
-    "type":           "النوع",
-    "new":            "جديد",
-    "clone":          "نسخ",
-    "total":          "إجمالي",
-    "selected":       "محدد",
-    "no_category":    "بدون تصنيف",
-    "currency_abbr":  "جنيه",
-    "currency":       "جنيه",
-    "currency_per_piece": "جنيه / قطعة",
-    "currency_per_hour":  "جنيه / ساعة",
-    "currency_per_unit":  "جنيه / وحدة",
-    "piece":          "قطعة",
-    "unit":           "وحدة",
-    "minutes_abbr":   "د",
-    
-    
 }

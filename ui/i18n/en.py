@@ -40,6 +40,9 @@ EN_STRINGS: dict[str, str] = {
     "paste":             "Paste",
     "open":              "Open",
     "new":               "New",
+    "all":               "All",
+    "clone":             "Clone",
+    "selected":          "Selected",
 
     # ══════════════════════════════════════════════
     # Form Buttons
@@ -112,6 +115,7 @@ EN_STRINGS: dict[str, str] = {
     "warning":              "Warning",
     "error":                "Error",
     "info":                 "Info",
+    "notice":               "Notice",
 
     # ══════════════════════════════════════════════
     # Field Validation Messages
@@ -219,6 +223,7 @@ EN_STRINGS: dict[str, str] = {
     "category_delete":       "Delete",
     "category_select_first": "Select a category first",
     "category_name_required":"Enter category name",
+    "no_category":           "No Category",
 
     # ══════════════════════════════════════════════
     # Operations
@@ -267,41 +272,21 @@ EN_STRINGS: dict[str, str] = {
     "publish":              "Publish",
     "published":            "Published",
     "not_published":        "Not Published",
-    
-     # ── General ──────────────────────────────────────────
-    "save":           "Save",
-    "cancel":         "Cancel",
-    "add":            "Add",
-    "edit":           "Edit",
-    "delete":         "Delete",
-    "close":          "Close",
-    "confirm":        "Confirm",
-    "warning":        "Warning",
-    "error":          "Error",
-    "notice":         "Notice",
-    "yes":            "Yes",
-    "no":             "No",
-    "all":            "All",
-    "search":         "Search",
-    "category":       "Category",
-    "name":           "Name",
-    "notes":          "Notes",
-    "type":           "Type",
-    "new":            "New",
-    "clone":          "Clone",
-    "total":          "Total",
-    "selected":       "Selected",
-    "no_category":    "No Category",
-    "currency_abbr":  "EGP",
-    "currency":       "EGP",
-    "currency_per_piece": "EGP / piece",
-    "currency_per_hour":  "EGP / hour",
-    "currency_per_unit":  "EGP / unit",
-    "piece":          "piece",
-    "unit":           "unit",
-    "minutes_abbr":   "min",
- 
-    # ── Products ─────────────────────────────────────────
+
+    # ══════════════════════════════════════════════
+    # Currency & Units
+    # ══════════════════════════════════════════════
+    "currency_abbr":          "EGP",
+    "currency":               "EGP",
+    "currency_per_piece":     "EGP / piece",
+    "currency_per_hour":      "EGP / hour",
+    "currency_per_unit":      "EGP / unit",
+    "piece":                  "piece",
+    "minutes_abbr":           "min",
+
+    # ══════════════════════════════════════════════
+    # Products
+    # ══════════════════════════════════════════════
     "new_product":              "New Product",
     "product_name_placeholder": "Product name...",
     "saved_products":           "Saved Products",
@@ -310,46 +295,50 @@ EN_STRINGS: dict[str, str] = {
     "add_one_component":        "Please add at least one component",
     "product_name":             "Product Name",
     "add_component":            "Component",
- 
-    # ── Components / BOM ─────────────────────────────────
-    "element":          "Element",
-    "row_or_variant":   "Row / Variant",
-    "cost_per_unit":    "Cost / Unit",
-    "qty":              "Qty",
-    "waste_pct_col":    "Waste %",
-    "waste_pct":        "Waste %",
-    "effective_qty":    "Effective Qty",
-    "component_scenario": "Component / Scenario",
- 
-    # ── BOM Tree ─────────────────────────────────────────
-    "bom_tree":           "BOM Structure",
-    "expand_all":         "Expand All",
-    "collapse_all":       "Collapse All",
-    "delete_selected":    "Delete Selected",
-    "default_scenario":   "Default Scenario",
-    "confirm_delete":     "Confirm Delete",
-    "delete_from_scenario":  "Delete",
-    "from_scenario":         "from scenario",
-    "delete_sub_components_from_semi": "Delete sub-components from the semi-finished product itself",
-    "notice":              "Notice",
- 
-    # ── Scenarios ────────────────────────────────────────
-    "scenario":                 "Scenario",
-    "add_scenario":             "Add Scenario",
-    "clone_scenario":           "Clone Scenario",
-    "rename_scenario":          "Rename",
-    "set_as_default":           "Set as Default",
-    "new_scenario":             "New Scenario",
-    "new_scenario_name":        "New Scenario Name",
-    "scenario_name":            "Scenario Name",
-    "new_name":                 "New Name",
-    "copy_of":                  "Copy of",
-    "cannot_delete_last_scenario": "Cannot delete the only scenario",
-    "delete_scenario_confirm":  "Delete scenario",
-    "delete_scenario_failed":   "Failed to delete scenario",
-    "select_scenario":          "Select scenario",
- 
-    # ── Scenario Comparison ───────────────────────────────
+
+    # ══════════════════════════════════════════════
+    # Components / BOM
+    # ══════════════════════════════════════════════
+    "element":                "Element",
+    "row_or_variant":         "Row / Variant",
+    "qty":                    "Qty",
+    "waste_pct_col":          "Waste %",
+    "effective_qty":          "Effective Qty",
+    "component_scenario":     "Component / Scenario",
+
+    # ══════════════════════════════════════════════
+    # BOM Tree
+    # ══════════════════════════════════════════════
+    "bom_tree":                         "BOM Structure",
+    "expand_all":                       "Expand All",
+    "collapse_all":                     "Collapse All",
+    "delete_selected":                  "Delete Selected",
+    "default_scenario":                 "Default Scenario",
+    "delete_from_scenario":             "Delete",
+    "from_scenario":                    "from scenario",
+    "delete_sub_components_from_semi":  "Delete sub-components from the semi-finished product itself",
+
+    # ══════════════════════════════════════════════
+    # Scenarios
+    # ══════════════════════════════════════════════
+    "scenario":                        "Scenario",
+    "add_scenario":                    "Add Scenario",
+    "clone_scenario":                  "Clone Scenario",
+    "rename_scenario":                 "Rename",
+    "set_as_default":                  "Set as Default",
+    "new_scenario":                    "New Scenario",
+    "new_scenario_name":               "New Scenario Name",
+    "scenario_name":                   "Scenario Name",
+    "new_name":                        "New Name",
+    "copy_of":                         "Copy of",
+    "cannot_delete_last_scenario":     "Cannot delete the only scenario",
+    "delete_scenario_confirm":         "Delete scenario",
+    "delete_scenario_failed":          "Failed to delete scenario",
+    "select_scenario":                 "Select scenario",
+
+    # ══════════════════════════════════════════════
+    # Scenario Comparison
+    # ══════════════════════════════════════════════
     "scenario_comparison":        "Scenario Comparison",
     "compare_scenario":           "Compare with",
     "default_scenario_cost":      "Default Cost",
@@ -367,48 +356,53 @@ EN_STRINGS: dict[str, str] = {
     "profit_increases":           "profit increases by",
     "equal_cost_scenarios":       "Both scenarios have equal cost",
     "select_product_to_compare":  "Select a product to start comparison",
- 
-    # ── Bulk Replace ─────────────────────────────────────
-    "operation_required":    "Operation Required",
-    "replace_element":       "Replace Element",
-    "edit_qty_only":         "Edit Qty Only",
-    "both_operations":       "Both Operations",
-    "replacement_raw":       "Replacement Raw",
-    "replacement_labor_op":  "Replacement Labor Op",
+
+    # ══════════════════════════════════════════════
+    # Bulk Replace
+    # ══════════════════════════════════════════════
+    "operation_required":     "Operation Required",
+    "replace_element":        "Replace Element",
+    "edit_qty_only":          "Edit Qty Only",
+    "both_operations":        "Both Operations",
+    "replacement_raw":        "Replacement Raw",
+    "replacement_labor_op":   "Replacement Labor Op",
     "replacement_machine_op": "Replacement Machine Op",
-    "replacement":           "Replacement",
-    "select_replacement":    "Select Replacement",
-    "no_alternatives":       "No alternatives available",
-    "apply_uniform_qty":     "Apply Uniform Qty:",
-    "filter_by_category":    "Filter by Category",
-    "select_all":            "All",
-    "select_none":           "None",
-    "invert_selection":      "Invert",
-    "no_products_linked":    "No products linked to this element",
-    "quick_select":          "Quick Select",
-    "apply_to_selected":     "Apply to Selected",
- 
-    # ── Machine Op Rows ──────────────────────────────────
-    "op_rows_editor":        "Operation Rows",
-    "add_row":               "Add Row",
-    "edit_row":              "Edit Row",
-    "delete_row":            "Delete Row",
-    "description":           "Description",
+    "replacement":            "Replacement",
+    "select_replacement":     "Select Replacement",
+    "no_alternatives":        "No alternatives available",
+    "apply_uniform_qty":      "Apply Uniform Qty:",
+    "filter_by_category":     "Filter by Category",
+    "select_all":             "All",
+    "select_none":            "None",
+    "invert_selection":       "Invert",
+    "no_products_linked":     "No products linked to this element",
+    "quick_select":           "Quick Select",
+    "apply_to_selected":      "Apply to Selected",
+
+    # ══════════════════════════════════════════════
+    # Machine Op Rows
+    # ══════════════════════════════════════════════
+    "op_rows_editor":             "Operation Rows",
+    "add_row":                    "Add Row",
+    "edit_row":                   "Edit Row",
+    "delete_row":                 "Delete Row",
     "row_description_placeholder": "Row description...",
-    "value_minutes":         "Value (minutes)",
-    "time_minutes":          "Time (minutes)",
-    "units":                 "Units",
-    "value":                 "Value",
-    "count":                 "Count",
-    "total_op_cost":         "Total Operation Cost",
-    "select_row_first":      "Please select a row first",
-    "min_one_row_required":  "At least one row is required",
-    "calc_mode":             "Calculation Mode",
-    "by_time":               "By Time",
-    "by_unit":               "By Unit",
-    "rate":                  "Rate",
- 
-    # ── Raw Variants ─────────────────────────────────────
+    "value_minutes":              "Value (minutes)",
+    "time_minutes":               "Time (minutes)",
+    "units":                      "Units",
+    "value":                      "Value",
+    "count":                      "Count",
+    "total_op_cost":              "Total Operation Cost",
+    "select_row_first":           "Please select a row first",
+    "min_one_row_required":       "At least one row is required",
+    "calc_mode":                  "Calculation Mode",
+    "by_time":                    "By Time",
+    "by_unit":                    "By Unit",
+    "rate":                       "Rate",
+
+    # ══════════════════════════════════════════════
+    # Raw Variants
+    # ══════════════════════════════════════════════
     "raw_variants":                "Production Units (Variants)",
     "variant_description_line1":   "Each variant defines how many pieces come from one unit of raw material",
     "variant_unit_cost_formula":   "Unit Cost = Total Price ÷ Pieces Count",
@@ -420,23 +414,21 @@ EN_STRINGS: dict[str, str] = {
     "select_variant_first":        "Please select a variant first",
     "delete_variant_confirm":      "Delete variant",
     "currency_per_piece_short":    "EGP/piece",
- 
-    # ── Categories ───────────────────────────────────────
-    "add_category":      "Add Category",
-    "edit_category":     "Edit Category",
-    "delete_category":   "Delete Category",
- 
-    # ── Raw Materials ────────────────────────────────────
-    "raw_material":      "Raw Material",
+
+    # ══════════════════════════════════════════════
+    # Raw Materials
+    # ══════════════════════════════════════════════
     "raw_materials":     "Raw Materials",
     "no_raws":           "No raw materials found",
     "saved_raws":        "Saved Raw Materials",
- 
-    # ── Labor ────────────────────────────────────────────
-    "labor_op":          "Labor Operation",
+
+    # ══════════════════════════════════════════════
+    # Labor
+    # ══════════════════════════════════════════════
     "labor_ops":         "Labor Operations",
- 
-    # ── Machine ──────────────────────────────────────────
-    "machine_op":        "Machine Operation",
+
+    # ══════════════════════════════════════════════
+    # Machine
+    # ══════════════════════════════════════════════
     "machine_ops":       "Machine Operations",
 }

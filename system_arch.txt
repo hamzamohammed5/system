@@ -1,5 +1,5 @@
 File Tree Snapshot
-Generated : 2026-05-30 14:55:53
+Generated : 2026-05-30 15:13:59
 Source    : D:\My Workspace\Hg\Alhabaar\accountant\system
 Extensions: .md, .py
 ────────────────────────────────────────────────────────────
@@ -55,6 +55,7 @@ system/
 │       └── shared_items_bridge.py
 ├── files_reference/
 │   ├── db.md
+│   ├── i18n_reference.md
 │   ├── models&services.md
 │   ├── ui_structure.md
 │   └── ui_widgets.md
