@@ -1,533 +1,371 @@
-# خطة إعادة هيكلة النظام — تحويل tabs/ إلى Orchestrators
-
-**الهدف الاستراتيجي:**
-```
-tabs/UI ──→ services/ ──→ repos/ (db/)
-  ↑                                ↑
-widgets/ (base classes)       schema/
-```
+# خطة إعادة الهيكلة الشاملة
+**التاريخ:** 2026-05-30  
+**الهدف:** `tabs/UI → services/ → repos/ (db/)` مع `widgets/ (base classes)`
 
 ---
 
-## 0. القواعد العامة للتطبيق
+## 1. المشاكل المكتشفة بالترتيب الأولوية
 
-1. **لا wrapper files** — كل استدعاء يذهب مباشرة للملف الذي يحتوي الكود الفعلي.
-2. **لا ملفات وسيطة بلا قيمة** — أي ملف يستورد ملفاً آخر فقط ليعيد تصديره يُحذف.
-3. **BaseListPanel / BaseSection / BaseDetailPanel / BaseCrudForm** هي الأساس — لا إعادة اختراع.
-4. **bus.company_data_changed** للإشعارات الجديدة، **bus.data_changed** للتوافق القديم.
-5. **tr()** لكل نص ظاهر للمستخدم — لا نصوص عربية hardcoded في الكود.
-6. **LiveConnMixin._live_conn()** لأي DB connection — لا استدعاء مباشر لـ company_state خارج المكان المناسب.
+### 🔴 أولوية قصوى
+
+#### 1.1 `main_window.py` — placeholders بدل tabs حقيقية
+```python
+# الحالي (خطأ): كل tabs تعرض placeholder
+w = _make_placeholder_tab(name)  # لا يستدعي أي section فعلي!
+
+# المطلوب: استخدام الـ sections الحقيقية
+from ui.tabs.costing_section    import CostingSection
+from ui.tabs.pricing_section    import PricingSection
+from ui.tabs.accounting_section import AccountingTab
+from ui.tabs.inventory_section  import InventoryTab
+from ui.tabs.design_section     import DesignSection
+from ui.tabs.orders_section     import OrdersSection
+```
+**الإجراء:** تعديل `_build_tabs()` في `main_window.py`
+
+#### 1.2 `services/inventory/inventory_service.py` — يستدعي دوال غير مؤكدة
+الملف الجديد يستدعي: `fetch_items_with_stock`, `fetch_item_with_stock`,
+`get_current_stock`, `fetch_movements`, `insert_movement`, etc.  
+لكن `inventory_repo.py` محتواه غير موجود في السياق.  
+**الإجراء:** إعادة كتابة `inventory_service.py` بدوال تستدعي مباشرة بالـ SQL أو بتحقق آمن من الـ repo.
+
+#### 1.3 `ui/tabs/accounting/_conn_guard.py` — محتمل wrapper
+إذا كان يقدم decorator للتحقق من الاتصال، يُستبدل بـ `@requires_company` من `ui/widgets/core/guard.py`.  
+**الإجراء:** مراجعة المحتوى — إذا wrapper → حذف واستبدال المستدعين.
 
 ---
 
-## 1. تحليل الوضع الحالي
+### 🟡 أولوية متوسطة
 
-### 1.1 ملفات تفتقد لها مراجع في الكود (Missing Files)
+#### 2.1 `ui/tabs/accounting/accounting_tabs_builder.py`
+إذا كان يبني `QTabWidget` فقط دون منطق إضافي → يُدمج في `accounting_section.py`.
 
-من تحليل الكود الموجود مقابل system_arch.txt:
+#### 2.2 `ui/tabs/accounting/account_combo.py` + `accounts_combo_widget.py`
+احتمال تكرار. أحدهما wrapper للآخر.  
+**الإجراء:** إبقاء الأصلي وحذف الـ wrapper، وتحديث المستدعين.
 
-| الملف المُستدعى | الملف الفعلي | الإجراء |
-|---|---|---|
-| `ui/widgets/core/__init__.py` (مُستدعى: `from ..core import get_font_size`) | غير مذكور في system_arch | **إنشاء** `ui/widgets/core/__init__.py` يصدّر `get_font_size` من `ui.app_settings` |
-| `ui/widgets/panels/form_parts.py` → `FormGroup` | موجود في system_arch | ✅ موجود |
-| `ui/tabs/costing/shared/_utils.py` → `SHARED_COLOR, SHARED_BG, PUBLISHED_COLOR, PUBLISHED_BG` | موجود في system_arch | يحتاج تحقق من المحتوى |
-| `ui/tabs/companies/shared_items_mixin.py` → `get_published_local_names, is_shared_id, extract_shared_id` | موجود في system_arch | يحتاج تحقق |
-| `services/costing/catalog_service.py` | موجود في system_arch | ✅ موجود |
+#### 2.3 `ui/tabs/design/design_styles.py`
+إذا كان يكرر `widgets/theme/styles.py` → حذف واستبدال المستدعين باستدعاء مباشر.
 
-### 1.2 استدعاءات غير مباشرة تحتاج توحيد
+#### 2.4 `ui/tabs/pricing/pricing/_stat_box.py`
+إذا كان wrapper لـ `StatCard` → حذف واستبدال باستدعاء مباشر لـ `StatCard`.
+
+#### 2.5 `ui/tabs/costing/shared/_utils.py`
+يُصدّر `SHARED_COLOR, SHARED_BG, PUBLISHED_COLOR, PUBLISHED_BG`.  
+هذه ثوابت خاصة بـ costing — **تبقى مكانها** ولا تنتقل.
+
+#### 2.6 `ui/tabs/companies/shared_items_mixin.py`
+يُصدّر: `is_shared_id`, `extract_shared_id`, `get_published_local_names`.  
+مستدعى من `shared_ops.py` و `list_panel_with_shared.py` — **يبقى مكانه** لأنه منطق خاص بالشركات.
+
+---
+
+### 🟢 أولوية منخفضة
+
+#### 3.1 تحويل tab classes لترث من `BaseSection`
+كل `*_tab.py` يجب أن يصبح orchestrator نظيف يرث من `TabSectionBase` أو `BaseSection`.
+
+#### 3.2 تحويل list panels لترث من `BaseListPanel`
+كل `*_table.py` يجب أن يرث من `BaseListPanel`.
+
+#### 3.3 تحويل detail panels لترث من `BaseDetailPanel`
+كل `*_detail*.py` أو `*_panel.py` يجب أن يرث من `BaseDetailPanel`.
+
+---
+
+## 2. مفاتيح الترجمة
+
+### 2.1 المفاتيح الموجودة بالفعل في ar.py و en.py ✅
+بعد مراجعة documents 44 و 73، كل المفاتيح التالية **موجودة**:
+- accounting: investors, investor_add, account_group, account_nature, etc.
+- inventory: inbound, outbound, inventory_report, item_name, etc.
+- orders: order_number, customer_name, status_pending, etc.
+- design: design_name, open_in_gimp, dimension_set_name, etc.
+- pricing: offer_name, base_cost, markup_pct, final_price, etc.
+
+### 2.2 مفاتيح تحتاج إضافة في ar.py و en.py ❌
 
 ```python
-# في list_panel_with_shared.py:
-from ui.widgets.base.list_panel import BaseListPanel  # ✅ مباشر
+# ar.py — إضافات مقترحة
+"inventory_items":          "أصناف المخزون",
+"movement_ref":             "مرجع الحركة",     # موجود في ar.py ✅
+"low_stock_alert":          "تنبيه مخزون منخفض",
+"avg_unit_cost":            "متوسط سعر الوحدة",
+"total_inbound_value":      "إجمالي قيمة الوارد",
+"total_outbound_value":     "إجمالي قيمة الصادر",
+"stock_value":              "قيمة المخزون",    # موجود ✅
 
-# لكن:
-def _live_conn(self):
-    from db.shared.connection import get_connection
-    return get_connection()  # ❌ يتجاهل LiveConnMixin الموروث!
+# لـ costing section tabs
+"raw_tab":                  "الخامات",
+"labor_tab":                "العمالة",
+"machine_tab":              "التشغيل",
+"product_tab":              "المنتجات",
+
+# لـ accounting section tabs
+"accounts_tab":             "شجرة الحسابات",
+"journal_tab":              "القيود",
+"ledger_tab":               "دفتر الأستاذ",
+"financial_tab":            "القوائم المالية",
+"investors_tab":            "المستثمرون",
+
+# لـ orders section tabs  
+"orders_tab":               "الطلبات",
+"customers_tab":            "العملاء",
+"dashboard_tab":            "لوحة التحكم",
+
+# لـ design section tabs
+"designs_tab":              "التصميمات",
+"dimension_sets_tab":       "مجموعات الأبعاد",
+
+# لـ pricing section tabs
+"pricing_tab":              "التسعير",
+"offers_tab":               "العروض",
 ```
-
----
-
-
-## 3. تحليل كل tab وما يحتاجه
-
-### 3.1 `ui/tabs/costing/` — الأكثر تعقيداً
-
-#### الملفات الموجودة:
-- `raw_tab.py` → يستخدم `raw_section.py` → `raw_input_panel.py` + `raw_table_panel.py`
-- `labor_tab.py` → `labor/labor_op_form.py` + `labor/labor_op_table.py`
-- `machine_tab.py` → `machine/machine_form.py` + `machine/machine_op_form.py` + `machine/machine_table.py` + `machine/machine_op_table.py`
-- `product_tab.py` → `product/product_form.py` + `product/product_main_panel.py` + `product/product_table.py`
-
-#### المشاكل المحتملة في costing:
-
-**A. `raw_table_panel.py`** يرث من `SharedItemsListPanel` (موجود في `shared/list_panel_with_shared.py`).
-- يجب أن يرث من `BaseListPanel` مباشرة وينفذ hooks.
-- `_live_conn` في `SharedItemsListPanel` يتجاهل `LiveConnMixin` — **يحتاج إصلاح**.
-
-**B. `product/form/_rows_manager.py`** يدير `ComponentRow` instances.
-- `ComponentRow` يستخدم `bus.data_changed` فقط — يحتاج ربط `company_data_changed`.
-
-**C. `shared/bom_scenarios/`** يحتوي ملفين:
-- `_db_scenarios.py` — سيناريوهات محفوظة في DB
-- `_memory_scenarios.py` — سيناريوهات مؤقتة في الذاكرة
-- يجب أن يستخدما `services/costing/scenario_service.py` مباشرة.
-
-**D. `shared/bulk_replace/`** — يستخدم `services/costing/bulk_replace_service.py`.
-
-#### مفاتيح ترجمة ناقصة في costing:
-لا توجد مفاتيح ناقصة كبيرة — `ar.py` و `en.py` يغطيان معظم costing strings.
-لكن يحتاج التحقق من:
-- رسائل validation في `product_form.py`
-- عناوين tabs في `costing_section.py`
-
----
-
-### 3.2 `ui/tabs/accounting/` — معقد جداً
-
-#### الهيكل الحالي (من system_arch):
-```
-accounting/
-├── financial/ (4 tabs: balance_sheet, income, owners_equity, trial_balance)
-├── investors/ (8 ملفات — panel, form, table, details, dialog)
-├── journal/ (account_picker, form, group_combo, lines, filter, tree_table, widget)
-├── ledger/ (accounts_panel, filter_bar, stat_cards, t_account)
-├── tree/ (account_form, group_filter, tree_builder, tree_headers, tree_nodes)
-└── +15 ملف في الجذر
-```
-
-#### المشاكل:
-- `accounting_tabs_builder.py` + `helpers.py` قد تكون wrapper files تحتاج دمج.
-- `_conn_guard.py` — إذا كان wrapper لـ `LiveConnMixin` أو `requires_company` يُحذف ويُستبدل.
-- `account_combo.py` + `accounts_combo_widget.py` — محتمل تكرار، يحتاج دمج.
-
-#### مفاتيح ترجمة ناقصة لـ accounting:
-```python
-# في ar.py و en.py — يحتاج إضافة:
-"investors":                "المستثمرون",          # "Investors"
-"investor_add":             "إضافة مستثمر",       # "Add Investor"
-"investor_movement":        "حركة مستثمر",        # "Investor Movement"
-"link_to_entry":            "ربط بقيد",           # "Link to Entry"
-"account_group":            "مجموعة الحسابات",    # "Account Group"
-"account_nature":           "طبيعة الحساب",       # "Account Nature"
-"debit_nature":             "مدين",               # "Debit"
-"credit_nature":            "دائن",               # "Credit"
-"account_level":            "مستوى الحساب",       # "Account Level"
-"account_tree":             "شجرة الحسابات",      # "Account Tree"
-"fiscal_year":              "السنة المالية",      # "Fiscal Year"
-"period":                   "الفترة",             # "Period"
-"owners_equity":            "حقوق الملكية",       # "Owners Equity"
-"audit_log":                "سجل المراجعة",       # "Audit Log"
-```
-
----
-
-### 3.3 `ui/tabs/inventory/` — متوسط التعقيد
-
-#### الهيكل:
-```
-inventory/
-├── items/ (_item_form.py, _items_tab.py, _items_table.py)
-├── inventory_inbound_tab.py
-├── inventory_outbound_tab.py
-├── inventory_items_tab.py
-├── inventory_report_tab.py
-```
-
-#### المشاكل المحتملة:
-- `_items_tab.py` + `inventory_items_tab.py` — احتمال تكرار، يحتاج مراجعة.
-- يجب أن يستخدم `db/inventory/inventory_repo.py` عبر service layer.
-
-**لا يوجد inventory service في `services/`** — هذا إغفال مهم!
-- يحتاج إنشاء `services/inventory/inventory_service.py` أو استخدام `inventory_repo.py` مباشرة إذا كانت العمليات بسيطة.
-
-#### مفاتيح ترجمة ناقصة لـ inventory:
-```python
-# في ar.py و en.py:
-"inbound":                  "وارد",               # "Inbound"
-"outbound":                 "صادر",               # "Outbound"
-"inventory_report":         "تقرير المخزون",      # "Inventory Report"
-"item_name":                "اسم الصنف",          # "Item Name"
-"item_type":                "نوع الصنف",          # "Item Type"
-"min_stock":                "الحد الأدنى",        # "Min Stock"
-"current_balance":          "الرصيد الحالي",      # "Current Balance"
-"movement_date":            "تاريخ الحركة",       # "Movement Date"
-"movement_type":            "نوع الحركة",         # "Movement Type"
-"reference":                "المرجع",             # "Reference"
-```
-
----
-
-### 3.4 `ui/tabs/orders/` — متوسط التعقيد
-
-#### الهيكل:
-```
-orders/
-├── customers/ (customer_detail_panel.py, customers_list_panel.py)
-├── dashboard/ (_config.py, _recent_table.py, _status_grid.py, _top_cards.py)
-├── order_detail/ (5 ملفات)
-├── order_form/ (_item_row_widget.py, _products_fetcher.py)
-├── orders/ (_filter_toolbar.py, _orders_list_panel.py, _status_delegate.py)
-├── _customer_form.py, _item_form.py, _order_detail.py, _order_form.py
-├── customers_tab.py, dashboard_tab.py, orders_tab.py
-```
-
-#### المشاكل:
-- `_orders_list_panel.py` + `orders_tab.py` + `_order_detail.py` — يجب أن يرثوا من `BaseListPanel` / `BaseDetailPanel`.
-- `_products_fetcher.py` — يجب أن يستخدم `services/costing/catalog_service.py` مباشرة.
-- `_status_delegate.py` — `QStyledItemDelegate` مخصص، هذا صحيح.
-
-#### مفاتيح ترجمة ناقصة لـ orders:
-```python
-# في ar.py و en.py:
-"order_number":             "رقم الطلب",          # "Order Number"
-"order_total":              "إجمالي الطلب",       # "Order Total"
-"customer_name":            "اسم العميل",         # "Customer Name"
-"customer_phone":           "هاتف العميل",        # "Customer Phone"
-"customer_address":         "عنوان العميل",       # "Customer Address"
-"delivery_date":            "تاريخ التسليم",      # "Delivery Date"
-"payment_status":           "حالة الدفع",         # "Payment Status"
-"order_items":              "بنود الطلب",         # "Order Items"
-"status_pending":           "معلق",               # "Pending"
-"status_confirmed":         "مؤكد",               # "Confirmed"
-"status_in_production":     "قيد الإنتاج",        # "In Production"
-"status_ready":             "جاهز",               # "Ready"
-"status_delivered":         "مُسلَّم",             # "Delivered"
-"status_cancelled":         "ملغي",               # "Cancelled"
-"dashboard":                "لوحة التحكم",        # "Dashboard"
-"recent_orders":            "الطلبات الأخيرة",    # "Recent Orders"
-"top_customers":            "أفضل العملاء",       # "Top Customers"
-```
-
----
-
-### 3.5 `ui/tabs/design/` — متوسط التعقيد
-
-#### الهيكل:
-```
-design/
-├── designs/ (design_detail_panel, designs_categories, designs_table, size_card)
-├── dimension_sets/ (8 ملفات)
-├── design_styles.py, designs_tab.py, dimension_sets_tab.py
-```
-
-#### المشاكل:
-- `design_styles.py` — يحتمل أن يكون styles مكررة مع `widgets/theme/styles.py`. يحتاج دمج أو حذف.
-- `designs_categories/_row_and_form.py` — يجب أن يستخدم `CategoryManager` من `widgets/managers/category.py` أو `CategoryService`.
-
-#### مفاتيح ترجمة ناقصة لـ design:
-```python
-# في ar.py و en.py:
-"design_name":              "اسم التصميم",        # "Design Name"
-"design_file":              "ملف التصميم",        # "Design File"
-"design_size":              "مقاس التصميم",       # "Design Size"
-"dimension_set_name":       "اسم مجموعة الأبعاد", # "Dimension Set Name"
-"dimension_group":          "مجموعة الأبعاد",     # "Dimension Group"
-"dimension_field":          "حقل البعد",          # "Dimension Field"
-"dimension_value":          "قيمة البعد",         # "Dimension Value"
-"dimension_instance":       "نسخة الأبعاد",       # "Dimension Instance"
-"open_in_gimp":             "فتح في GIMP",        # "Open in GIMP"
-"thumbnail":                "صورة مصغرة",         # "Thumbnail"
-```
-
----
-
-### 3.6 `ui/tabs/pricing/` — بسيط نسبياً
-
-#### الهيكل:
-```
-pricing/
-├── offers/ (6 ملفات)
-├── pricing/ (_pricing_panel.py, _stat_box.py)
-└── pricing_tab.py
-```
-
-#### المشاكل:
-- `_stat_box.py` — إذا كان wrapper لـ `StatCard` يُحذف ويُستبدل بـ `StatCard` مباشرة.
-- `offers/offer_item_row.py` — يجب أن يشابه `ComponentRow` في البنية.
-
-#### مفاتيح ترجمة ناقصة لـ pricing:
-```python
-# في ar.py و en.py:
-"offer_name":               "اسم العرض",          # "Offer Name"
-"offer_validity":           "صلاحية العرض",       # "Offer Validity"
-"offer_items":              "بنود العرض",         # "Offer Items"
-"base_cost":                "التكلفة الأساسية",   # "Base Cost"
-"markup_pct":               "نسبة الهامش",        # "Markup %"
-"final_price":              "السعر النهائي",      # "Final Price"
-"product_cost":             "تكلفة المنتج",       # "Product Cost"
-"scenario_used":            "السيناريو المستخدم", # "Scenario Used"
-```
-
----
-
-## 4. الإصلاحات المحددة المطلوبة
-
-### 4.1 إصلاح `ui/widgets/shared/list_panel_with_shared.py`
-
-**المشكلة:** `_live_conn` يتجاهل `LiveConnMixin` الموروث.
 
 ```python
-# الكود الحالي (خطأ):
-def _live_conn(self):
-    from db.shared.connection import get_connection
-    return get_connection()
-
-# الإصلاح — حذف هذا override تماماً، LiveConnMixin يتولى الأمر
-# أو إذا احتاج connection مختلف:
-# لا شيء — LiveConnMixin._live_conn() يفعل نفس الشيء بشكل أصح
+# en.py — نفس المفاتيح بالإنجليزية
+"inventory_items":          "Inventory Items",
+"low_stock_alert":          "Low Stock Alert",
+"avg_unit_cost":            "Avg. Unit Cost",
+"total_inbound_value":      "Total Inbound Value",
+"total_outbound_value":     "Total Outbound Value",
+"raw_tab":                  "Raw Materials",
+"labor_tab":                "Labor",
+"machine_tab":              "Machine Ops",
+"product_tab":              "Products",
+"accounts_tab":             "Chart of Accounts",
+"journal_tab":              "Journal Entries",
+"ledger_tab":               "Ledger",
+"financial_tab":            "Financial Statements",
+"investors_tab":            "Investors",
+"orders_tab":               "Orders",
+"customers_tab":            "Customers",
+"dashboard_tab":            "Dashboard",
+"designs_tab":              "Designs",
+"dimension_sets_tab":       "Dimension Sets",
+"pricing_tab":              "Pricing",
+"offers_tab":               "Offers",
 ```
-
-### 4.2 إصلاح `ui/tabs/costing/shared/_utils.py`
-
-هذا الملف يُصدّر ثوابت ألوان `SHARED_COLOR, SHARED_BG, PUBLISHED_COLOR, PUBLISHED_BG`.
-يجب أن تنتقل هذه الثوابت إلى `ui/widgets/core/colors.py` أو تبقى في `_utils.py` إذا كانت خاصة بـ costing.
-
-**القرار:** تبقى في `_utils.py` لأنها ألوان خاصة بمنطق العناصر المشتركة في costing.
-
-### 4.3 `ui/tabs/accounting/accounting_tabs_builder.py`
-
-إذا كان هذا الملف يبني `QTabWidget` فقط دون منطق، يُدمج في `accounting_section.py`.
-
-### 4.4 حذف `ui/widgets/panels/crud_section.py` كملف مستقل
-
-`CrudSection` أصبحت alias لـ `BaseSection` (من `ui/widgets/base/section.py`).
-يجب تحديث جميع imports لتستخدم `BaseSection` مباشرة:
-
-```python
-# قبل:
-from ui.widgets.panels.crud_section import CrudSection
-
-# بعد:
-from ui.widgets.base.section import BaseSection as CrudSection  # للتوافق
-# أو مباشرة:
-from ui.widgets.base.section import BaseSection
-```
-
-### 4.5 توحيد `_conn_guard.py` في accounting
-
-إذا كان `_conn_guard.py` يوفر decorator للتحقق من الاتصال، يُستبدل بـ `@requires_company` من `ui/widgets/core/guard.py`.
 
 ---
 
-## 5. خطة التنفيذ المرحلية
+## 3. ملفات تحتاج إنشاء
 
-### المرحلة 1: الأساس (أولوية عالية)
+### 3.1 `services/inventory/inventory_service.py` ✅ تم
+**ملاحظة مهمة:** الملف يستدعي دوال من `inventory_repo.py` بأسماء مفترضة.
+يجب التحقق من أسماء الدوال الفعلية في `inventory_repo.py`.
+**البديل الآمن:** كتابة SQL مباشرة في الـ service إذا كانت الدوال غير موجودة.
 
+---
 
-### المرحلة 2: توحيد Tabs (أولوية متوسطة)
+## 4. ترتيب التنفيذ
 
-#### 2-A: `costing_section.py`
-يجب أن يكون orchestrator نظيف:
+### المرحلة الأولى — إصلاح فوري (اليوم)
+
+```
+[A] تعديل main_window.py → استخدام sections حقيقية بدل placeholders
+[B] إعادة كتابة inventory_service.py → SQL مباشر بدل افتراض دوال الـ repo
+[C] إضافة مفاتيح الترجمة الجديدة في ar.py و en.py
+```
+
+### المرحلة الثانية — تحويل sections إلى orchestrators
+
+```
+[D] costing_section.py   → TabSectionBase + CostingSection
+[E] inventory_section.py → TabSectionBase + InventoryTab
+[F] orders_section.py    → TabSectionBase + OrdersSection
+[G] design_section.py    → TabSectionBase + DesignSection
+[H] pricing_section.py   → TabSectionBase + PricingSection
+[I] accounting_section.py → TabSectionBase + AccountingTab
+```
+
+### المرحلة الثالثة — تحويل sub-tabs
+
+```
+[J] inventory/items/_items_tab.py       → BaseSection
+[K] inventory/*_tab.py                  → BaseSection
+[L] orders/customers_tab.py             → BaseSection
+[M] orders/orders_tab.py                → BaseSection
+[N] orders/dashboard_tab.py             → BaseSection
+[O] design/designs_tab.py               → BaseSection
+[P] design/dimension_sets_tab.py        → BaseSection
+[Q] pricing/pricing_tab.py              → BaseSection
+[R] pricing/offers/offers_tab.py        → BaseSection
+```
+
+### المرحلة الرابعة — تحويل list/detail panels
+
+```
+[S] inventory/items/_items_table.py     → BaseListPanel
+[T] inventory/*_tab.py tables           → BaseListPanel
+[U] orders/customers/_list.py           → BaseListPanel
+[V] orders/orders/*_list_panel.py       → BaseListPanel
+[W] design/designs/_designs_table.py    → BaseListPanel
+```
+
+### المرحلة الخامسة — تنظيف
+
+```
+[X] فحص accounting/_conn_guard.py → حذف إذا wrapper لـ requires_company
+[Y] فحص account_combo vs accounts_combo_widget → حذف الـ wrapper
+[Z] فحص design_styles.py → حذف إذا يكرر widgets/theme/styles.py
+[AA] فحص pricing/_stat_box.py → حذف إذا wrapper لـ StatCard
+```
+
+---
+
+## 5. قواعد Code Review (Checklist)
+
+- [ ] لا نصوص عربية hardcoded — كل نص مرئي يستخدم `tr(key)`
+- [ ] لا wrapper files — استدعاء مباشر للملف الحقيقي
+- [ ] كل list panel يرث من `BaseListPanel`
+- [ ] كل detail panel يرث من `BaseDetailPanel`
+- [ ] كل section يرث من `BaseSection` أو `TabSectionBase`
+- [ ] كل orchestrator tab يرث من `TabSectionBase`
+- [ ] signals تستخدم `bus.company_data_changed` + `CONNECT_BUS = True`
+- [ ] emit يستخدم `emit_company_data_changed()` لا `bus.data_changed.emit()`
+- [ ] DB access عبر `_live_conn()` لا `company_state` مباشرة
+- [ ] `@requires_company` على كل method تحتاج شركة نشطة
+
+---
+
+## 6. تفاصيل التحويل لكل section
+
+### costing_section.py (orchestrator)
 ```python
 class CostingSection(TabSectionBase):
     def _build_tabs(self, tabs):
-        tabs.addTab(RawTab(self.conn),     tr("nav_costing") + " — " + tr("raw_materials"))
-        tabs.addTab(LaborTab(self.conn),   tr("labor_ops"))
-        tabs.addTab(MachineTab(self.conn), tr("machine_ops"))
-        tabs.addTab(ProductTab(self.conn), tr("new_product"))
+        from ui.tabs.costing.raw_tab    import RawTab
+        from ui.tabs.costing.labor_tab  import LaborTab
+        from ui.tabs.costing.machine_tab import MachineTab
+        from ui.tabs.costing.product_tab import ProductTab
+        tabs.addTab(RawTab(self.conn),     tr("raw_tab"))
+        tabs.addTab(LaborTab(self.conn),   tr("labor_tab"))
+        tabs.addTab(MachineTab(self.conn), tr("machine_tab"))
+        tabs.addTab(ProductTab(self.conn), tr("product_tab"))
 ```
 
-#### 2-B: تحويل tab classes لترث من `BaseSection`
-كل tab مثل `RawTab`, `LaborTab` يجب أن يكون:
+### inventory_section.py (orchestrator)
 ```python
-class RawTab(BaseSection):
-    LIST_MIN_W = 320
-    CONNECT_BUS = True
-
-    def _create_list(self):
-        return RawTablePanel(self.conn)
-
-    def _create_detail(self):
-        return RawInputPanel(self.conn)
-
-    def _connect_signals(self):
-        self._list.item_selected.connect(self._detail.load_item)
+class InventoryTab(TabSectionBase):
+    def _build_tabs(self, tabs):
+        from ui.tabs.inventory.inventory_items_tab   import InventoryItemsTab
+        from ui.tabs.inventory.inventory_inbound_tab import InventoryInboundTab
+        from ui.tabs.inventory.inventory_outbound_tab import InventoryOutboundTab
+        from ui.tabs.inventory.inventory_report_tab  import InventoryReportTab
+        tabs.addTab(InventoryItemsTab(self.conn),   tr("inventory_items"))
+        tabs.addTab(InventoryInboundTab(self.conn), tr("stock_in"))
+        tabs.addTab(InventoryOutboundTab(self.conn),tr("stock_out"))
+        tabs.addTab(InventoryReportTab(self.conn),  tr("inventory_report"))
 ```
 
-#### 2-C: تحويل list panels لترث من `BaseListPanel`
-كل `*_table.py` يجب أن يكون:
+### orders_section.py (orchestrator)
 ```python
-class LaborOpTable(BaseListPanel):
-    COLUMNS = ["ID", tr("name"), tr("cost_per_hour"), tr("category")]
+class OrdersSection(TabSectionBase):
+    def _build_tabs(self, tabs):
+        from ui.tabs.orders.dashboard_tab  import DashboardTab
+        from ui.tabs.orders.orders_tab     import OrdersTab
+        from ui.tabs.orders.customers_tab  import CustomersTab
+        tabs.addTab(DashboardTab(self.conn), tr("dashboard_tab"))
+        tabs.addTab(OrdersTab(self.conn),   tr("orders_tab"))
+        tabs.addTab(CustomersTab(self.conn),tr("customers_tab"))
+```
+
+### design_section.py (orchestrator)
+```python
+class DesignSection(TabSectionBase):
+    def _build_tabs(self, tabs):
+        from ui.tabs.design.designs_tab        import DesignsTab
+        from ui.tabs.design.dimension_sets_tab import DimensionSetsTab
+        tabs.addTab(DesignsTab(self.conn),       tr("designs_tab"))
+        tabs.addTab(DimensionSetsTab(self.conn), tr("dimension_sets_tab"))
+```
+
+### pricing_section.py (orchestrator)
+```python
+class PricingSection(TabSectionBase):
+    def _build_tabs(self, tabs):
+        from ui.tabs.pricing.pricing_tab      import PricingTab
+        from ui.tabs.pricing.offers.offers_tab import OffersTab
+        tabs.addTab(PricingTab(self.conn), tr("pricing_tab"))
+        tabs.addTab(OffersTab(self.conn),  tr("offers_tab"))
+```
+
+### accounting_section.py (orchestrator)
+```python
+class AccountingTab(TabSectionBase):
+    def _build_tabs(self, tabs):
+        from ui.tabs.accounting.accounts_tree     import AccountsTree
+        from ui.tabs.accounting.journal_tab       import JournalTab
+        from ui.tabs.accounting.ledger_tab        import LedgerTab
+        from ui.tabs.accounting.financial_statements import FinancialStatements
+        from ui.tabs.accounting.investors_tab     import InvestorsTab
+        tabs.addTab(AccountsTree(self.conn),        tr("accounts_tab"))
+        tabs.addTab(JournalTab(self.conn),          tr("journal_tab"))
+        tabs.addTab(LedgerTab(self.conn),           tr("ledger_tab"))
+        tabs.addTab(FinancialStatements(self.conn), tr("financial_tab"))
+        tabs.addTab(InvestorsTab(self.conn),        tr("investors_tab"))
+```
+
+---
+
+## 7. نموذج تحويل list panel (BaseListPanel)
+
+```python
+# المثال: items/_items_table.py
+class ItemsTable(BaseListPanel):
+    COLUMNS     = ["", tr("name"), tr("unit"), tr("price"), tr("category")]
     STRETCH_COL = 1
-    EMPTY_ICON = "👷"
-    EMPTY_TITLE = "labor_ops"
+    COL_WIDTHS  = {0: 0, 2: 70, 3: 90, 4: 120}
+    EMPTY_ICON  = "📦"
+    EMPTY_TITLE = "no_data"
     SHOW_CATEGORY = True
-    CONNECT_BUS = True
+    FILTER_SCOPE  = "all"
+    CONNECT_BUS   = True
 
-    def _load_rows(self):
-        return LaborOpService(self.conn).list_all()
+    def _load_rows(self) -> list:
+        from services.shared.item_service import ItemService
+        return [vars(r) for r in ItemService(self.conn).list_all()]
 
-    def _fill_row(self, table, r, row):
+    def _fill_row(self, table, r: int, row: dict):
+        from ui.widgets.tables.items import make_item
         table.setItem(r, 0, make_item("", user_data=row["id"]))
-        table.setItem(r, 1, make_item(row["name"]))
-        # ...
+        table.setItem(r, 1, make_item(row.get("name", "")))
+        table.setItem(r, 2, make_item(row.get("unit", "")))
+        table.setItem(r, 3, make_item(f"{row.get('price', 0):.2f}"))
+        table.setItem(r, 4, make_item(row.get("category_name", "")))
 ```
 
 ---
 
-### المرحلة 3: مفاتيح الترجمة (أولوية متوسطة)
+## 8. المرحلة الأولى: الملفات التي سيتم إنشاؤها/تعديلها الآن
 
-#### إضافات لـ `ui/i18n/ar.py`:
+### 8.1 `ui/main_window.py` — تعديل `_build_tabs()`
+إزالة `_make_placeholder_tab` واستخدام sections حقيقية.
 
-```python
-# === Accounting ===
-"investors":                "المستثمرون",
-"investor_add":             "إضافة مستثمر",
-"investor_movement":        "حركة مستثمر",
-"link_to_entry":            "ربط بقيد",
-"account_group":            "مجموعة الحسابات",
-"account_nature":           "طبيعة الحساب",
-"account_tree":             "شجرة الحسابات",
-"fiscal_year":              "السنة المالية",
-"owners_equity":            "حقوق الملكية",
-"audit_log":                "سجل المراجعة",
-"debit_nature":             "طبيعة مدينة",
-"credit_nature":            "طبيعة دائنة",
+### 8.2 `services/inventory/inventory_service.py` — إعادة كتابة
+استخدام SQL مباشر بدل افتراض أسماء دوال الـ repo.
 
-# === Inventory ===
-"inbound":                  "وارد",
-"outbound":                 "صادر",
-"inventory_report":         "تقرير المخزون",
-"item_name":                "اسم الصنف",
-"item_type":                "نوع الصنف",
-"min_stock":                "الحد الأدنى للمخزون",
-"current_balance":          "الرصيد الحالي",
-"movement_date":            "تاريخ الحركة",
-"movement_type":            "نوع الحركة",
+### 8.3 `ui/i18n/ar.py` — إضافة مفاتيح tabs
+إضافة مفاتيح أسماء التبويبات للـ sections.
 
-# === Orders ===
-"order_number":             "رقم الطلب",
-"order_total":              "إجمالي الطلب",
-"customer_name":            "اسم العميل",
-"customer_phone":           "هاتف العميل",
-"customer_address":         "عنوان العميل",
-"delivery_date":            "تاريخ التسليم",
-"payment_status":           "حالة الدفع",
-"order_items":              "بنود الطلب",
-"status_pending":           "معلق",
-"status_confirmed":         "مؤكد",
-"status_in_production":     "قيد الإنتاج",
-"status_ready":             "جاهز",
-"status_delivered":         "مُسلَّم",
-"status_cancelled":         "ملغي",
-"dashboard":                "لوحة التحكم",
-"recent_orders":            "الطلبات الأخيرة",
-"top_customers":            "أفضل العملاء",
+### 8.4 `ui/i18n/en.py` — إضافة مفاتيح tabs
+نفس المفاتيح بالإنجليزية.
 
-# === Design ===
-"design_name":              "اسم التصميم",
-"design_file":              "ملف التصميم",
-"open_in_gimp":             "فتح في GIMP",
-"thumbnail":                "صورة مصغرة",
-"dimension_set_name":       "اسم مجموعة الأبعاد",
-"dimension_group":          "مجموعة الأبعاد",
-"dimension_field":          "حقل البعد",
-"dimension_value":          "قيمة البعد",
-"dimension_instance":       "نسخة الأبعاد",
+### 8.5 `ui/tabs/costing_section.py` — orchestrator
+تحويل إلى `TabSectionBase` orchestrator نظيف.
 
-# === Pricing ===
-"offer_name":               "اسم العرض",
-"offer_validity":           "صلاحية العرض",
-"offer_items":              "بنود العرض",
-"base_cost":                "التكلفة الأساسية",
-"markup_pct":               "نسبة الهامش %",
-"final_price":              "السعر النهائي",
-"product_cost":             "تكلفة المنتج",
-"scenario_used":            "السيناريو المستخدم",
-```
+### 8.6 `ui/tabs/inventory_section.py` — orchestrator
+تحويل إلى `TabSectionBase` orchestrator نظيف.
 
-#### إضافات لـ `ui/i18n/en.py`:
-نفس المفاتيح بالإنجليزية (موضحة في الجدول أعلاه).
+### 8.7 `ui/tabs/orders_section.py` — orchestrator
+تحويل إلى `TabSectionBase` orchestrator نظيف.
 
----
+### 8.8 `ui/tabs/design_section.py` — orchestrator
+تحويل إلى `TabSectionBase` orchestrator نظيف.
 
-### المرحلة 4: إصلاحات قصيرة المدى (أولوية منخفضة)
+### 8.9 `ui/tabs/pricing_section.py` — orchestrator
+تحويل إلى `TabSectionBase` orchestrator نظيف.
 
-#### 4-A: `design_styles.py`
-فحص المحتوى — إذا كان يكرر `widgets/theme/styles.py` يُحذف ويُستبدل باستدعاء مباشر.
-
-#### 4-B: `accounting/account_combo.py` + `accounts_combo_widget.py`
-فحص التكرار — الأرجح واحد منهما wrapper للآخر.
-
-#### 4-C: Placeholder tabs في `main_window.py`
-```python
-# الكود الحالي يبني placeholders:
-w = _make_placeholder_tab(name)
-
-# يجب استبداله بالـ widgets الفعلية:
-from ui.tabs.costing_section    import CostingSection
-from ui.tabs.pricing_section    import PricingSection
-# إلخ...
-```
-
----
-
-
-## 8. ترتيب التنفيذ المقترح
-
-```
-الأسبوع 1:
-  [P1] ui/widgets/core/__init__.py                 ← فوري، يحل imports مكسورة
-  [P1] إصلاح list_panel_with_shared._live_conn      ← سطر واحد
-  [P1] إضافة مفاتيح الترجمة لـ ar.py + en.py        ← ملفان
-
-الأسبوع 2:
-  [P2] services/inventory/inventory_service.py     ← service layer ناقصة
-  [P2] inventory tabs تستخدم service مباشرة
-  [P2] تحويل inventory list panels → BaseListPanel
-
-الأسبوع 3:
-  [P3] costing_section.py كـ orchestrator نظيف
-  [P3] RawTab/LaborTab/MachineTab → BaseSection
-  [P3] table panels → BaseListPanel
-
-الأسبوع 4:
-  [P4] accounting section review
-  [P4] orders/design/pricing tabs review
-  [P4] main_window.py placeholder → real widgets
-
-الأسبوع 5:
-  [P5] design_styles.py مراجعة وحذف التكرارات
-  [P5] accounting/account_combo دمج إذا تكرار
-  [P5] حذف crud_section.py المستقل (الـ BaseSection يغطيه)
-```
-
----
-
-## 9. قواعد Code Review لكل تعديل
-
-قبل إغلاق أي ملف تعديل، تحقق من:
-
-- [ ] لا توجد نصوص عربية hardcoded — كل نص مرئي للمستخدم يستخدم `tr(key)`
-- [ ] لا `from db.companies.company_state import company_state` خارج `conn.py` و `guard.py`
-- [ ] لا استدعاء مباشر لـ `company_state.get_erp_conn()` في tabs — يمر عبر `_live_conn()`
-- [ ] لا wrapper files — الاستدعاء مباشر للملف الذي يحتوي الكود
-- [ ] كل list panel يرث من `BaseListPanel`
-- [ ] كل detail panel يرث من `BaseDetailPanel`
-- [ ] كل section يرث من `BaseSection`
-- [ ] signals تستخدم `bus.company_data_changed` مع `CONNECT_BUS = True`
-- [ ] لا `bus.data_changed.emit()` في tabs — يستخدم `emit_company_data_changed()`
-
----
-
-## 10. ملاحظات ختامية
-
-### ما هو مكتمل بالفعل (لا يحتاج تغيير):
-- `widgets/base/` — الـ base classes مكتملة ومحكمة
-- `widgets/mixins/` — الـ mixins جاهزة
-- `widgets/core/` — colors, conn, events, guard, i18n كلها جاهزة
-- `services/costing/` — كاملة
-- `services/shared/` — كاملة
-- `services/accounting/journal_service.py` — كاملة
-- `services/orders/order_service.py` — كاملة
-- `ui/i18n/ar.py` + `ui/i18n/en.py` — تحتاج إضافات فقط (المرحلة 3)
-
-### الفجوة الأكبر:
-**`services/inventory/`** غائب كلياً — يجب إنشاؤه.
-
-### الخطر الأكبر:
-**`main_window.py`** حالياً يبني placeholders فقط (`_make_placeholder_tab`) —
-التطبيق لا يعرض أي قسم حقيقي. هذا يعني tabs الفعلية لا تُستدعى أبداً ولا يمكن اختبارها عبر UI.
-إصلاح هذا يجب أن يكون **أولوية قصوى** بعد التأكد من أن كل section module يعمل.
+### 8.10 `ui/tabs/accounting_section.py` — orchestrator
+تحويل إلى `TabSectionBase` orchestrator نظيف.
