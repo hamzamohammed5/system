@@ -607,18 +607,5 @@ AR_STRINGS: dict[str, str] = {
     "pricing_tab":              "التسعير",
     "offers_tab":               "العروض",
     
-    # ── CategoryManager / CategoryForm ──
-    "category_data":          "بيانات التصنيف",
-    "category_add":           "إضافة جديدة",
-    "category_name":          "اسم التصنيف",
-    "category_parent":        "التصنيف الأب",
-    "category_color":         "اللون",
-    "category_name_required": "أدخل اسم التصنيف",
-    "category_select_first":  "اختر تصنيفاً أولاً",
-
-    # ── General ──
-    "filter_all":             "— الكل —",
-    "raw_materials":          "الخامات",
-    "select_company":         "اختر شركة نشطة أولاً",
 
 }
