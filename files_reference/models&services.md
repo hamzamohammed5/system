@@ -24,6 +24,7 @@
 calc_worker_hourly_rate(conn) -> float
 # = (monthly_salary ÷ net_hours) × overhead_factor
 # net_hours = (working_days - holiday_days) × working_hours_day
+# يقرأ من settings عبر get_setting() — كل القيم TEXT تُحوَّل لـ float
 
 raw_unit_price(item_row) -> float
 # لو total_qty > 0: price ÷ total_qty | وإلا: price
@@ -56,9 +57,10 @@ calc_machine_op_cost(conn, op_id, row_id=None) -> float
 calc_cost(conn, item_id, _visited=None, central_conn=None) -> float
 # التكلفة الكاملة للمنتج (default scenario)
 # يدعم item_id كـ int (محلي) أو "shared:{n}" (مشترك)
-# central_conn اختياري — يُحسّن الأداء عند استدعاءات متعددة
+# central_conn اختياري — [P-02b] يُحسّن الأداء عند استدعاءات متعددة
 
 calc_product_cost(conn, product_id, scenario_id=None, central_conn=None) -> tuple[float, dict]
+# [C-01 / E-01] يحسب تكلفة المنتج مع تفاصيل
 # (total_cost, breakdown)
 # breakdown: {raw, labor, machine, semi, total}
 # scenario_id=None → يستخدم الـ default scenario
@@ -73,9 +75,21 @@ calc_cost_breakdown(conn, item_id, central_conn=None) -> dict
 | النوع | الحساب |
 |-------|--------|
 | `raw` | `raw_unit_price` أو `variant_price` |
-| `semi` | `calc_cost` متكرر (مع حماية من الحلقات) |
+| `semi` | `calc_cost` متكرر (مع حماية من الحلقات عبر _visited) |
 | `labor_op` | `calc_labor_op_cost` |
 | `machine_op` | `calc_machine_op_cost` |
+
+**دعم العناصر المشتركة:**
+
+| النوع المشترك | الحساب |
+|---------------|--------|
+| `raw` | `_shared_raw_unit_price` من companies.db |
+| `labor_op` | `_shared_labor_op_cost` — المعدل من erp.db |
+| `machine_op` | `_shared_machine_op_cost` من companies.db |
+
+**[P-02] Central Connection Cache:**
+- `_get_central_conn_cached()` — connection مشترك بدل فتح/غلق في كل استدعاء
+- `_central_conn_override` — thread-local store للـ caller-provided connection
 
 ---
 
@@ -98,7 +112,7 @@ svc.get_delete_preview(item_id) -> DeletePreview | None
 # DeletePreview.can_delete() -> bool
 
 svc.get_usage_count(item_id) -> int
-# يشمل كل child_types: raw, semi, labor_op, machine_op
+# [تحسين 18] يشمل كل child_types: raw, semi, labor_op, machine_op
 
 svc.delete(item_id) -> bool  # يرفض لو مستخدم في BOM
 svc.force_delete(item_id)    # يحذف حتى لو مستخدم
@@ -137,9 +151,11 @@ ProductService(conn)
 svc.save(product_data: dict, components: list[BomComponent],
          scenario_id=None, scenario_name="سيناريو 1") -> ProductSaveResult
 # product_data: {id?, name, type["semi"|"final"], price, category_id?}
+# [C-02 / A-03] _save_bom يستخدم replace_bom_for_scenario — migration-safe
 # ProductSaveResult: product_id, scenario_id, is_new, bom_count
 
 svc.calculate_cost(product_id, scenario_id=None) -> CostResult
+# [C-01] يستخدم calc_product_cost
 # CostResult: product_id, product_name, total_cost, breakdown
 
 svc.get_orphan_components(product_id) -> list[OrphanComponent]
@@ -178,7 +194,7 @@ svc.ensure_default(item_id) -> int
 # يتأكد من وجود default scenario — ينشئ "سيناريو 1" لو مفيش
 
 svc.calc_cost(scenario_id) -> float
-# يحسب التكلفة الكاملة للسيناريو
+# يحسب التكلفة الكاملة للسيناريو مباشرة من BOM
 ```
 
 **`ScenarioResult`:** `id, item_id, name, is_default, notes`
@@ -266,8 +282,8 @@ svc.replace(op_id, rows: list)
 
 # ── حساب ──
 svc.calc_row_cost(row_id) -> float
-# mode="time": (value/60) × rate_per_hour
-# mode="unit": value × rate_per_unit
+# mode="time": (value/60) × rate_per_hour / count
+# mode="unit": (value × rate_per_unit) / count
 
 svc.calc_total_cost(op_id) -> float
 # مجموع تكلفة كل الصفوف
@@ -409,7 +425,7 @@ svc.invalidate_columns_cache()
 
 ```python
 OrderService(conn, erp_conn=None)
-# erp_conn اختياري — لربط المنتجات وإثراء OrderItem تلقائياً
+# erp_conn اختياري — [E-06] لربط المنتجات وإثراء OrderItem تلقائياً
 
 svc.create(customer_id, items: list[OrderItem], notes="") -> int
 svc.update(order_id, customer_id, items, notes="")
@@ -435,6 +451,7 @@ svc.get_customer_summary(customer_id) -> OrderSummary
 ```python
 resolve_product_info(erp_conn, product_id) -> dict | None
 # {"name": str, "price": float} أو None لو غير موجود
+# [E-06] لجلب اسم وسعر المنتج من erp.db
 ```
 
 **الانتقالات المسموح بها:**
@@ -469,12 +486,15 @@ svc.get_account_balance(account_id, date_from=None, date_to=None) -> AccountBala
 
 svc.post_entry(entry_data: dict, lines: list[JournalLine]) -> EntryResult
 # entry_data: {date, description, ref?, entry_type?, notes?}
+# [إصلاح 35] يستخدم insert_entry + add_entry_lines (الأسماء الفعلية)
 # EntryResult: entry_id, is_new, total_dr, total_cr, lines_count
 
 svc.update_entry(entry_id, entry_data, lines) -> EntryResult
+# [إصلاح 35] يحذف الصفوف القديمة ويكتب الجديدة مباشرة
 svc.reverse_entry(entry_id, note="") -> EntryResult
 svc.get_delete_preview(entry_id) -> DeletePreview | None
 svc.delete(entry_id) -> bool
+# [إصلاح 35] يستخدم delete_entry (الاسم الفعلي)
 ```
 
 **`JournalLine`:** `account_id, dr=0.0, cr=0.0, note=""`
@@ -570,11 +590,11 @@ sub = svc.get_sub_bom(item_id=3)  # BOM النصف مصنع
 
 ## ملاحظات مهمة
 
-**1. الـ bus events:** استخدم `bus.company_data_changed.emit(cid)` بدل `bus.data_changed.emit()` — أكثر دقة وأفضل أداءً.
+**1. الـ bus events:** استخدم `emit_company_data_changed()` من `ui.widgets.core.events` بدل `bus.data_changed.emit()`.
 
 **2. `_C` dictionary:** لا تُعدّل مباشرة — استخدم `apply_theme(colors)` فقط.
 
-**3. `tr()` function:** تقبل مفاتيح الترجمة أو نصوص عربية مباشرة — تحول `"حفظ"` تلقائياً لـ `"save"`.
+**3. `tr()` function:** تقبل مفاتيح الترجمة فقط — لا تمرر نصاً عربياً مباشرة.
 
 **4. `BulkReplaceService.fetch_candidates`:** يعتمد على `bulk_replace_helpers` في الـ UI layer — انتبه لهذا الـ coupling عند نقل الـ service لبيئة بدون UI.
 
@@ -583,3 +603,5 @@ sub = svc.get_sub_bom(item_id=3)  # BOM النصف مصنع
 **6. `CatalogService` والعناصر المشتركة:** تعتمد على `company_state.is_ready` — تأكد من وجود شركة نشطة قبل استدعاء `build()`.
 
 **7. `ScenarioService.calc_cost`:** يحسب التكلفة مباشرة من BOM الخاص بالسيناريو بدون المرور بـ `calc_product_cost` في models — مناسب للمقارنة بين سيناريوهات متعددة.
+
+**8. `settings` values:** كل قيم الإعدادات مُخزَّنة كـ TEXT — استخدم `float(get_setting(...))` عند قراءة الأرقام.

@@ -41,7 +41,7 @@ ensure_company_dir(company_id: int) -> str
 
 create_central_tables(conn)
 # ينشئ: companies, shared_items, company_shared_links
-# ثم يُطبق _migrate_central()
+# ثم يُطبّق _migrate_central()
 ```
 
 ---
@@ -74,6 +74,10 @@ link_shared_item_to_company(central_conn, erp_conn, shared_item_id,
 unlink_shared_item(central_conn, shared_item_id, company_id)
 delete_shared_item(central_conn, shared_item_id)
 sync_shared_item(central_conn, source_erp_conn, shared_item_id)  # no-op
+
+# ⚠️ الدوال المهملة [T-01] — محذوفة، ImportError واضح:
+#   fetch_all_shared_items     → استورد من db.companies.shared_items_repo
+#   fetch_shared_items_for_company → استورد من db.companies.shared_items_repo
 ```
 
 ---
@@ -83,6 +87,7 @@ sync_shared_item(central_conn, source_erp_conn, shared_item_id)  # no-op
 #### `ProtectedConnection`
 
 Wrapper على sqlite3.Connection يمنع الإغلاق العرضي ويعيد الاتصال تلقائياً.
+يخزّن `_path` كـ instance attribute للقراءة السريعة بدون PRAGMA.
 
 ```python
 ProtectedConnection(path: str)
@@ -93,8 +98,8 @@ conn.executescript(script)
 conn.commit() / conn.rollback()
 conn.close()       # no-op
 conn.real_close()  # الإغلاق الحقيقي
-conn.path_matches(expected_path) -> bool
-conn.validate(expected_path) -> bool
+conn.path_matches(expected_path) -> bool  # مقارنة سريعة بدون PRAGMA
+conn.validate(expected_path) -> bool       # تحقق صريح عبر PRAGMA
 ```
 
 #### `CompanyState` (Singleton)
@@ -110,6 +115,7 @@ company_state.is_ready      # bool
 
 # Methods
 company_state.set_active(company_id, name="", color="#1565c0")
+# [C-03] thread-safe عبر _invalidate_pending Event
 company_state.clear()
 
 company_state.get_erp_conn() -> ProtectedConnection
@@ -119,6 +125,7 @@ company_state.get_orders_conn() -> ProtectedConnection
 company_state.get_designs_conn() -> ProtectedConnection
 
 company_state.wait_for_invalidate(timeout=1.0)
+# [C-03] ينتظر انتهاء set_active() — للاستخدام من AppState
 ```
 
 ---
@@ -161,7 +168,7 @@ init_db()
 _init_erp_db(conn)
 # يُهيئ erp.db — ينشئ: categories, items, machines, labor_ops,
 #   machine_ops, bom, settings
-# القيم الافتراضية في settings:
+# القيم الافتراضية في settings (كلها TEXT):
 #   monthly_salary=3000, working_days=25, holiday_days=4,
 #   working_hours_day=8, overhead_factor=1.10, font_size=11
 ```
@@ -173,14 +180,20 @@ _init_erp_db(conn)
 - `labor_ops(id, name, minutes, category_id)`
 - `machine_ops(id, machine_id, name, mode["time"|"unit"], value, category_id)`
 - `bom(id, parent_id, child_type, child_id, qty, child_name, waste_pct?, variant_id?, machine_op_row_id?, scenario_id?)`
-- `settings(key TEXT PK, value TEXT)`
+- `settings(key TEXT PK, value TEXT)`  ← value كـ TEXT (ليس REAL)
 
 ---
 
 ### `db/shared/items_repo.py`
 
 ```python
-# ── العناصر المشتركة ──
+# ── Central Connection Cache ──
+_get_central_conn_cached() -> Connection
+# [تحسين 8] connection مشترك مرتبط بـ company_id — لا فتح/غلق متكرر
+invalidate_central_conn_cache()
+# يُستدعى عند تغيير الشركة النشطة
+
+# ── Shared ID Utilities — [A-02] المصدر الوحيد ──
 is_shared_id(item_id) -> bool
 extract_shared_id(item_id) -> int | None
 # "shared:42" → 42
@@ -210,10 +223,15 @@ replace_bom(conn, parent_id, rows: list[tuple])
 fetch_orphan_bom_rows(conn, parent_id) -> list[dict]
 delete_orphan_bom_rows(conn, parent_id) -> int
 fetch_products_with_orphan(conn, child_type, child_id) -> list[int]
+cleanup_empty_products_after_orphan_fix(conn, parent_ids: list) -> list[int]
 
 # ── Cache ──
 invalidate_bom_cols_cache(conn=None)
 invalidate_central_conn_cache()
+
+# ── Shared Fetching ──
+fetch_shared_for_types(company_id=None, types: list=None) -> dict
+# [تحسين 11] batch query — {type: [items]}
 ```
 
 ---
@@ -226,10 +244,12 @@ fetch_categories_by_scope(conn, scope) -> list
 fetch_category(conn, cat_id) -> row
 
 fetch_descendants(conn, cat_id) -> list[int]
-# CTE Recursive — O(1) query
+# [تحسين 5] SQLite Recursive CTE — O(1) query
+# Fallback تلقائي للـ while loop لو CTE غير مدعوم
 
 insert_category(conn, name, scope="all", color="#607d8b", parent_id=None,
                 template_fields=None, default_unit="mm") -> int
+# [تحسين 13] يستخدم encode_json_list من json_utils
 
 update_category(conn, cat_id, name, scope, color, parent_id=None,
                 template_fields=None, default_unit="mm")
@@ -240,7 +260,7 @@ count_category_items(conn, cat_id) -> dict
 # {"عناصر": n, "عمليات عمالة": n, "عمليات تشغيل": n, "ماكينات": n}
 
 build_tree(rows) -> list[dict]
-# قائمة مسطحة → شجرة هرمية
+# [إصلاح 5] آمن من KeyError عبر _row_to_dict()
 # كل node: {id, name, scope, color, parent_id, children:[...]}
 
 get_template_fields(conn, cat_id) -> list[dict]
@@ -280,9 +300,16 @@ set_setting(conn, key: str, value)
 
 ```python
 # ── قراءة ──
-fetch_all_accounts_basic(conn, acc_type=None) -> list      # بدون أرصدة
-fetch_all_accounts_with_balance(conn, acc_type=None) -> list  # مع balance
-fetch_all_accounts(conn, acc_type=None) -> list            # = with_balance
+fetch_all_accounts_basic(conn, acc_type=None) -> list
+# [P-01] بدون balance — سريعة للـ dropdowns والـ combos
+
+fetch_all_accounts_with_balance(conn, acc_type=None) -> list
+# [P-01] مع balance — للتقارير والقوائم المالية
+# [تحسين 38] LEFT JOIN بدل correlated subquery
+
+fetch_all_accounts(conn, acc_type=None) -> list
+# = fetch_all_accounts_with_balance (للتوافق)
+
 fetch_account(conn, account_id) -> row
 fetch_account_by_code(conn, code: str) -> row | None
 fetch_leaf_accounts(conn, acc_type=None) -> list           # is_leaf=1
@@ -301,6 +328,7 @@ delete_account(conn, account_id)
 
 # ── تصنيفات الحسابات ──
 fetch_all_groups(conn, acc_type=None) -> list
+# [تحسين 3] _sort_groups_parents_first — O(n) dicts بدل O(3n)
 fetch_group(conn, group_id) -> row
 insert_group(conn, name, acc_type, parent_id=None, color="#607d8b") -> int
 update_group(conn, group_id, name, parent_id=None, color="#607d8b")
@@ -318,10 +346,16 @@ next_ref_no(conn) -> str
 
 # ── قراءة ──
 fetch_all_entries(conn, limit=200) -> list
+# [إصلاح 29] استخدم fetch_entries_count() في الـ UI لإظهار "X من أصل Y"
+
 fetch_entries_count(conn) -> int
+# [إصلاح 29] إجمالي عدد القيود — للـ pagination
+
 fetch_all_entries_paginated(conn, limit=200, offset=0,
                             date_from=None, date_to=None,
                             search=None, entry_type=None) -> list
+# [إصلاح 29] pagination كاملة مع فلترة
+
 fetch_entry(conn, entry_id) -> row
 fetch_entry_lines(conn, entry_id) -> list
 # كل row: id, account_id, debit, credit, description,
@@ -338,7 +372,7 @@ add_entry_lines(conn, entry_id, lines: list)
 # lines: [{"account_id", "debit", "credit", "description"}, ...]
 
 delete_entry(conn, entry_id, changed_by="system")
-# snapshot → audit_log → حذف
+# [مقترح 52] snapshot → audit_log → حذف
 
 validate_entry_balance(lines: list) -> bool
 ```
@@ -373,6 +407,8 @@ purchase_inventory(inv_conn, acc_conn, inv_id, qty, unit_cost, date,
 # يسجل شراء مخزن + قيد محاسبي تلقائي
 # Returns: (entry_id, move_id)
 # Raises: ValueError | RuntimeError
+# [إصلاح 32] rollback محصّن في try/finally
+# [مقترح 52] يُسجِّل في audit_log عند rollback أو تناقض حرج
 ```
 
 ---
@@ -418,6 +454,12 @@ fetch_investor_entry_id(erp_conn, link_id) -> int | None
 ### `db/accounting/investors_repo.py`
 
 ```python
+# ── Migration ──
+create_investors_tables(conn)
+invalidate_investors_migration_cache(conn=None)
+# [إصلاح 31] flag per-db-path — migration مرة واحدة فقط
+# [تحسين 7] _get_db_path fast path عبر ProtectedConnection._path
+
 # ── CRUD ──
 fetch_all_investors(conn) -> list
 fetch_investor(conn, investor_id) -> row
@@ -442,7 +484,7 @@ calc_investor_summary(conn, investor_id, acc_conn=None) -> dict
 #  net_investment, entries}
 
 calc_all_investors_summary(conn, acc_conn=None) -> list
-# batch query — O(1)
+# [إصلاح 40] batch query — O(1) بدل O(n×m)
 ```
 
 ---
@@ -481,8 +523,9 @@ record_inventory_move(conn, inv_id, move_type, qty, unit_cost, date,
 # move_type: "in" | "out" | "adjust"
 # "in":     يحسب avg_cost الجديد بـ WACC
 # "out":    يتحقق من الكمية الكافية
-# "adjust": يضع qty مباشرة
+# "adjust": يضع qty مباشرة (لا تقبل qty سالبة — [تحسين 20])
 # Raises: ValueError لو qty أكبر من الرصيد في out
+#         ValueError لو qty سالبة في adjust
 ```
 
 ---
@@ -495,6 +538,7 @@ record_inventory_move(conn, inv_id, move_type, qty, unit_cost, date,
 - `orders(id, order_number UNIQUE, customer_id→RESTRICT, order_type, status, priority, order_date, due_date, total_amount, discount, net_amount, paid_amount, notes, internal_notes)`
 - `order_items(id, order_id→CASCADE, item_name, quantity, unit, unit_price, discount_pct, total_price, sort_order, ...)`
 - `order_status_log(id, order_id→CASCADE, old_status, new_status, notes, changed_by, changed_at)`
+- `schema_migrations(id, name UNIQUE, applied_at)` ← [تحسين 25]
 
 **حالات الطلب:** `pending → confirmed → in_progress → ready → delivered` (مع `cancelled`, `on_hold`)
 
@@ -509,7 +553,7 @@ fetch_customer_stats(conn, customer_id) -> dict
 
 insert_customer(conn, name, customer_type="individual", phone="",
                 phone2="", email="", address="", city="", notes="") -> int
-# يولد code تلقائياً: "CUS-0001"
+# [إصلاح 15] يولد code بـ GLOB بدل LIKE — آمن من تكرار CUS-0001
 
 update_customer(conn, customer_id, name, ..., is_active=1)
 delete_customer(conn, customer_id) -> bool   # يرفض لو في طلبات مرتبطة
@@ -538,12 +582,13 @@ insert_order(conn, customer_id, order_type="new", status="pending",
              total_amount=0, discount=0, paid_amount=0,
              notes="", internal_notes="", reference_order=None,
              created_by="system") -> int
-# يتحقق من وجود العميل وكونه نشطاً
-# يولد order_number: "ORD-YYYY-0001"
+# [تحسين 22] يتحقق من وجود العميل وكونه نشطاً
+# [إصلاح 16] _next_order_number بـ GLOB بدل LIKE
 
 update_order(conn, order_id, priority="normal", due_date=None,
              total_amount=0, discount=0, paid_amount=0, notes="",
              internal_notes="", customer_id=None, changed_by="system") -> bool
+# [C-04] customer_id اختياري — None = لا تغيير
 
 change_order_status(conn, order_id, new_status, notes="", changed_by="system") -> bool
 cancel_order(conn, order_id, reason="", changed_by="system") -> bool
@@ -551,7 +596,8 @@ reorder(conn, original_order_id, notes="", created_by="system") -> int
 # ينسخ الطلب القديم كطلب جديد من نوع "reorder"
 
 delete_order(conn, order_id) -> bool
-# يرفض لو status ليس pending/cancelled أو paid_amount > 0
+# [تحسين 21] يرفض لو paid_amount > 0
+# يرفض لو status ليس pending/cancelled
 
 # ── بنود الطلب ──
 fetch_order_items(conn, order_id) -> list
@@ -584,10 +630,13 @@ fetch_orders_summary(conn) -> dict
 - `designs(id, name, category_id, item_category_id, notes, preview_image, created_at, updated_at)`
 - `design_sizes(id, design_id→CASCADE, set_id, instance_id, width_field_id, height_field_id, dpi_field_id, xcf_path, notes, sort_order, UNIQUE(design_id,instance_id))`
 
+**ملاحظة:** `dpi_field_id` يُضاف تلقائياً عبر `_run_migrations()` على قواعد البيانات القديمة [إصلاح 7 + 12].
+
 ### `db/designs/designs_repo.py`
 
 ```python
 fetch_all_designs(conn, category_id=None, set_id=None, name_q="") -> list
+# category_id هنا = item_category_id
 fetch_design(conn, design_id) -> row
 insert_design(conn, name, item_category_id=None, notes="") -> int
 update_design(conn, design_id, name, item_category_id=None, notes="")
@@ -655,14 +704,14 @@ set_field_dep(conn, field_id, source_field_id, offset=0.0,
 remove_field_dep(conn, field_id)
 calc_auto_value(conn, field_id, link_id) -> float | None
 
-# ── تصنيفات (re-export) ──
+# ── تصنيفات (re-export من design_categories_repo) ──
 fetch_all_design_categories(conn) -> list
 insert_design_category(conn, name, color="#1565c0", parent_id=None, notes="") -> int
 update_design_category(conn, cat_id, name, color, parent_id=None, notes="")
 delete_design_category(conn, cat_id)
 build_category_tree(rows) -> list
 
-# ── instances (re-export) ──
+# ── instances (re-export من dimension_instances_repo) ──
 fetch_instances_for_set(conn, set_id) -> list
 fetch_instance(conn, instance_id) -> row
 insert_instance(conn, set_id, name="", notes="", sort_order=None) -> int
@@ -672,7 +721,19 @@ duplicate_instance(conn, instance_id, new_name) -> int | None
 fetch_instance_values(conn, instance_id) -> dict
 save_instance_values(conn, instance_id, set_id, values: dict)
 calc_instance_cross_auto(conn, field_id, instance_id) -> float | None
+
+# ── Legacy (من dimension_instances_repo) ──
+fetch_standalone_values(conn, set_id) -> dict
+save_standalone_value(conn, set_id, field_id, value_num=None, value_text=None)
+fetch_source_set_values(conn, source_set_id) -> dict
+calc_standalone_cross_auto(conn, field_id, current_set_id) -> float | None
+get_source_ref(conn, field_id, current_set_id) -> dict | None
 ```
+
+**ملاحظة [تحسين 46]:** الملف مقسَّم إلى 3 ملفات منفصلة:
+- `design_categories_repo.py` — تصنيفات مجموعات المقاسات
+- `dimension_sets_repo.py` — هذا الـ Facade + المجموعات + الحقول
+- `dimension_instances_repo.py` — Instances + قيمها
 
 ---
 
@@ -681,6 +742,7 @@ calc_instance_cross_auto(conn, field_id, instance_id) -> float | None
 ```python
 fetch_all_item_categories(conn) -> list
 fetch_all_item_categories_with_count(conn) -> list
+# [P-03] query واحدة تدمج عدد التصميمات (بدل query-ين)
 fetch_item_category(conn, cat_id) -> row
 fetch_item_category_descendants(conn, cat_id) -> list[int]
 insert_item_category(conn, name, color="#7c3aed", parent_id=None, notes="") -> int
@@ -688,6 +750,7 @@ update_item_category(conn, cat_id, name, color, parent_id=None, notes="")
 delete_item_category(conn, cat_id)
 build_item_category_tree(rows) -> list[dict]
 count_designs_per_category(conn) -> dict[int, int]
+# للتوافق مع الكود القديم — الكود الجديد يستخدم fetch_all_item_categories_with_count
 ```
 
 ---
@@ -702,6 +765,10 @@ count_designs_per_category(conn) -> dict[int, int]
 ### `db/costing/bom_scenarios_repo.py`
 
 ```python
+# ── BOM columns cache — [إصلاح 8] موحد مع items_repo ──
+invalidate_bom_cols_cache(conn=None)
+# استدعه بعد أي migration يضيف أعمدة لجدول bom
+
 # ── السيناريوهات ──
 fetch_scenarios(conn, item_id) -> list
 fetch_scenario(conn, scenario_id) -> row
@@ -716,8 +783,6 @@ clone_scenario(conn, scenario_id, new_name) -> int
 fetch_bom_for_scenario(conn, scenario_id) -> list
 replace_bom_for_scenario(conn, scenario_id, rows)
 # rows: [(child_type, child_id, qty, waste_pct, variant_id, machine_op_row_id), ...]
-
-invalidate_bom_cols_cache(conn=None)
 ```
 
 ---
@@ -731,6 +796,7 @@ fetch_machine(conn, machine_id) -> row
 insert_machine(conn, name, rate_per_hour, rate_per_unit, category_id=None) -> int
 update_machine(conn, machine_id, name, rate_per_hour, rate_per_unit, category_id=None)
 count_machine_ops(conn, machine_id) -> int
+# [تحسين 19] للتحقق قبل الحذف — CASCADE صامت على machine_ops
 delete_machine(conn, machine_id)  # CASCADE على machine_ops
 
 # ── عمليات العمالة ──
@@ -763,10 +829,11 @@ replace_op_rows(conn, op_id, rows: list[tuple])
 # rows: [(label, value, count), ...]
 
 calc_op_row_cost(conn, row_id) -> float
-# mode="time": (value/60) × rate_per_hour
-# mode="unit": value × rate_per_unit
+# mode="time": (value/60) × rate_per_hour / count
+# mode="unit": (value × rate_per_unit) / count
 
 calc_op_total_cost(conn, op_id) -> float
+# مجموع تكاليف كل الصفوف
 ```
 
 ---
@@ -795,14 +862,20 @@ calc_unit_cost_with_variant(item_row, variant_id, conn) -> float
 
 ```python
 fetch_all_pricing(conn, limit=500, offset=0) -> list
+# [تحسين 23b] يدعم pagination
+
 fetch_pricing_count(conn) -> int
+# [تحسين 23b] إجمالي المنتجات النهائية
+
 fetch_all_pricing_paginated(conn, limit=200, offset=0,
                             category_id=None, search=None,
                             only_priced=False) -> list
+# [تحسين 23b] pagination كاملة مع فلترة
+
 fetch_pricing(conn, item_id) -> row | None
 
 upsert_pricing(conn, item_id, margin, price)
-# يتحقق أن item_id نوعه "final"
+# [تحسين 23] يتحقق أن item_id نوعه "final"
 # Raises: ValueError لو غير موجود أو نوعه ليس final
 
 delete_pricing(conn, item_id)
@@ -824,6 +897,8 @@ replace_offer_items(conn, offer_id, items: list[tuple])
 # items: [(item_id, qty), ...]
 
 calc_offer_summary(conn, offer_id) -> dict
+# [تحسين 14] cost_cache — كل item_id يُحسب مرة واحدة
+# [P-02] central_conn مشترك لكل الحسابات — لا فتح/غلق متكرر
 # {offer_id, offer_name, discount, lines: [...], total_listed, sell_price,
 #  total_cost, profit}
 # كل line: {item_id, item_name, qty, unit_cost, unit_price,
@@ -842,12 +917,15 @@ get_central_connection() -> sqlite3.Connection
 get_connection(db="erp") -> ProtectedConnection
 # db: "erp" | "accounting" | "inventory" | "orders" | "designs"
 # ⚠️ يرمي RuntimeError لو لا توجد شركة نشطة
-# ⚠️ "costing" مُهمَل — استخدم "erp"
+# "costing" مُهمَل [إصلاح 10] → DeprecationWarning + يُحوَّل لـ "erp"
+
+# [T-03] get_costing_connection() محذوفة — ImportError واضح
+# بديلها: company_state.get_erp_conn() أو get_connection("erp")
 
 get_accounting_connection() -> ProtectedConnection
 get_inventory_connection() -> ProtectedConnection
 
-get_linked_connection(primary="inventory", attach=None) -> Connection
+get_linked_connection(primary="inventory", attach=None) -> sqlite3.Connection
 # connection مع ATTACH لـ DBs إضافية للـ JOIN
 ```
 
@@ -859,6 +937,7 @@ get_linked_connection(primary="inventory", attach=None) -> Connection
 decode_json(data_str: str) -> dict        # JSON → dict | {} عند الفشل
 encode_json(data: dict) -> str            # dict → JSON | "{}"
 decode_json_list(data_str: str) -> list   # JSON → list | []
+# [تحسين 13] مُستخدمة في categories_repo لـ template_fields
 encode_json_list(data: list) -> str       # list → JSON | "[]"
 ```
 
@@ -868,6 +947,8 @@ encode_json_list(data: list) -> str       # list → JSON | "[]"
 
 ```python
 SharedItemsBridge(company_id: int)
+# [إصلاح 33] يستخدم decode_json/encode_json من json_utils
+# [A-02] is_shared_id و extract_shared_id مُعادان تصديرهما من items_repo
 
 bridge.fetch_shared_items_for_type(shared_type) -> list
 bridge.fetch_items_by_type_with_shared(item_type) -> list
@@ -882,7 +963,7 @@ bridge.calc_shared_raw_unit_price(shared_item_id) -> float
 
 get_bridge() -> SharedItemsBridge | None
 
-# re-exports:
+# re-exports من items_repo [A-02]:
 is_shared_id(item_id) -> bool
 extract_shared_id(item_id) -> int | None
 ```
@@ -891,16 +972,22 @@ extract_shared_id(item_id) -> int | None
 
 ## ملاحظات مهمة
 
-**1. ترتيب الإنشاء:** `categories` يجب أن يُنشأ أولاً في schema.
+**1. ترتيب الإنشاء:** `categories` يجب أن يُنشأ أولاً في schema [إصلاح 4].
 
-**2. العناصر المشتركة:** IDs بصيغة `"shared:{n}"` (string) — تحقق دائماً بـ `is_shared_id()`.
+**2. العناصر المشتركة:** IDs بصيغة `"shared:{n}"` (string) — تحقق دائماً بـ `is_shared_id()` من `db.shared.items_repo` [A-02].
 
 **3. الـ connections:** لا تُغلق `ProtectedConnection` مباشرة — اتركها للـ `company_state`. فقط `get_central_connection()` تحتاج `.close()`.
 
-**4. BOM columns cache:** استدعي `invalidate_bom_cols_cache(conn)` بعد أي migration يضيف أعمدة لجدول bom.
+**4. BOM columns cache:** استدعِ `invalidate_bom_cols_cache(conn)` بعد أي migration يضيف أعمدة لجدول bom.
 
-**5. SQLite type affinity:** جدول `settings` يخزن كل القيم كـ TEXT — استخدم `float(get_setting(...))` عند الحاجة.
+**5. SQLite type affinity:** جدول `settings` يخزن كل القيم كـ TEXT — استخدم `float(get_setting(...))` عند الحاجة. [إصلاح 5]
 
-**6. الـ accounting.db:** تحقق من `_verify_conn_is_accounting()` قبل أي seed أو write لتجنب الكتابة على erp.db بالخطأ.
+**6. الـ accounting.db:** تحقق من `_verify_conn_is_accounting()` قبل أي seed أو write لتجنب الكتابة على erp.db بالخطأ. [إصلاح 9 + 11 + Q-01]
 
 **7. الـ WACC:** حساب `avg_cost` في المخزن تلقائي في `record_inventory_move()` — لا تحسبه يدوياً.
+
+**8. Thread Safety:** `CompanyState.set_active()` آمن للـ threads عبر `_invalidate_pending` Event [C-03]. استخدم `company_state.wait_for_invalidate()` من AppState قبل قراءة الـ cache.
+
+**9. Central Connection Cache:** `_get_central_conn_cached()` في items_repo يُقلّص فتح/غلق connections المتكرر. يُبطَل تلقائياً عند تغيير الشركة [تحسين 8].
+
+**10. Migration Framework (orders.db):** كل migration في `_MIGRATIONS` يجب أن يكون idempotent. الـ framework يُسجِّل في `schema_migrations` ويتخطى المُطبَّق [تحسين 25].
