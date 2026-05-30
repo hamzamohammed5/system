@@ -746,7 +746,7 @@ DataTableWidget(columns: list, stretch_col=-1, col_widths=None,
 # يفرق بين 3 حالات:
 #   total=0         → empty state "لا توجد بيانات"
 #   total>0,shown>0 → يعرض الجدول
-#   total>0,shown=0 → empty state "لا توجد نتائج" (icon=🔍)
+#   total>0,shown=0 → empty state "لا توجد نتائج" (icon=🔍, subtitle="جرب تغيير كلمة البحث أو الفلتر")
 
   .begin_fill()
   .insert_row() -> int
@@ -778,18 +778,19 @@ def _connect_bus(data=True, company=False, theme=False, lang=False)
 # guard يمنع double-connect (عبر _bus_connected flag)
 
 def _disconnect_bus()
-# يفصل كل الـ signals المرتبطة
+# يفصل كل الـ signals المرتبطة (data + company + theme + lang)
 # يُعيد ضبط _bus_connected = False
 # يمسح _cached_company_id = None
 
 # Data changed handlers:
 def _on_company_data_changed(company_id: int)
-# يتحقق من _cached_company_id (مقارنة int==int مباشرة — O(1))
+# [P-04] مقارنة مباشرة بـ _cached_company_id بدل استدعاء is_same_company()
 # المرة الأولى: يُضبط _cached_company_id من company_state
 # لو شركة مختلفة → تجاهل + تحديث الـ cache
 # لو نفس الشركة → _on_data_changed() + _refresh_guard
 def _on_data_changed_guarded()
 # يتجاهل لو _refresh_guard=True (يمنع data_changed المكرر)
+# يُسجّل debug log عند التخطي
 def _on_data_changed()            # Override
 
 # Company changed handler:
@@ -1729,6 +1730,41 @@ class MySection(BaseSection):
         self._list.item_selected.connect(self._detail.load_item)
 ```
 
+### إنشاء فورم CRUD سريع
+
+```python
+from ui.widgets.base.crud_form import BaseCrudForm
+from ui.widgets.panels.form_parts import FormGroup
+from ui.widgets.forms.inputs import RequiredLineEdit
+
+class MyForm(BaseCrudForm):
+    FORM_TITLE = "بيانات العنصر"
+
+    def _build_fields(self, group: FormGroup):
+        self.inp_name = RequiredLineEdit("الاسم...")
+        group.add_row("الاسم :", self.inp_name)
+
+    def _collect(self):
+        if not self.inp_name.validate():
+            return None
+        return {"name": self.inp_name.text_stripped()}
+
+    def _do_insert(self, data) -> int:
+        return insert_item(self.conn, data["name"])
+
+    def _do_update(self, item_id, data):
+        update_item(self.conn, item_id, data["name"])
+
+    def _do_load(self, item_id):
+        return fetch_item(self.conn, item_id)
+
+    def _fill_fields(self, data):
+        self.inp_name.setText(data.get("name", ""))
+
+    def _reset_fields(self):
+        self.inp_name.clear()
+```
+
 ### استخدام bus events
 
 ```python
@@ -1770,4 +1806,31 @@ emit_company_data_changed()
 # ❌ تجنّب — للتوافق القديم فقط
 from ui.events import bus
 bus.data_changed.emit()
+```
+
+### جدول مع دعم العناصر المشتركة
+
+```python
+from ui.widgets.shared.list_panel_with_shared import SharedItemsListPanel
+
+class RawMaterialsPanel(SharedItemsListPanel):
+    SHARED_TYPE      = "raw"
+    TABLE_COLS       = ["#", "الاسم", "السعر", "التصنيف"]
+    TABLE_TITLE      = "الخامات"
+    HAS_BULK_REPLACE = True
+
+    def _fetch_local_rows(self):
+        return fetch_items_by_type(self.conn, "raw")
+
+    def _fill_table_row(self, r, item):
+        self.table.setItem(r, 0, make_item(str(item["id"]), item["id"]))
+        self.table.setItem(r, 1, make_item(item["name"]))
+        self.table.setItem(r, 2, make_item(f"{item['price']:,.2f}"))
+        self.table.setItem(r, 3, make_item(item.get("category_name", "─")))
+
+    def _edit_item(self, item_id):
+        ...
+
+    def _delete_item(self, item_id, item_name):
+        ...
 ```
