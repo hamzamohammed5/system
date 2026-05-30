@@ -45,7 +45,7 @@ AR_STRINGS: dict[str, str] = {
     "open":              "فتح",
     "new":               "جديد",
     "all":               "الكل",
-    "clone":             "استنساخ",     # FIX: كان "نسخ" = نفس "copy" — clone يعني نسخة طبق الأصل
+    "clone":             "استنساخ",
     "selected":          "محدد",
 
     # ══════════════════════════════════════════════
@@ -222,7 +222,7 @@ AR_STRINGS: dict[str, str] = {
     "category_parent":       "تابع لـ",
     "category_color":        "اللون",
     "category_add":          "تصنيف جديد",
-    "category_new":          "الأبناء",    # FIX: كان "إضافة" — الصح "الأبناء" (يتطابق مع en "Children" وi18n.py الداخلي)
+    "category_new":          "الأبناء",
     "category_edit":         "تعديل",
     "category_delete":       "حذف",
     "category_select_first": "اختر تصنيفاً أولاً",
@@ -295,8 +295,8 @@ AR_STRINGS: dict[str, str] = {
     "product_name_placeholder": "اسم المنتج...",
     "saved_products":           "المنتجات المحفوظة",
     "no_products":              "لا توجد منتجات",
-    "enter_product_name":       "أدخل اسم المنتج أولاً",    # FIX: كان "ادخل اسم المنتج اولاً" — همزتان ناقصتان
-    "add_one_component":        "أضف مكوناً واحداً على الأقل",  # FIX: كان "اضف" — همزة ناقصة
+    "enter_product_name":       "أدخل اسم المنتج أولاً",
+    "add_one_component":        "أضف مكوناً واحداً على الأقل",
     "product_name":             "اسم المنتج",
     "add_component":            "مكون",
 
@@ -327,7 +327,7 @@ AR_STRINGS: dict[str, str] = {
     # ══════════════════════════════════════════════
     "scenario":                        "السيناريو",
     "add_scenario":                    "إضافة سيناريو",
-    "clone_scenario":                  "استنساخ السيناريو",   # FIX: كان "نسخ السيناريو" — يتوافق مع "clone" = "استنساخ"
+    "clone_scenario":                  "استنساخ السيناريو",
     "rename_scenario":                 "إعادة تسمية",
     "set_as_default":                  "تعيين كافتراضي",
     "new_scenario":                    "سيناريو جديد",
@@ -435,7 +435,7 @@ AR_STRINGS: dict[str, str] = {
     # التشغيل
     # ══════════════════════════════════════════════
     "machine_ops":       "عمليات التشغيل",
-    
+
     # ══════════════════════════════════════════════
     # المحاسبة — Accounting
     # ══════════════════════════════════════════════
@@ -467,7 +467,7 @@ AR_STRINGS: dict[str, str] = {
     "reverse_entry":            "عكس القيد",
     "draft":                    "مسودة",
     "posted":                   "مرحَّل",
- 
+
     # ══════════════════════════════════════════════
     # المخزون — Inventory
     # ══════════════════════════════════════════════
@@ -490,7 +490,7 @@ AR_STRINGS: dict[str, str] = {
     "record_inbound":           "تسجيل وارد",
     "record_outbound":          "تسجيل صادر",
     "movement_ref":             "مرجع الحركة",
- 
+
     # ══════════════════════════════════════════════
     # الطلبات — Orders
     # ══════════════════════════════════════════════
@@ -515,7 +515,6 @@ AR_STRINGS: dict[str, str] = {
     "change_status":            "تغيير الحالة",
     "no_orders":                "لا توجد طلبات",
     "no_customers":             "لا يوجد عملاء",
-    "order_date":               "تاريخ الطلب",
     "paid":                     "مدفوع",
     "unpaid":                   "غير مدفوع",
     "partial":                  "جزئي",
@@ -523,7 +522,7 @@ AR_STRINGS: dict[str, str] = {
     "unit_price":               "سعر الوحدة",
     "item_qty":                 "الكمية",
     "item_total":               "الإجمالي",
- 
+
     # ══════════════════════════════════════════════
     # التصميمات — Design
     # ══════════════════════════════════════════════
@@ -545,7 +544,7 @@ AR_STRINGS: dict[str, str] = {
     "file_not_found":           "الملف غير موجود",
     "source_set":               "مجموعة المصدر",
     "target_field":             "الحقل المستهدف",
- 
+
     # ══════════════════════════════════════════════
     # التسعير — Pricing
     # ══════════════════════════════════════════════
@@ -564,4 +563,47 @@ AR_STRINGS: dict[str, str] = {
     "min_price":                "الحد الأدنى للسعر",
     "suggested_price":          "السعر المقترح",
     "customer_price":           "سعر العميل",
+
+    # ══════════════════════════════════════════════
+    # أسماء تبويبات الـ Sections  [جديد]
+    # ══════════════════════════════════════════════
+
+    # Costing tabs
+    "raw_tab":                  "الخامات",
+    "labor_tab":                "العمالة",
+    "machine_tab":              "التشغيل",
+    "product_tab":              "المنتجات",
+    "categories_tab":           "التصنيفات",
+
+    # Accounting tabs
+    "accounts_tab":             "شجرة الحسابات",
+    "journal_tab":              "القيود المحاسبية",
+    "ledger_tab":               "دفتر الأستاذ",
+    "financial_tab":            "القوائم المالية",
+    "investors_tab":            "المستثمرون",
+
+    # Inventory tabs
+    "inventory_items":          "أصناف المخزون",
+    "inventory_items_tab":      "الأصناف",
+    "inventory_inbound_tab":    "الوارد",
+    "inventory_outbound_tab":   "الصادر",
+    "inventory_report_tab":     "التقرير",
+    "low_stock_alert":          "تنبيه مخزون منخفض",
+    "avg_unit_cost":            "متوسط سعر الوحدة",
+    "total_inbound_value":      "إجمالي قيمة الوارد",
+    "total_outbound_value":     "إجمالي قيمة الصادر",
+
+    # Orders tabs
+    "orders_tab":               "الطلبات",
+    "customers_tab":            "العملاء",
+    "dashboard_tab":            "لوحة التحكم",
+
+    # Design tabs
+    "designs_tab":              "التصميمات",
+    "dimension_sets_tab":       "مجموعات الأبعاد",
+    "design_categories_tab":    "تصنيفات التصميم",
+
+    # Pricing tabs
+    "pricing_tab":              "التسعير",
+    "offers_tab":               "العروض",
 }

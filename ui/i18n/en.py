@@ -370,7 +370,7 @@ EN_STRINGS: dict[str, str] = {
     "replacement":            "Replacement",
     "select_replacement":     "Select Replacement",
     "no_alternatives":        "No alternatives available",
-    "apply_uniform_qty":      "Apply Uniform Qty",    # FIX: كان "Apply Uniform Qty:" — الـ colon لا يكون في الـ translation string
+    "apply_uniform_qty":      "Apply Uniform Qty",
     "filter_by_category":     "Filter by Category",
     "select_all":             "All",
     "select_none":            "None",
@@ -560,4 +560,47 @@ EN_STRINGS: dict[str, str] = {
     "min_price":                "Minimum Price",
     "suggested_price":          "Suggested Price",
     "customer_price":           "Customer Price",
+
+    # ══════════════════════════════════════════════
+    # Section Tab Names  [new]
+    # ══════════════════════════════════════════════
+
+    # Costing tabs
+    "raw_tab":                  "Raw Materials",
+    "labor_tab":                "Labor",
+    "machine_tab":              "Machine Ops",
+    "product_tab":              "Products",
+    "categories_tab":           "Categories",
+
+    # Accounting tabs
+    "accounts_tab":             "Chart of Accounts",
+    "journal_tab":              "Journal Entries",
+    "ledger_tab":               "Ledger",
+    "financial_tab":            "Financial Statements",
+    "investors_tab":            "Investors",
+
+    # Inventory tabs
+    "inventory_items":          "Inventory Items",
+    "inventory_items_tab":      "Items",
+    "inventory_inbound_tab":    "Inbound",
+    "inventory_outbound_tab":   "Outbound",
+    "inventory_report_tab":     "Report",
+    "low_stock_alert":          "Low Stock Alert",
+    "avg_unit_cost":            "Avg. Unit Cost",
+    "total_inbound_value":      "Total Inbound Value",
+    "total_outbound_value":     "Total Outbound Value",
+
+    # Orders tabs
+    "orders_tab":               "Orders",
+    "customers_tab":            "Customers",
+    "dashboard_tab":            "Dashboard",
+
+    # Design tabs
+    "designs_tab":              "Designs",
+    "dimension_sets_tab":       "Dimension Sets",
+    "design_categories_tab":    "Design Categories",
+
+    # Pricing tabs
+    "pricing_tab":              "Pricing",
+    "offers_tab":               "Offers",
 }

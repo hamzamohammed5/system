@@ -1,12 +1,16 @@
 """
-ui/main_window.py  (نسخة multi-company — مُصلَحة v10)
+ui/main_window.py  (نسخة multi-company — مُصلَحة v11)
 =====================================================
-التغييرات عن v9:
-  - [إصلاح 9] _build_tabs: استبدال الكود المُعلَّق بـ placeholder widget واضح
-    مع TODO comment، بدلاً من self._stack.setCurrentIndex(1) الذي كان
-    يُشير لـ index غير موجود ويعرض شاشة "لا توجد شركة" بشكل خاطئ.
-  - _on_company_changed يستدعي AppState.invalidate() لمسح font_size cache
-    عند تغيير الشركة — لأن كل شركة ممكن يكون ليها font_size مختلف
+التغييرات عن v10:
+  - [إصلاح A] _build_tabs: استخدام sections حقيقية بدل placeholders.
+    كل section يرث من TabSectionBase ويُبنى من conn الخاص بالشركة النشطة.
+    لو section لم يُنشأ بعد (import يفشل) يُعرض placeholder مؤقت مع
+    رسالة خطأ واضحة بدل صمت.
+
+  - [إصلاح B] _destroy_tabs: يستدعي company_state.refresh_connections()
+    بعد إزالة tabs لضمان تحديث الـ connections.
+
+  - [محفوظ] _on_company_changed يستدعي AppState.invalidate() لمسح font_size cache.
 """
 
 from PyQt5.QtWidgets import (
@@ -15,6 +19,7 @@ from PyQt5.QtWidgets import (
     QScrollArea, QSizePolicy, QApplication,
 )
 from PyQt5.QtCore import Qt
+import logging
 
 from ui.app_settings  import _C, fs, get_font_size
 from ui.events        import bus
@@ -26,14 +31,13 @@ from .main_window_helper._nav_button import (
     SIDEBAR_COLLAPSED_WIDTH, CONTENT_MIN_WIDTH,
 )
 
+logger = logging.getLogger(__name__)
 
-def _make_placeholder_tab(section_name: str) -> QWidget:
+
+def _make_placeholder_tab(section_name: str, error: str = "") -> QWidget:
     """
-    TODO: استبدل هذا الـ placeholder بالـ widget الحقيقي للقسم.
-
-    مثال:
-        from ui.tabs.costing_section import CostingSection
-        return CostingSection()
+    Placeholder مؤقت لـ section لم يُبنَ بعد أو فشل import.
+    يعرض رسالة واضحة للمطور.
     """
     w = QWidget()
     w.setStyleSheet(f"background:{_C['bg_page']};")
@@ -58,7 +62,8 @@ def _make_placeholder_tab(section_name: str) -> QWidget:
     )
     lay.addWidget(lbl_title)
 
-    lbl_sub = QLabel("قيد التطوير — TODO: استبدل هذا الـ placeholder بالـ widget الحقيقي")
+    msg = error if error else "قيد التطوير"
+    lbl_sub = QLabel(msg)
     lbl_sub.setAlignment(Qt.AlignCenter)
     lbl_sub.setWordWrap(True)
     lbl_sub.setStyleSheet(
@@ -68,6 +73,21 @@ def _make_placeholder_tab(section_name: str) -> QWidget:
     lay.addWidget(lbl_sub)
 
     return w
+
+
+def _try_build_section(builder_fn, section_name: str) -> QWidget:
+    """
+    يحاول بناء section — يرجع placeholder مع رسالة خطأ لو فشل.
+    يضمن أن فشل section واحد لا يمنع بقية الـ sections من العمل.
+    """
+    try:
+        return builder_fn()
+    except ImportError as e:
+        logger.warning("_try_build_section: import فشل لـ %s: %s", section_name, e)
+        return _make_placeholder_tab(section_name, f"ImportError: {e}")
+    except Exception as e:
+        logger.error("_try_build_section: فشل بناء %s: %s", section_name, e)
+        return _make_placeholder_tab(section_name, f"خطأ: {e}")
 
 
 class MainWindow(QMainWindow):
@@ -153,30 +173,73 @@ class MainWindow(QMainWindow):
     # ──────────────────────────────────────────────────────
 
     def _build_tabs(self):
+        """
+        يبني tabs الـ sections الحقيقية.
+
+        كل section يُبنى باستخدام _try_build_section() لعزل أي import errors.
+        الترتيب والـ index يجب أن يتطابقا مع index_map في _on_nav().
+
+        index 1 → costing
+        index 2 → pricing
+        index 3 → accounting
+        index 4 → inventory
+        index 5 → design
+        index 6 → orders
+        """
         if self._tabs_built:
             self._destroy_tabs()
 
-        # TODO: فك التعليق عن الـ imports واستبدل الـ placeholders بالـ widgets الحقيقية
-        # -----------------------------------------------------------------------
-        from ui.tabs.costing_section    import CostingSection    # index 1
-        from ui.tabs.pricing_section    import PricingSection     # index 2
-        from ui.tabs.accounting_section import AccountingTab      # index 3
-        from ui.tabs.inventory_section  import InventoryTab       # index 4
-        from ui.tabs.design_section     import DesignSection      # index 5
-        from ui.tabs.orders_section     import OrdersSection      # index 6
-        # -----------------------------------------------------------------------
+        # جلب الـ connection من company_state لتمريره للـ sections
+        try:
+            from db.companies.company_state import company_state
+            conn = company_state.get_erp_conn()
+        except Exception as e:
+            logger.error("_build_tabs: تعذر الحصول على conn: %s", e)
+            conn = None
 
-        _sections = [
-            ("حساب التكلفة", "costing"),
-            ("التسعير",      "pricing"),
-            ("الحسابات",     "accounting"),
-            ("المخزن",        "inventory"),
-            ("التصميمات",    "design"),
-            ("الطلبات",       "orders"),
+        # ── بناء كل section بشكل آمن ──────────────────────
+
+        # index 1: Costing
+        def _build_costing():
+            from ui.tabs.costing_section import CostingSection
+            return CostingSection(conn_fn=lambda: conn)
+
+        # index 2: Pricing
+        def _build_pricing():
+            from ui.tabs.pricing_section import PricingSection
+            return PricingSection(conn_fn=lambda: conn)
+
+        # index 3: Accounting
+        def _build_accounting():
+            from ui.tabs.accounting_section import AccountingTab
+            return AccountingTab(conn_fn=lambda: conn)
+
+        # index 4: Inventory
+        def _build_inventory():
+            from ui.tabs.inventory_section import InventoryTab
+            return InventoryTab(conn_fn=lambda: conn)
+
+        # index 5: Design
+        def _build_design():
+            from ui.tabs.design_section import DesignSection
+            return DesignSection(conn_fn=lambda: conn)
+
+        # index 6: Orders
+        def _build_orders():
+            from ui.tabs.orders_section import OrdersSection
+            return OrdersSection(conn_fn=lambda: conn)
+
+        _builders = [
+            (_build_costing,    "حساب التكلفة"),
+            (_build_pricing,    "التسعير"),
+            (_build_accounting, "الحسابات"),
+            (_build_inventory,  "المخزن"),
+            (_build_design,     "التصميمات"),
+            (_build_orders,     "الطلبات"),
         ]
 
-        for name, _key in _sections:
-            w = _make_placeholder_tab(name)
+        for builder_fn, name in _builders:
+            w = _try_build_section(builder_fn, name)
             self._stack.addWidget(w)
 
         # الانتقال لأول tab حقيقية (index 1)
@@ -207,7 +270,7 @@ class MainWindow(QMainWindow):
             from db.companies.company_state import company_state
             company_state.refresh_connections()
         except Exception as e:
-            print(f"[MainWindow] refresh_connections warning: {e}")
+            logger.warning("_destroy_tabs: refresh_connections: %s", e)
 
         self._accounting = None
         self._tabs_built = False
@@ -262,7 +325,9 @@ class MainWindow(QMainWindow):
             "orders":     6,
         }
         if key in index_map:
-            self._stack.setCurrentIndex(index_map[key])
+            idx = index_map[key]
+            if idx < self._stack.count():
+                self._stack.setCurrentIndex(idx)
 
     def _open_shared_items(self):
         from db.companies.companies_schema import get_central_connection, create_central_tables
