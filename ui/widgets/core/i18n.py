@@ -1,202 +1,189 @@
 """
-ui/widgets/core/i18n.py
-================================
-دالة tr() الموحدة للترجمة في الـ widgets.
+ui/i18n.py
+===========
+نظام الترجمة للتطبيق — عربي وإنجليزي.
 
 الاستخدام:
-    from ui.widgets.core.i18n import tr
+    from ui.i18n import tr, i18n_manager
 
-    btn = make_btn(tr("save"), "primary")
-    lbl.setText(tr("name"))
-    msg = tr("delete_confirm_msg", name=item_name)
+    text = tr("save")
+    text = tr("delete_confirm_msg", name="X")
 
-    # النص العربي المباشر كـ fallback:
-    btn = make_btn(tr("إضافة", fallback="إضافة"), "primary")
+    i18n_manager.set_language("en")
+    i18n_manager.language_changed.connect(my_fn)
 
-لو i18n غير مُفعّل أو حدث خطأ → يرجع النص الأصلي (fallback آمن).
-
-ملاحظة:
-    tr() تقبل نوعين من الـ keys:
-    1. key قصير مثل "save" أو "delete" → يبحث في i18n_manager
-    2. نص عربي مباشر مثل "إضافة" → يُستخدم كـ fallback لو مفيش ترجمة
-       (للتوافق مع الكود القديم فقط — الكود الجديد يستخدم المفاتيح مباشرة)
+مصدر الترجمات:
+    ui/i18n/ar.py  →  AR_STRINGS  (العربية)
+    ui/i18n/en.py  →  EN_STRINGS  (الإنجليزية)
+    هما المصدر الوحيد — لا يوجد قاموس داخلي مكرر هنا.
 """
 
 from __future__ import annotations
 
+from typing import Dict
+from PyQt5.QtCore import QObject, pyqtSignal, Qt
 
-# ── الـ key map: نص عربي مباشر → translation key ─────────────────────────
-# يسمح بكتابة tr("إضافة") بدل tr("add") في الكود القديم
-# لا تضيف مفاتيح جديدة هنا — الكود الجديد يستخدم المفاتيح مباشرة
-_AR_TO_KEY: dict[str, str] = {
-    # أزرار وإجراءات
-    "إضافة":            "add",
-    "حفظ":              "save",
-    "حفظ التعديل":      "save_edit",
-    "تعديل":            "edit",
-    "حذف":              "delete",
-    "إلغاء":            "cancel",
-    "تأكيد":            "confirm",
-    "إغلاق":            "close",
-    "بحث":              "search",
-    "إعادة تعيين":      "reset",
-    "تحديث":            "refresh",
-    "تصدير":            "export",
-    "استيراد":          "import",
-    "طباعة":            "print",
-    "رجوع":             "back",
-    "التالي":           "next",
-    "السابق":           "previous",
-    "نعم":              "yes",
-    "لا":               "no",
-    "حسناً":            "ok",
-    "تطبيق":            "apply",
-    "مسح":              "clear",
-    "جديد":             "new",
-    "استنساخ":          "clone",   # FIX: كان "نسخ" — يتعارض مع "copy". clone = استنساخ
-    # حالات فارغة
-    "لا توجد بيانات":           "no_data",
-    "لا توجد نتائج":            "no_results",
-    "اختر عنصراً أولاً":        "select_item_first",
-    # تأكيد
-    "تأكيد الحذف":              "confirm_delete",
-    "تأكيد الحفظ":              "confirm_save",
-    # نجاح/خطأ
-    "تم الإضافة بنجاح":         "success_add",
-    "تم الحفظ بنجاح":           "success_save",
-    "تم الحذف بنجاح":           "success_delete",
-    "خطأ في تحميل البيانات":    "error_load",
-    "خطأ في الحفظ":             "error_save",
-    "خطأ في الحذف":             "error_delete",
-    "تنبيه":                    "warning",
-    "خطأ":                      "error",
-    "معلومة":                   "info",
-    # حقول
-    "الاسم":            "name",
-    "الكود":            "code",
-    "الوصف":            "description",
-    "ملاحظات":          "notes",
-    "التاريخ":          "date",
-    "المبلغ":           "amount",
-    "السعر":            "price",
-    "الكمية":           "quantity",
-    "الوحدة":           "unit",
-    "التصنيف":          "category",
-    "الحالة":           "status",
-    "النوع":            "type",
-    "الإجمالي":         "total",
-    # محاسبة
-    "مدين":             "debit",
-    "دائن":             "credit",
-    "الرصيد":           "balance",
-    # فلاتر
-    "اليوم":            "today",
-    "الشهر":            "this_month",
-    "العام":            "this_year",
+
+# ══════════════════════════════════════════════════════════
+# قواميس اللغات — تُملأ من الملفات الخارجية فقط
+# ══════════════════════════════════════════════════════════
+
+_TRANSLATIONS: Dict[str, Dict[str, str]] = {
+    "ar": {},
+    "en": {},
 }
 
-# ── رسائل بـ format placeholders ──────────────────────────────────────────
-# للتوافق مع الكود القديم الذي يمرر النص العربي مع {} مباشرة
-_FORMAT_KEYS: dict[str, str] = {
-    "هل تريد حذف «{name}»؟":       "delete_confirm_msg",
-    "تأكيد حفظ «{name}»؟":          "save_confirm_msg",
-    "أدخل {label}":                  "enter_field",
-    "اختر {label}":                  "select_field",
-    "{label} يجب أن يكون أكبر من صفر": "field_positive",
-    "أدخل {label} أكبر من صفر":      "field_positive_enter",
+_LANGUAGE_DIRECTION: Dict[str, str] = {
+    "ar": "rtl",
+    "en": "ltr",
+}
+
+_LANGUAGE_DISPLAY_NAMES: Dict[str, str] = {
+    "ar": "العربية",
+    "en": "English",
 }
 
 
-def tr(text: str, fallback: str = "", **kwargs) -> str:
+def _load_translations():
     """
-    يترجم النص للغة النشطة حالياً.
-
-    Parameters
-    ----------
-    text : str
-        إما translation key (مثل "save") أو نص عربي مباشر (مثل "حفظ").
-    fallback : str
-        النص الافتراضي لو لم تُوجد ترجمة. لو فارغ → يُستخدم text.
-    **kwargs :
-        قيم لتنسيق النص بعد الترجمة.
-        مثال: tr("delete_confirm_msg", name="المنتج")
-
-    Returns
-    -------
-    str
-        النص المترجم، أو النص الأصلي لو الترجمة غير متاحة.
-
-    أمثلة
-    -----
-        tr("save")                            # "Save" بالإنجليزية
-        tr("حفظ")                             # "Save" بالإنجليزية (auto-map)
-        tr("delete_confirm_msg", name="X")    # "Delete «X»?"
-        tr("أدخل {label}", label="الاسم")    # "Enter الاسم"
+    يحمّل الترجمات من ui/i18n/ar.py و ui/i18n/en.py.
+    يُستدعى تلقائياً عند استيراد هذا الملف.
     """
-    result = _translate(text, fallback)
-
-    if kwargs:
-        try:
-            result = result.format(**kwargs)
-        except (KeyError, ValueError):
-            # لو فشل الـ format على المترجم، جرب على النص الأصلي
-            try:
-                result = (fallback or text).format(**kwargs)
-            except Exception:
-                pass
-
-    return result
-
-
-def _translate(text: str, fallback: str = "") -> str:
-    """
-    البحث عن الترجمة بالترتيب:
-    1. النص كـ key مباشر في i18n_manager
-    2. النص كـ Arabic text → map إلى key عبر _AR_TO_KEY
-    3. البحث في _FORMAT_KEYS (للنصوص العربية مع format placeholders)
-    4. Fallback
-    """
-    _fb = fallback or text
-
     try:
-        from ui.i18n import i18n_manager
-
-        # لو اللغة عربية → أعد النص العربي مباشرة
-        if i18n_manager.language == "ar":
-            return _fb
-
-        # 1. النص كـ key مباشر (مثل "save", "delete")
-        translated = i18n_manager.translate(text)
-        if translated and translated != text:
-            return translated
-
-        # 2. النص العربي → map إلى key
-        key = _AR_TO_KEY.get(text)
-        if key:
-            translated = i18n_manager.translate(key)
-            if translated and translated != key:
-                return translated
-
-        # 3. البحث في _FORMAT_KEYS (بالنص بدون format)
-        format_key = _FORMAT_KEYS.get(text)
-        if format_key:
-            translated = i18n_manager.translate(format_key)
-            if translated and translated != format_key:
-                return translated
-
+        from ...i18n.ar import AR_STRINGS
+        _TRANSLATIONS["ar"].update(AR_STRINGS)
     except Exception:
         pass
 
-    return _fb
+    try:
+        from ...i18n.en import EN_STRINGS
+        _TRANSLATIONS["en"].update(EN_STRINGS)
+    except Exception:
+        pass
 
 
-def tr_plural(singular: str, plural: str, count: int, **kwargs) -> str:
+_load_translations()
+
+
+# ══════════════════════════════════════════════════════════
+# I18nManager
+# ══════════════════════════════════════════════════════════
+
+class I18nManager(QObject):
     """
-    يختار بين المفرد والجمع حسب العدد.
+    Singleton يدير لغة التطبيق.
+
+    الاستخدام:
+        from ui.i18n import i18n_manager, tr
+
+        i18n_manager.set_language("en")
+        text = tr("save")   # "Save"
+    """
+
+    language_changed = pyqtSignal(str)
+
+    def __init__(self):
+        super().__init__()
+        self._language: str = "ar"
+
+    @property
+    def language(self) -> str:
+        return self._language
+
+    @property
+    def is_rtl(self) -> bool:
+        return _LANGUAGE_DIRECTION.get(self._language, "rtl") == "rtl"
+
+    @property
+    def qt_direction(self) -> Qt.LayoutDirection:
+        return Qt.RightToLeft if self.is_rtl else Qt.LeftToRight
+
+    def set_language(self, lang: str, save: bool = True):
+        if lang not in _TRANSLATIONS:
+            lang = "ar"
+        if lang == self._language:
+            return
+        self._language = lang
+        self._apply_direction()
+        if save:
+            self._save_to_db()
+        self.language_changed.emit(lang)
+
+    def translate(self, key: str, lang: str = None, **kwargs) -> str:
+        target = lang or self._language
+        text = _TRANSLATIONS.get(target, {}).get(key)
+        if text is None:
+            # fallback للعربية
+            text = _TRANSLATIONS["ar"].get(key, key)
+        if kwargs:
+            try:
+                text = text.format(**kwargs)
+            except (KeyError, ValueError):
+                pass
+        return text
+
+    def load_from_db(self):
+        try:
+            from db.shared.connection import get_connection
+            from db.shared.settings_repo import get_setting
+            conn = get_connection()
+            lang = get_setting(conn, "ui_language", "ar")
+            if lang in _TRANSLATIONS:
+                self._language = lang
+            self._apply_direction()
+        except Exception:
+            pass
+
+    def get_available_languages(self) -> list:
+        return [
+            {
+                "code":   code,
+                "name":   _LANGUAGE_DISPLAY_NAMES.get(code, code),
+                "active": code == self._language,
+                "is_rtl": _LANGUAGE_DIRECTION.get(code, "ltr") == "rtl",
+            }
+            for code in _TRANSLATIONS
+        ]
+
+    def add_translations(self, lang_code: str, translations: Dict[str, str]):
+        """إضافة ترجمات جديدة أو تحديث موجودة برمجياً."""
+        if lang_code not in _TRANSLATIONS:
+            _TRANSLATIONS[lang_code] = {}
+        _TRANSLATIONS[lang_code].update(translations)
+
+    # ── Internal ──────────────────────────────────────────
+
+    def _apply_direction(self):
+        try:
+            from PyQt5.QtWidgets import QApplication
+            app = QApplication.instance()
+            if app:
+                app.setLayoutDirection(self.qt_direction)
+        except Exception:
+            pass
+
+    def _save_to_db(self):
+        try:
+            from db.shared.connection import get_connection
+            from db.shared.settings_repo import set_setting
+            conn = get_connection()
+            set_setting(conn, "ui_language", self._language)
+        except Exception:
+            pass
+
+
+# ── Singletons ────────────────────────────────────────────
+i18n_manager = I18nManager()
+
+
+def tr(key: str, lang: str = None, **kwargs) -> str:
+    """
+    دالة الترجمة الرئيسية.
 
     مثال:
-        tr_plural("{count} عنصر", "{count} عناصر", 5, count=5)
-        # "5 عناصر" (أو "5 items" بالإنجليزية)
+        from ui.i18n import tr
+
+        btn.setText(tr("save"))
+        lbl.setText(tr("delete_confirm_msg", name="المنتج"))
     """
-    text = singular if count == 1 else plural
-    return tr(text, count=count, **kwargs)
+    return i18n_manager.translate(key, lang, **kwargs)
