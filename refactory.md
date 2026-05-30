@@ -48,23 +48,6 @@ def _live_conn(self):
 
 ---
 
-## 2. ملف `ui/widgets/core/__init__.py` — ينقصنا
-
-الكود في عدة ملفات يستدعي:
-```python
-from ..core import get_font_size
-```
-هذا يعني `ui/widgets/core/__init__.py` يجب أن يوجد.
-
-**الملف المطلوب:**
-```python
-# ui/widgets/core/__init__.py
-from ui.app_settings import get_font_size
-
-__all__ = ["get_font_size"]
-```
-
----
 
 ## 3. تحليل كل tab وما يحتاجه
 
@@ -331,29 +314,6 @@ from ui.widgets.base.section import BaseSection
 
 ### المرحلة 1: الأساس (أولوية عالية)
 
-#### 1-A: إنشاء `ui/widgets/core/__init__.py`
-```python
-from ui.app_settings import get_font_size
-__all__ = ["get_font_size"]
-```
-
-#### 1-B: إصلاح `list_panel_with_shared.py`
-- حذف override `_live_conn`
-- التأكد من صحة الـ inheritance chain
-
-#### 1-C: إنشاء `services/inventory/inventory_service.py`
-الـ inventory لا يملك service layer — يحتاج إنشاء:
-```python
-class InventoryService:
-    def __init__(self, conn): ...
-    def get_current_stock(self, item_id): ...
-    def record_inbound(self, ...): ...
-    def record_outbound(self, ...): ...
-    def get_movements(self, filters): ...
-    def get_report(self, date_from, date_to): ...
-```
-
----
 
 ### المرحلة 2: توحيد Tabs (أولوية متوسطة)
 
@@ -504,46 +464,6 @@ from ui.tabs.pricing_section    import PricingSection
 
 ---
 
-## 6. ملف `ui/widgets/core/__init__.py` — أولوية فورية
-
-هذا الملف ضروري لأن عدة ملفات تستدعيه:
-
-```python
-# المستدعيون:
-from ..core import get_font_size          # في label.py, headers.py, etc.
-from ..core import get_font_size          # في form_parts.py
-```
-
-**الملف المطلوب** (بسيط جداً):
-```python
-"""ui/widgets/core/__init__.py"""
-from ui.app_settings import get_font_size
-
-__all__ = ["get_font_size"]
-```
-
----
-
-## 7. `services/inventory/inventory_service.py` — ينقصنا
-
-**لا يوجد service للمخزون رغم وجود repo كامل في `db/inventory/inventory_repo.py`.**
-
-```python
-"""services/inventory/inventory_service.py"""
-class InventoryService:
-    def __init__(self, conn):
-        self.conn = conn
-
-    def get_items(self, filters=None) -> list[dict]: ...
-    def get_item(self, item_id: int) -> dict | None: ...
-    def record_inbound(self, item_id, qty, date, ref, notes) -> int: ...
-    def record_outbound(self, item_id, qty, date, ref, notes) -> int: ...
-    def get_movements(self, item_id=None, date_from=None, date_to=None) -> list[dict]: ...
-    def get_current_stock(self, item_id: int) -> float: ...
-    def get_report(self, date_from, date_to) -> list[dict]: ...
-```
-
----
 
 ## 8. ترتيب التنفيذ المقترح
 
