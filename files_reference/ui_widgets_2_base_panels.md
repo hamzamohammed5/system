@@ -74,15 +74,17 @@ _sort_key(col, row)               # يُستدعى فقط لو SORTABLE=True
 
 ```python
 def _on_theme_changed(theme_name: str):
-    # يُعيد تطبيق background على الـ widget الرئيسي
+    # يُعيد تطبيق background على الـ widget الرئيسي (من _C['bg_input'])
     # يُعيد تطبيق stylesheet على _empty_state
     # يُعيد بناء styles الـ pagination bar والـ status bar
     # يستدعي _rebuild_pagination_styles() + _rebuild_status_style()
+    # ⚠️ عند override: استدعي super()._on_theme_changed(theme_name) أولاً
 
 def _on_language_changed(lang_code: str):
     # يُحدّث placeholder البحث عبر _header.search_bar.set_placeholder()
     # يُحدّث نص empty state عبر _empty_state.set_title(_tr_safe(EMPTY_TITLE))
     # يُحدّث نصوص أزرار الـ pagination
+    # ⚠️ عند override: استدعي super()._on_language_changed(lang_code) أولاً
 ```
 
 **API:**
@@ -165,9 +167,11 @@ _on_data_changed()                 # افتراضياً: load_item(self._item_id
 _on_theme_changed(theme_name: str)
 # يُعيد تطبيق bg_page على الـ panel + scroll area + inner widgets
 # يُعيد تطبيق scroll_style() على الـ scroll area
+# ⚠️ عند override: استدعي super()._on_theme_changed(theme_name) أولاً
 
 _on_language_changed(lang_code: str)
 # يُحدّث نص _empty عبر _empty.set_title(_tr_safe(EMPTY_TITLE))
+# ⚠️ عند override: استدعي super()._on_language_changed(lang_code) أولاً
 ```
 
 **ملاحظة (theme/lang):** عند `CONNECT_BUS=True` يشترك تلقائياً في `theme_changed` و `language_changed` إضافةً لـ `data_changed`.
@@ -243,10 +247,11 @@ section.form_panel -> QWidget | None   # [T-05]
 **مثال:**
 ```python
 from ui.widgets.base.section import BaseSection
+from ui.widgets.core.i18n import tr
 
 class MySection(BaseSection):
-    LIST_MIN_W   = 300
-    CONNECT_BUS  = True
+    LIST_MIN_W    = 300
+    CONNECT_BUS   = True
     FORM_POSITION = "bottom"   # فورم أسفل القائمة
 
     def _create_list(self):
@@ -300,10 +305,13 @@ section.current_tab -> QWidget | None
 
 **مثال:**
 ```python
+from ui.widgets.base.tab_section import TabSectionBase
+from ui.widgets.core.i18n import tr
+
 class RawTab(TabSectionBase):
     def _build_tabs(self, tabs: QTabWidget):
-        tabs.addTab(RawSection(self.conn),        tr("raw_tab"))
-        tabs.addTab(CategoryManager(self.conn),   tr("categories_tab"))
+        tabs.addTab(RawSection(self.conn),      tr("raw_tab"))
+        tabs.addTab(CategoryManager(self.conn), tr("categories_tab"))
 ```
 
 ---

@@ -28,8 +28,8 @@ def _connect_bus(data=True, company=False, theme=False, lang=False)
 # data=True    → يربط company_data_changed (مع _on_company_data_changed)
 #              + data_changed (مع _on_data_changed_guarded)
 # company=True → يربط company_data_changed لـ _on_company_changed (بدون فلتر شركة)
-# theme=True   → يربط theme_changed لـ _on_theme_changed
-# lang=True    → يربط language_changed لـ _on_language_changed
+# theme=True   → يربط bus.theme_changed لـ _on_theme_changed
+# lang=True    → يربط bus.language_changed لـ _on_language_changed
 # [تحسين 39] guard يمنع double-connect (عبر _bus_connected flag)
 # [P-04] يُهيّئ _cached_company_id = None عند الاشتراك
 
@@ -63,6 +63,7 @@ def _on_company_changed(company_id: int)
 def _on_theme_changed(theme_name: str)
 # Override — يُعيد تطبيق الـ styles عند تغيير الثيم
 # يُستدعى فقط لو _connect_bus(theme=True)
+# عند استدعائه، _C تكون مُحدَّثة بالفعل من apply_theme()
 
 def _on_language_changed(lang_code: str)
 # Override — يُحدّث النصوص بـ tr() عند تغيير اللغة

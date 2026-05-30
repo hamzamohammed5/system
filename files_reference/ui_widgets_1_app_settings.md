@@ -30,7 +30,32 @@
 - `WINDOW_DEFAULT_W = SIDEBAR_EXPANDED_WIDTH + CONTENT_MIN_WIDTH`
 
 **`_C`** — dict ألوان التطبيق الحالية (يتغير مع الثيم).
-المفاتيح: `bg_page, bg_surface, bg_surface_2, bg_hover, bg_active, bg_input, border, border_med, border_focus, border_strong, text_primary, text_sec, text_muted, text_disabled, accent, accent_hover, accent_light, accent_mid, accent_text, sidebar_bg, sidebar_text, sidebar_muted, sidebar_hover, sidebar_active, sidebar_border, danger, danger_bg, danger_border, success, success_bg, success_border, warning, warning_bg, warning_border, info, info_bg, info_border, tab_active, tab_indicator, purple, purple_bg, purple_border, orange, orange_bg, orange_border`
+
+المفاتيح الكاملة:
+```python
+# Backgrounds
+"bg_page", "bg_surface", "bg_surface_2", "bg_hover", "bg_active", "bg_input"
+# Borders
+"border", "border_med", "border_focus", "border_strong"
+# Text
+"text_primary", "text_sec", "text_muted", "text_disabled"
+# Accent
+"accent", "accent_hover", "accent_light", "accent_mid", "accent_text"
+# Sidebar
+"sidebar_bg", "sidebar_text", "sidebar_muted", "sidebar_hover",
+"sidebar_active", "sidebar_border"
+# States
+"danger", "danger_bg", "danger_border"
+"success", "success_bg", "success_border"
+"warning", "warning_bg", "warning_border"
+"info", "info_bg", "info_border"
+# Tabs
+"tab_active", "tab_indicator"
+# Purple — للـ machine_op rows
+"purple", "purple_bg", "purple_border"
+# Orange — للـ filters والـ warnings الثانوية
+"orange", "orange_bg", "orange_border"
+```
 
 ```python
 get_font_size() -> int
@@ -54,9 +79,12 @@ apply_theme(theme_colors: dict, app: QApplication = None)
 # يمسح كل الـ caches (stylesheet + button)
 # يُطبّق stylesheet الجديد على الـ app فوراً
 # يُستدعى من ThemeManager.set_theme() — لا تستدعه مباشرة من الـ UI
+# مثال:
+#   apply_theme({"accent": "#5B8DB8", "bg_page": "#0F0F0F", ...})
 
-get_theme_color(key, fallback="#000000") -> str
+get_theme_color(key: str, fallback: str = "#000000") -> str
 # يرجع لون من _C بأمان مع fallback
+# مثال: color = get_theme_color("accent", "#1565c0")
 
 invalidate_stylesheet_cache()
 # يمسح _ss_cache + يُعيد حساب _current_theme_hash
@@ -133,7 +161,7 @@ bus.data_changed.emit()
 theme_manager.current_theme -> str  # "light" | "dark"
 theme_manager.is_dark -> bool
 
-theme_manager.set_theme(theme_name, save=True)
+theme_manager.set_theme(theme_name: str, save: bool = True)
 # يُحدّث _current_theme
 # يستدعي apply_theme() من app_settings (يُحدّث _C + يمسح cache + يُطبّق stylesheet)
 # يُطلق bus.theme_changed تلقائياً بعد التطبيق
@@ -147,7 +175,7 @@ theme_manager.get_available_themes() -> list[{key, name, active}]
 # ثوابت الثيمات:
 # THEMES: {"light": _LIGHT_THEME, "dark": _DARK_THEME}
 # THEME_DISPLAY_NAMES: {"light": "فاتح", "dark": "داكن"}
-# كل ثيم dict يحتوي على نفس مفاتيح _C في app_settings
+# كل ثيم dict يحتوي على نفس مفاتيح _C في app_settings (شامل purple/orange)
 ```
 
 **تدفق تغيير الثيم:**
@@ -158,6 +186,13 @@ SettingsDialog._save()
     → bus.theme_changed.emit("dark")
       → كل widget مشترك في _on_theme_changed يُعيد تطبيق styles
 ```
+
+**الثيمات المتاحة:**
+
+| الثيم | الوصف |
+|-------|-------|
+| `"light"` | Warm Neutral — خلفية بيضاء دافئة (الافتراضي) |
+| `"dark"` | خلفية داكنة للاستخدام الليلي |
 
 ---
 
@@ -173,15 +208,20 @@ from ui.widgets.core.i18n import tr, i18n_manager
 i18n_manager.language -> str          # "ar" | "en"
 i18n_manager.is_rtl -> bool
 i18n_manager.qt_direction -> Qt.LayoutDirection
-i18n_manager.set_language(lang, save=True)
-i18n_manager.translate(key, lang=None, **kwargs) -> str
+i18n_manager.set_language(lang: str, save: bool = True)
+# يُحدّث _language + يُطبّق direction + يحفظ في DB + يُطلق language_changed
+i18n_manager.translate(key: str, lang=None, **kwargs) -> str
+# fallback للعربية لو المفتاح ناقص في اللغة المطلوبة
 i18n_manager.load_from_db()
+# يحمّل اللغة المحفوظة + يُطبّق الاتجاه — يُستدعى عند بدء التطبيق
 i18n_manager.get_available_languages() -> list[{code, name, active, is_rtl}]
-i18n_manager.add_translations(lang_code, translations: dict)
+i18n_manager.add_translations(lang_code: str, translations: dict)
+# يضيف/يحدث ترجمات برمجياً بدون تعديل الملفات
 
 def tr(key: str, lang=None, **kwargs) -> str
+# دالة الترجمة الرئيسية — تُرجع المفتاح نفسه لو غير موجود (fallback صامت)
 # مثال: tr("save")                           → "حفظ" | "Save"
-# مثال: tr("delete_confirm_msg", name="X")   → "هل تريد حذف «X»؟" | "Delete «X»?"
+# مثال: tr("delete_confirm_msg", name="X")   → "هل تريد حذف «X»؟"
 # مثال: tr("showing_of", shown=5, total=100) → "5 / 100"
 ```
 
