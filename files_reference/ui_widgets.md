@@ -1072,7 +1072,7 @@ SearchableCombo()
 # Signals: item_selected(data)
   .populate(items: list)
   # items: [(display_text, user_data, is_separator), ...]
-  # الـ separators المتتالية بدون عناصر بينها تُتجاهل (pending_sep pattern)
+  # الـ separators المتتالية بدون عناصر بينها تُتجاهَل (pending_sep pattern)
   .clear_items()
   .current_data()
   .get_selected_id() -> int | None
@@ -1628,6 +1628,14 @@ MainWindow(app: QApplication)
 # "settings"     → SettingsDialog (لا يغير الـ stack index)
 # "shared_items" → SharedItemsManagerDialog
 # تغيير الشركة  → AppState.invalidate() + _refresh_tabs() + bus.company_data_changed
+
+# _build_tabs() حالياً تُنشئ placeholders — لفك التعليق في الكود الحقيقي:
+# from ui.tabs.costing_section    import CostingSection    # index 1
+# from ui.tabs.pricing_section    import PricingSection     # index 2
+# from ui.tabs.accounting_section import AccountingTab      # index 3
+# from ui.tabs.inventory_section  import InventoryTab       # index 4
+# from ui.tabs.design_section     import DesignSection      # index 5
+# from ui.tabs.orders_section     import OrdersSection      # index 6
 ```
 
 ---
