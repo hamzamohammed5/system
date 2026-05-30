@@ -87,7 +87,8 @@ record_inventory_move(conn, inv_id, move_type, qty, unit_cost, date,
 **حالات الطلب:**
 ```
 pending → confirmed → in_progress → ready → delivered
-                 ↘ cancelled ↗        ↘ on_hold ↗
+       ↘ on_hold ↗                ↘ on_hold ↗
+                    ↘ cancelled ↗
 ```
 
 ---
@@ -149,8 +150,12 @@ insert_order(conn, customer_id, order_type="new", status="pending",
 
 update_order(conn, order_id, priority="normal", due_date=None,
              total_amount=0, discount=0, paid_amount=0, notes="",
-             internal_notes="", customer_id=None, changed_by="system") -> bool
-# [C-04] customer_id اختياري — None = لا تغيير
+             internal_notes="", customer_id=None,
+             changed_by="system") -> bool
+# [C-04] customer_id اختياري:
+#   None (الافتراضي) → لا يُغيِّر العميل الحالي (backward-compatible)
+#   قيمة صحيحة     → يتحقق من وجود العميل وكونه نشطاً ثم يُغيِّره
+#   يُسجَّل تغيير العميل في order_status_log كملاحظة
 
 change_order_status(conn, order_id, new_status, notes="", changed_by="system") -> bool
 cancel_order(conn, order_id, reason="", changed_by="system") -> bool
@@ -180,7 +185,7 @@ delete_order_item(conn, item_id)
 fetch_status_log(conn, order_id) -> list
 fetch_orders_summary(conn) -> dict
 # {total, pending, confirmed, in_progress, ready, delivered,
-#  cancelled, urgent, total_value, total_paid}
+#  cancelled, on_hold, urgent, total_value, total_paid}
 ```
 
 #### الانتقالات المسموح بها

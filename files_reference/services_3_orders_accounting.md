@@ -21,7 +21,10 @@
 
 ```python
 OrderService(conn, erp_conn=None)
-# erp_conn اختياري — [E-06] لربط المنتجات وإثراء OrderItem تلقائياً
+# erp_conn اختياري — [E-06] لربط المنتجات وإثراء OrderItem تلقائياً:
+#   - يتحقق من وجود product_id في items table
+#   - يملأ item_name تلقائياً لو كان فارغاً
+#   - يُسجّل warning لو unit_price = 0 وسعر المنتج موجود في DB
 
 svc.create(customer_id, items: list[OrderItem], notes="") -> int
 svc.update(order_id, customer_id, items, notes="")
@@ -41,7 +44,7 @@ svc.get_customer_summary(customer_id) -> OrderSummary
 
 **`OrderItem`:** `product_id, qty, unit_price, notes="", item_name=""`
 - `.total() -> float`
-- `.resolved_name() -> str`
+- `.resolved_name() -> str` — يرجع `item_name` أو `"منتج #{product_id}"` كـ fallback
 
 **دالة مساعدة:**
 
@@ -49,6 +52,7 @@ svc.get_customer_summary(customer_id) -> OrderSummary
 resolve_product_info(erp_conn, product_id) -> dict | None
 # {"name": str, "price": float} أو None لو غير موجود
 # [E-06] لجلب اسم وسعر المنتج من erp.db
+# erp_conn=None → يرجع None بأمان (لا exception)
 ```
 
 **الانتقالات المسموح بها:**
@@ -117,6 +121,28 @@ result = svc.post_entry(
     ]
 )
 # result.entry_id, result.total_dr, result.total_cr
+```
+
+### إنشاء طلب مع ربط المنتجات
+
+```python
+from services.orders.order_service import OrderService, OrderItem
+from db.companies.company_state import company_state
+
+# مع ربط erp.db — يملأ item_name تلقائياً لو كان فارغاً
+svc = OrderService(orders_conn, erp_conn=company_state.get_erp_conn())
+order_id = svc.create(
+    customer_id=1,
+    items=[
+        OrderItem(product_id=5, qty=2, unit_price=150.0),
+        OrderItem(product_id=8, qty=1, unit_price=300.0, item_name="منتج مخصص"),
+    ],
+    notes="طلب عاجل"
+)
+
+# بدون erp_conn — يعمل بنفس السلوك القديم
+svc2 = OrderService(orders_conn)
+order_id2 = svc2.create(customer_id=1, items=[...])
 ```
 
 ### استبدال شامل في BOM
@@ -202,3 +228,5 @@ sub = svc.get_sub_bom(item_id=3)  # BOM النصف مصنع
 **7. `ScenarioService.calc_cost`:** يحسب التكلفة مباشرة من BOM بدون المرور بـ `calc_product_cost` — مناسب للمقارنة بين سيناريوهات متعددة.
 
 **8. `settings` values:** كل قيم الإعدادات مُخزَّنة كـ TEXT — استخدم `float(get_setting(...))` عند قراءة الأرقام.
+
+**9. `OrderService` مع `erp_conn`:** [E-06] `erp_conn` اختياري تماماً — بدونه يعمل الـ service بالسلوك القديم. مع `erp_conn` يُثري البنود تلقائياً لكن لا يرفض لو المنتج غير موجود (يُسجّل warning فقط).

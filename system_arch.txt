@@ -1,5 +1,5 @@
 File Tree Snapshot
-Generated : 2026-05-30 19:57:56
+Generated : 2026-05-30 20:03:22
 Source    : D:\My Workspace\Hg\Alhabaar\accountant\system
 Extensions: .md, .py
 ────────────────────────────────────────────────────────────
@@ -66,6 +66,7 @@ system/
 │   ├── services_1_shared.md
 │   ├── services_2_costing.md
 │   ├── services_3_orders_accounting.md
+│   ├── services_4_inventory.md
 │   ├── ui_widgets_1_app_settings.md
 │   ├── ui_widgets_2_base_panels.md
 │   ├── ui_widgets_3_components.md
