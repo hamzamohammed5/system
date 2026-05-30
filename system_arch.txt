@@ -1,5 +1,5 @@
 File Tree Snapshot
-Generated : 2026-05-30 17:20:02
+Generated : 2026-05-30 17:28:31
 Source    : D:\My Workspace\Hg\Alhabaar\accountant\system
 Extensions: .md, .py
 ────────────────────────────────────────────────────────────
@@ -76,6 +76,8 @@ system/
 │   │   ├── product_service.py
 │   │   ├── scenario_service.py
 │   │   └── variant_service.py
+│   ├── inventory/
+│   │   └── inventory_service.py
 │   ├── orders/
 │   │   └── order_service.py
 │   └── shared/
@@ -323,6 +325,7 @@ system/
 │   │   │   ├── spinner.py
 │   │   │   └── stat_row.py
 │   │   ├── core/
+│   │   │   ├── __init__.py
 │   │   │   ├── colors.py
 │   │   │   ├── conn.py
 │   │   │   ├── events.py

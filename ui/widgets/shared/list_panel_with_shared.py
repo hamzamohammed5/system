@@ -3,12 +3,12 @@ ui/widgets/shared/list_panel_with_shared.py
 ============================================
 SharedItemsListPanel — قاعدة مشتركة للجداول التي تدعم العناصر المشتركة/المنشورة.
 
-يرث من BaseListPanel + SharedOpsMixin ويضيف:
+يرث من BaseListPanel + SharedOpsMixin + LiveConnMixin ويضيف:
   - legend العناصر المشتركة/المنشورة
   - دمج الصفوف المحلية مع المشتركة
   - أزرار: تعديل / حذف / استبدال شامل / تعديل مشترك / نشر كمشترك
   - منطق التلوين للصفوف المشتركة/المنشورة
-  - _live_conn() عبر LiveConnMixin
+  - _live_conn() عبر LiveConnMixin (لا override — يستخدم الـ mixin مباشرة)
   - _selected_row_data() للحصول على بيانات الصف المختار
 
 إعدادات الـ subclass:
@@ -30,6 +30,11 @@ Hooks الاختيارية:
   _bulk_replace_item(item_id, item_name)
   _setup_column_widths(table)
   _on_edit_shared()   — override لتخصيص سلوك تعديل المشترك
+
+[إصلاح] حذف _live_conn override الخاطئ الذي كان يتجاهل LiveConnMixin.
+  القديم: كان يستدعي get_connection() مباشرة، متجاهلاً company_state.
+  الجديد: يعتمد على LiveConnMixin._live_conn() الموروثة التي تستخدم
+          self.conn أولاً ثم company_state كـ fallback.
 """
 
 from PyQt5.QtWidgets import QTableWidgetItem, QMessageBox
@@ -49,6 +54,11 @@ class SharedItemsListPanel(BaseListPanel, SharedOpsMixin, LiveConnMixin):
     """
     قاعدة مشتركة للجداول التي تدعم العناصر المشتركة/المنشورة.
     راجع docstring الملف للتفاصيل الكاملة.
+
+    [إصلاح] لا override لـ _live_conn — LiveConnMixin تتولى الأمر.
+    الـ inheritance chain: SharedItemsListPanel → BaseListPanel → BusConnectedMixin
+                                                 → LiveConnMixin
+    LiveConnMixin._live_conn() يستخدم self.conn ثم company_state كـ fallback.
     """
 
     # ── إعدادات الـ subclass ──────────────────────────────
@@ -241,7 +251,10 @@ class SharedItemsListPanel(BaseListPanel, SharedOpsMixin, LiveConnMixin):
                 return row
         return None
 
-    def _live_conn(self):
-        """يرجع connection حي من company_state."""
-        from db.shared.connection import get_connection
-        return get_connection()
+    # ══════════════════════════════════════════════════════
+    # [إصلاح] لا _live_conn override هنا.
+    # LiveConnMixin._live_conn() موروثة وتعمل صح:
+    #   1. تجرب self.conn أولاً
+    #   2. ثم company_state كـ fallback
+    #   3. ترمي RuntimeError واضحة لو فشل كل شيء
+    # ══════════════════════════════════════════════════════

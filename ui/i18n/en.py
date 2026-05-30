@@ -431,4 +431,141 @@ EN_STRINGS: dict[str, str] = {
     # Machine
     # ══════════════════════════════════════════════
     "machine_ops":       "Machine Operations",
+    
+    """
+إضافات مفاتيح الترجمة لـ ui/i18n/en.py
+يُضاف هذا المحتوى داخل EN_STRINGS dict في نهايته.
+"""
+
+ENGLISH_ADDITIONS = {
+
+    # ══════════════════════════════════════════════
+    # Accounting
+    # ══════════════════════════════════════════════
+    "investors":                "Investors",
+    "investor_add":             "Add Investor",
+    "investor_movement":        "Investor Movement",
+    "link_to_entry":            "Link to Entry",
+    "account_group":            "Account Group",
+    "account_nature":           "Account Nature",
+    "account_tree":             "Account Tree",
+    "fiscal_year":              "Fiscal Year",
+    "owners_equity":            "Owners Equity",
+    "audit_log":                "Audit Log",
+    "debit_nature":             "Debit Nature",
+    "credit_nature":            "Credit Nature",
+    "account_level":            "Account Level",
+    "account_code":             "Account Code",
+    "account_type":             "Account Type",
+    "account_balance":          "Account Balance",
+    "opening_balance":          "Opening Balance",
+    "closing_balance":          "Closing Balance",
+    "journal_date":             "Entry Date",
+    "journal_description":      "Entry Description",
+    "total_debit":              "Total Debit",
+    "total_credit":             "Total Credit",
+    "balanced":                 "Balanced",
+    "unbalanced":               "Unbalanced",
+    "post_entry":               "Post Entry",
+    "reverse_entry":            "Reverse Entry",
+    "draft":                    "Draft",
+    "posted":                   "Posted",
+
+    # ══════════════════════════════════════════════
+    # Inventory
+    # ══════════════════════════════════════════════
+    "inbound":                  "Inbound",
+    "outbound":                 "Outbound",
+    "inventory_report":         "Inventory Report",
+    "item_name":                "Item Name",
+    "item_type":                "Item Type",
+    "min_stock":                "Min Stock Level",
+    "current_balance":          "Current Balance",
+    "movement_date":            "Movement Date",
+    "movement_type":            "Movement Type",
+    "unit_cost":                "Unit Cost",
+    "total_inbound":            "Total Inbound",
+    "total_outbound":           "Total Outbound",
+    "low_stock":                "Low Stock",
+    "low_stock_items":          "Low Stock Items",
+    "stock_value":              "Stock Value",
+    "no_movements":             "No movements found",
+    "record_inbound":           "Record Inbound",
+    "record_outbound":          "Record Outbound",
+    "movement_ref":             "Movement Reference",
+
+    # ══════════════════════════════════════════════
+    # Orders
+    # ══════════════════════════════════════════════
+    "order_number":             "Order Number",
+    "order_total":              "Order Total",
+    "customer_name":            "Customer Name",
+    "customer_phone":           "Customer Phone",
+    "customer_address":         "Customer Address",
+    "delivery_date":            "Delivery Date",
+    "payment_status":           "Payment Status",
+    "order_items":              "Order Items",
+    "status_pending":           "Pending",
+    "status_confirmed":         "Confirmed",
+    "status_in_production":     "In Production",
+    "status_ready":             "Ready",
+    "status_delivered":         "Delivered",
+    "status_cancelled":         "Cancelled",
+    "dashboard":                "Dashboard",
+    "recent_orders":            "Recent Orders",
+    "top_customers":            "Top Customers",
+    "order_log":                "Order Log",
+    "change_status":            "Change Status",
+    "no_orders":                "No orders found",
+    "no_customers":             "No customers found",
+    "order_date":               "Order Date",
+    "paid":                     "Paid",
+    "unpaid":                   "Unpaid",
+    "partial":                  "Partial",
+    "deposit":                  "Deposit",
+    "unit_price":               "Unit Price",
+    "item_qty":                 "Qty",
+    "item_total":               "Total",
+
+    # ══════════════════════════════════════════════
+    # Design
+    # ══════════════════════════════════════════════
+    "design_name":              "Design Name",
+    "design_file":              "Design File",
+    "open_in_gimp":             "Open in GIMP",
+    "thumbnail":                "Thumbnail",
+    "dimension_set_name":       "Dimension Set Name",
+    "dimension_group":          "Dimension Group",
+    "dimension_field":          "Dimension Field",
+    "dimension_value":          "Dimension Value",
+    "dimension_instance":       "Dimension Instance",
+    "no_designs":               "No designs found",
+    "add_size":                 "Add Size",
+    "size_name":                "Size Name",
+    "size_width":               "Width",
+    "size_height":              "Height",
+    "gimp_not_found":           "GIMP not found",
+    "file_not_found":           "File not found",
+    "source_set":               "Source Set",
+    "target_field":             "Target Field",
+
+    # ══════════════════════════════════════════════
+    # Pricing
+    # ══════════════════════════════════════════════
+    "offer_name":               "Offer Name",
+    "offer_validity":           "Offer Validity",
+    "offer_items":              "Offer Items",
+    "base_cost":                "Base Cost",
+    "markup_pct":               "Markup %",
+    "final_price":              "Final Price",
+    "product_cost":             "Product Cost",
+    "scenario_used":            "Scenario Used",
+    "offer_total":              "Offer Total",
+    "no_offers":                "No offers found",
+    "pricing_table":            "Pricing Table",
+    "cost_breakdown":           "Cost Breakdown",
+    "min_price":                "Minimum Price",
+    "suggested_price":          "Suggested Price",
+    "customer_price":           "Customer Price",
+}
 }
