@@ -341,7 +341,7 @@ class SettingsDialog(QDialog):
         grp_lay.setSpacing(10)
 
         try:
-            from ui.i18n import i18n_manager
+            from ui.widgets.core.i18n import i18n_manager
             current_lang = i18n_manager.language
         except Exception:
             current_lang = "ar"
@@ -711,7 +711,7 @@ class SettingsDialog(QDialog):
 
         # ── اللغة ──
         selected_lang = self._get_selected_lang()
-        from ui.i18n import i18n_manager
+        from ui.widgets.core.i18n import i18n_manager
         if selected_lang != i18n_manager.language:
             i18n_manager.set_language(selected_lang, save=True)
             self._app.setLayoutDirection(i18n_manager.qt_direction)
