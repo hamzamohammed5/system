@@ -15,6 +15,8 @@ from PyQt5.QtCore import Qt
 from ui.widgets.base.list_panel        import BaseListPanel
 from ui.widgets.mixins.shared_ops      import SharedOpsMixin
 from ui.widgets.tables.items           import make_item, colored_item
+from ui.widgets.dialogs.confirm        import confirm_delete          # ✅ كان: ui.helpers
+from ui.widgets.core.events            import emit_company_data_changed
 from ui.tabs.costing.shared._utils     import (
     to_dict, SHARED_COLOR, SHARED_BG, PUBLISHED_COLOR, PUBLISHED_BG,
 )
@@ -40,7 +42,7 @@ class RawTablePanel(BaseListPanel, SharedOpsMixin):
     EMPTY_ICON         = "🧱"
     EMPTY_TITLE        = "لا توجد خامات"
     LIST_TITLE         = "─── الخامات المحفوظة ───"
-    ADD_TEXT           = ""           # بدون زر Add — الفورم منفصل
+    ADD_TEXT           = ""
     SHOW_CATEGORY      = True
     FILTER_SCOPE       = "raw"
     COL_WIDTHS         = {0: 45, 2: 110, 3: 90, 4: 90, 5: 95}
@@ -125,7 +127,7 @@ class RawTablePanel(BaseListPanel, SharedOpsMixin):
     # ══════════════════════════════════════════════════════
 
     def _on_add_clicked(self):
-        pass  # الإضافة تتم عبر الـ input panel المنفصل
+        pass
 
     def _on_row_double_clicked(self, item_id):
         if self._input_panel and not is_shared_id(item_id):
@@ -175,7 +177,7 @@ class RawTablePanel(BaseListPanel, SharedOpsMixin):
         self._publish_item(row, "raw", item_data, self)
 
     # ══════════════════════════════════════════════════════
-    # تعديل / حذف (يُعرَّف في BaseListPanel بالـ hooks التالية)
+    # تعديل / حذف
     # ══════════════════════════════════════════════════════
 
     def _on_edit_item(self, item_id):
@@ -191,9 +193,7 @@ class RawTablePanel(BaseListPanel, SharedOpsMixin):
 
     def _on_delete_item(self, item_id, item_name: str):
         from PyQt5.QtWidgets import QMessageBox
-        from ui.helpers import confirm_delete
         from db.shared.items_repo import delete_item
-        from ui.widgets.core.events import emit_company_data_changed
 
         if is_shared_id(item_id):
             QMessageBox.warning(

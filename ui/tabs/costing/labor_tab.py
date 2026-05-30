@@ -12,10 +12,10 @@ LaborTab — التبويب الرئيسي للعمالة.
 from PyQt5.QtWidgets import QTabWidget, QWidget, QVBoxLayout, QSplitter
 from PyQt5.QtCore import Qt
 
-from ui.widgets.shared.tab_section_base import TabSectionBase
-from ui.widgets.shared.category_manager import CategoryManager
-from ui.widgets.core.i18n               import tr
-from ui.app_settings                    import _C
+from ui.widgets.base.tab_section  import TabSectionBase
+from ui.widgets.managers.category import CategoryManager
+from ui.widgets.core.i18n         import tr
+from ui.app_settings              import _C
 
 from .labor.labor_settings import _LaborSettingsPanel
 from .labor.labor_op_form  import LaborOpForm
@@ -60,7 +60,6 @@ class LaborTab(TabSectionBase):
     """
 
     def _build_tabs(self, tabs: QTabWidget):
-        # _LaborSettingsPanel محتاج conn — نبنيه هنا ونمرره للـ ops tab
         self._settings = _LaborSettingsPanel(self.conn)
 
         tabs.addTab(self._settings,

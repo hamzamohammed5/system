@@ -11,21 +11,23 @@ _OrphanHandler — منطق معالجة المكونات الناقصة (Orphan
 يُستخدم من _ProductMainPanel.
 
 [Fix #5] استبدال bus.data_changed.emit() بـ emit_company_data_changed()
-  من: ui.events.bus  → bus.data_changed.emit()
-  إلى: ui.widgets.core.events → emit_company_data_changed()
-  السبب: أكثر دقة وأفضل أداءً حسب files_reference/models&services.md
+[Fix #10] استبدال db imports المباشرة بـ ProductService + ItemService:
+  من: db.shared.items_repo → fetch_item, fetch_orphan_bom_rows,
+      delete_orphan_bom_rows, cleanup_empty_products_after_orphan_fix
+  إلى: ProductService.get_orphan_components() + ProductService.fix_orphans()
+       + ItemService.get()
+  ملاحظة: cleanup_empty_products_after_orphan_fix غير موجود في ProductService API
+  يُبقى استدعاؤه المباشر مؤقتاً حتى إضافته للـ service.
 """
 
 from PyQt5.QtWidgets import QMessageBox
 
-from db.shared.items_repo import (
-    fetch_item,
-    fetch_orphan_bom_rows,
-    delete_orphan_bom_rows,
-    cleanup_empty_products_after_orphan_fix,
-)
-# [Fix #5] استخدام emit_company_data_changed بدل bus.data_changed
-from ui.widgets.core.events import emit_company_data_changed
+from services.costing.product_service import ProductService
+from services.shared.item_service     import ItemService
+from ui.widgets.core.events           import emit_company_data_changed
+
+# TODO: نقل cleanup_empty_products_after_orphan_fix إلى ProductService
+from db.shared.items_repo import cleanup_empty_products_after_orphan_fix
 
 
 class _OrphanHandler:
@@ -46,7 +48,7 @@ class _OrphanHandler:
     @staticmethod
     def fetch(conn, pid: int) -> list:
         """يرجع قائمة المكونات الناقصة للمنتج."""
-        return fetch_orphan_bom_rows(conn, pid)
+        return ProductService(conn).get_orphan_components(pid)
 
     def fix(self, conn, pid: int,
             warning_bar, bom_tree, form) -> None:
@@ -56,23 +58,30 @@ class _OrphanHandler:
         المعاملات:
             conn        : اتصال قاعدة البيانات
             pid         : ID المنتج
-            warning_bar : _WarningBar لإخفائه بعد الإصلاح
+            warning_bar : BaseWarningBar لإخفائه بعد الإصلاح
             bom_tree    : BomTree لإعادة تحميله
             form        : _FormPanel لإعادة ضبطه لو المنتج اتحذف
         """
-        orphans      = fetch_orphan_bom_rows(conn, pid)
-        orphan_names = [
-            o["child_name"] or f"ID:{o['child_id']}" for o in orphans
-        ]
-        item      = fetch_item(conn, pid)
-        prod_name = item["name"] if item else f"ID {pid}"
+        prod_svc = ProductService(conn)
 
-        n            = delete_orphan_bom_rows(conn, pid)
+        # نجلب الأسماء قبل الحذف عشان نعرضها في الرسالة
+        orphans      = prod_svc.get_orphan_components(pid)
+        orphan_names = [
+            getattr(o, "name", None) or f"ID:{getattr(o, 'child_id', '?')}"
+            for o in orphans
+        ]
+
+        item      = ItemService(conn).get(pid)
+        prod_name = item.name if item else f"ID {pid}"
+
+        # الحذف عبر ProductService
+        n = prod_svc.fix_orphans(pid)
+
+        # TODO: نقل هذا المنطق لـ ProductService.fix_orphans()
         auto_deleted = cleanup_empty_products_after_orphan_fix(conn, [pid])
 
         warning_bar.setVisible(False)
         bom_tree.load(conn, pid)
-        # [Fix #5] emit_company_data_changed بدل bus.data_changed.emit()
         emit_company_data_changed()
 
         if auto_deleted:

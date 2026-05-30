@@ -1,307 +1,238 @@
-# خطة إعادة الهيكلة — تحويل tabs/ إلى Orchestrators
-
-**الهدف:** `tabs/UI → services/ → repos/ (db/)` مع قواعد `widgets/base`
-
----
-
-## المبادئ الأساسية
-
-```
-tabs/          → Orchestrator فقط (لا repo مباشر، لا منطق حساب)
-services/      → Business logic + validation
-repos/ (db/)   → SQL فقط
-widgets/base   → Base classes (BaseListPanel, BaseCrudForm, ...)
-```
+# خطة إعادة الهيكلة — Costing Tabs
+**التاريخ:** 2026-05-30  
+**الهدف:** تحويل `ui/tabs/` لتصبح orchestrators نظيفة تستدعي services/ وwidgets/ الجاهزة
 
 ---
 
-## المشاكل الموجودة حالياً (من تحليل الكود)
+## 1. المشاكل الموجودة حالياً
 
-### 1. استدعاء repos مباشرة من tabs/
+### 1.1 مسارات imports خاطئة (يُصلَح بتعديل الـ import مباشرة)
 
-| الملف | المشكلة |
-|-------|---------|
-| `bom_tree.py` | `fetch_bom`, `delete_bom_row` من `db/shared/items_repo` مباشرة |
-| `bom_tree.py` | `fetch_bom_for_scenario` من `db/costing/bom_scenarios_repo` مباشرة |
-| `_scenario_node_builder.py` | `fetch_item`, `fetch_labor_op`, `fetch_machine_op` من repos مباشرة |
-| `scenario_comparison_widget.py` | `calc_cost` + منطق حساب معقد داخل الـ widget |
-| `product_form.py` | `fetch_item`, `fetch_orphan_bom_rows`, `fetch_default_scenario`, `insert_scenario` مباشرة |
-| `_orphan_handler.py` | `fetch_orphan_bom_rows`, `delete_orphan_bom_rows`, `cleanup_empty_products_after_orphan_fix` مباشرة |
-| `raw_variants_panel.py` | `insert_variant`, `update_variant`, `delete_variant`, `fetch_variant` مباشرة |
-| `machine_op_rows_editor.py` | `fetch_op_rows`, `insert_op_row`, `update_op_row`, `delete_op_row`, `calc_op_row_cost`, `calc_op_total_cost` مباشرة |
-| `_db_scenarios.py` | `fetch_scenarios`, `insert_scenario`, `update_scenario`, `delete_scenario`, `set_default_scenario`, `clone_scenario` مباشرة |
-| `bulk_replace_helpers.py` | SQL مباشر + `calc_cost` في UI layer |
-| `catalog_builder.py` | `fetch_items_by_type`, `fetch_all_labor_ops`, `fetch_all_machine_ops` مباشرة |
-
-### 2. منطق حساب داخل الـ widgets
-
-| الملف | المشكلة |
-|-------|---------|
-| `scenario_comparison_widget.py` | `_calc_scenario_cost()` — 40 سطر من business logic داخل QFrame |
-| `_scenario_node_builder.py` | `calc_cost`, `calc_labor_op_cost`, `calc_machine_op_cost`, `raw_unit_price` داخل builder |
-| `bom_tree.py` | `total_sc_cost` يُحسب داخل `_refresh()` |
-
-### 3. bus events غير موحدة
-
-| الملف | المشكلة |
-|-------|---------|
-| `raw_variants_panel.py` | ✅ محوَّل لـ `emit_company_data_changed` |
-| `machine_op_rows_editor.py` | ✅ محوَّل |
-| `_db_scenarios.py` | ✅ محوَّل |
-| `labor_op_form.py` | ❌ يستخدم `bus.data_changed.connect` — يجب مراجعة |
-| `machine_op_form.py` | ❌ `bus.data_changed.emit()` مباشرة |
-| `product_form.py` | ❌ `bus.data_changed.emit()` مباشرة |
-
-### 4. Hardcoded strings عربية بدل `tr()`
-
-| الملف | المشكلة |
-|-------|---------|
-| `labor_tab.py` | `"⚙️  إعدادات العمالة"`, `"📋  عمليات العمالة"`, `"🏷️  التصنيفات"` hardcoded |
-| `machine_tab.py` | كل labels hardcoded |
-| `product_main_panel.py` | `"🗑️ حذف الناقص"`, `"✏️ تعديل"` hardcoded |
-| `machine_op_form.py` | نصوص عربية كثيرة بدون `tr()` |
-| `machine_form.py` | نصوص hardcoded |
-
-### 5. `_SPLITTER_STYLE` مكررة
-
-في `labor_tab.py` و `machine_tab.py` نفس الـ style محروقة. لا يربط بـ `_C` ولا يستجيب لـ `bus.theme_changed`.
-
-### 6. `catalog_builder.py` في UI layer
-
-`catalog_builder.py` موجود في `ui/tabs/costing/shared/` لكنه يبني بيانات من DB — يجب نقله أو تغليفه بـ service.
-
-### 7. `product_main_panel.py` — `_build_extra_header_actions` hardcoded strings
-
-```python
-header.add_action("🗑️ حذف الناقص", ..., fix_text="🗑️ حذف الناقص")
-```
+| الملف | Import الخاطئ | يُستبدل بـ |
+|-------|--------------|-----------|
+| `raw_tab.py`, `product_tab.py`, `labor_tab.py`, `machine_tab.py` | `from ui.widgets.shared.tab_section_base import TabSectionBase` | `from ui.widgets.base.tab_section import TabSectionBase` |
+| `raw_tab.py`, `product_tab.py`, `labor_tab.py`, `machine_tab.py` | `from ui.widgets.shared.category_manager import CategoryManager` | `from ui.widgets.managers.category import CategoryManager` |
+| `product_main_panel.py` | `from ui.widgets.shared.base_warning_bar import BaseWarningBar` | `from ui.widgets.components.notification import BaseWarningBar` |
+| `raw_table_panel.py` | `from ui.helpers import confirm_delete` | `from ui.widgets.dialogs.confirm import confirm_delete` |
 
 ---
 
-## الخطة التفصيلية
+### 1.2 DB access مباشر من UI (يجب المرور عبر services)
 
-### المرحلة 1 — Services جديدة (الأولوية الأعلى)
-
-#### 1.1 `services/costing/scenario_service.py` (جديد)
-
-يغلّف كل عمليات `bom_scenarios_repo` + حساب تكلفة السيناريو:
-
-```python
-ScenarioService(conn)
-
-svc.list(item_id) -> list[ScenarioResult]
-svc.get_default(item_id) -> ScenarioResult | None
-svc.create(item_id, name, is_default=False) -> int
-svc.rename(scenario_id, name)
-svc.clone(scenario_id, name) -> int
-svc.set_default(scenario_id)
-svc.delete(scenario_id) -> bool
-svc.ensure_default(item_id) -> int
-
-# الجديد — ينقل منطق _calc_scenario_cost من scenario_comparison_widget
-svc.calc_cost(scenario_id) -> float
-svc.get_bom(scenario_id) -> list[BomRow]
-svc.replace_bom(scenario_id, rows: list[BomComponent])
-```
-
-**الملفات المتأثرة:**
-- `_db_scenarios.py` → يستدعي `ScenarioService` بدل repos مباشرة
-- `scenario_comparison_widget.py` → `_calc_scenario_cost` يُحذف، يُستبدل بـ `svc.calc_cost`
-- `product_form.py` → `fetch_default_scenario`, `insert_scenario` يُستبدلان
-- `_save_logic.py` → `ensure_default_scenario` يأتي من Service
-
-#### 1.2 `services/costing/bom_tree_service.py` (جديد)
-
-يغلّف جلب بيانات BOM Tree:
-
-```python
-BomTreeService(conn)
-
-svc.get_scenarios(item_id) -> list[ScenarioWithBom]
-svc.get_bom_for_scenario(scenario_id) -> list[BomRow]
-svc.get_sub_bom(item_id) -> list[BomRow]          # للنصف مصنع
-svc.delete_bom_component(scenario_id, child_type, child_id)
-svc.delete_bom_row_direct(parent_id, child_type, child_id)  # بدون سيناريو
-```
-
-**الملفات المتأثرة:**
-- `bom_tree.py` → يستدعي `BomTreeService` بدل repos مباشرة
-- `_fetch_bom_with_row_id_by_scenario` يُبسَّط
-
-#### 1.3 `services/costing/variant_service.py` (جديد)
-
-```python
-VariantService(conn)
-
-svc.list(item_id) -> list[VariantResult]
-svc.get(variant_id) -> VariantResult | None
-svc.add(item_id, name, pieces, notes=None) -> int
-svc.update(variant_id, name, pieces, notes=None)
-svc.delete(variant_id)
-svc.calc_unit_cost(item_id, variant_id, item_price) -> float
-```
-
-**الملفات المتأثرة:**
-- `raw_variants_panel.py` → كل `db.costing.raw_variants_repo` calls تُستبدل
-
-#### 1.4 `services/costing/machine_op_rows_service.py` (جديد)
-
-```python
-MachineOpRowsService(conn)
-
-svc.list(op_id) -> list[OpRowResult]
-svc.get(row_id) -> OpRowResult | None
-svc.add(op_id, label, value, count, sort_order=0) -> int
-svc.update(row_id, label, value, count, sort_order=0)
-svc.delete(row_id) -> bool          # يرفض لو آخر صف
-svc.calc_row_cost(row_id) -> float
-svc.calc_total_cost(op_id) -> float
-```
-
-**الملفات المتأثرة:**
-- `machine_op_rows_editor.py` → كل `db.costing.machine_op_rows_repo` calls تُستبدل
-
-#### 1.5 `services/costing/catalog_service.py` (جديد أو نقل)
-
-ينقل منطق `catalog_builder.py` إلى services layer:
-
-```python
-CatalogService(conn)
-
-svc.build() -> CatalogData
-svc.build_raw() -> list
-svc.build_labor_ops() -> list
-svc.build_machine_ops() -> list
-svc.build_semi() -> list
-```
-
-**الملفات المتأثرة:**
-- `catalog_builder.py` → يصبح thin wrapper أو يُحذف
-- `_catalog_provider.py` → يستدعي `CatalogService`
+| الملف | Import المباشر | البديل |
+|-------|--------------|--------|
+| `product_form.py` | `from db.costing.bom_scenarios_repo import fetch_default_scenario, insert_scenario, fetch_bom_for_scenario` | `ScenarioService` |
+| `product_form.py` | `from db.shared.items_repo import fetch_item, fetch_orphan_bom_rows` | `ItemService` / `ProductService` |
+| `product_main_panel.py` | `from db.shared.items_repo import fetch_item, delete_item` | `ItemService` |
+| `_orphan_handler.py` | `from db.shared.items_repo import fetch_item, fetch_orphan_bom_rows, delete_orphan_bom_rows, cleanup_empty_products_after_orphan_fix` | `ProductService.fix_orphans()` + إبقاء `cleanup_empty_products_after_orphan_fix` مؤقتاً (غير موثق في ProductService) |
+| `bulk_replace_helpers.py` | SQL مباشر + `fetch_items_by_type`, `fetch_all_labor_ops`, `fetch_all_machine_ops` | `BulkReplaceService.fetch_candidates()` و `fetch_affected_products()` |
+| `bom_tree.py` → `_fetch_node_data` | repos مباشرة داخل data_fetcher | ✅ مقبول — هذا pattern مقصود (BomTree يملك conn) |
+| `labor_settings.py` | `get_setting` / `set_setting` | ✅ مقبول — لا service موجود لهذا |
+| `machine_op_form.py` | `calc_op_total_cost` من repo | ✅ مقبول — للقراءة فقط |
 
 ---
 
-### المرحلة 2 — تنظيف الـ Widgets
+### 1.3 bus events خاطئة
 
-#### 2.1 `scenario_comparison_widget.py`
+| الملف | الحالي | الصحيح |
+|-------|--------|--------|
+| `bulk_replace_dialog.py` | `bus.data_changed.emit()` | `emit_company_data_changed()` |
+| `labor_settings.py` | `bus.data_changed.emit()` | `emit_company_data_changed()` |
 
-**قبل:**
+---
+
+### 1.4 مشكلة fallback غير موجود
+
+في `_catalog_provider.py`:
 ```python
-def _calc_scenario_cost(self, scenario_id):
-    # 40 سطر من منطق حساب معقد مع imports داخلية
-    from db.costing.bom_scenarios_repo import fetch_bom_for_scenario
-    from db.shared.items_repo import fetch_item
-    from models.costing_base import raw_unit_price, effective_qty
-    ...
+from ui.tabs.costing.shared.catalog_builder import build_catalog  # غير موجود في system_arch
 ```
+الـ fallback لن يعمل لكن `CatalogService` يعمل أولاً — الأثر عملياً صفر.  
+**الحل:** حذف الـ fallback الميت وإبقاء `CatalogService` + الـ fallback المحلي فقط.
 
-**بعد:**
+---
+
+## 2. خطة التنفيذ (مرتبة حسب الأولوية)
+
+### الخطوة 1 — إصلاح المسارات المكسورة ✦ Critical
+
+**الملفات المتأثرة:** `raw_tab.py`, `product_tab.py`, `labor_tab.py`, `machine_tab.py`, `product_main_panel.py`, `raw_table_panel.py`
+
+تعديل الـ imports مباشرة — لا ملفات جديدة.
+
+---
+
+### الخطوة 2 — تنظيف `product_form.py`
+
+**استبدال:**
 ```python
-def _calc_scenario_cost(self, scenario_id):
-    from services.costing.scenario_service import ScenarioService
-    return ScenarioService(self.conn).calc_cost(scenario_id)
-```
+# قبل
+from db.costing.bom_scenarios_repo import fetch_default_scenario, insert_scenario, fetch_bom_for_scenario
+from db.shared.items_repo import fetch_item, fetch_orphan_bom_rows
 
-#### 2.2 `bom_tree.py`
-
-**قبل:**
-- `_fetch_bom_with_row_id_by_scenario` — 50 سطر SQL مع PRAGMA
-- `_fetch_all_scenarios` — SQL مباشر
-- `_get_scenario_id_for_item` — SQL مباشر
-
-**بعد:**
-```python
-def _refresh(self):
-    svc = BomTreeService(self._conn)
-    scenarios = svc.get_scenarios(self._pid)
-    for sc in scenarios:
-        bom_rows = svc.get_bom_for_scenario(sc.id)
-        ...
-```
-
-#### 2.3 `raw_variants_panel.py`
-
-**قبل:**
-```python
-from db.costing.raw_variants_repo import (
-    fetch_variants_for_item, insert_variant, update_variant,
-    delete_variant, fetch_variant,
-)
-```
-
-**بعد:**
-```python
-from services.costing.variant_service import VariantService
-# كل العمليات عبر VariantService(self.conn)
-```
-
-#### 2.4 `machine_op_rows_editor.py`
-
-**قبل:** 8 imports من `db.costing.machine_op_rows_repo`
-
-**بعد:**
-```python
-from services.costing.machine_op_rows_service import MachineOpRowsService
-svc = MachineOpRowsService(self.conn)
-```
-
-#### 2.5 `_db_scenarios.py`
-
-**قبل:** 6 imports من `db.costing.bom_scenarios_repo`
-
-**بعد:**
-```python
+# بعد
 from services.costing.scenario_service import ScenarioService
-svc = ScenarioService(self.conn)
+from services.shared.item_service import ItemService
+```
+
+**في `load_product()`:**
+```python
+# قبل
+item = fetch_item(conn, pid)
+sc = fetch_default_scenario(conn, pid)
+sc_id = sc["id"] if sc else insert_scenario(conn, pid, "سيناريو 1", is_default=True)
+
+# بعد
+item = ItemService(conn).get(pid)
+svc = ScenarioService(conn)
+sc = svc.get_default(pid)
+sc_id = sc.id if sc else svc.ensure_default(pid)
+```
+
+**في `_load_bom_for_scenario()`:**
+```python
+# قبل
+bom_rows = fetch_bom_for_scenario(conn, scenario_id)
+
+# بعد
+svc = ScenarioService(conn)
+bom_rows = [vars(r) for r in svc.get_bom(scenario_id)]
+```
+
+**في `_load_bom_for_scenario()` — orphan_map:**
+```python
+# قبل
+orphan_map = {(o["child_type"], o["child_id"]): o["child_name"]
+              for o in fetch_orphan_bom_rows(conn, pid)}
+
+# بعد
+orphans = ProductService(conn).get_orphan_components(pid)
+orphan_map = {(o.child_type, o.child_id): o.name for o in orphans}
+# ملاحظة: OrphanComponent يحتاج تحقق من الـ attributes
 ```
 
 ---
 
+### الخطوة 3 — تنظيف `_orphan_handler.py`
 
+```python
+# قبل — 4 دوال من items_repo
+from db.shared.items_repo import (fetch_item, fetch_orphan_bom_rows,
+    delete_orphan_bom_rows, cleanup_empty_products_after_orphan_fix)
 
-## ترتيب التنفيذ المقترح
-
+# بعد
+from services.costing.product_service import ProductService
+from services.shared.item_service import ItemService
+# cleanup_empty_products_after_orphan_fix → TODO: إضافة لـ ProductService أو إبقاء مؤقتاً
 ```
-الأسبوع 1:
-  ✅ ScenarioService         → يُبسّط 4 ملفات دفعة واحدة
-  ✅ VariantService          → يُبسّط raw_variants_panel
-  ✅ MachineOpRowsService    → يُبسّط machine_op_rows_editor
 
-الأسبوع 2:
-  ✅ BomTreeService          → يُبسّط bom_tree.py
-  ✅ CatalogService          → ينقل catalog_builder لـ services layer
-  ✅ توحيد bus events        → emit_company_data_changed في كل مكان
+في `fetch()`: `ProductService(conn).get_orphan_components(pid)`  
+في `fix()`: `ProductService(conn).fix_orphans(pid)` — لكن fix_orphans لا يعيد names للرسالة  
+**تحدي:** الرسالة تحتاج أسماء الـ orphans قبل حذفها — يجب جلبها أولاً ثم الحذف.
 
-الأسبوع 3:
-  ✅ splitter_vertical_style → إزالة _SPLITTER_STYLE المكررة
-  ✅ tr() في كل النصوص      → labor_tab, machine_tab, machine_op_form
-  ✅ BomNodeData dataclass   → فصل presentation عن data access في bom_tree
+---
+
+### الخطوة 4 — تنظيف `product_main_panel.py`
+
+```python
+# قبل
+from db.shared.items_repo import fetch_item, delete_item
+
+# بعد
+from services.shared.item_service import ItemService
+```
+
+```python
+# في _delete_product():
+# قبل
+item = fetch_item(conn, pid)
+delete_item(conn, pid)
+
+# بعد
+svc = ItemService(conn)
+item = svc.get(pid)
+svc.delete(pid)  # يرفض لو مستخدم في BOM — يحتاج force_delete أو معالجة
+```
+
+**تحدي:** `delete_item` المباشر يحذف بغض النظر، لكن `ItemService.delete()` يرفض لو مستخدم.  
+**الحل:** استخدام `svc.force_delete(pid)` للمنتجات لأن حذف المنتج يتضمن BOM بطبيعته.
+
+---
+
+### الخطوة 5 — إصلاح bus events
+
+في `bulk_replace_dialog.py`:
+```python
+from ui.widgets.core.events import emit_company_data_changed
+# استبدال bus.data_changed.emit() بـ emit_company_data_changed()
+```
+
+في `labor_settings.py`: نفس الاستبدال.
+
+---
+
+### الخطوة 6 — تنظيف `bulk_replace_helpers.py`
+
+الدوال `fetch_candidates` و `fetch_affected_products` يمكن إعادة توجيهها لـ `BulkReplaceService`:
+```python
+# استبدال SQL المباشر بـ:
+from services.costing.bulk_replace_service import BulkReplaceService
+
+def fetch_candidates(conn, child_type, exclude_id):
+    return BulkReplaceService(conn).fetch_candidates(child_type, exclude_id)
+
+def fetch_affected_products(conn, child_type, child_id):
+    return BulkReplaceService(conn).fetch_affected_products(child_type, child_id)
 ```
 
 ---
 
-## ملخص الأثر المتوقع
+### الخطوة 7 — تنظيف `_catalog_provider.py`
 
-| المعيار | قبل | بعد |
-|---------|-----|-----|
-| repo imports مباشرة في tabs/ | ~25 import | 0 |
-| منطق حساب في widgets | ~80 سطر | 0 |
-| `bus.data_changed.emit()` غير موحّدة | 6 أماكن | 0 |
-| hardcoded strings عربية في tabs/ | ~40 نص | 0 |
-| `_SPLITTER_STYLE` مكررة | 3 أماكن | 0 |
-| services جديدة | 0 | 5 |
+حذف الـ fallback الميت:
+```python
+# حذف هذا الـ fallback (catalog_builder غير موجود):
+try:
+    from ui.tabs.costing.shared.catalog_builder import build_catalog
+    return build_catalog(conn)
+except Exception:
+    pass
+```
 
 ---
 
-## ملاحظات مهمة
+## 3. ما هو مقبول ولا يحتاج تعديل
 
-1. **`cleanup_empty_products_after_orphan_fix`** — هذه الدالة مستخدمة في `_orphan_handler.py` لكنها غير موثقة في `db.md` → يجب التحقق من وجودها أو إضافتها لـ `ProductService.fix_orphans()` الموجود.
+| الملف | السبب |
+|-------|-------|
+| `bom_tree.py` → `_fetch_node_data` | data_fetcher pattern مقصود، BomTree يملك conn ✅ |
+| `labor_settings.py` → `get_setting/set_setting` | لا service موجود، مقبول ✅ |
+| `machine_op_form.py` → `calc_op_total_cost` | قراءة فقط، مقبول ✅ |
+| كل `*_form.py` الوارث من `BaseCrudForm` | نمط صحيح ✅ |
+| `scenario_comparison_widget.py` | يستخدم `ScenarioService` ✅ |
+| `_db_scenarios.py` | يستخدم `ScenarioService` ✅ |
+| `raw_variants_panel.py` | يستخدم `VariantService` ✅ |
+| `machine_op_rows_editor.py` | يستخدم `MachineOpRowsService` ✅ |
+| `_save_logic.py` | يستخدم `ProductService` ✅ |
 
-2. **`fetch_bom_with_row_id_by_scenario`** — الـ PRAGMA SQL الموجود في `bom_tree.py` يتحقق من وجود أعمدة ديناميكياً. هذا المنطق يجب أن ينتقل لـ `BomTreeService` أو يُعالج في migration آمن.
+---
 
-3. **`catalog_builder._fetch_shared()`** — يفتح ويُغلق `central_conn` في كل استدعاء. في `CatalogService` يجب تحسين هذا بـ context manager أو تمرير `central_conn` اختياري.
+## 4. ترتيب الأولوية النهائي
 
-4. **`_memory_scenarios.py`** — منطق الذاكرة صحيح ولا يحتاج تغيير جوهري، لكن عند بناء `ScenarioService` يجب التأكد من التوافق مع `switch_to_db_mode`.
+```
+🔴 Critical (يكسر التطبيق):
+   الخطوة 1 — إصلاح imports المكسورة في 6 ملفات
+
+🟡 High (يُلوّث المعمارية):
+   الخطوة 2 — product_form.py
+   الخطوة 3 — _orphan_handler.py
+   الخطوة 4 — product_main_panel.py
+
+🟢 Medium (تحسين):
+   الخطوة 5 — bus events
+   الخطوة 6 — bulk_replace_helpers.py
+   الخطوة 7 — _catalog_provider.py
+```
 
 # بنية المشروع — المرحلة السادسة
 ### الأهداف البنيوية للمرحلة السابعة

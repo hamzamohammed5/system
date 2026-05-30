@@ -3,8 +3,6 @@ ui/tabs/costing/product/product_main_panel.py
 ===============================================
 _ProductMainPanel — اللوحة الرئيسية: فورم + جدول + BOM tree + تحذير.
 
-التحسين: يستخدم BaseWarningBar.show_orphans() بدل الـ API القديم
-
 [Fix #1] توحيد import LiveConnMixin من المسار الموثق في ui_widgets.md:
   من: ui.widgets.shared.connection_mixin
   إلى: ui.widgets.core.conn
@@ -12,6 +10,9 @@ _ProductMainPanel — اللوحة الرئيسية: فورم + جدول + BOM t
 [Fix #4] conn معامل إلزامي في _check_orphans — كل الاستدعاءات تمرره فعلاً
 [Fix #6] توحيد import confirm_delete من المسار الموثق في ui_widgets.md
 [Fix #7] استبدال hardcoded strings بـ tr()
+[Fix #8] توحيد import BaseWarningBar من المسار الصحيح:
+  من: ui.widgets.shared.base_warning_bar
+  إلى: ui.widgets.components.notification
 """
 
 from PyQt5.QtWidgets import (
@@ -19,13 +20,11 @@ from PyQt5.QtWidgets import (
 )
 from PyQt5.QtCore import Qt
 
-from db.shared.items_repo import fetch_item, delete_item
-# [Fix #6] توحيد import confirm_delete من المسار الموثق في ui_widgets.md
-from ui.widgets.dialogs.confirm import confirm_delete
-# [Fix #1] توحيد import LiveConnMixin من المسار الموثق في ui_widgets.md
-from ui.widgets.core.conn       import LiveConnMixin
-from ui.widgets.core.i18n       import tr
-from ui.widgets.shared.base_warning_bar import BaseWarningBar
+from services.shared.item_service   import ItemService
+from ui.widgets.dialogs.confirm     import confirm_delete
+from ui.widgets.core.conn           import LiveConnMixin
+from ui.widgets.core.i18n          import tr
+from ui.widgets.components.notification import BaseWarningBar   # ✅ كان: ui.widgets.shared.base_warning_bar
 from ui.tabs.costing.shared.bom_tree    import BomTree
 from ui.app_settings import _C
 from ui.events import bus
@@ -70,19 +69,16 @@ class _ProductMainPanel(QWidget, LiveConnMixin):
 
         splitter = QSplitter(Qt.Vertical)
         splitter.setHandleWidth(6)
-        # [Fix #7] style مربوط بـ _C بدل hardcoded
         splitter.setStyleSheet(_splitter_style())
 
         self._form = _FormPanel(self.conn, self.product_type, self._get_catalog)
         bus.data_changed.connect(self._refresh_form_catalog)
 
-        from PyQt5.QtWidgets import QWidget as _W
-        mid_widget = _W()
+        mid_widget = QWidget()
         mid_layout = QVBoxLayout(mid_widget)
         mid_layout.setContentsMargins(0, 0, 0, 0)
         mid_layout.setSpacing(0)
 
-        # [Fix #7] استخدام tr() بدل hardcoded
         self._warning = BaseWarningBar(
             on_fix=self._fix_orphans,
             on_edit=self._edit_selected,
@@ -112,7 +108,6 @@ class _ProductMainPanel(QWidget, LiveConnMixin):
 
         root.addWidget(splitter)
 
-    # [Fix #3] دمج المنطق المشترك في دالة واحدة بدل التكرار
     def _refresh_for_product(self, pid: int):
         """تحديث الـ warning bar والـ BOM tree لمنتج محدد."""
         try:
@@ -141,11 +136,10 @@ class _ProductMainPanel(QWidget, LiveConnMixin):
             return
         self._form._rows.refresh_catalog(new_catalog)
 
-    # [Fix #4] conn معامل إلزامي — كل الاستدعاءات تمرره فعلاً
     def _check_orphans(self, pid: int, conn):
         orphans = self._orphan.fetch(conn, pid)
-        item    = fetch_item(conn, pid)
-        name    = item["name"] if item else f"ID {pid}"
+        item    = ItemService(conn).get(pid)
+        name    = item.name if item else f"ID {pid}"
         self._warning.show_orphans(orphans, name)
 
     def _fix_orphans(self):
@@ -183,14 +177,16 @@ class _ProductMainPanel(QWidget, LiveConnMixin):
             QMessageBox.warning(self, tr("خطأ"), str(e))
             return
 
-        item = fetch_item(conn, pid)
+        svc  = ItemService(conn)
+        item = svc.get(pid)
         if not item:
             return
 
-        if confirm_delete(self, item["name"]):
+        if confirm_delete(self, item.name):
             if self._form.is_editing and self._form._editing_id == pid:
                 self._form.reset()
-            delete_item(conn, pid)
+            # المنتج يُحذف بـ force_delete لأن حذفه يشمل BOM بطبيعته
+            svc.force_delete(pid)
             self._warning.setVisible(False)
             self._bom_tree.clear_tree()
             bus.data_changed.emit()

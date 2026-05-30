@@ -249,14 +249,14 @@ def _load_external_translations():
     """
     # تحميل العربية من ar.py
     try:
-        from ui.i18n.ar import AR_STRINGS
+        from .i18n.ar import AR_STRINGS
         _TRANSLATIONS["ar"].update(AR_STRINGS)
     except Exception:
         pass
 
     # تحميل الإنجليزية من en.py
     try:
-        from ui.i18n.en import EN_STRINGS
+        from .i18n.en import EN_STRINGS
         _TRANSLATIONS["en"].update(EN_STRINGS)
     except Exception:
         pass

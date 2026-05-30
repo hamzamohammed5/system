@@ -14,8 +14,8 @@ RawTab — التبويب الرئيسي للخامات.
 
 from PyQt5.QtWidgets import QTabWidget
 
-from ui.widgets.shared.tab_section_base  import TabSectionBase
-from ui.widgets.shared.category_manager  import CategoryManager
+from ui.widgets.base.tab_section  import TabSectionBase
+from ui.widgets.managers.category import CategoryManager
 
 from .raw.raw_section import _RawSection
 

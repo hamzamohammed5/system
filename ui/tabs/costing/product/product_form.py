@@ -12,26 +12,20 @@ _FormPanel — فورم إضافة / تعديل المنتج.
   من: ui.widgets.shared.connection_mixin
   إلى: ui.widgets.core.conn
 [Fix #2] حذف import ComponentRow القديم — يُستخدم فقط في _rows_manager.py
-         from ui.widgets.shared.component_row._row_widget import ComponentRow ← محذوف
-         الاستخدام الفعلي يمر عبر _RowsManager من المسار الصحيح:
-         ui.widgets.components.component_row.widget
-[Fix #3] استبدال bus.data_changed.emit() بـ emit_company_data_changed()
-         حسب توصية files_reference/models&services.md
+[Fix #3] استخدام emit_company_data_changed بدل bus.data_changed.emit()
+[Fix #9] استبدال db imports بـ services:
+  من: db.costing.bom_scenarios_repo + db.shared.items_repo
+  إلى: ScenarioService + ItemService + ProductService
 """
 
 from PyQt5.QtWidgets import QWidget, QVBoxLayout, QMessageBox
 from PyQt5.QtCore    import Qt, QTimer
 
-from db.shared.items_repo import (
-    fetch_item, fetch_orphan_bom_rows,
-)
-from db.costing.bom_scenarios_repo import (
-    fetch_default_scenario, insert_scenario,
-    fetch_bom_for_scenario,
-)
-# [Fix #1] توحيد import LiveConnMixin من المسار الموثق في ui_widgets.md
+from services.costing.scenario_service import ScenarioService
+from services.costing.product_service  import ProductService
+from services.shared.item_service      import ItemService
+
 from ui.widgets.core.conn   import LiveConnMixin
-# [Fix #3] استخدام emit_company_data_changed بدل bus.data_changed.emit()
 from ui.widgets.core.events import emit_company_data_changed
 from ui.events import bus
 
@@ -39,9 +33,6 @@ from .form._header_bar   import _FormHeaderBar
 from .form._rows_manager import _RowsManager
 from .form._save_logic   import _SaveLogic
 
-# [Fix #2] ComponentRow مُستورد في _rows_manager.py من المسار الصحيح:
-# from ui.widgets.components.component_row.widget import ComponentRow
-# نُبقي type hint هنا بدون import مباشر
 from typing import TYPE_CHECKING
 if TYPE_CHECKING:
     from ui.widgets.components.component_row.widget import ComponentRow
@@ -64,7 +55,6 @@ class _FormPanel(QWidget, LiveConnMixin):
         root.setContentsMargins(0, 0, 0, 0)
         root.setSpacing(0)
 
-        # ── الهيدر ──
         self._header = _FormHeaderBar(self._live_conn(), scope=self._scope)
         self._header.add_row_clicked.connect(lambda: self._add_row())
         self._header.save_clicked.connect(self.save)
@@ -72,21 +62,17 @@ class _FormPanel(QWidget, LiveConnMixin):
         self._header.scenario_changed.connect(self._on_scenario_changed)
         root.addWidget(self._header)
 
-        # ── صفوف المكونات ──
         self._rows = _RowsManager(self._catalog_fn)
         root.addWidget(self._rows, stretch=1)
 
-        # ── saver ──
         self._saver = _SaveLogic(conn_fn=self._live_conn)
 
-        # صف افتراضي
         self._add_row()
 
     # ── Shorthands للـ header ─────────────────────────────
 
     @property
     def rows_layout(self):
-        """للتوافق مع الكود القديم في _ProductMainPanel."""
         return self._rows.rows_layout
 
     @property
@@ -123,20 +109,21 @@ class _FormPanel(QWidget, LiveConnMixin):
     def load_product(self, pid: int):
         try:
             conn = self._live_conn()
-            item = fetch_item(conn, pid)
+            item = ItemService(conn).get(pid)
         except Exception:
             return
         if not item:
             return
 
         self.clear_rows()
-        self._header.product_name = item["name"]
-        self._header.set_category(item["category_id"])
+        self._header.product_name = item.name
+        self._header.set_category(item.category_id)
         self._header.scenarios_panel.load_item(pid)
 
         try:
-            sc = fetch_default_scenario(conn, pid)
-            sc_id = sc["id"] if sc else insert_scenario(conn, pid, "سيناريو 1", is_default=True)
+            svc = ScenarioService(conn)
+            sc  = svc.get_default(pid)
+            sc_id = sc.id if sc else svc.ensure_default(pid)
         except Exception:
             sc_id = None
 
@@ -145,13 +132,13 @@ class _FormPanel(QWidget, LiveConnMixin):
             self._load_bom_for_scenario(pid, sc_id)
 
         try:
-            n_orphans = len(fetch_orphan_bom_rows(conn, pid))
+            orphan_count = len(ProductService(conn).get_orphan_components(pid))
         except Exception:
-            n_orphans = 0
+            orphan_count = 0
 
         label = (
-            f"تعديل: {item['name']}  {n_orphans} مكون ناقص"
-            if n_orphans else f"تعديل: {item['name']}"
+            f"تعديل: {item.name}  {orphan_count} مكون ناقص"
+            if orphan_count else f"تعديل: {item.name}"
         )
         self.enter_edit_mode(pid, label)
         self._header.inp_name.setFocus()
@@ -164,39 +151,38 @@ class _FormPanel(QWidget, LiveConnMixin):
             self._add_row()
             return
 
-        orphan_map = {
-            (o["child_type"], o["child_id"]): o["child_name"]
-            for o in fetch_orphan_bom_rows(conn, pid)
-        }
-
+        # بناء orphan_map من ProductService
         try:
-            bom_rows = fetch_bom_for_scenario(conn, scenario_id)
+            orphans    = ProductService(conn).get_orphan_components(pid)
+            orphan_map = {(o.child_type, o.child_id): getattr(o, "name", None)
+                          for o in orphans}
         except Exception:
-            try:
-                from db.shared.items_repo import fetch_bom
-                bom_rows = fetch_bom(conn, pid)
-            except Exception:
-                bom_rows = []
+            orphan_map = {}
+
+        # جلب BOM من ScenarioService
+        try:
+            svc      = ScenarioService(conn)
+            bom_rows = svc.get_bom(scenario_id)
+        except Exception:
+            bom_rows = []
 
         for row_data in (bom_rows or []):
-            child_type = row_data["child_type"]
-            child_id   = row_data["child_id"]
-            qty        = row_data["qty"]
-
-            try:
-                waste_pct = float(row_data["waste_pct"]) if row_data["waste_pct"] else 0.0
-            except (KeyError, TypeError):
-                waste_pct = 0.0
-
-            try:
-                variant_id = row_data["variant_id"]
-            except (KeyError, IndexError):
-                variant_id = None
-
-            try:
-                machine_op_row_id = row_data["machine_op_row_id"]
-            except (KeyError, IndexError):
-                machine_op_row_id = None
+            # ScenarioService يرجع BomRowResult objects
+            if hasattr(row_data, "child_type"):
+                child_type        = row_data.child_type
+                child_id          = row_data.child_id
+                qty               = row_data.qty
+                waste_pct         = float(row_data.waste_pct or 0.0)
+                variant_id        = row_data.variant_id
+                machine_op_row_id = row_data.machine_op_row_id
+            else:
+                # fallback لو رجع dict
+                child_type        = row_data["child_type"]
+                child_id          = row_data["child_id"]
+                qty               = row_data["qty"]
+                waste_pct         = float(row_data.get("waste_pct") or 0.0)
+                variant_id        = row_data.get("variant_id")
+                machine_op_row_id = row_data.get("machine_op_row_id")
 
             o_name = orphan_map.get((child_type, child_id))
 
@@ -247,7 +233,6 @@ class _FormPanel(QWidget, LiveConnMixin):
         )
         if pid is not None:
             self.reset()
-            # [Fix #3] استخدام emit_company_data_changed بدل bus.data_changed.emit()
             QTimer.singleShot(0, emit_company_data_changed)
 
     # ══════════════════════════════════════════════════════
