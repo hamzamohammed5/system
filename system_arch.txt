@@ -1,5 +1,5 @@
 File Tree Snapshot
-Generated : 2026-05-30 19:18:52
+Generated : 2026-05-30 19:22:56
 Source    : D:\My Workspace\Hg\Alhabaar\accountant\system
 Extensions: .md, .py
 ────────────────────────────────────────────────────────────
@@ -62,7 +62,10 @@ system/
 │   ├── db_06_costing_pricing.md
 │   ├── db_07_shared.md
 │   ├── i18n_reference.md
-│   ├── models&services.md
+│   ├── models.md
+│   ├── services_1_shared.md
+│   ├── services_2_costing.md
+│   ├── services_3_orders_accounting.md
 │   ├── ui_structure.md
 │   ├── ui_widgets_1_app_settings.md
 │   ├── ui_widgets_2_base_panels.md

@@ -1,6 +1,6 @@
-# دليل الكود — DB (6): التكلفة والتسعير
+# دليل الكود — DB (7): أدوات مشتركة
 
-> جداول إضافية في `erp.db` — السيناريوهات، صفوف العمليات، المتغيرات، التسعير، العروض.
+> `db/shared/` — الاتصالات، JSON، جسر العناصر المشتركة.
 
 ---
 
@@ -8,194 +8,99 @@
 
 | القسم | الملفات |
 |-------|---------|
-| [هيكل الجداول الإضافية](#هيكل-الجداول-الإضافية) | — |
-| [bom_scenarios_repo](#bom_scenarios_repo) | `db/costing/bom_scenarios_repo.py` |
-| [operations_repo](#operations_repo) | `db/costing/operations_repo.py` |
-| [machine_op_rows_repo](#machine_op_rows_repo) | `db/costing/machine_op_rows_repo.py` |
-| [raw_variants_repo](#raw_variants_repo) | `db/costing/raw_variants_repo.py` |
-| [pricing_repo](#pricing_repo) | `db/pricing/pricing_repo.py` |
-| [offers_repo](#offers_repo) | `db/pricing/offers_repo.py` |
+| [connection](#connection) | `db/shared/connection.py` |
+| [json_utils](#json_utils) | `db/shared/json_utils.py` |
+| [shared_items_bridge](#shared_items_bridge) | `db/shared/shared_items_bridge.py` |
 
 ---
 
-## هيكل الجداول الإضافية
+## connection
 
-جداول إضافية في `erp.db`:
-
-| الجدول | الأعمدة الرئيسية |
-|--------|-----------------|
-| `bom_scenarios` | `id, item_id→CASCADE, name, is_default, notes` |
-| `machine_op_rows` | `id, op_id→machine_ops, label, value, count, sort_order` |
-| `raw_variants` | `id, item_id→items CASCADE, name, pieces>0, notes` |
-
-جداول `erp.db` للتسعير:
-
-| الجدول | الأعمدة الرئيسية |
-|--------|-----------------|
-| `pricing` | `id, item_id UNIQUE, margin, price` |
-
----
-
-## bom_scenarios_repo
-
-### `db/costing/bom_scenarios_repo.py`
-
-#### BOM columns cache — [إصلاح 8] موحد مع items_repo
+### `db/shared/connection.py`
 
 ```python
-invalidate_bom_cols_cache(conn=None)
-# استدعه بعد أي migration يضيف أعمدة لجدول bom
+get_central_connection() -> sqlite3.Connection
+
+get_connection(db="erp") -> ProtectedConnection
+# db: "erp" | "accounting" | "inventory" | "orders" | "designs"
+# ⚠️ يرمي RuntimeError لو لا توجد شركة نشطة
+# "costing" مُهمَل [إصلاح 10] → DeprecationWarning + يُحوَّل لـ "erp"
 ```
 
-#### السيناريوهات
+> ⚠️ **[T-03]** `get_costing_connection()` محذوفة — ImportError واضح.
+> البديل: `company_state.get_erp_conn()` أو `get_connection("erp")`
 
 ```python
-fetch_scenarios(conn, item_id) -> list
-fetch_scenario(conn, scenario_id) -> row
-fetch_default_scenario(conn, item_id) -> row | None
-insert_scenario(conn, item_id, name, is_default=False, notes="") -> int
-update_scenario(conn, scenario_id, name, notes="")
-set_default_scenario(conn, scenario_id)
-delete_scenario(conn, scenario_id) -> bool  # يرفض لو آخر سيناريو
-clone_scenario(conn, scenario_id, new_name) -> int
-```
+get_accounting_connection() -> ProtectedConnection
+get_inventory_connection() -> ProtectedConnection
 
-#### BOM للسيناريو
-
-```python
-fetch_bom_for_scenario(conn, scenario_id) -> list
-replace_bom_for_scenario(conn, scenario_id, rows)
-# rows: [(child_type, child_id, qty, waste_pct, variant_id, machine_op_row_id), ...]
+get_linked_connection(primary="inventory", attach=None) -> sqlite3.Connection
+# connection مع ATTACH لـ DBs إضافية للـ JOIN
 ```
 
 ---
 
-## operations_repo
+## json_utils
 
-### `db/costing/operations_repo.py`
-
-#### الماكينات
+### `db/shared/json_utils.py`
 
 ```python
-fetch_all_machines(conn) -> list
-fetch_machine(conn, machine_id) -> row
-insert_machine(conn, name, rate_per_hour, rate_per_unit, category_id=None) -> int
-update_machine(conn, machine_id, name, rate_per_hour, rate_per_unit, category_id=None)
-count_machine_ops(conn, machine_id) -> int
-# [تحسين 19] للتحقق قبل الحذف — CASCADE صامت على machine_ops
-delete_machine(conn, machine_id)  # CASCADE على machine_ops
-```
-
-#### عمليات العمالة
-
-```python
-fetch_all_labor_ops(conn) -> list
-fetch_labor_op(conn, op_id) -> row
-insert_labor_op(conn, name, minutes, category_id=None) -> int
-update_labor_op(conn, op_id, name, minutes, category_id=None)
-delete_labor_op(conn, op_id)
-```
-
-#### عمليات التشغيل
-
-```python
-fetch_all_machine_ops(conn) -> list
-fetch_machine_op(conn, op_id) -> row
-insert_machine_op(conn, machine_id, name, mode, value, category_id=None) -> int
-# mode: "time" | "unit"
-update_machine_op(conn, op_id, machine_id, name, mode, value, category_id=None)
-delete_machine_op(conn, op_id)
+decode_json(data_str: str) -> dict        # JSON → dict | {} عند الفشل
+encode_json(data: dict) -> str            # dict → JSON | "{}"
+decode_json_list(data_str: str) -> list   # JSON → list | []
+encode_json_list(data: list) -> str       # list → JSON | "[]"
+# [تحسين 13] مُستخدمة في categories_repo لـ template_fields
 ```
 
 ---
 
-## machine_op_rows_repo
+## shared_items_bridge
 
-### `db/costing/machine_op_rows_repo.py`
+### `db/shared/shared_items_bridge.py`
 
 ```python
-fetch_op_rows(conn, op_id) -> list
-fetch_op_row(conn, row_id) -> row
-insert_op_row(conn, op_id, label="", value=0.0, count=1.0, sort_order=0) -> int
-update_op_row(conn, row_id, label, value, count, sort_order=0)
-delete_op_row(conn, row_id)
-replace_op_rows(conn, op_id, rows: list[tuple])
-# rows: [(label, value, count), ...]
+SharedItemsBridge(company_id: int)
+# [إصلاح 33] يستخدم decode_json/encode_json من json_utils
+# [A-02] is_shared_id و extract_shared_id مُعادان تصديرهما من items_repo
 
-calc_op_row_cost(conn, row_id) -> float
-# mode="time": (value/60) × rate_per_hour / count
-# mode="unit": (value × rate_per_unit) / count
+bridge.fetch_shared_items_for_type(shared_type) -> list
+bridge.fetch_items_by_type_with_shared(item_type) -> list
+bridge.fetch_shared_item_as_row(shared_item_id, shared_type=None) -> dict | None
+bridge.update_shared_item(shared_item_id, name, data: dict)
+bridge.link_shared_item(shared_item_id)
+bridge.unlink_shared_item(shared_item_id)
+bridge.is_linked(shared_item_id) -> bool
+bridge.batch_link(shared_item_ids: list)
+bridge.batch_unlink(shared_item_ids: list)
+bridge.calc_shared_raw_unit_price(shared_item_id) -> float
 
-calc_op_total_cost(conn, op_id) -> float
-# مجموع تكاليف كل الصفوف
+get_bridge() -> SharedItemsBridge | None
+
+# re-exports من items_repo [A-02]:
+is_shared_id(item_id) -> bool
+extract_shared_id(item_id) -> int | None
 ```
 
 ---
 
-## raw_variants_repo
+## ملاحظات عامة DB
 
-### `db/costing/raw_variants_repo.py`
+**1. ترتيب الإنشاء:** `categories` يجب أن يُنشأ أولاً في schema [إصلاح 4].
 
-```python
-fetch_variants_for_item(conn, item_id) -> list
-fetch_variant(conn, variant_id) -> row
-insert_variant(conn, item_id, name, pieces, notes=None) -> int
-update_variant(conn, variant_id, name, pieces, notes=None)
-delete_variant(conn, variant_id)
+**2. العناصر المشتركة:** IDs بصيغة `"shared:{n}"` (string) — تحقق دائماً بـ `is_shared_id()` من `db.shared.items_repo` [A-02].
 
-calc_unit_cost_with_variant(item_row, variant_id, conn) -> float
-# الأولوية: variant → price÷pieces | total_qty → price÷total_qty | price مباشرة
-```
+**3. الـ connections:** لا تُغلق `ProtectedConnection` مباشرة — اتركها للـ `company_state`. فقط `get_central_connection()` تحتاج `.close()`.
 
----
+**4. BOM columns cache:** استدعِ `invalidate_bom_cols_cache(conn)` بعد أي migration يضيف أعمدة لجدول bom.
 
-## pricing_repo
+**5. SQLite type affinity:** جدول `settings` يخزن كل القيم كـ TEXT — استخدم `float(get_setting(...))` عند الحاجة [إصلاح 5].
 
-### `db/pricing/pricing_repo.py`
+**6. الـ accounting.db:** تحقق من `_verify_conn_is_accounting()` قبل أي seed أو write لتجنب الكتابة على `erp.db` بالخطأ [إصلاح 9 + 11 + Q-01].
 
-```python
-fetch_all_pricing(conn, limit=500, offset=0) -> list
-# [تحسين 23b] يدعم pagination
+**7. الـ WACC:** حساب `avg_cost` في المخزن تلقائي في `record_inventory_move()` — لا تحسبه يدوياً.
 
-fetch_pricing_count(conn) -> int
-# [تحسين 23b] إجمالي المنتجات النهائية
+**8. Thread Safety:** `CompanyState.set_active()` آمن للـ threads عبر `_invalidate_pending` Event [C-03]. استخدم `company_state.wait_for_invalidate()` من AppState قبل قراءة الـ cache.
 
-fetch_all_pricing_paginated(conn, limit=200, offset=0,
-                            category_id=None, search=None,
-                            only_priced=False) -> list
-# [تحسين 23b] pagination كاملة مع فلترة
+**9. Central Connection Cache:** `_get_central_conn_cached()` في `items_repo` يُقلّص فتح/غلق connections المتكرر. يُبطَل تلقائياً عند تغيير الشركة [تحسين 8].
 
-fetch_pricing(conn, item_id) -> row | None
-
-upsert_pricing(conn, item_id, margin, price)
-# [تحسين 23] يتحقق أن item_id نوعه "final"
-# Raises: ValueError لو غير موجود أو نوعه ليس final
-
-delete_pricing(conn, item_id)
-```
-
----
-
-## offers_repo
-
-### `db/pricing/offers_repo.py`
-
-```python
-fetch_all_offers(conn) -> list
-fetch_offer(conn, offer_id) -> row
-insert_offer(conn, name, discount, notes="", category_id=None) -> int
-update_offer(conn, offer_id, name, discount, notes="", category_id=None)
-delete_offer(conn, offer_id)
-
-fetch_offer_items(conn, offer_id) -> list
-replace_offer_items(conn, offer_id, items: list[tuple])
-# items: [(item_id, qty), ...]
-
-calc_offer_summary(conn, offer_id) -> dict
-# [تحسين 14] cost_cache — كل item_id يُحسب مرة واحدة
-# [P-02] central_conn مشترك لكل الحسابات — لا فتح/غلق متكرر
-# {offer_id, offer_name, discount, lines: [...], total_listed, sell_price,
-#  total_cost, profit}
-# كل line: {item_id, item_name, qty, unit_cost, unit_price,
-#           line_cost, line_listed, has_pricing}
-```
+**10. Migration Framework (orders.db):** كل migration يجب أن يكون idempotent. يُسجَّل في `schema_migrations` ويتخطى المُطبَّق [تحسين 25].
