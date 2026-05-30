@@ -25,7 +25,7 @@
 COLUMNS: list          # أسماء الأعمدة
 STRETCH_COL: int       # عمود يتمدد (-1 = آخر عمود)
 EMPTY_ICON: str
-EMPTY_TITLE: str       # مفتاح tr() أو نص مباشر
+EMPTY_TITLE: str       # مفتاح tr() أو نص مباشر — يُترجم تلقائياً عند تغيير اللغة
 _load_rows() -> list   # تحميل البيانات — يرجع list[dict]
 _fill_row(table, row_index, row_data)  # ملء صف واحد
 ```
@@ -104,12 +104,13 @@ panel.table -> QTableWidget
 from ui.widgets.base.list_panel import BaseListPanel
 from ui.widgets.core.i18n import tr
 from ui.widgets.tables.items import make_item
+from ui.app_settings import _C
 
 class MyListPanel(BaseListPanel):
     COLUMNS     = [tr("name"), tr("price")]
     STRETCH_COL = 0
     EMPTY_ICON  = "📦"
-    EMPTY_TITLE = "no_data"    # مفتاح tr()
+    EMPTY_TITLE = "no_data"    # مفتاح tr() — يُترجم تلقائياً عند تغيير اللغة
     LIST_TITLE  = tr("raw_materials")
     ADD_TEXT    = tr("btn_add")
     CONNECT_BUS = True
@@ -123,9 +124,11 @@ class MyListPanel(BaseListPanel):
 
     def _on_theme_changed(self, theme_name: str):
         super()._on_theme_changed(theme_name)
+        # إعادة تطبيق أي styles إضافية خاصة بالـ subclass
 
     def _on_language_changed(self, lang_code: str):
         super()._on_language_changed(lang_code)
+        # تحديث أي نصوص إضافية خاصة بالـ subclass
 ```
 
 ---
@@ -161,6 +164,8 @@ _on_theme_changed(theme_name: str)
 _on_language_changed(lang_code: str)
 # يُحدّث نص _empty عبر _empty.set_title(_tr_safe(EMPTY_TITLE))
 ```
+
+**ملاحظة (theme/lang):** عند `CONNECT_BUS=True` يشترك تلقائياً في `theme_changed` و `language_changed` إضافةً لـ `data_changed`.
 
 **Signals:** `saved = pyqtSignal(int)` | `deleted = pyqtSignal()`
 
