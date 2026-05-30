@@ -603,4 +603,19 @@ EN_STRINGS: dict[str, str] = {
     # Pricing tabs
     "pricing_tab":              "Pricing",
     "offers_tab":               "Offers",
+    
+    # ── CategoryManager / CategoryForm ──
+    "category_data":          "Category Data",
+    "category_add":           "Add New",
+    "category_name":          "Category Name",
+    "category_parent":        "Parent Category",
+    "category_color":         "Color",
+    "category_name_required": "Enter category name",
+    "category_select_first":  "Select a category first",
+
+    # ── General ──
+    "filter_all":             "— All —",
+    "raw_materials":          "Raw Materials",
+    "select_company":         "Select an active company first",
+
 }
