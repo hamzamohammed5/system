@@ -3,12 +3,9 @@ ui/widgets/dialogs/settings_dialog.py
 ======================================
 نافذة الإعدادات — حجم الخط + مسار GIMP + وحدات القياس + الثيم + اللغة.
 
-[إصلاح] الاستيراد من unit_service مباشرة بدل combo/unit.py (re-export):
+[إصلاح] الاستيراد من unit_service مباشرة — المصدر الأصلي للدوال.
   قبل: from ui.widgets.combo.unit import load_units, add_unit, ...
   بعد: from ui.widgets.combo.unit_service import load_units, add_unit, ...
-
-  combo/unit.py يُعيد تصدير هذه الدوال من unit_service.py،
-  فالأفضل الاستيراد من المصدر مباشرة لتجنب الاعتماد على re-exports غير مباشرة.
 """
 
 import os
@@ -26,7 +23,6 @@ from PyQt5.QtWidgets import (
 from ui.font  import get_font_size, set_font_size, apply_font, fs
 from ui.theme import _C
 
-# [إصلاح] استيراد من المصدر مباشرة بدل re-export من combo/unit.py
 from ui.widgets.combo.unit_service import (
     load_units, add_unit, remove_unit,
     reset_units_to_default, _DEFAULT_UNITS,
