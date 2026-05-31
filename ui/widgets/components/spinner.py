@@ -2,6 +2,8 @@
 ui/widgets/components/spinner.py
 =========================================
 LoadingSpinner / LoadingOverlay / LoadingButton — مؤشرات تحميل موحدة.
+
+[Refactor V3] إصلاح imports: ui.app_settings → ui.theme + ui.font
 """
 from PyQt5.QtWidgets import (
     QWidget, QLabel, QVBoxLayout, QHBoxLayout, QFrame,
@@ -9,8 +11,8 @@ from PyQt5.QtWidgets import (
 )
 from PyQt5.QtCore import Qt, QTimer
 
-from ui.app_settings import _C, fs
-from ui.app_settings import get_font_size
+from ui.theme import _C
+from ui.font  import fs, get_font_size
 
 
 _FRAMES = ["⠋", "⠙", "⠸", "⠴", "⠦", "⠇"]

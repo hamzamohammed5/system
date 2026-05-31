@@ -3,12 +3,15 @@ ui/widgets/components/notification.py
 =======================================
 NotificationBar  — شريط إشعارات مؤقت.
 BaseWarningBar   — شريط تحذير ثابت مع أزرار إصلاح وتعديل.
+
+[Refactor V3] إصلاح imports: ui.app_settings → ui.theme + ui.font
 """
 from PyQt5.QtWidgets import QFrame, QHBoxLayout, QLabel, QPushButton
 from PyQt5.QtCore    import QTimer, pyqtSignal
 
-from ui.app_settings    import _C, fs, get_font_size
-from ..core.colors      import status_colors
+from ui.theme import _C
+from ui.font  import fs, get_font_size
+from ..core.colors import status_colors
 
 _ICONS = {
     "success": "✅",
@@ -44,7 +47,6 @@ class NotificationBar(QFrame):
 
         base = get_font_size()
         self._lbl_icon = QLabel()
-        # ← استخدام fs() بدل hardcoded "14px"
         self._lbl_icon.setStyleSheet(
             f"background:transparent; border:none; font-size:{fs(base, 0)}pt;"
         )
@@ -67,11 +69,6 @@ class NotificationBar(QFrame):
             lay.addWidget(btn)
 
     def show(self, message: str, level: str = "info", auto_hide: int = 0):
-        """
-        يعرض الإشعار.
-        level: "success" | "info" | "warning" | "danger"
-        auto_hide: إخفاء بعد N ms (0 = لا إخفاء تلقائي)
-        """
         cfg  = status_colors(level)
         icon = _ICONS.get(level, "ℹ️")
         base = get_font_size()
@@ -144,7 +141,6 @@ class BaseWarningBar(QFrame):
 
         base = get_font_size()
         lbl_icon = QLabel("⚠️")
-        # ← استخدام fs() بدل hardcoded "16px"
         lbl_icon.setStyleSheet(
             f"font-size:{fs(base, +2)}pt; background:transparent; border:none;"
         )

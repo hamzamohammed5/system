@@ -1,9 +1,7 @@
 """
 ui/main_window_helper/_nav_button.py
 ===================================================
-
-التغيير: الثوابت (SIDEBAR_EXPANDED_WIDTH، إلخ) نُقلت لـ app_settings.py
-وأصبحت مستوردة من هناك — لا تعريف مكرر.
+[Refactor V3] إصلاح imports: ui.app_settings → ui.theme + ui.font + ui.constants
 """
 
 from PyQt5.QtWidgets import (
@@ -12,12 +10,13 @@ from PyQt5.QtWidgets import (
 )
 from PyQt5.QtCore import Qt
 
-from ui.app_settings import (
-    get_font_size, _C,
-    SIDEBAR_EXPANDED_WIDTH,   # noqa: F401 — مُعاد تصديرها للـ imports القديمة
-    SIDEBAR_COLLAPSED_WIDTH,  # noqa: F401
-    CONTENT_MIN_WIDTH,        # noqa: F401
-    WINDOW_DEFAULT_W,         # noqa: F401
+from ui.theme     import _C
+from ui.font      import get_font_size
+from ui.constants import (
+    SIDEBAR_EXPANDED_WIDTH,
+    SIDEBAR_COLLAPSED_WIDTH,
+    CONTENT_MIN_WIDTH,
+    WINDOW_DEFAULT_W,
 )
 
 

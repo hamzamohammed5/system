@@ -1,12 +1,13 @@
 """
 ui/main_window_helper/_toggle_button.py
 ===================================================
+[Refactor V3] إصلاح imports: ui.app_settings → ui.theme
 """
 
 from PyQt5.QtWidgets import QPushButton
 from PyQt5.QtCore import Qt
 
-from ui.app_settings  import _C
+from ui.theme import _C
 
 # ══════════════════════════════════════════════════════════
 # _ToggleButton
@@ -38,5 +39,3 @@ class _ToggleButton(QPushButton):
         self._collapsed = not self._collapsed
         self._refresh()
         return self._collapsed
-
-

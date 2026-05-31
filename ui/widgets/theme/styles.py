@@ -7,12 +7,14 @@ scroll_style()  — المصدر الوحيد للـ scroll stylesheet.
 h_divider()     — منقولة من theme/builders.py (المحذوف).
 v_divider()     — منقولة من theme/builders.py (المحذوف).
 wrap_in_scroll()— منقولة من utils/scroll.py   (المحذوف).
+
+[Refactor V3] إصلاح imports: ui.app_settings → ui.theme + ui.font
 """
 from PyQt5.QtWidgets import QFrame, QScrollArea, QWidget, QSizePolicy
 from PyQt5.QtCore    import Qt
 
-from ui.app_settings import _C, fs
-from ui.app_settings import get_font_size
+from ui.theme import _C
+from ui.font  import fs, get_font_size
 
 
 # ══════════════════════════════════════════════════════════════════
@@ -172,7 +174,7 @@ def card_style(bg: str = None, border: str = None, radius: int = 10) -> str:
 
 
 def status_card_style(status: str = "info", radius: int = 8) -> str:
-    from ..core.colors import status_colors
+    from ui.widgets.core.colors import status_colors
     s = status_colors(status)
     return f"""
         QFrame {{
@@ -289,7 +291,7 @@ def toolbar_style() -> str:
 # ══════════════════════════════════════════════════════════════════
 
 def status_label_style(status: str = "info", font_offset: int = 0) -> str:
-    from ..core.colors import status_colors
+    from ui.widgets.core.colors import status_colors
     base = get_font_size()
     s = status_colors(status)
     return (
@@ -337,7 +339,7 @@ def link_btn_style(color: str = None) -> str:
 
 
 # ══════════════════════════════════════════════════════════════════
-# Dividers  ← منقولة من theme/builders.py (المحذوف)
+# Dividers
 # ══════════════════════════════════════════════════════════════════
 
 def h_divider(color: str = None, height: int = 1) -> QFrame:
@@ -362,7 +364,7 @@ def v_divider(color: str = None, width: int = 1, margin_v: int = 4) -> QFrame:
 
 
 # ══════════════════════════════════════════════════════════════════
-# Scroll Widget  ← منقول من utils/scroll.py (المحذوف)
+# Scroll Widget
 # ══════════════════════════════════════════════════════════════════
 
 def wrap_in_scroll(widget: QWidget,

@@ -1,15 +1,9 @@
 """
 ui/widgets/components/stat_row.py
 ===================================
-كل البطاقات الإحصائية والشارات في مكان واحد:
+كل البطاقات الإحصائية والشارات في مكان واحد.
 
-  BadgeLabel    — شارة نصية ملونة
-  StatCard      — بطاقة إحصائية مستقلة (في detail headers)
-  StatusChip    — شريحة حالة (أيقونة + اسم + عدد)
-  StatItem      — dataclass لتعريف بطاقة
-  _StatCard     — بطاقة خفيفة مضمّنة في StatRow
-  StatRow       — صف أفقي من البطاقات
-  make_stat_row / stat_card_pair / make_stat_card_simple / make_status_chip
+[Refactor V3] إصلاح imports: ui.app_settings → ui.theme + ui.font
 """
 
 from __future__ import annotations
@@ -22,8 +16,8 @@ from PyQt5.QtWidgets import (
 from PyQt5.QtCore import Qt
 from PyQt5.QtGui  import QFont
 
-from ui.app_settings import _C, fs
-from ui.app_settings import get_font_size
+from ui.theme import _C
+from ui.font  import fs, get_font_size
 from ..core.colors   import card_colors
 from ..theme.styles import v_divider
 
@@ -296,9 +290,7 @@ class _StatCard(QFrame):
 
 
 class StatRow(QWidget):
-    """
-    صف أفقي من البطاقات الإحصائية مع فواصل عمودية اختيارية.
-    """
+    """صف أفقي من البطاقات الإحصائية مع فواصل عمودية اختيارية."""
 
     def __init__(self, items: list[StatItem],
                  separator: bool = True,
@@ -363,7 +355,6 @@ def make_stat_row(*items: StatItem,
 
 def stat_card_pair(label: str, color: str = "#1565c0",
                    icon: str = "") -> tuple[QFrame, QLabel]:
-    """يبني بطاقة مع label مرجع للتحديث السريع."""
     item = StatItem(label=label, color=color, icon=icon)
     card = _StatCard(item)
     return card, card.value_label()
@@ -381,7 +372,7 @@ def make_status_chip(icon: str, label: str, count: int = 0,
 
 
 # ══════════════════════════════════════════════════════════
-# StatusCard — مضمومة من components/card.py
+# StatusCard
 # ══════════════════════════════════════════════════════════
 
 class StatusCard(QFrame):

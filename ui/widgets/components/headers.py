@@ -1,22 +1,9 @@
 """
 ui/widgets/components/headers.py
 ============================================
-كل هيدرات التطبيق في ملف واحد:
+كل هيدرات التطبيق في ملف واحد.
 
-  SectionHeader  — هيدر قسم داخلي
-  PageHeader     — هيدر صفحة كاملة
-  DetailHeader   — هيدر صفحة تفاصيل
-  ListHeader     — هيدر لوحة قائمة
-  SearchBar      — حقل بحث مع delay
-  StatusBar      — شريط حالة
-
-التغييرات:
-  - [i18n] SearchBar placeholder يستخدم tr("list_search_placeholder").
-  - [i18n] StatusBar يستخدم tr() لنصوص العداد.
-  - [i18n] ListHeader يشترك في bus.language_changed لتحديث النصوص.
-  - [تحسين 22] DetailHeader lazy initialization لـ ActionToolbar محفوظ.
-  - [Q-04] _tb_section مخفي بـ setVisible(False) حتى أول استخدام فعلي
-    للـ toolbar — يمنع spacing وارتفاع فارغ في الـ header.
+[Refactor V3] إصلاح imports: ui.app_settings → ui.theme + ui.font
 """
 
 from PyQt5.QtWidgets import (
@@ -26,8 +13,8 @@ from PyQt5.QtWidgets import (
 from PyQt5.QtCore import Qt, QTimer, pyqtSignal
 from PyQt5.QtGui  import QFont
 
-from ui.app_settings import _C, fs
-from ui.app_settings import get_font_size
+from ui.theme import _C
+from ui.font  import fs, get_font_size
 from ..theme.styles import h_divider, v_divider
 from .button          import make_btn
 from .stat_row        import BadgeLabel
@@ -49,7 +36,6 @@ class SearchBar(QWidget):
                  height: int = 34,
                  parent=None):
         super().__init__(parent)
-        # [i18n] استخدام tr() للـ placeholder الافتراضي
         _placeholder = placeholder or tr("list_search_placeholder")
         self._delay = delay_ms
         self._timer = QTimer(self)
@@ -128,7 +114,6 @@ class StatusBar(QLabel):
     def set_count(self, shown: int, total: int):
         self._shown = shown
         self._total = total
-        # [i18n] استخدام tr() لنصوص العداد
         if shown == total:
             self.setText(tr("showing_all", total=total))
         else:
@@ -148,9 +133,7 @@ class StatusBar(QLabel):
 # ══════════════════════════════════════════════════════════
 
 class SectionHeader(QWidget):
-    """
-    هيدر قسم داخلي: accent bar + عنوان + أزرار.
-    """
+    """هيدر قسم داخلي: accent bar + عنوان + أزرار."""
 
     def __init__(self, title: str = "", parent=None):
         super().__init__(parent)
@@ -194,9 +177,7 @@ class SectionHeader(QWidget):
 # ══════════════════════════════════════════════════════════
 
 class PageHeader(QFrame):
-    """
-    هيدر صفحة رئيسية: أيقونة + عنوان + subtitle + أزرار.
-    """
+    """هيدر صفحة رئيسية: أيقونة + عنوان + subtitle + أزرار."""
 
     def __init__(self, title: str = "", subtitle: str = "",
                  icon: str = "", accent: str = None,
@@ -288,7 +269,6 @@ class DetailHeader(QFrame):
 
     [تحسين 22] ActionToolbar يُنشأ بـ lazy initialization.
     [Q-04] _tb_section مخفي بـ setVisible(False) حتى أول استخدام فعلي للـ toolbar.
-            هذا يمنع spacing وارتفاع فارغ في الـ header لو لم يُستخدم الـ toolbar.
     """
 
     def __init__(self, bg: str = None, parent=None):
@@ -375,32 +355,23 @@ class DetailHeader(QFrame):
         root.addWidget(cards_section)
         root.addWidget(h_divider())
 
-        # [Q-04] _tb_section مخفي افتراضياً — يظهر فقط عند أول استخدام للـ toolbar
-        # هذا يمنع spacing وارتفاع فارغ لو ما استُخدم الـ toolbar
         self._tb_section = QWidget()
         self._tb_section.setStyleSheet("background:transparent;")
         self._tb_section.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Preferred)
         self._tb_lay = QVBoxLayout(self._tb_section)
         self._tb_lay.setContentsMargins(0, 8, 0, 10)
-        self._tb_section.setVisible(False)  # [Q-04] مخفي حتى أول استخدام
+        self._tb_section.setVisible(False)
         root.addWidget(self._tb_section)
 
         self._root_layout = root
 
     def _ensure_toolbar(self) -> "ActionToolbar":
-        """
-        [تحسين 22] ينشئ ActionToolbar عند الحاجة الأولى فقط.
-        [Q-04] يُظهر _tb_section عند أول استخدام.
-        """
         if self._toolbar is None:
             from .action_toolbar import ActionToolbar
             self._toolbar = ActionToolbar(spacing=8)
             self._tb_lay.addWidget(self._toolbar)
-            # [Q-04] إظهار الـ section فقط عند الحاجة الفعلية
             self._tb_section.setVisible(True)
         return self._toolbar
-
-    # ── API ──────────────────────────────────────────────
 
     def set_title(self, text: str):
         self._lbl_title.setText(text)
@@ -451,12 +422,10 @@ class DetailHeader(QFrame):
 
     def add_action(self, text: str, callback=None,
                    style: str = "primary") -> QPushButton:
-        """إضافة زر للـ toolbar — alias لـ toolbar.add_action()."""
         return self._ensure_toolbar().add_action(text, style, callback)
 
     @property
     def toolbar(self) -> "ActionToolbar":
-        """[تحسين 22] يُنشئ الـ toolbar عند أول وصول."""
         return self._ensure_toolbar()
 
 
@@ -465,11 +434,7 @@ class DetailHeader(QFrame):
 # ══════════════════════════════════════════════════════════
 
 class ListHeader(QFrame):
-    """
-    هيدر لوحة قائمة: عنوان + بحث + زر إضافة + أزرار إضافية.
-
-    [i18n] يشترك في bus.language_changed لتحديث placeholder البحث وزر الإضافة.
-    """
+    """هيدر لوحة قائمة: عنوان + بحث + زر إضافة + أزرار إضافية."""
 
     search_changed = pyqtSignal(str)
     add_clicked    = pyqtSignal()
@@ -485,7 +450,6 @@ class ListHeader(QFrame):
         self._btn_add     = None
         self._search_bar  = None
         self._btn_row     = None
-        # [i18n] placeholder افتراضي من tr()
         _placeholder = search_placeholder or tr("list_search_placeholder")
         self._build(_placeholder, search_delay)
         self._connect_language_bus()
@@ -531,7 +495,6 @@ class ListHeader(QFrame):
             root.addWidget(self._search_bar)
 
     def _connect_language_bus(self):
-        """[i18n] يشترك في bus.language_changed."""
         try:
             from ui.events import bus
             bus.language_changed.connect(
@@ -541,7 +504,6 @@ class ListHeader(QFrame):
             pass
 
     def _on_language_changed(self, lang_code: str):
-        """[i18n] يُحدّث placeholder البحث."""
         if self._search_bar:
             self._search_bar.set_placeholder(tr("list_search_placeholder"))
 

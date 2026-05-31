@@ -1,12 +1,12 @@
 """
 ui/main_window_helper/_section_label.py
 ===================================================
-[تحسين 20] _apply_style أصبحت public (قابلة للاستدعاء من _sidebar.refresh_all_buttons)
-لتحديث حجم الخط عند تغييره من الإعدادات.
+[Refactor V3] إصلاح imports: ui.app_settings → ui.theme + ui.font
 """
 
 from PyQt5.QtWidgets import QLabel
-from ui.app_settings  import _C, fs, get_font_size
+from ui.theme import _C
+from ui.font  import fs, get_font_size
 
 
 # ══════════════════════════════════════════════════════════
@@ -21,11 +21,7 @@ class _SectionLabel(QLabel):
     def _apply_style(self):
         """
         يُطبّق الـ stylesheet الحالي على الـ label.
-
-        [تحسين 20] تُستدعى من _sidebar.refresh_all_buttons() عند تغيير حجم الخط،
-        بالإضافة لاستدعائها في __init__ عند الإنشاء الأول.
-
-        تقرأ get_font_size() في كل استدعاء لضمان استخدام الحجم الحالي.
+        تُستدعى من _sidebar.refresh_all_buttons() عند تغيير حجم الخط.
         """
         base = get_font_size()
         self.setStyleSheet(f"""
