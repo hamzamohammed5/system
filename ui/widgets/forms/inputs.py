@@ -3,15 +3,10 @@ ui/widgets/forms/inputs.py
 ===========================
 Input widgets الموحدة للتطبيق.
 
-التغييرات:
-  - NotesLineEdit: بدل background:#fafafa و background:white الـ hardcoded،
-    الآن يستخدم _C['bg_surface_2'] و _C['bg_input'].
-  - باقي الـ widgets لم تتغير.
-
-  [إصلاح] حذف `from ..core import get_font_size as _get_font_size` المكرر —
-    المصدر الصحيح هو `ui.font` مباشرة.
-  [إصلاح] `from ..theme.styles import ...` → `from ..theme.input_styles import ...`
-    لأن theme/styles.py حُذف بعد Refactor V3.
+[إصلاح 1] from ..theme.styles → from ..theme.input_styles
+          theme/styles.py محذوف بعد Refactor V3.
+[إصلاح 2] حذف from ..core import get_font_size as _get_font_size
+          مكرر مع from ui.font import get_font_size أعلاه.
 """
 from PyQt5.QtWidgets import (
     QWidget, QHBoxLayout, QLineEdit, QLabel,
@@ -22,9 +17,9 @@ from PyQt5.QtGui  import QFont
 
 from ui.theme import _C
 from ui.font  import fs, get_font_size
-# [إصلاح] input_styles بدل styles (المسار القديم المحذوف)
+# [إصلاح 1] المسار الصحيح بعد Refactor V3
 from ..theme.input_styles import input_style as _input_style, spinbox_style as _spinbox_style
-# [إصلاح] حُذف: from ..core import get_font_size as _get_font_size — مكرر مع السطر أعلاه
+# [إصلاح 2] السطر المحذوف: from ..core import get_font_size as _get_font_size
 
 
 # ── AmountSpinBox ─────────────────────────────────────────
@@ -173,13 +168,7 @@ class RequiredLineEdit(QLineEdit):
 # ── NotesLineEdit ─────────────────────────────────────────
 
 class NotesLineEdit(QLineEdit):
-    """
-    حقل ملاحظات بستايل مخصص.
-
-    التغيير: بدل background:#fafafa و background:white الـ hardcoded،
-    الآن يستخدم _C['bg_surface_2'] و _C['bg_input'].
-    لو غيّرت الثيم، الحقل ده بيتغير معاه تلقائياً.
-    """
+    """حقل ملاحظات بستايل مخصص يتزامن مع الثيم."""
 
     def __init__(self, placeholder: str = "ملاحظات اختيارية...",
                  height: int = 30, parent=None):
