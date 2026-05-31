@@ -2,6 +2,9 @@
 ui/widgets/utils/tooltip.py
 =======================================
 دوال مساعدة موحدة للـ tooltips في الجداول والـ widgets.
+
+[Refactor V3 — المرحلة 3] إضافة refresh_tooltips alias لتوحيد الوظيفة
+المتوزعة سابقاً على هذا الملف وعلى tables/flexible.py.
 """
 from PyQt5.QtWidgets import QTableWidget, QTreeWidget, QTreeWidgetItem
 
@@ -22,6 +25,10 @@ def apply_table_tooltips(table: QTableWidget,
             item = table.item(r, c)
             if item and item.text() and not item.toolTip():
                 item.setToolTip(item.text())
+
+
+# alias موحّد — يُستخدم من tables/flexible.py بدل تعريف مكرر
+refresh_tooltips = apply_table_tooltips
 
 
 def apply_tree_tooltips(tree: QTreeWidget,

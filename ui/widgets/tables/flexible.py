@@ -2,6 +2,9 @@
 ui/widgets/tables/flexible.py
 ==============================
 Delegates وأدوات word-wrap للجداول.
+
+[Refactor V3 — المرحلة 3] refresh_tooltips تُستورد من utils/tooltip
+بدل تعريف مكرر هنا.
 """
 from PyQt5.QtWidgets import (
     QStyledItemDelegate, QStyle, QApplication,
@@ -10,6 +13,9 @@ from PyQt5.QtWidgets import (
 )
 from PyQt5.QtCore import Qt, QSize, QRect
 from PyQt5.QtGui  import QFontMetrics, QPainter, QTextOption
+
+# [المرحلة 3] استيراد بدل تكرار
+from ..utils.tooltip import refresh_tooltips  # noqa: F401
 
 
 class WrapDelegate(QStyledItemDelegate):
@@ -156,12 +162,3 @@ class FlexibleTreeWidget(QTreeWidget):
         else:
             parent_item.addChild(item)
         return item
-
-
-def refresh_tooltips(table: QTableWidget):
-    """يضيف tooltip = النص الكامل لكل خلية فارغة الـ tooltip."""
-    for r in range(table.rowCount()):
-        for c in range(table.columnCount()):
-            item = table.item(r, c)
-            if item and item.text() and not item.toolTip():
-                item.setToolTip(item.text())

@@ -1,5 +1,5 @@
 File Tree Snapshot
-Generated : 2026-05-31 11:52:57
+Generated : 2026-05-31 12:19:18
 Source    : D:\My Workspace\Hg\Alhabaar\accountant\system
 Extensions: .md, .py
 ────────────────────────────────────────────────────────────
@@ -374,7 +374,6 @@ system/
 │   │   │   ├── service.py
 │   │   │   └── shared_ops.py
 │   │   ├── panels/
-│   │   │   ├── crud_section.py
 │   │   │   ├── data_table.py
 │   │   │   ├── detail_section.py
 │   │   │   ├── filter.py
@@ -391,7 +390,12 @@ system/
 │   │   │   ├── flexible.py
 │   │   │   └── tables.py
 │   │   ├── theme/
-│   │   │   └── styles.py
+│   │   │   ├── card_styles.py
+│   │   │   ├── input_styles.py
+│   │   │   ├── label_styles.py
+│   │   │   ├── layout_styles.py
+│   │   │   ├── styles.py
+│   │   │   └── table_styles.py
 │   │   └── utils/
 │   │       ├── date_range.py
 │   │       ├── flow_layout.py

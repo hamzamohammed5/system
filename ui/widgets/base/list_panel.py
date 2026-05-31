@@ -3,22 +3,10 @@ ui/widgets/base/list_panel.py
 ==========================
 BaseListPanel — قاعدة مشتركة لكل لوحات القوائم.
 
-التغييرات:
-  - [i18n/themes] _connect_bus يدعم theme=True و lang=True.
-  - [i18n/themes] _on_theme_changed() يُعيد تطبيق الـ styles على الـ widget.
-  - [i18n/themes] _on_language_changed() يُحدّث النصوص الظاهرة (search placeholder,
-    empty state title, pagination buttons).
-  - [i18n/themes] EmptyState تحمل reference للـ title label لتحديثه لاحقاً.
-    ملاحظة: يستخدم EMPTY_TITLE كـ key للترجمة لو أمكن، وإلا يعرض النص مباشرة.
-  - [تحسين 24 محفوظ] current_id property.
-  - [تحسين 45 محفوظ] Custom Sort.
-  - [تحسين 51 محفوظ] Pagination.
-  - [تحسين 17 محفوظ] select_item binary search.
-  - [E-02] إصلاح تطبيق date filter في _apply_filter:
-    القديم: FilterToolbar يُبنى لكن in_date_range لا يُطبَّق في الـ base class
-            عند SHOW_DATE=True — الفلتر الزمني كان للعرض فقط بدون تأثير.
-    الجديد: _apply_filter تستدعي _match_date() التي تستدعي
-            _filter_toolbar.in_date_range() لو كانت SHOW_DATE=True.
+[Refactor V3] إصلاح imports:
+  - ui.app_settings → ui.theme + ui.font
+  - ..tables.builders → ..tables.tables
+  - ..tables.items    → ..tables.tables
 """
 from PyQt5.QtWidgets import (
     QWidget, QVBoxLayout, QHBoxLayout, QLabel,
@@ -26,21 +14,21 @@ from PyQt5.QtWidgets import (
 )
 from PyQt5.QtCore    import Qt, pyqtSignal, QTimer
 
-from ui.app_settings import _C, fs, get_font_size
-from ..tables.builders  import (
+from ui.theme        import _C
+from ui.font         import fs, get_font_size
+from ..tables.tables import (
     make_splitter_table_guarded,
     fit_splitter_table,
     ROW_HEIGHT_LARGE,
+    auto_fit_columns,
 )
-from ..tables.items     import auto_fit_columns
-from ..panels.state     import EmptyState
-from ..components.headers    import ListHeader, StatusBar
-from ..panels.filter    import FilterToolbar
-from ..mixins.bus       import BusConnectedMixin
+from ..panels.state       import EmptyState
+from ..components.headers import ListHeader, StatusBar
+from ..panels.filter      import FilterToolbar
+from ..mixins.bus         import BusConnectedMixin
 
 
 def _tr_safe(key: str) -> str:
-    """ترجمة آمنة — لو فشلت ترجع المفتاح كما هو."""
     try:
         from ui.widgets.core.i18n import tr
         return tr(key)
@@ -60,7 +48,7 @@ class BaseListPanel(QWidget, BusConnectedMixin):
     Override الاختياري:
         _match_filter(row, query)      → bool
         _match_category(row, cat_id)   → bool
-        _match_date(row)               → bool  ← [E-02] جديد
+        _match_date(row)               → bool
         _on_add_clicked()
         _on_data_changed()
         _build_extra_header_actions(header)
@@ -72,17 +60,15 @@ class BaseListPanel(QWidget, BusConnectedMixin):
         _sort_key(col, row)
 
     [تحسين 51] Pagination:
-        PAGINATE  = True  لتفعيل التقسيم لصفحات
+        PAGINATE  = True
         PAGE_SIZE = عدد الصفوف في كل صفحة (افتراضي 200)
 
     [E-02] Date filter:
         DATE_COL = اسم الـ key في dict البيانات اللي بيحتوي التاريخ
-                   الافتراضي "date" — override لو كان اسم مختلف.
     """
 
     item_selected = pyqtSignal(int)
 
-    # ── إعدادات الـ subclass ──────────────────────────────
     COLUMNS            : list = []
     STRETCH_COL        : int  = -1
     COL_WIDTHS         : dict = None
@@ -96,17 +82,13 @@ class BaseListPanel(QWidget, BusConnectedMixin):
     SHOW_DATE          : bool = False
     FILTER_SCOPE       : str  = "all"
     CONNECT_BUS        : bool = True
-
-    # [E-02] اسم الـ key اللي بيحتوي التاريخ في dict البيانات
     DATE_COL           : str  = "date"
 
-    # ── [تحسين 45] Sort settings ─────────────────────────
     SORTABLE          : bool = False
     COL_KEYS          : list = []
     SORT_DEFAULT_COL  : int  = -1
     SORT_DEFAULT_ASC  : bool = True
 
-    # ── [تحسين 51] Pagination settings ───────────────────
     PAGINATE  : bool = False
     PAGE_SIZE : int  = 200
 
@@ -119,11 +101,9 @@ class BaseListPanel(QWidget, BusConnectedMixin):
         self._timer.setInterval(250)
         self._timer.timeout.connect(self._apply_filter)
 
-        # [تحسين 45] Sort state
         self._sort_col : int  = self.SORT_DEFAULT_COL
         self._sort_asc : bool = self.SORT_DEFAULT_ASC
 
-        # [تحسين 51] Pagination state
         self._page_rows    : list = []
         self._shown_count  : int  = 0
 
@@ -132,7 +112,6 @@ class BaseListPanel(QWidget, BusConnectedMixin):
         self._build()
 
         if self.CONNECT_BUS:
-            # [i18n/themes] اشترك في theme وlang أيضاً
             self._connect_bus(data=True, theme=True, lang=True)
 
         self.refresh()
@@ -153,14 +132,6 @@ class BaseListPanel(QWidget, BusConnectedMixin):
         return cat_id is None or row.get("category_id") == cat_id
 
     def _match_date(self, row: dict) -> bool:
-        """
-        [E-02] يتحقق من وقوع التاريخ ضمن النطاق المحدد في FilterToolbar.
-
-        يُستدعى فقط لو SHOW_DATE=True والـ _filter_toolbar موجود.
-        يقرأ التاريخ من row[DATE_COL] — override DATE_COL لو كان اسم مختلف.
-
-        Override هذه الدالة لو أردت منطق مقارنة مخصص.
-        """
         if not self._filter_toolbar:
             return True
         date_str = str(row.get(self.DATE_COL, ""))
@@ -211,7 +182,6 @@ class BaseListPanel(QWidget, BusConnectedMixin):
         self.table.setHorizontalScrollBarPolicy(Qt.ScrollBarAsNeeded)
         self.table.itemSelectionChanged.connect(self._on_select)
 
-        # [تحسين 45] ربط header click للـ sort
         if self.SORTABLE:
             hh = self.table.horizontalHeader()
             hh.setSectionsClickable(True)
@@ -231,7 +201,6 @@ class BaseListPanel(QWidget, BusConnectedMixin):
         self._empty_state.setVisible(False)
         root.addWidget(self._empty_state)
 
-        # [تحسين 51] شريط الـ pagination
         self._pagination_bar = self._build_pagination_bar()
         root.addWidget(self._pagination_bar)
 
@@ -270,41 +239,21 @@ class BaseListPanel(QWidget, BusConnectedMixin):
     # ── [i18n/themes] Theme & Language handlers ───────────
 
     def _on_theme_changed(self, theme_name: str):
-        """
-        [i18n/themes] يُعيد تطبيق الـ styles بعد تغيير الثيم.
-        يُستدعى تلقائياً من BusConnectedMixin.
-        """
-        # إعادة تطبيق خلفية الـ widget الرئيسي
         self.setStyleSheet(f"background:{_C['bg_input']};")
-
-        # إعادة تطبيق empty state background
         self._empty_state.setStyleSheet(
             f"QFrame {{ background:{_C['bg_input']}; border:none; }}"
         )
-
-        # إعادة بناء pagination bar styles
         self._rebuild_pagination_styles()
-
-        # إعادة بناء status bar style
         self._rebuild_status_style()
 
     def _on_language_changed(self, lang_code: str):
-        """
-        [i18n/themes] يُحدّث النصوص الظاهرة بعد تغيير اللغة.
-        """
-        # تحديث placeholder البحث
         if self._header.search_bar:
             placeholder = _tr_safe(self.SEARCH_PLACEHOLDER)
             self._header.search_bar.set_placeholder(placeholder)
-
-        # تحديث نص الـ empty state
         self._update_empty_state_title()
-
-        # تحديث أزرار الـ pagination
         self._update_pagination_texts()
 
     def _rebuild_pagination_styles(self):
-        """يُعيد بناء styles شريط الـ pagination بعد تغيير الثيم."""
         base = get_font_size()
         self._pagination_bar.setStyleSheet(f"""
             QFrame {{
@@ -338,7 +287,6 @@ class BaseListPanel(QWidget, BusConnectedMixin):
         """)
 
     def _rebuild_status_style(self):
-        """يُعيد بناء style الـ status bar."""
         base = get_font_size()
         self._status_bar.setStyleSheet(f"""
             background:{_C['bg_surface_2']};
@@ -350,10 +298,6 @@ class BaseListPanel(QWidget, BusConnectedMixin):
         """)
 
     def _update_empty_state_title(self):
-        """
-        يُحدّث نص الـ empty state بعد تغيير اللغة.
-        يستخدم set_title() من EmptyState مباشرة (أسرع وأوضح من findChildren).
-        """
         translated = _tr_safe(self.EMPTY_TITLE)
         try:
             self._empty_state.set_title(translated)
@@ -361,7 +305,6 @@ class BaseListPanel(QWidget, BusConnectedMixin):
             pass
 
     def _update_pagination_texts(self):
-        """يُحدّث نصوص أزرار الـ pagination بعد تغيير اللغة."""
         try:
             if self._pagination_bar.isVisible():
                 shown = self._shown_count
@@ -446,11 +389,9 @@ class BaseListPanel(QWidget, BusConnectedMixin):
     def _on_load_more(self):
         if not self._page_rows:
             return
-
         start = self._shown_count
         end   = min(start + self.PAGE_SIZE, len(self._page_rows))
         batch = self._page_rows[start:end]
-
         self.table.setUpdatesEnabled(False)
         for row_data in batch:
             r = self.table.rowCount()
@@ -458,7 +399,6 @@ class BaseListPanel(QWidget, BusConnectedMixin):
             self.table.setRowHeight(r, ROW_HEIGHT_LARGE)
             self._fill_row(self.table, r, row_data)
         self.table.setUpdatesEnabled(True)
-
         self._shown_count = end
         self._update_pagination_bar(len(self._page_rows), self._shown_count)
         self._auto_resize()
@@ -467,11 +407,9 @@ class BaseListPanel(QWidget, BusConnectedMixin):
     def _on_show_all(self):
         if not self._page_rows:
             return
-
         remaining = self._page_rows[self._shown_count:]
         if not remaining:
             return
-
         self.table.setUpdatesEnabled(False)
         for row_data in remaining:
             r = self.table.rowCount()
@@ -479,7 +417,6 @@ class BaseListPanel(QWidget, BusConnectedMixin):
             self.table.setRowHeight(r, ROW_HEIGHT_LARGE)
             self._fill_row(self.table, r, row_data)
         self.table.setUpdatesEnabled(True)
-
         self._shown_count = len(self._page_rows)
         self._pagination_bar.setVisible(False)
         self._auto_resize()
@@ -541,7 +478,6 @@ class BaseListPanel(QWidget, BusConnectedMixin):
                 continue
             if not self._match_category(row, cat_id):
                 continue
-            # [E-02] تطبيق فلتر التاريخ لو كان SHOW_DATE=True
             if self.SHOW_DATE and not self._match_date(row):
                 continue
             filtered.append(row)
@@ -561,11 +497,7 @@ class BaseListPanel(QWidget, BusConnectedMixin):
         return self._filter_toolbar.category_id if self._filter_toolbar else None
 
     def _fill_table(self, rows: list):
-        """
-        [تحسين 51] يملأ الجدول مع دعم الـ pagination.
-        """
         self.table.setRowCount(0)
-
         self._page_rows   = rows
         self._shown_count = 0
 
@@ -620,10 +552,6 @@ class BaseListPanel(QWidget, BusConnectedMixin):
                 self.item_selected.emit(int(data))
 
     def select_item(self, item_id: int):
-        """
-        [تحسين 17] البحث الذكي مع Pagination.
-        """
-        # الخطوة 1: ابحث في الصفوف الظاهرة
         for r in range(self.table.rowCount()):
             item = self.table.item(r, 0)
             if item and item.data(Qt.UserRole) == item_id:
@@ -631,7 +559,6 @@ class BaseListPanel(QWidget, BusConnectedMixin):
                 self.item_selected.emit(item_id)
                 return
 
-        # الخطوة 2: مش موجود في الصفوف الظاهرة — ابحث في _page_rows
         if not (self.PAGINATE and self._shown_count < len(self._page_rows)):
             return
 
@@ -648,7 +575,6 @@ class BaseListPanel(QWidget, BusConnectedMixin):
             self._on_show_all()
         else:
             end_needed = target_index + 1
-
             batch = self._page_rows[self._shown_count:end_needed]
             if batch:
                 self.table.setUpdatesEnabled(False)
@@ -658,7 +584,6 @@ class BaseListPanel(QWidget, BusConnectedMixin):
                     self.table.setRowHeight(r, ROW_HEIGHT_LARGE)
                     self._fill_row(self.table, r, row_data)
                 self.table.setUpdatesEnabled(True)
-
                 self._shown_count = end_needed
                 self._update_pagination_bar(len(self._page_rows), self._shown_count)
                 self._auto_resize()
@@ -681,20 +606,15 @@ class BaseListPanel(QWidget, BusConnectedMixin):
             return int(data) if data is not None else None
         return None
 
-    # [تحسين 24]
     @property
     def current_id(self) -> "int | None":
         return self.selected_id()
-
-    # ── header API ────────────────────────────────────────
 
     def add_header_action(self, text: str, callback=None, style: str = "normal"):
         return self._header.add_action(text, callback, style)
 
     def set_add_enabled(self, enabled: bool):
         self._header.set_add_enabled(enabled)
-
-    # ── [تحسين 45] Sort API ───────────────────────────────
 
     def set_sort(self, col: int, ascending: bool = True):
         self._sort_col = col
@@ -709,8 +629,6 @@ class BaseListPanel(QWidget, BusConnectedMixin):
         if self.SORTABLE:
             self._update_sort_indicators()
         self._apply_filter()
-
-    # ── [تحسين 51] Pagination API ─────────────────────────
 
     def reset_pagination(self):
         self._apply_filter()
