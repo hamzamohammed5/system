@@ -6,6 +6,9 @@ CardGrid + CollapsibleCard — Widgets تنظيم Layout.
 التغييرات:
   - [إصلاح imports] استبدال ui.theme/ui.font بـ ui.app_settings
   - [إصلاح imports] استبدال ..styles بـ ..theme.styles
+
+  [FIX] استبدال from ...font و from ...theme (ثلاث نقاط خاطئة تُسبب ImportError)
+        بـ absolute imports مباشرة.
 """
 from PyQt5.QtWidgets import (
     QWidget, QFrame, QVBoxLayout, QGridLayout,
@@ -13,10 +16,13 @@ from PyQt5.QtWidgets import (
 )
 from PyQt5.QtCore import Qt, pyqtSignal
 
-from ...font import fs, get_font_size
-from ...theme import _C
-from ..theme.builders   import h_divider
+# [FIX] absolute imports بدل from ...font / from ...theme الخاطئة
+from ui.font  import fs, get_font_size
+from ui.theme import _C
+
+from ..theme.builders    import h_divider
 from ..theme.card_styles import card_style
+
 
 # ══════════════════════════════════════════════════════════
 # CardGrid

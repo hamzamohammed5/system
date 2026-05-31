@@ -6,6 +6,11 @@ Field builders للفورمات.
 مستخرج من panels/form_parts.py:
   spin_field, int_spin_field, labeled_widget,
   field_row, labeled_row, make_form_layout
+
+  [FIX] استبدال from ..theme.styles import spinbox_style
+        بـ from ..theme.input_styles import spinbox_style
+        لأن spinbox_style انتقلت لـ input_styles.py بعد Refactor V3،
+        و theme/styles.py لم يعد موجوداً.
 """
 
 from PyQt5.QtWidgets import (
@@ -16,7 +21,9 @@ from PyQt5.QtCore import Qt
 
 from ui.theme import _C
 from ui.font  import get_font_size, fs
-from ..theme.styles import spinbox_style
+
+# [FIX] input_styles بدل styles (المسار القديم المحذوف)
+from ..theme.input_styles import spinbox_style
 
 from .form_labels import form_label, required_label, hint_label
 

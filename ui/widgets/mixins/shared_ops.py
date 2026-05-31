@@ -3,6 +3,11 @@ ui/widgets/mixins/shared_ops.py
 ==========================================
 SharedOpsMixin — منطق النشر والتعديل المشترك.
 نسخة محدّثة تستخدم emit_company_data_changed بدل bus.data_changed.
+
+  [FIX] _publish_item: إضافة emit_company_data_changed() بعد نجاح النشر.
+        القديم: كانت _edit_shared_item و _edit_published_item تُطلقان الإشعار
+                لكن _publish_item كانت تنتهي صامتةً → الـ UI لا يتحدث بعد النشر.
+        الجديد: emit_company_data_changed() تُستدعى في نهاية _publish_item أيضاً.
 """
 import logging
 
@@ -122,5 +127,7 @@ class SharedOpsMixin:
                 parent=parent,
             ).exec_()
             central.close()
+            # [FIX] إطلاق الإشعار بعد النشر حتى يتحدث الـ UI
+            emit_company_data_changed()
         except Exception as e:
             msg_warning(parent, "خطأ", str(e))

@@ -18,18 +18,15 @@ ComponentRow — صف مكوّن واحد في BOM.
   - [E-03] refresh_cost(): يُحدِّث عرض تكلفة الخامة (lbl_variant_cost)
     عند تغيير سعر الخامة من قسم آخر، بدون إعادة فتح الفورم.
 
-    المشكلة:
-      عند تحديث سعر خامة من raw_tab أو أي قسم آخر، ComponentRows النشطة
-      في product_form كانت تُظهر التكلفة القديمة حتى يُعاد فتح الفورم.
-      bus.data_changed يُطلق _on_catalog_changed الذي يُعيد بناء الـ catalog
-      لكنه لا يُحدِّث lbl_variant_cost لأن العنصر المحدد لم يتغير.
-
-    الحل:
-      إضافة _refresh_cost_label() يُعيد حساب التكلفة من الـ catalog الجديد
-      ويُحدِّث العرض. يُستدعى من _on_catalog_changed بعد _refresh_items().
-
-    التكلفة تُحسَب من catalog_fn() → raw items → price / total_qty
-    بنفس منطق models.costing_base.raw_unit_price.
+  إصلاحات (مراجعة الكود):
+  - [FIX-1] _schedule_deferred_loads: تغيير initial_variant_id → selected_variant_id
+    لمطابقة توقيع VariantsMixin._load_variants.
+  - [FIX-2] _schedule_deferred_loads: شرط الحذف يستخدم s بدل self
+    لضمان فائدة weakref فعلياً.
+  - [FIX-3] _mark_orphan: استخدام get_orphan_style() بدل STYLE_ORPHAN الثابت
+    حتى يعكس الثيم الحالي دائماً.
+  - [FIX-4] _connect_bus / _disconnect_bus: ربط bus.company_data_changed
+    إضافةً لـ bus.data_changed حتى يستجيب ComponentRow للإشعارات الجديدة.
 """
 
 import weakref
@@ -46,7 +43,7 @@ from ui.events import bus
 
 from .ui      import (
     build_row_ui, update_waste_style,
-    COMPONENT_TYPES, STYLE_NORMAL, STYLE_ORPHAN,
+    COMPONENT_TYPES, STYLE_NORMAL, get_orphan_style,   # [FIX-3] get_orphan_style بدل STYLE_ORPHAN
 )
 from .op_rows  import OpRowsMixin
 from .variants import VariantsMixin
@@ -93,6 +90,7 @@ class ComponentRow(QWidget, OpRowsMixin, VariantsMixin):
 
     [A-06] _bus_slot: مرجع الـ bus connection محفوظ ويُفصل في closeEvent.
     [E-03] refresh_cost(): يُحدِّث تكلفة الخامة عند تغيير السعر.
+    [FIX-1..4] راجع module docstring.
     """
 
     removed = pyqtSignal(QWidget)
@@ -115,8 +113,9 @@ class ComponentRow(QWidget, OpRowsMixin, VariantsMixin):
         self._orphan         = _OrphanState()
         self._conn_cache     = None
 
-        # [A-06] مرجع الـ bus slot لفصله لاحقاً
-        self._bus_slot = None
+        # [A-06] مرجع الـ bus slots لفصلها لاحقاً
+        self._bus_slot              = None   # data_changed
+        self._bus_slot_company      = None   # company_data_changed  [FIX-4]
 
         # pinned state (يُحفظ عند التنقل بين الأنواع)
         self._pinned_type      = child_type
@@ -187,37 +186,38 @@ class ComponentRow(QWidget, OpRowsMixin, VariantsMixin):
     def _connect_bus(self):
         """
         [إصلاح 20] يستخدم weakref لمنع dangling reference.
-        [A-06] يحفظ مرجع الـ slot في self._bus_slot لفصله لاحقاً.
+        [A-06] يحفظ مرجع الـ slots في instance variables لفصلها لاحقاً.
+        [FIX-4] يربط bus.company_data_changed إضافةً لـ bus.data_changed.
 
-        القديم:
-            bus.data_changed.connect(
-                lambda: QTimer.singleShot(0, self._on_catalog_changed)
-            )
-        المشكلة: الـ lambda تحتفظ بـ strong reference لـ self.
-        لو حُذف ComponentRow، الـ lambda تبقى مرتبطة بالـ bus
-        وتستدعي _on_catalog_changed على widget محذوف → crash.
-
-        الجديد:
-        - weakref.ref(self) — لو الـ widget محذوف، weak() ترجع None وتُتجاهل.
-        - _bus_slot محفوظ — يُفصل صريحاً في closeEvent() لضمان تنظيف كامل.
+        القديم: ربط data_changed فقط.
+        الجديد: ربط الاثنين حتى يستجيب ComponentRow لكلا نوعي الإشعارات.
         """
         weak = weakref.ref(self)
 
         def _on_bus_event():
             s = weak()
             if s is None:
-                # الـ widget محذوف — تجاهل الاستدعاء
                 return
             QTimer.singleShot(0, s._on_catalog_changed)
 
-        # [A-06] حفظ مرجع الـ slot
-        self._bus_slot = _on_bus_event
+        # [FIX-4] نفس المنطق لـ company_data_changed (يستقبل company_id)
+        def _on_company_bus_event(_company_id: int):
+            s = weak()
+            if s is None:
+                return
+            QTimer.singleShot(0, s._on_catalog_changed)
+
+        # [A-06] حفظ مرجع الـ slots
+        self._bus_slot         = _on_bus_event
+        self._bus_slot_company = _on_company_bus_event   # [FIX-4]
+
         bus.data_changed.connect(self._bus_slot)
+        bus.company_data_changed.connect(self._bus_slot_company)   # [FIX-4]
 
     def _disconnect_bus(self):
         """
-        [A-06] يفصل الـ slot من الـ bus صريحاً.
-        يُستدعى من closeEvent() لضمان إزالة الـ connection تماماً.
+        [A-06] يفصل الـ slots من الـ bus صريحاً.
+        يُستدعى من closeEvent() لضمان إزالة الـ connections تماماً.
         """
         if self._bus_slot is not None:
             try:
@@ -226,9 +226,17 @@ class ComponentRow(QWidget, OpRowsMixin, VariantsMixin):
                 pass
             self._bus_slot = None
 
+        # [FIX-4] فصل company_data_changed أيضاً
+        if self._bus_slot_company is not None:
+            try:
+                bus.company_data_changed.disconnect(self._bus_slot_company)
+            except (TypeError, RuntimeError):
+                pass
+            self._bus_slot_company = None
+
     def closeEvent(self, event):
         """
-        [A-06] يفصل الـ bus connection عند إغلاق الـ widget.
+        [A-06] يفصل الـ bus connections عند إغلاق الـ widget.
         """
         self._disconnect_bus()
         super().closeEvent(event)
@@ -243,9 +251,11 @@ class ComponentRow(QWidget, OpRowsMixin, VariantsMixin):
 
             def _timer_variants():
                 s = weak()
-                if s is None or self._is_widget_deleted():
+                # [FIX-2] s._is_widget_deleted() بدل self._is_widget_deleted()
+                if s is None or s._is_widget_deleted():
                     return
-                s._load_variants(cid, initial_variant_id=vid)
+                # [FIX-1] selected_variant_id بدل initial_variant_id
+                s._load_variants(cid, selected_variant_id=vid)
 
             QTimer.singleShot(50, _timer_variants)
 
@@ -255,7 +265,8 @@ class ComponentRow(QWidget, OpRowsMixin, VariantsMixin):
 
             def _timer_load():
                 s = weak()
-                if s is None or self._is_widget_deleted():
+                # [FIX-2] s._is_widget_deleted() بدل self._is_widget_deleted()
+                if s is None or s._is_widget_deleted():
                     return
                 s._load_op_rows(op_id, row_id)
 
@@ -296,7 +307,8 @@ class ComponentRow(QWidget, OpRowsMixin, VariantsMixin):
         self._orphan.active  = True
         self._orphan.item_id = child_id
         self._orphan.type_   = child_type
-        self.setStyleSheet(STYLE_ORPHAN)
+        # [FIX-3] get_orphan_style() بدل STYLE_ORPHAN الثابت — يعكس الثيم الحالي
+        self.setStyleSheet(get_orphan_style())
         self.setToolTip(self._orphan.tooltip())
 
     def _clear_orphan(self):
@@ -367,76 +379,46 @@ class ComponentRow(QWidget, OpRowsMixin, VariantsMixin):
     def _refresh_cost_label(self):
         """
         [E-03] يُحدِّث عرض تكلفة الخامة (lbl_variant_cost) من الـ catalog الجديد.
-
-        يُستدعى من _on_catalog_changed بعد _refresh_items() لضمان
-        أن تكلفة الخامة المحددة تعكس آخر سعر مُحدَّث.
-
-        الحالات التي لا يفعل فيها شيئاً:
-          - النوع ليس "raw"
-          - لا يوجد عنصر محدد
-          - lbl_variant_cost غير موجود في الـ UI (قد لا يكون في بعض variants)
-          - العنصر orphan (سعره غير محدد أصلاً)
-
-        حساب التكلفة:
-          يستخدم entry من الـ catalog مباشرة (price, total_qty)
-          بنفس منطق raw_unit_price من models/costing_base.py:
-            unit_cost = price / total_qty  if total_qty > 0
-            unit_cost = price              otherwise
         """
-        # فقط للخامات
         if self._pinned_type != "raw":
             return
-
-        # لا نُحدِّث الـ orphan — سعره مجهول أصلاً
         if self._orphan.active:
             return
 
-        # تحقق من وجود lbl_variant_cost في الـ UI
         cost_label = getattr(self, "lbl_variant_cost", None)
         if cost_label is None:
             return
 
-        # جلب معرف العنصر المحدد
         child_id = self._pinned_id
         if child_id is None:
             return
 
-        # البحث في الـ catalog الجديد
-        catalog = self._catalog_fn()
+        catalog   = self._catalog_fn()
         raw_items = catalog.get("raw", [])
 
         for entry in raw_items:
             if entry[0] != child_id:
                 continue
 
-            # entry[0]=id, entry[1]=name, entry[2]=price, ...
-            # الترتيب يعتمد على catalog_builder — نحاول استخراج السعر بأمان
             price     = 0.0
             total_qty = None
 
             try:
-                # catalog يُعيد (id, name, price, total_qty, cat_id, cat_name)
-                # أو (id, name, cat_id, cat_name) — نتحقق من الطول
                 if len(entry) >= 4:
-                    # محاولة قراءة السعر من index 2 لو كان رقماً
                     val2 = entry[2]
                     if isinstance(val2, (int, float)):
                         price = float(val2)
-                        # total_qty في index 3 لو كان رقماً أو None
-                        val3 = entry[3]
+                        val3  = entry[3]
                         if isinstance(val3, (int, float)):
                             total_qty = float(val3)
-                    # لو entry[2] ليس رقماً → السعر في مكان آخر (بنية مختلفة)
             except (IndexError, TypeError, ValueError):
                 pass
 
-            # حساب سعر الوحدة (نفس raw_unit_price في costing_base)
             if total_qty is not None and total_qty > 0:
                 unit_cost = price / total_qty
             else:
                 unit_cost = price
 
-            # تحديث الـ label
             try:
                 if hasattr(cost_label, "setText"):
                     cost_label.setText(f"{unit_cost:,.4g}")
@@ -448,7 +430,7 @@ class ComponentRow(QWidget, OpRowsMixin, VariantsMixin):
             except Exception:
                 pass
 
-            return  # وجدنا العنصر — لا داعي للتكرار
+            return
 
     # ── Signal handlers ────────────────────────────────────
 
@@ -495,9 +477,6 @@ class ComponentRow(QWidget, OpRowsMixin, VariantsMixin):
             if data and data[0] not in ("__sep__", "__orphan__"):
                 self._pinned_id = data[1]
         self._refresh_items()
-
-        # [E-03] تحديث تكلفة الخامة بعد تحديث الـ catalog
-        # يضمن أن lbl_variant_cost يعكس السعر الجديد فوراً
         self._refresh_cost_label()
 
     def _on_type_changed(self, _):

@@ -9,15 +9,20 @@ FilterToolbar — شريط فلاتر موحد (بحث + تصنيف + تاريخ
   - [إصلاح imports] استبدال ..styles بـ ..theme.styles
   - [إصلاح 14] FilterToolbar تستمع لـ bus.company_data_changed.
   - [تحسين 16] reload() تُحدّث conn ثم تُعيد تحميل التصنيفات.
+
+  [FIX] استبدال from ...font و from ...theme (ثلاث نقاط خاطئة تُسبب ImportError)
+        بـ absolute imports مباشرة.
 """
 from PyQt5.QtWidgets import (
     QWidget, QHBoxLayout, QLabel, QPushButton, QComboBox,
 )
 from PyQt5.QtCore import QDate, pyqtSignal
 
-from ...font import fs, get_font_size
-from ...theme import _C
-from ..utils.signals   import blocked_signals
+# [FIX] absolute imports بدل from ...font / from ...theme الخاطئة
+from ui.font  import fs, get_font_size
+from ui.theme import _C
+
+from ..utils.signals import blocked_signals
 
 
 def _combo_style() -> str:
