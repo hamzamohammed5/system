@@ -57,7 +57,7 @@ from ..core.i18n          import tr
 from ..components.button  import make_btn
 from ..dialogs.confirm    import confirm_delete
 from ..dialogs.message    import msg_info, msg_warning
-from ..theme.styles       import tree_style
+from ..theme.layout_styles import tree_style
 from ..components.label   import ModeLabel
 from ui.widgets.core.events import emit_company_data_changed
 

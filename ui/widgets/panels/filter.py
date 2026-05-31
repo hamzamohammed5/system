@@ -77,7 +77,7 @@ class FilterToolbar(QWidget):
         lay.setContentsMargins(8, 6, 8, 6)
         lay.setSpacing(8)
 
-        from ..components.headers import SearchBar
+        from ..components.headers_list import SearchBar
         self._search = SearchBar(placeholder=placeholder, delay_ms=250, height=28)
         self._search.search_changed.connect(lambda _: self.filter_changed.emit())
         self.inp_search = self._search.inp

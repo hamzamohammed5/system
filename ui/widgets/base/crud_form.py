@@ -52,8 +52,8 @@ from PyQt5.QtCore import pyqtSignal
 
 from ui.widgets.mixins.edit    import EditModeMixin
 from ui.widgets.core.conn      import LiveConnMixin
-from ui.widgets.panels.form_parts import FormGroup
-from ui.widgets.theme.styles   import wrap_in_scroll
+from ui.widgets.panels.form_group  import FormGroup
+from ui.widgets.theme.builders     import wrap_in_scroll
 from ui.events                 import bus
 
 

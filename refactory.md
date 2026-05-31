@@ -8,7 +8,7 @@
 الملفات اللي هتتغير فيها:
 
 ── ui/widgets/base/list_panel.py ──
-القديم:  from ..components.headers import ListHeader, StatusBar
+القديم:  from ..components.headers_list import ListHeader, StatusBar
 الجديد:  from ..components.headers_list import ListHeader, StatusBar
 
 ── ui/widgets/base/detail_panel.py ──
@@ -20,7 +20,7 @@
 الجديد:  from ..components.headers_list import SearchBar
 
 ── ui/widgets/panels/data_table.py ──
-القديم:  from ..components.headers import ListHeader, StatusBar
+القديم:  from ..components.headers_list import ListHeader, StatusBar
 الجديد:  from ..components.headers_list import ListHeader, StatusBar
 
 ── ui/widgets/components/headers_page.py ──  (الملف الجديد نفسه)
@@ -124,7 +124,7 @@
 الملفات اللي هتتغير فيها:
 
 ── ui/widgets/utils/splitter.py ──
-القديم:  from ..theme.styles import splitter_style
+القديم:  from ..theme.table_styles import splitter_style
 الجديد:  from ..theme.table_styles import splitter_style
 
 ── ui/widgets/components/action_toolbar.py ──
@@ -136,7 +136,7 @@
 الجديد:  from ..theme.layout_styles import tree_style
 
 ── ui/widgets/base/section.py ──
-القديم:  from ..theme.styles import splitter_style
+القديم:  from ..theme.table_styles import splitter_style
 الجديد:  from ..theme.table_styles import splitter_style
 
 ── ui/widgets/base/crud_form.py ──

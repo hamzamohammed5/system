@@ -15,7 +15,7 @@ from PyQt5.QtGui  import QFont
 
 from ui.theme import _C
 from ui.font  import fs, get_font_size
-from ..theme.styles  import h_divider, v_divider
+from ..theme.builders import h_divider, v_divider
 from .button         import make_btn
 from .stat_row       import BadgeLabel
 from .label          import InfoRow
@@ -301,7 +301,8 @@ class DetailHeader(QFrame):
 
     def add_stat_card(self, icon: str, title: str, value: str = "─",
                       color: str = "#1565c0", compact: bool = True):
-        from .stat_row import StatCard
+        from .stat_card  import StatCard
+
         card = StatCard(icon, title, value, color, compact=compact)
         self._cards_row.addWidget(card, stretch=1)
         self._stat_cards.append(card)

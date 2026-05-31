@@ -14,7 +14,7 @@ from ...font import fs, get_font_size
 from ...theme import _C
 
 from ..tables.tables         import make_list_table, ROW_HEIGHT_LARGE, auto_fit_columns
-from ..components.headers    import ListHeader, StatusBar
+from ..components.headers_list import ListHeader, StatusBar
 from ..panels.state          import EmptyState
 
 

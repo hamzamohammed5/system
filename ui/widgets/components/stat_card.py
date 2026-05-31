@@ -21,8 +21,7 @@ from PyQt5.QtGui  import QFont
 from ui.theme import _C
 from ui.font  import fs, get_font_size
 from ..core.colors   import card_colors
-from ..theme.styles  import v_divider
-
+from ..theme.builders import v_divider
 
 # ══════════════════════════════════════════════════════════
 # StatCard — بطاقة مستقلة كاملة

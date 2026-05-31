@@ -7,7 +7,7 @@ import logging
 from PyQt5.QtWidgets import QSplitter, QTableWidget, QWidget, QSizePolicy
 from PyQt5.QtCore    import Qt, QTimer, QObject, QEvent
 
-from ..theme.styles import splitter_style  # المصدر الوحيد — لا تكرار
+from ..theme.table_styles import splitter_style  # المصدر الوحيد — لا تكرار
 
 logger = logging.getLogger(__name__)
 

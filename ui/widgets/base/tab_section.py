@@ -16,7 +16,7 @@ get_connection() ترجع shared connection من company_state،
 from PyQt5.QtWidgets import QWidget, QVBoxLayout, QTabWidget
 
 from db.shared.connection      import get_connection
-from ..theme.styles            import tab_style
+from ..theme.layout_styles     import tab_style
 
 
 def _is_owned_connection(conn) -> bool:

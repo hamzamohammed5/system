@@ -12,7 +12,7 @@ from PyQt5.QtCore    import Qt, pyqtSignal
 
 from ui.theme                        import _C
 from ui.font                         import fs, get_font_size
-from ..components.headers            import DetailHeader
+from ..components.headers_page       import DetailHeader
 from ..panels.state                  import EmptyState
 from ..components.notification       import NotificationBar
 from ..mixins.bus                    import BusConnectedMixin

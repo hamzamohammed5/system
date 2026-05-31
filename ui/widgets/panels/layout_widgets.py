@@ -15,8 +15,8 @@ from PyQt5.QtCore import Qt, pyqtSignal
 
 from ...font import fs, get_font_size
 from ...theme import _C
-from ..theme.styles  import h_divider, card_style
-
+from ..theme.builders   import h_divider
+from ..theme.card_styles import card_style
 
 # ══════════════════════════════════════════════════════════
 # CardGrid

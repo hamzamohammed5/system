@@ -22,8 +22,8 @@ from ..tables.tables import (
     ROW_HEIGHT_LARGE,
     auto_fit_columns,
 )
-from ..panels.state       import EmptyState
-from ..components.headers import ListHeader, StatusBar
+from ..panels.state            import EmptyState
+from ..components.headers_list import ListHeader, StatusBar
 from ..panels.filter      import FilterToolbar
 from ..mixins.bus         import BusConnectedMixin
 
