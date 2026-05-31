@@ -17,8 +17,8 @@ from PyQt5.QtWidgets import QPushButton, QSizePolicy
 from PyQt5.QtCore    import Qt
 from PyQt5.QtGui     import QFont, QFontMetrics
 
-from ui.app_settings import _C, fs
-from ui.app_settings import get_font_size
+from ...font import fs, get_font_size
+from ...theme import _C
 
 # cache: (style_name, font_size) → stylesheet string
 _stylesheet_cache: dict[tuple[str, int], str] = {}
