@@ -1,19 +1,13 @@
 """
 ui/widgets/panels/state.py
 ===========================
-مكونات الـ Empty State الموحدة:
+EmptyState + EmptyPanelState + table empty state helpers.
 
-  EmptyState              — QFrame حالة فارغة مع أيقونة ونص وزر
-  EmptyPanelState         — alias للتوافق مع الكود القديم
-  set_table_empty_state   — صف رسالة داخل الجدول
-  clear_table_empty_state — مسح صف الرسالة
-
-[تحسين 6 محفوظ] get_font_size() تُستدعى مرة واحدة.
-
-[i18n/themes] EmptyState تحفظ reference للـ title label (_lbl_title)
-لتحديثه مباشرة عند تغيير اللغة بدون إعادة بناء الـ widget.
+التغييرات:
+  - [إصلاح imports] استبدال ui.theme/ui.font بـ ui.app_settings
+  - [i18n/themes] EmptyState تحفظ reference للـ title label للتحديث المباشر.
+  - [تحسين 6 محفوظ] get_font_size() تُستدعى مرة واحدة.
 """
-
 from PyQt5.QtWidgets import (
     QFrame, QVBoxLayout, QLabel,
     QTableWidget, QTableWidgetItem, QSizePolicy,
@@ -21,9 +15,9 @@ from PyQt5.QtWidgets import (
 from PyQt5.QtCore import Qt, pyqtSignal
 from PyQt5.QtGui  import QColor, QFont
 
-from ui.theme import _C
-from ui.font  import get_font_size, fs
-from ..core.colors          import card_colors, status_colors
+from ...font import fs, get_font_size
+from ...theme import _C
+from ..core.colors import card_colors, status_colors
 
 
 # ══════════════════════════════════════════════════════════
@@ -34,11 +28,7 @@ class EmptyState(QFrame):
     """
     QFrame حالة فارغة مع أيقونة ونص وزر اختياري.
 
-    expandable=True → يتمدد ليملأ المساحة.
-    expandable=False (افتراضي) → حجم ثابت حسب المحتوى.
-
-    [i18n/themes] يحفظ reference للـ title label في _lbl_title
-    لتحديثه مباشرة من الخارج عند تغيير اللغة.
+    [i18n/themes] يحفظ reference للـ title label في _lbl_title.
     """
 
     action_clicked = pyqtSignal()
@@ -51,7 +41,7 @@ class EmptyState(QFrame):
                  parent=None):
         super().__init__(parent)
         self._expandable = expandable
-        self._lbl_title  = None   # [i18n/themes] reference للـ title label
+        self._lbl_title  = None
         _color = color or _C['text_muted']
         self._build(icon, title, subtitle, action_text, style, _color, min_height)
 
@@ -80,7 +70,6 @@ class EmptyState(QFrame):
             20, 16 if not self._expandable else 30,
         )
 
-        # [تحسين 6] استدعاء get_font_size() مرة واحدة وتخزينها
         base = get_font_size()
 
         if icon:
@@ -99,7 +88,6 @@ class EmptyState(QFrame):
         )
         lay.addWidget(lbl_title)
 
-        # [i18n/themes] حفظ reference للـ title label
         self._lbl_title = lbl_title
 
         if subtitle:
@@ -122,15 +110,10 @@ class EmptyState(QFrame):
             lay.addWidget(btn, alignment=Qt.AlignCenter)
 
     def set_title(self, text: str):
-        """
-        [i18n/themes] يُحدّث نص العنوان مباشرة.
-        يُستخدم من _on_language_changed() في الـ panels.
-        """
         if self._lbl_title is not None:
             self._lbl_title.setText(text)
 
     def title(self) -> str:
-        """يرجع النص الحالي للعنوان."""
         if self._lbl_title is not None:
             return self._lbl_title.text()
         return ""
@@ -141,7 +124,7 @@ class EmptyState(QFrame):
 def EmptyPanelState(icon: str = "📋", title: str = "لا توجد بيانات",
                     subtitle: str = "", action_text: str = "",
                     color: str = None, parent=None) -> EmptyState:
-    """Alias لـ EmptyState(expandable=True). محفوظ للتوافق مع الكود القديم."""
+    """Alias لـ EmptyState(expandable=True). محفوظ للتوافق."""
     return EmptyState(
         icon=icon, title=title, subtitle=subtitle,
         action_text=action_text,

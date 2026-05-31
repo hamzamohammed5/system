@@ -3,31 +3,29 @@ ui/widgets/panels/data_table.py
 ==========================================
 DataTableWidget — جدول بيانات موحد.
 
-الإصلاحات:
-  - [إصلاح 7] end_fill تفرق بين "لا بيانات أصلاً" و"لا نتائج للبحث".
-    القديم: لو shown=0 و total=10 → يظهر الـ empty state نفسه
-    بنفس الرسالة سواء كانت البيانات فاضية أو تم تفلترها.
-    الجديد: رسالة مختلفة لكل حالة.
+التغييرات:
+  - [إصلاح imports] استبدال ..styles بـ ..theme.styles
+  - [إصلاح 7] end_fill تفرق بين "لا بيانات" و"لا نتائج للبحث".
 """
-
 from PyQt5.QtWidgets import QWidget, QVBoxLayout, QSizePolicy
 from PyQt5.QtCore    import Qt, pyqtSignal
 
-from ui.theme import _C
-from ..tables.tables   import make_list_table, ROW_HEIGHT_LARGE
-from ..tables.tables   import auto_fit_columns
-from ..components.headers   import ListHeader, StatusBar
-from ..panels.state    import EmptyState
+from ...font import fs, get_font_size
+from ...theme import _C
+
+from ..tables.tables         import make_list_table, ROW_HEIGHT_LARGE, auto_fit_columns
+from ..components.headers    import ListHeader, StatusBar
+from ..panels.state          import EmptyState
 
 
 class DataTableWidget(QWidget):
     """
-    جدول بيانات موحد يحتوي على هيدر + جدول + حالة فارغة + عداد.
+    جدول بيانات موحد: هيدر + جدول + حالة فارغة + عداد.
 
     Signals:
         add_clicked         → زر الإضافة ضُغط
         search_changed(str) → تغير نص البحث
-        row_selected(int)   → صف مُحدد (يطلق ID من UserRole في العمود 0)
+        row_selected(int)   → صف مُحدد
     """
 
     add_clicked    = pyqtSignal()
@@ -67,7 +65,6 @@ class DataTableWidget(QWidget):
         root.setSpacing(0)
         self.setStyleSheet(f"background:{_C['bg_input']};")
 
-        # Header
         self._header = ListHeader(
             title=title,
             add_text=add_text,
@@ -79,7 +76,6 @@ class DataTableWidget(QWidget):
             self._header.add_clicked.connect(self.add_clicked.emit)
         root.addWidget(self._header)
 
-        # Table
         self.table = make_list_table(
             columns=columns,
             stretch_col=stretch_col,
@@ -89,7 +85,7 @@ class DataTableWidget(QWidget):
         self.table.itemSelectionChanged.connect(self._on_select)
         root.addWidget(self.table, stretch=1)
 
-        # Empty state — "لا بيانات" (الحالة الافتراضية)
+        # Empty state — "لا بيانات"
         self._empty = EmptyState(
             icon=self.EMPTY_ICON,
             title=self.EMPTY_TITLE,
@@ -118,18 +114,15 @@ class DataTableWidget(QWidget):
         self._empty_filtered.setVisible(False)
         root.addWidget(self._empty_filtered)
 
-        # Status bar
         self._status = StatusBar()
         root.addWidget(self._status)
 
     # ── Table API ─────────────────────────────────────────
 
     def begin_fill(self):
-        """يبدأ ملء الجدول — يمسح الصفوف القديمة."""
         self.table.setRowCount(0)
 
     def insert_row(self) -> int:
-        """يضيف صف جديد ويرجع رقمه."""
         r = self.table.rowCount()
         self.table.insertRow(r)
         self.table.setRowHeight(r, self._row_height)
@@ -137,20 +130,15 @@ class DataTableWidget(QWidget):
 
     def end_fill(self, shown: int = None):
         """
-        ينهي ملء الجدول ويحدث العداد والحالة الفارغة.
-
-        shown: عدد الصفوف الظاهرة (لو مختلفة عن الكل عند الفلترة).
-
         [إصلاح 7] يفرق بين 3 حالات:
-          1. total == 0           → "لا توجد بيانات" (empty state افتراضي)
+          1. total == 0           → "لا توجد بيانات"
           2. total > 0, shown > 0 → يعرض الجدول
-          3. total > 0, shown == 0 → "لا توجد نتائج" (filtered empty state)
+          3. total > 0, shown == 0 → "لا توجد نتائج"
         """
         total   = self.table.rowCount()
         visible = shown if shown is not None else total
 
-        # [إصلاح 7] تحديد الحالة
-        has_data         = visible > 0
+        has_data          = visible > 0
         is_filtered_empty = (not has_data) and (total > 0)
 
         self.table.setVisible(has_data)

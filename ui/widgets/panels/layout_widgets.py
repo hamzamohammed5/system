@@ -1,24 +1,25 @@
 """
 ui/widgets/panels/layout_widgets.py
 =====================================
-دمج card_grid.py + collapsible_card.py — Widgets تنظيم Layout.
+CardGrid + CollapsibleCard — Widgets تنظيم Layout.
 
-الملفات المحذوفة: card_grid.py, collapsible_card.py
+التغييرات:
+  - [إصلاح imports] استبدال ui.theme/ui.font بـ ui.app_settings
+  - [إصلاح imports] استبدال ..styles بـ ..theme.styles
 """
-
 from PyQt5.QtWidgets import (
     QWidget, QFrame, QVBoxLayout, QGridLayout,
     QPushButton, QSizePolicy,
 )
 from PyQt5.QtCore import Qt, pyqtSignal
 
-from ui.theme import _C
-from ui.font  import get_font_size, fs
-from ..styles import h_divider, card_style
+from ...font import fs, get_font_size
+from ...theme import _C
+from ..theme.styles  import h_divider, card_style
 
 
 # ══════════════════════════════════════════════════════════
-# CardGrid  (كان في card_grid.py)
+# CardGrid
 # ══════════════════════════════════════════════════════════
 
 class CardGrid(QWidget):
@@ -61,7 +62,7 @@ class CardGrid(QWidget):
 
 
 # ══════════════════════════════════════════════════════════
-# CollapsibleCard  (كان في collapsible_card.py)
+# CollapsibleCard
 # ══════════════════════════════════════════════════════════
 
 class CollapsibleCard(QFrame):

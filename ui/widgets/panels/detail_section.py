@@ -5,13 +5,10 @@ DetailSection  — قسم تفاصيل موحد (عنوان: قيمة) في grid
 TwoColDetails  — عرض في عمودين.
 make_detail_row — دالة سريعة.
 
-التحسينات:
+التغييرات:
+  - [إصلاح imports] استبدال ui.theme/ui.font بـ ui.app_settings
   - [تحسين 19 محفوظ] set_data ترجع dict[str, QLabel] للتحديث المباشر.
   - [تحسين 44] set_data تدعم clear_missing=True لإخفاء الصفوف الزائدة.
-    القديم: لو استُدعيت set_data بـ keys أقل من السابق، الصفوف القديمة
-    تبقى ظاهرة بقيمها القديمة.
-    الجديد: clear_missing=True يُخفي الصفوف غير الموجودة في data الجديدة،
-    clear_missing=False (الافتراضي) يحافظ على السلوك القديم للتوافق.
 """
 from PyQt5.QtWidgets import (
     QFrame, QVBoxLayout, QHBoxLayout, QLabel, QWidget,
@@ -19,15 +16,13 @@ from PyQt5.QtWidgets import (
 )
 from PyQt5.QtCore import Qt
 
-from ui.theme import _C
-from ui.font  import get_font_size, fs
-from ..components.headers         import SectionHeader
+from ...font import fs, get_font_size
+from ...theme import _C
+from ..components.headers import SectionHeader
 
 
 class DetailSection(QFrame):
-    """
-    قسم تفاصيل موحد — يعرض أزواج (عنوان: قيمة) في grid منظم.
-    """
+    """قسم تفاصيل موحد — يعرض أزواج (عنوان: قيمة) في grid منظم."""
 
     def __init__(self, title: str = "",
                  cols: int = 1,
@@ -66,8 +61,8 @@ class DetailSection(QFrame):
         self._grid.setVerticalSpacing(6 if self._compact else 10)
 
         for c in range(self._cols):
-            self._grid.setColumnStretch(c * 2, 0)      # label
-            self._grid.setColumnStretch(c * 2 + 1, 1)  # value
+            self._grid.setColumnStretch(c * 2, 0)
+            self._grid.setColumnStretch(c * 2 + 1, 1)
 
         root.addLayout(self._grid)
 
@@ -121,27 +116,12 @@ class DetailSection(QFrame):
                  clear_missing: bool = False) -> "dict[str, QLabel]":
         """
         يعرض البيانات.
-
-        [تحسين 19] ترجع {label_text: value_QLabel} للتحديث المباشر.
-
-        [تحسين 44] clear_missing=True يُخفي الصفوف الموجودة في الـ widget
-        لكن غير موجودة في data الجديدة.
-        المثال: عرض منتج A (5 خصائص) ثم منتج B (3 خصائص) →
-          - clear_missing=False (افتراضي): تظهر 5 صفوف، الـ 3 الأولى بقيم B والـ 2 بقيم A القديمة.
-          - clear_missing=True: تظهر 3 صفوف فقط، الباقي مخفية.
-
-        ملاحظة: الإخفاء لا يحذف الـ widgets من الذاكرة (مفيد للأداء لو
-        ستعود البيانات لنفس الـ keys لاحقاً).
-
-        مثال:
-            refs = section.set_data({"الاسم": "منتج A", "السعر": "100"})
-            # لاحقاً:
-            refs["السعر"].setText("150")
+        [تحسين 19] ترجع {label_text: value_QLabel}.
+        [تحسين 44] clear_missing=True يُخفي الصفوف غير الموجودة في data.
         """
         result   = {}
         existing = {lk.text(): (lk, lv) for lk, lv in self._rows}
 
-        # [تحسين 44] أولاً أخفِ الصفوف الزائدة لو طُلب ذلك
         if clear_missing:
             new_keys = set(data.keys())
             for key, (lk, lv) in existing.items():
@@ -154,7 +134,6 @@ class DetailSection(QFrame):
             if label in existing:
                 lk, lv = existing[label]
                 lv.setText(str_val)
-                # [تحسين 44] تأكد أن الصف ظاهر (ممكن كان مخفياً من set_data سابقة)
                 lk.setVisible(True)
                 lv.setVisible(True)
                 result[label] = lv
@@ -194,10 +173,7 @@ class DetailSection(QFrame):
             lbl_val.setText("─")
 
     def show_all_rows(self):
-        """
-        [تحسين 44] يُظهر كل الصفوف المخفية.
-        مفيد لو تريد إعادة عرضها بعد set_data(clear_missing=True).
-        """
+        """[تحسين 44] يُظهر كل الصفوف المخفية."""
         for lbl_key, lbl_val in self._rows:
             lbl_key.setVisible(True)
             lbl_val.setVisible(True)
