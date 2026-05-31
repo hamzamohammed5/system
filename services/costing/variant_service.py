@@ -5,7 +5,12 @@ VariantService — يغلّف كل عمليات raw_variants_repo.
 
 يُستخدم من:
   - ui/tabs/costing/shared/raw_variants_panel.py
-  - ui/widgets/components/component_row/variants.py  (لو موجود)
+  - ui/widgets/components/component_row/variants.py
+
+الدوال المضافة (مطلوبة من variants.py):
+  - get_variants_for_item(conn, item_id) → list
+  - get_variant_unit_cost(conn, variant_id, item_id) → float | None
+  - get_item_price(conn, item_id) → float
 """
 
 from __future__ import annotations
@@ -44,6 +49,59 @@ class VariantResult:
 
 
 # ──────────────────────────────────────────────────────────
+# دوال مساعدة مستقلة (تُستخدم من variants.py مباشرة)
+# ──────────────────────────────────────────────────────────
+
+def get_variants_for_item(conn, item_id: int) -> list:
+    """
+    يرجع كل variants الخامة كـ list of dicts.
+    مطلوبة من component_row/variants.py.
+    """
+    try:
+        from db.costing.raw_variants_repo import fetch_variants_for_item
+        rows = fetch_variants_for_item(conn, item_id)
+        return [dict(r) for r in rows] if rows else []
+    except Exception:
+        return []
+
+
+def get_variant_unit_cost(conn, variant_id: int,
+                           item_id: int) -> "float | None":
+    """
+    يحسب سعر الوحدة للـ variant = item_price ÷ pieces.
+    مطلوبة من component_row/variants.py.
+    """
+    try:
+        from db.costing.raw_variants_repo import fetch_variant
+        var = fetch_variant(conn, variant_id)
+        if not var:
+            return None
+        pieces = float(var["pieces"])
+        if pieces <= 0:
+            return None
+        price = get_item_price(conn, item_id)
+        if price <= 0:
+            return None
+        return price / pieces
+    except Exception:
+        return None
+
+
+def get_item_price(conn, item_id: int) -> float:
+    """
+    يجلب سعر الخامة من جدول items.
+    مطلوبة من component_row/variants.py.
+    """
+    try:
+        row = conn.execute(
+            "SELECT price FROM items WHERE id=?", (item_id,)
+        ).fetchone()
+        return float(row["price"]) if row and row["price"] else 0.0
+    except Exception:
+        return 0.0
+
+
+# ──────────────────────────────────────────────────────────
 # VariantService
 # ──────────────────────────────────────────────────────────
 
@@ -75,7 +133,8 @@ class VariantService:
 
     # ── كتابة ─────────────────────────────────────────────
 
-    def add(self, item_id: int, name: str, pieces: float, notes: str = None) -> int:
+    def add(self, item_id: int, name: str, pieces: float,
+            notes: str = None) -> int:
         """
         يضيف variant جديد.
         يرجع id الـ variant الجديد.
@@ -90,7 +149,8 @@ class VariantService:
         from db.costing.raw_variants_repo import insert_variant
         return insert_variant(self.conn, item_id, name, pieces, notes=notes)
 
-    def update(self, variant_id: int, name: str, pieces: float, notes: str = None) -> None:
+    def update(self, variant_id: int, name: str, pieces: float,
+               notes: str = None) -> None:
         """
         يحدّث variant موجود.
         Raises: ValueError لو name فارغ أو pieces <= 0

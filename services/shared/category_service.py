@@ -8,6 +8,13 @@ Business Logic للتصنيفات — مفصولة عن الـ UI والـ DB.
     svc = CategoryService(conn)
     preview = svc.get_delete_preview(cat_id)
     svc.delete_cascade(cat_id)
+
+الدوال المضافة (مطلوبة من managers/category.py و combo/category.py):
+  - get_all(scope) → list of dicts
+  - build_tree(rows) → list of dicts (هيكل شجري)
+  - get_one(cat_id) → dict | None
+  - get_descendants(cat_id) → set of ids
+  - count_items(cat_id) → dict
 """
 
 from dataclasses import dataclass, field
@@ -73,7 +80,50 @@ class CategoryService:
     def __init__(self, conn):
         self._conn = conn
 
-    # ── Read ──────────────────────────────────────────────
+    # ── Read (دوال مضافة لـ managers/category.py و combo/category.py) ──
+
+    def get_all(self, scope: str = "all") -> list:
+        """
+        يرجع كل التصنيفات كـ list of dicts.
+        مطلوبة من managers/category.py و combo/category.py.
+        """
+        return [dict(r) for r in fetch_all_categories(self._conn, scope)]
+
+    def build_tree(self, rows: list) -> list:
+        """
+        يبني هيكل شجري من list of dicts.
+        مطلوبة من managers/category.py و combo/category.py.
+
+        rows: list of dicts من get_all()
+        returns: list of dicts مع "children" key
+        """
+        # build_tree من الـ repo يقبل rows من DB مباشرة
+        # نمررها كـ list of Row objects أو dicts
+        return build_tree(rows)
+
+    def get_one(self, cat_id: int) -> "dict | None":
+        """
+        يرجع تصنيف واحد بالـ id كـ dict.
+        مطلوبة من managers/category.py (load_for_edit).
+        """
+        row = fetch_category(self._conn, cat_id)
+        return dict(row) if row else None
+
+    def get_descendants(self, cat_id: int) -> set:
+        """
+        يرجع set من IDs كل الأبناء والأحفاد.
+        مطلوبة من managers/category.py (exclude في parent combo).
+        """
+        return set(fetch_descendants(self._conn, cat_id))
+
+    def count_items(self, cat_id: int) -> dict:
+        """
+        يرجع dict بعدد العناصر المرتبطة بالتصنيف.
+        مطلوبة من managers/category.py (_add_items).
+        """
+        return count_category_items(self._conn, cat_id)
+
+    # ── Read (دوال قديمة) ─────────────────────────────────
 
     def get_tree(self, scope: str = None) -> list[CategoryNode]:
         """يرجع شجرة التصنيفات كـ dataclasses."""
@@ -107,7 +157,6 @@ class CategoryService:
         name = name.strip()
         if not name:
             raise ValueError("اسم التصنيف مطلوب")
-        # update_category في الـ repo بيتحقق من circular reference
         update_category(self._conn, cat_id, name, scope, color, parent_id)
 
     # ── Delete ────────────────────────────────────────────

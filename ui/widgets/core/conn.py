@@ -147,7 +147,7 @@ class SafeConnMixin:
                 _get = getattr(company_state, "_get_conn", None)
                 new_conn = _get(self.__safe_db_name) if _get else None
 
-    الجديد: منطق مباشر بدون الشرط الداخلي الزائد، مع warning لو لم يُجد public API.
+    الجديد: منطق مباشر — لو erp استخدم public API، وإلا استخدم _get_conn مع warning.
     """
 
     def _init_safe_conn(self, conn, db_name: str = "accounting"):
@@ -164,26 +164,27 @@ class SafeConnMixin:
             from db.companies.company_state import company_state
 
             if self.__safe_db_name == "erp":
-                # [إصلاح private API] public API
+                # public API مباشرة
                 new_conn = company_state.get_erp_conn()
             else:
-                # لأنواع DB الأخرى (accounting, etc.)
-                # نحاول _get_conn كـ fallback لأنه لا يوجد public API لكل الأنواع
+                # لأنواع DB الأخرى (accounting, etc.) — نحاول _get_conn كـ fallback
+                # لأن public API غير متاح لكل أنواع DB
                 _get = getattr(company_state, "_get_conn", None)
                 if _get is not None:
                     new_conn = _get(self.__safe_db_name)
                 else:
                     logger.warning(
-                        "%s._get_safe_conn: لا يوجد _get_conn على company_state، "
-                        "fallback لـ erp", type(self).__name__
+                        "%s._get_safe_conn: no _get_conn on company_state for db '%s', "
+                        "trying erp fallback",
+                        type(self).__name__, self.__safe_db_name
                     )
                     new_conn = company_state.get_erp_conn()
 
                 # لو _get_conn لم يُعطِ نتيجة، نحاول erp كـ last resort
                 if not _test_conn(new_conn):
                     logger.warning(
-                        "%s._get_safe_conn: لم يُجد public API لـ db '%s'، "
-                        "جارٍ المحاولة بـ erp fallback",
+                        "%s._get_safe_conn: no valid conn for db '%s', "
+                        "falling back to erp",
                         type(self).__name__, self.__safe_db_name
                     )
                     new_conn = company_state.get_erp_conn()
