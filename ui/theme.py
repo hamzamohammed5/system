@@ -1,43 +1,29 @@
 """
-ui/app_settings.py
-==================
-يحفظ ويطبّق إعداد حجم الخط على التطبيق كله.
-تصميم محسّن — Warm Neutral System مع تفاصيل دقيقة.
+ui/theme.py
+===========
+إدارة الألوان والثيم — المصدر الوحيد لـ _C وكل عمليات الثيم.
 
-التغييرات (v7 — theme + i18n support):
-  - [themes] apply_theme(colors): يُحدّث _C بألوان الثيم الجديد،
-    يمسح الـ stylesheet cache، ويُطبّق الـ stylesheet الجديد على الـ app.
-    يُستدعى من ThemeManager.set_theme() عند تغيير الثيم.
-
-  - [themes] get_theme_color(key, fallback): يرجع لون من _C بأمان.
-
-  - [تحسين 37 محفوظ] _ss_cache key = (font_size, theme_hash).
-  - [تحسين 43 محفوظ] module-level font size cache.
-  - set_font_size() تحدّث AppState cache أولاً ثم تحفظ في DB.
+المسؤولية:
+  - dict الألوان الحالية (_C)
+  - تطبيق ثيم جديد (apply_theme)
+  - قراءة لون بأمان (get_theme_color)
+  - إدارة stylesheet cache
+  - بناء الـ stylesheet الكامل (build_stylesheet)
 """
 
+from __future__ import annotations
 from PyQt5.QtWidgets import QApplication
 
-DEFAULT_FONT_SIZE = 11
-MIN_FONT_SIZE     = 8
-MAX_FONT_SIZE     = 20
-
 # ══════════════════════════════════════════════════════════
-# Stylesheet cache — يحفظ نتيجة _build_stylesheet لكل (font_size, theme_hash)
+# Stylesheet cache — key = (font_size, theme_hash)
 # ══════════════════════════════════════════════════════════
 _ss_cache: dict[tuple, str] = {}
 _current_theme_hash: str    = ""
 
 # ══════════════════════════════════════════════════════════
-# Sidebar layout constants
+# Palette: Warm Neutral + Slate Accents (الثيم الافتراضي)
 # ══════════════════════════════════════════════════════════
-SIDEBAR_EXPANDED_WIDTH  = 224
-SIDEBAR_COLLAPSED_WIDTH = 56
-CONTENT_MIN_WIDTH       = 820
-WINDOW_DEFAULT_W        = SIDEBAR_EXPANDED_WIDTH + CONTENT_MIN_WIDTH
-
-# ── Palette: Warm Neutral + Slate Accents ─────────────────
-_C = {
+_C: dict = {
     # Backgrounds
     "bg_page":      "#F5F4F0",
     "bg_surface":   "#FAFAF8",
@@ -47,16 +33,16 @@ _C = {
     "bg_input":     "#FFFFFF",
 
     # Borders
-    "border":       "#DDD9CF",
-    "border_med":   "#C8C4B8",
-    "border_focus": "#8B8680",
-    "border_strong":"#6B6760",
+    "border":        "#DDD9CF",
+    "border_med":    "#C8C4B8",
+    "border_focus":  "#8B8680",
+    "border_strong": "#6B6760",
 
     # Text
-    "text_primary": "#1C1B18",
-    "text_sec":     "#4A4843",
-    "text_muted":   "#7A7870",
-    "text_disabled":"#A8A69E",
+    "text_primary":  "#1C1B18",
+    "text_sec":      "#4A4843",
+    "text_muted":    "#7A7870",
+    "text_disabled": "#A8A69E",
 
     # Accent — Slate Blue
     "accent":       "#3D5A80",
@@ -66,116 +52,49 @@ _C = {
     "accent_text":  "#2A3F5A",
 
     # Sidebar
-    "sidebar_bg":    "#1E1D1A",
-    "sidebar_text":  "#E8E6E1",
-    "sidebar_muted": "#7A7870",
-    "sidebar_hover": "#2E2D2A",
-    "sidebar_active":"#3A3835",
-    "sidebar_border":"#2E2D2A",
+    "sidebar_bg":     "#1E1D1A",
+    "sidebar_text":   "#E8E6E1",
+    "sidebar_muted":  "#7A7870",
+    "sidebar_hover":  "#2E2D2A",
+    "sidebar_active": "#3A3835",
+    "sidebar_border": "#2E2D2A",
 
     # States
-    "danger":        "#C0392B",
-    "danger_bg":     "#FDF0EF",
-    "danger_border": "#E8A39D",
-    "success":       "#2E7D52",
-    "success_bg":    "#EDF7F2",
-    "success_border":"#8EC5A8",
-    "warning":       "#7A5C00",
-    "warning_bg":    "#FDF8E7",
-    "warning_border":"#D4B84A",
-    "info":          "#1A5276",
-    "info_bg":       "#EBF5FB",
-    "info_border":   "#7FB3D3",
+    "danger":         "#C0392B",
+    "danger_bg":      "#FDF0EF",
+    "danger_border":  "#E8A39D",
+    "success":        "#2E7D52",
+    "success_bg":     "#EDF7F2",
+    "success_border": "#8EC5A8",
+    "warning":        "#7A5C00",
+    "warning_bg":     "#FDF8E7",
+    "warning_border": "#D4B84A",
+    "info":           "#1A5276",
+    "info_bg":        "#EBF5FB",
+    "info_border":    "#7FB3D3",
 
     # Tab indicator
     "tab_active":    "#3D5A80",
     "tab_indicator": "#3D5A80",
 
     # Purple — للـ machine_op rows
-    "purple":         "#6a1b9a",
-    "purple_bg":      "#f3e5f5",
-    "purple_border":  "#ce93d8",
+    "purple":        "#6a1b9a",
+    "purple_bg":     "#f3e5f5",
+    "purple_border": "#ce93d8",
 
     # Orange — للـ filters والـ warnings الثانوية
-    "orange":         "#e65100",
-    "orange_bg":      "#fff3e0",
-    "orange_border":  "#ffcc80",
+    "orange":        "#e65100",
+    "orange_bg":     "#fff3e0",
+    "orange_border": "#ffcc80",
 }
 
 
 # ══════════════════════════════════════════════════════════
-# [themes] apply_theme — الدالة الجديدة
-# ══════════════════════════════════════════════════════════
-
-def apply_theme(theme_colors: dict, app: QApplication = None):
-    """
-    يُحدّث _C بألوان الثيم الجديد ويُعيد بناء الـ stylesheet.
-
-    يُستدعى من ThemeManager.set_theme() عند تغيير الثيم.
-
-    Parameters
-    ----------
-    theme_colors : dict
-        dict يحتوي على المفاتيح المطلوبة مثل:
-        {"accent": "#3D5A80", "danger": "#C0392B", ...}
-        المفاتيح غير الموجودة في theme_colors تبقى كما هي في _C.
-
-    app : QApplication | None
-        لو محدد، يُطبّق الـ stylesheet الجديد على الـ app فوراً.
-        لو None، يُحاول الحصول على الـ instance تلقائياً.
-
-    مثال:
-        from ui.app_settings import apply_theme
-        apply_theme({
-            "accent": "#5B8DB8",
-            "bg_page": "#0F0F0F",
-            ...
-        })
-    """
-    global _C, _current_theme_hash
-
-    # تحديث _C بالألوان الجديدة فقط (المفاتيح الموجودة)
-    for key, value in theme_colors.items():
-        if key in _C:
-            _C[key] = value
-        # السماح بإضافة مفاتيح جديدة أيضاً (للثيمات المستقبلية)
-        else:
-            _C[key] = value
-
-    # مسح كل الـ caches لأن الألوان تغيّرت
-    invalidate_stylesheet_cache()
-
-    # مسح button cache
-    try:
-        from ui.widgets.components.button import invalidate_stylesheet_cache as inv_btn
-        inv_btn()
-    except Exception:
-        pass
-
-    # إعادة بناء وتطبيق الـ stylesheet فوراً
-    _app = app or QApplication.instance()
-    if _app:
-        _app.setStyleSheet(_build_stylesheet(get_font_size()))
-
-
-def get_theme_color(key: str, fallback: str = "#000000") -> str:
-    """
-    يرجع لون من _C بأمان مع fallback.
-
-    مثال:
-        color = get_theme_color("accent", "#1565c0")
-    """
-    return _C.get(key, fallback)
-
-
-# ══════════════════════════════════════════════════════════
-# [تحسين 37] Theme hash helpers
+# Theme hash — للكشف عن تغييرات الثيم في الـ cache
 # ══════════════════════════════════════════════════════════
 
 def _compute_theme_hash() -> str:
-    """
-    يحسب hash بسيط من _C للكشف عن تغييرات الثيم.
-    """
+    """يحسب hash من _C الحالي."""
     try:
         return str(hash(tuple(sorted(_C.items()))))
     except Exception:
@@ -183,88 +102,118 @@ def _compute_theme_hash() -> str:
 
 
 def _get_theme_hash() -> str:
-    """
-    يرجع الـ theme hash الحالي.
-    يُحسب مرة واحدة ثم يُحفظ في _current_theme_hash.
-    """
+    """يرجع الـ hash الحالي — يحسبه lazy لو لم يُحسب بعد."""
     global _current_theme_hash
     if not _current_theme_hash:
         _current_theme_hash = _compute_theme_hash()
     return _current_theme_hash
 
 
+# ══════════════════════════════════════════════════════════
+# Cache management
+# ══════════════════════════════════════════════════════════
+
 def invalidate_stylesheet_cache():
     """
-    يمسح الـ stylesheet cache ويُعيد حساب الـ theme hash.
-    [تحسين 43] يمسح _module_font_size أيضاً لإجبار إعادة القراءة من AppState.
-
-    استدعه عند:
-      - تغيير حجم الخط (يُستدعى تلقائياً من AppState)
-      - تغيير الثيم / Dark Mode
-      - تغيير الشركة (يُستدعى من AppState.invalidate)
+    يمسح الـ stylesheet cache.
+    يُستدعى عند: تغيير الثيم / تغيير الشركة / تغيير حجم الخط.
     """
     global _current_theme_hash
     _ss_cache.clear()
-    _current_theme_hash = _compute_theme_hash()
+    _current_theme_hash = ""          # يُعاد حسابه lazy في الطلب التالي
+    from ui.font import _set_module_font_cache
     _set_module_font_cache(None)
 
 
 # ══════════════════════════════════════════════════════════
-# [تحسين 43] Module-level font size cache
+# Public API
 # ══════════════════════════════════════════════════════════
-_module_font_size: int | None = None
 
-
-def _set_module_font_cache(size: int | None):
-    """يحدّث الـ module-level font cache."""
-    global _module_font_size
-    _module_font_size = size
-
-
-def get_font_size() -> int:
+def apply_theme(theme_colors: dict, app: QApplication = None):
     """
-    يرجع حجم الخط الحالي.
-    [تحسين 43] يقرأ من _module_font_size أولاً.
+    يُحدّث _C بألوان الثيم الجديد ويُعيد بناء الـ stylesheet.
+    يُستدعى من ThemeManager.set_theme() — لا تستدعه مباشرة من الـ UI.
     """
-    global _module_font_size
-    if _module_font_size is not None:
-        return _module_font_size
-    from ui.app_state import AppState
-    size = AppState.font_size()
-    _module_font_size = size
-    return size
+    global _C
+    _C.update(theme_colors)
 
-
-def set_font_size(size: int):
-    """
-    يحدّث حجم الخط — cache أولاً ثم DB.
-    """
-    size = max(MIN_FONT_SIZE, min(MAX_FONT_SIZE, size))
-    _set_module_font_cache(size)
-
-    from ui.app_state import AppState
-    AppState.on_font_changed(size)
+    invalidate_stylesheet_cache()
 
     try:
-        from db.shared.connection import get_connection
-        conn = get_connection()
-        from db.shared.settings_repo import set_setting
-        set_setting(conn, "font_size", size)
+        from ui.widgets.components.button import invalidate_stylesheet_cache as inv_btn
+        inv_btn()
     except Exception:
         pass
 
+    _app = app or QApplication.instance()
+    if _app:
+        from ui.font import get_font_size
+        _app.setStyleSheet(build_stylesheet(get_font_size()))
 
-def fs(base: int, delta: int = 0) -> int:
-    """حجم خط نسبي — الحد الأدنى 7 دائماً."""
-    return max(7, base + delta)
+
+def get_theme_color(key: str, fallback: str = "#000000") -> str:
+    """يرجع لون من _C بأمان مع fallback."""
+    return _C.get(key, fallback)
 
 
 # ══════════════════════════════════════════════════════════
-# _build_stylesheet — مقسّمة لدوال مساعدة
+# Stylesheet builder — مقسّم لدوال مساعدة للقراءة
 # ══════════════════════════════════════════════════════════
 
-def _ss_base_reset(base: int, c: dict, normal: int, btn_h: int,
-                   radius: str, radius_sm: str) -> str:
+def build_stylesheet(base: int) -> str:
+    """
+    يبني الـ stylesheet الكامل لحجم خط معين.
+    Cache key = (font_size, theme_hash).
+    """
+    from ui.constants import MIN_FONT_SIZE, MAX_FONT_SIZE
+    from ui.font import fs
+
+    base = max(MIN_FONT_SIZE, min(MAX_FONT_SIZE, base))
+
+    theme_hash = _get_theme_hash()
+    cache_key  = (base, theme_hash)
+
+    if cache_key in _ss_cache:
+        return _ss_cache[cache_key]
+
+    c       = _C
+    small   = fs(base, -1)
+    normal  = fs(base,  0)
+    large   = fs(base, +1)
+    input_h = normal * 2 + 6
+    btn_h   = normal * 2 + 8
+
+    kw = dict(
+        base=base, c=c,
+        small=small, normal=normal, large=large,
+        input_h=input_h, btn_h=btn_h,
+        radius="6px", radius_sm="4px", radius_lg="8px",
+    )
+
+    sections = [
+        _ss_base_reset(**kw),
+        _ss_message_box(**kw),
+        _ss_dialog(**kw),
+        _ss_typography(**kw),
+        _ss_groupbox(**kw),
+        _ss_buttons(**kw),
+        _ss_inputs(**kw),
+        _ss_combobox(**kw),
+        _ss_tables(**kw),
+        _ss_tree(**kw),
+        _ss_tabs(**kw),
+        _ss_scrollbars(c=c),
+        _ss_misc(**kw),
+    ]
+
+    result = "\n".join(sections)
+    _ss_cache[cache_key] = result
+    return result
+
+
+# ── Stylesheet sections ────────────────────────────────────
+
+def _ss_base_reset(c, normal, btn_h, radius, radius_sm, **_) -> str:
     return f"""
 /* ══ Base & Reset ══ */
 * {{ font-size: {normal}pt; color: {c['text_primary']}; outline: none; }}
@@ -273,8 +222,7 @@ QWidget {{ background: transparent; }}
 """
 
 
-def _ss_message_box(base: int, c: dict, normal: int, btn_h: int,
-                    radius: str, radius_sm: str) -> str:
+def _ss_message_box(c, normal, btn_h, radius, radius_sm, **_) -> str:
     return f"""
 /* ══ QMessageBox ══ */
 QMessageBox {{ background: {c['bg_surface']}; color: {c['text_primary']}; }}
@@ -304,7 +252,7 @@ QMessageBox QPushButton:pressed {{ background: {c['bg_active']}; }}
 """
 
 
-def _ss_dialog(base: int, c: dict, **_) -> str:
+def _ss_dialog(c, **_) -> str:
     return f"""
 /* ══ QDialog ══ */
 QDialog {{ background: {c['bg_surface']}; color: {c['text_primary']}; }}
@@ -320,8 +268,7 @@ QDialog QScrollArea > QWidget > QWidget {{ background: {c['bg_surface']}; }}
 """
 
 
-def _ss_typography(base: int, c: dict, normal: int, small: int,
-                   large: int, radius_sm: str, **_) -> str:
+def _ss_typography(c, normal, small, large, radius_sm, **_) -> str:
     return f"""
 /* ══ Typography ══ */
 QLabel {{ font-size: {normal}pt; color: {c['text_primary']}; background: transparent; }}
@@ -347,8 +294,7 @@ QLabel[role="mode"] {{
 """
 
 
-def _ss_groupbox(base: int, c: dict, normal: int, small: int,
-                 radius_lg: str, **_) -> str:
+def _ss_groupbox(c, normal, small, radius_lg, **_) -> str:
     return f"""
 /* ══ GroupBox ══ */
 QGroupBox {{
@@ -364,8 +310,7 @@ QGroupBox::title {{
 """
 
 
-def _ss_buttons(base: int, c: dict, normal: int, btn_h: int,
-                radius: str, **_) -> str:
+def _ss_buttons(c, normal, btn_h, radius, **_) -> str:
     return f"""
 /* ══ Buttons ══ */
 QPushButton {{
@@ -389,8 +334,7 @@ QPushButton:checked {{
 """
 
 
-def _ss_inputs(base: int, c: dict, normal: int, input_h: int,
-               radius: str, **_) -> str:
+def _ss_inputs(c, normal, input_h, radius, **_) -> str:
     return f"""
 /* ══ Inputs ══ */
 QLineEdit, QDoubleSpinBox, QSpinBox, QDateEdit, QTimeEdit {{
@@ -424,8 +368,7 @@ QSpinBox::up-button:hover, QSpinBox::down-button:hover {{
 """
 
 
-def _ss_combobox(base: int, c: dict, normal: int, input_h: int,
-                 radius: str, radius_sm: str, **_) -> str:
+def _ss_combobox(c, normal, input_h, radius, radius_sm, **_) -> str:
     return f"""
 /* ══ ComboBox ══ */
 QComboBox {{
@@ -453,8 +396,7 @@ QComboBox QAbstractItemView::item:hover {{ background: {c['bg_hover']}; }}
 """
 
 
-def _ss_tables(base: int, c: dict, normal: int, small: int,
-               radius: str, **_) -> str:
+def _ss_tables(c, normal, small, radius, **_) -> str:
     return f"""
 /* ══ Tables ══ */
 QTableWidget {{
@@ -484,8 +426,7 @@ QHeaderView::section:hover {{ background: {c['bg_hover']}; color: {c['text_prima
 """
 
 
-def _ss_tree(base: int, c: dict, normal: int, small: int,
-             radius: str, radius_sm: str, **_) -> str:
+def _ss_tree(c, normal, small, radius, radius_sm, **_) -> str:
     return f"""
 /* ══ TreeWidget ══ */
 QTreeWidget {{
@@ -510,7 +451,7 @@ QTreeWidget QHeaderView::section {{
 """
 
 
-def _ss_tabs(base: int, c: dict, normal: int, **_) -> str:
+def _ss_tabs(c, normal, **_) -> str:
     return f"""
 /* ══ Tabs ══ */
 QTabWidget::pane {{
@@ -535,7 +476,7 @@ QTabBar::tab:hover:!selected {{
 """
 
 
-def _ss_scrollbars(c: dict, **_) -> str:
+def _ss_scrollbars(c, **_) -> str:
     return f"""
 /* ══ Scrollbars ══ */
 QScrollBar:vertical {{
@@ -561,8 +502,7 @@ QScrollBar::add-page:horizontal, QScrollBar::sub-page:horizontal {{ background: 
 """
 
 
-def _ss_misc(base: int, c: dict, normal: int, small: int,
-             radius: str, radius_sm: str, **_) -> str:
+def _ss_misc(c, normal, small, radius, radius_sm, **_) -> str:
     return f"""
 /* ══ ListWidget ══ */
 QListWidget {{
@@ -632,70 +572,3 @@ QRadioButton::indicator:checked {{
 QLabel#nav_icon {{ font-size: 16pt; background: transparent; border: none; }}
 QLabel#nav_label {{ font-size: {normal}pt; background: transparent; border: none; }}
 """
-
-
-def _build_stylesheet(base: int) -> str:
-    """
-    يبني الـ stylesheet الكامل لحجم خط معين.
-    [تحسين 37] الـ cache key = (base, theme_hash).
-    """
-    base = max(MIN_FONT_SIZE, min(MAX_FONT_SIZE, base))
-
-    theme_hash = _get_theme_hash()
-    cache_key  = (base, theme_hash)
-
-    if cache_key in _ss_cache:
-        return _ss_cache[cache_key]
-
-    c       = _C
-    tiny    = fs(base, -2)
-    small   = fs(base, -1)
-    normal  = fs(base,  0)
-    large   = fs(base, +1)
-    input_h = normal * 2 + 6
-    btn_h   = normal * 2 + 8
-
-    kw = dict(
-        base=base, c=c,
-        tiny=tiny, small=small, normal=normal, large=large,
-        input_h=input_h, btn_h=btn_h,
-        radius="6px", radius_sm="4px", radius_lg="8px",
-    )
-
-    sections = [
-        _ss_base_reset(**kw),
-        _ss_message_box(**kw),
-        _ss_dialog(**kw),
-        _ss_typography(**kw),
-        _ss_groupbox(**kw),
-        _ss_buttons(**kw),
-        _ss_inputs(**kw),
-        _ss_combobox(**kw),
-        _ss_tables(**kw),
-        _ss_tree(**kw),
-        _ss_tabs(**kw),
-        _ss_scrollbars(c=c),
-        _ss_misc(**kw),
-    ]
-
-    result = "\n".join(sections)
-    _ss_cache[cache_key] = result
-    return result
-
-
-def apply_font(app: QApplication, size: int = None):
-    if size is None:
-        size = get_font_size()
-    size = max(MIN_FONT_SIZE, min(MAX_FONT_SIZE, size))
-
-    theme_hash = _get_theme_hash()
-    cache_key  = (size, theme_hash)
-
-    if cache_key not in _ss_cache:
-        _ss_cache.clear()
-
-    _set_module_font_cache(size)
-
-    from ui.app_state import AppState
-    AppState.on_font_changed(size)
-    app.setStyleSheet(_build_stylesheet(size))

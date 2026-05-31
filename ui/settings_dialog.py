@@ -27,7 +27,8 @@ from PyQt5.QtWidgets import (
     QPushButton, QFrame,
 )
 
-from ui.app_settings import get_font_size, set_font_size, apply_font, _C, fs
+from ui.font  import get_font_size, set_font_size, apply_font, fs
+from ui.theme import _C
 
 from ui.widgets.combo.unit import (
     load_units, add_unit, remove_unit,

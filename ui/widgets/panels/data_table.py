@@ -13,9 +13,9 @@ DataTableWidget — جدول بيانات موحد.
 from PyQt5.QtWidgets import QWidget, QVBoxLayout, QSizePolicy
 from PyQt5.QtCore    import Qt, pyqtSignal
 
-from ui.app_settings import _C
-from ..tables.builders import make_list_table, ROW_HEIGHT_LARGE
-from ..tables.items    import auto_fit_columns
+from ui.theme import _C
+from ..tables.tables   import make_list_table, ROW_HEIGHT_LARGE
+from ..tables.tables   import auto_fit_columns
 from ..components.headers   import ListHeader, StatusBar
 from ..panels.state    import EmptyState
 

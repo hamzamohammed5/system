@@ -1,5 +1,5 @@
 File Tree Snapshot
-Generated : 2026-05-31 09:09:32
+Generated : 2026-05-31 09:58:33
 Source    : D:\My Workspace\Hg\Alhabaar\accountant\system
 Extensions: .md, .py
 ────────────────────────────────────────────────────────────
@@ -351,10 +351,9 @@ system/
 │   │   │   ├── guard.py
 │   │   │   └── i18n.py
 │   │   ├── dialogs/
-│   │   │   ├── base.py
 │   │   │   ├── confirm.py
-│   │   │   ├── message.py
-│   │   │   └── shell.py
+│   │   │   ├── dialogs_base.py
+│   │   │   └── message.py
 │   │   ├── forms/
 │   │   │   └── inputs.py
 │   │   ├── helpers/
@@ -363,28 +362,23 @@ system/
 │   │   │   └── category.py
 │   │   ├── mixins/
 │   │   │   ├── bus.py
-│   │   │   ├── edit.py
-│   │   │   ├── rebuild.py
-│   │   │   ├── refresh.py
-│   │   │   ├── select.py
+│   │   │   ├── data_mixins.py
+│   │   │   ├── form_mixins.py
 │   │   │   ├── service.py
-│   │   │   ├── shared_ops.py
-│   │   │   └── validate.py
+│   │   │   └── shared_ops.py
 │   │   ├── panels/
-│   │   │   ├── card_grid.py
-│   │   │   ├── collapsible_card.py
 │   │   │   ├── crud_section.py
 │   │   │   ├── data_table.py
 │   │   │   ├── detail_section.py
 │   │   │   ├── filter.py
 │   │   │   ├── form_parts.py
+│   │   │   ├── layout_widgets.py
 │   │   │   └── state.py
 │   │   ├── shared/
 │   │   │   └── list_panel_with_shared.py
 │   │   ├── tables/
-│   │   │   ├── builders.py
 │   │   │   ├── flexible.py
-│   │   │   └── items.py
+│   │   │   └── tables.py
 │   │   ├── theme/
 │   │   │   └── styles.py
 │   │   └── utils/
@@ -395,11 +389,13 @@ system/
 │   │       ├── signals.py
 │   │       ├── splitter.py
 │   │       └── tooltip.py
-│   ├── app_settings.py
 │   ├── app_state.py
+│   ├── constants.py
 │   ├── events.py
+│   ├── font.py
 │   ├── main_window.py
-│   └── settings_dialog.py
+│   ├── settings_dialog.py
+│   └── theme.py
 ├── main.py
 ├── README.md
 └── refactory.md

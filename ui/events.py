@@ -7,10 +7,6 @@ Bus مركزي للإشعارات — أي tab يحفظ بيانات يبعت si
 الاستخدام:
     from ui.events import bus
 
-    # إشعار عام (للـ widgets اللي مش مرتبطة بشركة محددة)
-    bus.data_changed.emit()
-    bus.data_changed.connect(fn)
-
     # إشعار مقيّد بشركة (الأفضل لتجنب تسريب البيانات بين الشركات)
     bus.company_data_changed.emit(company_id)
     bus.company_data_changed.connect(fn)   # fn(company_id: int)
@@ -19,11 +15,11 @@ Bus مركزي للإشعارات — أي tab يحفظ بيانات يبعت si
     bus.font_changed.emit(12)
     bus.font_changed.connect(fn)
 
-    # تغيير الثيم — [جديد]
+    # تغيير الثيم
     bus.theme_changed.emit("dark")
     bus.theme_changed.connect(fn)   # fn(theme_name: str)
 
-    # تغيير اللغة — [جديد]
+    # تغيير اللغة
     bus.language_changed.emit("en")
     bus.language_changed.connect(fn)   # fn(lang_code: str)
 """
@@ -32,20 +28,16 @@ from PyQt5.QtCore import QObject, pyqtSignal
 
 
 class _EventBus(QObject):
-    # إشعار عام — للتوافق مع الكود القديم
-    data_changed = pyqtSignal()
-
-    # إشعار مقيّد بـ company_id — الأفضل للاستخدام الجديد
-    # كل widget يقارن company_id قبل ما يستجيب
+    # إشعار مقيّد بـ company_id — كل widget يقارن company_id قبل ما يستجيب
     company_data_changed = pyqtSignal(int)
 
     # تغيير حجم الخط
     font_changed = pyqtSignal(int)
 
-    # [i18n / themes] تغيير الثيم — يحمل اسم الثيم الجديد ("light" | "dark")
+    # تغيير الثيم — يحمل اسم الثيم الجديد ("light" | "dark")
     theme_changed = pyqtSignal(str)
 
-    # [i18n] تغيير اللغة — يحمل كود اللغة الجديدة ("ar" | "en")
+    # تغيير اللغة — يحمل كود اللغة الجديدة ("ar" | "en")
     language_changed = pyqtSignal(str)
 
 

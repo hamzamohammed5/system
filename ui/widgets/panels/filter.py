@@ -18,9 +18,10 @@ from PyQt5.QtWidgets import (
 )
 from PyQt5.QtCore import QDate, pyqtSignal
 
-from ui.app_settings    import _C, fs, get_font_size
-from ..utils.signals    import blocked_signals
-from ..theme.styles     import input_style
+from ui.theme import _C
+from ui.font  import get_font_size, fs
+from ..utils.ui_utils   import blocked_signals
+from ..styles           import input_style
 
 
 def _combo_style() -> str:

@@ -21,7 +21,8 @@ from PyQt5.QtWidgets import (
 from PyQt5.QtCore import Qt, pyqtSignal
 from PyQt5.QtGui  import QColor, QFont
 
-from ui.app_settings        import _C, fs, get_font_size
+from ui.theme import _C
+from ui.font  import get_font_size, fs
 from ..core.colors          import card_colors, status_colors
 
 

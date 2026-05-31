@@ -21,7 +21,8 @@ from PyQt5.QtWidgets import (
 from PyQt5.QtCore import Qt
 import logging
 
-from ui.app_settings  import _C, fs, get_font_size
+from ui.font  import get_font_size, fs
+from ui.theme import _C
 from ui.events        import bus
 from ui.widgets.core.events import emit_company_data_changed
 from .main_window_helper._sidebar import _Sidebar
@@ -249,7 +250,20 @@ class MainWindow(QMainWindow):
             if btns:
                 btns[0].setChecked(True)
 
+        self._validate_index_map()
         self._tabs_built = True
+
+    def _validate_index_map(self):
+        """يتحقق أن كل index في index_map موجود فعلاً في الـ stack."""
+        index_map = {
+            "costing": 1, "pricing": 2, "accounting": 3,
+            "inventory": 4, "design": 5, "orders": 6,
+        }
+        stack_count = self._stack.count()
+        for key, idx in index_map.items():
+            assert idx < stack_count, (
+                f"index_map['{key}'] = {idx} خارج الـ stack ({stack_count})"
+            )
 
     def _destroy_tabs(self):
         bus.blockSignals(True)
@@ -287,9 +301,14 @@ class MainWindow(QMainWindow):
         from ui.app_state import AppState
         AppState.invalidate()
 
-        from db.companies.company_state import company_state
-        self.setWindowTitle(f"ERP — {company_state.company_name}")
-        self._refresh_tabs()
+        try:
+            from db.companies.company_state import company_state
+            self.setWindowTitle(f"ERP — {company_state.company_name}")
+            self._refresh_tabs()
+        except Exception as e:
+            logger.error("_on_company_changed: %s", e)
+            return
+
         bus.company_data_changed.emit(company_id)
 
     def _on_nav(self, clicked_btn):

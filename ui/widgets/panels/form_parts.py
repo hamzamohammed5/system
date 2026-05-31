@@ -25,9 +25,10 @@ from PyQt5.QtWidgets import (
 )
 from PyQt5.QtCore import Qt, pyqtSignal
 
-from ui.app_settings import _C, fs, get_font_size
+from ui.theme import _C
+from ui.font  import get_font_size, fs
 from ..components.button import make_btn
-from ..theme.styles      import spinbox_style
+from ..styles            import spinbox_style
 from ..core.colors       import status_colors
 from ..core.i18n         import tr
 

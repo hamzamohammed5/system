@@ -1,20 +1,25 @@
 """
-ui/widgets/dialogs/shell.py
-============================
-DialogShell — هيكل نافذة حوار موحد بدون منطق.
+ui/widgets/dialogs/dialogs_base.py
+====================================
+دمج shell.py + base.py — Base classes للـ dialogs.
 
-[تحسين 21] _make_header: استبدال `{a}dd` بـ `accent_transparent` واضح الاسم.
-القديم: `stop:1 {a}dd` — قد يُفسَّر بشكل خاطئ إذا كان `a` لا ينتهي بـ hex char.
-الجديد: `accent_transparent = a + "cc"` — صريح ولا لبس فيه.
+الملفات المحذوفة: shell.py, base.py
 """
+
 from PyQt5.QtWidgets import (
     QDialog, QVBoxLayout, QHBoxLayout,
-    QLabel, QFrame, QWidget,
+    QLabel, QFrame, QWidget, QPushButton,
 )
 from PyQt5.QtCore import Qt
 
-from ui.app_settings import _C, fs, get_font_size
+from ui.theme import _C
+from ui.font  import get_font_size, fs
+from ..components.button import make_btn
 
+
+# ══════════════════════════════════════════════════════════
+# DialogShell  (كان في shell.py)
+# ══════════════════════════════════════════════════════════
 
 class DialogShell(QDialog):
     """
@@ -23,6 +28,8 @@ class DialogShell(QDialog):
       - منطقة محتوى (body_layout)
       - شريط أزرار (btn_layout)
       - RTL + modal تلقائي
+
+    [تحسين 21] _make_header: استبدال `{a}dd` بـ `accent_transparent` واضح الاسم.
     """
 
     def __init__(self, parent=None, title: str = "", icon: str = "📋",
@@ -75,9 +82,6 @@ class DialogShell(QDialog):
 
     def _make_header(self, icon: str, title: str, subtitle: str) -> QFrame:
         a = self._accent
-
-        # [تحسين 21] بدل `{a}dd` الغامض، نستخدم متغير واضح الاسم.
-        # "cc" تعني ~80% opacity في CSS hex alpha (0xCC / 0xFF ≈ 0.8)
         accent_transparent = a + "cc"
 
         hdr = QFrame()
@@ -132,3 +136,69 @@ class DialogShell(QDialog):
     @property
     def btn_layout(self) -> QHBoxLayout:
         return self._btn_layout
+
+
+# ══════════════════════════════════════════════════════════
+# BaseDialog  (كان في base.py)
+# ══════════════════════════════════════════════════════════
+
+class BaseDialog(DialogShell):
+    """
+    قاعدة مشتركة للـ dialogs.
+
+    Override:
+        _build_content(lay) → أضف المحتوى
+        _on_accept()        → منطق الحفظ
+    """
+
+    def __init__(self, parent=None, title: str = "", icon: str = "📋",
+                 subtitle: str = "", min_size: tuple = (500, 400),
+                 accent: str = None, show_btns: bool = True):
+        super().__init__(
+            parent, title=title, icon=icon, subtitle=subtitle,
+            accent=accent, min_width=min_size[0], min_height=min_size[1],
+        )
+        if show_btns:
+            self._add_default_buttons()
+        else:
+            self._btn_ok = QPushButton()  # dummy
+
+        self._build_content(self._body_layout)
+
+    def _add_default_buttons(self):
+        btn_cancel = make_btn("✖  إلغاء", "ghost")
+        btn_cancel.setMinimumHeight(36)
+        btn_cancel.clicked.connect(self.reject)
+
+        self._btn_ok = make_btn("✅  حفظ", "primary")
+        self._btn_ok.setMinimumHeight(36)
+
+        if self._accent and self._accent != _C.get("accent"):
+            base = get_font_size()
+            self._btn_ok.setStyleSheet(f"""
+                QPushButton {{
+                    background:{self._accent}; color:white; font-weight:bold;
+                    border-radius:6px; padding:0 20px;
+                    font-size:{fs(base,0)}pt; border:none; min-height:36px;
+                }}
+                QPushButton:hover {{ background:{self._accent}dd; }}
+                QPushButton:disabled {{ background:{_C['text_disabled']}; }}
+            """)
+
+        self._btn_ok.clicked.connect(self._on_accept)
+        self.btn_layout.addWidget(btn_cancel)
+        self.btn_layout.addWidget(self._btn_ok)
+
+    def _build_content(self, lay: QVBoxLayout):
+        pass
+
+    def _on_accept(self):
+        self.accept()
+
+    def set_ok_enabled(self, enabled: bool):
+        if hasattr(self, "_btn_ok"):
+            self._btn_ok.setEnabled(enabled)
+
+    def set_ok_text(self, text: str):
+        if hasattr(self, "_btn_ok"):
+            self._btn_ok.setText(text)

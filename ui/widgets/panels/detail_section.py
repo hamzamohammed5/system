@@ -19,8 +19,8 @@ from PyQt5.QtWidgets import (
 )
 from PyQt5.QtCore import Qt
 
-from ui.app_settings import _C, fs
-from ui.app_settings import get_font_size
+from ui.theme import _C
+from ui.font  import get_font_size, fs
 from ..components.headers         import SectionHeader
 
 

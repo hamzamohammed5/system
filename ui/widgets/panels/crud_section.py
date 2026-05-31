@@ -11,7 +11,7 @@ from PyQt5.QtWidgets import (
 )
 from PyQt5.QtCore import Qt, QTimer
 
-from ..theme.styles  import splitter_style   # المصدر الوحيد
+from ..styles        import splitter_style
 
 
 class CrudSection(QWidget):

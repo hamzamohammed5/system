@@ -1,25 +1,72 @@
 """
-ui/widgets/panels/collapsible_card.py
-=================================================
-CollapsibleCard — بطاقة قابلة للطي/التوسع.
+ui/widgets/panels/layout_widgets.py
+=====================================
+دمج card_grid.py + collapsible_card.py — Widgets تنظيم Layout.
+
+الملفات المحذوفة: card_grid.py, collapsible_card.py
 """
-from PyQt5.QtWidgets import QWidget, QFrame, QVBoxLayout, QPushButton
-from PyQt5.QtCore    import Qt, pyqtSignal
 
-from ui.app_settings import _C, fs
-from ui.app_settings import get_font_size
-from ..theme.styles import h_divider
-from ..theme.styles   import card_style
+from PyQt5.QtWidgets import (
+    QWidget, QFrame, QVBoxLayout, QGridLayout,
+    QPushButton, QSizePolicy,
+)
+from PyQt5.QtCore import Qt, pyqtSignal
 
+from ui.theme import _C
+from ui.font  import get_font_size, fs
+from ..styles import h_divider, card_style
+
+
+# ══════════════════════════════════════════════════════════
+# CardGrid  (كان في card_grid.py)
+# ══════════════════════════════════════════════════════════
+
+class CardGrid(QWidget):
+    """شبكة بطاقات بعدد أعمدة ثابت — تملأ الصفوف تلقائياً."""
+
+    def __init__(self, cols: int = 4, spacing: int = 10, parent=None):
+        super().__init__(parent)
+        self._cols  = cols
+        self._count = 0
+        self.setStyleSheet("background:transparent;")
+        self.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Fixed)
+
+        self._grid = QGridLayout(self)
+        self._grid.setSpacing(spacing)
+        self._grid.setContentsMargins(0, 0, 0, 0)
+
+        for c in range(cols):
+            self._grid.setColumnStretch(c, 1)
+
+    def add_widget(self, widget: QWidget):
+        row = self._count // self._cols
+        col = self._count % self._cols
+        self._grid.addWidget(widget, row, col)
+        self._count += 1
+
+    def clear(self):
+        while self._grid.count():
+            item = self._grid.takeAt(0)
+            if item.widget():
+                item.widget().deleteLater()
+        self._count = 0
+
+    @classmethod
+    def from_widgets(cls, widgets: list, cols: int = 4,
+                     spacing: int = 10) -> "CardGrid":
+        grid = cls(cols=cols, spacing=spacing)
+        for w in widgets:
+            grid.add_widget(w)
+        return grid
+
+
+# ══════════════════════════════════════════════════════════
+# CollapsibleCard  (كان في collapsible_card.py)
+# ══════════════════════════════════════════════════════════
 
 class CollapsibleCard(QFrame):
     """
-    بطاقة قابلة للطي مع header زر وmحتوى قابل للإخفاء.
-
-    الاستخدام:
-        card = CollapsibleCard("تفاصيل إضافية", expanded=False)
-        card.content_layout.addWidget(my_widget)
-        layout.addWidget(card)
+    بطاقة قابلة للطي مع header زر ومحتوى قابل للإخفاء.
 
     Signals:
         toggled(bool) — يُطلق عند تغيير حالة التوسع
