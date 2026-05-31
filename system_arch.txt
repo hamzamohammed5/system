@@ -1,5 +1,5 @@
 File Tree Snapshot
-Generated : 2026-05-31 11:40:06
+Generated : 2026-05-31 11:52:57
 Source    : D:\My Workspace\Hg\Alhabaar\accountant\system
 Extensions: .md, .py
 ────────────────────────────────────────────────────────────
@@ -327,7 +327,8 @@ system/
 │   │   │   └── tab_section.py
 │   │   ├── combo/
 │   │   │   ├── category.py
-│   │   │   └── unit.py
+│   │   │   ├── unit.py
+│   │   │   └── unit_service.py
 │   │   ├── components/
 │   │   │   ├── component_row/
 │   │   │   │   ├── op_rows.py
@@ -335,12 +336,17 @@ system/
 │   │   │   │   ├── variants.py
 │   │   │   │   └── widget.py
 │   │   │   ├── action_toolbar.py
+│   │   │   ├── amount_label.py
+│   │   │   ├── badge.py
 │   │   │   ├── button.py
 │   │   │   ├── headers.py
 │   │   │   ├── label.py
 │   │   │   ├── notification.py
+│   │   │   ├── progress.py
 │   │   │   ├── spinner.py
-│   │   │   └── stat_row.py
+│   │   │   ├── stat_card.py
+│   │   │   ├── stat_row.py
+│   │   │   └── status_chip.py
 │   │   ├── core/
 │   │   │   ├── __init__.py
 │   │   │   ├── colors.py
@@ -361,8 +367,10 @@ system/
 │   │   │   └── category.py
 │   │   ├── mixins/
 │   │   │   ├── bus.py
-│   │   │   ├── data_mixins.py
 │   │   │   ├── form_mixins.py
+│   │   │   ├── rebuild_mixin.py
+│   │   │   ├── refresh_mixin.py
+│   │   │   ├── selection_mixin.py
 │   │   │   ├── service.py
 │   │   │   └── shared_ops.py
 │   │   ├── panels/
@@ -370,7 +378,11 @@ system/
 │   │   │   ├── data_table.py
 │   │   │   ├── detail_section.py
 │   │   │   ├── filter.py
-│   │   │   ├── form_parts.py
+│   │   │   ├── form_badges.py
+│   │   │   ├── form_buttons.py
+│   │   │   ├── form_fields.py
+│   │   │   ├── form_group.py
+│   │   │   ├── form_labels.py
 │   │   │   ├── layout_widgets.py
 │   │   │   └── state.py
 │   │   ├── shared/
