@@ -8,7 +8,9 @@ InfoRow + ModeLabel — الـ widgets الأصلية لهذا الملف.
   - AmountLabel, DebitCreditDisplay, BalanceDisplay,
     format_amount, amount_color, dr_cr_color         → amount_label.py
 
-Re-exports محفوظة هنا للتوافق مع الكود القديم.
+للاستيراد الصحيح:
+    from ui.widgets.components.progress     import ProgressBar, MultiProgressBar
+    from ui.widgets.components.amount_label import AmountLabel, format_amount, ...
 """
 from __future__ import annotations
 
@@ -17,13 +19,6 @@ from PyQt5.QtCore    import Qt
 
 from ui.theme import _C
 from ui.font  import fs, get_font_size
-
-# ── Re-exports للتوافق مع الكود القديم ───────────────────
-from .progress import ProgressBar, MultiProgressBar          # noqa: F401
-from .amount_label import (                                  # noqa: F401
-    AmountLabel, DebitCreditDisplay, BalanceDisplay,
-    format_amount, amount_color, dr_cr_color,
-)
 
 
 # ══════════════════════════════════════════════════════════

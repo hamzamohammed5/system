@@ -1,7 +1,7 @@
 """
 ui/theme_manager.py
 ====================
-نظام الثيمات الكامل للتطبيق.
+نظام الثيمات الكامل للتطبيق — المصدر الوحيد لكل الألوان.
 
 [نُقل من ui/themes/theme_manager.py]
 
@@ -10,8 +10,12 @@ ui/theme_manager.py
   - Dark
 
 هذا الملف هو **المصدر الوحيد** لتعريف الألوان.
-ui/theme.py يستورد _LIGHT_THEME منه لملء _C الافتراضي
-بدل تعريف الألوان مرتين (تكرار محذوف).
+ui/theme.py يستورد _LIGHT_THEME منه لملء _C الافتراضي.
+
+[تحديث] نُقلت إليه الألوان التالية من colors.py:
+  - ألوان الهادر (waste_high/medium/low) لكل ثيم
+  - ألوان الـ fallback للبطاقات (card_fallback_bg/border)
+  colors.py لم يعد يحتوي على أي ألوان hardcoded — كل شيء يُقرأ من _C.
 
 الاستخدام:
     from ui.theme_manager import theme_manager
@@ -86,6 +90,15 @@ _LIGHT_THEME: Dict[str, str] = {
     "waste_zero_bg":         "#f5f5f5",
     "waste_zero_border":     "#e0e0e0",
     "waste_zero_color":      "#999999",
+    # waste_text_color → يُستخدم _C['orange'] مباشرة
+
+    # ── Waste levels ─────────────────────────────────────
+    "waste_high_bg":         "#ffcdd2",
+    "waste_high_border":     "#e53935",
+    "waste_medium_bg":       "#ffe0b2",
+    "waste_medium_border":   "#f57c00",
+    "waste_low_bg":          "#fff8e1",
+    "waste_low_border":      "#ffe082",
 
     # ── Input states ─────────────────────────────────────
     "input_error_bg":        "#fef2f2",
@@ -93,6 +106,10 @@ _LIGHT_THEME: Dict[str, str] = {
     "input_positive_bg":     "#f0fdf4",
     "input_positive_border": "#86efac",
     "input_positive_color":  "#15803d",
+
+    # ── Card fallback ─────────────────────────────────────
+    "card_fallback_bg":      "#f5f5f5",
+    "card_fallback_border":  "#e0e0e0",
 }
 
 _DARK_THEME: Dict[str, str] = {
@@ -147,12 +164,24 @@ _DARK_THEME: Dict[str, str] = {
     "waste_zero_border":     "#3a3a3a",
     "waste_zero_color":      "#666666",
 
+    # ── Waste levels ─────────────────────────────────────
+    "waste_high_bg":         "#2a1010",
+    "waste_high_border":     "#e53935",
+    "waste_medium_bg":       "#281400",
+    "waste_medium_border":   "#f57c00",
+    "waste_low_bg":          "#282000",
+    "waste_low_border":      "#ffe082",
+
     # ── Input states ─────────────────────────────────────
     "input_error_bg":        "#2a1010",
     "input_error_border":    "#e57373",
     "input_positive_bg":     "#0a2018",
     "input_positive_border": "#66bb8a",
     "input_positive_color":  "#66bb8a",
+
+    # ── Card fallback ─────────────────────────────────────
+    "card_fallback_bg":      "#2a2a2a",
+    "card_fallback_border":  "#3a3a3a",
 }
 
 THEMES: Dict[str, Dict[str, str]] = {
@@ -198,9 +227,6 @@ class ThemeManager(QObject):
     def set_theme(self, theme_name: str, save: bool = True):
         """
         يبدّل الثيم فوراً ويطبّقه على كامل التطبيق.
-
-        يستخدم apply_theme() من ui.theme بدل _apply_to_app_settings()
-        + _rebuild_stylesheet() المنفصلَين.
         """
         if theme_name not in THEMES:
             theme_name = "light"
@@ -254,7 +280,6 @@ class ThemeManager(QObject):
     # ── Internal ──────────────────────────────────────────
 
     def _emit_theme_changed(self, theme_name: str):
-        """يُطلق bus.theme_changed لإشعار الـ widgets المشتركة."""
         try:
             from ui.events import bus
             bus.theme_changed.emit(theme_name)
