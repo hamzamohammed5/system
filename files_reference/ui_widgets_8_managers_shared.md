@@ -1,6 +1,7 @@
-# دليل الكود — UI / Widgets (8): Managers, Main & Shared
+# دليل الكود — UI / Widgets (8): Managers & Shared
 
-> الجزء الثامن — مدير التصنيفات، النافذة الرئيسية، والأقسام المشتركة.
+> `ui/widgets/managers/` و `ui/widgets/shared/` — مدير التصنيفات والأقسام المشتركة.
+> لـ MainWindow و SettingsDialog → راجع `ui_widgets_ui_root.md`
 
 ---
 
@@ -8,9 +9,8 @@
 
 | القسم | الملفات |
 |-------|---------|
-| [CategoryManager](#categorymanager) | `widgets/managers/category` |
-| [Main Window](#main-window) | `main_window`, `settings_dialog` |
-| [SharedItemsListPanel](#shareditemslistpanel) | `widgets/shared/list_panel_with_shared` |
+| [CategoryManager](#categorymanager) | `widgets/managers/category.py` |
+| [SharedItemsListPanel](#shareditemslistpanel) | `widgets/shared/list_panel_with_shared.py` |
 
 ---
 
@@ -21,77 +21,16 @@
 ```python
 CategoryManager(conn, scope="all")
 # يستمع لـ bus.data_changed + bus.language_changed
-# يستخدم _live_conn() مرة واحدة لكل action — يُمررها للدوال الفرعية
+# يستخدم _live_conn() مرة واحدة لكل action
 # عناوين الأعمدة والأزرار من tr()
-# يشترك في bus.language_changed لتحديث النصوص تلقائياً
 
 CategoryForm(conn, scope, tree_widget)
   .load_for_edit(cat_id: int)
 # يشترك في bus.language_changed لتحديث نصوص الـ groupbox والأزرار
 # _refresh_parent_combo(conn=None, exclude_id=None)
-# conn اختياري — لو None يستدعي _live_conn() مرة واحدة
 ```
 
-**ملاحظة [Q-03]:** كل action يُجري `_live_conn()` مرة واحدة فقط ويُمررها للدوال الفرعية بدل استدعاء جديد في كل عملية.
-
----
-
-## Main Window
-
-### `ui/main_window.py` — `MainWindow`
-
-```python
-MainWindow(app: QApplication)
-# resize: WINDOW_DEFAULT_W × 820
-# setLayoutDirection: Qt.RightToLeft
-# setMinimumSize: (SIDEBAR_COLLAPSED_WIDTH + 400, 500)
-
-# index_map للـ Navigation:
-{
-    "costing":    1,
-    "pricing":    2,
-    "accounting": 3,
-    "inventory":  4,
-    "design":     5,
-    "orders":     6,
-}
-
-# سلوكيات خاصة:
-# "settings"     → SettingsDialog (لا يغير الـ stack index)
-# "shared_items" → SharedItemsManagerDialog مباشرة
-# تغيير الشركة  → AppState.invalidate() + _refresh_tabs() + bus.company_data_changed
-```
-
-**إضافة Tab جديدة:**
-```python
-# في MainWindow._build_tabs():
-from ui.tabs.my_section import MySection
-self._stack.addWidget(MySection())  # index N
-
-# في index_map:
-"my_key": N
-
-# في _sidebar._build():
-_NavButton("🔑", "اسم القسم", key="my_key")
-```
-
----
-
-### `ui/settings_dialog.py` — `SettingsDialog`
-
-```python
-SettingsDialog(app: QApplication, parent=None)
-# تبويبات: الخط | المظهر | اللغة | الوحدات | GIMP
-
-# حفظ (_save):
-#   - حجم الخط: set_font_size() + apply_font() + bus.font_changed
-#   - الثيم: theme_manager.set_theme() → يُطلق bus.theme_changed تلقائياً
-#   - اللغة: i18n_manager.set_language() + app.setLayoutDirection() + bus.language_changed
-#   - GIMP path: set_setting() في erp DB
-
-# _get_settings_conn_and_status() -> tuple[conn, has_company]
-# يقرأ company_state.is_ready مرة واحدة فقط
-```
+**ملاحظة [Q-03]:** كل action يُجري `_live_conn()` مرة واحدة فقط ويُمررها للدوال الفرعية.
 
 ---
 
@@ -143,16 +82,15 @@ _on_edit_shared()
 ```python
 # العناصر المشتركة (row["_is_shared"] = True):
 #   fg = SHARED_COLOR, bg = SHARED_BG
-# العناصر المنشورة (row["_is_published"] = True أو name في _published_names):
+# العناصر المنشورة (row["_is_published"] = True):
 #   fg = PUBLISHED_COLOR, bg = PUBLISHED_BG
 # من: ui/tabs/costing/shared/_utils.py
 ```
 
 **مساعدات:**
 ```python
-panel._selected_row_data() -> tuple[int | None, str]   # (item_id, item_name)
+panel._selected_row_data() -> tuple[int | None, str]
 panel._get_current_row_dict() -> dict | None
-# _live_conn() موروثة من LiveConnMixin — تستخدم self.conn ثم company_state كـ fallback
 ```
 
 **مثال:**
