@@ -9,35 +9,16 @@ CategoryForm    — فورم إضافة/تعديل التصنيف.
   - [i18n] CategoryForm و CategoryManager يشتركان في bus.language_changed.
   - [Q-03] تمرير conn مباشرة لـ CategoryService بدل استدعاء _live_conn()
     في كل عملية (add, save, delete, load, _load).
-
-    المشكلة القديمة:
-      كل عملية كانت تستدعي self._live_conn() بشكل منفصل:
-        def _add(self):
-            conn = self._live_conn()   ← استدعاء
-            CategoryService(conn).add(...)
-
-        def _save(self):
-            conn = self._live_conn()   ← استدعاء ثانٍ
-            CategoryService(conn).update(...)
-
-        def _load(self):
-            conn = self._live_conn()   ← استدعاء ثالث
-            rows = fetch_all_categories(conn, ...)
-
-      رغم أن الـ LiveConnMixin يحفظ الـ connection داخلياً (cache)،
-      إلا أن البنية مربكة وتُنشئ coupling خفياً بين كل عملية وحالة الـ connection.
-
-    الحل الجديد [Q-03]:
-      - CategoryForm و CategoryManager يُجريان _live_conn() مرة واحدة
-        في بداية كل action ويمررانه لـ CategoryService مباشرة.
-      - الدوال الداخلية (مثل _refresh_parent_combo, _add_items)
-        تستقبل conn كـ parameter بدل إعادة استدعاء _live_conn() من جديد.
-      - هذا يضمن أن كل action يستخدم نفس الـ connection طوال تنفيذه
-        بدل فتح connections متعددة (حتى لو هي نفس الـ cached connection).
-
-    ملاحظة: _live_conn() في LiveConnMixin يُعيد connection من company_state
-    ولا يفتح connection جديد في كل استدعاء — لذا التأثير الأداء ضئيل.
-    لكن الوضوح الكودي يتحسن بشكل ملحوظ.
+  - [إصلاح هيكلة] استبدال imports مباشرة من db/ بـ CategoryService methods.
+    القديم: from db.shared.categories_repo import fetch_all_categories, fetch_category, ...
+    الجديد: كل الاستدعاءات عبر CategoryService — المسار الصحيح:
+            widget → service → repo (db/)
+    الدوال المضافة لـ CategoryService:
+      - get_all(conn, scope) → list
+      - get_one(conn, cat_id) → dict | None
+      - get_descendants(conn, cat_id) → set
+      - count_items(conn, cat_id) → dict
+      - get_tree(conn, scope) → list  (بناء الشجرة من النتائج)
 """
 
 from PyQt5.QtWidgets import (
@@ -47,11 +28,6 @@ from PyQt5.QtWidgets import (
 from PyQt5.QtCore import Qt
 from PyQt5.QtGui  import QColor
 
-from db.shared.categories_repo import (
-    fetch_all_categories, fetch_category, insert_category,
-    update_category, delete_category, count_category_items,
-    build_tree, fetch_descendants,
-)
 from ..core.conn          import LiveConnMixin
 from ..core.i18n          import tr
 from ..components.button  import make_btn
@@ -133,7 +109,7 @@ class CategoryForm(QGroupBox, LiveConnMixin):
     def _refresh_parent_combo(self, conn=None, exclude_id: int = None):
         """
         [Q-03] يستقبل conn اختياري بدل استدعاء _live_conn() داخلياً.
-        لو conn=None يستدعي _live_conn() مرة واحدة فقط.
+        [إصلاح هيكلة] يستخدم CategoryService بدل db import مباشر.
         """
         if conn is None:
             try:
@@ -146,7 +122,10 @@ class CategoryForm(QGroupBox, LiveConnMixin):
         self.cmb_parent.addItem(tr("filter_all"), None)
 
         try:
-            rows = fetch_all_categories(conn, self.scope)
+            from services.shared.category_service import CategoryService
+            svc  = CategoryService(conn)
+            rows = svc.get_all(self.scope)
+            tree = svc.build_tree(rows)
         except Exception:
             self.cmb_parent.blockSignals(False)
             return
@@ -154,11 +133,12 @@ class CategoryForm(QGroupBox, LiveConnMixin):
         excluded = set()
         if exclude_id is not None:
             try:
-                excluded = set(fetch_descendants(conn, exclude_id))
+                from services.shared.category_service import CategoryService
+                excluded = CategoryService(conn).get_descendants(exclude_id)
             except Exception:
                 pass
 
-        self._add_parent_nodes(build_tree(rows), depth=0, excluded=excluded)
+        self._add_parent_nodes(tree, depth=0, excluded=excluded)
         self.cmb_parent.blockSignals(False)
 
     def _add_parent_nodes(self, nodes, depth, excluded):
@@ -177,7 +157,6 @@ class CategoryForm(QGroupBox, LiveConnMixin):
             msg_warning(self, tr("warning"), tr("category_name_required"))
             return
 
-        # [Q-03] _live_conn() مرة واحدة فقط لكل action
         try:
             conn = self._live_conn()
         except Exception as e:
@@ -206,7 +185,6 @@ class CategoryForm(QGroupBox, LiveConnMixin):
             msg_warning(self, tr("warning"), tr("category_name_required"))
             return
 
-        # [Q-03] _live_conn() مرة واحدة فقط لكل action
         try:
             conn = self._live_conn()
         except Exception as e:
@@ -228,20 +206,22 @@ class CategoryForm(QGroupBox, LiveConnMixin):
         emit_company_data_changed()
 
     def load_for_edit(self, cat_id: int):
-        # [Q-03] _live_conn() مرة واحدة — نمررها لـ _refresh_parent_combo
         try:
             conn = self._live_conn()
         except Exception:
             return
 
-        cat = fetch_category(conn, cat_id)
+        # [إصلاح هيكلة] استخدام CategoryService بدل fetch_category مباشرة
+        from services.shared.category_service import CategoryService
+        svc = CategoryService(conn)
+        cat = svc.get_one(cat_id)
         if not cat:
             return
+
         self._editing_id = cat_id
         self.inp_name.setText(cat["name"])
         self._color_picker.set_color(cat["color"])
 
-        # [Q-03] تمرير conn المحفوظ بدل استدعاء _live_conn() مرة أخرى
         self._refresh_parent_combo(conn=conn, exclude_id=cat_id)
 
         for i in range(self.cmb_parent.count()):
@@ -254,10 +234,6 @@ class CategoryForm(QGroupBox, LiveConnMixin):
         self.btn_cancel.setVisible(True)
 
     def _reset(self, conn=None):
-        """
-        [Q-03] يستقبل conn اختياري لتمريره لـ _refresh_parent_combo.
-        لو conn=None، _refresh_parent_combo ستستدعي _live_conn() بنفسها.
-        """
         self._editing_id = None
         self._color_picker.set_color("#607d8b")
         self.inp_name.clear()
@@ -307,7 +283,6 @@ class CategoryManager(QWidget, LiveConnMixin):
         root.setSpacing(10)
 
         self.tree = QTreeWidget()
-        # [i18n] استخدام tr() لعناوين الأعمدة
         self.tree.setHeaderLabels([
             tr("category"), tr("category_new"), tr("quantity")
         ])
@@ -335,8 +310,8 @@ class CategoryManager(QWidget, LiveConnMixin):
 
     def _load(self):
         """
-        [Q-03] _live_conn() مرة واحدة — يُمرر لـ _add_items بدل
-        استدعاء جديد من الدالة الفرعية.
+        [Q-03] _live_conn() مرة واحدة.
+        [إصلاح هيكلة] يستخدم CategoryService بدل db imports مباشرة.
         """
         try:
             conn = self._live_conn()
@@ -355,20 +330,23 @@ class CategoryManager(QWidget, LiveConnMixin):
             _collect(self.tree.topLevelItem(i))
 
         self.tree.clear()
+
+        # [إصلاح هيكلة] استخدام CategoryService بدل fetch_all_categories + build_tree
         try:
-            rows = fetch_all_categories(conn, self.scope)
+            from services.shared.category_service import CategoryService
+            svc  = CategoryService(conn)
+            rows = svc.get_all(self.scope)
+            tree = svc.build_tree(rows)
         except Exception:
             return
 
-        # [Q-03] تمرير conn بدل إعادة استدعائه في _add_items
-        self._add_items(build_tree(rows), parent=None,
-                        expanded=expanded, conn=conn)
+        self._add_items(tree, parent=None, expanded=expanded, conn=conn)
         self.tree.expandAll()
 
     def _add_items(self, nodes, parent, expanded, conn):
         """
-        [Q-03] conn يُمرر كـ parameter بدل استدعاء _live_conn() من جديد.
-        يضمن استخدام نفس الـ connection الذي فتحه _load().
+        [إصلاح هيكلة] يستخدم CategoryService بدل count_category_items مباشرة.
+        conn يُمرر كـ parameter — نفس الـ connection الذي فتحه _load().
         """
         for node in nodes:
             item = QTreeWidgetItem()
@@ -379,8 +357,10 @@ class CategoryManager(QWidget, LiveConnMixin):
             child_count = len(node["children"])
             item.setText(1, str(child_count) if child_count else "—")
 
+            # [إصلاح هيكلة] استخدام CategoryService بدل count_category_items مباشرة
             try:
-                counts = count_category_items(conn, node["id"])
+                from services.shared.category_service import CategoryService
+                counts = CategoryService(conn).count_items(node["id"])
                 total  = sum(counts.values())
             except Exception:
                 total = 0
@@ -417,7 +397,6 @@ class CategoryManager(QWidget, LiveConnMixin):
             msg_info(self, tr("warning"), tr("category_select_first"))
             return
 
-        # [Q-03] _live_conn() مرة واحدة فقط لكل action
         try:
             conn = self._live_conn()
         except Exception as e:
