@@ -10,8 +10,11 @@ get_connection() ترجع shared connection من company_state،
 
 [إصلاح 18] توضيح سلوك _is_owned_connection:
   - دالة آمنة تماماً: عند أي exception ترجع False (لا تُغلق).
-  - السلوك المقصود: الشركة لم تتحمل بعد → company_state._get_conn يرمي → False → لا إغلاق.
+  - السلوك المقصود: الشركة لم تتحمل بعد → company_state.get_erp_conn يرمي → False → لا إغلاق.
   - هذا مقصود لأن الأمان أهم من إغلاق connection ربما لا يحتاج إغلاقاً.
+
+[FIX] استبدال company_state._get_conn("erp") (private API) بـ
+      company_state.get_erp_conn() (public API).
 """
 from PyQt5.QtWidgets import QWidget, QVBoxLayout, QTabWidget
 
@@ -27,20 +30,22 @@ def _is_owned_connection(conn) -> bool:
     الاتصالات المشتركة لا يجب إغلاقها من الـ widgets.
 
     السلوك المقصود عند الفشل:
-    - لو company_state لم يُحمَّل بعد → _get_conn يرمي RuntimeError → except → False
+    - لو company_state لم يُحمَّل بعد → get_erp_conn يرمي → except → False
     - لو conn is None → False
     - لو conn هو نفس الـ shared connection → False (shared → لا تُغلق)
     - لو conn مختلف (مُنشأ يدوياً) → True (owned → يُغلق)
 
     الإرجاع بـ False عند الشك هو الاختيار الآمن:
     أفضل من إغلاق connection لا يجب إغلاقه وكسر widgets أخرى.
+
+    [FIX] استخدام get_erp_conn() (public) بدل _get_conn("erp") (private).
     """
     if conn is None:
         return False
     try:
         from db.companies.company_state import company_state
-        # لو نفس الـ connection اللي company_state بيديه → shared → لا تقفله
-        shared = company_state._get_conn("erp")
+        # [FIX] get_erp_conn() بدل _get_conn("erp") — استخدام الـ public API
+        shared = company_state.get_erp_conn()
         return conn is not shared
     except Exception:
         # لو مش قادر يتحقق (شركة غير محملة، company_state غير جاهز)

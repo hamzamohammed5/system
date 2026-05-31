@@ -5,6 +5,9 @@ BaseCrudForm — قاعدة مشتركة لكل فورمات CRUD.
 
 [إصلاح 2.4] from ui.widgets.mixins.edit import EditModeMixin
          → from ui.widgets.mixins.form_mixins import EditModeMixin
+
+[FIX] استبدال bus.data_changed.emit() بـ emit_company_data_changed()
+      لتجنب تحديث كل الـ widgets في كل الشركات عند حفظ بيانات شركة واحدة.
 """
 
 from PyQt5.QtWidgets import (
@@ -17,7 +20,8 @@ from ui.widgets.mixins.form_mixins import EditModeMixin   # [إصلاح 2.4]
 from ui.widgets.core.conn          import LiveConnMixin
 from ui.widgets.panels.form_group  import FormGroup
 from ui.widgets.theme.builders     import wrap_in_scroll
-from ui.events                     import bus
+# [FIX] استيراد emit_company_data_changed بدل bus مباشرة
+from ui.widgets.core.events        import emit_company_data_changed
 
 
 class BaseCrudForm(QWidget, EditModeMixin, LiveConnMixin):
@@ -134,7 +138,9 @@ class BaseCrudForm(QWidget, EditModeMixin, LiveConnMixin):
             QMessageBox.warning(self, "خطأ", str(e))
             return
         self._reset()
-        bus.data_changed.emit()
+        # [FIX] emit_company_data_changed بدل bus.data_changed.emit()
+        # يضمن تحديث widgets الشركة النشطة فقط بدل كل الشركات
+        emit_company_data_changed()
         self.saved.emit(new_id)
 
     def _on_save(self):
@@ -147,7 +153,8 @@ class BaseCrudForm(QWidget, EditModeMixin, LiveConnMixin):
             QMessageBox.warning(self, "خطأ", str(e))
             return
         self._reset()
-        bus.data_changed.emit()
+        # [FIX] emit_company_data_changed بدل bus.data_changed.emit()
+        emit_company_data_changed()
         self.saved.emit(self._editing_id)
 
     def _on_cancel(self):

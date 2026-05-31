@@ -128,6 +128,8 @@ class SharedOpsMixin:
             ).exec_()
             central.close()
             # [FIX] إطلاق الإشعار بعد النشر حتى يتحدث الـ UI
+            # كان مفقوداً — _edit_shared_item و_edit_published_item كانا يُطلقانه
+            # لكن _publish_item كانت تنتهي صامتةً
             emit_company_data_changed()
         except Exception as e:
             msg_warning(parent, "خطأ", str(e))

@@ -5,19 +5,16 @@ Mixins موحدة لإدارة اتصالات قاعدة البيانات.
 
 الإصلاحات:
   - [إصلاح 3] LiveConnMixin._conn_cache أصبح instance variable
-    القديم: class variable مشترك بين كل الـ instances — لو instance
-    واحد غيّر الـ cache، instance تاني يقرأ قيمة غلط (نفس مشكلة
-    _refresh_guard القديمة التي أُصلحت في Phase 5).
-    الحل: object.__setattr__ لإنشاء instance variable في أول استخدام،
-    يتجنب تعديل الـ class namespace ويضمن عزل كل instance.
+    القديم: class variable مشترك بين كل الـ instances.
+    الحل: object.__setattr__ لإنشاء instance variable في أول استخدام.
 
   - [إصلاح Phase 4 محفوظ] _live_conn() و_get_safe_conn() و_get_erp_conn()
     ترمي RuntimeError واضحة بدل إرجاع None صامت.
 
-  - [إصلاح 13] توثيق _conn_attr مع تحذير في __init_subclass__:
-    لو subclass يُعرِّف attribute اسمه مختلف (مثل erp_conn) بدون
-    تغيير _conn_attr، الـ _live_conn() ستبحث عن self.conn وتفشل صامتة.
-    __init_subclass__ يُصدر تحذيراً مبكراً في وقت التعريف بدل الـ runtime.
+  - [إصلاح 13 — FIX] __init_subclass__ كانت فارغة تماماً مع توثيق مضلل.
+    الآن تُصدر تحذيراً فعلياً لو subclass يُعرِّف conn attribute باسم
+    مختلف عن _conn_attr دون تحديثه.
+    السلوك: تحذير فقط (لا يمنع الـ class من العمل).
 """
 import logging
 import warnings
@@ -55,27 +52,16 @@ class LiveConnMixin:
     Mixin يوفر _live_conn() لأي QWidget يحتفظ بـ DB connection.
 
     [إصلاح 3] _conn_cache أصبح instance variable بدل class variable.
-    object.__setattr__ يضمن إنشاء الـ variable على الـ instance مباشرة،
-    بدون المرور بـ __setattr__ المخصص للـ PyQt widgets.
+    object.__setattr__ يضمن إنشاء الـ variable على الـ instance مباشرة.
 
-    [إصلاح 13] _conn_attr:
-    ══════════════════════
-    يحدد اسم الـ attribute الذي يحمل الـ DB connection على الـ instance.
-    الافتراضي: "conn" — أي يبحث عن self.conn
+    [إصلاح 13 — FIX] __init_subclass__ تُصدر تحذيراً حقيقياً الآن بدل
+    أن تكون فارغة تماماً مع توثيق مضلل. التحذير يُصدر لو:
+      - الـ subclass لا يُعرِّف _conn_attr صراحةً
+      - لكن يُعرِّف __annotations__ أو class attributes باسم يشير لـ connection
+        مختلف عن "conn" (مثل erp_conn, db_conn, connection...)
 
-    ⚠️ تحذير مهم: لو subclass يستخدم اسماً مختلفاً (مثل self.erp_conn)
-    يجب تغيير _conn_attr أيضاً:
-
-        class MyWidget(QWidget, LiveConnMixin):
-            _conn_attr = "erp_conn"   ← ضروري!
-
-            def __init__(self):
-                self.erp_conn = get_erp_connection()
-
-    لو نسيت تغيير _conn_attr، الـ _live_conn() ستبحث عن self.conn
-    (الذي قد يكون None) وستفشل أو تذهب للـ fallback غير المقصود.
-
-    __init_subclass__ يُصدر تحذيراً لو رأى conn_attr مشبوهاً.
+    ملاحظة: الكشف في وقت التعريف تقريبي — runtime مشكلة مختلفة.
+    التحذير لا يمنع الـ class من العمل.
     """
 
     _conn_attr: str = "conn"
@@ -84,21 +70,58 @@ class LiveConnMixin:
 
     def __init_subclass__(cls, **kwargs):
         """
-        [إصلاح 13] تحذير مبكر لو subclass يُعرِّف conn attribute
-        باسم مختلف عن _conn_attr دون تحديث _conn_attr.
+        [إصلاح 13 — FIX] تحذير فعلي بدل stub فارغ.
 
-        يعمل في وقت تعريف الـ class (import time)، لا في runtime،
-        مما يكشف الخطأ مبكراً أثناء التطوير.
+        يتحقق: لو الـ subclass يُعرِّف _conn_attr بشكل صريح → الكل تمام.
+        لو لا يُعرِّفه → يرث "conn" افتراضياً.
 
-        السلوك:
-          - لو الـ subclass يُعرِّف _conn_attr صراحةً → لا تحذير (قصدي).
-          - لو يُعرِّف __init__ مع assignment لاسم آخر → لا يمكن الكشف
-            في وقت التعريف (يحتاج runtime). التحذير هنا تقريبي.
-          - الـ warning لا يمنع الـ class من العمل — تنبيه فقط.
+        يُصدر تحذيراً لو وجد annotation أو class variable بأسماء
+        تشير لـ connection (تحتوي "conn" أو "connection") لكن تختلف عن "conn"
+        مما قد يعني أن المطور نسي تحديث _conn_attr.
+
+        مثال يُصدر تحذيراً:
+            class MyWidget(QWidget, LiveConnMixin):
+                erp_conn: SomeType   # ← يُصدر تحذير
+                # نسي: _conn_attr = "erp_conn"
+
+        مثال لا يُصدر تحذيراً:
+            class MyWidget(QWidget, LiveConnMixin):
+                _conn_attr = "erp_conn"   # ← صريح
+                erp_conn: SomeType
         """
         super().__init_subclass__(**kwargs)
-        # تحقق بسيط: لو الـ subclass يُعرِّف _conn_attr فلا حاجة للتحذير
-        # لو لم يُعرِّفه → يرث القيمة الافتراضية "conn" وهذا مقبول
+
+        # لو الـ subclass يُعرِّف _conn_attr صراحةً → لا حاجة للتحذير
+        if "_conn_attr" in cls.__dict__:
+            return
+
+        # ابحث عن annotations أو class-level attributes باسم يشير لـ connection
+        # مختلف عن "conn" (الافتراضي)
+        suspicious_names = set()
+
+        # تحقق من الـ annotations
+        annotations = cls.__dict__.get("__annotations__", {})
+        for name in annotations:
+            if name != "conn" and ("conn" in name.lower() or "connection" in name.lower()):
+                suspicious_names.add(name)
+
+        # تحقق من الـ class dict attributes (ليس methods)
+        for name, val in cls.__dict__.items():
+            if name.startswith("_"):
+                continue
+            if not callable(val) and name != "conn":
+                if "conn" in name.lower() or "connection" in name.lower():
+                    suspicious_names.add(name)
+
+        if suspicious_names:
+            warnings.warn(
+                f"{cls.__qualname__} يرث من LiveConnMixin ويُعرِّف "
+                f"{suspicious_names} لكن لم يُحدِّث _conn_attr. "
+                f"لو كان يستخدم اسماً مختلفاً للـ connection، أضف: "
+                f"_conn_attr = '{next(iter(suspicious_names))}'",
+                UserWarning,
+                stacklevel=2,
+            )
 
     def _live_conn(self):
         """
@@ -112,9 +135,6 @@ class LiveConnMixin:
           2. لو لا → يجرب self.{_conn_attr} (افتراضياً self.conn).
           3. لو لا → fallback من company_state.
           4. لو فشل كل شيء → RuntimeError واضحة.
-
-        [إصلاح 13] يستخدم self._conn_attr بدل "conn" الثابتة،
-        مما يسمح للـ subclasses باستخدام أسماء مختلفة.
         """
         # [إصلاح 3] قراءة من instance dict مباشرة — لا نلمس الـ class variable
         _cache = self.__dict__.get("_conn_cache")

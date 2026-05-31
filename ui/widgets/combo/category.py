@@ -9,6 +9,10 @@ CategoryCombo — QComboBox للتصنيفات الهرمية.
     فالـ combo لم يكن يتحدث عند تغيير البيانات عبر النهج الجديد.
     الحل: ربط الاتنين معاً — data_changed للتوافق القديم،
     company_data_changed للنهج الجديد.
+
+  - [FIX-14] إضافة Qt.UniqueConnection لكل ربط bus
+    لمنع تسجيل مضاعف للـ signals عند إنشاء instances متعددة أو
+    عند إضافة widget لـ layout جديدة دون حذف القديم.
 """
 from PyQt5.QtWidgets import QComboBox
 from PyQt5.QtCore    import Qt
@@ -53,6 +57,8 @@ class CategoryCombo(QComboBox, LiveConnMixin):
     QComboBox للتصنيفات الهرمية مع تحديث تلقائي.
 
     [إصلاح 2] يسمع الآن لـ company_data_changed إضافةً لـ data_changed.
+
+    [FIX-14] Qt.UniqueConnection على كل ربط bus لمنع التسجيل المضاعف.
     """
 
     def __init__(self, conn, scope: str = "all", parent=None):
@@ -60,10 +66,12 @@ class CategoryCombo(QComboBox, LiveConnMixin):
         self.conn  = conn
         self.scope = scope
         self.refresh()
-        # تسمع فقط — لا تبعت
-        bus.data_changed.connect(self.refresh)
+        # [FIX-14] UniqueConnection يمنع التسجيل المضاعف
+        bus.data_changed.connect(self.refresh, Qt.UniqueConnection)
         # [إصلاح 2] ربط bus.company_data_changed — النهج الجديد
-        bus.company_data_changed.connect(lambda _: self.refresh())
+        bus.company_data_changed.connect(
+            lambda _: self.refresh(), Qt.UniqueConnection
+        )
 
     def refresh(self):
         try:

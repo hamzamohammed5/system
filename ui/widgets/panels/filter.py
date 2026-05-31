@@ -18,7 +18,7 @@ from PyQt5.QtWidgets import (
 )
 from PyQt5.QtCore import QDate, pyqtSignal
 
-# [FIX] absolute imports بدل from ...font / from ...theme الخاطئة
+# [FIX] absolute imports — ثلاث نقاط كانت خاطئة تُسبب ImportError
 from ui.font  import fs, get_font_size
 from ui.theme import _C
 
