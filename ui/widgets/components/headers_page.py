@@ -3,7 +3,8 @@ ui/widgets/components/headers_page.py
 =======================================
 SectionHeader + PageHeader + DetailHeader — هيدرات الصفحات والتفاصيل.
 
-مستخرج من components/headers.py.
+[إصلاح 2.5] from .stat_row import BadgeLabel
+         → from .badge import BadgeLabel
 """
 
 from PyQt5.QtWidgets import (
@@ -17,7 +18,7 @@ from ui.theme import _C
 from ui.font  import fs, get_font_size
 from ..theme.builders import h_divider, v_divider
 from .button         import make_btn
-from .stat_row       import BadgeLabel
+from .badge          import BadgeLabel           # [إصلاح 2.5]
 from .label          import InfoRow
 
 
@@ -159,9 +160,6 @@ class PageHeader(QFrame):
 class DetailHeader(QFrame):
     """
     هيدر صفحة تفاصيل: عنوان + شارات + بطاقات إحصائية + toolbar أزرار.
-
-    [تحسين 22] ActionToolbar يُنشأ بـ lazy initialization.
-    [Q-04] _tb_section مخفي بـ setVisible(False) حتى أول استخدام فعلي للـ toolbar.
     """
 
     def __init__(self, bg: str = None, parent=None):
@@ -301,8 +299,7 @@ class DetailHeader(QFrame):
 
     def add_stat_card(self, icon: str, title: str, value: str = "─",
                       color: str = "#1565c0", compact: bool = True):
-        from .stat_card  import StatCard
-
+        from .stat_card import StatCard
         card = StatCard(icon, title, value, color, compact=compact)
         self._cards_row.addWidget(card, stretch=1)
         self._stat_cards.append(card)

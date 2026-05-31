@@ -5,10 +5,8 @@ DetailSection  — قسم تفاصيل موحد (عنوان: قيمة) في grid
 TwoColDetails  — عرض في عمودين.
 make_detail_row — دالة سريعة.
 
-التغييرات:
-  - [إصلاح imports] استبدال relative imports بـ absolute imports
-  - [تحسين 19 محفوظ] set_data ترجع dict[str, QLabel] للتحديث المباشر.
-  - [تحسين 44] set_data تدعم clear_missing=True لإخفاء الصفوف الزائدة.
+[إصلاح 2.3] from ..components.headers import SectionHeader
+         → from ..components.headers_page import SectionHeader
 """
 from PyQt5.QtWidgets import (
     QFrame, QVBoxLayout, QHBoxLayout, QLabel, QWidget,
@@ -18,7 +16,7 @@ from PyQt5.QtCore import Qt
 
 from ui.font  import fs, get_font_size
 from ui.theme import _C
-from ..components.headers import SectionHeader
+from ..components.headers_page import SectionHeader   # [إصلاح 2.3]
 
 
 class DetailSection(QFrame):
@@ -114,11 +112,6 @@ class DetailSection(QFrame):
 
     def set_data(self, data: dict,
                  clear_missing: bool = False) -> "dict[str, QLabel]":
-        """
-        يعرض البيانات.
-        [تحسين 19] ترجع {label_text: value_QLabel}.
-        [تحسين 44] clear_missing=True يُخفي الصفوف غير الموجودة في data.
-        """
         result   = {}
         existing = {lk.text(): (lk, lv) for lk, lv in self._rows}
 
@@ -173,7 +166,6 @@ class DetailSection(QFrame):
             lbl_val.setText("─")
 
     def show_all_rows(self):
-        """[تحسين 44] يُظهر كل الصفوف المخفية."""
         for lbl_key, lbl_val in self._rows:
             lbl_key.setVisible(True)
             lbl_val.setVisible(True)

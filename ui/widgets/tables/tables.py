@@ -3,8 +3,8 @@ ui/widgets/tables/tables.py
 ============================
 دمج builders.py + items.py — أدوات بناء الجداول الموحدة.
 
-الملفات المحذوفة: builders.py, items.py
-يبقى منفرداً: flexible.py (منطق مختلف — delegates + tree)
+[إصلاح 3.2] from ..styles import ROW_HEIGHT_*
+         → from ..theme.table_styles import ROW_HEIGHT_*
 """
 
 from PyQt5.QtWidgets import (
@@ -15,14 +15,14 @@ from PyQt5.QtCore import Qt, QTimer
 from PyQt5.QtGui  import QColor, QFont, QBrush
 
 from ui.theme import _C
-from ..styles import (
+from ..theme.table_styles import (       # [إصلاح 3.2]
     table_style, splitter_style,
     ROW_HEIGHT_NORMAL, ROW_HEIGHT_COMPACT, ROW_HEIGHT_LARGE,
 )
 
 
 # ══════════════════════════════════════════════════════════
-# أدوات خلايا الجداول  (كان في items.py)
+# أدوات خلايا الجداول
 # ══════════════════════════════════════════════════════════
 
 def make_item(text: str = "", user_data=None,
@@ -133,7 +133,7 @@ def apply_tooltips(table: QTableWidget, cols: list = None):
 
 
 # ══════════════════════════════════════════════════════════
-# دوال بناء الجداول  (كان في builders.py)
+# دوال بناء الجداول
 # ══════════════════════════════════════════════════════════
 
 def _build_table(columns: list, stretch_col: int = -1,

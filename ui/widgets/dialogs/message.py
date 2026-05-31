@@ -10,11 +10,11 @@ ui/widgets/dialogs/message.py
 from PyQt5.QtWidgets import QLabel
 from PyQt5.QtCore    import Qt
 
-from ui.app_settings import _C, fs
-from ..core          import get_font_size
+from ui.font  import get_font_size, fs
+from ui.theme import _C
 from ..components.button import make_btn
 from ..core.i18n         import tr
-from .shell import DialogShell
+from .dialogs_base import DialogShell
 
 _ICONS = {
     "question": ("❓", _C["accent"]),

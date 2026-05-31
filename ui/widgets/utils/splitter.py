@@ -8,6 +8,7 @@ from PyQt5.QtWidgets import QSplitter, QTableWidget, QWidget, QSizePolicy
 from PyQt5.QtCore    import Qt, QTimer, QObject, QEvent
 
 from ..theme.table_styles import splitter_style  # المصدر الوحيد — لا تكرار
+from ..tables.tables      import calc_width       # [إصلاح 2.1] من tables.tables بدل tables.items
 
 logger = logging.getLogger(__name__)
 
@@ -18,8 +19,6 @@ _MAX_LIST_W = 620
 def fit_list_panel(splitter: QSplitter, list_index: int,
                    table: QTableWidget, min_w: int = _MIN_LIST_W,
                    max_w: int = _MAX_LIST_W, extra_pad: int = 24) -> int:
-    from ..tables.items import calc_width
-
     sizes = splitter.sizes()
     if not sizes or len(sizes) <= list_index:
         return min_w

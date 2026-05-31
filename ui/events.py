@@ -7,6 +7,10 @@ Bus مركزي للإشعارات — أي tab يحفظ بيانات يبعت si
 الاستخدام:
     from ui.events import bus
 
+    # إشعار عام (للتوافق مع الكود القديم)
+    bus.data_changed.emit()
+    bus.data_changed.connect(fn)
+
     # إشعار مقيّد بشركة (الأفضل لتجنب تسريب البيانات بين الشركات)
     bus.company_data_changed.emit(company_id)
     bus.company_data_changed.connect(fn)   # fn(company_id: int)
@@ -28,6 +32,9 @@ from PyQt5.QtCore import QObject, pyqtSignal
 
 
 class _EventBus(QObject):
+    # إشعار عام — للتوافق مع الكود القديم
+    data_changed = pyqtSignal()
+
     # إشعار مقيّد بـ company_id — كل widget يقارن company_id قبل ما يستجيب
     company_data_changed = pyqtSignal(int)
 

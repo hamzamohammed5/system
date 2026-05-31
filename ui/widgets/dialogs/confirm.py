@@ -11,11 +11,12 @@ ui/widgets/dialogs/confirm.py
 from PyQt5.QtWidgets import QLabel
 from PyQt5.QtCore    import Qt
 
-from ui.app_settings import _C, fs
-from ..core          import get_font_size
+from ui.theme import _C
+from ui.font  import get_font_size, fs
+
 from ..components.button import make_btn
 from ..core.i18n         import tr
-from .shell import DialogShell
+from .dialogs_base import DialogShell
 
 
 def _confirm_btn(text: str, accent: str, ghost: bool = False) -> 'QPushButton':

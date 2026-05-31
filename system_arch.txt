@@ -1,5 +1,5 @@
 File Tree Snapshot
-Generated : 2026-05-31 13:01:08
+Generated : 2026-05-31 13:32:47
 Source    : D:\My Workspace\Hg\Alhabaar\accountant\system
 Extensions: .md, .py
 ────────────────────────────────────────────────────────────
@@ -348,7 +348,6 @@ system/
 │   │   │   ├── stat_card.py
 │   │   │   └── status_chip.py
 │   │   ├── core/
-│   │   │   ├── __init__.py
 │   │   │   ├── colors.py
 │   │   │   ├── conn.py
 │   │   │   ├── events.py

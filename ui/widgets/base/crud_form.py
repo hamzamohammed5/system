@@ -3,45 +3,8 @@ ui/widgets/base/crud_form.py
 =============================
 BaseCrudForm — قاعدة مشتركة لكل فورمات CRUD.
 
-يوفر:
-  - QWidget + EditModeMixin + LiveConnMixin
-  - FormGroup + أزرار add/save/cancel داخل scroll
-  - signal saved(int) عند نجاح الإضافة أو التعديل
-  - hooks للـ subclass:
-      _build_fields(group)   — إضافة الحقول داخل FormGroup (مطلوب)
-      _build_extra(layout)   — إضافة widgets بعد FormGroup (اختياري)
-      _collect() → dict|None — جمع قيم الحقول والتحقق منها (مطلوب)
-      _do_insert(data) → int — إدراج سجل جديد (مطلوب)
-      _do_update(id, data)   — تحديث سجل موجود (مطلوب)
-      _do_load(id) → dict    — تحميل بيانات للتعديل (مطلوب)
-      _fill_fields(data)     — ملء الحقول بالبيانات (مطلوب)
-      _reset_fields()        — مسح الحقول (مطلوب)
-
-إعدادات الـ subclass:
-  FORM_TITLE : str — عنوان الـ FormGroup
-  ADD_TEXT   : str — نص زر الإضافة
-  SAVE_TEXT  : str — نص زر الحفظ
-
-الاستخدام:
-    class MyForm(BaseCrudForm):
-        FORM_TITLE = "بيانات العنصر"
-        ADD_TEXT   = "➕ إضافة"
-        SAVE_TEXT  = "💾 حفظ التعديل"
-
-        def _build_fields(self, group):
-            self.inp_name = RequiredLineEdit("اسم...")
-            group.add_row("الاسم :", self.inp_name)
-
-        def _collect(self):
-            if not self.inp_name.validate():
-                return None
-            return {"name": self.inp_name.text_stripped()}
-
-        def _do_insert(self, data): ...
-        def _do_update(self, id, data): ...
-        def _do_load(self, id): ...
-        def _fill_fields(self, data): ...
-        def _reset_fields(self): ...
+[إصلاح 2.4] from ui.widgets.mixins.edit import EditModeMixin
+         → from ui.widgets.mixins.form_mixins import EditModeMixin
 """
 
 from PyQt5.QtWidgets import (
@@ -50,11 +13,11 @@ from PyQt5.QtWidgets import (
 )
 from PyQt5.QtCore import pyqtSignal
 
-from ui.widgets.mixins.edit    import EditModeMixin
-from ui.widgets.core.conn      import LiveConnMixin
+from ui.widgets.mixins.form_mixins import EditModeMixin   # [إصلاح 2.4]
+from ui.widgets.core.conn          import LiveConnMixin
 from ui.widgets.panels.form_group  import FormGroup
 from ui.widgets.theme.builders     import wrap_in_scroll
-from ui.events                 import bus
+from ui.events                     import bus
 
 
 class BaseCrudForm(QWidget, EditModeMixin, LiveConnMixin):
@@ -134,34 +97,27 @@ class BaseCrudForm(QWidget, EditModeMixin, LiveConnMixin):
     # ══════════════════════════════════════════════════════
 
     def _build_fields(self, group: FormGroup):
-        """إضافة الحقول داخل FormGroup."""
         raise NotImplementedError
 
     def _build_extra(self, root_layout: QVBoxLayout):
-        """إضافة widgets إضافية بعد FormGroup — اختياري."""
+        pass
 
     def _collect(self) -> "dict | None":
-        """جمع قيم الحقول — يرجع None عند فشل التحقق."""
         raise NotImplementedError
 
     def _do_insert(self, data: dict) -> int:
-        """إدراج سجل جديد — يرجع ID السجل."""
         raise NotImplementedError
 
     def _do_update(self, item_id: int, data: dict) -> None:
-        """تحديث سجل موجود."""
         raise NotImplementedError
 
     def _do_load(self, item_id: int) -> "dict | None":
-        """تحميل بيانات سجل للتعديل."""
         raise NotImplementedError
 
     def _fill_fields(self, data: dict) -> None:
-        """ملء الحقول ببيانات السجل."""
         raise NotImplementedError
 
     def _reset_fields(self) -> None:
-        """مسح الحقول وإعادة الضبط."""
         raise NotImplementedError
 
     # ══════════════════════════════════════════════════════
@@ -202,7 +158,6 @@ class BaseCrudForm(QWidget, EditModeMixin, LiveConnMixin):
     # ══════════════════════════════════════════════════════
 
     def load_for_edit(self, item_id: int):
-        """تحميل عنصر للتعديل."""
         try:
             data = self._do_load(item_id)
         except Exception:
@@ -214,6 +169,5 @@ class BaseCrudForm(QWidget, EditModeMixin, LiveConnMixin):
         self.enter_edit_mode(item_id, f"─── تعديل: {name} ───")
 
     def _reset(self):
-        """إعادة الفورم لوضع الإضافة."""
         self._reset_fields()
         self.exit_edit_mode(f"─── {self.FORM_TITLE} ───")

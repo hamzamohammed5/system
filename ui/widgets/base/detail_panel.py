@@ -3,8 +3,8 @@ ui/widgets/base/detail_panel.py
 =============================
 BaseDetailPanel — قاعدة مشتركة لكل لوحات التفاصيل.
 
-[Refactor V3] إصلاح imports:
-  - ui.app_settings → ui.theme + ui.font
+[إصلاح 2.2] from ..theme.styles import scroll_style
+         → from ..theme.layout_styles import scroll_style
 """
 
 from PyQt5.QtWidgets import QWidget, QVBoxLayout, QScrollArea, QSizePolicy
@@ -16,7 +16,7 @@ from ..components.headers_page       import DetailHeader
 from ..panels.state                  import EmptyState
 from ..components.notification       import NotificationBar
 from ..mixins.bus                    import BusConnectedMixin
-from ..theme.styles                  import scroll_style
+from ..theme.layout_styles           import scroll_style   # [إصلاح 2.2]
 
 
 def _tr_safe(key: str) -> str:
