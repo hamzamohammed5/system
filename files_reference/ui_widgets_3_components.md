@@ -1,6 +1,7 @@
 # دليل الكود — UI / Widgets (3): Components
 
-> الجزء الثالث — مكونات الواجهة القابلة لإعادة الاستخدام: أزرار، لوحات رأس، إشعارات، مؤشرات تحميل، بطاقات إحصائية.
+> الجزء الثالث — مكونات الواجهة القابلة لإعادة الاستخدام.
+> `ui/widgets/components/`, `ui/widgets/helpers/`
 
 ---
 
@@ -8,14 +9,14 @@
 
 | القسم | الملفات |
 |-------|---------|
-| [Button](#button) | `components/button` |
-| [Label](#label) | `components/label` |
-| [Headers](#headers) | `components/headers` |
-| [Notification](#notification) | `components/notification` |
-| [Spinner](#spinner) | `components/spinner` |
-| [StatRow](#statrow) | `components/stat_row` |
-| [ActionToolbar](#actiontoolbar) | `components/action_toolbar` |
-| [ColorPicker](#colorpicker) | `helpers/color_picker` |
+| [Button](#button) | `components/button.py` |
+| [Label](#label) | `components/label.py` |
+| [Headers](#headers) | `components/headers.py` |
+| [Notification](#notification) | `components/notification.py` |
+| [Spinner](#spinner) | `components/spinner.py` |
+| [StatRow](#statrow) | `components/stat_row.py` |
+| [ActionToolbar](#actiontoolbar) | `components/action_toolbar.py` |
+| [ColorPicker](#colorpicker) | `helpers/color_picker.py` |
 
 ---
 
@@ -36,10 +37,22 @@ invalidate_stylesheet_cache()
 refresh_visible_buttons(root_widget) -> int
 # يُعيد تطبيق stylesheet على كل QPushButton في الـ widget tree
 # يعتمد على property("_btn_style") — يتجاهل الأزرار بدون هذا الـ property
+# يمسح _stylesheet_cache قبل التطبيق لضمان استخدام الألوان الجديدة
 # يرجع عدد الأزرار المحدثة
+# مثال: bus.theme_changed.connect(lambda _: refresh_visible_buttons(main_window))
 
 calc_btn_width(text: str, font_size: int, padding: int = 32) -> int
 ```
+
+**أنماط الأزرار:**
+
+| style | الوصف | الألوان |
+|-------|-------|---------|
+| `"primary"` | الإجراء الرئيسي — غامق | من `accent_light / accent_text` |
+| `"success"` | حفظ / إضافة — أخضر | من `success_bg / success` |
+| `"danger"` | حذف / خطأ — أحمر | من `danger_bg / danger` |
+| `"ghost"` | ثانوي / إلغاء — شفاف | من `border_med / text_sec` |
+| `"normal"` | عادي — رمادي فاتح | من `bg_surface_2 / text_sec` |
 
 **مثال مع الثيم واللغة:**
 ```python
@@ -54,6 +67,13 @@ def _on_language_changed(self, lang_code: str):
     self.btn_save.setText(tr("btn_save"))
     self.btn_cancel.setText(tr("btn_cancel"))
 ```
+
+**ملاحظة الـ cache:**
+`_stylesheet_cache` key هو `(style_name, font_size)`.
+يُمسح تلقائياً عند:
+- تغيير حجم الخط (عبر `apply_font()`)
+- تغيير الثيم (عبر `apply_theme()` → `invalidate_stylesheet_cache()`)
+- استدعاء `refresh_visible_buttons()` مباشرة
 
 ---
 
@@ -98,7 +118,6 @@ ProgressBar(label="", color=None, height=8, show_pct=True, compact=False)
   .value() -> float
   .reset()
   # resizeEvent: يُعيد حساب عرض الـ fill تلقائياً
-  # التحقق من total_w > 0 مقصود ومهم — لا تُزِله
 
 MultiProgressBar(spacing=8)
   .add_bar(label, value=0, color=None) -> ProgressBar
@@ -144,7 +163,7 @@ PageHeader(title="", subtitle="", icon="", accent=None, compact=False)
 
 DetailHeader(bg=None)
 # ActionToolbar يُنشأ بـ lazy initialization — فقط عند أول استخدام فعلي
-# _tb_section مخفي بـ setVisible(False) حتى أول استخدام (يمنع spacing فارغ)
+# _tb_section مخفي بـ setVisible(False) حتى أول استخدام
   .set_title(text)
   .set_type_badge(text, color=None)
   .set_status_badge(text, text_color="#555", bg="#f5f5f5", border="#e0e0e0")
@@ -154,13 +173,11 @@ DetailHeader(bg=None)
   .add_stat_card(icon, title, value="─", color="#1565c0", compact=True) -> StatCard
   .clear_stat_cards()
   .add_action(text, callback=None, style="primary") -> QPushButton
-  # alias لـ toolbar.add_action() — يُظهر _tb_section تلقائياً
-  .toolbar -> ActionToolbar   # lazy property — يُنشئ عند أول وصول
+  .toolbar -> ActionToolbar   # lazy property
 
 ListHeader(title="", add_text="", show_search=True,
            search_placeholder="", search_delay=250)
 # يشترك في bus.language_changed لتحديث placeholder تلقائياً
-# placeholder افتراضي من tr("list_search_placeholder")
 # Signals: search_changed(str), add_clicked
   .add_action(text, callback=None, style="normal") -> QPushButton
   .search_text() -> str
@@ -171,7 +188,6 @@ ListHeader(title="", add_text="", show_search=True,
 
 make_list_header(title="", add_text="", show_search=True,
                  placeholder="") -> ListHeader
-# placeholder افتراضي من tr("list_search_placeholder")
 ```
 
 ---
@@ -186,7 +202,6 @@ NotificationBar(show_dismiss=True)
   .show(message: str, level: str = "info", auto_hide: int = 0)
   # level: "success" | "info" | "warning" | "danger"
   # ألوان الـ level من status_colors() — تتغير مع الثيم
-  # auto_hide: إخفاء بعد N ms (0 = لا إخفاء تلقائي)
   .hide_bar()
 
 BaseWarningBar(on_fix=None, on_edit=None,
@@ -195,7 +210,6 @@ BaseWarningBar(on_fix=None, on_edit=None,
 # Signals: fix_clicked, edit_clicked, dismissed
   .show_message(message, fix_text=None, edit_text=None)
   .show_orphans(orphans: list, product_name: str, type_labels: dict = None)
-  # يُخفي نفسه تلقائياً لو orphans فارغة
   .hide_warning()
   .set_fix_visible(v: bool)
   .set_edit_visible(v: bool)
@@ -232,13 +246,11 @@ LoadingButton(text="")
 
 ```python
 BadgeLabel()
-# ألوانه الافتراضية من _C — تتغير مع الثيم
   .set_badge(text, text_color=None, bg=None, border=None)
   .clear_badge()
 
 StatCard(icon="", title="", value="─", color="#1565c0",
          bg=None, border=None, compact=False)
-# bg/border من card_colors(color) افتراضياً
   .set_value(text: str)
   .set_color(color: str)
   .value_label() -> QLabel
@@ -285,7 +297,6 @@ ActionToolbar(spacing=6)
   .add_action(text, style="normal", callback=None, enabled=True) -> QPushButton
   .add_danger(text, callback=None, enabled=True) -> QPushButton
   .add_separator()
-  # فاصل مرئي بين الأزرار العادية
 ```
 
 ---
