@@ -1,20 +1,20 @@
 """
-ui/themes.py
-=============
+ui/theme_manager.py
+====================
 نظام الثيمات الكامل للتطبيق.
+
+[نُقل من ui/themes/theme_manager.py]
 
 يدعم:
   - Light (الافتراضي — Warm Neutral)
   - Dark
 
-التغييرات:
-  - [themes] ThemeManager.set_theme() يستخدم apply_theme() من app_settings
-    لتحديث _C فوراً بدل بناء stylesheet منفصل.
-  - [themes] يُطلق bus.theme_changed بعد تطبيق الثيم لإشعار الـ widgets.
-  - _apply_to_app_settings() محذوفة — استُبدلت بـ apply_theme() الموحدة.
+هذا الملف هو **المصدر الوحيد** لتعريف الألوان.
+ui/theme.py يستورد _LIGHT_THEME منه لملء _C الافتراضي
+بدل تعريف الألوان مرتين (تكرار محذوف).
 
 الاستخدام:
-    from ui.themes import theme_manager
+    from ui.theme_manager import theme_manager
 
     theme_manager.set_theme("dark")
     current = theme_manager.current_theme   # "dark"
@@ -32,7 +32,7 @@ from PyQt5.QtCore import QObject, pyqtSignal
 
 
 # ══════════════════════════════════════════════════════════
-# تعريف الثيمات
+# تعريف الثيمات — المصدر الوحيد للألوان
 # ══════════════════════════════════════════════════════════
 
 _LIGHT_THEME: Dict[str, str] = {
@@ -151,7 +151,7 @@ class ThemeManager(QObject):
     Singleton يدير الثيم الحالي.
 
     الاستخدام:
-        from ui.themes import theme_manager
+        from ui.theme_manager import theme_manager
 
         theme_manager.set_theme("dark")
         theme_manager.theme_changed.connect(my_fn)
@@ -175,9 +175,8 @@ class ThemeManager(QObject):
         """
         يبدّل الثيم فوراً ويطبّقه على كامل التطبيق.
 
-        التغيير: يستخدم apply_theme() من app_settings بدل
-        _apply_to_app_settings() + _rebuild_stylesheet() المنفصلَين.
-        هذا يضمن تحديث _C والـ stylesheet في خطوة واحدة موحدة.
+        يستخدم apply_theme() من ui.theme بدل _apply_to_app_settings()
+        + _rebuild_stylesheet() المنفصلَين.
         """
         if theme_name not in THEMES:
             theme_name = "light"
@@ -188,9 +187,8 @@ class ThemeManager(QObject):
         self._current_theme = theme_name
         colors = THEMES[theme_name]
 
-        # [themes] apply_theme() يُحدّث _C + يمسح cache + يُطبّق stylesheet
         try:
-            from ui.app_settings import apply_theme
+            from ui.theme import apply_theme
             apply_theme(colors)
         except Exception:
             pass
@@ -198,7 +196,6 @@ class ThemeManager(QObject):
         if save:
             self._save_to_db()
 
-        # [themes] إطلاق signal عبر bus لإشعار كل الـ widgets
         self._emit_theme_changed(theme_name)
         self.theme_changed.emit(theme_name)
 
@@ -211,10 +208,9 @@ class ThemeManager(QObject):
             theme = get_setting(conn, "ui_theme", "light")
             if theme in THEMES:
                 self._current_theme = theme
-            # تطبيق الثيم بدون save (نحن فقط نقرأ)
             colors = THEMES.get(self._current_theme, _LIGHT_THEME)
             try:
-                from ui.app_settings import apply_theme
+                from ui.theme import apply_theme
                 apply_theme(colors)
             except Exception:
                 pass

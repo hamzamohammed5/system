@@ -1,10 +1,10 @@
 """
-ui/i18n.py
-===========
+ui/widgets/core/i18n.py
+========================
 نظام الترجمة للتطبيق — عربي وإنجليزي.
 
 الاستخدام:
-    from ui.i18n import tr, i18n_manager
+    from ui.widgets.core.i18n import tr, i18n_manager
 
     text = tr("save")
     text = tr("delete_confirm_msg", name="X")
@@ -16,6 +16,9 @@ ui/i18n.py
     ui/i18n/ar.py  →  AR_STRINGS  (العربية)
     ui/i18n/en.py  →  EN_STRINGS  (الإنجليزية)
     هما المصدر الوحيد — لا يوجد قاموس داخلي مكرر هنا.
+
+[تغيير] الـ imports أصبحت absolute بدل relative لوضوح أكبر وتجنب
+هشاشة الـ relative imports عند إعادة هيكلة المجلدات.
 """
 
 from __future__ import annotations
@@ -47,16 +50,22 @@ _LANGUAGE_DISPLAY_NAMES: Dict[str, str] = {
 def _load_translations():
     """
     يحمّل الترجمات من ui/i18n/ar.py و ui/i18n/en.py.
+
+    [تغيير] استخدام absolute imports بدل relative imports:
+      قبل: from ...i18n.ar import AR_STRINGS
+      بعد: from ui.i18n.ar import AR_STRINGS
+
+    هذا أوضح وأكثر صموداً عند إعادة هيكلة المجلدات.
     يُستدعى تلقائياً عند استيراد هذا الملف.
     """
     try:
-        from ...i18n.ar import AR_STRINGS
+        from ui.i18n.ar import AR_STRINGS
         _TRANSLATIONS["ar"].update(AR_STRINGS)
     except Exception:
         pass
 
     try:
-        from ...i18n.en import EN_STRINGS
+        from ui.i18n.en import EN_STRINGS
         _TRANSLATIONS["en"].update(EN_STRINGS)
     except Exception:
         pass
@@ -74,7 +83,7 @@ class I18nManager(QObject):
     Singleton يدير لغة التطبيق.
 
     الاستخدام:
-        from ui.i18n import i18n_manager, tr
+        from ui.widgets.core.i18n import i18n_manager, tr
 
         i18n_manager.set_language("en")
         text = tr("save")   # "Save"
@@ -181,7 +190,7 @@ def tr(key: str, lang: str = None, **kwargs) -> str:
     دالة الترجمة الرئيسية.
 
     مثال:
-        from ui.i18n import tr
+        from ui.widgets.core.i18n import tr
 
         btn.setText(tr("save"))
         lbl.setText(tr("delete_confirm_msg", name="المنتج"))

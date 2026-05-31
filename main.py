@@ -17,7 +17,7 @@ def main():
     qt_app = QApplication(sys.argv)
 
     # 3. تحميل الثيم واللغة من DB قبل أي شيء
-    from ui.themes import theme_manager
+    from ui import theme_manager
     from ui.widgets.core.i18n   import i18n_manager
     theme_manager.load_from_db()
     i18n_manager.load_from_db()

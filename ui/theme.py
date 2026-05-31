@@ -4,11 +4,15 @@ ui/theme.py
 إدارة الألوان والثيم — المصدر الوحيد لـ _C وكل عمليات الثيم.
 
 المسؤولية:
-  - dict الألوان الحالية (_C)
+  - dict الألوان الحالية (_C) — يُملى من theme_manager._LIGHT_THEME
   - تطبيق ثيم جديد (apply_theme)
   - قراءة لون بأمان (get_theme_color)
   - إدارة stylesheet cache
   - بناء الـ stylesheet الكامل (build_stylesheet)
+
+[تغيير] _C لم يعد يحتوي على ألوان hardcoded مكررة.
+بدلاً من ذلك يُملى من ui.theme_manager._LIGHT_THEME عند الـ import الأول.
+المصدر الوحيد لتعريف الألوان: ui/theme_manager.py
 """
 
 from __future__ import annotations
@@ -21,72 +25,56 @@ _ss_cache: dict[tuple, str] = {}
 _current_theme_hash: str    = ""
 
 # ══════════════════════════════════════════════════════════
-# Palette: Warm Neutral + Slate Accents (الثيم الافتراضي)
+# _C — dict الألوان الحالية
+# يُملى من _LIGHT_THEME في theme_manager عند الـ import الأول.
+# لا ألوان hardcoded هنا — المصدر الوحيد هو theme_manager.py
 # ══════════════════════════════════════════════════════════
-_C: dict = {
-    # Backgrounds
-    "bg_page":      "#F5F4F0",
-    "bg_surface":   "#FAFAF8",
-    "bg_surface_2": "#F0EEE9",
-    "bg_hover":     "#ECEAE4",
-    "bg_active":    "#E4E2DA",
-    "bg_input":     "#FFFFFF",
+_C: dict = {}
 
-    # Borders
-    "border":        "#DDD9CF",
-    "border_med":    "#C8C4B8",
-    "border_focus":  "#8B8680",
-    "border_strong": "#6B6760",
 
-    # Text
-    "text_primary":  "#1C1B18",
-    "text_sec":      "#4A4843",
-    "text_muted":    "#7A7870",
-    "text_disabled": "#A8A69E",
+def _init_default_theme():
+    """
+    يُملّي _C بالثيم الافتراضي (Light) عند أول import.
 
-    # Accent — Slate Blue
-    "accent":       "#3D5A80",
-    "accent_hover": "#2E4460",
-    "accent_light": "#D6E4F0",
-    "accent_mid":   "#98C1D9",
-    "accent_text":  "#2A3F5A",
+    يستورد _LIGHT_THEME من theme_manager بدل تكرار الألوان هنا.
+    هذا يضمن مصدراً واحداً لتعريف الألوان في كامل الـ codebase.
+    """
+    try:
+        from ui.theme_manager import _LIGHT_THEME
+        _C.update(_LIGHT_THEME)
+    except ImportError:
+        # fallback طارئ لو theme_manager مش متاح (مثلاً أثناء الـ testing)
+        _C.update({
+            "bg_page": "#F5F4F0", "bg_surface": "#FAFAF8",
+            "bg_surface_2": "#F0EEE9", "bg_hover": "#ECEAE4",
+            "bg_active": "#E4E2DA", "bg_input": "#FFFFFF",
+            "border": "#DDD9CF", "border_med": "#C8C4B8",
+            "border_focus": "#8B8680", "border_strong": "#6B6760",
+            "text_primary": "#1C1B18", "text_sec": "#4A4843",
+            "text_muted": "#7A7870", "text_disabled": "#A8A69E",
+            "accent": "#3D5A80", "accent_hover": "#2E4460",
+            "accent_light": "#D6E4F0", "accent_mid": "#98C1D9",
+            "accent_text": "#2A3F5A",
+            "sidebar_bg": "#1E1D1A", "sidebar_text": "#E8E6E1",
+            "sidebar_muted": "#7A7870", "sidebar_hover": "#2E2D2A",
+            "sidebar_active": "#3A3835", "sidebar_border": "#2E2D2A",
+            "danger": "#C0392B", "danger_bg": "#FDF0EF",
+            "danger_border": "#E8A39D",
+            "success": "#2E7D52", "success_bg": "#EDF7F2",
+            "success_border": "#8EC5A8",
+            "warning": "#7A5C00", "warning_bg": "#FDF8E7",
+            "warning_border": "#D4B84A",
+            "info": "#1A5276", "info_bg": "#EBF5FB",
+            "info_border": "#7FB3D3",
+            "tab_active": "#3D5A80", "tab_indicator": "#3D5A80",
+            "purple": "#6a1b9a", "purple_bg": "#f3e5f5",
+            "purple_border": "#ce93d8",
+            "orange": "#e65100", "orange_bg": "#fff3e0",
+            "orange_border": "#ffcc80",
+        })
 
-    # Sidebar
-    "sidebar_bg":     "#1E1D1A",
-    "sidebar_text":   "#E8E6E1",
-    "sidebar_muted":  "#7A7870",
-    "sidebar_hover":  "#2E2D2A",
-    "sidebar_active": "#3A3835",
-    "sidebar_border": "#2E2D2A",
 
-    # States
-    "danger":         "#C0392B",
-    "danger_bg":      "#FDF0EF",
-    "danger_border":  "#E8A39D",
-    "success":        "#2E7D52",
-    "success_bg":     "#EDF7F2",
-    "success_border": "#8EC5A8",
-    "warning":        "#7A5C00",
-    "warning_bg":     "#FDF8E7",
-    "warning_border": "#D4B84A",
-    "info":           "#1A5276",
-    "info_bg":        "#EBF5FB",
-    "info_border":    "#7FB3D3",
-
-    # Tab indicator
-    "tab_active":    "#3D5A80",
-    "tab_indicator": "#3D5A80",
-
-    # Purple — للـ machine_op rows
-    "purple":        "#6a1b9a",
-    "purple_bg":     "#f3e5f5",
-    "purple_border": "#ce93d8",
-
-    # Orange — للـ filters والـ warnings الثانوية
-    "orange":        "#e65100",
-    "orange_bg":     "#fff3e0",
-    "orange_border": "#ffcc80",
-}
+_init_default_theme()
 
 
 # ══════════════════════════════════════════════════════════
@@ -120,7 +108,7 @@ def invalidate_stylesheet_cache():
     """
     global _current_theme_hash
     _ss_cache.clear()
-    _current_theme_hash = ""          # يُعاد حسابه lazy في الطلب التالي
+    _current_theme_hash = ""
     from ui.font import _set_module_font_cache
     _set_module_font_cache(None)
 

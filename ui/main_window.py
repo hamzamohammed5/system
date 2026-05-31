@@ -321,7 +321,7 @@ class MainWindow(QMainWindow):
 
         if key == "settings":
             clicked_btn.setChecked(False)
-            from ui.settings_dialog import SettingsDialog
+            from ui.widgets.dialogs.settings_dialog import SettingsDialog
             SettingsDialog(self._app, parent=self).exec_()
             self._sidebar.refresh_all_buttons()
             return

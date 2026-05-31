@@ -1,5 +1,5 @@
 File Tree Snapshot
-Generated : 2026-05-31 10:09:34
+Generated : 2026-05-31 10:17:44
 Source    : D:\My Workspace\Hg\Alhabaar\accountant\system
 Extensions: .md, .py
 ────────────────────────────────────────────────────────────
@@ -318,8 +318,6 @@ system/
 │   │   ├── inventory_section.py
 │   │   ├── orders_section.py
 │   │   └── pricing_section.py
-│   ├── themes/
-│   │   └── theme_manager.py
 │   ├── widgets/
 │   │   ├── base/
 │   │   │   ├── crud_form.py
@@ -353,7 +351,8 @@ system/
 │   │   ├── dialogs/
 │   │   │   ├── confirm.py
 │   │   │   ├── dialogs_base.py
-│   │   │   └── message.py
+│   │   │   ├── message.py
+│   │   │   └── settings_dialog.py
 │   │   ├── forms/
 │   │   │   └── inputs.py
 │   │   ├── helpers/
@@ -394,8 +393,8 @@ system/
 │   ├── events.py
 │   ├── font.py
 │   ├── main_window.py
-│   ├── settings_dialog.py
-│   └── theme.py
+│   ├── theme.py
+│   └── theme_manager.py
 ├── main.py
 ├── README.md
 └── refactory.md

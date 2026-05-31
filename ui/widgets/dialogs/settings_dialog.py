@@ -1,7 +1,9 @@
 """
-ui/settings_dialog.py
-=====================
+ui/widgets/dialogs/settings_dialog.py
+======================================
 نافذة الإعدادات — حجم الخط + مسار GIMP + وحدات القياس + الثيم + اللغة.
+
+[نُقل من ui/settings_dialog.py]
 
 التغييرات:
   - [i18n / themes] _save() يُطلق bus.language_changed عند تغيير اللغة،
@@ -9,10 +11,6 @@ ui/settings_dialog.py
   - [تحسين 11 محفوظ] _get_settings_conn و_show_no_company_notice.
   - [A-05] دمج _get_settings_conn و_has_active_company في دالة واحدة
     بدل استدعاء company_state.is_ready مرتين في _load_settings.
-    القديم: conn = _get_settings_conn() → يتحقق من is_ready
-            ثم if conn is None and not _has_active_company() → يتحقق من is_ready مجدداً
-    الجديد: conn, has_company = _get_settings_conn_and_status()
-            يقرأ is_ready مرة واحدة فقط ويُعيد كلا القيمتين.
 """
 
 import os
@@ -43,10 +41,7 @@ def _get_settings_conn_and_status() -> "tuple":
     """
     [A-05] يرجع (conn, has_active_company) في استدعاء واحد.
 
-    يُقرأ company_state.is_ready مرة واحدة فقط بدل مرتين:
-      - القديم: _get_settings_conn() يقرأ is_ready
-                ثم _has_active_company() يقرأ is_ready مجدداً في نفس _load_settings.
-      - الجديد: قراءة واحدة → إرجاع كلا القيمتين معاً.
+    يُقرأ company_state.is_ready مرة واحدة فقط بدل مرتين.
 
     Returns:
         (conn, has_active_company)
@@ -66,7 +61,6 @@ def _get_settings_conn_and_status() -> "tuple":
 def _get_settings_conn():
     """
     [للتوافق مع الكود القديم] يرجع الـ connection فقط.
-    الكود الجديد في _load_settings يستخدم _get_settings_conn_and_status().
     """
     conn, _ = _get_settings_conn_and_status()
     return conn
@@ -75,7 +69,6 @@ def _get_settings_conn():
 def _has_active_company() -> bool:
     """
     [للتوافق مع الكود القديم] يتحقق بسرعة من وجود شركة نشطة.
-    الكود الجديد في _load_settings يستخدم _get_settings_conn_and_status().
     """
     _, has_company = _get_settings_conn_and_status()
     return has_company
@@ -235,7 +228,7 @@ class SettingsDialog(QDialog):
         grp_lay = QVBoxLayout(grp)
         grp_lay.setSpacing(10)
 
-        from ui.themes import theme_manager, THEMES, THEME_DISPLAY_NAMES
+        from ui.theme_manager import theme_manager, THEMES, THEME_DISPLAY_NAMES
 
         self._theme_btn_group = QButtonGroup(self)
         self._theme_radios    = {}
@@ -504,25 +497,10 @@ class SettingsDialog(QDialog):
     def _load_settings(self):
         """
         [A-05] يستخدم _get_settings_conn_and_status() بدل استدعاءين منفصلين.
-
-        القديم (2 استدعاء لـ company_state.is_ready):
-            conn = _get_settings_conn()          # يقرأ is_ready
-            if conn is None and not _has_active_company():  # يقرأ is_ready مجدداً
-                ...
-
-        الجديد (استدعاء واحد):
-            conn, has_company = _get_settings_conn_and_status()
-            if not has_company:
-                ...
-
-        ملاحظة: الحالة conn is None and has_company is True نادرة جداً
-        (تعني is_ready=True لكن get_erp_conn() رمى exception).
-        في هذه الحالة نُظهر التنبيه أيضاً لأن الـ conn غير متاح.
         """
         conn, has_company = _get_settings_conn_and_status()
 
         if not has_company or conn is None:
-            # [تحسين 11] يُظهر تنبيهاً واضحاً للمستخدم إذا لم تكن الشركة محددة
             if not has_company:
                 self._show_no_company_notice()
         else:
@@ -705,9 +683,8 @@ class SettingsDialog(QDialog):
 
         # ── الثيم ──
         selected_theme = self._get_selected_theme()
-        from ui.themes import theme_manager
+        from ui.theme_manager import theme_manager
         if selected_theme != theme_manager.current_theme:
-            # theme_manager.set_theme() يُطلق bus.theme_changed تلقائياً
             theme_manager.set_theme(selected_theme, save=True)
 
         # ── اللغة ──
@@ -716,12 +693,9 @@ class SettingsDialog(QDialog):
         if selected_lang != i18n_manager.language:
             i18n_manager.set_language(selected_lang, save=True)
             self._app.setLayoutDirection(i18n_manager.qt_direction)
-            # [i18n] إطلاق bus.language_changed لإشعار الـ widgets
             bus.language_changed.emit(selected_lang)
 
         # ── GIMP path ──
-        # [A-05] نستخدم _get_settings_conn_and_status() بدل _get_settings_conn()
-        # لأننا محتاجين الـ conn فقط — لا داعي للتحقق من has_company هنا
         conn = _get_settings_conn()
         if conn:
             try:
