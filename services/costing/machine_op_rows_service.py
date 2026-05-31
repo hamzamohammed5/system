@@ -6,6 +6,11 @@ MachineOpRowsService — يغلّف كل عمليات machine_op_rows_repo.
 يُستخدم من:
   - ui/tabs/costing/shared/machine_op_rows_editor.py
   - ui/tabs/costing/machine/machine_op_form.py  (calc_op_total_cost)
+  - ui/widgets/components/component_row/op_rows.py
+
+الدوال المضافة (مطلوبة من op_rows.py):
+  - get_op_rows(conn, op_id) → list of dicts
+  - get_op_row_cost(conn, row_id) → float
 """
 
 from __future__ import annotations
@@ -37,6 +42,35 @@ class OpRowResult:
             count=float(d["count"]),
             sort_order=int(d.get("sort_order") or 0),
         )
+
+
+# ──────────────────────────────────────────────────────────
+# دوال مساعدة مستقلة (تُستخدم من op_rows.py مباشرة)
+# ──────────────────────────────────────────────────────────
+
+def get_op_rows(conn, op_id: int) -> list:
+    """
+    يرجع كل صفوف العملية كـ list of dicts.
+    مطلوبة من component_row/op_rows.py.
+    """
+    try:
+        from db.costing.machine_op_rows_repo import fetch_op_rows
+        rows = fetch_op_rows(conn, op_id)
+        return [dict(r) for r in rows] if rows else []
+    except Exception:
+        return []
+
+
+def get_op_row_cost(conn, row_id: int) -> float:
+    """
+    يحسب تكلفة صف واحد.
+    مطلوبة من component_row/op_rows.py.
+    """
+    try:
+        from db.costing.machine_op_rows_repo import calc_op_row_cost
+        return calc_op_row_cost(conn, row_id)
+    except Exception:
+        return 0.0
 
 
 # ──────────────────────────────────────────────────────────
@@ -113,13 +147,8 @@ class MachineOpRowsService:
     # ── حساب ──────────────────────────────────────────────
 
     def calc_row_cost(self, row_id: int) -> float:
-        """
-        يحسب تكلفة صف واحد.
-        mode="time": (value/60) × rate_per_hour
-        mode="unit": value × rate_per_unit
-        """
-        from db.costing.machine_op_rows_repo import calc_op_row_cost
-        return calc_op_row_cost(self.conn, row_id)
+        """يحسب تكلفة صف واحد."""
+        return get_op_row_cost(self.conn, row_id)
 
     def calc_total_cost(self, op_id: int) -> float:
         """يحسب إجمالي تكلفة العملية (مجموع كل الصفوف)."""

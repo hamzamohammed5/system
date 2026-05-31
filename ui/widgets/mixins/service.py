@@ -19,9 +19,22 @@ ServiceMixin — Lazy-loaded services للـ widgets.
         def _on_add(self, data):
             new_id = self._item_service.add(data["name"], data["price"], "raw")
 
-ملاحظة:
-    الـ service instances ليست cached — يُنشأ instance جديد في كل وصول.
+ملاحظة — instance جديد في كل وصول:
+    الـ service instances ليست cached — يُنشأ instance جديد في كل وصول للـ property.
     هذا مقصود: الـ conn ممكن يتغير (تغيير الشركة)، والـ service خفيف الوزن.
+
+    لو تحتاج استدعاءات متعددة في نفس الـ method، احفظ في متغير محلي:
+
+        # ✅ صح — instance واحد لاستدعاءات متعددة
+        def _load(self):
+            svc = self._item_service
+            items = svc.list_by_type("raw")
+            count = svc.get_usage_count(some_id)
+
+        # ❌ غلط — instance جديد في كل سطر
+        def _load(self):
+            items = self._item_service.list_by_type("raw")
+            count = self._item_service.get_usage_count(some_id)
 """
 
 
@@ -30,6 +43,12 @@ class ServiceMixin:
     Mixin يوفر lazy-loaded services للـ widgets.
 
     يفترض: self.conn موجود ويشير لـ DB connection صالح.
+
+    تنبيه: كل property تُنشئ instance جديد عند كل وصول.
+    لاستدعاءات متعددة في نفس الـ method، احفظ في متغير:
+        svc = self._item_service
+        svc.add(...)
+        svc.list_by_type(...)
     """
 
     # ── Item Service ──────────────────────────────────────
