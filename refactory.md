@@ -1,238 +1,280 @@
-# دليل تحديث الاستدعاءات المباشرة
-# الملفات اللي هتتمسح والبديل المباشر لكل import
+# خطة إعادة الهيكلة الشاملة — Refactor Plan V4
 
-==============================================================
-1. ui/widgets/components/headers.py  →  يتمسح
-==============================================================
+**الهدف:** ضمان مبدأ Single Source of Truth — كل وظيفة في مكان واحد فقط، بدون تكرار، وكل import يشير للمصدر الصح.
 
-الملفات اللي هتتغير فيها:
+---
 
-── ui/widgets/base/list_panel.py ──
-القديم:  from ..components.headers_list import ListHeader, StatusBar
-الجديد:  from ..components.headers_list import ListHeader, StatusBar
+## البنية النهائية المستهدفة
 
-── ui/widgets/base/detail_panel.py ──
-القديم:  from ..components.headers import DetailHeader
-الجديد:  from ..components.headers_page import DetailHeader
+```
+ui/
+├── events.py                          ← bus + كل الـ signals (مصدر واحد)
+├── theme.py                           ← _C + apply_theme (مصدر واحد)
+├── theme_manager.py                   ← ThemeManager + تعريف الألوان
+├── font.py                            ← get_font_size, set_font_size, fs
+├── constants.py                       ← ثوابت التطبيق
+├── app_state.py                       ← cache الإعدادات
+├── i18n/
+│   ├── ar.py                          ← القاموس العربي
+│   └── en.py                          ← القاموس الإنجليزي
+└── widgets/
+    ├── core/
+    │   ├── __init__.py                ← re-export من ui.font
+    │   ├── colors.py                  ← card_colors, status_colors, waste_*
+    │   ├── conn.py                    ← LiveConnMixin, SafeConnMixin, DualConnMixin
+    │   ├── events.py                  ← helpers: emit_company_data_changed
+    │   ├── guard.py                   ← requires_company decorator
+    │   └── i18n.py                    ← I18nManager + tr()
+    ├── theme/
+    │   ├── builders.py                ← h_divider, v_divider, wrap_in_scroll
+    │   ├── card_styles.py             ← card_style, status_card_style, group_box_style
+    │   ├── input_styles.py            ← input_style, spinbox_style, search_input_style
+    │   ├── label_styles.py            ← status_label_style, muted_label_style, ...
+    │   ├── layout_styles.py           ← tab_style, scroll_style, tree_style, ...
+    │   └── table_styles.py            ← table_style, splitter_style, ROW_HEIGHT_*
+    ├── components/
+    │   ├── action_toolbar.py          ← ActionToolbar
+    │   ├── amount_label.py            ← AmountLabel, DebitCreditDisplay, BalanceDisplay [المصدر]
+    │   ├── badge.py                   ← BadgeLabel [المصدر]
+    │   ├── button.py                  ← make_btn, refresh_visible_buttons
+    │   ├── headers_list.py            ← SearchBar, StatusBar, ListHeader
+    │   ├── headers_page.py            ← SectionHeader, PageHeader, DetailHeader
+    │   ├── label.py                   ← InfoRow, ModeLabel + re-exports [موحَّد]
+    │   ├── notification.py            ← NotificationBar, BaseWarningBar
+    │   ├── progress.py                ← ProgressBar, MultiProgressBar [المصدر]
+    │   ├── spinner.py                 ← LoadingSpinner, LoadingOverlay, LoadingButton
+    │   ├── stat_card.py               ← StatItem, StatCard, StatRow, ...
+    │   └── status_chip.py             ← StatusChip, StatusCard
+    ├── dialogs/
+    │   ├── confirm.py                 ← ConfirmDialog, confirm_delete, ...
+    │   ├── dialogs_base.py            ← DialogShell, BaseDialog [المصدر الوحيد]
+    │   ├── message.py                 ← MessageDialog, msg_*
+    │   └── settings_dialog.py
+    ├── mixins/
+    │   ├── bus.py                     ← BusConnectedMixin
+    │   ├── edit.py                    ← re-export من form_mixins [للتوافق]
+    │   ├── form_mixins.py             ← EditModeMixin, FormValidationMixin [المصدر]
+    │   ├── rebuild_mixin.py           ← RebuildMixin
+    │   ├── refresh_mixin.py           ← RefreshableMixin
+    │   ├── selection_mixin.py         ← SelectionMixin
+    │   ├── service.py                 ← ServiceMixin
+    │   ├── shared_ops.py              ← SharedOpsMixin
+    │   └── validate.py                ← re-export من form_mixins [للتوافق]
+    ├── tables/
+    │   ├── flexible.py                ← WrapDelegate, FlexItem, make_flexible_table
+    │   └── tables.py                  ← make_table, make_splitter_table, ROW_HEIGHT_* [المصدر]
+    ├── utils/
+    │   ├── date_range.py
+    │   ├── flow_layout.py
+    │   ├── no_wheel.py
+    │   ├── searchable_combo.py
+    │   ├── signals.py                 ← blocked_signals
+    │   ├── splitter.py                ← SmartSplitter, SplitterScrollGuard
+    │   └── tooltip.py
+    ├── base/
+    │   ├── crud_form.py
+    │   ├── detail_panel.py
+    │   ├── list_panel.py
+    │   ├── section.py
+    │   └── tab_section.py
+    ├── panels/
+    │   ├── data_table.py
+    │   ├── detail_section.py
+    │   ├── filter.py
+    │   ├── form_badges.py
+    │   ├── form_buttons.py
+    │   ├── form_fields.py
+    │   ├── form_group.py
+    │   ├── form_labels.py
+    │   ├── layout_widgets.py
+    │   └── state.py
+    ├── combo/
+    │   ├── category.py
+    │   ├── unit.py
+    │   └── unit_service.py
+    ├── forms/
+    │   └── inputs.py
+    ├── managers/
+    │   └── category.py
+    └── shared/
+        └── list_panel_with_shared.py
+```
 
-── ui/widgets/panels/filter.py ──
-القديم:  from ..components.headers import SearchBar
-الجديد:  from ..components.headers_list import SearchBar
+---
 
-── ui/widgets/panels/data_table.py ──
-القديم:  from ..components.headers_list import ListHeader, StatusBar
-الجديد:  from ..components.headers_list import ListHeader, StatusBar
+## المراحل
 
-── ui/widgets/components/headers_page.py ──  (الملف الجديد نفسه)
-القديم:  from .stat_row import BadgeLabel, StatCard
-الجديد:  from .badge import BadgeLabel
-         from .stat_card import StatCard
+---
 
-القديم:  from .label import InfoRow
-الجديد:  from .label import InfoRow   (← نفسه، مش بيتغير)
+## المرحلة 1 — إصلاح الأعطال الحرجة
+**الهدف:** التطبيق يشتغل. لا SyntaxError، لا ImportError.
+**العدد:** 4 ملفات
+**الوقت المقدر:** سريع
 
-القديم:  from ..theme.styles import h_divider, v_divider
-الجديد:  from ..theme.builders import h_divider, v_divider
+| # | الملف | المشكلة | الإصلاح |
+|---|-------|---------|---------|
+| 1.1 | `ui/events.py` | `data_changed` signal ناقص | أضف `data_changed = pyqtSignal()` |
+| 1.2 | `ui/widgets/dialogs/confirm.py` | `from .shell import` → مكسور | غيّر لـ `from .dialogs_base import` |
+| 1.3 | `ui/widgets/dialogs/message.py` | `from .shell import` → مكسور | غيّر لـ `from .dialogs_base import` |
+| 1.4 | `ui/widgets/components/action_toolbar.py` | سطرَي import مدمجان | افصلهم على سطرين |
 
+---
 
-==============================================================
-2. ui/widgets/components/stat_row.py  →  يتمسح
-==============================================================
+## المرحلة 2 — إصلاح Imports الـ Refactor
+**الهدف:** كل import يشير للمكان الصح بعد تقسيم الملفات.
+**العدد:** 5 ملفات
+**الوقت المقدر:** متوسط
 
-الملفات اللي هتتغير فيها:
+| # | الملف | المشكلة | الإصلاح |
+|---|-------|---------|---------|
+| 2.1 | `ui/widgets/utils/splitter.py` | `from ..tables.items import calc_width` | `from ..tables.tables import calc_width` |
+| 2.2 | `ui/widgets/base/detail_panel.py` | `from ..theme.styles import scroll_style` | `from ..theme.layout_styles import scroll_style` |
+| 2.3 | `ui/widgets/panels/detail_section.py` | `from ..components.headers import SectionHeader` | `from ..components.headers_page import SectionHeader` |
+| 2.4 | `ui/widgets/base/crud_form.py` | `from ui.widgets.mixins.edit import EditModeMixin` | `from ui.widgets.mixins.form_mixins import EditModeMixin` |
+| 2.5 | `ui/widgets/components/headers_page.py` | `from .stat_row import BadgeLabel` | `from .badge import BadgeLabel` |
 
-── ui/widgets/components/headers_page.py ──
-القديم:  from .stat_row import BadgeLabel, StatCard
-الجديد:  from .badge import BadgeLabel
-         from .stat_card import StatCard
+---
 
-ملاحظة: أي كود تاني بيستورد من stat_row يستبدل:
-  BadgeLabel       → from .badge import BadgeLabel
-  StatItem         → from .stat_card import StatItem
-  StatCard         → from .stat_card import StatCard
-  _StatCard        → from .stat_card import _StatCard
-  StatRow          → from .stat_card import StatRow
-  make_stat_row    → from .stat_card import make_stat_row
-  stat_card_pair   → from .stat_card import stat_card_pair
-  make_stat_card_simple → from .stat_card import make_stat_card_simple
-  StatusChip       → from .status_chip import StatusChip
-  StatusCard       → from .status_chip import StatusCard
-  make_status_chip → from .status_chip import make_status_chip
+## المرحلة 3 — إصلاح Imports المتوسطة
+**الهدف:** توحيد كل الـ imports الغامضة.
+**العدد:** 2 ملفات
 
+| # | الملف | المشكلة | الإصلاح |
+|---|-------|---------|---------|
+| 3.1 | `ui/widgets/core/__init__.py` | `from ui.app_settings import get_font_size` | `from ui.font import get_font_size` |
+| 3.2 | `ui/widgets/tables/tables.py` | `from ..styles import ROW_HEIGHT_*` | `from ..theme.table_styles import ROW_HEIGHT_*` |
 
-==============================================================
-3. ui/widgets/mixins/data_mixins.py  →  يتمسح
-==============================================================
+---
 
-أي كود بيستورد منه:
-  RefreshableMixin → from ..mixins.refresh_mixin import RefreshableMixin
-  RebuildMixin     → from ..mixins.rebuild_mixin import RebuildMixin
-  SelectionMixin   → from ..mixins.selection_mixin import SelectionMixin
+## المرحلة 4 — توحيد ملفات التكرار الصريح
+**الهدف:** كل كلاس/دالة في مكان واحد فقط.
+**العدد:** 3 ملفات تُعدَّل + 2 ملفات compatibility shims تُنشأ
 
-(مفيش ملفات في الـ docs الحالية بتستورد منه)
+### 4.1 — توحيد Label Widgets
 
+**المشكلة:** `ProgressBar` و`MultiProgressBar` مكررتان في `label.py` و`progress.py`. كذلك `AmountLabel` وأخواتها في `label.py` و`amount_label.py`.
 
-==============================================================
-4. ui/widgets/panels/form_parts.py  →  يتمسح
-==============================================================
+**الحل:**
+- `progress.py` ← **المصدر الوحيد** لـ `ProgressBar, MultiProgressBar`
+- `amount_label.py` ← **المصدر الوحيد** لـ `AmountLabel, DebitCreditDisplay, BalanceDisplay, format_amount, amount_color, dr_cr_color`
+- `label.py` ← يحذف التعريفات المكررة ويستبدلها بـ re-exports
 
-الملفات اللي هتتغير فيها:
+**label.py بعد التعديل:**
+```python
+# label.py — يحتفظ فقط بـ: InfoRow, ModeLabel
+# ويعمل re-export للباقي للتوافق مع الكود القديم
 
-── ui/widgets/base/crud_form.py ──
-القديم:  from ui.widgets.panels.form_parts import FormGroup
-الجديد:  from ui.widgets.panels.form_group import FormGroup
+from .progress     import ProgressBar, MultiProgressBar       # noqa: F401
+from .amount_label import (                                   # noqa: F401
+    AmountLabel, DebitCreditDisplay, BalanceDisplay,
+    format_amount, amount_color, dr_cr_color,
+)
+```
 
-القديم:  from ui.widgets.theme.styles import wrap_in_scroll
-الجديد:  from ui.widgets.theme.builders import wrap_in_scroll
+### 4.2 — إنشاء ملفات التوافق للـ Mixins المحذوفة
 
-أي كود تاني بيستورد من form_parts يستبدل:
-  form_label       → from ..panels.form_labels import form_label
-  required_label   → from ..panels.form_labels import required_label
-  hint_label       → from ..panels.form_labels import hint_label
-  section_title    → from ..panels.form_labels import section_title
-  separator_line   → from ..panels.form_labels import separator_line
-  spin_field       → from ..panels.form_fields import spin_field
-  int_spin_field   → from ..panels.form_fields import int_spin_field
-  labeled_widget   → from ..panels.form_fields import labeled_widget
-  field_row        → from ..panels.form_fields import field_row
-  labeled_row      → from ..panels.form_fields import labeled_row
-  make_form_layout → from ..panels.form_fields import make_form_layout
-  FormGroup        → from ..panels.form_group import FormGroup
-  ResultBadge      → from ..panels.form_badges import ResultBadge
-  ModeBadge        → from ..panels.form_badges import ModeBadge
-  InlinePreview    → from ..panels.form_badges import InlinePreview
-  make_preview_label → from ..panels.form_badges import make_preview_label
-  CrudButtonsBar   → from ..panels.form_buttons import CrudButtonsBar
+**المشكلة:** `edit.py` و`validate.py` محذوفان لكن يُستورد منهما.
 
+**الحل:** إنشاء ملفين compatibility shims:
 
-==============================================================
-5. ui/widgets/panels/crud_section.py  →  يتمسح
-==============================================================
+**`ui/widgets/mixins/edit.py`:**
+```python
+# Compatibility shim — المصدر الحقيقي: form_mixins.py
+from .form_mixins import EditModeMixin  # noqa: F401
+```
 
-أي كود بيستورد منه:
-  CrudSection → from ui.widgets.base.section import BaseSection as CrudSection
-  أو:          from ui.widgets.base.section import BaseSection
-               # واستخدم BaseSection بدل CrudSection
+**`ui/widgets/mixins/validate.py`:**
+```python
+# Compatibility shim — المصدر الحقيقي: form_mixins.py
+from .form_mixins import FormValidationMixin  # noqa: F401
+```
 
-(مفيش ملفات في الـ docs الحالية بتستورد منه)
+### 4.3 — إنشاء ملف التوافق لـ stat_row
 
+**المشكلة:** `stat_row.py` محذوف لكن `headers_page.py` يستورد منه.
 
-==============================================================
-6. ui/widgets/theme/styles.py  →  يتمسح
-==============================================================
+**الحل:** إما تعديل `headers_page.py` لـ `from .badge import BadgeLabel` (تم في المرحلة 2.5)، أو إنشاء shim.
 
-الملفات اللي هتتغير فيها:
+---
 
-── ui/widgets/utils/splitter.py ──
-القديم:  from ..theme.table_styles import splitter_style
-الجديد:  from ..theme.table_styles import splitter_style
+## المرحلة 5 — إصلاح مشكلة STYLE_ORPHAN الـ Stale
+**الهدف:** ألوان الـ orphan rows تتحدث مع تغيير الثيم.
 
-── ui/widgets/components/action_toolbar.py ──
-القديم:  from ..theme.styles import v_divider
-الجديد:  from ..theme.builders import v_divider
+**الملف:** `ui/widgets/components/component_row/ui.py`
 
-── ui/widgets/combo/category.py ──  (tree_style)
-القديم:  from ..theme.styles import tree_style
-الجديد:  from ..theme.layout_styles import tree_style
+**الحل:** استبدال الثابت بدالة:
+```python
+# قبل
+STYLE_ORPHAN = _orphan_style()  # stale
 
-── ui/widgets/base/section.py ──
-القديم:  from ..theme.table_styles import splitter_style
-الجديد:  from ..theme.table_styles import splitter_style
+# بعد — يُقرأ عند كل استخدام
+def get_orphan_style() -> str:
+    return _orphan_style()
+```
 
-── ui/widgets/base/crud_form.py ──
-القديم:  from ui.widgets.theme.styles import wrap_in_scroll
-الجديد:  from ui.widgets.theme.builders import wrap_in_scroll
+وفي `widget.py`:
+```python
+self.setStyleSheet(get_orphan_style())
+```
 
-── ui/widgets/base/tab_section.py ──
-القديم:  from ..theme.styles import tab_style
-الجديد:  from ..theme.layout_styles import tab_style
+---
 
-── ui/widgets/managers/category.py ──
-القديم:  from ..theme.styles import tree_style
-الجديد:  from ..theme.layout_styles import tree_style
+## المرحلة 6 — إصلاح BusConnectedMixin (أول إشعار مفقود)
+**الملف:** `ui/widgets/mixins/bus.py`
 
-── ui/widgets/base/list_panel.py ──
-القديم:  from ..theme.styles import (...)
-تفاصيل الـ imports الموجودة في list_panel:
-  → ROW_HEIGHT_LARGE          : from ..theme.table_styles import ROW_HEIGHT_LARGE
-  → (make_splitter_table_guarded, fit_splitter_table, auto_fit_columns من tables.py مش styles)
+**الإصلاح:**
+```python
+def _on_company_data_changed(self, company_id: int):
+    if self._cached_company_id is None:
+        self._cached_company_id = self._get_active_company_id()
 
-── ui/widgets/components/label.py ──
-القديم:  from ..theme.styles import (...)
-تفاصيل:
-  → (label.py بتستورد من ..core.colors مش styles مباشرة)
+    # لو الـ cache لا يزال None → اضبطه وتابع (لا تُتجاهل)
+    if self._cached_company_id is None:
+        self._cached_company_id = company_id
+    elif company_id != self._cached_company_id:
+        logger.debug(...)
+        return
 
-── ui/widgets/base/detail_panel.py ──
-القديم:  from ..theme.styles import scroll_style
-الجديد:  from ..theme.layout_styles import scroll_style
+    self._refresh_guard = True
+    self._on_data_changed()
+    QTimer.singleShot(0, self._clear_refresh_guard)
+```
 
-── ui/widgets/panels/layout_widgets.py ──
-القديم:  from ..theme.styles import h_divider, card_style
-الجديد:  from ..theme.builders import h_divider
-         from ..theme.card_styles import card_style
+---
 
-── ui/widgets/components/headers_page.py ──  (الملف الجديد)
-القديم:  from ..theme.styles import h_divider, v_divider
-الجديد:  from ..theme.builders import h_divider, v_divider
+## جدول تتبع التنفيذ
 
-── ui/widgets/panels/data_table.py ──
-القديم:  from ..theme.styles import (...)
-تفاصيل:
-  → (data_table بتستورد من ..tables.tables و ..components.headers)
+| المرحلة | الملف | الحالة |
+|---------|-------|--------|
+| 1.1 | `ui/events.py` | ⬜ |
+| 1.2 | `ui/widgets/dialogs/confirm.py` | ⬜ |
+| 1.3 | `ui/widgets/dialogs/message.py` | ⬜ |
+| 1.4 | `ui/widgets/components/action_toolbar.py` | ⬜ |
+| 2.1 | `ui/widgets/utils/splitter.py` | ⬜ |
+| 2.2 | `ui/widgets/base/detail_panel.py` | ⬜ |
+| 2.3 | `ui/widgets/panels/detail_section.py` | ⬜ |
+| 2.4 | `ui/widgets/base/crud_form.py` | ⬜ |
+| 2.5 | `ui/widgets/components/headers_page.py` | ⬜ |
+| 3.1 | `ui/widgets/core/__init__.py` | ⬜ |
+| 3.2 | `ui/widgets/tables/tables.py` | ⬜ |
+| 4.1 | `ui/widgets/components/label.py` | ⬜ |
+| 4.2 | `ui/widgets/mixins/edit.py` (shim جديد) | ⬜ |
+| 4.2 | `ui/widgets/mixins/validate.py` (shim جديد) | ⬜ |
+| 5.1 | `ui/widgets/components/component_row/ui.py` | ⬜ |
+| 6.1 | `ui/widgets/mixins/bus.py` | ⬜ |
 
-── ui/widgets/panels/form_group.py ──
-القديم:  (spinbox_style via form_parts أو styles)
-الجديد:  from ..theme.input_styles import spinbox_style
+**الإجمالي:** 16 ملف (14 تعديل + 2 إنشاء جديد)
 
-── ui/widgets/panels/form_fields.py ──
-القديم:  from ..theme.styles import spinbox_style
-الجديد:  from ..theme.input_styles import spinbox_style
+---
 
+## قواعد لا تُكسر بعد هذا الـ Refactor
 
-==============================================================
-ملخص جدول التحويل السريع
-==============================================================
-
-| القديم                        | الجديد                                    |
-|-------------------------------|-------------------------------------------|
-| ..theme.styles → splitter_style  | ..theme.table_styles                   |
-| ..theme.styles → table_style     | ..theme.table_styles                   |
-| ..theme.styles → ROW_HEIGHT_*    | ..theme.table_styles                   |
-| ..theme.styles → input_style     | ..theme.input_styles                   |
-| ..theme.styles → spinbox_style   | ..theme.input_styles                   |
-| ..theme.styles → search_input_style | ..theme.input_styles               |
-| ..theme.styles → card_style      | ..theme.card_styles                    |
-| ..theme.styles → status_card_style | ..theme.card_styles                  |
-| ..theme.styles → group_box_style | ..theme.card_styles                    |
-| ..theme.styles → status_label_style | ..theme.label_styles               |
-| ..theme.styles → muted_label_style  | ..theme.label_styles               |
-| ..theme.styles → section_title_style | ..theme.label_styles              |
-| ..theme.styles → icon_btn_style  | ..theme.label_styles                   |
-| ..theme.styles → link_btn_style  | ..theme.label_styles                   |
-| ..theme.styles → tab_style       | ..theme.layout_styles                  |
-| ..theme.styles → scroll_style    | ..theme.layout_styles                  |
-| ..theme.styles → filter_bar_style | ..theme.layout_styles                 |
-| ..theme.styles → toolbar_style   | ..theme.layout_styles                  |
-| ..theme.styles → tree_style      | ..theme.layout_styles                  |
-| ..theme.styles → list_style      | ..theme.layout_styles                  |
-| ..theme.styles → h_divider       | ..theme.builders                       |
-| ..theme.styles → v_divider       | ..theme.builders                       |
-| ..theme.styles → wrap_in_scroll  | ..theme.builders                       |
-| ..components.headers → ListHeader   | ..components.headers_list           |
-| ..components.headers → StatusBar    | ..components.headers_list           |
-| ..components.headers → SearchBar    | ..components.headers_list           |
-| ..components.headers → SectionHeader | ..components.headers_page          |
-| ..components.headers → PageHeader   | ..components.headers_page           |
-| ..components.headers → DetailHeader | ..components.headers_page           |
-| ..components.stat_row → BadgeLabel  | ..components.badge                  |
-| ..components.stat_row → Stat*       | ..components.stat_card              |
-| ..components.stat_row → Status*     | ..components.status_chip            |
-| ..panels.form_parts → FormGroup     | ..panels.form_group                 |
-| ..panels.form_parts → form_label    | ..panels.form_labels                |
-| ..panels.form_parts → spin_field    | ..panels.form_fields                |
-| ..panels.form_parts → ResultBadge   | ..panels.form_badges                |
-| ..panels.form_parts → CrudButtonsBar | ..panels.form_buttons              |
-| ..mixins.data_mixins → Refreshable* | ..mixins.refresh_mixin             |
-| ..mixins.data_mixins → Rebuild*     | ..mixins.rebuild_mixin              |
-| ..mixins.data_mixins → Selection*   | ..mixins.selection_mixin            |
-| ..panels.crud_section → CrudSection | ui.widgets.base.section → BaseSection |
+1. **`ui/events.py`** — المصدر الوحيد للـ bus وكل الـ signals
+2. **`ui/widgets/dialogs/dialogs_base.py`** — المصدر الوحيد لـ `DialogShell` و`BaseDialog`
+3. **`ui/widgets/mixins/form_mixins.py`** — المصدر الوحيد لـ `EditModeMixin` و`FormValidationMixin`
+4. **`ui/widgets/components/progress.py`** — المصدر الوحيد لـ `ProgressBar`
+5. **`ui/widgets/components/amount_label.py`** — المصدر الوحيد لـ `AmountLabel` وأخواتها
+6. **`ui/widgets/tables/tables.py`** — المصدر الوحيد لـ `ROW_HEIGHT_*` وبناة الجداول
+7. **`ui/widgets/theme/layout_styles.py`** — المصدر الوحيد لـ `scroll_style`
+8. **`ui/widgets/components/badge.py`** — المصدر الوحيد لـ `BadgeLabel`
+9. **`ui/widgets/components/headers_page.py`** — المصدر الوحيد لـ `SectionHeader`
