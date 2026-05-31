@@ -6,10 +6,8 @@ UnitCombo — QComboBox موحد لاختيار وحدة القياس.
 [Refactor V3] Business logic نُقل لـ unit_service.py.
 هذا الملف يحتوي على الـ widget فقط + make_unit_combo.
 
-الـ exports التاريخية محفوظة عبر re-import لضمان التوافق:
-  load_units, save_units, invalidate_units_cache, get_last_unit,
-  set_last_unit, add_unit, remove_unit, get_all_units,
-  reset_units_to_default, _DEFAULT_UNITS
+لاستخدام دوال الـ service (load_units, add_unit, ...):
+    from ui.widgets.combo.unit_service import load_units, add_unit, ...
 """
 
 import logging
@@ -17,20 +15,10 @@ from PyQt5.QtWidgets import QComboBox
 from PyQt5.QtCore    import pyqtSignal
 
 from ..utils.signals import blocked_signals
-
-# re-export للتوافق مع الكود القديم
-from .unit_service import (  # noqa: F401
+from .unit_service   import (
+    load_units, invalidate_units_cache,
+    get_last_unit, set_last_unit,
     _DEFAULT_UNITS,
-    _cache_key,
-    invalidate_units_cache,
-    load_units,
-    save_units,
-    get_last_unit,
-    set_last_unit,
-    add_unit,
-    remove_unit,
-    get_all_units,
-    reset_units_to_default,
 )
 
 logger = logging.getLogger(__name__)
