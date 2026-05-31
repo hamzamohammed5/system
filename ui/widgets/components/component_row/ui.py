@@ -8,6 +8,11 @@ ui/widgets/components/component_row/ui.py
   - دالة واحدة build_row_ui() تبني كل الـ UI
   - update_waste_style() تستخدم waste_colors من core/colors (لا hardcoded)
   - كل الألوان من _C و core/colors — لا hardcoded
+
+  [Phase 5] STYLE_ORPHAN أصبح دالة get_orphan_style() بدل ثابت stale.
+    القديم: STYLE_ORPHAN = _orphan_style()  — يُحسب مرة عند import ويبقى قديماً
+            عند تغيير الثيم.
+    الجديد: get_orphan_style() → str  — يُحسب في كل استخدام من _C الحالي.
 """
 
 from PyQt5.QtWidgets import (
@@ -37,6 +42,7 @@ COMPONENT_TYPES = [
 # ── ستايلات الصف ───────────────────────────────────────────
 STYLE_NORMAL = ""
 
+
 def _orphan_style() -> str:
     s = _status_colors("warning")
     return f"""
@@ -48,7 +54,20 @@ def _orphan_style() -> str:
         }}
     """
 
-# نبني STYLE_ORPHAN مرة واحدة عند التحميل
+
+def get_orphan_style() -> str:
+    """
+    [Phase 5] يرجع ستايل الـ orphan row من _C الحالي.
+
+    بدل الثابت STYLE_ORPHAN الذي كان يُحسب مرة واحدة عند الـ import
+    ويبقى stale عند تغيير الثيم، هذه الدالة تُحسب في كل استخدام
+    لضمان أن الألوان تعكس الثيم الحالي دائماً.
+    """
+    return _orphan_style()
+
+
+# للتوافق مع أي كود قديم يستخدم STYLE_ORPHAN مباشرة — يُحسب عند أول import
+# لكن استخدم get_orphan_style() للثيم الصحيح
 STYLE_ORPHAN = _orphan_style()
 
 
@@ -79,7 +98,6 @@ def _variant_cost_style() -> str:
 
 def _sub_row_style() -> str:
     s = _status_colors("danger")
-    # وردي فاتح مخصص للـ machine_op sub-row
     return f"""
         QFrame {{
             background: {s['bg']}; border: 1px solid {s['border']};
@@ -90,7 +108,6 @@ def _sub_row_style() -> str:
 
 def _op_row_combo_style() -> str:
     base = get_font_size()
-    # نستخدم purple لعمليات التشغيل للتمييز البصري
     s = _status_colors("purple")
     return f"""
         QComboBox {{
