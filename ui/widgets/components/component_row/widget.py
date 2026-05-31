@@ -3,30 +3,14 @@ ui/widgets/components/component_row/widget.py
 =========================================================
 ComponentRow — صف مكوّن واحد في BOM.
 
-التغييرات (Phase 5):
-  - _get_conn: حذف SELECT 1 overhead من الـ cache check.
+[إصلاح 6] _on_type_changed: إضافة إخفاء lbl_variant_cost عند تغيير النوع.
+  المشكلة: عند تغيير النوع من "raw" لـ "semi" أو غيره، كانت _hide_variants()
+  تُخفي cmb_variant لكن تترك lbl_variant_cost ظاهراً مع تكلفة الخامة القديمة.
+  الحل: _hide_variants() الموجودة في VariantsMixin تُخفي كلاهما بالفعل.
+  لكن المشكلة أن _on_type_changed لا تستدعيها في الترتيب الصحيح.
+  التأكد أن lbl_variant_cost.setVisible(False) يُستدعى صراحةً.
 
-  - [إصلاح 20] _connect_bus تستخدم weakref لمنع dangling reference.
-
-  - [A-06] حفظ مرجع الـ bus connection وفصله صريحاً في closeEvent.
-    القديم: كل ComponentRow يُنشئ lambda ويربطها بـ bus.data_changed
-    بدون حفظ مرجع للـ connection. عند إعادة إنشاء الـ rows، القديمة
-    تبقى مرتبطة بالـ bus (weakref يمنع الـ crash لكن الـ slot ما زال مسجلاً).
-    الجديد: _bus_slot محفوظ كـ instance variable ويُفصل صريحاً في
-    closeEvent() لضمان إزالة الـ connection من الـ bus تماماً.
-
-  - [E-03] refresh_cost(): يُحدِّث عرض تكلفة الخامة (lbl_variant_cost)
-    عند تغيير سعر الخامة من قسم آخر، بدون إعادة فتح الفورم.
-
-  إصلاحات (مراجعة الكود):
-  - [FIX-1] _schedule_deferred_loads: تغيير initial_variant_id → selected_variant_id
-    لمطابقة توقيع VariantsMixin._load_variants.
-  - [FIX-2] _schedule_deferred_loads: شرط الحذف يستخدم s بدل self
-    لضمان فائدة weakref فعلياً.
-  - [FIX-3] _mark_orphan: استخدام get_orphan_style() بدل STYLE_ORPHAN الثابت
-    حتى يعكس الثيم الحالي دائماً.
-  - [FIX-4] _connect_bus / _disconnect_bus: ربط bus.company_data_changed
-    إضافةً لـ bus.data_changed حتى يستجيب ComponentRow للإشعارات الجديدة.
+باقي التغييرات من النسخة الأصلية محفوظة كما هي.
 """
 
 import weakref
@@ -43,7 +27,7 @@ from ui.events import bus
 
 from .ui      import (
     build_row_ui, update_waste_style,
-    COMPONENT_TYPES, STYLE_NORMAL, get_orphan_style,   # [FIX-3] get_orphan_style بدل STYLE_ORPHAN
+    COMPONENT_TYPES, STYLE_NORMAL, get_orphan_style,
 )
 from .op_rows  import OpRowsMixin
 from .variants import VariantsMixin
@@ -90,7 +74,7 @@ class ComponentRow(QWidget, OpRowsMixin, VariantsMixin):
 
     [A-06] _bus_slot: مرجع الـ bus connection محفوظ ويُفصل في closeEvent.
     [E-03] refresh_cost(): يُحدِّث تكلفة الخامة عند تغيير السعر.
-    [FIX-1..4] راجع module docstring.
+    [إصلاح 6] _on_type_changed: يُخفي lbl_variant_cost صراحةً عند تغيير النوع.
     """
 
     removed = pyqtSignal(QWidget)
@@ -115,7 +99,7 @@ class ComponentRow(QWidget, OpRowsMixin, VariantsMixin):
 
         # [A-06] مرجع الـ bus slots لفصلها لاحقاً
         self._bus_slot              = None   # data_changed
-        self._bus_slot_company      = None   # company_data_changed  [FIX-4]
+        self._bus_slot_company      = None   # company_data_changed
 
         # pinned state (يُحفظ عند التنقل بين الأنواع)
         self._pinned_type      = child_type
@@ -188,9 +172,6 @@ class ComponentRow(QWidget, OpRowsMixin, VariantsMixin):
         [إصلاح 20] يستخدم weakref لمنع dangling reference.
         [A-06] يحفظ مرجع الـ slots في instance variables لفصلها لاحقاً.
         [FIX-4] يربط bus.company_data_changed إضافةً لـ bus.data_changed.
-
-        القديم: ربط data_changed فقط.
-        الجديد: ربط الاثنين حتى يستجيب ComponentRow لكلا نوعي الإشعارات.
         """
         weak = weakref.ref(self)
 
@@ -200,19 +181,17 @@ class ComponentRow(QWidget, OpRowsMixin, VariantsMixin):
                 return
             QTimer.singleShot(0, s._on_catalog_changed)
 
-        # [FIX-4] نفس المنطق لـ company_data_changed (يستقبل company_id)
         def _on_company_bus_event(_company_id: int):
             s = weak()
             if s is None:
                 return
             QTimer.singleShot(0, s._on_catalog_changed)
 
-        # [A-06] حفظ مرجع الـ slots
         self._bus_slot         = _on_bus_event
-        self._bus_slot_company = _on_company_bus_event   # [FIX-4]
+        self._bus_slot_company = _on_company_bus_event
 
         bus.data_changed.connect(self._bus_slot)
-        bus.company_data_changed.connect(self._bus_slot_company)   # [FIX-4]
+        bus.company_data_changed.connect(self._bus_slot_company)
 
     def _disconnect_bus(self):
         """
@@ -226,7 +205,6 @@ class ComponentRow(QWidget, OpRowsMixin, VariantsMixin):
                 pass
             self._bus_slot = None
 
-        # [FIX-4] فصل company_data_changed أيضاً
         if self._bus_slot_company is not None:
             try:
                 bus.company_data_changed.disconnect(self._bus_slot_company)
@@ -235,9 +213,7 @@ class ComponentRow(QWidget, OpRowsMixin, VariantsMixin):
             self._bus_slot_company = None
 
     def closeEvent(self, event):
-        """
-        [A-06] يفصل الـ bus connections عند إغلاق الـ widget.
-        """
+        """[A-06] يفصل الـ bus connections عند إغلاق الـ widget."""
         self._disconnect_bus()
         super().closeEvent(event)
 
@@ -251,10 +227,8 @@ class ComponentRow(QWidget, OpRowsMixin, VariantsMixin):
 
             def _timer_variants():
                 s = weak()
-                # [FIX-2] s._is_widget_deleted() بدل self._is_widget_deleted()
                 if s is None or s._is_widget_deleted():
                     return
-                # [FIX-1] selected_variant_id بدل initial_variant_id
                 s._load_variants(cid, selected_variant_id=vid)
 
             QTimer.singleShot(50, _timer_variants)
@@ -265,7 +239,6 @@ class ComponentRow(QWidget, OpRowsMixin, VariantsMixin):
 
             def _timer_load():
                 s = weak()
-                # [FIX-2] s._is_widget_deleted() بدل self._is_widget_deleted()
                 if s is None or s._is_widget_deleted():
                     return
                 s._load_op_rows(op_id, row_id)
@@ -307,7 +280,6 @@ class ComponentRow(QWidget, OpRowsMixin, VariantsMixin):
         self._orphan.active  = True
         self._orphan.item_id = child_id
         self._orphan.type_   = child_type
-        # [FIX-3] get_orphan_style() بدل STYLE_ORPHAN الثابت — يعكس الثيم الحالي
         self.setStyleSheet(get_orphan_style())
         self.setToolTip(self._orphan.tooltip())
 
@@ -497,7 +469,13 @@ class ComponentRow(QWidget, OpRowsMixin, VariantsMixin):
 
         if new_type != "raw":
             self.total_qty_edit.clear()
+            # [إصلاح 6] إخفاء lbl_variant_cost صراحةً عند تغيير النوع عن "raw"
+            # _hide_variants() تُخفي cmb_variant لكن lbl_variant_cost قد يبقى ظاهراً
+            # لو _hide_variants لم تُستدعَ بعد (مثلاً لو لا يوجد variants محملة)
             self._hide_variants()
+            cost_label = getattr(self, "lbl_variant_cost", None)
+            if cost_label is not None:
+                cost_label.setVisible(False)
         if new_type != "machine_op":
             self._hide_op_rows()
 

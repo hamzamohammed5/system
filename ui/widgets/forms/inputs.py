@@ -7,6 +7,11 @@ Input widgets الموحدة للتطبيق.
   - NotesLineEdit: بدل background:#fafafa و background:white الـ hardcoded،
     الآن يستخدم _C['bg_surface_2'] و _C['bg_input'].
   - باقي الـ widgets لم تتغير.
+
+  [إصلاح] حذف `from ..core import get_font_size as _get_font_size` المكرر —
+    المصدر الصحيح هو `ui.font` مباشرة.
+  [إصلاح] `from ..theme.styles import ...` → `from ..theme.input_styles import ...`
+    لأن theme/styles.py حُذف بعد Refactor V3.
 """
 from PyQt5.QtWidgets import (
     QWidget, QHBoxLayout, QLineEdit, QLabel,
@@ -17,8 +22,9 @@ from PyQt5.QtGui  import QFont
 
 from ui.theme import _C
 from ui.font  import fs, get_font_size
-from ..core          import get_font_size as _get_font_size
-from ..theme.styles  import input_style as _input_style, spinbox_style as _spinbox_style
+# [إصلاح] input_styles بدل styles (المسار القديم المحذوف)
+from ..theme.input_styles import input_style as _input_style, spinbox_style as _spinbox_style
+# [إصلاح] حُذف: from ..core import get_font_size as _get_font_size — مكرر مع السطر أعلاه
 
 
 # ── AmountSpinBox ─────────────────────────────────────────

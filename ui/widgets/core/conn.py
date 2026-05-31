@@ -15,6 +15,11 @@ Mixins موحدة لإدارة اتصالات قاعدة البيانات.
     الآن تُصدر تحذيراً فعلياً لو subclass يُعرِّف conn attribute باسم
     مختلف عن _conn_attr دون تحديثه.
     السلوك: تحذير فقط (لا يمنع الـ class من العمل).
+
+  - [إصلاح private API] SafeConnMixin._get_safe_conn و DualConnMixin._get_erp_conn
+    كانتا تستخدمان company_state._get_conn("erp") (private API).
+    الآن تستخدمان company_state.get_erp_conn() (public API) للاتساق مع
+    الإصلاح المطبّق في tab_section.py.
 """
 import logging
 import warnings
@@ -199,6 +204,8 @@ class SafeConnMixin:
     Mixin متقدم يدعم إعادة الاتصال التلقائي.
 
     _get_safe_conn() لم تعد تُعيد None — ترمي RuntimeError عند الفشل.
+
+    [إصلاح private API] يستخدم get_erp_conn() (public) بدل _get_conn("erp") (private).
     """
 
     def _init_safe_conn(self, conn, db_name: str = "accounting"):
@@ -212,7 +219,20 @@ class SafeConnMixin:
         logger.debug("%s._get_safe_conn: reconnecting", type(self).__name__)
         try:
             from db.companies.company_state import company_state
-            new_conn = company_state._get_conn(self.__safe_db_name)
+            # [إصلاح private API] استخدام public API بدل _get_conn الخاصة
+            # لو الـ db_name هو "erp" نستخدم get_erp_conn() مباشرة
+            # لو غيره (مثل "accounting") نحاول عبر _get_conn لو موجودة
+            if self.__safe_db_name == "erp":
+                new_conn = company_state.get_erp_conn()
+            else:
+                # fallback للـ private API لو لا يوجد public method للـ db المطلوب
+                get_fn = getattr(company_state, "get_erp_conn", None)
+                if get_fn and self.__safe_db_name == "erp":
+                    new_conn = get_fn()
+                else:
+                    # محاولة عبر _get_conn لأنواع DB الأخرى (accounting, etc.)
+                    _get = getattr(company_state, "_get_conn", None)
+                    new_conn = _get(self.__safe_db_name) if _get else None
             if _test_conn(new_conn):
                 self.__safe_conn = new_conn
                 return new_conn
@@ -246,6 +266,8 @@ class DualConnMixin(SafeConnMixin):
     Mixin لأي widget يحتاج acc_conn + erp_conn معاً.
 
     _get_erp_conn() لم تعد تُعيد None — ترمي RuntimeError عند الفشل.
+
+    [إصلاح private API] يستخدم get_erp_conn() (public) بدل _get_conn("erp") (private).
     """
 
     def _init_dual_conn(self, acc_conn, erp_conn, acc_db: str = "accounting"):
@@ -260,7 +282,8 @@ class DualConnMixin(SafeConnMixin):
         logger.debug("%s._get_erp_conn: reconnecting", type(self).__name__)
         try:
             from db.companies.company_state import company_state
-            new = company_state._get_conn("erp")
+            # [إصلاح private API] get_erp_conn() (public) بدل _get_conn("erp") (private)
+            new = company_state.get_erp_conn()
             if _test_conn(new):
                 self._erp_conn_ref = new
                 return new

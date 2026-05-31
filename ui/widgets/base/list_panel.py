@@ -1,12 +1,18 @@
 """
-ui/widgets/base/list_panel.py
-==========================
-BaseListPanel — قاعدة مشتركة لكل لوحات القوائم.
+ui/widgets/base/list_panel.py — إصلاح refresh() double apply_filter
 
-[Refactor V3] إصلاح imports:
-  - ui.app_settings → ui.theme + ui.font
-  - ..tables.builders → ..tables.tables
-  - ..tables.items    → ..tables.tables
+التغيير الوحيد عن النسخة الأصلية:
+  [إصلاح 5] refresh() تُوقف الـ _timer قبل reload() لمنع تشغيل _apply_filter مرتين.
+
+  المشكلة:
+    _filter_toolbar.reload() يُعيد ملء categories combo → currentIndexChanged
+    → filter_changed → _timer.start().
+    ثم refresh() تستدعي _apply_filter() مباشرة.
+    النتيجة: _apply_filter() تُنفَّذ مرتين (مرة فورية + مرة بعد 250ms من الـ timer).
+
+  الحل:
+    إيقاف الـ timer قبل reload() حتى لو بدأ من تغيير الـ combo،
+    ثم _apply_filter() الفورية هي الوحيدة التي تُنفَّذ.
 """
 from PyQt5.QtWidgets import (
     QWidget, QVBoxLayout, QHBoxLayout, QLabel,
@@ -463,8 +469,22 @@ class BaseListPanel(QWidget, BusConnectedMixin):
     # ── فلترة ─────────────────────────────────────────────
 
     def refresh(self):
+        """
+        [إصلاح 5] إيقاف الـ _timer قبل reload() لمنع تشغيل _apply_filter مرتين.
+
+        المشكلة القديمة:
+          _filter_toolbar.reload() يُعيد ملء categories combo → currentIndexChanged
+          → filter_changed → _timer.start().
+          ثم refresh() تستدعي _apply_filter() مباشرة.
+          النتيجة: _apply_filter() تُنفَّذ مرتين.
+
+        الحل:
+          إيقاف الـ timer قبل reload() حتى لو بدأ من تغيير الـ combo،
+          ثم _apply_filter() الفورية في نهاية refresh() هي المرة الوحيدة.
+        """
         self._all_rows = self._load_rows()
         if self._filter_toolbar and self.conn:
+            self._timer.stop()                        # [إصلاح 5] منع double apply_filter
             self._filter_toolbar.reload(self.conn)
         self._apply_filter()
 
