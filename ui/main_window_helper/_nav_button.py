@@ -2,6 +2,10 @@
 ui/main_window_helper/_nav_button.py
 ===================================================
 [Refactor V3] إصلاح imports: ui.app_settings → ui.theme + ui.font + ui.constants
+
+[إصلاح ألوان] badge stylesheet يستخدم _C['danger'] و _C['bg_input']
+  بدل "#C0392B" و "#FFF" الـ hardcoded.
+  يُضاف _update_badge_style() لإعادة التطبيق عند تغيير الثيم.
 """
 
 from PyQt5.QtWidgets import (
@@ -54,13 +58,22 @@ class _NavButton(QPushButton):
         self._badge_lbl = QLabel(self._badge)
         self._badge_lbl.setVisible(bool(self._badge))
         self._badge_lbl.setAlignment(Qt.AlignCenter)
-        self._badge_lbl.setStyleSheet(
-            "QLabel{background:#C0392B;color:#FFF;font-size:8pt;font-weight:700;"
-            "padding:1px 6px;border-radius:8px;border:none;}"
-        )
+        # [إصلاح] _C['danger'] و _C['bg_input'] بدل "#C0392B" و "#FFF" hardcoded
+        self._apply_badge_style()
         lay.addWidget(self._txt_lbl, stretch=1)
         lay.addWidget(self._badge_lbl)
         lay.addWidget(self._ico_lbl)
+
+    def _apply_badge_style(self):
+        """
+        [إصلاح] يطبق badge stylesheet من _C الحالي.
+        يُستدعى من _build_content() وعند تغيير الثيم.
+        """
+        self._badge_lbl.setStyleSheet(
+            f"QLabel{{background:{_C['danger']};color:{_C['bg_input']};"
+            "font-size:8pt;font-weight:700;"
+            "padding:1px 6px;border-radius:8px;border:none;}"
+        )
 
     def set_badge(self, text):
         self._badge = text
@@ -127,3 +140,5 @@ class _NavButton(QPushButton):
         self.setFixedHeight(max(38, h))
         if not self._collapsed:
             self.setFixedWidth(SIDEBAR_EXPANDED_WIDTH - 16)
+        # [إصلاح] إعادة تطبيق badge style عند تغيير حجم الخط (قد يتغير الثيم أيضاً)
+        self._apply_badge_style()

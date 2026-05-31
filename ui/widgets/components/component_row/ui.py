@@ -13,6 +13,14 @@ ui/widgets/components/component_row/ui.py
     القديم: STYLE_ORPHAN = _orphan_style()  — يُحسب مرة عند import ويبقى قديماً
             عند تغيير الثيم.
     الجديد: get_orphan_style() → str  — يُحسب في كل استخدام من _C الحالي.
+
+  [إصلاح ألوان] استبدال WASTE_ZERO_BG/BORDER/COLOR/TEXT_COLOR الثوابت
+    بدوال waste_zero_bg() وغيرها من core/colors.
+    القديم: ثوابت hardcoded تتجمد عند import الأول.
+    الجديد: دوال تقرأ من _C الحالي — تعكس الثيم دائماً.
+
+  [إصلاح ألوان] _variant_cost_style و_variant_combo_style يستخدمان _C
+    بدل hardcoded positive colors مكررة.
 """
 
 from PyQt5.QtWidgets import (
@@ -24,11 +32,14 @@ from ui.theme import _C
 from ui.font  import fs, get_font_size
 from ui.widgets.utils.searchable_combo import SearchableCombo
 from ui.widgets.core.colors import (
-    waste_colors as _waste_colors,
-    waste_level  as _waste_level,
-    WASTE_TEXT_COLOR, WASTE_ZERO_BG, WASTE_ZERO_BORDER, WASTE_ZERO_COLOR,
-    status_colors as _status_colors,
-    card_colors   as _card_colors,
+    waste_colors      as _waste_colors,
+    waste_level       as _waste_level,
+    waste_zero_bg     as _waste_zero_bg,
+    waste_zero_border as _waste_zero_border,
+    waste_zero_color  as _waste_zero_color,
+    waste_text_color  as _waste_text_color,
+    status_colors     as _status_colors,
+    card_colors       as _card_colors,
 )
 
 # ── أنواع المكونات ─────────────────────────────────────────
@@ -72,25 +83,32 @@ STYLE_ORPHAN = _orphan_style()
 
 
 def _variant_combo_style() -> str:
-    s = _status_colors("success")
+    """
+    [إصلاح] يستخدم _C["input_positive_*"] بدل hardcoded green colors.
+    """
     base = get_font_size()
     return f"""
         QComboBox {{
-            background: {s['bg']}; border: 1px solid {s['border']};
+            background: {_C['input_positive_bg']};
+            border: 1px solid {_C['input_positive_border']};
             border-radius: 4px; padding: 1px 6px;
-            font-size: {fs(base, -1)}pt; color: {s['fg']};
+            font-size: {fs(base, -1)}pt;
+            color: {_C['input_positive_color']};
         }}
-        QComboBox:focus {{ border-color: {s['fg']}; }}
+        QComboBox:focus {{ border-color: {_C['input_positive_color']}; }}
         QComboBox::drop-down {{ border: none; }}
     """
 
 
 def _variant_cost_style() -> str:
-    s = _status_colors("success")
+    """
+    [إصلاح] يستخدم _C["input_positive_*"] بدل hardcoded green colors.
+    """
     base = get_font_size()
-    bg, border = _card_colors(s['fg'])
+    fg   = _C["input_positive_color"]
+    bg, border = _card_colors(fg)
     return (
-        f"font-size:{fs(base, -1)}pt; color:{s['fg']}; font-weight:bold;"
+        f"font-size:{fs(base, -1)}pt; color:{fg}; font-weight:bold;"
         f"background:{bg}; border:1px solid {border};"
         "border-radius:3px; padding:1px 5px;"
     )
@@ -121,16 +139,22 @@ def _op_row_combo_style() -> str:
 
 
 def _waste_zero_style() -> str:
+    """
+    [إصلاح] يستخدم دوال waste_zero_*() بدل ثوابت hardcoded.
+    الدوال تقرأ من _C الحالي — تعكس الثيم دائماً.
+    """
     base = get_font_size()
     return f"""
         QDoubleSpinBox {{
-            background: {WASTE_ZERO_BG}; border: 1px solid {WASTE_ZERO_BORDER};
+            background: {_waste_zero_bg()};
+            border: 1px solid {_waste_zero_border()};
             border-radius: 4px; padding: 1px 4px;
-            font-size: {fs(base, -1)}pt; color: {WASTE_ZERO_COLOR};
+            font-size: {fs(base, -1)}pt;
+            color: {_waste_zero_color()};
         }}
         QDoubleSpinBox:focus {{
             border-color: {_C['border_focus']}; background: {_C['bg_surface_2']};
-            color: {WASTE_TEXT_COLOR};
+            color: {_waste_text_color()};
         }}
     """
 
@@ -327,7 +351,9 @@ def _build_sub_row(widget, outer: QVBoxLayout):
 def update_waste_style(widget, val: float):
     """
     يحدّث ستايل الـ waste spinbox حسب القيمة.
-    يستخدم waste_colors من core/colors — لا hardcoded.
+
+    [إصلاح] يستخدم دوال waste_zero_*() و waste_text_color() من core/colors
+    بدل ثوابت hardcoded — الدوال تقرأ من _C الحالي وتعكس الثيم.
     """
     base = get_font_size()
     if val > 0:
@@ -337,7 +363,8 @@ def update_waste_style(widget, val: float):
             QDoubleSpinBox {{
                 background: {bg}; border: 1px solid {border};
                 border-radius: 4px; padding: 1px 4px;
-                font-size: {fs(base, -1)}pt; color: {WASTE_TEXT_COLOR}; font-weight: bold;
+                font-size: {fs(base, -1)}pt;
+                color: {_waste_text_color()}; font-weight: bold;
             }}
             QDoubleSpinBox:focus {{ border-color: {_C['warning']}; }}
         """)

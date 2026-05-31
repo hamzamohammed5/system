@@ -81,6 +81,18 @@ _LIGHT_THEME: Dict[str, str] = {
     "orange":        "#e65100",
     "orange_bg":     "#fff3e0",
     "orange_border": "#ffcc80",
+
+    # ── Waste (نسبة الهادر) ──────────────────────────────
+    "waste_zero_bg":         "#f5f5f5",
+    "waste_zero_border":     "#e0e0e0",
+    "waste_zero_color":      "#999999",
+
+    # ── Input states ─────────────────────────────────────
+    "input_error_bg":        "#fef2f2",
+    "input_error_border":    "#f87171",
+    "input_positive_bg":     "#f0fdf4",
+    "input_positive_border": "#86efac",
+    "input_positive_color":  "#15803d",
 }
 
 _DARK_THEME: Dict[str, str] = {
@@ -129,6 +141,18 @@ _DARK_THEME: Dict[str, str] = {
     "orange":        "#FFB74D",
     "orange_bg":     "#281400",
     "orange_border": "#503000",
+
+    # ── Waste (نسبة الهادر) ──────────────────────────────
+    "waste_zero_bg":         "#2a2a2a",
+    "waste_zero_border":     "#3a3a3a",
+    "waste_zero_color":      "#666666",
+
+    # ── Input states ─────────────────────────────────────
+    "input_error_bg":        "#2a1010",
+    "input_error_border":    "#e57373",
+    "input_positive_bg":     "#0a2018",
+    "input_positive_border": "#66bb8a",
+    "input_positive_color":  "#66bb8a",
 }
 
 THEMES: Dict[str, Dict[str, str]] = {

@@ -8,17 +8,27 @@ ui/widgets/core/colors.py
     بدل dict ثابت بـ hardcoded hex.
     هذا يضمن التزامن الكامل — لو غيّرت لون في _C
     يتغير تلقائياً في كل مكان يستخدم status_colors().
-  - CARD_PALETTE لم يتغير — هو مصدر ألوان الكروت المستقل.
 
-  [تحسين 10] تحقق من circular imports:
-    هذا الملف لا يستورد من أي ملف يستورد منه — آمن.
-
-  [إصلاح] status_colors() كانت تستورد من ui.app_settings (غير موجود كملف مستقل).
+  - [إصلاح] status_colors() كانت تستورد من ui.app_settings (غير موجود كملف مستقل).
     المصدر الصحيح هو ui.theme حيث يُعرَّف _C.
     تغيير: from ui.app_settings import _C → from ui.theme import _C
+
+  - [إصلاح ألوان] حذف _PURPLE_FALLBACK/_ORANGE_FALLBACK وغيرها —
+    كانت مكررة من theme_manager.py. status_colors() تستخدم _C.get() مباشرة
+    مع fallback من نفس الـ dict بدل ثوابت hardcoded منفصلة.
+
+  - [إصلاح waste] WASTE_ZERO_BG/BORDER/COLOR/TEXT_COLOR أصبحت دوال
+    تقرأ من _C بدل ثوابت hardcoded تتجمد عند أول import.
+    الاستخدام: waste_zero_bg() بدل WASTE_ZERO_BG.
+
+  - [إصلاح card_colors] إضافة _DARK_CARD_PALETTE و card_colors()
+    تتحقق من الثيم الحالي تلقائياً.
+
+  - [تحسين 10] تحقق من circular imports:
+    هذا الملف لا يستورد من أي ملف يستورد منه — آمن.
 """
 
-# ── لوحة ألوان البطاقات (لون → (خلفية، حدود)) ──────────────────────────
+# ── لوحة ألوان البطاقات — Light Theme ────────────────────────────────────────
 CARD_PALETTE: dict[str, tuple[str, str]] = {
     # أزرق
     "#1565c0": ("#e8f0fe", "#90caf9"),
@@ -65,19 +75,67 @@ CARD_PALETTE: dict[str, tuple[str, str]] = {
     "#5d4037": ("#efebe9", "#bcaaa4"),
 }
 
-_FALLBACK: tuple[str, str] = ("#f5f5f5", "#e0e0e0")
+# ── لوحة ألوان البطاقات — Dark Theme ─────────────────────────────────────────
+_DARK_CARD_PALETTE: dict[str, tuple[str, str]] = {
+    # أزرق
+    "#1565c0": ("#1a2a3a", "#2a4a6a"),
+    "#0d47a1": ("#152030", "#1e3a5f"),
+    "#1d4ed8": ("#1a2540", "#2a4080"),
+    "#1e40af": ("#1a2540", "#2a4080"),
+    "#0891b2": ("#0a2830", "#1a5060"),
+    "#0369a1": ("#0a2030", "#1a4060"),
+    # أخضر
+    "#10b981": ("#0a2820", "#1a5040"),
+    "#2e7d32": ("#0a2010", "#1a4020"),
+    "#065f46": ("#0a2818", "#1a5030"),
+    "#15803d": ("#0a2018", "#1a4030"),
+    "#16a34a": ("#0a2018", "#1a4030"),
+    # أحمر
+    "#ef4444": ("#2a1010", "#5a2020"),
+    "#dc2626": ("#2a1010", "#5a2020"),
+    "#c62828": ("#281010", "#4a1818"),
+    "#991b1b": ("#2a1010", "#4a1818"),
+    "#b91c1c": ("#2a1010", "#4a1818"),
+    # برتقالي / أصفر
+    "#f59e0b": ("#2a2000", "#4a3800"),
+    "#e65100": ("#281400", "#503000"),
+    "#b45309": ("#281c00", "#4a3400"),
+    "#d97706": ("#281c00", "#4a3400"),
+    "#ea580c": ("#281800", "#503800"),
+    # رمادي
+    "#6b7280": ("#1e2028", "#2e3040"),
+    "#374151": ("#1a1c24", "#2a2e38"),
+    "#9ca3af": ("#1e2028", "#2e3040"),
+    "#555555": ("#1e1e1e", "#2e2e2e"),
+    "#555":    ("#1e1e1e", "#2e2e2e"),
+    "#4b5563": ("#1a1c24", "#2a2e38"),
+    # بنفسجي / وردي
+    "#8b5cf6": ("#1a1028", "#3a2060"),
+    "#6d28d9": ("#180c28", "#301860"),
+    "#6a1b9a": ("#1a0828", "#3a1060"),
+    "#7c3aed": ("#1a0c2a", "#341860"),
+    "#9333ea": ("#1c0a28", "#3c1860"),
+    "#db2777": ("#280a18", "#501830"),
+    "#be185d": ("#280a18", "#501830"),
+    # بني
+    "#4e342e": ("#201010", "#3a1c18"),
+    "#5d4037": ("#221210", "#3c1e18"),
+}
 
-# ── Fallback ثوابت للألوان غير الموجودة في _C بعد ──────────────────────────
-_PURPLE_FALLBACK        = "#6a1b9a"
-_PURPLE_BG_FALLBACK     = "#f3e5f5"
-_PURPLE_BORDER_FALLBACK = "#ce93d8"
-_ORANGE_FALLBACK        = "#e65100"
-_ORANGE_BG_FALLBACK     = "#fff3e0"
-_ORANGE_BORDER_FALLBACK = "#ffcc80"
+_FALLBACK: tuple[str, str] = ("#f5f5f5", "#e0e0e0")
+_FALLBACK_DARK: tuple[str, str] = ("#2a2a2a", "#3a3a3a")
 
 
 def card_colors(color: str) -> tuple[str, str]:
-    """يرجع (bg, border) للون المعطى، أو الـ fallback لو مش موجود."""
+    """
+    يرجع (bg, border) للون المعطى حسب الثيم الحالي.
+
+    [إصلاح] يتحقق من theme_manager.is_dark تلقائياً —
+    لو dark يرجع _DARK_CARD_PALETTE، وإلا CARD_PALETTE.
+    """
+    from ui.theme_manager import theme_manager
+    if theme_manager.is_dark:
+        return _DARK_CARD_PALETTE.get(color, _FALLBACK_DARK)
     return CARD_PALETTE.get(color, _FALLBACK)
 
 
@@ -90,6 +148,10 @@ def status_colors(level: str) -> dict[str, str]:
     [إصلاح] استبدال `from ui.app_settings import _C` بـ `from ui.theme import _C`.
     ui.app_settings ليس ملفاً مستقلاً — _C معرَّف في ui.theme وهو المصدر الوحيد.
     الـ import داخل الدالة (lazy) مقصود لتجنب circular imports — لا تنقله خارجها.
+
+    [إصلاح fallbacks] حذف _PURPLE_FALLBACK/_ORANGE_FALLBACK وغيرها —
+    كانت hardcoded مكررة من theme_manager. الـ fallback الآن من نفس _C
+    (يرجع neutral عوضاً عن hardcoded hex).
     """
     from ui.theme import _C  # [إصلاح] المصدر الصحيح بدل ui.app_settings
 
@@ -125,30 +187,60 @@ def status_colors(level: str) -> dict[str, str]:
             "border": _C["accent_mid"],
         },
         "purple": {
-            "fg":     _C.get("purple",        _PURPLE_FALLBACK),
-            "bg":     _C.get("purple_bg",     _PURPLE_BG_FALLBACK),
-            "border": _C.get("purple_border", _PURPLE_BORDER_FALLBACK),
+            # [إصلاح] _C.get() مع fallback من نفس _C — لا hardcoded fallback
+            "fg":     _C.get("purple",        _C["text_sec"]),
+            "bg":     _C.get("purple_bg",     _C["bg_surface_2"]),
+            "border": _C.get("purple_border", _C["border"]),
         },
         "orange": {
-            "fg":     _C.get("orange",        _ORANGE_FALLBACK),
-            "bg":     _C.get("orange_bg",     _ORANGE_BG_FALLBACK),
-            "border": _C.get("orange_border", _ORANGE_BORDER_FALLBACK),
+            # [إصلاح] _C.get() مع fallback من نفس _C — لا hardcoded fallback
+            "fg":     _C.get("orange",        _C["warning"]),
+            "bg":     _C.get("orange_bg",     _C["warning_bg"]),
+            "border": _C.get("orange_border", _C["warning_border"]),
         },
     }
     return _map.get(level, _map["neutral"])
 
 
-# ── ألوان نسبة الهادر (waste) ─────────────────────────────────────────────
+# ── ألوان نسبة الهادر (waste) ─────────────────────────────────────────────────
+# [إصلاح] WASTE_COLORS يبقى كـ dict ثابت — هو palette مستقل للمستويات
+# وليس ألوان UI تتأثر بالثيم مباشرة.
 WASTE_COLORS: dict[str, tuple[str, str]] = {
     "high":   ("#ffcdd2", "#e53935"),   # >= 20%
     "medium": ("#ffe0b2", "#f57c00"),   # >= 10%
     "low":    ("#fff8e1", "#ffe082"),   # > 0%
 }
 
-WASTE_ZERO_BG     = "#f5f5f5"
-WASTE_ZERO_BORDER = "#e0e0e0"
-WASTE_ZERO_COLOR  = "#999"
-WASTE_TEXT_COLOR  = "#e65100"
+
+def waste_zero_bg() -> str:
+    """
+    [إصلاح] دالة بدل ثابت — تقرأ من _C الحالي عند كل استدعاء.
+    القديم: WASTE_ZERO_BG = "#f5f5f5" (يتجمد عند import)
+    الجديد: waste_zero_bg() → _C["waste_zero_bg"] (يعكس الثيم الحالي دائماً)
+    """
+    from ui.theme import _C
+    return _C["waste_zero_bg"]
+
+
+def waste_zero_border() -> str:
+    """دالة بدل ثابت — تقرأ waste_zero_border من _C."""
+    from ui.theme import _C
+    return _C["waste_zero_border"]
+
+
+def waste_zero_color() -> str:
+    """دالة بدل ثابت — تقرأ waste_zero_color من _C."""
+    from ui.theme import _C
+    return _C["waste_zero_color"]
+
+
+def waste_text_color() -> str:
+    """
+    دالة بدل ثابت — تقرأ orange من _C.
+    WASTE_TEXT_COLOR كان "#e65100" = _C['orange'] في light theme.
+    """
+    from ui.theme import _C
+    return _C["orange"]
 
 
 def waste_level(pct: float) -> str:
@@ -162,4 +254,4 @@ def waste_level(pct: float) -> str:
 def waste_colors(pct: float) -> tuple[str, str]:
     """يرجع (bg, border) حسب نسبة الهادر."""
     level = waste_level(pct)
-    return WASTE_COLORS.get(level, (WASTE_ZERO_BG, WASTE_ZERO_BORDER))
+    return WASTE_COLORS.get(level, (waste_zero_bg(), waste_zero_border()))
