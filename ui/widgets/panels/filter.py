@@ -1,27 +1,23 @@
 """
-widgets/panels/filter.py
+ui/widgets/panels/filter.py
 =========================
 FilterToolbar — شريط فلاتر موحد (بحث + تصنيف + تاريخ).
 
 التغييرات:
+  - [إصلاح imports] استبدال ui.theme/ui.font بـ ui.app_settings
+  - [إصلاح imports] استبدال ..utils.ui_utils بـ ..utils.signals (الصح)
+  - [إصلاح imports] استبدال ..styles بـ ..theme.styles
   - [إصلاح 14] FilterToolbar تستمع لـ bus.company_data_changed.
-    القديم: FilterToolbar لا تُحدّث categories عند تغيير الشركة
-    لأنها لا ترث BusConnectedMixin ولا تستمع لأي bus event.
-    الجديد: اشتراك في bus.company_data_changed يُعيد تحميل
-    التصنيفات تلقائياً مع الـ connection الجديد من company_state.
-
   - [تحسين 16] reload() تُحدّث conn ثم تُعيد تحميل التصنيفات.
-    هذا كان موجوداً بالفعل لكن لم يكن يُستدعى عند تغيير الشركة.
 """
 from PyQt5.QtWidgets import (
     QWidget, QHBoxLayout, QLabel, QPushButton, QComboBox,
 )
 from PyQt5.QtCore import QDate, pyqtSignal
 
-from ui.theme import _C
-from ui.font  import get_font_size, fs
-from ..utils.ui_utils   import blocked_signals
-from ..styles           import input_style
+from ...font import fs, get_font_size
+from ...theme import _C
+from ..utils.signals   import blocked_signals
 
 
 def _combo_style() -> str:
@@ -65,8 +61,6 @@ class FilterToolbar(QWidget):
         self._show_date    = show_date
         self._show_presets = show_presets
         self._build(placeholder)
-
-        # [إصلاح 14] الاستماع لتغيير الشركة لإعادة تحميل التصنيفات
         self._connect_company_bus()
 
     # ── بناء ──────────────────────────────────────────────
@@ -146,26 +140,13 @@ class FilterToolbar(QWidget):
     # ── [إصلاح 14] ربط الـ bus ────────────────────────────
 
     def _connect_company_bus(self):
-        """
-        [إصلاح 14] يستمع لـ bus.company_data_changed لإعادة تحميل
-        التصنيفات تلقائياً عند تغيير الشركة النشطة.
-
-        يستخدم الـ conn الجديد من company_state مباشرة،
-        لأن self._conn قد يصبح قديماً بعد تغيير الشركة.
-        """
         try:
             from ui.events import bus
             bus.company_data_changed.connect(self._on_company_changed)
         except Exception:
-            pass  # bus غير متاح — مقبول
+            pass
 
     def _on_company_changed(self, company_id: int):
-        """
-        [إصلاح 14] يُعيد تحميل التصنيفات مع الـ connection الجديد.
-
-        يحاول جلب الـ connection من company_state مباشرة،
-        لأنه الأحدث بعد تغيير الشركة.
-        """
         if self.cmb_cat is None:
             return
         try:
@@ -200,10 +181,7 @@ class FilterToolbar(QWidget):
                     break
 
     def reload(self, conn=None):
-        """
-        [تحسين 16] يُحدّث conn ثم يُعيد تحميل التصنيفات.
-        استدعه من BaseListPanel._on_data_changed أو عند تغيير الشركة.
-        """
+        """[تحسين 16] يُحدّث conn ثم يُعيد تحميل التصنيفات."""
         if conn:
             self._conn = conn
         self._reload_categories()
