@@ -15,8 +15,9 @@ from PyQt5.QtWidgets import (
 from PyQt5.QtCore import Qt, QDate
 from PyQt5.QtGui  import QFont
 
-from ui.app_settings import _C, fs
-from ..core          import get_font_size
+from ui.theme import _C
+from ui.font  import fs, get_font_size
+from ..core          import get_font_size as _get_font_size
 from ..theme.styles  import input_style as _input_style, spinbox_style as _spinbox_style
 
 

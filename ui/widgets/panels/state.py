@@ -4,7 +4,7 @@ ui/widgets/panels/state.py
 EmptyState + EmptyPanelState + table empty state helpers.
 
 التغييرات:
-  - [إصلاح imports] استبدال ui.theme/ui.font بـ ui.app_settings
+  - [إصلاح imports] استبدال relative imports بـ absolute imports
   - [i18n/themes] EmptyState تحفظ reference للـ title label للتحديث المباشر.
   - [تحسين 6 محفوظ] get_font_size() تُستدعى مرة واحدة.
 """
@@ -15,8 +15,8 @@ from PyQt5.QtWidgets import (
 from PyQt5.QtCore import Qt, pyqtSignal
 from PyQt5.QtGui  import QColor, QFont
 
-from ...font import fs, get_font_size
-from ...theme import _C
+from ui.font  import fs, get_font_size
+from ui.theme import _C
 from ..core.colors import card_colors, status_colors
 
 

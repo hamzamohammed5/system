@@ -15,7 +15,8 @@ from PyQt5.QtWidgets import (
     QPushButton, QSizePolicy, QLabel, QDoubleSpinBox, QFrame,
 )
 
-from ui.app_settings import _C, fs, get_font_size
+from ui.theme import _C
+from ui.font  import fs, get_font_size
 from ui.widgets.utils.searchable_combo import SearchableCombo
 from ui.widgets.core.colors import (
     waste_colors as _waste_colors,
@@ -193,7 +194,6 @@ def _build_variant_widgets(widget, layout: QHBoxLayout):
 
 
 def _build_qty_widget(widget, qty: float, layout: QHBoxLayout):
-    base = get_font_size()
     widget.qty_edit = QLineEdit()
     widget.qty_edit.setPlaceholderText("الكمية")
     widget.qty_edit.setSizePolicy(QSizePolicy.Preferred, QSizePolicy.Fixed)

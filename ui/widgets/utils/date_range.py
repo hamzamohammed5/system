@@ -6,7 +6,8 @@ DateRangeFilter — فلتر نطاق التاريخ الموحد.
 from PyQt5.QtWidgets import QWidget, QHBoxLayout, QLabel, QDateEdit, QPushButton
 from PyQt5.QtCore    import QDate, pyqtSignal
 
-from ui.app_settings     import _C, fs, get_font_size
+from ui.theme            import _C
+from ui.font             import fs, get_font_size
 from ..utils.signals     import blocked_signals
 from ..components.button import make_btn
 
@@ -36,7 +37,6 @@ class DateRangeFilter(QWidget):
             d.setDate(default)
             d.setFixedWidth(width)
             d.setMinimumHeight(height)
-            # ← استخدام _C بدل raw CSS strings hardcoded
             base = get_font_size()
             d.setStyleSheet(f"""
                 QDateEdit {{
@@ -74,14 +74,12 @@ class DateRangeFilter(QWidget):
             for label, slot in [("اليوم", self._preset_today),
                                  ("الشهر", self._preset_month),
                                  ("العام",  self._preset_year)]:
-                # ← استخدام make_btn بدل raw QPushButton + stylesheet hardcoded
                 btn = make_btn(label, "normal")
                 btn.setMinimumHeight(height)
                 btn.clicked.connect(slot)
                 lay.addWidget(btn)
 
     def _set_range(self, from_date: QDate, to_date: QDate):
-        # ← استخدام blocked_signals بدل blockSignals يدوي
         with blocked_signals(self.dt_from, self.dt_to):
             self.dt_from.setDate(from_date)
             self.dt_to.setDate(to_date)

@@ -30,8 +30,8 @@ from PyQt5.QtWidgets import (
 from PyQt5.QtCore import Qt
 from PyQt5.QtGui  import QFont
 
-from ui.app_settings import _C, fs
-from ui.app_settings import get_font_size
+from ui.theme import _C
+from ui.font  import fs, get_font_size
 from ..core.colors   import status_colors
 
 

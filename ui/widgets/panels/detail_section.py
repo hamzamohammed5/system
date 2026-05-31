@@ -6,7 +6,7 @@ TwoColDetails  — عرض في عمودين.
 make_detail_row — دالة سريعة.
 
 التغييرات:
-  - [إصلاح imports] استبدال ui.theme/ui.font بـ ui.app_settings
+  - [إصلاح imports] استبدال relative imports بـ absolute imports
   - [تحسين 19 محفوظ] set_data ترجع dict[str, QLabel] للتحديث المباشر.
   - [تحسين 44] set_data تدعم clear_missing=True لإخفاء الصفوف الزائدة.
 """
@@ -16,8 +16,8 @@ from PyQt5.QtWidgets import (
 )
 from PyQt5.QtCore import Qt
 
-from ...font import fs, get_font_size
-from ...theme import _C
+from ui.font  import fs, get_font_size
+from ui.theme import _C
 from ..components.headers import SectionHeader
 
 
