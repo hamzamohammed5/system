@@ -4,16 +4,14 @@ widgets/combo/category.py
 CategoryCombo — QComboBox للتصنيفات الهرمية.
 
 الإصلاحات:
-  - [إصلاح 2] CategoryCombo الآن يسمع لـ bus.company_data_changed
-    الكود الجديد يبعت company_data_changed بدل data_changed،
-    فالـ combo لم يكن يتحدث عند تغيير البيانات عبر النهج الجديد.
-    الحل: ربط الاتنين معاً — data_changed للتوافق القديم،
-    company_data_changed للنهج الجديد.
-
-  - [FIX-14] إضافة Qt.UniqueConnection لكل ربط bus
-    لمنع تسجيل مضاعف للـ signals عند إنشاء instances متعددة أو
-    عند إضافة widget لـ layout جديدة دون حذف القديم.
+  - [إصلاح 2] CategoryCombo يسمع لـ bus.company_data_changed إضافةً لـ data_changed.
+  - [FIX-14] Qt.UniqueConnection على كل ربط bus لمنع التسجيل المضاعف.
+  - [إصلاح memory leak] استبدال lambda تحمل self بـ weakref لمنع تعلق الـ widget
+    في الذاكرة بعد حذفه. Lambda كانت تحمل reference قوي لـ self يمنع
+    garbage collection حتى بعد إزالة الـ widget من الـ UI.
 """
+import weakref
+
 from PyQt5.QtWidgets import QComboBox
 from PyQt5.QtCore    import Qt
 from PyQt5.QtGui     import QColor
@@ -59,6 +57,15 @@ class CategoryCombo(QComboBox, LiveConnMixin):
     [إصلاح 2] يسمع الآن لـ company_data_changed إضافةً لـ data_changed.
 
     [FIX-14] Qt.UniqueConnection على كل ربط bus لمنع التسجيل المضاعف.
+
+    [إصلاح memory leak] استخدام weakref بدل lambda لـ company_data_changed.
+      القديم:
+          bus.company_data_changed.connect(
+              lambda _: self.refresh(), Qt.UniqueConnection
+          )
+      المشكلة: lambda تحمل reference قوي لـ self — يمنع garbage collection
+               للـ widget بعد حذفه من الـ UI.
+      الحل: weakref يسمح للـ widget بالحذف، والـ slot يتحقق أولاً قبل الاستدعاء.
     """
 
     def __init__(self, conn, scope: str = "all", parent=None):
@@ -66,11 +73,24 @@ class CategoryCombo(QComboBox, LiveConnMixin):
         self.conn  = conn
         self.scope = scope
         self.refresh()
+
         # [FIX-14] UniqueConnection يمنع التسجيل المضاعف
         bus.data_changed.connect(self.refresh, Qt.UniqueConnection)
+
+        # [إصلاح memory leak] weakref بدل lambda
+        _weak = weakref.ref(self)
+
+        def _on_company_data_changed(_cid: int):
+            obj = _weak()
+            if obj is not None:
+                obj.refresh()
+
+        # نحفظ مرجع الـ slot لأن weakref لا يحمي الـ closure من الـ GC
+        self._company_data_slot = _on_company_data_changed
+
         # [إصلاح 2] ربط bus.company_data_changed — النهج الجديد
         bus.company_data_changed.connect(
-            lambda _: self.refresh(), Qt.UniqueConnection
+            self._company_data_slot, Qt.UniqueConnection
         )
 
     def refresh(self):

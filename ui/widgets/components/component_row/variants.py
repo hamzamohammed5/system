@@ -7,6 +7,15 @@ VariantsMixin — منطق تحميل وعرض variants الخامة في Compon
   - _is_widget_deleted() مشتركة من widget.py بدل _safe_deleted() المحلية
   - blocked_signals() من utils/signals بدل blockSignals المكررة
   - أسماء أوضح للدوال الداخلية
+
+  [إصلاح هيكلة] استبدال imports من db/ مباشرة بـ services/costing/variant_service.
+    القديم: from db.costing.raw_variants_repo import fetch_variants_for_item
+            from db.costing.raw_variants_repo import fetch_variant
+            + SQL مباشر: conn.execute("SELECT price FROM items WHERE id=?", ...)
+    الجديد: from services.costing.variant_service import (
+                get_variants_for_item, get_variant_unit_cost, get_item_price
+            )
+    الهيكل الصحيح: widget → service → repo (db/)
 """
 
 
@@ -50,12 +59,13 @@ class VariantsMixin:
     # ── منطق داخلي ────────────────────────────────────────
 
     def _fetch_variants(self, item_id: int) -> list:
+        """[إصلاح] يستخدم variant_service بدل db import مباشر."""
         try:
-            from db.costing.raw_variants_repo import fetch_variants_for_item
+            from services.costing.variant_service import get_variants_for_item
             conn = self._get_conn()
             if conn is None:
                 return []
-            return fetch_variants_for_item(conn, item_id)
+            return get_variants_for_item(conn, item_id)
         except Exception:
             return []
 
@@ -66,7 +76,6 @@ class VariantsMixin:
 
         item_price = self._get_item_price(item_id)
 
-        # blocked_signals يغني عن blockSignals(True/False) المكررة
         with blocked_signals(self.cmb_variant):
             self.cmb_variant.clear()
             self.cmb_variant.addItem("─ بدون variant ─", None)
@@ -115,19 +124,13 @@ class VariantsMixin:
 
     def _calc_variant_unit_cost(self, variant_id: int,
                                  item_id: int) -> "float | None":
+        """[إصلاح] يستخدم variant_service بدل db import مباشر."""
         try:
-            from db.costing.raw_variants_repo import fetch_variant
+            from services.costing.variant_service import get_variant_unit_cost
             conn = self._get_conn()
             if not conn:
                 return None
-            var = fetch_variant(conn, variant_id)
-            if not var:
-                return None
-            item_price = self._get_item_price(item_id)
-            pieces     = float(var["pieces"])
-            if pieces > 0 and item_price > 0:
-                return item_price / pieces
-            return None
+            return get_variant_unit_cost(conn, variant_id, item_id)
         except Exception:
             return None
 
@@ -142,14 +145,12 @@ class VariantsMixin:
         return None
 
     def _get_item_price(self, item_id: int) -> float:
+        """[إصلاح] يستخدم variant_service بدل SQL مباشر في الـ widget."""
         try:
+            from services.costing.variant_service import get_item_price
             conn = self._get_conn()
             if conn:
-                row = conn.execute(
-                    "SELECT price FROM items WHERE id=?", (item_id,)
-                ).fetchone()
-                if row:
-                    return float(row["price"])
+                return get_item_price(conn, item_id)
         except Exception:
             pass
         return 0.0

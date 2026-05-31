@@ -5,6 +5,9 @@ Delegates وأدوات word-wrap للجداول.
 
 [Refactor V3 — المرحلة 3] refresh_tooltips تُستورد من utils/tooltip
 بدل تعريف مكرر هنا.
+
+[إصلاح] حذف re-export لـ refresh_tooltips — كل من يحتاجها يستورد مباشرة:
+    from ui.widgets.utils.tooltip import refresh_tooltips
 """
 from PyQt5.QtWidgets import (
     QStyledItemDelegate, QStyle, QApplication,
@@ -13,9 +16,6 @@ from PyQt5.QtWidgets import (
 )
 from PyQt5.QtCore import Qt, QSize, QRect
 from PyQt5.QtGui  import QFontMetrics, QPainter, QTextOption
-
-# [المرحلة 3] استيراد بدل تكرار
-from ..utils.tooltip import refresh_tooltips  # noqa: F401
 
 
 class WrapDelegate(QStyledItemDelegate):

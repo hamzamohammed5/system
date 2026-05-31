@@ -3,14 +3,12 @@ ui/widgets/dialogs/settings_dialog.py
 ======================================
 نافذة الإعدادات — حجم الخط + مسار GIMP + وحدات القياس + الثيم + اللغة.
 
-[نُقل من ui/settings_dialog.py]
+[إصلاح] الاستيراد من unit_service مباشرة بدل combo/unit.py (re-export):
+  قبل: from ui.widgets.combo.unit import load_units, add_unit, ...
+  بعد: from ui.widgets.combo.unit_service import load_units, add_unit, ...
 
-التغييرات:
-  - [i18n / themes] _save() يُطلق bus.language_changed عند تغيير اللغة،
-    بالإضافة لـ bus.theme_changed الذي يُطلق من theme_manager.set_theme() تلقائياً.
-  - [تحسين 11 محفوظ] _get_settings_conn و_show_no_company_notice.
-  - [A-05] دمج _get_settings_conn و_has_active_company في دالة واحدة
-    بدل استدعاء company_state.is_ready مرتين في _load_settings.
+  combo/unit.py يُعيد تصدير هذه الدوال من unit_service.py،
+  فالأفضل الاستيراد من المصدر مباشرة لتجنب الاعتماد على re-exports غير مباشرة.
 """
 
 import os
@@ -28,7 +26,8 @@ from PyQt5.QtWidgets import (
 from ui.font  import get_font_size, set_font_size, apply_font, fs
 from ui.theme import _C
 
-from ui.widgets.combo.unit import (
+# [إصلاح] استيراد من المصدر مباشرة بدل re-export من combo/unit.py
+from ui.widgets.combo.unit_service import (
     load_units, add_unit, remove_unit,
     reset_units_to_default, _DEFAULT_UNITS,
 )
@@ -40,13 +39,6 @@ from ui.widgets.components.button import make_btn
 def _get_settings_conn_and_status() -> "tuple":
     """
     [A-05] يرجع (conn, has_active_company) في استدعاء واحد.
-
-    يُقرأ company_state.is_ready مرة واحدة فقط بدل مرتين.
-
-    Returns:
-        (conn, has_active_company)
-        conn              : ProtectedConnection أو None
-        has_active_company: True لو توجد شركة نشطة
     """
     try:
         from db.companies.company_state import company_state
@@ -59,17 +51,13 @@ def _get_settings_conn_and_status() -> "tuple":
 
 
 def _get_settings_conn():
-    """
-    [للتوافق مع الكود القديم] يرجع الـ connection فقط.
-    """
+    """[للتوافق مع الكود القديم] يرجع الـ connection فقط."""
     conn, _ = _get_settings_conn_and_status()
     return conn
 
 
 def _has_active_company() -> bool:
-    """
-    [للتوافق مع الكود القديم] يتحقق بسرعة من وجود شركة نشطة.
-    """
+    """[للتوافق مع الكود القديم] يتحقق بسرعة من وجود شركة نشطة."""
     _, has_company = _get_settings_conn_and_status()
     return has_company
 
@@ -95,7 +83,6 @@ class SettingsDialog(QDialog):
         outer.setContentsMargins(0, 0, 0, 0)
         outer.setSpacing(0)
 
-        # ── Tabs ──
         self._tabs = QTabWidget()
         self._tabs.setStyleSheet(f"""
             QTabWidget::pane {{
@@ -129,7 +116,6 @@ class SettingsDialog(QDialog):
         self._tabs.addTab(self._build_gimp_tab(),    "🖼️  GIMP")
         outer.addWidget(self._tabs, stretch=1)
 
-        # ── شريط الأزرار ──
         btn_bar = QWidget()
         btn_bar.setStyleSheet(
             f"background:{_C['bg_surface']}; border-top:1px solid {_C['border']};"
@@ -249,7 +235,6 @@ class SettingsDialog(QDialog):
 
         lay.addWidget(grp)
 
-        # ── معاينة الألوان ──
         preview_grp     = QGroupBox("معاينة الألوان")
         preview_grp_lay = QHBoxLayout(preview_grp)
         preview_grp_lay.setSpacing(6)
@@ -495,9 +480,6 @@ class SettingsDialog(QDialog):
     # ══════════════════════════════════════════════════════
 
     def _load_settings(self):
-        """
-        [A-05] يستخدم _get_settings_conn_and_status() بدل استدعاءين منفصلين.
-        """
         conn, has_company = _get_settings_conn_and_status()
 
         if not has_company or conn is None:
@@ -514,7 +496,6 @@ class SettingsDialog(QDialog):
         self._reload_units_list()
 
     def _show_no_company_notice(self):
-        """[تحسين 11] يُظهر تنبيهاً في تبويب الوحدات وGIMP عند غياب الشركة."""
         base = get_font_size()
         from ui.widgets.core.colors import status_colors
         s = status_colors("warning")
@@ -675,19 +656,16 @@ class SettingsDialog(QDialog):
     def _save(self):
         from ui.events import bus
 
-        # ── حجم الخط ──
         size = self._slider.value()
         set_font_size(size)
         apply_font(self._app, size)
         bus.font_changed.emit(size)
 
-        # ── الثيم ──
         selected_theme = self._get_selected_theme()
         from ui.theme_manager import theme_manager
         if selected_theme != theme_manager.current_theme:
             theme_manager.set_theme(selected_theme, save=True)
 
-        # ── اللغة ──
         selected_lang = self._get_selected_lang()
         from ui.widgets.core.i18n import i18n_manager
         if selected_lang != i18n_manager.language:
@@ -695,7 +673,6 @@ class SettingsDialog(QDialog):
             self._app.setLayoutDirection(i18n_manager.qt_direction)
             bus.language_changed.emit(selected_lang)
 
-        # ── GIMP path ──
         conn = _get_settings_conn()
         if conn:
             try:

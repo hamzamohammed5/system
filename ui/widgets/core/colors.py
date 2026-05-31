@@ -12,19 +12,10 @@ ui/widgets/core/colors.py
 
   [تحسين 10] تحقق من circular imports:
     هذا الملف لا يستورد من أي ملف يستورد منه — آمن.
-    لكن يستورد من ui.app_settings داخل status_colors() (lazy import).
-    لا تضف import مباشر خارج الدالة لتجنب circular imports
-    مع app_settings التي تستورد _C منها بعض ملفات أخرى.
 
-  [تحسين 10 تابع] purple/orange: أُضيفا الآن بالقراءة من _C مباشرة
-    مع fallback آمن لو المفاتيح مش موجودة في _C بعد.
-    لإضافتهم بالكامل لـ _C، أضف في app_settings:
-        "purple":        "#6a1b9a",
-        "purple_bg":     "#f3e5f5",
-        "purple_border": "#ce93d8",
-        "orange":        "#e65100",
-        "orange_bg":     "#fff3e0",
-        "orange_border": "#ffcc80",
+  [إصلاح] status_colors() كانت تستورد من ui.app_settings (غير موجود كملف مستقل).
+    المصدر الصحيح هو ui.theme حيث يُعرَّف _C.
+    تغيير: from ui.app_settings import _C → from ui.theme import _C
 """
 
 # ── لوحة ألوان البطاقات (لون → (خلفية، حدود)) ──────────────────────────
@@ -77,7 +68,6 @@ CARD_PALETTE: dict[str, tuple[str, str]] = {
 _FALLBACK: tuple[str, str] = ("#f5f5f5", "#e0e0e0")
 
 # ── Fallback ثوابت للألوان غير الموجودة في _C بعد ──────────────────────────
-# هذه القيم تُستخدم فقط إذا لم تُضَف المفاتيح لـ _C في app_settings
 _PURPLE_FALLBACK        = "#6a1b9a"
 _PURPLE_BG_FALLBACK     = "#f3e5f5"
 _PURPLE_BORDER_FALLBACK = "#ce93d8"
@@ -97,21 +87,11 @@ def status_colors(level: str) -> dict[str, str]:
     """
     يرجع dict ألوان الـ status (fg, bg, border) من _C.
 
-    التغيير: بدل STATUS_COLORS dict ثابت بـ hardcoded hex،
-    الدالة دي بتبني الـ map من _C في كل استدعاء.
-
-    الفايدة: لو غيّرت _C["danger"] في app_settings،
-    كل widget بيستخدم status_colors("danger") يتحدث تلقائياً
-    بدون ما تحتاج تعدل ملف تاني.
-
-    [تحسين 10] purple/orange: تُقرأ من _C مع fallback آمن.
-    لو أضفت المفاتيح لـ _C في app_settings يتحدث السلوك تلقائياً.
-    لو لم تُضَف بعد، يستخدم القيم الافتراضية الثابتة أعلاه.
-
-    ملاحظة الـ import: الـ import داخل الدالة (lazy) مقصود لتجنب
-    circular imports — لا تنقله خارج الدالة.
+    [إصلاح] استبدال `from ui.app_settings import _C` بـ `from ui.theme import _C`.
+    ui.app_settings ليس ملفاً مستقلاً — _C معرَّف في ui.theme وهو المصدر الوحيد.
+    الـ import داخل الدالة (lazy) مقصود لتجنب circular imports — لا تنقله خارجها.
     """
-    from ui.app_settings import _C
+    from ui.theme import _C  # [إصلاح] المصدر الصحيح بدل ui.app_settings
 
     _map: dict[str, dict[str, str]] = {
         "success": {
@@ -144,10 +124,6 @@ def status_colors(level: str) -> dict[str, str]:
             "bg":     _C["accent_light"],
             "border": _C["accent_mid"],
         },
-        # [تحسين 10] قراءة من _C مع fallback آمن
-        # أضف هذه المفاتيح لـ _C في app_settings للتزامن الكامل مع الثيم:
-        #   "purple": "#6a1b9a", "purple_bg": "#f3e5f5", "purple_border": "#ce93d8"
-        #   "orange": "#e65100", "orange_bg": "#fff3e0", "orange_border": "#ffcc80"
         "purple": {
             "fg":     _C.get("purple",        _PURPLE_FALLBACK),
             "bg":     _C.get("purple_bg",     _PURPLE_BG_FALLBACK),
@@ -163,7 +139,6 @@ def status_colors(level: str) -> dict[str, str]:
 
 
 # ── ألوان نسبة الهادر (waste) ─────────────────────────────────────────────
-# المصدر الوحيد — لا تعريف لهذه الألوان في أي ملف آخر
 WASTE_COLORS: dict[str, tuple[str, str]] = {
     "high":   ("#ffcdd2", "#e53935"),   # >= 20%
     "medium": ("#ffe0b2", "#f57c00"),   # >= 10%
