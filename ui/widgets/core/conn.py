@@ -136,18 +136,22 @@ class SafeConnMixin:
     Mixin متقدم يدعم إعادة الاتصال التلقائي.
 
     [إصلاح شرط مستحيل + إصلاح else branch]:
-    القديم:
+
+    القديم كان يحتوي على منطق خاطئ في الـ else branch:
         if self.__safe_db_name == "erp":
             new_conn = company_state.get_erp_conn()
         else:
             get_fn = getattr(company_state, "get_erp_conn", None)
-            if get_fn and self.__safe_db_name == "erp":  ← مستحيل! الـ else يعني != "erp"
+            if get_fn and self.__safe_db_name == "erp":  # ← مستحيل! الـ else يعني != "erp"
                 new_conn = get_fn()
             else:
-                _get = getattr(company_state, "_get_conn", None)
+                _get = getattr(company_state, "_get_conn", None)  # ← private API
                 new_conn = _get(self.__safe_db_name) if _get else None
 
-    الجديد: منطق مباشر — لو erp استخدم public API، وإلا استخدم _get_conn مع warning.
+    الجديد: منطق مباشر وصريح:
+        - لو db_name == "erp" → استخدم get_erp_conn() مباشرة (public API)
+        - لو غيره → جرّب _get_conn كـ fallback (مع تسجيل warning)،
+          ولو فشل جرّب erp كـ last resort
     """
 
     def _init_safe_conn(self, conn, db_name: str = "accounting"):
@@ -164,7 +168,7 @@ class SafeConnMixin:
             from db.companies.company_state import company_state
 
             if self.__safe_db_name == "erp":
-                # public API مباشرة
+                # public API مباشرة — الحالة الواضحة
                 new_conn = company_state.get_erp_conn()
             else:
                 # لأنواع DB الأخرى (accounting, etc.) — نحاول _get_conn كـ fallback
@@ -173,6 +177,7 @@ class SafeConnMixin:
                 if _get is not None:
                     new_conn = _get(self.__safe_db_name)
                 else:
+                    # لا يوجد طريقة للوصول لهذه الـ DB عبر public API
                     logger.warning(
                         "%s._get_safe_conn: no _get_conn on company_state for db '%s', "
                         "trying erp fallback",
@@ -180,7 +185,7 @@ class SafeConnMixin:
                     )
                     new_conn = company_state.get_erp_conn()
 
-                # لو _get_conn لم يُعطِ نتيجة، نحاول erp كـ last resort
+                # لو _get_conn لم يُعطِ نتيجة سليمة، نحاول erp كـ last resort
                 if not _test_conn(new_conn):
                     logger.warning(
                         "%s._get_safe_conn: no valid conn for db '%s', "
@@ -192,6 +197,7 @@ class SafeConnMixin:
             if _test_conn(new_conn):
                 self.__safe_conn = new_conn
                 return new_conn
+
         except Exception as e:
             logger.warning("%s._get_safe_conn: reconnect failed: %s",
                            type(self).__name__, e)
