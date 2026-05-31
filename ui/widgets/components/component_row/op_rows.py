@@ -110,7 +110,8 @@ class OpRowsMixin:
         [إصلاح] استخدام explicit `is not None` بدل `or`:
           القديم: `selected_row_id or self._init_... or self._pinned_...`
           المشكلة: `0 or x` يُعطي `x` في Python — أي ID = 0 يُتخطى خطأً.
-          الحل: فحص صريح يضمن أن 0 (لو حدث) يُعامَل كـ valid ID.
+          رغم أن SQLite IDs تبدأ من 1 عملياً، النمط نفسه خطر.
+          الحل: فحص صريح يضمن أن أي قيمة غير None (بما فيها 0) تُعامَل كـ valid.
         """
         if selected_row_id is not None:
             return selected_row_id
