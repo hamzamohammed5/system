@@ -1,443 +1,257 @@
-# تقرير المراجعة الشاملة — استكمال هيكلة النظام
+# خطة إصلاح الألوان الـ Hardcoded — المصدر الوحيد
 
 ## الهدف
+كل لون في التطبيق يجي من `ui/theme_manager.py` فقط.
+لو غيّرت الثيم من light لـ dark — كل الألوان تتغير تلقائياً.
+
+---
+
+## الوضع الحالي
+
+### 🔴 ملفات تحتاج إصلاح (4 ملفات)
+
+---
+
+### 1. `ui/widgets/core/colors.py`
+
+#### المشكلة أ — Fallbacks مكررة من الثيم
+```python
+# ❌ حالياً — مكرر من theme_manager.py
+_PURPLE_FALLBACK        = "#6a1b9a"   # = _C['purple']
+_PURPLE_BG_FALLBACK     = "#f3e5f5"   # = _C['purple_bg']
+_PURPLE_BORDER_FALLBACK = "#ce93d8"   # = _C['purple_border']
+_ORANGE_FALLBACK        = "#e65100"   # = _C['orange']
+_ORANGE_BG_FALLBACK     = "#fff3e0"   # = _C['orange_bg']
+_ORANGE_BORDER_FALLBACK = "#ffcc80"   # = _C['orange_border']
 ```
-widgets/ (base classes) → tabs/UI ──→ services/ ──→ repos/ (db/) ← schema/
+
+**الإصلاح:** احذفها — `status_colors()` تستخدم `_C.get("purple", _C["text_sec"])` مباشرة.
+
+---
+
+#### المشكلة ب — Waste colors hardcoded
+```python
+# ❌ حالياً
+WASTE_ZERO_BG     = "#f5f5f5"
+WASTE_ZERO_BORDER = "#e0e0e0"
+WASTE_ZERO_COLOR  = "#999"
+WASTE_TEXT_COLOR  = "#e65100"   # = _C['orange']
+```
+
+**الإصلاح:** تُضاف لـ `theme_manager.py` كمفاتيح جديدة:
+```python
+# في _LIGHT_THEME و _DARK_THEME
+"waste_zero_bg":     "#f5f5f5",   # dark: "#2a2a2a"
+"waste_zero_border": "#e0e0e0",   # dark: "#3a3a3a"
+"waste_zero_color":  "#999999",   # dark: "#666666"
+# waste_text_color يُستبدل بـ _C['orange'] الموجود
 ```
 
 ---
 
-## أولاً: ما اكتمل بالفعل في الكود الحالي
-
-- `op_rows.py` — `_determine_target_id` بـ `is not None` ✅
-- `list_panel.py` — `_timer.stop()` في `refresh()` ✅
-- `widget.py` — إخفاء `lbl_variant_cost` في `_on_type_changed` ✅
-- `conn.py` — `DualConnMixin._get_erp_conn` يستخدم `get_erp_conn()` ✅
-
----
-
-## ثانياً: إصلاحات مطلوبة
-
----
-
-### 🔴 1. `forms/inputs.py` — استيراد من ملف محذوف + استيراد مكرر
-
-**الملف:** `ui/widgets/forms/inputs.py` (doc 32)
-
-**المشكلتان:**
-
+#### المشكلة ج — `CARD_PALETTE` (30+ hardcoded hex pairs)
 ```python
-# السطر الحالي — خطأ (theme/styles.py محذوف بعد Refactor V3)
-from ..theme.styles import input_style as _input_style, spinbox_style as _spinbox_style
-
-# السطر الحالي — مكرر مع `from ui.font import get_font_size` أعلاه
-from ..core import get_font_size as _get_font_size
+CARD_PALETTE: dict[str, tuple[str, str]] = {
+    "#1565c0": ("#e8f0fe", "#90caf9"),
+    "#0d47a1": ("#e3f2fd", "#64b5f6"),
+    # ... 30+ entries
+}
 ```
 
-**الإصلاح:**
+**القرار:** يبقى في `colors.py` — لكن يُضاف `_DARK_CARD_PALETTE` بديل للـ dark theme.
+
+**الإصلاح:** `card_colors()` تتحقق من الثيم الحالي:
 ```python
-# صح
-from ..theme.input_styles import input_style as _input_style, spinbox_style as _spinbox_style
-# حذف السطر الثاني بالكامل
+def card_colors(color: str) -> tuple[str, str]:
+    from ui.theme_manager import theme_manager
+    palette = _DARK_CARD_PALETTE if theme_manager.is_dark else CARD_PALETTE
+    return palette.get(color, _FALLBACK)
 ```
 
 ---
 
-### 🟠 2. `core/conn.py` — `SafeConnMixin._get_safe_conn` تستخدم private API
+### 2. `ui/widgets/theme/input_styles.py`
 
-**الملف:** `ui/widgets/core/conn.py` (doc 76)
-
-**الكود الحالي:**
+#### المشكلة — ألوان error و positive hardcoded
 ```python
-def _get_safe_conn(self):
-    # ...
-    if self.__safe_db_name == "erp":
-        new_conn = company_state.get_erp_conn()  # ← هذا صح
-    else:
-        get_fn = getattr(company_state, "get_erp_conn", None)
-        if get_fn and self.__safe_db_name == "erp":   # ← شرط مستحيل! self.__safe_db_name == "erp" تحقق بالفعل في الـ if أعلاه
-            new_conn = get_fn()
-        else:
-            _get = getattr(company_state, "_get_conn", None)   # ← private API
-            new_conn = _get(self.__safe_db_name) if _get else None
+# ❌ حالياً
+def input_style(error=False):
+    bg     = "#fef2f2" if error else _C["bg_input"]   # hardcoded
+    border = "#f87171" if error else _C["border_med"] # hardcoded
+
+def spinbox_style(positive=False):
+    if positive:
+        bg, border, color = "#f0fdf4", "#86efac", "#15803d"  # hardcoded
 ```
 
-**المشكلة:** الـ `else` branch يحتوي على:
-- شرط مستحيل (`self.__safe_db_name == "erp"` تحقق بالفعل أعلاه)
-- استخدام `_get_conn` الـ private API كـ fallback
-
-**الإصلاح:**
+**الإصلاح:** تُضاف لـ `theme_manager.py` كمفاتيح جديدة:
 ```python
-def _get_safe_conn(self):
-    if _test_conn(self.__safe_conn):
-        return self.__safe_conn
+# في _LIGHT_THEME
+"input_error_bg":      "#fef2f2",   # dark: "#2a1010"
+"input_error_border":  "#f87171",   # dark: "#e57373"
+"input_positive_bg":   "#f0fdf4",   # dark: "#0a2018"
+"input_positive_border":"#86efac",  # dark: "#66bb8a"
+"input_positive_color": "#15803d",  # dark: "#66bb8a"
+```
 
-    logger.debug("%s._get_safe_conn: reconnecting", type(self).__name__)
-    try:
-        from db.companies.company_state import company_state
-        if self.__safe_db_name == "erp":
-            new_conn = company_state.get_erp_conn()
-        else:
-            # لأنواع DB الأخرى (accounting, etc.) — نحاول _get_conn كـ fallback
-            # لأن public API غير متاح لكل أنواع DB
-            _get = getattr(company_state, "_get_conn", None)
-            new_conn = _get(self.__safe_db_name) if _get else None
-            if new_conn is None:
-                logger.warning(
-                    "%s._get_safe_conn: no public API for db '%s', trying erp fallback",
-                    type(self).__name__, self.__safe_db_name
-                )
-                new_conn = company_state.get_erp_conn()
+ثم `input_styles.py` تستخدم `_C` مباشرة:
+```python
+bg     = _C["input_error_bg"]     if error    else _C["bg_input"]
+border = _C["input_error_border"]  if error    else _C["border_med"]
 
-        if _test_conn(new_conn):
-            self.__safe_conn = new_conn
-            return new_conn
-    except Exception as e:
-        logger.warning("%s._get_safe_conn: reconnect failed: %s",
-                       type(self).__name__, e)
-
-    raise _conn_null_error(
-        type(self).__name__, "_get_safe_conn", self.__safe_db_name
-    )
+if positive:
+    bg, border, color = _C["input_positive_bg"], _C["input_positive_border"], _C["input_positive_color"]
 ```
 
 ---
 
-### 🟡 3. `dialogs/settings_dialog.py` — استيراد من re-export بدل المصدر
+### 3. `ui/widgets/components/component_row/ui.py`
 
-**الملف:** `ui/widgets/dialogs/settings_dialog.py` (doc 15)
-
-**الكود الحالي:**
+#### المشكلة — نفس ألوان positive مكررة
 ```python
-from ui.widgets.combo.unit import (
-    load_units, add_unit, remove_unit,
-    reset_units_to_default, _DEFAULT_UNITS,
+# ❌ في _variant_cost_style و spinbox داخل الـ widget
+"#f0fdf4", "#86efac", "#15803d"
+```
+
+**الإصلاح:** بعد إضافة المفاتيح للثيم، يستخدم `_C` مباشرة — نفس إصلاح `input_styles.py`.
+
+---
+
+### 4. `ui/main_window_helper/_nav_button.py`
+
+#### المشكلة — badge color hardcoded في QSS string
+```python
+# ❌ حالياً
+self._badge_lbl.setStyleSheet(
+    "QLabel{background:#C0392B;color:#FFF;...}"   # hardcoded
 )
 ```
 
-`combo/unit.py` يُعيد تصدير هذه الدوال من `unit_service.py`. الاستيراد يجب أن يكون من المصدر مباشرة.
-
 **الإصلاح:**
 ```python
-from ui.widgets.combo.unit_service import (
-    load_units, add_unit, remove_unit,
-    reset_units_to_default, _DEFAULT_UNITS,
+# ✅ بعد
+from ui.theme import _C
+self._badge_lbl.setStyleSheet(
+    f"QLabel{{background:{_C['danger']};color:{_C['bg_input']};...}}"
 )
 ```
 
 ---
 
-### 🟡 4. `tables/flexible.py` — re-export غير مطلوب
+### 🟡 إصلاح طفيف
 
-**الملف:** `ui/widgets/tables/flexible.py` (doc 12)
+### 5. `ui/widgets/theme/builders.py`
 
-**الكود الحالي:**
 ```python
-from ..utils.tooltip import refresh_tooltips  # noqa: F401
+# حالياً — fallback في get() مقبول لكن أفضل يكون من _C
+sep.setStyleSheet(f"background:{color or _C.get('border','#e0e0e0')}; ...")
 ```
 
-هذا السطر يُعيد تصدير `refresh_tooltips` من `utils/tooltip.py`. أي مستخدم يستوردها من `flexible.py` يعتمد على re-export غير مباشر.
+**الإصلاح:** `_C['border']` بدل `_C.get('border','#e0e0e0')` — الـ key دايماً موجود في الثيم.
 
-**الإصلاح:** حذف السطر. كل من يحتاج `refresh_tooltips` يستورد مباشرة:
+---
+
+## المفاتيح الجديدة تُضاف لـ `theme_manager.py`
+
+### في `_LIGHT_THEME`:
 ```python
-from ui.widgets.utils.tooltip import refresh_tooltips
+# Waste colors
+"waste_zero_bg":        "#f5f5f5",
+"waste_zero_border":    "#e0e0e0",
+"waste_zero_color":     "#999999",
+
+# Input states
+"input_error_bg":       "#fef2f2",
+"input_error_border":   "#f87171",
+"input_positive_bg":    "#f0fdf4",
+"input_positive_border":"#86efac",
+"input_positive_color": "#15803d",
+```
+
+### في `_DARK_THEME`:
+```python
+# Waste colors
+"waste_zero_bg":        "#2a2a2a",
+"waste_zero_border":    "#3a3a3a",
+"waste_zero_color":     "#666666",
+
+# Input states
+"input_error_bg":       "#2a1010",
+"input_error_border":   "#e57373",
+"input_positive_bg":    "#0a2018",
+"input_positive_border":"#66bb8a",
+"input_positive_color": "#66bb8a",
 ```
 
 ---
 
-### 🟠 5. `core/colors.py` — circular import مخفي
+## `CARD_PALETTE` — قرار منفصل
 
-**الملف:** `ui/widgets/core/colors.py` (doc 58)
+`CARD_PALETTE` ليس UI theme — هو palette لتعيين خلفية وحدود الكروت الملونة
+بناءً على لون accent العنصر (مثلاً لون التصنيف).
 
-**المشكلة:** `status_colors()` تعمل lazy import من `ui.app_settings`:
+### الحل المقترح — `_DARK_CARD_PALETTE` في نفس الملف:
 ```python
-def status_colors(level: str) -> dict[str, str]:
-    from ui.app_settings import _C   # ← lazy import داخل الدالة
-```
+# في colors.py — palette مستقل للـ dark theme
+_DARK_CARD_PALETTE: dict[str, tuple[str, str]] = {
+    "#1565c0": ("#1a2a3a", "#2a4a6a"),
+    "#0d47a1": ("#152030", "#1e3a5f"),
+    # ... نفس الألوان بـ dark variants
+}
 
-لكن `ui/theme.py` يستورد من `ui.theme_manager` الذي يستورد من `ui.theme`. هذه الدوائر محمية بالـ lazy import، لكن `ui.app_settings` غير موجود كملف منفصل في المستندات — `_C` معرّف في `ui/theme.py` وليس `ui/app_settings`.
-
-**التأثير:** لو `ui.app_settings` هو alias أو re-export من `ui.theme`، فكل استدعاء لـ `status_colors()` يستورد من مكانين مختلفين يشيران لنفس الشيء.
-
-**الإصلاح:** توحيد الاستيراد:
-```python
-def status_colors(level: str) -> dict[str, str]:
-    from ui.theme import _C  # المصدر الوحيد الصحيح
+def card_colors(color: str) -> tuple[str, str]:
+    from ui.theme_manager import theme_manager
+    palette = _DARK_CARD_PALETTE if theme_manager.is_dark else CARD_PALETTE
+    return palette.get(color, _FALLBACK)
 ```
 
 ---
 
-### 🟠 6. `mixins/service.py` — إنشاء instance جديد في كل استدعاء بدون تحذير
+## ترتيب التنفيذ
 
-**الملف:** `ui/widgets/mixins/service.py` (doc 6)
-
-**المشكلة:** التعليق يقول "هذا مقصود" لكن الكود لا يُحذّر لو استُدعيت الـ property عشر مرات في method واحدة:
-```python
-@property
-def _item_service(self):
-    from services.shared.item_service import ItemService
-    return ItemService(self.conn)  # instance جديد في كل استدعاء
-```
-
-**التوصية:** إضافة تحذير في الـ docstring وإضافة helper للحالات التي تحتاج instance واحد:
-```python
-@property
-def _item_service(self):
-    """
-    يُعيد instance جديد في كل استدعاء — مقصود لتجنب stale connection.
-    لو تحتاج استدعاءات متعددة في نفس الـ method، احفظ في متغير:
-        svc = self._item_service
-        svc.add(...)
-        svc.list_by_type(...)
-    """
-    from services.shared.item_service import ItemService
-    return ItemService(self.conn)
-```
+| الخطوة | الملف | العمل |
+|--------|-------|-------|
+| 1 | `ui/theme_manager.py` | إضافة المفاتيح الجديدة لـ light و dark |
+| 2 | `ui/widgets/core/colors.py` | حذف الـ fallbacks + waste vars + تحديث `status_colors()` + إضافة `_DARK_CARD_PALETTE` |
+| 3 | `ui/widgets/theme/input_styles.py` | استبدال hardcoded بـ `_C` |
+| 4 | `ui/widgets/components/component_row/ui.py` | استبدال hardcoded بـ `_C` |
+| 5 | `ui/main_window_helper/_nav_button.py` | استبدال hardcoded badge colors بـ `_C` |
+| 6 | `ui/widgets/theme/builders.py` | حذف fallback strings من `get()` |
 
 ---
 
-### 🟡 7. `combo/category.py` — lambda تُنشئ closure قد تُسبب memory leak
+## النتيجة النهائية
 
-**الملف:** `ui/widgets/combo/category.py` (doc 17)
-
-**الكود الحالي:**
-```python
-bus.company_data_changed.connect(
-    lambda _: self.refresh(), Qt.UniqueConnection
-)
+```
+مصدر الألوان الوحيد:  ui/theme_manager.py
+                              ↓
+الألوان النشطة:        ui/theme.py (_C dict)
+                              ↓
+كل الملفات الأخرى:    تقرأ من _C فقط — لا hardcoded
 ```
 
-Lambda تحمل reference لـ `self` مما يمنع garbage collection للـ widget بعد حذفه. الـ `UniqueConnection` يحمي من التكرار لكن لا يحل مشكلة الـ dangling reference.
-
-**الإصلاح:**
-```python
-import weakref
-
-_weak = weakref.ref(self)
-def _on_company_changed(_cid: int):
-    obj = _weak()
-    if obj is not None:
-        obj.refresh()
-
-bus.company_data_changed.connect(_on_company_changed, Qt.UniqueConnection)
-```
+لو غيّرت الثيم لـ dark:
+- `_C` يُحدَّث بـ `_DARK_THEME`
+- `input_error_bg` يصبح `#2a1010` بدل `#fef2f2`
+- `waste_zero_bg` يصبح `#2a2a2a` بدل `#f5f5f5`
+- `card_colors()` ترجع dark palette
+- كل شيء يتغير تلقائياً ✅
 
 ---
 
-## ثالثاً: انتهاكات الهيكلة المطلوبة
+## ملفات نظيفة — لا تحتاج تغيير
 
-### الهيكل المستهدف:
-```
-widgets/ (base classes) → tabs/UI ──→ services/ ──→ repos/ (db/) ← schema/
-```
-
----
-
-### 🔴 8. `component_row/variants.py` — يستورد من `db/` مباشرة بدون المرور بـ `services/`
-
-**الملف:** `ui/widgets/components/component_row/variants.py` (doc 4)
-
-```python
-def _fetch_variants(self, item_id: int) -> list:
-    from db.costing.raw_variants_repo import fetch_variants_for_item  # ← db مباشرة
-    conn = self._get_conn()
-    return fetch_variants_for_item(conn, item_id)
-
-def _calc_variant_unit_cost(self, variant_id, item_id):
-    from db.costing.raw_variants_repo import fetch_variant  # ← db مباشرة
-    conn = self._get_conn()
-    var = fetch_variant(conn, variant_id)
-```
-
-وأيضاً استعلام SQL مباشر:
-```python
-def _get_item_price(self, item_id: int) -> float:
-    row = conn.execute(
-        "SELECT price FROM items WHERE id=?", (item_id,)  # ← SQL مباشر في widget!
-    ).fetchone()
-```
-
-**الانتهاك:** widget تستورد من `db/` مباشرة وتكتب SQL. يجب المرور بـ `services/`.
-
-**الإصلاح المطلوب:** إنشاء `services/costing/variant_service.py` يحتوي على:
-- `get_variants_for_item(conn, item_id) -> list`
-- `get_variant_unit_cost(conn, variant_id, item_id) -> float | None`
-- `get_item_price(conn, item_id) -> float`
-
-ثم `variants.py` يستورد من الـ service فقط.
-
----
-
-### 🔴 9. `component_row/op_rows.py` — يستورد من `db/` مباشرة
-
-**الملف:** `ui/widgets/components/component_row/op_rows.py` (doc 70)
-
-```python
-def _fetch_op_rows(self, op_id: int) -> list:
-    from db.costing.machine_op_rows_repo import fetch_op_rows  # ← db مباشرة
-
-def _calc_row_cost(self, row_id: int) -> float:
-    from db.costing.machine_op_rows_repo import calc_op_row_cost  # ← db مباشرة
-```
-
-**الإصلاح المطلوب:** إنشاء أو توسيع `services/costing/machine_op_service.py` بـ:
-- `get_op_rows(conn, op_id) -> list`
-- `get_op_row_cost(conn, row_id) -> float`
-
----
-
-### 🔴 10. `managers/category.py` — يستورد من `db/` مباشرة
-
-**الملف:** `ui/widgets/managers/category.py` (doc 9)
-
-```python
-from db.shared.categories_repo import (
-    fetch_all_categories, fetch_category, insert_category,
-    update_category, delete_category, count_category_items,
-    build_tree, fetch_descendants,
-)
-```
-
-الـ widget يستورد 8 دوال من `db/` مباشرة رغم وجود `CategoryService` في `services/`.
-
-**الوضع الحالي:** الكود يستخدم بعض الدوال مباشرة وبعضها عبر `CategoryService`:
-```python
-# مباشر (خطأ)
-rows = fetch_all_categories(conn, self.scope)
-item = fetch_category(conn, cat_id)
-excluded = set(fetch_descendants(conn, exclude_id))
-counts = count_category_items(conn, node["id"])
-
-# عبر service (صح)
-CategoryService(conn).add(...)
-CategoryService(conn).update(...)
-CategoryService(conn).delete_cascade(cat_id)
-```
-
-**الإصلاح المطلوب:** نقل `fetch_all_categories`, `fetch_category`, `fetch_descendants`, `count_category_items`, `build_tree` إلى `CategoryService` كـ methods، ثم استبدال الاستدعاءات المباشرة بـ service calls.
-
----
-
-### 🔴 11. `combo/category.py` — يستورد من `db/` مباشرة
-
-**الملف:** `ui/widgets/combo/category.py` (doc 17)
-
-```python
-from db.shared.categories_repo import fetch_all_categories, build_tree
-```
-
-**الإصلاح:** استيراد من `services/shared/category_service.py` أو إنشاء `CategoryService.get_all_tree(conn, scope)`.
-
----
-
-### 🔴 12. `panels/filter.py` — يستورد من `combo/category.py` بدل `services/`
-
-**الملف:** `ui/widgets/panels/filter.py` (doc 42)
-
-```python
-from ..combo.category import populate_category_combo
-```
-
-`populate_category_combo` نفسها تستورد من `db/` مباشرة. الـ filter panel يعتمد على widget آخر يعتمد على db — سلسلة غير مباشرة.
-
-**الإصلاح:** `populate_category_combo` يجب أن تستورد من `services/` أو تُنقل لـ service مباشرة.
-
----
-
-### 🟠 13. `shared/list_panel_with_shared.py` — FILTER_SCOPE ثابت "all" بدل استخدام SHARED_TYPE
-
-**الملف:** `ui/widgets/shared/list_panel_with_shared.py` (doc 48)
-
-```python
-FILTER_SCOPE: str = "all"  # ← كل subclass تُعرّف SHARED_TYPE لكن FILTER_SCOPE لا يستخدمه
-```
-
-كل subclass تُعرّف `SHARED_TYPE = "raw"` مثلاً، لكن الـ filter يعرض كل التصنيفات بدل تصنيفات النوع المحدد.
-
-**الإصلاح:**
-```python
-def _build_filter(self) -> "FilterToolbar | None":
-    scope = getattr(self, "SHARED_TYPE", self.FILTER_SCOPE)
-    toolbar = FilterToolbar(
-        conn=self.conn,
-        scope=scope,  # ← استخدام SHARED_TYPE بدل FILTER_SCOPE الثابت
-        ...
-    )
-```
-
----
-
-### 🟠 14. `base/tab_section.py` يستورد `get_connection` من `db/shared/connection` مباشرة
-
-**الملف:** `ui/widgets/base/tab_section.py` (doc 14)
-
-```python
-from db.shared.connection import get_connection
-# ...
-self.conn = (conn_fn or get_connection)()
-```
-
-هذا مقبول كـ bootstrap للـ section، لكن يجب توثيقه كاستثناء من القاعدة.
-
----
-
-## رابعاً: ملفات في مسار غير منطقي
-
-### 15. `panels/form_badges.py`, `form_labels.py`, `form_fields.py`, `form_group.py`, `form_buttons.py`
-
-هذه ملفات **components** لكنها في مجلد `panels/`. المسار المنطقي هو `components/forms/` أو `forms/`.
-
-**التأثير:** لا يُسبب أخطاء لكن يُربك من يبحث عن مكوّن معين.
-
-**التوصية:** نقل تدريجي عند الـ refactor القادم.
-
----
-
-### 16. `forms/inputs.py` في مجلد `forms/` لكن يحتوي على input widgets عامة
-
-`AmountSpinBox`, `DateField`, `StyledComboBox` هي widgets عامة وليست مرتبطة بالفورمات فقط. المسار المنطقي `components/inputs.py` أو `widgets/inputs.py`.
-
----
-
-## خامساً: ملخص الأولويات
-
-| # | الملف | النوع | الأولوية | التأثير |
-|---|-------|-------|----------|---------|
-| 1 | `forms/inputs.py` | Import خاطئ | 🔴 فوري | RuntimeError |
-| 2 | `core/conn.py` | Logic خاطئ | 🔴 فوري | شرط مستحيل في else |
-| 3 | `component_row/variants.py` | انتهاك هيكلة | 🔴 هيكلة | SQL في widget |
-| 4 | `component_row/op_rows.py` | انتهاك هيكلة | 🔴 هيكلة | db import في widget |
-| 5 | `managers/category.py` | انتهاك هيكلة | 🔴 هيكلة | 8 db imports مباشرة |
-| 6 | `combo/category.py` | انتهاك هيكلة | 🔴 هيكلة | db import في widget |
-| 7 | `core/colors.py` | Import مشبوه | 🟠 مهم | `ui.app_settings` غير موجود |
-| 8 | `dialogs/settings_dialog.py` | Import re-export | 🟡 تنظيمي | يعمل لكن غير مباشر |
-| 9 | `tables/flexible.py` | Re-export | 🟡 تنظيمي | يعمل لكن غير مباشر |
-| 10 | `combo/category.py` | Memory leak | 🟠 مهم | lambda تحمل self |
-| 11 | `shared/list_panel_with_shared.py` | FILTER_SCOPE خاطئ | 🟠 منطقي | فلتر بتصنيفات خاطئة |
-| 12 | `mixins/service.py` | توثيق ناقص | 🟡 تنظيمي | لا يُسبب خطأ |
-
----
-
-## سادساً: الخطوات التالية لاستكمال الهيكلة
-
-### المرحلة 1 — إصلاح الاستيرادات الخاطئة (فوري)
-1. `forms/inputs.py`: تغيير مسار import
-2. `core/conn.py`: إصلاح الشرط المستحيل في `_get_safe_conn`
-3. `dialogs/settings_dialog.py`: استيراد من `unit_service` مباشرة
-4. `tables/flexible.py`: حذف سطر re-export
-5. `core/colors.py`: التحقق من `ui.app_settings` وتوحيده مع `ui.theme`
-
-### المرحلة 2 — نقل منطق الـ DB إلى services (هيكلة)
-1. إنشاء `services/costing/variant_service.py`
-2. إنشاء/توسيع `services/costing/machine_op_service.py`
-3. توسيع `services/shared/category_service.py` بإضافة:
-   - `get_all_categories(conn, scope) -> list`
-   - `get_all_tree(conn, scope) -> list`
-   - `get_descendants(conn, cat_id) -> set`
-   - `count_items(conn, cat_id) -> dict`
-4. تحديث الـ widgets لاستخدام الـ services الجديدة
-
-### المرحلة 3 — إصلاح الـ memory leak وتحسين الكود
-1. `combo/category.py`: استبدال lambda بـ weakref
-2. `shared/list_panel_with_shared.py`: استخدام SHARED_TYPE في الفلتر
-3. توثيق `mixins/service.py`
+| الملف | السبب |
+|-------|-------|
+| `ui/theme_manager.py` | المصدر — بنضيف إليه فقط |
+| `ui/theme.py` | ✅ تم إصلاحه |
+| `ui/font.py` | لا ألوان |
+| `ui/events.py` | لا ألوان |
+| `ui/constants.py` | لا ألوان |
+| `ui/widgets/theme/table_styles.py` | كلها من `_C` |
+| `ui/widgets/theme/card_styles.py` | كلها من `_C` |
+| `ui/widgets/theme/label_styles.py` | كلها من `_C` |
+| `ui/widgets/theme/layout_styles.py` | كلها من `_C` |
+| `ui/widgets/panels/state.py` | كلها من `_C` |
+| `ui/widgets/components/notification.py` | كلها من `status_colors()` |
+| `ui/widgets/components/badge.py` | كلها من `_C` |
