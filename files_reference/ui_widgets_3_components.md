@@ -1,11 +1,11 @@
 # دليل الكود — UI / Widgets (3): Components
 
-> الجزء الثالث — مكونات الواجهة القابلة لإعادة الاستخدام.
-> `ui/widgets/components/`, `ui/widgets/helpers/`
+> `ui/widgets/components/` — كل مكونات الواجهة القابلة لإعادة الاستخدام.
+> يشمل: Button, Labels, Headers, Notification, Spinner, Stats, Badges, ActionToolbar, ColorPicker, ComponentRow.
 
 ---
 
-## فهرس هذا الجزء
+## فهرس
 
 | القسم | الملفات |
 |-------|---------|
@@ -22,6 +22,10 @@
 | [Status Chip](#status-chip) | `components/status_chip.py` |
 | [ActionToolbar](#actiontoolbar) | `components/action_toolbar.py` |
 | [ColorPicker](#colorpicker) | `helpers/color_picker.py` |
+| [ComponentRow — Widget](#componentrow--widget) | `components/component_row/widget.py` |
+| [ComponentRow — UI](#componentrow--ui) | `components/component_row/ui.py` |
+| [ComponentRow — OpRows](#componentrow--oprows) | `components/component_row/op_rows.py` |
+| [ComponentRow — Variants](#componentrow--variants) | `components/component_row/variants.py` |
 
 ---
 
@@ -34,7 +38,7 @@ make_btn(text: str, style: str = "normal", fixed_size: bool = True) -> QPushButt
 # style: "primary" | "success" | "danger" | "ghost" | "normal"
 # يحفظ style على الزر كـ Qt property ("_btn_style") لـ refresh_visible_buttons
 # fixed_size=True → setFixedWidth | False → setMinimumWidth (قابل للتمدد)
-# ألوان الأزرار تُقرأ من _C تلقائياً — تتغير مع الثيم
+# ألوان الأزرار تُقرأ من _C — تتغير مع الثيم
 
 invalidate_stylesheet_cache()
 # يمسح _stylesheet_cache — يُستدعى من apply_font() وعند تغيير الثيم
@@ -51,20 +55,17 @@ calc_btn_width(text: str, font_size: int, padding: int = 32) -> int
 
 | style | الوصف | الألوان |
 |-------|-------|---------|
-| `"primary"` | الإجراء الرئيسي | من `accent_light / accent_text` |
-| `"success"` | حفظ / إضافة — أخضر | من `success_bg / success` |
-| `"danger"` | حذف / خطأ — أحمر | من `danger_bg / danger` |
-| `"ghost"` | ثانوي / إلغاء — شفاف | من `border_med / text_sec` |
-| `"normal"` | عادي — رمادي فاتح | من `bg_surface_2 / text_sec` |
+| `"primary"` | الإجراء الرئيسي | `accent_light / accent_text` |
+| `"success"` | حفظ / إضافة — أخضر | `success_bg / success` |
+| `"danger"` | حذف / خطأ — أحمر | `danger_bg / danger` |
+| `"ghost"` | ثانوي / إلغاء — شفاف | `border_med / text_sec` |
+| `"normal"` | عادي — رمادي فاتح | `bg_surface_2 / text_sec` |
 
 ---
 
 ## Label
 
 ### `ui/widgets/components/label.py`
-
-> **ملاحظة:** هذا الملف يحتوي الآن على `InfoRow` و `ModeLabel` فقط.
-> باقي الـ classes انتقلت لملفات مستقلة (انظر أدناه).
 
 ```python
 InfoRow(separator="  ·  ")
@@ -73,7 +74,6 @@ InfoRow(separator="  ·  ")
   .label() -> QLabel
 
 ModeLabel(add_text="جديد", icon="")
-# المصدر الوحيد لـ ModeLabel — مُستورد في form_parts أيضاً
   .set_add_mode(text=None)   # أزرق — وضع الإضافة
   .set_edit_mode(name="")    # برتقالي — وضع التعديل
   .set_custom(text, color=None)
@@ -86,18 +86,14 @@ ModeLabel(add_text="جديد", icon="")
 
 ### `ui/widgets/components/amount_label.py`
 
-> **ملاحظة:** مستخرج من `components/label.py`.
-
 ```python
 format_amount(value, decimals=2, currency="ج") -> str
 amount_color(value, positive_color=None, negative_color=None, zero_color=None) -> str
-# يقرأ الألوان من _C تلقائياً
 dr_cr_color(side: str) -> str    # side: "dr" | "cr"
 
 AmountLabel(value=None, currency="ج", decimals=2, bold=True,
             font_size_offset=0, auto_color=True)
   .set_amount(value, color=None)
-  # value=0 → "─" بلون text_muted
   .set_debit(value)
   .set_credit(value)
   .reset(placeholder="─")
@@ -117,8 +113,6 @@ BalanceDisplay(currency="ج")
 ## Progress
 
 ### `ui/widgets/components/progress.py`
-
-> **ملاحظة:** مستخرج من `components/label.py`.
 
 ```python
 ProgressBar(label="", color=None, height=8, show_pct=True, compact=False)
@@ -140,11 +134,10 @@ MultiProgressBar(spacing=8)
 
 ### `ui/widgets/components/headers_list.py`
 
-> **ملاحظة:** مستخرج من `components/headers.py` — يحتوي على widgets لوحات القوائم.
-
 ```python
 SearchBar(placeholder="", delay_ms=250, height=34)
 # placeholder افتراضي من tr("list_search_placeholder")
+# يشترك في bus.language_changed تلقائياً
 # Signals: search_changed(str)
   .text() -> str
   .clear()
@@ -152,7 +145,6 @@ SearchBar(placeholder="", delay_ms=250, height=34)
   .inp -> QLineEdit
 
 StatusBar()
-# نصوص العداد من tr("showing_of") و tr("showing_all")
   .set_count(shown: int, total: int)
   .set_text(text: str)
   .clear_count()
@@ -178,8 +170,6 @@ make_list_header(title="", add_text="", show_search=True,
 
 ### `ui/widgets/components/headers_page.py`
 
-> **ملاحظة:** مستخرج من `components/headers.py` — يحتوي على widgets الصفحات والتفاصيل.
-
 ```python
 SectionHeader(title="")
   .set_title(title)
@@ -192,7 +182,6 @@ PageHeader(title="", subtitle="", icon="", accent=None, compact=False)
 
 DetailHeader(bg=None)
 # ActionToolbar يُنشأ بـ lazy initialization — فقط عند أول استخدام فعلي
-# _tb_section مخفي بـ setVisible(False) حتى أول استخدام
   .set_title(text)
   .set_type_badge(text, color=None)
   .set_status_badge(text, text_color="#555", bg="#f5f5f5", border="#e0e0e0")
@@ -216,7 +205,6 @@ NotificationBar(show_dismiss=True)
 # Signals: dismissed
   .show(message: str, level: str = "info", auto_hide: int = 0)
   # level: "success" | "info" | "warning" | "danger"
-  # ألوان الـ level من status_colors() — تتغير مع الثيم
   .hide_bar()
 
 BaseWarningBar(on_fix=None, on_edit=None,
@@ -238,9 +226,8 @@ BaseWarningBar(on_fix=None, on_edit=None,
 
 ```python
 LoadingSpinner(text="جارٍ التحميل...", color=None, compact=False)
-# color يقرأ من _C["accent"] افتراضياً
   .start()
-  .stop()         # يُظهر "✓"
+  .stop()
   .set_text(text)
   .is_running() -> bool
 
@@ -259,14 +246,10 @@ LoadingButton(text="")
 
 ### `ui/widgets/components/stat_card.py`
 
-> **ملاحظة:** مستخرج من `components/stat_row.py`.
-
 ```python
 @dataclass
-StatItem(label: str, color: str = "#1565c0", icon: str = "",
-         value: str = "─", bg: Optional[str] = None,
-         border: Optional[str] = None, bold_value: bool = True,
-         compact: bool = False)
+StatItem(label, color="#1565c0", icon="", value="─",
+         bg=None, border=None, bold_value=True, compact=False)
 
 StatCard(icon="", title="", value="─", color="#1565c0",
          bg=None, border=None, compact=False)
@@ -286,7 +269,6 @@ StatusCard(icon="", label="", value="─", color="#1565c0", sub="")
   .set_value(text: str)
   .value_label() -> QLabel
 
-# Helpers
 make_stat_row(*items: StatItem, separator=True, compact=False, bg=None) -> StatRow
 stat_card_pair(label, color, icon="") -> tuple[QFrame, QLabel]
 make_stat_card_simple(label, value="─", color="#1565c0", icon="") -> StatCard
@@ -297,8 +279,6 @@ make_stat_card_simple(label, value="─", color="#1565c0", icon="") -> StatCard
 ## Badge
 
 ### `ui/widgets/components/badge.py`
-
-> **ملاحظة:** مستخرج من `components/stat_row.py`.
 
 ```python
 BadgeLabel()
@@ -311,8 +291,6 @@ BadgeLabel()
 ## Status Chip
 
 ### `ui/widgets/components/status_chip.py`
-
-> **ملاحظة:** مستخرج من `components/stat_row.py`.
 
 ```python
 StatusChip(icon="", label="", count=0, color="#6b7280",
@@ -349,3 +327,112 @@ ColorPickerWidget(default="#607d8b", btn_text="اختر لون")
   .current_color() -> str
   .set_color(color: str)
 ```
+
+---
+
+## ComponentRow — Widget
+
+### `ui/widgets/components/component_row/widget.py`
+
+```python
+ComponentRow(catalog_fn, child_type="raw", child_id=None,
+             qty=1.0, waste_pct=0.0, raw_total_qty=None,
+             show_total_qty=False, variant_id=None,
+             machine_op_row_id=None)
+# Signals: removed(QWidget)
+# يستخدم weakref في bus slot لمنع dangling reference
+# _bus_slot محفوظ كـ instance variable ويُفصل في closeEvent()
+# _get_conn(): يثق في الـ cache مباشرة بدون SELECT 1 overhead
+
+.get_values() -> tuple | None
+# (child_type, child_id, qty, waste_pct, variant_id, machine_op_row_id)
+.get_waste_pct() -> float
+.get_variant_id() -> int | None
+.get_machine_op_row_id() -> int | None
+.is_orphan() -> bool
+.set_orphan_name(name: str | None)
+.refresh_catalog(_new_catalog: dict = None)
+.expose_load_op_rows(op_id, selected_row_id=None)
+# synchronous — يمنع QTimer من إعادة التحميل
+
+._refresh_cost_label()
+# يُحدِّث lbl_variant_cost من الـ catalog الجديد بعد تغيير سعر الخامة
+
+._disconnect_bus()
+# يفصل الـ slots من bus صريحاً — يُستدعى تلقائياً من closeEvent()
+
+._is_widget_deleted(*widgets) -> bool
+# مشترك بين OpRowsMixin و VariantsMixin — sip.isdeleted()
+```
+
+**Attributes على الـ widget:**
+`cmb_type`, `_item_combo`, `cmb_variant`, `lbl_variant_cost`, `qty_edit`,
+`waste_spin`, `lbl_waste`, `total_qty_edit`, `lbl_total_qty`, `cmb_op_row`,
+`lbl_op_row_cost`, `_sub_row_widget`, `cmb_item` (alias لـ `_item_combo.cmb`)
+
+---
+
+## ComponentRow — UI
+
+### `ui/widgets/components/component_row/ui.py`
+
+```python
+build_row_ui(widget, child_type, child_id, qty, raw_total_qty,
+             waste_pct, variant_id, machine_op_row_id, show_total_qty)
+# كل الألوان من _C و status_colors() — لا hardcoded
+
+update_waste_style(widget, val: float)
+# يستخدم waste_colors() و waste_zero_*() من core/colors
+
+get_orphan_style() -> str
+# [Phase 5] دالة بدل ثابت — تُحسب في كل استخدام من _C الحالي
+
+COMPONENT_TYPES = [
+    ("raw",        "🧱 خامة"),
+    ("semi",       "🔧 نصف مصنع"),
+    ("labor_op",   "👷 عملية عمالة"),
+    ("machine_op", "⚙️ عملية تشغيل"),
+]
+STYLE_NORMAL = ""
+STYLE_ORPHAN = ...   # legacy ثابت — استخدم get_orphan_style() بدله
+```
+
+---
+
+## ComponentRow — OpRows
+
+### `ui/widgets/components/component_row/op_rows.py` — `OpRowsMixin`
+
+```python
+.expose_load_op_rows(op_id, selected_row_id=None)
+# synchronous — للاستدعاء الخارجي من product_form
+
+._ensure_machine_op_rows()
+._hide_op_rows()
+._load_op_rows(op_id, selected_row_id=None)
+# أولوية الاختيار:
+# selected_row_id → _init_machine_op_row_id → _pinned_op_row_id → أول صف
+
+._on_op_row_changed(_index=0)
+._update_op_row_cost_label()
+._is_op_row_deleted() -> bool
+```
+
+**ملاحظة [إصلاح هيكلة]:** يستورد من `services/costing/machine_op_rows_service` بدل `db/` مباشرة.
+**ملاحظة [إصلاح]:** `_determine_target_id` يستخدم `is not None` بدل `or` لتجنب مشكلة ID = 0.
+
+---
+
+## ComponentRow — Variants
+
+### `ui/widgets/components/component_row/variants.py` — `VariantsMixin`
+
+```python
+._load_variants(item_id, selected_variant_id=None)
+._hide_variants()
+._on_variant_changed()
+._update_variant_cost_label()
+._is_variant_deleted() -> bool
+```
+
+**ملاحظة [إصلاح هيكلة]:** يستورد من `services/costing/variant_service` بدل `db/` مباشرة.

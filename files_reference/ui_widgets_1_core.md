@@ -1,32 +1,18 @@
 # دليل الكود — UI / Widgets (1): Core Utilities
 
 > `ui/widgets/core/` — الأدوات الأساسية المشتركة بين كل الـ widgets.
-> لـ app_settings, app_state, events, theme → راجع `ui_widgets_ui_root.md`
-> لـ i18n → راجع `i18n_reference.md`
 
 ---
 
-## فهرس هذا الجزء
+## فهرس
 
 | القسم | الملفات |
 |-------|---------|
-| [Core — __init__](#core--init) | `widgets/core/__init__.py` |
-| [Core — Colors](#core--colors) | `widgets/core/colors.py` |
-| [Core — Events](#core--events) | `widgets/core/events.py` |
-| [Core — Conn](#core--conn) | `widgets/core/conn.py` |
-| [Core — Guard](#core--guard) | `widgets/core/guard.py` |
-| [Core — i18n](#core--i18n) | `widgets/core/i18n.py` |
-
----
-
-## Core — __init__
-
-### `ui/widgets/core/__init__.py`
-
-```python
-from ui.widgets.core import get_font_size
-# re-export من app_settings
-```
+| [Core — Colors](#core--colors) | `core/colors.py` |
+| [Core — Events](#core--events) | `core/events.py` |
+| [Core — Conn](#core--conn) | `core/conn.py` |
+| [Core — Guard](#core--guard) | `core/guard.py` |
+| [Core — i18n](#core--i18n) | `core/i18n.py` |
 
 ---
 
@@ -34,25 +20,25 @@ from ui.widgets.core import get_font_size
 
 ### `ui/widgets/core/colors.py`
 
+كل الألوان تُقرأ من `_C` الحالي — لا hardcoded. المصدر الوحيد للألوان هو `ui/theme_manager.py`.
+
 ```python
 card_colors(color: str) -> tuple[str, str]
-# (bg, border) من CARD_PALETTE — fallback: ("#f5f5f5", "#e0e0e0")
+# (bg, border) من CARD_PALETTES حسب الثيم الحالي
+# fallback: (_C["card_fallback_bg"], _C["card_fallback_border"])
 
 status_colors(level: str) -> dict[str, str]
-# يبني الـ map من _C في كل استدعاء — لا dict ثابت
-# هذا يضمن التزامن التلقائي مع تغييرات الثيم
+# يبني الـ map من _C في كل استدعاء — يضمن التزامن مع الثيم
 # level: "success" | "warning" | "danger" | "info" | "neutral" | "primary" | "purple" | "orange"
 # يرجع: {"fg": str, "bg": str, "border": str}
-# purple/orange: من _C.get() مع fallback آمن
-# ملاحظة: الـ import داخل الدالة (lazy) مقصود لتجنب circular imports
 
 waste_level(pct: float) -> str   # "high" | "medium" | "low" | "zero"
-waste_colors(pct: float) -> tuple[str, str]
+waste_colors(pct: float) -> tuple[str, str]   # (bg, border) حسب المستوى
 
-WASTE_COLORS = {"high": ("#ffcdd2","#e53935"), "medium": ("#ffe0b2","#f57c00"),
-                "low": ("#fff8e1","#ffe082")}
-WASTE_ZERO_BG = "#f5f5f5" | WASTE_ZERO_BORDER = "#e0e0e0"
-WASTE_ZERO_COLOR = "#999" | WASTE_TEXT_COLOR = "#e65100"
+waste_zero_bg() -> str
+waste_zero_border() -> str
+waste_zero_color() -> str
+waste_text_color() -> str   # لون نص الهادر (orange من _C)
 ```
 
 ---
@@ -63,10 +49,15 @@ WASTE_ZERO_COLOR = "#999" | WASTE_TEXT_COLOR = "#e65100"
 
 ```python
 get_active_company_id() -> int | None
+# يرجع company_id النشط أو None
+
 emit_company_data_changed()
 # يُطلق bus.company_data_changed(cid) لو توجد شركة نشطة
 # وإلا يُطلق bus.data_changed()
+# الاستخدام الصحيح — بدل bus.data_changed.emit() مباشرة
+
 is_same_company(company_id: int) -> bool
+# يتحقق لو company_id هو نفس الشركة النشطة
 ```
 
 **الاستخدام الصحيح:**
@@ -88,28 +79,36 @@ bus.data_changed.emit()
 
 ```python
 # ── LiveConnMixin ──
-# _conn_attr: str = "conn"
-# _conn_cache: instance variable (object.__setattr__)
+# _conn_attr: str = "conn"   (اسم الـ attribute الذي يحمل الـ connection)
+# _conn_cache: instance variable
 
-  ._live_conn() -> Connection
-  # 1. self.__dict__["_conn_cache"] لو سليم
-  # 2. self.{_conn_attr} لو سليم
-  # 3. company_state.get_erp_conn() كـ fallback
-  # 4. RuntimeError واضحة لو كل شيء فشل
-  ._invalidate_conn_cache()
-  ._live_acc_conn() -> Connection
+._live_conn() -> Connection
+# 1. self.__dict__["_conn_cache"] لو سليم
+# 2. self.{_conn_attr} لو سليم
+# 3. company_state.get_erp_conn() كـ fallback
+# 4. RuntimeError واضحة لو كل شيء فشل
+
+._invalidate_conn_cache()
+._live_acc_conn() -> Connection   # accounting connection
 
 # ── SafeConnMixin ──
-  ._init_safe_conn(conn, db_name="accounting")
-  ._get_safe_conn() -> Connection
-  ._get_company_id() -> int | None
-  ._should_respond_to_company(company_id, stored_attr="_company_id") -> bool
+._init_safe_conn(conn, db_name="accounting")
+._get_safe_conn() -> Connection
+# إعادة اتصال تلقائية لو فشل الـ connection
+._get_company_id() -> int | None
+._should_respond_to_company(company_id, stored_attr="_company_id") -> bool
 
 # ── DualConnMixin(SafeConnMixin) ──
-  ._init_dual_conn(acc_conn, erp_conn, acc_db="accounting")
-  ._get_erp_conn() -> Connection
-  ._on_dual_company_event(company_id) -> bool
+# لأي widget يحتاج acc_conn + erp_conn معاً
+._init_dual_conn(acc_conn, erp_conn, acc_db="accounting")
+._get_erp_conn() -> Connection
+._on_dual_company_event(company_id) -> bool
 ```
+
+**ملاحظات:**
+- `LiveConnMixin.__init_subclass__` يُصدر تحذيراً لو الـ subclass يُعرِّف اسم connection مختلف بدون تحديث `_conn_attr`.
+- `SafeConnMixin._get_safe_conn` يستخدم `get_erp_conn()` (public API) بدل `_get_conn()` (private).
+- كل الـ mixins ترمي `RuntimeError` واضحة بدل إرجاع `None` صامت عند فشل الاتصال.
 
 ---
 
@@ -130,21 +129,21 @@ def _load_rows(self) -> list: ...
 
 @requires_company(message="رسالة مخصصة")
 def my_method(self): ...
-
-# يعرض التحذير عبر (بالترتيب):
-# show_warning() → _warn() → _notif.show() → debug log
 ```
+
+**أولوية عرض التحذير (بالترتيب):**
+`show_warning()` → `_warn()` → `_notif.show()` → debug log صامت
 
 ---
 
 ## Core — i18n
 
-### `ui/widgets/core/i18n.py` — `I18nManager` + `tr()`
+### `ui/widgets/core/i18n.py`
 
 ```python
 from ui.widgets.core.i18n import tr, i18n_manager
 
-i18n_manager.language -> str          # "ar" | "en"
+i18n_manager.language -> str                    # "ar" | "en"
 i18n_manager.is_rtl -> bool
 i18n_manager.qt_direction -> Qt.LayoutDirection
 i18n_manager.set_language(lang, save=True)
@@ -154,10 +153,13 @@ i18n_manager.get_available_languages() -> list[{code, name, active, is_rtl}]
 i18n_manager.add_translations(lang_code, translations: dict)
 
 def tr(key: str, lang=None, **kwargs) -> str
-# دالة الترجمة الرئيسية — تُرجع المفتاح نفسه لو غير موجود (fallback صامت)
+# دالة الترجمة الرئيسية
+# تُرجع المفتاح نفسه لو غير موجود (fallback صامت)
 # مثال: tr("save")                           → "حفظ" | "Save"
 # مثال: tr("delete_confirm_msg", name="X")   → "هل تريد حذف «X»؟"
 ```
 
-> **ملاحظة:** لا تمرر نصاً عربياً مباشرة لـ `tr()` — استخدم المفتاح المقابل دائماً.
-> للمزيد عن إضافة مفاتيح جديدة → راجع `i18n_reference.md`
+**مصادر الترجمات:** `ui/i18n/ar.py` (AR_STRINGS) و `ui/i18n/en.py` (EN_STRINGS)
+
+> ⚠️ لا تمرر نصاً عربياً مباشرة لـ `tr()` — استخدم المفتاح المقابل دائماً.
+> للمزيد → راجع `i18n_reference.md`
