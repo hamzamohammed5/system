@@ -92,6 +92,10 @@ class BusConnectedMixin:
 
 ### `ui/widgets/mixins/form_mixins.py`
 
+> **ملاحظة [إصلاح 2.4]:** المسار الصحيح للـ import:
+> `from ui.widgets.mixins.form_mixins import EditModeMixin`
+> (بدل `from ui.widgets.mixins.edit import EditModeMixin` القديم)
+
 #### EditModeMixin
 
 ```python
@@ -107,11 +111,13 @@ class EditModeMixin:
 .enter_edit_mode(item_id: int, mode_text: str = "")
 # يُخفي btn_add، يُظهر btn_save + btn_cancel
 # يضبط النص على lbl_mode
+# يُسند self._editing_id = item_id
 
 .exit_edit_mode(add_text: str = "")
 # يُعيد الـ add state — يُستدعى بعد حفظ أو إلغاء
+# يُعيد ضبط self._editing_id = None
 
-.is_edit_mode -> bool   # property
+.is_edit_mode -> bool   # property: self._editing_id is not None
 ```
 
 **مثال:**
@@ -290,7 +296,7 @@ class SharedOpsMixin:
 ._publish_item(row: dict, shared_type: str, item_data: dict, parent=None)
 # لو العنصر منشور → _edit_published_item
 # لو جديد → PublishAsSharedDialog
-# [FIX] يُطلق emit_company_data_changed() بعد النشر
+# [FIX] يُطلق emit_company_data_changed() بعد النشر دائماً
 ```
 
 #### مساعدات

@@ -39,6 +39,7 @@ waste_level(pct: float) -> str   # "high" | "medium" | "low" | "zero"
 
 waste_colors(pct: float) -> tuple[str, str]   # (bg, border) حسب المستوى
 # يستدعي waste_level() ثم يقرأ _C[f"waste_{level}_bg"] و _C[f"waste_{level}_border"]
+# لو level == "zero" → يرجع (waste_zero_bg(), waste_zero_border())
 
 waste_zero_bg() -> str     # _C["waste_zero_bg"]
 waste_zero_border() -> str # _C["waste_zero_border"]
@@ -55,7 +56,7 @@ waste_text_color() -> str  # _C["orange"] — لون نص الهادر
 ```python
 get_active_company_id() -> int | None
 # يرجع company_state.company_id لو is_ready وإلا None
-# يُعيد None عند أي exception
+# يُعيد None عند أي exception — try/except شامل
 
 emit_company_data_changed()
 # لو cid is not None → bus.company_data_changed.emit(cid)
@@ -120,6 +121,7 @@ _conn_null_error(class_name: str, method: str, db: str = "erp") -> RuntimeError
 # يفحص __annotations__ + __dict__ بحثاً عن أسماء تحتوي "conn" أو "connection"
 # لو وجد ولم يُحدَّث _conn_attr → UserWarning
 # يتجاهل الأسماء التي تبدأ بـ "_"
+# يتجاهل لو "_conn_attr" موجود أصلاً في cls.__dict__
 ```
 
 #### SafeConnMixin
@@ -130,14 +132,22 @@ _conn_null_error(class_name: str, method: str, db: str = "erp") -> RuntimeError
 
 ._get_safe_conn() -> Connection
 # إعادة اتصال تلقائية لو فشل الـ connection
-# db_name == "erp"  → company_state.get_erp_conn() مباشرة
+# db_name == "erp"  → company_state.get_erp_conn() مباشرة (public API)
 # db_name != "erp"  → يجرب company_state._get_conn(db_name) كـ fallback
-#                     لو فشل → يجرب get_erp_conn() كـ last resort مع warning
+#                     لو لم يُعطِ نتيجة سليمة → يجرب get_erp_conn() كـ last resort مع warning
 # Raises: RuntimeError عبر _conn_null_error لو كل شيء فشل
 
 ._get_company_id() -> int | None   # static method
 ._should_respond_to_company(company_id, stored_attr="_company_id") -> bool
 # لو stored = None → يضبطه من company_id الواصل ويرجع True
+```
+
+**ملاحظة [إصلاح شرط مستحيل]:**
+```python
+# القديم في else branch كان يحتوي:
+#   if get_fn and self.__safe_db_name == "erp":  ← مستحيل دائماً False في else
+# الجديد: منطق مباشر بدون الشرط الزائد
+# يستخدم _get_conn كـ fallback (private API — مع warning) للأنواع غير erp
 ```
 
 #### DualConnMixin(SafeConnMixin)
@@ -191,11 +201,21 @@ def my_method(self): ...
 3. مع قيمة افتراضية: `@requires_company(return_value=[])`
 4. مع factory: `@requires_company(return_value_factory=list)`
 
+**التوقيع الكامل:**
+```python
+requires_company(method=None, *,
+                 message: str = "",
+                 return_value = None,
+                 return_value_factory: "type | None" = None)
+```
+
 **أولوية عرض التحذير (بالترتيب):**
 `show_warning()` → `_warn()` → `_notif.show()` → debug log صامت
 
-**ملاحظة:** `_default_msg()` تستخدم `tr("select_company")` — تدعم الترجمة تلقائياً.
-الـ sentinel object `_SENTINEL = object()` يُستخدم داخلياً للتفريق بين None المقصود وغياب الـ parameter.
+**ملاحظات داخلية:**
+- `_SENTINEL = object()` — موجود في الكود كـ sentinel داخلي، لا يُستخدم خارج الملف.
+- `_default_msg()` تستخدم `tr("select_company")` — تدعم الترجمة تلقائياً، مع fallback `"اختر شركة نشطة أولاً"` لو فشل الـ import.
+- `_wrap()` تستخدم `functools.wraps(fn)` للحفاظ على metadata الدالة الأصلية.
 
 ---
 
@@ -233,13 +253,24 @@ def tr(key: str, lang=None, **kwargs) -> str
 
 **تحميل الترجمات:**
 - `_load_translations()` تُستدعى تلقائياً عند module load
-- تستخدم **absolute imports**: `from ui.i18n.ar import AR_STRINGS`
+- تستخدم **absolute imports**: `from ui.i18n.ar import AR_STRINGS` و `from ui.i18n.en import EN_STRINGS`
 - لو فشل الـ import → الـ dict يبقى فارغاً بدون exception (try/except)
+- `_TRANSLATIONS` dict يحتوي `"ar": {}` و `"en": {}` — يُملأ من الملفات الخارجية فقط
 
 **اتجاه اللغة:**
 ```python
-_LANGUAGE_DIRECTION = {"ar": "rtl", "en": "ltr"}
-_LANGUAGE_DISPLAY_NAMES = {"ar": "العربية", "en": "English"}
+_LANGUAGE_DIRECTION      = {"ar": "rtl", "en": "ltr"}
+_LANGUAGE_DISPLAY_NAMES  = {"ar": "العربية", "en": "English"}
+```
+
+**`_apply_direction()` — داخلي:**
+```python
+# يستدعي QApplication.instance().setLayoutDirection(self.qt_direction)
+# محاط بـ try/except — لا يرمي exception
+
+_save_to_db()
+# يحفظ "ui_language" في settings عبر get_connection() + set_setting()
+# محاط بـ try/except — لا يرمي exception
 ```
 
 > ⚠️ لا تمرر نصاً عربياً مباشرة لـ `tr()` — استخدم المفتاح المقابل دائماً.

@@ -152,9 +152,12 @@ DataTableWidget(columns, stretch_col=-1, col_widths=None,
 
 ### `ui/widgets/forms/inputs.py`
 
+> **ملاحظة [إصلاح]:** المسار الصحيح للـ import: `from ..theme.input_styles import input_style, spinbox_style`
+> (بدل `from ..theme.styles` المحذوف في Refactor V3)
+
 ```python
 AmountSpinBox(max_=999_999_999, dec=2, min_=0, height=32, currency="")
-# يغير لون الـ spinbox تلقائياً لو القيمة > 0
+# يغير لون الـ spinbox تلقائياً لو القيمة > 0 (spinbox_style positive=True)
 
 DateField(date=None, height=32, width=None)
   .date_str() -> str
@@ -166,11 +169,12 @@ LabeledInput(label, widget, unit="", spacing=8, label_width=None)
   .widget -> QWidget
 
 RequiredLineEdit(placeholder="", height=32)
-  .validate() -> bool
-  .text_stripped() -> str
+  .validate() -> bool      # يضبط _error=True ويُركّز لو فارغ
+  .text_stripped() -> str  # text().strip()
   .clear_error()
 
 NotesLineEdit(placeholder="ملاحظات اختيارية...", height=30)
+# تغير ستايل عند focus (italic → normal)
 ```
 
 ---
@@ -264,34 +268,46 @@ FormGroup(title="", accent=None)
 ### `ui/widgets/combo/unit_service.py` — Business Logic
 
 ```python
-load_units(conn, force=False) -> list
-save_units(conn, units: list)
-add_unit(conn, value: str, label: str) -> bool
-remove_unit(conn, value: str) -> bool
-get_all_units(conn) -> list
-reset_units_to_default(conn)
-invalidate_units_cache(conn=None)
-get_last_unit(conn, key, fallback="cm") -> str
-set_last_unit(conn, key, unit)
-
+_UNITS_KEY     = "custom_units"    # مفتاح الـ settings في DB
 _DEFAULT_UNITS = [
     ("px","px — بكسل"), ("mm","mm — مليمتر"),
     ("cm","cm — سنتيمتر"), ("m","m  — متر"),
     ("inch","inch — بوصة"),
 ]
+
+load_units(conn, force=False) -> list
+# يستخدم cache بـ _cache_key(conn) — db_path أو id(conn) كـ fallback
+# force=True → يتجاوز الـ cache ويُعيد الكتابة
+save_units(conn, units: list)
+# يحفظ في settings + invalidate_units_cache(conn)
+add_unit(conn, value: str, label: str) -> bool
+# value.strip().lower() + label.strip()
+# يرجع False لو الـ value موجود مسبقاً
+remove_unit(conn, value: str) -> bool
+# يرفض حذف الوحدات الافتراضية (_DEFAULT_UNITS)
+# يرجع False لو لم يجدها
+get_all_units(conn) -> list       # = load_units(conn)
+reset_units_to_default(conn)      # save_units(conn, list(_DEFAULT_UNITS))
+invalidate_units_cache(conn=None)
+# conn=None → _units_cache.clear() كامل
+# conn=<conn> → يحذف cache هذا الملف فقط
+get_last_unit(conn, key, fallback="cm") -> str
+set_last_unit(conn, key, unit)
 ```
 
 ### `ui/widgets/combo/unit.py` — Widget
 
 ```python
 UnitCombo(conn, last_key=None, current=None)
-# يستخدم blocked_signals() داخلياً
+# يستخدم blocked_signals() داخلياً عند الـ populate
 # Signals: unit_changed(str)
-  .current_unit() -> str
+  .current_unit() -> str    # currentData() or "cm"
   .set_unit(unit: str)
   .refresh()
+  # invalidate_units_cache + _populate() → يُعيد اختيار القيمة السابقة
 
 make_unit_combo(conn=None, current="cm", last_key=None) -> QComboBox
+# لو conn=None → يستخدم _DEFAULT_UNITS مباشرة بدون DB
 ```
 
 ---
@@ -302,15 +318,21 @@ make_unit_combo(conn=None, current="cm", last_key=None) -> QComboBox
 
 ```python
 CategoryCombo(conn, scope="all")
-# يستمع لـ bus.data_changed + bus.company_data_changed
-# يستخدم blocked_signals() + weakref لمنع memory leak
-# يستخدم CategoryService بدل db import مباشر
+# [إصلاح 2] يستمع لـ bus.data_changed + bus.company_data_changed
+# [FIX-14] Qt.UniqueConnection على كل ربط bus لمنع التسجيل المضاعف
+# [إصلاح memory leak] يستخدم weakref للـ company_data_changed slot
+# [إصلاح هيكلة] يستخدم CategoryService عبر populate_category_combo
   .refresh()
+  # _live_conn() → populate_category_combo → يُعيد اختيار السابق
+  # لو _live_conn رمى exception → يرجع بدون فعل شيء
   .get_category() -> int | None
   .set_category(cat_id)
+  # لو لم يجد → setCurrentIndex(0)
 
 populate_category_combo(combo: QComboBox, conn, scope="all",
                         all_label="— الكل —")
-# تُستخدم من CategoryCombo وأي widget آخر
 # [إصلاح هيكلة] يستخدم CategoryService.get_all() + build_tree() داخلياً
+# يُضيف all_label كأول خيار (data=None) لو all_label غير فارغ
+# يُلوّن التصنيفات بألوانها عبر Qt.ForegroundRole
+# الهرمية: depth=0 → لا indent | depth>0 → "    " * depth + "↳ "
 ```

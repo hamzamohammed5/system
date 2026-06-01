@@ -29,6 +29,7 @@ table_style(variant="normal") -> str
 
 splitter_style() -> str
 # المصدر الوحيد — لا تكرار في أي ملف آخر
+# يُستخدم في BaseSection._build()
 
 ROW_HEIGHT_COMPACT = 34
 ROW_HEIGHT_NORMAL  = 40
@@ -90,9 +91,11 @@ group_box_style(accent=None) -> str
 ```python
 tab_style(accent=None, size="normal") -> str
 # size: "normal" | "inner" | "small"
+# يُستخدم في TabSectionBase._setup()
 
 scroll_style(width=6) -> str
 # المصدر الوحيد لـ QScrollArea / QScrollBar — لا تكرار
+# يُستخدم في BaseDetailPanel._build()
 
 filter_bar_style() -> str
 toolbar_style() -> str
@@ -109,12 +112,15 @@ list_style() -> str
 ```python
 h_divider(color=None, height=1) -> QFrame
 # فاصل أفقي موحد
+# color افتراضي: _C['border']
 
 v_divider(color=None, width=1, margin_v=4) -> QFrame
 # فاصل عمودي موحد — للـ toolbars
+# color افتراضي: _C['border_med']
 
 wrap_in_scroll(widget: QWidget, min_height=0, horizontal=False) -> QScrollArea
 # يلف أي widget في QScrollArea موحد مع scroll_style()
+# يُستخدم في BaseCrudForm._build()
 ```
 
 ---
@@ -125,3 +131,4 @@ wrap_in_scroll(widget: QWidget, min_height=0, horizontal=False) -> QScrollArea
 - `_C` يُحدَّث تلقائياً عند تغيير الثيم عبر `apply_theme()`.
 - `splitter_style()` و `scroll_style()` — كل منهما مصدر وحيد، لا تنسخهما في ملفات أخرى.
 - عند تغيير الثيم: استدعِ `invalidate_stylesheet_cache()` من `components/button.py` لمسح الـ cache.
+- `input_style` و `spinbox_style` يُستوردان في `forms/inputs.py` بالمسار الصحيح: `from ..theme.input_styles import input_style, spinbox_style`.

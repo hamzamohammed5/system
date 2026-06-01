@@ -170,8 +170,17 @@ _on_language_changed(lang_code)
 
 **`_on_theme_changed`:**
 ```python
-# يُعيد تطبيق bg_page على: self + scroll + inner widget + children
+# يُعيد تطبيق bg_page على: self + scroll + inner widget + children (بدون header)
 # يُعيد تطبيق scroll_style() على self._scroll
+```
+
+**إشعارات:**
+```python
+panel.show_success(msg, auto_hide=3000)
+panel.show_error(msg)          # danger level — لا auto_hide
+panel.show_warning(msg, auto_hide=0)
+panel.show_info(msg, auto_hide=0)
+# كلها تستدعي self._notif.show(msg, level, auto_hide)
 ```
 
 **API:**
@@ -179,7 +188,7 @@ _on_language_changed(lang_code)
 panel.load_item(item_id: int)
 panel.clear()                  # يُعيد ضبط _item_id/_item_data + يُخفي notif
 panel.show_success(msg, auto_hide=3000)
-panel.show_error(msg)          # danger level — لا auto_hide
+panel.show_error(msg)
 panel.show_warning(msg, auto_hide=0)
 panel.show_info(msg, auto_hide=0)
 panel.item_id -> int | None
@@ -195,6 +204,7 @@ panel.content_layout -> QVBoxLayout
 ### `ui/widgets/base/section.py`
 
 **ملاحظة:** `BaseSection` تجمع سلوك `CrudSection` القديم — استخدمها مباشرة.
+`CrudSection` في `panels/crud_section.py` أصبحت alias لـ `BaseSection` للتوافق مع الكود القديم.
 
 **Override المطلوب:**
 ```python
@@ -211,9 +221,10 @@ CONNECT_BUS: bool = False
 LAYOUT_REVERSED: bool = False
 
 FORM_POSITION: str = "none"
-# "none"   → لا فورم (يرجع self._list مباشرة)
-# "bottom" → فورم أسفل لوحة القائمة (container: VBox(list + form))
-# "left"   → يرجع self._list (الفورم خارج الـ splitter)
+# "none"   → لا فورم: self._form = None، يرجع self._list مباشرة
+# "bottom" → فورم أسفل لوحة القائمة: container VBox(list + form)، self._form = form
+# "left"   → يرجع self._list (الفورم خارج الـ splitter)، لكن self._form = form (لا يُهمَل)
+# أي قيمة أخرى → نفس سلوك "left"
 
 SPLITTER_RATIO: tuple = (1, 2)  # (list_stretch, detail_stretch)
 
@@ -225,15 +236,20 @@ _on_item_selected(item_id: int)
 # افتراضياً: يستدعي detail.load_item(item_id) لو موجود
 ```
 
-**`_build_left_panel()` — منطق FORM_POSITION:**
+**`_build_left_panel()` — منطق FORM_POSITION بالتفصيل:**
 ```python
-# form = self._create_form()
+form = self._create_form()
+
 # لو form is None أو FORM_POSITION == "none":
 #   self._form = None → يرجع self._list
+
 # لو FORM_POSITION == "bottom":
-#   container = QWidget → VBoxLayout(list stretch=1, form) → self._form = form
-# لو FORM_POSITION == "left" أو غيره:
-#   self._form = form → يرجع self._list
+#   container = QWidget → VBoxLayout(list stretch=1, form)
+#   self._form = form → يرجع container
+
+# لو FORM_POSITION == "left" أو أي قيمة أخرى:
+#   self._form = form   ← يُحفظ (لا يُهمَل على عكس "none")
+#   يرجع self._list (الفورم خارج الـ splitter — للتطبيق يديره الـ subclass)
 ```
 
 **`_apply_sizes()` — يُشغَّل بـ QTimer.singleShot(50):**
@@ -252,7 +268,7 @@ section.clear_detail()       # يستدعي detail.clear() لو موجود
 section.select_item(item_id) # يستدعي list.select_item() + _on_item_selected()
 section.list_panel -> QWidget
 section.detail_panel -> QWidget
-section.form_panel -> QWidget | None
+section.form_panel -> QWidget | None   # None لو FORM_POSITION="none" أو لا يوجد form
 ```
 
 ---
@@ -273,16 +289,18 @@ def _build_tabs(self, tabs: QTabWidget)  # Override إلزامي
 ```python
 # يرجع False لو conn is None
 # يجلب company_state.get_erp_conn() — يستخدم get_erp_conn() (public API)
+# [FIX] استخدام get_erp_conn() بدل _get_conn("erp") (private API)
 # لو conn is shared → False (لا تُغلق)
 # لو conn مختلف → True (owned → يُغلق)
 # عند أي exception → False (الاختيار الآمن)
+# السلوك المقصود: الأمان أهم — أفضل عدم الإغلاق من إغلاق connection مشترك
 ```
 
 **`closeEvent`:**
 ```python
 # يستدعي _is_owned_connection(self.conn)
 # لو True → self.conn.close() مع try/except
-# لو False → لا شيء (الأغلب أن الـ connection مشترك)
+# لو False → لا شيء (الأغلب أن الـ connection مشترك من company_state)
 ```
 
 **Properties:**
@@ -340,18 +358,19 @@ _build_extra(root_layout: QVBoxLayout)
 #   1. _collect() → None = فشل
 #   2. _do_insert(data)
 #   3. _reset()
-#   4. emit_company_data_changed()
+#   4. emit_company_data_changed()   ← [FIX] بدل bus.data_changed.emit()
 #   5. saved.emit(new_id)
 
 # _on_save():
 #   1. _collect() → None = فشل
 #   2. _do_update(self._editing_id, data)
 #   3. _reset()
-#   4. emit_company_data_changed()
+#   4. emit_company_data_changed()   ← [FIX] بدل bus.data_changed.emit()
 #   5. saved.emit(self._editing_id)
 
 # _on_cancel():
 #   1. _reset()
+# أخطاء _do_insert / _do_update → QMessageBox.warning
 ```
 
 **`load_for_edit(item_id)`:**
