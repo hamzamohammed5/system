@@ -24,21 +24,26 @@
 
 ```python
 card_colors(color: str) -> tuple[str, str]
-# (bg, border) من CARD_PALETTES حسب الثيم الحالي
+# (bg, border) من CARD_PALETTES في theme_manager حسب الثيم الحالي
+# يستورد theme_manager و CARD_PALETTES مباشرة
 # fallback: (_C["card_fallback_bg"], _C["card_fallback_border"])
 
 status_colors(level: str) -> dict[str, str]
 # يبني الـ map من _C في كل استدعاء — يضمن التزامن مع الثيم
 # level: "success" | "warning" | "danger" | "info" | "neutral" | "primary" | "purple" | "orange"
 # يرجع: {"fg": str, "bg": str, "border": str}
+# "neutral" هو الـ fallback لأي level غير معروف
 
 waste_level(pct: float) -> str   # "high" | "medium" | "low" | "zero"
-waste_colors(pct: float) -> tuple[str, str]   # (bg, border) حسب المستوى
+# pct >= 20 → "high" | pct >= 10 → "medium" | pct > 0 → "low" | else → "zero"
 
-waste_zero_bg() -> str
-waste_zero_border() -> str
-waste_zero_color() -> str
-waste_text_color() -> str   # لون نص الهادر (orange من _C)
+waste_colors(pct: float) -> tuple[str, str]   # (bg, border) حسب المستوى
+# يستدعي waste_level() ثم يقرأ _C[f"waste_{level}_bg"] و _C[f"waste_{level}_border"]
+
+waste_zero_bg() -> str     # _C["waste_zero_bg"]
+waste_zero_border() -> str # _C["waste_zero_border"]
+waste_zero_color() -> str  # _C["waste_zero_color"]
+waste_text_color() -> str  # _C["orange"] — لون نص الهادر
 ```
 
 ---
@@ -49,15 +54,16 @@ waste_text_color() -> str   # لون نص الهادر (orange من _C)
 
 ```python
 get_active_company_id() -> int | None
-# يرجع company_id النشط أو None
+# يرجع company_state.company_id لو is_ready وإلا None
+# يُعيد None عند أي exception
 
 emit_company_data_changed()
-# يُطلق bus.company_data_changed(cid) لو توجد شركة نشطة
-# وإلا يُطلق bus.data_changed()
-# الاستخدام الصحيح — بدل bus.data_changed.emit() مباشرة
+# لو cid is not None → bus.company_data_changed.emit(cid)
+# لو None → bus.data_changed.emit()
+# يُسجّل warning عند أي exception
 
 is_same_company(company_id: int) -> bool
-# يتحقق لو company_id هو نفس الشركة النشطة
+# يتحقق لو company_id == get_active_company_id()
 ```
 
 **الاستخدام الصحيح:**
@@ -82,39 +88,38 @@ bus.data_changed.emit()
 ```python
 _test_conn(conn) -> bool
 # يختبر الاتصال بـ SELECT 1
-# يرجع True لو سليم، False لو conn=None أو رمى exception
+# يرجع False لو conn=None أو رمى exception
 
 _conn_null_error(class_name: str, method: str, db: str = "erp") -> RuntimeError
-# يبني RuntimeError موحدة لحالة فشل الاتصال
-# الرسالة تتضمن اسم الـ class والـ method واسم قاعدة البيانات
-# تُستدعى من _live_conn() و _get_safe_conn() و _get_erp_conn()
+# يبني RuntimeError موحدة مع رسالة واضحة
 ```
 
 #### LiveConnMixin
 
 ```python
 # _conn_attr: str = "conn"   (اسم الـ attribute الذي يحمل الـ connection)
-# _conn_cache: instance variable (يُخزَّن بـ object.__setattr__)
+# _conn_cache: يُخزَّن بـ object.__setattr__ (instance variable)
 
 ._live_conn() -> Connection
 # 1. self.__dict__["_conn_cache"] لو سليم (بدون SELECT 1 — fast path)
 # 2. self.{_conn_attr} لو سليم
-# 3. company_state.get_erp_conn() كـ fallback
+# 3. company_state.get_erp_conn() كـ fallback + يُحدّث self.conn + الـ cache
 # 4. RuntimeError واضحة (عبر _conn_null_error) لو كل شيء فشل
 
 ._invalidate_conn_cache()
-# يُعيد ضبط _conn_cache = None
+# object.__setattr__(self, "_conn_cache", None)
 
 ._live_acc_conn() -> Connection
 # accounting connection — نفس منطق _live_conn()
+# fallback عبر get_accounting_connection()
 # Raises: RuntimeError عبر _conn_null_error لو فشل
 ```
 
 **`__init_subclass__` — تحذير تلقائي:**
 ```python
-# لو الـ subclass يُعرِّف اسم connection مختلف (مثل "db_conn") بدون تحديث _conn_attr
-# يُصدر UserWarning تلقائياً عند تعريف الـ class
-# مثال: _conn_attr = "db_conn"   ← أضف هذا لإيقاف التحذير
+# يفحص __annotations__ + __dict__ بحثاً عن أسماء تحتوي "conn" أو "connection"
+# لو وجد ولم يُحدَّث _conn_attr → UserWarning
+# يتجاهل الأسماء التي تبدأ بـ "_"
 ```
 
 #### SafeConnMixin
@@ -125,35 +130,37 @@ _conn_null_error(class_name: str, method: str, db: str = "erp") -> RuntimeError
 
 ._get_safe_conn() -> Connection
 # إعادة اتصال تلقائية لو فشل الـ connection
-# [إصلاح شرط مستحيل]: منطق الـ else branch أُصلح:
-#   - db_name == "erp"   → get_erp_conn() مباشرة (public API)
-#   - db_name != "erp"   → يجرب _get_conn() كـ fallback
-#                           لو فشل → يسجل warning ويحاول erp كـ last resort
-#   - القديم كان يحتوي شرطاً مستحيلاً (== "erp" داخل else != "erp")
+# db_name == "erp"  → company_state.get_erp_conn() مباشرة
+# db_name != "erp"  → يجرب company_state._get_conn(db_name) كـ fallback
+#                     لو فشل → يجرب get_erp_conn() كـ last resort مع warning
 # Raises: RuntimeError عبر _conn_null_error لو كل شيء فشل
 
 ._get_company_id() -> int | None   # static method
 ._should_respond_to_company(company_id, stored_attr="_company_id") -> bool
+# لو stored = None → يضبطه من company_id الواصل ويرجع True
 ```
 
 #### DualConnMixin(SafeConnMixin)
 
 ```python
-# لأي widget يحتاج acc_conn + erp_conn معاً
 ._init_dual_conn(acc_conn, erp_conn, acc_db: str = "accounting")
+# يستدعي _init_safe_conn(acc_conn, acc_db)
+# يحفظ erp_conn في _erp_conn_ref
+# يحفظ company_id من _get_company_id()
 
 ._get_erp_conn() -> Connection
-# [إصلاح private API] يستخدم get_erp_conn() (public) بدل _get_conn("erp")
+# يستخدم get_erp_conn() (public API) بدل _get_conn("erp")
 # Raises: RuntimeError عبر _conn_null_error لو فشل
 
 ._on_dual_company_event(company_id: int) -> bool
+# = _should_respond_to_company(company_id)
 ```
 
 **ملاحظات:**
 - `LiveConnMixin.__init_subclass__` يُصدر `UserWarning` لو الـ subclass يُعرِّف اسم connection مختلف بدون تحديث `_conn_attr`.
-- `SafeConnMixin._get_safe_conn` يستخدم `get_erp_conn()` (public API) بدل `_get_conn()` (private).
-- كل الـ mixins ترمي `RuntimeError` واضحة (عبر `_conn_null_error`) بدل إرجاع `None` صامت عند فشل الاتصال.
-- `_test_conn` تستخدم `SELECT 1` — لا تستخدمها في hot paths متكررة (مثل `_get_conn` في `ComponentRow` التي تتجنبها عمداً للأداء).
+- `SafeConnMixin._get_safe_conn` يستخدم `get_erp_conn()` (public API) — إصلاح الشرط المستحيل القديم موثّق في الكود.
+- كل الـ mixins ترمي `RuntimeError` واضحة بدل إرجاع `None` صامت.
+- لا تستخدم `_test_conn` في hot paths — overhead غير ضروري.
 
 ---
 
@@ -164,7 +171,7 @@ _conn_null_error(class_name: str, method: str, db: str = "erp") -> RuntimeError
 ```python
 @requires_company
 def my_method(self): ...
-# رسالة افتراضية: tr("select_company")
+# رسالة افتراضية: tr("select_company") عبر _default_msg()
 
 @requires_company(return_value=[])
 def _load_rows(self) -> list: ...
@@ -172,15 +179,23 @@ def _load_rows(self) -> list: ...
 @requires_company(return_value_factory=list)
 def _load_rows(self) -> list: ...
 # return_value_factory يتجنب mutable default sharing
+# يُستدعى بـ return_value_factory() عند التنفيذ
 
 @requires_company(message="رسالة مخصصة")
 def my_method(self): ...
 ```
 
+**الـ decorator يقبل 4 أنماط:**
+1. بدون أقواس: `@requires_company`
+2. مع رسالة مخصصة: `@requires_company(message="...")`
+3. مع قيمة افتراضية: `@requires_company(return_value=[])`
+4. مع factory: `@requires_company(return_value_factory=list)`
+
 **أولوية عرض التحذير (بالترتيب):**
 `show_warning()` → `_warn()` → `_notif.show()` → debug log صامت
 
 **ملاحظة:** `_default_msg()` تستخدم `tr("select_company")` — تدعم الترجمة تلقائياً.
+الـ sentinel object `_SENTINEL = object()` يُستخدم داخلياً للتفريق بين None المقصود وغياب الـ parameter.
 
 ---
 
@@ -195,10 +210,13 @@ i18n_manager.language -> str                    # "ar" | "en"
 i18n_manager.is_rtl -> bool
 i18n_manager.qt_direction -> Qt.LayoutDirection
 i18n_manager.set_language(lang, save=True)
+# لو lang غير موجود في _TRANSLATIONS → يُعيّن "ar"
 # يُحدّث _language + يُطبّق اتجاه Layout + يحفظ في DB + يُطلق language_changed
 
 i18n_manager.translate(key, lang=None, **kwargs) -> str
 # fallback للعربية لو المفتاح ناقص في اللغة المطلوبة
+# يرجع key نفسه لو غير موجود في أي لغة
+# يُطبّق .format(**kwargs) بأمان (try/except)
 
 i18n_manager.load_from_db()
 # يحمّل اللغة المحفوظة + يُطبّق الاتجاه — يُستدعى عند بدء التطبيق
@@ -207,21 +225,22 @@ i18n_manager.get_available_languages() -> list[{code, name, active, is_rtl}]
 
 i18n_manager.add_translations(lang_code: str, translations: dict)
 # يضيف/يحدث ترجمات برمجياً بدون تعديل الملفات
-# مفيد لـ plugins أو وحدات اختبار
+# لو lang_code جديد → يُنشئ dict فارغ أولاً
 
 def tr(key: str, lang=None, **kwargs) -> str
-# دالة الترجمة الرئيسية
-# تُرجع المفتاح نفسه لو غير موجود (fallback صامت)
-# مثال: tr("save")                           → "حفظ" | "Save"
-# مثال: tr("delete_confirm_msg", name="X")   → "هل تريد حذف «X»؟"
+# = i18n_manager.translate(key, lang, **kwargs)
 ```
 
-**مصادر الترجمات:** `ui/i18n/ar.py` (AR_STRINGS) و `ui/i18n/en.py` (EN_STRINGS)
-
 **تحميل الترجمات:**
-- يُحمَّل تلقائياً من الملفين عند أول import لـ `i18n.py` عبر `_load_translations()`
-- يستخدم absolute imports: `from ui.i18n.ar import AR_STRINGS`
-- لو فشل الـ import → الـ dict يبقى فارغاً بدون exception
+- `_load_translations()` تُستدعى تلقائياً عند module load
+- تستخدم **absolute imports**: `from ui.i18n.ar import AR_STRINGS`
+- لو فشل الـ import → الـ dict يبقى فارغاً بدون exception (try/except)
+
+**اتجاه اللغة:**
+```python
+_LANGUAGE_DIRECTION = {"ar": "rtl", "en": "ltr"}
+_LANGUAGE_DISPLAY_NAMES = {"ar": "العربية", "en": "English"}
+```
 
 > ⚠️ لا تمرر نصاً عربياً مباشرة لـ `tr()` — استخدم المفتاح المقابل دائماً.
 > للمزيد → راجع `i18n_reference.md`

@@ -46,7 +46,7 @@ WINDOW_DEFAULT_W  = SIDEBAR_EXPANDED_WIDTH + CONTENT_MIN_WIDTH  # 1044
 
 ```python
 get_font_size() -> int
-# يقرأ من _module_font_size أولاً (module-level cache [تحسين 43])
+# يقرأ من _module_font_size أولاً (module-level cache)
 # إن لم يوجد → AppState.font_size() ثم يُخزّن في الـ cache
 
 set_font_size(size: int)
@@ -79,24 +79,30 @@ AppState.font_size() -> int
 AppState.on_font_changed(size: int)
 # يُقيّد بـ [MIN_FONT_SIZE, MAX_FONT_SIZE]
 # يُحدّث _font_size + _module_font_size في font.py
-# يُبطل button stylesheet cache
+# يُبطل button stylesheet cache عبر _invalidate_button_cache()
 
 AppState.invalidate()
 # يمسح _font_size = None
-# يستدعي invalidate_stylesheet_cache() الكامل (theme.py)
+# يستدعي invalidate_stylesheet_cache() من theme.py
+# fallback: يستدعي _invalidate_button_cache() مباشرة لو فشل theme
 # يُستدعى من MainWindow._on_company_changed()
 ```
 
 **تسلسل القراءة:**
 ```
 get_font_size()
-  → _module_font_size (module cache, أسرع)
+  → _module_font_size (module cache، أسرع)
   → AppState.font_size()
     → _font_size (class cache)
     → _load_font_size_from_db()
       → DB → settings["font_size"]
       → fallback: DEFAULT_FONT_SIZE
 ```
+
+**`_load_font_size_from_db()`:**
+- لو `raw = None` → يكتب DEFAULT_FONT_SIZE في DB ويرجعه
+- لو القيمة خارج `[MIN_FONT_SIZE, MAX_FONT_SIZE]` → يُعيد ضبطها ويرجع DEFAULT
+- يستخدم `int(float(raw))` لتحويل النص
 
 ---
 
@@ -133,27 +139,32 @@ bus.data_changed.emit()
 
 ```python
 _C: dict   # dict الألوان النشطة — يُملأ من _LIGHT_THEME عند الـ import الأول
+           # عبر _init_default_theme() التي تستورد من theme_manager
 
 apply_theme(theme_colors: dict, app: QApplication = None)
 # يُحدّث _C + يمسح كل الـ caches + يُطبّق stylesheet على الـ app
 # يُستدعى من ThemeManager.set_theme() — لا تستدعه مباشرة
+# يستدعي invalidate_stylesheet_cache() + invalidate_stylesheet_cache من button.py
 
 get_theme_color(key: str, fallback: str = "#000000") -> str
 # يرجع لون من _C بأمان مع fallback
 
 build_stylesheet(base: int) -> str
-# cache key = (font_size, theme_hash)
+# cache key = (font_size, theme_hash) عبر _ss_cache dict
 # يبني الـ stylesheet الكامل مقسّماً على دوال مساعدة
+# يُقيّد base بـ [MIN_FONT_SIZE, MAX_FONT_SIZE] من ui.constants
 
 invalidate_stylesheet_cache()
-# يمسح _ss_cache + _module_font_size + يُعيد حساب _current_theme_hash
+# يمسح _ss_cache + يُعيد ضبط _current_theme_hash = ""
+# يستدعي _set_module_font_cache(None) من ui.font
 ```
 
-**أقسام الـ stylesheet:**
-`base_reset`, `message_box`, `dialog`, `typography`, `groupbox`,
-`buttons`, `inputs`, `combobox`, `tables`, `tree`, `tabs`, `scrollbars`, `misc`
+**أقسام الـ stylesheet (الدوال المساعدة الفعلية):**
+`_ss_base_reset`, `_ss_message_box`, `_ss_dialog`, `_ss_typography`,
+`_ss_groupbox`, `_ss_buttons`, `_ss_inputs`, `_ss_combobox`,
+`_ss_tables`, `_ss_tree`, `_ss_tabs`, `_ss_scrollbars`, `_ss_misc`
 
-**مفاتيح `_C` الكاملة:**
+**مفاتيح `_C` الكاملة (من theme_manager.py):**
 ```python
 # Backgrounds
 "bg_page", "bg_surface", "bg_surface_2", "bg_hover", "bg_active", "bg_input"
@@ -203,8 +214,9 @@ _DARK_THEME:  dict
 THEMES: dict = {"light": _LIGHT_THEME, "dark": _DARK_THEME}
 THEME_DISPLAY_NAMES: dict = {"light": "فاتح", "dark": "داكن"}
 
-CARD_PALETTES: dict   # lookup tables لألوان البطاقات حسب الثيم
-# {"light": {color: (bg, border), ...}, "dark": {...}}
+CARD_PALETTES: dict
+# {"light": {color_hex: (bg, border), ...}, "dark": {...}}
+# يُستخدم من colors.py في card_colors()
 
 theme_manager = ThemeManager()   # Singleton
 ```
@@ -214,7 +226,10 @@ theme_manager.current_theme -> str   # "light" | "dark"
 theme_manager.is_dark -> bool
 
 theme_manager.set_theme(theme_name: str, save: bool = True)
-# يُحدّث _current_theme → apply_theme() → يحفظ في DB → يُطلق bus.theme_changed
+# لو theme_name غير موجود → يُعيّن "light"
+# لو نفس الثيم الحالي → يرجع بدون فعل شيء
+# يُحدّث _current_theme → apply_theme() → _save_to_db() → _emit_theme_changed()
+# _emit_theme_changed() يُطلق bus.theme_changed ثم self.theme_changed
 
 theme_manager.load_from_db()
 # يحمّل الثيم المحفوظ + يطبّقه — يُستدعى عند بدء التطبيق
@@ -228,7 +243,8 @@ SettingsDialog._save()
   → theme_manager.set_theme("dark")
     → apply_theme(colors)          # يُحدّث _C + يمسح cache
     → _save_to_db()
-    → bus.theme_changed.emit("dark")
+    → _emit_theme_changed("dark")  # يُطلق bus.theme_changed
+    → self.theme_changed.emit("dark")
 ```
 
 ---
@@ -242,6 +258,8 @@ MainWindow(app: QApplication)
 # resize: WINDOW_DEFAULT_W × 820
 # setLayoutDirection: Qt.RightToLeft
 # setMinimumSize: (SIDEBAR_COLLAPSED_WIDTH + 400, 500)
+# يبني الـ stack مع NoCompanyScreen عند index 0
+# لو company_state.is_ready عند __init__ → يستدعي _build_tabs() فوراً
 ```
 
 **هيكل الـ Stack:**
@@ -271,54 +289,84 @@ index 6 → OrdersSection     ("الطلبات")
 ```python
 # "settings"     → SettingsDialog (لا يغير الـ stack)
 #                  ثم sidebar.refresh_all_buttons()
-# "shared_items" → SharedItemsManagerDialog مباشرة
+# "shared_items" → _open_shared_items() مباشرة
+#                  يفتح central DB + SharedItemsManagerDialog
+#                  يربط items_changed بـ emit_company_data_changed
 
 def _on_company_changed(company_id: int):
-    AppState.invalidate()   # مسح font_size cache
-    self._refresh_tabs()
+    AppState.invalidate()          # مسح font_size cache
+    company_state.company_name     # يضبط window title
+    self._refresh_tabs()           # = _build_tabs()
     bus.company_data_changed.emit(company_id)
 ```
 
 **حماية من فشل الـ import:**
 ```python
 _try_build_section(builder_fn, section_name) -> QWidget
-# يرجع placeholder مع رسالة خطأ واضحة لو فشل ImportError أو أي Exception
+# يرجع placeholder مع رسالة خطأ واضحة لو فشل ImportError أو Exception
 
 _make_placeholder_tab(section_name, error="") -> QWidget
-# يعرض: أيقونة 🚧 + عنوان + رسالة الخطأ
+# يعرض: أيقونة 🚧 + عنوان f"قسم {section_name}" + رسالة الخطأ أو "قيد التطوير"
 ```
 
 **دورة حياة الـ tabs:**
 ```python
 _build_tabs()
-# يُدمّر tabs القديمة لو موجودة (_destroy_tabs)
-# يجلب conn من company_state.get_erp_conn()
-# يبني كل section بـ _try_build_section()
+# لو _tabs_built → يستدعي _destroy_tabs() أولاً
+# يجلب conn من company_state.get_erp_conn() — لو فشل conn = None
+# يبني كل section بـ _try_build_section() مع closure: conn_fn=lambda: conn
+# يذهب لـ index 1 ويُفعّل أول زر في الـ sidebar
 # يُشغّل _validate_index_map() للتحقق
+# يضبط self._tabs_built = True
 
 _destroy_tabs()
 # bus.blockSignals(True) أثناء الإزالة
-# يُزيل كل widgets من index 1 فصاعداً
-# يستدعي company_state.refresh_connections() بعد الإزالة
+# يُزيل كل widgets من index 1 فصاعداً (يبقي index 0 = NoCompanyScreen)
+# يستدعي w.hide() + w.deleteLater() لكل widget
+# QApplication.processEvents()
+# bus.blockSignals(False)
+# يستدعي company_state.refresh_connections()
+# يُعيد ضبط self._accounting = None + self._tabs_built = False
 
 _validate_index_map()
-# assert على كل index في index_map < stack.count()
+# assert أن كل index في index_map < stack.count()
+# يُثير AssertionError برسالة واضحة لو فشل
+```
+
+**بناء الـ Sidebar (من `_sidebar.py`):**
+```python
+# أقسام Nav بالترتيب:
+("الإنتاج", [
+    ("📊", "حساب التكلفة", "costing",    ""),
+    ("💰", "التسعير",       "pricing",    ""),
+]),
+("المالية", [
+    ("🏦", "الحسابات",     "accounting", ""),
+    ("📦", "المخزن",        "inventory",  ""),
+]),
+("العمل", [
+    ("🎨", "التصميمات",    "design",     ""),
+    ("📋", "الطلبات",       "orders",     ""),
+]),
+# Footer (بعد divider):
+("🔗", "العناصر المشتركة", "shared_items", "")
+("⚙️", "الإعدادات",        "settings",     "")
+# + _ToggleButton
 ```
 
 **إضافة Tab جديدة:**
 ```python
-# 1. في _build_tabs():
+# 1. في _build_tabs() — أضف builder function:
 def _build_my_section():
     from ui.tabs.my_section import MySection
     return MySection(conn_fn=lambda: conn)
 _builders.append((_build_my_section, "اسم القسم"))
 
 # 2. في index_map:
-"my_key": N   # N = موقع الـ section في _builders + 1
+"my_key": N   # N = موقع في _builders + 1
 
-# 3. في _sidebar._build():
-("🔑", "اسم القسم", "my_key", "")
+# 3. في _sidebar._build() — nav_sections:
+("اسم القسم", [("🔑", "اسم القسم", "my_key", "")])
 
-# 4. في _validate_index_map():
-# يُضاف تلقائياً لو موجود في index_map
+# _validate_index_map() يتحقق تلقائياً
 ```
