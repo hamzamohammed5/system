@@ -40,7 +40,7 @@ SEARCH_PLACEHOLDER: str = "🔍  بحث..."
 SHOW_CATEGORY: bool = False
 SHOW_DATE: bool = False
 FILTER_SCOPE: str = "all"
-DATE_COL: str = "date"          # اسم الـ key في dict البيانات للتاريخ
+DATE_COL: str = "date"          # اسم الـ key في dict البيانات للتاريخ [E-02]
 CONNECT_BUS: bool = True
 
 # Sort settings
@@ -62,8 +62,17 @@ _build_extra_header_actions(header: ListHeader)
 _sort_key(col, row)                    # يُستدعى فقط لو SORTABLE=True
 ```
 
-**[إصلاح 5] refresh() المحدّث:**
-يُوقف الـ `_timer` قبل `reload()` لمنع تشغيل `_apply_filter` مرتين.
+**[إصلاح 5] `refresh()` المحدّث:**
+```python
+def refresh(self):
+    self._all_rows = self._load_rows()
+    if self._filter_toolbar and self.conn:
+        self._timer.stop()    # ← يمنع double apply_filter
+        self._filter_toolbar.reload(self.conn)
+    self._apply_filter()
+```
+المشكلة القديمة: `_filter_toolbar.reload()` يُعيد ملء الـ combo → `currentIndexChanged` → `_timer.start()` → ثم `_apply_filter()` مباشرة = تنفيذ مزدوج.
+الحل: إيقاف الـ timer قبل `reload()`.
 
 **API:**
 ```python
@@ -228,12 +237,15 @@ section.conn -> ProtectedConnection
 section.current_tab -> QWidget | None
 ```
 
-**closeEvent:**
+**`closeEvent`:**
 يُغلق `conn` فقط لو `_is_owned_connection()` = True (أي مش shared من company_state).
 يستخدم `get_erp_conn()` (public API).
 
 **`_is_owned_connection(conn)`:**
-يرجع `False` عند أي شك (الاختيار الآمن). إذا `conn` هو نفس `company_state.get_erp_conn()` → `False`. إذا لم يُجد التحقق → `False`.
+- يرجع `False` عند أي شك (الاختيار الآمن).
+- إذا `conn` هو نفس `company_state.get_erp_conn()` → `False`.
+- إذا لم يُجد التحقق (شركة غير محملة، exception) → `False`.
+- `[إصلاح 18]` استخدام `get_erp_conn()` (public) بدل `_get_conn("erp")` (private).
 
 ---
 
@@ -242,7 +254,7 @@ section.current_tab -> QWidget | None
 ### `ui/widgets/base/crud_form.py`
 
 يرث من `QWidget + EditModeMixin + LiveConnMixin`.
-يستخدم `emit_company_data_changed()` بدل `bus.data_changed.emit()`.
+يستخدم `emit_company_data_changed()` بدل `bus.data_changed.emit()` — يضمن تحديث الشركة النشطة فقط.
 
 **Signals:** `saved = pyqtSignal(int)`
 
@@ -267,6 +279,7 @@ _reset_fields()
 **Hook اختياري:**
 ```python
 _build_extra(root_layout: QVBoxLayout)
+# يُستدعى بعد الـ FormGroup لإضافة widgets إضافية
 ```
 
 **API:**
@@ -274,4 +287,13 @@ _build_extra(root_layout: QVBoxLayout)
 form.load_for_edit(item_id: int)
 form.btn_add / btn_save / btn_cancel -> QPushButton
 form.lbl_mode -> QLabel
+```
+
+**منطق الحفظ:**
+```python
+# _on_add() و _on_save() كلاهما:
+#   1. يستدعي _collect() → None = فشل التحقق
+#   2. يستدعي _do_insert() أو _do_update()
+#   3. يستدعي emit_company_data_changed()  ← [FIX] بدل bus.data_changed.emit()
+#   4. يُطلق saved(item_id)
 ```
