@@ -34,6 +34,7 @@ svc.create(customer_id, items: list[OrderItem], notes="") -> int
 svc.update(order_id, customer_id, items, notes="")
 # يرفض لو status ليس "pending"
 # [E-06] يُثري البنود قبل الحفظ
+# يحذف بنود الطلب القديمة ثم يُضيف الجديدة
 
 svc.change_status(order_id, new_status, note="") -> OrderStatusChange
 svc.get_allowed_transitions(order_id) -> list[str]
@@ -43,6 +44,7 @@ svc.delete(order_id) -> bool
 
 svc.get_summary(customer_id=None) -> OrderSummary
 # OrderSummary: total_orders, total_amount, pending_count, in_progress, done_count, cancelled
+# يستعلم من: COUNT(*), SUM(net_amount), CASE WHEN status=...
 
 svc.add_customer(name, phone="", notes="") -> int
 svc.update_customer(customer_id, name, phone="", notes="")
@@ -53,13 +55,29 @@ svc.get_customer_summary(customer_id) -> OrderSummary
 - `.total() -> float`
 - `.resolved_name() -> str` — يرجع `item_name.strip()` أو `"منتج #{product_id}"` كـ fallback
 
-**دالة مساعدة:**
+**`_enrich_item(item)` — [E-06]:**
+```python
+# لو erp_conn=None → يُعيد item كما هو
+# يستدعي resolve_product_info(erp_conn, product_id)
+# لو product غير موجود → warning log، يُعيد item كما هو
+# لو item_name فارغ → ينشئ OrderItem جديد مع الاسم من DB
+# لو unit_price=0 و price>0 → warning log (لا يُعدّل السعر تلقائياً)
+```
+
+**`_assert_customer_exists(customer_id)` — داخلي:**
+```python
+# SELECT id, is_active FROM customers WHERE id=?
+# يرمي ValueError لو غير موجود أو غير نشط
+```
+
+**دالة مساعدة مستقلة:**
 
 ```python
 resolve_product_info(erp_conn, product_id) -> dict | None
 # {"name": str, "price": float} أو None لو غير موجود أو erp_conn=None
+# SELECT name, price FROM items WHERE id=?
 # [E-06] لجلب اسم وسعر المنتج من erp.db
-# erp_conn=None → يرجع None بأمان (لا exception)
+# erp_conn=None أو product_id=None → يرجع None بأمان (لا exception)
 ```
 
 **الانتقالات المسموح بها (`_ALLOWED_TRANSITIONS`):**
@@ -91,24 +109,31 @@ svc.check_balance(lines: list[JournalLine]) -> BalanceCheck
 
 svc.validate_lines(lines) -> list[str]
 # يتحقق من: وجود صفوف، account_id غير فارغ،
-# مبالغ غير سالبة، dr أو cr (ليس الاثنين)، التوازن الكلي
+# مبالغ غير سالبة، dr أو cr (ليس الاثنين ولا الاثنين صفر)، التوازن الكلي
 
 svc.get_account_balance(account_id, date_from=None, date_to=None) -> AccountBalance
+# SQL مباشر: JOIN journal_lines + journal_entries + accounts
 # AccountBalance: account_id, account_name, total_dr, total_cr
 # AccountBalance.balance -> float | .side -> "dr" | "cr"
+# لو لا توجد حركات → يجلب اسم الحساب ويرجع أرصدة صفر
 
 svc.post_entry(entry_data: dict, lines: list[JournalLine]) -> EntryResult
 # entry_data: {date, description, ref?, entry_type?, notes?}
 # [إصلاح 35] يستخدم insert_entry + add_entry_lines (الأسماء الفعلية)
 # status="posted" دائماً
+# يُحوَّل JournalLine → dict {account_id, debit, credit, description}
 # EntryResult: entry_id, is_new=True, total_dr, total_cr, lines_count
 
 svc.update_entry(entry_id, entry_data, lines) -> EntryResult
 # يرفض لو status="reversed"
-# [إصلاح 35] يحذف الصفوف القديمة (_delete_entry_lines) ويكتب الجديدة
+# [إصلاح 35] يُحدّث journal_entries بـ SQL مباشر (update_journal_entry غير موجودة في repo)
+# يستدعي _delete_entry_lines(entry_id) ثم add_entry_lines للجديدة
+# EntryResult: entry_id, is_new=False, ...
 
 svc.reverse_entry(entry_id, note="") -> EntryResult
+# يجلب الصفوف بـ fetch_entry_lines (الاسم الفعلي)
 # ينشئ قيد عكسي — debit/credit مُعكوسان
+# يستدعي post_entry داخلياً
 # يرجع EntryResult للقيد الجديد
 
 svc.get_delete_preview(entry_id) -> DeletePreview | None
@@ -120,9 +145,15 @@ svc.delete(entry_id) -> bool
 ```
 
 **`JournalLine`:** `account_id, dr=0.0, cr=0.0, note=""`
-- `.is_valid() -> bool` — dr أو cr (ليس الاثنين)
+- `.is_valid() -> bool` — `(dr > 0) != (cr > 0)` — dr أو cr لكن ليس الاثنين
 - `.amount() -> float`
 - `.side() -> "dr" | "cr"`
+
+**`_delete_entry_lines(entry_id)` — داخلي [إصلاح 35]:**
+```python
+# DELETE FROM journal_lines WHERE entry_id=?  + commit
+# بديل عن delete_journal_lines الغير موجودة في repo
+```
 
 **`DeletePreview` (للقيود):**
 ```python
@@ -252,12 +283,16 @@ sub = svc.get_sub_bom(item_id=3)  # BOM النصف مصنع
 
 **6. `CatalogService` والعناصر المشتركة:** تعتمد على `company_state.is_ready` — تأكد من وجود شركة نشطة قبل استدعاء `build()`.
 
-**7. `ScenarioService.calc_cost`:** يحسب التكلفة مباشرة من BOM بدون المرور بـ `calc_product_cost` — مناسب للمقارنة بين سيناريوهات متعددة.
+**7. `ScenarioService.calc_cost`:** يحسب التكلفة مباشرة من BOM بدون المرور بـ `calc_product_cost` — مناسب للمقارنة بين سيناريوهات متعددة. يمرر `machine_op_row_id` لـ `calc_machine_op_cost`.
 
 **8. `settings` values:** كل قيم الإعدادات مُخزَّنة كـ TEXT — استخدم `float(get_setting(...))` عند قراءة الأرقام.
 
-**9. `OrderService` مع `erp_conn`:** [E-06] `erp_conn` اختياري تماماً — بدونه يعمل الـ service بالسلوك القديم. مع `erp_conn` يُثري البنود تلقائياً لكن لا يرفض لو المنتج غير موجود (يُسجّل warning فقط).
+**9. `OrderService` مع `erp_conn`:** [E-06] `erp_conn` اختياري تماماً — بدونه يعمل الـ service بالسلوك القديم. مع `erp_conn` يُثري البنود تلقائياً لكن لا يرفض لو المنتج غير موجود (يُسجّل warning فقط). **لا يُعدّل unit_price تلقائياً** حتى لو كان صفراً.
 
 **10. `order_items.product_id`:** [E-06] عمود `product_id` يُحفظ الآن في `order_items` — تأكد من تطبيق migration على قواعد البيانات القديمة لو لم يكن العمود موجوداً.
 
-**11. `_log_status` في orders_repo:** [C-04] `new_status=None` مسموح الآن للملاحظات الإدارية (مثل تغيير العميل) — لا يجب أن يُفترض دائماً وجود قيمة.
+**11. `JournalService.update_entry`:** يُحدّث `journal_entries` بـ SQL مباشر (لا توجد `update_journal_entry` في repo) ثم يحذف الصفوف القديمة ويُضيف الجديدة.
+
+**12. `JournalService._delete_entry_lines`:** دالة مساعدة داخلية [إصلاح 35] — بديل عن `delete_journal_lines` الغير موجودة في repo. تستخدم DELETE المباشر على `journal_lines`.
+
+**13. `BulkReplaceService.apply` والـ BOM:** يقرأ `(child_type, child_id, qty, waste_pct)` — 4 عناصر من `fetch_bom`. لدعم السيناريوهات يجب استخدام `replace_bom_for_scenario` مباشرة.
