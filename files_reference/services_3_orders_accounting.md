@@ -27,7 +27,14 @@ OrderService(conn, erp_conn=None)
 #   - يُسجّل warning لو unit_price = 0 وسعر المنتج موجود في DB
 
 svc.create(customer_id, items: list[OrderItem], notes="") -> int
+# [E-06] يُثري البنود بمعلومات المنتجات قبل الحفظ (لو erp_conn متاح)
+# يتحقق من وجود العميل و is_active=1
+# يحفظ product_id في order_items (الآن مدعوم)
+
 svc.update(order_id, customer_id, items, notes="")
+# يرفض لو status ليس "pending"
+# [E-06] يُثري البنود قبل الحفظ
+
 svc.change_status(order_id, new_status, note="") -> OrderStatusChange
 svc.get_allowed_transitions(order_id) -> list[str]
 
@@ -44,18 +51,18 @@ svc.get_customer_summary(customer_id) -> OrderSummary
 
 **`OrderItem`:** `product_id, qty, unit_price, notes="", item_name=""`
 - `.total() -> float`
-- `.resolved_name() -> str` — يرجع `item_name` أو `"منتج #{product_id}"` كـ fallback
+- `.resolved_name() -> str` — يرجع `item_name.strip()` أو `"منتج #{product_id}"` كـ fallback
 
 **دالة مساعدة:**
 
 ```python
 resolve_product_info(erp_conn, product_id) -> dict | None
-# {"name": str, "price": float} أو None لو غير موجود
+# {"name": str, "price": float} أو None لو غير موجود أو erp_conn=None
 # [E-06] لجلب اسم وسعر المنتج من erp.db
 # erp_conn=None → يرجع None بأمان (لا exception)
 ```
 
-**الانتقالات المسموح بها:**
+**الانتقالات المسموح بها (`_ALLOWED_TRANSITIONS`):**
 
 | من | إلى |
 |----|-----|
@@ -66,6 +73,9 @@ resolve_product_info(erp_conn, product_id) -> dict | None
 | `delivered` | — |
 | `cancelled` | pending |
 | `on_hold` | pending, confirmed, in_progress |
+
+**الحالات التي تمنع الحذف (`_NO_DELETE_STATUSES`):**
+`in_progress`, `ready`, `delivered`
 
 ---
 
@@ -80,6 +90,8 @@ svc.check_balance(lines: list[JournalLine]) -> BalanceCheck
 # BalanceCheck.is_balanced, .diff, .error_text()
 
 svc.validate_lines(lines) -> list[str]
+# يتحقق من: وجود صفوف، account_id غير فارغ،
+# مبالغ غير سالبة، dr أو cr (ليس الاثنين)، التوازن الكلي
 
 svc.get_account_balance(account_id, date_from=None, date_to=None) -> AccountBalance
 # AccountBalance: account_id, account_name, total_dr, total_cr
@@ -88,20 +100,35 @@ svc.get_account_balance(account_id, date_from=None, date_to=None) -> AccountBala
 svc.post_entry(entry_data: dict, lines: list[JournalLine]) -> EntryResult
 # entry_data: {date, description, ref?, entry_type?, notes?}
 # [إصلاح 35] يستخدم insert_entry + add_entry_lines (الأسماء الفعلية)
-# EntryResult: entry_id, is_new, total_dr, total_cr, lines_count
+# status="posted" دائماً
+# EntryResult: entry_id, is_new=True, total_dr, total_cr, lines_count
 
 svc.update_entry(entry_id, entry_data, lines) -> EntryResult
-# [إصلاح 35] يحذف الصفوف القديمة ويكتب الجديدة مباشرة
+# يرفض لو status="reversed"
+# [إصلاح 35] يحذف الصفوف القديمة (_delete_entry_lines) ويكتب الجديدة
+
 svc.reverse_entry(entry_id, note="") -> EntryResult
+# ينشئ قيد عكسي — debit/credit مُعكوسان
+# يرجع EntryResult للقيد الجديد
+
 svc.get_delete_preview(entry_id) -> DeletePreview | None
+# يرفض (can_delete=False) لو status="reversed"
+
 svc.delete(entry_id) -> bool
 # [إصلاح 35] يستخدم delete_entry (الاسم الفعلي)
+# يرجع False لو مقفول/معكوس
 ```
 
 **`JournalLine`:** `account_id, dr=0.0, cr=0.0, note=""`
-- `.is_valid() -> bool`
+- `.is_valid() -> bool` — dr أو cr (ليس الاثنين)
 - `.amount() -> float`
 - `.side() -> "dr" | "cr"`
+
+**`DeletePreview` (للقيود):**
+```python
+# entry_id, entry_ref, is_posted, can_delete, reason
+# .warning_text() -> str
+```
 
 ---
 
@@ -230,3 +257,7 @@ sub = svc.get_sub_bom(item_id=3)  # BOM النصف مصنع
 **8. `settings` values:** كل قيم الإعدادات مُخزَّنة كـ TEXT — استخدم `float(get_setting(...))` عند قراءة الأرقام.
 
 **9. `OrderService` مع `erp_conn`:** [E-06] `erp_conn` اختياري تماماً — بدونه يعمل الـ service بالسلوك القديم. مع `erp_conn` يُثري البنود تلقائياً لكن لا يرفض لو المنتج غير موجود (يُسجّل warning فقط).
+
+**10. `order_items.product_id`:** [E-06] عمود `product_id` يُحفظ الآن في `order_items` — تأكد من تطبيق migration على قواعد البيانات القديمة لو لم يكن العمود موجوداً.
+
+**11. `_log_status` في orders_repo:** [C-04] `new_status=None` مسموح الآن للملاحظات الإدارية (مثل تغيير العميل) — لا يجب أن يُفترض دائماً وجود قيمة.

@@ -407,19 +407,26 @@ fetch_investor_entry_id(erp_conn, link_id: int) -> int | None
 
 ## investors_repo.py
 
-#### Cache الـ Migration — [إصلاح 31]
+#### Cache الـ Migration — [إصلاح 31] + [تحسين 7]
 
 ```python
 _investors_migrated: set   # مجموعة db_paths التي تمّ migration عليها
 
 _get_db_path(conn) -> str
 # [تحسين 7] Fast path: ProtectedConnection._path مباشرة O(1)
+#   يستخدم object.__getattribute__(conn, '_path') — يتجنب الـ proxy
+#   لو نجح وأعاد str صالح → يستخدمه مباشرة
 # Slow path: PRAGMA database_list للـ connections العادية
+#   يُستدعى فقط لو conn ليس ProtectedConnection أو _path فشل
 
 _migrate_investors(conn)
-# يُنفَّذ مرة واحدة per-connection-path
+# [إصلاح 31] يُنفَّذ مرة واحدة per-connection-path
+# يتحقق من وجود الجداول وشكل investor_entries (migration آمن)
+# يستدعي create_investors_tables(conn) لو الجداول غير موجودة
 
 invalidate_investors_migration_cache(conn=None)
+# conn=None → يمسح كل الـ cache (_investors_migrated.clear())
+# conn=<conn> → يمسح cache هذا الملف فقط (_investors_migrated.discard)
 ```
 
 #### CRUD — المستثمرون
@@ -428,9 +435,11 @@ invalidate_investors_migration_cache(conn=None)
 fetch_all_investors(conn) -> list
 fetch_investor(conn, investor_id) -> row
 insert_investor(conn, name, notes=None, joined_at=None) -> int
+# joined_at افتراضياً = today
 update_investor(conn, investor_id, name, notes=None, joined_at=None)
 delete_investor(conn, investor_id)
 investor_exists(conn, name) -> int | None
+# يرجع investor_id لو موجود، أو None
 ```
 
 #### ربط المستثمر بالقيود
@@ -441,7 +450,13 @@ link_investor_to_line(conn, investor_id, entry_id, line_id,
 # move_type: "capital" | "drawings"
 
 fetch_investor_entries(conn, investor_id, acc_conn=None) -> list
+# لو acc_conn متاح → يجلب بيانات القيد (ref_no, date, account_code, ...)
+# كل entry: {id, move_type, amount, notes, created_at,
+#             ref_no, date, entry_desc, debit, credit,
+#             line_desc, account_code, account_name, account_type}
+
 fetch_entry_investor_links(conn, entry_id) -> list
+# مع investor_name من JOIN
 delete_investor_link(conn, link_id)
 delete_entry_investor_links(conn, entry_id)
 ```
@@ -454,7 +469,10 @@ calc_investor_summary(conn, investor_id, acc_conn=None) -> dict
 #  total_capital, total_drawings, net_investment, entries}
 
 calc_all_investors_summary(conn, acc_conn=None) -> list
-# [إصلاح 40] O(1) + O(entries) بدل O(n×m) queries
+# [إصلاح 40] O(1) + O(entries) بدل O(n×m) queries:
+#   1. يجلب كل investor_entries دفعة واحدة
+#   2. لو acc_conn متاح → يجلب كل journal_entries و journal_lines بـ IN query
+#   3. يبني النتائج من الـ cache بدون queries إضافية
 # النتائج مُرتَّبة بـ net_investment DESC
 ```
 
@@ -467,3 +485,5 @@ calc_all_investors_summary(conn, acc_conn=None) -> list
 - `purchase_inventory` يحتاج **connection-ين** منفصلين: `inv_conn` و `acc_conn`.
 - `calc_all_investors_summary` يجلب acc_conn data دفعة واحدة [إصلاح 40].
 - `delete_entry` يُسجّل snapshot في audit_log قبل الحذف تلقائياً [مقترح 52].
+- `_migrate_investors` تُنفَّذ مرة واحدة per-path بفضل `_investors_migrated` set [إصلاح 31].
+- `_get_db_path` fast path O(1) لـ ProtectedConnection — لا PRAGMA overhead [تحسين 7].

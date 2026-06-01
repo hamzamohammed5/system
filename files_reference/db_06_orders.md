@@ -32,8 +32,10 @@ get_orders_connection() -> sqlite3.Connection
 | `customer_contacts` | `id, customer_id→CASCADE, name, role, phone, email, notes` |
 | `orders` | `id, order_number UNIQUE, customer_id→RESTRICT, order_type DEFAULT "new", status DEFAULT "pending", priority DEFAULT "normal", order_date, due_date, delivery_date, total_amount, discount, net_amount, paid_amount, notes, internal_notes, reference_order→SET NULL` |
 | `order_items` | `id, order_id→CASCADE, item_name, description, quantity DEFAULT 1 CHECK(>0), unit DEFAULT "قطعة", unit_price, discount_pct, total_price, design_ref, notes, sort_order` |
-| `order_status_log` | `id, order_id→CASCADE, old_status, new_status, notes, changed_by DEFAULT "system", changed_at` |
+| `order_status_log` | `id, order_id→CASCADE, old_status, new_status TEXT` (**يقبل NULL** — للملاحظات الإدارية [C-04])`, notes, changed_by DEFAULT "system", changed_at` |
 | `schema_migrations` | `id, name UNIQUE, applied_at` |
+
+> ⚠️ **[C-04]** `order_status_log.new_status` يقبل NULL — يُستخدم لتسجيل أحداث إدارية مثل تغيير العميل بدون تغيير الحالة فعلياً.
 
 **الـ Indexes:**
 `idx_orders_customer`, `idx_orders_status`, `idx_orders_date`,
@@ -162,7 +164,11 @@ update_order(conn, order_id, priority="normal", due_date=None,
              notes="", internal_notes="",
              customer_id=None, changed_by="system") -> bool
 # [C-04] customer_id اختياري:
-#   None → لا تغيير | قيمة → تحقق من الوجود و is_active + تحديث
+#   None (الافتراضي) → لا يُغيِّر العميل الحالي (backward-compatible)
+#   قيمة صحيحة → تحقق من وجود العميل و is_active=1 ثم يُغيِّره
+#   يُسجَّل تغيير العميل في order_status_log كملاحظة (new_status=NULL)
+# Raises: ValueError لو العميل غير موجود أو غير نشط
+# Returns: True لو نجح، False لو الطلب غير موجود
 
 change_order_status(conn, order_id, new_status, notes="",
                     changed_by="system") -> bool
@@ -183,6 +189,8 @@ delete_order(conn, order_id) -> bool
 
 ```python
 fetch_order_items(conn, order_id) -> list
+# id, order_id, item_name, description, quantity, unit,
+# unit_price, discount_pct, total_price, design_ref, notes, sort_order
 
 insert_order_item(conn, order_id, item_name, description="",
                   quantity=1, unit="قطعة", unit_price=0,
@@ -190,6 +198,8 @@ insert_order_item(conn, order_id, item_name, description="",
                   sort_order=None) -> int
 # total_price = quantity × unit_price × (1 - discount_pct/100)
 # يستدعي _recalc_order_total() بعد الإضافة
+# ملاحظة: product_id يُمرَّر من OrderService [E-06] لكن غير موجود في
+#          schema الأساسي — تأكد من migration لو تحتاج هذا العمود
 
 update_order_item(conn, item_id, item_name, ...)
 # يستدعي _recalc_order_total() بعد التعديل
@@ -202,6 +212,7 @@ delete_order_item(conn, item_id)
 
 ```python
 fetch_status_log(conn, order_id) -> list   # ORDER BY changed_at ASC
+# كل صف: id, old_status, new_status (قد يكون NULL [C-04]), notes, changed_by, changed_at
 
 fetch_orders_summary(conn) -> dict
 # {total, pending, confirmed, in_progress, ready, delivered,
@@ -224,5 +235,7 @@ cancelled → pending (فقط)
 
 - `delete_customer` يرفض الحذف لو العميل له طلبات.
 - `insert_order` يتحقق من `is_active=1` للعميل [تحسين 22].
-- `update_order` يدعم تغيير العميل عبر `customer_id` اختياري [C-04].
+- `update_order` يدعم تغيير العميل عبر `customer_id` اختياري [C-04] — `None` = لا تغيير.
 - `delete_order` يرفض لو `paid_amount > 0` [تحسين 21].
+- `order_status_log.new_status` يقبل NULL [C-04] للأحداث الإدارية كتغيير العميل.
+- `_log_status` تقبل `new_status=None` للملاحظات الإدارية — لا تفترض وجود قيمة دائماً.

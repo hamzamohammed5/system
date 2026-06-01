@@ -48,11 +48,45 @@ svc.force_delete(item_id)    # يحذف حتى لو مستخدم
 
 ```python
 CategoryService(conn)
+```
 
-svc.get_tree(scope=None) -> list[CategoryNode]
+#### قراءة
+
+```python
+svc.get_all(scope: str = "all") -> list
+# يرجع كل التصنيفات كـ list of dicts
+# مطلوبة من managers/category.py و combo/category.py
+
+svc.build_tree(rows: list) -> list
+# يبني هيكل شجري من list of dicts
+# rows: نتيجة get_all() — يرجع list of dicts مع "children" key
+
+svc.get_one(cat_id: int) -> dict | None
+# يرجع تصنيف واحد بالـ id كـ dict
+# مطلوبة من managers/category.py (load_for_edit)
+
+svc.get_descendants(cat_id: int) -> set
+# يرجع set من IDs كل الأبناء والأحفاد
+# مطلوبة من managers/category.py (exclude في parent combo)
+
+svc.count_items(cat_id: int) -> dict
+# يرجع dict بعدد العناصر المرتبطة بالتصنيف
+# مطلوبة من managers/category.py (_add_items)
+
+svc.get_tree(scope: str = None) -> list[CategoryNode]
+# يرجع شجرة التصنيفات كـ dataclasses (للكود القديم)
+```
+
+#### كتابة
+
+```python
 svc.add(name, scope, color, parent_id=None) -> int
 svc.update(cat_id, name, scope, color, parent_id=None)
+```
 
+#### حذف
+
+```python
 svc.get_delete_preview(cat_id) -> DeletePreview | None
 # DeletePreview.child_count, .item_count, .warning_text()
 
@@ -60,3 +94,12 @@ svc.delete_cascade(cat_id) -> int  # يرجع عدد التصنيفات المح
 ```
 
 **`CategoryNode`:** `id, name, color, scope, parent_id, children`
+
+**`DeletePreview`:**
+```python
+# cat_name    : str
+# child_count : int
+# item_counts : dict   # {"عناصر": n, "ماكينات": n, ...}
+# .item_count -> int   # مجموع كل الأعداد
+# .warning_text() -> str
+```
