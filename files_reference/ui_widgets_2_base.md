@@ -96,7 +96,7 @@ panel.select_item(item_id)
 
 ```python
 def _on_theme_changed(theme_name):
-    # يُعيد تطبيق: background + pagination styles + status bar style
+    # يُعيد تطبيق: background + empty_state background
     # يستدعي _rebuild_pagination_styles() + _rebuild_status_style()
 
 def _on_language_changed(lang_code):
@@ -117,7 +117,7 @@ panel.clear_sort()
 panel.reset_pagination()
 panel.total_rows -> int    # = len(self._page_rows)
 panel.shown_rows -> int    # = self._shown_count
-panel.table -> QTableWidget
+panel.table -> QTableWidget   # attribute مباشر — الجدول الداخلي
 ```
 
 ---
@@ -140,7 +140,7 @@ _build_content(layout: QVBoxLayout)
 ```python
 HEADER_BG: str = None          # افتراضياً: _C['bg_surface']
 MIN_CONTENT_W: int = 500
-CONNECT_BUS: bool = False
+CONNECT_BUS: bool = False      # افتراضياً False — يجب تفعيله صراحةً
 
 _build_header_cards()          # يُستدعى في __init__ قبل بناء الـ content
 _build_header_buttons()        # يُستدعى في __init__ قبل بناء الـ content
@@ -172,6 +172,13 @@ _on_language_changed(lang_code)
 ```python
 # يُعيد تطبيق bg_page على: self + scroll + inner widget + children (بدون header)
 # يُعيد تطبيق scroll_style() على self._scroll
+# ⚠️ لا يُحدّث self._hdr — تأكد من تطبيق theme على الهيدر يدوياً لو احتجت
+```
+
+**`_on_language_changed`:**
+```python
+# يُحدّث نص EMPTY_TITLE عبر _tr_safe()
+# يستدعي self._empty.set_title(translated)
 ```
 
 **إشعارات:**
@@ -181,6 +188,7 @@ panel.show_error(msg)          # danger level — لا auto_hide
 panel.show_warning(msg, auto_hide=0)
 panel.show_info(msg, auto_hide=0)
 # كلها تستدعي self._notif.show(msg, level, auto_hide)
+# ⚠️ show_warning مهمة: guard.py يتحقق من hasattr(widget, "show_warning")
 ```
 
 **API:**

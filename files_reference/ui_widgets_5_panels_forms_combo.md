@@ -321,6 +321,8 @@ CategoryCombo(conn, scope="all")
 # [إصلاح 2] يستمع لـ bus.data_changed + bus.company_data_changed
 # [FIX-14] Qt.UniqueConnection على كل ربط bus لمنع التسجيل المضاعف
 # [إصلاح memory leak] يستخدم weakref للـ company_data_changed slot
+#   self._company_data_slot = _on_company_data_changed  ← يحفظ مرجع الـ slot
+#   منع GC من حذف الـ closure قبل فصله
 # [إصلاح هيكلة] يستخدم CategoryService عبر populate_category_combo
   .refresh()
   # _live_conn() → populate_category_combo → يُعيد اختيار السابق
