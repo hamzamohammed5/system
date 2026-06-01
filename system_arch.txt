@@ -1,5 +1,5 @@
 File Tree Snapshot
-Generated : 2026-06-01 09:49:30
+Generated : 2026-06-01 10:00:58
 Source    : D:\My Workspace\Hg\Alhabaar\accountant\system
 Extensions: .md, .py
 ────────────────────────────────────────────────────────────
@@ -70,7 +70,7 @@ system/
 │   ├── ui_main_window_helper.md
 │   ├── ui_root.md
 │   ├── ui_widgets_1_core.md
-│   ├── ui_widgets_2_base_panels.md
+│   ├── ui_widgets_2_base.md
 │   ├── ui_widgets_3_components.md
 │   ├── ui_widgets_4_panels.md
 │   ├── ui_widgets_5_mixins.md

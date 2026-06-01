@@ -1,6 +1,6 @@
 # دليل الكود — UI / Widgets (4): Panels
 
-> الجزء الرابع — لوحات الواجهة: حالة فارغة، فلتر، تفاصيل، بطاقات قابلة للطي، جداول بيانات.
+> الجزء الرابع — لوحات الواجهة: حالة فارغة، فلتر، تفاصيل، بطاقات قابلة للطي، شبكة بطاقات، جداول بيانات.
 
 ---
 
@@ -8,13 +8,12 @@
 
 | القسم | الملفات |
 |-------|---------|
-| [State (Empty State)](#state-empty-state) | `panels/state` |
-| [FilterToolbar](#filtertoolbar) | `panels/filter` |
-| [DetailSection](#detailsection) | `panels/detail_section` |
-| [CollapsibleCard](#collapsiblecard) | `panels/collapsible_card` |
-| [CardGrid](#cardgrid) | `panels/card_grid` |
-| [DataTableWidget](#datatablewidget) | `panels/data_table` |
-| [CrudSection (alias)](#crudsection-alias) | `panels/crud_section` |
+| [State (Empty State)](#state-empty-state) | `panels/state.py` |
+| [FilterToolbar](#filtertoolbar) | `panels/filter.py` |
+| [DetailSection](#detailsection) | `panels/detail_section.py` |
+| [CollapsibleCard + CardGrid](#collapsiblecard--cardgrid) | `panels/layout_widgets.py` |
+| [DataTableWidget](#datatablewidget) | `panels/data_table.py` |
+| [CrudSection (alias)](#crudsection-alias) | `panels/crud_section.py` |
 
 ---
 
@@ -29,7 +28,7 @@ EmptyState(icon="📋", title="لا توجد بيانات", subtitle="",
 # style: "dashed" | "solid" | "plain"
 # color افتراضي من _C['text_muted']
 # expandable=True → يتمدد ليملأ المساحة
-# يحفظ _lbl_title reference لتحديثه مباشرة عند تغيير اللغة بدون إعادة بناء
+# يحفظ _lbl_title reference لتحديثه مباشرة عند تغيير اللغة
 # Signals: action_clicked
   .set_title(text: str)    # يُحدّث النص مباشرة بدون إعادة بناء
   .title() -> str
@@ -88,7 +87,7 @@ DetailSection(title="", cols=1, compact=False)
   .add_separator()
   .set_data(data: dict, clear_missing: bool = False) -> dict[str, QLabel]
   # يرجع {label_text: value_QLabel} للتحديث المباشر
-  # clear_missing=True: يُخفي الصفوف غير الموجودة في data الجديدة (بدون حذفها)
+  # clear_missing=True: يُخفي الصفوف غير الموجودة في data الجديدة
   # clear_missing=False (افتراضي): يحافظ على الصفوف الزائدة مع قيمها القديمة
   .clear_rows()              # يحذف كل الصفوف من الذاكرة
   .update_value(index, value, color=None)
@@ -105,26 +104,22 @@ TwoColDetails()
 
 ---
 
-## CollapsibleCard
+## CollapsibleCard + CardGrid
 
-### `ui/widgets/panels/collapsible_card.py`
+### `ui/widgets/panels/layout_widgets.py`
+
+> **ملاحظة:** دُمج `panels/collapsible_card.py` و `panels/card_grid.py` في هذا الملف.
 
 ```python
+# ── CollapsibleCard ──
 CollapsibleCard(title="", expanded=True, accent=None)
 # accent افتراضي من _C['accent']
 # Signals: toggled(bool)
 # المحتوى في: card.content_layout (QVBoxLayout)
   .set_expanded(expanded: bool)
   .is_expanded -> bool
-```
 
----
-
-## CardGrid
-
-### `ui/widgets/panels/card_grid.py`
-
-```python
+# ── CardGrid ──
 CardGrid(cols=4, spacing=10)
   .add_widget(widget: QWidget)
   .clear()   # يحذف كل الـ widgets بـ deleteLater

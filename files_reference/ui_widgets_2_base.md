@@ -8,12 +8,12 @@
 
 | القسم | الملفات |
 |-------|---------|
-| [BaseListPanel](#baselistpanel) | `base/list_panel` |
-| [BaseDetailPanel](#basedetailpanel) | `base/detail_panel` |
-| [BaseSection](#basesection) | `base/section` |
-| [CrudSection (alias)](#crudsection-alias) | `panels/crud_section` |
-| [TabSectionBase](#tabsectionbase) | `base/tab_section` |
-| [BaseCrudForm](#basecrudform) | `base/crud_form` |
+| [BaseListPanel](#baselistpanel) | `base/list_panel.py` |
+| [BaseDetailPanel](#basedetailpanel) | `base/detail_panel.py` |
+| [BaseSection](#basesection) | `base/section.py` |
+| [CrudSection (alias)](#crudsection-alias) | `panels/crud_section.py` |
+| [TabSectionBase](#tabsectionbase) | `base/tab_section.py` |
+| [BaseCrudForm](#basecrudform) | `base/crud_form.py` |
 
 ---
 
@@ -43,13 +43,11 @@ SHOW_DATE: bool = False
 FILTER_SCOPE: str = "all"
 DATE_COL: str = "date"
 # [E-02] اسم الـ key في dict البيانات الذي يحتوي التاريخ
-# يُستخدم في _match_date() لقراءة التاريخ من row[DATE_COL]
-# override لو اسم الحقل مختلف عن "date"
 CONNECT_BUS: bool = True
 
 # Sort settings
 SORTABLE: bool = False
-COL_KEYS: list = []              # مفاتيح الأعمدة للـ sort
+COL_KEYS: list = []
 SORT_DEFAULT_COL: int = -1
 SORT_DEFAULT_ASC: bool = True
 
@@ -57,18 +55,13 @@ SORT_DEFAULT_ASC: bool = True
 PAGINATE: bool = False
 PAGE_SIZE: int = 200
 
-_match_filter(row, query) -> bool
-# افتراضياً: يبحث في row["name"]
-_match_category(row, cat_id) -> bool
-# افتراضياً: يقارن row["category_id"]
-_match_date(row) -> bool
-# [E-02] يُستدعى فقط لو SHOW_DATE=True
-# يقرأ row[DATE_COL] ويمرره لـ _filter_toolbar.in_date_range()
-# override لو أردت منطق مقارنة مخصص
+_match_filter(row, query) -> bool      # افتراضياً: يبحث في row["name"]
+_match_category(row, cat_id) -> bool   # افتراضياً: يقارن row["category_id"]
+_match_date(row) -> bool               # [E-02] يُستدعى فقط لو SHOW_DATE=True
 _on_add_clicked()
-_on_data_changed()                # افتراضياً: self.refresh()
+_on_data_changed()                     # افتراضياً: self.refresh()
 _build_extra_header_actions(header: ListHeader)
-_sort_key(col, row)               # يُستدعى فقط لو SORTABLE=True
+_sort_key(col, row)                    # يُستدعى فقط لو SORTABLE=True
 ```
 
 **Bus (عند `CONNECT_BUS=True`):**
@@ -79,7 +72,6 @@ def _on_theme_changed(theme_name: str):
     # يُعيد تطبيق background على الـ widget الرئيسي (من _C['bg_input'])
     # يُعيد تطبيق stylesheet على _empty_state
     # يُعيد بناء styles الـ pagination bar والـ status bar
-    # يستدعي _rebuild_pagination_styles() + _rebuild_status_style()
     # ⚠️ عند override: استدعي super()._on_theme_changed(theme_name) أولاً
 
 def _on_language_changed(lang_code: str):
@@ -89,10 +81,12 @@ def _on_language_changed(lang_code: str):
     # ⚠️ عند override: استدعي super()._on_language_changed(lang_code) أولاً
 ```
 
+**[إصلاح 5] refresh() المحدّث:**
+يُوقف الـ `_timer` قبل `reload()` لمنع تشغيل `_apply_filter` مرتين عند إعادة ملء الـ categories combo.
+
 **API:**
 ```python
 panel.refresh()
-# يُعيد تحميل البيانات (_load_rows) + يُعيد تحميل categories في FilterToolbar + يُطبّق الفلتر
 panel.select_item(item_id)
 # يبحث في الصفوف الظاهرة أولاً، ثم يُحمِّل من _page_rows لو PAGINATE=True
 panel.selected_id() -> int | None
@@ -111,18 +105,14 @@ panel.table -> QTableWidget
 ```python
 from ui.widgets.base.list_panel import BaseListPanel
 from ui.widgets.core.i18n import tr
-from ui.widgets.tables.items import make_item
-from ui.app_settings import _C
+from ui.widgets.tables.tables import make_item
 
 class MyListPanel(BaseListPanel):
     COLUMNS     = [tr("name"), tr("price")]
     STRETCH_COL = 0
     EMPTY_ICON  = "📦"
-    EMPTY_TITLE = "no_data"    # مفتاح tr() — يُترجم تلقائياً عند تغيير اللغة
-    LIST_TITLE  = tr("raw_materials")
-    ADD_TEXT    = tr("btn_add")
+    EMPTY_TITLE = "no_data"    # مفتاح tr() — يُترجم تلقائياً
     CONNECT_BUS = True
-    DATE_COL    = "created_at"  # لو اسم حقل التاريخ مختلف
 
     def _load_rows(self):
         return fetch_items_by_type(self.conn, "raw")
@@ -130,14 +120,6 @@ class MyListPanel(BaseListPanel):
     def _fill_row(self, table, r, row):
         table.setItem(r, 0, make_item(row["name"], row["id"]))
         table.setItem(r, 1, make_item(f"{row['price']:,.2f}"))
-
-    def _on_theme_changed(self, theme_name: str):
-        super()._on_theme_changed(theme_name)
-        # إعادة تطبيق أي styles إضافية خاصة بالـ subclass
-
-    def _on_language_changed(self, lang_code: str):
-        super()._on_language_changed(lang_code)
-        # تحديث أي نصوص إضافية خاصة بالـ subclass
 ```
 
 ---
@@ -149,7 +131,7 @@ class MyListPanel(BaseListPanel):
 **Override المطلوب:**
 ```python
 EMPTY_ICON: str = "📋"
-EMPTY_TITLE: str = "اختر عنصراً من القائمة"  # مفتاح tr() أو نص مباشر
+EMPTY_TITLE: str = "اختر عنصراً من القائمة"
 EMPTY_SUBTITLE: str = ""
 _load_data(item_id: int) -> dict | None
 _fill_data(data: dict)
@@ -168,8 +150,7 @@ _fill_header(data: dict)           # افتراضياً: self._hdr.set_title(dat
 _on_data_changed()                 # افتراضياً: load_item(self._item_id)
 
 _on_theme_changed(theme_name: str)
-# يُعيد تطبيق bg_page على الـ panel + scroll area + inner widgets
-# يُعيد تطبيق scroll_style() على الـ scroll area
+# يُعيد تطبيق bg_page + scroll_style()
 # ⚠️ عند override: استدعي super()._on_theme_changed(theme_name) أولاً
 
 _on_language_changed(lang_code: str)
@@ -177,15 +158,11 @@ _on_language_changed(lang_code: str)
 # ⚠️ عند override: استدعي super()._on_language_changed(lang_code) أولاً
 ```
 
-**ملاحظة (theme/lang):** عند `CONNECT_BUS=True` يشترك تلقائياً في `theme_changed` و `language_changed` إضافةً لـ `data_changed`.
-
 **Signals:** `saved = pyqtSignal(int)` | `deleted = pyqtSignal()`
 
 **API:**
 ```python
 panel.load_item(item_id: int)
-# يستدعي _load_data → _fill_header → _fill_data
-# لو data = None → يُظهر empty state
 panel.clear()
 panel.show_success(msg, auto_hide=3000)
 panel.show_error(msg)
@@ -204,7 +181,7 @@ panel.content_layout -> QVBoxLayout
 ### `ui/widgets/base/section.py` — `BaseSection`
 
 > **[T-05] توحيد BaseSection و CrudSection:**
-> `BaseSection` استوعبت كل خصائص `CrudSection` — استخدمها مباشرة في الكود الجديد.
+> `BaseSection` استوعبت كل خصائص `CrudSection`.
 > `CrudSection` في `panels/crud_section.py` أصبحت alias للتوافق فقط.
 
 **Override المطلوب:**
@@ -219,7 +196,7 @@ LIST_MIN_W: int = 280
 LIST_MAX_W: int = 560
 DETAIL_MIN_W: int = 320
 CONNECT_BUS: bool = False
-LAYOUT_REVERSED: bool = False  # يعكس ترتيب list/detail
+LAYOUT_REVERSED: bool = False
 
 # [T-05] من CrudSection:
 FORM_POSITION: str = "none"
@@ -227,7 +204,7 @@ FORM_POSITION: str = "none"
 # "bottom" → فورم أسفل لوحة القائمة
 # "left"   → list panel فقط (الفورم خارج الـ splitter)
 
-SPLITTER_RATIO: tuple = (1, 2)   # نسبة list:detail
+SPLITTER_RATIO: tuple = (1, 2)
 
 _create_form() -> QWidget | None   # [T-05] افتراضياً: None
 _connect_signals()
@@ -241,33 +218,10 @@ _on_item_selected(item_id: int)
 ```python
 section.refresh()
 section.clear_detail()
-section.select_item(item_id)   # [T-05] يختار عنصراً برمجياً
+section.select_item(item_id)
 section.list_panel -> QWidget
 section.detail_panel -> QWidget
 section.form_panel -> QWidget | None   # [T-05]
-```
-
-**مثال:**
-```python
-from ui.widgets.base.section import BaseSection
-from ui.widgets.core.i18n import tr
-
-class MySection(BaseSection):
-    LIST_MIN_W    = 300
-    CONNECT_BUS   = True
-    FORM_POSITION = "bottom"   # فورم أسفل القائمة
-
-    def _create_list(self):
-        return MyListPanel(self.conn)
-
-    def _create_detail(self):
-        return MyDetailPanel(self.conn)
-
-    def _create_form(self):
-        return MyAddForm(self.conn)   # [T-05]
-
-    def _connect_signals(self):
-        self._list.item_selected.connect(self._detail.load_item)
 ```
 
 ---
@@ -277,7 +231,6 @@ class MySection(BaseSection):
 ### `ui/widgets/panels/crud_section.py`
 
 > **تنبيه:** `CrudSection` أصبح alias لـ `BaseSection` للتوافق مع الكود القديم.
-> الكود الجديد يستخدم `BaseSection` من `ui/widgets/base/section.py` مباشرة.
 
 ```python
 from ui.widgets.panels.crud_section import CrudSection
@@ -294,7 +247,7 @@ from ui.widgets.panels.crud_section import CrudSection
 TabSectionBase(conn_fn=None, parent=None)
 # conn_fn: callable يُعيد connection — افتراضياً get_connection() من db.shared.connection
 
-def _build_tabs(self, tabs: QTabWidget)  # Override إلزامي — يضيف التبويبات
+def _build_tabs(self, tabs: QTabWidget)  # Override إلزامي
 
 # Properties:
 section.conn -> ProtectedConnection
@@ -302,19 +255,7 @@ section.current_tab -> QWidget | None
 
 # closeEvent:
 # [إصلاح 18] يُغلق conn فقط لو _is_owned_connection() = True
-# في الغالب الـ connection مشترك من company_state → لا يُغلق هنا
-# الإغلاق يحدث في company_state عند تغيير الشركة
-```
-
-**مثال:**
-```python
-from ui.widgets.base.tab_section import TabSectionBase
-from ui.widgets.core.i18n import tr
-
-class RawTab(TabSectionBase):
-    def _build_tabs(self, tabs: QTabWidget):
-        tabs.addTab(RawSection(self.conn),      tr("raw_tab"))
-        tabs.addTab(CategoryManager(self.conn), tr("categories_tab"))
+# [FIX] يستخدم get_erp_conn() (public API) بدل _get_conn("erp") (private)
 ```
 
 ---
@@ -324,9 +265,9 @@ class RawTab(TabSectionBase):
 ### `ui/widgets/base/crud_form.py` — `BaseCrudForm`
 
 قاعدة مشتركة لكل فورمات CRUD. يرث من `QWidget + EditModeMixin + LiveConnMixin`.
-يُطلق `bus.data_changed.emit()` بعد كل إضافة أو تعديل ناجح.
+**[FIX]** يستخدم `emit_company_data_changed()` بدل `bus.data_changed.emit()` بعد كل إضافة/تعديل.
 
-**Signals:** `saved = pyqtSignal(int)` — يُطلق بعد نجاح الإضافة أو التعديل مع ID العنصر.
+**Signals:** `saved = pyqtSignal(int)`
 
 **إعدادات الـ subclass:**
 ```python
@@ -337,27 +278,23 @@ SAVE_TEXT:  str = "💾  حفظ التعديل"
 
 **Hooks المطلوبة (override إلزامي):**
 ```python
-_build_fields(group: FormGroup)        # إضافة الحقول داخل FormGroup
-_collect() -> dict | None              # جمع قيم الحقول — None عند فشل التحقق
-_do_insert(data: dict) -> int          # إدراج سجل جديد — يرجع ID العنصر
-_do_update(item_id: int, data: dict)   # تحديث سجل موجود
-_do_load(item_id: int) -> dict | None  # تحميل بيانات للتعديل
-_fill_fields(data: dict)               # ملء الحقول بالبيانات
-_reset_fields()                        # مسح الحقول وإعادة الضبط
+_build_fields(group: FormGroup)
+_collect() -> dict | None              # None عند فشل التحقق
+_do_insert(data: dict) -> int
+_do_update(item_id: int, data: dict)
+_do_load(item_id: int) -> dict | None
+_fill_fields(data: dict)
+_reset_fields()
 ```
 
 **Hook اختياري:**
 ```python
 _build_extra(root_layout: QVBoxLayout)
-# إضافة widgets إضافية بعد FormGroup
 ```
 
 **API:**
 ```python
 form.load_for_edit(item_id: int)
-# _do_load → _fill_fields → enter_edit_mode
-
-# Attributes المُنشأة تلقائياً:
 form.btn_add    -> QPushButton
 form.btn_save   -> QPushButton
 form.btn_cancel -> QPushButton

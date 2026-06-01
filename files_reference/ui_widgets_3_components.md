@@ -11,10 +11,15 @@
 |-------|---------|
 | [Button](#button) | `components/button.py` |
 | [Label](#label) | `components/label.py` |
-| [Headers](#headers) | `components/headers.py` |
+| [Amount Label](#amount-label) | `components/amount_label.py` |
+| [Progress](#progress) | `components/progress.py` |
+| [Headers List](#headers-list) | `components/headers_list.py` |
+| [Headers Page](#headers-page) | `components/headers_page.py` |
 | [Notification](#notification) | `components/notification.py` |
 | [Spinner](#spinner) | `components/spinner.py` |
-| [StatRow](#statrow) | `components/stat_row.py` |
+| [Stat Card](#stat-card) | `components/stat_card.py` |
+| [Badge](#badge) | `components/badge.py` |
+| [Status Chip](#status-chip) | `components/status_chip.py` |
 | [ActionToolbar](#actiontoolbar) | `components/action_toolbar.py` |
 | [ColorPicker](#colorpicker) | `helpers/color_picker.py` |
 
@@ -27,7 +32,7 @@
 ```python
 make_btn(text: str, style: str = "normal", fixed_size: bool = True) -> QPushButton
 # style: "primary" | "success" | "danger" | "ghost" | "normal"
-# يحفظ style على الزر كـ Qt property ("_btn_style") لاستخدامها في refresh_visible_buttons
+# يحفظ style على الزر كـ Qt property ("_btn_style") لـ refresh_visible_buttons
 # fixed_size=True → setFixedWidth | False → setMinimumWidth (قابل للتمدد)
 # ألوان الأزرار تُقرأ من _C تلقائياً — تتغير مع الثيم
 
@@ -36,10 +41,8 @@ invalidate_stylesheet_cache()
 
 refresh_visible_buttons(root_widget) -> int
 # يُعيد تطبيق stylesheet على كل QPushButton في الـ widget tree
-# يعتمد على property("_btn_style") — يتجاهل الأزرار بدون هذا الـ property
-# يمسح _stylesheet_cache قبل التطبيق لضمان استخدام الألوان الجديدة
+# يعتمد على property("_btn_style")
 # يرجع عدد الأزرار المحدثة
-# مثال: bus.theme_changed.connect(lambda _: refresh_visible_buttons(main_window))
 
 calc_btn_width(text: str, font_size: int, padding: int = 32) -> int
 ```
@@ -48,32 +51,11 @@ calc_btn_width(text: str, font_size: int, padding: int = 32) -> int
 
 | style | الوصف | الألوان |
 |-------|-------|---------|
-| `"primary"` | الإجراء الرئيسي — غامق | من `accent_light / accent_text` |
+| `"primary"` | الإجراء الرئيسي | من `accent_light / accent_text` |
 | `"success"` | حفظ / إضافة — أخضر | من `success_bg / success` |
 | `"danger"` | حذف / خطأ — أحمر | من `danger_bg / danger` |
 | `"ghost"` | ثانوي / إلغاء — شفاف | من `border_med / text_sec` |
 | `"normal"` | عادي — رمادي فاتح | من `bg_surface_2 / text_sec` |
-
-**مثال مع الثيم واللغة:**
-```python
-from ui.widgets.components.button import make_btn
-from ui.widgets.core.i18n import tr
-
-btn_save   = make_btn(tr("btn_save"),   "success")
-btn_cancel = make_btn(tr("btn_cancel"), "ghost")
-btn_delete = make_btn(tr("btn_delete"), "danger")
-
-def _on_language_changed(self, lang_code: str):
-    self.btn_save.setText(tr("btn_save"))
-    self.btn_cancel.setText(tr("btn_cancel"))
-```
-
-**ملاحظة الـ cache:**
-`_stylesheet_cache` key هو `(style_name, font_size)`.
-يُمسح تلقائياً عند:
-- تغيير حجم الخط (عبر `apply_font()`)
-- تغيير الثيم (عبر `apply_theme()` → `invalidate_stylesheet_cache()`)
-- استدعاء `refresh_visible_buttons()` مباشرة
 
 ---
 
@@ -81,18 +63,36 @@ def _on_language_changed(self, lang_code: str):
 
 ### `ui/widgets/components/label.py`
 
+> **ملاحظة:** هذا الملف يحتوي الآن على `InfoRow` و `ModeLabel` فقط.
+> باقي الـ classes انتقلت لملفات مستقلة (انظر أدناه).
+
 ```python
-# ── Labels ──
 InfoRow(separator="  ·  ")
   .set_parts(parts: list)   # يُرشح القيم الفارغة تلقائياً
   .set_text(text)
   .label() -> QLabel
 
 ModeLabel(add_text="جديد", icon="")
+# المصدر الوحيد لـ ModeLabel — مُستورد في form_parts أيضاً
   .set_add_mode(text=None)   # أزرق — وضع الإضافة
   .set_edit_mode(name="")    # برتقالي — وضع التعديل
   .set_custom(text, color=None)
   .is_edit_mode -> bool
+```
+
+---
+
+## Amount Label
+
+### `ui/widgets/components/amount_label.py`
+
+> **ملاحظة:** مستخرج من `components/label.py`.
+
+```python
+format_amount(value, decimals=2, currency="ج") -> str
+amount_color(value, positive_color=None, negative_color=None, zero_color=None) -> str
+# يقرأ الألوان من _C تلقائياً
+dr_cr_color(side: str) -> str    # side: "dr" | "cr"
 
 AmountLabel(value=None, currency="ج", decimals=2, bold=True,
             font_size_offset=0, auto_color=True)
@@ -102,7 +102,6 @@ AmountLabel(value=None, currency="ج", decimals=2, bold=True,
   .set_credit(value)
   .reset(placeholder="─")
 
-# ── Display Widgets ──
 DebitCreditDisplay(currency="ج")
   .update(total_dr, total_cr)
   .reset()
@@ -111,7 +110,17 @@ BalanceDisplay(currency="ج")
   .set_balance(value, side_label="", color=None)
   .set_debit_credit_balance(dr, cr)
   .reset()
+```
 
+---
+
+## Progress
+
+### `ui/widgets/components/progress.py`
+
+> **ملاحظة:** مستخرج من `components/label.py`.
+
+```python
 ProgressBar(label="", color=None, height=8, show_pct=True, compact=False)
   .set_value(value, label=None)  # value: 0-100
   .set_color(color)
@@ -123,19 +132,15 @@ MultiProgressBar(spacing=8)
   .add_bar(label, value=0, color=None) -> ProgressBar
   .clear_bars()
   .update_bar(index, value)
-
-# ── Helpers ──
-format_amount(value, decimals=2, currency="ج") -> str
-amount_color(value, positive_color=None, negative_color=None, zero_color=None) -> str
-# يقرأ الألوان من _C تلقائياً — تتغير مع الثيم
-dr_cr_color(side: str) -> str    # side: "dr" | "cr"
 ```
 
 ---
 
-## Headers
+## Headers List
 
-### `ui/widgets/components/headers.py`
+### `ui/widgets/components/headers_list.py`
+
+> **ملاحظة:** مستخرج من `components/headers.py` — يحتوي على widgets لوحات القوائم.
 
 ```python
 SearchBar(placeholder="", delay_ms=250, height=34)
@@ -152,6 +157,30 @@ StatusBar()
   .set_text(text: str)
   .clear_count()
 
+ListHeader(title="", add_text="", show_search=True,
+           search_placeholder="", search_delay=250)
+# يشترك في bus.language_changed لتحديث placeholder تلقائياً
+# Signals: search_changed(str), add_clicked
+  .add_action(text, callback=None, style="normal") -> QPushButton
+  .search_text() -> str
+  .clear_search()
+  .set_add_enabled(enabled: bool)
+  .search_bar -> SearchBar | None
+  .btn_add -> QPushButton | None
+
+make_list_header(title="", add_text="", show_search=True,
+                 placeholder="") -> ListHeader
+```
+
+---
+
+## Headers Page
+
+### `ui/widgets/components/headers_page.py`
+
+> **ملاحظة:** مستخرج من `components/headers.py` — يحتوي على widgets الصفحات والتفاصيل.
+
+```python
 SectionHeader(title="")
   .set_title(title)
   .add_button(text, callback=None, style="normal") -> QPushButton
@@ -174,20 +203,6 @@ DetailHeader(bg=None)
   .clear_stat_cards()
   .add_action(text, callback=None, style="primary") -> QPushButton
   .toolbar -> ActionToolbar   # lazy property
-
-ListHeader(title="", add_text="", show_search=True,
-           search_placeholder="", search_delay=250)
-# يشترك في bus.language_changed لتحديث placeholder تلقائياً
-# Signals: search_changed(str), add_clicked
-  .add_action(text, callback=None, style="normal") -> QPushButton
-  .search_text() -> str
-  .clear_search()
-  .set_add_enabled(enabled: bool)
-  .search_bar -> SearchBar | None
-  .btn_add -> QPushButton | None
-
-make_list_header(title="", add_text="", show_search=True,
-                 placeholder="") -> ListHeader
 ```
 
 ---
@@ -240,31 +255,24 @@ LoadingButton(text="")
 
 ---
 
-## StatRow
+## Stat Card
 
-### `ui/widgets/components/stat_row.py`
+### `ui/widgets/components/stat_card.py`
+
+> **ملاحظة:** مستخرج من `components/stat_row.py`.
 
 ```python
-BadgeLabel()
-  .set_badge(text, text_color=None, bg=None, border=None)
-  .clear_badge()
+@dataclass
+StatItem(label: str, color: str = "#1565c0", icon: str = "",
+         value: str = "─", bg: Optional[str] = None,
+         border: Optional[str] = None, bold_value: bool = True,
+         compact: bool = False)
 
 StatCard(icon="", title="", value="─", color="#1565c0",
          bg=None, border=None, compact=False)
   .set_value(text: str)
   .set_color(color: str)
   .value_label() -> QLabel
-
-StatusChip(icon="", label="", count=0, color="#6b7280",
-           bg=None, border=None, compact=False)
-  .set_count(count: int)
-  .count() -> int
-
-@dataclass
-StatItem(label: str, color: str = "#1565c0", icon: str = "",
-         value: str = "─", bg: Optional[str] = None,
-         border: Optional[str] = None, bold_value: bool = True,
-         compact: bool = False)
 
 StatRow(items: list[StatItem], separator=True, compact=False, bg=None)
   .set_value(index: int, text: str, color: str = None)
@@ -282,6 +290,36 @@ StatusCard(icon="", label="", value="─", color="#1565c0", sub="")
 make_stat_row(*items: StatItem, separator=True, compact=False, bg=None) -> StatRow
 stat_card_pair(label, color, icon="") -> tuple[QFrame, QLabel]
 make_stat_card_simple(label, value="─", color="#1565c0", icon="") -> StatCard
+```
+
+---
+
+## Badge
+
+### `ui/widgets/components/badge.py`
+
+> **ملاحظة:** مستخرج من `components/stat_row.py`.
+
+```python
+BadgeLabel()
+  .set_badge(text, text_color=None, bg=None, border=None)
+  .clear_badge()
+```
+
+---
+
+## Status Chip
+
+### `ui/widgets/components/status_chip.py`
+
+> **ملاحظة:** مستخرج من `components/stat_row.py`.
+
+```python
+StatusChip(icon="", label="", count=0, color="#6b7280",
+           bg=None, border=None, compact=False)
+  .set_count(count: int)
+  .count() -> int
+
 make_status_chip(icon, label, count=0, color="#6b7280") -> StatusChip
 ```
 
