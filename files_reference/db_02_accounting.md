@@ -1,4 +1,4 @@
-# دليل الكود — DB (3): المحاسبة (accounting.db)
+# دليل الكود — DB: المحاسبة (db/accounting/)
 
 > جداول `accounting.db` — الحسابات، القيود، القوائم المالية، المستثمرون، Audit Log.
 
@@ -6,31 +6,28 @@
 
 ## فهرس
 
-| القسم | الملفات |
-|-------|---------|
-| [schema](#schema) | `db/accounting/accounting_schema.py` |
-| [accounting_schema_constants](#accounting_schema_constants) | `db/accounting/accounting_schema_constants.py` |
-| [accounting_schema_seed](#accounting_schema_seed) | `db/accounting/accounting_schema_seed.py` |
-| [accounting_accounts_repo](#accounting_accounts_repo) | `db/accounting/accounting_accounts_repo.py` |
-| [accounting_journal_repo](#accounting_journal_repo) | `db/accounting/accounting_journal_repo.py` |
-| [accounting_statements_repo](#accounting_statements_repo) | `db/accounting/accounting_statements_repo.py` |
-| [accounting_inventory_repo](#accounting_inventory_repo) | `db/accounting/accounting_inventory_repo.py` |
-| [accounting_audit_repo](#accounting_audit_repo) | `db/accounting/accounting_audit_repo.py` |
-| [investors_repo](#investors_repo) | `db/accounting/investors_repo.py` |
-| [accounting_repo (Facade)](#accounting_repo-facade) | `db/accounting/accounting_repo.py` |
-| [accounting_repo_ui_helpers](#accounting_repo_ui_helpers) | `db/accounting/accounting_repo_ui_helpers.py` |
+| الملف | الوصف |
+|-------|-------|
+| [accounting_schema.py](#accounting_schemapy) | Facade إنشاء الجداول |
+| [accounting_schema_constants.py](#accounting_schema_constantspy) | ثوابت أنواع الحسابات |
+| [accounting_schema_seed.py](#accounting_schema_seedpy) | البيانات الافتراضية |
+| [accounting_accounts_repo.py](#accounting_accounts_repopy) | CRUD الحسابات والتصنيفات |
+| [accounting_journal_repo.py](#accounting_journal_repopy) | CRUD القيود ودفتر الأستاذ |
+| [accounting_statements_repo.py](#accounting_statements_repopy) | القوائم المالية |
+| [accounting_inventory_repo.py](#accounting_inventory_repopy) | ربط المخزن بالمحاسبة |
+| [accounting_audit_repo.py](#accounting_audit_repopy) | Audit Log |
+| [accounting_repo.py](#accounting_repopy) | Facade للتوافق القديم |
+| [accounting_repo_ui_helpers.py](#accounting_repo_ui_helperspy) | دوال مساعدة للـ UI |
+| [investors_repo.py](#investors_repopy) | إدارة المستثمرين |
 
 ---
 
-## schema
-
-### `db/accounting/accounting_schema.py`
+## accounting_schema.py
 
 Facade يُعيد تصدير من الملفات المقسّمة:
 - `accounting_schema_constants.py` — الثوابت
-- `accounting_schema_migrations.py` — الـ migrations
 - `accounting_schema_seed.py` — البيانات الافتراضية
-- `accounting_audit_repo.py` — Audit Log [مقترح 52]
+- `accounting_audit_repo.py` — Audit Log
 
 ```python
 create_accounting_tables(conn)
@@ -65,9 +62,7 @@ CHECK(NOT (debit > 0 AND credit > 0))
 
 ---
 
-## accounting_schema_constants
-
-### `db/accounting/accounting_schema_constants.py`
+## accounting_schema_constants.py
 
 ```python
 TYPE_AR = {
@@ -97,9 +92,7 @@ _VALID_TYPES = "('asset','liability','capital','revenue','expense','drawings')"
 
 ---
 
-## accounting_schema_seed
-
-### `db/accounting/accounting_schema_seed.py`
+## accounting_schema_seed.py
 
 ```python
 seed_default_accounts(conn)
@@ -129,29 +122,24 @@ _verify_conn_is_accounting(conn) -> bool
 
 ---
 
-## accounting_accounts_repo
-
-### `db/accounting/accounting_accounts_repo.py`
+## accounting_accounts_repo.py
 
 #### قراءة الحسابات — [P-01] دالتان مقسّمتان
 
 ```python
 fetch_all_accounts_basic(conn, acc_type=None) -> list
 # بدون balance — سريعة للـ dropdowns والـ combos
-# LEFT JOIN مع accounts (parent) و account_groups فقط
 # الأعمدة: id, code, name, type, subtype, parent_id, is_leaf, group_id,
 #          parent_name, group_name, group_color
 
 fetch_all_accounts_with_balance(conn, acc_type=None) -> list
 # مع balance = SUM(debit) - SUM(credit)
 # [تحسين 38] LEFT JOIN + GROUP BY بدل correlated subquery = O(1) بدل O(n)
-# يضيف عمود: balance
 
 fetch_all_accounts(conn, acc_type=None) -> list
 # للتوافق القديم — يُفوَّض لـ fetch_all_accounts_with_balance
 
 fetch_account(conn, account_id) -> row
-# مع parent_name و group_name و group_color
 fetch_account_by_code(conn, code) -> row | None
 fetch_leaf_accounts(conn, acc_type=None) -> list
 # is_leaf=1 فقط — للاختيار في القيود
@@ -163,10 +151,10 @@ fetch_leaf_accounts(conn, acc_type=None) -> list
 insert_account(conn, code, name, acc_type, parent_id=None,
                group_id=None, subtype=None, notes=None) -> int
 # لو parent_id محدد → UPDATE accounts SET is_leaf=0 على الأب تلقائياً
-# is_leaf=1 للحساب الجديد دائماً
 
 update_account(conn, account_id, name, group_id=None, notes=None)
 # لا يُغيّر code أو type أو parent_id
+
 delete_account(conn, account_id)
 # CASCADE على الأبناء
 ```
@@ -175,17 +163,10 @@ delete_account(conn, account_id)
 
 ```python
 get_account_balance(conn, account_id) -> float
-# COALESCE(SUM(debit) - SUM(credit), 0)
-
 get_account_natural_balance(conn, account_id) -> float
-# يراعي الـ normal balance (dr/cr)
-
 get_normal_balance(acc_type: str) -> str
 # "dr" لـ asset/expense/drawings | "cr" لـ liability/capital/revenue
-
 calc_signed_amount(acc_type, increase: bool, amount: float) -> tuple[float, float]
-# يرجع (debit, credit)
-
 get_balances_by_type(conn) -> dict
 # {type: {"debit": float, "credit": float, "balance": float}}
 ```
@@ -206,7 +187,6 @@ build_group_tree(rows) -> list
 
 _sort_groups_parents_first(rows) -> list
 # [تحسين 3] O(n) dicts بدل O(3n)
-# يضمن ظهور الأب قبل أبنائه دائماً
 
 _get_group_descendants(conn, group_id) -> set
 # Private — استورد مباشرة من accounting_accounts_repo لو احتجتها
@@ -214,16 +194,13 @@ _get_group_descendants(conn, group_id) -> set
 
 ---
 
-## accounting_journal_repo
-
-### `db/accounting/accounting_journal_repo.py`
+## accounting_journal_repo.py
 
 #### رقم القيد التلقائي
 
 ```python
 next_ref_no(conn) -> str
 # "JE-00001", "JE-00002", ...
-# MAX(CAST(SUBSTR(ref_no,4) AS INTEGER)) + 1
 ```
 
 #### قراءة القيود
@@ -243,8 +220,6 @@ fetch_all_entries_paginated(conn, limit=200, offset=0,
 # search: يبحث في ref_no و description
 
 fetch_entry(conn, entry_id) -> row | None
-# SELECT * FROM journal_entries
-
 fetch_entry_lines(conn, entry_id) -> list
 # مع account_code, account_name, account_type من JOIN
 ```
@@ -254,16 +229,14 @@ fetch_entry_lines(conn, entry_id) -> list
 ```python
 insert_entry(conn, date, description, entry_type="manual",
              notes=None, ref_id=None, ref_type=None) -> int
-# يولد ref_no تلقائياً بـ next_ref_no()
-# status="posted" دائماً
+# يولد ref_no تلقائياً | status="posted" دائماً
 
 add_entry_lines(conn, entry_id, lines: list)
 # lines: [{"account_id", "debit", "credit", "description"}, ...]
 
 delete_entry(conn, entry_id, changed_by="system")
-# [مقترح 52] يأخذ snapshot بـ snapshot_journal_entry قبل الحذف
-# يُسجّل في audit_log ثم يحذف
-# فشل الـ audit لا يوقف الحذف — يُسجَّل كـ warning فقط
+# [مقترح 52] snapshot قبل الحذف في audit_log
+# فشل الـ audit لا يوقف الحذف
 
 validate_entry_balance(lines: list) -> bool
 # abs(total_debit - total_credit) < 0.001
@@ -273,26 +246,19 @@ validate_entry_balance(lines: list) -> bool
 
 ```python
 fetch_t_account(conn, account_id) -> dict
-# {account: dict, lines: [dict], total_debit, total_credit,
-#  balance, normal_balance}
-# lines مرتبة بـ date, id
+# {account, lines, total_debit, total_credit, balance, normal_balance}
 ```
 
 ---
 
-## accounting_statements_repo
-
-### `db/accounting/accounting_statements_repo.py`
+## accounting_statements_repo.py
 
 ```python
 trial_balance(conn) -> list
 # كل الـ leaf accounts مع total_debit, total_credit, balance
-# balance = total_debit - total_credit
 
 income_statement(conn) -> dict
-# {revenues: [dict], expenses: [dict],
-#  total_rev, total_exp, net_income}
-# revenues: credit - debit | expenses: debit - credit
+# {revenues, expenses, total_rev, total_exp, net_income}
 
 balance_sheet(conn) -> dict
 # {assets, liabilities, capital, drawings, net_income,
@@ -306,9 +272,7 @@ owners_equity_statement(conn) -> dict
 
 ---
 
-## accounting_inventory_repo
-
-### `db/accounting/accounting_inventory_repo.py`
+## accounting_inventory_repo.py
 
 ```python
 purchase_inventory(inv_conn, acc_conn,
@@ -321,11 +285,11 @@ purchase_inventory(inv_conn, acc_conn,
 - `qty <= 0` → ValueError
 - `unit_cost < 0` → ValueError
 - الصنف غير موجود → ValueError
-- حساب المخزون غير موجود → ValueError (يجرب account_code أولاً ثم subtype='inventory')
+- حساب المخزون غير موجود → ValueError
 - payment_account_id فارغ → ValueError
 
 **المرحلتان:**
-1. إنشاء قيد محاسبي في `accounting.db` (مدين: حساب مخزون، دائن: حساب دفع)
+1. إنشاء قيد محاسبي في `accounting.db`
 2. تسجيل حركة وارد في `inventory.db`
 
 **[إصلاح 32] Rollback محصّن:**
@@ -334,36 +298,20 @@ purchase_inventory(inv_conn, acc_conn,
 #   - يحاول حذف القيد المحاسبي
 #   - [مقترح 52] يُسجّل rollback في audit_log قبل الحذف
 #   - لو فشل الـ rollback → CRITICAL log + RuntimeError واضحة
-#   - entry_id=None guard يمنع rollback بدون قيد حقيقي
-```
-
-**دوال مساعدة [مقترح 52]:**
-```python
-_audit_rollback(acc_conn, entry_id, reason, changed_by)
-# يُسجّل عملية الـ rollback في audit_log قبل الحذف
-# فشله لا يوقف الـ rollback
-
-_audit_critical_inconsistency(acc_conn, entry_id, inv_err, rb_err,
-                               inv_id, qty, unit_cost, date, changed_by)
-# يُسجّل حالة التناقض الحرجة — يُحاوِل الكتابة حتى لو الـ conn غير مستقر
 ```
 
 **Raises:**
 - `ValueError` — بيانات غير صحيحة أو فشل إنشاء القيد
-- `RuntimeError` — فشل تسجيل المخزون (مع rollback) أو فشل الـ rollback نفسه
+- `RuntimeError` — فشل تسجيل المخزون أو فشل الـ rollback
 
 ---
 
-## accounting_audit_repo
-
-### `db/accounting/accounting_audit_repo.py`
+## accounting_audit_repo.py
 
 ```python
 AUDIT_LOG_DDL  # CREATE TABLE IF NOT EXISTS audit_log (...)
 
 create_audit_log_table(conn)
-# يستخدم executescript(AUDIT_LOG_DDL) + commit
-# فشله يُسجَّل كـ warning فقط
 ```
 
 #### كتابة السجلات
@@ -372,9 +320,7 @@ create_audit_log_table(conn)
 log_action(conn, action, table_name, record_id=None,
            old_data=None, changed_by="system") -> int | None
 # action: "delete" | "update" | "create"
-# old_data: dict | list | str → يُحوَّل لـ JSON تلقائياً
 # فشل الـ insert يُسجَّل كـ warning — لا يوقف العملية الأصلية
-# يرجع id السجل الجديد أو None عند الفشل
 
 log_delete(conn, table_name, record_id, old_data=None, changed_by="system") -> int | None
 log_update(conn, table_name, record_id, old_data=None, changed_by="system") -> int | None
@@ -385,13 +331,10 @@ log_create(conn, table_name, record_id, data=None, changed_by="system") -> int |
 
 ```python
 snapshot_journal_entry(conn, entry_id) -> dict | None
-# {entry: dict, lines: [dict]} — مع account_code و account_name
+# {entry: dict, lines: [dict]} مع account_code و account_name
 
 snapshot_account(conn, account_id) -> dict | None
-# dict(row) من accounts
-
 snapshot_row(conn, table, record_id, id_col="id") -> dict | None
-# snapshot عام لأي جدول بسيط
 ```
 
 #### قراءة السجل
@@ -399,95 +342,13 @@ snapshot_row(conn, table, record_id, id_col="id") -> dict | None
 ```python
 fetch_audit_log(conn, table_name=None, action=None,
                 limit=200, offset=0) -> list
-# كل dict يحتوي: id, action, table_name, record_id,
-#   old_data (string), old_data_parsed (dict | None), changed_by, created_at
-
 fetch_audit_log_count(conn, table_name=None, action=None) -> int
-
 fetch_record_history(conn, table_name, record_id) -> list
-# كل تعديلات سجل بعينه مرتبة DESC
 ```
 
 ---
 
-## investors_repo
-
-### `db/accounting/investors_repo.py`
-
-#### Cache الـ Migration — [إصلاح 31]
-
-```python
-_investors_migrated: set   # مجموعة db_paths التي تمّ migration عليها
-
-_get_db_path(conn) -> str
-# [تحسين 7] Fast path: ProtectedConnection._path مباشرة O(1)
-# Slow path: PRAGMA database_list للـ connections العادية
-
-_migrate_investors(conn)
-# يُنفَّذ مرة واحدة per-connection-path
-# يتحقق من شكل investor_entries — إذا كان schema قديم يُهاجره
-# Migration القديم: investor_entries كان يحتوي REFERENCES journal_entries
-# Migration الجديد: entry_id و line_id بدون FK عبر DBs
-
-invalidate_investors_migration_cache(conn=None)
-# conn=None → يمسح كل الـ cache | conn محدد → يمسح هذا المسار فقط
-```
-
-#### CRUD — المستثمرون
-
-```python
-fetch_all_investors(conn) -> list   # ORDER BY name
-fetch_investor(conn, investor_id) -> row
-insert_investor(conn, name, notes=None, joined_at=None) -> int
-# joined_at الافتراضي: today بـ datetime.now().strftime("%Y-%m-%d")
-update_investor(conn, investor_id, name, notes=None, joined_at=None)
-delete_investor(conn, investor_id)
-# CASCADE على investor_entries
-investor_exists(conn, name) -> int | None
-# يرجع id لو موجود أو None
-```
-
-#### ربط المستثمر بالقيود
-
-```python
-link_investor_to_line(conn, investor_id, entry_id, line_id,
-                       move_type, amount, notes=None) -> int
-# move_type: "capital" | "drawings"
-
-fetch_investor_entries(conn, investor_id, acc_conn=None) -> list
-# لو acc_conn متاح → يجلب بيانات القيود (ref_no, date, description)
-#                    + بيانات السطور (debit, credit, account_code, account_name)
-# كل entry كـ dict مع كل الحقول
-
-fetch_entry_investor_links(conn, entry_id) -> list
-# مع investor_name من JOIN
-
-delete_investor_link(conn, link_id)
-delete_entry_investor_links(conn, entry_id)
-```
-
-#### تقارير — [إصلاح 40]
-
-```python
-calc_investor_summary(conn, investor_id, acc_conn=None) -> dict
-# {investor_id, investor_name, joined_at, notes,
-#  total_capital, total_drawings, net_investment, entries}
-
-calc_all_investors_summary(conn, acc_conn=None) -> list
-# [إصلاح 40] O(1) + O(entries) بدل O(n×m) queries
-# خطوات:
-#   1. جلب كل investor_entries دفعة واحدة
-#   2. تجميع حسب investor_id في defaultdict
-#   3. لو acc_conn: جلب je_cache و jl_cache دفعة واحدة بـ IN (...)
-#   4. بناء النتائج بدون queries إضافية
-# النتائج مُرتَّبة بـ net_investment DESC
-```
-
----
-
-## accounting_repo (Facade)
-
-### `db/accounting/accounting_repo.py`
+## accounting_repo.py
 
 Facade للتوافق مع الكود القديم — يُعيد تصدير كل الدوال من الملفات المقسّمة.
 
@@ -513,7 +374,7 @@ from db.accounting.accounting_repo import (
     trial_balance, income_statement, balance_sheet, owners_equity_statement,
     # inventory
     purchase_inventory,
-    # audit log [مقترح 52]
+    # audit log
     create_audit_log_table,
     log_action, log_delete, log_update, log_create,
     snapshot_journal_entry, snapshot_account, snapshot_row,
@@ -521,31 +382,22 @@ from db.accounting.accounting_repo import (
 )
 ```
 
-> ⚠️ `_get_group_descendants` **محذوفة** من الـ facade [تحسين 14] — هي private function. استوردها مباشرة من `accounting_accounts_repo` لو احتجتها.
+> ⚠️ `_get_group_descendants` **محذوفة** من الـ facade — هي private function. استوردها مباشرة من `accounting_accounts_repo`.
 
 ---
 
-## accounting_repo_ui_helpers
+## accounting_repo_ui_helpers.py
 
-### `db/accounting/accounting_repo_ui_helpers.py`
-
-دوال مساعدة نُقلت من الـ UI widgets إلى DB layer لفصل المسؤوليات.
+دوال مساعدة نُقلت من الـ UI widgets إلى DB layer.
 
 ```python
 fetch_account_by_code(conn, code: str) -> row | None
-# SELECT id FROM accounts WHERE code=?
-
 fetch_capital_line_for_entry(conn, entry_id: int) -> int
 # يرجع id أول سطر دائن (credit > 0) في القيد، أو 0
-
 fetch_drawings_line_for_entry(conn, entry_id: int) -> int
 # يرجع id أول سطر مدين (debit > 0) في القيد، أو 0
-
 fetch_entry_by_ref(conn, ref_no: str) -> row | None
-# SELECT id FROM journal_entries WHERE ref_no=?
-
 fetch_investor_entry_id(erp_conn, link_id: int) -> int | None
-# SELECT entry_id FROM investor_entries WHERE id=?
 # يأخذ erp_conn (ليس acc_conn) لأن investor_entries في erp.db
 ```
 
@@ -553,10 +405,65 @@ fetch_investor_entry_id(erp_conn, link_id: int) -> int | None
 
 ---
 
+## investors_repo.py
+
+#### Cache الـ Migration — [إصلاح 31]
+
+```python
+_investors_migrated: set   # مجموعة db_paths التي تمّ migration عليها
+
+_get_db_path(conn) -> str
+# [تحسين 7] Fast path: ProtectedConnection._path مباشرة O(1)
+# Slow path: PRAGMA database_list للـ connections العادية
+
+_migrate_investors(conn)
+# يُنفَّذ مرة واحدة per-connection-path
+
+invalidate_investors_migration_cache(conn=None)
+```
+
+#### CRUD — المستثمرون
+
+```python
+fetch_all_investors(conn) -> list
+fetch_investor(conn, investor_id) -> row
+insert_investor(conn, name, notes=None, joined_at=None) -> int
+update_investor(conn, investor_id, name, notes=None, joined_at=None)
+delete_investor(conn, investor_id)
+investor_exists(conn, name) -> int | None
+```
+
+#### ربط المستثمر بالقيود
+
+```python
+link_investor_to_line(conn, investor_id, entry_id, line_id,
+                       move_type, amount, notes=None) -> int
+# move_type: "capital" | "drawings"
+
+fetch_investor_entries(conn, investor_id, acc_conn=None) -> list
+fetch_entry_investor_links(conn, entry_id) -> list
+delete_investor_link(conn, link_id)
+delete_entry_investor_links(conn, entry_id)
+```
+
+#### تقارير — [إصلاح 40]
+
+```python
+calc_investor_summary(conn, investor_id, acc_conn=None) -> dict
+# {investor_id, investor_name, joined_at, notes,
+#  total_capital, total_drawings, net_investment, entries}
+
+calc_all_investors_summary(conn, acc_conn=None) -> list
+# [إصلاح 40] O(1) + O(entries) بدل O(n×m) queries
+# النتائج مُرتَّبة بـ net_investment DESC
+```
+
+---
+
 ## ملاحظات
 
-- الـ `accounting.db` منفصل تماماً عن `erp.db` — لا FOREIGN KEYS بينهما.
+- `accounting.db` منفصل تماماً عن `erp.db` — لا FOREIGN KEYS بينهما.
 - استخدم `_verify_conn_is_accounting()` للتحقق من صحة الـ connection قبل الكتابة.
-- `purchase_inventory` يحتاج **connection-ين** منفصلين: `inv_conn` لـ inventory و `acc_conn` لـ accounting.
-- `calc_all_investors_summary` يجلب acc_conn data دفعة واحدة [إصلاح 40] — استخدمه بدل `calc_investor_summary` في حلقات.
+- `purchase_inventory` يحتاج **connection-ين** منفصلين: `inv_conn` و `acc_conn`.
+- `calc_all_investors_summary` يجلب acc_conn data دفعة واحدة [إصلاح 40].
 - `delete_entry` يُسجّل snapshot في audit_log قبل الحذف تلقائياً [مقترح 52].

@@ -1,4 +1,4 @@
-# دليل الكود — DB (5): التصميمات (designs.db)
+# دليل الكود — DB: التصميمات (db/designs/)
 
 > جداول `designs.db` — التصميمات، المقاسات، مجموعات الأبعاد، التصنيفات.
 
@@ -6,35 +6,36 @@
 
 ## فهرس
 
-| القسم | الملفات |
-|-------|---------|
-| [design_schema](#design_schema) | `db/designs/design_schema.py` |
-| [هيكل الجداول](#هيكل-الجداول) | — |
-| [designs_repo](#designs_repo) | `db/designs/designs_repo.py` |
-| [designs_sizes_repo](#designs_sizes_repo) | `db/designs/designs_sizes_repo.py` |
-| [dimension_sets_repo](#dimension_sets_repo) | `db/designs/dimension_sets_repo.py` (Facade) |
-| [design_item_categories_repo](#design_item_categories_repo) | `db/designs/design_item_categories_repo.py` |
+| الملف | الوصف |
+|-------|-------|
+| [design_schema.py](#design_schemapy) | إنشاء جداول designs.db |
+| [designs_repo.py](#designs_repopy) | CRUD التصميمات وربطها بالمقاسات |
+| [designs_sizes_repo.py](#designs_sizes_repopy) | ربط التصميمات بالمقاسات الفعلية |
+| [dimension_sets_repo.py](#dimension_sets_repopy) | مجموعات المقاسات والحقول (Facade) |
+| [design_categories_repo.py](#design_categories_repopy) | تصنيفات مجموعات المقاسات |
+| [design_item_categories_repo.py](#design_item_categories_repopy) | تصنيفات التصميمات |
+| [dimension_instances_repo.py](#dimension_instances_repopy) | Instances وقيمها |
 
 ---
 
-## design_schema
-
-### `db/designs/design_schema.py`
+## design_schema.py
 
 ```python
-create_design_tables(conn)
-# ينشئ في designs.db كل الجداول + يُشغِّل _run_migrations()
+create_designs_tables(conn)
+# ينشئ في designs.db كل الجداول + يُشغّل _run_migrations()
 # الترتيب: design_categories → design_item_categories → dimension_sets
 #          → dimension_fields → dimension_field_deps
 #          → dimension_set_instances → dimension_set_values
-#          → designs → design_sizes
+#          → designs → design_sizes → design_dimensions → design_dim_values
+
+_run_migrations(conn)
+# [إصلاح 7 + 12] يضيف dpi_field_id لجدول design_sizes لو ناقص
+# idempotent — آمن للاستدعاء المتكرر
+
+get_designs_connection() -> sqlite3.Connection
 ```
 
-> **ملاحظة [إصلاح 7 + 12]:** `dpi_field_id` يُضاف تلقائياً عبر `_run_migrations()` على قواعد البيانات القديمة.
-
----
-
-## هيكل الجداول
+**هيكل الجداول:**
 
 | الجدول | الأعمدة الرئيسية |
 |--------|-----------------|
@@ -47,26 +48,41 @@ create_design_tables(conn)
 | `dimension_set_values` | `id, set_id, field_id, instance_id→CASCADE, value_num, value_text, UNIQUE(instance_id,field_id)` |
 | `designs` | `id, name, category_id, item_category_id, notes, preview_image, created_at, updated_at` |
 | `design_sizes` | `id, design_id→CASCADE, set_id, instance_id, width_field_id, height_field_id, dpi_field_id, xcf_path, notes, sort_order, UNIQUE(design_id,instance_id)` |
+| `design_dimensions` | `id, design_id→CASCADE, set_id→RESTRICT, label, sort_order` |
+| `design_dim_values` | `id, link_id→CASCADE, field_id→CASCADE, value_num, value_text, is_auto, UNIQUE(link_id,field_id)` |
 
 ---
 
-## designs_repo
-
-### `db/designs/designs_repo.py`
+## designs_repo.py
 
 ```python
 fetch_all_designs(conn, category_id=None, set_id=None, name_q="") -> list
-# category_id هنا = item_category_id
+# category_id هنا = item_category_id (تصنيف التصميم المستقل)
 fetch_design(conn, design_id) -> row
 insert_design(conn, name, item_category_id=None, notes="") -> int
 update_design(conn, design_id, name, item_category_id=None, notes="")
 delete_design(conn, design_id)
+```
 
+#### ربط التصميم بالمقاسات (design_dimensions)
+
+```python
 fetch_design_links_for_design(conn, design_id) -> list
+fetch_link(conn, link_id) -> row
+add_design_link(conn, design_id, set_id, label="", sort_order=0) -> int
+remove_design_link(conn, link_id)
+update_design_link_label(conn, link_id, label)
+```
+
+#### قيم الحقول (design_dim_values)
+
+```python
 fetch_dim_values(conn, link_id) -> dict
+# {field_id: {"value_num", "value_text", "is_auto"}}
 set_dim_value(conn, link_id, field_id, value_num=None, value_text=None, is_auto=False)
 save_all_dim_values(conn, link_id, values: dict, auto_flags: dict = None)
 recalc_auto_values(conn, link_id) -> dict[int, float]
+
 fetch_full_design_data(conn, design_id) -> dict
 # {id, name, category_name, notes,
 #  links: [{link_id, set_name, label, unit, fields: [...]}]}
@@ -74,9 +90,7 @@ fetch_full_design_data(conn, design_id) -> dict
 
 ---
 
-## designs_sizes_repo
-
-### `db/designs/designs_sizes_repo.py`
+## designs_sizes_repo.py
 
 ```python
 fetch_design_sizes(conn, design_id) -> list
@@ -91,22 +105,21 @@ update_design_size_path(conn, size_id, xcf_path)
 delete_design_size(conn, size_id)
 
 fetch_canvas_size(conn, size_id) -> tuple[float|None, float|None]
+# يرجع (width_val, height_val) من قيم الـ instance
 fetch_canvas_dpi(conn, size_id) -> float | None
 fetch_instances_for_set_with_values(conn, set_id) -> list
 instance_already_used(conn, design_id, instance_id, exclude_size_id=None) -> bool
 fetch_all_designs_summary(conn) -> list
+# كل التصميمات مع عدد المقاسات وعدد الملفات الموجودة
 ```
 
 ---
 
-## dimension_sets_repo
+## dimension_sets_repo.py
 
-### `db/designs/dimension_sets_repo.py` — Facade
+> **Facade [تحسين 46]:** يُعيد تصدير الدوال من `design_categories_repo.py` و `dimension_instances_repo.py` للتوافق مع الكود القديم، بالإضافة لمجموعات المقاسات وحقولها.
 
-> **ملاحظة [تحسين 46]:** الملف مقسَّم داخلياً إلى 3 ملفات:
-> - `design_categories_repo.py` — تصنيفات مجموعات المقاسات
-> - `dimension_sets_repo.py` — هذا الـ Facade + المجموعات + الحقول
-> - `dimension_instances_repo.py` — Instances + قيمها
+> ⚠️ منع Circular Imports: `design_categories_repo` و `dimension_instances_repo` يجب ألّا يستوردا من `dimension_sets_repo`.
 
 #### مجموعات المقاسات
 
@@ -122,7 +135,9 @@ delete_dimension_set(conn, set_id)
 
 ```python
 fetch_fields_for_set(conn, set_id) -> list
+# مع معلومات الاعتمادية إن وجدت
 fetch_all_fields_for_combo(conn, exclude_field_id=None) -> list
+# الحقول الرقمية مجمّعة حسب المجموعة والتصنيف — للـ comboboxes
 fetch_field(conn, field_id) -> row
 insert_field(conn, set_id, name, label, unit="cm", field_type="number",
              required=True, sort_order=0) -> int
@@ -140,19 +155,56 @@ set_field_dep(conn, field_id, source_field_id, offset=0.0,
               notes="", source_set_id=None)
 remove_field_dep(conn, field_id)
 calc_auto_value(conn, field_id, link_id) -> float | None
+# يدعم cross-set dependencies
 ```
 
-#### تصنيفات (re-export من design_categories_repo)
+---
+
+## design_categories_repo.py
+
+تصنيفات مجموعات المقاسات (dimension_sets) — مختلفة عن `design_item_categories`.
 
 ```python
 fetch_all_design_categories(conn) -> list
+fetch_design_category(conn, cat_id) -> row
+fetch_category_descendants(conn, cat_id) -> list
+# يرجع IDs كل الأبناء المتداخلين شامل cat_id نفسه
 insert_design_category(conn, name, color="#1565c0", parent_id=None, notes="") -> int
 update_design_category(conn, cat_id, name, color, parent_id=None, notes="")
 delete_design_category(conn, cat_id)
 build_category_tree(rows) -> list
 ```
 
-#### Instances (re-export من dimension_instances_repo)
+---
+
+## design_item_categories_repo.py
+
+تصنيفات التصميمات نفسها (designs) — مختلفة عن `design_categories`.
+
+```python
+fetch_all_item_categories(conn) -> list
+# بدون عدد التصميمات — للتوافق القديم
+
+fetch_all_item_categories_with_count(conn) -> list
+# [P-03] يدمج عدد التصميمات في نفس الـ JOIN — query واحدة بدل اثنتين
+# كل صف يحتوي: id, name, color, parent_id, notes, parent_name, designs_count
+
+fetch_item_category(conn, cat_id) -> row
+fetch_item_category_descendants(conn, cat_id) -> list[int]
+insert_item_category(conn, name, color="#7c3aed", parent_id=None, notes="") -> int
+update_item_category(conn, cat_id, name, color, parent_id=None, notes="")
+# يتحقق من circular reference تلقائياً
+delete_item_category(conn, cat_id)
+build_item_category_tree(rows) -> list[dict]
+# يعمل مع fetch_all_item_categories و fetch_all_item_categories_with_count
+
+count_designs_per_category(conn) -> dict[int, int]
+# للتوافق القديم — الكود الجديد يستخدم fetch_all_item_categories_with_count
+```
+
+---
+
+## dimension_instances_repo.py
 
 ```python
 fetch_instances_for_set(conn, set_id) -> list
@@ -161,15 +213,24 @@ insert_instance(conn, set_id, name="", notes="", sort_order=None) -> int
 update_instance(conn, instance_id, name, notes="")
 delete_instance(conn, instance_id)
 duplicate_instance(conn, instance_id, new_name) -> int | None
-fetch_instance_values(conn, instance_id) -> dict
-save_instance_values(conn, instance_id, set_id, values: dict)
-calc_instance_cross_auto(conn, field_id, instance_id) -> float | None
+# ينسخ instance موجود مع كل قيمه
 ```
 
-#### Legacy (من dimension_instances_repo)
+#### قيم Instance
+
+```python
+fetch_instance_values(conn, instance_id) -> dict
+# {field_id: {"value_num", "value_text"}}
+save_instance_values(conn, instance_id, set_id, values: dict)
+calc_instance_cross_auto(conn, field_id, instance_id) -> float | None
+# يدعم cross-set: source_set_id → يبحث عن أول instance في المجموعة المصدر
+```
+
+#### Legacy (للتوافق مع الكود القديم)
 
 ```python
 fetch_standalone_values(conn, set_id) -> dict
+# يرجع قيم أول instance للمجموعة
 save_standalone_value(conn, set_id, field_id, value_num=None, value_text=None)
 fetch_source_set_values(conn, source_set_id) -> dict
 calc_standalone_cross_auto(conn, field_id, current_set_id) -> float | None
@@ -178,20 +239,8 @@ get_source_ref(conn, field_id, current_set_id) -> dict | None
 
 ---
 
-## design_item_categories_repo
+## ملاحظات
 
-### `db/designs/design_item_categories_repo.py`
-
-```python
-fetch_all_item_categories(conn) -> list
-fetch_all_item_categories_with_count(conn) -> list
-# [P-03] query واحدة تدمج عدد التصميمات (بدل query-ين)
-fetch_item_category(conn, cat_id) -> row
-fetch_item_category_descendants(conn, cat_id) -> list[int]
-insert_item_category(conn, name, color="#7c3aed", parent_id=None, notes="") -> int
-update_item_category(conn, cat_id, name, color, parent_id=None, notes="")
-delete_item_category(conn, cat_id)
-build_item_category_tree(rows) -> list[dict]
-count_designs_per_category(conn) -> dict[int, int]
-# للتوافق مع الكود القديم — الكود الجديد يستخدم fetch_all_item_categories_with_count
-```
+- `dpi_field_id` يُضاف تلقائياً عبر `_run_migrations()` على قواعد البيانات القديمة [إصلاح 7 + 12].
+- `design_categories` ≠ `design_item_categories`: الأول لتصنيف مجموعات المقاسات، الثاني لتصنيف التصميمات.
+- `dimension_sets_repo` هو الـ Facade — استورد منه دائماً للتوافق مع الكود القديم.
