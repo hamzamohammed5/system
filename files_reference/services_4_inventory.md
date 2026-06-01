@@ -1,4 +1,4 @@
-# دليل الكود — Models & Services (5): Service المخزون
+# دليل الكود — Service المخزون
 
 > `services/inventory/` — خدمة المخزون.
 > لـ `db/inventory/inventory_schema.py` و `db/orders/orders_schema.py` → راجع `db_04_inventory_orders.md`
