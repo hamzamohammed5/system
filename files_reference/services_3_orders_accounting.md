@@ -1,4 +1,4 @@
-# دليل الكود — Models & Services (4): Services الطلبات والمحاسبة + أمثلة
+# دليل الكود — Services الطلبات والمحاسبة + أمثلة
 
 > `services/orders/` و `services/accounting/` — الطلبات، القيود المحاسبية، وأمثلة عملية.
 
