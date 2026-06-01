@@ -73,7 +73,7 @@ delete_shared_item(central_conn, shared_item_id)
 sync_shared_item(central_conn, source_erp_conn, shared_item_id)  # no-op
 ```
 
-> ⚠️ **الدوال المهملة [T-01] — محذوفة، ImportError واضح:**
+> ⚠️ **الدوال المحذوفة [T-01] — ImportError واضح:**
 > - `fetch_all_shared_items` → استورد من `db.companies.shared_items_repo`
 > - `fetch_shared_items_for_company` → استورد من `db.companies.shared_items_repo`
 

@@ -20,7 +20,6 @@
 | [Forms — Badges](#forms--badges) | `panels/form_badges.py` |
 | [Forms — Buttons Bar](#forms--buttons-bar) | `panels/form_buttons.py` |
 | [Forms — Group](#forms--group) | `panels/form_group.py` |
-| [CrudSection (alias)](#crudsection-alias) | `panels/crud_section.py` |
 | [Combos — Unit](#combos--unit) | `combo/unit.py`, `combo/unit_service.py` |
 | [Combos — Category](#combos--category) | `combo/category.py` |
 
@@ -256,18 +255,6 @@ FormGroup(title="", accent=None)
   .add_label_row(label_widget: QWidget)
   .add_separator()
   .form -> QFormLayout
-```
-
----
-
-## CrudSection (alias)
-
-### `ui/widgets/panels/crud_section.py`
-
-```python
-from ui.widgets.panels.crud_section import CrudSection
-# مطابق تماماً لـ BaseSection — راجع ui_widgets_2_base.md للتفاصيل
-# موجود للتوافق مع الكود القديم فقط
 ```
 
 ---

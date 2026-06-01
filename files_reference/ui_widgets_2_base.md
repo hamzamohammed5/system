@@ -167,7 +167,7 @@ panel.content_layout -> QVBoxLayout
 
 ### `ui/widgets/base/section.py`
 
-> **[T-05]** `BaseSection` استوعبت كل خصائص `CrudSection` — `CrudSection` في `panels/crud_section.py` هي alias للتوافق مع الكود القديم فقط.
+> **ملاحظة:** `BaseSection` هي الكلاس الأساسي الوحيد للـ sections — استخدمها مباشرة.
 
 **Override المطلوب:**
 ```python
