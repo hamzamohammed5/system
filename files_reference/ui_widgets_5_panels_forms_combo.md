@@ -267,6 +267,7 @@ FormGroup(title="", accent=None)
 ```python
 from ui.widgets.panels.crud_section import CrudSection
 # مطابق تماماً لـ BaseSection — راجع ui_widgets_2_base.md للتفاصيل
+# موجود للتوافق مع الكود القديم فقط
 ```
 
 ---
@@ -324,4 +325,5 @@ CategoryCombo(conn, scope="all")
 populate_category_combo(combo: QComboBox, conn, scope="all",
                         all_label="— الكل —")
 # تُستخدم من CategoryCombo وأي widget آخر
+# [إصلاح هيكلة] يستخدم CategoryService.get_all() + build_tree() داخلياً
 ```

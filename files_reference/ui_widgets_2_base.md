@@ -167,7 +167,7 @@ panel.content_layout -> QVBoxLayout
 
 ### `ui/widgets/base/section.py`
 
-> **[T-05]** `BaseSection` استوعبت كل خصائص `CrudSection` — `CrudSection` في `panels/crud_section.py` أصبحت alias للتوافق.
+> **[T-05]** `BaseSection` استوعبت كل خصائص `CrudSection` — `CrudSection` في `panels/crud_section.py` هي alias للتوافق مع الكود القديم فقط.
 
 **Override المطلوب:**
 ```python
@@ -185,7 +185,7 @@ LAYOUT_REVERSED: bool = False
 FORM_POSITION: str = "none"
 # "none"   → لا فورم
 # "bottom" → فورم أسفل لوحة القائمة
-# "left"   → list panel فقط
+# "left"   → list panel فقط (الفورم خارج الـ splitter)
 SPLITTER_RATIO: tuple = (1, 2)
 
 _create_form() -> QWidget | None   # افتراضياً: None
@@ -203,6 +203,13 @@ section.select_item(item_id)
 section.list_panel -> QWidget
 section.detail_panel -> QWidget
 section.form_panel -> QWidget | None
+```
+
+**`_build_left_panel()` — منطق FORM_POSITION:**
+```
+FORM_POSITION = "none"   → يرجع self._list مباشرة (لا فورم)
+FORM_POSITION = "bottom" → يرجع container(list + form في QVBoxLayout)
+FORM_POSITION = "left"   → يرجع self._list (الفورم خارج الـ splitter)
 ```
 
 ---
@@ -224,6 +231,9 @@ section.current_tab -> QWidget | None
 **closeEvent:**
 يُغلق `conn` فقط لو `_is_owned_connection()` = True (أي مش shared من company_state).
 يستخدم `get_erp_conn()` (public API).
+
+**`_is_owned_connection(conn)`:**
+يرجع `False` عند أي شك (الاختيار الآمن). إذا `conn` هو نفس `company_state.get_erp_conn()` → `False`. إذا لم يُجد التحقق → `False`.
 
 ---
 

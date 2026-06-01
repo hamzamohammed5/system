@@ -32,12 +32,35 @@ CategoryForm(conn, scope: str, tree_widget, parent=None)
 .load_for_edit(cat_id: int)
 # يملأ الحقول + يُحدّث cmb_parent (مع استثناء التصنيف وفروعه)
 # يُبدّل الأزرار لـ edit mode
+# يستخدم: svc.get_one(cat_id) + svc.get_descendants(cat_id)
 ```
 
 **الحقول:**
 - `inp_name` — اسم التصنيف
 - `cmb_parent` — التصنيف الأب (هرمي)
 - `_color_picker` — ColorPickerWidget للاختيار اللوني
+
+**`_refresh_parent_combo(conn=None, exclude_id=None)`:**
+```python
+# [Q-03] يستقبل conn اختياري بدل استدعاء _live_conn() داخلياً
+# [إصلاح هيكلة] يستخدم:
+svc   = CategoryService(conn)
+rows  = svc.get_all(scope)
+tree  = svc.build_tree(rows)
+# استبعاد التصنيف وفروعه:
+excluded = svc.get_descendants(exclude_id)
+```
+
+**العمليات:**
+```python
+# إضافة — يستخدم:
+CategoryService(conn).add(name, scope, color, parent_id)
+
+# تعديل — يستخدم:
+CategoryService(conn).update(cat_id, name, scope, color, parent_id)
+
+# كل عملية تُطلق emit_company_data_changed() بعد النجاح
+```
 
 #### CategoryManager
 
@@ -59,10 +82,36 @@ CategoryManager(conn, scope="all", parent=None)
 - `btn_edit` — يفتح التصنيف المحدد في CategoryForm
 - `btn_del` — يحذف مع تأكيد (confirm_delete) + إظهار warning_text من DeletePreview
 
+**`_load()` — [Q-03] منطق التحميل:**
+```python
+# _live_conn() مرة واحدة
+conn = self._live_conn()
+
+# [إصلاح هيكلة] يستخدم CategoryService:
+svc  = CategoryService(conn)
+rows = svc.get_all(scope)
+tree = svc.build_tree(rows)
+```
+
+**`_add_items(nodes, parent, expanded, conn)` — [إصلاح هيكلة]:**
+```python
+# conn يُمرر كـ parameter (نفس الـ connection الذي فتحه _load())
+# يستخدم CategoryService(conn).count_items(node["id"]) لعدد العناصر
+# لا يفتح connection جديد في كل node
+```
+
+**`_delete()` — يستخدم:**
+```python
+svc     = CategoryService(conn)
+preview = svc.get_delete_preview(cat_id)
+# preview.cat_name, preview.warning_text()
+svc.delete_cascade(cat_id)
+emit_company_data_changed()
+```
+
 **ملاحظات:**
 - يحفظ حالة التوسع قبل reload ويُعيدها بعده.
-- `_add_items` تُمرر نفس الـ `conn` من `_load()` بدل فتح connection جديد في كل node.
-- `[Q-03]` كل action يُجري `_live_conn()` مرة واحدة ويُمررها للدوال الفرعية.
+- كل عملية تستدعي `_live_conn()` مرة واحدة وتُمررها للدوال الفرعية [Q-03].
 
 ---
 
@@ -98,6 +147,16 @@ CONNECT_BUS      : bool = True
 FILTER_SCOPE     : str  = ""        # فارغ = استخدم SHARED_TYPE تلقائياً
 # STRETCH_COL يُضبط على 1 تلقائياً
 # العمود 0 يُخفى تلقائياً (setColumnHidden) — يُستخدم لحمل الـ ID
+```
+
+#### [إصلاح FILTER_SCOPE] `_build_filter()` المحدّث
+
+```python
+# القديم: FILTER_SCOPE = "all" ثابت → يُظهر كل التصنيفات دائماً
+# الجديد: scope = SHARED_TYPE لو FILTER_SCOPE فارغ → تصنيفات نوع العنصر فقط
+# مثال: raw panel يُعرض تصنيفات "raw" فقط بدل كل التصنيفات
+
+scope = self.FILTER_SCOPE if self.FILTER_SCOPE else self.SHARED_TYPE
 ```
 
 #### Hooks المطلوبة (override إلزامي)
