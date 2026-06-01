@@ -72,7 +72,7 @@ FilterToolbar(conn=None, scope="all", show_category=True,
 
 **Imports:**
 ```python
-# [FIX] absolute imports — ثلاث نقاط (relative) كانت خاطئة:
+# [FIX] absolute imports — ثلاث نقاط (relative) كانت تُسبب ImportError:
 from ui.font  import fs, get_font_size
 from ui.theme import _C
 ```
@@ -134,7 +134,7 @@ TwoColDetails()
 
 **Imports:**
 ```python
-# [FIX] absolute imports — ثلاث نقاط (relative) كانت خاطئة:
+# [FIX] absolute imports — ثلاث نقاط (relative) كانت تُسبب ImportError:
 from ui.font  import fs, get_font_size
 from ui.theme import _C
 ```

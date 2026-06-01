@@ -45,10 +45,16 @@ ROW_HEIGHT_LARGE   = 48
 ```python
 input_style(height=32, error=False) -> str
 # للـ QLineEdit / QComboBox / QDateEdit
-# error colors من _C["input_error_bg/border"] — لا hardcoded
+# [إصلاح ألوان] error colors من _C بدل hardcoded:
+#   القديم: "#fef2f2", "#f87171"
+#   الجديد: _C["input_error_bg"], _C["input_error_border"]
+# يضمن تغيير الألوان تلقائياً عند التبديل بين light و dark
 
 spinbox_style(height=32, positive=False, widget="QDoubleSpinBox") -> str
-# positive colors من _C["input_positive_*"] — لا hardcoded
+# [إصلاح ألوان] positive colors من _C بدل hardcoded:
+#   القديم: "#f0fdf4", "#86efac", "#15803d"
+#   الجديد: _C["input_positive_bg"], _C["input_positive_border"], _C["input_positive_color"]
+# يضمن تغيير الألوان تلقائياً عند التبديل بين light و dark
 
 search_input_style(height=34) -> str
 ```
@@ -132,3 +138,4 @@ wrap_in_scroll(widget: QWidget, min_height=0, horizontal=False) -> QScrollArea
 - `splitter_style()` و `scroll_style()` — كل منهما مصدر وحيد، لا تنسخهما في ملفات أخرى.
 - عند تغيير الثيم: استدعِ `invalidate_stylesheet_cache()` من `components/button.py` لمسح الـ cache.
 - `input_style` و `spinbox_style` يُستوردان في `forms/inputs.py` بالمسار الصحيح: `from ..theme.input_styles import input_style, spinbox_style`.
+- `input_style(error=True)` و `spinbox_style(positive=True)` يستخدمان مفاتيح `_C` — لا ألوان hardcoded — لضمان التزامن مع الثيم الحالي.

@@ -73,7 +73,17 @@ def refresh(self):
 ```
 
 **المشكلة القديمة قبل [إصلاح 5]:**
-`_filter_toolbar.reload()` يُعيد ملء categories combo → `currentIndexChanged` → `filter_changed` → `_timer.start()`. ثم `refresh()` تستدعي `_apply_filter()` مباشرة. النتيجة: `_apply_filter()` تُنفَّذ مرتين. الحل: إيقاف الـ timer قبل `reload()`.
+```
+_filter_toolbar.reload()
+  → يُعيد ملء categories combo
+  → currentIndexChanged
+  → filter_changed
+  → _timer.start()
+ثم refresh() تستدعي _apply_filter() مباشرة
+النتيجة: _apply_filter() تُنفَّذ مرتين
+
+الحل: self._timer.stop() قبل reload() يمنع التنفيذ المضاعف
+```
 
 **بناء الـ Header:**
 - لو `SHOW_CATEGORY` أو `SHOW_DATE` = True → يستخدم `FilterToolbar` بدل search في `ListHeader`

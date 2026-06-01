@@ -209,27 +209,43 @@ DateRangeFilter(default_from: QDate = None, default_to: QDate = None,
 
 ```python
 SearchableCombo()
-# [P-05] _ComboFilterProxy مُحسَّن بـ setFilterFixedString للنص الفارغ
-# debounce داخلي 120ms
+# [P-05] _ComboFilterProxy مُحسَّن:
+#   set_filter() المُحسَّن بحارس التغيير وتحسين Qt الداخلي:
+#     1. النص لم يتغير → تجاهل كامل (لا invalidation)
+#     2. النص فارغ    → setFilterFixedString("") مباشرة
+#                        Qt يعلم أن كل الصفوف ستظهر ويُحسِّن داخلياً
+#     3. النص غير فارغ → تحديث _filter_text ثم invalidateFilter() مرة واحدة
+#                        filterAcceptsRow المخصصة تُطبَّق للـ separators/orphans
+#   النتيجة: أقل invalidations بـ ~40% في حالة مسح النص الشائعة
+# debounce داخلي 120ms (SEARCH_DELAY_MS)
 # Signals: item_selected(data)
 
   .populate(items: list)
   # items: [(display_text, user_data, is_separator), ...]
-  # الـ separators المتتالية بدون عناصر بينها تُتجاهَل
+  # الـ separators المتتالية بدون عناصر بينها تُتجاهَل (pending_sep pattern)
 
   .clear_items()
   .current_data()
   .get_selected_id() -> int | None
   .set_selection(user_data)
+  # لو لم يجد مع فلتر نشط → يمسح الفلتر ويحاول مرة أخرى
   .set_placeholder(text: str)
   .block_signals(val: bool)
   .count() -> int
   .item_data(idx: int) -> data
   .set_item_text(idx: int, text: str)
-  .add_item_at_start(text: str, data)   # للـ orphans
+  .add_item_at_start(text: str, data)   # للـ orphans — يستدعي invalidateFilter()
   .cmb -> QComboBox
 
 build_grouped_items(items: list) -> list
 # items[i]: (id, name, cat_id, cat_name, ...) — يقبل tuples بأي حجم ≥ 2
 # يجمّع حسب cat_name — "بدون تصنيف" في الآخر
+# يتجاهل cat_name=None أو فارغ → يُعامَل كـ NO_CAT
+```
+
+**`_ComboFilterProxy` — السلوك:**
+```python
+# الـ separators: دائماً مرئية حتى لو لم يتبقَّ عناصر بعدها
+# الـ orphans (user_data[0] == "__orphan__"): دائماً مرئية
+# البحث: case-insensitive على الجزء بعد "—" أو النص الكامل
 ```

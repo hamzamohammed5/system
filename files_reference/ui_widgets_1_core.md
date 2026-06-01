@@ -102,10 +102,11 @@ _conn_null_error(class_name: str, method: str, db: str = "erp") -> RuntimeError
 # _conn_cache: يُخزَّن بـ object.__setattr__ (instance variable)
 
 ._live_conn() -> Connection
-# 1. self.__dict__["_conn_cache"] لو سليم (بدون SELECT 1 — fast path)
+# 1. self.__dict__["_conn_cache"] لو سليم — fast path بدون SELECT 1
 # 2. self.{_conn_attr} لو سليم
 # 3. company_state.get_erp_conn() كـ fallback + يُحدّث self.conn + الـ cache
 # 4. RuntimeError واضحة (عبر _conn_null_error) لو كل شيء فشل
+# ملاحظة: لا SELECT 1 في hot path — يعتمد على وجود الـ cache مباشرة
 
 ._invalidate_conn_cache()
 # object.__setattr__(self, "_conn_cache", None)

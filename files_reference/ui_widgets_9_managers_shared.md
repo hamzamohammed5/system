@@ -104,9 +104,9 @@ tree = svc.build_tree(rows)
 
 **`_add_items(nodes, parent, expanded, conn)` — [إصلاح هيكلة]:**
 ```python
-# conn يُمرر كـ parameter (نفس الـ connection الذي فتحه _load())
+# conn يُمرَّر كـ parameter (نفس الـ connection الذي فتحه _load())
+# لا يفتح connection جديد في كل node — تحسين أداء مهم
 # يستخدم CategoryService(conn).count_items(node["id"]) لعدد العناصر
-# لا يفتح connection جديد في كل node
 ```
 
 **`_delete()` — يستخدم:**

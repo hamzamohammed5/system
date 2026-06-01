@@ -302,6 +302,8 @@ class SharedOpsMixin:
 # لو جديد → PublishAsSharedDialog
 # [FIX] يُطلق emit_company_data_changed() بعد النشر دائماً
 # القديم: كانت تنتهي صامتة بدون إطلاق الإشعار → الـ UI لا يتحدث بعد النشر
+# السبب: _edit_shared_item و _edit_published_item كانتا يُطلقانه
+#          لكن _publish_item كانت لا تُطلقه — فجوة في التغطية
 ```
 
 #### مساعدات
