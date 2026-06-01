@@ -78,11 +78,15 @@ class BusConnectedMixin:
 # يُعيد ضبط _cached_company_id لإجبار إعادة القراءة
 ```
 
-**[Phase 6] منطق _on_company_data_changed:**
-1. لو `_cached_company_id = None` → جرب القراءة من company_state
-2. لو لا يزال `None` → اضبطه من company_id الواصل وتابع
-3. لو `company_id != _cached_company_id` → شركة مختلفة → تجاهل
-4. نفس الشركة → تنفيذ `_on_data_changed()`
+**[Phase 6] منطق `_on_company_data_changed` بالتفصيل:**
+```python
+# الخطوة 1: لو _cached_company_id = None → جرب القراءة من company_state
+# الخطوة 2: لو لا يزال None (شركة لم تُحمَّل بعد)
+#   → اضبطه من company_id الواصل وتابع (لا ترجع!)
+#   القديم: كان يُقارن None != company_id → يُتجاهل → أول إشعار يضيع
+# الخطوة 3: لو company_id != _cached_company_id → تجاهل
+# الخطوة 4: نفس الشركة → تنفيذ _on_data_changed()
+```
 
 **[تحسين 24]** `_on_data_changed_guarded` يُسجّل debug log عند التخطي بسبب refresh_guard.
 
@@ -92,18 +96,15 @@ class BusConnectedMixin:
 
 ### `ui/widgets/mixins/form_mixins.py`
 
-> **ملاحظة [إصلاح 2.4]:** المسار الصحيح للـ import:
+> **[إصلاح 2.4]** الملف الصحيح:
 > `from ui.widgets.mixins.form_mixins import EditModeMixin`
-> (بدل `from ui.widgets.mixins.edit import EditModeMixin` القديم)
+> (بدل `from ui.widgets.mixins.edit import EditModeMixin` المحذوف)
 
 #### EditModeMixin
 
 ```python
 class EditModeMixin:
-    """
-    يدير الـ Add/Edit mode للفورمات.
     _editing_id: int | None = None
-    """
 
 .init_edit_mode(btn_add, btn_save, btn_cancel, lbl_mode=None)
 # يحفظ references للأزرار — يُستدعى في __init__
@@ -137,7 +138,7 @@ class MyForm(QWidget, EditModeMixin):
 
 ```python
 class FormValidationMixin:
-    """يوفر دوال تحقق موحدة."""
+    """يوفر دوال تحقق موحدة — يستخدم tr() للرسائل."""
 
 ._warn(msg: str)
 # يعرض msg_warning — يستخدم tr("warning") كعنوان
@@ -150,9 +151,11 @@ class FormValidationMixin:
 
 .validate_amount(spinbox, label="", min_val=0.01, parent=None) -> bool
 # يتحقق أن spinbox.value() >= min_val
+# رسالة الخطأ: tr("field_positive_enter", label=label)
 
 .validate_positive(value: float, label="", parent=None) -> bool
 # يتحقق أن value > 0
+# رسالة الخطأ: tr("field_positive", label=label)
 ```
 
 ---
@@ -287,6 +290,7 @@ class SharedOpsMixin:
 # لو العنصر مشترك → SharedItemsDialog
 # لو منشور → _edit_published_item
 # لو عادي → msg_info "استخدم «✏️ تعديل»"
+# يُطلق emit_company_data_changed() بعد النجاح
 
 ._edit_published_item(row: dict, shared_type: str, parent=None)
 # يبحث في companies.db عن shared_item بنفس الاسم
@@ -297,6 +301,7 @@ class SharedOpsMixin:
 # لو العنصر منشور → _edit_published_item
 # لو جديد → PublishAsSharedDialog
 # [FIX] يُطلق emit_company_data_changed() بعد النشر دائماً
+# القديم: كانت تنتهي صامتة بدون إطلاق الإشعار → الـ UI لا يتحدث بعد النشر
 ```
 
 #### مساعدات
@@ -308,4 +313,8 @@ class SharedOpsMixin:
 ._find_row_by_id(item_id) -> dict | None
 ```
 
-**ملاحظة [FIX]:** `_publish_item` كانت تنتهي صامتة بدون إطلاق الإشعار — أُصلح ليطلق `emit_company_data_changed()` دائماً.
+**الـ import المستخدم:**
+```python
+from ui.widgets.core.events import emit_company_data_changed
+# يُستدعى في _edit_shared_item, _edit_published_item, _publish_item
+```

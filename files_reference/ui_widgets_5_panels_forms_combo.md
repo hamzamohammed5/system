@@ -49,6 +49,13 @@ set_table_empty_state(table: QTableWidget, message="لا توجد بيانات",
 clear_table_empty_state(table: QTableWidget)
 ```
 
+**Imports:**
+```python
+# [FIX] absolute imports بدل relative:
+from ui.font  import fs, get_font_size
+from ui.theme import _C
+```
+
 ---
 
 ## FilterToolbar
@@ -61,13 +68,29 @@ FilterToolbar(conn=None, scope="all", show_category=True,
 # [إصلاح 14] يستمع لـ bus.company_data_changed — يُعيد تحميل التصنيفات تلقائياً
 # [تحسين 16] reload() يُحدّث self._conn ثم يُعيد تحميل التصنيفات
 # Signals: filter_changed
+```
 
+**Imports:**
+```python
+# [FIX] absolute imports — ثلاث نقاط (relative) كانت خاطئة:
+from ui.font  import fs, get_font_size
+from ui.theme import _C
+```
+
+**`_on_company_changed(company_id)`:**
+```python
+# يقرأ company_state.get_erp_conn() ويُحدّث self._conn
+# ثم يستدعي _reload_categories()
+```
+
+```python
 toolbar.name_query -> str
 toolbar.category_id
 toolbar.in_date_range(date_str: str) -> bool
 toolbar.match(name, cat_id, date_str="") -> bool
 toolbar.set_count(shown: int, total: int)
 toolbar.reload(conn=None)
+# [تحسين 16] يُحدّث self._conn لو conn مُعطى، ثم يُعيد تحميل التصنيفات
 toolbar.reset()
 ```
 
@@ -76,6 +99,13 @@ toolbar.reset()
 ## DetailSection
 
 ### `ui/widgets/panels/detail_section.py`
+
+**Import الصحيح:**
+```python
+# [إصلاح 2.3] المسار الصحيح:
+from ..components.headers_page import SectionHeader
+# (بدل from ..components.headers import SectionHeader المحذوف)
+```
 
 ```python
 DetailSection(title="", cols=1, compact=False)
@@ -101,6 +131,13 @@ TwoColDetails()
 ## CollapsibleCard + CardGrid
 
 ### `ui/widgets/panels/layout_widgets.py`
+
+**Imports:**
+```python
+# [FIX] absolute imports — ثلاث نقاط (relative) كانت خاطئة:
+from ui.font  import fs, get_font_size
+from ui.theme import _C
+```
 
 ```python
 CollapsibleCard(title="", expanded=True, accent=None)
@@ -128,11 +165,26 @@ DataTableWidget(columns, stretch_col=-1, col_widths=None,
                 row_height=ROW_HEIGHT_LARGE, empty_icon="📋",
                 empty_title="لا توجد بيانات")
 # Signals: add_clicked, search_changed(str), row_selected(int)
-# [إصلاح 7] يفرق بين 3 حالات:
-#   total=0         → empty state "لا توجد بيانات"
+# [إصلاح 7] end_fill() تفرّق بين 3 حالات:
+#   total=0         → empty state "لا توجد بيانات"    (_empty)
 #   total>0,shown>0 → يعرض الجدول
-#   total>0,shown=0 → empty state "لا توجد نتائج" (icon=🔍)
+#   total>0,shown=0 → empty state "لا توجد نتائج"     (_empty_filtered, icon=🔍)
+```
 
+**`end_fill(shown: int = None)`:**
+```python
+total   = self.table.rowCount()
+visible = shown if shown is not None else total
+
+has_data          = visible > 0
+is_filtered_empty = (not has_data) and (total > 0)
+
+self.table.setVisible(has_data)
+self._empty.setVisible(not has_data and not is_filtered_empty)
+self._empty_filtered.setVisible(is_filtered_empty)
+```
+
+```python
   .begin_fill()
   .insert_row() -> int
   .end_fill(shown: int = None)
@@ -152,7 +204,8 @@ DataTableWidget(columns, stretch_col=-1, col_widths=None,
 
 ### `ui/widgets/forms/inputs.py`
 
-> **ملاحظة [إصلاح]:** المسار الصحيح للـ import: `from ..theme.input_styles import input_style, spinbox_style`
+> **[إصلاح 1]** المسار الصحيح:
+> `from ..theme.input_styles import input_style, spinbox_style`
 > (بدل `from ..theme.styles` المحذوف في Refactor V3)
 
 ```python
@@ -197,6 +250,13 @@ separator_line() -> QFrame
 
 ### `ui/widgets/panels/form_fields.py`
 
+**Import الصحيح:**
+```python
+# [FIX] المسار الصحيح:
+from ..theme.input_styles import spinbox_style
+# (بدل from ..theme.styles الذي لم يعد موجوداً بعد Refactor V3)
+```
+
 ```python
 spin_field(max_=999999, dec=2, min_=0, min_height=30) -> QDoubleSpinBox
 int_spin_field(max_=9999, min_=0, min_height=30) -> QSpinBox
@@ -222,6 +282,7 @@ ResultBadge(text="─", color=None, status="success")
 
 ModeBadge(text="─", color="blue")
 # color: "blue" | "orange" | "green" | "red" | "purple"
+# يُترجم color → status key: blue→primary, orange→warning, green→success, red→danger, purple→purple
   .set_mode(text, color=None)
   .reset()
 
@@ -238,12 +299,20 @@ InlinePreview(label="النتيجة:", color=None, status="success")
 
 ```python
 CrudButtonsBar(add_text="", save_text="", cancel_text="", show_mode=True)
-# نصوص الأزرار من tr() لو فارغة
+# نصوص الأزرار من tr() لو فارغة: tr("btn_add"), tr("btn_save"), tr("btn_cancel")
 # يشترك في bus.language_changed لتحديث نصوص الأزرار تلقائياً
 # Signals: add_clicked, save_clicked, cancel_clicked
   .btn_add / btn_save / btn_cancel -> QPushButton
   .lbl_mode -> QLabel
   .set_mode_text(text: str)
+```
+
+**`_on_language_changed`:**
+```python
+# يُحدّث النصوص من tr() مباشرة:
+self.btn_add.setText(tr("btn_add"))
+self.btn_save.setText(tr("btn_save"))
+self.btn_cancel.setText(tr("btn_cancel"))
 ```
 
 ---
@@ -268,7 +337,7 @@ FormGroup(title="", accent=None)
 ### `ui/widgets/combo/unit_service.py` — Business Logic
 
 ```python
-_UNITS_KEY     = "custom_units"    # مفتاح الـ settings في DB
+_UNITS_KEY     = "custom_units"
 _DEFAULT_UNITS = [
     ("px","px — بكسل"), ("mm","mm — مليمتر"),
     ("cm","cm — سنتيمتر"), ("m","m  — متر"),
@@ -276,21 +345,12 @@ _DEFAULT_UNITS = [
 ]
 
 load_units(conn, force=False) -> list
-# يستخدم cache بـ _cache_key(conn) — db_path أو id(conn) كـ fallback
-# force=True → يتجاوز الـ cache ويُعيد الكتابة
 save_units(conn, units: list)
-# يحفظ في settings + invalidate_units_cache(conn)
 add_unit(conn, value: str, label: str) -> bool
-# value.strip().lower() + label.strip()
-# يرجع False لو الـ value موجود مسبقاً
 remove_unit(conn, value: str) -> bool
-# يرفض حذف الوحدات الافتراضية (_DEFAULT_UNITS)
-# يرجع False لو لم يجدها
 get_all_units(conn) -> list       # = load_units(conn)
-reset_units_to_default(conn)      # save_units(conn, list(_DEFAULT_UNITS))
+reset_units_to_default(conn)
 invalidate_units_cache(conn=None)
-# conn=None → _units_cache.clear() كامل
-# conn=<conn> → يحذف cache هذا الملف فقط
 get_last_unit(conn, key, fallback="cm") -> str
 set_last_unit(conn, key, unit)
 ```
@@ -304,7 +364,6 @@ UnitCombo(conn, last_key=None, current=None)
   .current_unit() -> str    # currentData() or "cm"
   .set_unit(unit: str)
   .refresh()
-  # invalidate_units_cache + _populate() → يُعيد اختيار القيمة السابقة
 
 make_unit_combo(conn=None, current="cm", last_key=None) -> QComboBox
 # لو conn=None → يستخدم _DEFAULT_UNITS مباشرة بدون DB
@@ -322,11 +381,8 @@ CategoryCombo(conn, scope="all")
 # [FIX-14] Qt.UniqueConnection على كل ربط bus لمنع التسجيل المضاعف
 # [إصلاح memory leak] يستخدم weakref للـ company_data_changed slot
 #   self._company_data_slot = _on_company_data_changed  ← يحفظ مرجع الـ slot
-#   منع GC من حذف الـ closure قبل فصله
 # [إصلاح هيكلة] يستخدم CategoryService عبر populate_category_combo
   .refresh()
-  # _live_conn() → populate_category_combo → يُعيد اختيار السابق
-  # لو _live_conn رمى exception → يرجع بدون فعل شيء
   .get_category() -> int | None
   .set_category(cat_id)
   # لو لم يجد → setCurrentIndex(0)

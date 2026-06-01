@@ -38,11 +38,13 @@ CategoryForm(conn, scope: str, tree_widget, parent=None)
 **الحقول:**
 - `inp_name` — اسم التصنيف
 - `cmb_parent` — التصنيف الأب (هرمي)
-- `_color_picker` — ColorPickerWidget للاختيار اللوني
+- `_color_picker` — `ColorPickerWidget` للاختيار اللوني
+- `lbl_mode` — `ModeLabel` يعرض وضع الإضافة/التعديل
 
 **`_refresh_parent_combo(conn=None, exclude_id=None)`:**
 ```python
 # [Q-03] يستقبل conn اختياري بدل استدعاء _live_conn() داخلياً
+# لو conn=None → يستدعي self._live_conn() كـ fallback
 # [إصلاح هيكلة] يستخدم:
 svc   = CategoryService(conn)
 rows  = svc.get_all(scope)
@@ -53,13 +55,20 @@ excluded = svc.get_descendants(exclude_id)
 
 **العمليات:**
 ```python
-# إضافة — يستخدم:
+# إضافة (_add) — يستخدم:
 CategoryService(conn).add(name, scope, color, parent_id)
 
-# تعديل — يستخدم:
+# تعديل (_save) — يستخدم:
 CategoryService(conn).update(cat_id, name, scope, color, parent_id)
 
-# كل عملية تُطلق emit_company_data_changed() بعد النجاح
+# كل عملية تستدعي _live_conn() مرة واحدة ثم تُطلق emit_company_data_changed()
+# لو فشل التحقق (name فارغ) → msg_warning بدون إطلاق إشعار
+```
+
+**`_reset(conn=None)`:**
+```python
+# يمسح الحقول، يُعيد lbl_mode لوضع الإضافة، يُظهر btn_add ويُخفي btn_save/btn_cancel
+# يستدعي _refresh_parent_combo(conn=conn) — يمرر نفس الـ conn لتجنب استدعاء _live_conn مرة ثانية
 ```
 
 #### CategoryManager
@@ -112,6 +121,7 @@ emit_company_data_changed()
 **ملاحظات:**
 - يحفظ حالة التوسع قبل reload ويُعيدها بعده.
 - كل عملية تستدعي `_live_conn()` مرة واحدة وتُمررها للدوال الفرعية [Q-03].
+- الـ tree يستخدم `tree_style()` من `..theme.layout_styles`.
 
 ---
 
@@ -130,7 +140,11 @@ class SharedItemsListPanel(BaseListPanel, SharedOpsMixin, LiveConnMixin):
                              → LiveConnMixin
 
     [إصلاح] لا override لـ _live_conn — LiveConnMixin تتولى الأمر.
-    [إصلاح FILTER_SCOPE] _build_filter يستخدم SHARED_TYPE كـ scope
+      القديم: كان يستدعي get_connection() مباشرة، متجاهلاً company_state.
+      الجديد: يعتمد على LiveConnMixin._live_conn() الموروثة التي تستخدم
+              self.conn أولاً ثم company_state كـ fallback.
+
+    [إصلاح FILTER_SCOPE] _build_filter() يستخدم SHARED_TYPE كـ scope
     لو FILTER_SCOPE فارغ.
     """
 ```
@@ -139,13 +153,13 @@ class SharedItemsListPanel(BaseListPanel, SharedOpsMixin, LiveConnMixin):
 
 ```python
 SHARED_TYPE      : str  = "raw"     # "raw" | "machine" | "labor_op" | "machine_op"
-TABLE_COLS       : list = []        # → تُحوَّل لـ COLUMNS تلقائياً
-TABLE_TITLE      : str  = ""        # → يُسند لـ LIST_TITLE تلقائياً
+TABLE_COLS       : list = []        # → تُحوَّل لـ COLUMNS تلقائياً في __init__
+TABLE_TITLE      : str  = ""        # → يُسند لـ LIST_TITLE تلقائياً في __init__
 HAS_BULK_REPLACE : bool = False     # يُظهر زر "استبدال شامل"
 SHOW_CATEGORY    : bool = True
 CONNECT_BUS      : bool = True
 FILTER_SCOPE     : str  = ""        # فارغ = استخدم SHARED_TYPE تلقائياً
-# STRETCH_COL يُضبط على 1 تلقائياً
+# STRETCH_COL يُضبط على 1 تلقائياً في __init__
 # العمود 0 يُخفى تلقائياً (setColumnHidden) — يُستخدم لحمل الـ ID
 ```
 
@@ -179,7 +193,7 @@ scope = self.FILTER_SCOPE if self.FILTER_SCOPE else self.SHARED_TYPE
 # افتراضياً: يستدعي _edit_shared_item من SharedOpsMixin
 ```
 
-#### أزرار الهيدر (تُضاف تلقائياً عبر _build_extra_header_actions)
+#### أزرار الهيدر (تُضاف تلقائياً عبر `_build_extra_header_actions`)
 
 | الزر | الظهور | الاستدعاء |
 |------|--------|----------|
@@ -204,9 +218,11 @@ scope = self.FILTER_SCOPE if self.FILTER_SCOPE else self.SHARED_TYPE
 ```python
 ._selected_row_data() -> tuple[int | None, str]
 # يرجع (item_id, item_name) للصف المختار
+# item_name: من row.get("name") أو f"ID:{item_id}" كـ fallback
 
 ._get_current_row_dict() -> dict | None
 # يرجع dict بيانات الصف المختار من _all_rows
+# يقارن str(row["id"]) == str(item_id) لتجنب مشاكل نوع البيانات
 ```
 
 **مثال:**

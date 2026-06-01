@@ -72,6 +72,9 @@ def refresh(self):
     self._apply_filter()
 ```
 
+**المشكلة القديمة قبل [إصلاح 5]:**
+`_filter_toolbar.reload()` يُعيد ملء categories combo → `currentIndexChanged` → `filter_changed` → `_timer.start()`. ثم `refresh()` تستدعي `_apply_filter()` مباشرة. النتيجة: `_apply_filter()` تُنفَّذ مرتين. الحل: إيقاف الـ timer قبل `reload()`.
+
 **بناء الـ Header:**
 - لو `SHOW_CATEGORY` أو `SHOW_DATE` = True → يستخدم `FilterToolbar` بدل search في `ListHeader`
 - لو كلاهما False → يستخدم `ListHeader` مع search مدمج
@@ -205,6 +208,13 @@ panel.header -> DetailHeader
 panel.content_layout -> QVBoxLayout
 ```
 
+**Import الصحيح لـ scroll_style:**
+```python
+# [إصلاح 2.2] المسار الصحيح:
+from ..theme.layout_styles import scroll_style
+# (بدل from ..theme.styles import scroll_style المحذوف)
+```
+
 ---
 
 ## BaseSection
@@ -296,8 +306,8 @@ def _build_tabs(self, tabs: QTabWidget)  # Override إلزامي
 **`_is_owned_connection(conn)` — دالة مستقلة (ليست method):**
 ```python
 # يرجع False لو conn is None
-# يجلب company_state.get_erp_conn() — يستخدم get_erp_conn() (public API)
-# [FIX] استخدام get_erp_conn() بدل _get_conn("erp") (private API)
+# [FIX] يستخدم company_state.get_erp_conn() (public API)
+#        بدل company_state._get_conn("erp") (private API القديم)
 # لو conn is shared → False (لا تُغلق)
 # لو conn مختلف → True (owned → يُغلق)
 # عند أي exception → False (الاختيار الآمن)
@@ -322,6 +332,16 @@ section.current_tab -> QWidget | None  # self._tabs.currentWidget()
 ## BaseCrudForm
 
 ### `ui/widgets/base/crud_form.py`
+
+**Imports الصحيحة:**
+```python
+# [إصلاح 2.4] المسار الصحيح:
+from ui.widgets.mixins.form_mixins import EditModeMixin
+# (بدل from ui.widgets.mixins.edit import EditModeMixin القديم)
+
+# [FIX] استخدام emit_company_data_changed بدل bus مباشرة:
+from ui.widgets.core.events import emit_company_data_changed
+```
 
 يرث من `QWidget + EditModeMixin + LiveConnMixin`.
 يستخدم `emit_company_data_changed()` بدل `bus.data_changed.emit()`.
