@@ -1,6 +1,7 @@
 # دليل الكود — DB: المحاسبة (db/accounting/)
 
 > جداول `accounting.db` — الحسابات، القيود، القوائم المالية، المستثمرون، Audit Log.
+> **آخر تحديث:** يعكس الكود الفعلي في السياق بالكامل.
 
 ---
 
@@ -100,27 +101,31 @@ seed_default_accounts(conn)
 # يتحقق أولاً بـ _account_exists() + _verify_conn_is_accounting()
 
 _verify_conn_is_accounting(conn) -> bool
-# [إصلاح 9 + 11 + Q-01] ثلاث محاولات بالترتيب:
-#
-#   المحاولة 1: main.sqlite_master (الأكثر دقة)
-#     → يتجاهل attached DBs تماماً
-#     → يتحقق: accounts موجود AND items غير موجود
-#
-#   المحاولة 2: sqlite_master العادي
-#     → للـ SQLite القديم أو بيئات خاصة
-#     → نفس منطق المحاولة 1
-#
-#   المحاولة 3: اختبار مباشر للجداول
-#     → يُجرب "SELECT 1 FROM accounts LIMIT 1" → has_accounts_table
-#     → يُجرب "SELECT 1 FROM items LIMIT 1"    → has_items_table
-#     → لو الاثنان موجودان: يرجع has_accounts AND NOT has_items
-#
-#   Fallback: يرجع True (backward compat) لو فشل كل شيء
-#
-# [Q-01] يدعم ProtectedConnection:
-#   execute() مُعرَّفة صريحاً في ProtectedConnection → تعمل بشكل صحيح
-#   بدون الحاجة للوصول المباشر لـ _raw
 ```
+
+**[إصلاح 9 + 11 + Q-01] ثلاث محاولات بالترتيب:**
+
+```python
+# المحاولة 1: main.sqlite_master (الأكثر دقة)
+#   → يتجاهل attached DBs تماماً
+#   → يتحقق: accounts موجود AND items غير موجود
+#   → يعمل مع ProtectedConnection لأن execute() مُعرَّفة صريحاً
+
+# المحاولة 2: sqlite_master العادي
+#   → للـ SQLite القديم أو بيئات خاصة
+#   → نفس منطق المحاولة 1
+
+# المحاولة 3 [Q-01]: اختبار مباشر للجداول
+#   → يُجرب "SELECT 1 FROM accounts LIMIT 1" → has_accounts_table
+#   → يُجرب "SELECT 1 FROM items LIMIT 1"    → has_items_table
+#   → لو الاثنان موجودان: يرجع has_accounts AND NOT has_items
+#   → يتجنب الحاجة لـ object.__getattribute__(conn, '_raw') مباشرة
+#   → ProtectedConnection يمرر execute() عبر __getattr__ → _get_raw().execute()
+
+# Fallback: يرجع True (backward compat) لو فشل كل شيء
+```
+
+> ⚠️ **[Q-01]** المحاولة الثالثة هي الأهم لـ `ProtectedConnection` — لا تحتاج الوصول المباشر لـ `_raw`.
 
 **الحسابات الافتراضية (34 حساب):**
 
@@ -131,8 +136,6 @@ _verify_conn_is_accounting(conn) -> bool
 | حقوق الملكية | 3, 31-33 |
 | الإيرادات | 4, 41-42 |
 | المصروفات | 5, 51-53, 521-524, 531 |
-
-> ⚠️ استخدم `_verify_conn_is_accounting()` قبل أي عملية كتابة على `accounting.db` لتجنب الكتابة على `erp.db` بالخطأ.
 
 ---
 
@@ -325,19 +328,23 @@ purchase_inventory(inv_conn, acc_conn,
 1. إنشاء قيد محاسبي في `accounting.db` (debit: inv_acc, credit: payment_acc)
 2. تسجيل حركة وارد في `inventory.db` عبر `record_inventory_move`
 
-**[إصلاح 32] Rollback محصّن:**
+**[إصلاح 32] Rollback محصّن بالكامل:**
 ```python
-# لو فشلت المرحلة 2 (record_inventory_move):
-#   entry_id=None guard: لا rollback بدون قيد حقيقي
+# entry_id=None guard: لا rollback بدون قيد حقيقي
+
+# لو فشلت المرحلة 2:
 #   محاولة rollback:
 #     1. _audit_rollback(acc_conn, entry_id, reason, changed_by)
 #        → snapshot_journal_entry + log_action("delete")
 #     2. DELETE FROM journal_entries WHERE id=?
 #     3. rollback_ok = True → يرمي RuntimeError واضحة
+
 #   لو فشل الـ rollback نفسه:
-#     _audit_critical_inconsistency(...) → log_action مع status="CRITICAL_INCONSISTENCY"
+#     _audit_critical_inconsistency(...):
+#       old_data["status"] = "CRITICAL_INCONSISTENCY"
+#       changed_by مُعدَّل: f"{changed_by}:CRITICAL_ROLLBACK_FAIL"
 #     logger.critical(...)
-#     يرمي RuntimeError بتفاصيل كاملة (entry_id محتاج مراجعة يدوية)
+#     يرمي RuntimeError بتفاصيل كاملة
 ```
 
 **دوال مساعدة للـ Audit [مقترح 52]:**
@@ -349,8 +356,6 @@ _audit_rollback(acc_conn, entry_id, reason, changed_by)
 _audit_critical_inconsistency(acc_conn, entry_id, inv_err, rb_err,
                                inv_id, qty, unit_cost, date, changed_by)
 # يُسجّل حالة تناقض حرجة في audit_log
-# old_data يحتوي: status="CRITICAL_INCONSISTENCY" + كل التفاصيل
-# changed_by مُعدَّل: f"{changed_by}:CRITICAL_ROLLBACK_FAIL"
 # يُحاوِل الكتابة حتى لو conn في حالة غير مستقرة
 ```
 
@@ -363,7 +368,8 @@ _audit_critical_inconsistency(acc_conn, entry_id, inv_err, rb_err,
 ## accounting_audit_repo.py
 
 ```python
-AUDIT_LOG_DDL  # CREATE TABLE IF NOT EXISTS audit_log (...)
+AUDIT_LOG_DDL
+# CREATE TABLE IF NOT EXISTS audit_log (...)
 # action CHECK("delete"|"update"|"create")
 # old_data TEXT — JSON snapshot
 # changed_by TEXT DEFAULT "system"
@@ -512,23 +518,52 @@ _migrate_investors(conn)
 #   4. لو غير موجود → create_investors_tables(conn) → إضافة path → return
 #   5. يتحقق من شكل investor_entries:
 #      sql_row = SELECT sql FROM sqlite_master WHERE name='investor_entries'
-#      لو "REFERENCES journal_" في sql → migration بـ executescript
+#      لو "REFERENCES journal_" في sql → migration بـ executescript:
+#        PRAGMA foreign_keys = OFF;
+#        CREATE TABLE _investor_entries_new (...بدون REFERENCES journal_...);
+#        INSERT ... SELECT ... FROM investor_entries;
+#        DROP TABLE investor_entries;
+#        ALTER TABLE _investor_entries_new RENAME TO investor_entries;
+#        PRAGMA foreign_keys = ON;
 #   6. إضافة path لـ _investors_migrated
 
 invalidate_investors_migration_cache(conn=None)
+# يُمسح الـ cache — استدعه لو احتجت إعادة فحص الـ schema
 # conn=None → _investors_migrated.clear()
 # conn=<conn> → _investors_migrated.discard(_get_db_path(conn))
+```
+
+#### إنشاء الجداول
+
+```python
+create_investors_tables(conn)
+# executescript:
+#   CREATE TABLE IF NOT EXISTS investors (id, name UNIQUE, notes, joined_at, created_at)
+#   CREATE TABLE IF NOT EXISTS investor_entries (
+#       id, investor_id→CASCADE, entry_id, line_id,
+#       move_type CHECK("capital"|"drawings"), amount DEFAULT 0, notes
+#   )
+# ملاحظة: investor_entries لا تحتوي REFERENCES لـ journal_entries
+#   (تم إزالتها في migration لأن القيود موجودة في accounting.db منفصل)
 ```
 
 #### CRUD — المستثمرون
 
 ```python
 fetch_all_investors(conn) -> list
+# يستدعي _migrate_investors(conn) أولاً
+# SELECT id, name, notes, joined_at, created_at FROM investors ORDER BY name
+
 fetch_investor(conn, investor_id) -> row
+# يستدعي _migrate_investors(conn) أولاً
+
 insert_investor(conn, name, notes=None, joined_at=None) -> int
 # joined_at افتراضياً = today (datetime.now().strftime("%Y-%m-%d"))
+# يستدعي _migrate_investors(conn) أولاً
+
 update_investor(conn, investor_id, name, notes=None, joined_at=None)
 delete_investor(conn, investor_id)
+
 investor_exists(conn, name) -> int | None
 # يرجع investor_id لو موجود، أو None
 ```
@@ -589,6 +624,8 @@ calc_all_investors_summary(conn, acc_conn=None) -> list
 - `calc_all_investors_summary` يجلب acc_conn data دفعة واحدة [إصلاح 40].
 - `delete_entry` يُسجّل snapshot في audit_log قبل الحذف تلقائياً [مقترح 52].
 - `_migrate_investors` تُنفَّذ مرة واحدة per-path بفضل `_investors_migrated` set [إصلاح 31].
+- `invalidate_investors_migration_cache()` متاحة لإعادة فحص الـ schema لو احتجت.
 - `_get_db_path` fast path O(1) لـ ProtectedConnection عبر `object.__getattribute__` [تحسين 7].
 - `fetch_all_accounts_basic` للـ dropdowns | `fetch_all_accounts_with_balance` للتقارير [P-01].
 - `_sort_groups_parents_first` تستخدم O(n) dicts بدل O(3n) [تحسين 3].
+- `_verify_conn_is_accounting` تدعم ProtectedConnection عبر المحاولة الثالثة [Q-01].
