@@ -90,29 +90,33 @@ bus.data_changed.emit()
 _test_conn(conn) -> bool
 # يختبر الاتصال بـ SELECT 1
 # يرجع False لو conn=None أو رمى exception
+# ⚠️ لا تستخدمها في hot paths — overhead غير ضروري
 
 _conn_null_error(class_name: str, method: str, db: str = "erp") -> RuntimeError
-# يبني RuntimeError موحدة مع رسالة واضحة
+# يبني RuntimeError موحدة مع رسالة واضحة تحتوي class_name و method و db
 ```
 
 #### LiveConnMixin
 
 ```python
 # _conn_attr: str = "conn"   (اسم الـ attribute الذي يحمل الـ connection)
-# _conn_cache: يُخزَّن بـ object.__setattr__ (instance variable)
+# _conn_cache: يُخزَّن بـ object.__setattr__ (instance variable مباشر)
 
 ._live_conn() -> Connection
-# 1. self.__dict__["_conn_cache"] لو سليم — fast path بدون SELECT 1
-# 2. self.{_conn_attr} لو سليم
-# 3. company_state.get_erp_conn() كـ fallback + يُحدّث self.conn + الـ cache
-# 4. RuntimeError واضحة (عبر _conn_null_error) لو كل شيء فشل
-# ملاحظة: لا SELECT 1 في hot path — يعتمد على وجود الـ cache مباشرة
+# Hot path — لا SELECT 1:
+#   1. self.__dict__["_conn_cache"] لو موجود → يرجعه مباشرة
+#   2. self.{_conn_attr} لو سليم → يُخزّن في _conn_cache ويرجعه
+#   3. company_state.get_erp_conn() كـ fallback:
+#      → يُحدّث self.conn
+#      → يُحدّث _conn_cache
+#   4. RuntimeError واضحة عبر _conn_null_error لو كل شيء فشل
 
 ._invalidate_conn_cache()
 # object.__setattr__(self, "_conn_cache", None)
+# يُستدعى عند تغيير الشركة أو إعادة تهيئة الـ connection
 
 ._live_acc_conn() -> Connection
-# accounting connection — نفس منطق _live_conn()
+# نفس منطق _live_conn() لكن لـ accounting connection
 # fallback عبر get_accounting_connection()
 # Raises: RuntimeError عبر _conn_null_error لو فشل
 ```
@@ -120,35 +124,51 @@ _conn_null_error(class_name: str, method: str, db: str = "erp") -> RuntimeError
 **`__init_subclass__` — تحذير تلقائي:**
 ```python
 # يفحص __annotations__ + __dict__ بحثاً عن أسماء تحتوي "conn" أو "connection"
-# لو وجد ولم يُحدَّث _conn_attr → UserWarning
+# لو وجد ولم يُحدَّث _conn_attr → UserWarning تحذر المطور
 # يتجاهل الأسماء التي تبدأ بـ "_"
 # يتجاهل لو "_conn_attr" موجود أصلاً في cls.__dict__
+# هدفه: اكتشاف الـ subclasses التي تُعرّف connection باسم مختلف بدون تحديث _conn_attr
 ```
 
 #### SafeConnMixin
 
 ```python
 ._init_safe_conn(conn, db_name: str = "accounting")
-# يُهيّئ __safe_conn و __safe_db_name
+# يُهيّئ __safe_conn و __safe_db_name (name-mangled للأمان)
 
 ._get_safe_conn() -> Connection
-# إعادة اتصال تلقائية لو فشل الـ connection
-# db_name == "erp"  → company_state.get_erp_conn() مباشرة (public API)
-# db_name != "erp"  → يجرب company_state._get_conn(db_name) كـ fallback
-#                     لو لم يُعطِ نتيجة سليمة → يجرب get_erp_conn() كـ last resort مع warning
+# إعادة اتصال تلقائية لو فشل الـ connection:
+#
+#   لو db_name == "erp":
+#     → company_state.get_erp_conn() مباشرة (public API)
+#
+#   لو db_name != "erp":
+#     → يجرب company_state._get_conn(db_name) كـ fallback
+#       [ملاحظة: private API — يُستخدم بحذر مع warning]
+#     → لو لم يُعطِ نتيجة سليمة:
+#       → يجرب get_erp_conn() كـ last resort مع logger.warning
+#
 # Raises: RuntimeError عبر _conn_null_error لو كل شيء فشل
 
 ._get_company_id() -> int | None   # static method
 ._should_respond_to_company(company_id, stored_attr="_company_id") -> bool
-# لو stored = None → يضبطه من company_id الواصل ويرجع True
+# لو stored = None → يضبطه من company_id الواصل ويرجع True (أول إشعار)
+# لو stored = company_id → True (نفس الشركة)
+# لو stored != company_id → False (شركة مختلفة)
 ```
 
-**ملاحظة [إصلاح شرط مستحيل]:**
+**[إصلاح شرط مستحيل في `_get_safe_conn`]:**
 ```python
-# القديم في else branch كان يحتوي:
-#   if get_fn and self.__safe_db_name == "erp":  ← مستحيل دائماً False في else
-# الجديد: منطق مباشر بدون الشرط الزائد
-# يستخدم _get_conn كـ fallback (private API — مع warning) للأنواع غير erp
+# المشكلة القديمة:
+#   في الـ else branch (db_name != "erp") كان يوجد:
+#     if get_fn and self.__safe_db_name == "erp":   ← مستحيل دائماً False
+#       ...
+#   هذا الشرط لا يُنفَّذ أبداً لأننا داخل else من db_name == "erp"
+#
+# الحل الجديد:
+#   منطق مباشر بدون الشرط الزائد:
+#   - يستخدم _get_conn كـ fallback للأنواع غير erp
+#   - يُسجّل warning عند استخدام private API
 ```
 
 #### DualConnMixin(SafeConnMixin)
@@ -169,9 +189,10 @@ _conn_null_error(class_name: str, method: str, db: str = "erp") -> RuntimeError
 
 **ملاحظات:**
 - `LiveConnMixin.__init_subclass__` يُصدر `UserWarning` لو الـ subclass يُعرِّف اسم connection مختلف بدون تحديث `_conn_attr`.
-- `SafeConnMixin._get_safe_conn` يستخدم `get_erp_conn()` (public API) — إصلاح الشرط المستحيل القديم موثّق في الكود.
+- `SafeConnMixin._get_safe_conn` يستخدم `get_erp_conn()` (public API) للـ erp — إصلاح الشرط المستحيل القديم موثّق في الكود.
 - كل الـ mixins ترمي `RuntimeError` واضحة بدل إرجاع `None` صامت.
-- لا تستخدم `_test_conn` في hot paths — overhead غير ضروري.
+- `_live_conn()` لا تستخدم SELECT 1 في hot path — تعتمد على وجود `_conn_cache` مباشرة.
+- `_conn_cache` يُخزَّن بـ `object.__setattr__` لتجاوز `__setattr__` المخصص في الـ proxies.
 
 ---
 
@@ -214,9 +235,10 @@ requires_company(method=None, *,
 `show_warning()` → `_warn()` → `_notif.show()` → debug log صامت
 
 **ملاحظات داخلية:**
-- `_SENTINEL = object()` — موجود في الكود كـ sentinel داخلي، لا يُستخدم خارج الملف.
+- `_SENTINEL = object()` — sentinel داخلي، لا يُستخدم خارج الملف.
 - `_default_msg()` تستخدم `tr("select_company")` — تدعم الترجمة تلقائياً، مع fallback `"اختر شركة نشطة أولاً"` لو فشل الـ import.
 - `_wrap()` تستخدم `functools.wraps(fn)` للحفاظ على metadata الدالة الأصلية.
+- يتحقق من `hasattr(widget, "show_warning")` قبل استدعائها (guard.py).
 
 ---
 
