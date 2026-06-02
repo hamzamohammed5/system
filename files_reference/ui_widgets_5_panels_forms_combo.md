@@ -238,10 +238,23 @@ NotesLineEdit(placeholder="ملاحظات اختيارية...", height=30)
 
 ```python
 form_label(text, color=None) -> QLabel
-required_label(text) -> QLabel     # علامة * بلون _C["danger"]
+# color افتراضي: _C['text_sec'] | font-weight: 600
+# alignment: AlignRight | AlignVCenter
+
+required_label(text) -> QLabel
+# علامة * بلون _C["danger"] كـ RichText
+# alignment: AlignRight | AlignVCenter
+
 hint_label(text, color=None) -> QLabel
+# color افتراضي: _C['text_muted'] | font-size: fs(base, -1)
+# wordWrap: True
+
 section_title(text, color=None, icon="") -> QLabel
+# color افتراضي: _C['accent'] | font-weight: 700
+# icon يُدمج: f"{icon}  {text}" لو icon غير فارغ
+
 separator_line() -> QFrame
+# QFrame.HLine | height: 1 | color: _C['border']
 ```
 
 ---
@@ -259,11 +272,29 @@ from ..theme.input_styles import spinbox_style
 
 ```python
 spin_field(max_=999999, dec=2, min_=0, min_height=30) -> QDoubleSpinBox
+# يُطبّق spinbox_style(min_height, widget="QDoubleSpinBox")
+
 int_spin_field(max_=9999, min_=0, min_height=30) -> QSpinBox
+# يُطبّق spinbox_style(min_height, widget="QSpinBox")
+
 labeled_widget(widget, unit, unit_color=None, spacing=6) -> QWidget
+# [widget] [unit_label] — unit_color افتراضي: _C['text_muted']
+# يُضيف addStretch() في النهاية
+
 field_row(label_text, widget, required=False, hint="") -> tuple[QLabel, QWidget]
+# required=True → required_label() | False → form_label()
+# hint → يُغلّف widget في QVBoxLayout مع hint_label أسفله
+# يرجع (label, widget_or_container)
+
 labeled_row(label_text, *widgets, spacing=6) -> QWidget
-make_form_layout(...) -> QFormLayout
+# [form_label] [widget1] [widget2] ... [stretch]
+# يقبل strings كـ hint_label تلقائياً
+# يتجاهل None في الـ widgets
+
+make_form_layout(spacing=10,
+                 label_align=Qt.AlignRight | Qt.AlignVCenter,
+                 contents_margins=(12, 10, 12, 10)) -> QFormLayout
+# FieldGrowthPolicy: ExpandingFieldsGrow
 ```
 
 ---
@@ -274,21 +305,100 @@ make_form_layout(...) -> QFormLayout
 
 ```python
 make_preview_label(text="─", status="info") -> QLabel
+# يستخدم status_colors(status) من core/colors
+# wordWrap: True | border-radius: 6px | padding: 8px 12px
+# font-size: fs(base, -1)
+```
 
-ResultBadge(text="─", color=None, status="success")
-  .set_value(text, color=None)
+#### `ResultBadge(QLabel)`
+
+```python
+ResultBadge(text="─", color=None, status="success", parent=None)
+# color: لون نص مخصص — يُلغي fg من status_colors لو محدد
+# status: "success" | "warning" | "danger" | "info" | ...
+# border-radius: 4px | padding: 4px 8px | font-weight: bold
+```
+
+**API:**
+```python
+  .set_value(text: str, color: str = None)
+  # لو color جديد ومختلف → يُعيد تطبيق _apply()
+
   .set_status(status: str)
-  .reset()
+  # لو status مختلف → يُعيد تطبيق _apply()
 
-ModeBadge(text="─", color="blue")
+  .reset()
+  # setText("─")
+```
+
+**منطق `_apply()`:**
+```python
+# لو _custom_color محدد:
+#   color = _custom_color | bg/border من status_colors
+# لو لا:
+#   color = s['fg'] | bg/border من status_colors
+```
+
+#### `ModeBadge(QLabel)`
+
+```python
+ModeBadge(text="─", color="blue", parent=None)
 # color: "blue" | "orange" | "green" | "red" | "purple"
-# يُترجم color → status key: blue→primary, orange→warning, green→success, red→danger, purple→purple
-  .set_mode(text, color=None)
-  .reset()
+# يُترجم color → status key:
+#   "blue"   → "primary"
+#   "orange" → "warning"
+#   "green"  → "success"
+#   "red"    → "danger"
+#   "purple" → "purple"
+# border-radius: 4px | padding: 3px 8px | font-weight: bold
+# font-size: fs(base, -1)
+```
 
-InlinePreview(label="النتيجة:", color=None, status="success")
-  .set_value(text: str)
+**API:**
+```python
+  .set_mode(text: str, color: str = None)
+  # لو color جديد ومختلف → يُعيد تطبيق _apply_style()
+
   .reset()
+  # setText("─")
+```
+
+#### `InlinePreview(QWidget)`
+
+```python
+InlinePreview(label="النتيجة:", color=None, status="success", parent=None)
+# Layout: [QLabel(label)] [ResultBadge("─")]  [stretch]
+# label: color=_C['text_sec'] | font-weight: 600 | font-size: fs(base, -1)
+# _lbl_value: ResultBadge داخلي
+```
+
+**API:**
+```python
+  .set_value(text: str)
+  # يستدعي self._lbl_value.set_value(text)
+
+  .reset()
+  # يستدعي self._lbl_value.reset()
+```
+
+**مثال:**
+```python
+from ui.widgets.panels.form_badges import ResultBadge, ModeBadge, InlinePreview
+
+# badge للنتيجة المحسوبة
+badge = ResultBadge("─", status="success")
+badge.set_value("250.00 ج", color=_C['success'])
+badge.set_status("warning")   # يُغيّر الألوان
+badge.reset()                 # يُعيد "─"
+
+# badge للوضع الحالي
+mode = ModeBadge("─", color="blue")
+mode.set_mode("وضع التعديل", color="orange")
+
+# عرض inline
+preview = InlinePreview(label="التكلفة الكلية:", status="success")
+preview.set_value("1,200.00 ج")
+preview.reset()
 ```
 
 ---
@@ -298,21 +408,68 @@ InlinePreview(label="النتيجة:", color=None, status="success")
 ### `ui/widgets/panels/form_buttons.py`
 
 ```python
-CrudButtonsBar(add_text="", save_text="", cancel_text="", show_mode=True)
-# نصوص الأزرار من tr() لو فارغة: tr("btn_add"), tr("btn_save"), tr("btn_cancel")
-# يشترك في bus.language_changed لتحديث نصوص الأزرار تلقائياً
+CrudButtonsBar(add_text="", save_text="", cancel_text="", show_mode=True, parent=None)
+# نصوص الأزرار من tr() لو فارغة:
+#   add_text    → tr("btn_add")
+#   save_text   → tr("btn_save")
+#   cancel_text → tr("btn_cancel")
+# show_mode=True → يُظهر lbl_mode فوق الأزرار
+# show_mode=False → lbl_mode يُنشأ لكن غير مرئي (للـ compatibility)
+# يشترك في bus.language_changed بـ Qt.UniqueConnection لتحديث نصوص الأزرار
 # Signals: add_clicked, save_clicked, cancel_clicked
-  .btn_add / btn_save / btn_cancel -> QPushButton
-  .lbl_mode -> QLabel
-  .set_mode_text(text: str)
 ```
 
-**`_on_language_changed`:**
+**Attributes:**
 ```python
-# يُحدّث النصوص من tr() مباشرة:
+  .btn_add    -> QPushButton   # style: "primary"
+  .btn_save   -> QPushButton   # style: "success"
+  .btn_cancel -> QPushButton   # style: "ghost"
+  .lbl_mode   -> QLabel        # دائماً موجود حتى لو show_mode=False
+```
+
+**API:**
+```python
+  .set_mode_text(text: str)
+  # lbl_mode.setText(text)
+```
+
+**`_on_language_changed(lang_code)`:**
+```python
+# يُحدّث النصوص من tr() مباشرة — لا يُخزّن النصوص المخصصة:
 self.btn_add.setText(tr("btn_add"))
 self.btn_save.setText(tr("btn_save"))
 self.btn_cancel.setText(tr("btn_cancel"))
+```
+
+**ملاحظة:** لو مررت `add_text` مخصص — سيُفقد عند تغيير اللغة. الـ mixin يُعيد دائماً `tr("btn_add")`.
+
+**Layout الداخلي:**
+```
+QVBoxLayout:
+  [lbl_mode]          ← لو show_mode=True
+  QHBoxLayout:
+    [btn_add] [btn_save] [btn_cancel] [stretch]
+```
+
+**`_connect_language_bus()`:**
+```python
+# try/except حول الاشتراك — لو فشل import bus لا يُوقف البناء
+from ui.events import bus
+bus.language_changed.connect(self._on_language_changed, Qt.UniqueConnection)
+```
+
+**مثال:**
+```python
+from ui.widgets.panels.form_buttons import CrudButtonsBar
+
+bar = CrudButtonsBar(show_mode=True)
+bar.add_clicked.connect(self._on_add)
+bar.save_clicked.connect(self._on_save)
+bar.cancel_clicked.connect(self._on_cancel)
+bar.set_mode_text("─── تعديل: المنتج ───")
+
+# مع نصوص مخصصة (تُفقد عند تغيير اللغة):
+bar = CrudButtonsBar(add_text="➕ إضافة منتج", show_mode=False)
 ```
 
 ---
@@ -322,12 +479,57 @@ self.btn_cancel.setText(tr("btn_cancel"))
 ### `ui/widgets/panels/form_group.py`
 
 ```python
-FormGroup(title="", accent=None)
-# accent افتراضي من _C["accent"]
+FormGroup(title="", accent=None, parent=None)
+# يرث من QGroupBox
+# accent افتراضي: _C["accent"]
+# border-radius: 10px | margin-top: 10px | padding-top: 6px
+# title position: top right (RTL)
+```
+
+**Layout الداخلي:**
+```python
+self.form = QFormLayout(self)
+# spacing: 10
+# labelAlignment: AlignRight | AlignVCenter
+# contentsMargins: (12, 14, 12, 12)
+```
+
+**API:**
+```python
   .add_row(label: str, widget: QWidget)
+  # form.addRow(label, widget)
+
   .add_label_row(label_widget: QWidget)
+  # form.addRow(label_widget) — بدون label نصي
+
   .add_separator()
-  .form -> QFormLayout
+  # يُضيف QFrame.HLine بارتفاع 1 بلون _C['border']
+  # form.addRow(sep)
+
+  .form -> QFormLayout   # الـ layout الداخلي للوصول المباشر
+```
+
+**`_apply_style()`:**
+```python
+# يُطبق QGroupBox stylesheet مع:
+#   title color = self._accent
+#   background = _C['bg_surface']
+#   border = _C['border']
+# يُستدعى في __init__ فقط — لا يُعيد التطبيق عند تغيير الثيم تلقائياً
+```
+
+**مثال:**
+```python
+from ui.widgets.panels.form_group import FormGroup
+
+grp = FormGroup("بيانات المنتج", accent=_C['accent'])
+grp.add_row("الاسم :", self.inp_name)
+grp.add_row("السعر :", self.spin_price)
+grp.add_separator()
+grp.add_row("الفئة :", self.cmb_category)
+
+# الوصول المباشر للـ form layout:
+grp.form.setSpacing(12)
 ```
 
 ---

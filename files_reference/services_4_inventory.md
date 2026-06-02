@@ -27,7 +27,7 @@ InventoryService(conn)
 
 ```python
 # كل method تجرب import من inventory_repo أولاً
-# لو (ImportError أو AttributeError) → تُنفّذ SQL مضمّناً مباشرة
+# لو (ImportError أو AttributeError) → تُنفَّذ SQL مضمّناً مباشرة
 # لو Exception أخرى → logger.error + يرجع قيمة افتراضية آمنة
 ```
 
@@ -70,7 +70,7 @@ svc.record_inbound(item_id, quantity, unit_cost=0.0,
 svc.record_outbound(item_id, quantity, unit_cost=0.0,
                     date=None, reference="", notes="") -> int
 # Raises: ValueError لو quantity <= 0
-# Raises: ValueError لو quantity > current_stock
+# Raises: ValueError لو quantity > current_stock (بالرسالة العربية)
 # يستدعي _record_movement(item_id, "out", ...)
 
 svc.delete_movement(movement_id: int) -> bool
@@ -84,6 +84,7 @@ svc.delete_movement(movement_id: int) -> bool
 # date=None → datetime.date.today().isoformat()
 # يحاول insert_movement من repo
 # Fallback: INSERT INTO inventory_movements (...) مباشر + last_insert_rowid()
+# لو فشل كل شيء → يرمي Exception (لا يبتلع الخطأ)
 ```
 
 #### التقارير
@@ -122,15 +123,23 @@ class InventoryReport:
 
 **SQL الداخلي المضمّن:**
 ```python
-_SQL_ITEMS_WITH_STOCK   # يعمل على: items JOIN categories + subquery من inventory_movements
-_SQL_MOVEMENTS          # يعمل على: inventory_movements JOIN items
-# ملاحظة: يستخدم جدول inventory_movements (ليس inventory_moves)
+_SQL_ITEMS_WITH_STOCK
+# يعمل على: items LEFT JOIN categories + subquery من inventory_movements
+# الأعمدة: id, name, item_type, unit, price, category_id, category_name,
+#           min_stock, current_stock, avg_unit_cost
+
+_SQL_MOVEMENTS
+# يعمل على: inventory_movements JOIN items
+# الأعمدة: id, item_id, item_name, movement_type, quantity,
+#           unit_cost, total_cost (qty*unit_cost), date, reference, notes
 ```
 
 **ملاحظات التصميم:**
+- جدول الحركات: `inventory_movements` (وليس `inventory_moves` — تأكد من اسم الجدول في الـ schema).
 - `movement_type`: `"in"` | `"out"` — الـ SQL الداخلي لا يدعم `"adjust"`.
-- الـ SQL الداخلي يعمل على جدول `inventory_movements` — تأكد من اسم الجدول في الـ schema.
 - `get_current_stock` يستخدم SQL مباشر دائماً (لا fallback لـ repo) لضمان الدقة.
-- `record_outbound` يتحقق من الرصيد الحالي قبل التسجيل.
+- `record_outbound` يتحقق من الرصيد الحالي قبل التسجيل — يرمي ValueError بالعربية.
+- `delete_movement` يرجع `False` عند الفشل (لا يرمي exception).
+- `logger.error` يُسجَّل عند كل فشل في كل method.
 
 > ⚠️ لو الـ schema الفعلي يستخدم `inventory_repo` مكتملاً، اعتمد عليه مباشرة للدقة الكاملة. استخدم `InventoryService` كـ facade موحّد للـ UI.
