@@ -1,7 +1,8 @@
-# دليل الكود — DB: المشترك (db/shared/)
+# دليل الكود — DB: الطبقة المشتركة (db/shared/) — نسخة من الكود الفعلي
 
-> `db/shared/` — الأدوات المشتركة: الاتصالات، الأصناف، التصنيفات، الإعدادات، JSON، جسر العناصر المشتركة.
-> **الملفات الفعلية:** `connection.py`, `items_repo.py`, `categories_repo.py`, `settings_repo.py`, `json_utils.py`, `shared_items_bridge.py`
+> يعكس هذا الملف الكود الفعلي الموجود في السياق.
+> الملفات: `connection.py`, `items_repo.py`, `categories_repo.py`,
+> `settings_repo.py`, `json_utils.py`, `shared_items_bridge.py`
 
 ---
 
@@ -10,8 +11,8 @@
 | الملف | الوصف |
 |-------|-------|
 | [connection.py](#connectionpy) | إدارة اتصالات قواعد البيانات |
-| [items_repo.py](#items_repopy) | CRUD الأصناف والـ BOM |
-| [categories_repo.py](#categories_repopy) | CRUD التصنيفات |
+| [items_repo.py](#items_repopy) | CRUD الأصناف والـ BOM + العناصر المشتركة |
+| [categories_repo.py](#categories_repopy) | CRUD التصنيفات + Template Fields |
 | [settings_repo.py](#settings_repopy) | قراءة/كتابة الإعدادات |
 | [json_utils.py](#json_utilspy) | دوال JSON المشتركة |
 | [shared_items_bridge.py](#shared_items_bridgepy) | جسر العناصر المشتركة |
@@ -20,26 +21,24 @@
 
 ## connection.py
 
-**المسارات:**
 ```python
 _BASE_DIR  = os.path.join(os.path.dirname(__file__), "..", "..")
 CENTRAL_DB = os.path.join(_BASE_DIR, "companies.db")
 ```
 
-**`_make_conn(path: str) -> sqlite3.Connection`** — دالة داخلية:
 ```python
-# row_factory=sqlite3.Row, isolation_level=None
-# PRAGMA foreign_keys=ON, journal_mode=WAL
-```
+def _make_conn(path: str) -> sqlite3.Connection:
+    # row_factory=sqlite3.Row, isolation_level=None
+    # PRAGMA foreign_keys=ON, journal_mode=WAL
 
-```python
 get_central_connection() -> sqlite3.Connection
-# connection لـ companies.db عبر _make_conn
+# يفتح companies.db عبر _make_conn
 
 get_connection(db: str = "erp") -> sqlite3.Connection
 # db: "erp" | "accounting" | "inventory" | "orders" | "designs"
 # يستدعي company_state._get_conn(db_name)
 # Raises: RuntimeError لو لا توجد شركة نشطة
+# [إصلاح 10] "costing" → DeprecationWarning ثم يُحوَّل لـ "erp"
 
 get_accounting_connection() -> sqlite3.Connection
 # اختصار → get_connection("accounting")
@@ -49,25 +48,18 @@ get_inventory_connection() -> sqlite3.Connection
 
 get_linked_connection(primary: str = "inventory",
                       attach: list[str] = None) -> sqlite3.Connection
-# يفتح connection جديد (_make_conn) للـ primary DB
-# ثم ATTACH لكل DB في attach list
+# يفتح connection جديد (_make_conn) لـ primary
+# ثم ATTACH لكل DB في attach
 # "costing"/"erp" → كلاهما يُحوَّل لـ "erp"
-```
-
-**[إصلاح 10] `get_connection("costing")`:**
-```python
-# يُصدر DeprecationWarning ثم يُحوَّل لـ "erp"
-# الرسالة: "get_connection('costing') مُهمَل — استخدم get_connection('erp') ..."
 ```
 
 **[T-03] `get_costing_connection()` محذوفة:**
 ```python
-# كانت تُصدر DeprecationWarning — محذوفة الآن
-# الكود الذي يستوردها → ImportError واضح
+# استورادها → ImportError واضح يساعد في تحديد الكود القديم
 # البديل: company_state.get_erp_conn() أو get_connection("erp")
 ```
 
-> ⚠️ `get_linked_connection()` يفتح connection جديد في كل استدعاء — لا تستدعه كثيراً. احفظ النتيجة في متغير.
+> ⚠️ `get_linked_connection()` يفتح connection جديد في كل استدعاء — احفظ النتيجة.
 
 ---
 
@@ -79,14 +71,12 @@ get_linked_connection(primary: str = "inventory",
 _central_conn_cache: dict = {"conn": None, "company_id": None}
 
 _get_central_conn_cached() -> sqlite3.Connection
-# يستخدم SELECT 1 للتحقق من صلاحية الـ cache
-# لو cached_conn is not None AND cached_cid == current_cid:
-#   → cached_conn.execute("SELECT 1") — لو نجح يرجعه
-#   → لو فشل (مات) → ينشئ جديد
-# غير ذلك → get_central_connection() → يُحدِّث الـ cache
+# لو cache صالح (SELECT 1 نجح + نفس company_id) → يُعيده
+# لو مات أو تغيرت الشركة → get_central_connection() جديد + تحديث cache
+# مشاركة آمنة: central DB للقراءة فقط، single-threaded PyQt
 
 invalidate_central_conn_cache()
-# يُغلق الـ connection القديم ويُصفِّر الـ cache
+# يُغلق القديم + يُصفِّر cache
 # استدعه عند تغيير الشركة النشطة
 ```
 
@@ -97,8 +87,12 @@ _bom_cols_cache: dict[str, set] = {}
 # key: db_path من PRAGMA database_list أو str(id(conn)) كـ fallback
 
 _get_bom_cols(conn) -> set
+# PRAGMA table_info(bom) + cache بمفتاح db_path
+
 invalidate_bom_cols_cache(conn=None)
-# conn=None → clear() | conn → pop(path, None)
+# conn=None → _bom_cols_cache.clear()
+# conn=<conn> → pop(path, None)
+# استدعه بعد أي migration يضيف أعمدة لـ bom
 ```
 
 ### Shared ID Utilities — [A-02] المصدر الوحيد
@@ -106,26 +100,29 @@ invalidate_bom_cols_cache(conn=None)
 ```python
 is_shared_id(item_id) -> bool
 # isinstance(item_id, str) AND str(item_id).startswith("shared:")
+# مثال: is_shared_id("shared:42") → True | is_shared_id(42) → False
 
 extract_shared_id(item_id) -> int | None
-# "shared:42" → 42 | أي صيغة أخرى → None
+# "shared:42" → 42 | أي صيغة أخرى أو exception → None
 ```
 
-> ⚠️ **المصدر الوحيد** — `shared_items_bridge.py` يُعيد تصديرهما من هنا.
+> ⚠️ **المصدر الوحيد** — `shared_items_bridge.py` يُعيد تصديرهما من هنا دون إعادة تعريف.
 
-### Items
+### Items — قراءة
 
 ```python
 fetch_all_items(conn) -> list
 # SELECT id, name, type, price, total_qty ORDER BY name
 
 fetch_items_by_type(conn, item_type: str) -> list
-# مع category_id, category_name من LEFT JOIN categories WHERE type=? ORDER BY i.name
+# مع category_id, category_name من LEFT JOIN categories
+# WHERE type=? ORDER BY i.name
 
-fetch_items_by_type_with_shared(conn, item_type: str, company_id: int = None) -> list
+fetch_items_by_type_with_shared(conn, item_type: str,
+                                 company_id: int = None) -> list
 # يدمج المحلي + المشترك
 # المحلي: is_shared=False, shared_item_id=None
-# المشترك: id="shared:{n}", is_shared=True
+# المشترك: id="shared:{n}", is_shared=True, category_name="🔗 مشترك"
 
 fetch_item(conn, item_id) -> row | _SharedItemRow | None
 # لو is_shared_id(item_id) → _fetch_shared_item_as_row(extract_shared_id)
@@ -134,24 +131,10 @@ fetch_item(conn, item_id) -> row | _SharedItemRow | None
 
 **`_SharedItemRow` — يحاكي sqlite3.Row:**
 ```python
-class _SharedItemRow:
-    # __getitem__(key)  → self._data.get(key)
-    # __getattr__(key)  → self._data.get(key) مع debug log لو غير موجود
-    # keys()            → self._data.keys()
-    # get(key, default) → self._data.get(key, default)
-```
-
-**`_shared_row_to_item(row, item_type: str) -> dict`:**
-```python
-# [إصلاح 33] يستخدم decode_json من json_utils
-# base: {id, shared_item_id, name, type, category_id:None,
-#         category_name:"🔗 مشترك", is_shared:True, total_qty:None}
-# حسب item_type:
-#   raw        → price, total_qty
-#   machine    → rate_per_hour, rate_per_unit, price=0.0
-#   labor_op   → minutes, price=0.0
-#   machine_op → mode, value, machine_name, rate_per_hour, rate_per_unit, price=0.0
-#   غيرها     → price=0.0
+# __getitem__(key)  → self._data.get(key)
+# __getattr__(key)  → self._data.get(key) مع debug log لو غير موجود
+# keys()            → self._data.keys()
+# get(key, default) → self._data.get(key, default)
 ```
 
 **`fetch_shared_for_types(company_id=None, types: list = None) -> dict`:**
@@ -159,49 +142,84 @@ class _SharedItemRow:
 # [تحسين 11] batch query لأنواع متعددة في connection واحد
 # [تحسين 8]  يستخدم _get_central_conn_cached() — لا يُغلق الـ connection
 # لو company_id=None → يقرأ من company_state
-# يرجع: {type: [item_dict, ...]}
+# SELECT من company_shared_links JOIN shared_items WHERE company_id=? AND type IN (...)
+# يرجع: {type_str: [item_dict, ...]}
+# عند فشل cache → _central_conn_cache["conn"] = None (للتعافي في الاستدعاء التالي)
+```
+
+**`_shared_row_to_item(row, item_type: str) -> dict`:**
+```python
+# [إصلاح 33] يستخدم decode_json من json_utils (لا json.loads محلي)
+# base: {id:"shared:{n}", shared_item_id, name, type,
+#         category_id:None, category_name:"🔗 مشترك",
+#         is_shared:True, total_qty:None}
+# حسب item_type:
+#   "raw"        → price, total_qty
+#   "machine"    → rate_per_hour, rate_per_unit, price=0.0
+#   "labor_op"   → minutes, price=0.0
+#   "machine_op" → mode, value, machine_name, rate_per_hour, rate_per_unit, price=0.0
+#   غيرها        → price=0.0
+```
+
+### Items — كتابة
+
+```python
+insert_item(conn, name: str, item_type: str, price: float = 0,
+            category_id: int = None, total_qty: float = None) -> int
+
+update_item(conn, item_id: int, name: str, price: float,
+            category_id: int = None, total_qty: float = None)
+
+delete_item(conn, item_id: int)
+
+update_item_category(conn, item_id: int, category_id: int | None)
+# UPDATE items SET category_id=? WHERE id=?
 ```
 
 ### BOM
 
 ```python
 fetch_bom(conn, parent_id: int) -> list
-# لو "variant_id" في cols → يجلبه | وإلا → بدونه
+# لو "variant_id" في _get_bom_cols → يجلبه | وإلا → بدونه
 # دائماً: COALESCE(waste_pct, 0) as waste_pct | ORDER BY id
 
-insert_bom_row(conn, parent_id, child_type, child_id, qty,
-               waste_pct=0.0, variant_id=None)
+insert_bom_row(conn, parent_id: int, child_type: str, child_id: int,
+               qty: float, waste_pct: float = 0.0,
+               variant_id: int = None)
+# يُحدِّد child_name تلقائياً من الجداول المناسبة
 
-delete_bom_row(conn, parent_id, child_type, child_id)
+delete_bom_row(conn, parent_id: int, child_type: str, child_id: int)
 
 replace_bom(conn, parent_id: int, rows: list[tuple])
 # rows: [(child_type, child_id, qty, waste_pct?, variant_id?), ...]
-# DELETE parent_id → INSERT الجديد
+# DELETE parent_id → INSERT الجديد بشكل آمن حسب الأعمدة الموجودة
 ```
 
 ### Orphans
 
 ```python
 fetch_orphan_bom_rows(conn, parent_id: int) -> list[dict]
-# يرجع: [{child_type, child_id, child_name, qty, waste_pct}, ...]
+# [{child_type, child_id, child_name, qty, waste_pct}, ...]
+# يتحقق من وجود كل child في الجدول المناسب
 
 delete_orphan_bom_rows(conn, parent_id: int) -> int
-fetch_products_with_orphan(conn, child_type, child_id) -> list[int]
+# يحذف الـ orphans ويرجع عددها
+
+fetch_products_with_orphan(conn, child_type: str, child_id: int) -> list[int]
+# DISTINCT parent_ids من bom
+
 cleanup_empty_products_after_orphan_fix(conn, parent_ids: list[int]) -> list[int]
-```
-
-### كتابة الأصناف
-
-```python
-insert_item(conn, name, item_type, price=0, category_id=None, total_qty=None) -> int
-update_item(conn, item_id, name, price, category_id=None, total_qty=None)
-delete_item(conn, item_id)
-update_item_category(conn, item_id, category_id: int | None)
+# يحذف المنتجات التي أصبح BOMها فارغاً بعد إصلاح الـ orphans
+# يرجع IDs المنتجات المحذوفة
 ```
 
 ---
 
 ## categories_repo.py
+
+> **[إصلاح 5]:** `build_tree` تستخدم `_row_to_dict()` الآمنة.
+> **[تحسين 5]:** `fetch_descendants` تستخدم SQLite Recursive CTE.
+> **[تحسين 13]:** `encode_json_list/decode_json_list` لـ `template_fields`.
 
 ### الثوابت
 
@@ -229,7 +247,7 @@ fetch_all_categories(conn, scope: str = None) -> list
 # مع parent_name من LEFT JOIN | ORDER BY parent_id NULLS FIRST, name
 
 fetch_categories_by_scope(conn, scope: str) -> list
-# تصنيفات scope محدد فقط — بدون scope='all'
+# تصنيفات scope محدد فقط (بدون 'all')
 # يجلب أيضاً: template_fields, default_unit
 
 fetch_category(conn, cat_id: int) -> row
@@ -237,47 +255,65 @@ fetch_category(conn, cat_id: int) -> row
 
 fetch_descendants(conn, cat_id: int) -> list[int]
 # [تحسين 5] SQLite Recursive CTE — O(1) query واحدة
-# يرجع IDs كل الأبناء والأحفاد + التصنيف نفسه
-# Fallback تلقائي لـ _fetch_descendants_fallback لو الـ CTE فشل
+# يرجع IDs: التصنيف نفسه + كل أبنائه وأحفاده
+# Fallback تلقائي لـ _fetch_descendants_fallback لو CTE فشل
+# _fetch_descendants_fallback: while loop + individual queries لكل مستوى
 ```
 
 ### الكتابة
 
 ```python
-insert_category(conn, name, scope="all", color="#607d8b",
-                parent_id=None, template_fields: list = None,
-                default_unit="mm") -> int
+insert_category(conn, name: str, scope: str = "all",
+                color: str = "#607d8b",
+                parent_id: int = None,
+                template_fields: list = None,
+                default_unit: str = "mm") -> int
 # [تحسين 13] encode_json_list لـ template_fields
 
-update_category(conn, cat_id, name, scope, color,
-                parent_id=None, template_fields: list = None, default_unit="mm")
-# يتحقق من circular reference → Raises ValueError
+update_category(conn, cat_id: int, name: str, scope: str,
+                color: str, parent_id: int = None,
+                template_fields: list = None,
+                default_unit: str = "mm")
+# يتحقق من circular reference: parent_id ∈ fetch_descendants(cat_id) → ValueError
+# [تحسين 13] encode_json_list لـ template_fields
 
-delete_category(conn, cat_id)
+delete_category(conn, cat_id: int)
 ```
 
-### عمليات مساعدة
+### المساعدات
 
 ```python
 count_category_items(conn, cat_id: int) -> dict
+# يجمع كل أبناء cat_id أولاً (fetch_descendants)
 # {"عناصر": n, "عمليات عمالة": n, "عمليات تشغيل": n, "ماكينات": n}
+# يبحث في: items, labor_ops, machine_ops, machines
 
-build_tree(rows) -> list[dict]
-# [إصلاح 5] يستخدم _row_to_dict() الآمنة
-# [{id, name, scope, color, parent_id, children: [...]}, ...]
+def _row_to_dict(r) -> dict:
+    # [إصلاح 5] آمنة — تستخدم .get() وتتحقق من available keys
+    # يمنع KeyError عند query قديمة أو migration ناقص
+    # {id, name, scope, color, parent_id, children: []}
+
+def build_tree(rows) -> list[dict]:
+    # [إصلاح 5] يستخدم _row_to_dict() الآمنة
+    # يبني شجرة هرمية من قائمة مسطحة
+    # [{id, name, scope, color, parent_id, children: [...]}, ...]
 ```
 
 ### Template Fields — [تحسين 13]
 
 ```python
 get_template_fields(conn, cat_id: int) -> list[dict]
-# decode_json_list(row["template_fields"]) → [] لو NULL
+# decode_json_list(row["template_fields"]) → [] لو NULL أو JSON فاسد
 
 set_template_fields(conn, cat_id: int, fields: list[dict])
+# encode_json_list(fields) → UPDATE categories SET template_fields=?
 
-apply_template_to_dimension_set(conn_erp, conn_design, cat_id, set_id) -> int
-# يجلب template_fields من erp.db ويُضيفها لـ dimension_fields في designs.db
+apply_template_to_dimension_set(conn_erp, conn_design,
+                                  cat_id: int, set_id: int) -> int
+# يجلب template_fields من erp.db (conn_erp)
+# يُضيف الحقول الجديدة فقط (يتحقق من existing بالاسم) لـ designs.db (conn_design)
 # يرجع عدد الحقول المُضافة
+# يتجاهل: الحقول بدون name أو الحقول الموجودة مسبقاً
 ```
 
 ---
@@ -287,53 +323,66 @@ apply_template_to_dimension_set(conn_erp, conn_design, cat_id, set_id) -> int
 ```python
 get_setting(conn, key: str, default=None)
 # SELECT value FROM settings WHERE key=?
-# يرجع row["value"] كـ TEXT أو default لو غير موجود
-# ⚠️ يرجع النص كما هو — استخدم float() عند قراءة الأرقام
+# يرجع row["value"] كـ TEXT | default لو المفتاح غير موجود
 
 set_setting(conn, key: str, value)
 # INSERT OR REPLACE INTO settings (key, value) VALUES (?, ?)
+# يستدعي conn.commit()
 ```
 
-**مثال:**
+**ملاحظة مهمة:**
 ```python
+# القيم مُخزَّنة كـ TEXT دائماً
+# استخدم التحويل عند القراءة:
 salary = float(get_setting(conn, "monthly_salary", 3000.0))
 theme  = get_setting(conn, "ui_theme", "light")
+lang   = get_setting(conn, "ui_language", "ar")
 ```
 
 ---
 
 ## json_utils.py
 
+> **[إصلاح 33]:** مركزة الكود المكرر — كل الملفات تستورد من هنا.
+> **[تحسين 13]:** `decode_json_list/encode_json_list` مُستخدمتان في `categories_repo.py`.
+
 ```python
 from db.shared.json_utils import decode_json, encode_json
 from db.shared.json_utils import decode_json_list, encode_json_list
 
-decode_json(data_str: str) -> dict
-# يرجع {} عند: None، نص فارغ، JSON غير صالح، أو نتيجة ليست dict
+def decode_json(data_str: str) -> dict:
+    # يرجع {} عند: None، نص فارغ، JSON غير صالح، النتيجة ليست dict
+    # try: json.loads → isinstance(result, dict) → return result
+    # except any → return {}
 
-encode_json(data: dict) -> str
-# يرجع '{}' لو data ليس dict أو عند أي خطأ
-# json.dumps(data, ensure_ascii=False)
+def encode_json(data: dict) -> str:
+    # يرجع '{}' لو data ليس dict أو عند أي خطأ
+    # json.dumps(data, ensure_ascii=False)
 
-decode_json_list(data_str: str) -> list
-# يرجع [] عند: None، نص فارغ، JSON غير صالح، أو نتيجة ليست list
-# [تحسين 13] مُستخدمة في categories_repo.py لـ template_fields
+def decode_json_list(data_str: str) -> list:
+    # يرجع [] عند: None، نص فارغ، JSON غير صالح، النتيجة ليست list
+    # [تحسين 13] مُستخدمة في categories_repo.py لـ template_fields
 
-encode_json_list(data: list) -> str
-# يرجع '[]' لو data ليست list أو عند أي خطأ
+def encode_json_list(data: list) -> str:
+    # يرجع '[]' لو data ليست list أو عند أي خطأ
+    # json.dumps(data, ensure_ascii=False)
 ```
 
-> ⚠️ لا تستخدم `json.loads/dumps` مباشرة في الملفات الأخرى — استورد من هنا دائماً [إصلاح 33].
+> ⚠️ لا تستخدم `json.loads/dumps` مباشرة في ملفات أخرى — استورد من هنا [إصلاح 33].
 
 ---
 
 ## shared_items_bridge.py
 
+> **[إصلاح 6]:** `_get_erp_conn()` يتحقق من `is_ready`.
+> **[إصلاح 33]:** يستخدم `decode_json/encode_json` من `json_utils`.
+> **[A-02]:** `is_shared_id/extract_shared_id` مُستوردتان من `items_repo` لا مُعرَّفتان هنا.
+
 ### الـ Imports الفعلية
 
 ```python
-from db.shared.json_utils import decode_json, encode_json        # [إصلاح 33]
-from db.shared.items_repo import is_shared_id, extract_shared_id # [A-02]
+from db.shared.json_utils import decode_json, encode_json
+from db.shared.items_repo import is_shared_id, extract_shared_id  # [A-02]
 ```
 
 ### SharedItemsBridge
@@ -350,29 +399,36 @@ class SharedItemsBridge:
 **دوال الاتصال الداخلية:**
 ```python
 ._get_central_conn(self) -> sqlite3.Connection
-# get_central_connection() — يفتح جديد في كل استدعاء (للكتابة فقط)
+# get_central_connection() — يفتح جديد في كل استدعاء (للكتابة)
 
 ._get_erp_conn(self) -> ProtectedConnection
-# [إصلاح 6] يتحقق من company_state.is_ready أولاً
-# Raises: RuntimeError لو لا توجد شركة نشطة
+# [إصلاح 6] يتحقق أولاً: company_state.is_ready
+# Raises: RuntimeError("SharedItemsBridge: لا توجد شركة نشطة") لو False
 ```
 
-**نمط `_conn` الداخلي:**
+**نمط `_conn` الداخلي (معظم methods):**
 ```python
-# معظم methods تقبل _conn=None
-# owned = _conn is None
-# conn  = _conn or self._get_central_conn()
-# try: ... finally: if owned: conn.close()
+def some_method(self, ..., _conn=None):
+    owned = _conn is None
+    conn  = _conn or self._get_central_conn()
+    try:
+        # العملية
+    except ...:
+        return default_value
+    finally:
+        if owned: conn.close()
 ```
 
 ### جلب العناصر المشتركة
 
 ```python
 .fetch_shared_items_for_type(shared_type: str, _conn=None) -> list
-# SELECT من company_shared_links JOIN shared_items WHERE company_id=? AND shared_type=?
+# SELECT من company_shared_links JOIN shared_items
+# WHERE company_id=? AND shared_type=? ORDER BY s.name
+# يستخدم _row_to_item() لكل صف
 
 .fetch_items_by_type_with_shared(item_type: str) -> list
-.fetch_all_with_shared(item_type: str) -> list  # alias
+.fetch_all_with_shared(item_type: str) -> list   # alias
 
 .fetch_shared_item_as_row(shared_item_id: int,
                            shared_type=None, _conn=None) -> dict | None
@@ -381,53 +437,66 @@ class SharedItemsBridge:
 **`_row_to_item(row, data: dict, shared_type: str) -> dict`:**
 ```python
 # base: {id:"shared:{n}", shared_item_id, name, type,
-#         category_id:None, category_name:"🔗 مشترك", is_shared:True, updated_at}
-# raw        → price, total_qty
-# machine    → rate_per_hour, rate_per_unit
-# labor_op   → minutes
-# machine_op → mode, value, machine_name, rate_per_hour, rate_per_unit
+#         category_id:None, category_name:"🔗 مشترك",
+#         is_shared:True, updated_at}
+# "raw"        → price, total_qty
+# "machine"    → rate_per_hour, rate_per_unit
+# "labor_op"   → minutes
+# "machine_op" → mode, value, machine_name, rate_per_hour, rate_per_unit
 ```
 
 ### تحديث / ربط / فك ربط
 
 ```python
-.update_shared_item(shared_item_id, name, data: dict, _conn=None)
-.link_shared_item(shared_item_id, _conn=None)
-.unlink_shared_item(shared_item_id, _conn=None)
-.is_linked(shared_item_id, _conn=None) -> bool
+.update_shared_item(shared_item_id: int, name: str, data: dict, _conn=None)
+# UPDATE shared_items SET name=?, data=encode_json(data), updated_at=datetime('now')
+
+.link_shared_item(shared_item_id: int, _conn=None)
+# INSERT OR IGNORE INTO company_shared_links
+
+.unlink_shared_item(shared_item_id: int, _conn=None)
+# DELETE FROM company_shared_links WHERE shared_item_id=? AND company_id=?
+
+.is_linked(shared_item_id: int, _conn=None) -> bool
+
 .batch_link(shared_item_ids: list[int])
 .batch_unlink(shared_item_ids: list[int])
+# يفتح connection واحد لكل الـ batch ثم يُغلقه
 ```
 
 ### حساب التكلفة
 
 ```python
-.calc_shared_raw_unit_price(shared_item_id, _conn=None) -> float
-# لو total_qty > 0: price / total_qty | وإلا: price
+.calc_shared_raw_unit_price(shared_item_id: int, _conn=None) -> float
+# لو total_qty is not None and float(total_qty) > 0 → price / total_qty
+# وإلا → price
+# يرجع 0.0 لو العنصر غير موجود
 ```
 
-### Singleton helper
+### Singleton Helper
 
 ```python
-get_bridge() -> SharedItemsBridge | None
-# يرجع None لو company_state.is_ready=False
+def get_bridge() -> SharedItemsBridge | None:
+    # يرجع None لو company_state.is_ready=False أو أي exception
+    # يرجع SharedItemsBridge(company_state.company_id) لو جاهز
 ```
 
 ### إعادة التصدير — [A-02]
 
 ```python
 __all__ = ["SharedItemsBridge", "get_bridge", "is_shared_id", "extract_shared_id"]
-# is_shared_id و extract_shared_id مصدرهما items_repo.py
+# is_shared_id و extract_shared_id مصدرهما items_repo.py فقط
 ```
 
 ---
 
 ## ملاحظات عامة
 
-- `is_shared_id` و `extract_shared_id`: **المصدر الأصلي في `items_repo.py`** — `shared_items_bridge.py` يُعيد تصديرهما فقط [A-02].
-- `json_utils`: كل الملفات تستورد منه — لا تعرِّف `_decode/_encode` محلياً [إصلاح 33].
-- `_get_central_conn_cached()`: يستخدم SELECT 1 للتحقق، بخلاف `ProtectedConnection` التي تتحقق بـ fast path [تحسين 8].
-- `get_costing_connection()` **محذوفة** → ImportError [T-03].
-- `get_connection("costing")` **مُهمَل** → DeprecationWarning + يُحوَّل لـ "erp" [إصلاح 10].
+- `is_shared_id` و `extract_shared_id`: المصدر الأصلي `items_repo.py` — `shared_items_bridge.py` يُعيد تصديرهما فقط [A-02].
+- `json_utils`: كل الملفات تستورد منه — لا تُعرِّف `_decode/_encode` محلياً [إصلاح 33].
+- `_get_central_conn_cached()`: يستخدم SELECT 1 للتحقق — مختلف عن `ProtectedConnection` [تحسين 8].
+- `get_costing_connection()` محذوفة → ImportError واضح [T-03].
+- `get_connection("costing")` مُهمَل → DeprecationWarning + يُحوَّل لـ "erp" [إصلاح 10].
 - `fetch_descendants`: Recursive CTE = O(1) مع fallback تلقائي [تحسين 5].
 - `build_tree`: يستخدم `_row_to_dict()` الآمنة [إصلاح 5].
+- `apply_template_to_dimension_set` يحتاج connection-ين: `conn_erp` لـ erp.db و `conn_design` لـ designs.db.
