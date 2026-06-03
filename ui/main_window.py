@@ -23,7 +23,7 @@ import logging
 
 from ui.font  import get_font_size, fs
 from ui.theme import _C
-from ui.events        import bus
+from ui.widgets.core.events        import bus
 from ui.widgets.core.events import emit_company_data_changed
 from .main_window_helper._sidebar import _Sidebar
 

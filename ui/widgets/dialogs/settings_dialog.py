@@ -8,7 +8,6 @@ ui/widgets/dialogs/settings_dialog.py
   بعد: from ui.widgets.combo.unit_service import load_units, add_unit, ...
 
 [دمج events] المصدر الوحيد للـ bus هو ui.widgets.core.events.
-  القديم: from ui.events import bus
   الجديد: from ui.widgets.core.events import bus
 """
 

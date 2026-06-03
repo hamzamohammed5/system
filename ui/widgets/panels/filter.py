@@ -146,7 +146,7 @@ class FilterToolbar(QWidget):
 
     def _connect_company_bus(self):
         try:
-            from ui.events import bus
+            from ui.widgets.core.events import bus
             bus.company_data_changed.connect(self._on_company_changed)
         except Exception:
             pass

@@ -191,7 +191,7 @@ class ListHeader(QFrame):
 
     def _connect_language_bus(self):
         try:
-            from ui.events import bus
+            from ui.widgets.core.events import bus
             bus.language_changed.connect(
                 self._on_language_changed, Qt.UniqueConnection
             )

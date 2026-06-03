@@ -55,7 +55,7 @@ class CategoryForm(QGroupBox, LiveConnMixin):
     def _connect_language_bus(self):
         """[i18n] يشترك في bus.language_changed لتحديث النصوص."""
         try:
-            from ui.events import bus
+            from ui.widgets.core.events import bus
             bus.language_changed.connect(
                 self._on_language_changed, Qt.UniqueConnection
             )
@@ -255,14 +255,14 @@ class CategoryManager(QWidget, LiveConnMixin):
         self.scope = scope
         self._build()
         self._load()
-        from ui.events import bus
-        bus.data_changed.connect(self._load)
+        from ui.widgets.core.events import bus
+        bus.company_data_changed.connect(self._load)
         self._connect_language_bus()
 
     def _connect_language_bus(self):
         """[i18n] يشترك في bus.language_changed لتحديث النصوص."""
         try:
-            from ui.events import bus
+            from ui.widgets.core.events import bus
             bus.language_changed.connect(
                 self._on_language_changed, Qt.UniqueConnection
             )

@@ -11,7 +11,6 @@ ComponentRow — صف مكوّن واحد في BOM.
   التأكد أن lbl_variant_cost.setVisible(False) يُستدعى صراحةً.
 
 [دمج events] المصدر الوحيد للـ bus هو ui.widgets.core.events.
-  القديم: from ui.events import bus
   الجديد: from ui.widgets.core.events import bus
 
 باقي التغييرات من النسخة الأصلية محفوظة كما هي.
