@@ -6,6 +6,10 @@ ui/widgets/dialogs/settings_dialog.py
 [إصلاح] الاستيراد من unit_service مباشرة — المصدر الأصلي للدوال.
   قبل: from ui.widgets.combo.unit import load_units, add_unit, ...
   بعد: from ui.widgets.combo.unit_service import load_units, add_unit, ...
+
+[دمج events] المصدر الوحيد للـ bus هو ui.widgets.core.events.
+  القديم: from ui.events import bus
+  الجديد: from ui.widgets.core.events import bus
 """
 
 import os
@@ -650,7 +654,7 @@ class SettingsDialog(QDialog):
     # ══════════════════════════════════════════════════════
 
     def _save(self):
-        from ui.events import bus
+        from ui.widgets.core.events import bus
 
         size = self._slider.value()
         set_font_size(size)

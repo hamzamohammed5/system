@@ -21,6 +21,9 @@ ui/theme.py يستورد _LIGHT_THEME منه لملء _C الافتراضي.
   نُقلت من colors.py (CARD_PALETTE و _DARK_CARD_PALETTE) لضمان أن
   المصدر الوحيد لكل الألوان هو هذا الملف.
 
+[دمج events] المصدر الوحيد للـ bus هو ui.widgets.core.events.
+  الجديد: from ui.widgets.core.events import bus
+
 الاستخدام:
     from ui.theme_manager import theme_manager
 
@@ -29,7 +32,7 @@ ui/theme.py يستورد _LIGHT_THEME منه لملء _C الافتراضي.
 
     theme_manager.theme_changed.connect(my_fn)
     # أو عبر bus:
-    from ui.events import bus
+    from ui.widgets.core.events import bus
     bus.theme_changed.connect(my_fn)
 """
 
@@ -384,7 +387,7 @@ class ThemeManager(QObject):
 
     def _emit_theme_changed(self, theme_name: str):
         try:
-            from ui.events import bus
+            from ui.widgets.core.events import bus
             bus.theme_changed.emit(theme_name)
         except Exception:
             pass

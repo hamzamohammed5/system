@@ -10,6 +10,10 @@ ComponentRow — صف مكوّن واحد في BOM.
   لكن المشكلة أن _on_type_changed لا تستدعيها في الترتيب الصحيح.
   التأكد أن lbl_variant_cost.setVisible(False) يُستدعى صراحةً.
 
+[دمج events] المصدر الوحيد للـ bus هو ui.widgets.core.events.
+  القديم: from ui.events import bus
+  الجديد: from ui.widgets.core.events import bus
+
 باقي التغييرات من النسخة الأصلية محفوظة كما هي.
 """
 
@@ -23,7 +27,7 @@ from PyQt5.QtCore import pyqtSignal, QTimer
 from ui.widgets.utils.searchable_combo import (
     SearchableCombo, build_grouped_items,
 )
-from ui.events import bus
+from ui.widgets.core.events import bus
 
 from .ui      import (
     build_row_ui, update_waste_style,
@@ -98,8 +102,8 @@ class ComponentRow(QWidget, OpRowsMixin, VariantsMixin):
         self._conn_cache     = None
 
         # [A-06] مرجع الـ bus slots لفصلها لاحقاً
-        self._bus_slot              = None   # data_changed
-        self._bus_slot_company      = None   # company_data_changed
+        self._bus_slot              = None   # company_data_changed
+        self._bus_slot_company      = None   # company_data_changed (مُستبقى للتوافق)
 
         # pinned state (يُحفظ عند التنقل بين الأنواع)
         self._pinned_type      = child_type
@@ -171,15 +175,9 @@ class ComponentRow(QWidget, OpRowsMixin, VariantsMixin):
         """
         [إصلاح 20] يستخدم weakref لمنع dangling reference.
         [A-06] يحفظ مرجع الـ slots في instance variables لفصلها لاحقاً.
-        [FIX-4] يربط bus.company_data_changed إضافةً لـ bus.data_changed.
+        [دمج events] يربط company_data_changed فقط — data_changed محذوف.
         """
         weak = weakref.ref(self)
-
-        def _on_bus_event():
-            s = weak()
-            if s is None:
-                return
-            QTimer.singleShot(0, s._on_catalog_changed)
 
         def _on_company_bus_event(_company_id: int):
             s = weak()
@@ -187,10 +185,8 @@ class ComponentRow(QWidget, OpRowsMixin, VariantsMixin):
                 return
             QTimer.singleShot(0, s._on_catalog_changed)
 
-        self._bus_slot         = _on_bus_event
         self._bus_slot_company = _on_company_bus_event
 
-        bus.data_changed.connect(self._bus_slot)
         bus.company_data_changed.connect(self._bus_slot_company)
 
     def _disconnect_bus(self):
@@ -198,13 +194,6 @@ class ComponentRow(QWidget, OpRowsMixin, VariantsMixin):
         [A-06] يفصل الـ slots من الـ bus صريحاً.
         يُستدعى من closeEvent() لضمان إزالة الـ connections تماماً.
         """
-        if self._bus_slot is not None:
-            try:
-                bus.data_changed.disconnect(self._bus_slot)
-            except (TypeError, RuntimeError):
-                pass
-            self._bus_slot = None
-
         if self._bus_slot_company is not None:
             try:
                 bus.company_data_changed.disconnect(self._bus_slot_company)

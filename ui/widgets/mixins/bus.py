@@ -17,6 +17,10 @@ BusConnectedMixin — ربط تلقائي بـ event bus.
             لو company_state لم يُحمَّل بعد يرجع None → company_id != None → يُتجاهل الإشعار الأول!
     الجديد: لو _cached_company_id لا يزال None بعد القراءة من company_state،
             نضبطه من company_id المُستلم ونتابع بدل التجاهل.
+
+  [دمج events] data_changed محذوف — كل الإشعارات عبر company_data_changed.
+    القديم: data=True → company_data_changed + data_changed
+    الجديد: data=True → company_data_changed فقط
 """
 import logging
 from PyQt5.QtCore import QTimer, Qt
@@ -40,6 +44,7 @@ class BusConnectedMixin:
 
         [تحسين 39] Guard يمنع double-connect.
         [P-04] يُهيّئ _cached_company_id = None عند الاشتراك.
+        [دمج events] data=True → company_data_changed فقط (data_changed محذوف).
         """
         if getattr(self, "_bus_connected", False):
             return
@@ -48,14 +53,11 @@ class BusConnectedMixin:
         self._refresh_guard  = False
         self._cached_company_id: "int | None" = None
 
-        from ui.events import bus
+        from ui.widgets.core.events import bus
 
         if data:
             bus.company_data_changed.connect(
                 self._on_company_data_changed, Qt.UniqueConnection
-            )
-            bus.data_changed.connect(
-                self._on_data_changed_guarded, Qt.UniqueConnection
             )
 
         if company:
@@ -79,18 +81,16 @@ class BusConnectedMixin:
     def _disconnect_bus(self):
         """يفصل الـ widget عن الـ bus."""
         try:
-            from ui.events import bus
+            from ui.widgets.core.events import bus
 
-            for signal in (bus.company_data_changed, bus.data_changed):
-                for slot in (
-                    self._on_company_data_changed,
-                    self._on_data_changed_guarded,
-                    self._on_company_changed,
-                ):
-                    try:
-                        signal.disconnect(slot)
-                    except (TypeError, RuntimeError):
-                        pass
+            for slot in (
+                self._on_company_data_changed,
+                self._on_company_changed,
+            ):
+                try:
+                    bus.company_data_changed.disconnect(slot)
+                except (TypeError, RuntimeError):
+                    pass
 
             if getattr(self, "_bus_theme_connected", False):
                 try:
@@ -158,19 +158,6 @@ class BusConnectedMixin:
         """يُعيد ضبط الـ cache لإجباره على إعادة القراءة من company_state."""
         self._cached_company_id = None
 
-    def _on_data_changed_guarded(self):
-        """[تحسين 24] يُسجّل debug log عند التخطي."""
-        if getattr(self, "_refresh_guard", False):
-            logger.debug(
-                "%s: تخطّي data_changed المكرر (refresh_guard نشط)",
-                type(self).__name__,
-            )
-            return
-        self._on_data_changed()
-
-    def _clear_refresh_guard(self):
-        self._refresh_guard = False
-
     def _on_data_changed(self):
         """Override هنا لتحديث الـ widget عند تغيير البيانات."""
         pass
@@ -186,3 +173,6 @@ class BusConnectedMixin:
     def _on_language_changed(self, lang_code: str):
         """Override هنا لتحديث النصوص عند تغيير اللغة."""
         pass
+
+    def _clear_refresh_guard(self):
+        self._refresh_guard = False

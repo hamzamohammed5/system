@@ -4,7 +4,7 @@ widgets/combo/category.py
 CategoryCombo — QComboBox للتصنيفات الهرمية.
 
 الإصلاحات:
-  - [إصلاح 2] CategoryCombo يسمع لـ bus.company_data_changed إضافةً لـ data_changed.
+  - [إصلاح 2] CategoryCombo يسمع لـ bus.company_data_changed فقط.
   - [FIX-14] Qt.UniqueConnection على كل ربط bus لمنع التسجيل المضاعف.
   - [إصلاح memory leak] استبدال lambda تحمل self بـ weakref.
   - [إصلاح هيكلة] استبدال imports مباشرة من db/ بـ CategoryService.
@@ -12,6 +12,9 @@ CategoryCombo — QComboBox للتصنيفات الهرمية.
     الجديد: from services.shared.category_service import CategoryService
             svc.get_all(scope) + svc.build_tree(rows)
     المسار الصحيح: widget → service → repo (db/)
+  - [دمج events] حذف bus.data_changed — يستخدم company_data_changed فقط.
+    القديم: bus.data_changed + bus.company_data_changed
+    الجديد: bus.company_data_changed فقط
 """
 import weakref
 
@@ -21,7 +24,7 @@ from PyQt5.QtGui     import QColor
 
 from ..core.conn          import LiveConnMixin
 from ..utils.signals      import blocked_signals
-from ui.events import bus
+from ui.widgets.core.events import bus
 
 
 def populate_category_combo(combo: QComboBox, conn,
@@ -61,7 +64,7 @@ class CategoryCombo(QComboBox, LiveConnMixin):
     """
     QComboBox للتصنيفات الهرمية مع تحديث تلقائي.
 
-    [إصلاح 2] يسمع الآن لـ company_data_changed إضافةً لـ data_changed.
+    [إصلاح 2] يسمع لـ company_data_changed فقط (data_changed محذوف).
     [FIX-14] Qt.UniqueConnection على كل ربط bus لمنع التسجيل المضاعف.
     [إصلاح memory leak] استخدام weakref بدل lambda.
     [إصلاح هيكلة] يستخدم CategoryService عبر populate_category_combo.
@@ -73,8 +76,7 @@ class CategoryCombo(QComboBox, LiveConnMixin):
         self.scope = scope
         self.refresh()
 
-        bus.data_changed.connect(self.refresh, Qt.UniqueConnection)
-
+        # [دمج events] company_data_changed فقط — data_changed محذوف
         # [إصلاح memory leak] weakref بدل lambda
         _weak = weakref.ref(self)
 
