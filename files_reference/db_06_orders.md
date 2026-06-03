@@ -34,7 +34,7 @@ create_orders_tables(conn)
 | `customer_contacts` | `id, customer_id→CASCADE, name, role, phone, email, notes` |
 | `orders` | `id, order_number UNIQUE, customer_id→RESTRICT, order_type DEFAULT 'new' CHECK('new'\|'reorder'\|'custom'), status DEFAULT 'pending' CHECK(7 حالات), priority DEFAULT 'normal' CHECK(4 أولويات), order_date, due_date, delivery_date, total_amount, discount, net_amount, paid_amount, notes, internal_notes, reference_order→SET NULL, created_by DEFAULT 'system', created_at, updated_at` |
 | `order_items` | `id, order_id→CASCADE, item_name, description, quantity DEFAULT 1 CHECK(>0), unit DEFAULT 'قطعة', unit_price, discount_pct, total_price, design_ref, notes, sort_order` |
-| `order_status_log` | `id, order_id→CASCADE, old_status, new_status TEXT [يقبل NULL للملاحظات الإدارية C-04], notes, changed_by DEFAULT 'system', changed_at` |
+| `order_status_log` | `id, order_id→CASCADE, old_status, new_status TEXT NULL (يقبل NULL للملاحظات الإدارية [C-04]), notes, changed_by DEFAULT 'system', changed_at` |
 | `schema_migrations` | `id, name UNIQUE, applied_at` |
 
 **حالات الطلب المسموحة في CHECK:**
@@ -93,7 +93,6 @@ _run_migrations(conn)
 
 **[Q-02] قاعدة idempotent — كل migration يجب أن يكون آمناً للتطبيق مرتين:**
 ```python
-# مثال migration صحيح:
 def _m006_my_migration(conn):
     if _table_exists(conn, "orders") and not _column_exists(conn, "orders", "my_col"):
         conn.execute("ALTER TABLE orders ADD COLUMN my_col TEXT")
@@ -114,6 +113,11 @@ _MIGRATIONS = [
     ("m006_description", _m006_description),
 ]
 ```
+
+**[Q-02] سلوك الـ framework عند الفشل:**
+- إذا فشل `_ensure_migrations_table` → لا migrations تُطبَّق (مع warning)
+- إذا فشل migration معين → يُسجَّل warning ويُتخطى (الباقي يكمل)
+- إذا نجح migration لكن فشل `_mark_applied` → يُعاد تطبيقه في التشغيل التالي (مقبول لأن كل migration idempotent)
 
 ---
 
@@ -203,7 +207,7 @@ delete_contact(conn, contact_id: int)
 _next_order_number(conn) -> str
 # [إصلاح 16] GLOB 'ORD-YYYY-[0-9]*' بدل LIKE للتحقق من الصيغة الرقمية
 # يأخذ السنة الحالية من datetime.date.today().year
-# صيغة الناتج: "ORD-2025-0001"، "ORD-2026-0001" (يعيد من 0001 كل سنة)
+# صيغة الناتج: "ORD-2025-0001" — يعيد من 0001 كل سنة جديدة
 ```
 
 ### قراءة الطلبات
@@ -286,6 +290,7 @@ reorder(conn, original_order_id: int,
 # ينسخ كل بنود الطلب الأصلي
 # order_type='reorder' | reference_order=original_order_id
 # يُعيد حساب total بـ _recalc_order_total()
+# يرجع None لو الطلب الأصلي غير موجود
 
 delete_order(conn, order_id: int) -> bool
 # يرفض لو status ليس 'pending' أو 'cancelled'

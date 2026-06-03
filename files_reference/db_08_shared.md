@@ -55,7 +55,7 @@ get_linked_connection(primary: str = "inventory",
 
 **[T-03] `get_costing_connection()` محذوفة:**
 ```python
-# استورادها → ImportError واضح يساعد في تحديد الكود القديم
+# استيرادها → ImportError واضح يساعد في تحديد الكود القديم
 # البديل: company_state.get_erp_conn() أو get_connection("erp")
 ```
 
@@ -71,9 +71,17 @@ get_linked_connection(primary: str = "inventory",
 _central_conn_cache: dict = {"conn": None, "company_id": None}
 
 _get_central_conn_cached() -> sqlite3.Connection
-# لو cache صالح (SELECT 1 نجح + نفس company_id) → يُعيده
-# لو مات أو تغيرت الشركة → get_central_connection() جديد + تحديث cache
-# مشاركة آمنة: central DB للقراءة فقط، single-threaded PyQt
+# المنطق:
+#   1. لو cache موجود (conn is not None) ونفس company_id:
+#      → يجرب SELECT 1 للتحقق من أن الـ connection لم يمت
+#      → نجح: يُعيده مباشرة
+#      → فشل: ينشئ connection جديد
+#   2. لو cache فارغ أو تغيرت الشركة:
+#      → get_central_connection() جديد + تحديث cache
+#
+# ملاحظة: SELECT 1 يُستخدم فقط للتحقق من حياة الـ connection، وليس في
+#          كل استدعاء عادي — مختلف عن ProtectedConnection التي تتجنبه في hot path.
+# مشاركة آمنة: central DB للقراءة فقط، التطبيق single-threaded (PyQt).
 
 invalidate_central_conn_cache()
 # يُغلق القديم + يُصفِّر cache
@@ -494,7 +502,7 @@ __all__ = ["SharedItemsBridge", "get_bridge", "is_shared_id", "extract_shared_id
 
 - `is_shared_id` و `extract_shared_id`: المصدر الأصلي `items_repo.py` — `shared_items_bridge.py` يُعيد تصديرهما فقط [A-02].
 - `json_utils`: كل الملفات تستورد منه — لا تُعرِّف `_decode/_encode` محلياً [إصلاح 33].
-- `_get_central_conn_cached()`: يستخدم SELECT 1 للتحقق — مختلف عن `ProtectedConnection` [تحسين 8].
+- `_get_central_conn_cached()`: يستخدم SELECT 1 للتحقق من **حياة الـ connection فقط** (لو مات يُنشئ جديداً) — مختلف عن `ProtectedConnection` التي تتجنب SELECT 1 في hot path تماماً [تحسين 8].
 - `get_costing_connection()` محذوفة → ImportError واضح [T-03].
 - `get_connection("costing")` مُهمَل → DeprecationWarning + يُحوَّل لـ "erp" [إصلاح 10].
 - `fetch_descendants`: Recursive CTE = O(1) مع fallback تلقائي [تحسين 5].

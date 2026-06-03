@@ -1,6 +1,6 @@
 # دليل الكود — DB: التصميمات (db/designs/) — نسخة محدَّثة
 
-> يعكس هذا الملف الكود الفعلي في السياق.
+> يعكس هذا الملف الكود الفعلي الموجود في السياق.
 > **الملفات:** `design_schema.py`, `designs_repo.py`, `designs_sizes_repo.py`,
 > `dimension_sets_repo.py`, `design_categories_repo.py`,
 > `design_item_categories_repo.py`, `dimension_instances_repo.py`
@@ -317,12 +317,19 @@ instance_already_used(conn, design_id: int, instance_id: int,
                        exclude_size_id: int = None) -> bool
 # هل هذا الـ instance مضاف مسبقاً لهذا التصميم؟
 # مع استثناء size_id محدد (للتحقق عند التعديل)
+```
 
+### ملخص كل التصميمات
+
+```python
 fetch_all_designs_summary(conn) -> list
+# ⚠️ هذه الدالة موجودة في designs_sizes_repo.py (ليس designs_repo.py)
 # كل التصميمات مع:
-#   category_name من LEFT JOIN design_item_categories (item_category_id)
+#   category_name من LEFT JOIN design_item_categories (يستخدم item_category_id)
 #   sizes_count = COUNT(design_sizes.id)
 #   files_count = COUNT WHEN xcf_path IS NOT NULL AND != ''
+# الأعمدة: id, name, notes, created_at, updated_at,
+#           category_name, sizes_count, files_count
 # ORDER BY d.updated_at DESC, d.name
 ```
 
@@ -471,11 +478,6 @@ fetch_all_item_categories_with_count(conn) -> list
 # الأعمدة: id, name, color, parent_id, notes, parent_name, designs_count
 # designs_count = عدد التصميمات المباشرة فقط (غير متداخلة)
 
-# مثال الاستخدام المفضّل:
-# cats = fetch_all_item_categories_with_count(conn)
-# for cat in cats:
-#     print(cat["designs_count"])  # بدون query إضافية
-
 fetch_item_category(conn, cat_id: int) -> row
 
 fetch_item_category_descendants(conn, cat_id: int) -> list[int]
@@ -573,7 +575,7 @@ get_source_ref(conn, field_id: int, current_set_id: int) -> dict | None
 ## ملاحظات مهمة
 
 - `dpi_field_id` يُضاف تلقائياً على قواعد البيانات القديمة عبر `_run_migrations()` [إصلاح 7+12].
-- `fetch_all_designs_summary` يستخدم `item_category_id` (ليس `category_id`).
+- **`fetch_all_designs_summary` موجودة في `designs_sizes_repo.py`** (وليس `designs_repo.py`) — تستخدم `item_category_id` وليس `category_id`.
 - `fetch_all_item_categories_with_count` أفضل أداءً من استدعاء دالتَين منفصلتَين [P-03].
 - `dimension_sets_repo` هو الـ Facade — استورد منه للتوافق مع الكود القديم.
 - `calc_auto_value` (من dimension_sets_repo) ← لـ `design_dim_values` (Legacy).

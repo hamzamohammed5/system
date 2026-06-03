@@ -22,7 +22,7 @@ create_inventory_tables(conn)
 # ينشئ في inventory.db:
 #   inventory_categories — تصنيفات المخزن
 #   inventory_items      — أصناف المخزن
-#   inventory_moves      — حركات المخزن
+#   inventory_moves      — حركات المخزن  ← الاسم الصحيح للجدول
 ```
 
 **هيكل الجداول:**
@@ -49,6 +49,10 @@ inventory.db  ─── costing_item_id → erp.db (items.id)                   
 ---
 
 ## inventory_repo.py
+
+> ⚠️ **تنبيه اسم الجدول:** `inventory_repo.py` يستخدم جدول `inventory_moves`.
+> `InventoryService` في `services/inventory/inventory_service.py` يستخدم جدول `inventory_movements` (اسم مختلف).
+> للوصول للبيانات الفعلية استخدم `inventory_repo.py` مباشرة.
 
 ### تصنيفات المخزن
 
@@ -97,6 +101,8 @@ delete_inventory_item(conn, inv_id: int)
 
 ### حركات المخزن
 
+> جدول الحركات الفعلي: `inventory_moves` (وليس `inventory_movements`)
+
 ```python
 fetch_inventory_moves(conn, inv_id: int) -> list
 # ORDER BY date DESC, id DESC
@@ -143,7 +149,7 @@ unit_cost  = old_avg          # يُحدَّث تلقائياً بالمتوسط
 
 **تفاصيل حالة `'adjust'`:**
 ```python
-# [تحسين 20] إذا qty < 0 → raises ValueError
+# [تحسين 20] إذا qty < 0 → raises ValueError:
 # "كمية التسوية لا يمكن أن تكون سالبة. للتعديل لكمية أقل استخدم حركة صادر بدلاً من ذلك."
 new_qty    = qty              # يضع الكمية الجديدة مباشرة (ليست تغييراً)
 new_avg    = old_avg          # المتوسط يبقى كما هو
@@ -159,8 +165,5 @@ total_cost = abs(qty - old_qty) * old_avg  # فرق التسوية
 - `move_type='adjust'` يضبط الكمية مطلقاً (رصيد جديد كامل، ليس فرق).
 - `inventory.db` منفصل عن `accounting.db` — الربط عبر `ref_entry_id` بدون FK.
 - `costing_item_id` اختياري — للربط مع `erp.db` عند الحاجة لحساب التكاليف.
-- جدول الحركات هو `inventory_moves` (وليس `inventory_movements` المستخدم في `InventoryService`).
-
-> ⚠️ **تناقض مهم:** `InventoryService` في `services/inventory/inventory_service.py`
-> يستخدم جدول `inventory_movements` بينما `inventory_repo.py` يستخدم `inventory_moves`.
-> تأكد من استخدام `inventory_repo.py` مباشرة للوصول للبيانات الصحيحة.
+- **جدول الحركات الفعلي هو `inventory_moves`** في `inventory_repo.py`.
+- `InventoryService` يستخدم `inventory_movements` (اسم مختلف) — استخدم `inventory_repo.py` مباشرة للدقة.
