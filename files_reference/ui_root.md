@@ -1,7 +1,7 @@
-# دليل الكود — UI / Root: Constants, Font, State, Events, Theme, Main Window
+# دليل الكود — UI / Root: Constants, Font, State, Theme, Main Window
 
 > الملفات الجذرية في `ui/` — ثوابت، خط، حالة، أحداث، ثيم، النافذة الرئيسية.
-> `ui/constants.py`, `ui/font.py`, `ui/app_state.py`, `ui/events.py`,
+> `ui/constants.py`, `ui/font.py`, `ui/app_state.py`, 
 > `ui/theme.py`, `ui/theme_manager.py`, `ui/main_window.py`
 
 ---
@@ -13,7 +13,6 @@
 | [constants](#constants) | `ui/constants.py` |
 | [font](#font) | `ui/font.py` |
 | [app_state](#app_state) | `ui/app_state.py` |
-| [events](#events) | `ui/events.py` |
 | [theme](#theme) | `ui/theme.py` |
 | [theme_manager](#theme_manager) | `ui/theme_manager.py` |
 | [main_window](#main_window) | `ui/main_window.py` |
@@ -125,32 +124,6 @@ AppState._invalidate_button_cache()   # classmethod — داخلي
 
 ---
 
-## events
-
-### `ui/events.py`
-
-```python
-bus = _EventBus()   # QObject singleton
-
-bus.data_changed          # pyqtSignal()     — إشعار عام (للتوافق القديم)
-bus.company_data_changed  # pyqtSignal(int)  — مقيّد بـ company_id (الأفضل)
-bus.font_changed          # pyqtSignal(int)  — عند تغيير حجم الخط
-bus.theme_changed         # pyqtSignal(str)  — "light" | "dark"
-bus.language_changed      # pyqtSignal(str)  — "ar" | "en"
-```
-
-**الاستخدام الصحيح:**
-```python
-# ✅ الصح
-from ui.widgets.core.events import emit_company_data_changed
-emit_company_data_changed()
-
-# ❌ للتوافق القديم فقط
-from ui.events import bus
-bus.data_changed.emit()
-```
-
----
 
 ## theme
 
@@ -356,6 +329,12 @@ index 6 → OrdersSection     ("الطلبات")
 # 2. setWindowTitle(company_name)
 # 3. self._refresh_tabs()        — = _build_tabs()
 # 4. bus.company_data_changed.emit(company_id)
+```
+
+**الـ imports المستخدمة:**
+```python
+from ui.widgets.core.events import bus
+from ui.widgets.core.events import emit_company_data_changed
 ```
 
 **حماية من فشل الـ import:**

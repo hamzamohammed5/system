@@ -12,47 +12,6 @@
 
 ---
 
-### 1. `ui_root.md` — قسم events
-
-**المكان:** قسم `## events` → `ui/events.py`
-
-**حذف بالكامل:**
-```python
-bus.data_changed          # pyqtSignal()     — إشعار عام (للتوافق القديم)
-```
-
-**تغيير الاستخدام الصحيح من:**
-```python
-# ✅ الصح
-from ui.widgets.core.events import emit_company_data_changed
-emit_company_data_changed()
-
-# ❌ للتوافق القديم فقط
-from ui.events import bus
-bus.data_changed.emit()
-```
-**إلى:**
-```python
-# ✅ الصح — المصدر الوحيد
-from ui.widgets.core.events import bus
-from ui.widgets.core.events import emit_company_data_changed
-from ui.widgets.core.events import get_active_company_id, is_same_company
-```
-
-**تغيير عنوان القسم من:**
-```
-### `ui/events.py`
-```
-**إلى:**
-```
-### `ui/widgets/core/events.py`  ← المصدر الوحيد
-```
-
-**حذف ملاحظة `ui/events.py` من الـ imports في main_window:**
-- كل `from ui.events import bus` → `from ui.widgets.core.events import bus`
-
----
-
 ### 2. `ui_widgets_1_core.md` — قسم Core — Events
 
 **المكان:** قسم `## Core — Events` → `ui/widgets/core/events.py`
