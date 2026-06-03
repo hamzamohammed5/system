@@ -1,6 +1,7 @@
 # دليل الكود — DB: الطلبات (db/orders/)
 
 > جداول `orders.db` — العملاء، الطلبات، بنود الطلبات، سجل الحالة.
+> **الملفات الفعلية:** `orders_schema.py`, `customers_repo.py`, `orders_repo.py`
 
 ---
 
@@ -17,11 +18,11 @@
 ## orders_schema.py
 
 ```python
+get_orders_connection() -> sqlite3.Connection
+# isolation_level=None, FK=ON, WAL mode
+
 create_orders_tables(conn)
 # ينشئ الجداول + indexes + يُشغّل _run_migrations()
-
-get_orders_connection() -> sqlite3.Connection
-# isolation_level=None, foreign_keys=ON, journal_mode=WAL
 ```
 
 **هيكل الجداول:**
@@ -35,17 +36,15 @@ get_orders_connection() -> sqlite3.Connection
 | `order_status_log` | `id, order_id→CASCADE, old_status, new_status TEXT` (**يقبل NULL** — للملاحظات الإدارية [C-04])`, notes, changed_by DEFAULT "system", changed_at` |
 | `schema_migrations` | `id, name UNIQUE, applied_at` |
 
-> ⚠️ **[C-04]** `order_status_log.new_status` يقبل NULL — يُستخدم لتسجيل أحداث إدارية مثل تغيير العميل بدون تغيير الحالة فعلياً.
-
 **الـ Indexes:**
 `idx_orders_customer`, `idx_orders_status`, `idx_orders_date`,
 `idx_order_items_order`, `idx_status_log_order`, `idx_customers_code`,
 `idx_orders_priority` (من migration m004)
 
-#### Migration Framework [تحسين 25]
+### Migration Framework [تحسين 25]
 
 ```python
-_ensure_migrations_table(conn)
+_ensure_migrations_table(conn)   # ينشئ schema_migrations
 _is_applied(conn, name: str) -> bool
 _mark_applied(conn, name: str)
 _apply_migration(conn, name: str, fn)
@@ -63,10 +62,13 @@ _run_migrations(conn)
 | `m004_add_idx_orders_priority` | يضيف index على `priority` |
 | `m005_add_customer_contacts_role` | يضيف `role TEXT` لـ `customer_contacts` |
 
+**[Q-02] كل migration يجب أن يكون idempotent:**
+- استخدم `IF NOT EXISTS`, `OR IGNORE`, `_column_exists()` للتحقق
+- لو نجح fn() لكن فشل `_mark_applied()` → يُعاد تطبيقه في التشغيل التالي (مقبول)
+
 **إضافة migration جديد:**
 ```python
 def _m006_my_migration(conn):
-    # يجب أن يكون idempotent (IF NOT EXISTS, _column_exists, OR IGNORE)
     if not _column_exists(conn, "orders", "my_col"):
         conn.execute("ALTER TABLE orders ADD COLUMN my_col TEXT")
         conn.commit()
@@ -77,16 +79,22 @@ _MIGRATIONS = [
 ]
 ```
 
-> ⚠️ [Q-02] كل migration يجب أن يكون **idempotent** — لو نجح لكن فشل `_mark_applied`، سيُعاد تطبيقه.
-
 ---
 
 ## customers_repo.py
 
-#### جلب العملاء
+### توليد الكود التلقائي
 
 ```python
-fetch_all_customers(conn, active_only=False) -> list
+_next_customer_code(conn) -> str
+# [إصلاح 15] GLOB 'CUS-[0-9]*' بدل LIKE 'CUS-%'
+# يمنع تكرار CUS-0001 عند وجود كودات بصيغة غير رقمية
+```
+
+### جلب العملاء
+
+```python
+fetch_all_customers(conn, active_only: bool = False) -> list
 # مع orders_count من LEFT JOIN | ORDER BY name
 
 fetch_customer(conn, customer_id) -> row
@@ -100,13 +108,12 @@ fetch_customer_stats(conn, customer_id) -> dict
 #  total_value, total_paid, last_order_date}
 ```
 
-#### كتابة العملاء
+### كتابة العملاء
 
 ```python
 insert_customer(conn, name, customer_type="individual", phone="",
                 phone2="", email="", address="", city="", notes="") -> int
-# [إصلاح 15] يولد code بـ GLOB 'CUS-[0-9]*' بدل LIKE 'CUS-%'
-# يمنع تكرار CUS-0001 عند وجود كودات بصيغة غير رقمية
+# يولد code تلقائياً بـ GLOB
 
 update_customer(conn, customer_id, name, customer_type="individual",
                 phone="", phone2="", email="", address="",
@@ -114,19 +121,17 @@ update_customer(conn, customer_id, name, customer_type="individual",
 # updated_at=datetime('now') تلقائياً
 
 delete_customer(conn, customer_id) -> bool
-# يرفض لو في طلبات مرتبطة (orders_count > 0)
+# يرفض لو في طلبات مرتبطة (orders_count > 0) → False
 
 toggle_customer_active(conn, customer_id)
 ```
 
-#### جهات الاتصال
+### جهات الاتصال
 
 ```python
 fetch_contacts(conn, customer_id) -> list
-insert_contact(conn, customer_id, name, role="", phone="",
-               email="", notes="") -> int
-update_contact(conn, contact_id, name, role="", phone="",
-               email="", notes="")
+insert_contact(conn, customer_id, name, role="", phone="", email="", notes="") -> int
+update_contact(conn, contact_id, name, role="", phone="", email="", notes="")
 delete_contact(conn, contact_id)
 ```
 
@@ -134,13 +139,22 @@ delete_contact(conn, contact_id)
 
 ## orders_repo.py
 
-#### قراءة
+### توليد رقم الطلب
+
+```python
+_next_order_number(conn) -> str
+# [إصلاح 16] GLOB 'ORD-YYYY-[0-9]*' بدل LIKE
+# صيغة: "ORD-2025-0001"
+```
+
+### قراءة الطلبات
 
 ```python
 fetch_all_orders(conn, status=None, customer_id=None,
                  order_type=None, date_from=None, date_to=None,
                  search=None) -> list
 # search: يبحث في order_number, customer name, customer code
+# مع customer_name, customer_code, ref_order_number من JOIN
 
 fetch_order(conn, order_id) -> row
 # كل الأعمدة + customer data + ref_order_number
@@ -148,7 +162,7 @@ fetch_order(conn, order_id) -> row
 fetch_customer_orders(conn, customer_id) -> list
 ```
 
-#### كتابة الطلبات
+### كتابة الطلبات
 
 ```python
 insert_order(conn, customer_id, order_type="new", status="pending",
@@ -157,16 +171,18 @@ insert_order(conn, customer_id, order_type="new", status="pending",
              notes="", internal_notes="", reference_order=None,
              created_by="system") -> int
 # [تحسين 22] يتحقق من وجود العميل و is_active=1
-# [إصلاح 16] _next_order_number بـ GLOB 'ORD-YYYY-[0-9]*' بدل LIKE
+# [إصلاح 16] رقم الطلب بـ GLOB
+# net_amount = total_amount - discount
+# يُسجَّل في order_status_log تلقائياً
 
 update_order(conn, order_id, priority="normal", due_date=None,
              total_amount=0, discount=0, paid_amount=0,
              notes="", internal_notes="",
              customer_id=None, changed_by="system") -> bool
 # [C-04] customer_id اختياري:
-#   None (الافتراضي) → لا يُغيِّر العميل الحالي (backward-compatible)
+#   None → لا يُغيِّر العميل الحالي (backward-compatible)
 #   قيمة صحيحة → تحقق من وجود العميل و is_active=1 ثم يُغيِّره
-#   يُسجَّل تغيير العميل في order_status_log كملاحظة (new_status=NULL)
+#   تغيير العميل يُسجَّل في order_status_log كملاحظة (new_status=NULL)
 # Raises: ValueError لو العميل غير موجود أو غير نشط
 # Returns: True لو نجح، False لو الطلب غير موجود
 
@@ -185,12 +201,13 @@ delete_order(conn, order_id) -> bool
 # [تحسين 21] يرفض لو paid_amount > 0
 ```
 
-#### بنود الطلب
+### بنود الطلب
 
 ```python
 fetch_order_items(conn, order_id) -> list
 # id, order_id, item_name, description, quantity, unit,
 # unit_price, discount_pct, total_price, design_ref, notes, sort_order
+# ORDER BY sort_order, id
 
 insert_order_item(conn, order_id, item_name, description="",
                   quantity=1, unit="قطعة", unit_price=0,
@@ -198,28 +215,33 @@ insert_order_item(conn, order_id, item_name, description="",
                   sort_order=None) -> int
 # total_price = quantity × unit_price × (1 - discount_pct/100)
 # يستدعي _recalc_order_total() بعد الإضافة
-# ملاحظة: product_id يُمرَّر من OrderService [E-06] لكن غير موجود في
-#          schema الأساسي — تأكد من migration لو تحتاج هذا العمود
 
 update_order_item(conn, item_id, item_name, ...)
 # يستدعي _recalc_order_total() بعد التعديل
 
 delete_order_item(conn, item_id)
 # يستدعي _recalc_order_total() بعد الحذف
+
+_recalc_order_total(conn, order_id)
+# داخلية — تُعيد حساب total_amount و net_amount من مجموع بنود الطلب
 ```
 
-#### سجل الحالة والملخص
+### سجل الحالة والملخص
 
 ```python
-fetch_status_log(conn, order_id) -> list   # ORDER BY changed_at ASC
-# كل صف: id, old_status, new_status (قد يكون NULL [C-04]), notes, changed_by, changed_at
+_log_status(conn, order_id, old_status, new_status, notes="", changed_by="system")
+# new_status=None مسموح للملاحظات الإدارية [C-04]
+
+fetch_status_log(conn, order_id) -> list
+# id, old_status, new_status (قد يكون NULL [C-04]), notes, changed_by, changed_at
+# ORDER BY changed_at ASC
 
 fetch_orders_summary(conn) -> dict
 # {total, pending, confirmed, in_progress, ready, delivered,
 #  cancelled, on_hold, urgent, total_value, total_paid}
 ```
 
-**حالات الطلب:**
+**حالات الطلب والانتقالات:**
 ```
 pending → confirmed → in_progress → ready → delivered
         ↘ on_hold ↗              ↘ on_hold ↗
@@ -238,4 +260,4 @@ cancelled → pending (فقط)
 - `update_order` يدعم تغيير العميل عبر `customer_id` اختياري [C-04] — `None` = لا تغيير.
 - `delete_order` يرفض لو `paid_amount > 0` [تحسين 21].
 - `order_status_log.new_status` يقبل NULL [C-04] للأحداث الإدارية كتغيير العميل.
-- `_log_status` تقبل `new_status=None` للملاحظات الإدارية — لا تفترض وجود قيمة دائماً.
+- كل الـ migrations يجب أن تكون idempotent [Q-02].
