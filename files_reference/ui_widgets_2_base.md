@@ -105,7 +105,7 @@ panel.select_item(item_id)
 ```
 
 **Bus (عند `CONNECT_BUS=True`):**
-يشترك في `company_data_changed` + `data_changed` + `theme_changed` + `language_changed`.
+يشترك في `company_data_changed` + `theme_changed` + `language_changed`.
 
 ```python
 def _on_theme_changed(theme_name):
@@ -349,12 +349,12 @@ section.current_tab -> QWidget | None  # self._tabs.currentWidget()
 from ui.widgets.mixins.form_mixins import EditModeMixin
 # (بدل from ui.widgets.mixins.edit import EditModeMixin القديم)
 
-# [FIX] استخدام emit_company_data_changed بدل bus مباشرة:
+# الاستخدام الصحيح للـ emit:
 from ui.widgets.core.events import emit_company_data_changed
 ```
 
 يرث من `QWidget + EditModeMixin + LiveConnMixin`.
-يستخدم `emit_company_data_changed()` بدل `bus.data_changed.emit()`.
+يستخدم `emit_company_data_changed()` — لو مفيش شركة نشطة لا يطلق شيء.
 
 **Signals:** `saved = pyqtSignal(int)`
 
@@ -396,14 +396,14 @@ _build_extra(root_layout: QVBoxLayout)
 #   1. _collect() → None = فشل
 #   2. _do_insert(data)
 #   3. _reset()
-#   4. emit_company_data_changed()   ← [FIX] بدل bus.data_changed.emit()
+#   4. emit_company_data_changed()   # لو مفيش شركة نشطة لا يطلق شيء
 #   5. saved.emit(new_id)
 
 # _on_save():
 #   1. _collect() → None = فشل
 #   2. _do_update(self._editing_id, data)
 #   3. _reset()
-#   4. emit_company_data_changed()   ← [FIX] بدل bus.data_changed.emit()
+#   4. emit_company_data_changed()   # لو مفيش شركة نشطة لا يطلق شيء
 #   5. saved.emit(self._editing_id)
 
 # _on_cancel():

@@ -40,7 +40,7 @@ class BusConnectedMixin:
 # [تحسين 39] Guard يمنع double-connect عبر _bus_connected flag
 # [P-04] يُهيّئ _cached_company_id=None عند الاشتراك
 # يربط:
-#   data=True    → company_data_changed + data_changed
+#   data=True    → company_data_changed
 #   company=True → company_data_changed (لـ _on_company_changed)
 #   theme=True   → theme_changed
 #   lang=True    → language_changed
@@ -54,7 +54,7 @@ class BusConnectedMixin:
 
 ```python
 ._on_data_changed()
-# يُستدعى عند company_data_changed (نفس الشركة) أو data_changed
+# يُستدعى عند company_data_changed (نفس الشركة)
 # افتراضياً: pass — override لتحديث الـ widget
 
 ._on_company_changed(company_id: int)

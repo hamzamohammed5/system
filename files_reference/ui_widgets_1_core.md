@@ -53,6 +53,9 @@ waste_text_color() -> str  # _C["orange"] — لون نص الهادر
 
 ### `ui/widgets/core/events.py`
 
+> ⚠️ `ui/events.py` محذوف — لا تستورد منه.
+> ⚠️ `data_changed` signal محذوف — كل الإشعارات مقيّدة بـ `company_id`.
+
 ```python
 get_active_company_id() -> int | None
 # يرجع company_state.company_id لو is_ready وإلا None
@@ -60,22 +63,36 @@ get_active_company_id() -> int | None
 
 emit_company_data_changed()
 # لو cid is not None → bus.company_data_changed.emit(cid)
-# لو None → bus.data_changed.emit()
+# لو None → لا يُطلق شيء (لا يوجد data_changed fallback)
 # يُسجّل warning عند أي exception
 
 is_same_company(company_id: int) -> bool
 # يتحقق لو company_id == get_active_company_id()
 ```
 
+**الـ bus signals المتاحة:**
+```python
+from ui.widgets.core.events import bus
+
+bus.company_data_changed.connect(fn)   # fn(company_id: int)
+bus.font_changed.connect(fn)           # fn(size: int)
+bus.theme_changed.connect(fn)          # fn(theme_name: str)
+bus.language_changed.connect(fn)       # fn(lang_code: str)
+```
+
 **الاستخدام الصحيح:**
 ```python
-# ✅ الصح — مقيّد بالشركة
+# ✅ الصح — emit مقيّد بالشركة
 from ui.widgets.core.events import emit_company_data_changed
-emit_company_data_changed()
+emit_company_data_changed()   # لو مفيش شركة نشطة لا يطلق شيء
 
-# ❌ تجنّب — للتوافق القديم فقط
-from ui.events import bus
-bus.data_changed.emit()
+# ✅ bus مباشرة للاشتراك
+from ui.widgets.core.events import bus
+bus.company_data_changed.connect(fn)
+
+# ❌ محذوف — لا تستخدم
+from ui.events import bus          # ui/events.py محذوف
+bus.data_changed.emit()            # data_changed محذوف
 ```
 
 ---

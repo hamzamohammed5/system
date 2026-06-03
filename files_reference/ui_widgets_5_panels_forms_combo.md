@@ -454,7 +454,7 @@ QVBoxLayout:
 **`_connect_language_bus()`:**
 ```python
 # try/except حول الاشتراك — لو فشل import bus لا يُوقف البناء
-from ui.events import bus
+from ui.widgets.core.events import bus
 bus.language_changed.connect(self._on_language_changed, Qt.UniqueConnection)
 ```
 
@@ -579,7 +579,7 @@ make_unit_combo(conn=None, current="cm", last_key=None) -> QComboBox
 
 ```python
 CategoryCombo(conn, scope="all")
-# [إصلاح 2] يستمع لـ bus.data_changed + bus.company_data_changed
+# يستمع لـ bus.company_data_changed فقط
 # [FIX-14] Qt.UniqueConnection على كل ربط bus لمنع التسجيل المضاعف
 # [إصلاح memory leak] يستخدم weakref للـ company_data_changed slot
 #   self._company_data_slot = _on_company_data_changed  ← يحفظ مرجع الـ slot

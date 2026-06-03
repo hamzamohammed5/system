@@ -76,7 +76,7 @@ CategoryService(conn).update(cat_id, name, scope, color, parent_id)
 ```python
 CategoryManager(conn, scope="all", parent=None)
 # QWidget — شجرة QTreeWidget كاملة لإدارة التصنيفات
-# يستمع لـ bus.data_changed + bus.language_changed
+# يستمع لـ bus.company_data_changed + bus.language_changed
 # يستخدم CategoryService بدل db imports مباشرة [إصلاح هيكلة]
 ```
 

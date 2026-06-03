@@ -271,7 +271,7 @@ sub = svc.get_sub_bom(item_id=3)  # BOM النصف مصنع
 
 ## ملاحظات مهمة
 
-**1. bus events:** استخدم `emit_company_data_changed()` من `ui.widgets.core.events` بدل `bus.data_changed.emit()`.
+**1. bus events:** استخدم دائماً `emit_company_data_changed()` من `ui.widgets.core.events` — `data_changed` محذوف، كل الإشعارات عبر `company_data_changed`.
 
 **2. `_C` dictionary:** لا تُعدّل مباشرة — استخدم `apply_theme(colors)` فقط.
 
