@@ -607,5 +607,8 @@ AR_STRINGS: dict[str, str] = {
     "pricing_tab":              "التسعير",
     "offers_tab":               "العروض",
     
-
+    "app_title":         "نظام إدارة التكاليف",
+    "app_title_company": "نظام إدارة التكاليف — {name}",
+    "under_development": "قيد التطوير",
+    
 }

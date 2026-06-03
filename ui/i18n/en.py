@@ -604,5 +604,8 @@ EN_STRINGS: dict[str, str] = {
     "pricing_tab":              "Pricing",
     "offers_tab":               "Offers",
     
+    "app_title":         "Cost Management System",
+    "app_title_company": "Cost Management System — {name}",
+    "under_development": "Under Development",
 
 }

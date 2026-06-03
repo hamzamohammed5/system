@@ -1,47 +1,68 @@
 """
-ui/main_window.py  (نسخة multi-company — مُصلَحة v11)
+ui/main_window.py  (نسخة multi-company — مُصلَحة v12)
 =====================================================
-التغييرات عن v10:
-  - [إصلاح A] _build_tabs: استخدام sections حقيقية بدل placeholders.
-    كل section يرث من TabSectionBase ويُبنى من conn الخاص بالشركة النشطة.
-    لو section لم يُنشأ بعد (import يفشل) يُعرض placeholder مؤقت مع
-    رسالة خطأ واضحة بدل صمت.
+التغييرات عن v11:
+  - [إصلاح C] _build_tabs: يبني CostingSection فقط — باقي الـ sections
+    تظهر كـ placeholder "قيد التطوير" بدل بناء كل شيء دفعةً واحدة.
+    يسهّل التطوير التدريجي ويقلل وقت الإقلاع.
 
-  - [إصلاح B] _destroy_tabs: يستدعي company_state.refresh_connections()
-    بعد إزالة tabs لضمان تحديث الـ connections.
+  - [إصلاح D] إزالة كل hardcoded strings من الـ UI:
+    عنوان النافذة والـ placeholder يستخدمان tr() بدل نصوص مباشرة.
 
-  - [محفوظ] _on_company_changed يستدعي AppState.invalidate() لمسح font_size cache.
+  - [إصلاح E] توحيد index_map في مكان واحد (_INDEX_MAP) بدل تكراره
+    في _validate_index_map و _on_nav.
+
+  - [محفوظ إصلاح A] _try_build_section يعزل import errors.
+  - [محفوظ إصلاح B] _destroy_tabs يستدعي company_state.refresh_connections().
+  - [محفوظ] _on_company_changed يستدعي AppState.invalidate().
+  - [محفوظ] emit_company_data_changed عبر الدالة لا bus.emit مباشرة.
 """
 
 from PyQt5.QtWidgets import (
-    QMainWindow, QWidget, QHBoxLayout, QVBoxLayout,
+    QMainWindow, QWidget, QHBoxLayout,
     QStackedWidget, QFrame, QLabel,
     QScrollArea, QSizePolicy, QApplication,
 )
 from PyQt5.QtCore import Qt
 import logging
 
-from ui.font  import get_font_size, fs
-from ui.theme import _C
-from ui.widgets.core.events        import bus
-from ui.widgets.core.events import emit_company_data_changed
+from ui.font                    import get_font_size, fs
+from ui.theme                   import _C
+from ui.widgets.core.events     import bus, emit_company_data_changed
+from ui.widgets.core.i18n       import tr
 from .main_window_helper._sidebar import _Sidebar
-
 from .main_window_helper._nav_button import (
     WINDOW_DEFAULT_W,
-    SIDEBAR_COLLAPSED_WIDTH, CONTENT_MIN_WIDTH,
+    SIDEBAR_COLLAPSED_WIDTH,
+    CONTENT_MIN_WIDTH,
 )
 
 logger = logging.getLogger(__name__)
 
+# ── خريطة التنقل: nav_key → stack index ──────────────────────────────────────
+# يجب أن يتطابق عدد العناصر مع _builders في _build_tabs (index يبدأ من 1)
+_INDEX_MAP: dict[str, int] = {
+    "costing":    1,
+    "pricing":    2,
+    "accounting": 3,
+    "inventory":  4,
+    "design":     5,
+    "orders":     6,
+}
+
+
+# ── دوال مساعدة مستقلة ───────────────────────────────────────────────────────
 
 def _make_placeholder_tab(section_name: str, error: str = "") -> QWidget:
     """
     Placeholder مؤقت لـ section لم يُبنَ بعد أو فشل import.
     يعرض رسالة واضحة للمطور.
+    كل الألوان من _C — لا hardcoded.
     """
     w = QWidget()
     w.setStyleSheet(f"background:{_C['bg_page']};")
+
+    from PyQt5.QtWidgets import QVBoxLayout
     lay = QVBoxLayout(w)
     lay.setAlignment(Qt.AlignCenter)
     lay.setSpacing(12)
@@ -55,7 +76,7 @@ def _make_placeholder_tab(section_name: str, error: str = "") -> QWidget:
     )
     lay.addWidget(lbl_icon)
 
-    lbl_title = QLabel(f"قسم {section_name}")
+    lbl_title = QLabel(section_name)
     lbl_title.setAlignment(Qt.AlignCenter)
     lbl_title.setStyleSheet(
         f"font-size:{fs(base, +2)}pt; font-weight:bold;"
@@ -63,7 +84,7 @@ def _make_placeholder_tab(section_name: str, error: str = "") -> QWidget:
     )
     lay.addWidget(lbl_title)
 
-    msg = error if error else "قيد التطوير"
+    msg = error if error else tr("under_development")
     lbl_sub = QLabel(msg)
     lbl_sub.setAlignment(Qt.AlignCenter)
     lbl_sub.setWordWrap(True)
@@ -91,23 +112,23 @@ def _try_build_section(builder_fn, section_name: str) -> QWidget:
         return _make_placeholder_tab(section_name, f"خطأ: {e}")
 
 
+# ── MainWindow ────────────────────────────────────────────────────────────────
+
 class MainWindow(QMainWindow):
     def __init__(self, app):
         super().__init__()
-        self._app          = app
-        self._tabs_built   = False
-        self._accounting   = None
+        self._app        = app
+        self._tabs_built = False
+        self._accounting = None
 
-        self.setWindowTitle("ERP — نظام إدارة التكاليف")
+        self.setWindowTitle(tr("app_title"))
         self.resize(WINDOW_DEFAULT_W, 820)
         self.setLayoutDirection(Qt.RightToLeft)
         self.setMinimumSize(SIDEBAR_COLLAPSED_WIDTH + 400, 500)
 
         self._build()
 
-    # ──────────────────────────────────────────────────────
-    # بناء الهيكل الأساسي
-    # ──────────────────────────────────────────────────────
+    # ── بناء الهيكل الأساسي ──────────────────────────────────────────────────
 
     def _build(self):
         central = QWidget()
@@ -117,10 +138,12 @@ class MainWindow(QMainWindow):
         main_layout.setContentsMargins(0, 0, 0, 0)
         main_layout.setSpacing(0)
 
+        # ── Sidebar ──
         self._sidebar = _Sidebar(on_company_changed=self._on_company_changed)
         self._sidebar.setSizePolicy(QSizePolicy.Fixed, QSizePolicy.Expanding)
         main_layout.addWidget(self._sidebar)
 
+        # ── فاصل عمودي ──
         sep = QFrame()
         sep.setFrameShape(QFrame.VLine)
         sep.setFixedWidth(1)
@@ -128,24 +151,37 @@ class MainWindow(QMainWindow):
         sep.setSizePolicy(QSizePolicy.Fixed, QSizePolicy.Expanding)
         main_layout.addWidget(sep)
 
+        # ── منطقة المحتوى مع scroll أفقي ──
         self._content_scroll = QScrollArea()
         self._content_scroll.setWidgetResizable(True)
         self._content_scroll.setHorizontalScrollBarPolicy(Qt.ScrollBarAsNeeded)
         self._content_scroll.setVerticalScrollBarPolicy(Qt.ScrollBarAlwaysOff)
         self._content_scroll.setStyleSheet(f"""
-            QScrollArea {{ border:none; background:transparent; }}
+            QScrollArea {{
+                border: none;
+                background: transparent;
+            }}
             QScrollBar:horizontal {{
-                background:transparent; height:6px; border-radius:3px;
+                background: transparent;
+                height: 6px;
+                border-radius: 3px;
             }}
             QScrollBar::handle:horizontal {{
-                background:{_C['border_med']}; border-radius:3px; min-width:30px;
+                background: {_C['border_med']};
+                border-radius: 3px;
+                min-width: 30px;
             }}
-            QScrollBar::handle:horizontal:hover {{ background:{_C['border_strong']}; }}
+            QScrollBar::handle:horizontal:hover {{
+                background: {_C['border_strong']};
+            }}
             QScrollBar::add-line:horizontal,
-            QScrollBar::sub-line:horizontal {{ width:0px; }}
+            QScrollBar::sub-line:horizontal {{
+                width: 0px;
+            }}
         """)
         self._content_scroll.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Expanding)
 
+        # ── Stack ──
         self._stack = QStackedWidget()
         self._stack.setStyleSheet(f"background:{_C['bg_page']};")
         self._stack.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Expanding)
@@ -162,35 +198,36 @@ class MainWindow(QMainWindow):
         self._content_scroll.setWidget(self._stack)
         main_layout.addWidget(self._content_scroll, stretch=1)
 
+        # ربط أزرار الـ sidebar
         for btn in self._sidebar.get_buttons():
             btn.clicked.connect(lambda checked, b=btn: self._on_nav(b))
 
+        # بناء التبويبات لو الشركة جاهزة
         from db.companies.company_state import company_state
         if company_state.is_ready:
             self._build_tabs()
 
-    # ──────────────────────────────────────────────────────
-    # بناء وتدمير التبويبات
-    # ──────────────────────────────────────────────────────
+    # ── بناء وتدمير التبويبات ────────────────────────────────────────────────
 
     def _build_tabs(self):
         """
-        يبني tabs الـ sections الحقيقية.
+        يبني tabs الـ sections.
 
-        كل section يُبنى باستخدام _try_build_section() لعزل أي import errors.
-        الترتيب والـ index يجب أن يتطابقا مع index_map في _on_nav().
+        [إصلاح C] CostingSection تُبنى فعلياً — باقي الـ sections تظهر
+        كـ placeholder "قيد التطوير" لتسريع الإقلاع وتسهيل التطوير التدريجي.
 
-        index 1 → costing
-        index 2 → pricing
-        index 3 → accounting
-        index 4 → inventory
-        index 5 → design
-        index 6 → orders
+        الترتيب يجب أن يتطابق مع _INDEX_MAP:
+            index 1 → costing     (مبني فعلياً)
+            index 2 → pricing     (placeholder)
+            index 3 → accounting  (placeholder)
+            index 4 → inventory   (placeholder)
+            index 5 → design      (placeholder)
+            index 6 → orders      (placeholder)
         """
         if self._tabs_built:
             self._destroy_tabs()
 
-        # جلب الـ connection من company_state لتمريره للـ sections
+        # جلب الـ connection
         try:
             from db.companies.company_state import company_state
             conn = company_state.get_erp_conn()
@@ -198,54 +235,47 @@ class MainWindow(QMainWindow):
             logger.error("_build_tabs: تعذر الحصول على conn: %s", e)
             conn = None
 
-        # ── بناء كل section بشكل آمن ──────────────────────
+        # ── تعريف الـ builders ──
+        # كل builder دالة تُبنى lazy — لا تُنفَّذ إلا عند الاستدعاء
 
-        # index 1: Costing
         def _build_costing():
             from ui.tabs.costing_section import CostingSection
             return CostingSection(conn_fn=lambda: conn)
 
-        # index 2: Pricing
+        # [إصلاح C] الـ sections الأخرى placeholder حتى تُفعَّل لاحقاً
+        # لتفعيل section: استبدل lambda بدالة بناء فعلية مثل _build_costing
         def _build_pricing():
-            from ui.tabs.pricing_section import PricingSection
-            return PricingSection(conn_fn=lambda: conn)
+            return _make_placeholder_tab(tr("pricing"))
 
-        # index 3: Accounting
         def _build_accounting():
-            from ui.tabs.accounting_section import AccountingTab
-            return AccountingTab(conn_fn=lambda: conn)
+            return _make_placeholder_tab(tr("accounting"))
 
-        # index 4: Inventory
         def _build_inventory():
-            from ui.tabs.inventory_section import InventoryTab
-            return InventoryTab(conn_fn=lambda: conn)
+            return _make_placeholder_tab(tr("inventory"))
 
-        # index 5: Design
         def _build_design():
-            from ui.tabs.design_section import DesignSection
-            return DesignSection(conn_fn=lambda: conn)
+            return _make_placeholder_tab(tr("design"))
 
-        # index 6: Orders
         def _build_orders():
-            from ui.tabs.orders_section import OrdersSection
-            return OrdersSection(conn_fn=lambda: conn)
+            return _make_placeholder_tab(tr("orders"))
 
+        # الترتيب يجب أن يطابق _INDEX_MAP بالضبط
         _builders = [
-            (_build_costing,    "حساب التكلفة"),
-            (_build_pricing,    "التسعير"),
-            (_build_accounting, "الحسابات"),
-            (_build_inventory,  "المخزن"),
-            (_build_design,     "التصميمات"),
-            (_build_orders,     "الطلبات"),
+            (_build_costing,    tr("costing")),
+            (_build_pricing,    tr("pricing")),
+            (_build_accounting, tr("accounting")),
+            (_build_inventory,  tr("inventory")),
+            (_build_design,     tr("design")),
+            (_build_orders,     tr("orders")),
         ]
 
         for builder_fn, name in _builders:
             w = _try_build_section(builder_fn, name)
             self._stack.addWidget(w)
 
-        # الانتقال لأول tab حقيقية (index 1)
+        # الانتقال لـ costing (index 1) وتفعيل زره في الـ sidebar
         if self._stack.count() > 1:
-            self._stack.setCurrentIndex(1)
+            self._stack.setCurrentIndex(_INDEX_MAP["costing"])
             btns = self._sidebar.get_buttons()
             if btns:
                 btns[0].setChecked(True)
@@ -254,18 +284,22 @@ class MainWindow(QMainWindow):
         self._tabs_built = True
 
     def _validate_index_map(self):
-        """يتحقق أن كل index في index_map موجود فعلاً في الـ stack."""
-        index_map = {
-            "costing": 1, "pricing": 2, "accounting": 3,
-            "inventory": 4, "design": 5, "orders": 6,
-        }
+        """
+        يتحقق أن كل index في _INDEX_MAP موجود فعلاً في الـ stack.
+        يُطلق AssertionError برسالة واضحة لو فشل.
+        """
         stack_count = self._stack.count()
-        for key, idx in index_map.items():
+        for key, idx in _INDEX_MAP.items():
             assert idx < stack_count, (
-                f"index_map['{key}'] = {idx} خارج الـ stack ({stack_count})"
+                f"_INDEX_MAP['{key}'] = {idx} خارج نطاق الـ stack "
+                f"(count={stack_count}) — تأكد من تطابق _builders مع _INDEX_MAP"
             )
 
     def _destroy_tabs(self):
+        """
+        يُزيل كل tabs عدا index 0 (NoCompanyScreen).
+        [إصلاح B] يستدعي refresh_connections() بعد الإزالة.
+        """
         bus.blockSignals(True)
 
         while self._stack.count() > 1:
@@ -284,7 +318,7 @@ class MainWindow(QMainWindow):
             from db.companies.company_state import company_state
             company_state.refresh_connections()
         except Exception as e:
-            logger.warning("_destroy_tabs: refresh_connections: %s", e)
+            logger.warning("_destroy_tabs: refresh_connections فشل: %s", e)
 
         self._accounting = None
         self._tabs_built = False
@@ -292,26 +326,35 @@ class MainWindow(QMainWindow):
     def _refresh_tabs(self):
         self._build_tabs()
 
-    # ──────────────────────────────────────────────────────
-    # أحداث
-    # ──────────────────────────────────────────────────────
+    # ── أحداث ────────────────────────────────────────────────────────────────
 
     def _on_company_changed(self, company_id: int):
-        # مسح font_size cache — كل شركة ممكن يكون ليها إعداد مختلف
+        """
+        يُستدعى عند تغيير الشركة النشطة من CompanySelector.
+        [محفوظ] AppState.invalidate() لمسح font_size cache.
+        """
         from ui.app_state import AppState
         AppState.invalidate()
 
         try:
             from db.companies.company_state import company_state
-            self.setWindowTitle(f"ERP — {company_state.company_name}")
+            self.setWindowTitle(
+                tr("app_title_company", name=company_state.company_name)
+            )
             self._refresh_tabs()
         except Exception as e:
             logger.error("_on_company_changed: %s", e)
             return
 
-        bus.company_data_changed.emit(company_id)
+        # [محفوظ] عبر الدالة لا bus.emit مباشرة — تتحقق من is_ready داخلياً
+        emit_company_data_changed()
 
     def _on_nav(self, clicked_btn):
+        """
+        يعالج النقر على أزرار الـ sidebar.
+        settings و shared_items لهما سلوك خاص — لا يُغيّران الـ stack.
+        """
+        # إلغاء تحديد كل الأزرار ثم تحديد المضغوط
         for btn in self._sidebar.get_buttons():
             if btn is not clicked_btn:
                 btn.setChecked(False)
@@ -319,38 +362,39 @@ class MainWindow(QMainWindow):
 
         key = clicked_btn.property("nav_key")
 
+        # ── settings ──
         if key == "settings":
             clicked_btn.setChecked(False)
             from ui.widgets.dialogs.settings_dialog import SettingsDialog
             SettingsDialog(self._app, parent=self).exec_()
+            # [تحسين 20] يُحدّث الأزرار والـ section labels بعد تغيير الإعدادات
             self._sidebar.refresh_all_buttons()
             return
 
+        # ── shared_items ──
         if key == "shared_items":
             clicked_btn.setChecked(False)
             self._open_shared_items()
             return
 
+        # ── لو لم تُبنَ الـ tabs بعد → شاشة "لا توجد شركة" ──
         if not self._tabs_built:
             self._stack.setCurrentIndex(0)
             return
 
-        index_map = {
-            "costing":    1,
-            "pricing":    2,
-            "accounting": 3,
-            "inventory":  4,
-            "design":     5,
-            "orders":     6,
-        }
-        if key in index_map:
-            idx = index_map[key]
+        # ── التنقل العادي عبر _INDEX_MAP ──
+        if key in _INDEX_MAP:
+            idx = _INDEX_MAP[key]
             if idx < self._stack.count():
                 self._stack.setCurrentIndex(idx)
 
     def _open_shared_items(self):
-        from db.companies.companies_schema import get_central_connection, create_central_tables
-        from db.companies.shared_items_repo import create_shared_items_tables
+        """
+        يفتح نافذة إدارة العناصر المشتركة من companies.db.
+        يُطلق emit_company_data_changed بعد أي تغيير.
+        """
+        from db.companies.companies_schema   import get_central_connection, create_central_tables
+        from db.companies.shared_items_repo  import create_shared_items_tables
         from ui.tabs.companies.shared_items_manager import SharedItemsManagerDialog
 
         central = get_central_connection()

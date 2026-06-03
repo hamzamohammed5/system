@@ -27,14 +27,16 @@ OrderService(conn, erp_conn=None)
 #   - يُسجّل warning لو unit_price = 0 وسعر المنتج موجود في DB
 
 svc.create(customer_id, items: list[OrderItem], notes="") -> int
-# [E-06] يُثري البنود بمعلومات المنتجات قبل الحفظ (لو erp_conn متاح)
+# [E-06] يُثري البنود بـ _validate_and_enrich_items() قبل الحفظ (لو erp_conn متاح)
 # يتحقق من وجود العميل و is_active=1
-# يحفظ product_id في order_items (الآن مدعوم)
+# يحفظ product_id في order_items عبر insert_order_item(..., product_id=item.product_id)
+# يحسب total = sum(i.total() for i in items)
 
 svc.update(order_id, customer_id, items, notes="")
 # يرفض لو status ليس "pending"
-# [E-06] يُثري البنود قبل الحفظ
-# يحذف بنود الطلب القديمة ثم يُضيف الجديدة
+# [E-06] يُثري البنود بـ _validate_and_enrich_items() قبل الحفظ
+# يحذف بنود الطلب القديمة بـ _delete_order_items() ثم يُضيف الجديدة
+# يحفظ product_id في order_items عبر insert_order_item(..., product_id=item.product_id)
 
 svc.change_status(order_id, new_status, note="") -> OrderStatusChange
 svc.get_allowed_transitions(order_id) -> list[str]
@@ -43,17 +45,29 @@ svc.get_delete_preview(order_id) -> DeletePreview | None
 svc.delete(order_id) -> bool
 
 svc.get_summary(customer_id=None) -> OrderSummary
-# OrderSummary: total_orders, total_amount, pending_count, in_progress, done_count, cancelled
-# يستعلم من: COUNT(*), SUM(net_amount), CASE WHEN status=...
+# يستعلم SQL مباشر:
+#   COUNT(*) AS total
+#   COALESCE(SUM(net_amount), 0) AS amount   ← يقرأ net_amount من الجدول
+#   CASE WHEN status=... THEN 1 لكل حالة
+# OrderSummary.total_amount = net_amount المجموع (وليس total_amount)
+# WHERE customer_id=? لو customer_id محدد
 
 svc.add_customer(name, phone="", notes="") -> int
 svc.update_customer(customer_id, name, phone="", notes="")
+# يقبل: name, phone, notes فقط — ليس customer_type أو phone2 أو email إلخ
+# يستدعي update_customer من customers_repo
 svc.get_customer_summary(customer_id) -> OrderSummary
 ```
 
 **`OrderItem`:** `product_id, qty, unit_price, notes="", item_name=""`
-- `.total() -> float`
+- `.total() -> float` — `qty × unit_price`
 - `.resolved_name() -> str` — يرجع `item_name.strip()` أو `"منتج #{product_id}"` كـ fallback
+
+**`_validate_and_enrich_items(items)` — [E-06]:**
+```python
+# يُطبّق _enrich_item() على كل بند ويرجع القائمة المُثراة
+# [إصلاح 8 محفوظ] اسم الدالة في الكود: _validate_and_enrich_items (وليس _enrich_items)
+```
 
 **`_enrich_item(item)` — [E-06]:**
 ```python
@@ -67,7 +81,13 @@ svc.get_customer_summary(customer_id) -> OrderSummary
 **`_assert_customer_exists(customer_id)` — داخلي:**
 ```python
 # SELECT id, is_active FROM customers WHERE id=?
-# يرمي ValueError لو غير موجود أو غير نشط
+# يرمي ValueError لو غير موجود أو is_active=0
+```
+
+**`_delete_order_items(order_id)` — داخلي:**
+```python
+# DELETE FROM order_items WHERE order_id=?
+# يستدعي conn.commit()
 ```
 
 **دالة مساعدة مستقلة:**
@@ -113,20 +133,23 @@ svc.validate_lines(lines) -> list[str]
 
 svc.get_account_balance(account_id, date_from=None, date_to=None) -> AccountBalance
 # SQL مباشر: JOIN journal_lines + journal_entries + accounts
+# WHERE jl.account_id = ? [AND je.date >= ?] [AND je.date <= ?]
 # AccountBalance: account_id, account_name, total_dr, total_cr
 # AccountBalance.balance -> float | .side -> "dr" | "cr"
-# لو لا توجد حركات → يجلب اسم الحساب ويرجع أرصدة صفر
+# لو لا توجد حركات → يجلب اسم الحساب من accounts ويرجع أرصدة صفر
 
 svc.post_entry(entry_data: dict, lines: list[JournalLine]) -> EntryResult
 # entry_data: {date, description, ref?, entry_type?, notes?}
 # [إصلاح 35] يستخدم insert_entry + add_entry_lines (الأسماء الفعلية)
+# date=None → datetime.now().strftime("%Y-%m-%d")
 # status="posted" دائماً
 # يُحوَّل JournalLine → dict {account_id, debit, credit, description}
 # EntryResult: entry_id, is_new=True, total_dr, total_cr, lines_count
 
 svc.update_entry(entry_id, entry_data, lines) -> EntryResult
 # يرفض لو status="reversed"
-# [إصلاح 35] يُحدّث journal_entries بـ SQL مباشر (update_journal_entry غير موجودة في repo)
+# [إصلاح 35] يُحدّث journal_entries بـ SQL مباشر (update_journal_entry غير موجودة في repo):
+#   UPDATE journal_entries SET date=?, description=? WHERE id=?
 # يستدعي _delete_entry_lines(entry_id) ثم add_entry_lines للجديدة
 # EntryResult: entry_id, is_new=False, ...
 
@@ -146,19 +169,30 @@ svc.delete(entry_id) -> bool
 
 **`JournalLine`:** `account_id, dr=0.0, cr=0.0, note=""`
 - `.is_valid() -> bool` — `(dr > 0) != (cr > 0)` — dr أو cr لكن ليس الاثنين
-- `.amount() -> float`
+- `.amount() -> float` — يرجع dr لو dr > 0 وإلا cr
 - `.side() -> "dr" | "cr"`
 
-**`_delete_entry_lines(entry_id)` — داخلي [إصلاح 35]:**
-```python
-# DELETE FROM journal_lines WHERE entry_id=?  + commit
-# بديل عن delete_journal_lines الغير موجودة في repo
-```
+**`BalanceCheck`:** `total_dr, total_cr`
+- `.is_balanced -> bool` — `abs(total_dr - total_cr) < 0.001`
+- `.diff -> float`
+- `.error_text() -> str | None`
+
+**`EntryResult`:** `entry_id, is_new, total_dr, total_cr, lines_count`
 
 **`DeletePreview` (للقيود):**
 ```python
 # entry_id, entry_ref, is_posted, can_delete, reason
 # .warning_text() -> str
+```
+
+**`AccountBalance`:** `account_id, account_name, total_dr, total_cr`
+- `.balance -> float` — `total_dr - total_cr`
+- `.side -> "dr" | "cr"`
+
+**`_delete_entry_lines(entry_id)` — داخلي [إصلاح 35]:**
+```python
+# DELETE FROM journal_lines WHERE entry_id=?  + commit
+# بديل عن delete_journal_lines الغير موجودة في repo
 ```
 
 ---
@@ -188,6 +222,7 @@ from services.orders.order_service import OrderService, OrderItem
 from db.companies.company_state import company_state
 
 # مع ربط erp.db — يملأ item_name تلقائياً لو كان فارغاً
+# ويحفظ product_id في order_items
 svc = OrderService(orders_conn, erp_conn=company_state.get_erp_conn())
 order_id = svc.create(
     customer_id=1,
@@ -201,6 +236,22 @@ order_id = svc.create(
 # بدون erp_conn — يعمل بنفس السلوك القديم
 svc2 = OrderService(orders_conn)
 order_id2 = svc2.create(customer_id=1, items=[...])
+```
+
+### تغيير حالة طلب
+
+```python
+from services.orders.order_service import OrderService
+
+svc = OrderService(orders_conn)
+
+# معرفة الانتقالات المسموحة
+allowed = svc.get_allowed_transitions(order_id=1)
+# مثلاً: ["confirmed", "in_progress", "cancelled", "on_hold"]
+
+# تغيير الحالة
+change = svc.change_status(order_id=1, new_status="confirmed", note="تم التأكيد")
+# change.old_status, change.new_status, change.timestamp
 ```
 
 ### استبدال شامل في BOM
@@ -287,12 +338,16 @@ sub = svc.get_sub_bom(item_id=3)  # BOM النصف مصنع
 
 **8. `settings` values:** كل قيم الإعدادات مُخزَّنة كـ TEXT — استخدم `float(get_setting(...))` عند قراءة الأرقام.
 
-**9. `OrderService` مع `erp_conn`:** [E-06] `erp_conn` اختياري تماماً — بدونه يعمل الـ service بالسلوك القديم. مع `erp_conn` يُثري البنود تلقائياً لكن لا يرفض لو المنتج غير موجود (يُسجّل warning فقط). **لا يُعدّل unit_price تلقائياً** حتى لو كان صفراً.
+**9. `OrderService` مع `erp_conn`:** [E-06] `erp_conn` اختياري تماماً — بدونه يعمل الـ service بالسلوك القديم. مع `erp_conn` يُثري البنود تلقائياً عبر `_validate_and_enrich_items()` → `_enrich_item()` لكن لا يرفض لو المنتج غير موجود (يُسجّل warning فقط). **لا يُعدّل unit_price تلقائياً** حتى لو كان صفراً.
 
-**10. `order_items.product_id`:** [E-06] عمود `product_id` يُحفظ الآن في `order_items` — تأكد من تطبيق migration على قواعد البيانات القديمة لو لم يكن العمود موجوداً.
+**10. `order_items.product_id`:** [E-06] عمود `product_id` يُحفظ الآن في `order_items` عبر `insert_order_item(..., product_id=item.product_id)` — تأكد من تطبيق migration على قواعد البيانات القديمة لو لم يكن العمود موجوداً.
 
-**11. `JournalService.update_entry`:** يُحدّث `journal_entries` بـ SQL مباشر (لا توجد `update_journal_entry` في repo) ثم يحذف الصفوف القديمة ويُضيف الجديدة.
+**11. `OrderSummary.total_amount`:** يُحسب من `SUM(net_amount)` في جدول `orders` (وليس `total_amount`) — يعكس المبلغ الصافي بعد الخصم.
 
-**12. `JournalService._delete_entry_lines`:** دالة مساعدة داخلية [إصلاح 35] — بديل عن `delete_journal_lines` الغير موجودة في repo. تستخدم DELETE المباشر على `journal_lines`.
+**12. `OrderService.update_customer`:** تقبل `name, phone, notes` فقط — لا تدعم `customer_type, phone2, email, address, city`. للتحديث الكامل استخدم `update_customer` من `customers_repo` مباشرة.
 
-**13. `BulkReplaceService.apply` والـ BOM:** يقرأ `(child_type, child_id, qty, waste_pct)` — 4 عناصر من `fetch_bom`. لدعم السيناريوهات يجب استخدام `replace_bom_for_scenario` مباشرة.
+**13. `JournalService.update_entry`:** يُحدّث `journal_entries` بـ SQL مباشر (لا توجد `update_journal_entry` في repo) ثم يحذف الصفوف القديمة ويُضيف الجديدة.
+
+**14. `JournalService._delete_entry_lines`:** دالة مساعدة داخلية [إصلاح 35] — بديل عن `delete_journal_lines` الغير موجودة في repo. تستخدم DELETE المباشر على `journal_lines`.
+
+**15. `BulkReplaceService.apply` والـ BOM:** يقرأ `(child_type, child_id, qty, waste_pct)` — 4 عناصر من `fetch_bom`. لدعم السيناريوهات يجب استخدام `replace_bom_for_scenario` مباشرة.
