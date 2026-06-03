@@ -1,5 +1,5 @@
 File Tree Snapshot
-Generated : 2026-06-03 12:29:45
+Generated : 2026-06-03 13:11:35
 Source    : D:\My Workspace\Hg\Alhabaar\accountant\system
 Extensions: .md, .py
 ────────────────────────────────────────────────────────────
@@ -412,4 +412,4 @@ system/
 │   └── theme_manager.py
 ├── main.py
 ├── README.md
-└── refactory.md
+├── refactory.md
