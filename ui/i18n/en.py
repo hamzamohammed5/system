@@ -7,6 +7,7 @@ ui/i18n/en.py
 يُصدّر EN_STRINGS للاستخدام المستقل أو للاستيراد من أدوات الترجمة.
 
 [Sync] متطابق في المفاتيح مع ar.py — كل مفتاح موجود في الملفين بالضبط.
+[Update] إضافة مفاتيح جديدة للماكينات وعمليات التشغيل والعمالة وعامة
 """
 
 EN_STRINGS: dict[str, str] = {
@@ -630,5 +631,56 @@ EN_STRINGS: dict[str, str] = {
     "select_product_first":     "Select a product from the list first",
     "select_product_to_delete": "Select a product first",
     "delete_orphan_components": "Delete Missing",
+
+    # ══════════════════════════════════════════════
+    # Machine Form — New Keys
+    # ══════════════════════════════════════════════
+    "machine_form_title":         "Machine Data",
+    "machine_name":               "Machine Name",
+    "machine_name_placeholder":   "e.g. Sewing Machine, Oven, Press...",
+    "machine_name_required":      "Enter machine name",
+    "rate_per_hour":              "Rate / Hour",
+    "rate_per_unit":              "Rate / Unit",
+    "add_machine_new":            "Add New Machine",
+    "editing_prefix":             "Edit",
+    "enter_name":                 "Enter Name",
+
+    # ══════════════════════════════════════════════
+    # Machine Op Form — New Keys
+    # ══════════════════════════════════════════════
+    "machine_op_form_title":       "Machine Operation Data",
+    "machine_op_name_placeholder": "e.g. Stitch, Press...",
+    "add_machine_op_new":          "Add New Machine Operation",
+    "op_name":                     "Operation Name",
+    "machine_label":               "Machine",
+    "select_machine_first":        "Select a machine first",
+    "add_op_first_hint":           "Add the operation first to see rows",
+    "mode_time_label":             "⏱ By Time",
+    "mode_unit_label":             "📦 By Unit",
+    "total_cost_label":            "Total Cost",
+    "op_added_success":            "Operation «{name}» added\nAdd rows now then click Save",
+
+    # ══════════════════════════════════════════════
+    # Labor Op Form — New Keys
+    # ══════════════════════════════════════════════
+    "labor_op_form_title":        "Operation Data",
+    "time_label":                 "Time",
+    "cost_label":                 "Cost",
+    "minutes_label":              "minutes",
+
+    # ══════════════════════════════════════════════
+    # Raw Form — New Keys
+    # ══════════════════════════════════════════════
+    "raw_form_title":             "Raw Material Data",
+    "raw_name_label":             "Raw Material Name",
+    "raw_name_required":          "Enter raw material name...",
+    "raw_price_label":            "Total Price",
+    "raw_qty_label":              "Total Quantity",
+    "raw_qty_unit":               "unit",
+    "raw_qty_tooltip":            "Leave at zero if price is per unit\nUnit Price = Total Price ÷ Total Quantity",
+    "raw_hint_with_qty":          "💡 Unit Price = {price} ÷ {qty} = {unit} EGP/unit",
+    "raw_hint_qty_only":          "💡 Unit Price = Total Price ÷ Total Quantity",
+    "raw_hint_no_qty":            "💡 Without total quantity: entered price = unit price directly",
+    "raw_add_variants_mode":      "Add production units for: {name}",
 
 }
