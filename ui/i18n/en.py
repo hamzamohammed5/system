@@ -189,7 +189,7 @@ EN_STRINGS: dict[str, str] = {
     # ══════════════════════════════════════════════
     "components":           "Components",
     "raw_material":         "Raw Material",
-    "semi_product":         "Semi-Product",
+    "semi_product":         "Semi-Finished",
     "labor_op":             "Labor Operation",
     "machine_op":           "Machine Operation",
 
@@ -562,7 +562,7 @@ EN_STRINGS: dict[str, str] = {
     "customer_price":           "Customer Price",
 
     # ══════════════════════════════════════════════
-    # Section Tab Names  [new]
+    # Section Tab Names
     # ══════════════════════════════════════════════
 
     # Costing tabs
@@ -603,9 +603,28 @@ EN_STRINGS: dict[str, str] = {
     # Pricing tabs
     "pricing_tab":              "Pricing",
     "offers_tab":               "Offers",
-    
+
     "app_title":         "Cost Management System",
     "app_title_company": "Cost Management System — {name}",
     "under_development": "Under Development",
+
+    # ══════════════════════════════════════════════
+    # Costing Section & Tabs  [NEW]
+    # ══════════════════════════════════════════════
+    "costing_section":           "Cost Management",
+    "final_product":             "Final Product",
+    "labor":                     "Labor",
+    "machine":                   "Machine",
+    "machines":                  "Machines",
+    "machine_operations":        "Machine Operations",
+    "labor_settings":            "Labor Settings",
+    "labor_operations":          "Labor Operations",
+
+    # ══════════════════════════════════════════════
+    # Product Messages  [NEW]
+    # ══════════════════════════════════════════════
+    "select_product_first":      "Select a product from the list first",
+    "select_product_to_delete":  "Select a product first",
+    "delete_orphan_components":  "Delete Missing",
 
 }
