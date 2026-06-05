@@ -5,13 +5,16 @@ _MachineOpForm — فورم إضافة / تعديل عملية تشغيل.
 
 [Refactor] استخدام MachineService + MachineOpService بدل operations_repo مباشرة.
 [Refactor] imports من المسارات الموثقة في files_reference:
-  - EditModeMixin   → ui.widgets.mixins.edit
+  - EditModeMixin   → ui.widgets.mixins.form_mixins
   - LiveConnMixin   → ui.widgets.core.conn
   - CategoryCombo   → ui.widgets.combo.category
   - FormGroup, ModeBadge, ResultBadge → ui.widgets.panels.form_parts
-  - wrap_in_scroll  → ui.widgets.theme.styles
+  - wrap_in_scroll  → ui.widgets.theme.builders
+[Fix A2] EditModeMixin → ui.widgets.mixins.form_mixins
+[Fix A3] wrap_in_scroll → ui.widgets.theme.builders
+[Fix A6] from ui.widgets.core.events import bus (بدل ui.events)
+[Fix D2] bus.data_changed → bus.company_data_changed مع named slot
 [Fix] استخدام emit_company_data_changed بدل bus.data_changed.emit()
-      حسب توصية files_reference/models&services.md
 """
 
 from PyQt5.QtWidgets import (
@@ -21,16 +24,16 @@ from PyQt5.QtWidgets import (
 
 from services.costing.machine_service   import MachineService, MachineOpService
 from db.costing.machine_op_rows_repo    import calc_op_total_cost
-from ui.widgets.mixins.edit             import EditModeMixin
+from ui.widgets.mixins.form_mixins      import EditModeMixin
 from ui.widgets.core.conn               import LiveConnMixin
 from ui.widgets.combo.category          import CategoryCombo
-from ui.widgets.panels.form_parts       import (
-    FormGroup, ModeBadge, ResultBadge,
-)
-from ui.widgets.theme.styles            import wrap_in_scroll
+from ui.widgets.panels.form_group import FormGroup
+from ui.widgets.panels.form_badges import ResultBadge
+from ui.widgets.panels.form_badges       import ModeBadge
+
+from ui.widgets.theme.builders          import wrap_in_scroll
 from ui.tabs.costing.shared.machine_op_rows_editor import _OpRowsEditor
-from ui.widgets.core.events             import emit_company_data_changed
-from ui.events import bus
+from ui.widgets.core.events             import emit_company_data_changed, bus
 
 
 def _buttons_row(*buttons) -> QHBoxLayout:
@@ -50,10 +53,14 @@ class _MachineOpForm(QWidget, EditModeMixin, LiveConnMixin):
         self._rows_editor = None
         self._build()
         self.init_edit_mode(self.btn_add, self.btn_save, self.btn_cancel, self.lbl_mode)
-        bus.data_changed.connect(self._refresh_machines)
+        # [Fix D2] استخدام named slot بدل lambda لتجنب memory leaks
+        bus.company_data_changed.connect(self._on_company_data_changed)
+
+    def _on_company_data_changed(self, _company_id: int = None):
+        """يُستدعى عند تغيير بيانات الشركة — يحدّث قائمة الماكينات."""
+        self._refresh_machines()
 
     def _build(self):
-        # بناء scroll يدوياً بدل build_inner_scroll غير الموثوق
         outer_layout = QVBoxLayout(self)
         outer_layout.setContentsMargins(0, 0, 0, 0)
         outer_layout.setSpacing(0)
@@ -253,7 +260,6 @@ class _MachineOpForm(QWidget, EditModeMixin, LiveConnMixin):
             QMessageBox.warning(self, "خطأ", str(e))
             return
 
-        # [Fix] emit_company_data_changed بدل bus.data_changed.emit()
         emit_company_data_changed()
 
         try:
@@ -295,7 +301,6 @@ class _MachineOpForm(QWidget, EditModeMixin, LiveConnMixin):
             QMessageBox.warning(self, "خطأ", str(e))
             return
         self._reset()
-        # [Fix] emit_company_data_changed بدل bus.data_changed.emit()
         emit_company_data_changed()
 
     def _cancel(self):

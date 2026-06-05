@@ -5,23 +5,25 @@ ProductTab — التبويب الرئيسي للمنتجات (نصف مصنع /
 
 يستخدم TabSectionBase للنمط الموحد.
 
-التقسيم:
-  product/product_form.py        → _FormPanel
-  product/product_table.py       → _ProductTable, _WarningBar
-  product/product_main_panel.py  → _ProductMainPanel
-  product_tab.py                 → ProductTab  (هذا الملف)
+[Fix E2] استبدال hardcoded strings بـ tr()
 """
 
 from PyQt5.QtWidgets import QTabWidget
 
 from ui.widgets.base.tab_section  import TabSectionBase
 from ui.widgets.managers.category import CategoryManager
+from ui.widgets.core.i18n         import tr
 
 from .product.product_main_panel import _ProductMainPanel
 
 _SCOPE_MAP = {
     "semi":  "semi",
     "final": "final",
+}
+
+_ICON_MAP = {
+    "semi":  "🔧",
+    "final": "🏭",
 }
 
 
@@ -42,13 +44,13 @@ class ProductTab(TabSectionBase):
 
     def _build_tabs(self, tabs: QTabWidget):
         scope = _SCOPE_MAP.get(self.product_type, self.product_type)
-        icon  = "🔧" if self.product_type == "semi" else "🏭"
+        icon  = _ICON_MAP.get(self.product_type, "🏭")
 
         tabs.addTab(
             _ProductMainPanel(self.conn, self.product_type),
-            f"{icon}  المنتجات",
+            f"{icon}  {tr('product_tab')}",
         )
         tabs.addTab(
             CategoryManager(self.conn, scope=scope),
-            "🏷️  التصنيفات",
+            f"🏷️  {tr('categories_tab')}",
         )

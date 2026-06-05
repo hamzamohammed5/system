@@ -3,12 +3,10 @@ ui/tabs/costing/machine/machine_form.py
 =======================================
 _MachineForm — فورم إضافة / تعديل الماكينة.
 
-[Fix A2] استبدال from ui.widgets.mixins.edit import EditModeMixin
-         بـ from ui.widgets.mixins.form_mixins import EditModeMixin
-[Fix A3] استبدال from ui.widgets.theme.styles import wrap_in_scroll
-         بـ from ui.widgets.theme.builders import wrap_in_scroll
-[Fix A4] استبدال from ui.widgets.panels.form_parts import ...
-         بالاستيراد المباشر من الملفات المقسمة
+[Fix A2] from ui.widgets.mixins.form_mixins import EditModeMixin
+[Fix A3] from ui.widgets.theme.builders import wrap_in_scroll
+[Fix A4] from ui.widgets.panels.form_group import FormGroup
+         from ui.widgets.panels.form_fields import spin_field, labeled_widget
 [Refactor] استخدام emit_company_data_changed بدل bus.data_changed.emit()
 """
 

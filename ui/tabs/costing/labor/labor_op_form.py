@@ -7,12 +7,17 @@ LaborOpForm — فورم إضافة / تعديل عملية عمالة.
 [Refactor] المسارات الموثقة في files_reference:
   - CategoryCombo  → ui.widgets.combo.category
   - ResultBadge    → ui.widgets.panels.form_parts
+[Fix A6] إصلاح from ui.events import bus → from ui.widgets.core.events import bus
+[Fix D3] استبدال bus.data_changed (محذوف) بـ bus.company_data_changed
 """
 
 from ui.widgets.base.crud_form    import BaseCrudForm
-from ui.widgets.panels.form_parts import FormGroup, spin_field, labeled_widget, ResultBadge
+from ui.widgets.panels.form_group import FormGroup
+from ui.widgets.panels.form_fields import spin_field, labeled_widget
+from ui.widgets.panels.form_badges import ResultBadge
 from ui.widgets.forms.inputs      import RequiredLineEdit
 from ui.widgets.combo.category    import CategoryCombo
+from ui.widgets.core.events       import bus
 
 
 class LaborOpForm(BaseCrudForm):
@@ -34,8 +39,11 @@ class LaborOpForm(BaseCrudForm):
         # ربط live preview
         self._sp_minutes.valueChanged.connect(self._update_preview)
         # تحديث التكلفة لو تغيرت الإعدادات
-        from ui.events import bus
-        bus.data_changed.connect(self._update_preview)
+        bus.company_data_changed.connect(self._on_company_data_changed)
+
+    def _on_company_data_changed(self, _company_id: int = None):
+        """يُستدعى عند تغيير بيانات الشركة — يحدّث المعاينة الحية."""
+        self._update_preview()
 
     # ══════════════════════════════════════════════════════
     # بناء الحقول

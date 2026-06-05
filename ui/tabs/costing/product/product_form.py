@@ -3,19 +3,10 @@ ui/tabs/costing/product/product_form.py
 ========================================
 _FormPanel — فورم إضافة / تعديل المنتج.
 
-التقسيم الداخلي (مجلد form/):
-  _header_bar.py   → شريط الهيدر (اسم + تصنيف + أزرار + سيناريوهات)
-  _rows_manager.py → إدارة صفوف المكونات
-  _save_logic.py   → منطق الحفظ في DB
-
-[Fix #1] توحيد import LiveConnMixin من المسار الموثق في ui_widgets.md:
-  من: ui.widgets.shared.connection_mixin
-  إلى: ui.widgets.core.conn
-[Fix #2] حذف import ComponentRow القديم — يُستخدم فقط في _rows_manager.py
+[Fix #1] توحيد import LiveConnMixin: ui.widgets.core.conn
 [Fix #3] استخدام emit_company_data_changed بدل bus.data_changed.emit()
-[Fix #9] استبدال db imports بـ services:
-  من: db.costing.bom_scenarios_repo + db.shared.items_repo
-  إلى: ScenarioService + ItemService + ProductService
+[Fix C1] استبدال "منتج جديد" hardcoded بـ tr("new_product")
+[Fix #9] استبدال db imports بـ services
 """
 
 from PyQt5.QtWidgets import QWidget, QVBoxLayout, QMessageBox
@@ -25,9 +16,9 @@ from services.costing.scenario_service import ScenarioService
 from services.costing.product_service  import ProductService
 from services.shared.item_service      import ItemService
 
-from ui.widgets.core.conn   import LiveConnMixin
-from ui.widgets.core.events import emit_company_data_changed
-from ui.events import bus
+from ui.widgets.core.conn    import LiveConnMixin
+from ui.widgets.core.events  import emit_company_data_changed
+from ui.widgets.core.i18n    import tr
 
 from .form._header_bar   import _FormHeaderBar
 from .form._rows_manager import _RowsManager
@@ -151,7 +142,6 @@ class _FormPanel(QWidget, LiveConnMixin):
             self._add_row()
             return
 
-        # بناء orphan_map من ProductService
         try:
             orphans    = ProductService(conn).get_orphan_components(pid)
             orphan_map = {(o.child_type, o.child_id): getattr(o, "name", None)
@@ -159,7 +149,6 @@ class _FormPanel(QWidget, LiveConnMixin):
         except Exception:
             orphan_map = {}
 
-        # جلب BOM من ScenarioService
         try:
             svc      = ScenarioService(conn)
             bom_rows = svc.get_bom(scenario_id)
@@ -167,7 +156,6 @@ class _FormPanel(QWidget, LiveConnMixin):
             bom_rows = []
 
         for row_data in (bom_rows or []):
-            # ScenarioService يرجع BomRowResult objects
             if hasattr(row_data, "child_type"):
                 child_type        = row_data.child_type
                 child_id          = row_data.child_id
@@ -176,7 +164,6 @@ class _FormPanel(QWidget, LiveConnMixin):
                 variant_id        = row_data.variant_id
                 machine_op_row_id = row_data.machine_op_row_id
             else:
-                # fallback لو رجع dict
                 child_type        = row_data["child_type"]
                 child_id          = row_data["child_id"]
                 qty               = row_data["qty"]
@@ -213,7 +200,8 @@ class _FormPanel(QWidget, LiveConnMixin):
         self.clear_rows()
         self._add_row()
         self._current_scenario_id = None
-        self.exit_edit_mode("منتج جديد")
+        # [Fix C1] بدل "منتج جديد" hardcoded
+        self.exit_edit_mode(tr("new_product"))
 
     # ══════════════════════════════════════════════════════
     # حفظ
@@ -247,7 +235,8 @@ class _FormPanel(QWidget, LiveConnMixin):
     def exit_edit_mode(self, label: str = ""):
         self._editing_id = None
         self.is_editing  = False
-        self._header.exit_edit_mode(label or "منتج جديد")
+        # [Fix C1] بدل "منتج جديد" hardcoded
+        self._header.exit_edit_mode(label or tr("new_product"))
 
     def _do_cancel(self):
         self.reset()

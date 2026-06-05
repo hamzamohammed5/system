@@ -6,6 +6,7 @@ LaborTab — التبويب الرئيسي للعمالة.
 يرث من TabSectionBase للتوحيد مع RawTab و ProductTab.
 
 [Fix A1] استبدال from ui.app_settings import _C بـ from ui.theme import _C
+[Fix A6] إصلاح from ui.events import bus → from ui.widgets.core.events import bus
 [Fix C4] استبدال tr() بنصوص عربية مباشرة بمفاتيح i18n صحيحة
 """
 

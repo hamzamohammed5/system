@@ -3,16 +3,17 @@ ui/tabs/costing/product/product_main_panel.py
 ===============================================
 _ProductMainPanel — اللوحة الرئيسية: فورم + جدول + BOM tree + تحذير.
 
-[Fix #1] توحيد import LiveConnMixin من المسار الموثق في ui_widgets.md:
-  من: ui.widgets.shared.connection_mixin
+[Fix #1] توحيد import LiveConnMixin من المسار الموثق:
   إلى: ui.widgets.core.conn
 [Fix #3] دمج المنطق المشترك في دالة _refresh_for_product بدل التكرار
-[Fix #4] conn معامل إلزامي في _check_orphans — كل الاستدعاءات تمرره فعلاً
-[Fix #6] توحيد import confirm_delete من المسار الموثق في ui_widgets.md
+[Fix #4] conn معامل إلزامي في _check_orphans
+[Fix #6] توحيد import confirm_delete من المسار الموثق
 [Fix #7] استبدال hardcoded strings بـ tr()
-[Fix #8] توحيد import BaseWarningBar من المسار الصحيح:
-  من: ui.widgets.shared.base_warning_bar
+[Fix #8] توحيد import BaseWarningBar:
   إلى: ui.widgets.components.notification
+[Fix A6] from ui.widgets.core.events import bus (بدل ui.events)
+[Fix C2] استبدال tr() بنصوص عربية مباشرة بمفاتيح i18n صحيحة
+[Fix D1] bus.data_changed → bus.company_data_changed مع named slots
 """
 
 from PyQt5.QtWidgets import (
@@ -20,14 +21,14 @@ from PyQt5.QtWidgets import (
 )
 from PyQt5.QtCore import Qt
 
-from services.shared.item_service   import ItemService
-from ui.widgets.dialogs.confirm     import confirm_delete
-from ui.widgets.core.conn           import LiveConnMixin
-from ui.widgets.core.i18n          import tr
-from ui.widgets.components.notification import BaseWarningBar   # ✅ كان: ui.widgets.shared.base_warning_bar
+from services.shared.item_service       import ItemService
+from ui.widgets.dialogs.confirm         import confirm_delete
+from ui.widgets.core.conn               import LiveConnMixin
+from ui.widgets.core.i18n              import tr
+from ui.widgets.components.notification import BaseWarningBar
 from ui.tabs.costing.shared.bom_tree    import BomTree
-from ui.app_settings import _C
-from ui.events import bus
+from ui.theme                           import _C
+from ui.widgets.core.events             import bus, emit_company_data_changed
 
 from .product_form  import _FormPanel
 from .product_table import _ProductTable
@@ -54,7 +55,12 @@ class _ProductMainPanel(QWidget, LiveConnMixin):
         self.product_type = product_type
         self._orphan      = _OrphanHandler(parent=self)
         self._build()
-        bus.data_changed.connect(self._on_data_changed)
+        # [Fix D1] named slots بدل lambda لتجنب memory leaks
+        bus.company_data_changed.connect(self._on_company_data_changed)
+
+    def _on_company_data_changed(self, _company_id: int = None):
+        """يُستدعى عند تغيير بيانات الشركة."""
+        self._on_data_changed()
 
     def _get_catalog(self) -> dict:
         try:
@@ -72,7 +78,8 @@ class _ProductMainPanel(QWidget, LiveConnMixin):
         splitter.setStyleSheet(_splitter_style())
 
         self._form = _FormPanel(self.conn, self.product_type, self._get_catalog)
-        bus.data_changed.connect(self._refresh_form_catalog)
+        # [Fix D1] named slot لتحديث الـ catalog
+        bus.company_data_changed.connect(self._on_company_data_changed_catalog)
 
         mid_widget = QWidget()
         mid_layout = QVBoxLayout(mid_widget)
@@ -82,8 +89,8 @@ class _ProductMainPanel(QWidget, LiveConnMixin):
         self._warning = BaseWarningBar(
             on_fix=self._fix_orphans,
             on_edit=self._edit_selected,
-            fix_text=f"🗑️ {tr('حذف الناقص')}",
-            edit_text=f"✏️ {tr('تعديل')}",
+            fix_text=f"🗑️ {tr('delete_orphan_components')}",
+            edit_text=f"✏️ {tr('edit')}",
         )
         mid_layout.addWidget(self._warning)
 
@@ -107,6 +114,10 @@ class _ProductMainPanel(QWidget, LiveConnMixin):
         splitter.setCollapsible(2, True)
 
         root.addWidget(splitter)
+
+    def _on_company_data_changed_catalog(self, _company_id: int = None):
+        """يُستدعى عند تغيير البيانات — يحدّث الـ catalog في الصفوف."""
+        self._refresh_form_catalog()
 
     def _refresh_for_product(self, pid: int):
         """تحديث الـ warning bar والـ BOM tree لمنتج محدد."""
@@ -149,7 +160,7 @@ class _ProductMainPanel(QWidget, LiveConnMixin):
         try:
             conn = self._live_conn()
         except Exception as e:
-            QMessageBox.warning(self, tr("خطأ"), str(e))
+            QMessageBox.warning(self, tr("error"), str(e))
             return
         self._orphan.fix(
             conn, pid,
@@ -162,19 +173,23 @@ class _ProductMainPanel(QWidget, LiveConnMixin):
         if pid is None:
             pid = self._prod_table.selected_pid()
         if pid is None:
-            QMessageBox.information(self, tr("تنبيه"), tr("اختر منتجاً من الجدول أولاً"))
+            QMessageBox.information(
+                self, tr("warning"), tr("select_product_first")
+            )
             return
         self._warning.setVisible(False)
         self._form.load_product(pid)
 
     def _delete_product(self, pid: int | None):
         if pid is None:
-            QMessageBox.information(self, tr("تنبيه"), tr("اختر منتجاً أولاً"))
+            QMessageBox.information(
+                self, tr("warning"), tr("select_product_to_delete")
+            )
             return
         try:
             conn = self._live_conn()
         except Exception as e:
-            QMessageBox.warning(self, tr("خطأ"), str(e))
+            QMessageBox.warning(self, tr("error"), str(e))
             return
 
         svc  = ItemService(conn)
@@ -185,8 +200,7 @@ class _ProductMainPanel(QWidget, LiveConnMixin):
         if confirm_delete(self, item.name):
             if self._form.is_editing and self._form._editing_id == pid:
                 self._form.reset()
-            # المنتج يُحذف بـ force_delete لأن حذفه يشمل BOM بطبيعته
             svc.force_delete(pid)
             self._warning.setVisible(False)
             self._bom_tree.clear_tree()
-            bus.data_changed.emit()
+            emit_company_data_changed()
