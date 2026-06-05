@@ -4,21 +4,20 @@ ui/tabs/costing_section.py
 قسم "حساب التكلفة" — تبويبات داخلية:
   📦 الخامات | 🔧 نصف مصنع | 🏭 منتج نهائي | 👷 العمالة | ⚙️ التشغيل
 
-[Refactor] استخدام _C و tr() بدل الألوان والنصوص المدمجة.
-استخدام tab_style من ui.widgets.theme.styles (الموثق في files_reference).
-ربط bus.theme_changed لتحديث الـ stylesheet عند تغيير الثيم.
-
+[Fix A1] استبدال from ui.app_settings import _C بـ from ui.theme import _C
+[Fix A3] استبدال from ui.widgets.theme.styles import tab_style
+         بـ from ui.widgets.theme.layout_styles import tab_style
+[Fix C5] استخدام مفاتيح i18n صحيحة لكل التبويبات
 [Fix #9] إضافة try/except حول بناء الـ tabs مع عرض رسالة واضحة عند الفشل
-  بدلاً من تفجير صامت عند خطأ في company_state أو الاتصال.
 """
 
 from PyQt5.QtWidgets import QWidget, QVBoxLayout, QTabWidget, QLabel
 from PyQt5.QtCore    import Qt
 
-from ..widgets.theme.styles import tab_style
-from ..app_settings         import _C
-from ..widgets.core.i18n    import tr
-from ..events               import bus
+from ui.widgets.theme.layout_styles import tab_style
+from ui.theme                        import _C
+from ui.widgets.core.i18n           import tr
+from ui.widgets.core.events         import bus
 
 from .costing.raw_tab     import RawTab
 from .costing.product_tab import ProductTab

@@ -3,15 +3,13 @@ ui/tabs/costing/machine/machine_form.py
 =======================================
 _MachineForm — فورم إضافة / تعديل الماكينة.
 
-[Refactor] استخدام MachineService بدل operations_repo مباشرة.
-[Refactor] imports من المسارات الموثقة في files_reference:
-  - EditModeMixin  → ui.widgets.mixins.edit
-  - LiveConnMixin  → ui.widgets.core.conn
-  - CategoryCombo  → ui.widgets.combo.category
-  - FormGroup, spin_field, labeled_widget → ui.widgets.panels.form_parts
-  - wrap_in_scroll → ui.widgets.theme.styles
-[Fix] استخدام emit_company_data_changed بدل bus.data_changed.emit()
-      حسب توصية files_reference/models&services.md
+[Fix A2] استبدال from ui.widgets.mixins.edit import EditModeMixin
+         بـ from ui.widgets.mixins.form_mixins import EditModeMixin
+[Fix A3] استبدال from ui.widgets.theme.styles import wrap_in_scroll
+         بـ from ui.widgets.theme.builders import wrap_in_scroll
+[Fix A4] استبدال from ui.widgets.panels.form_parts import ...
+         بالاستيراد المباشر من الملفات المقسمة
+[Refactor] استخدام emit_company_data_changed بدل bus.data_changed.emit()
 """
 
 from PyQt5.QtWidgets import (
@@ -19,19 +17,18 @@ from PyQt5.QtWidgets import (
     QLineEdit, QPushButton, QLabel, QMessageBox,
 )
 
-from services.costing.machine_service import MachineService
-from ui.widgets.mixins.edit   import EditModeMixin
-from ui.widgets.core.conn     import LiveConnMixin
-from ui.widgets.combo.category import CategoryCombo
-from ui.widgets.panels.form_parts import (
-    FormGroup, spin_field, labeled_widget,
-)
-from ui.widgets.theme.styles import wrap_in_scroll
-from ui.widgets.core.events  import emit_company_data_changed
+from services.costing.machine_service   import MachineService
+from ui.widgets.mixins.form_mixins      import EditModeMixin
+from ui.widgets.core.conn               import LiveConnMixin
+from ui.widgets.combo.category          import CategoryCombo
+from ui.widgets.panels.form_group       import FormGroup
+from ui.widgets.panels.form_fields      import spin_field, labeled_widget
+from ui.widgets.theme.builders          import wrap_in_scroll
+from ui.widgets.core.events             import emit_company_data_changed
 
 
 def _buttons_row(*buttons) -> QHBoxLayout:
-    """صف أزرار أفقي — بديل عن buttons_row غير الموثوق."""
+    """صف أزرار أفقي."""
     row = QHBoxLayout()
     row.setSpacing(6)
     for btn in buttons:
@@ -48,7 +45,6 @@ class _MachineForm(QWidget, EditModeMixin, LiveConnMixin):
         self.init_edit_mode(self.btn_add, self.btn_save, self.btn_cancel, self.lbl_mode)
 
     def _build(self):
-        # بناء scroll يدوياً بدل build_inner_scroll غير الموثوق
         outer_layout = QVBoxLayout(self)
         outer_layout.setContentsMargins(0, 0, 0, 0)
         outer_layout.setSpacing(0)
@@ -124,7 +120,6 @@ class _MachineForm(QWidget, EditModeMixin, LiveConnMixin):
             QMessageBox.warning(self, "خطأ", str(e))
             return
         self._reset()
-        # [Fix] emit_company_data_changed بدل bus.data_changed.emit()
         emit_company_data_changed()
 
     def _save_edit(self):
@@ -145,7 +140,6 @@ class _MachineForm(QWidget, EditModeMixin, LiveConnMixin):
             QMessageBox.warning(self, "خطأ", str(e))
             return
         self._reset()
-        # [Fix] emit_company_data_changed بدل bus.data_changed.emit()
         emit_company_data_changed()
 
     def _cancel(self):

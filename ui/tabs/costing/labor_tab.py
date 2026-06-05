@@ -5,8 +5,8 @@ LaborTab — التبويب الرئيسي للعمالة.
 
 يرث من TabSectionBase للتوحيد مع RawTab و ProductTab.
 
-[Refactor] استبدال hardcoded strings بـ tr().
-[Refactor] ربط _SPLITTER_STYLE بـ _C بدل ألوان ثابتة.
+[Fix A1] استبدال from ui.app_settings import _C بـ from ui.theme import _C
+[Fix C4] استبدال tr() بنصوص عربية مباشرة بمفاتيح i18n صحيحة
 """
 
 from PyQt5.QtWidgets import QTabWidget, QWidget, QVBoxLayout, QSplitter
@@ -15,7 +15,7 @@ from PyQt5.QtCore import Qt
 from ui.widgets.base.tab_section  import TabSectionBase
 from ui.widgets.managers.category import CategoryManager
 from ui.widgets.core.i18n         import tr
-from ui.app_settings              import _C
+from ui.theme                     import _C
 
 from .labor.labor_settings import _LaborSettingsPanel
 from .labor.labor_op_form  import LaborOpForm
@@ -63,8 +63,8 @@ class LaborTab(TabSectionBase):
         self._settings = _LaborSettingsPanel(self.conn)
 
         tabs.addTab(self._settings,
-                    f"⚙️  {tr('إعدادات العمالة')}")
+                    f"⚙️  {tr('labor_settings')}")
         tabs.addTab(_LaborOpsTab(self.conn, self._settings),
-                    f"📋  {tr('عمليات العمالة')}")
+                    f"📋  {tr('labor_operations')}")
         tabs.addTab(CategoryManager(self.conn, scope="labor"),
-                    f"🏷️  {tr('التصنيفات')}")
+                    f"🏷️  {tr('categories_tab')}")
