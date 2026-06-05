@@ -2,6 +2,11 @@
 ui/i18n/ar.py
 ==============
 القاموس العربي الكامل للتطبيق.
+
+يُستخدم من I18nManager في ui/i18n.py كمصدر للترجمة العربية.
+يُصدّر AR_STRINGS للاستخدام المستقل أو للاستيراد من أدوات الترجمة.
+
+[Sync] متطابق في المفاتيح مع en.py — كل مفتاح موجود في الملفين بالضبط.
 """
 
 AR_STRINGS: dict[str, str] = {
@@ -123,7 +128,7 @@ AR_STRINGS: dict[str, str] = {
     "field_positive_enter": "أدخل {label} أكبر من صفر",
 
     # ══════════════════════════════════════════════
-    # حقول
+    # حقول عامة
     # ══════════════════════════════════════════════
     "name":                 "الاسم",
     "code":                 "الكود",
@@ -143,6 +148,13 @@ AR_STRINGS: dict[str, str] = {
     "tax":                  "الضريبة",
 
     # ══════════════════════════════════════════════
+    # وحدات زمنية
+    # ══════════════════════════════════════════════
+    "month":                "شهر",
+    "day":                  "يوم",
+    "hour":                 "ساعة",
+
+    # ══════════════════════════════════════════════
     # محاسبة
     # ══════════════════════════════════════════════
     "accounts":             "الحسابات",
@@ -154,14 +166,61 @@ AR_STRINGS: dict[str, str] = {
     "credit":               "دائن",
     "balance":              "الرصيد",
     "ref_no":               "رقم المرجع",
+    "investors":            "المستثمرون",
+    "investor_add":         "إضافة مستثمر",
+    "investor_movement":    "حركة مستثمر",
+    "link_to_entry":        "ربط بقيد",
+    "account_group":        "مجموعة الحسابات",
+    "account_nature":       "طبيعة الحساب",
+    "account_tree":         "شجرة الحسابات",
+    "fiscal_year":          "السنة المالية",
+    "owners_equity":        "حقوق الملكية",
+    "audit_log":            "سجل المراجعة",
+    "debit_nature":         "طبيعة مدينة",
+    "credit_nature":        "طبيعة دائنة",
+    "account_level":        "مستوى الحساب",
+    "account_code":         "كود الحساب",
+    "account_type":         "نوع الحساب",
+    "account_balance":      "رصيد الحساب",
+    "opening_balance":      "الرصيد الافتتاحي",
+    "closing_balance":      "الرصيد الختامي",
+    "journal_date":         "تاريخ القيد",
+    "journal_description":  "وصف القيد",
+    "total_debit":          "إجمالي المدين",
+    "total_credit":         "إجمالي الدائن",
+    "balanced":             "متوازن",
+    "unbalanced":           "غير متوازن",
+    "post_entry":           "ترحيل القيد",
+    "reverse_entry":        "عكس القيد",
+    "draft":                "مسودة",
+    "posted":               "مرحَّل",
 
     # ══════════════════════════════════════════════
-    # مخزن
+    # مخزون
     # ══════════════════════════════════════════════
     "inventory":            "المخزن",
     "stock_in":             "وارد",
     "stock_out":            "صادر",
     "current_stock":        "المخزون الحالي",
+    "inbound":              "وارد",
+    "outbound":             "صادر",
+    "inventory_report":     "تقرير المخزون",
+    "item_name":            "اسم الصنف",
+    "item_type":            "نوع الصنف",
+    "min_stock":            "الحد الأدنى للمخزون",
+    "current_balance":      "الرصيد الحالي",
+    "movement_date":        "تاريخ الحركة",
+    "movement_type":        "نوع الحركة",
+    "unit_cost":            "سعر الوحدة",
+    "total_inbound":        "إجمالي الوارد",
+    "total_outbound":       "إجمالي الصادر",
+    "low_stock":            "مخزون منخفض",
+    "low_stock_items":      "الأصناف المنخفضة",
+    "stock_value":          "قيمة المخزون",
+    "no_movements":         "لا توجد حركات",
+    "record_inbound":       "تسجيل وارد",
+    "record_outbound":      "تسجيل صادر",
+    "movement_ref":         "مرجع الحركة",
 
     # ══════════════════════════════════════════════
     # شركات
@@ -182,7 +241,7 @@ AR_STRINGS: dict[str, str] = {
     "waste_pct":            "نسبة الهادر",
 
     # ══════════════════════════════════════════════
-    # BOM
+    # BOM — أنواع المكونات
     # ══════════════════════════════════════════════
     "components":           "المكونات",
     "raw_material":         "خامة",
@@ -210,26 +269,26 @@ AR_STRINGS: dict[str, str] = {
     # ══════════════════════════════════════════════
     # تصنيفات
     # ══════════════════════════════════════════════
-    "category_data":         "بيانات التصنيف",
-    "category_name":         "الاسم",
-    "category_parent":       "تابع لـ",
-    "category_color":        "اللون",
-    "category_add":          "تصنيف جديد",
-    "category_new":          "الأبناء",
-    "category_edit":         "تعديل",
-    "category_delete":       "حذف",
-    "category_select_first": "اختر تصنيفاً أولاً",
+    "category_data":          "بيانات التصنيف",
+    "category_name":          "الاسم",
+    "category_parent":        "تابع لـ",
+    "category_color":         "اللون",
+    "category_add":           "تصنيف جديد",
+    "category_new":           "الأبناء",
+    "category_edit":          "تعديل",
+    "category_delete":        "حذف",
+    "category_select_first":  "اختر تصنيفاً أولاً",
     "category_name_required": "أدخل اسم التصنيف",
-    "no_category":           "بدون تصنيف",
+    "no_category":            "بدون تصنيف",
 
     # ══════════════════════════════════════════════
     # عمليات عامة
     # ══════════════════════════════════════════════
-    "operation_add":        "إضافة",
-    "operation_edit":       "تعديل",
-    "operation_delete":     "حذف",
-    "operation_save":       "حفظ",
-    "operation_cancel":     "إلغاء",
+    "operation_add":    "إضافة",
+    "operation_edit":   "تعديل",
+    "operation_delete": "حذف",
+    "operation_save":   "حفظ",
+    "operation_cancel": "إلغاء",
 
     # ══════════════════════════════════════════════
     # تصميمات
@@ -238,6 +297,24 @@ AR_STRINGS: dict[str, str] = {
     "design_add":           "إضافة تصميم",
     "design_categories":    "تصنيفات التصميم",
     "dimension_sets":       "مجموعات الأبعاد",
+    "design_name":          "اسم التصميم",
+    "design_file":          "ملف التصميم",
+    "open_in_gimp":         "فتح في GIMP",
+    "thumbnail":            "صورة مصغرة",
+    "dimension_set_name":   "اسم مجموعة الأبعاد",
+    "dimension_group":      "مجموعة الأبعاد",
+    "dimension_field":      "حقل البعد",
+    "dimension_value":      "قيمة البعد",
+    "dimension_instance":   "نسخة الأبعاد",
+    "no_designs":           "لا توجد تصميمات",
+    "add_size":             "إضافة مقاس",
+    "size_name":            "اسم المقاس",
+    "size_width":           "العرض",
+    "size_height":          "الارتفاع",
+    "gimp_not_found":       "لم يتم العثور على GIMP",
+    "file_not_found":       "الملف غير موجود",
+    "source_set":           "مجموعة المصدر",
+    "target_field":         "الحقل المستهدف",
 
     # ══════════════════════════════════════════════
     # طلبات
@@ -248,6 +325,34 @@ AR_STRINGS: dict[str, str] = {
     "customer_add":         "إضافة عميل",
     "order_status":         "حالة الطلب",
     "order_date":           "تاريخ الطلب",
+    "order_number":         "رقم الطلب",
+    "order_total":          "إجمالي الطلب",
+    "customer_name":        "اسم العميل",
+    "customer_phone":       "هاتف العميل",
+    "customer_address":     "عنوان العميل",
+    "delivery_date":        "تاريخ التسليم",
+    "payment_status":       "حالة الدفع",
+    "order_items":          "بنود الطلب",
+    "status_pending":       "معلق",
+    "status_confirmed":     "مؤكد",
+    "status_in_production": "قيد الإنتاج",
+    "status_ready":         "جاهز للتسليم",
+    "status_delivered":     "مُسلَّم",
+    "status_cancelled":     "ملغي",
+    "dashboard":            "لوحة التحكم",
+    "recent_orders":        "الطلبات الأخيرة",
+    "top_customers":        "أفضل العملاء",
+    "order_log":            "سجل الطلب",
+    "change_status":        "تغيير الحالة",
+    "no_orders":            "لا توجد طلبات",
+    "no_customers":         "لا يوجد عملاء",
+    "paid":                 "مدفوع",
+    "unpaid":               "غير مدفوع",
+    "partial":              "جزئي",
+    "deposit":              "عربون",
+    "unit_price":           "سعر الوحدة",
+    "item_qty":             "الكمية",
+    "item_total":           "الإجمالي",
 
     # ══════════════════════════════════════════════
     # تسعير
@@ -255,9 +360,24 @@ AR_STRINGS: dict[str, str] = {
     "pricing":              "التسعير",
     "offers":               "العروض",
     "offer_add":            "إضافة عرض",
+    "offer_name":           "اسم العرض",
+    "offer_validity":       "صلاحية العرض",
+    "offer_items":          "بنود العرض",
+    "base_cost":            "التكلفة الأساسية",
+    "markup_pct":           "نسبة الهامش %",
+    "final_price":          "السعر النهائي",
+    "product_cost":         "تكلفة المنتج",
+    "scenario_used":        "السيناريو المستخدم",
+    "offer_total":          "إجمالي العرض",
+    "no_offers":            "لا توجد عروض",
+    "pricing_table":        "جدول التسعير",
+    "cost_breakdown":       "تفصيل التكلفة",
+    "min_price":            "الحد الأدنى للسعر",
+    "suggested_price":      "السعر المقترح",
+    "customer_price":       "سعر العميل",
 
     # ══════════════════════════════════════════════
-    # رسائل حذف مخصصة
+    # حذف — رسائل خاصة
     # ══════════════════════════════════════════════
     "delete_has_children":  "لا يمكن الحذف — يحتوي على عناصر فرعية",
     "delete_has_items":     "لا يمكن الحذف — مرتبط بعناصر أخرى",
@@ -265,10 +385,10 @@ AR_STRINGS: dict[str, str] = {
     # ══════════════════════════════════════════════
     # عناصر مشتركة
     # ══════════════════════════════════════════════
-    "shared_items":         "العناصر المشتركة",
-    "publish":              "نشر",
-    "published":            "منشور",
-    "not_published":        "غير منشور",
+    "shared_items":  "العناصر المشتركة",
+    "publish":       "نشر",
+    "published":     "منشور",
+    "not_published": "غير منشور",
 
     # ══════════════════════════════════════════════
     # العملة والوحدات
@@ -280,9 +400,6 @@ AR_STRINGS: dict[str, str] = {
     "currency_per_unit":      "جنيه / وحدة",
     "piece":                  "قطعة",
     "minutes_abbr":           "د",
-    "month":                  "شهر",
-    "day":                    "يوم",
-    "hour":                   "ساعة",
 
     # ══════════════════════════════════════════════
     # المنتجات
@@ -299,42 +416,42 @@ AR_STRINGS: dict[str, str] = {
     # ══════════════════════════════════════════════
     # المكونات / BOM
     # ══════════════════════════════════════════════
-    "element":                "العنصر",
-    "row_or_variant":         "الصف / الـ variant",
-    "qty":                    "الكمية",
-    "waste_pct_col":          "هادر %",
-    "effective_qty":          "الكمية الفعلية",
-    "component_scenario":     "المكون / السيناريو",
+    "element":            "العنصر",
+    "row_or_variant":     "الصف / الـ variant",
+    "qty":                "الكمية",
+    "waste_pct_col":      "هادر %",
+    "effective_qty":      "الكمية الفعلية",
+    "component_scenario": "المكون / السيناريو",
 
     # ══════════════════════════════════════════════
     # BOM Tree
     # ══════════════════════════════════════════════
-    "bom_tree":                         "هيكل BOM",
-    "expand_all":                       "فتح الكل",
-    "collapse_all":                     "إغلاق الكل",
-    "delete_selected":                  "حذف المحدد",
-    "default_scenario":                 "سيناريو افتراضي",
-    "delete_from_scenario":             "حذف",
-    "from_scenario":                    "من السيناريو",
-    "delete_sub_components_from_semi":  "احذف المكونات الفرعية من المنتج النصف مصنع نفسه",
+    "bom_tree":                        "هيكل BOM",
+    "expand_all":                      "فتح الكل",
+    "collapse_all":                    "إغلاق الكل",
+    "delete_selected":                 "حذف المحدد",
+    "default_scenario":                "سيناريو افتراضي",
+    "delete_from_scenario":            "حذف",
+    "from_scenario":                   "من السيناريو",
+    "delete_sub_components_from_semi": "احذف المكونات الفرعية من المنتج النصف مصنع نفسه",
 
     # ══════════════════════════════════════════════
     # السيناريوهات
     # ══════════════════════════════════════════════
-    "scenario":                        "السيناريو",
-    "add_scenario":                    "إضافة سيناريو",
-    "clone_scenario":                  "استنساخ السيناريو",
-    "rename_scenario":                 "إعادة تسمية",
-    "set_as_default":                  "تعيين كافتراضي",
-    "new_scenario":                    "سيناريو جديد",
-    "new_scenario_name":               "اسم السيناريو الجديد",
-    "scenario_name":                   "اسم السيناريو",
-    "new_name":                        "الاسم الجديد",
-    "copy_of":                         "نسخة من",
-    "cannot_delete_last_scenario":     "لا يمكن حذف السيناريو الوحيد",
-    "delete_scenario_confirm":         "هل تريد حذف السيناريو",
-    "delete_scenario_failed":          "فشل حذف السيناريو",
-    "select_scenario":                 "اختر سيناريو",
+    "scenario":                    "السيناريو",
+    "add_scenario":                "إضافة سيناريو",
+    "clone_scenario":              "استنساخ السيناريو",
+    "rename_scenario":             "إعادة تسمية",
+    "set_as_default":              "تعيين كافتراضي",
+    "new_scenario":                "سيناريو جديد",
+    "new_scenario_name":           "اسم السيناريو الجديد",
+    "scenario_name":               "اسم السيناريو",
+    "new_name":                    "الاسم الجديد",
+    "copy_of":                     "نسخة من",
+    "cannot_delete_last_scenario": "لا يمكن حذف السيناريو الوحيد",
+    "delete_scenario_confirm":     "هل تريد حذف السيناريو",
+    "delete_scenario_failed":      "فشل حذف السيناريو",
+    "select_scenario":             "اختر سيناريو",
 
     # ══════════════════════════════════════════════
     # مقارنة السيناريوهات
@@ -418,179 +535,50 @@ AR_STRINGS: dict[str, str] = {
     # ══════════════════════════════════════════════
     # الخامات
     # ══════════════════════════════════════════════
-    "raw_materials":     "الخامات",
-    "no_raws":           "لا توجد خامات",
-    "saved_raws":        "الخامات المحفوظة",
+    "raw_materials": "الخامات",
+    "no_raws":       "لا توجد خامات",
+    "saved_raws":    "الخامات المحفوظة",
 
     # ══════════════════════════════════════════════
     # العمالة
     # ══════════════════════════════════════════════
-    "labor_ops":         "عمليات العمالة",
+    "labor_ops": "عمليات العمالة",
 
     # ══════════════════════════════════════════════
     # التشغيل
     # ══════════════════════════════════════════════
-    "machine_ops":       "عمليات التشغيل",
+    "machine_ops": "عمليات التشغيل",
 
     # ══════════════════════════════════════════════
-    # المحاسبة
+    # إعدادات تكلفة العمالة
     # ══════════════════════════════════════════════
-    "investors":                "المستثمرون",
-    "investor_add":             "إضافة مستثمر",
-    "investor_movement":        "حركة مستثمر",
-    "link_to_entry":            "ربط بقيد",
-    "account_group":            "مجموعة الحسابات",
-    "account_nature":           "طبيعة الحساب",
-    "account_tree":             "شجرة الحسابات",
-    "fiscal_year":              "السنة المالية",
-    "owners_equity":            "حقوق الملكية",
-    "audit_log":                "سجل المراجعة",
-    "debit_nature":             "طبيعة مدينة",
-    "credit_nature":            "طبيعة دائنة",
-    "account_level":            "مستوى الحساب",
-    "account_code":             "كود الحساب",
-    "account_type":             "نوع الحساب",
-    "account_balance":          "رصيد الحساب",
-    "opening_balance":          "الرصيد الافتتاحي",
-    "closing_balance":          "الرصيد الختامي",
-    "journal_date":             "تاريخ القيد",
-    "journal_description":      "وصف القيد",
-    "total_debit":              "إجمالي المدين",
-    "total_credit":             "إجمالي الدائن",
-    "balanced":                 "متوازن",
-    "unbalanced":               "غير متوازن",
-    "post_entry":               "ترحيل القيد",
-    "reverse_entry":            "عكس القيد",
-    "draft":                    "مسودة",
-    "posted":                   "مرحَّل",
+    "labor_cost_settings":    "إعدادات تكلفة العمالة",
+    "base_salary":            "الراتب الأساسي",
+    "working_days":           "أيام العمل",
+    "holiday_days":           "أيام الإجازة",
+    "working_hours_per_day":  "ساعات العمل / يوم",
+    "overhead_factor":        "معامل التحميل",
+    "hourly_rate":            "معدل الأجر / ساعة",
+    "save_labor_settings":    "حفظ إعدادات العمالة",
+    "labor_settings_saved":   "تم حفظ إعدادات العمالة",
 
     # ══════════════════════════════════════════════
-    # المخزون
-    # ══════════════════════════════════════════════
-    "inbound":                  "وارد",
-    "outbound":                 "صادر",
-    "inventory_report":         "تقرير المخزون",
-    "item_name":                "اسم الصنف",
-    "item_type":                "نوع الصنف",
-    "min_stock":                "الحد الأدنى للمخزون",
-    "current_balance":          "الرصيد الحالي",
-    "movement_date":            "تاريخ الحركة",
-    "movement_type":            "نوع الحركة",
-    "unit_cost":                "سعر الوحدة",
-    "total_inbound":            "إجمالي الوارد",
-    "total_outbound":           "إجمالي الصادر",
-    "low_stock":                "مخزون منخفض",
-    "low_stock_items":          "الأصناف المنخفضة",
-    "stock_value":              "قيمة المخزون",
-    "no_movements":             "لا توجد حركات",
-    "record_inbound":           "تسجيل وارد",
-    "record_outbound":          "تسجيل صادر",
-    "movement_ref":             "مرجع الحركة",
-
-    # ══════════════════════════════════════════════
-    # الطلبات
-    # ══════════════════════════════════════════════
-    "order_number":             "رقم الطلب",
-    "order_total":              "إجمالي الطلب",
-    "customer_name":            "اسم العميل",
-    "customer_phone":           "هاتف العميل",
-    "customer_address":         "عنوان العميل",
-    "delivery_date":            "تاريخ التسليم",
-    "payment_status":           "حالة الدفع",
-    "order_items":              "بنود الطلب",
-    "status_pending":           "معلق",
-    "status_confirmed":         "مؤكد",
-    "status_in_production":     "قيد الإنتاج",
-    "status_ready":             "جاهز للتسليم",
-    "status_delivered":         "مُسلَّم",
-    "status_cancelled":         "ملغي",
-    "dashboard":                "لوحة التحكم",
-    "recent_orders":            "الطلبات الأخيرة",
-    "top_customers":            "أفضل العملاء",
-    "order_log":                "سجل الطلب",
-    "change_status":            "تغيير الحالة",
-    "no_orders":                "لا توجد طلبات",
-    "no_customers":             "لا يوجد عملاء",
-    "paid":                     "مدفوع",
-    "unpaid":                   "غير مدفوع",
-    "partial":                  "جزئي",
-    "deposit":                  "عربون",
-    "unit_price":               "سعر الوحدة",
-    "item_qty":                 "الكمية",
-    "item_total":               "الإجمالي",
-
-    # ══════════════════════════════════════════════
-    # التصميمات
-    # ══════════════════════════════════════════════
-    "design_name":              "اسم التصميم",
-    "design_file":              "ملف التصميم",
-    "open_in_gimp":             "فتح في GIMP",
-    "thumbnail":                "صورة مصغرة",
-    "dimension_set_name":       "اسم مجموعة الأبعاد",
-    "dimension_group":          "مجموعة الأبعاد",
-    "dimension_field":          "حقل البعد",
-    "dimension_value":          "قيمة البعد",
-    "dimension_instance":       "نسخة الأبعاد",
-    "no_designs":               "لا توجد تصميمات",
-    "add_size":                 "إضافة مقاس",
-    "size_name":                "اسم المقاس",
-    "size_width":               "العرض",
-    "size_height":              "الارتفاع",
-    "gimp_not_found":           "لم يتم العثور على GIMP",
-    "file_not_found":           "الملف غير موجود",
-    "source_set":               "مجموعة المصدر",
-    "target_field":             "الحقل المستهدف",
-
-    # ══════════════════════════════════════════════
-    # التسعير
-    # ══════════════════════════════════════════════
-    "offer_name":               "اسم العرض",
-    "offer_validity":           "صلاحية العرض",
-    "offer_items":              "بنود العرض",
-    "base_cost":                "التكلفة الأساسية",
-    "markup_pct":               "نسبة الهامش %",
-    "final_price":              "السعر النهائي",
-    "product_cost":             "تكلفة المنتج",
-    "scenario_used":            "السيناريو المستخدم",
-    "offer_total":              "إجمالي العرض",
-    "no_offers":                "لا توجد عروض",
-    "pricing_table":            "جدول التسعير",
-    "cost_breakdown":           "تفصيل التكلفة",
-    "min_price":                "الحد الأدنى للسعر",
-    "suggested_price":          "السعر المقترح",
-    "customer_price":           "سعر العميل",
-
-    # ══════════════════════════════════════════════
-    # إعدادات العمالة
-    # ══════════════════════════════════════════════
-    "labor_cost_settings":      "إعدادات تكلفة العمالة",
-    "base_salary":              "الراتب الأساسي",
-    "working_days":             "أيام العمل",
-    "holiday_days":             "أيام الإجازة",
-    "working_hours_per_day":    "ساعات العمل / يوم",
-    "overhead_factor":          "معامل التحميل",
-    "hourly_rate":              "معدل الأجر / ساعة",
-    "save_labor_settings":      "حفظ إعدادات العمالة",
-    "labor_settings_saved":     "تم حفظ إعدادات العمالة",
-    "currency_per_hour":        "جنيه / ساعة",
-
-    # ══════════════════════════════════════════════
-    # أسماء تبويبات الـ Sections
+    # أسماء تبويبات الأقسام
     # ══════════════════════════════════════════════
 
     # Costing tabs
-    "raw_tab":                  "الخامات",
-    "labor_tab":                "العمالة",
-    "machine_tab":              "التشغيل",
-    "product_tab":              "المنتجات",
-    "categories_tab":           "التصنيفات",
+    "raw_tab":        "الخامات",
+    "labor_tab":      "العمالة",
+    "machine_tab":    "التشغيل",
+    "product_tab":    "المنتجات",
+    "categories_tab": "التصنيفات",
 
     # Accounting tabs
-    "accounts_tab":             "شجرة الحسابات",
-    "journal_tab":              "القيود المحاسبية",
-    "ledger_tab":               "دفتر الأستاذ",
-    "financial_tab":            "القوائم المالية",
-    "investors_tab":            "المستثمرون",
+    "accounts_tab":   "شجرة الحسابات",
+    "journal_tab":    "القيود المحاسبية",
+    "ledger_tab":     "دفتر الأستاذ",
+    "financial_tab":  "القوائم المالية",
+    "investors_tab":  "المستثمرون",
 
     # Inventory tabs
     "inventory_items":          "أصناف المخزون",
@@ -604,18 +592,18 @@ AR_STRINGS: dict[str, str] = {
     "total_outbound_value":     "إجمالي قيمة الصادر",
 
     # Orders tabs
-    "orders_tab":               "الطلبات",
-    "customers_tab":            "العملاء",
-    "dashboard_tab":            "لوحة التحكم",
+    "orders_tab":    "الطلبات",
+    "customers_tab": "العملاء",
+    "dashboard_tab": "لوحة التحكم",
 
     # Design tabs
-    "designs_tab":              "التصميمات",
-    "dimension_sets_tab":       "مجموعات الأبعاد",
-    "design_categories_tab":    "تصنيفات التصميم",
+    "designs_tab":           "التصميمات",
+    "dimension_sets_tab":    "مجموعات الأبعاد",
+    "design_categories_tab": "تصنيفات التصميم",
 
     # Pricing tabs
-    "pricing_tab":              "التسعير",
-    "offers_tab":               "العروض",
+    "pricing_tab": "التسعير",
+    "offers_tab":  "العروض",
 
     # ══════════════════════════════════════════════
     # التطبيق
@@ -625,22 +613,22 @@ AR_STRINGS: dict[str, str] = {
     "under_development": "قيد التطوير",
 
     # ══════════════════════════════════════════════
-    # أقسام التكلفة وتبويباتها
+    # قسم التكلفة وتبويباته
     # ══════════════════════════════════════════════
-    "costing_section":           "حساب التكلفة",
-    "final_product":             "منتج نهائي",
-    "labor":                     "العمالة",
-    "machine":                   "التشغيل",
-    "machines":                  "الماكينات",
-    "machine_operations":        "عمليات التشغيل",
-    "labor_settings":            "إعدادات العمالة",
-    "labor_operations":          "عمليات العمالة",
+    "costing_section":    "حساب التكلفة",
+    "final_product":      "منتج نهائي",
+    "labor":              "العمالة",
+    "machine":            "التشغيل",
+    "machines":           "الماكينات",
+    "machine_operations": "عمليات التشغيل",
+    "labor_settings":     "إعدادات العمالة",
+    "labor_operations":   "عمليات العمالة",
 
     # ══════════════════════════════════════════════
     # رسائل المنتجات
     # ══════════════════════════════════════════════
-    "select_product_first":      "اختر منتجاً من الجدول أولاً",
-    "select_product_to_delete":  "اختر منتجاً أولاً",
-    "delete_orphan_components":  "حذف الناقص",
+    "select_product_first":     "اختر منتجاً من الجدول أولاً",
+    "select_product_to_delete": "اختر منتجاً أولاً",
+    "delete_orphan_components": "حذف الناقص",
 
 }

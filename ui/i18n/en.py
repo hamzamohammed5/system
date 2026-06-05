@@ -5,6 +5,8 @@ ui/i18n/en.py
 
 يُستخدم من I18nManager في ui/i18n.py كمصدر للترجمة الإنجليزية.
 يُصدّر EN_STRINGS للاستخدام المستقل أو للاستيراد من أدوات الترجمة.
+
+[Sync] متطابق في المفاتيح مع ar.py — كل مفتاح موجود في الملفين بالضبط.
 """
 
 EN_STRINGS: dict[str, str] = {
@@ -90,7 +92,6 @@ EN_STRINGS: dict[str, str] = {
     "select_item_first":    "Select an item first",
     "select_company":       "Please select an active company first",
 
-    # Panel placeholders
     "list_search_placeholder": "🔍  Search...",
     "detail_select_item":      "Select an item from the list",
 
@@ -116,6 +117,7 @@ EN_STRINGS: dict[str, str] = {
     "error":                "Error",
     "info":                 "Info",
     "notice":               "Notice",
+    "done":                 "Done",
 
     # ══════════════════════════════════════════════
     # Field Validation Messages
@@ -126,7 +128,7 @@ EN_STRINGS: dict[str, str] = {
     "field_positive_enter": "Enter {label} greater than zero",
 
     # ══════════════════════════════════════════════
-    # Fields
+    # General Fields
     # ══════════════════════════════════════════════
     "name":                 "Name",
     "code":                 "Code",
@@ -146,6 +148,13 @@ EN_STRINGS: dict[str, str] = {
     "tax":                  "Tax",
 
     # ══════════════════════════════════════════════
+    # Time Units
+    # ══════════════════════════════════════════════
+    "month":                "month",
+    "day":                  "day",
+    "hour":                 "hour",
+
+    # ══════════════════════════════════════════════
     # Accounting
     # ══════════════════════════════════════════════
     "accounts":             "Accounts",
@@ -157,6 +166,34 @@ EN_STRINGS: dict[str, str] = {
     "credit":               "Credit",
     "balance":              "Balance",
     "ref_no":               "Reference No.",
+    "investors":            "Investors",
+    "investor_add":         "Add Investor",
+    "investor_movement":    "Investor Movement",
+    "link_to_entry":        "Link to Entry",
+    "account_group":        "Account Group",
+    "account_nature":       "Account Nature",
+    "account_tree":         "Account Tree",
+    "fiscal_year":          "Fiscal Year",
+    "owners_equity":        "Owners Equity",
+    "audit_log":            "Audit Log",
+    "debit_nature":         "Debit Nature",
+    "credit_nature":        "Credit Nature",
+    "account_level":        "Account Level",
+    "account_code":         "Account Code",
+    "account_type":         "Account Type",
+    "account_balance":      "Account Balance",
+    "opening_balance":      "Opening Balance",
+    "closing_balance":      "Closing Balance",
+    "journal_date":         "Entry Date",
+    "journal_description":  "Entry Description",
+    "total_debit":          "Total Debit",
+    "total_credit":         "Total Credit",
+    "balanced":             "Balanced",
+    "unbalanced":           "Unbalanced",
+    "post_entry":           "Post Entry",
+    "reverse_entry":        "Reverse Entry",
+    "draft":                "Draft",
+    "posted":               "Posted",
 
     # ══════════════════════════════════════════════
     # Inventory
@@ -165,6 +202,25 @@ EN_STRINGS: dict[str, str] = {
     "stock_in":             "In",
     "stock_out":            "Out",
     "current_stock":        "Current Stock",
+    "inbound":              "Inbound",
+    "outbound":             "Outbound",
+    "inventory_report":     "Inventory Report",
+    "item_name":            "Item Name",
+    "item_type":            "Item Type",
+    "min_stock":            "Min Stock Level",
+    "current_balance":      "Current Balance",
+    "movement_date":        "Movement Date",
+    "movement_type":        "Movement Type",
+    "unit_cost":            "Unit Cost",
+    "total_inbound":        "Total Inbound",
+    "total_outbound":       "Total Outbound",
+    "low_stock":            "Low Stock",
+    "low_stock_items":      "Low Stock Items",
+    "stock_value":          "Stock Value",
+    "no_movements":         "No movements found",
+    "record_inbound":       "Record Inbound",
+    "record_outbound":      "Record Outbound",
+    "movement_ref":         "Movement Reference",
 
     # ══════════════════════════════════════════════
     # Companies
@@ -185,7 +241,7 @@ EN_STRINGS: dict[str, str] = {
     "waste_pct":            "Waste %",
 
     # ══════════════════════════════════════════════
-    # BOM
+    # BOM — Component Types
     # ══════════════════════════════════════════════
     "components":           "Components",
     "raw_material":         "Raw Material",
@@ -213,26 +269,26 @@ EN_STRINGS: dict[str, str] = {
     # ══════════════════════════════════════════════
     # Categories
     # ══════════════════════════════════════════════
-    "category_data":         "Category Data",
-    "category_name":         "Name",
-    "category_parent":       "Parent",
-    "category_color":        "Color",
-    "category_add":          "New Category",
-    "category_new":          "Children",
-    "category_edit":         "Edit",
-    "category_delete":       "Delete",
-    "category_select_first": "Select a category first",
+    "category_data":          "Category Data",
+    "category_name":          "Name",
+    "category_parent":        "Parent",
+    "category_color":         "Color",
+    "category_add":           "New Category",
+    "category_new":           "Children",
+    "category_edit":          "Edit",
+    "category_delete":        "Delete",
+    "category_select_first":  "Select a category first",
     "category_name_required": "Enter category name",
-    "no_category":           "No Category",
+    "no_category":            "No Category",
 
     # ══════════════════════════════════════════════
     # Operations
     # ══════════════════════════════════════════════
-    "operation_add":        "Add",
-    "operation_edit":       "Edit",
-    "operation_delete":     "Delete",
-    "operation_save":       "Save",
-    "operation_cancel":     "Cancel",
+    "operation_add":    "Add",
+    "operation_edit":   "Edit",
+    "operation_delete": "Delete",
+    "operation_save":   "Save",
+    "operation_cancel": "Cancel",
 
     # ══════════════════════════════════════════════
     # Designs
@@ -241,6 +297,24 @@ EN_STRINGS: dict[str, str] = {
     "design_add":           "Add Design",
     "design_categories":    "Design Categories",
     "dimension_sets":       "Dimension Sets",
+    "design_name":          "Design Name",
+    "design_file":          "Design File",
+    "open_in_gimp":         "Open in GIMP",
+    "thumbnail":            "Thumbnail",
+    "dimension_set_name":   "Dimension Set Name",
+    "dimension_group":      "Dimension Group",
+    "dimension_field":      "Dimension Field",
+    "dimension_value":      "Dimension Value",
+    "dimension_instance":   "Dimension Instance",
+    "no_designs":           "No designs found",
+    "add_size":             "Add Size",
+    "size_name":            "Size Name",
+    "size_width":           "Width",
+    "size_height":          "Height",
+    "gimp_not_found":       "GIMP not found",
+    "file_not_found":       "File not found",
+    "source_set":           "Source Set",
+    "target_field":         "Target Field",
 
     # ══════════════════════════════════════════════
     # Orders
@@ -251,6 +325,34 @@ EN_STRINGS: dict[str, str] = {
     "customer_add":         "Add Customer",
     "order_status":         "Order Status",
     "order_date":           "Order Date",
+    "order_number":         "Order Number",
+    "order_total":          "Order Total",
+    "customer_name":        "Customer Name",
+    "customer_phone":       "Customer Phone",
+    "customer_address":     "Customer Address",
+    "delivery_date":        "Delivery Date",
+    "payment_status":       "Payment Status",
+    "order_items":          "Order Items",
+    "status_pending":       "Pending",
+    "status_confirmed":     "Confirmed",
+    "status_in_production": "In Production",
+    "status_ready":         "Ready",
+    "status_delivered":     "Delivered",
+    "status_cancelled":     "Cancelled",
+    "dashboard":            "Dashboard",
+    "recent_orders":        "Recent Orders",
+    "top_customers":        "Top Customers",
+    "order_log":            "Order Log",
+    "change_status":        "Change Status",
+    "no_orders":            "No orders found",
+    "no_customers":         "No customers found",
+    "paid":                 "Paid",
+    "unpaid":               "Unpaid",
+    "partial":              "Partial",
+    "deposit":              "Deposit",
+    "unit_price":           "Unit Price",
+    "item_qty":             "Qty",
+    "item_total":           "Total",
 
     # ══════════════════════════════════════════════
     # Pricing
@@ -258,6 +360,21 @@ EN_STRINGS: dict[str, str] = {
     "pricing":              "Pricing",
     "offers":               "Offers",
     "offer_add":            "Add Offer",
+    "offer_name":           "Offer Name",
+    "offer_validity":       "Offer Validity",
+    "offer_items":          "Offer Items",
+    "base_cost":            "Base Cost",
+    "markup_pct":           "Markup %",
+    "final_price":          "Final Price",
+    "product_cost":         "Product Cost",
+    "scenario_used":        "Scenario Used",
+    "offer_total":          "Offer Total",
+    "no_offers":            "No offers found",
+    "pricing_table":        "Pricing Table",
+    "cost_breakdown":       "Cost Breakdown",
+    "min_price":            "Minimum Price",
+    "suggested_price":      "Suggested Price",
+    "customer_price":       "Customer Price",
 
     # ══════════════════════════════════════════════
     # Custom Delete Messages
@@ -268,10 +385,10 @@ EN_STRINGS: dict[str, str] = {
     # ══════════════════════════════════════════════
     # Shared Items
     # ══════════════════════════════════════════════
-    "shared_items":         "Shared Items",
-    "publish":              "Publish",
-    "published":            "Published",
-    "not_published":        "Not Published",
+    "shared_items":  "Shared Items",
+    "publish":       "Publish",
+    "published":     "Published",
+    "not_published": "Not Published",
 
     # ══════════════════════════════════════════════
     # Currency & Units
@@ -299,42 +416,42 @@ EN_STRINGS: dict[str, str] = {
     # ══════════════════════════════════════════════
     # Components / BOM
     # ══════════════════════════════════════════════
-    "element":                "Element",
-    "row_or_variant":         "Row / Variant",
-    "qty":                    "Qty",
-    "waste_pct_col":          "Waste %",
-    "effective_qty":          "Effective Qty",
-    "component_scenario":     "Component / Scenario",
+    "element":            "Element",
+    "row_or_variant":     "Row / Variant",
+    "qty":                "Qty",
+    "waste_pct_col":      "Waste %",
+    "effective_qty":      "Effective Qty",
+    "component_scenario": "Component / Scenario",
 
     # ══════════════════════════════════════════════
     # BOM Tree
     # ══════════════════════════════════════════════
-    "bom_tree":                         "BOM Structure",
-    "expand_all":                       "Expand All",
-    "collapse_all":                     "Collapse All",
-    "delete_selected":                  "Delete Selected",
-    "default_scenario":                 "Default Scenario",
-    "delete_from_scenario":             "Delete",
-    "from_scenario":                    "from scenario",
-    "delete_sub_components_from_semi":  "Delete sub-components from the semi-finished product itself",
+    "bom_tree":                        "BOM Structure",
+    "expand_all":                      "Expand All",
+    "collapse_all":                    "Collapse All",
+    "delete_selected":                 "Delete Selected",
+    "default_scenario":                "Default Scenario",
+    "delete_from_scenario":            "Delete",
+    "from_scenario":                   "from scenario",
+    "delete_sub_components_from_semi": "Delete sub-components from the semi-finished product itself",
 
     # ══════════════════════════════════════════════
     # Scenarios
     # ══════════════════════════════════════════════
-    "scenario":                        "Scenario",
-    "add_scenario":                    "Add Scenario",
-    "clone_scenario":                  "Clone Scenario",
-    "rename_scenario":                 "Rename",
-    "set_as_default":                  "Set as Default",
-    "new_scenario":                    "New Scenario",
-    "new_scenario_name":               "New Scenario Name",
-    "scenario_name":                   "Scenario Name",
-    "new_name":                        "New Name",
-    "copy_of":                         "Copy of",
-    "cannot_delete_last_scenario":     "Cannot delete the only scenario",
-    "delete_scenario_confirm":         "Delete scenario",
-    "delete_scenario_failed":          "Failed to delete scenario",
-    "select_scenario":                 "Select scenario",
+    "scenario":                    "Scenario",
+    "add_scenario":                "Add Scenario",
+    "clone_scenario":              "Clone Scenario",
+    "rename_scenario":             "Rename",
+    "set_as_default":              "Set as Default",
+    "new_scenario":                "New Scenario",
+    "new_scenario_name":           "New Scenario Name",
+    "scenario_name":               "Scenario Name",
+    "new_name":                    "New Name",
+    "copy_of":                     "Copy of",
+    "cannot_delete_last_scenario": "Cannot delete the only scenario",
+    "delete_scenario_confirm":     "Delete scenario",
+    "delete_scenario_failed":      "Failed to delete scenario",
+    "select_scenario":             "Select scenario",
 
     # ══════════════════════════════════════════════
     # Scenario Comparison
@@ -418,166 +535,50 @@ EN_STRINGS: dict[str, str] = {
     # ══════════════════════════════════════════════
     # Raw Materials
     # ══════════════════════════════════════════════
-    "raw_materials":     "Raw Materials",
-    "no_raws":           "No raw materials found",
-    "saved_raws":        "Saved Raw Materials",
+    "raw_materials": "Raw Materials",
+    "no_raws":       "No raw materials found",
+    "saved_raws":    "Saved Raw Materials",
 
     # ══════════════════════════════════════════════
     # Labor
     # ══════════════════════════════════════════════
-    "labor_ops":         "Labor Operations",
+    "labor_ops": "Labor Operations",
 
     # ══════════════════════════════════════════════
     # Machine
     # ══════════════════════════════════════════════
-    "machine_ops":       "Machine Operations",
+    "machine_ops": "Machine Operations",
 
     # ══════════════════════════════════════════════
-    # Accounting
+    # Labor Cost Settings
     # ══════════════════════════════════════════════
-    "investors":                "Investors",
-    "investor_add":             "Add Investor",
-    "investor_movement":        "Investor Movement",
-    "link_to_entry":            "Link to Entry",
-    "account_group":            "Account Group",
-    "account_nature":           "Account Nature",
-    "account_tree":             "Account Tree",
-    "fiscal_year":              "Fiscal Year",
-    "owners_equity":            "Owners Equity",
-    "audit_log":                "Audit Log",
-    "debit_nature":             "Debit Nature",
-    "credit_nature":            "Credit Nature",
-    "account_level":            "Account Level",
-    "account_code":             "Account Code",
-    "account_type":             "Account Type",
-    "account_balance":          "Account Balance",
-    "opening_balance":          "Opening Balance",
-    "closing_balance":          "Closing Balance",
-    "journal_date":             "Entry Date",
-    "journal_description":      "Entry Description",
-    "total_debit":              "Total Debit",
-    "total_credit":             "Total Credit",
-    "balanced":                 "Balanced",
-    "unbalanced":               "Unbalanced",
-    "post_entry":               "Post Entry",
-    "reverse_entry":            "Reverse Entry",
-    "draft":                    "Draft",
-    "posted":                   "Posted",
-
-    # ══════════════════════════════════════════════
-    # Inventory
-    # ══════════════════════════════════════════════
-    "inbound":                  "Inbound",
-    "outbound":                 "Outbound",
-    "inventory_report":         "Inventory Report",
-    "item_name":                "Item Name",
-    "item_type":                "Item Type",
-    "min_stock":                "Min Stock Level",
-    "current_balance":          "Current Balance",
-    "movement_date":            "Movement Date",
-    "movement_type":            "Movement Type",
-    "unit_cost":                "Unit Cost",
-    "total_inbound":            "Total Inbound",
-    "total_outbound":           "Total Outbound",
-    "low_stock":                "Low Stock",
-    "low_stock_items":          "Low Stock Items",
-    "stock_value":              "Stock Value",
-    "no_movements":             "No movements found",
-    "record_inbound":           "Record Inbound",
-    "record_outbound":          "Record Outbound",
-    "movement_ref":             "Movement Reference",
-
-    # ══════════════════════════════════════════════
-    # Orders
-    # ══════════════════════════════════════════════
-    "order_number":             "Order Number",
-    "order_total":              "Order Total",
-    "customer_name":            "Customer Name",
-    "customer_phone":           "Customer Phone",
-    "customer_address":         "Customer Address",
-    "delivery_date":            "Delivery Date",
-    "payment_status":           "Payment Status",
-    "order_items":              "Order Items",
-    "status_pending":           "Pending",
-    "status_confirmed":         "Confirmed",
-    "status_in_production":     "In Production",
-    "status_ready":             "Ready",
-    "status_delivered":         "Delivered",
-    "status_cancelled":         "Cancelled",
-    "dashboard":                "Dashboard",
-    "recent_orders":            "Recent Orders",
-    "top_customers":            "Top Customers",
-    "order_log":                "Order Log",
-    "change_status":            "Change Status",
-    "no_orders":                "No orders found",
-    "no_customers":             "No customers found",
-    "order_date":               "Order Date",
-    "paid":                     "Paid",
-    "unpaid":                   "Unpaid",
-    "partial":                  "Partial",
-    "deposit":                  "Deposit",
-    "unit_price":               "Unit Price",
-    "item_qty":                 "Qty",
-    "item_total":               "Total",
-
-    # ══════════════════════════════════════════════
-    # Design
-    # ══════════════════════════════════════════════
-    "design_name":              "Design Name",
-    "design_file":              "Design File",
-    "open_in_gimp":             "Open in GIMP",
-    "thumbnail":                "Thumbnail",
-    "dimension_set_name":       "Dimension Set Name",
-    "dimension_group":          "Dimension Group",
-    "dimension_field":          "Dimension Field",
-    "dimension_value":          "Dimension Value",
-    "dimension_instance":       "Dimension Instance",
-    "no_designs":               "No designs found",
-    "add_size":                 "Add Size",
-    "size_name":                "Size Name",
-    "size_width":               "Width",
-    "size_height":              "Height",
-    "gimp_not_found":           "GIMP not found",
-    "file_not_found":           "File not found",
-    "source_set":               "Source Set",
-    "target_field":             "Target Field",
-
-    # ══════════════════════════════════════════════
-    # Pricing
-    # ══════════════════════════════════════════════
-    "offer_name":               "Offer Name",
-    "offer_validity":           "Offer Validity",
-    "offer_items":              "Offer Items",
-    "base_cost":                "Base Cost",
-    "markup_pct":               "Markup %",
-    "final_price":              "Final Price",
-    "product_cost":             "Product Cost",
-    "scenario_used":            "Scenario Used",
-    "offer_total":              "Offer Total",
-    "no_offers":                "No offers found",
-    "pricing_table":            "Pricing Table",
-    "cost_breakdown":           "Cost Breakdown",
-    "min_price":                "Minimum Price",
-    "suggested_price":          "Suggested Price",
-    "customer_price":           "Customer Price",
+    "labor_cost_settings":    "Labor Cost Settings",
+    "base_salary":            "Base Salary",
+    "working_days":           "Working Days",
+    "holiday_days":           "Holiday Days",
+    "working_hours_per_day":  "Working Hours / Day",
+    "overhead_factor":        "Overhead Factor",
+    "hourly_rate":            "Hourly Rate",
+    "save_labor_settings":    "Save Labor Settings",
+    "labor_settings_saved":   "Labor settings saved",
 
     # ══════════════════════════════════════════════
     # Section Tab Names
     # ══════════════════════════════════════════════
 
     # Costing tabs
-    "raw_tab":                  "Raw Materials",
-    "labor_tab":                "Labor",
-    "machine_tab":              "Machine Ops",
-    "product_tab":              "Products",
-    "categories_tab":           "Categories",
+    "raw_tab":        "Raw Materials",
+    "labor_tab":      "Labor",
+    "machine_tab":    "Machine Ops",
+    "product_tab":    "Products",
+    "categories_tab": "Categories",
 
     # Accounting tabs
-    "accounts_tab":             "Chart of Accounts",
-    "journal_tab":              "Journal Entries",
-    "ledger_tab":               "Ledger",
-    "financial_tab":            "Financial Statements",
-    "investors_tab":            "Investors",
+    "accounts_tab":   "Chart of Accounts",
+    "journal_tab":    "Journal Entries",
+    "ledger_tab":     "Ledger",
+    "financial_tab":  "Financial Statements",
+    "investors_tab":  "Investors",
 
     # Inventory tabs
     "inventory_items":          "Inventory Items",
@@ -591,40 +592,43 @@ EN_STRINGS: dict[str, str] = {
     "total_outbound_value":     "Total Outbound Value",
 
     # Orders tabs
-    "orders_tab":               "Orders",
-    "customers_tab":            "Customers",
-    "dashboard_tab":            "Dashboard",
+    "orders_tab":    "Orders",
+    "customers_tab": "Customers",
+    "dashboard_tab": "Dashboard",
 
     # Design tabs
-    "designs_tab":              "Designs",
-    "dimension_sets_tab":       "Dimension Sets",
-    "design_categories_tab":    "Design Categories",
+    "designs_tab":           "Designs",
+    "dimension_sets_tab":    "Dimension Sets",
+    "design_categories_tab": "Design Categories",
 
     # Pricing tabs
-    "pricing_tab":              "Pricing",
-    "offers_tab":               "Offers",
+    "pricing_tab": "Pricing",
+    "offers_tab":  "Offers",
 
+    # ══════════════════════════════════════════════
+    # App
+    # ══════════════════════════════════════════════
     "app_title":         "Cost Management System",
     "app_title_company": "Cost Management System — {name}",
     "under_development": "Under Development",
 
     # ══════════════════════════════════════════════
-    # Costing Section & Tabs  [NEW]
+    # Costing Section & Tabs
     # ══════════════════════════════════════════════
-    "costing_section":           "Cost Management",
-    "final_product":             "Final Product",
-    "labor":                     "Labor",
-    "machine":                   "Machine",
-    "machines":                  "Machines",
-    "machine_operations":        "Machine Operations",
-    "labor_settings":            "Labor Settings",
-    "labor_operations":          "Labor Operations",
+    "costing_section":    "Cost Management",
+    "final_product":      "Final Product",
+    "labor":              "Labor",
+    "machine":            "Machine",
+    "machines":           "Machines",
+    "machine_operations": "Machine Operations",
+    "labor_settings":     "Labor Settings",
+    "labor_operations":   "Labor Operations",
 
     # ══════════════════════════════════════════════
-    # Product Messages  [NEW]
+    # Product Messages
     # ══════════════════════════════════════════════
-    "select_product_first":      "Select a product from the list first",
-    "select_product_to_delete":  "Select a product first",
-    "delete_orphan_components":  "Delete Missing",
+    "select_product_first":     "Select a product from the list first",
+    "select_product_to_delete": "Select a product first",
+    "delete_orphan_components": "Delete Missing",
 
 }
