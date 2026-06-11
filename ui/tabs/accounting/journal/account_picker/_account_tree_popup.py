@@ -24,10 +24,10 @@ from db.accounting.accounting_repo import (
 )
 from db.accounting.accounting_schema import TYPE_AR, EQUITY_TYPES
 from ...helpers import TYPE_COLORS
+from ui.theme import _C
+from ui.widgets.core.i18n import tr
 
 _TYPE_ORDER = ["asset", "liability", "capital", "drawings", "revenue", "expense"]
-
-_TYPE_ICONS = {
     "asset":     "🏦",
     "liability": "📋",
     "capital":   "👑",
@@ -36,8 +36,7 @@ _TYPE_ICONS = {
     "expense":   "📤",
 }
 
-_EQUITY_COLOR = "#2e7d32"
-_EQUITY_LABEL = "حقوق الملكية"
+# _EQUITY_COLOR now uses _C at runtime
 
 
 class _AccountTreePopup(QDialog):
@@ -67,43 +66,31 @@ class _AccountTreePopup(QDialog):
     def _build(self):
         self.setMinimumWidth(440)
         self.setMaximumHeight(520)
-        self.setStyleSheet("""
-            QDialog {
-                background: white;
-                border: 1px solid #c5cae9;
-                border-radius: 8px;
-            }
-        """)
+        self.setStyleSheet(
+            f"QDialog {{ background: {_C['bg_surface']}; border: 1px solid {_C['journal_header_border']}; border-radius: 8px; }}"
+        )
         root = QVBoxLayout(self)
         root.setContentsMargins(6, 6, 6, 6)
         root.setSpacing(4)
 
         self.inp_search = QLineEdit()
-        self.inp_search.setPlaceholderText("🔍 بحث بالاسم أو الكود...")
+        self.inp_search.setPlaceholderText(tr("account_search_placeholder"))
         self.inp_search.setMinimumHeight(30)
-        self.inp_search.setStyleSheet("""
-            QLineEdit {
-                background: #f0f4ff; border: 1px solid #c5cae9;
-                border-radius: 4px; padding: 2px 8px; font-size: 12px;
-            }
-            QLineEdit:focus { border-color: #1565c0; background: white; }
-        """)
+        self.inp_search.setStyleSheet(
+            f"QLineEdit {{ background: {_C['journal_header_bg']}; border: 1px solid {_C['journal_header_border']};"            "border-radius: 4px; padding: 2px 8px; font-size: 12px; }"            f"QLineEdit:focus {{ border-color: {_C['accent']}; background: {_C['bg_input']}; }}"
+        )
         self.inp_search.textChanged.connect(self._on_search)
         root.addWidget(self.inp_search)
 
         self.list_widget = QListWidget()
-        self.list_widget.setStyleSheet("""
-            QListWidget { border: 1px solid #e0e0e0; border-radius: 4px;
-                          background: white; outline: none; }
-            QListWidget::item { padding: 3px 6px; border-bottom: 1px solid #f0f0f0; }
-            QListWidget::item:selected { background: #e3f2fd; color: #1565c0; }
-            QListWidget::item:hover:!selected { background: #f5f5f5; }
-        """)
+        self.list_widget.setStyleSheet(
+            f"QListWidget {{ border: 1px solid {_C['border']}; border-radius: 4px;"            f"background: {_C['bg_surface']}; outline: none; }}"            f"QListWidget::item {{ padding: 3px 6px; border-bottom: 1px solid {_C['border']}; }}"            f"QListWidget::item:selected {{ background: {_C['badge_dr_bg']}; color: {_C['accent']}; }}"            f"QListWidget::item:hover:!selected {{ background: {_C['bg_hover']}; }}"
+        )
         self.list_widget.itemClicked.connect(self._on_item_clicked)
         self.list_widget.itemDoubleClicked.connect(self._on_item_double_clicked)
         root.addWidget(self.list_widget)
 
-        hint = QLabel("اضغط مرتين أو Enter للاختيار")
+        hint = QLabel(tr("popup_hint_select"))
         hint.setStyleSheet("font-size:9px; color:#aaa; background:transparent;")
         hint.setAlignment(Qt.AlignCenter)
         root.addWidget(hint)
@@ -191,12 +178,12 @@ class _AccountTreePopup(QDialog):
             expanded   = equity_key in self._expanded
             toggle     = "▼" if expanded else "▶"
 
-            eq_item = QListWidgetItem(f"{toggle} 👑  {_EQUITY_LABEL}")
+            eq_item = QListWidgetItem(f"{toggle} 👑  {tr('equity_label')}")
             eq_item.setData(Qt.UserRole, {"kind": "equity_group", "key": equity_key})
             f = QFont(); f.setBold(True); f.setPointSize(f.pointSize() + 1)
             eq_item.setFont(f)
-            eq_item.setForeground(QColor(_EQUITY_COLOR))
-            eq_item.setBackground(QColor("#f1f8e9"))
+            eq_item.setForeground(QColor(_C["investor_capital_text"]))
+            eq_item.setBackground(QColor(_C["investor_capital_bg"]))
             self.list_widget.addItem(eq_item)
 
             if expanded:
@@ -228,7 +215,7 @@ class _AccountTreePopup(QDialog):
         f = QFont(); f.setBold(True); f.setPointSize(f.pointSize() + (0 if indent else 1))
         type_item.setFont(f)
         type_item.setForeground(QColor(color))
-        type_item.setBackground(QColor("#f0f4ff" if indent == 0 else "#fafffe"))
+        type_item.setBackground(QColor(_C["journal_header_bg"] if indent == 0 else _C["bg_surface_2"]))
         self.list_widget.addItem(type_item)
 
         if not expanded:
@@ -252,7 +239,7 @@ class _AccountTreePopup(QDialog):
             gf = QFont(); gf.setBold(True); gf.setItalic(True)
             grp_item.setFont(gf)
             grp_item.setForeground(QColor("#546e7a"))
-            grp_item.setBackground(QColor("#fafbff"))
+            grp_item.setBackground(QColor(_C["journal_neutral_bg"]))
             self.list_widget.addItem(grp_item)
 
             if not grp_expanded and not q:

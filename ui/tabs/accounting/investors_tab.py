@@ -16,8 +16,8 @@ from db.companies.company_state import company_state
 
 from .investors._investors_layout import build_investors_tabs
 from .investors._investor_details import _InvestorDetails
-from ui.widgets.shared.safe_conn_mixin import DualConnMixin
-from ui.events import bus
+from ui.widgets.core.conn import DualConnMixin
+from ui.widgets.core.events import bus
 
 
 class InvestorsTab(DualConnMixin, QWidget):

@@ -15,10 +15,11 @@ from PyQt5.QtWidgets import (
 )
 from PyQt5.QtCore import Qt, QDate, QTimer, pyqtSignal
 
-from ui.widgets.shared.safe_conn_mixin import SafeConnMixin
-from ui.widgets.shared.date_range_filter import DateRangeFilter
-from ui.widgets.shared.company_utils import get_active_company_id
-from ui.events import bus
+from ui.widgets.core.conn import SafeConnMixin
+from ui.widgets.utils.date_range import DateRangeFilter
+from ui.widgets.core.events import bus, get_active_company_id
+from ui.widgets.core.i18n import tr
+from ui.theme import _C
 from .journal_group_combo import _TreeGroupCombo
 
 
@@ -32,12 +33,12 @@ class _JournalFilterBar(SafeConnMixin, QFrame):
         super().__init__(parent)
         self._init_safe_conn(conn, "accounting")
         self._company_id = get_active_company_id()
-        self.setStyleSheet("""
-            QFrame {
-                background: #f0f4ff;
-                border: 1px solid #c5cae9;
+        self.setStyleSheet(f"""
+            QFrame {{
+                background: {_C['journal_header_bg']};
+                border: 1px solid {_C['journal_header_border']};
                 border-radius: 8px;
-            }
+            }}
         """)
         self._build()
         bus.company_data_changed.connect(self._on_company_event)
@@ -86,49 +87,49 @@ class _JournalFilterBar(SafeConnMixin, QFrame):
         lbl_s.setFixedWidth(20)
 
         self.inp_search = QLineEdit()
-        self.inp_search.setPlaceholderText("بحث في الوصف أو رقم القيد...")
+        self.inp_search.setPlaceholderText(tr("journal_search_placeholder"))
         self.inp_search.setMinimumHeight(30)
-        self.inp_search.setStyleSheet("""
-            QLineEdit {
-                background: white; border: 1px solid #c5cae9;
+        self.inp_search.setStyleSheet(f"""
+            QLineEdit {{
+                background: {_C['bg_input']}; border: 1px solid {_C['border_med']};
                 border-radius: 5px; padding: 2px 8px; font-size: 12px;
-            }
-            QLineEdit:focus { border-color: #1565c0; }
+            }}
+            QLineEdit:focus {{ border-color: {_C['accent']}; }}
         """)
 
-        lbl_grp = QLabel("🏷 التصنيف:")
+        lbl_grp = QLabel(tr("group_filter"))
         lbl_grp.setStyleSheet(
-            "background:transparent; border:none; font-weight:bold;"
-            "font-size:11px; color:#555;"
+            f"background:transparent; border:none; font-weight:bold;"
+            f"font-size:11px; color:{_C['text_sec']};"
         )
 
         self.cmb_group = _TreeGroupCombo(self._get_safe_conn())
         self.cmb_group.setMinimumHeight(30)
         self.cmb_group.setMinimumWidth(200)
         self.cmb_group.setMaximumWidth(280)
-        self.cmb_group.setStyleSheet("""
-            QComboBox {
-                background: white; border: 1px solid #c5cae9;
+        self.cmb_group.setStyleSheet(f"""
+            QComboBox {{
+                background: {_C['bg_input']}; border: 1px solid {_C['border_med']};
                 border-radius: 5px; padding: 2px 8px; font-size: 11px;
-            }
-            QComboBox::drop-down { border: none; width: 20px; }
+            }}
+            QComboBox::drop-down {{ border: none; width: 20px; }}
         """)
 
-        lbl_bal = QLabel("الحالة:")
+        lbl_bal = QLabel(tr("balance_status_filter"))
         lbl_bal.setStyleSheet(lbl_grp.styleSheet())
 
         self.cmb_balance = QComboBox()
         self.cmb_balance.setMinimumHeight(30)
         self.cmb_balance.setFixedWidth(120)
-        self.cmb_balance.addItem("الكل",          None)
-        self.cmb_balance.addItem("✅ متوازن",      "balanced")
-        self.cmb_balance.addItem("⚠️ غير متوازن", "unbalanced")
-        self.cmb_balance.setStyleSheet("""
-            QComboBox {
-                background: white; border: 1px solid #c5cae9;
+        self.cmb_balance.addItem(tr("all"),            None)
+        self.cmb_balance.addItem(tr("balanced_filter"),   "balanced")
+        self.cmb_balance.addItem(tr("unbalanced_filter"), "unbalanced")
+        self.cmb_balance.setStyleSheet(f"""
+            QComboBox {{
+                background: {_C['bg_input']}; border: 1px solid {_C['border_med']};
                 border-radius: 5px; padding: 2px 8px; font-size: 11px;
-            }
-            QComboBox::drop-down { border: none; }
+            }}
+            QComboBox::drop-down {{ border: none; }}
         """)
 
         row1.addWidget(lbl_s)
@@ -163,16 +164,16 @@ class _JournalFilterBar(SafeConnMixin, QFrame):
         )
         row2.addWidget(sep)
 
-        btn_reset = QPushButton("↺ مسح الفلاتر")
+        btn_reset = QPushButton(tr("clear_filters"))
         btn_reset.setMinimumHeight(28)
         btn_reset.setFixedWidth(95)
-        btn_reset.setStyleSheet("""
-            QPushButton {
-                background: #e8eaf6; border: 1px solid #c5cae9;
-                border-radius: 5px; color: #3949ab;
+        btn_reset.setStyleSheet(f"""
+            QPushButton {{
+                background: {_C['accent_light']}; border: 1px solid {_C['border_med']};
+                border-radius: 5px; color: {_C['accent']};
                 font-size: 11px; padding: 2px 8px;
-            }
-            QPushButton:hover { background: #c5cae9; }
+            }}
+            QPushButton:hover {{ background: {_C['border_med']}; }}
         """)
         btn_reset.clicked.connect(self.reset)
         row2.addWidget(btn_reset)
@@ -180,7 +181,7 @@ class _JournalFilterBar(SafeConnMixin, QFrame):
 
         self.lbl_count = QLabel("")
         self.lbl_count.setStyleSheet(
-            "color:#1565c0; font-size:10px; font-weight:bold;"
+            f"color:{_C['accent']}; font-size:10px; font-weight:bold;"
             "background:transparent; border:none; min-width:70px;"
         )
         self.lbl_count.setAlignment(Qt.AlignCenter)

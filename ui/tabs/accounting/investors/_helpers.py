@@ -11,12 +11,12 @@ ui/tabs/accounting/investors/_helpers.py
 
 from PyQt5.QtWidgets import QComboBox
 
-# ── re-export من الـ shared الموحد ──
-from ui.widgets.shared.form_utils import spin_field as _spin          # noqa: F401
-from ui.widgets.shared.stat_row   import stat_card_pair as _stat_card  # noqa: F401
+from ui.widgets.panels.form_fields import spin_field as _spin          # noqa: F401
+from ui.widgets.components.stat_card import stat_card_pair as _stat_card  # noqa: F401
 
 from db.accounting.accounting_repo import fetch_leaf_accounts, insert_entry, add_entry_lines
 from db.accounting.investors_repo  import link_investor_to_line
+from ui.widgets.core.i18n import tr
 
 
 # ══════════════════════════════════════════════════════════
@@ -115,7 +115,7 @@ def _fill_drawings_combo(cmb: QComboBox, acc_conn, prev_id=None):
 
 def _post_capital_entry(acc_conn, erp_conn, investor_id, investor_name,
                         capital_acc_id, asset_acc_id, amount, date, notes=None):
-    desc     = f"رأس مال — {investor_name}  {amount:,.2f} ج"
+    desc     = tr("capital_entry_desc").format(name=investor_name, amount=f"{amount:,.2f}", currency=tr("currency_abbr"))
     entry_id = insert_entry(acc_conn, date, desc, entry_type="manual", notes=notes)
     lines = [
         {"account_id": asset_acc_id,   "debit": amount, "credit": 0,      "description": desc},
@@ -133,7 +133,7 @@ def _post_capital_entry(acc_conn, erp_conn, investor_id, investor_name,
 
 def _post_drawings_entry(acc_conn, erp_conn, investor_id, investor_name,
                          drawings_acc_id, asset_acc_id, amount, date, notes=None):
-    desc     = f"مسحوبات — {investor_name}  {amount:,.2f} ج"
+    desc     = tr("drawings_entry_desc").format(name=investor_name, amount=f"{amount:,.2f}", currency=tr("currency_abbr"))
     entry_id = insert_entry(acc_conn, date, desc, entry_type="manual", notes=notes)
     lines = [
         {"account_id": drawings_acc_id, "debit": amount, "credit": 0,      "description": desc},

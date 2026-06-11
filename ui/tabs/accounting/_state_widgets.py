@@ -12,7 +12,7 @@ _StateWidgets — widgets حالة الانتظار والخطأ لـ Accounting
 from PyQt5.QtWidgets import QLabel, QFrame, QVBoxLayout
 from PyQt5.QtCore import Qt
 
-from ui.widgets.shared.empty_state_helpers import EmptyPanelState
+from ui.widgets.panels.state import EmptyState
 
 
 # ══════════════════════════════════════════════════════════
@@ -72,17 +72,14 @@ def make_loading_widget(attempt: int, max_attempts: int = 5,
 def make_empty_state(icon: str = "📋",
                      title: str = "لا توجد بيانات",
                      subtitle: str = "",
-                     action_text: str = "") -> EmptyPanelState:
+                     action_text: str = "") -> EmptyState:
     """
-    يبني EmptyPanelState موحد من panels.
-
-    الاستخدام:
-        empty = make_empty_state("🏦", "لا توجد حسابات", "أضف حساباً جديداً")
-        layout.addWidget(empty)
+    يبني EmptyState موحد من panels.
     """
-    return EmptyPanelState(
+    return EmptyState(
         icon=icon,
         title=title,
         subtitle=subtitle,
         action_text=action_text,
+        expandable=True,
     )

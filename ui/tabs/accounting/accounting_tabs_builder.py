@@ -2,14 +2,8 @@
 ui/tabs/accounting/accounting_tabs_builder.py
 ==============================================
 _AccountingTabsBuilder — دوال بناء التبويبات الفرعية للقسم المحاسبي.
-
-[تحديث v3]:
-  - استخدام make_inner_tabs و make_financial_tabs من tab_builder المشترك.
-  - _INNER_TAB_STYLE محتفظ به للتوافق مع accounting_section.py فقط،
-    لكن لا يُستخدم داخلياً — نستخدم make_inner_tabs بدلاً منه.
 """
-
-from PyQt5.QtWidgets import QWidget, QVBoxLayout, QSplitter
+from PyQt5.QtWidgets import QWidget, QVBoxLayout, QSplitter, QTabWidget
 from PyQt5.QtCore import Qt
 
 from .accounts_tree import AccountsTreePanel
@@ -18,73 +12,59 @@ from .financial.trial_balance_tab    import TrialBalanceTab
 from .financial.income_statement_tab import IncomeStatementTab
 from .financial.owners_equity_tab    import OwnersEquityTab
 from .financial.balance_sheet_tab    import BalanceSheetTab
-from ui.widgets.shared.tab_builder   import make_inner_tabs, make_financial_tabs
-from ui.widgets.shared.panels        import get_splitter_style
+from ui.widgets.theme.layout_styles import tab_style
+from ui.widgets.theme.table_styles import splitter_style
+from ui.widgets.core.i18n import tr
+from db.accounting.accounting_schema import TYPE_AR
 
 
 # للتوافق مع accounting_section.py الذي يستورد _INNER_TAB_STYLE
-# مستمد من tab_builder بدل تعريف محلي
-_INNER_TAB_STYLE = """
-    QTabWidget::pane { border: none; background: #fafafa; }
-    QTabBar::tab {
-        background: #f5f5f5;
-        border: 1px solid #e0e0e0;
-        border-bottom: none;
-        padding: 6px 12px;
-        font-size: 10px;
-        color: #666;
-    }
-    QTabBar::tab:selected {
-        background: white;
-        color: #1565c0;
-        font-weight: bold;
-        border-top: 2px solid #1565c0;
-    }
-    QTabBar::tab:hover:!selected { background: #eeeeee; }
-"""
+_INNER_TAB_STYLE = tab_style(size="inner")
+
+
+def _make_tab_widget(size: str = "inner") -> QTabWidget:
+    tabs = QTabWidget()
+    tabs.setLayoutDirection(Qt.RightToLeft)
+    tabs.setStyleSheet(tab_style(size=size))
+    return tabs
 
 
 def build_accounts_tabs(acc):
-    """يبني تبويبات قسم الحسابات (الأصول / الخصوم / حقوق الملكية)."""
-    return make_inner_tabs(
-        ("🏦  الأصول",
-         make_inner_tabs(
-             ("📊 الحسابات",   AccountsTreePanel(acc, ["asset"], "الأصول")),
-             ("🏷️ التصنيفات", _GroupManagerPanel(acc, "asset")),
-         )),
-        ("📋  الخصوم",
-         make_inner_tabs(
-             ("📊 الحسابات",   AccountsTreePanel(acc, ["liability"], "الخصوم")),
-             ("🏷️ التصنيفات", _GroupManagerPanel(acc, "liability")),
-         )),
-        ("👑  حقوق الملكية",
-         build_equity_tab(acc)),
-    )
+    assets_inner = _make_tab_widget()
+    assets_inner.addTab(AccountsTreePanel(acc, ["asset"], tr("assets")), tr("accounts_tab"))
+    assets_inner.addTab(_GroupManagerPanel(acc, "asset"), tr("categories_tab"))
+
+    liab_inner = _make_tab_widget()
+    liab_inner.addTab(AccountsTreePanel(acc, ["liability"], tr("liabilities")), tr("accounts_tab"))
+    liab_inner.addTab(_GroupManagerPanel(acc, "liability"), tr("categories_tab"))
+
+    outer = _make_tab_widget()
+    outer.addTab(assets_inner,          tr("assets_tab"))
+    outer.addTab(liab_inner,            tr("liabilities_tab"))
+    outer.addTab(build_equity_tab(acc), tr("equity_tab"))
+    return outer
 
 
 def build_equity_tab(acc) -> QWidget:
-    """يبني تبويب حقوق الملكية مع الـ splitter."""
-    widget = QWidget()
-    root   = QVBoxLayout(widget)
+    widget   = QWidget()
+    root     = QVBoxLayout(widget)
     root.setContentsMargins(0, 0, 0, 0)
-
     splitter = QSplitter(Qt.Horizontal)
     splitter.setHandleWidth(5)
-    splitter.setStyleSheet(get_splitter_style())
+    splitter.setStyleSheet(splitter_style())
 
     tree_panel = AccountsTreePanel(
         acc,
         ["capital", "drawings", "revenue", "expense"],
-        "حقوق الملكية"
+        tr("owners_equity")
     )
     splitter.addWidget(tree_panel)
 
-    cat_tabs = make_inner_tabs(
-        ("👑 رأس المال",   _GroupManagerPanel(acc, "capital")),
-        ("💸 المسحوبات",  _GroupManagerPanel(acc, "drawings")),
-        ("💹 الإيرادات",  _GroupManagerPanel(acc, "revenue")),
-        ("📤 المصروفات",  _GroupManagerPanel(acc, "expense")),
-    )
+    cat_tabs = _make_tab_widget()
+    cat_tabs.addTab(_GroupManagerPanel(acc, "capital"),   tr("capital_tab"))
+    cat_tabs.addTab(_GroupManagerPanel(acc, "drawings"),  tr("drawings_tab"))
+    cat_tabs.addTab(_GroupManagerPanel(acc, "revenue"),   tr("revenue_tab"))
+    cat_tabs.addTab(_GroupManagerPanel(acc, "expense"),   tr("expense_tab"))
     splitter.addWidget(cat_tabs)
     splitter.setSizes([600, 300])
 
@@ -93,10 +73,9 @@ def build_equity_tab(acc) -> QWidget:
 
 
 def build_financial_tab(acc):
-    """يبني تبويبات القوائم المالية."""
-    return make_financial_tabs(
-        ("📊 قائمة الدخل",        IncomeStatementTab(acc)),
-        ("👑 حقوق الملكية",       OwnersEquityTab(acc)),
-        ("🏛️ الميزانية العمومية", BalanceSheetTab(acc)),
-        ("⚖️ ميزان المراجعة",    TrialBalanceTab(acc)),
-    )
+    tabs = _make_tab_widget(size="small")
+    tabs.addTab(IncomeStatementTab(acc),  tr("income_statement_tab"))
+    tabs.addTab(OwnersEquityTab(acc),     tr("owners_equity_tab"))
+    tabs.addTab(BalanceSheetTab(acc),     tr("balance_sheet_tab"))
+    tabs.addTab(TrialBalanceTab(acc),     tr("trial_balance_tab"))
+    return tabs

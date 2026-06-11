@@ -11,8 +11,8 @@ _InvestorsTable — جدول المستثمرين مع أزرار الإضافة
 """
 
 from PyQt5.QtWidgets import (
-    QWidget, QVBoxLayout, QPushButton,
-    QTableWidgetItem, QMessageBox,
+    QWidget, QVBoxLayout, QHBoxLayout,
+    QTableWidgetItem,
 )
 from PyQt5.QtGui  import QColor, QFont
 
@@ -20,20 +20,27 @@ from db.accounting.investors_repo import (
     fetch_investor, delete_investor,
     calc_all_investors_summary,
 )
-from ui.widgets.shared.panels import (
-    make_list_table,
-    _make_btn,
-    confirm_delete,
-    auto_fit_columns,
-    form_section_title,
-    ROW_HEIGHT_LARGE,
-)
-from ui.events import bus
-from ui.widgets.shared.safe_conn_mixin import DualConnMixin
+from ui.widgets.tables.tables import make_list_table, auto_fit_columns, ROW_HEIGHT_LARGE
+from ui.widgets.components.button import make_btn as _make_btn
+from ui.widgets.dialogs.confirm import confirm_delete
+from ui.widgets.dialogs.message import msg_info
+from ui.widgets.core.events import bus
+from ui.widgets.core.conn import DualConnMixin
+from ui.theme import _C
+from ui.widgets.core.i18n import tr
 from ._investor_form    import _InvestorForm
 from ._movement_dialog  import _MovementDialog
 
-_COLS = ["ID", "الاسم", "تاريخ الانضمام", "رأس المال", "المسحوبات", "صافي الاستثمار"]
+def _get_cols():
+    return [
+        tr("link_no_col"),
+        tr("investor_name_col"),
+        tr("join_date_col"),
+        tr("capital_col"),
+        tr("drawings_col"),
+        tr("net_col"),
+    ]
+
 _COL_WIDTHS = {0: 40, 2: 100, 3: 110, 4: 100, 5: 120}
 
 
@@ -56,10 +63,16 @@ class _InvestorsTable(DualConnMixin, QWidget):
         root = QVBoxLayout(self)
         root.setContentsMargins(12, 8, 12, 12)
         root.setSpacing(6)
-        root.addWidget(form_section_title("─── المستثمرون ───"))
+
+        lbl = QLabel(tr("investor_list_title"))
+        lbl.setStyleSheet(
+            f"font-weight:bold; color:{_C['accent']}; font-size:11px;"
+            "background:transparent; border:none;"
+        )
+        root.addWidget(lbl)
 
         self.table = make_list_table(
-            columns=_COLS,
+            columns=_get_cols(),
             stretch_col=1,
             col_widths=_COL_WIDTHS,
         )
@@ -69,10 +82,10 @@ class _InvestorsTable(DualConnMixin, QWidget):
         )
         root.addWidget(self.table, stretch=1)
 
-        btn_edit    = _make_btn("✏️  تعديل", "normal")
-        btn_del     = _make_btn("🗑️  حذف", "danger")
-        btn_capital = _make_btn("💰  إضافة استثمار", "success")
-        btn_draw    = _make_btn("💸  مسحوبات", "danger")
+        btn_edit    = _make_btn(tr("btn_edit"),            "normal")
+        btn_del     = _make_btn(tr("btn_delete"),          "danger")
+        btn_capital = _make_btn(tr("add_investment_btn"),  "success")
+        btn_draw    = _make_btn(tr("investor_drawings_badge"), "danger")
 
         for btn in (btn_edit, btn_del, btn_capital, btn_draw):
             btn.setMinimumHeight(30)
@@ -82,7 +95,6 @@ class _InvestorsTable(DualConnMixin, QWidget):
         btn_capital.clicked.connect(lambda: self._open_movement("capital"))
         btn_draw.clicked.connect(lambda: self._open_movement("drawings"))
 
-        from PyQt5.QtWidgets import QHBoxLayout
         btn_row = QHBoxLayout()
         btn_row.setSpacing(6)
         for btn in (btn_edit, btn_del, btn_capital, btn_draw):
@@ -109,17 +121,17 @@ class _InvestorsTable(DualConnMixin, QWidget):
             self.table.setItem(r, 2, QTableWidgetItem(s.get("joined_at", "—")))
 
             cap_item = QTableWidgetItem(f"{s['total_capital']:,.2f}")
-            cap_item.setForeground(QColor("#2e7d32"))
+            cap_item.setForeground(QColor(_C["investor_capital_text"]))
             self.table.setItem(r, 3, cap_item)
 
             draw_item = QTableWidgetItem(f"{s['total_drawings']:,.2f}")
-            draw_item.setForeground(QColor("#c62828"))
+            draw_item.setForeground(QColor(_C["investor_drawings_text"]))
             self.table.setItem(r, 4, draw_item)
 
             net      = s["net_investment"]
             net_item = QTableWidgetItem(f"{net:,.2f}")
             net_item.setForeground(
-                QColor("#1b5e20") if net >= 0 else QColor("#b71c1c")
+                QColor(_C["success"]) if net >= 0 else QColor(_C["danger"])
             )
             f = QFont()
             f.setBold(True)
@@ -138,14 +150,14 @@ class _InvestorsTable(DualConnMixin, QWidget):
     def _edit(self):
         inv_id = self._selected_id()
         if not inv_id:
-            QMessageBox.information(self, "تنبيه", "اختر مستثمراً أولاً")
+            msg_info(self, tr("warning"), tr("select_investor_first"))
             return
         self._form.load_for_edit(inv_id)
 
     def _delete(self):
         inv_id = self._selected_id()
         if not inv_id:
-            QMessageBox.information(self, "تنبيه", "اختر مستثمراً أولاً")
+            msg_info(self, tr("warning"), tr("select_investor_first"))
             return
         erp = self._get_erp_conn()
         inv = fetch_investor(erp, inv_id)
@@ -156,7 +168,7 @@ class _InvestorsTable(DualConnMixin, QWidget):
     def _open_movement(self, move_type: str):
         inv_id = self._selected_id()
         if not inv_id:
-            QMessageBox.information(self, "تنبيه", "اختر مستثمراً أولاً")
+            msg_info(self, tr("warning"), tr("select_investor_first"))
             return
         erp = self._get_erp_conn()
         acc = self._get_safe_conn()

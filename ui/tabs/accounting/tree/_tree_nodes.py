@@ -15,6 +15,7 @@ from PyQt5.QtGui  import QColor
 
 from db.accounting.accounting_repo import get_account_balance, _get_group_descendants
 from ui.tabs.accounting.helpers import TYPE_COLORS
+from ui.theme import _C
 
 
 def rows_to_tree(rows) -> list:
@@ -74,7 +75,7 @@ def add_acc_nodes(conn, tree_widget: QTreeWidget, nodes: list, parent):
         except Exception:
             bal = 0.0
 
-        color = TYPE_COLORS.get(node["type"], "#333")
+        color = TYPE_COLORS.get(node["type"], _C["text_primary"])
         item  = QTreeWidgetItem()
         item.setText(0, node["code"])
         item.setText(1, node["name"])
@@ -92,9 +93,9 @@ def add_acc_nodes(conn, tree_widget: QTreeWidget, nodes: list, parent):
             item.setFont(1, f)
 
         if bal < 0:
-            item.setForeground(2, QColor("#c62828"))
+            item.setForeground(2, QColor(_C["journal_cr_accent"]))
         elif bal > 0:
-            item.setForeground(2, QColor("#2e7d32"))
+            item.setForeground(2, QColor(_C["investor_capital_text"]))
 
         if parent:
             parent.addChild(item)

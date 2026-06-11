@@ -13,7 +13,7 @@ _JournalForm — فورم إدخال القيد اليومي الكامل.
 """
 
 from PyQt5.QtWidgets import (
-    QWidget, QVBoxLayout, QLabel, QPushButton, QMessageBox,
+    QWidget, QVBoxLayout, QHBoxLayout, QLabel, QPushButton,
 )
 from PyQt5.QtCore import Qt
 
@@ -24,9 +24,11 @@ from db.accounting.accounting_repo_ui_helpers import (
     fetch_capital_line_for_entry,
     fetch_drawings_line_for_entry,
 )
-from ui.helpers import buttons_row
-from ui.widgets.shared.safe_conn_mixin import DualConnMixin
-from ui.widgets.shared.company_utils import emit_company_data_changed
+from ui.widgets.core.conn import DualConnMixin
+from ui.widgets.core.events import emit_company_data_changed
+from ui.widgets.core.i18n import tr
+from ui.theme import _C
+from ui.widgets.dialogs.message import msg_warning, msg_info
 from .journal_lines import _LinesPanel
 from .form._balance_bar    import _BalanceBar
 from .form._journal_header import _JournalHeader
@@ -45,9 +47,9 @@ class _JournalForm(DualConnMixin, QWidget):
         root.setContentsMargins(12, 10, 12, 10)
         root.setSpacing(8)
 
-        self.lbl_mode = QLabel("── قيد يومية جديد ──")
+        self.lbl_mode = QLabel(tr("new_journal_entry"))
         self.lbl_mode.setStyleSheet(
-            "font-weight:bold; color:#1565c0; font-size:12px;"
+            f"font-weight:bold; color:{_C['accent']}; font-size:12px;"
         )
         root.addWidget(self.lbl_mode)
 
@@ -62,29 +64,25 @@ class _JournalForm(DualConnMixin, QWidget):
         self._balance_bar = _BalanceBar()
         root.addWidget(self._balance_bar)
 
-        self.btn_save   = QPushButton("💾  حفظ القيد")
-        self.btn_cancel = QPushButton("✖  مسح")
+        self.btn_save   = QPushButton(tr("entry_save_btn"))
+        self.btn_cancel = QPushButton(tr("entry_clear_btn"))
         self.btn_save.setMinimumHeight(34)
         self.btn_cancel.setMinimumHeight(34)
         self.btn_save.setEnabled(False)
-        self.btn_save.setStyleSheet("""
-            QPushButton {
-                background:#1565c0; color:white;
-                font-weight:bold; border-radius:6px; padding:0 20px;
-            }
-            QPushButton:hover  { background:#0d47a1; }
-            QPushButton:disabled { background:#b0bec5; color:#eceff1; }
-        """)
-        self.btn_cancel.setStyleSheet("""
-            QPushButton {
-                background:#f5f5f5; color:#555;
-                border:1px solid #ddd; border-radius:6px; padding:0 14px;
-            }
-            QPushButton:hover { background:#eeeeee; }
-        """)
+        self.btn_save.setStyleSheet(
+            f"QPushButton {{ background:{_C['accent']}; color:{_C['accent_text']};"            "font-weight:bold; border-radius:6px; padding:0 20px; }"            f"QPushButton:hover {{ background:{_C['accent_hover']}; }}"            f"QPushButton:disabled {{ background:{_C['text_disabled']}; color:{_C['bg_surface_2']}; }}"
+        )
+        self.btn_cancel.setStyleSheet(
+            f"QPushButton {{ background:{_C['bg_surface_2']}; color:{_C['text_sec']};"            f"border:1px solid {_C['border']}; border-radius:6px; padding:0 14px; }}"            f"QPushButton:hover {{ background:{_C['bg_hover']}; }}"
+        )
         self.btn_save.clicked.connect(self._save)
         self.btn_cancel.clicked.connect(self._clear)
-        root.addLayout(buttons_row(self.btn_save, self.btn_cancel))
+        _btn_row = QHBoxLayout()
+        _btn_row.setSpacing(8)
+        _btn_row.addWidget(self.btn_save)
+        _btn_row.addWidget(self.btn_cancel)
+        _btn_row.addStretch()
+        root.addLayout(_btn_row)
 
         self._lines_panel.add_line()
         self._lines_panel.add_line()
@@ -101,30 +99,27 @@ class _JournalForm(DualConnMixin, QWidget):
 
         desc = self._hdr.description()
         if not desc:
-            QMessageBox.warning(self, "تنبيه", "أدخل وصف القيد")
+            msg_warning(self, tr("warning"), tr("enter_field", label=tr("description")))
             return
 
         all_lines = self._lines_panel.get_all_values()
         if not all_lines:
-            QMessageBox.warning(self, "تنبيه", "أضف صفاً واحداً على الأقل")
+            msg_warning(self, tr("warning"), tr("add_at_least_one_line"))
             return
 
         dr_lines = [l for l in all_lines if l["debit"]  > 0]
         cr_lines = [l for l in all_lines if l["credit"] > 0]
         if not dr_lines:
-            QMessageBox.warning(self, "تنبيه", "لا يوجد أي صف مدين (DR)")
+            msg_warning(self, tr("warning"), tr("no_dr_line"))
             return
         if not cr_lines:
-            QMessageBox.warning(self, "تنبيه", "لا يوجد أي صف دائن (CR)")
+            msg_warning(self, tr("warning"), tr("no_cr_line"))
             return
 
         if not validate_entry_balance(all_lines):
             td = sum(l["debit"]  for l in all_lines)
             tc = sum(l["credit"] for l in all_lines)
-            QMessageBox.warning(
-                self, "خطأ في التوازن",
-                f"مجموع DR ({td:,.2f}) ≠ مجموع CR ({tc:,.2f})"
-            )
+            msg_warning(self, tr("balance_error_title"), tr("balance_error_msg", dr=f"{td:,.2f}", cr=f"{tc:,.2f}"))
             return
 
         date     = self._hdr.date_str()
@@ -138,7 +133,7 @@ class _JournalForm(DualConnMixin, QWidget):
 
         self._clear()
         emit_company_data_changed()
-        QMessageBox.information(self, "تم", "✅ تم حفظ القيد بنجاح")
+        msg_info(self, tr("done"), tr("journal_saved_success"))
 
     def _post_investor_links(self, conn, erp, entry_id: int,
                               investor_links: list, desc: str):
@@ -172,7 +167,7 @@ class _JournalForm(DualConnMixin, QWidget):
     def _clear(self):
         self._lines_panel.clear_lines()
         self._hdr.reset()
-        self.lbl_mode.setText("── قيد يومية جديد ──")
+        self.lbl_mode.setText(tr("new_journal_entry"))
         self.btn_save.setEnabled(False)
         self._lines_panel.add_line()
         self._lines_panel.add_line()

@@ -17,13 +17,13 @@ from PyQt5.QtCore import Qt
 from PyQt5.QtGui  import QColor
 
 from db.accounting.accounting_repo import income_statement
-from ui.helpers import make_table, section_label
-from ui.events  import bus
-from ui.widgets.shared.panels import (
-    PageHeader,
-    StatRow, StatItem,
-)
-from ui.widgets.shared.safe_conn_mixin import SafeConnMixin
+from ui.widgets.tables.tables import make_table
+from ui.widgets.core.events import bus
+from ui.widgets.components.headers_page import PageHeader
+from ui.widgets.components.stat_card import StatRow, StatItem
+from ui.widgets.core.conn import SafeConnMixin
+from ui.theme import _C
+from ui.widgets.core.i18n import tr
 from ._financial_helpers import _money
 
 
@@ -45,34 +45,36 @@ class IncomeStatementTab(SafeConnMixin, QWidget):
         root.setContentsMargins(12, 10, 12, 12)
         root.setSpacing(10)
 
-        # ── هيدر الصفحة (بدل QLabel اليدوي) ──
         root.addWidget(PageHeader(
-            title="قائمة الدخل",
+            title=tr("income_statement_title"),
             icon="📊",
-            accent="#6a1b9a",
+            accent=_C["acc_type_revenue"],
         ))
 
-        # ── البطاقات الإحصائية (بدل QHBoxLayout + _stat_card اليدوية) ──
         self._stats = StatRow([
-            StatItem("إجمالي الإيرادات",     color="#6a1b9a", icon="💹"),
-            StatItem("إجمالي المصروفات",     color="#e65100", icon="📤"),
-            StatItem("صافي الربح / الخسارة", color="#1b5e20", icon="📊"),
+            StatItem(tr("total_revenues"),  color=_C["acc_type_revenue"], icon="💹"),
+            StatItem(tr("total_expenses"),  color=_C["acc_type_expense"], icon="📤"),
+            StatItem(tr("net_profit_loss"), color=_C["success"],          icon="📊"),
         ])
         root.addWidget(self._stats)
 
-        # ── الجداول ──
         splitter = QSplitter(Qt.Horizontal)
         splitter.setHandleWidth(6)
 
-        for attr_name, title in [
-            ("table_rev", "💹 الإيرادات"),
-            ("table_exp", "📤 المصروفات"),
+        for attr_name, title, color in [
+            ("table_rev", tr("revenues_section"), _C["acc_type_revenue"]),
+            ("table_exp", tr("expenses_section"), _C["acc_type_expense"]),
         ]:
             w  = QWidget()
             wl = QVBoxLayout(w)
             wl.setContentsMargins(0, 4, 4, 0)
-            wl.addWidget(section_label(title))
-            tbl = make_table(["الكود", "البند", "المبلغ"], stretch_col=1)
+            lbl = QLabel(title)
+            lbl.setStyleSheet(
+                f"font-weight:bold; color:{color}; font-size:11px;"
+                "background:transparent; border:none;"
+            )
+            wl.addWidget(lbl)
+            tbl = make_table([tr("code"), tr("item_col"), tr("amount")], stretch_col=1)
             tbl.setColumnWidth(0, 60)
             tbl.setColumnWidth(2, 110)
             setattr(self, attr_name, tbl)
@@ -89,8 +91,8 @@ class IncomeStatementTab(SafeConnMixin, QWidget):
             return
 
         for tbl, rows, color in [
-            (self.table_rev, data["revenues"], "#6a1b9a"),
-            (self.table_exp, data["expenses"], "#e65100"),
+            (self.table_rev, data["revenues"], _C["acc_type_revenue"]),
+            (self.table_exp, data["expenses"], _C["acc_type_expense"]),
         ]:
             tbl.setRowCount(0)
             for row in rows:
@@ -104,10 +106,9 @@ class IncomeStatementTab(SafeConnMixin, QWidget):
                 ai.setForeground(QColor(color))
                 tbl.setItem(r, 2, ai)
 
-        # ── تحديث البطاقات عبر StatRow ──
         self._stats.set_value(0, _money(data["total_rev"]))
         self._stats.set_value(1, _money(data["total_exp"]))
 
         net   = data["net_income"]
-        color = "#1b5e20" if net >= 0 else "#b71c1c"
+        color = _C["success"] if net >= 0 else _C["danger"]
         self._stats.set_value(2, _money(net), color=color)

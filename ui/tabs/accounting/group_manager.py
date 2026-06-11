@@ -23,15 +23,18 @@ from db.accounting.accounting_repo import (
     build_group_tree,
 )
 from db.accounting.accounting_schema import TYPE_AR
-from ui.events  import bus
-from ui.widgets.shared.safe_conn_mixin import SafeConnMixin
-from ui.widgets.shared.color_picker_widget import ColorPickerWidget
-from ui.widgets.shared.panels import (
-    SectionHeader, _make_btn, get_tree_style, confirm_delete,
-    ListStatusBar,
-)
-from ui.widgets.shared.form_utils import FormGroup
-from ui.widgets.shared.panles_helper.mode_label import ModeLabel
+from ui.widgets.core.events import bus
+from ui.widgets.core.conn import SafeConnMixin
+from ui.widgets.helpers.color_picker import ColorPickerWidget
+from ui.widgets.components.headers_page import SectionHeader
+from ui.widgets.components.button import make_btn as _make_btn
+from ui.widgets.components.headers_list import StatusBar as ListStatusBar
+from ui.widgets.theme.layout_styles import tree_style as get_tree_style
+from ui.widgets.dialogs.confirm import confirm_delete
+from ui.widgets.panels.form_group import FormGroup
+from ui.widgets.components.label import ModeLabel
+from ui.widgets.core.i18n import tr
+from ui.widgets.dialogs.message import msg_warning, msg_info
 
 
 class _GroupManagerPanel(SafeConnMixin, QWidget):
@@ -55,12 +58,12 @@ class _GroupManagerPanel(SafeConnMixin, QWidget):
         root.setSpacing(8)
 
         # ── هيدر القسم ──
-        hdr = SectionHeader(f"تصنيفات {TYPE_AR.get(self.acc_type, '')}")
+        hdr = SectionHeader(tr("group_categories_header", type_name=TYPE_AR.get(self.acc_type, '')))
         root.addWidget(hdr)
 
         # ── الشجرة ──
         self.tree = QTreeWidget()
-        self.tree.setHeaderLabels(["التصنيف", "عدد الحسابات"])
+        self.tree.setHeaderLabels([tr("group_tree_col"), tr("group_count_col")])
         self.tree.header().setSectionResizeMode(0, QHeaderView.Stretch)
         self.tree.header().setSectionResizeMode(1, QHeaderView.Interactive)
         self.tree.setColumnWidth(1, 100)
@@ -70,8 +73,8 @@ class _GroupManagerPanel(SafeConnMixin, QWidget):
 
         # ── أزرار التعديل والحذف ──
         btn_row  = QHBoxLayout()
-        btn_edit = _make_btn("✏️ تعديل", "normal")
-        btn_del  = _make_btn("🗑️ حذف",  "danger")
+        btn_edit = _make_btn(tr("btn_edit"), "normal")
+        btn_del  = _make_btn(tr("btn_delete"),  "danger")
         btn_edit.clicked.connect(self._edit)
         btn_del.clicked.connect(self._delete)
         btn_row.addWidget(btn_edit)
@@ -84,32 +87,32 @@ class _GroupManagerPanel(SafeConnMixin, QWidget):
         root.addWidget(self._status)
 
         # ── فورم الإضافة/التعديل (FormGroup الموحد) ──
-        grp = FormGroup(f"➕ إضافة / تعديل تصنيف {TYPE_AR.get(self.acc_type, '')}")
+        grp = FormGroup(tr("group_add_edit_header", type_name=TYPE_AR.get(self.acc_type, '')))
 
-        self._lbl_mode = ModeLabel(add_text="تصنيف جديد")
+        self._lbl_mode = ModeLabel(add_text=tr("group_new_placeholder"))
         grp.add_label_row(self._lbl_mode)
 
         self.inp_name = QLineEdit()
         self.inp_name.setMinimumHeight(28)
-        self.inp_name.setPlaceholderText("اسم التصنيف...")
-        grp.add_row("الاسم:", self.inp_name)
+        self.inp_name.setPlaceholderText(tr("group_name_placeholder"))
+        grp.add_row(tr("name") + ":", self.inp_name)
 
         self.cmb_parent = QComboBox()
         self.cmb_parent.setMinimumHeight(28)
-        grp.add_row("تابع لـ:", self.cmb_parent)
+        grp.add_row(tr("group_parent_label"), self.cmb_parent)
 
         # ── ColorPickerWidget الموحد ──
-        self._color_picker = ColorPickerWidget(default="#607d8b")
-        grp.add_row("اللون:", self._color_picker)
+        self._color_picker = ColorPickerWidget(default=tr("group_default_color"))
+        grp.add_row(tr("group_color_label"), self._color_picker)
 
         # ── أزرار الفورم ──
         btn_w = QWidget()
         btn_w.setStyleSheet("background: transparent;")
         bl    = QHBoxLayout(btn_w)
         bl.setContentsMargins(0, 0, 0, 0)
-        self.btn_add    = _make_btn("➕ إضافة", "primary")
-        self.btn_save   = _make_btn("💾 حفظ",  "success")
-        self.btn_cancel = _make_btn("✖ إلغاء", "ghost")
+        self.btn_add    = _make_btn(tr("btn_add"), "primary")
+        self.btn_save   = _make_btn(tr("btn_save"),  "success")
+        self.btn_cancel = _make_btn(tr("btn_cancel"), "ghost")
         self.btn_save.setVisible(False)
         self.btn_cancel.setVisible(False)
         self.btn_add.clicked.connect(self._add)
@@ -161,7 +164,7 @@ class _GroupManagerPanel(SafeConnMixin, QWidget):
         conn = self._get_safe_conn()
         self.cmb_parent.blockSignals(True)
         self.cmb_parent.clear()
-        self.cmb_parent.addItem("— بدون أب (رئيسي) —", None)
+        self.cmb_parent.addItem(tr("group_without_parent"), None)
         rows = fetch_all_groups(conn, self.acc_type)
         tree = build_group_tree(rows)
         self._add_parent_nodes(tree, 0, exclude_id)
@@ -184,7 +187,7 @@ class _GroupManagerPanel(SafeConnMixin, QWidget):
     def _add(self):
         name = self.inp_name.text().strip()
         if not name:
-            QMessageBox.warning(self, "تنبيه", "أدخل اسم التصنيف")
+            msg_warning(self, tr("warning"), tr("category_name_required"))
             return
         insert_group(self._get_safe_conn(), name, self.acc_type,
                      self.cmb_parent.currentData(),
@@ -195,7 +198,7 @@ class _GroupManagerPanel(SafeConnMixin, QWidget):
     def _edit(self):
         gid = self._selected_id()
         if not gid:
-            QMessageBox.information(self, "تنبيه", "اختر تصنيفًا أولًا")
+            msg_info(self, tr("warning"), tr("select_category_first"))
             return
         grp = fetch_group(self._get_safe_conn(), gid)
         if not grp:
@@ -244,7 +247,7 @@ class _GroupManagerPanel(SafeConnMixin, QWidget):
     def _reset(self):
         self._editing_id = None
         self.inp_name.clear()
-        self._color_picker.set_color("#607d8b")
+        self._color_picker.set_color(tr("group_default_color"))
         self._lbl_mode.set_add_mode()
         self.btn_add.setVisible(True)
         self.btn_save.setVisible(False)

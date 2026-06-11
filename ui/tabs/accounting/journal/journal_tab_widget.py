@@ -10,8 +10,9 @@ JournalTab — التبويب الرئيسي لليومية.
 from PyQt5.QtWidgets import QWidget, QVBoxLayout, QSplitter
 from PyQt5.QtCore import Qt, QTimer
 
-from ui.widgets.shared.safe_conn_mixin import SafeConnMixin
-from ui.events import bus
+from ui.widgets.core.conn import SafeConnMixin
+from ui.widgets.core.events import bus
+from ui.theme import _C
 
 from .journal_tree_table import _JournalTreeTable
 from .journal_form       import _JournalForm
@@ -49,7 +50,7 @@ class JournalTab(SafeConnMixin, QWidget):
             pass
         try:
             from db.companies.company_state import company_state
-            new = company_state._get_conn("erp")
+            new = company_state.get_erp_conn()
             self._erp_conn = new
             return new
         except Exception:
@@ -61,10 +62,9 @@ class JournalTab(SafeConnMixin, QWidget):
 
         self._splitter = QSplitter(Qt.Vertical)
         self._splitter.setHandleWidth(6)
-        self._splitter.setStyleSheet("""
-            QSplitter::handle { background:#e0e0e0; }
-            QSplitter::handle:hover { background:#bbdefb; }
-        """)
+        self._splitter.setStyleSheet(
+            f"QSplitter::handle {{ background:{_C['border']}; }}"            f"QSplitter::handle:hover {{ background:{_C['badge_dr_bg']}; }}"
+        )
 
         conn = self._get_safe_conn()
         erp  = self._get_erp_conn()

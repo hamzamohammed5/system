@@ -17,13 +17,13 @@ from PyQt5.QtCore import Qt
 from PyQt5.QtGui  import QColor
 
 from db.accounting.accounting_repo import owners_equity_statement
-from ui.helpers import make_table, section_label
-from ui.events  import bus
-from ui.widgets.shared.panels import (
-    PageHeader,
-    StatRow, StatItem,
-)
-from ui.widgets.shared.safe_conn_mixin import SafeConnMixin
+from ui.widgets.tables.tables import make_table
+from ui.widgets.core.events import bus
+from ui.widgets.components.headers_page import PageHeader
+from ui.widgets.components.stat_card import StatRow, StatItem
+from ui.widgets.core.conn import SafeConnMixin
+from ui.theme import _C
+from ui.widgets.core.i18n import tr
 from ._financial_helpers import _money
 
 
@@ -47,17 +47,17 @@ class OwnersEquityTab(SafeConnMixin, QWidget):
 
         # ── هيدر الصفحة (بدل hdr اليدوي) ──
         root.addWidget(PageHeader(
-            title="قائمة حقوق الملكية",
+            title=tr("owners_equity_title"),
             icon="👑",
-            accent="#2e7d32",
+            accent=_C["acc_type_capital"],
         ))
 
         # ── البطاقات الإحصائية (بدل _stat_card اليدوية) ──
         self._stats = StatRow([
-            StatItem("رأس المال",         color="#2e7d32", icon="💰"),
-            StatItem("صافي الدخل",        color="#1b5e20", icon="📈"),
-            StatItem("المسحوبات",         color="#4e342e", icon="💸"),
-            StatItem("صافي حقوق الملكية", color="#1565c0", icon="⚖️"),
+            StatItem(tr("capital_label_bs"),   color=_C["acc_type_capital"],  icon="💰"),
+            StatItem(tr("net_income_col"),      color=_C["success"],           icon="📈"),
+            StatItem(tr("drawings_label"),      color=_C["acc_type_drawings"], icon="💸"),
+            StatItem(tr("net_equity"),          color=_C["accent"],            icon="⚖️"),
         ])
         root.addWidget(self._stats)
 
@@ -67,13 +67,15 @@ class OwnersEquityTab(SafeConnMixin, QWidget):
         left_w = QWidget()
         ll = QVBoxLayout(left_w)
         ll.setContentsMargins(0, 4, 4, 0)
-        cr_hdr = QLabel("📈 ما يزيد حقوق الملكية (CR↑)")
+        cr_hdr = QLabel(tr("equity_increases"))
         cr_hdr.setStyleSheet(
-            "font-weight:bold; color:#2e7d32; font-size:11px;"
-            "background:#f1f8e9; border-radius:4px; padding:4px 8px;"
+            f"font-weight:bold; color:{_C['acc_type_capital']}; font-size:11px;"
+            f"background:{_C['investor_capital_bg']}; border-radius:4px; padding:4px 8px;"
         )
         ll.addWidget(cr_hdr)
-        self.table_cr = make_table(["الكود", "البند", "النوع", "المبلغ"], stretch_col=1)
+        self.table_cr = make_table(
+            [tr("code"), tr("item_col"), tr("type"), tr("amount")], stretch_col=1
+        )
         self.table_cr.setColumnWidth(0, 60)
         self.table_cr.setColumnWidth(2, 80)
         self.table_cr.setColumnWidth(3, 100)
@@ -83,13 +85,15 @@ class OwnersEquityTab(SafeConnMixin, QWidget):
         right_w = QWidget()
         rl = QVBoxLayout(right_w)
         rl.setContentsMargins(4, 4, 0, 0)
-        dr_hdr = QLabel("📉 ما ينقص حقوق الملكية (DR↑)")
+        dr_hdr = QLabel(tr("equity_decreases"))
         dr_hdr.setStyleSheet(
-            "font-weight:bold; color:#c62828; font-size:11px;"
-            "background:#fdecea; border-radius:4px; padding:4px 8px;"
+            f"font-weight:bold; color:{_C['danger']}; font-size:11px;"
+            f"background:{_C['investor_drawings_bg']}; border-radius:4px; padding:4px 8px;"
         )
         rl.addWidget(dr_hdr)
-        self.table_dr = make_table(["الكود", "البند", "النوع", "المبلغ"], stretch_col=1)
+        self.table_dr = make_table(
+            [tr("code"), tr("item_col"), tr("type"), tr("amount")], stretch_col=1
+        )
         self.table_dr.setColumnWidth(0, 60)
         self.table_dr.setColumnWidth(2, 80)
         self.table_dr.setColumnWidth(3, 100)
@@ -100,13 +104,13 @@ class OwnersEquityTab(SafeConnMixin, QWidget):
 
         eq_frame = QFrame()
         eq_frame.setStyleSheet(
-            "QFrame { background:#e8f4fd; border:1px solid #90caf9; border-radius:6px; }"
+            f"QFrame {{ background:{_C['info_bg']}; border:1px solid {_C['info_border']}; border-radius:6px; }}"
         )
         eq_lay = QHBoxLayout(eq_frame)
         eq_lay.setContentsMargins(12, 8, 12, 8)
         self.lbl_equation = QLabel("")
         self.lbl_equation.setStyleSheet(
-            "font-size:12px; font-weight:bold; color:#1565c0;"
+            f"font-size:12px; font-weight:bold; color:{_C['accent']};"
             "background:transparent; border:none;"
         )
         eq_lay.addWidget(self.lbl_equation)
@@ -127,19 +131,19 @@ class OwnersEquityTab(SafeConnMixin, QWidget):
             n = QTableWidgetItem(row["name"])
             n.setToolTip(row["name"])
             self.table_cr.setItem(r, 1, n)
-            self.table_cr.setItem(r, 2, QTableWidgetItem("رأس المال"))
+            self.table_cr.setItem(r, 2, QTableWidgetItem(tr("capital_label_bs")))
             ai = QTableWidgetItem(f"{row['amount']:,.2f}")
-            ai.setForeground(QColor("#2e7d32"))
+            ai.setForeground(QColor(_C["acc_type_capital"]))
             self.table_cr.setItem(r, 3, ai)
 
         ni = data["net_income"]
         r  = self.table_cr.rowCount()
         self.table_cr.insertRow(r)
         self.table_cr.setItem(r, 0, QTableWidgetItem(""))
-        self.table_cr.setItem(r, 1, QTableWidgetItem("صافي الدخل للفترة"))
-        self.table_cr.setItem(r, 2, QTableWidgetItem("إيرادات - مصروفات"))
+        self.table_cr.setItem(r, 1, QTableWidgetItem(tr("net_income_row")))
+        self.table_cr.setItem(r, 2, QTableWidgetItem(tr("income_minus_expenses")))
         ni_item = QTableWidgetItem(f"{ni:,.2f}")
-        ni_item.setForeground(QColor("#1b5e20") if ni >= 0 else QColor("#b71c1c"))
+        ni_item.setForeground(QColor(_C["success"]) if ni >= 0 else QColor(_C["danger"]))
         self.table_cr.setItem(r, 3, ni_item)
 
         self.table_dr.setRowCount(0)
@@ -150,24 +154,25 @@ class OwnersEquityTab(SafeConnMixin, QWidget):
             n = QTableWidgetItem(row["name"])
             n.setToolTip(row["name"])
             self.table_dr.setItem(r, 1, n)
-            self.table_dr.setItem(r, 2, QTableWidgetItem("مسحوبات"))
+            self.table_dr.setItem(r, 2, QTableWidgetItem(tr("drawings_label")))
             ai = QTableWidgetItem(f"{row['amount']:,.2f}")
-            ai.setForeground(QColor("#4e342e"))
+            ai.setForeground(QColor(_C["acc_type_drawings"]))
             self.table_dr.setItem(r, 3, ai)
 
-        # تحديث StatRow بدل lbls اليدوية
         self._stats.set_value(0, _money(data["total_capital"]))
         self._stats.set_value(1, _money(ni),
-                              color="#1b5e20" if ni >= 0 else "#b71c1c")
+                              color=_C["success"] if ni >= 0 else _C["danger"])
         self._stats.set_value(2, _money(data["total_drawings"]))
 
         total = data["total_equity"]
         self._stats.set_value(3, _money(total),
-                              color="#1565c0" if total >= 0 else "#b71c1c")
+                              color=_C["accent"] if total >= 0 else _C["danger"])
 
         self.lbl_equation.setText(
-            f"رأس المال  {data['total_capital']:,.2f}  +  "
-            f"صافي الدخل  {ni:,.2f}  −  "
-            f"المسحوبات  {data['total_drawings']:,.2f}  =  "
-            f"صافي حقوق الملكية  {total:,.2f}"
+            tr("equity_equation").format(
+                capital=f"{data['total_capital']:,.2f}",
+                net_income=f"{ni:,.2f}",
+                drawings=f"{data['total_drawings']:,.2f}",
+                total=f"{total:,.2f}",
+            )
         )

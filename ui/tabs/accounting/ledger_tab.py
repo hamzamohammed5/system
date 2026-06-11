@@ -16,8 +16,9 @@ from PyQt5.QtCore import Qt
 
 from .ledger.ledger_accounts_panel import _AccountsPanel
 from .ledger.ledger_t_account import _TAccountPanel
-from ui.widgets.shared.safe_conn_mixin import SafeConnMixin
-from ui.events import bus
+from ui.widgets.core.conn import SafeConnMixin
+from ui.widgets.core.events import bus
+from ui.widgets.theme.table_styles import splitter_style as get_splitter_style
 
 
 class LedgerTab(SafeConnMixin, QWidget):
@@ -39,10 +40,7 @@ class LedgerTab(SafeConnMixin, QWidget):
 
         splitter = QSplitter(Qt.Horizontal)
         splitter.setHandleWidth(6)
-        splitter.setStyleSheet("""
-            QSplitter::handle { background: #e0e0e0; }
-            QSplitter::handle:hover { background: #bbdefb; }
-        """)
+        splitter.setStyleSheet(get_splitter_style())
 
         left = QWidget()
         ll   = QVBoxLayout(left)

@@ -5,22 +5,32 @@ ui/tabs/accounting/helpers.py
 
 [تحديث v2]: _stat_card تستخدم stat_card_pair من stat_row بدل كود محلي.
 [تحديث v3]: _spin تستخدم spin_field من form_utils بدل تعريف محلي مكرر.
+[تحديث v4]: _get_type_colors تقرأ من _C دائماً — لا hardcoded.
+             TYPE_COLORS يُحدَّث عند كل استدعاء _get_type_colors().
 """
 
 from db.accounting.accounting_schema import TYPE_AR, NORMAL_BALANCE
-from ui.font_utils import card_title_style, card_value_style
-from ui.widgets.shared.stat_row import stat_card_pair   # ← الموحد
-from ui.widgets.shared.form_utils import spin_field     # ← الموحد (بدل التعريف المحلي)
+from ui.widgets.components.stat_card import stat_card_pair
+from ui.widgets.panels.form_fields import spin_field
+from ui.theme import _C
+from ui.widgets.core.i18n import tr
 
 
-TYPE_COLORS = {
-    "asset":    "#1565c0",
-    "liability":"#c62828",
-    "capital":  "#2e7d32",
-    "revenue":  "#6a1b9a",
-    "expense":  "#e65100",
-    "drawings": "#4e342e",
-}
+def _get_type_colors() -> dict:
+    """ألوان أنواع الحسابات — تُقرأ من _C دائماً لدعم الثيمات."""
+    return {
+        "asset":    _C["acc_type_asset"],
+        "liability":_C["acc_type_liability"],
+        "capital":  _C["acc_type_capital"],
+        "revenue":  _C["acc_type_revenue"],
+        "expense":  _C["acc_type_expense"],
+        "drawings": _C["acc_type_drawings"],
+    }
+
+
+# للتوافق مع الكود الذي يستورد TYPE_COLORS مباشرة
+# استخدم _get_type_colors() مباشرة في الكود الجديد
+TYPE_COLORS = _get_type_colors()
 
 
 def _spin(max_=999_999_999, dec=2, min_height: int = 30):
@@ -32,12 +42,12 @@ def _spin(max_=999_999_999, dec=2, min_height: int = 30):
 
 
 def _money(val: float) -> str:
-    return f"{val:,.2f}  ج"
+    return f"{val:,.2f}  {tr('currency_abbr')}"
 
 
-def _stat_card(label: str, color: str = "#1565c0"):
+def _stat_card(label: str, color: str = None):
     """
     يرجع (QFrame, QLabel_value) — بطاقة إحصائية.
     [تحديث]: يستخدم stat_card_pair الموحدة بدل كود محلي مكرر.
     """
-    return stat_card_pair(label=label, color=color)
+    return stat_card_pair(label=label, color=color or _C["accent"])

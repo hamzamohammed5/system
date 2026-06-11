@@ -22,25 +22,10 @@ from db.accounting.accounting_repo import (
 )
 from db.accounting.accounting_repo_ui_helpers import fetch_account_by_code
 from db.accounting.accounting_schema import TYPE_AR
-from ui.helpers import danger_button
-from ui.events  import bus
-from ui.widgets.shared.safe_conn_mixin import SafeConnMixin
-
-
-def _get_current_company_id():
-    try:
-        from db.companies.company_state import company_state
-        return company_state.company_id if company_state.is_ready else None
-    except Exception:
-        return None
-
-
-def _emit_data_changed():
-    cid = _get_current_company_id()
-    if cid is not None:
-        bus.company_data_changed.emit(cid)
-    else:
-        bus.data_changed.emit()
+from ui.theme import _C
+from ui.widgets.core.events import emit_company_data_changed
+from ui.widgets.core.conn import SafeConnMixin
+from ui.widgets.core.i18n import tr
 
 
 class _AccountForm(SafeConnMixin, QWidget):
@@ -56,40 +41,40 @@ class _AccountForm(SafeConnMixin, QWidget):
         root.setContentsMargins(6, 8, 10, 10)
         root.setSpacing(8)
 
-        grp = QGroupBox("➕ إضافة / تعديل حساب")
-        grp.setStyleSheet("""
-            QGroupBox { font-weight:bold; color:#1565c0;
-                border:1px solid #e0e0e0; border-radius:6px;
-                margin-top:8px; padding-top:8px; }
-            QGroupBox::title { subcontrol-origin:margin; padding:0 6px; }
+        grp = QGroupBox(tr("group_add_edit_header", type_name=tr("accounts")))
+        grp.setStyleSheet(f"""
+            QGroupBox {{ font-weight:bold; color:{_C['accent']};
+                border:1px solid {_C['border']}; border-radius:6px;
+                margin-top:8px; padding-top:8px; }}
+            QGroupBox::title {{ subcontrol-origin:margin; padding:0 6px; }}
         """)
         fl = QFormLayout(grp)
         fl.setSpacing(8)
         fl.setLabelAlignment(Qt.AlignRight)
 
-        self.lbl_form_mode = QLabel("── حساب جديد ──")
-        self.lbl_form_mode.setStyleSheet("font-weight:bold; color:#1565c0;")
+        self.lbl_form_mode = QLabel(tr("new_journal_entry").replace("قيد يومية", tr("accounts")).strip("─ "))
+        self.lbl_form_mode.setStyleSheet(f"font-weight:bold; color:{_C['accent']};")
         fl.addRow(self.lbl_form_mode)
 
         self.inp_code = QLineEdit()
-        self.inp_code.setPlaceholderText("مثال: 1141")
+        self.inp_code.setPlaceholderText("1141")
         self.inp_code.setMinimumHeight(28)
-        fl.addRow("الكود:", self.inp_code)
+        fl.addRow(f"{tr('account_code')}:", self.inp_code)
 
         self.inp_name = QLineEdit()
-        self.inp_name.setPlaceholderText("اسم الحساب...")
+        self.inp_name.setPlaceholderText(tr("name") + "...")
         self.inp_name.setMinimumHeight(28)
-        fl.addRow("الاسم:", self.inp_name)
+        fl.addRow(f"{tr('name')}:", self.inp_name)
 
         self.cmb_type = QComboBox()
         self.cmb_type.setMinimumHeight(28)
         for t in self.acc_types:
             self.cmb_type.addItem(TYPE_AR.get(t, t), t)
-        fl.addRow("النوع:", self.cmb_type)
+        fl.addRow(f"{tr('account_type')}:", self.cmb_type)
 
         self.cmb_group = QComboBox()
         self.cmb_group.setMinimumHeight(28)
-        fl.addRow("التصنيف:", self.cmb_group)
+        fl.addRow(f"{tr('account_group')}:", self.cmb_group)
 
         self.cmb_type.currentIndexChanged.connect(self._on_type_changed)
 
@@ -177,7 +162,7 @@ class _AccountForm(SafeConnMixin, QWidget):
             insert_account(conn, code, name, acc_type, parent_id, group_id)
             self.inp_code.clear()
             self.inp_name.clear()
-            _emit_data_changed()
+            emit_company_data_changed()
         except Exception as e:
             QMessageBox.warning(self, "خطأ", str(e))
 
@@ -210,7 +195,7 @@ class _AccountForm(SafeConnMixin, QWidget):
         update_account(self._get_safe_conn(), self._editing_id, name,
                        self.cmb_group.currentData())
         self._cancel_edit()
-        _emit_data_changed()
+        emit_company_data_changed()
 
     def _cancel_edit(self):
         self._editing_id = None

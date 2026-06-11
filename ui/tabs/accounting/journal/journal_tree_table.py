@@ -12,7 +12,7 @@ _JournalTreeTable — جدول القيود المحاسبية.
 from PyQt5.QtWidgets import (
     QWidget, QVBoxLayout,
     QTableWidget, QTableWidgetItem, QHeaderView,
-    QAbstractItemView, QMessageBox,
+    QAbstractItemView,
 )
 from PyQt5.QtCore import Qt, QTimer
 from PyQt5.QtGui  import QColor
@@ -21,16 +21,19 @@ from db.accounting.accounting_repo import (
     fetch_all_entries, fetch_entry_lines,
     delete_entry,
 )
-from ui.events import bus
-from ui.widgets.shared.safe_conn_mixin import SafeConnMixin
-from ui.widgets.shared.company_utils import get_active_company_id
-from ui.widgets.shared.panels import (
-    ListHeader, ListStatusBar,
-    confirm_delete,
-    _make_btn,
-    bold_table_item, colored_table_item,
-    center_table_item, set_row_background,
+from ui.widgets.core.events import bus, get_active_company_id, emit_company_data_changed
+from ui.widgets.core.conn import SafeConnMixin
+from ui.widgets.components.headers_list import ListHeader, StatusBar as ListStatusBar
+from ui.widgets.dialogs.confirm import confirm_delete
+from ui.widgets.components.button import make_btn as _make_btn
+from ui.widgets.tables.tables import (
+    bold_item as bold_table_item,
+    colored_item as colored_table_item,
+    center_item as center_table_item,
+    set_row_bg as set_row_background,
 )
+from ui.theme import _C
+from ui.widgets.core.i18n import tr
 from ..helpers  import TYPE_COLORS
 from .journal_filter  import _JournalFilterBar
 from .journal_form    import _JournalForm
@@ -39,7 +42,9 @@ from .journal_form    import _JournalForm
 class _JournalTreeTable(SafeConnMixin, QWidget):
     """جدول القيود المحاسبية — SafeConnMixin يضمن conn الشركة الصح."""
 
-    COLS = ["#", "التاريخ", "رقم القيد", "البيان / الحساب", "DR", "CR", "الحالة"]
+    @staticmethod
+    def _cols():
+        return ["#", tr("date"), tr("ref_no"), tr("journal_description"), "DR", "CR", tr("status")]
 
     def __init__(self, conn, parent=None):
         super().__init__(parent)
@@ -64,12 +69,12 @@ class _JournalTreeTable(SafeConnMixin, QWidget):
 
         # ── هيدر موحد ──
         self._header = ListHeader(
-            title="── القيود المحاسبية المحفوظة ──",
+            title=tr("journal_table_title"),
             show_search=False,
         )
-        self._header.add_action("⊞ توسيع الكل",   self._expand_all,   "normal")
-        self._header.add_action("⊟ طي الكل",      self._collapse_all, "normal")
-        self._header.add_action("🗑️  حذف المحدد", self._delete_selected, "danger")
+        self._header.add_action(tr("journal_expand_all"),   self._expand_all,   "normal")
+        self._header.add_action(tr("journal_collapse_all"), self._collapse_all, "normal")
+        self._header.add_action(tr("journal_delete_selected"), self._delete_selected, "danger")
         root.addWidget(self._header)
 
         # ── شريط الفلاتر ──
@@ -87,8 +92,9 @@ class _JournalTreeTable(SafeConnMixin, QWidget):
 
         # ── الجدول ──
         self.table = QTableWidget()
-        self.table.setColumnCount(len(self.COLS))
-        self.table.setHorizontalHeaderLabels(self.COLS)
+        _cols = self._cols()
+        self.table.setColumnCount(len(_cols))
+        self.table.setHorizontalHeaderLabels(_cols)
         self.table.setSelectionBehavior(QAbstractItemView.SelectRows)
         self.table.setEditTriggers(QAbstractItemView.NoEditTriggers)
         self.table.setAlternatingRowColors(False)
@@ -177,20 +183,20 @@ class _JournalTreeTable(SafeConnMixin, QWidget):
             self._row_meta[r] = {"entry_id": eid, "is_parent": True, "is_child": False}
 
             self.table.setItem(r, 0, center_table_item(
-                "▼" if expanded else "▶", color="#1565c0", bold=True,
+                "▼" if expanded else "▶", color=_C["accent"], bold=True,
             ))
-            self.table.setItem(r, 1, center_table_item(entry["date"], color="#2e7d32", bold=True))
-            self.table.setItem(r, 2, bold_table_item(entry["ref_no"],      "#1565c0"))
+            self.table.setItem(r, 1, center_table_item(entry["date"], color=_C["success"], bold=True))
+            self.table.setItem(r, 2, bold_table_item(entry["ref_no"],      _C["accent"]))
             self.table.setItem(r, 3, bold_table_item(entry["description"]))
-            self.table.setItem(r, 4, bold_table_item(f"{total_dr:,.2f}",   "#1565c0"))
-            self.table.setItem(r, 5, bold_table_item(f"{total_cr:,.2f}",   "#c62828"))
+            self.table.setItem(r, 4, bold_table_item(f"{total_dr:,.2f}",   _C["acc_type_asset"]))
+            self.table.setItem(r, 5, bold_table_item(f"{total_cr:,.2f}",   _C["acc_type_liability"]))
 
             diff      = total_dr - total_cr
-            bal_color = "#2e7d32" if abs(diff) < 0.01 else "#c62828"
-            bal_text  = "✅ متوازن" if abs(diff) < 0.01 else f"⚠️ {abs(diff):,.2f}"
+            bal_color = _C["success"] if abs(diff) < 0.01 else _C["danger"]
+            bal_text  = tr("journal_status_balanced") if abs(diff) < 0.01 else tr("journal_status_unbalanced", diff=f"{abs(diff):,.2f}")
             self.table.setItem(r, 6, bold_table_item(bal_text, bal_color))
 
-            set_row_background(self.table, r, "#eef3fb")
+            set_row_background(self.table, r, _C["accent_light"])
 
             if expanded:
                 for line in entry["lines"]:
@@ -211,7 +217,7 @@ class _JournalTreeTable(SafeConnMixin, QWidget):
                         desc_text += f"  │  {line['description']}"
 
                     is_dr  = line["debit"] > 0
-                    row_bg = "#f4f8ff" if is_dr else "#fff4f4"
+                    row_bg = _C["journal_dr_bg"] if is_dr else _C["journal_cr_bg"]
 
                     for c in range(3):
                         self.table.setItem(rc, c, QTableWidgetItem(""))
@@ -222,11 +228,11 @@ class _JournalTreeTable(SafeConnMixin, QWidget):
                     ))
 
                     if is_dr:
-                        self.table.setItem(rc, 4, colored_table_item(f"{line['debit']:,.2f}",  "#1565c0"))
+                        self.table.setItem(rc, 4, colored_table_item(f"{line['debit']:,.2f}",  _C["acc_type_asset"]))
                         self.table.setItem(rc, 5, QTableWidgetItem(""))
                     else:
                         self.table.setItem(rc, 4, QTableWidgetItem(""))
-                        self.table.setItem(rc, 5, colored_table_item(f"{line['credit']:,.2f}", "#c62828"))
+                        self.table.setItem(rc, 5, colored_table_item(f"{line['credit']:,.2f}", _C["acc_type_liability"]))
 
                     self.table.setItem(rc, 6, QTableWidgetItem(""))
                     set_row_background(self.table, rc, row_bg)
@@ -260,9 +266,10 @@ class _JournalTreeTable(SafeConnMixin, QWidget):
         return meta["entry_id"]
 
     def _delete_selected(self):
+        from ui.widgets.dialogs.message import msg_info
         eid = self._selected_entry_id()
         if eid is None:
-            QMessageBox.information(self, "تنبيه", "اختر قيداً أولاً")
+            msg_info(self, tr("warning"), tr("select_entry_first"))
             return
         entry_data = next(
             (e for e in self._entries_data if e["id"] == eid), None
@@ -271,5 +278,4 @@ class _JournalTreeTable(SafeConnMixin, QWidget):
         if confirm_delete(self, desc):
             delete_entry(self._get_safe_conn(), eid)
             self._expanded.discard(eid)
-            from ui.widgets.shared.company_utils import emit_company_data_changed
             emit_company_data_changed()

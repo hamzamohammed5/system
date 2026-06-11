@@ -15,9 +15,10 @@ from PyQt5.QtGui  import QColor, QFont, QStandardItemModel, QStandardItem
 
 from db.accounting.accounting_repo import fetch_all_groups, build_group_tree
 from db.accounting.accounting_schema import TYPE_AR, EQUITY_TYPES
-from ui.events import bus
-from ui.widgets.shared.safe_conn_mixin import SafeConnMixin
-from ui.widgets.shared.company_utils import get_active_company_id
+from ui.widgets.core.events import bus, get_active_company_id
+from ui.widgets.core.conn import SafeConnMixin
+from ui.widgets.core.i18n import tr
+from ui.theme import _C
 from ui.tabs.accounting.helpers import TYPE_COLORS
 from ._no_select_delegate import _NoSelectDelegate
 
@@ -35,8 +36,9 @@ _TYPE_ICONS = {
 _ROLE_GROUP_ID  = Qt.UserRole + 1
 _ROLE_IS_HEADER = Qt.UserRole + 2
 
-_EQUITY_COLOR = "#2e7d32"
-_EQUITY_LABEL = "حقوق الملكية"
+def _equity_color() -> str:
+    """لون حقوق الملكية من الثيم — يُقرأ في runtime لدعم تغيير الثيم."""
+    return _C["investor_capital_text"]
 
 
 class _TreeGroupCombo(SafeConnMixin, QComboBox):
@@ -63,24 +65,24 @@ class _TreeGroupCombo(SafeConnMixin, QComboBox):
         )
         self._tree_view.setEditTriggers(QTreeView.NoEditTriggers)
         self._tree_view.setSelectionBehavior(QTreeView.SelectRows)
-        self._tree_view.setStyleSheet("""
-            QTreeView {
-                border: 1px solid #c5cae9;
-                background: white;
+        self._tree_view.setStyleSheet(f"""
+            QTreeView {{
+                border: 1px solid {_C['border_med']};
+                background: {_C['bg_input']};
                 outline: none;
                 font-size: 11px;
-            }
-            QTreeView::item {
+            }}
+            QTreeView::item {{
                 padding: 3px 6px;
                 min-height: 24px;
-            }
-            QTreeView::item:selected {
-                background: #e3f2fd;
-                color: #1565c0;
-            }
-            QTreeView::item:hover:!selected {
-                background: #f5f5f5;
-            }
+            }}
+            QTreeView::item:selected {{
+                background: {_C['badge_dr_bg']};
+                color: {_C['accent']};
+            }}
+            QTreeView::item:hover:!selected {{
+                background: {_C['bg_hover']};
+            }}
         """)
         self.setView(self._tree_view)
         self._tree_view.clicked.connect(self._on_tree_clicked)
@@ -115,13 +117,13 @@ class _TreeGroupCombo(SafeConnMixin, QComboBox):
         prev_gid = self.currentData()
         self._model.clear()
 
-        all_item = QStandardItem("— كل التصنيفات —")
+        all_item = QStandardItem(tr("all_groups"))
         all_item.setData(None, _ROLE_GROUP_ID)
         all_item.setData(False, _ROLE_IS_HEADER)
         all_item.setFlags(all_item.flags() | Qt.ItemIsEnabled | Qt.ItemIsSelectable)
         f = QFont(); f.setItalic(True)
         all_item.setFont(f)
-        all_item.setForeground(QColor("#555"))
+        all_item.setForeground(QColor(_C['text_sec']))
         self._model.appendRow(all_item)
 
         try:
@@ -150,7 +152,7 @@ class _TreeGroupCombo(SafeConnMixin, QComboBox):
             hf = QFont(); hf.setBold(True); hf.setPointSize(hf.pointSize() + 1)
             header_item.setFont(hf)
             header_item.setForeground(QColor(TYPE_COLORS.get(acc_type, "#333")))
-            bg = "#f1f8e9" if acc_type in EQUITY_TYPES else "#f0f4ff"
+            bg = _C["investor_capital_bg"] if acc_type in EQUITY_TYPES else _C["journal_header_bg"]
             header_item.setBackground(QColor(bg))
             self._model.appendRow(header_item)
             self._add_group_items(header_item, tree, acc_type)
@@ -207,7 +209,7 @@ class _TreeGroupCombo(SafeConnMixin, QComboBox):
         conn = self._get_safe_conn()
 
         if gid is None:
-            self.setCurrentText("— كل التصنيفات —")
+            self.setCurrentText(tr("all_groups"))
             self._group_entry_ids = None
         else:
             self.setCurrentText(item.text().strip())

@@ -61,6 +61,7 @@ _LIGHT_THEME: Dict[str, str] = {
     "text_sec":     "#4A4843",
     "text_muted":   "#7A7870",
     "text_disabled":"#A8A69E",
+    "text_hint":    "#B0ADA5",
     "accent":       "#3D5A80",
     "accent_hover": "#2E4460",
     "accent_light": "#D6E4F0",
@@ -92,6 +93,9 @@ _LIGHT_THEME: Dict[str, str] = {
     "orange":        "#e65100",
     "orange_bg":     "#fff3e0",
     "orange_border": "#ffcc80",
+    "teal":          "#0891b2",
+    "teal_bg":       "#e0f7fa",
+    "teal_border":   "#80deea",
 
     # ── Waste (نسبة الهادر) ──────────────────────────────
     "waste_zero_bg":         "#f5f5f5",
@@ -117,6 +121,67 @@ _LIGHT_THEME: Dict[str, str] = {
     # ── Card fallback ─────────────────────────────────────
     "card_fallback_bg":      "#f5f5f5",
     "card_fallback_border":  "#e0e0e0",
+
+    # ── Accounting Journal ────────────────────────────────────
+    # journal_dr_accent == badge_dr_text == acc_type_asset (#1565c0)
+    # journal_cr_accent == badge_cr_text == acc_type_liability (#c62828)
+    "journal_dr_bg":          "#f4f8ff",
+    "journal_dr_border":      "#c5d8f7",
+    "journal_dr_accent":      "#1565c0",   # == badge_dr_text == acc_type_asset
+    "journal_cr_bg":          "#fff4f4",
+    "journal_cr_border":      "#f7c5c5",
+    "journal_cr_accent":      "#c62828",   # == badge_cr_text == acc_type_liability
+    "journal_neutral_bg":     "#fafbff",
+    "journal_neutral_border": "#dde3f0",
+    "journal_header_bg":      "#f0f4ff",
+    "journal_header_border":  "#c5cae9",
+    # ── Investor ─────────────────────────────────────────────
+    # investor_capital_text == acc_type_capital (#2e7d32)
+    # investor_drawings_text == badge_cr_text == acc_type_liability (#c62828)
+    # investor_drawings_bg == badge_cr_bg == t_account_cr_bg (#fdecea)
+    "investor_capital_bg":    "#f1f8e9",
+    "investor_capital_text":  "#2e7d32",   # == acc_type_capital
+    "investor_drawings_bg":   "#fdecea",   # == badge_cr_bg == t_account_cr_bg
+    "investor_drawings_text": "#c62828",   # == badge_cr_text == acc_type_liability
+    "investor_link_bg":       "#fff8e1",
+    "investor_link_border":   "#ffe082",
+    "investor_link_text":     "#f57f17",
+    # ── Audit Log — يعكس danger/warning/success مباشرة ──────
+    # audit_delete_fg == danger,        audit_delete_bg == danger_bg
+    # audit_update_fg == warning,       audit_update_bg == warning_bg
+    # audit_create_fg == success,       audit_create_bg == success_bg
+    "audit_delete_fg":        "#C0392B",   # == danger
+    "audit_delete_bg":        "#FDF0EF",   # == danger_bg
+    "audit_update_fg":        "#7A5C00",   # == warning
+    "audit_update_bg":        "#FDF8E7",   # == warning_bg
+    "audit_create_fg":        "#2E7D52",   # == success
+    "audit_create_bg":        "#EDF7F2",   # == success_bg
+    # ── T-Account ────────────────────────────────────────────
+    # t_account_dr_bg == badge_dr_bg,  t_account_cr_bg == badge_cr_bg == investor_drawings_bg
+    "t_account_dr_bg":        "#e3f2fd",   # == badge_dr_bg
+    "t_account_cr_bg":        "#fdecea",   # == badge_cr_bg == investor_drawings_bg
+    "t_account_frame":        "#c5cae9",
+    # ── Badge ────────────────────────────────────────────────
+    # badge_dr_text == journal_dr_accent == acc_type_asset
+    # badge_cr_text == journal_cr_accent == acc_type_liability == investor_drawings_text
+    "badge_dr_bg":            "#e3f2fd",   # == t_account_dr_bg
+    "badge_dr_text":          "#1565c0",   # == journal_dr_accent == acc_type_asset
+    "badge_cr_bg":            "#fdecea",   # == t_account_cr_bg == investor_drawings_bg
+    "badge_cr_text":          "#c62828",   # == journal_cr_accent == acc_type_liability
+    # ── Account type colors ──────────────────────────────────
+    # acc_type_asset    == badge_dr_text == journal_dr_accent (#1565c0)
+    # acc_type_liability== badge_cr_text == journal_cr_accent == investor_drawings_text (#c62828)
+    # acc_type_capital  == investor_capital_text (#2e7d32)
+    # acc_type_revenue  == purple (#6a1b9a)
+    # acc_type_expense  == orange (#e65100)
+    "acc_type_asset":         "#1565c0",
+    "acc_type_liability":     "#c62828",
+    "acc_type_capital":       "#2e7d32",
+    "acc_type_revenue":       "#6a1b9a",
+    "acc_type_expense":       "#e65100",
+    "acc_type_drawings":      "#4e342e",
+    # ── Separator / muted ────────────────────────────────────
+    "text_separator":         "#78909c",
 }
 
 _DARK_THEME: Dict[str, str] = {
@@ -134,6 +199,7 @@ _DARK_THEME: Dict[str, str] = {
     "text_sec":     "#B8B5AE",
     "text_muted":   "#7A7870",
     "text_disabled":"#4A4843",
+    "text_hint":    "#5A5850",
     "accent":       "#5B8DB8",
     "accent_hover": "#7AABD4",
     "accent_light": "#1A2A3A",
@@ -165,6 +231,9 @@ _DARK_THEME: Dict[str, str] = {
     "orange":        "#FFB74D",
     "orange_bg":     "#281400",
     "orange_border": "#503000",
+    "teal":          "#26C6DA",
+    "teal_bg":       "#0a2830",
+    "teal_border":   "#1a5060",
 
     # ── Waste (نسبة الهادر) ──────────────────────────────
     "waste_zero_bg":         "#2a2a2a",
@@ -189,6 +258,81 @@ _DARK_THEME: Dict[str, str] = {
     # ── Card fallback ─────────────────────────────────────
     "card_fallback_bg":      "#2a2a2a",
     "card_fallback_border":  "#3a3a3a",
+
+    # ── Accounting Journal ────────────────────────────────────
+    # journal_dr_accent == badge_dr_text == acc_type_asset == accent (#5B8DB8)
+    # journal_cr_accent == badge_cr_text == acc_type_liability == danger == investor_drawings_text (#E57373)
+    # journal_dr_bg == badge_dr_bg == t_account_dr_bg (#1a2a3a)
+    # journal_cr_bg == badge_cr_bg == t_account_cr_bg == danger_bg == audit_delete_bg == investor_drawings_bg (#2a1010)
+    # journal_neutral_bg == bg_surface (#1A1A1A)
+    # journal_neutral_border == border (#2E2E2E)
+    "journal_dr_bg":          "#1a2a3a",   # == badge_dr_bg == t_account_dr_bg
+    "journal_dr_border":      "#2a4a6a",
+    "journal_dr_accent":      "#5B8DB8",   # == badge_dr_text == acc_type_asset == accent
+    "journal_cr_bg":          "#2a1010",   # == badge_cr_bg == t_account_cr_bg == danger_bg == investor_drawings_bg
+    "journal_cr_border":      "#5a2020",   # == danger_border
+    "journal_cr_accent":      "#E57373",   # == badge_cr_text == acc_type_liability == danger == investor_drawings_text
+    "journal_neutral_bg":     "#1A1A1A",   # == bg_surface
+    "journal_neutral_border": "#2E2E2E",   # == border
+    "journal_header_bg":      "#1a2030",
+    "journal_header_border":  "#2a3050",
+    # ── Investor ─────────────────────────────────────────────
+    # investor_capital_bg == success_bg == audit_create_bg (#0a2018)
+    # investor_capital_text == success == audit_create_fg == acc_type_capital (#66BB8A)
+    # investor_drawings_bg == danger_bg == audit_delete_bg == journal_cr_bg == badge_cr_bg == t_account_cr_bg (#2a1010)
+    # investor_drawings_text == danger == audit_delete_fg == badge_cr_text == journal_cr_accent == acc_type_liability (#E57373)
+    "investor_capital_bg":    "#0a2018",   # == success_bg == audit_create_bg
+    "investor_capital_text":  "#66BB8A",   # == success == audit_create_fg == acc_type_capital
+    "investor_drawings_bg":   "#2a1010",   # == danger_bg == badge_cr_bg == journal_cr_bg
+    "investor_drawings_text": "#E57373",   # == danger == badge_cr_text == journal_cr_accent
+    "investor_link_bg":       "#282000",
+    "investor_link_border":   "#4a3800",
+    "investor_link_text":     "#FFD54F",
+    # ── Audit Log — يعكس danger/warning/success مباشرة ──────
+    # audit_delete_fg == danger == badge_cr_text == journal_cr_accent (#E57373)
+    # audit_delete_bg == danger_bg == journal_cr_bg == badge_cr_bg == investor_drawings_bg (#2a1010)
+    # audit_update_fg == warning (#FFD54F)
+    # audit_update_bg == warning_bg (#2a2000)
+    # audit_create_fg == success == investor_capital_text == acc_type_capital (#66BB8A)
+    # audit_create_bg == success_bg == investor_capital_bg (#0a2018)
+    "audit_delete_fg":        "#E57373",   # == danger
+    "audit_delete_bg":        "#2a1010",   # == danger_bg
+    "audit_update_fg":        "#FFD54F",   # == warning
+    "audit_update_bg":        "#2a2000",   # == warning_bg
+    "audit_create_fg":        "#66BB8A",   # == success
+    "audit_create_bg":        "#0a2018",   # == success_bg
+    # ── T-Account ────────────────────────────────────────────
+    # t_account_dr_bg == badge_dr_bg == journal_dr_bg (#1a2a3a)
+    # t_account_cr_bg == badge_cr_bg == journal_cr_bg == danger_bg (#2a1010)
+    "t_account_dr_bg":        "#1a2a3a",   # == badge_dr_bg == journal_dr_bg
+    "t_account_cr_bg":        "#2a1010",   # == badge_cr_bg == journal_cr_bg == danger_bg
+    "t_account_frame":        "#2a3050",
+    # ── Badge ────────────────────────────────────────────────
+    # badge_dr_bg == t_account_dr_bg == journal_dr_bg (#1a2a3a)
+    # badge_dr_text == journal_dr_accent == acc_type_asset == accent (#5B8DB8)
+    # badge_cr_bg == t_account_cr_bg == journal_cr_bg == danger_bg (#2a1010)
+    # badge_cr_text == journal_cr_accent == acc_type_liability == danger (#E57373)
+    "badge_dr_bg":            "#1a2a3a",   # == t_account_dr_bg == journal_dr_bg
+    "badge_dr_text":          "#5B8DB8",   # == journal_dr_accent == acc_type_asset == accent
+    "badge_cr_bg":            "#2a1010",   # == t_account_cr_bg == journal_cr_bg == danger_bg
+    "badge_cr_text":          "#E57373",   # == journal_cr_accent == acc_type_liability == danger
+    # ── Account type colors ──────────────────────────────────
+    # acc_type_asset    == badge_dr_text == journal_dr_accent == accent (#5B8DB8)
+    # acc_type_liability== badge_cr_text == journal_cr_accent == danger (#E57373)
+    # acc_type_capital  == success == investor_capital_text (#66BB8A)
+    # acc_type_revenue  == purple (#CE93D8)
+    # acc_type_expense  == orange (#FFB74D)
+    "acc_type_asset":         "#5B8DB8",   # == accent == badge_dr_text
+    "acc_type_liability":     "#E57373",   # == danger == badge_cr_text
+    "acc_type_capital":       "#66BB8A",   # == success == investor_capital_text
+    "acc_type_revenue":       "#CE93D8",   # == purple
+    "acc_type_expense":       "#FFB74D",   # == orange
+    "acc_type_drawings":      "#BCAAA4",
+    # ── Separator / muted ────────────────────────────────────
+    "text_separator":         "#607d8b",
+    # ── Investor link ─────────────────────────────────────────
+    # investor_link_bg == warning_bg (#2A2000), investor_link_border == warning_border (#4A3800)
+    # investor_link_text == warning (#FFD54F)
 }
 
 THEMES: Dict[str, Dict[str, str]] = {

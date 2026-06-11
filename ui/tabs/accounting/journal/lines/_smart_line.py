@@ -22,9 +22,10 @@ from PyQt5.QtCore import Qt
 
 from db.accounting.accounting_repo import fetch_account, get_normal_balance
 from db.accounting.accounting_schema import NORMAL_BALANCE
-from ui.events import bus
-from ui.widgets.shared.safe_conn_mixin import DualConnMixin
-from ui.widgets.shared.company_utils import get_active_company_id
+from ui.widgets.core.events import bus, get_active_company_id
+from ui.widgets.core.conn import DualConnMixin
+from ui.theme import _C
+from ui.widgets.core.i18n import tr
 from ..journal_account_picker import _AccountPickerButton
 
 _INVESTOR_TYPES = {"capital", "drawings"}
@@ -59,13 +60,13 @@ class _SmartLine(DualConnMixin, QFrame):
             self._reload_investors()
 
     def _build(self):
-        self.setStyleSheet("""
-            QFrame {
-                background: #fafbff;
-                border: 1px solid #dde3f0;
+        self.setStyleSheet(f"""
+            QFrame {{
+                background: {_C['journal_neutral_bg']};
+                border: 1px solid {_C['journal_neutral_border']};
                 border-radius: 6px;
-            }
-            QFrame:hover { border-color: #90aad4; }
+            }}
+            QFrame:hover {{ border-color: {_C['border_med']}; }}
         """)
         lay = QVBoxLayout(self)
         lay.setContentsMargins(6, 4, 6, 4)
@@ -79,8 +80,8 @@ class _SmartLine(DualConnMixin, QFrame):
         for b in (self.btn_up, self.btn_dn):
             b.setFixedSize(18, 18)
             b.setStyleSheet(
-                "QPushButton { background:transparent; border:none; color:#bbb; font-size:8px; }"
-                "QPushButton:hover { color:#1565c0; }"
+                f"QPushButton {{ background:transparent; border:none; color:{_C['text_disabled']}; font-size:8px; }}"
+                f"QPushButton:hover {{ color:{_C['accent']}; }}"
             )
         self.btn_up.clicked.connect(lambda: self._on_move_up(self))
         self.btn_dn.clicked.connect(lambda: self._on_move_dn(self))
@@ -100,11 +101,11 @@ class _SmartLine(DualConnMixin, QFrame):
         dir_lay = QHBoxLayout(dir_frame)
         dir_lay.setContentsMargins(0, 0, 0, 0)
         dir_lay.setSpacing(3)
-        self.rdo_inc = QRadioButton("زيادة ✚")
-        self.rdo_dec = QRadioButton("نقص ✖")
+        self.rdo_inc = QRadioButton(tr("journal_increase"))
+        self.rdo_dec = QRadioButton(tr("journal_decrease"))
         self.rdo_inc.setChecked(True)
-        self.rdo_inc.setStyleSheet("font-size:10px; color:#2e7d32; font-weight:bold;")
-        self.rdo_dec.setStyleSheet("font-size:10px; color:#c62828; font-weight:bold;")
+        self.rdo_inc.setStyleSheet(f"font-size:10px; color:{_C['investor_capital_text']}; font-weight:bold;")
+        self.rdo_dec.setStyleSheet(f"font-size:10px; color:{_C['journal_cr_accent']}; font-weight:bold;")
         self._dir_group = QButtonGroup(self)
         self._dir_group.addButton(self.rdo_inc, 1)
         self._dir_group.addButton(self.rdo_dec, 0)
@@ -123,15 +124,15 @@ class _SmartLine(DualConnMixin, QFrame):
         main_row.addWidget(self.sp_amount)
 
         self.inp_desc = QLineEdit()
-        self.inp_desc.setPlaceholderText("بيان...")
+        self.inp_desc.setPlaceholderText(tr("line_description_placeholder"))
         self.inp_desc.setMinimumHeight(28)
         main_row.addWidget(self.inp_desc, stretch=2)
 
         btn_del = QPushButton("✖")
         btn_del.setFixedSize(22, 22)
         btn_del.setStyleSheet(
-            "QPushButton { background:transparent; border:none; color:#bbb; font-size:11px; }"
-            "QPushButton:hover { color:#e53935; }"
+            f"QPushButton {{ background:transparent; border:none; color:{_C['text_disabled']}; font-size:11px; }}"
+            f"QPushButton:hover {{ color:{_C['danger']}; }}"
         )
         btn_del.clicked.connect(lambda: self._on_remove(self))
         main_row.addWidget(btn_del)
@@ -140,16 +141,16 @@ class _SmartLine(DualConnMixin, QFrame):
 
         self._investor_row = QFrame()
         self._investor_row.setStyleSheet(
-            "QFrame { background:#fff8e1; border:1px solid #ffe082;"
+            f"QFrame {{ background:{_C['investor_link_bg']}; border:1px solid {_C['investor_link_border']};"
             "border-radius:4px; margin-top:2px; }"
         )
         inv_lay = QHBoxLayout(self._investor_row)
         inv_lay.setContentsMargins(8, 4, 8, 4)
         inv_lay.setSpacing(8)
 
-        lbl_inv = QLabel("👤  ربط بمستثمر:")
+        lbl_inv = QLabel(tr("link_investor_to_entry"))
         lbl_inv.setStyleSheet(
-            "font-size:10px; font-weight:bold; color:#f57f17;"
+            f"font-size:10px; font-weight:bold; color:{_C['investor_link_text']};"
             "background:transparent; border:none;"
         )
         lbl_inv.setFixedWidth(95)
@@ -161,9 +162,9 @@ class _SmartLine(DualConnMixin, QFrame):
         self._reload_investors()
         inv_lay.addWidget(self.cmb_investor, stretch=1)
 
-        lbl_hint = QLabel("(اختياري)")
+        lbl_hint = QLabel(tr("investor_link_optional"))
         lbl_hint.setStyleSheet(
-            "font-size:9px; color:#aaa; background:transparent; border:none;"
+            f"font-size:9px; color:{_C['text_disabled']}; background:transparent; border:none;"
         )
         inv_lay.addWidget(lbl_hint)
 
@@ -181,7 +182,7 @@ class _SmartLine(DualConnMixin, QFrame):
             prev = self.cmb_investor.currentData()
             self.cmb_investor.blockSignals(True)
             self.cmb_investor.clear()
-            self.cmb_investor.addItem("— لا يوجد ربط —", None)
+            self.cmb_investor.addItem(tr("filter_all"), None)
             for inv in fetch_all_investors(erp):
                 self.cmb_investor.addItem(f"👤 {inv['name']}", inv["id"])
             self.cmb_investor.blockSignals(False)
@@ -213,31 +214,31 @@ class _SmartLine(DualConnMixin, QFrame):
             side = _resolve_side(acc_type, is_inc)
             self._resolved_side = side
             if side == "dr":
-                self.setStyleSheet("""
-                    QFrame {
-                        background: #f4f8ff;
-                        border: 1px solid #c5d8f7;
-                        border-right: 3px solid #1565c0;
+                self.setStyleSheet(f"""
+                    QFrame {{
+                        background: {_C['journal_dr_bg']};
+                        border: 1px solid {_C['journal_dr_border']};
+                        border-right: 3px solid {_C['journal_dr_accent']};
                         border-radius: 6px;
-                    }
+                    }}
                 """)
             else:
-                self.setStyleSheet("""
-                    QFrame {
-                        background: #fff4f4;
-                        border: 1px solid #f7c5c5;
-                        border-right: 3px solid #c62828;
+                self.setStyleSheet(f"""
+                    QFrame {{
+                        background: {_C['journal_cr_bg']};
+                        border: 1px solid {_C['journal_cr_border']};
+                        border-right: 3px solid {_C['journal_cr_accent']};
                         border-radius: 6px;
-                    }
+                    }}
                 """)
         else:
             self._resolved_side = "dr"
-            self.setStyleSheet("""
-                QFrame {
-                    background: #fafbff;
-                    border: 1px solid #dde3f0;
+            self.setStyleSheet(f"""
+                QFrame {{
+                    background: {_C['journal_neutral_bg']};
+                    border: 1px solid {_C['journal_neutral_border']};
                     border-radius: 6px;
-                }
+                }}
             """)
 
     def _on_acc_changed(self):

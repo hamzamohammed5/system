@@ -21,10 +21,23 @@ from db.accounting.accounting_repo import (
     get_normal_balance, _get_group_descendants,
 )
 from db.accounting.accounting_schema import TYPE_AR
-from ui.events import bus
-from ui.font_utils import badge_style, badge_width
-from ui.widgets.shared.safe_conn_mixin import SafeConnMixin
-from .helpers import TYPE_COLORS
+from ui.widgets.core.events import bus
+from ui.widgets.core.conn import SafeConnMixin
+from ui.theme import _C
+from ui.widgets.core.i18n import tr
+from .helpers import _get_type_colors
+
+
+def _badge_style(side: str = "") -> str:
+    if side == "dr":
+        return (f"font-size:10px; font-weight:bold; color:{_C['badge_dr_text']};"
+                f"background:{_C['badge_dr_bg']}; border-radius:3px; padding:2px 4px;")
+    if side == "cr":
+        return (f"font-size:10px; font-weight:bold; color:{_C['badge_cr_text']};"
+                f"background:{_C['badge_cr_bg']}; border-radius:3px; padding:2px 4px;")
+    return "font-size:10px; font-weight:bold; border-radius:3px; padding:2px 4px;"
+
+_BADGE_WIDTH = 44
 
 
 class _AccountCombo(SafeConnMixin, QWidget):
@@ -51,11 +64,11 @@ class _AccountCombo(SafeConnMixin, QWidget):
 
         self.cmb_group = QComboBox()
         self.cmb_group.setFixedWidth(130)
-        self.cmb_group.setToolTip("فلتر بالتصنيف")
+        self.cmb_group.setToolTip(tr("group_filter_tooltip"))
         self.cmb_group.currentIndexChanged.connect(self._apply_filter)
 
         self.inp_search = QLineEdit()
-        self.inp_search.setPlaceholderText("🔍 بحث...")
+        self.inp_search.setPlaceholderText(tr("search_placeholder"))
         self.inp_search.setFixedWidth(90)
         self.inp_search.textChanged.connect(self._apply_filter)
 
@@ -64,9 +77,9 @@ class _AccountCombo(SafeConnMixin, QWidget):
         self.cmb_account.setMinimumWidth(200)
 
         self.lbl_nb = QLabel("")
-        self.lbl_nb.setFixedWidth(badge_width())
+        self.lbl_nb.setFixedWidth(_BADGE_WIDTH)
         self.lbl_nb.setAlignment(Qt.AlignCenter)
-        self.lbl_nb.setStyleSheet(badge_style())
+        self.lbl_nb.setStyleSheet(_badge_style())
         self.cmb_account.currentIndexChanged.connect(self._update_nb_label)
 
         lay.addWidget(self.cmb_group)
@@ -83,7 +96,7 @@ class _AccountCombo(SafeConnMixin, QWidget):
         self.cmb_group.blockSignals(True)
         prev = self.cmb_group.currentData()
         self.cmb_group.clear()
-        self.cmb_group.addItem("— كل التصنيفات —", None)
+        self.cmb_group.addItem(tr("all_types_combo"), None)
         try:
             all_groups = fetch_all_groups(conn)
             seen_types = set(self.acc_types) if self.acc_types else set(TYPE_AR.keys())
@@ -126,7 +139,7 @@ class _AccountCombo(SafeConnMixin, QWidget):
 
         self.cmb_account.blockSignals(True)
         self.cmb_account.clear()
-        self.cmb_account.addItem("— اختر الحساب —", None)
+        self.cmb_account.addItem(tr("select_account_combo"), None)
 
         last_type = None
         for acc in self._all_accs:
@@ -147,9 +160,9 @@ class _AccountCombo(SafeConnMixin, QWidget):
                 self._disable_item(sep_index)
                 last_type = acc["type"]
 
-            color   = TYPE_COLORS.get(acc["type"], "#333")
+            color   = _get_type_colors().get(acc["type"], _C["text_primary"])
             nb      = get_normal_balance(acc["type"])
-            nb_text = "DR↑" if nb == "dr" else "CR↑"
+            nb_text = tr("dr_badge") if nb == "dr" else tr("cr_badge")
             label   = f"{acc['code']} — {acc['name']}  [{nb_text}]"
             self.cmb_account.addItem(label, acc["id"])
             idx2 = self.cmb_account.count() - 1
@@ -173,7 +186,7 @@ class _AccountCombo(SafeConnMixin, QWidget):
         item  = model.item(idx)
         if item:
             item.setFlags(item.flags() & ~Qt.ItemIsEnabled & ~Qt.ItemIsSelectable)
-            item.setForeground(QColor("#78909c"))
+            item.setForeground(QColor(_C["text_separator"]))
             f = QFont()
             f.setBold(True)
             item.setFont(f)
@@ -208,7 +221,7 @@ class _AccountCombo(SafeConnMixin, QWidget):
         acc_id = self.current_account_id()
         if not acc_id:
             self.lbl_nb.setText("")
-            self.lbl_nb.setStyleSheet(badge_style())
+            self.lbl_nb.setStyleSheet(_badge_style())
             return
         try:
             acc = fetch_account(self._get_safe_conn(), acc_id)
@@ -216,11 +229,11 @@ class _AccountCombo(SafeConnMixin, QWidget):
                 return
             nb = get_normal_balance(acc["type"])
             if nb == "dr":
-                self.lbl_nb.setText("DR↑")
-                self.lbl_nb.setStyleSheet(badge_style("dr"))
+                self.lbl_nb.setText(tr("dr_badge"))
+                self.lbl_nb.setStyleSheet(_badge_style("dr"))
             else:
-                self.lbl_nb.setText("CR↑")
-                self.lbl_nb.setStyleSheet(badge_style("cr"))
+                self.lbl_nb.setText(tr("cr_badge"))
+                self.lbl_nb.setStyleSheet(_badge_style("cr"))
         except Exception:
             pass
 

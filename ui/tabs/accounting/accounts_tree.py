@@ -24,13 +24,17 @@ from db.accounting.accounting_repo import (
     fetch_all_groups, build_group_tree,
 )
 from db.accounting.accounting_schema import TYPE_AR, EQUITY_TYPES
-from ui.events  import bus
-from ui.widgets.shared.safe_conn_mixin import SafeConnMixin
-from ui.widgets.shared.panels import (
-    SectionHeader, _make_btn, get_splitter_style,
-    get_tree_style, confirm_delete,
-)
+from ui.widgets.core.events import bus
+from ui.widgets.core.conn import SafeConnMixin
+from ui.widgets.components.headers_page import SectionHeader
+from ui.widgets.components.button import make_btn as _make_btn
+from ui.widgets.theme.table_styles import splitter_style as get_splitter_style
+from ui.widgets.theme.layout_styles import tree_style as get_tree_style
+from ui.widgets.dialogs.confirm import confirm_delete
 
+from ui.theme import _C
+from ui.widgets.core.i18n import tr
+from ui.widgets.dialogs.message import msg_info, msg_warning, msg_critical
 from .tree._tree_builder import (
     rows_to_tree, filter_by_group, add_acc_nodes, add_type_header, EQUITY_COLOR,
 )
@@ -74,7 +78,7 @@ class AccountsTreePanel(SafeConnMixin, QWidget):
 
         # ── فلتر التصنيف ──
         filter_row = QHBoxLayout()
-        lbl_tag = QLabel("🏷")
+        lbl_tag = QLabel(tr("group_tag_icon"))
         lbl_tag.setStyleSheet("background:transparent; border:none;")
         self.cmb_group_filter = _GroupFilterCombo(self._get_safe_conn(), self.acc_types)
         self.cmb_group_filter.setMinimumHeight(26)
@@ -85,7 +89,7 @@ class AccountsTreePanel(SafeConnMixin, QWidget):
 
         # ── شجرة الحسابات ──
         self.tree = QTreeWidget()
-        self.tree.setHeaderLabels(["الكود", "اسم الحساب", "الرصيد"])
+        self.tree.setHeaderLabels([tr("accounts_col"), tr("account_name_col"), tr("balance")])
         hh = self.tree.header()
         hh.setSectionResizeMode(0, QHeaderView.Interactive)
         hh.setSectionResizeMode(1, QHeaderView.Stretch)
@@ -98,8 +102,8 @@ class AccountsTreePanel(SafeConnMixin, QWidget):
 
         # ── أزرار التعديل والحذف ──
         btn_row  = QHBoxLayout()
-        btn_edit = _make_btn("✏️ تعديل", "normal")
-        btn_del  = _make_btn("🗑️ حذف",  "danger")
+        btn_edit = _make_btn(tr("btn_edit"), "normal")
+        btn_del  = _make_btn(tr("btn_delete"),  "danger")
         btn_edit.clicked.connect(self._edit)
         btn_del.clicked.connect(self._delete)
         btn_row.addWidget(btn_edit)
@@ -154,8 +158,8 @@ class AccountsTreePanel(SafeConnMixin, QWidget):
 
         if not all_nodes_by_type:
             empty = QTreeWidgetItem()
-            empty.setText(1, "لا توجد حسابات — أضف من الفورم على اليمين")
-            empty.setForeground(1, QColor("#aaa"))
+            empty.setText(1, tr("no_accounts_msg"))
+            empty.setForeground(1, QColor(_C["text_muted"]))
             self.tree.addTopLevelItem(empty)
             return
 
@@ -173,7 +177,7 @@ class AccountsTreePanel(SafeConnMixin, QWidget):
         if equity_present:
             equity_item = QTreeWidgetItem()
             equity_item.setText(0, "")
-            equity_item.setText(1, "👑  حقوق الملكية")
+            equity_item.setText(1, tr("owners_equity"))
             equity_item.setText(2, "")
             equity_item.setFlags(equity_item.flags() & ~Qt.ItemIsSelectable)
             f = equity_item.font(1)
@@ -181,9 +185,9 @@ class AccountsTreePanel(SafeConnMixin, QWidget):
             f.setPointSize(f.pointSize() + 1)
             equity_item.setFont(1, f)
             equity_item.setForeground(1, QColor(EQUITY_COLOR))
-            equity_item.setBackground(0, QColor("#f1f8e9"))
-            equity_item.setBackground(1, QColor("#f1f8e9"))
-            equity_item.setBackground(2, QColor("#f1f8e9"))
+            equity_item.setBackground(0, QColor(_C["success_bg"]))
+            equity_item.setBackground(1, QColor(_C["success_bg"]))
+            equity_item.setBackground(2, QColor(_C["success_bg"]))
             self.tree.addTopLevelItem(equity_item)
 
             for acc_type in ["capital", "drawings", "revenue", "expense"]:
@@ -216,7 +220,7 @@ class AccountsTreePanel(SafeConnMixin, QWidget):
     def _edit(self):
         aid = self._selected_id()
         if not aid:
-            QMessageBox.information(self, "تنبيه", "اختر حسابًا أولًا")
+            msg_info(self, tr("warning"), tr("select_item_first"))
             return
         self._form.load_for_edit(aid)
 
@@ -251,15 +255,14 @@ class AccountsTreePanel(SafeConnMixin, QWidget):
             has_lines = 0
 
         if has_lines:
-            QMessageBox.warning(
-                self, "تحذير",
-                f"الحساب «{acc['name']}» أو أحد فروعه\n"
-                f"له {has_lines} حركة في القيود — لا يمكن حذفه."
+            msg_warning(
+                self, tr("warning"),
+                tr("account_has_lines_msg", name=acc["name"], count=has_lines)
             )
             return
 
         child_count = len(all_ids) - 1
-        extra = f"⚠️ سيتم حذف {child_count} حساب فرعي معه." if child_count else ""
+        extra = tr("sub_accounts_delete_warning", count=child_count) if child_count else ""
 
         if confirm_delete(self, acc["name"], extra_msg=extra):
             try:
@@ -267,4 +270,4 @@ class AccountsTreePanel(SafeConnMixin, QWidget):
                     conn.execute("DELETE FROM accounts WHERE id=?", (del_id,))
                 bus.company_data_changed.emit(self._company_id or 0)
             except Exception as e:
-                QMessageBox.critical(self, "خطأ", f"فشل الحذف:\n{e}")
+                msg_critical(self, tr("error"), tr("delete_failed_msg", error=str(e)))

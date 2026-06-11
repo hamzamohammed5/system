@@ -16,7 +16,9 @@ from PyQt5.QtWidgets import (
 from PyQt5.QtCore import Qt, QPoint, QTimer
 
 from db.accounting.accounting_repo import fetch_account, get_normal_balance
-from ui.widgets.shared.safe_conn_mixin import SafeConnMixin
+from ui.widgets.core.conn import SafeConnMixin
+from ui.theme import _C
+from ui.widgets.core.i18n import tr
 from ._account_tree_popup import _AccountTreePopup, _TYPE_ORDER
 
 
@@ -38,24 +40,19 @@ class _AccountPickerButton(SafeConnMixin, QWidget):
         lay.setContentsMargins(0, 0, 0, 0)
         lay.setSpacing(4)
 
-        self.btn = QPushButton("— اختر الحساب —")
+        self.btn = QPushButton(tr("select_account"))
         self.btn.setMinimumHeight(30)
         self.btn.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Fixed)
-        self.btn.setStyleSheet("""
-            QPushButton {
-                background: white; border: 1px solid #c5cae9;
-                border-radius: 4px; padding: 2px 10px;
-                text-align: right; font-size: 11px; color: #333;
-            }
-            QPushButton:hover { border-color: #1565c0; background: #f0f4ff; }
-        """)
+        self.btn.setStyleSheet(
+            f"QPushButton {{ background: {_C['bg_input']}; border: 1px solid {_C['border_med']};"            "border-radius: 4px; padding: 2px 10px;"            f"text-align: right; font-size: 11px; color: {_C['text_primary']}; }}"            f"QPushButton:hover {{ border-color: {_C['accent']}; background: {_C['journal_header_bg']}; }}"
+        )
         self.btn.clicked.connect(self._open_popup)
 
         self.lbl_nb = QLabel("")
         self.lbl_nb.setFixedWidth(44)
         self.lbl_nb.setAlignment(Qt.AlignCenter)
         self.lbl_nb.setStyleSheet(
-            "font-size:10px; font-weight:bold; border-radius:3px; padding:2px 4px;"
+            f"font-size:10px; font-weight:bold; border-radius:3px; padding:2px 4px; color:{_C["text_disabled"]};"
         )
 
         lay.addWidget(self.btn, stretch=1)
@@ -96,7 +93,7 @@ class _AccountPickerButton(SafeConnMixin, QWidget):
         if not self._account_id:
             self.lbl_nb.setText("")
             self.lbl_nb.setStyleSheet(
-                "font-size:10px; font-weight:bold; border-radius:3px; padding:2px 4px;"
+                f"font-size:10px; font-weight:bold; border-radius:3px; padding:2px 4px; color:{_C["text_disabled"]};"
             )
             return
         acc = fetch_account(self._get_safe_conn(), self._account_id)
@@ -106,14 +103,12 @@ class _AccountPickerButton(SafeConnMixin, QWidget):
         if nb == "dr":
             self.lbl_nb.setText("DR↑")
             self.lbl_nb.setStyleSheet(
-                "font-size:10px; font-weight:bold; color:#1565c0;"
-                "background:#e3f2fd; border-radius:3px; padding:2px 4px;"
+                f"font-size:10px; font-weight:bold; color:{_C['badge_dr_text']};"                f"background:{_C['badge_dr_bg']}; border-radius:3px; padding:2px 4px;"
             )
         else:
             self.lbl_nb.setText("CR↑")
             self.lbl_nb.setStyleSheet(
-                "font-size:10px; font-weight:bold; color:#c62828;"
-                "background:#fdecea; border-radius:3px; padding:2px 4px;"
+                f"font-size:10px; font-weight:bold; color:{_C['badge_cr_text']};"                f"background:{_C['badge_cr_bg']}; border-radius:3px; padding:2px 4px;"
             )
 
     def current_account_id(self):
@@ -138,8 +133,8 @@ class _AccountPickerButton(SafeConnMixin, QWidget):
         self._account_id   = None
         self._account_name = None
         self._account_type = None
-        self.btn.setText("— اختر الحساب —")
+        self.btn.setText(tr("select_account"))
         self.lbl_nb.setText("")
         self.lbl_nb.setStyleSheet(
-            "font-size:10px; font-weight:bold; border-radius:3px; padding:2px 4px;"
+            f"font-size:10px; font-weight:bold; border-radius:3px; padding:2px 4px; color:{_C["text_disabled"]};"
         )

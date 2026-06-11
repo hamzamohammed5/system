@@ -11,6 +11,8 @@ from PyQt5.QtWidgets import (
     QFrame, QHBoxLayout, QLabel, QPushButton,
 )
 from PyQt5.QtCore import pyqtSignal
+from ui.theme import _C
+from ui.widgets.core.i18n import tr
 
 
 class _BalanceBar(QFrame):
@@ -37,12 +39,12 @@ class _BalanceBar(QFrame):
         self._build()
 
     def _build(self):
-        self.setStyleSheet("""
-            QFrame {
-                background: #f0f4ff;
-                border: 1px solid #c5cae9;
+        self.setStyleSheet(f"""
+            QFrame {{
+                background: {_C['journal_header_bg']};
+                border: 1px solid {_C['journal_header_border']};
                 border-radius: 6px;
-            }
+            }}
         """)
         bal_lay = QHBoxLayout(self)
         bal_lay.setContentsMargins(14, 8, 14, 8)
@@ -50,36 +52,36 @@ class _BalanceBar(QFrame):
 
         def _sep():
             s = QLabel("│")
-            s.setStyleSheet("color:#c5cae9; font-size:18px; margin:0 8px;")
+            s.setStyleSheet(f"color:{_C['border_med']}; font-size:18px; margin:0 8px;")
             return s
 
-        lbl_dr_t = QLabel("إجمالي DR:")
-        lbl_dr_t.setStyleSheet("font-weight:bold; color:#1565c0;")
+        lbl_dr_t = QLabel(tr("total_debit") + ":")
+        lbl_dr_t.setStyleSheet(f"font-weight:bold; color:{_C['journal_dr_accent']};")
         self.lbl_sum_dr = QLabel("0.00")
         self.lbl_sum_dr.setStyleSheet(
-            "font-size:14px; font-weight:bold; color:#1565c0;"
-            "background:#e3f2fd; border-radius:4px; padding:3px 10px; margin-left:4px;"
+            f"font-size:14px; font-weight:bold; color:{_C['journal_dr_accent']};"
+            f"background:{_C['badge_dr_bg']}; border-radius:4px; padding:3px 10px; margin-left:4px;"
         )
 
-        lbl_cr_t = QLabel("إجمالي CR:")
-        lbl_cr_t.setStyleSheet("font-weight:bold; color:#c62828;")
+        lbl_cr_t = QLabel(tr("total_credit") + ":")
+        lbl_cr_t.setStyleSheet(f"font-weight:bold; color:{_C['journal_cr_accent']};")
         self.lbl_sum_cr = QLabel("0.00")
         self.lbl_sum_cr.setStyleSheet(
-            "font-size:14px; font-weight:bold; color:#c62828;"
-            "background:#fdecea; border-radius:4px; padding:3px 10px; margin-left:4px;"
+            f"font-size:14px; font-weight:bold; color:{_C['journal_cr_accent']};"
+            f"background:{_C['badge_cr_bg']}; border-radius:4px; padding:3px 10px; margin-left:4px;"
         )
 
-        lbl_diff_t = QLabel("الفرق:")
-        lbl_diff_t.setStyleSheet("font-weight:bold; color:#555;")
+        lbl_diff_t = QLabel(tr("balance_bar_diff"))
+        lbl_diff_t.setStyleSheet(f"font-weight:bold; color:{_C['text_sec']};")
         self.lbl_diff = QLabel("0.00")
         self.lbl_diff.setStyleSheet(
-            "font-size:14px; font-weight:bold; color:#888;"
-            "background:#f5f5f5; border-radius:4px; padding:3px 10px; margin-left:4px;"
+            f"font-size:14px; font-weight:bold; color:{_C['text_hint']};"
+            f"background:{_C['bg_surface_2']}; border-radius:4px; padding:3px 10px; margin-left:4px;"
         )
 
-        self.lbl_status = QLabel("○ أضف صفوف")
+        self.lbl_status = QLabel(tr("balance_bar_add_rows"))
         self.lbl_status.setStyleSheet(
-            "font-size:12px; font-weight:bold; color:#888;"
+            f"font-size:12px; font-weight:bold; color:{_C['text_hint']};"
         )
 
         for w in (lbl_dr_t, self.lbl_sum_dr, _sep(),
@@ -114,34 +116,34 @@ class _BalanceBar(QFrame):
         return False
 
     def _set_neutral(self):
-        self.lbl_status.setText("○ أضف صفوف")
+        self.lbl_status.setText(tr("balance_bar_add_rows"))
         self.lbl_status.setStyleSheet(
-            "font-size:12px; font-weight:bold; color:#888;"
+            f"font-size:12px; font-weight:bold; color:{_C['text_hint']};"
         )
         self.lbl_diff.setStyleSheet(
-            "font-size:14px; font-weight:bold; color:#888;"
-            "background:#f5f5f5; border-radius:4px; padding:3px 10px; margin-left:4px;"
+            f"font-size:14px; font-weight:bold; color:{_C['text_hint']};"
+            f"background:{_C['bg_surface_2']}; border-radius:4px; padding:3px 10px; margin-left:4px;"
         )
 
     def _set_balanced(self):
-        self.lbl_status.setText("✅  متوازن — يمكن الحفظ")
+        self.lbl_status.setText(tr("journal_balanced"))
         self.lbl_status.setStyleSheet(
-            "font-size:12px; font-weight:bold; color:#2e7d32;"
+            f"font-size:12px; font-weight:bold; color:{_C['investor_capital_text']};"
         )
         self.lbl_diff.setStyleSheet(
-            "font-size:14px; font-weight:bold; color:#2e7d32;"
-            "background:#f1f8e9; border-radius:4px; padding:3px 10px; margin-left:4px;"
+            f"font-size:14px; font-weight:bold; color:{_C['investor_capital_text']};"
+            f"background:{_C['investor_capital_bg']}; border-radius:4px; padding:3px 10px; margin-left:4px;"
         )
 
     def _set_unbalanced(self, diff: float):
-        side_ar = "DR أكبر" if diff > 0 else "CR أكبر"
+        side = tr("dr_bigger") if diff > 0 else tr("cr_bigger")
         self.lbl_status.setText(
-            f"⚠️  غير متوازن ({side_ar} بـ {abs(diff):,.2f})"
+            tr("journal_unbalanced_detail", side=side, diff=f"{abs(diff):,.2f}")
         )
         self.lbl_status.setStyleSheet(
-            "font-size:12px; font-weight:bold; color:#c62828;"
+            f"font-size:12px; font-weight:bold; color:{_C['journal_cr_accent']};"
         )
         self.lbl_diff.setStyleSheet(
-            "font-size:14px; font-weight:bold; color:#c62828;"
-            "background:#fdecea; border-radius:4px; padding:3px 10px; margin-left:4px;"
+            f"font-size:14px; font-weight:bold; color:{_C['journal_cr_accent']};"
+            f"background:{_C['badge_cr_bg']}; border-radius:4px; padding:3px 10px; margin-left:4px;"
         )

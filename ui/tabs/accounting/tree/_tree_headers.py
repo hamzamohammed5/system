@@ -15,6 +15,7 @@ from PyQt5.QtGui  import QColor
 
 from db.accounting.accounting_schema import TYPE_AR
 from ui.tabs.accounting.helpers import TYPE_COLORS
+from ui.theme import _C
 from ._tree_nodes import add_acc_nodes
 
 
@@ -23,7 +24,7 @@ def add_type_header(tree_widget: QTreeWidget, acc_type: str, nodes: list,
     """يضيف عقدة رأسية لنوع حساب مستقل."""
     type_item = QTreeWidgetItem()
     type_item.setText(1, f"── {TYPE_AR.get(acc_type, acc_type)} ──")
-    type_item.setForeground(1, QColor(TYPE_COLORS.get(acc_type, "#333")))
+    type_item.setForeground(1, QColor(TYPE_COLORS.get(acc_type, _C["text_primary"])))
     f = type_item.font(1)
     f.setBold(True)
     type_item.setFont(1, f)

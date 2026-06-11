@@ -14,7 +14,9 @@ from PyQt5.QtWidgets import (
     QMessageBox,
 )
 
-from ui.widgets.shared.safe_conn_mixin import DualConnMixin
+from ui.widgets.core.conn import DualConnMixin
+from ui.theme import _C
+from ui.widgets.core.i18n import tr
 from ._smart_line import _SmartLine
 
 
@@ -29,12 +31,12 @@ class _LinesPanel(DualConnMixin, QFrame):
         self._build()
 
     def _build(self):
-        self.setStyleSheet("""
-            QFrame {
-                background: white;
-                border: 1px solid #e0e0e0;
+        self.setStyleSheet(f"""
+            QFrame {{
+                background: {_C['bg_surface']};
+                border: 1px solid {_C['border']};
                 border-radius: 8px;
-            }
+            }}
         """)
         root = QVBoxLayout(self)
         root.setContentsMargins(0, 0, 0, 0)
@@ -42,24 +44,24 @@ class _LinesPanel(DualConnMixin, QFrame):
 
         # رأس
         hdr = QFrame()
-        hdr.setStyleSheet("background:#f0f4ff; border-radius:7px 7px 0 0;")
+        hdr.setStyleSheet(f"background:{_C['journal_header_bg']}; border-radius:7px 7px 0 0;")
         hdr.setFixedHeight(38)
         hl = QHBoxLayout(hdr)
         hl.setContentsMargins(12, 4, 12, 4)
 
-        lbl = QLabel("📋  صفوف القيد")
+        lbl = QLabel(tr("journal_lines_title"))
         lbl.setStyleSheet(
-            "font-weight:bold; font-size:12px; color:#1565c0;"
+            f"font-weight:bold; font-size:12px; color:{_C['accent']};"
             "background:transparent; border:none;"
         )
         self.lbl_dr = QLabel("DR: 0.00")
         self.lbl_dr.setStyleSheet(
-            "font-weight:bold; color:#1565c0; background:#e3f2fd;"
+            f"font-weight:bold; color:{_C['journal_dr_accent']}; background:{_C['badge_dr_bg']};"
             "border-radius:4px; padding:2px 8px; font-size:11px; border:none;"
         )
         self.lbl_cr = QLabel("CR: 0.00")
         self.lbl_cr.setStyleSheet(
-            "font-weight:bold; color:#c62828; background:#fdecea;"
+            f"font-weight:bold; color:{_C['journal_cr_accent']}; background:{_C['badge_cr_bg']};"
             "border-radius:4px; padding:2px 8px; font-size:11px; border:none;"
         )
         hl.addWidget(lbl)
@@ -71,7 +73,7 @@ class _LinesPanel(DualConnMixin, QFrame):
 
         # رؤوس الأعمدة
         col_hdr = QFrame()
-        col_hdr.setStyleSheet("background:#fafbff;")
+        col_hdr.setStyleSheet(f"background:{_C['bg_surface_2']};")
         ch_lay = QHBoxLayout(col_hdr)
         ch_lay.setContentsMargins(28, 2, 8, 2)
         ch_lay.setSpacing(6)
@@ -79,17 +81,17 @@ class _LinesPanel(DualConnMixin, QFrame):
         def _ch(text, w=None, stretch=0):
             lbl2 = QLabel(text)
             lbl2.setStyleSheet(
-                "font-size:9px; color:#888; font-weight:bold;"
+                f"font-size:9px; color:{_C['text_sec']}; font-weight:bold;"
                 "background:transparent; border:none;"
             )
             if w:
                 lbl2.setFixedWidth(w)
             ch_lay.addWidget(lbl2, stretch=stretch)
 
-        _ch("الحساب",  stretch=4)
-        _ch("الاتجاه", w=130)
-        _ch("المبلغ",  w=110)
-        _ch("البيان",  stretch=2)
+        _ch(tr("lines_col_account"),  stretch=4)
+        _ch(tr("lines_col_direction"), w=130)
+        _ch(tr("lines_col_amount"),   w=110)
+        _ch(tr("lines_col_desc"),     stretch=2)
         _ch("",        w=22)
         root.addWidget(col_hdr)
 
@@ -106,18 +108,18 @@ class _LinesPanel(DualConnMixin, QFrame):
         scroll.setWidget(self._rows_w)
         scroll.setMinimumHeight(150)
         scroll.setMaximumHeight(380)
-        scroll.setStyleSheet("QScrollArea { border:none; background:transparent; }")
+        scroll.setStyleSheet(f"QScrollArea {{ border:none; background:{_C['bg_surface']}; }}")
         root.addWidget(scroll)
 
-        btn_add = QPushButton("➕  إضافة صف")
+        btn_add = QPushButton(tr("add_journal_line"))
         btn_add.setMinimumHeight(28)
-        btn_add.setStyleSheet("""
-            QPushButton {
-                background: #f0f4ff; color: #1565c0;
-                border: 1px solid #c5cae9; border-radius: 4px;
+        btn_add.setStyleSheet(f"""
+            QPushButton {{
+                background: {_C['journal_header_bg']}; color: {_C['accent']};
+                border: 1px solid {_C['journal_header_border']}; border-radius: 4px;
                 font-weight: bold; padding: 2px 12px; margin: 4px 8px;
-            }
-            QPushButton:hover { background: #1565c0; color: white; }
+            }}
+            QPushButton:hover {{ background: {_C['accent']}; color: {_C['accent_text']}; }}
         """)
         btn_add.clicked.connect(self.add_line)
         root.addWidget(btn_add)
@@ -138,7 +140,8 @@ class _LinesPanel(DualConnMixin, QFrame):
 
     def _remove_line(self, line):
         if len(self._lines) <= 1:
-            QMessageBox.information(None, "تنبيه", "لازم يكون في صف واحد على الأقل")
+            from ui.widgets.dialogs.message import msg_info
+            msg_info(None, tr("warning"), tr("min_one_row_required"))
             return
         self._lines.remove(line)
         self._rows_lay.removeWidget(line)

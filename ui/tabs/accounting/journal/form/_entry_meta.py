@@ -16,23 +16,29 @@ _EntryRefLabel  — label موحد لرقم مرجعي للقيد.
 
 from PyQt5.QtWidgets import QLabel
 from PyQt5.QtCore import Qt
+from ui.theme import _C
+from ui.widgets.core.i18n import tr
 
-# ألوان أنواع القيود — متوافقة مع TYPE_COLORS في helpers.py
-_TYPE_COLORS = {
-    "manual":   ("#1565c0", "#e8f0fe", "#90caf9"),
-    "opening":  ("#2e7d32", "#e8f5e9", "#a5d6a7"),
-    "closing":  ("#6a1b9a", "#f3e5f5", "#ce93d8"),
-    "transfer": ("#e65100", "#fff3e0", "#ffcc80"),
-    "auto":     ("#0891b2", "#e0f7fa", "#80deea"),
-}
+def _get_type_colors(entry_type: str) -> tuple:
+    """يرجع (fg, bg, border) من _C حسب نوع القيد."""
+    mapping = {
+        "manual":   (_C["accent"],      _C["accent_light"],    _C["accent_mid"]),
+        "opening":  (_C["success"],     _C["success_bg"],      _C["success_border"]),
+        "closing":  (_C["purple"],      _C["purple_bg"],       _C["purple_border"]),
+        "transfer": (_C["orange"],      _C["orange_bg"],       _C["orange_border"]),
+        "auto":     (_C["teal"],        _C["teal_bg"],         _C["teal_border"]),
+    }
+    return mapping.get(entry_type, (_C["text_sec"], _C["bg_surface_2"], _C["border"]))
 
-_TYPE_LABELS = {
-    "manual":   "يدوي",
-    "opening":  "افتتاحي",
-    "closing":  "ختامي",
-    "transfer": "ترحيل",
-    "auto":     "تلقائي",
-}
+def _get_type_label(entry_type: str) -> str:
+    mapping = {
+        "manual":   tr("entry_type_manual").replace("📝 ", ""),
+        "opening":  tr("entry_type_opening").replace("🟢 ", ""),
+        "closing":  tr("entry_type_closing").replace("🔴 ", ""),
+        "transfer": tr("entry_type_transfer").replace("🔄 ", ""),
+        "auto":     tr("entry_type_auto").replace("🤖 ", ""),
+    }
+    return mapping.get(entry_type, entry_type)
 
 
 class _EntryTypeBadge(QLabel):
@@ -50,20 +56,12 @@ class _EntryTypeBadge(QLabel):
         self.set_type(entry_type)
 
     def set_type(self, entry_type: str):
-        fg, bg, border = _TYPE_COLORS.get(entry_type, ("#555", "#f5f5f5", "#e0e0e0"))
-        label = _TYPE_LABELS.get(entry_type, entry_type)
+        fg, bg, border = _get_type_colors(entry_type)
+        label = _get_type_label(entry_type)
         self.setText(label)
-        self.setStyleSheet(f"""
-            QLabel {{
-                color: {fg};
-                background: {bg};
-                border: 1px solid {border};
-                border-radius: 4px;
-                padding: 2px 10px;
-                font-size: 10px;
-                font-weight: bold;
-            }}
-        """)
+        self.setStyleSheet(
+            f"QLabel {{ color: {fg}; background: {bg}; border: 1px solid {border};"            "border-radius: 4px; padding: 2px 10px; font-size: 10px; font-weight: bold; }}"
+        )
 
 
 class _EntryRefLabel(QLabel):
@@ -77,18 +75,9 @@ class _EntryRefLabel(QLabel):
     def __init__(self, ref_no: str = "─", parent=None):
         super().__init__(ref_no, parent)
         self.setAlignment(Qt.AlignCenter)
-        self.setStyleSheet("""
-            QLabel {
-                color: #1565c0;
-                background: #e8f0fe;
-                border: 1px solid #90caf9;
-                border-radius: 4px;
-                padding: 2px 10px;
-                font-size: 11px;
-                font-weight: bold;
-                font-family: monospace;
-            }
-        """)
+        self.setStyleSheet(
+            f"QLabel {{ color: {_C['badge_dr_text']}; background: {_C['accent_light']};"            f"border: 1px solid {_C['accent_mid']};"            "border-radius: 4px; padding: 2px 10px; font-size: 11px; font-weight: bold; font-family: monospace; }}"
+        )
 
     def set_ref(self, ref_no: str):
         self.setText(ref_no or "─")

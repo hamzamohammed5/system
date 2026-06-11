@@ -14,7 +14,7 @@ from PyQt5.QtGui  import QColor
 
 from db.accounting.accounting_repo import fetch_all_groups, build_group_tree
 from ui.tabs.accounting.helpers import TYPE_COLORS
-from ui.widgets.shared.safe_conn_mixin import SafeConnMixin
+from ui.widgets.core.conn import SafeConnMixin
 
 
 class _GroupFilterCombo(SafeConnMixin, QComboBox):

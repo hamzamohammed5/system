@@ -15,9 +15,12 @@ from .financial.trial_balance_tab    import TrialBalanceTab
 from .financial.income_statement_tab import IncomeStatementTab
 from .financial.owners_equity_tab    import OwnersEquityTab
 from .financial.balance_sheet_tab    import BalanceSheetTab
-from ui.widgets.shared.safe_conn_mixin import SafeConnMixin
-from ui.widgets.shared.panels import make_financial_tabs
-from ui.events import bus
+from ui.widgets.core.conn import SafeConnMixin
+from ui.widgets.core.events import bus
+from PyQt5.QtWidgets import QTabWidget
+from PyQt5.QtCore import Qt
+from ui.widgets.theme.layout_styles import tab_style
+from ui.widgets.core.i18n import tr
 
 
 class FinancialStatementsTab(SafeConnMixin, QWidget):
@@ -38,12 +41,13 @@ class FinancialStatementsTab(SafeConnMixin, QWidget):
 
     def _build(self):
         conn = self._get_safe_conn()
-        self._tabs = make_financial_tabs(
-            ("📊 قائمة الدخل",        IncomeStatementTab(conn)),
-            ("👑 حقوق الملكية",       OwnersEquityTab(conn)),
-            ("🏛️ الميزانية العمومية", BalanceSheetTab(conn)),
-            ("⚖️ ميزان المراجعة",    TrialBalanceTab(conn)),
-        )
+        self._tabs = QTabWidget()
+        self._tabs.setLayoutDirection(Qt.RightToLeft)
+        self._tabs.setStyleSheet(tab_style(size="small"))
+        self._tabs.addTab(IncomeStatementTab(conn),  tr("income_statement_tab"))
+        self._tabs.addTab(OwnersEquityTab(conn),     tr("owners_equity_tab"))
+        self._tabs.addTab(BalanceSheetTab(conn),     tr("balance_sheet_tab"))
+        self._tabs.addTab(TrialBalanceTab(conn),     tr("trial_balance_tab"))
         self._root_layout.addWidget(self._tabs)
 
     def _rebuild(self):
