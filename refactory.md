@@ -1,1909 +1,1165 @@
-# خطة إعادة هيكلة قسم المحاسبة — نسخة نهائية قابلة للتطبيق المباشر
+# خطة إعادة هيكلة نظام إدارة الشركات — منظمة حسب الملف
 
-> تاريخ الإعداد: 2026-06-05
-> المبدأ: كل استدعاء مباشر لمصدره الأصلي — لا re-exports — لا shims — لا hardcoded
-
----
-
-## صفر: ما يُحذف قبل البدء
-
-| الملف | السبب |
-|---|---|
-| `ui/tabs/accounting/investors/_helpers.py` | كان re-export بحت لـ spin_field و stat_card_pair |
-| أي ملف `ui/widgets/shared/panels.py` | wrapper وهمي — لا وجود له فعلاً في البنية |
-| أي ملف `ui/widgets/shared/stat_row.py` | wrapper وهمي |
-| أي ملف `ui/widgets/shared/tab_builder.py` | wrapper وهمي |
-| أي ملف `ui/widgets/shared/safe_conn_mixin.py` | wrapper وهمي |
-| أي ملف `ui/widgets/shared/company_utils.py` | wrapper وهمي |
-| أي ملف `ui/widgets/shared/date_range_filter.py` | wrapper وهمي |
-| أي ملف `ui/widgets/shared/input_widgets.py` | wrapper وهمي |
-| أي ملف `ui/widgets/shared/empty_state_helpers.py` | wrapper وهمي |
-| أي ملف `ui/widgets/shared/form_utils.py` | wrapper وهمي |
-| أي ملف `ui/widgets/shared/color_picker_widget.py` | wrapper وهمي |
-| أي ملف `ui/widgets/shared/panles_helper/` | مجلد wrapper وهمي بالكامل |
-| أي ملف `ui/widgets/theme/styles.py` | wrapper وهمي لـ table_styles + layout_styles |
-| أي ملف `ui/helpers.py` | wrapper وهمي — وظائفه موزعة على الـ widgets الفعلية |
-| أي ملف `ui/font_utils.py` | wrapper وهمي لـ ui.font |
-| أي ملف `ui/events.py` | wrapper وهمي — استخدم ui.widgets.core.events مباشرة |
-| أي ملف `ui/app_settings.py` | wrapper وهمي — استخدم ui.theme و ui.font مباشرة |
+> **الهدف:** تحويل `tabs/` إلى orchestrators خالصة وفق التسلسل:
+> `widgets/ (base) → tabs/UI → services/ → repos/ (db/) ← schema/`
+>
+> **القاعدة الذهبية:** لا hardcoded — لا ألوان، لا نصوص، لا بناء UI خارج أماكنها.
 
 ---
 
-## أولاً: خريطة الـ imports النهائية (المصدر الحقيقي لكل شيء)
+## فهرس سريع
 
-### Mixins و Connections
-```
-SafeConnMixin, DualConnMixin, LiveConnMixin   →  ui.widgets.core.conn
-```
+- [المرحلة الأساسية](#المرحلة-الأساسية)
+- [تبويبات المخزن](#تبويبات-المخزن)
+- [تبويبات التسعير](#تبويبات-التسعير)
+- [إدارة الشركات](#إدارة-الشركات)
+- [ترتيب التطبيق](#ترتيب-التطبيق)
 
-### Events و Bus
-```
-bus, emit_company_data_changed, get_active_company_id  →  ui.widgets.core.events
-```
+---
 
-### Theme و Font
-```
-_C                →  ui.theme
-fs, get_font_size →  ui.font
-```
+# المرحلة الأساسية
 
-### Components
-```
-PageHeader, SectionHeader          →  ui.widgets.components.headers_page
-ListHeader, StatusBar              →  ui.widgets.components.headers_list
-StatRow, StatItem, stat_card_pair  →  ui.widgets.components.stat_card
-BalanceDisplay, AmountLabel        →  ui.widgets.components.amount_label
-NotificationBar                    →  ui.widgets.components.notification
-ModeLabel                          →  ui.widgets.components.label
-make_btn                           →  ui.widgets.components.button
-ColorPickerWidget                  →  ui.widgets.helpers.color_picker
-```
+## `ui/theme/theme_manager.py` — إضافة ألوان جديدة
 
-### Tables
-```
-make_table, make_list_table, bold_item, colored_item,
-center_item, set_row_bg, auto_fit_columns,
-ROW_HEIGHT_NORMAL, ROW_HEIGHT_LARGE              →  ui.widgets.tables.tables
-```
+### المشاكل
+عدم وجود ألوان مخصصة لـ:
+- العناصر المشتركة / المنشورة
+- حالات المخزون (منخفض / حرج / كافٍ)
 
-### Panels / Forms
-```
-FormGroup         →  ui.widgets.panels.form_group
-spin_field, make_form_layout  →  ui.widgets.panels.form_fields
-form_label, required_label    →  ui.widgets.panels.form_labels
-EmptyState (بدل EmptyPanelState)  →  ui.widgets.panels.state
-FilterToolbar     →  ui.widgets.panels.filter
-```
+### الحل
+إضافة 8 ألوان جديدة إلى `_LIGHT_THEME` و `_DARK_THEME`:
 
-### Inputs
-```
-NotesLineEdit, DateField, AmountSpinBox  →  ui.widgets.forms.inputs
-```
+```python
+# في _LIGHT_THEME - أضف بعد الألوان الموجودة:
+# ── Shared / Published items ──────────────────────────────
+"shared_item_fg":      "#6a1b9a",   # نص العنصر المشترك
+"shared_item_bg":      "#f3e5f5",   # خلفية صف العنصر المشترك
+"published_item_fg":   "#0891b2",   # نص العنصر المنشور محلياً
+"published_item_bg":   "#e0f7fa",   # خلفية صف العنصر المنشور
 
-### Dialogs
-```
-confirm_delete, confirm_action  →  ui.widgets.dialogs.confirm
-msg_warning, msg_info           →  ui.widgets.dialogs.message
-```
+# ── Inventory Stock Levels ────────────────────────────────
+"stock_critical_fg":   "#c62828",   # صفر مخزون (نص)
+"stock_low_fg":        "#e65100",   # تحت الحد الأدنى (نص)
+"stock_ok_fg":         "#2e7d32",   # مخزون كافٍ (نص)
 
-### Theme Styles
-```
-table_style, splitter_style, ROW_HEIGHT_NORMAL  →  ui.widgets.theme.table_styles
-tree_style, tab_style, scroll_style             →  ui.widgets.theme.layout_styles
-```
-
-### Mixins
-```
-EditModeMixin, FormValidationMixin  →  ui.widgets.mixins.form_mixins
-```
-
-### Widgets Utils
-```
-DateRangeFilter  →  ui.widgets.utils.date_range
+# في _DARK_THEME - نفس المفاتيح:
+"shared_item_fg":      "#CE93D8",
+"shared_item_bg":      "#1a0828",
+"published_item_fg":   "#26C6DA",
+"published_item_bg":   "#0a2830",
+"stock_critical_fg":   "#E57373",
+"stock_low_fg":        "#FFB74D",
+"stock_ok_fg":         "#66BB8A",
 ```
 
 ---
 
-## ثانياً: إضافة alias واحد فقط في `ui/widgets/core/conn.py`
+## `ui/i18n/ar.py` — إضافة مفاتيح الترجمة العربية
 
-أضف داخل `SafeConnMixin`:
+### المشاكل
+عدم وجود مفاتيح ترجمة لـ UI المخزن والتسعير والشركات.
+
+### الحل
+أضف المفاتيح التالية في المكان المناسب حسب التصنيف:
 
 ```python
-def _on_company_event_safe(self, company_id: int) -> bool:
-    """Alias لـ _should_respond_to_company — للتوافق مع الكود الموجود."""
-    return self._should_respond_to_company(company_id)
+# ─────────────────────────────────────────────────────────────
+# المخزن
+# ─────────────────────────────────────────────────────────────
+"inventory_purchase_success":  "✅ تم تسجيل الاستلام وإنشاء قيد محاسبي",
+"inventory_select_item":        "اختر الصنف أولاً",
+"inventory_select_payment":     "اختر حساب الدفع",
+"inventory_valid_qty_cost":     "أدخل كمية وسعر صحيحين",
+"inventory_adjust_negative":    "كمية التسوية لا يمكن أن تكون سالبة",
+"record_outbound_success":      "تم تسجيل الصرف بنجاح",
+"inventory_item_name":          "اسم الصنف",
+"inventory_new_item":           "صنف جديد",
+"inventory_unit_placeholder":   "قطعة / متر / كيلو...",
+"inventory_min_qty_label":      "الحد الأدنى",
+"inventory_link_raw":           "ربط بخامة",
+"inventory_acc_account":        "حساب المخزون",
+"inventory_outbound_title":     "📤  صرف / استهلاك مخزن",
+"inventory_inbound_title":      "📥  استلام / شراء مخزن",
+"inventory_recent_inbound":     "─── آخر حركات الوارد ───",
+"inventory_recent_outbound":    "─── آخر حركات الصادر ───",
+"inventory_items_header":       "─── أصناف المخزن ───",
+"inventory_purpose":            "الغرض من الصرف...",
+"inventory_payment_account":    "حساب الدفع",
+"inventory_available_qty":      "الرصيد: {qty} {unit}",
+"inventory_available_none":     "الرصيد: —",
+
+# ─────────────────────────────────────────────────────────────
+# التسعير
+# ─────────────────────────────────────────────────────────────
+"pricing_product_label":        "المنتج",
+"pricing_margin_label":         "هامش الربح",
+"pricing_final_price_label":    "السعر النهائي",
+"pricing_cost_stat":            "التكلفة",
+"pricing_suggested_stat":       "سعر البيع المقترح",
+"pricing_manual_stat":          "السعر اليدوي",
+"pricing_profit_stat":          "الربح",
+"pricing_margin_actual_stat":   "هامش الربح الفعلي %",
+"pricing_select_product":       "اختر منتجاً أولاً",
+"pricing_price_positive":       "السعر يجب أن يكون أكبر من صفر",
+"pricing_delete_confirm":       "حذف سعر «{name}»؟",
+"pricing_saved_prices":         "─── قائمة الأسعار ───",
+"pricing_new_mode":             "─── تسعير منتج ───",
+"pricing_edit_mode":            "─── تعديل سعر: {name} ───",
+"offer_new_mode":               "─── عرض جديد ───",
+"offer_edit_mode":              "─── تعديل: {name} ───",
+"offer_name_label":             "اسم العرض",
+"offer_discount_label":         "الخصم",
+"offer_category_label":         "التصنيف",
+"offer_notes_label":            "ملاحظات",
+"offer_add_product_btn":        "➕  إضافة منتج للعرض",
+"offer_save_btn":               "💾  حفظ العرض",
+"offer_total_before_disc":      "إجمالي السعر قبل الخصم",
+"offer_discount_value":         "قيمة الخصم",
+"offer_sell_price":             "سعر البيع النهائي",
+"offer_total_cost":             "إجمالي التكلفة",
+"offer_profit":                 "الربح",
+"offer_select_product_search":  "🔍 بحث...",
+"offer_col_product":            "المنتج",
+"offer_col_category":           "التصنيف",
+"offer_col_qty":                "الكمية",
+"offer_col_unit_cost":          "تكلفة/وحدة",
+"offer_col_unit_price":         "سعر/وحدة",
+"offer_col_line_total":         "إجمالي السطر",
+"offer_col_line_profit":        "الربح/سطر",
+"offer_select_first":           "اختر عرضاً أولاً",
+"offer_details_placeholder":    "اختر عرضاً لعرض تفاصيله",
+"offer_saved_list":             "─── العروض المحفوظة ───",
+"offer_products_tab":           "🎁  العروض",
+"offer_categories_tab":         "🏷️  تصنيفات العروض",
+"pricing_prices_tab":           "💰  الأسعار",
+"pricing_categories_tab":       "🏷️  التصنيفات",
+
+# ─────────────────────────────────────────────────────────────
+# الشركات والعناصر المشتركة
+# ─────────────────────────────────────────────────────────────
+"companies_registered":         "الشركات المسجلة",
+"company_add_btn":              "➕  إضافة شركة",
+"company_name_label":           "اسم الشركة *",
+"company_short_name_label":     "الاسم المختصر",
+"company_color_label":          "اللون المميز",
+"company_notes_label":          "ملاحظات",
+"company_choose_color":         "اختر لوناً",
+"company_new_title":            "✨  شركة جديدة",
+"company_edit_title":           "✏️  تعديل: {name}",
+"company_status_active":        "✅ نشطة",
+"company_status_paused":        "⏸ موقوفة",
+"company_updated_msg":          "تم تحديث بيانات «{name}»",
+"company_created_msg":          "تم إنشاء شركة «{name}» بنجاح.\nتم إنشاء قواعد البيانات الخاصة بها.",
+"company_delete_confirm":       "هل تريد حذف شركة «{name}»؟\n\nملاحظة: ملفات قواعد البيانات ستبقى على القرص.",
+"shared_item_hint":             "💡  العناصر المشتركة مخزنة مركزياً — أي تعديل على السعر أو البيانات يتعكس فوراً على كل الشركات المشتركة فيها.",
+"shared_publish_hint":          "💡  العنصر المشترك يُحفظ مركزياً ويظهر في كل الشركات المختارة.\n    أي تعديل على بياناته سيتعكس فوراً على كل الشركات.",
+"shared_item_header":           "🔗  إدارة العناصر المشتركة بين الشركات",
+"shared_add_btn":               "➕  إضافة عنصر مشترك",
+"shared_edit_btn":              "✏️  تعديل المحدد",
+"shared_delete_btn":            "🗑️  حذف المحدد",
+"shared_refresh_btn":           "🔄  تحديث",
+"shared_close_btn":             "✖  إغلاق",
+"shared_link_btn":              "➕  ربط شركة",
+"shared_unlink_btn":            "✖  فك الربط",
+"shared_save_btn":              "💾  حفظ التغييرات",
+"shared_publish_btn":           "📤  نشر العنصر",
+"shared_name_required":         "أدخل اسم العنصر",
+"shared_updated_msg":           "✅ تم حفظ التغييرات — ستنعكس فوراً على كل الشركات المشتركة.",
+"shared_published_msg":         "✅ تم نشر «{name}» كعنصر مشترك وربطه بالشركات المختارة.",
+"shared_linked_msg":            "✅ تم ربط الشركات المختارة بالعنصر «{name}»",
+"shared_already_linked":        "هذه الشركة مربوطة بالفعل",
+"shared_not_linked":            "هذه الشركة غير مربوطة أصلاً",
+"shared_unlink_confirm":        "فك ربط هذه الشركة من العنصر المشترك؟",
+"shared_delete_with_companies": "هذا العنصر مرتبط بـ {count} شركة. حذفه سيفك الربط تلقائياً. هل تريد المتابعة؟",
+"shared_delete_simple":         "حذف هذا العنصر المشترك؟",
+"shared_deleted_msg":           "✅ تم حذف العنصر المشترك",
+"shared_companies_section":     "الشركات المشتركة في هذا العنصر",
+"shared_item_data_section":     "بيانات العنصر",
+"shared_companies_share":       "مشاركة مع الشركات",
+"shared_select_all_btn":        "✅ الكل",
+"shared_select_none_btn":       "☐ لا شيء",
+"shared_quick_select":          "تحديد سريع:",
+"link_item_title":              "🔗  اختر عنصراً للربط",
+"link_item_prompt":             "اختر العنصر المشترك الذي تريد ربطه بشركتك:",
+"link_item_btn":                "✅  ربط",
+"no_company_welcome":           "مرحباً بك في نظام ERP",
+"no_company_subtitle":          "اختر شركة من القائمة أعلاه للبدء\nأو أنشئ شركة جديدة",
+"no_company_add_btn":           "➕  إنشاء شركة جديدة",
+"company_name_placeholder":     "مثال: شركة النور للطباعة",
+"company_short_placeholder":    "مثال: النور",
+"raw_price_lbl":                "السعر الكلي (جنيه)",
+"raw_total_qty_lbl":            "الكمية الإجمالية",
+"machine_rate_hour_lbl":        "معدل التشغيل / ساعة (جنيه)",
+"machine_rate_unit_lbl":        "معدل التشغيل / وحدة (جنيه)",
+"labor_time_lbl":               "الوقت (دقيقة)",
+"raw_unit_preview_lbl":         "سعر الوحدة",
+"machine_name_col":             "الماكينة",
+"shared_type_raw":              "خامة",
+"shared_type_machine":          "ماكينة",
+"shared_type_labor_op":         "عملية عمالة",
+"shared_type_machine_op":       "عملية تشغيل",
+"shared_companies_col":         "الشركات المشتركة",
+"shared_last_update_col":       "آخر تحديث",
+"shared_main_data_col":         "البيانات الرئيسية",
 ```
 
 ---
 
-## ثالثاً: ألوان جديدة في `ui/theme_manager.py`
+## `ui/i18n/en.py` — إضافة مفاتيح الترجمة الإنجليزية
 
-أضف في **كلا** `_LIGHT_THEME` و `_DARK_THEME`:
+### المشاكل
+نفس المشاكل في اللغة الإنجليزية.
 
-### في `_LIGHT_THEME`:
+### الحل
+أضف نفس المفاتيح بالإنجليزية:
+
 ```python
-# ── Accounting Journal ────────────────────────────────────
-"journal_dr_bg":          "#f4f8ff",
-"journal_dr_border":      "#c5d8f7",
-"journal_dr_accent":      "#1565c0",
-"journal_cr_bg":          "#fff4f4",
-"journal_cr_border":      "#f7c5c5",
-"journal_cr_accent":      "#c62828",
-"journal_neutral_bg":     "#fafbff",
-"journal_neutral_border": "#dde3f0",
-"journal_header_bg":      "#f0f4ff",
-"journal_header_border":  "#c5cae9",
-# ── Investor ─────────────────────────────────────────────
-"investor_capital_bg":    "#f1f8e9",
-"investor_capital_text":  "#2e7d32",
-"investor_drawings_bg":   "#fdecea",
-"investor_drawings_text": "#c62828",
-"investor_link_bg":       "#fff8e1",
-"investor_link_border":   "#ffe082",
-"investor_link_text":     "#f57f17",
-# ── Audit Log ────────────────────────────────────────────
-"audit_delete_fg":        "#C0392B",
-"audit_delete_bg":        "#FDF0EF",
-"audit_update_fg":        "#7A5C00",
-"audit_update_bg":        "#FDF8E7",
-"audit_create_fg":        "#2E7D52",
-"audit_create_bg":        "#EDF7F2",
-# ── T-Account ────────────────────────────────────────────
-"t_account_dr_bg":        "#e3f2fd",
-"t_account_cr_bg":        "#fdecea",
-"t_account_frame":        "#c5cae9",
-# ── Badge ────────────────────────────────────────────────
-"badge_dr_bg":            "#e3f2fd",
-"badge_dr_text":          "#1565c0",
-"badge_cr_bg":            "#fdecea",
-"badge_cr_text":          "#c62828",
-```
+# ─────────────────────────────────────────────────────────────
+# Inventory
+# ─────────────────────────────────────────────────────────────
+"inventory_purchase_success":   "✅ Inbound recorded and accounting entry created",
+"inventory_select_item":        "Select an item first",
+"inventory_select_payment":     "Select a payment account",
+"inventory_valid_qty_cost":     "Enter valid quantity and price",
+"inventory_adjust_negative":    "Adjustment quantity cannot be negative",
+"record_outbound_success":      "Outbound recorded successfully",
+"inventory_item_name":          "Item Name",
+"inventory_new_item":           "New Item",
+"inventory_unit_placeholder":   "piece / meter / kg...",
+"inventory_min_qty_label":      "Min Level",
+"inventory_link_raw":           "Link to Raw Material",
+"inventory_acc_account":        "Inventory Account",
+"inventory_outbound_title":     "📤  Issue / Consumption",
+"inventory_inbound_title":      "📥  Receive / Purchase",
+"inventory_recent_inbound":     "─── Recent Inbound Movements ───",
+"inventory_recent_outbound":    "─── Recent Outbound Movements ───",
+"inventory_items_header":       "─── Inventory Items ───",
+"inventory_purpose":            "Purpose of issue...",
+"inventory_payment_account":    "Payment Account",
+"inventory_available_qty":      "Balance: {qty} {unit}",
+"inventory_available_none":     "Balance: —",
 
-### في `_DARK_THEME`:
-```python
-# ── Accounting Journal ────────────────────────────────────
-"journal_dr_bg":          "#1a2a3a",
-"journal_dr_border":      "#2a4a6a",
-"journal_dr_accent":      "#5B8DB8",
-"journal_cr_bg":          "#2a1010",
-"journal_cr_border":      "#5a2020",
-"journal_cr_accent":      "#E57373",
-"journal_neutral_bg":     "#1A1A1A",
-"journal_neutral_border": "#2E2E2E",
-"journal_header_bg":      "#1a2030",
-"journal_header_border":  "#2a3050",
-# ── Investor ─────────────────────────────────────────────
-"investor_capital_bg":    "#0a2018",
-"investor_capital_text":  "#66BB8A",
-"investor_drawings_bg":   "#2a1010",
-"investor_drawings_text": "#E57373",
-"investor_link_bg":       "#282000",
-"investor_link_border":   "#4a3800",
-"investor_link_text":     "#FFD54F",
-# ── Audit Log ────────────────────────────────────────────
-"audit_delete_fg":        "#E57373",
-"audit_delete_bg":        "#2a1010",
-"audit_update_fg":        "#FFD54F",
-"audit_update_bg":        "#2a2000",
-"audit_create_fg":        "#66BB8A",
-"audit_create_bg":        "#0a2018",
-# ── T-Account ────────────────────────────────────────────
-"t_account_dr_bg":        "#1a2a3a",
-"t_account_cr_bg":        "#2a1010",
-"t_account_frame":        "#2a3050",
-# ── Badge ────────────────────────────────────────────────
-"badge_dr_bg":            "#1a2a3a",
-"badge_dr_text":          "#5B8DB8",
-"badge_cr_bg":            "#2a1010",
-"badge_cr_text":          "#E57373",
-```
+# ─────────────────────────────────────────────────────────────
+# Pricing
+# ─────────────────────────────────────────────────────────────
+"pricing_product_label":        "Product",
+"pricing_margin_label":         "Profit Margin",
+"pricing_final_price_label":    "Final Price",
+"pricing_cost_stat":            "Cost",
+"pricing_suggested_stat":       "Suggested Selling Price",
+"pricing_manual_stat":          "Manual Price",
+"pricing_profit_stat":          "Profit",
+"pricing_margin_actual_stat":   "Actual Margin %",
+"pricing_select_product":       "Select a product first",
+"pricing_price_positive":       "Price must be greater than zero",
+"pricing_delete_confirm":       "Delete price for «{name}»?",
+"pricing_saved_prices":         "─── Price List ───",
+"pricing_new_mode":             "─── Price a Product ───",
+"pricing_edit_mode":            "─── Edit Price: {name} ───",
+"offer_new_mode":               "─── New Offer ───",
+"offer_edit_mode":              "─── Edit: {name} ───",
+"offer_name_label":             "Offer Name",
+"offer_discount_label":         "Discount",
+"offer_category_label":         "Category",
+"offer_notes_label":            "Notes",
+"offer_add_product_btn":        "➕  Add Product to Offer",
+"offer_save_btn":               "💾  Save Offer",
+"offer_total_before_disc":      "Total Price Before Discount",
+"offer_discount_value":         "Discount Amount",
+"offer_sell_price":             "Final Selling Price",
+"offer_total_cost":             "Total Cost",
+"offer_profit":                 "Profit",
+"offer_select_product_search":  "🔍 Search...",
+"offer_col_product":            "Product",
+"offer_col_category":           "Category",
+"offer_col_qty":                "Qty",
+"offer_col_unit_cost":          "Cost/Unit",
+"offer_col_unit_price":         "Price/Unit",
+"offer_col_line_total":         "Line Total",
+"offer_col_line_profit":        "Line Profit",
+"offer_select_first":           "Select an offer first",
+"offer_details_placeholder":    "Select an offer to view details",
+"offer_saved_list":             "─── Saved Offers ───",
+"offer_products_tab":           "🎁  Offers",
+"offer_categories_tab":         "🏷️  Offer Categories",
+"pricing_prices_tab":           "💰  Prices",
+"pricing_categories_tab":       "🏷️  Categories",
 
----
-
-## رابعاً: مفاتيح ترجمة جديدة
-
-### يُضاف في `ui/i18n/ar.py` داخل `AR_STRINGS`:
-```python
-# ══════════════════════════════════════════════
-# دفتر الأستاذ
-# ══════════════════════════════════════════════
-"ledger":                  "دفتر الأستاذ",
-"t_account":               "حساب T",
-"normal_balance_dr":       "طبيعة مدينة (DR↑)",
-"normal_balance_cr":       "طبيعة دائنة (CR↑)",
-
-# ══════════════════════════════════════════════
-# فورم القيد
-# ══════════════════════════════════════════════
-"journal_balanced":        "✅ متوازن — يمكن الحفظ",
-"journal_unbalanced":      "⚠️ غير متوازن",
-"add_journal_line":        "➕  إضافة صف",
-"journal_lines_title":     "📋  صفوف القيد",
-"journal_increase":        "زيادة ✚",
-"journal_decrease":        "نقص ✖",
-"entry_type_manual":       "📝 يدوي",
-"entry_type_opening":      "🟢 افتتاحي",
-"entry_type_closing":      "🔴 ختامي",
-"entry_type_transfer":     "🔄 ترحيل",
-"select_account":          "— اختر الحساب —",
-"select_journal_first":    "اختر قيداً أولاً",
-"journal_saved_success":   "✅ تم حفظ القيد بنجاح",
-"no_dr_line":              "لا يوجد أي صف مدين (DR)",
-"no_cr_line":              "لا يوجد أي صف دائن (CR)",
-"entry_description_placeholder": "وصف القيد الإجمالي...",
-"line_description_placeholder":  "بيان...",
-"balance_bar_diff":        "الفرق:",
-"balance_bar_add_rows":    "○ أضف صفوف",
-"entry_save_btn":          "💾  حفظ القيد",
-"entry_clear_btn":         "✖  مسح",
-"new_journal_entry":       "── قيد يومية جديد ──",
-
-# ══════════════════════════════════════════════
-# Audit Log
-# ══════════════════════════════════════════════
-"audit_log_delete":        "🗑️ حذف",
-"audit_log_update":        "✏️ تعديل",
-"audit_log_create":        "➕ إضافة",
-"audit_detail_title":      "تفاصيل العملية",
-"old_data":                "البيانات القديمة",
-"changed_by":              "بواسطة",
-"no_audit_records":        "لا توجد سجلات",
-"no_audit_yet":            "لم يُسجَّل أي عملية حتى الآن",
-"audit_all_tables":        "— كل الجداول —",
-"audit_all_types":         "— كل الأنواع —",
-
-# ══════════════════════════════════════════════
-# المستثمرون
-# ══════════════════════════════════════════════
-"investor_capital_badge":  "💰 رأس مال",
-"investor_drawings_badge": "💸 مسحوبات",
-"initial_capital":         "رأس المال الأولي",
-"capital_account":         "حساب رأس المال",
-"deposit_account":         "حساب الإيداع",
-"payment_account":         "حساب الصرف",
-"link_investor_to_entry":  "🔗  ربط بقيد محاسبي",
-"link_success":            "✅ تم ربط القيد بالمستثمر بنجاح",
-"investor_join_date":      "تاريخ الانضمام",
-"investor_new":            "مستثمر جديد",
-"select_investor":         "اختر المستثمر",
-"investor_movements":      "─── الحركات المالية ───",
-"delete_movement_title":   "تأكيد حذف الحركة",
-"delete_movement_msg":     "حذف {type} (قيد {ref})؟\n\n⚠️ سيتم حذف الحركة من سجل المستثمر وحذف القيد من الحسابات.",
-"investor_list_title":     "─── المستثمرون ───",
-"add_capital_title":       "💰  إضافة رأس مال",
-"add_drawings_title":      "💸  تسجيل مسحوبات",
-"expected_entry":          "القيد المتوقع:",
-"link_entry_info":         "🔗  ربط قيد محاسبي موجود بمستثمر\nاستخدم هذا لو أضفت القيد يدوياً في تبويب القيود وتريد نسبته لمستثمر.",
-"entry_ref_placeholder":   "مثال: JE-00012",
-"link_entry_btn":          "🔗  ربط",
-
-# ══════════════════════════════════════════════
-# Pagination
-# ══════════════════════════════════════════════
-"load_more":               "تحميل {count} إضافي  ▼",
-"show_all_records":        "عرض الكل",
-"showing_records":         "يعرض {shown:,} من {total:,}",
-"showing_all_records":     "يعرض كل {shown:,} سجل",
-
-# ══════════════════════════════════════════════
-# شريط الحالة والفلاتر
-# ══════════════════════════════════════════════
-"group_filter":            "🏷 التصنيف:",
-"balance_status_filter":   "الحالة:",
-"all_groups":              "— كل التصنيفات —",
-"balanced_filter":         "✅ متوازن",
-"unbalanced_filter":       "⚠️ غير متوازن",
-"move_type_all":           "كل الحركات",
-"move_type_dr":            "مدين فقط",
-"move_type_cr":            "دائن فقط",
-"clear_filters":           "↺ مسح الفلاتر",
-"entry_date_label":        "التاريخ:",
-"entry_type_label":        "النوع:",
-"entry_desc_label":        "الوصف:",
-```
-
-### يُضاف في `ui/i18n/en.py` داخل `EN_STRINGS`:
-```python
-# ══════════════════════════════════════════════
-# Ledger
-# ══════════════════════════════════════════════
-"ledger":                  "Ledger",
-"t_account":               "T-Account",
-"normal_balance_dr":       "Debit Nature (DR↑)",
-"normal_balance_cr":       "Credit Nature (CR↑)",
-
-# ══════════════════════════════════════════════
-# Journal Form
-# ══════════════════════════════════════════════
-"journal_balanced":        "✅ Balanced — can save",
-"journal_unbalanced":      "⚠️ Unbalanced",
-"add_journal_line":        "➕  Add Row",
-"journal_lines_title":     "📋  Journal Lines",
-"journal_increase":        "Increase ✚",
-"journal_decrease":        "Decrease ✖",
-"entry_type_manual":       "📝 Manual",
-"entry_type_opening":      "🟢 Opening",
-"entry_type_closing":      "🔴 Closing",
-"entry_type_transfer":     "🔄 Transfer",
-"select_account":          "— Select Account —",
-"select_journal_first":    "Select an entry first",
-"journal_saved_success":   "✅ Entry saved successfully",
-"no_dr_line":              "No debit (DR) line found",
-"no_cr_line":              "No credit (CR) line found",
-"entry_description_placeholder": "Entry description...",
-"line_description_placeholder":  "Description...",
-"balance_bar_diff":        "Diff:",
-"balance_bar_add_rows":    "○ Add rows",
-"entry_save_btn":          "💾  Save Entry",
-"entry_clear_btn":         "✖  Clear",
-"new_journal_entry":       "── New Journal Entry ──",
-
-# ══════════════════════════════════════════════
-# Audit Log
-# ══════════════════════════════════════════════
-"audit_log_delete":        "🗑️ Delete",
-"audit_log_update":        "✏️ Update",
-"audit_log_create":        "➕ Create",
-"audit_detail_title":      "Operation Details",
-"old_data":                "Old Data",
-"changed_by":              "Changed By",
-"no_audit_records":        "No records found",
-"no_audit_yet":            "No operations logged yet",
-"audit_all_tables":        "— All Tables —",
-"audit_all_types":         "— All Types —",
-
-# ══════════════════════════════════════════════
-# Investors
-# ══════════════════════════════════════════════
-"investor_capital_badge":  "💰 Capital",
-"investor_drawings_badge": "💸 Drawings",
-"initial_capital":         "Initial Capital",
-"capital_account":         "Capital Account",
-"deposit_account":         "Deposit Account",
-"payment_account":         "Payment Account",
-"link_investor_to_entry":  "🔗  Link to Accounting Entry",
-"link_success":            "✅ Entry linked to investor successfully",
-"investor_join_date":      "Join Date",
-"investor_new":            "New Investor",
-"select_investor":         "Select Investor",
-"investor_movements":      "─── Financial Movements ───",
-"delete_movement_title":   "Confirm Delete Movement",
-"delete_movement_msg":     "Delete {type} (entry {ref})?\n\n⚠️ This will delete the movement and its accounting entry.",
-"investor_list_title":     "─── Investors ───",
-"add_capital_title":       "💰  Add Capital",
-"add_drawings_title":      "💸  Record Drawings",
-"expected_entry":          "Expected Entry:",
-"link_entry_info":         "🔗  Link an existing accounting entry to an investor\nUse this if you added the entry manually in the journal tab.",
-"entry_ref_placeholder":   "e.g. JE-00012",
-"link_entry_btn":          "🔗  Link",
-
-# ══════════════════════════════════════════════
-# Pagination
-# ══════════════════════════════════════════════
-"load_more":               "Load {count} More  ▼",
-"show_all_records":        "Show All",
-"showing_records":         "Showing {shown:,} of {total:,}",
-"showing_all_records":     "Showing all {shown:,} records",
-
-# ══════════════════════════════════════════════
-# Filters
-# ══════════════════════════════════════════════
-"group_filter":            "🏷 Group:",
-"balance_status_filter":   "Status:",
-"all_groups":              "— All Groups —",
-"balanced_filter":         "✅ Balanced",
-"unbalanced_filter":       "⚠️ Unbalanced",
-"move_type_all":           "All Movements",
-"move_type_dr":            "Debit Only",
-"move_type_cr":            "Credit Only",
-"clear_filters":           "↺ Clear Filters",
-"entry_date_label":        "Date:",
-"entry_type_label":        "Type:",
-"entry_desc_label":        "Description:",
+# ─────────────────────────────────────────────────────────────
+# Companies
+# ─────────────────────────────────────────────────────────────
+"companies_registered":         "Registered Companies",
+"company_add_btn":              "➕  Add Company",
+"company_name_label":           "Company Name *",
+"company_short_name_label":     "Short Name",
+"company_color_label":          "Brand Color",
+"company_notes_label":          "Notes",
+"company_choose_color":         "Choose Color",
+"company_new_title":            "✨  New Company",
+"company_edit_title":           "✏️  Edit: {name}",
+"company_status_active":        "✅ Active",
+"company_status_paused":        "⏸ Paused",
+"company_updated_msg":          "Company «{name}» updated",
+"company_created_msg":          "Company «{name}» created successfully.\nDatabases have been initialized.",
+"company_delete_confirm":       "Delete company «{name}»?\n\nNote: Database files will remain on disk.",
+"shared_item_hint":             "💡  Shared items are stored centrally — any change is reflected across all linked companies.",
+"shared_publish_hint":          "💡  Shared item is stored centrally and appears in all selected companies.\n    Any changes will be reflected immediately.",
+"shared_item_header":           "🔗  Manage Shared Items Between Companies",
+"shared_add_btn":               "➕  Add Shared Item",
+"shared_edit_btn":              "✏️  Edit Selected",
+"shared_delete_btn":            "🗑️  Delete Selected",
+"shared_refresh_btn":           "🔄  Refresh",
+"shared_close_btn":             "✖  Close",
+"shared_link_btn":              "➕  Link Company",
+"shared_unlink_btn":            "✖  Unlink",
+"shared_save_btn":              "💾  Save Changes",
+"shared_publish_btn":           "📤  Publish Item",
+"shared_name_required":         "Enter item name",
+"shared_updated_msg":           "✅ Changes saved — reflected immediately across all linked companies.",
+"shared_published_msg":         "✅ «{name}» published as shared and linked to selected companies.",
+"shared_linked_msg":            "✅ Selected companies linked to «{name}»",
+"shared_already_linked":        "This company is already linked",
+"shared_not_linked":            "This company is not linked",
+"shared_unlink_confirm":        "Unlink this company from the shared item?",
+"shared_delete_with_companies": "This item is linked to {count} company(ies). Deleting it will remove all links. Continue?",
+"shared_delete_simple":         "Delete this shared item?",
+"shared_deleted_msg":           "✅ Shared item deleted",
+"shared_companies_section":     "Companies Sharing This Item",
+"shared_item_data_section":     "Item Data",
+"shared_companies_share":       "Share with Companies",
+"shared_select_all_btn":        "✅ All",
+"shared_select_none_btn":       "☐ None",
+"shared_quick_select":          "Quick Select:",
+"link_item_title":              "🔗  Select Item to Link",
+"link_item_prompt":             "Select the shared item you want to link to your company:",
+"link_item_btn":                "✅  Link",
+"no_company_welcome":           "Welcome to the ERP System",
+"no_company_subtitle":          "Select a company from the list above to start\nor create a new company",
+"no_company_add_btn":           "➕  Create New Company",
+"company_name_placeholder":     "e.g. Al-Nour Printing Co.",
+"company_short_placeholder":    "e.g. Al-Nour",
+"raw_price_lbl":                "Total Price (EGP)",
+"raw_total_qty_lbl":            "Total Quantity",
+"machine_rate_hour_lbl":        "Rate / Hour (EGP)",
+"machine_rate_unit_lbl":        "Rate / Unit (EGP)",
+"labor_time_lbl":               "Time (minutes)",
+"raw_unit_preview_lbl":         "Unit Price",
+"machine_name_col":             "Machine",
+"shared_type_raw":              "Raw Material",
+"shared_type_machine":          "Machine",
+"shared_type_labor_op":         "Labor Operation",
+"shared_type_machine_op":       "Machine Operation",
+"shared_companies_col":         "Linked Companies",
+"shared_last_update_col":       "Last Updated",
+"shared_main_data_col":         "Main Data",
 ```
 
 ---
 
-## خامساً: التعديلات الكاملة — ملف بملف
+# تبويبات المخزن
 
----
+## `ui/tabs/inventory/items/_item_form.py`
 
-### 1. `ui/widgets/core/conn.py` — إضافة alias
+### المشاكل
+- استيراد repos مباشرة: `from db.inventory.inventory_repo import ...`
+- استخدام `get_connection()` مباشرة بدل `company_state`
+- استخدام `bus.data_changed.emit()` — signal محذوف
 
-أضف داخل كلاس `SafeConnMixin` (بعد `_should_respond_to_company` مباشرةً):
-
+### الحل
+**الاستيرادات المطلوبة:**
 ```python
-def _on_company_event_safe(self, company_id: int) -> bool:
-    """Alias لـ _should_respond_to_company — للتوافق مع الكود الموجود."""
-    return self._should_respond_to_company(company_id)
-```
-
----
-
-### 2. `ui/tabs/accounting/helpers.py` — تعديل كامل
-
-```python
-"""
-ui/tabs/accounting/helpers.py
-==============================
-أدوات مساعدة صغيرة مشتركة بين تبويبات الحسابات.
-"""
-from db.accounting.accounting_schema import TYPE_AR, NORMAL_BALANCE
-from ui.widgets.components.stat_card import stat_card_pair
-from ui.widgets.panels.form_fields import spin_field
-
-
-TYPE_COLORS = {
-    "asset":    "#1565c0",
-    "liability":"#c62828",
-    "capital":  "#2e7d32",
-    "revenue":  "#6a1b9a",
-    "expense":  "#e65100",
-    "drawings": "#4e342e",
-}
-
-
-def _spin(max_=999_999_999, dec=2, min_height: int = 30):
-    """QDoubleSpinBox موحد — wrapper للتوافق مع الكود القديم في هذا المجلد."""
-    return spin_field(max_=float(max_), dec=dec, min_height=min_height)
-
-
-def _money(val: float) -> str:
-    """تنسيق مبلغ مالي."""
-    return f"{val:,.2f}  ج"
-
-
-def _stat_card(label: str, color: str = "#1565c0"):
-    """بطاقة إحصائية — يرجع (QFrame, QLabel_value)."""
-    return stat_card_pair(label=label, color=color)
-```
-
----
-
-### 3. `ui/tabs/accounting/accounts_combo_widget.py` — تعديل import فقط
-
-استبدل السطر:
-```python
-from ui.app_settings import _C
-```
-بـ:
-```python
-from ui.theme import _C
-```
-
----
-
-### 4. `ui/tabs/accounting/account_combo.py` — تعديل imports
-
-استبدل:
-```python
-from ui.events import bus
-from ui.font_utils import badge_style, badge_width
-from ui.widgets.shared.safe_conn_mixin import SafeConnMixin
-```
-بـ:
-```python
-from ui.widgets.core.events import bus
-from ui.widgets.core.conn import SafeConnMixin
-from ui.theme import _C
-```
-
-ثم احذف كل استخدام لـ `badge_style` و `badge_width` واستبدلها بدوال محلية صغيرة في نفس الملف:
-
-```python
-def _badge_style(side: str = "") -> str:
-    if side == "dr":
-        return (f"font-size:10px; font-weight:bold; color:{_C['badge_dr_text']};"
-                f"background:{_C['badge_dr_bg']}; border-radius:3px; padding:2px 4px;")
-    if side == "cr":
-        return (f"font-size:10px; font-weight:bold; color:{_C['badge_cr_text']};"
-                f"background:{_C['badge_cr_bg']}; border-radius:3px; padding:2px 4px;")
-    return "font-size:10px; font-weight:bold; border-radius:3px; padding:2px 4px;"
-
-_BADGE_WIDTH = 44
-```
-
-ثم استبدل كل `badge_style(...)` بـ `_badge_style(...)` وكل `badge_width()` بـ `_BADGE_WIDTH`.
-
----
-
-### 5. `ui/tabs/accounting/accounts_tree.py` — تعديل imports
-
-استبدل:
-```python
-from ui.events import bus
-from ui.widgets.shared.safe_conn_mixin import SafeConnMixin
-from ui.widgets.shared.panels import (
-    SectionHeader, _make_btn, get_splitter_style,
-    get_tree_style, confirm_delete,
+from db.inventory.inventory_repo import (
+    fetch_inventory_item, insert_inventory_item, update_inventory_item,
 )
-```
-بـ:
-```python
-from ui.widgets.core.events import bus
-from ui.widgets.core.conn import SafeConnMixin
-from ui.widgets.components.headers_page import SectionHeader
-from ui.widgets.components.button import make_btn as _make_btn
-from ui.widgets.theme.table_styles import splitter_style as get_splitter_style
-from ui.widgets.theme.layout_styles import tree_style as get_tree_style
-from ui.widgets.dialogs.confirm import confirm_delete
-```
-
----
-
-### 6. `ui/tabs/accounting/group_manager.py` — تعديل imports
-
-استبدل:
-```python
-from ui.events import bus
-from ui.widgets.shared.safe_conn_mixin import SafeConnMixin
-from ui.widgets.shared.color_picker_widget import ColorPickerWidget
-from ui.widgets.shared.panels import (
-    SectionHeader, _make_btn, get_tree_style, confirm_delete, ListStatusBar,
-)
-from ui.widgets.shared.form_utils import FormGroup
-from ui.widgets.shared.panles_helper.mode_label import ModeLabel
-```
-بـ:
-```python
-from ui.widgets.core.events import bus
-from ui.widgets.core.conn import SafeConnMixin
-from ui.widgets.helpers.color_picker import ColorPickerWidget
-from ui.widgets.components.headers_page import SectionHeader
-from ui.widgets.components.button import make_btn as _make_btn
-from ui.widgets.components.headers_list import StatusBar as ListStatusBar
-from ui.widgets.theme.layout_styles import tree_style as get_tree_style
-from ui.widgets.dialogs.confirm import confirm_delete
-from ui.widgets.panels.form_group import FormGroup
-from ui.widgets.components.label import ModeLabel
-```
-
----
-
-### 7. `ui/tabs/accounting/accounting_tabs_builder.py` — تعديل كامل
-
-```python
-"""
-ui/tabs/accounting/accounting_tabs_builder.py
-==============================================
-_AccountingTabsBuilder — دوال بناء التبويبات الفرعية للقسم المحاسبي.
-"""
-from PyQt5.QtWidgets import QWidget, QVBoxLayout, QSplitter, QTabWidget
-from PyQt5.QtCore import Qt
-
-from .accounts_tree import AccountsTreePanel
-from .group_manager import _GroupManagerPanel
-from .financial.trial_balance_tab    import TrialBalanceTab
-from .financial.income_statement_tab import IncomeStatementTab
-from .financial.owners_equity_tab    import OwnersEquityTab
-from .financial.balance_sheet_tab    import BalanceSheetTab
-from ui.widgets.theme.layout_styles import tab_style
-from ui.widgets.theme.table_styles import splitter_style
-
-
-# للتوافق مع accounting_section.py الذي يستورد _INNER_TAB_STYLE
-_INNER_TAB_STYLE = tab_style(size="inner")
-
-
-def _make_tab_widget(size: str = "inner") -> QTabWidget:
-    """مساعد داخلي لإنشاء QTabWidget بستايل موحد."""
-    tabs = QTabWidget()
-    tabs.setLayoutDirection(Qt.RightToLeft)
-    tabs.setStyleSheet(tab_style(size=size))
-    return tabs
-
-
-def build_accounts_tabs(acc):
-    """يبني تبويبات قسم الحسابات."""
-    # الأصول
-    assets_inner = _make_tab_widget()
-    assets_inner.addTab(AccountsTreePanel(acc, ["asset"], "الأصول"), "📊 الحسابات")
-    assets_inner.addTab(_GroupManagerPanel(acc, "asset"), "🏷️ التصنيفات")
-
-    # الخصوم
-    liab_inner = _make_tab_widget()
-    liab_inner.addTab(AccountsTreePanel(acc, ["liability"], "الخصوم"), "📊 الحسابات")
-    liab_inner.addTab(_GroupManagerPanel(acc, "liability"), "🏷️ التصنيفات")
-
-    # الرئيسية
-    outer = _make_tab_widget()
-    outer.addTab(assets_inner,          "🏦  الأصول")
-    outer.addTab(liab_inner,            "📋  الخصوم")
-    outer.addTab(build_equity_tab(acc), "👑  حقوق الملكية")
-    return outer
-
-
-def build_equity_tab(acc) -> QWidget:
-    """يبني تبويب حقوق الملكية."""
-    widget   = QWidget()
-    root     = QVBoxLayout(widget)
-    root.setContentsMargins(0, 0, 0, 0)
-    splitter = QSplitter(Qt.Horizontal)
-    splitter.setHandleWidth(5)
-    splitter.setStyleSheet(splitter_style())
-
-    tree_panel = AccountsTreePanel(
-        acc,
-        ["capital", "drawings", "revenue", "expense"],
-        "حقوق الملكية"
-    )
-    splitter.addWidget(tree_panel)
-
-    cat_tabs = _make_tab_widget()
-    cat_tabs.addTab(_GroupManagerPanel(acc, "capital"),   "👑 رأس المال")
-    cat_tabs.addTab(_GroupManagerPanel(acc, "drawings"),  "💸 المسحوبات")
-    cat_tabs.addTab(_GroupManagerPanel(acc, "revenue"),   "💹 الإيرادات")
-    cat_tabs.addTab(_GroupManagerPanel(acc, "expense"),   "📤 المصروفات")
-    splitter.addWidget(cat_tabs)
-    splitter.setSizes([600, 300])
-
-    root.addWidget(splitter)
-    return widget
-
-
-def build_financial_tab(acc):
-    """يبني تبويبات القوائم المالية."""
-    tabs = _make_tab_widget(size="small")
-    tabs.addTab(IncomeStatementTab(acc),  "📊 قائمة الدخل")
-    tabs.addTab(OwnersEquityTab(acc),     "👑 حقوق الملكية")
-    tabs.addTab(BalanceSheetTab(acc),     "🏛️ الميزانية العمومية")
-    tabs.addTab(TrialBalanceTab(acc),     "⚖️ ميزان المراجعة")
-    return tabs
-```
-
----
-
-### 8. `ui/tabs/accounting/audit_log_tab.py` — تعديل imports
-
-استبدل:
-```python
-from ui.app_settings import _C, fs, get_font_size
-from ui.widgets.theme.styles import (
-    table_style, scroll_style, splitter_style, ROW_HEIGHT_NORMAL,
-)
-from ui.widgets.components.headers import ListHeader, StatusBar
-from ui.widgets.components.button import make_btn
-from ui.widgets.panels.state import EmptyState
-from ui.widgets.core.conn import LiveConnMixin
-```
-بـ:
-```python
-from ui.theme import _C
-from ui.font import fs, get_font_size
-from ui.widgets.theme.table_styles import table_style, ROW_HEIGHT_NORMAL
-from ui.widgets.components.headers_list import ListHeader, StatusBar
-from ui.widgets.components.button import make_btn
-from ui.widgets.panels.state import EmptyState
-from ui.widgets.core.conn import LiveConnMixin
-from ui.widgets.core.i18n import tr
-```
-
-**ثم استبدل كل النصوص الـ hardcoded في الملف:**
-
-```python
-# بدل النصوص الـ hardcoded في _ACTION_COLORS و _ACTION_ICONS و _TABLE_LABELS
-# عدّل الـ _fill_table لتقرأ من _C:
-
-_ACTION_COLORS = {
-    "delete": lambda: (_C["audit_delete_fg"], _C["audit_delete_bg"]),
-    "update": lambda: (_C["audit_update_fg"], _C["audit_update_bg"]),
-    "create": lambda: (_C["audit_create_fg"], _C["audit_create_bg"]),
-}
-
-# بدل الـ hardcoded في _build_header:
-# lbl.setStyleSheet(f"font-weight:bold; ...")
-# استبدل بـ _C مباشرة في كل style
-
-# بدل في _build_pagination:
-# self._btn_load_more.setText(f"تحميل {_PAGE_SIZE} إضافي  ▼")
-# استبدل بـ:
-# self._btn_load_more.setText(tr("load_more", count=_PAGE_SIZE))
-
-# بدل "لا توجد سجلات" و "لم يُسجَّل أي عملية حتى الآن":
-# استبدل بـ tr("no_audit_records") و tr("no_audit_yet")
-
-# بدل "— كل الجداول —" و "— كل الأنواع —":
-# استبدل بـ tr("audit_all_tables") و tr("audit_all_types")
-```
-
----
-
-### 9. `ui/tabs/accounting/_state_widgets.py` — تعديل imports
-
-استبدل:
-```python
-from ui.widgets.shared.empty_state_helpers import EmptyPanelState
-```
-بـ:
-```python
-from ui.widgets.panels.state import EmptyState
-```
-
-ثم غيّر كل `EmptyPanelState` في الملف إلى `EmptyState` مع إضافة `expandable=True`:
-
-```python
-def make_empty_state(icon: str = "📋",
-                     title: str = "لا توجد بيانات",
-                     subtitle: str = "",
-                     action_text: str = "") -> EmptyState:
-    return EmptyState(
-        icon=icon,
-        title=title,
-        subtitle=subtitle,
-        action_text=action_text,
-        expandable=True,
-    )
-```
-
----
-
-### 10. `ui/tabs/accounting/financial_statements.py` — تعديل imports
-
-استبدل:
-```python
-from ui.widgets.shared.safe_conn_mixin import SafeConnMixin
-from ui.widgets.shared.panels import make_financial_tabs
-```
-بـ:
-```python
-from ui.widgets.core.conn import SafeConnMixin
-from PyQt5.QtWidgets import QTabWidget
-from PyQt5.QtCore import Qt
-from ui.widgets.theme.layout_styles import tab_style
-```
-
-ثم استبدل كل استدعاء `make_financial_tabs(...)` بـ:
-
-```python
-def _build(self):
-    conn = self._get_safe_conn()
-    self._tabs = QTabWidget()
-    self._tabs.setLayoutDirection(Qt.RightToLeft)
-    self._tabs.setStyleSheet(tab_style(size="small"))
-    self._tabs.addTab(IncomeStatementTab(conn),  "📊 قائمة الدخل")
-    self._tabs.addTab(OwnersEquityTab(conn),     "👑 حقوق الملكية")
-    self._tabs.addTab(BalanceSheetTab(conn),     "🏛️ الميزانية العمومية")
-    self._tabs.addTab(TrialBalanceTab(conn),     "⚖️ ميزان المراجعة")
-    self._root_layout.addWidget(self._tabs)
-```
-
----
-
-### 11. `ui/tabs/accounting/ledger_tab.py` — تعديل imports
-
-استبدل:
-```python
-from ui.widgets.shared.safe_conn_mixin import SafeConnMixin
-from ui.events import bus
-```
-بـ:
-```python
-from ui.widgets.core.conn import SafeConnMixin
-from ui.widgets.core.events import bus
-```
-
----
-
-### 12. `ui/tabs/accounting/investors_tab.py` — تعديل imports
-
-استبدل:
-```python
-from ui.widgets.shared.safe_conn_mixin import DualConnMixin
-```
-بـ:
-```python
-from ui.widgets.core.conn import DualConnMixin
-from ui.widgets.core.events import bus
-```
-
-احذف `from ui.events import bus` لو موجودة.
-
----
-
-### 13. `ui/tabs/accounting/financial/trial_balance_tab.py` — تعديل imports
-
-استبدل:
-```python
-from ui.events import bus
-from ui.widgets.shared.panels import (
-    PageHeader, make_list_table, bold_table_item, colored_table_item,
-)
-from ui.widgets.shared.safe_conn_mixin import SafeConnMixin
-```
-بـ:
-```python
-from ui.widgets.core.events import bus
-from ui.widgets.core.conn import SafeConnMixin
-from ui.widgets.components.headers_page import PageHeader
-from ui.widgets.tables.tables import (
-    make_list_table,
-    bold_item as bold_table_item,
-    colored_item as colored_table_item,
-)
-from ui.widgets.core.i18n import tr
-```
-
----
-
-### 14. `ui/tabs/accounting/financial/balance_sheet_tab.py` — تعديل imports
-
-استبدل:
-```python
-from ui.events import bus
-from ui.helpers import make_table, section_label
-from ui.widgets.shared.panels import PageHeader, StatRow, StatItem, NotificationBar
-from ui.widgets.shared.safe_conn_mixin import SafeConnMixin
-```
-بـ:
-```python
-from ui.widgets.core.events import bus
-from ui.widgets.core.conn import SafeConnMixin
-from ui.widgets.components.headers_page import PageHeader
-from ui.widgets.components.stat_card import StatRow, StatItem
-from ui.widgets.tables.tables import make_table
-```
-
-**واستبدل كل استخدام `section_label("نص")` بـ:**
-```python
-from PyQt5.QtWidgets import QLabel
-# بدل: section_label("🏦 الأصول")
-lbl = QLabel("🏦 الأصول")
-lbl.setStyleSheet(
-    f"font-weight:bold; color:{_C['accent']}; font-size:11px;"
-    "background:transparent; border:none;"
-)
-```
-
-أضف في أعلى الملف:
-```python
-from ui.theme import _C
-```
-
----
-
-### 15. `ui/tabs/accounting/financial/income_statement_tab.py` — تعديل imports
-
-استبدل:
-```python
-from ui.events import bus
-from ui.helpers import make_table, section_label
-from ui.widgets.shared.panels import PageHeader, StatRow, StatItem
-from ui.widgets.shared.safe_conn_mixin import SafeConnMixin
-```
-بـ:
-```python
-from ui.widgets.core.events import bus
-from ui.widgets.core.conn import SafeConnMixin
-from ui.widgets.components.headers_page import PageHeader
-from ui.widgets.components.stat_card import StatRow, StatItem
-from ui.widgets.tables.tables import make_table
-from ui.theme import _C
-```
-
-واستبدل كل `section_label("نص")` بـ:
-```python
-lbl = QLabel("نص")
-lbl.setStyleSheet(
-    f"font-weight:bold; color:{_C['accent']}; font-size:11px;"
-    "background:transparent; border:none;"
-)
-```
-
----
-
-### 16. `ui/tabs/accounting/financial/owners_equity_tab.py` — تعديل imports
-
-استبدل:
-```python
-from ui.events import bus
-from ui.helpers import make_table, section_label
-from ui.widgets.shared.panels import PageHeader, StatRow, StatItem
-from ui.widgets.shared.safe_conn_mixin import SafeConnMixin
-```
-بـ:
-```python
-from ui.widgets.core.events import bus
-from ui.widgets.core.conn import SafeConnMixin
-from ui.widgets.components.headers_page import PageHeader
-from ui.widgets.components.stat_card import StatRow, StatItem
-from ui.widgets.tables.tables import make_table
-from ui.theme import _C
-```
-
-واستبدل كل `section_label("نص")` بـ `QLabel` مع style من `_C` كما سبق.
-
----
-
-### 17. `ui/tabs/accounting/ledger/ledger_accounts_panel.py` — تعديل imports
-
-استبدل:
-```python
-from ui.widgets.shared.safe_conn_mixin import SafeConnMixin
-from ui.widgets.shared.panels import ListHeader, ListStatusBar, get_tree_style
-```
-بـ:
-```python
-from ui.widgets.core.conn import SafeConnMixin
-from ui.widgets.components.headers_list import ListHeader, StatusBar as ListStatusBar
-from ui.widgets.theme.layout_styles import tree_style as get_tree_style
-```
-
-احذف `from ui.events import bus` ← مش بتستخدمه مباشرة هنا.
-
----
-
-### 18. `ui/tabs/accounting/ledger/ledger_filter_bar.py` — تعديل imports
-
-استبدل:
-```python
-from ui.widgets.shared.panles_helper.filter_toolbar import FilterToolbar
-```
-بـ:
-```python
-from ui.widgets.panels.filter import FilterToolbar
-```
-
-**هام:** أضف في `_add_move_type_filter` استخدام `tr()` بدل النصوص الـ hardcoded:
-
-```python
-from ui.widgets.core.i18n import tr
-# ...
-self.cmb_move_type.addItem(tr("move_type_all"), None)
-self.cmb_move_type.addItem(tr("move_type_dr"),  "dr")
-self.cmb_move_type.addItem(tr("move_type_cr"),  "cr")
-```
-
----
-
-### 19. `ui/tabs/accounting/ledger/ledger_t_account.py` — تعديل imports
-
-استبدل:
-```python
-from ui.widgets.shared.panels import PageHeader, BalanceDisplay
-```
-بـ:
-```python
-from ui.widgets.components.headers_page import PageHeader
-from ui.widgets.components.amount_label import BalanceDisplay
-from ui.theme import _C
-```
-
-**استبدل الألوان الـ hardcoded في `_make_t_table` و `_build` بـ `_C`:**
-
-```python
-# بدل: "background: white; border: 2px solid #c5cae9;"
-f"background:{_C['bg_surface']}; border:2px solid {_C['t_account_frame']};"
-
-# بدل: "background: #e3f2fd;"  في dr_hdr
-f"background:{_C['t_account_dr_bg']};"
-
-# بدل: "background: #fdecea;" في cr_hdr
-f"background:{_C['t_account_cr_bg']};"
-
-# بدل: "background: #1565c0; color: #1565c0;"
-f"color:{_C['journal_dr_accent']};"
-
-# بدل: "color: #c62828;"
-f"color:{_C['journal_cr_accent']};"
-```
-
----
-
-### 20. `ui/tabs/accounting/ledger/ledger_stat_cards.py` — تعديل imports
-
-استبدل:
-```python
-from ui.widgets.shared.stat_row import StatRow, StatItem
-```
-بـ:
-```python
-from ui.widgets.components.stat_card import StatRow, StatItem
-```
-
----
-
-### 21. `ui/tabs/accounting/tree/_group_filter.py` — تعديل imports
-
-استبدل:
-```python
-from ui.widgets.shared.safe_conn_mixin import SafeConnMixin
-```
-بـ:
-```python
-from ui.widgets.core.conn import SafeConnMixin
-```
-
----
-
-### 22. `ui/tabs/accounting/tree/_account_form.py` — تعديل imports
-
-استبدل:
-```python
-from ui.events import bus
-from ui.widgets.shared.safe_conn_mixin import SafeConnMixin
-```
-بـ:
-```python
-from ui.widgets.core.events import bus
-from ui.widgets.core.conn import SafeConnMixin
-```
-
-**احذف الدالة `_emit_data_changed` المحلية** واستبدل كل استخدامها بـ:
-```python
-from ui.widgets.core.events import emit_company_data_changed
-# بدل _emit_data_changed():
-emit_company_data_changed()
-```
-
-**احذف الدالة `_get_current_company_id` المحلية** — مش محتاجها بعد استخدام `emit_company_data_changed`.
-
----
-
-### 23. `ui/tabs/accounting/journal/journal_filter.py` — تعديل imports
-
-استبدل:
-```python
-from ui.events import bus
-from ui.widgets.shared.safe_conn_mixin import SafeConnMixin
-from ui.widgets.shared.date_range_filter import DateRangeFilter
-from ui.widgets.shared.company_utils import get_active_company_id
-```
-بـ:
-```python
-from ui.widgets.core.events import bus
-from ui.widgets.core.conn import SafeConnMixin
-from ui.widgets.utils.date_range import DateRangeFilter
-from ui.widgets.core.events import get_active_company_id
-from ui.widgets.core.i18n import tr
-```
-
-**استبدل النصوص الـ hardcoded في `_build`:**
-```python
-# بدل: "— كل الأنواع —"
-tr("all_groups")
-# بدل: "✅ متوازن"
-tr("balanced_filter")
-# بدل: "⚠️ غير متوازن"
-tr("unbalanced_filter")
-# بدل: "↺ مسح الفلاتر"
-tr("clear_filters")
-# بدل: "🏷 التصنيف:"
-tr("group_filter")
-# بدل: "الحالة:"
-tr("balance_status_filter")
-```
-
----
-
-### 24. `ui/tabs/accounting/journal/journal_tree_table.py` — تعديل imports
-
-استبدل:
-```python
-from ui.events import bus
-from ui.widgets.shared.safe_conn_mixin import SafeConnMixin
-from ui.widgets.shared.company_utils import get_active_company_id
-from ui.widgets.shared.panels import (
-    ListHeader, ListStatusBar, confirm_delete, _make_btn,
-    bold_table_item, colored_table_item, center_table_item, set_row_background,
-)
-```
-بـ:
-```python
-from ui.widgets.core.events import bus, get_active_company_id, emit_company_data_changed
-from ui.widgets.core.conn import SafeConnMixin
-from ui.widgets.components.headers_list import ListHeader, StatusBar as ListStatusBar
-from ui.widgets.dialogs.confirm import confirm_delete
-from ui.widgets.components.button import make_btn as _make_btn
-from ui.widgets.tables.tables import (
-    bold_item as bold_table_item,
-    colored_item as colored_table_item,
-    center_item as center_table_item,
-    set_row_bg as set_row_background,
-)
-```
-
-**احذف الـ import الداخلي `from ui.widgets.shared.company_utils import emit_company_data_changed`** داخل `_delete_selected` واستخدم الـ import العلوي بدلاً منه.
-
----
-
-### 25. `ui/tabs/accounting/journal/journal_tab_widget.py` — تعديل imports
-
-استبدل:
-```python
-from ui.widgets.shared.safe_conn_mixin import SafeConnMixin
-from ui.events import bus
-```
-بـ:
-```python
-from ui.widgets.core.conn import SafeConnMixin
-from ui.widgets.core.events import bus
-```
-
-**في `_get_erp_conn`:** استبدل `company_state._get_conn("erp")` بـ `company_state.get_erp_conn()` (public API):
-
-```python
-def _get_erp_conn(self):
-    try:
-        if self._erp_conn is not None:
-            self._erp_conn.execute("SELECT 1")
-            return self._erp_conn
-    except Exception:
-        pass
-    try:
-        from db.companies.company_state import company_state
-        new = company_state.get_erp_conn()   # ← public API
-        self._erp_conn = new
-        return new
-    except Exception:
-        return self._erp_conn
-```
-
----
-
-### 26. `ui/tabs/accounting/journal/journal_form.py` — تعديل imports
-
-استبدل:
-```python
-from ui.helpers import buttons_row
-from ui.widgets.shared.safe_conn_mixin import DualConnMixin
-from ui.widgets.shared.company_utils import emit_company_data_changed
-```
-بـ:
-```python
-from ui.widgets.core.conn import DualConnMixin
-from ui.widgets.core.events import emit_company_data_changed
-from ui.widgets.core.i18n import tr
-```
-
-**استبدل كل `buttons_row(btn1, btn2)` بـ layout inline:**
-```python
-btn_row = QHBoxLayout()
-btn_row.setSpacing(8)
-btn_row.addWidget(self.btn_save)
-btn_row.addWidget(self.btn_cancel)
-btn_row.addStretch()
-root.addLayout(btn_row)
-```
-
-**استبدل النصوص الـ hardcoded:**
-```python
-# بدل: "💾  حفظ القيد"
-tr("entry_save_btn")
-# بدل: "✖  مسح"
-tr("entry_clear_btn")
-# بدل: "── قيد يومية جديد ──"
-tr("new_journal_entry")
-# بدل: QMessageBox.warning(self, "تنبيه", "أدخل وصف القيد")
-from ui.widgets.dialogs.message import msg_warning
-msg_warning(self, tr("warning"), tr("enter_field", label=tr("description")))
-# بدل: QMessageBox.warning(self, "تنبيه", "لا يوجد أي صف مدين (DR)")
-msg_warning(self, tr("warning"), tr("no_dr_line"))
-# بدل: QMessageBox.warning(self, "تنبيه", "لا يوجد أي صف دائن (CR)")
-msg_warning(self, tr("warning"), tr("no_cr_line"))
-# بدل: QMessageBox.information(self, "تم", "✅ تم حفظ القيد بنجاح")
-from ui.widgets.dialogs.message import msg_info
-msg_info(self, tr("done"), tr("journal_saved_success"))
-```
-
-**استبدل الألوان الـ hardcoded في `_build`:**
-```python
-from ui.theme import _C
-# بدل "background:#1565c0; color:white;"
-f"background:{_C['accent']}; color:{_C['accent_text']};"
-# بدل "background:#b0bec5; color:#eceff1;"
-f"background:{_C['text_disabled']}; color:{_C['bg_surface_2']};"
-# بدل "background:#f5f5f5; color:#555;"
-f"background:{_C['bg_surface_2']}; color:{_C['text_sec']};"
-```
-
----
-
-### 27. `ui/tabs/accounting/journal/account_picker/_account_picker_button.py` — تعديل imports
-
-استبدل:
-```python
-from ui.widgets.shared.safe_conn_mixin import SafeConnMixin
-```
-بـ:
-```python
-from ui.widgets.core.conn import SafeConnMixin
-from ui.theme import _C
-```
-
-**استبدل الألوان الـ hardcoded في `_build` و `_update_nb_label`:**
-```python
-# بدل "background:#e3f2fd;" → f"background:{_C['badge_dr_bg']};"
-# بدل "color:#1565c0;"      → f"color:{_C['badge_dr_text']};"
-# بدل "background:#fdecea;" → f"background:{_C['badge_cr_bg']};"
-# بدل "color:#c62828;"      → f"color:{_C['badge_cr_text']};"
-```
-
----
-
-### 28. `ui/tabs/accounting/journal/lines/_smart_line.py` — تعديل imports
-
-استبدل:
-```python
-from ui.events import bus
-from ui.widgets.shared.safe_conn_mixin import DualConnMixin
-from ui.widgets.shared.company_utils import get_active_company_id
-```
-بـ:
-```python
-from ui.widgets.core.events import bus, get_active_company_id
-from ui.widgets.core.conn import DualConnMixin
-from ui.theme import _C
-from ui.widgets.core.i18n import tr
-```
-
-**استبدل الألوان الـ hardcoded في `_update_side_style`:**
-```python
-# بدل "background: #f4f8ff; border: 1px solid #c5d8f7; border-right: 3px solid #1565c0;"
-f"background:{_C['journal_dr_bg']}; border:1px solid {_C['journal_dr_border']}; border-right:3px solid {_C['journal_dr_accent']};"
-
-# بدل "background: #fff4f4; border: 1px solid #f7c5c5; border-right: 3px solid #c62828;"
-f"background:{_C['journal_cr_bg']}; border:1px solid {_C['journal_cr_border']}; border-right:3px solid {_C['journal_cr_accent']};"
-
-# بدل "background: #fafbff; border: 1px solid #dde3f0;"
-f"background:{_C['journal_neutral_bg']}; border:1px solid {_C['journal_neutral_border']};"
-```
-
-**استبدل الألوان الـ hardcoded في `_build` (الـ investor_row):**
-```python
-# بدل "background:#fff8e1; border:1px solid #ffe082;"
-f"background:{_C['investor_link_bg']}; border:1px solid {_C['investor_link_border']};"
-
-# بدل "color:#f57f17;"
-f"color:{_C['investor_link_text']};"
-```
-
-**استبدل النصوص الـ hardcoded:**
-```python
-# بدل "زيادة ✚"
-tr("journal_increase")
-# بدل "نقص ✖"
-tr("journal_decrease")
-# بدل "بيان..."
-tr("line_description_placeholder")
-# بدل "👤  ربط بمستثمر:"
-tr("link_investor_to_entry")  # أو نص مناسب
-# بدل "— لا يوجد ربط —"
-tr("filter_all")
-```
-
----
-
-### 29. `ui/tabs/accounting/journal/lines/_lines_panel.py` — تعديل imports
-
-استبدل:
-```python
-from ui.widgets.shared.safe_conn_mixin import DualConnMixin
-```
-بـ:
-```python
-from ui.widgets.core.conn import DualConnMixin
-from ui.theme import _C
-from ui.widgets.core.i18n import tr
-```
-
-**استبدل الألوان الـ hardcoded في `_build`:**
-```python
-# بدل "background: white; border: 1px solid #e0e0e0;"
-f"background:{_C['bg_surface']}; border:1px solid {_C['border']};"
-
-# بدل "background:#f0f4ff; border-radius:7px 7px 0 0;"
-f"background:{_C['journal_header_bg']}; border-radius:7px 7px 0 0;"
-
-# بدل "background:#e3f2fd;"
-f"background:{_C['badge_dr_bg']};"
-
-# بدل "background:#fdecea;"
-f"background:{_C['badge_cr_bg']};"
-
-# بدل "background:#f0f4ff; color:#1565c0;"
-f"background:{_C['journal_header_bg']}; color:{_C['accent']};"
-```
-
-**استبدل النصوص الـ hardcoded:**
-```python
-# بدل "📋  صفوف القيد"
-tr("journal_lines_title")
-# بدل "➕  إضافة صف"
-tr("add_journal_line")
-# بدل "لازم يكون في صف واحد على الأقل"
-from ui.widgets.dialogs.message import msg_info
-msg_info(None, tr("warning"), tr("min_one_row_required"))
-```
-
----
-
-### 30. `ui/tabs/accounting/journal/group_combo/_tree_group_combo.py` — تعديل imports
-
-استبدل:
-```python
-from ui.events import bus
-from ui.widgets.shared.safe_conn_mixin import SafeConnMixin
-from ui.widgets.shared.company_utils import get_active_company_id
-```
-بـ:
-```python
-from ui.widgets.core.events import bus, get_active_company_id
-from ui.widgets.core.conn import SafeConnMixin
-from ui.theme import _C
-```
-
-**استبدل الألوان الـ hardcoded في `_populate` و `_add_group_items`:**
-```python
-# بدل "background: white; border: 1px solid #c5cae9;"
-f"background:{_C['bg_input']}; border:1px solid {_C['border_med']};"
-
-# بدل "background: #e3f2fd; color: #1565c0;"
-f"background:{_C['accent_light']}; color:{_C['accent_text']};"
-
-# بدل "background: #f5f5f5;"
-f"background:{_C['bg_hover']};"
-
-# بدل "#f1f8e9"
-_C["success_bg"]
-
-# بدل "#f0f4ff"
-_C["info_bg"]
-```
-
----
-
-### 31. `ui/tabs/accounting/journal/form/_balance_bar.py` — تعديل كامل (إضافة _C)
-
-أضف في أعلى الملف:
-```python
-from ui.theme import _C
-from ui.widgets.core.i18n import tr
-```
-
-**استبدل كل الألوان الـ hardcoded:**
-```python
-# في _build:
-# بدل "background: #f0f4ff; border: 1px solid #c5cae9;"
-f"background:{_C['journal_header_bg']}; border:1px solid {_C['journal_header_border']};"
-
-# بدل "color:#c5cae9;"
-f"color:{_C['border_med']};"
-
-# بدل "color:#1565c0;" في lbl_dr_t
-f"color:{_C['journal_dr_accent']};"
-
-# بدل "background:#e3f2fd;" في lbl_sum_dr
-f"background:{_C['badge_dr_bg']};"
-
-# بدل "color:#c62828;" في lbl_cr_t
-f"color:{_C['journal_cr_accent']};"
-
-# بدل "background:#fdecea;" في lbl_sum_cr
-f"background:{_C['badge_cr_bg']};"
-```
-
-**استبدل النصوص الـ hardcoded:**
-```python
-# بدل "إجمالي DR:"
-tr("total_debit") + ":"
-# بدل "إجمالي CR:"
-tr("total_credit") + ":"
-# بدل "الفرق:"
-tr("balance_bar_diff")
-# بدل "○ أضف صفوف"
-tr("balance_bar_add_rows")
-# بدل "✅  متوازن — يمكن الحفظ"
-tr("journal_balanced")
-```
-
----
-
-### 32. `ui/tabs/accounting/journal/form/_journal_header.py` — تعديل (إضافة tr)
-
-أضف:
-```python
-from ui.widgets.core.i18n import tr
-```
-
-**استبدل النصوص الـ hardcoded:**
-```python
-# بدل "وصف القيد الإجمالي..."
-tr("entry_description_placeholder")
-# بدل "التاريخ:"
-tr("entry_date_label")
-# بدل "النوع:"
-tr("entry_type_label")
-# بدل "الوصف:"
-tr("entry_desc_label")
-```
-
-**بدل الـ _ENTRY_TYPES الـ hardcoded استخدم tr():**
-```python
-from ui.widgets.core.i18n import tr
-
-def _get_entry_types():
-    return [
-        ("manual",   tr("entry_type_manual")),
-        ("opening",  tr("entry_type_opening")),
-        ("closing",  tr("entry_type_closing")),
-        ("transfer", tr("entry_type_transfer")),
-    ]
-```
-
-وفي `_build`:
-```python
-for key, label in _get_entry_types():
-    self.cmb_type.addItem(label, key)
-```
-
----
-
-### 33. `ui/tabs/accounting/journal/form/_entry_meta.py` — تعديل (إضافة _C)
-
-أضف:
-```python
-from ui.theme import _C
-```
-
-**بدل الـ `_TYPE_COLORS` الـ hardcoded** ابنيها من `_C` وأنواع الحسابات:
-```python
-def _get_type_colors(entry_type: str) -> tuple:
-    """يرجع (fg, bg, border) من _C حسب نوع القيد."""
-    mapping = {
-        "manual":   (_C["accent"],      _C["accent_light"],    _C["accent_mid"]),
-        "opening":  (_C["success"],     _C["success_bg"],      _C["success_border"]),
-        "closing":  (_C["purple"],      _C["purple_bg"],       _C["purple_border"]),
-        "transfer": (_C["orange"],      _C["orange_bg"],       _C["orange_border"]),
-        "auto":     (_C["info"],        _C["info_bg"],         _C["info_border"]),
-    }
-    return mapping.get(entry_type, (_C["text_sec"], _C["bg_surface_2"], _C["border"]))
-```
-
----
-
-### 34. `ui/tabs/accounting/investors/_investor_form.py` — تعديل imports
-
-استبدل:
-```python
-from ui.helpers import EditModeMixin
-from ui.events import bus
-from ui.widgets.shared.safe_conn_mixin import DualConnMixin
-from ui.widgets.shared.panels import FormGroup, ModeLabel, _make_btn, NotesLineEdit
-from ui.widgets.shared.input_widgets import DateField, AmountSpinBox
-```
-بـ:
-```python
-from ui.widgets.core.events import bus
-from ui.widgets.core.conn import DualConnMixin
+from db.accounting.accounting_accounts_repo import fetch_leaf_accounts
+from db.shared.items_repo import fetch_items_by_type
 from ui.widgets.mixins.form_mixins import EditModeMixin
-from ui.widgets.panels.form_group import FormGroup
-from ui.widgets.components.label import ModeLabel
-from ui.widgets.components.button import make_btn as _make_btn
-from ui.widgets.forms.inputs import NotesLineEdit, DateField, AmountSpinBox
-from ui.theme import _C
+from ui.widgets.core.events import emit_company_data_changed
 from ui.widgets.core.i18n import tr
+from ui.widgets.core.conn import LiveConnMixin
+from ui.theme import _C
 ```
 
-**استبدل النصوص الـ hardcoded:**
+**الفئة:**
 ```python
-# بدل "اسم المستثمر..."
-tr("name") + "..."
-# بدل "تاريخ الانضمام:"
-tr("investor_join_date") + ":"
-# بدل "ملاحظات:"
-tr("notes") + ":"
-# بدل "مستثمر جديد"
-tr("investor_new")
-# بدل "➕  إضافة مستثمر"
-tr("btn_add") + " " + tr("investors")
-# بدل "💾  حفظ التعديل"
-tr("btn_save")
-# بدل "✖  إلغاء"
-tr("btn_cancel")
+class _ItemForm(QWidget, EditModeMixin, LiveConnMixin):
+    def __init__(self, inv_conn, acc_conn, parent=None):
+        super().__init__(parent)
+        self.inv_conn = inv_conn
+        self.acc_conn = acc_conn
+        ...
+    
+    def _add(self):
+        # ... جمع البيانات ...
+        insert_inventory_item(self.inv_conn, **data)
+        self._reset()
+        emit_company_data_changed()  # ← بدل bus.data_changed.emit()
 ```
+
+**النقاط المهمة:**
+1. استبدل `bus.data_changed.emit()` بـ `emit_company_data_changed()`
+2. استخدم `_C` للألوان من `ui.theme`
+3. استخدم `tr()` لكل النصوص
+4. الـ repos تُستدعى مباشرة (آمن — لا توجد services للمخزن بعد)
 
 ---
 
-### 35. `ui/tabs/accounting/investors/_movement_dialog.py` — تعديل imports
+## `ui/tabs/inventory/items/_items_table.py`
 
-استبدل:
+### المشاكل
+- استخدام `bus.data_changed.connect()` — signal محذوف
+- hardcoded colors: `QColor("#c62828")`, `QColor("#e65100")`
+- استيراد repos مباشرة
+
+### الحل
+**الاستيرادات:**
 ```python
-from ui.events import bus
-from ui.widgets.shared.safe_conn_mixin import DualConnMixin
-from ui.widgets.shared.panels import FormGroup, _make_btn, NotesLineEdit
-from ui.widgets.shared.input_widgets import DateField, AmountSpinBox
-```
-بـ:
-```python
-from ui.widgets.core.events import bus
-from ui.widgets.core.conn import DualConnMixin
-from ui.widgets.panels.form_group import FormGroup
-from ui.widgets.components.button import make_btn as _make_btn
-from ui.widgets.forms.inputs import NotesLineEdit, DateField, AmountSpinBox
-from ui.theme import _C
-from ui.widgets.core.i18n import tr
-```
-
-**استبدل الألوان الـ hardcoded في `_build`:**
-```python
-# بدل "#2e7d32" لرأس المال
-_C["investor_capital_text"]
-# بدل "#c62828" للمسحوبات
-_C["investor_drawings_text"]
-# بدل "#f1f8e9" و "#fdecea" للخلفية
-_C["investor_capital_bg"] if is_cap else _C["investor_drawings_bg"]
-```
-
-**استبدل النصوص الـ hardcoded:**
-```python
-# بدل "💰  إضافة رأس مال" و "💸  تسجيل مسحوبات"
-tr("add_capital_title") if is_cap else tr("add_drawings_title")
-# بدل "المبلغ (جنيه):"
-tr("amount") + f" ({tr('currency')}):"
-# بدل "التاريخ:"
-tr("date") + ":"
-# بدل "القيد المتوقع:"
-tr("expected_entry")
-# بدل "ملاحظات:"
-tr("notes") + ":"
-# بدل "✅  تسجيل"
-tr("confirm")
-# بدل "✖  إلغاء"
-tr("btn_cancel")
-```
-
----
-
-### 36. `ui/tabs/accounting/investors/_link_to_entry_panel.py` — تعديل imports
-
-استبدل:
-```python
-from ui.events import bus
-from ui.widgets.shared.safe_conn_mixin import DualConnMixin
-from ui.widgets.shared.panels import (
-    FormGroup, spin_field, _make_btn, NotificationBar,
-    make_form_layout, required_label, form_label, NotesLineEdit,
+from db.inventory.inventory_repo import (
+    fetch_all_inventory, fetch_inventory_item, delete_inventory_item,
 )
-```
-بـ:
-```python
-from ui.widgets.core.events import bus
-from ui.widgets.core.conn import DualConnMixin
-from ui.widgets.panels.form_group import FormGroup
-from ui.widgets.panels.form_fields import spin_field
-from ui.widgets.panels.form_labels import required_label, form_label
-from ui.widgets.components.button import make_btn as _make_btn
-from ui.widgets.components.notification import NotificationBar
-from ui.widgets.forms.inputs import NotesLineEdit
+from ui.widgets.mixins.bus import BusConnectedMixin
+from ui.widgets.core.events import emit_company_data_changed
 from ui.theme import _C
-from ui.widgets.core.i18n import tr
 ```
 
-**استبدل النصوص الـ hardcoded:**
+**الفئة:**
 ```python
-# بدل "المستثمر:"
-tr("investors")
-# بدل "نوع الحركة:"
-tr("type")
-# بدل "رقم القيد:"
-tr("ref_no")
-# بدل "المبلغ:"
-tr("amount")
-# بدل "ملاحظات:"
-tr("notes")
-# بدل "🔗  ربط"
-tr("link_entry_btn")
-# بدل "💰  رأس مال (capital)" و "💸  مسحوبات (drawings)"
-tr("investor_capital_badge") + " (capital)"
-tr("investor_drawings_badge") + " (drawings)"
-# بدل النص الطويل في lbl_info
-tr("link_entry_info")
+class _ItemsTable(QWidget, BusConnectedMixin):
+    def __init__(self, inv_conn, form, on_select, parent=None):
+        super().__init__(parent)
+        self.inv_conn = inv_conn
+        self._form = form
+        self._on_select = on_select
+        self._build()
+        self._load()
+        self._connect_bus(data=True)  # ← اشترك في data_changed
+    
+    def _on_data_changed(self):  # ← callback تلقائي عند تغيير البيانات
+        self._load()
+    
+    def _load(self):
+        rows = fetch_all_inventory(self.inv_conn)
+        # ... ملء الجدول ...
+        if inv["qty_on_hand"] == 0:
+            qty_item.setForeground(QColor(_C["stock_critical_fg"]))  # ← بدل hardcoded
+        elif inv["qty_on_hand"] <= inv["qty_min"]:
+            qty_item.setForeground(QColor(_C["stock_low_fg"]))  # ← من theme
 ```
+
+**النقاط المهمة:**
+1. وسّع الفئة من `BusConnectedMixin`
+2. استدعِ `self._connect_bus(data=True)` في `__init__`
+3. عرّف `_on_data_changed()` لتحديث البيانات تلقائياً
+4. استبدل الألوان بـ `_C["..."]`
+5. في `closeEvent`، استدعِ `self._disconnect_bus()`
 
 ---
 
-### 37. `ui/tabs/accounting/investors/_investor_details.py` — تعديل imports
+## `ui/tabs/inventory/inventory_inbound_tab.py`
 
-استبدل:
+### المشاكل
+- استيراد repos مباشرة
+- استخدام `bus.data_changed.connect()` — محذوف
+- استخدام `get_accounting_connection()` و `get_inventory_connection()` بدل `company_state`
+- hardcoded colors
+
+### الحل
+**الاستيرادات:**
 ```python
-from ui.helpers import buttons_row, section_label, danger_button
-from ui.events import bus
-from ui.widgets.shared.safe_conn_mixin import DualConnMixin
-from ui.widgets.shared.panels import StatRow, StatItem
-```
-بـ:
-```python
-from ui.widgets.core.events import bus
-from ui.widgets.core.conn import DualConnMixin
-from ui.widgets.components.stat_card import StatRow, StatItem
-from ui.widgets.components.button import make_btn
-from ui.theme import _C
-from ui.widgets.core.i18n import tr
-```
-
-**استبدل `buttons_row(btn)` بـ layout inline:**
-```python
-btn_row = QHBoxLayout()
-btn_row.setSpacing(8)
-btn_row.addWidget(btn_del_move)
-btn_row.addStretch()
-root.addLayout(btn_row)
-```
-
-**استبدل `section_label("نص")` بـ:**
-```python
-lbl = QLabel(tr("investor_movements"))
-lbl.setStyleSheet(f"font-weight:bold; color:{_C['accent']}; font-size:11px; background:transparent; border:none;")
-```
-
-**استبدل `danger_button("🗑️  حذف الحركة المحددة")` بـ:**
-```python
-btn_del_move = make_btn(tr("btn_delete") + "  " + tr("movement_type"), "danger")
-```
-
-**استبدل الألوان الـ hardcoded في `_build` و `_refresh`:**
-```python
-# بدل "#e8f4fd" و "#90caf9"
-_C["info_bg"], _C["info_border"]
-# بدل "#1565c0"
-_C["accent"]
-# بدل "#1b5e20"
-_C["success"]
-# بدل "#b71c1c"
-_C["danger"]
-```
-
-**استبدل النصوص الـ hardcoded:**
-```python
-# بدل "اختر مستثمراً لعرض تفاصيله"
-tr("detail_select_item")
-# بدل "إجمالي رأس المال"
-tr("initial_capital")
-# بدل "إجمالي المسحوبات"
-tr("investor_drawings_badge").replace("💸 ", "")
-# بدل "صافي الاستثمار"
-tr("balance")
-```
-
----
-
-### 38. `ui/tabs/accounting/investors/_investors_table.py` — تعديل imports
-
-استبدل:
-```python
-from ui.events import bus
-from ui.widgets.shared.panels import (
-    make_list_table, _make_btn, confirm_delete, auto_fit_columns,
-    form_section_title, ROW_HEIGHT_LARGE,
+from db.inventory.inventory_repo import (
+    fetch_all_inventory, fetch_inventory_item,
 )
-from ui.widgets.shared.safe_conn_mixin import DualConnMixin
-```
-بـ:
-```python
-from ui.widgets.core.events import bus
-from ui.widgets.core.conn import DualConnMixin
-from ui.widgets.tables.tables import make_list_table, auto_fit_columns, ROW_HEIGHT_LARGE
-from ui.widgets.components.button import make_btn as _make_btn
-from ui.widgets.dialogs.confirm import confirm_delete
+from db.accounting.accounting_accounts_repo import fetch_leaf_accounts
+from db.accounting.accounting_inventory_repo import purchase_inventory
+from ui.widgets.mixins.bus import BusConnectedMixin
+from ui.widgets.core.events import emit_company_data_changed
 from ui.theme import _C
-from ui.widgets.core.i18n import tr
 ```
 
-**استبدل `form_section_title("نص")` بـ:**
+**الفئة:**
 ```python
-lbl = QLabel(tr("investor_list_title"))
-lbl.setStyleSheet(f"font-weight:bold; color:{_C['accent']}; font-size:11px; background:transparent; border:none;")
-```
-
-**استبدل الألوان الـ hardcoded في `_load`:**
-```python
-# بدل QColor("#2e7d32")
-QColor(_C["success"])
-# بدل QColor("#c62828")
-QColor(_C["danger"])
-# بدل QColor("#1b5e20")
-QColor(_C["success"])
-# بدل QColor("#b71c1c")
-QColor(_C["danger"])
-```
-
-**استبدل النصوص الـ hardcoded في أسماء الأزرار:**
-```python
-# بدل "✏️  تعديل"
-tr("btn_edit")
-# بدل "🗑️  حذف"
-tr("btn_delete")
-# بدل "💰  إضافة استثمار"
-tr("investor_capital_badge")
-# بدل "💸  مسحوبات"
-tr("investor_drawings_badge")
-# بدل "تنبيه", "اختر مستثمراً أولاً"
-msg_info(self, tr("warning"), tr("select_item_first"))
+class _InboundTab(QWidget, BusConnectedMixin):
+    def __init__(self, inv_conn, acc_conn, parent=None):
+        super().__init__(parent)
+        self.inv_conn = inv_conn
+        self.acc_conn = acc_conn
+        self._build()
+        self._connect_bus(data=True)
+    
+    def _on_data_changed(self):
+        self._reload_items()
+        self._load_moves()
+    
+    def _save(self):
+        # ... التحقق ...
+        purchase_inventory(
+            self.inv_conn, self.acc_conn,
+            inv_id, qty, unit_cost, date, pay_acc, notes
+        )
+        self.inp_notes.clear()
+        emit_company_data_changed()  # ← بدل bus.data_changed.emit()
 ```
 
 ---
 
-### 39. `ui/tabs/accounting/investors/_investors_layout.py` — تعديل imports
+## `ui/tabs/inventory/inventory_outbound_tab.py`
 
-استبدل:
+### المشاكل
+- نفس مشاكل `inventory_inbound_tab.py`
+
+### الحل
+نفس الإجراء:
 ```python
-from ui.widgets.shared.tab_builder import make_tabs
-```
-بـ:
-```python
-from PyQt5.QtWidgets import QTabWidget
-from PyQt5.QtCore import Qt
-from ui.widgets.theme.layout_styles import tab_style
-from ui.widgets.core.i18n import tr
-```
-
-ثم استبدل كل استدعاء `make_tabs(...)` بـ:
-
-```python
-def build_investors_tabs(acc_conn, erp_conn, on_investor_selected) -> tuple:
-    main_widget, details = build_main_panel(acc_conn, erp_conn, on_investor_selected)
-
-    tabs = QTabWidget()
-    tabs.setLayoutDirection(Qt.RightToLeft)
-    tabs.setStyleSheet(tab_style())
-    tabs.addTab(main_widget, tr("investors"))
-    tabs.addTab(_LinkToEntryPanel(acc_conn, erp_conn), tr("link_investor_to_entry"))
-
-    return tabs, details
+class _OutboundTab(QWidget, BusConnectedMixin):
+    def __init__(self, inv_conn, parent=None):
+        super().__init__(parent)
+        self.inv_conn = inv_conn
+        self._build()
+        self._connect_bus(data=True)
+    
+    def _on_data_changed(self):
+        self._reload_items()
+        self._load_moves()
+    
+    def _save(self):
+        # ...
+        record_inventory_move(self.inv_conn, inv_id, "out", qty, 0, date, notes)
+        emit_company_data_changed()
 ```
 
 ---
 
-### 40. `ui/tabs/accounting/investors/_investors_panel.py` — تعديل imports
+## `ui/tabs/inventory/inventory_report_tab.py`
 
-استبدل:
+### المشاكل
+- استخدام `bus.data_changed.connect()` — محذوف
+- hardcoded colors عديدة
+- استيراد repos مباشرة
+
+### الحل
+**الفئة الرئيسية:**
 ```python
-from ui.widgets.shared.panels import get_splitter_style
-```
-بـ:
-```python
-from ui.widgets.theme.table_styles import splitter_style as get_splitter_style
-```
-
----
-
-### 41. `ui/tabs/accounting/investors/_helpers.py` — حذف الملف بالكامل
-
-هذا الملف يُحذف تماماً. في كل ملف كان يستورد منه، استبدل:
-
-```python
-# بدل: from ._helpers import _spin, _stat_card
-from ui.widgets.panels.form_fields import spin_field as _spin
-from ui.widgets.components.stat_card import stat_card_pair as _stat_card
-```
-
----
-
-### 42. `ui/tabs/accounting/_conn_guard.py` — تعديل imports
-
-```python
-# لا يحتاج تعديل imports — الملف يستخدم مباشرة db.companies و db.shared
-# لكن تأكد من إزالة أي import من ui.events القديم لو موجود
+class _ReportTab(QWidget, BusConnectedMixin):
+    def __init__(self, inv_conn, parent=None):
+        super().__init__(parent)
+        self.inv_conn = inv_conn
+        self._build()
+        self._load()
+        self._connect_bus(data=True)
+    
+    def _on_data_changed(self):
+        self._load()
 ```
 
----
-
-### 43. `ui/tabs/accounting/accounting_section.py` — تعديل imports فقط
-
+**الألوان:**
 ```python
-# لا يحتاج تعديل — الملف نظيف ومش بيستخدم wrappers وهمية
-# فقط تأكد أن هذا الـ import موجود:
-from ui.widgets.theme.layout_styles import tab_style
-# إذا كانت _TAB_STYLE محتاجة، استبدلها بـ: tab_style()
+def _card(label_key, color_key):
+    color = _C[color_key]  # ← بدل hardcoded
+    f = QFrame()
+    f.setStyleSheet(f"""
+        QFrame {{
+            background: {_C['bg_surface']};
+            border-left: 4px solid {color};
+            border-radius: 6px;
+        }}
+    """)
 ```
 
 ---
 
-## سادساً: التحسينات المقترحة
+## `ui/tabs/inventory_section.py`
 
-### أ. إنشاء `ui/tabs/accounting/journal/form/_balance_indicator.py` (ملف جديد)
+### المشاكل
+- استخدام `get_accounting_connection()` و `get_inventory_connection()` مباشرة
 
+### الحل
+**استبدل:**
 ```python
-"""
-بديل لـ _BalanceBar المستقل — يدعم تحديث الألوان عند تغيير الثيم.
-"""
-from PyQt5.QtWidgets import QFrame, QHBoxLayout, QLabel
-from ui.theme import _C
-from ui.widgets.core.events import bus
-from ui.widgets.core.i18n import tr
+from db.companies.company_state import company_state
 
-
-class BalanceBar(QFrame):
-    """شريط توازن القيد — يتحدث تلقائياً مع تغيير الثيم واللغة."""
-
+class InventoryTab(QWidget):
     def __init__(self, parent=None):
         super().__init__(parent)
+        # ...
+        
+    def _build(self):
+        # ...
+        inv_conn = company_state.get_inventory_conn()  # ← بدل get_inventory_connection()
+        acc_conn = company_state.get_accounting_conn()  # ← بدل get_accounting_connection()
+        
+        tabs.addTab(_ItemsTab(inv_conn, acc_conn, ...), ...)
+```
+
+---
+
+# تبويبات التسعير
+
+## `ui/tabs/pricing/pricing/_stat_box.py`
+
+### المشاكل
+- hardcoded colors في StyleSheet
+- نصوص مضمنة
+
+### الحل
+**الدالة الجديدة:**
+```python
+from ui.theme import _C
+from ui.widgets.core.i18n import tr
+
+def stat_box(label: str, color: str = None) -> tuple:
+    """يرجع (QFrame, QLabel_value) — بطاقة إحصائية."""
+    if color is None:
+        color = _C["accent"]
+    
+    frame = QFrame()
+    frame.setStyleSheet(f"""
+        QFrame {{
+            background: {_C['bg_surface']};
+            border: 1px solid {_C['border']};
+            border-radius: 6px;
+            padding: 4px;
+        }}
+    """)
+    lay = QVBoxLayout(frame)
+    lay.setContentsMargins(10, 6, 10, 6)
+    lay.setSpacing(2)
+    
+    lbl_title = QLabel(label)  # label آت من الخارج (من tr())
+    lbl_title.setStyleSheet(
+        f"font-size:10px; color:{_C['text_muted']};"
+        "background:transparent; border:none;"
+    )
+    
+    lbl_val = QLabel("─")
+    lbl_val.setStyleSheet(
+        f"font-size:14px; font-weight:bold; color:{color};"
+        "background:transparent; border:none;"
+    )
+    
+    lay.addWidget(lbl_title)
+    lay.addWidget(lbl_val)
+    return frame, lbl_val
+```
+
+---
+
+## `ui/tabs/pricing/pricing/_pricing_panel.py`
+
+### المشاكل
+- استيراد repos مباشرة
+- `bus.data_changed.connect()` — محذوف
+- hardcoded colors عديدة: `#e65100`, `#1565c0`, `#2e7d32`
+
+### الحل
+**الاستيرادات:**
+```python
+from db.shared.items_repo import fetch_items_by_type, fetch_item
+from db.pricing.pricing_repo import fetch_all_pricing, upsert_pricing, delete_pricing
+from ui.widgets.mixins.bus import BusConnectedMixin
+from ui.widgets.core.events import emit_company_data_changed
+from ui.theme import _C
+```
+
+**الفئة:**
+```python
+class _PricingPanel(QWidget, BusConnectedMixin):
+    def __init__(self, conn, parent=None):
+        super().__init__(parent)
+        self.conn = conn
         self._build()
-        bus.theme_changed.connect(lambda _: self._apply_style())
-        bus.language_changed.connect(lambda _: self._update_labels())
+        self._load_products_combo()
+        self._load()
+        self._connect_bus(data=True)
+    
+    def _on_data_changed(self):
+        self._load_products_combo()
+        self._load()
+    
+    def _save(self):
+        # ...
+        upsert_pricing(self.conn, prod_id, self.sp_margin.value(), price)
+        self._reset_form()
+        emit_company_data_changed()  # ← بدل bus.data_changed.emit()
+```
 
-    def _apply_style(self):
-        self.setStyleSheet(
-            f"QFrame {{ background:{_C['journal_header_bg']};"
-            f"border:1px solid {_C['journal_header_border']}; border-radius:6px; }}"
+**الألوان:**
+```python
+self.lbl_mode.setStyleSheet(f"font-weight:bold; color:{_C['orange']};")  # ← بدل hardcoded
+```
+
+---
+
+## `ui/tabs/pricing/pricing_tab.py`
+
+### المشاكل
+- استخدام `get_connection()` مباشرة
+
+### الحل
+```python
+from db.companies.company_state import company_state
+
+class PricingTab(QWidget):
+    def __init__(self, parent=None):
+        super().__init__(parent)
+        self.conn = company_state.get_erp_conn()  # ← بدل get_connection()
+        self._build()
+```
+
+---
+
+## `ui/tabs/pricing/offers/offer_item_row.py`
+
+### المشاكل
+- `bus.data_changed.connect()` — محذوف
+- hardcoded colors
+- استيراد repos
+
+### الحل
+**الفئة:**
+```python
+from ui.widgets.mixins.bus import BusConnectedMixin
+
+class _OfferItemRow(QFrame, BusConnectedMixin):
+    def __init__(self, conn, on_remove, on_change, parent=None):
+        super().__init__(parent)
+        self._conn = conn
+        self._on_remove = on_remove
+        self._on_change = on_change
+        self._build()
+        self._load_products()
+        self._connect_bus(data=True)
+    
+    def _on_data_changed(self):
+        self._reload_products()
+    
+    def closeEvent(self, event):
+        self._disconnect_bus()
+        super().closeEvent(event)
+```
+
+---
+
+## `ui/tabs/pricing/offers/offer_form.py`
+
+### المشاكل
+- `bus.data_changed.emit()` — محذوف
+- hardcoded colors وnصوص عربية مباشرة
+- استيراد repos
+
+### الحل
+**الاستيرادات:**
+```python
+from db.pricing.offers_repo import (
+    fetch_offer, fetch_offer_items,
+    insert_offer, update_offer, replace_offer_items,
+)
+from ui.widgets.core.events import emit_company_data_changed
+from ui.theme import _C
+```
+
+**الفئة:**
+```python
+class _OfferForm(QWidget):
+    def __init__(self, conn, parent=None):
+        super().__init__(parent)
+        self._conn = conn
+        ...
+    
+    def _save(self):
+        name = self.inp_name.text().strip()
+        # ... جمع البيانات ...
+        if self._editing_id is not None:
+            update_offer(conn, self._editing_id, name, discount, notes, category_id)
+            replace_offer_items(conn, self._editing_id, items)
+        else:
+            oid = insert_offer(conn, name, discount, notes, category_id)
+            replace_offer_items(conn, oid, items)
+        
+        self.reset()
+        emit_company_data_changed()  # ← بدل bus.data_changed.emit()
+```
+
+---
+
+## `ui/tabs/pricing/offers/offer_details.py`
+
+### المشاكل
+- hardcoded colors
+
+### الحل
+```python
+from ui.theme import _C
+
+class _OfferDetails(QFrame):
+    def _build(self):
+        self.setStyleSheet(f"""
+            QFrame {{
+                background: {_C['bg_surface']};
+                border: 1px solid {_C['orange_border']};
+                border-radius: 8px;
+            }}
+        """)
+        # ...
+        cost_item.setForeground(QColor(_C["accent"]))  # ← بدل hardcoded
+```
+
+---
+
+## `ui/tabs/pricing/offers/offers_table.py`
+
+### المشاكل
+- `bus.data_changed.connect()` — محذوف
+- hardcoded colors
+- استيراد repos
+
+### الحل
+**الفئة:**
+```python
+from ui.widgets.mixins.bus import BusConnectedMixin
+
+class _OffersTable(QWidget, BusConnectedMixin):
+    def __init__(self, conn, on_edit, on_delete, on_select, parent=None):
+        super().__init__(parent)
+        self.conn = conn
+        self._all_rows = []
+        self._build()
+        self._load()
+        self._connect_bus(data=True)
+    
+    def _on_data_changed(self):
+        self._load()
+    
+    def closeEvent(self, event):
+        self._disconnect_bus()
+        super().closeEvent(event)
+```
+
+---
+
+## `ui/tabs/pricing/offers/offers_tab.py`
+
+### المشاكل
+- `bus.data_changed.emit()` — محذوف
+- hardcoded colors في StyleSheets
+- نصوص عربية مضمنة
+
+### الحل
+**الفئة:**
+```python
+from ui.widgets.core.events import emit_company_data_changed
+from ui.theme import _C
+
+class OffersTab(QWidget):
+    def _build(self):
+        # ...
+        tabs.setStyleSheet(f"""
+            QTabBar::tab:selected {{
+                color: {_C['orange']};
+                border-top: 2px solid {_C['orange']};
+            }}
+        """)
+    
+    def _delete_offer(self, offer_id):
+        if confirm_delete(self, offer["name"]):
+            delete_offer(conn, offer_id)
+            self._details.clear()
+            emit_company_data_changed()  # ← بدل bus.data_changed.emit()
+```
+
+---
+
+# إدارة الشركات
+
+## `ui/tabs/companies/no_company_screen.py`
+
+### المشاكل
+- نصوص عربية مضمنة
+- hardcoded colors
+
+### الحل
+```python
+from ui.widgets.core.i18n import tr
+from ui.theme import _C
+
+class NoCompanyScreen(QWidget):
+    def _build(self):
+        # ...
+        title = QLabel(tr("no_company_welcome"))  # ← بدل "مرحباً بك"
+        title.setStyleSheet(
+            f"font-size: 18pt; font-weight: bold; color: {_C['text_primary']};"
         )
-
-    def _update_labels(self):
-        self._lbl_dr_title.setText(tr("total_debit") + ":")
-        self._lbl_cr_title.setText(tr("total_credit") + ":")
-        self._lbl_diff_title.setText(tr("balance_bar_diff"))
-```
-
-### ب. إضافة `_on_language_changed` للـ Smart Line
-
-في `_smart_line.py`، أضف:
-```python
-bus.language_changed.connect(self._on_lang_changed)
-
-def _on_lang_changed(self, _):
-    self.rdo_inc.setText(tr("journal_increase"))
-    self.rdo_dec.setText(tr("journal_decrease"))
-    self.inp_desc.setPlaceholderText(tr("line_description_placeholder"))
-```
-
-### ج. استخدام `ProtectedConnection.path_matches` في `_conn_guard.py`
-
-```python
-# بدل PRAGMA database_list في verify_conn_belongs_to_company:
-def verify_conn_belongs_to_company(conn, expected_company_id: int) -> bool:
-    if conn is None or expected_company_id is None:
-        return False
-    try:
-        expected_path = _get_expected_path(expected_company_id)
-        if not expected_path:
-            return False
-        # استخدام path_matches السريعة لو ProtectedConnection
-        if hasattr(conn, 'path_matches'):
-            return conn.path_matches(expected_path)
-        # fallback لـ sqlite3.Connection العادي
-        conn.execute("SELECT 1").fetchone()
-        row = conn.execute("PRAGMA database_list").fetchone()
-        if not row:
-            return False
-        actual_path   = row[2] if len(row) > 2 else ""
-        actual_norm   = os.path.normcase(os.path.realpath(actual_path))
-        expected_norm = os.path.normcase(os.path.realpath(expected_path))
-        return actual_norm == expected_norm
-    except Exception:
-        return False
+        
+        sub = QLabel(tr("no_company_subtitle"))  # ← بدل نص مضمن
+        sub.setStyleSheet(f"font-size: 12pt; color: {_C['text_muted']};")
+        
+        btn = QPushButton(tr("no_company_add_btn"))  # ← بدل "إنشاء شركة"
+        btn.setStyleSheet(f"""
+            QPushButton {{
+                background: {_C['accent']};
+                color: {_C['bg_input']};
+            }}
+        """)
 ```
 
 ---
 
-## سابعاً: ترتيب التطبيق
+## `ui/tabs/companies/companies_dialog.py`
 
-1. **أضف alias `_on_company_event_safe`** في `ui/widgets/core/conn.py`
-2. **أضف الألوان الجديدة** في `ui/theme_manager.py` (كلا الثيمين)
-3. **أضف مفاتيح الترجمة** في `ui/i18n/ar.py` و `ui/i18n/en.py`
-4. **عدّل ملفات `helpers.py`** و `accounts_combo_widget.py`
-5. **عدّل ملفات `ledger/`** (الأبسط — imports فقط)
-6. **عدّل ملفات `tree/`** (imports فقط)
-7. **عدّل ملفات `financial/`** (imports + section_label)
-8. **عدّل ملفات `investors/`** (imports + hardcoded text + colors)
-9. **عدّل ملفات `journal/`** (الأعقد — imports + text + colors)
-10. **احذف الملفات الوهمية** من `ui/widgets/shared/`
-11. **احذف** `ui/tabs/accounting/investors/_helpers.py`
+### المشاكل
+- hardcoded colors كثيرة: `"#2e7d52"`, `"#1b5e38"`, `"#e3f2fd"`, `"#fff8e1"` ... إلخ
+- نصوص عربية مضمنة: `"✨  شركة جديدة"`, `"تم تحديث بيانات"` ... إلخ
+
+### الحل
+**استبدال منهجي:**
+
+1. **في الأعلى، أضف:**
+```python
+from ui.widgets.core.i18n import tr
+from ui.theme import _C
+```
+
+2. **استبدل كل الألوان:**
+   - `"#2e7d52"` → `_C["success"]`
+   - `"#1b5e38"` → `_C["success"]` (أداكن من الأول، لكن نفس الدلالة)
+   - `"#e3f2fd"` → `_C["accent_light"]`
+   - `"#bbdefb"` → `_C["accent_mid"]`
+   - `"#fff8e1"` → `_C["warning_bg"]`
+   - `"#ffecb3"` → `_C["warning_border"]`
+   - `"#fdecea"` → `_C["danger_bg"]`
+   - `"#ffcdd2"` → `_C["danger_border"]`
+   - `"white"` → `_C["bg_surface"]`
+   - `"#e0e0e0"` → `_C["border"]`
+   - `"#888"` → `_C["text_muted"]`
+
+3. **استبدل النصوص:**
+   - `"✨  شركة جديدة"` → `tr("company_new_title")`
+   - `"✏️  تعديل: {name}"` → `tr("company_edit_title").format(name=name)`
+   - `"✅ نشطة"` / `"⏸ موقوفة"` → `tr("company_status_active")` / `tr("company_status_paused")`
+   - `"تم تحديث بيانات «{name}»"` → `tr("company_updated_msg").format(name=name)`
+   - `"تم إنشاء شركة«{name}» بنجاح..."` → `tr("company_created_msg").format(name=name)`
+   - `"هل تريد حذف شركة «{name}»؟"` → `tr("company_delete_confirm").format(name=name)`
+
+**مثال من الكود:**
+```python
+def _build_form_panel(self):
+    grp = QGroupBox(tr("companies"))
+    grp.setStyleSheet(f"""
+        QGroupBox {{ color:{_C['success']}; 
+                   border:1px solid {_C['border']};
+                   border-radius:8px; }}
+    """)
+    # ...
+    self._form_title = QLabel(tr("company_new_title"))  # ← بدل "✨  شركة جديدة"
+
+def _save(self):
+    # ...
+    msg_info(self, tr("done"), tr("company_updated_msg").format(name=name))
+    # ← بدل: msg_info(self, "تم", f"تم تحديث بيانات «{name}»")
+```
 
 ---
 
-## ثامناً: قائمة التحقق قبل التطبيق
+## `ui/tabs/companies/shared_items_dialog.py`
 
-- [ ] `_on_company_event_safe` موجود في `SafeConnMixin`
-- [ ] كل الألوان الجديدة في كلا الثيمين في `theme_manager.py`
-- [ ] كل مفاتيح الترجمة موجودة في `ar.py` **و** `en.py`
-- [ ] لا يوجد `from ui.events import bus` — كله `from ui.widgets.core.events import bus`
-- [ ] لا يوجد `from ui.app_settings import _C` — كله `from ui.theme import _C`
-- [ ] لا يوجد `from ui.helpers import ...`
-- [ ] لا يوجد `from ui.widgets.shared.panels import ...`
-- [ ] لا يوجد `from ui.widgets.shared.safe_conn_mixin import ...`
-- [ ] كل `section_label(...)` تحول لـ `QLabel` مع style من `_C`
-- [ ] كل `buttons_row(...)` تحول لـ `QHBoxLayout` مباشرة
-- [ ] كل `danger_button(...)` تحول لـ `make_btn(..., "danger")`
-- [ ] كل `setup_table_columns(...)` تحول لـ `auto_fit_columns(...)`
-- [ ] `_helpers.py` محذوف من `investors/`
-- [ ] `emit_company_data_changed()` لا تستخدم `company_state._get_conn` (private)
+### المشاكل
+- hardcoded colors: `"#1565c0"`, `"#e3f2fd"`, `"#e8f5e9"`, `"#2e7d32"`, `"#fdecea"`, `"#c62828"`
+- نصوص عربية مضمنة
+
+### الحل
+```python
+from ui.widgets.core.i18n import tr
+from ui.theme import _C
+
+# الاستبدالات:
+# "#1565c0" → _C["accent"]
+# "#e3f2fd" → _C["accent_light"]
+# "#90caf9" → _C["accent_mid"]
+# "#e8f5e9" → _C["success_bg"]
+# "#2e7d32" → _C["success"]
+# "#a5d6a7" → _C["success_border"]
+# "#fdecea" → _C["danger_bg"]
+# "#c62828" → _C["danger"]
+# "#ef9a9a" → _C["danger_border"]
+# "#e0e0e0" → _C["border"]
+# "#333" → _C["text_primary"]
+# "#888" → _C["text_muted"]
+
+# النصوص:
+# "أدخل اسم العنصر" → tr("shared_name_required")
+# "✅ تم حفظ التغييرات — ستنعكس..." → tr("shared_updated_msg")
+# عنوان النافذة: tr("shared_item_header")
+```
+
+---
+
+## `ui/tabs/companies/shared_items_manager.py`
+
+### المشاكل
+- نفس مشاكل `shared_items_dialog.py`
+- hardcoded colors ونصوص عربية
+
+### الحل
+```python
+from ui.widgets.core.i18n import tr
+from ui.theme import _C
+
+# الاستبدالات المنهجية نفسها
+self.btn_add.setText(tr("shared_add_btn"))
+self.btn_edit.setText(tr("shared_edit_btn"))
+self.btn_delete.setText(tr("shared_delete_btn"))
+```
+
+---
+
+## `ui/tabs/companies/shared_items_manager_helper/_add_shared_item_dialog.py`
+
+### المشاكل
+- hardcoded colors: `"#e3f2fd"`, `"#90caf9"`, `"#1565c0"`, `"white"`, `"#e0e0e0"`
+- نصوص عربية مضمنة
+
+### الحل
+```python
+from ui.widgets.core.i18n import tr
+from ui.theme import _C
+
+# الاستبدالات:
+# "#e3f2fd" → _C["accent_light"]
+# "#90caf9" → _C["accent_mid"]
+# "#1565c0" → _C["accent"]
+# "white" → _C["bg_surface"]
+# "#e0e0e0" → _C["border"]
+
+# النصوص:
+# "💡  العنصر المشترك يُحفظ مركزياً..." → tr("shared_publish_hint")
+# "بيانات العنصر المشترك" → tr("shared_item_data_section")
+# "مشاركة مع الشركات" → tr("shared_companies_share")
+# "تحديد سريع:" → tr("shared_quick_select")
+# "✅ الكل" → tr("shared_select_all_btn")
+# "☐ لا شيء" → tr("shared_select_none_btn")
+# "📤  نشر العنصر" → tr("shared_publish_btn")
+```
+
+---
+
+## `ui/tabs/companies/_link_item_picker.py`
+
+### المشاكل
+- hardcoded colors
+- نصوص عربية مضمنة
+
+### الحل
+```python
+from ui.widgets.core.i18n import tr
+
+# النصوص:
+self.setWindowTitle(tr("link_item_title"))  # ← بدل "🔗  اختر عنصراً للربط"
+lay.addWidget(QLabel(tr("link_item_prompt")))  # ← بدل "اختر العنصر المشترك..."
+ok_btn.setText(tr("link_item_btn"))  # ← بدل "✅  ربط"
+
+# النوع:
+_TYPE_AR = {
+    "raw":        tr("shared_type_raw"),
+    "machine":    tr("shared_type_machine"),
+    "labor_op":   tr("shared_type_labor_op"),
+    "machine_op": tr("shared_type_machine_op"),
+}
+```
+
+---
+
+## `ui/tabs/pricing_section.py`
+
+### المشاكل
+- hardcoded colors في `_TAB_STYLE`
+- نصوص مضمنة
+
+### الحل
+```python
+from ui.widgets.core.i18n import tr
+from ui.theme import _C
+
+class PricingSection(QWidget):
+    def _build(self):
+        self._header = QLabel(f"  💰  {tr('pricing')}")  # ← بدل hardcoded
+        self._header.setFixedHeight(42)
+        self._apply_theme()
+        
+        tabs.setStyleSheet(tab_style(accent=_C["orange"]))  # ← بدل _TAB_STYLE
+```
+
+---
+
+# ترتيب التطبيق
+
+## المرحلة 1 — الأساس (لا يكسر أي شيء)
+
+1. ✅ `ui/theme/theme_manager.py` — أضف 8 ألوان جديدة
+2. ✅ `ui/i18n/ar.py` — أضف ~100 مفتاح
+3. ✅ `ui/i18n/en.py` — أضف ~100 مفتاح
+4. ✅ `ui/tabs/pricing/pricing/_stat_box.py` — استبدل الألوان والنصوص
+
+## المرحلة 2 — الـ widgets الصغيرة
+
+5. ✅ `ui/tabs/companies/no_company_screen.py`
+6. ✅ `ui/tabs/companies/_link_item_picker.py`
+7. ✅ `ui/tabs/pricing/offers/offer_details.py`
+8. ✅ `ui/tabs/pricing/offers/offer_item_row.py`
+
+## المرحلة 3 — تبويبات المخزن
+
+9. ✅ `ui/tabs/inventory/items/_item_form.py`
+10. ✅ `ui/tabs/inventory/items/_items_table.py`
+11. ✅ `ui/tabs/inventory/inventory_outbound_tab.py`
+12. ✅ `ui/tabs/inventory/inventory_inbound_tab.py`
+13. ✅ `ui/tabs/inventory/inventory_report_tab.py`
+14. ✅ `ui/tabs/inventory_section.py`
+
+## المرحلة 4 — تبويبات التسعير
+
+15. ✅ `ui/tabs/pricing/pricing_tab.py`
+16. ✅ `ui/tabs/pricing/pricing/_pricing_panel.py`
+17. ✅ `ui/tabs/pricing/offers/offers_table.py`
+18. ✅ `ui/tabs/pricing/offers/offer_form.py`
+19. ✅ `ui/tabs/pricing/offers/offers_tab.py`
+20. ✅ `ui/tabs/pricing_section.py`
+
+## المرحلة 5 — إدارة الشركات
+
+21. ✅ `ui/tabs/companies/companies_dialog.py`
+22. ✅ `ui/tabs/companies/shared_items_dialog.py`
+23. ✅ `ui/tabs/companies/shared_items_manager.py`
+24. ✅ `ui/tabs/companies/shared_items_manager_helper/_add_shared_item_dialog.py`
+
+## المرحلة 6 — التحقق
+
+- [ ] اشغّل التطبيق وتأكد من عدم وجود `AttributeError` على `bus.data_changed`
+- [ ] تأكد من عمل الـ theme switching (light/dark)
+- [ ] تأكد من عمل الـ language switching (AR/EN)
+- [ ] تحقق من أن كل الألوان تنعكس بشكل صحيح
+- [ ] اختبر إضافة/تعديل/حذف في جميع التبويبات
+
+---
+
+# ملخص التغييرات
+
+| الفئة | عدد الملفات | الملفات | 
+|-------|-----------|--------|
+| **Theme & i18n** | 3 | theme_manager.py, ar.py, en.py |
+| **Inventory Tabs** | 6 | _item_form.py, _items_table.py, inventory_inbound_tab.py, inventory_outbound_tab.py, inventory_report_tab.py, inventory_section.py |
+| **Pricing Tabs** | 7 | _stat_box.py, _pricing_panel.py, pricing_tab.py, offer_item_row.py, offer_form.py, offer_details.py, offers_table.py, offers_tab.py, pricing_section.py |
+| **Companies** | 4 | no_company_screen.py, companies_dialog.py, shared_items_dialog.py, shared_items_manager.py, _add_shared_item_dialog.py, _link_item_picker.py |
+| **المجموع** | **20 ملف** | — |
+
+---
+
+## قاعدة الفحص السريع
+
+ابحث عن:
+- ❌ `bus.data_changed` → استبدل بـ `BusConnectedMixin` + `emit_company_data_changed()`
+- ❌ `"#` (ألوان hex مباشرة) → استبدل بـ `_C["..."]`
+- ❌ `"white"`, `"#e0e0e0"`, `"#888"` → استبدل بـ `_C["bg_surface"]`, `_C["border"]`, `_C["text_muted"]`
+- ❌ نصوص عربية/إنجليزية مباشرة → استبدل بـ `tr("key")`
+- ❌ `get_connection()`, `get_accounting_connection()`, `get_inventory_connection()` → استبدل بـ `company_state.get_*_conn()`
+- ❌ استيراد repos مباشرة في tabs → آمن حالياً (بدون services للمخزن/التسعير)
+
+> **اختبار بعد كل مرحلة:** اشغّل التطبيق وافتح التبويب الذي عدّلته.

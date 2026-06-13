@@ -26,21 +26,27 @@ from db.companies.shared_items_repo import (
     fetch_all_shared_items, delete_shared_item,
     fetch_linked_companies,
 )
-from ui.events import bus
+from ui.widgets.core.events import emit_company_data_changed
+from ui.widgets.core.i18n import tr
+from ui.theme import _C
 
-_TYPE_AR = {
-    "raw":        "🧱  الخامات",
-    "machine":    "🖥️  الماكينات",
-    "labor_op":   "👷  عمليات العمالة",
-    "machine_op": "⚙️  عمليات التشغيل",
-}
 
-_TYPE_COLORS = {
-    "raw":        "#1565c0",
-    "machine":    "#6a1b9a",
-    "labor_op":   "#2e7d32",
-    "machine_op": "#e65100",
-}
+def _type_label(t: str) -> str:
+    return {
+        "raw":        f"🧱  {tr('shared_type_raw')}",
+        "machine":    f"🖥️  {tr('shared_type_machine')}",
+        "labor_op":   f"👷  {tr('shared_type_labor_op')}",
+        "machine_op": f"⚙️  {tr('shared_type_machine_op')}",
+    }.get(t, t)
+
+
+def _type_color(t: str) -> str:
+    return {
+        "raw":        _C["acc_type_asset"],
+        "machine":    _C["purple"],
+        "labor_op":   _C["success"],
+        "machine_op": _C["orange"],
+    }.get(t, _C["text_primary"])
 
 
 class SharedItemsManagerDialog(QDialog):
@@ -60,7 +66,7 @@ class SharedItemsManagerDialog(QDialog):
     def __init__(self, central_conn, parent=None):
         super().__init__(parent)
         self._conn = central_conn
-        self.setWindowTitle("🔗  إدارة العناصر المشتركة بين الشركات")
+        self.setWindowTitle(tr("shared_item_header"))
         self.setMinimumSize(820, 600)
         self.setModal(True)
         self.setLayoutDirection(Qt.RightToLeft)
@@ -79,47 +85,45 @@ class SharedItemsManagerDialog(QDialog):
         root.addWidget(self._build_header())
 
         body = QWidget()
-        body.setStyleSheet("background:#f5f7fa;")
+        body.setStyleSheet(f"background:{_C['bg_page']};")
         body_lay = QVBoxLayout(body)
         body_lay.setContentsMargins(16, 14, 16, 14)
         body_lay.setSpacing(10)
 
         # ── شرح ──
-        lbl_hint = QLabel(
-            "💡  العناصر المشتركة مخزنة مركزياً — أي تعديل على السعر أو البيانات يتعكس فوراً "
-            "على كل الشركات المشتركة فيها. لا توجد نسخ محلية."
-        )
+        lbl_hint = QLabel(tr("shared_item_hint"))
         lbl_hint.setWordWrap(True)
         lbl_hint.setStyleSheet(
-            "background:#e8f5e9; border:1px solid #a5d6a7; border-radius:6px;"
-            "padding:8px 12px; color:#1b5e20; font-size:11px;"
+            f"background:{_C['success_bg']}; border:1px solid {_C['success_border']};"
+            f"border-radius:6px; padding:8px 12px; color:{_C['success']}; font-size:11px;"
         )
         body_lay.addWidget(lbl_hint)
 
         # ── أزرار ──
         btn_row = QHBoxLayout()
 
-        self.btn_add = QPushButton("➕  إضافة عنصر مشترك")
+        self.btn_add = QPushButton(tr("shared_add_btn"))
         self.btn_add.setMinimumHeight(32)
         self.btn_add.setStyleSheet(
-            "background:#1565c0; color:white; font-weight:bold;"
+            f"background:{_C['accent']}; color:{_C['bg_surface']}; font-weight:bold;"
             "border-radius:6px; padding:0 14px;"
         )
         self.btn_add.clicked.connect(self._add_item)
 
-        self.btn_edit = QPushButton("✏️  تعديل المحدد")
+        self.btn_edit = QPushButton(tr("shared_edit_btn"))
         self.btn_edit.setMinimumHeight(32)
         self.btn_edit.clicked.connect(self._edit_item)
 
-        self.btn_delete = QPushButton("🗑️  حذف المحدد")
+        self.btn_delete = QPushButton(tr("shared_delete_btn"))
         self.btn_delete.setMinimumHeight(32)
         self.btn_delete.setStyleSheet(
-            "background:#fdecea; color:#c62828; border:1px solid #ef9a9a;"
+            f"background:{_C['danger_bg']}; color:{_C['danger']};"
+            f"border:1px solid {_C['danger_border']};"
             "border-radius:4px; padding:0 12px; font-weight:bold;"
         )
         self.btn_delete.clicked.connect(self._delete_item)
 
-        self.btn_refresh = QPushButton("🔄  تحديث")
+        self.btn_refresh = QPushButton(tr("shared_refresh_btn"))
         self.btn_refresh.setMinimumHeight(32)
         self.btn_refresh.clicked.connect(self._load)
 
@@ -134,22 +138,26 @@ class SharedItemsManagerDialog(QDialog):
         self.tree = QTreeWidget()
         self.tree.setColumnCount(5)
         self.tree.setHeaderLabels([
-            "اسم العنصر", "النوع", "البيانات الرئيسية",
-            "الشركات المشتركة", "آخر تحديث"
+            tr("name"),
+            tr("type"),
+            tr("shared_main_data_col"),
+            tr("shared_companies_col"),
+            tr("shared_last_update_col"),
         ])
         self.tree.setSelectionMode(QAbstractItemView.SingleSelection)
         self.tree.setEditTriggers(QAbstractItemView.NoEditTriggers)
         self.tree.setAlternatingRowColors(True)
         self.tree.itemDoubleClicked.connect(self._on_double_click)
-        self.tree.setStyleSheet("""
-            QTreeWidget {
-                border:1px solid #e0e0e0; border-radius:8px;
-                background:white;
-            }
-            QTreeWidget::item { padding:5px 8px; }
-            QTreeWidget::item:selected {
-                background:#e3f2fd; color:#1565c0;
-            }
+        self.tree.setStyleSheet(f"""
+            QTreeWidget {{
+                border:1px solid {_C['border']}; border-radius:8px;
+                background:{_C['bg_input']};
+                alternate-background-color:{_C['bg_surface']};
+            }}
+            QTreeWidget::item {{ padding:5px 8px; }}
+            QTreeWidget::item:selected {{
+                background:{_C['accent_light']}; color:{_C['accent_text']};
+            }}
         """)
 
         hh = self.tree.header()
@@ -165,7 +173,7 @@ class SharedItemsManagerDialog(QDialog):
 
         body_lay.addWidget(self.tree, stretch=1)
 
-        btn_close = QPushButton("✖  إغلاق")
+        btn_close = QPushButton(tr("shared_close_btn"))
         btn_close.setMinimumHeight(34)
         btn_close.clicked.connect(self.accept)
         close_row = QHBoxLayout()
@@ -177,19 +185,18 @@ class SharedItemsManagerDialog(QDialog):
 
     def _build_header(self) -> QFrame:
         header = QFrame()
-        header.setStyleSheet("""
-            QFrame {
-                background: qlineargradient(x1:0, y1:0, x2:1, y2:0,
-                    stop:0 #1565c0, stop:1 #1976d2);
-                border-bottom: 2px solid #0d47a1;
-            }
+        header.setStyleSheet(f"""
+            QFrame {{
+                background: {_C['accent']};
+                border-bottom: 2px solid {_C['accent_hover']};
+            }}
         """)
         header.setFixedHeight(60)
         h_lay = QHBoxLayout(header)
         h_lay.setContentsMargins(20, 0, 20, 0)
-        lbl = QLabel("🔗  إدارة العناصر المشتركة بين الشركات")
+        lbl = QLabel(tr("shared_item_header"))
         lbl.setStyleSheet(
-            "font-size:14px; font-weight:bold; color:white;"
+            f"font-size:14px; font-weight:bold; color:{_C['bg_surface']};"
             "background:transparent; border:none;"
         )
         h_lay.addWidget(lbl)
@@ -212,7 +219,7 @@ class SharedItemsManagerDialog(QDialog):
 
         for shared_type, type_items in sorted(by_type.items()):
             # نود النوع
-            type_label = _TYPE_AR.get(shared_type, shared_type)
+            type_label = _type_label(shared_type)
             type_node  = QTreeWidgetItem([
                 f"{type_label}  ({len(type_items)})", "", "", "", ""
             ])
@@ -220,14 +227,14 @@ class SharedItemsManagerDialog(QDialog):
             font.setBold(True)
             font.setPointSize(font.pointSize() + 1)
             type_node.setFont(0, font)
-            color = QColor(_TYPE_COLORS.get(shared_type, "#333"))
+            color = QColor(_type_color(shared_type))
             type_node.setForeground(0, color)
-            type_node.setBackground(0, QBrush(QColor("#f5f5f5")))
+            type_node.setBackground(0, QBrush(QColor(_C["bg_surface_2"])))
             type_node.setData(0, Qt.UserRole, ("__type__", shared_type))
 
             for item in type_items:
                 linked_cos = fetch_linked_companies(self._conn, item["id"])
-                co_names   = ", ".join(c["name"] for c in linked_cos) or "─ لا يوجد"
+                co_names   = ", ".join(c["name"] for c in linked_cos) or tr("dash")
 
                 try:
                     import json
@@ -236,13 +243,14 @@ class SharedItemsManagerDialog(QDialog):
                     data = {}
 
                 data_summary = self._data_summary(shared_type, data)
+                type_short = _type_label(shared_type).split("  ", 1)[-1] if "  " in _type_label(shared_type) else shared_type
 
                 child = QTreeWidgetItem([
                     item["name"],
-                    _TYPE_AR.get(shared_type, shared_type).split("  ")[1] if "  " in _TYPE_AR.get(shared_type, "") else shared_type,
+                    type_short,
                     data_summary,
-                    f"🏢 {co_names}  ({len(linked_cos)} شركة)",
-                    item["updated_at"][:16] if item["updated_at"] else "─",
+                    f"🏢 {co_names}  ({len(linked_cos)} {tr('companies')})",
+                    item["updated_at"][:16] if item["updated_at"] else tr("dash"),
                 ])
                 child.setData(0, Qt.UserRole, ("item", item["id"]))
                 child.setToolTip(0, item["name"])
@@ -258,20 +266,21 @@ class SharedItemsManagerDialog(QDialog):
             price = data.get("price", 0)
             tq    = data.get("total_qty")
             if tq:
-                return f"السعر: {price:.2f} ج  │  الكمية: {tq}"
-            return f"السعر: {price:.2f} جنيه/وحدة"
+                return f"{tr('price')}: {price:.2f}  │  {tr('quantity')}: {tq}"
+            return f"{tr('price')}: {price:.2f}"
         elif shared_type == "machine":
             rh = data.get("rate_per_hour", 0)
             ru = data.get("rate_per_unit", 0)
-            return f"{rh:.2f} ج/ساعة  │  {ru:.2f} ج/وحدة"
+            return f"{rh:.2f} / {tr('hour')}  │  {ru:.2f} / {tr('unit')}"
         elif shared_type == "labor_op":
             m = data.get("minutes", 0)
-            return f"{m:.2f} دقيقة"
+            return f"{m:.2f} {tr('labor_time_lbl').split('(')[-1].rstrip(')')}"
         elif shared_type == "machine_op":
             v = data.get("value", 0)
             m = data.get("mode", "time")
-            return f"{'وقت' if m=='time' else 'وحدة'}: {v:.4g}"
-        return "─"
+            mode_label = tr("hour") if m == "time" else tr("unit")
+            return f"{mode_label}: {v:.4g}"
+        return tr("dash")
 
     # ══════════════════════════════════════════════════════
     # أحداث
@@ -313,35 +322,38 @@ class SharedItemsManagerDialog(QDialog):
         if dlg.exec_():
             self._load()
             self.items_changed.emit()
-            bus.data_changed.emit()
+            emit_company_data_changed()
 
     def _add_item_simple(self):
         """إضافة بسيطة بدون نافذة خاصة — يُستخدم كـ fallback."""
-        from PyQt5.QtWidgets import QInputDialog, QComboBox
+        from PyQt5.QtWidgets import QInputDialog
         types = ["raw", "machine", "labor_op", "machine_op"]
-        type_ar = ["خامة", "ماكينة", "عملية عمالة", "عملية تشغيل"]
+        type_labels = [
+            tr("shared_type_raw"), tr("shared_type_machine"),
+            tr("shared_type_labor_op"), tr("shared_type_machine_op"),
+        ]
         t, ok = QInputDialog.getItem(
-            self, "نوع العنصر", "اختر نوع العنصر:",
-            type_ar, 0, False
+            self, tr("type"), tr("select"),
+            type_labels, 0, False
         )
         if not ok:
             return
-        shared_type = types[type_ar.index(t)]
+        shared_type = types[type_labels.index(t)]
 
-        name, ok = QInputDialog.getText(self, "اسم العنصر", "اسم العنصر:")
+        name, ok = QInputDialog.getText(self, tr("name"), tr("name"))
         if not ok or not name.strip():
             return
 
         from db.companies.shared_items_repo import insert_shared_item
         new_id = insert_shared_item(self._conn, name.strip(), shared_type)
         self._load()
-        bus.data_changed.emit()
+        emit_company_data_changed()
         self._open_edit_dialog(new_id)
 
     def _edit_item(self):
         item_id = self._selected_item_id()
         if item_id is None:
-            QMessageBox.information(self, "تنبيه", "اختر عنصراً أولاً")
+            QMessageBox.information(self, tr("notice"), tr("select_item_first"))
             return
         self._open_edit_dialog(item_id)
 
@@ -355,7 +367,7 @@ class SharedItemsManagerDialog(QDialog):
     def _delete_item(self):
         item_id = self._selected_item_id()
         if item_id is None:
-            QMessageBox.information(self, "تنبيه", "اختر عنصراً أولاً")
+            QMessageBox.information(self, tr("notice"), tr("select_item_first"))
             return
 
         # تحقق من وجود شركات مرتبطة
@@ -363,16 +375,15 @@ class SharedItemsManagerDialog(QDialog):
         if linked:
             co_names = ", ".join(c["name"] for c in linked)
             reply = QMessageBox.question(
-                self, "تأكيد الحذف",
-                f"هذا العنصر مرتبط بـ {len(linked)} شركة:\n{co_names}\n\n"
-                "حذفه سيفك الربط تلقائياً. هل تريد المتابعة؟",
+                self, tr("confirm_delete"),
+                tr("shared_delete_with_companies").format(count=len(linked)) + f"\n{co_names}",
                 QMessageBox.Yes | QMessageBox.No
             )
             if reply != QMessageBox.Yes:
                 return
         else:
             reply = QMessageBox.question(
-                self, "تأكيد الحذف", "حذف هذا العنصر المشترك؟",
+                self, tr("confirm_delete"), tr("shared_delete_simple"),
                 QMessageBox.Yes | QMessageBox.No
             )
             if reply != QMessageBox.Yes:
@@ -381,5 +392,5 @@ class SharedItemsManagerDialog(QDialog):
         delete_shared_item(self._conn, item_id)
         self._load()
         self.items_changed.emit()
-        bus.data_changed.emit()
-        QMessageBox.information(self, "تم", "✅ تم حذف العنصر المشترك")
+        emit_company_data_changed()
+        QMessageBox.information(self, tr("done"), tr("shared_deleted_msg"))

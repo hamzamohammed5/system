@@ -9,13 +9,14 @@ from PyQt5.QtWidgets import (
     QLabel, QPushButton, QListWidget, QListWidgetItem,
 )
 from PyQt5.QtCore import Qt
-from ui.app_settings import _C
+from ui.theme import _C
+from ui.widgets.core.i18n import tr
 
 _TYPE_AR = {
-    "raw":        "خامة",
-    "machine":    "ماكينة",
-    "labor_op":   "عملية عمالة",
-    "machine_op": "عملية تشغيل",
+    "raw":        tr("shared_type_raw"),
+    "machine":    tr("shared_type_machine"),
+    "labor_op":   tr("shared_type_labor_op"),
+    "machine_op": tr("shared_type_machine_op"),
 }
 
 
@@ -25,7 +26,7 @@ class LinkItemPicker(QDialog):
         self.selected_id = None
         self._items      = items
 
-        self.setWindowTitle("🔗  اختر عنصراً للربط")
+        self.setWindowTitle(tr("link_item_title"))
         self.setMinimumSize(460, 380)
         self.setModal(True)
         self._build()
@@ -35,7 +36,7 @@ class LinkItemPicker(QDialog):
         lay.setSpacing(10)
         lay.setContentsMargins(16, 16, 16, 16)
 
-        lay.addWidget(QLabel("اختر العنصر المشترك الذي تريد ربطه بشركتك:"))
+        lay.addWidget(QLabel(tr("link_item_prompt")))
 
         self._list = QListWidget()
         self._list.setStyleSheet(f"""
@@ -54,7 +55,8 @@ class LinkItemPicker(QDialog):
 
         for item in self._items:
             type_ar = _TYPE_AR.get(item["shared_type"], item["shared_type"])
-            text    = f"{item['name']}  [{type_ar}]  — من: {item['source_company_name'] or '?'}"
+            source  = item["source_company_name"] or tr("dash")
+            text    = f"{item['name']}  [{type_ar}]  {tr('link_item_from').format(company=source)}"
             wi = QListWidgetItem(text)
             wi.setData(Qt.UserRole, item["id"])
             self._list.addItem(wi)
@@ -62,18 +64,18 @@ class LinkItemPicker(QDialog):
         lay.addWidget(self._list)
 
         btn_row = QHBoxLayout()
-        ok_btn = QPushButton("✅  ربط")
+        ok_btn = QPushButton(tr("link_item_btn"))
         ok_btn.setFixedHeight(34)
         ok_btn.setStyleSheet(f"""
             QPushButton {{
-                background: {_C['accent']}; color: white; font-weight: 600;
+                background: {_C['accent']}; color: {_C['bg_input']}; font-weight: 600;
                 border: none; border-radius: 5px; padding: 4px 18px;
             }}
             QPushButton:hover {{ background: {_C['accent_hover']}; }}
         """)
         ok_btn.clicked.connect(self._accept)
 
-        cancel_btn = QPushButton("✖  إلغاء")
+        cancel_btn = QPushButton(tr("btn_cancel"))
         cancel_btn.setFixedHeight(34)
         cancel_btn.setStyleSheet(f"""
             QPushButton {{

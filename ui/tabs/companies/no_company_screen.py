@@ -7,6 +7,7 @@ ui/widgets/shared/no_company_screen.py
 from PyQt5.QtWidgets import QWidget, QVBoxLayout, QLabel, QPushButton
 from PyQt5.QtCore    import Qt, pyqtSignal
 from ui.app_settings import _C
+from ui.widgets.core.i18n import tr
 
 
 class NoCompanyScreen(QWidget):
@@ -28,25 +29,25 @@ class NoCompanyScreen(QWidget):
         ico.setStyleSheet("font-size: 48pt; background: transparent;")
         lay.addWidget(ico)
 
-        title = QLabel("مرحباً بك في نظام ERP")
+        title = QLabel(tr("no_company_welcome"))
         title.setAlignment(Qt.AlignCenter)
         title.setStyleSheet(
             f"font-size: 18pt; font-weight: bold; color: {_C['text_primary']};"
         )
         lay.addWidget(title)
 
-        sub = QLabel("اختر شركة من القائمة أعلاه للبدء\nأو أنشئ شركة جديدة")
+        sub = QLabel(tr("no_company_subtitle"))
         sub.setAlignment(Qt.AlignCenter)
         sub.setWordWrap(True)
         sub.setStyleSheet(f"font-size: 12pt; color: {_C['text_muted']};")
         lay.addWidget(sub)
 
-        btn = QPushButton("➕  إنشاء شركة جديدة")
+        btn = QPushButton(tr("no_company_add_btn"))
         btn.setFixedHeight(42)
         btn.setFixedWidth(220)
         btn.setStyleSheet(f"""
             QPushButton {{
-                background: {_C['accent']}; color: white;
+                background: {_C['accent']}; color: {_C['bg_input']};
                 font-weight: 600; font-size: 11pt;
                 border: none; border-radius: 8px;
             }}

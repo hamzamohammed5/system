@@ -16,7 +16,8 @@ from db.companies.companies_repo import (
     insert_company, update_company,
     delete_company, toggle_company_active,
 )
-from ui.app_settings import _C
+from ui.theme import _C
+from ui.widgets.core.i18n import tr
 from ui.widgets.shared.message_box import msg_question, msg_info, msg_warning, msg_critical
 
 
@@ -25,9 +26,9 @@ class CompaniesDialog(QDialog):
         super().__init__(parent)
         self._conn       = central_conn
         self._editing_id = None
-        self._color      = "#1565c0"
+        self._color      = _C['accent']
 
-        self.setWindowTitle("🏢  إدارة الشركات")
+        self.setWindowTitle(tr("companies_manage_title"))
         self.setMinimumSize(820, 560)
         self.setModal(True)
         self._build()
@@ -38,7 +39,7 @@ class CompaniesDialog(QDialog):
         root.setContentsMargins(12, 12, 12, 12)
         root.setSpacing(10)
 
-        title = QLabel("🏢  إدارة الشركات")
+        title = QLabel(tr("companies_manage_title"))
         title.setStyleSheet(f"""
             font-size: 14pt; font-weight: bold;
             color: {_C['accent']}; padding: 4px 0;
@@ -56,7 +57,7 @@ class CompaniesDialog(QDialog):
 
         btn_row = QHBoxLayout()
         btn_row.addStretch()
-        close_btn = QPushButton("✖  إغلاق")
+        close_btn = QPushButton(tr("shared_close_btn"))
         close_btn.setFixedHeight(34)
         close_btn.setStyleSheet(f"""
             QPushButton {{
@@ -78,20 +79,23 @@ class CompaniesDialog(QDialog):
         lay.setSpacing(6)
 
         toolbar = QHBoxLayout()
-        lbl = QLabel("الشركات المسجلة")
+        lbl = QLabel(tr("companies_registered"))
         lbl.setStyleSheet("font-weight: bold; font-size: 11pt; background: transparent;")
         toolbar.addWidget(lbl)
         toolbar.addStretch()
 
-        add_btn = QPushButton("➕  إضافة شركة")
+        add_btn = QPushButton(tr("company_add_btn"))
         add_btn.setFixedHeight(32)
-        add_btn.setStyleSheet(self._btn_style("#2e7d52", "#1b5e38"))
+        add_btn.setStyleSheet(self._btn_style(_C['success'], _C['success_hover']))
         add_btn.clicked.connect(self._new_company)
         toolbar.addWidget(add_btn)
         lay.addLayout(toolbar)
 
         self._table = QTableWidget(0, 4)
-        self._table.setHorizontalHeaderLabels(["الاسم", "الاختصار", "الحالة", "إجراءات"])
+        self._table.setHorizontalHeaderLabels([
+            tr("company_col_name"), tr("company_col_short"),
+            tr("company_col_status"), tr("company_col_actions"),
+        ])
         self._table.setSelectionBehavior(QTableWidget.SelectRows)
         self._table.setEditTriggers(QTableWidget.NoEditTriggers)
         self._table.setAlternatingRowColors(True)
@@ -144,7 +148,7 @@ class CompaniesDialog(QDialog):
         lay.setContentsMargins(16, 16, 16, 16)
         lay.setSpacing(10)
 
-        self._form_title = QLabel("✨  شركة جديدة")
+        self._form_title = QLabel(tr("company_new_title"))
         self._form_title.setStyleSheet(
             "font-weight: bold; font-size: 11pt; background: transparent;"
         )
@@ -177,23 +181,23 @@ class CompaniesDialog(QDialog):
             """)
             return e
 
-        lay.addWidget(_lbl("اسم الشركة *"))
-        self._inp_name = _inp("مثال: شركة النور للطباعة")
+        lay.addWidget(_lbl(tr("company_name_label")))
+        self._inp_name = _inp(tr("company_name_placeholder"))
         lay.addWidget(self._inp_name)
 
-        lay.addWidget(_lbl("الاسم المختصر"))
-        self._inp_short = _inp("مثال: النور")
+        lay.addWidget(_lbl(tr("company_short_name_label")))
+        self._inp_short = _inp(tr("company_short_placeholder"))
         lay.addWidget(self._inp_short)
 
-        lay.addWidget(_lbl("اللون المميز"))
+        lay.addWidget(_lbl(tr("company_color_label")))
         color_row = QHBoxLayout()
         self._color_preview = QLabel()
         self._color_preview.setFixedSize(32, 32)
         self._color_preview.setStyleSheet(
             f"background: {self._color}; border-radius: 5px;"
-            "border: 1px solid #ccc;"
+            f"border: 1px solid {_C['border_med']};"
         )
-        color_btn = QPushButton("اختر لوناً")
+        color_btn = QPushButton(tr("company_choose_color"))
         color_btn.setFixedHeight(32)
         color_btn.setStyleSheet(f"""
             QPushButton {{
@@ -209,7 +213,7 @@ class CompaniesDialog(QDialog):
         color_row.addStretch()
         lay.addLayout(color_row)
 
-        lay.addWidget(_lbl("ملاحظات"))
+        lay.addWidget(_lbl(tr("company_notes_label")))
         self._inp_notes = QTextEdit()
         self._inp_notes.setMaximumHeight(80)
         self._inp_notes.setStyleSheet(f"""
@@ -225,7 +229,7 @@ class CompaniesDialog(QDialog):
         lay.addStretch()
 
         form_btns = QHBoxLayout()
-        self._save_btn = QPushButton("💾  حفظ")
+        self._save_btn = QPushButton(tr("btn_save"))
         self._save_btn.setFixedHeight(34)
         self._save_btn.setStyleSheet(
             self._btn_style(_C['accent'], _C['accent_hover'])
@@ -233,7 +237,7 @@ class CompaniesDialog(QDialog):
         self._save_btn.clicked.connect(self._save)
         form_btns.addWidget(self._save_btn)
 
-        self._cancel_btn = QPushButton("✖  إلغاء")
+        self._cancel_btn = QPushButton(tr("btn_cancel"))
         self._cancel_btn.setFixedHeight(34)
         self._cancel_btn.setStyleSheet(f"""
             QPushButton {{
@@ -252,7 +256,7 @@ class CompaniesDialog(QDialog):
     def _btn_style(self, bg, hover):
         return f"""
             QPushButton {{
-                background: {bg}; color: white; font-weight: 600;
+                background: {bg}; color: {_C['bg_input']}; font-weight: 600;
                 border: none; border-radius: 5px; padding: 4px 14px;
             }}
             QPushButton:hover {{ background: {hover}; }}
@@ -267,21 +271,21 @@ class CompaniesDialog(QDialog):
 
             name_lbl = QLabel(f"  {r['name']}")
             name_lbl.setStyleSheet(f"""
-                background: {r['color'] or '#1565c0'};
-                color: white; font-weight: 600;
+                background: {r['color'] or _C['accent']};
+                color: {_C['bg_input']}; font-weight: 600;
                 border-radius: 4px; padding: 3px 8px;
             """)
             self._table.setCellWidget(ri, 0, name_lbl)
 
-            short = QTableWidgetItem(r["short_name"] or "—")
+            short = QTableWidgetItem(r["short_name"] or tr("dash"))
             short.setTextAlignment(Qt.AlignCenter)
             self._table.setItem(ri, 1, short)
 
-            status_text = "✅ نشطة" if r["is_active"] else "⏸ موقوفة"
+            status_text = tr("company_status_active") if r["is_active"] else tr("company_status_paused")
             status = QTableWidgetItem(status_text)
             status.setTextAlignment(Qt.AlignCenter)
             status.setForeground(
-                QColor("#2e7d52") if r["is_active"] else QColor("#888")
+                QColor(_C["success"]) if r["is_active"] else QColor(_C["text_muted"])
             )
             self._table.setItem(ri, 2, status)
 
@@ -303,22 +307,22 @@ class CompaniesDialog(QDialog):
             """
 
             edit_btn = QPushButton("✏")
-            edit_btn.setToolTip("تعديل")
-            edit_btn.setStyleSheet(_btn_ss("#e3f2fd", "#bbdefb"))
+            edit_btn.setToolTip(tr("company_tooltip_edit"))
+            edit_btn.setStyleSheet(_btn_ss(_C["t_account_dr_bg"], _C["accent_mid"]))
             edit_btn.clicked.connect(
                 lambda _, rid=r["id"]: self._edit_company(rid)
             )
 
             toggle_btn = QPushButton("⏸" if r["is_active"] else "▶")
-            toggle_btn.setToolTip("إيقاف / تفعيل")
-            toggle_btn.setStyleSheet(_btn_ss("#fff8e1", "#ffecb3"))
+            toggle_btn.setToolTip(tr("company_tooltip_toggle"))
+            toggle_btn.setStyleSheet(_btn_ss(_C["warning_bg"], _C["warning_border"]))
             toggle_btn.clicked.connect(
                 lambda _, rid=r["id"]: self._toggle(rid)
             )
 
             del_btn = QPushButton("🗑")
-            del_btn.setToolTip("حذف")
-            del_btn.setStyleSheet(_btn_ss("#fdecea", "#ffcdd2"))
+            del_btn.setToolTip(tr("company_tooltip_delete"))
+            del_btn.setStyleSheet(_btn_ss(_C["danger_bg"], _C["danger_hover"]))
             del_btn.clicked.connect(
                 lambda _, rid=r["id"], nm=r["name"]: self._delete(rid, nm)
             )
@@ -331,13 +335,14 @@ class CompaniesDialog(QDialog):
 
     def _new_company(self):
         self._editing_id = None
-        self._form_title.setText("✨  شركة جديدة")
+        self._form_title.setText(tr("company_new_title"))
         self._inp_name.clear()
         self._inp_short.clear()
         self._inp_notes.clear()
-        self._color = "#1565c0"
+        self._color = _C["accent"]
         self._color_preview.setStyleSheet(
-            f"background: {self._color}; border-radius: 5px; border: 1px solid #ccc;"
+            f"background: {self._color}; border-radius: 5px;"
+            f"border: 1px solid {_C['border_med']};"
         )
         self._inp_name.setFocus()
 
@@ -346,21 +351,23 @@ class CompaniesDialog(QDialog):
         if not row:
             return
         self._editing_id = company_id
-        self._form_title.setText(f"✏️  تعديل: {row['name']}")
+        self._form_title.setText(tr("company_edit_title").format(name=row["name"]))
         self._inp_name.setText(row["name"])
         self._inp_short.setText(row["short_name"] or "")
         self._inp_notes.setPlainText(row["notes"] or "")
-        self._color = row["color"] or "#1565c0"
+        self._color = row["color"] or _C["accent"]
         self._color_preview.setStyleSheet(
-            f"background: {self._color}; border-radius: 5px; border: 1px solid #ccc;"
+            f"background: {self._color}; border-radius: 5px;"
+            f"border: 1px solid {_C['border_med']};"
         )
 
     def _pick_color(self):
-        c = QColorDialog.getColor(QColor(self._color), self, "اختر لون الشركة")
+        c = QColorDialog.getColor(QColor(self._color), self, tr("company_pick_color_title"))
         if c.isValid():
             self._color = c.name()
             self._color_preview.setStyleSheet(
-                f"background: {self._color}; border-radius: 5px; border: 1px solid #ccc;"
+                f"background: {self._color}; border-radius: 5px;"
+                f"border: 1px solid {_C['border_med']};"
             )
 
     def _save(self):
@@ -369,7 +376,7 @@ class CompaniesDialog(QDialog):
         notes = self._inp_notes.toPlainText().strip()
 
         if not name:
-            msg_warning(self, "تنبيه", "اسم الشركة مطلوب")
+            msg_warning(self, tr("warning"), tr("company_name_required"))
             return
 
         try:
@@ -379,32 +386,29 @@ class CompaniesDialog(QDialog):
                     name=name, short_name=short,
                     color=self._color, notes=notes
                 )
-                msg_info(self, "تم", f"تم تحديث بيانات «{name}»")
+                msg_info(self, tr("done"), tr("company_updated_msg").format(name=name))
             else:
                 insert_company(
                     self._conn,
                     name=name, short_name=short,
                     color=self._color, notes=notes
                 )
-                msg_info(
-                    self, "تم",
-                    f"تم إنشاء شركة «{name}» بنجاح.\n"
-                    "تم إنشاء قواعد البيانات الخاصة بها."
-                )
+                msg_info(self, tr("done"), tr("company_created_msg").format(name=name))
             self._reset_form()
             self._load()
         except Exception as e:
-            msg_critical(self, "خطأ", str(e))
+            msg_critical(self, tr("error"), str(e))
 
     def _reset_form(self):
         self._editing_id = None
-        self._form_title.setText("✨  شركة جديدة")
+        self._form_title.setText(tr("company_new_title"))
         self._inp_name.clear()
         self._inp_short.clear()
         self._inp_notes.clear()
-        self._color = "#1565c0"
+        self._color = _C["accent"]
         self._color_preview.setStyleSheet(
-            f"background: {self._color}; border-radius: 5px; border: 1px solid #ccc;"
+            f"background: {self._color}; border-radius: 5px;"
+            f"border: 1px solid {_C['border_med']};"
         )
 
     def _toggle(self, company_id: int):
@@ -413,12 +417,11 @@ class CompaniesDialog(QDialog):
 
     def _delete(self, company_id: int, name: str):
         if msg_question(
-            self, "تأكيد الحذف",
-            f"هل تريد حذف شركة «{name}»؟\n\n"
-            "ملاحظة: ملفات قواعد البيانات ستبقى على القرص."
+            self, tr("confirm_delete"),
+            tr("company_delete_confirm").format(name=name)
         ):
             try:
                 delete_company(self._conn, company_id)
                 self._load()
             except Exception as e:
-                msg_critical(self, "خطأ", str(e))
+                msg_critical(self, tr("error"), str(e))

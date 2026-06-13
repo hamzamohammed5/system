@@ -18,6 +18,7 @@ from db.companies.companies_schema import get_central_connection, create_central
 from db.companies.companies_repo   import fetch_all_companies
 from db.companies.company_state    import company_state
 from ui.app_settings               import _C
+from ui.widgets.core.i18n          import tr
 
 
 class CompanySelector(QWidget):
@@ -85,7 +86,7 @@ class CompanySelector(QWidget):
         # زر الإدارة
         self._manage_btn = QPushButton("⚙")
         self._manage_btn.setFixedSize(30, 30)
-        self._manage_btn.setToolTip("إدارة الشركات")
+        self._manage_btn.setToolTip(tr("manage_companies"))
         self._manage_btn.setStyleSheet(f"""
             QPushButton {{
                 background: transparent;
@@ -123,7 +124,7 @@ class CompanySelector(QWidget):
             self._companies = []
 
         if not self._companies:
-            self._combo.addItem("— لا توجد شركات —")
+            self._combo.addItem(tr("no_companies_available"))
             self._combo.setEnabled(False)
         else:
             self._combo.setEnabled(True)
@@ -156,7 +157,7 @@ class CompanySelector(QWidget):
         company = self._companies[idx]
         cid     = company["id"]
         name    = company["name"]
-        color   = company["color"] or "#1565c0"
+        color   = company["color"] or _C["accent"]
 
         company_state.set_active(cid, name, color)
         self.company_changed.emit(cid)
