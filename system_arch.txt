@@ -1,5 +1,5 @@
 File Tree Snapshot
-Generated : 2026-06-14 00:46:50
+Generated : 2026-06-17 17:52:25
 Source    : D:\My Workspace\Hg\Alhabaar\accountant\system
 Extensions: .md, .py
 ────────────────────────────────────────────────────────────
@@ -271,7 +271,6 @@ system/
 │   │   │   ├── inventory_items_tab.py
 │   │   │   ├── inventory_outbound_tab.py
 │   │   │   └── inventory_report_tab.py
-│   │   ├── offers/
 │   │   ├── orders/
 │   │   │   ├── customers/
 │   │   │   │   ├── customer_detail_panel.py

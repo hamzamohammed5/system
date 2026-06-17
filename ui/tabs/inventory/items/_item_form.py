@@ -11,12 +11,16 @@ from PyQt5.QtWidgets import (
 )
 from PyQt5.QtCore import Qt
 
-from db.shared.connection      import get_connection
-from db.inventory.inventory_repo  import fetch_inventory_item, insert_inventory_item, update_inventory_item
-from db.accounting.accounting_repo import fetch_leaf_accounts
-from db.shared.items_repo      import fetch_items_by_type
-from ui.helpers import EditModeMixin
-from ui.events  import bus
+from db.inventory.inventory_repo import (
+    fetch_inventory_item, insert_inventory_item, update_inventory_item,
+)
+from db.accounting.accounting_accounts_repo import fetch_leaf_accounts
+from db.shared.items_repo import fetch_items_by_type
+from db.companies.company_state import company_state
+from ui.widgets.mixins.form_mixins import EditModeMixin
+from ui.widgets.core.events import emit_company_data_changed
+from ui.widgets.core.i18n import tr
+from ui.theme import _C
 
 
 def _spin(max_=999999999, dec=4):
@@ -40,62 +44,62 @@ class _ItemForm(QWidget, EditModeMixin):
         root.setContentsMargins(12, 10, 12, 10)
         root.setSpacing(8)
 
-        grp = QGroupBox("بيانات الصنف")
-        grp.setStyleSheet("""
-            QGroupBox { font-weight:bold; color:#1565c0; border:1px solid #e0e0e0;
-                        border-radius:8px; margin-top:8px; padding-top:8px; }
-            QGroupBox::title { subcontrol-origin:margin; padding:0 6px; }
+        grp = QGroupBox(tr("inventory_item_data_group"))
+        grp.setStyleSheet(f"""
+            QGroupBox {{ font-weight:bold; color:{_C['accent']}; border:1px solid {_C['border']};
+                        border-radius:8px; margin-top:8px; padding-top:8px; }}
+            QGroupBox::title {{ subcontrol-origin:margin; padding:0 6px; }}
         """)
         form = QFormLayout(grp)
         form.setSpacing(10)
         form.setLabelAlignment(Qt.AlignRight)
 
-        self.lbl_mode = QLabel("─── صنف جديد ───")
-        self.lbl_mode.setStyleSheet("font-weight:bold; color:#1565c0;")
+        self.lbl_mode = QLabel(tr("inventory_item_new_mode"))
+        self.lbl_mode.setStyleSheet(f"font-weight:bold; color:{_C['accent']};")
         form.addRow(self.lbl_mode)
 
         self.inp_name = QLineEdit()
-        self.inp_name.setPlaceholderText("اسم الصنف...")
+        self.inp_name.setPlaceholderText(tr("inventory_item_name_placeholder"))
         self.inp_name.setMinimumHeight(30)
 
         self.inp_unit = QLineEdit()
-        self.inp_unit.setPlaceholderText("قطعة / متر / كيلو...")
+        self.inp_unit.setPlaceholderText(tr("inventory_unit_placeholder"))
         self.inp_unit.setMinimumHeight(30)
-        self.inp_unit.setText("قطعة")
+        self.inp_unit.setText(tr("piece"))
         self.inp_unit.setFixedWidth(120)
 
         self.sp_qty_min = _spin(dec=2)
         self.sp_qty_min.setFixedWidth(120)
-        self.sp_qty_min.setToolTip("الكمية الدنيا للتنبيه بالطلب")
+        self.sp_qty_min.setToolTip(tr("inventory_qty_min_tooltip"))
 
         # ربط بصنف من items (اختياري)
         self.cmb_item = QComboBox()
         self.cmb_item.setMinimumHeight(28)
-        self.cmb_item.addItem("— لا يوجد ربط —", None)
-        for item in fetch_items_by_type(get_connection(), "raw"):
-            self.cmb_item.addItem(f"🧱 {item['name']}", item["id"])
+        self.cmb_item.addItem(tr("investor_no_link"), None)
+        for item in fetch_items_by_type(company_state.get_shared_conn(), "raw"):
+            self.cmb_item.addItem(tr("inventory_raw_item_fmt").format(name=item["name"]), item["id"])
 
         # ربط بحساب محاسبي
         self.cmb_account = QComboBox()
         self.cmb_account.setMinimumHeight(28)
-        self.cmb_account.addItem("— حساب المخزون الافتراضي —", None)
+        self.cmb_account.addItem(tr("inventory_default_account_placeholder"), None)
         for acc in fetch_leaf_accounts(self.acc_conn, "asset"):
             self.cmb_account.addItem(f"{acc['code']} — {acc['name']}", acc["id"])
 
         self.inp_notes = QLineEdit()
-        self.inp_notes.setPlaceholderText("ملاحظات...")
+        self.inp_notes.setPlaceholderText(tr("notes_placeholder"))
         self.inp_notes.setMinimumHeight(28)
 
-        form.addRow("اسم الصنف:", self.inp_name)
-        form.addRow("وحدة القياس:", self.inp_unit)
-        form.addRow("الحد الأدنى:", self.sp_qty_min)
-        form.addRow("ربط بخامة:", self.cmb_item)
-        form.addRow("حساب المخزون:", self.cmb_account)
-        form.addRow("ملاحظات:", self.inp_notes)
+        form.addRow(f"{tr('inventory_item_name')}:", self.inp_name)
+        form.addRow(f"{tr('unit')}:", self.inp_unit)
+        form.addRow(f"{tr('inventory_min_qty_label')}:", self.sp_qty_min)
+        form.addRow(f"{tr('inventory_link_raw')}:", self.cmb_item)
+        form.addRow(f"{tr('inventory_acc_account')}:", self.cmb_account)
+        form.addRow(f"{tr('notes')}:", self.inp_notes)
 
-        self.btn_add    = QPushButton("➕  إضافة صنف")
-        self.btn_save   = QPushButton("💾  حفظ التعديل")
-        self.btn_cancel = QPushButton("✖  إلغاء")
+        self.btn_add    = QPushButton(f"➕  {tr('inventory_add_item')}")
+        self.btn_save   = QPushButton(f"💾  {tr('save_edit')}")
+        self.btn_cancel = QPushButton(f"✖  {tr('cancel')}")
         for btn in (self.btn_add, self.btn_save, self.btn_cancel):
             btn.setMinimumHeight(30)
         self.btn_add.clicked.connect(self._add)
@@ -119,11 +123,11 @@ class _ItemForm(QWidget, EditModeMixin):
     def _collect(self):
         name = self.inp_name.text().strip()
         if not name:
-            QMessageBox.warning(self, "تنبيه", "أدخل اسم الصنف")
+            QMessageBox.warning(self, tr("warning"), tr("enter_field").format(label=tr("inventory_item_name")))
             return None
         return {
             "name":       name,
-            "unit":       self.inp_unit.text().strip() or "قطعة",
+            "unit":       self.inp_unit.text().strip() or tr("piece"),
             "qty_min":    self.sp_qty_min.value(),
             "account_id": self.cmb_account.currentData(),
             "item_id":    self.cmb_item.currentData(),
@@ -136,7 +140,7 @@ class _ItemForm(QWidget, EditModeMixin):
             return
         insert_inventory_item(self.inv_conn, **data)
         self._reset()
-        bus.data_changed.emit()
+        emit_company_data_changed()
 
     def _save_edit(self):
         data = self._collect()
@@ -147,7 +151,7 @@ class _ItemForm(QWidget, EditModeMixin):
                               data["qty_min"], data["account_id"],
                               data["notes"])
         self._reset()
-        bus.data_changed.emit()
+        emit_company_data_changed()
 
     def _cancel(self):
         self._reset()
@@ -164,13 +168,13 @@ class _ItemForm(QWidget, EditModeMixin):
                 self.cmb_account.setCurrentIndex(i)
                 break
         self.inp_notes.setText(inv["notes"] or "")
-        self.enter_edit_mode(inv_id, f"─── تعديل: {inv['name']} ───")
+        self.enter_edit_mode(inv_id, tr("edit_mode_fmt").format(name=inv["name"]))
 
     def _reset(self):
         self.inp_name.clear()
-        self.inp_unit.setText("قطعة")
+        self.inp_unit.setText(tr("piece"))
         self.sp_qty_min.setValue(0)
         self.cmb_account.setCurrentIndex(0)
         self.cmb_item.setCurrentIndex(0)
         self.inp_notes.clear()
-        self.exit_edit_mode("─── صنف جديد ───")
+        self.exit_edit_mode(tr("inventory_item_new_mode"))

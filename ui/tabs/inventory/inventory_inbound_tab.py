@@ -14,17 +14,19 @@ from PyQt5.QtWidgets import (
     QComboBox, QDateEdit, QTableWidgetItem, QMessageBox,
 )
 from PyQt5.QtCore import Qt, QDate
-from PyQt5.QtGui  import QColor
 
-from db.inventory.inventory_repo  import (
+from db.inventory.inventory_repo import (
     fetch_all_inventory, fetch_inventory_item,
-    record_inventory_move,
 )
-from db.accounting.accounting_repo import fetch_leaf_accounts, purchase_inventory
+from db.accounting.accounting_accounts_repo import fetch_leaf_accounts
+from db.accounting.accounting_inventory_repo import purchase_inventory
 from ui.helpers import (
     make_table, setup_table_columns, section_label,
 )
-from ui.events import bus
+from ui.widgets.mixins.bus import BusConnectedMixin
+from ui.widgets.core.events import emit_company_data_changed
+from ui.widgets.core.i18n import tr
+from ui.theme import _C
 
 
 def _spin(max_=999999999, dec=4):
@@ -48,24 +50,28 @@ def _safe_subtype(acc_row) -> str:
 # تبويب الوارد (شراء)
 # ══════════════════════════════════════════════════════════
 
-class _InboundTab(QWidget):
+class _InboundTab(QWidget, BusConnectedMixin):
     def __init__(self, inv_conn, acc_conn, parent=None):
         super().__init__(parent)
         self.inv_conn = inv_conn
         self.acc_conn = acc_conn
         self._build()
-        bus.data_changed.connect(self._reload_items)
+        self._connect_bus(data=True)
+
+    def _on_data_changed(self):
+        self._reload_items()
+        self._load_moves()
 
     def _build(self):
         root = QVBoxLayout(self)
         root.setContentsMargins(12, 10, 12, 10)
         root.setSpacing(10)
 
-        grp = QGroupBox("📥  استلام / شراء مخزن")
-        grp.setStyleSheet("""
-            QGroupBox { font-weight:bold; color:#2e7d32; border:1px solid #c8e6c9;
-                        border-radius:8px; margin-top:8px; padding-top:8px; }
-            QGroupBox::title { subcontrol-origin:margin; padding:0 6px; }
+        grp = QGroupBox(tr("inventory_inbound_title"))
+        grp.setStyleSheet(f"""
+            QGroupBox {{ font-weight:bold; color:{_C['success']}; border:1px solid {_C['success_border']};
+                        border-radius:8px; margin-top:8px; padding-top:8px; }}
+            QGroupBox::title {{ subcontrol-origin:margin; padding:0 6px; }}
         """)
         form = QFormLayout(grp)
         form.setSpacing(10)
@@ -81,9 +87,9 @@ class _InboundTab(QWidget):
         self.sp_qty.setValue(1)
         self.sp_unit_cost = _spin(dec=4)
 
-        self.lbl_total = QLabel("0.00  ج")
+        self.lbl_total = QLabel(f"0.00  {tr('currency_abbr')}")
         self.lbl_total.setStyleSheet(
-            "font-weight:bold; color:#2e7d32; font-size:14px;"
+            f"font-weight:bold; color:{_C['success']}; font-size:14px;"
         )
         self.sp_qty.valueChanged.connect(self._update_total)
         self.sp_unit_cost.valueChanged.connect(self._update_total)
@@ -106,39 +112,40 @@ class _InboundTab(QWidget):
                 self.cmb_payment.addItem(f"{acc['code']} — {acc['name']}", acc["id"])
 
         # اختيار الموردين افتراضياً
+        supplier_kw = tr("inventory_supplier_keyword").lower()
         for i in range(self.cmb_payment.count()):
             text = self.cmb_payment.itemText(i) or ""
-            if "211" in text or "مورد" in text.lower():
+            if "211" in text or supplier_kw in text.lower():
                 self.cmb_payment.setCurrentIndex(i)
                 break
 
         self.inp_notes = QLineEdit()
-        self.inp_notes.setPlaceholderText("ملاحظات...")
+        self.inp_notes.setPlaceholderText(tr("notes_placeholder"))
         self.inp_notes.setMinimumHeight(28)
 
-        form.addRow("الصنف:", self.cmb_item)
-        form.addRow("الكمية:", self.sp_qty)
-        form.addRow("سعر الوحدة:", self.sp_unit_cost)
-        form.addRow("الإجمالي:", self.lbl_total)
-        form.addRow("التاريخ:", self.dt_date)
-        form.addRow("حساب الدفع:", self.cmb_payment)
-        form.addRow("ملاحظات:", self.inp_notes)
+        form.addRow(f"{tr('item')}:", self.cmb_item)
+        form.addRow(f"{tr('quantity')}:", self.sp_qty)
+        form.addRow(f"{tr('unit_price')}:", self.sp_unit_cost)
+        form.addRow(f"{tr('total')}:", self.lbl_total)
+        form.addRow(f"{tr('date')}:", self.dt_date)
+        form.addRow(f"{tr('inventory_payment_account')}:", self.cmb_payment)
+        form.addRow(f"{tr('notes')}:", self.inp_notes)
 
-        btn_save = QPushButton("📥  تسجيل الاستلام + قيد محاسبي")
+        btn_save = QPushButton(f"📥  {tr('inventory_inbound_save')}")
         btn_save.setMinimumHeight(36)
-        btn_save.setStyleSheet("""
-            QPushButton { background:#2e7d32; color:white; font-weight:bold;
-                border-radius:6px; padding:0 18px; }
-            QPushButton:hover { background:#1b5e20; }
+        btn_save.setStyleSheet(f"""
+            QPushButton {{ background:{_C['success']}; color:{_C['bg_input']}; font-weight:bold;
+                border-radius:6px; padding:0 18px; }}
+            QPushButton:hover {{ background:{_C['success_hover']}; }}
         """)
         btn_save.clicked.connect(self._save)
         form.addRow(btn_save)
 
         root.addWidget(grp)
 
-        root.addWidget(section_label("─── آخر حركات الوارد ───"))
+        root.addWidget(section_label(tr("inventory_recent_inbound")))
         self.table = make_table(
-            ["التاريخ", "الصنف", "الكمية", "سعر الوحدة", "الإجمالي", "رقم القيد"],
+            [tr("date"), tr("item"), tr("quantity"), tr("unit_price"), tr("total"), tr("entry_no_col")],
             stretch_col=1
         )
         setup_table_columns(self.table,
@@ -149,13 +156,12 @@ class _InboundTab(QWidget):
         root.addWidget(self.table, stretch=1)
 
         self._load_moves()
-        bus.data_changed.connect(self._load_moves)
 
     def _reload_items(self):
         prev = self.cmb_item.currentData() if self.cmb_item.count() else None
         self.cmb_item.blockSignals(True)
         self.cmb_item.clear()
-        self.cmb_item.addItem("— اختر الصنف —", None)
+        self.cmb_item.addItem(tr("inventory_select_item_placeholder"), None)
         for inv in fetch_all_inventory(self.inv_conn):
             self.cmb_item.addItem(
                 f"{inv['name']}  ({inv['qty_on_hand']:,.4g} {inv['unit']})",
@@ -178,21 +184,21 @@ class _InboundTab(QWidget):
 
     def _update_total(self):
         total = self.sp_qty.value() * self.sp_unit_cost.value()
-        self.lbl_total.setText(f"{total:,.2f}  ج")
+        self.lbl_total.setText(f"{total:,.2f}  {tr('currency_abbr')}")
 
     def _save(self):
         inv_id  = self.cmb_item.currentData()
         pay_acc = self.cmb_payment.currentData()
         if not inv_id:
-            QMessageBox.warning(self, "تنبيه", "اختر الصنف أولاً")
+            QMessageBox.warning(self, tr("warning"), tr("inventory_select_item"))
             return
         if not pay_acc:
-            QMessageBox.warning(self, "تنبيه", "اختر حساب الدفع")
+            QMessageBox.warning(self, tr("warning"), tr("inventory_select_payment"))
             return
         qty       = self.sp_qty.value()
         unit_cost = self.sp_unit_cost.value()
         if qty <= 0 or unit_cost < 0:
-            QMessageBox.warning(self, "تنبيه", "أدخل كمية وسعر صحيحين")
+            QMessageBox.warning(self, tr("warning"), tr("inventory_valid_qty_cost"))
             return
         date  = self.dt_date.date().toString("yyyy-MM-dd")
         notes = self.inp_notes.text().strip() or None
@@ -202,12 +208,12 @@ class _InboundTab(QWidget):
                 inv_id, qty, unit_cost, date, pay_acc, notes
             )
             self.inp_notes.clear()
-            bus.data_changed.emit()
+            emit_company_data_changed()
             QMessageBox.information(
-                self, "تم", "✅ تم تسجيل الاستلام وإنشاء قيد محاسبي"
+                self, tr("done"), tr("inventory_purchase_success")
             )
         except Exception as e:
-            QMessageBox.critical(self, "خطأ", str(e))
+            QMessageBox.critical(self, tr("error"), str(e))
 
     def _load_moves(self):
         try:
@@ -236,3 +242,7 @@ class _InboundTab(QWidget):
             self.table.setItem(row, 4, QTableWidgetItem(f"{r['total_cost']:,.2f}"))
             ref = r["ref_entry_no"] if "ref_entry_no" in r.keys() else "—"
             self.table.setItem(row, 5, QTableWidgetItem(ref or "—"))
+
+    def closeEvent(self, event):
+        self._disconnect_bus()
+        super().closeEvent(event)

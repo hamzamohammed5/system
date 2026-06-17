@@ -21,7 +21,10 @@ from db.inventory.inventory_repo import (
 from ui.helpers import (
     make_table, setup_table_columns, section_label,
 )
-from ui.events import bus
+from ui.widgets.mixins.bus import BusConnectedMixin
+from ui.widgets.core.events import emit_company_data_changed
+from ui.widgets.core.i18n import tr
+from ui.theme import _C
 
 
 def _spin(max_=999999999, dec=4):
@@ -36,23 +39,27 @@ def _spin(max_=999999999, dec=4):
 # تبويب الصادر (صرف)
 # ══════════════════════════════════════════════════════════
 
-class _OutboundTab(QWidget):
+class _OutboundTab(QWidget, BusConnectedMixin):
     def __init__(self, inv_conn, parent=None):
         super().__init__(parent)
         self.inv_conn = inv_conn
         self._build()
-        bus.data_changed.connect(self._reload_items)
+        self._connect_bus(data=True)
+
+    def _on_data_changed(self):
+        self._reload_items()
+        self._load_moves()
 
     def _build(self):
         root = QVBoxLayout(self)
         root.setContentsMargins(12, 10, 12, 10)
         root.setSpacing(10)
 
-        grp = QGroupBox("📤  صرف / استهلاك مخزن")
-        grp.setStyleSheet("""
-            QGroupBox { font-weight:bold; color:#e65100; border:1px solid #ffe0b2;
-                        border-radius:8px; margin-top:8px; padding-top:8px; }
-            QGroupBox::title { subcontrol-origin:margin; padding:0 6px; }
+        grp = QGroupBox(tr("inventory_outbound_title"))
+        grp.setStyleSheet(f"""
+            QGroupBox {{ font-weight:bold; color:{_C['orange']}; border:1px solid {_C['orange_border']};
+                        border-radius:8px; margin-top:8px; padding-top:8px; }}
+            QGroupBox::title {{ subcontrol-origin:margin; padding:0 6px; }}
         """)
         form = QFormLayout(grp)
         form.setSpacing(10)
@@ -66,9 +73,9 @@ class _OutboundTab(QWidget):
         self.sp_qty = _spin(dec=4)
         self.sp_qty.setValue(1)
 
-        self.lbl_available = QLabel("الرصيد: —")
+        self.lbl_available = QLabel(tr("inventory_available_none"))
         self.lbl_available.setStyleSheet(
-            "color:#1565c0; font-weight:bold;"
+            f"color:{_C['accent']}; font-weight:bold;"
         )
 
         self.dt_date = QDateEdit(QDate.currentDate())
@@ -77,31 +84,31 @@ class _OutboundTab(QWidget):
         self.dt_date.setFixedWidth(130)
 
         self.inp_notes = QLineEdit()
-        self.inp_notes.setPlaceholderText("الغرض من الصرف...")
+        self.inp_notes.setPlaceholderText(tr("inventory_purpose"))
         self.inp_notes.setMinimumHeight(28)
 
-        form.addRow("الصنف:", self.cmb_item)
-        form.addRow("الكمية:", self.sp_qty)
-        form.addRow("الرصيد الحالي:", self.lbl_available)
-        form.addRow("التاريخ:", self.dt_date)
-        form.addRow("البيان:", self.inp_notes)
+        form.addRow(f"{tr('item')}:", self.cmb_item)
+        form.addRow(f"{tr('quantity')}:", self.sp_qty)
+        form.addRow(f"{tr('current_balance')}:", self.lbl_available)
+        form.addRow(f"{tr('date')}:", self.dt_date)
+        form.addRow(f"{tr('statement_col')}:", self.inp_notes)
 
-        btn_save = QPushButton("📤  تسجيل الصرف")
+        btn_save = QPushButton(f"📤  {tr('inventory_outbound_save')}")
         btn_save.setMinimumHeight(36)
-        btn_save.setStyleSheet("""
-            QPushButton { background:#e65100; color:white; font-weight:bold;
-                border-radius:6px; padding:0 18px; }
-            QPushButton:hover { background:#bf360c; }
+        btn_save.setStyleSheet(f"""
+            QPushButton {{ background:{_C['orange']}; color:{_C['bg_input']}; font-weight:bold;
+                border-radius:6px; padding:0 18px; }}
+            QPushButton:hover {{ background:{_C['orange_hover']}; }}
         """)
         btn_save.clicked.connect(self._save)
         form.addRow(btn_save)
 
         root.addWidget(grp)
 
-        root.addWidget(section_label("─── آخر حركات الصادر ───"))
+        root.addWidget(section_label(tr("inventory_recent_outbound")))
         self.table = make_table(
-            ["التاريخ", "الصنف", "الكمية", "متوسط التكلفة",
-             "إجمالي القيمة", "البيان"],
+            [tr("date"), tr("item"), tr("quantity"), tr("avg_cost"),
+             tr("total_value"), tr("statement_col")],
             stretch_col=1
         )
         setup_table_columns(self.table,
@@ -112,13 +119,12 @@ class _OutboundTab(QWidget):
         root.addWidget(self.table, stretch=1)
 
         self._load_moves()
-        bus.data_changed.connect(self._load_moves)
 
     def _reload_items(self):
         prev = self.cmb_item.currentData() if self.cmb_item.count() else None
         self.cmb_item.blockSignals(True)
         self.cmb_item.clear()
-        self.cmb_item.addItem("— اختر الصنف —", None)
+        self.cmb_item.addItem(tr("inventory_select_item_placeholder"), None)
         for inv in fetch_all_inventory(self.inv_conn):
             self.cmb_item.addItem(
                 f"{inv['name']}  ({inv['qty_on_hand']:,.4g} {inv['unit']})",
@@ -137,15 +143,15 @@ class _OutboundTab(QWidget):
             inv = fetch_inventory_item(self.inv_conn, inv_id)
             if inv:
                 self.lbl_available.setText(
-                    f"الرصيد: {inv['qty_on_hand']:,.4g} {inv['unit']}"
+                    tr("inventory_available_qty").format(qty=f"{inv['qty_on_hand']:,.4g}", unit=inv["unit"])
                 )
         else:
-            self.lbl_available.setText("الرصيد: —")
+            self.lbl_available.setText(tr("inventory_available_none"))
 
     def _save(self):
         inv_id = self.cmb_item.currentData()
         if not inv_id:
-            QMessageBox.warning(self, "تنبيه", "اختر الصنف أولاً")
+            QMessageBox.warning(self, tr("warning"), tr("inventory_select_item"))
             return
         qty   = self.sp_qty.value()
         date  = self.dt_date.date().toString("yyyy-MM-dd")
@@ -155,9 +161,9 @@ class _OutboundTab(QWidget):
                 self.inv_conn, inv_id, "out", qty, 0, date, notes
             )
             self.inp_notes.clear()
-            bus.data_changed.emit()
+            emit_company_data_changed()
         except ValueError as e:
-            QMessageBox.critical(self, "خطأ", str(e))
+            QMessageBox.critical(self, tr("error"), str(e))
 
     def _load_moves(self):
         try:
@@ -187,3 +193,7 @@ class _OutboundTab(QWidget):
             notes_item = QTableWidgetItem(r["notes"] or "—")
             notes_item.setToolTip(r["notes"] or "")
             self.table.setItem(row, 5, notes_item)
+
+    def closeEvent(self, event):
+        self._disconnect_bus()
+        super().closeEvent(event)

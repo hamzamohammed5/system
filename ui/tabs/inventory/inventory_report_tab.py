@@ -22,20 +22,26 @@ from db.inventory.inventory_repo import (
 from ui.helpers import (
     make_table, setup_table_columns, section_label,
 )
-from ui.events import bus
+from ui.widgets.mixins.bus import BusConnectedMixin
+from ui.widgets.core.events import emit_company_data_changed
+from ui.widgets.core.i18n import tr
+from ui.theme import _C
 
 
 # ══════════════════════════════════════════════════════════
 # تقرير المخزن
 # ══════════════════════════════════════════════════════════
 
-class _ReportTab(QWidget):
+class _ReportTab(QWidget, BusConnectedMixin):
     def __init__(self, inv_conn, parent=None):
         super().__init__(parent)
         self.inv_conn = inv_conn
         self._build()
         self._load()
-        bus.data_changed.connect(self._load)
+        self._connect_bus(data=True)
+
+    def _on_data_changed(self):
+        self._load()
 
     def _build(self):
         root = QVBoxLayout(self)
@@ -49,7 +55,7 @@ class _ReportTab(QWidget):
             f = QFrame()
             f.setStyleSheet(f"""
                 QFrame {{
-                    background: white;
+                    background: {_C['bg_surface']};
                     border-left: 4px solid {color};
                     border-radius: 6px;
                     padding: 4px;
@@ -59,7 +65,7 @@ class _ReportTab(QWidget):
             lay.setContentsMargins(12, 8, 12, 8)
             lbl_t = QLabel(label)
             lbl_t.setStyleSheet(
-                "font-size:10px; color:#888;"
+                f"font-size:10px; color:{_C['text_muted']};"
                 "background:transparent; border:none;"
             )
             lbl_v = QLabel("─")
@@ -72,17 +78,17 @@ class _ReportTab(QWidget):
             cards_row.addWidget(f, stretch=1)
             return lbl_v
 
-        self.lbl_total_items = _card("عدد الأصناف",           "#1565c0")
-        self.lbl_total_value = _card("إجمالي قيمة المخزن",    "#2e7d32")
-        self.lbl_low_stock   = _card("أصناف تحت الحد الأدنى", "#c62828")
-        self.lbl_zero_stock  = _card("أصناف نفدت",            "#e65100")
+        self.lbl_total_items = _card(tr("inventory_total_items_card"), _C["info"])
+        self.lbl_total_value = _card(tr("inventory_total_value_card"), _C["success"])
+        self.lbl_low_stock   = _card(tr("inventory_low_stock_card"),   _C["stock_critical_fg"])
+        self.lbl_zero_stock  = _card(tr("inventory_zero_stock_card"),  _C["stock_low_fg"])
 
         root.addLayout(cards_row)
 
-        root.addWidget(section_label("─── تقرير مخزن تفصيلي ───"))
+        root.addWidget(section_label(tr("inventory_detailed_report_header")))
         self.table = make_table(
-            ["الصنف", "الوحدة", "الرصيد", "الحد الأدنى",
-             "متوسط التكلفة", "القيمة الإجمالية", "الحالة"],
+            [tr("item"), tr("unit"), tr("balance"), tr("inventory_min_qty_label"),
+             tr("avg_cost"), tr("total_value"), tr("status")],
             stretch_col=0
         )
         setup_table_columns(self.table,
@@ -112,16 +118,16 @@ class _ReportTab(QWidget):
             self.table.setItem(r, 5, QTableWidgetItem(f"{inv['total_value']:,.2f}"))
 
             if inv["qty_on_hand"] == 0:
-                status = "❌ نفد"
-                color  = QColor("#c62828")
+                status = tr("inventory_status_out")
+                color  = QColor(_C["stock_critical_fg"])
                 zero_count += 1
             elif inv["qty_on_hand"] <= inv["qty_min"]:
-                status = "⚠️ منخفض"
-                color  = QColor("#e65100")
+                status = tr("inventory_status_low")
+                color  = QColor(_C["stock_low_fg"])
                 low_count += 1
             else:
-                status = "✅ متوفر"
-                color  = QColor("#2e7d32")
+                status = tr("inventory_status_ok")
+                color  = QColor(_C["stock_ok_fg"])
 
             status_item = QTableWidgetItem(status)
             status_item.setForeground(color)
@@ -129,7 +135,7 @@ class _ReportTab(QWidget):
             total_val += inv["total_value"]
 
         self.lbl_total_items.setText(str(len(rows)))
-        self.lbl_total_value.setText(f"{total_val:,.2f}  ج")
+        self.lbl_total_value.setText(f"{total_val:,.2f}  {tr('currency_abbr')}")
         self.lbl_low_stock.setText(str(low_count))
         self.lbl_zero_stock.setText(str(zero_count))
 
@@ -150,15 +156,15 @@ class _MovesPanel(QWidget):
         root.setContentsMargins(12, 8, 12, 12)
         root.setSpacing(6)
 
-        self.lbl_title = QLabel("اختر صنفاً لعرض حركاته")
+        self.lbl_title = QLabel(tr("inventory_select_item_for_moves"))
         self.lbl_title.setStyleSheet(
-            "font-weight:bold; color:#1565c0; font-size:13px;"
+            f"font-weight:bold; color:{_C['accent']}; font-size:13px;"
         )
         root.addWidget(self.lbl_title)
 
         self.table = make_table(
-            ["التاريخ", "النوع", "الكمية", "سعر الوحدة",
-             "الإجمالي", "رقم القيد", "ملاحظات"],
+            [tr("date"), tr("type_col"), tr("quantity"), tr("unit_price"),
+             tr("total"), tr("entry_no_col"), tr("notes")],
             stretch_col=6
         )
         setup_table_columns(self.table,
@@ -174,14 +180,23 @@ class _MovesPanel(QWidget):
         if not inv:
             return
         self.lbl_title.setText(
-            f"📦  حركات: {inv['name']}"
-            f"  (رصيد: {inv['qty_on_hand']:,.4g} {inv['unit']})"
+            tr("inventory_item_moves_title_fmt").format(
+                name=inv["name"], qty=f"{inv['qty_on_hand']:,.4g}", unit=inv["unit"]
+            )
         )
         moves = fetch_inventory_moves(self.inv_conn, inv_id)
         self.table.setRowCount(0)
 
-        type_ar    = {"in": "📥 وارد", "out": "📤 صادر", "adjust": "⚖️ تسوية"}
-        type_color = {"in": "#2e7d32", "out": "#c62828",  "adjust": "#1565c0"}
+        type_ar    = {
+            "in":     tr("move_type_in"),
+            "out":    tr("move_type_out"),
+            "adjust": tr("move_type_adjust"),
+        }
+        type_color = {
+            "in":     _C["stock_ok_fg"],
+            "out":    _C["stock_critical_fg"],
+            "adjust": _C["journal_dr_accent"],
+        }
 
         for m in moves:
             r = self.table.rowCount()
@@ -191,7 +206,7 @@ class _MovesPanel(QWidget):
                 type_ar.get(m["move_type"], m["move_type"])
             )
             type_item.setForeground(
-                QColor(type_color.get(m["move_type"], "#333"))
+                QColor(type_color.get(m["move_type"], _C["text_primary"]))
             )
             self.table.setItem(r, 1, type_item)
             self.table.setItem(r, 2, QTableWidgetItem(f"{m['qty']:,.4g}"))
@@ -205,4 +220,4 @@ class _MovesPanel(QWidget):
 
     def clear(self):
         self.table.setRowCount(0)
-        self.lbl_title.setText("اختر صنفاً لعرض حركاته")
+        self.lbl_title.setText(tr("inventory_select_item_for_moves"))

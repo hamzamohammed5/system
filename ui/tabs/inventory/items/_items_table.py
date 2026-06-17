@@ -16,10 +16,13 @@ from ui.helpers import (
     make_table, setup_table_columns, buttons_row,
     section_label, danger_button, confirm_delete,
 )
-from ui.events import bus
+from ui.widgets.mixins.bus import BusConnectedMixin
+from ui.widgets.core.events import emit_company_data_changed
+from ui.widgets.core.i18n import tr
+from ui.theme import _C
 
 
-class _ItemsTable(QWidget):
+class _ItemsTable(QWidget, BusConnectedMixin):
     def __init__(self, inv_conn, form, on_select, parent=None):
         super().__init__(parent)
         self.inv_conn   = inv_conn
@@ -27,17 +30,20 @@ class _ItemsTable(QWidget):
         self._on_select = on_select
         self._build()
         self._load()
-        bus.data_changed.connect(self._load)
+        self._connect_bus(data=True)
+
+    def _on_data_changed(self):
+        self._load()
 
     def _build(self):
         root = QVBoxLayout(self)
         root.setContentsMargins(12, 8, 12, 12)
         root.setSpacing(6)
-        root.addWidget(section_label("─── أصناف المخزن ───"))
+        root.addWidget(section_label(tr("inventory_items_header")))
 
         self.table = make_table(
-            ["ID", "الصنف", "الوحدة", "الرصيد", "الحد الأدنى",
-             "متوسط التكلفة", "إجمالي القيمة"],
+            [tr("id_col"), tr("item"), tr("unit"), tr("balance"), tr("inventory_min_qty_label"),
+             tr("avg_cost"), tr("total_value")],
             stretch_col=1
         )
         setup_table_columns(self.table,
@@ -50,8 +56,8 @@ class _ItemsTable(QWidget):
         )
         root.addWidget(self.table, stretch=1)
 
-        btn_edit = QPushButton("✏️  تعديل")
-        btn_del  = danger_button("🗑️  حذف")
+        btn_edit = QPushButton(f"✏️  {tr('edit')}")
+        btn_del  = danger_button(f"🗑️  {tr('delete')}")
         for btn in (btn_edit, btn_del):
             btn.setMinimumHeight(30)
         btn_edit.clicked.connect(self._edit)
@@ -78,8 +84,8 @@ class _ItemsTable(QWidget):
 
             qty_item = QTableWidgetItem(f"{inv['qty_on_hand']:,.4g}")
             if inv["qty_on_hand"] <= inv["qty_min"]:
-                qty_item.setForeground(QColor("#c62828"))
-                qty_item.setToolTip(f"⚠️ تحت الحد الأدنى ({inv['qty_min']:,.4g})")
+                qty_item.setForeground(QColor(_C["stock_critical_fg"]))
+                qty_item.setToolTip(tr("inventory_below_min_tooltip").format(min=f"{inv['qty_min']:,.4g}"))
             self.table.setItem(r, 3, qty_item)
 
             self.table.setItem(r, 4, QTableWidgetItem(f"{inv['qty_min']:,.4g}"))
@@ -89,16 +95,20 @@ class _ItemsTable(QWidget):
     def _edit(self):
         inv_id = self._selected_id()
         if not inv_id:
-            QMessageBox.information(self, "تنبيه", "اختر صنفاً أولاً")
+            QMessageBox.information(self, tr("warning"), tr("inventory_select_item"))
             return
         self._form.load_for_edit(inv_id)
 
     def _delete(self):
         inv_id = self._selected_id()
         if not inv_id:
-            QMessageBox.information(self, "تنبيه", "اختر صنفاً أولاً")
+            QMessageBox.information(self, tr("warning"), tr("inventory_select_item"))
             return
         inv = fetch_inventory_item(self.inv_conn, inv_id)
         if confirm_delete(self, inv["name"]):
             delete_inventory_item(self.inv_conn, inv_id)
-            bus.data_changed.emit()
+            emit_company_data_changed()
+
+    def closeEvent(self, event):
+        self._disconnect_bus()
+        super().closeEvent(event)
