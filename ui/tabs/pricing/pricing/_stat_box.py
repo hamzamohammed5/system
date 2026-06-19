@@ -7,24 +7,32 @@ ui/tabs/pricing/pricing/_stat_box.py
 from PyQt5.QtWidgets import QFrame, QVBoxLayout, QLabel
 from PyQt5.QtCore import Qt
 
+from ui.theme import _C
 
-def stat_box(label: str, color: str = "#1565c0") -> tuple:
-    """يرجع (QFrame, QLabel_value) — بطاقة إحصائية."""
+
+def stat_box(label: str, color_key: str = "accent") -> tuple:
+    """يرجع (QFrame, QLabel_value) — بطاقة إحصائية.
+
+    Args:
+        label:     النص المعروض كعنوان البطاقة (يأتي من tr() خارجياً).
+        color_key: مفتاح اللون في _C (افتراضي: "accent").
+    """
+    color = _C[color_key]
     frame = QFrame()
-    frame.setStyleSheet("""
-        QFrame {
-            background: white;
-            border: 1px solid #e0e0e0;
+    frame.setStyleSheet(f"""
+        QFrame {{
+            background: {_C['bg_surface']};
+            border: 1px solid {_C['border']};
             border-radius: 6px;
             padding: 4px;
-        }
+        }}
     """)
     lay = QVBoxLayout(frame)
     lay.setContentsMargins(10, 6, 10, 6)
     lay.setSpacing(2)
     lbl_title = QLabel(label)
     lbl_title.setStyleSheet(
-        "font-size:10px; color:#888; background:transparent; border:none;"
+        f"font-size:10px; color:{_C['text_muted']}; background:transparent; border:none;"
     )
     lbl_title.setAlignment(Qt.AlignCenter)
     lbl_val = QLabel("─")

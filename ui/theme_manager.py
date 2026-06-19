@@ -74,8 +74,15 @@ _LIGHT_THEME: Dict[str, str] = {
     "sidebar_active":"#3A3835",
     "sidebar_border":"#2E2D2A",
     "danger":        "#C0392B",
+    "danger_strong": "#e53935",   # أحمر أعمق لأيقونات التحذير
     "danger_bg":     "#FDF0EF",
     "danger_border": "#E8A39D",
+    "text_neutral":  "#555555",   # رمادي محايد للنصوص الثانوية
+    "border_light":  "#cccccc",   # حد فاتح للفواصل
+    "input_accent_border": "#c5cae9",  # حد حقل بحث indigo
+    "row_alt_bg":    "#fafafa",   # خلفية صف متبادلة
+    "row_alt_border":"#e8e8e8",   # حد صف متبادل
+    "scroll_warm_bg":"#fffaf5",   # خلفية scroll ذهبي فاتح
     "success":       "#2E7D52",
     "success_bg":    "#EDF7F2",
     "success_border":"#8EC5A8",
@@ -182,6 +189,23 @@ _LIGHT_THEME: Dict[str, str] = {
     "acc_type_drawings":      "#4e342e",
     # ── Separator / muted ────────────────────────────────────
     "text_separator":         "#78909c",
+    
+    # ── Shared / Published items ──────────────────────────────
+    "shared_item_fg":      "#6a1b9a",   # نص العنصر المشترك
+    "shared_item_bg":      "#f3e5f5",   # خلفية صف العنصر المشترك
+    "published_item_fg":   "#0891b2",   # نص العنصر المنشور محلياً
+    "published_item_bg":   "#e0f7fa",   # خلفية صف العنصر المنشور
+    
+    # ── Inventory Stock Levels ────────────────────────────────
+    "stock_critical_fg":   "#c62828",   # صفر مخزون (نص)
+    "stock_low_fg":        "#e65100",   # تحت الحد الأدنى (نص)
+    "stock_ok_fg":         "#2e7d32",   # مخزون كافٍ (نص)
+
+    # ── Action button hover variants ──────────────────────────
+    "success_hover":       "#1b5e38",
+    "danger_hover":        "#ffcdd2",
+    "warning_hover":       "#ffecb3",
+    "orange_hover":        "#bf360c",
 }
 
 _DARK_THEME: Dict[str, str] = {
@@ -212,8 +236,15 @@ _DARK_THEME: Dict[str, str] = {
     "sidebar_active":"#242220",
     "sidebar_border":"#181614",
     "danger":        "#E57373",
+    "danger_strong": "#ef5350",   # أحمر أعمق (dark mode)
     "danger_bg":     "#2A1010",
     "danger_border": "#5A2020",
+    "text_neutral":  "#888888",   # رمادي محايد (dark)
+    "border_light":  "#3A3A3A",   # حد فاتح (dark)
+    "input_accent_border": "#5c6bc0",  # حد حقل بحث indigo (dark)
+    "row_alt_bg":    "#1E1E1E",   # خلفية صف متبادلة (dark)
+    "row_alt_border":"#2A2A2A",   # حد صف متبادل (dark)
+    "scroll_warm_bg":"#1A1208",   # خلفية scroll ذهبي (dark)
     "success":       "#66BB8A",
     "success_bg":    "#0A2018",
     "success_border":"#1A4030",
@@ -333,6 +364,23 @@ _DARK_THEME: Dict[str, str] = {
     # ── Investor link ─────────────────────────────────────────
     # investor_link_bg == warning_bg (#2A2000), investor_link_border == warning_border (#4A3800)
     # investor_link_text == warning (#FFD54F)
+    
+    # ── Shared / Published items ──────────────────────────────
+    "shared_item_fg":      "#CE93D8",
+    "shared_item_bg":      "#1a0828",
+    "published_item_fg":   "#26C6DA",
+    "published_item_bg":   "#0a2830",
+    
+    # ── Inventory Stock Levels ────────────────────────────────
+    "stock_critical_fg":   "#E57373",
+    "stock_low_fg":        "#FFB74D",
+    "stock_ok_fg":         "#66BB8A",
+
+    # ── Action button hover variants ──────────────────────────
+    "success_hover":       "#1A4030",
+    "danger_hover":        "#5A2020",
+    "warning_hover":       "#4A3800",
+    "orange_hover":        "#CC5500",
 }
 
 THEMES: Dict[str, Dict[str, str]] = {

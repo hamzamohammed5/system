@@ -10,18 +10,15 @@ from PyQt5.QtWidgets import (
 from PyQt5.QtCore import Qt
 
 from db.pricing.offers_repo import fetch_offer, delete_offer
-from ui.helpers     import confirm_delete
+from ui.helpers import confirm_delete
 from ui.widgets.shared.category_manager import CategoryManager
-from ui.events      import bus
+from ui.widgets.core.i18n import tr
+from ui.widgets.core.events import emit_company_data_changed
+from ui.theme import _C
 
 from .offer_form    import _OfferForm
 from .offer_details import _OfferDetails
 from .offers_table  import _OffersTable
-
-_SPLITTER_STYLE = """
-    QSplitter::handle { background: #e0e0e0; border-top: 1px solid #ccc; }
-    QSplitter::handle:hover { background: #ffe0b2; }
-"""
 
 
 class OffersTab(QWidget):
@@ -41,24 +38,35 @@ class OffersTab(QWidget):
         root.setContentsMargins(0, 0, 0, 0)
 
         tabs = QTabWidget()
-        tabs.setStyleSheet("""
-            QTabBar::tab:selected { color: #e65100; border-top: 2px solid #e65100; }
+        tabs.setStyleSheet(f"""
+            QTabBar::tab:selected {{
+                color: {_C['orange']};
+                border-top: 2px solid {_C['orange']};
+            }}
         """)
 
         main_widget = QWidget()
         main_lay = QVBoxLayout(main_widget)
         main_lay.setContentsMargins(0, 0, 0, 0)
 
+        _splitter_style = f"""
+            QSplitter::handle {{
+                background: {_C['border']};
+                border-top: 1px solid {_C['border_light']};
+            }}
+            QSplitter::handle:hover {{ background: {_C['orange_bg']}; }}
+        """
+
         splitter = QSplitter(Qt.Vertical)
         splitter.setHandleWidth(6)
-        splitter.setStyleSheet(_SPLITTER_STYLE)
+        splitter.setStyleSheet(_splitter_style)
 
         self._form = _OfferForm(self._live_conn())
         splitter.addWidget(self._form)
 
         bottom = QSplitter(Qt.Horizontal)
         bottom.setHandleWidth(6)
-        bottom.setStyleSheet(_SPLITTER_STYLE)
+        bottom.setStyleSheet(_splitter_style)
 
         self._offers_table = _OffersTable(
             self._live_conn(),
@@ -77,22 +85,23 @@ class OffersTab(QWidget):
 
         main_lay.addWidget(splitter)
 
-        tabs.addTab(main_widget,
-                    "🎁  العروض")
-        tabs.addTab(CategoryManager(self._live_conn(), scope="all"),
-                    "🏷️  تصنيفات العروض")
+        tabs.addTab(main_widget, tr("offer_products_tab"))
+        tabs.addTab(
+            CategoryManager(self._live_conn(), scope="all"),
+            tr("offer_categories_tab"),
+        )
 
         root.addWidget(tabs)
 
     def _edit_offer(self, offer_id):
         if offer_id is None:
-            QMessageBox.information(self, "تنبيه", "اختر عرضاً أولاً")
+            QMessageBox.information(self, tr("warning"), tr("offer_select_first"))
             return
         self._form.load_offer(offer_id)
 
     def _delete_offer(self, offer_id):
         if offer_id is None:
-            QMessageBox.information(self, "تنبيه", "اختر عرضاً أولاً")
+            QMessageBox.information(self, tr("warning"), tr("offer_select_first"))
             return
         try:
             conn = self._live_conn()
@@ -106,7 +115,7 @@ class OffersTab(QWidget):
                 self._form.reset()
             delete_offer(conn, offer_id)
             self._details.clear()
-            bus.data_changed.emit()
+            emit_company_data_changed()
 
     def _show_details(self, offer_id):
         self._details.load(offer_id)

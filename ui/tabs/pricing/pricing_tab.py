@@ -11,7 +11,8 @@ PricingTab — التبويب الرئيسي للتسعير.
 
 from PyQt5.QtWidgets import QWidget, QVBoxLayout, QTabWidget
 
-from db.shared.connection import get_connection
+from db.companies.company_state import company_state
+from ui.widgets.core.i18n import tr
 from ui.widgets.shared.category_manager import CategoryManager
 
 from .pricing._pricing_panel import _PricingPanel
@@ -20,17 +21,15 @@ from .pricing._pricing_panel import _PricingPanel
 class PricingTab(QWidget):
     def __init__(self, parent=None):
         super().__init__(parent)
-        self.conn = get_connection()
         self._build()
+
+    def _live_conn(self):
+        return company_state.get_erp_conn()
 
     def _build(self):
         root = QVBoxLayout(self)
         root.setContentsMargins(0, 0, 0, 0)
         tabs = QTabWidget()
-        tabs.addTab(_PricingPanel(self.conn),                  "💰  الأسعار")
-        tabs.addTab(CategoryManager(self.conn, scope="final"), "🏷️  التصنيفات")
+        tabs.addTab(_PricingPanel(self._live_conn()),                  tr("pricing_prices_tab"))
+        tabs.addTab(CategoryManager(self._live_conn(), scope="final"), tr("pricing_categories_tab"))
         root.addWidget(tabs)
-
-    def closeEvent(self, event):
-        self.conn.close()
-        super().closeEvent(event)

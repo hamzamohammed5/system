@@ -13,33 +13,10 @@ from PyQt5.QtCore import Qt
 from PyQt5.QtGui  import QColor
 
 from db.pricing.offers_repo import calc_offer_summary
+from ui.widgets.core.i18n import tr
+from ui.theme import _C
 
-
-def _stat_box(title: str, color: str = "#1565c0"):
-    frame = QFrame()
-    frame.setStyleSheet("""
-        QFrame {
-            background: white;
-            border: 1px solid #e0e0e0;
-            border-radius: 6px;
-            padding: 4px;
-        }
-    """)
-    lay = QVBoxLayout(frame)
-    lay.setContentsMargins(10, 6, 10, 6)
-    lay.setSpacing(2)
-    lbl_t = QLabel(title)
-    lbl_t.setStyleSheet("font-size:10px; color:#888; background:transparent; border:none;")
-    lbl_t.setAlignment(Qt.AlignCenter)
-    lbl_v = QLabel("─")
-    lbl_v.setStyleSheet(
-        f"font-size:14px; font-weight:bold; color:{color};"
-        "background:transparent; border:none;"
-    )
-    lbl_v.setAlignment(Qt.AlignCenter)
-    lay.addWidget(lbl_t)
-    lay.addWidget(lbl_v)
-    return frame, lbl_v
+from ..pricing._stat_box import stat_box
 
 
 class _OfferDetails(QFrame):
@@ -47,12 +24,12 @@ class _OfferDetails(QFrame):
     def __init__(self, conn, parent=None):
         super().__init__(parent)
         self.conn = conn
-        self.setStyleSheet("""
-            QFrame {
-                background: white;
-                border: 1px solid #ffe0b2;
+        self.setStyleSheet(f"""
+            QFrame {{
+                background: {_C['bg_surface']};
+                border: 1px solid {_C['orange_border']};
                 border-radius: 8px;
-            }
+            }}
         """)
         self._build()
 
@@ -73,9 +50,9 @@ class _OfferDetails(QFrame):
         root.setContentsMargins(12, 10, 12, 10)
         root.setSpacing(8)
 
-        self.lbl_title = QLabel("اختر عرضاً لعرض تفاصيله")
+        self.lbl_title = QLabel(tr("offer_details_placeholder"))
         self.lbl_title.setStyleSheet(
-            "font-weight:bold; color:#e65100; font-size:13px;"
+            f"font-weight:bold; color:{_C['orange']}; font-size:13px;"
             "background:transparent; border:none;"
         )
         self.lbl_title.setAlignment(Qt.AlignCenter)
@@ -83,11 +60,11 @@ class _OfferDetails(QFrame):
 
         stats_row = QHBoxLayout()
         stats_row.setSpacing(6)
-        f1, self.sl_listed = _stat_box("إجمالي السعر قبل الخصم", "#1565c0")
-        f2, self.sl_disc   = _stat_box("قيمة الخصم",             "#e53935")
-        f3, self.sl_sell   = _stat_box("سعر البيع النهائي",      "#2e7d32")
-        f4, self.sl_cost   = _stat_box("إجمالي التكلفة",         "#555555")
-        f5, self.sl_profit = _stat_box("الربح",                   "#1b5e20")
+        f1, self.sl_listed = stat_box(tr("offer_total_before_disc"), "journal_dr_accent")
+        f2, self.sl_disc   = stat_box(tr("offer_discount_value"),    "danger_strong")
+        f3, self.sl_sell   = stat_box(tr("offer_sell_price"),        "success")
+        f4, self.sl_cost   = stat_box(tr("offer_total_cost"),        "text_neutral")
+        f5, self.sl_profit = stat_box(tr("offer_profit"),            "success")
         for f in (f1, f2, f3, f4, f5):
             stats_row.addWidget(f, stretch=1)
         root.addLayout(stats_row)
@@ -95,8 +72,10 @@ class _OfferDetails(QFrame):
         self.table = QTableWidget()
         self.table.setColumnCount(7)
         self.table.setHorizontalHeaderLabels([
-            "المنتج", "التصنيف", "الكمية",
-            "تكلفة/وحدة", "سعر/وحدة", "إجمالي السطر", "الربح/سطر"
+            tr("offer_col_product"),   tr("offer_col_category"),
+            tr("offer_col_qty"),       tr("offer_col_unit_cost"),
+            tr("offer_col_unit_price"),tr("offer_col_line_total"),
+            tr("offer_col_line_profit"),
         ])
         self.table.setEditTriggers(QAbstractItemView.NoEditTriggers)
         self.table.setSelectionBehavior(QAbstractItemView.SelectRows)
@@ -113,7 +92,7 @@ class _OfferDetails(QFrame):
 
         self.lbl_notes = QLabel("")
         self.lbl_notes.setStyleSheet(
-            "font-size:10px; color:#999; background:transparent; border:none;"
+            f"font-size:10px; color:{_C['text_muted']}; background:transparent; border:none;"
         )
         self.lbl_notes.setWordWrap(True)
         root.addWidget(self.lbl_notes)
@@ -127,10 +106,17 @@ class _OfferDetails(QFrame):
         if not s:
             return
 
-        cat_part = f"  │  🏷 {s['category_name']}" if s.get("category_name") else ""
+        cat_part = (
+            tr("offer_details_category_part").format(category=s["category_name"])
+            if s.get("category_name") else ""
+        )
         self.lbl_title.setText(
-            f"📋  {s['offer_name']}  —  خصم {s['discount']:.1f}%"
-            f"  │  {s['created_at']}{cat_part}"
+            tr("offer_details_title").format(
+                name=s["offer_name"],
+                discount=s["discount"],
+                created_at=s["created_at"],
+                category=cat_part,
+            )
         )
 
         self.table.setRowCount(0)
@@ -138,60 +124,65 @@ class _OfferDetails(QFrame):
             r = self.table.rowCount()
             self.table.insertRow(r)
 
-            icon = "🏭" if line["item_type"] == "final" else "🔧"
-            self.table.setItem(r, 0, QTableWidgetItem(f"{icon} {line['item_name']}"))
-            self.table.setItem(r, 1, QTableWidgetItem(line["category_name"] or "—"))
+            icon_key = "offer_item_final_icon" if line["item_type"] == "final" else "offer_item_semi_icon"
+            self.table.setItem(r, 0, QTableWidgetItem(
+                tr(icon_key).format(name=line["item_name"])
+            ))
+            self.table.setItem(r, 1, QTableWidgetItem(line["category_name"] or tr("dash")))
             self.table.setItem(r, 2, QTableWidgetItem(f"{line['qty']:.4g}"))
 
             cost_item = QTableWidgetItem(f"{line['unit_cost']:.2f}")
-            cost_item.setForeground(QColor("#1565c0"))
+            cost_item.setForeground(QColor(_C["journal_dr_accent"]))
             self.table.setItem(r, 3, cost_item)
 
             if line["has_pricing"]:
                 price_item = QTableWidgetItem(f"{line['unit_price']:.2f}")
-                price_item.setForeground(QColor("#2e7d32"))
+                price_item.setForeground(QColor(_C["success"]))
             else:
                 price_item = QTableWidgetItem("─ ⚠️")
-                price_item.setForeground(QColor("#e65100"))
+                price_item.setForeground(QColor(_C["orange"]))
             self.table.setItem(r, 4, price_item)
 
             if line["has_pricing"]:
                 line_item = QTableWidgetItem(f"{line['line_listed']:.2f}")
-                line_item.setForeground(QColor("#e65100"))
+                line_item.setForeground(QColor(_C["orange"]))
             else:
-                line_item = QTableWidgetItem("─")
+                line_item = QTableWidgetItem(tr("dash"))
             self.table.setItem(r, 5, line_item)
 
             if line["has_pricing"]:
                 line_profit = (line["unit_price"] - line["unit_cost"]) * line["qty"]
                 lp_item = QTableWidgetItem(f"{line_profit:.2f}")
                 lp_item.setForeground(
-                    QColor("#1b5e20") if line_profit >= 0 else QColor("#b71c1c")
+                    QColor(_C["success"]) if line_profit >= 0 else QColor(_C["danger"])
                 )
                 self.table.setItem(r, 6, lp_item)
             else:
-                self.table.setItem(r, 6, QTableWidgetItem("─"))
+                self.table.setItem(r, 6, QTableWidgetItem(tr("dash")))
 
         disc_pct = s["discount"]
         disc_amt = s["total_listed"] - s["sell_price"]
 
-        self.sl_listed.setText(f"{s['total_listed']:.2f}  ج")
-        self.sl_disc.setText(f"{disc_amt:.2f}  ج  ({disc_pct:.1f}%)")
-        self.sl_sell.setText(f"{s['sell_price']:.2f}  ج")
-        self.sl_cost.setText(f"{s['total_cost']:.2f}  ج")
+        self.sl_listed.setText(tr("amount_fmt").format(amount=s["total_listed"]))
+        self.sl_disc.setText(tr("amount_disc_fmt").format(amount=disc_amt, pct=disc_pct))
+        self.sl_sell.setText(tr("amount_fmt").format(amount=s["sell_price"]))
+        self.sl_cost.setText(tr("amount_fmt").format(amount=s["total_cost"]))
 
         profit = s["profit"]
-        color  = "#1b5e20" if profit >= 0 else "#b71c1c"
-        self.sl_profit.setText(f"{profit:.2f}  ج")
+        profit_key = "success" if profit >= 0 else "danger"
+        self.sl_profit.setText(tr("amount_fmt").format(amount=profit))
         self.sl_profit.setStyleSheet(
-            f"font-size:14px; font-weight:bold; color:{color};"
+            f"font-size:14px; font-weight:bold; color:{_C[profit_key]};"
             "background:transparent; border:none;"
         )
 
-        self.lbl_notes.setText(f"📝 {s['notes']}" if s.get("notes") else "")
+        notes = s.get("notes", "")
+        self.lbl_notes.setText(
+            tr("offer_details_notes_prefix").format(notes=notes) if notes else ""
+        )
 
     def clear(self):
-        self.lbl_title.setText("اختر عرضاً لعرض تفاصيله")
+        self.lbl_title.setText(tr("offer_details_placeholder"))
         self.table.setRowCount(0)
         for lbl in (self.sl_listed, self.sl_disc, self.sl_sell,
                     self.sl_cost, self.sl_profit):

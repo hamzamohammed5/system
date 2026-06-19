@@ -10,9 +10,11 @@ from PyQt5.QtWidgets import (
 )
 from PyQt5.QtCore import Qt
 
-from db.shared.items_repo  import fetch_items_by_type
+from db.shared.items_repo import fetch_items_by_type
 from models.costing import calc_cost
-from ui.events      import bus
+from ui.widgets.mixins.bus import BusConnectedMixin
+from ui.widgets.core.i18n import tr
+from ui.theme import _C
 
 
 def _spin(max_=999999, dec=2):
@@ -23,7 +25,7 @@ def _spin(max_=999999, dec=2):
     return s
 
 
-class _OfferItemRow(QFrame):
+class _OfferItemRow(QFrame, BusConnectedMixin):
     """صف منتج واحد داخل فورم العرض."""
 
     def __init__(self, conn, on_remove, on_change, parent=None):
@@ -33,7 +35,7 @@ class _OfferItemRow(QFrame):
         self._on_change = on_change
         self._build()
         self._load_products()
-        bus.data_changed.connect(self._reload_products)
+        self._connect_bus(data=True)
 
     # ── connection صالح دايماً ────────────────────────────
     def _live_conn(self):
@@ -46,28 +48,38 @@ class _OfferItemRow(QFrame):
         from db.companies.company_state import company_state
         return company_state.get_erp_conn()
 
+    def _on_data_changed(self):
+        self._reload_products()
+
+    def closeEvent(self, event):
+        self._disconnect_bus()
+        super().closeEvent(event)
+
     def _build(self):
-        self.setStyleSheet("""
-            QFrame {
-                background: #fafafa;
-                border: 1px solid #e8e8e8;
+        self.setStyleSheet(f"""
+            QFrame {{
+                background: {_C['row_alt_bg']};
+                border: 1px solid {_C['row_alt_border']};
                 border-radius: 6px;
-            }
+            }}
         """)
         lay = QHBoxLayout(self)
         lay.setContentsMargins(8, 6, 8, 6)
         lay.setSpacing(8)
 
         self.inp_search = QLineEdit()
-        self.inp_search.setPlaceholderText("🔍 بحث...")
+        self.inp_search.setPlaceholderText(tr("offer_select_product_search"))
         self.inp_search.setFixedWidth(120)
         self.inp_search.setMinimumHeight(28)
-        self.inp_search.setStyleSheet("""
-            QLineEdit {
-                background: white; border: 1px solid #c5cae9;
-                border-radius: 4px; padding: 2px 6px; font-size: 11px;
-            }
-            QLineEdit:focus { border-color: #e65100; }
+        self.inp_search.setStyleSheet(f"""
+            QLineEdit {{
+                background: {_C['bg_input']};
+                border: 1px solid {_C['input_accent_border']};
+                border-radius: 4px;
+                padding: 2px 6px;
+                font-size: 11px;
+            }}
+            QLineEdit:focus {{ border-color: {_C['orange']}; }}
         """)
         self.inp_search.textChanged.connect(
             lambda t: self._load_products(filter_text=t.strip())
@@ -81,18 +93,19 @@ class _OfferItemRow(QFrame):
         self.lbl_cost = QLabel("─")
         self.lbl_cost.setFixedWidth(72)
         self.lbl_cost.setStyleSheet(
-            "color:#1565c0; font-size:11px; background:transparent; border:none;"
+            f"color:{_C['journal_dr_accent']}; font-size:11px;"
+            "background:transparent; border:none;"
         )
         self.lbl_cost.setAlignment(Qt.AlignCenter)
-        self.lbl_cost.setToolTip("تكلفة الإنتاج / وحدة")
+        self.lbl_cost.setToolTip(tr("offer_col_unit_cost"))
 
         self.lbl_listed = QLabel("─")
         self.lbl_listed.setFixedWidth(72)
         self.lbl_listed.setStyleSheet(
-            "color:#2e7d32; font-size:11px; background:transparent; border:none;"
+            f"color:{_C['success']}; font-size:11px; background:transparent; border:none;"
         )
         self.lbl_listed.setAlignment(Qt.AlignCenter)
-        self.lbl_listed.setToolTip("سعر التسعير / وحدة")
+        self.lbl_listed.setToolTip(tr("offer_col_unit_price"))
 
         self.sp_qty = _spin(99999, 4)
         self.sp_qty.setValue(1.0)
@@ -102,37 +115,37 @@ class _OfferItemRow(QFrame):
         self.lbl_line = QLabel("─")
         self.lbl_line.setFixedWidth(80)
         self.lbl_line.setStyleSheet(
-            "color:#e65100; font-weight:bold; font-size:11px;"
+            f"color:{_C['orange']}; font-weight:bold; font-size:11px;"
             "background:transparent; border:none;"
         )
         self.lbl_line.setAlignment(Qt.AlignCenter)
-        self.lbl_line.setToolTip("إجمالي سعر السطر قبل الخصم")
+        self.lbl_line.setToolTip(tr("offer_col_line_total"))
 
         self.lbl_warn = QLabel("⚠️")
         self.lbl_warn.setStyleSheet(
-            "color:#e65100; font-size:11px; background:transparent; border:none;"
+            f"color:{_C['orange']}; font-size:11px; background:transparent; border:none;"
         )
         self.lbl_warn.setFixedWidth(20)
-        self.lbl_warn.setToolTip("هذا المنتج ليس له سعر في التسعير")
+        self.lbl_warn.setToolTip(tr("offer_no_price_tooltip"))
         self.lbl_warn.setVisible(False)
 
         btn_del = QPushButton("❌")
         btn_del.setFixedSize(28, 28)
         btn_del.setStyleSheet(
-            "QPushButton { background:transparent; border:none; font-size:13px; }"
-            "QPushButton:hover { color:#e53935; }"
+            f"QPushButton {{ background:transparent; border:none; font-size:13px; }}"
+            f"QPushButton:hover {{ color:{_C['danger']}; }}"
         )
         btn_del.clicked.connect(lambda: self._on_remove(self))
 
         lay.addWidget(self.inp_search)
         lay.addWidget(self.cmb_product, stretch=1)
-        lay.addWidget(QLabel("تكلفة:"))
+        lay.addWidget(QLabel(tr("offer_cost_lbl")))
         lay.addWidget(self.lbl_cost)
-        lay.addWidget(QLabel("سعر:"))
+        lay.addWidget(QLabel(tr("offer_price_lbl")))
         lay.addWidget(self.lbl_listed)
-        lay.addWidget(QLabel("×"))
+        lay.addWidget(QLabel(tr("offer_times_sym")))
         lay.addWidget(self.sp_qty)
-        lay.addWidget(QLabel("="))
+        lay.addWidget(QLabel(tr("offer_equals_sym")))
         lay.addWidget(self.lbl_line)
         lay.addWidget(self.lbl_warn)
         lay.addWidget(btn_del)
@@ -155,13 +168,16 @@ class _OfferItemRow(QFrame):
             }
             for item_type in ("final", "semi"):
                 rows = fetch_items_by_type(conn, item_type)
-                icon = "🏭" if item_type == "final" else "🔧"
+                icon_key = "offer_item_final_icon" if item_type == "final" else "offer_item_semi_icon"
                 for row in rows:
                     if row["id"] not in priced_ids:
                         continue
                     if q and q not in row["name"].lower():
                         continue
-                    self.cmb_product.addItem(f"{icon} {row['name']}", row["id"])
+                    self.cmb_product.addItem(
+                        tr(icon_key).format(name=row["name"]),
+                        row["id"],
+                    )
         except Exception:
             pass
 

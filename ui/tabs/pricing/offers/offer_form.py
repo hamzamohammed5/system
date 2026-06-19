@@ -17,12 +17,15 @@ from db.pricing.offers_repo import (
     insert_offer, update_offer,
     replace_offer_items,
 )
-from models.costing     import calc_cost
-from ui.helpers         import buttons_row
+from models.costing import calc_cost
+from ui.helpers import buttons_row
 from ui.widgets.shared.category_manager import CategoryCombo
-from ui.events          import bus
+from ui.widgets.core.i18n import tr
+from ui.widgets.core.events import emit_company_data_changed
+from ui.theme import _C
 
 from .offer_item_row import _OfferItemRow
+from ..pricing._stat_box import stat_box
 
 
 def _spin(max_=999999, dec=2):
@@ -31,35 +34,6 @@ def _spin(max_=999999, dec=2):
     s.setDecimals(dec)
     s.setMinimumHeight(30)
     return s
-
-
-def _stat_box(title: str, color: str = "#1565c0"):
-    frame = QFrame()
-    frame.setStyleSheet("""
-        QFrame {
-            background: white;
-            border: 1px solid #e0e0e0;
-            border-radius: 6px;
-            padding: 4px;
-        }
-    """)
-    lay = QVBoxLayout(frame)
-    lay.setContentsMargins(10, 6, 10, 6)
-    lay.setSpacing(2)
-    lbl_t = QLabel(title)
-    lbl_t.setStyleSheet(
-        "font-size:10px; color:#888; background:transparent; border:none;"
-    )
-    lbl_t.setAlignment(Qt.AlignCenter)
-    lbl_v = QLabel("─")
-    lbl_v.setStyleSheet(
-        f"font-size:14px; font-weight:bold; color:{color};"
-        "background:transparent; border:none;"
-    )
-    lbl_v.setAlignment(Qt.AlignCenter)
-    lay.addWidget(lbl_t)
-    lay.addWidget(lbl_v)
-    return frame, lbl_v
 
 
 class _OfferForm(QWidget):
@@ -88,47 +62,49 @@ class _OfferForm(QWidget):
         root.setSpacing(8)
 
         header = QFrame()
-        header.setStyleSheet("""
-            QFrame {
-                background: white;
-                border: 1px solid #ffe0b2;
+        header.setStyleSheet(f"""
+            QFrame {{
+                background: {_C['bg_surface']};
+                border: 1px solid {_C['orange_border']};
                 border-radius: 8px;
-            }
+            }}
         """)
         h_lay = QVBoxLayout(header)
         h_lay.setContentsMargins(14, 12, 14, 12)
         h_lay.setSpacing(8)
 
-        self.lbl_mode = QLabel("─── عرض جديد ───")
-        self.lbl_mode.setStyleSheet("font-weight:bold; color:#e65100; font-size:12px;")
+        self.lbl_mode = QLabel(tr("offer_new_mode"))
+        self.lbl_mode.setStyleSheet(
+            f"font-weight:bold; color:{_C['orange']}; font-size:12px;"
+        )
         h_lay.addWidget(self.lbl_mode)
 
         info_row = QHBoxLayout()
         info_row.setSpacing(12)
 
-        lbl_name = QLabel("اسم العرض:")
+        lbl_name = QLabel(tr("offer_name_field"))
         lbl_name.setStyleSheet("font-weight:bold;")
         self.inp_name = QLineEdit()
-        self.inp_name.setPlaceholderText("مثال: عرض رمضان، باقة العيد...")
+        self.inp_name.setPlaceholderText(tr("offer_name_placeholder"))
         self.inp_name.setMinimumHeight(30)
 
-        lbl_disc = QLabel("الخصم:")
+        lbl_disc = QLabel(tr("offer_discount_field"))
         lbl_disc.setStyleSheet("font-weight:bold;")
         self.sp_discount = _spin(100, 2)
         self.sp_discount.setValue(0)
         self.sp_discount.setFixedWidth(90)
-        lbl_disc_pct = QLabel("%")
-        lbl_disc_pct.setStyleSheet("font-weight:bold; color:#e65100;")
+        lbl_disc_pct = QLabel(tr("offer_times_sym").replace("×", "%"))
+        lbl_disc_pct.setStyleSheet(f"font-weight:bold; color:{_C['orange']};")
 
-        lbl_cat = QLabel("التصنيف:")
+        lbl_cat = QLabel(tr("offer_category_field"))
         lbl_cat.setStyleSheet("font-weight:bold;")
         self.cmb_category = CategoryCombo(self._live_conn(), scope="all")
         self.cmb_category.setMinimumHeight(30)
         self.cmb_category.setFixedWidth(150)
 
-        lbl_notes = QLabel("ملاحظات:")
+        lbl_notes = QLabel(tr("offer_notes_field"))
         self.inp_notes = QLineEdit()
-        self.inp_notes.setPlaceholderText("اختياري...")
+        self.inp_notes.setPlaceholderText(tr("offer_notes_placeholder"))
         self.inp_notes.setMinimumHeight(30)
 
         info_row.addWidget(lbl_name)
@@ -146,11 +122,11 @@ class _OfferForm(QWidget):
 
         stats_row = QHBoxLayout()
         stats_row.setSpacing(6)
-        f1, self.lbl_total_listed = _stat_box("إجمالي السعر قبل الخصم", "#1565c0")
-        f2, self.lbl_discount_amt = _stat_box("قيمة الخصم",             "#e53935")
-        f3, self.lbl_sell_price   = _stat_box("سعر البيع النهائي",      "#2e7d32")
-        f4, self.lbl_total_cost   = _stat_box("إجمالي التكلفة",         "#555555")
-        f5, self.lbl_profit       = _stat_box("الربح",                   "#1b5e20")
+        f1, self.lbl_total_listed = stat_box(tr("offer_total_before_disc"), "journal_dr_accent")
+        f2, self.lbl_discount_amt = stat_box(tr("offer_discount_value"),    "danger_strong")
+        f3, self.lbl_sell_price   = stat_box(tr("offer_sell_price"),        "success")
+        f4, self.lbl_total_cost   = stat_box(tr("offer_total_cost"),        "text_neutral")
+        f5, self.lbl_profit       = stat_box(tr("offer_profit"),            "success")
         for f in (f1, f2, f3, f4, f5):
             stats_row.addWidget(f, stretch=1)
         h_lay.addLayout(stats_row)
@@ -167,19 +143,19 @@ class _OfferForm(QWidget):
         def _hdr(text, w=None, stretch=0):
             lbl = QLabel(text)
             lbl.setStyleSheet(
-                "font-size:9px; font-weight:bold; color:#888;"
-                "border-bottom:1px solid #eee; background:transparent;"
+                f"font-size:9px; font-weight:bold; color:{_C['text_muted']};"
+                f"border-bottom:1px solid {_C['border']}; background:transparent;"
             )
             if w:
                 lbl.setFixedWidth(w)
             ch_lay.addWidget(lbl, stretch=stretch)
 
-        _hdr("بحث", 120)
-        _hdr("المنتج", stretch=1)
-        _hdr("تكلفة/و", 72)
-        _hdr("سعر/و", 72)
-        _hdr("الكمية", 85)
-        _hdr("إجمالي", 80)
+        _hdr(tr("offer_header_search"), 120)
+        _hdr(tr("offer_col_product"), stretch=1)
+        _hdr(tr("offer_col_unit_cost"), 72)
+        _hdr(tr("offer_col_unit_price"), 72)
+        _hdr(tr("offer_col_qty"), 85)
+        _hdr(tr("offer_header_total_col"), 80)
         _hdr("", 20)
         _hdr("", 28)
         root.addWidget(ch)
@@ -196,36 +172,45 @@ class _OfferForm(QWidget):
         scroll.setWidget(self._rows_container)
         scroll.setMinimumHeight(110)
         scroll.setMaximumHeight(260)
-        scroll.setStyleSheet("""
-            QScrollArea {
-                border: 1px solid #ffe0b2;
+        scroll.setStyleSheet(f"""
+            QScrollArea {{
+                border: 1px solid {_C['orange_border']};
                 border-radius: 6px;
-                background: #fffaf5;
-            }
+                background: {_C['scroll_warm_bg']};
+            }}
         """)
         root.addWidget(scroll, stretch=1)
 
-        btn_add_row = QPushButton("➕  إضافة منتج للعرض")
+        btn_add_row = QPushButton(tr("offer_add_product_btn"))
         btn_add_row.setMinimumHeight(30)
-        btn_add_row.setStyleSheet(
-            "QPushButton { background:#fff3e0; border:1px solid #ffcc80;"
-            "border-radius:4px; color:#e65100; font-weight:bold; padding:4px 12px; }"
-            "QPushButton:hover { background:#ffe0b2; }"
-        )
+        btn_add_row.setStyleSheet(f"""
+            QPushButton {{
+                background: {_C['orange_bg']};
+                border: 1px solid {_C['orange_border']};
+                border-radius: 4px;
+                color: {_C['orange']};
+                font-weight: bold;
+                padding: 4px 12px;
+            }}
+            QPushButton:hover {{ background: {_C['orange_border']}; }}
+        """)
         btn_add_row.clicked.connect(lambda: self._add_item_row())
 
-        self.btn_save = QPushButton("💾  حفظ العرض")
+        self.btn_save = QPushButton(tr("offer_save_btn"))
         self.btn_save.setMinimumHeight(32)
-        self.btn_save.setStyleSheet("""
-            QPushButton {
-                background: #e65100; color: white;
-                font-weight: bold; border-radius: 6px; padding: 0 18px;
-            }
-            QPushButton:hover { background: #bf360c; }
+        self.btn_save.setStyleSheet(f"""
+            QPushButton {{
+                background: {_C['orange']};
+                color: {_C['bg_input']};
+                font-weight: bold;
+                border-radius: 6px;
+                padding: 0 18px;
+            }}
+            QPushButton:hover {{ background: {_C['orange_hover']}; }}
         """)
         self.btn_save.clicked.connect(self._save)
 
-        self.btn_cancel = QPushButton("✖  إلغاء")
+        self.btn_cancel = QPushButton(tr("offer_cancel_btn"))
         self.btn_cancel.setMinimumHeight(32)
         self.btn_cancel.setVisible(False)
         self.btn_cancel.clicked.connect(self.reset)
@@ -290,15 +275,15 @@ class _OfferForm(QWidget):
         sell_price = total_listed - disc_amt
         profit     = sell_price - total_cost
 
-        self.lbl_total_listed.setText(f"{total_listed:.2f}  ج")
-        self.lbl_discount_amt.setText(f"{disc_amt:.2f}  ج")
-        self.lbl_sell_price.setText(f"{sell_price:.2f}  ج")
-        self.lbl_total_cost.setText(f"{total_cost:.2f}  ج")
+        self.lbl_total_listed.setText(tr("amount_fmt").format(amount=total_listed))
+        self.lbl_discount_amt.setText(tr("amount_fmt").format(amount=disc_amt))
+        self.lbl_sell_price.setText(tr("amount_fmt").format(amount=sell_price))
+        self.lbl_total_cost.setText(tr("amount_fmt").format(amount=total_cost))
 
-        color = "#1b5e20" if profit >= 0 else "#b71c1c"
-        self.lbl_profit.setText(f"{profit:.2f}  ج")
+        profit_key = "success" if profit >= 0 else "danger"
+        self.lbl_profit.setText(tr("amount_fmt").format(amount=profit))
         self.lbl_profit.setStyleSheet(
-            f"font-size:14px; font-weight:bold; color:{color};"
+            f"font-size:14px; font-weight:bold; color:{_C[profit_key]};"
             "background:transparent; border:none;"
         )
 
@@ -306,17 +291,17 @@ class _OfferForm(QWidget):
     def _save(self):
         name = self.inp_name.text().strip()
         if not name:
-            QMessageBox.warning(self, "تنبيه", "أدخل اسم العرض أولاً")
+            QMessageBox.warning(self, tr("warning"), tr("offer_name_required"))
             return
         items = [r.get_values() for r in self._item_rows if r.get_values()]
         if not items:
-            QMessageBox.warning(self, "تنبيه", "أضف منتجاً واحداً على الأقل")
+            QMessageBox.warning(self, tr("warning"), tr("offer_product_required"))
             return
 
         try:
             conn = self._live_conn()
         except Exception as e:
-            QMessageBox.warning(self, "خطأ", str(e))
+            QMessageBox.warning(self, tr("warning"), str(e))
             return
 
         discount    = self.sp_discount.value()
@@ -331,7 +316,7 @@ class _OfferForm(QWidget):
             replace_offer_items(conn, oid, items)
 
         self.reset()
-        bus.data_changed.emit()
+        emit_company_data_changed()
 
     def load_offer(self, offer_id: int):
         try:
@@ -349,7 +334,9 @@ class _OfferForm(QWidget):
         self._clear_rows()
         for row in fetch_offer_items(conn, offer_id):
             self._add_item_row(item_id=row["item_id"], qty=row["qty"])
-        self.lbl_mode.setText(f"─── تعديل: {offer['name']} ───")
+        self.lbl_mode.setText(
+            tr("offer_edit_mode").format(name=offer["name"])
+        )
         self.btn_cancel.setVisible(True)
         self._update_totals()
 
@@ -361,7 +348,7 @@ class _OfferForm(QWidget):
         self.cmb_category.setCurrentIndex(0)
         self._clear_rows()
         self._add_item_row()
-        self.lbl_mode.setText("─── عرض جديد ───")
+        self.lbl_mode.setText(tr("offer_new_mode"))
         self.btn_cancel.setVisible(False)
         for lbl in (self.lbl_total_listed, self.lbl_discount_amt,
                     self.lbl_sell_price, self.lbl_total_cost, self.lbl_profit):

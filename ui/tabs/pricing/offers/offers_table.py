@@ -15,10 +15,12 @@ from ui.helpers import (
     make_table, buttons_row, section_label, danger_button,
 )
 from ui.widgets.shared.filter_bar import FilterBar
-from ui.events import bus
+from ui.widgets.mixins.bus import BusConnectedMixin
+from ui.widgets.core.i18n import tr
+from ui.theme import _C
 
 
-class _OffersTable(QWidget):
+class _OffersTable(QWidget, BusConnectedMixin):
     """جدول العروض المحفوظة مع فلتر وأزرار."""
 
     def __init__(self, conn, on_edit, on_delete, on_select, parent=None):
@@ -30,7 +32,7 @@ class _OffersTable(QWidget):
         self._all_rows  = []
         self._build()
         self._load()
-        bus.data_changed.connect(self._load)
+        self._connect_bus(data=True)
 
     # ── connection صالح دايماً ────────────────────────────
 
@@ -44,6 +46,13 @@ class _OffersTable(QWidget):
         from db.companies.company_state import company_state
         return company_state.get_erp_conn()
 
+    def _on_data_changed(self):
+        self._load()
+
+    def closeEvent(self, event):
+        self._disconnect_bus()
+        super().closeEvent(event)
+
     # ══════════════════════════════════════════════════════
     # بناء الواجهة
     # ══════════════════════════════════════════════════════
@@ -53,16 +62,22 @@ class _OffersTable(QWidget):
         root.setContentsMargins(12, 8, 12, 10)
         root.setSpacing(6)
 
-        root.addWidget(section_label("─── العروض المحفوظة ───"))
+        root.addWidget(section_label(tr("offer_saved_list")))
 
         self._filter = FilterBar(self._live_conn(), scope="all")
         self._filter.filter_changed.connect(self._apply_filter)
         root.addWidget(self._filter)
 
         self.table = make_table(
-            ["ID", "اسم العرض", "التصنيف", "عدد المنتجات",
-             "خصم %", "إجمالي السعر", "سعر البيع", "التكلفة", "الربح", "التاريخ"],
-            stretch_col=1
+            [
+                "ID",
+                tr("offer_col_product"),       tr("offer_col_category"),
+                tr("offer_col_count"),          tr("offer_col_discount_pct"),
+                tr("offer_col_total_listed"),   tr("offer_col_sell_price"),
+                tr("offer_col_cost"),           tr("offer_col_profit"),
+                tr("offer_col_date"),
+            ],
+            stretch_col=1,
         )
         self.table.setColumnWidth(0, 35)
         self.table.setColumnWidth(1, 140)
@@ -78,8 +93,8 @@ class _OffersTable(QWidget):
         self.table.itemSelectionChanged.connect(self._on_selection)
         root.addWidget(self.table, stretch=1)
 
-        btn_edit = QPushButton("✏️  تعديل")
-        btn_del  = danger_button("🗑️  حذف")
+        btn_edit = QPushButton(tr("btn_edit"))
+        btn_del  = danger_button(tr("btn_delete"))
         for btn in (btn_edit, btn_del):
             btn.setMinimumHeight(30)
         btn_edit.clicked.connect(lambda: self._on_edit(self.selected_id()))
@@ -127,7 +142,7 @@ class _OffersTable(QWidget):
             self.table.insertRow(r)
             self.table.setItem(r, 0, QTableWidgetItem(str(offer["id"])))
             self.table.setItem(r, 1, QTableWidgetItem(offer["name"]))
-            self.table.setItem(r, 2, QTableWidgetItem(offer["category_name"] or "—"))
+            self.table.setItem(r, 2, QTableWidgetItem(offer["category_name"] or tr("dash")))
             self.table.setItem(r, 3, QTableWidgetItem(str(len(s.get("lines", [])))))
             self.table.setItem(r, 4, QTableWidgetItem(f"{offer['discount']:.1f} %"))
             self.table.setItem(r, 5, QTableWidgetItem(f"{s.get('total_listed', 0):.2f}"))
@@ -136,7 +151,7 @@ class _OffersTable(QWidget):
 
             profit = s.get("profit", 0)
             pi = QTableWidgetItem(f"{profit:.2f}")
-            pi.setForeground(QColor("#1b5e20") if profit >= 0 else QColor("#b71c1c"))
+            pi.setForeground(QColor(_C["success"]) if profit >= 0 else QColor(_C["danger"]))
             self.table.setItem(r, 8, pi)
             self.table.setItem(r, 9, QTableWidgetItem(offer["created_at"]))
             shown += 1
