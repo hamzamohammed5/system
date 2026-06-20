@@ -17,6 +17,11 @@ ui/tabs/costing/shared/bulk_replace/bulk_replace_dialog.py
   من: db.shared.items_repo.fetch_item / replace_bom / fetch_bom
   إلى: services.costing.bulk_replace_service.BulkReplaceService
 
+[Fix i18n] كل النصوص المكتوبة مباشرة (عنوان النافذة، رسائل التأكيد
+  والأخطاء، أزرار الإجراء) انتقلت إلى مفاتيح ترجمة في ar.py/en.py.
+[Fix colors] كل الألوان الست عشرية المباشرة استُبدلت بمفاتيح _C
+  من ui/theme_manager.py (المصدر الوحيد للألوان).
+
 الاستخدام:
     dlg = BulkReplaceDialog(conn, child_type, child_id, child_name, parent)
     dlg.exec_()
@@ -30,6 +35,8 @@ from PyQt5.QtCore import Qt
 
 from services.costing.bulk_replace_service import BulkReplaceService
 from ui.widgets.core.events import bus, emit_company_data_changed
+from ui.theme import _C
+from ui.widgets.core.i18n import tr
 
 
 from .bulk_replace_helpers        import get_element_name, fetch_candidates
@@ -49,7 +56,7 @@ class BulkReplaceDialog(QDialog):
         # ✅ [Refactor] استخدام get_element_name من helpers (لا تغيير هنا)
         self.child_name = child_name or get_element_name(conn, child_type, child_id)
 
-        self.setWindowTitle("🔄  استبدال / تعديل شامل")
+        self.setWindowTitle(tr("bulk_replace_window_title"))
         self.setMinimumSize(750, 620)
         self.setModal(True)
         self.setLayoutDirection(Qt.RightToLeft)
@@ -66,7 +73,7 @@ class BulkReplaceDialog(QDialog):
         root.addWidget(self._build_header())
 
         body = QFrame()
-        body.setStyleSheet("background: #f5f7fa;")
+        body.setStyleSheet(f"background: {_C['bg_page']};")
         body_lay = QVBoxLayout(body)
         body_lay.setContentsMargins(16, 14, 16, 14)
         body_lay.setSpacing(12)
@@ -89,12 +96,12 @@ class BulkReplaceDialog(QDialog):
 
     def _build_header(self) -> QFrame:
         header = QFrame()
-        header.setStyleSheet("""
-            QFrame {
+        header.setStyleSheet(f"""
+            QFrame {{
                 background: qlineargradient(x1:0, y1:0, x2:1, y2:0,
-                    stop:0 #1565c0, stop:1 #1976d2);
-                border-bottom: 2px solid #0d47a1;
-            }
+                    stop:0 {_C['blue']}, stop:1 {_C['blue_hover']});
+                border-bottom: 2px solid {_C['blue_strong']};
+            }}
         """)
         header.setFixedHeight(70)
 
@@ -105,11 +112,12 @@ class BulkReplaceDialog(QDialog):
         lbl_icon.setStyleSheet("font-size:28px; background:transparent; border:none;")
 
         lbl_title = QLabel(
-            f"استبدال شامل  —  "
-            f"<span style='color:#90caf9;'>{self.child_name}</span>"
+            tr("bulk_replace_header_title").format(
+                name=f"<span style='color:{_C['blue_border']};'>{self.child_name}</span>"
+            )
         )
         lbl_title.setStyleSheet(
-            "font-size:15px; font-weight:bold; color:white;"
+            f"font-size:15px; font-weight:bold; color:{_C['btn_primary_text']};"
             "background:transparent; border:none;"
         )
         lbl_title.setTextFormat(Qt.RichText)
@@ -123,28 +131,28 @@ class BulkReplaceDialog(QDialog):
     def _build_action_buttons(self) -> QHBoxLayout:
         row = QHBoxLayout()
 
-        self._btn_apply = QPushButton("🚀  تطبيق على المحدد")
+        self._btn_apply = QPushButton(f"🚀  {tr('apply_to_selected')}")
         self._btn_apply.setMinimumHeight(38)
-        self._btn_apply.setStyleSheet("""
-            QPushButton {
-                background: #1565c0; color: white;
+        self._btn_apply.setStyleSheet(f"""
+            QPushButton {{
+                background: {_C['blue']}; color: {_C['btn_primary_text']};
                 font-weight: bold; font-size: 13px;
                 border-radius: 6px; padding: 0 20px;
-            }
-            QPushButton:hover { background: #1976d2; }
-            QPushButton:disabled { background: #90a4ae; }
+            }}
+            QPushButton:hover {{ background: {_C['blue_hover']}; }}
+            QPushButton:disabled {{ background: {_C['text_disabled']}; }}
         """)
         self._btn_apply.clicked.connect(self._apply)
 
-        btn_cancel = QPushButton("✖  إغلاق")
+        btn_cancel = QPushButton(f"✖  {tr('close')}")
         btn_cancel.setMinimumHeight(38)
-        btn_cancel.setStyleSheet("""
-            QPushButton {
-                background: #f5f5f5; color: #555;
-                border: 1px solid #ddd; border-radius: 6px;
+        btn_cancel.setStyleSheet(f"""
+            QPushButton {{
+                background: {_C['bg_surface']}; color: {_C['text_neutral']};
+                border: 1px solid {_C['border']}; border-radius: 6px;
                 padding: 0 16px; font-size: 12px;
-            }
-            QPushButton:hover { background: #eeeeee; }
+            }}
+            QPushButton:hover {{ background: {_C['bg_hover']}; }}
         """)
         btn_cancel.clicked.connect(self.reject)
 
@@ -169,7 +177,7 @@ class BulkReplaceDialog(QDialog):
     def _apply(self):
         selected_rows = self._products_panel.get_selected_rows()
         if not selected_rows:
-            QMessageBox.warning(self, "تنبيه", "اختر منتجاً واحداً على الأقل")
+            QMessageBox.warning(self, tr("warning"), tr("select_at_least_one_product"))
             return
 
         do_replace   = self._op_section.do_replace
@@ -180,9 +188,7 @@ class BulkReplaceDialog(QDialog):
         # التحقق من وجود بديل لو العملية تستلزمه
         if do_replace and new_child_id is None:
             QMessageBox.warning(
-                self, "تنبيه",
-                "اختر العنصر البديل أولاً\n"
-                "أو اختر «تعديل الكمية فقط» لو لا تريد الاستبدال."
+                self, tr("warning"), tr("select_replacement_first")
             )
             return
 
@@ -195,19 +201,20 @@ class BulkReplaceDialog(QDialog):
                 new_name = svc.get_element_name(self.child_type, new_child_id)
             except Exception:
                 new_name = get_element_name(self.conn, self.child_type, new_child_id)
-            op_desc.append(f"• استبدال  «{self.child_name}»  بـ  «{new_name}»")
+            op_desc.append(
+                tr("bulk_replace_desc_line").format(old=self.child_name, new=new_name)
+            )
         if do_qty:
             if uniform_qty is not None:
-                op_desc.append(f"• تعيين الكمية = {uniform_qty:.4f}")
+                op_desc.append(tr("bulk_set_qty_desc_line").format(qty=f"{uniform_qty:.4f}"))
             else:
-                op_desc.append("• الاحتفاظ بالكمية المعدَّلة لكل منتج")
+                op_desc.append(tr("bulk_keep_qty_desc_line"))
 
-        msg = (
-            f"سيتم تطبيق التالي على {len(selected_rows)} منتج:\n\n"
-            + "\n".join(op_desc) + "\n\nهل تريد المتابعة؟"
+        msg = tr("bulk_apply_confirm_msg").format(
+            count=len(selected_rows), ops="\n".join(op_desc)
         )
         if QMessageBox.question(
-            self, "تأكيد التطبيق", msg,
+            self, tr("confirm_apply_title"), msg,
             QMessageBox.Yes | QMessageBox.No
         ) != QMessageBox.Yes:
             return
@@ -233,21 +240,22 @@ class BulkReplaceDialog(QDialog):
             )
 
         except Exception as e:
-            QMessageBox.warning(self, "خطأ", str(e))
+            QMessageBox.warning(self, tr("error"), str(e))
             return
 
         emit_company_data_changed()
 
         if errors:
             QMessageBox.warning(
-                self, "اكتمل مع أخطاء",
-                f"✅ تم تحديث {updated} منتج بنجاح\n\n"
-                f"⚠️ فشل {len(errors)} منتج:\n" + "\n".join(errors)
+                self, tr("bulk_completed_with_errors_title"),
+                tr("bulk_completed_with_errors_msg").format(
+                    updated=updated, failed=len(errors), errors="\n".join(errors)
+                )
             )
         else:
             QMessageBox.information(
-                self, "تم",
-                f"✅ تم تحديث {updated} منتج بنجاح"
+                self, tr("done"),
+                tr("bulk_completed_success_msg").format(count=updated)
             )
 
         if do_replace:

@@ -23,6 +23,7 @@ from ui.widgets.components.stat_card import StatRow, StatItem
 from ui.widgets.core.conn import SafeConnMixin
 from ui.theme import _C
 from ui.widgets.core.i18n import tr
+from ui.font import FS_SM
 from ._financial_helpers import _money
 
 
@@ -70,7 +71,7 @@ class BalanceSheetTab(SafeConnMixin, QWidget):
         l1.setContentsMargins(0, 4, 4, 0)
         lbl_assets = QLabel(tr("assets_section"))
         lbl_assets.setStyleSheet(
-            f"font-weight:bold; color:{_C['acc_type_asset']}; font-size:11px;"
+            f"font-weight:bold; color:{_C['acc_type_asset']}; font-size:{FS_SM}px;"
             "background:transparent; border:none;"
         )
         l1.addWidget(lbl_assets)
@@ -87,7 +88,7 @@ class BalanceSheetTab(SafeConnMixin, QWidget):
         l2.setContentsMargins(4, 4, 0, 0)
         lbl_liab = QLabel(tr("liabilities_equity_section"))
         lbl_liab.setStyleSheet(
-            f"font-weight:bold; color:{_C['acc_type_liability']}; font-size:11px;"
+            f"font-weight:bold; color:{_C['acc_type_liability']}; font-size:{FS_SM}px;"
             "background:transparent; border:none;"
         )
         l2.addWidget(lbl_liab)

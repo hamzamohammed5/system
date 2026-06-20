@@ -107,7 +107,7 @@ class RawInputPanel(BaseCrudForm):
         if tq and tq > 0 and price > 0:
             unit = price / tq
             self.lbl_hint.setText(
-                tr("raw_hint_with_qty", price=f"{price:.2f}", qty=f"{tq:.4g}", unit=f"{unit:.4f}")
+                tr("raw_hint_with_qty").format(price=f"{price:.2f}", qty=f"{tq:.4g}", unit=f"{unit:.4f}")
             )
         elif tq and tq > 0:
             self.lbl_hint.setText(tr("raw_hint_qty_only"))
@@ -140,7 +140,7 @@ class RawInputPanel(BaseCrudForm):
         )
         self._variants.load_item(new_id, data["price"])
         # إبقاء الفورم في وضع التعديل لإضافة variants
-        self.enter_edit_mode(new_id, f"─── {tr('raw_add_variants_mode', name=data['name'])} ───")
+        self.enter_edit_mode(new_id, f"─── {tr('raw_add_variants_mode').format(name=data['name'])} ───")
         self.btn_add.setVisible(False)
         self.btn_save.setVisible(True)
         self.btn_cancel.setVisible(True)

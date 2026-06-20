@@ -20,6 +20,7 @@ from db.shared.items_repo  import fetch_items_by_type
 from models.costing        import calc_cost
 from ui.widgets.base.list_panel  import BaseListPanel
 from ui.widgets.tables.tables     import make_item, colored_item
+from ui.widgets.core.i18n         import tr
 
 _PRODUCT_SCOPE = {
     "semi":  "semi",
@@ -39,11 +40,11 @@ class _ProductTable(BaseListPanel):
       - bus.data_changed auto-connect
     """
 
-    COLUMNS       = ["ID", "الاسم", "التصنيف", "التكلفة"]
+    COLUMNS       = [tr("id_col"), tr("name"), tr("category"), tr("cost")]
     STRETCH_COL   = 1
     EMPTY_ICON    = "🏭"
-    EMPTY_TITLE   = "لا توجد منتجات"
-    LIST_TITLE    = "─── المنتجات المحفوظة ───"
+    EMPTY_TITLE   = tr("no_products")
+    LIST_TITLE    = tr("products_table_title")
     ADD_TEXT      = ""           # بدون زر Add — الفورم منفصل
     SHOW_CATEGORY = True
     CONNECT_BUS   = True
@@ -85,7 +86,7 @@ class _ProductTable(BaseListPanel):
 
         table.setItem(r, 0, make_item(str(row["id"]), user_data=row["id"]))
         table.setItem(r, 1, make_item(row["name"]))
-        table.setItem(r, 2, make_item(row["category_name"] if row["category_name"] else "—"))
+        table.setItem(r, 2, make_item(row["category_name"] if row["category_name"] else tr("dash")))
         table.setItem(r, 3, make_item(f"{cost:.4f}"))
 
     # ══════════════════════════════════════════════════════
@@ -106,8 +107,8 @@ class _ProductTable(BaseListPanel):
     def _build_extra_header_actions(self, header):
         """إضافة أزرار تعديل وحذف في الهيدر."""
         # [Fix #7] style="normal" صريح لتوحيد المظهر مع بقية الجداول
-        header.add_action("✏️ تعديل المحدد", self._trigger_edit,   style="normal")
-        header.add_action("🗑️ حذف المحدد",   self._trigger_delete, style="danger")
+        header.add_action(tr("edit_selected_btn"), self._trigger_edit,   style="normal")
+        header.add_action(tr("delete_selected_btn"), self._trigger_delete, style="danger")
 
     # ══════════════════════════════════════════════════════
     # ربط الـ callbacks الخارجية

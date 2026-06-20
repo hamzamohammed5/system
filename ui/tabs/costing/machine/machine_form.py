@@ -25,6 +25,7 @@ from ui.widgets.theme.builders          import wrap_in_scroll
 from ui.widgets.core.events             import emit_company_data_changed
 from ui.widgets.core.i18n               import tr
 from ui.theme                           import _C
+from ui.font                            import FS_MD
 
 
 def buttons_row(*buttons) -> QHBoxLayout:
@@ -61,7 +62,7 @@ class _MachineForm(QWidget, EditModeMixin, LiveConnMixin):
         grp = FormGroup(tr("machine_form_title"))
 
         self.lbl_mode = QLabel(f"─── {tr('add_machine_new')} ───")
-        self.lbl_mode.setStyleSheet(f"font-weight:bold; color:{_C['accent']};")
+        self.lbl_mode.setStyleSheet(f"font-weight:bold; font-size:{FS_MD}px; color:{_C['accent']};")
         grp.add_label_row(self.lbl_mode)
 
         self.inp_name = QLineEdit()

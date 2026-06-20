@@ -12,6 +12,7 @@ from PyQt5.QtCore import Qt, pyqtSignal
 
 from ui.theme import _C
 from ui.widgets.core.i18n import tr
+from ui.font import FS_XS, FS_SM, FS_LG
 
 from .bom_scenarios._memory_scenarios import MemoryScenariosMixin
 from .bom_scenarios._db_scenarios     import DbScenariosMixin
@@ -51,12 +52,12 @@ class _BomScenariosPanel(QFrame, MemoryScenariosMixin, DbScenariosMixin):
         lay.setSpacing(8)
 
         lbl_icon = QLabel("🎯")
-        lbl_icon.setStyleSheet("background:transparent; border:none; font-size:14px;")
+        lbl_icon.setStyleSheet(f"background:transparent; border:none; font-size:{FS_LG}px;")
         lay.addWidget(lbl_icon)
 
         lbl = QLabel(f"{tr('scenario')}:")
         lbl.setStyleSheet(
-            f"font-weight:bold; font-size:11px; color:{_C['purple']};"
+            f"font-weight:bold; font-size:{FS_SM}px; color:{_C['purple']};"
             "background:transparent; border:none;"
         )
         lay.addWidget(lbl)
@@ -70,7 +71,7 @@ class _BomScenariosPanel(QFrame, MemoryScenariosMixin, DbScenariosMixin):
 
         self.lbl_default_badge = QLabel(f"⭐ {tr('default_scenario')}")
         self.lbl_default_badge.setStyleSheet(
-            f"color:{_C['warning']}; font-weight:bold; font-size:10px;"
+            f"color:{_C['warning']}; font-weight:bold; font-size:{FS_XS}px;"
             "border:none; background:transparent;"
         )
         self.lbl_default_badge.setVisible(False)
@@ -134,7 +135,7 @@ class _BomScenariosPanel(QFrame, MemoryScenariosMixin, DbScenariosMixin):
                 border: 1px solid {_C['purple_border']};
                 border-radius: 4px;
                 padding: 2px 8px;
-                font-size: 11px;
+                font-size: {FS_SM}px;
                 color: {_C['purple']};
             }}
             QComboBox:focus {{ border-color: {_C['purple']}; }}
@@ -153,7 +154,7 @@ class _BomScenariosPanel(QFrame, MemoryScenariosMixin, DbScenariosMixin):
                 color: {fg};
                 border: 1px solid {border};
                 border-radius: 4px;
-                font-size: 10px;
+                font-size: {FS_XS}px;
                 font-weight: bold;
                 padding: 2px 6px;
             }}
@@ -304,7 +305,7 @@ class _BomScenariosPanel(QFrame, MemoryScenariosMixin, DbScenariosMixin):
         )
         reply = QMessageBox.question(
             self, tr("confirm_delete"),
-            f"{tr('delete_scenario_confirm')} «{current_name}»؟",
+            tr("delete_scenario_confirm_msg").format(name=current_name),
             QMessageBox.Yes | QMessageBox.No
         )
         if reply != QMessageBox.Yes:

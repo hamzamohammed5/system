@@ -26,6 +26,7 @@ from ui.widgets.tables.tables import (
 )
 from ui.widgets.core.i18n import tr
 from ui.theme import _C
+from ui.font import FS_XS, FS_BASE
 
 
 class TrialBalanceTab(SafeConnMixin, QWidget):
@@ -56,7 +57,7 @@ class TrialBalanceTab(SafeConnMixin, QWidget):
 
         legend = QLabel(tr("trial_balance_legend"))
         legend.setStyleSheet(
-            f"font-size:10px; color:{_C['text_sec']}; background:{_C['journal_header_bg']};"
+            f"font-size:{FS_XS}px; color:{_C['text_sec']}; background:{_C['journal_header_bg']};"
             f"border:1px solid {_C['journal_header_border']}; border-radius:4px; padding:4px 10px;"
         )
         root.addWidget(legend)
@@ -82,7 +83,7 @@ class TrialBalanceTab(SafeConnMixin, QWidget):
         self.lbl_sum_c  = QLabel(tr("sum_credit_label").format(val="0.00"))
         self.lbl_status = QLabel("─")
         for lbl in (self.lbl_sum_d, self.lbl_sum_c, self.lbl_status):
-            lbl.setStyleSheet("font-weight:bold; font-size:12px;")
+            lbl.setStyleSheet(f"font-weight:bold; font-size:{FS_BASE}px;")
         tl.addWidget(self.lbl_sum_d)
         tl.addSpacing(24)
         tl.addWidget(self.lbl_sum_c)

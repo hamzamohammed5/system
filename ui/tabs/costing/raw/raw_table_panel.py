@@ -42,7 +42,7 @@ class RawTablePanel(BaseListPanel, SharedOpsMixin):
                            tr("raw_col_total_price"), tr("raw_col_qty"), tr("raw_col_unit_price")]
     STRETCH_COL        = 1
     EMPTY_ICON         = "🧱"
-    EMPTY_TITLE        = "no_raws"
+    EMPTY_TITLE        = tr("no_raws")
     LIST_TITLE         = f"─── {tr('saved_raws')} ───"
     ADD_TEXT           = ""
     SHOW_CATEGORY      = True
@@ -92,9 +92,9 @@ class RawTablePanel(BaseListPanel, SharedOpsMixin):
         id_item = make_item(id_text, user_data=row.get("id"))
         table.setItem(r, 0, id_item)
         table.setItem(r, 1, colored_item(prefix + row.get("name", ""), color=color))
-        table.setItem(r, 2, colored_item(row.get("category_name") or "—", color=color))
+        table.setItem(r, 2, colored_item(row.get("category_name") or tr("dash"), color=color))
         table.setItem(r, 3, colored_item(f"{price:.2f}", color=color))
-        table.setItem(r, 4, colored_item(str(tq) if tq is not None else "—", color=color))
+        table.setItem(r, 4, colored_item(str(tq) if tq is not None else tr("dash"), color=color))
         table.setItem(r, 5, colored_item(f"{unit:.4f}", color=color))
 
         if color:

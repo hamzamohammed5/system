@@ -23,6 +23,7 @@ from ui.theme          import _C
 from ui.widgets.core.i18n     import tr
 from ui.widgets.core.events   import emit_company_data_changed
 from ui.widgets.core.events import bus
+from ui.font import FS_XS, FS_SM, FS_BASE
 
 
 
@@ -194,7 +195,7 @@ class _OpRowsEditor(QGroupBox):
 
     def _apply_info_style(self):
         self.lbl_mode_info.setStyleSheet(
-            f"font-size:10px; color:{_C['text_sec']}; font-weight:normal;"
+            f"font-size:{FS_XS}px; color:{_C['text_sec']}; font-weight:normal;"
             f"background:{_C['info_bg']}; border-radius:4px; padding:4px 8px;"
             f"border:1px solid {_C['info_border']};"
         )
@@ -211,7 +212,7 @@ class _OpRowsEditor(QGroupBox):
             )
         if hasattr(self, "lbl_preview"):
             self.lbl_preview.setStyleSheet(
-                f"color:{_C['orange']}; font-weight:bold; font-size:11px;"
+                f"color:{_C['orange']}; font-weight:bold; font-size:{FS_SM}px;"
             )
         if hasattr(self, "table"):
             self.table.setStyleSheet(
@@ -222,18 +223,18 @@ class _OpRowsEditor(QGroupBox):
             )
         if hasattr(self, "lbl_total"):
             self.lbl_total.setStyleSheet(
-                f"color:{_C['success']}; font-weight:bold; font-size:12px;"
+                f"color:{_C['success']}; font-weight:bold; font-size:{FS_BASE}px;"
                 f"background:{_C['success_bg']}; border:1px solid {_C['success_border']};"
                 "border-radius:4px; padding:3px 8px;"
             )
         if hasattr(self, "_lbl_label"):
             for lbl in (self._lbl_label, self._lbl_count, self.lbl_value):
                 lbl.setStyleSheet(
-                    f"font-weight:bold; font-size:11px; color:{_C['text_primary']};"
+                    f"font-weight:bold; font-size:{FS_SM}px; color:{_C['text_primary']};"
                 )
         if hasattr(self, "_lbl_total_lbl"):
             self._lbl_total_lbl.setStyleSheet(
-                f"font-size:11px; font-weight:bold; color:{_C['text_primary']};"
+                f"font-size:{FS_SM}px; font-weight:bold; color:{_C['text_primary']};"
             )
         if hasattr(self, "btn_del_row"):
             self.btn_del_row.setStyleSheet(f"color:{_C['danger']};")

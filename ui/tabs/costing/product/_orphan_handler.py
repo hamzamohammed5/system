@@ -25,6 +25,7 @@ from PyQt5.QtWidgets import QMessageBox
 from services.costing.product_service import ProductService
 from services.shared.item_service     import ItemService
 from ui.widgets.core.events           import emit_company_data_changed
+from ui.widgets.core.i18n             import tr
 
 # TODO: نقل cleanup_empty_products_after_orphan_fix إلى ProductService
 from db.shared.items_repo import cleanup_empty_products_after_orphan_fix
@@ -84,21 +85,21 @@ class _OrphanHandler:
         bom_tree.load(conn, pid)
         emit_company_data_changed()
 
+        names_block = "\n".join(f"  • {nm}" for nm in orphan_names)
+
         if auto_deleted:
             form.reset()
             bom_tree.clear_tree()
             QMessageBox.information(
                 self._parent,
-                "تم — وتم حذف المنتج",
-                f"✅ تم حذف {n} مكوّن ناقص:\n"
-                + "\n".join(f"  • {nm}" for nm in orphan_names)
-                + f"\n\nبما أن «{prod_name}» لم يعد يحتوي على أي مكونات،\n"
-                  "تم حذفه تلقائياً."
+                tr("orphans_deleted_with_product_title"),
+                tr("orphans_deleted_product_removed_msg").format(
+                    count=n, names=names_block, product_name=prod_name
+                )
             )
         else:
             QMessageBox.information(
                 self._parent,
-                "تم",
-                f"✅ تم حذف {n} مكوّن ناقص:\n"
-                + "\n".join(f"  • {nm}" for nm in orphan_names)
+                tr("orphans_deleted_title"),
+                tr("orphans_deleted_msg").format(count=n, names=names_block)
             )

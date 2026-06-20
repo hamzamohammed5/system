@@ -17,18 +17,25 @@ _ScenarioNodeBuilder — منطق بناء nodes السيناريو والمكو
 
   BomNodeRawData — dataclass بسيط يحمل:
     name, unit_cost, [op_row_label]
+
+[Fix i18n] كل النصوص (تسميات الأنواع، التولتيبس، نص "افتراضي") انتقلت
+  إلى مفاتيح ترجمة في ar.py/en.py — لا نص مكتوب مباشرة في الكود.
+[Fix colors] كل الألوان (خلفية/نص node السيناريو، ألوان الأنواع،
+  لون الهادر) أصبحت تُقرأ من _C (ui.theme) بدل القيم الست عشرية المباشرة.
+  المصدر الوحيد لكل الألوان هو ui/theme_manager.py.
 """
 
 from __future__ import annotations
 
-from dataclasses import dataclass, field
+from dataclasses import dataclass
 from typing      import Callable, Optional
 
 from PyQt5.QtWidgets import QTreeWidgetItem
 from PyQt5.QtCore    import Qt
-from PyQt5.QtGui     import QFont, QColor, QBrush
+from PyQt5.QtGui     import QColor, QBrush
 
 from models.costing_base import effective_qty
+from ui.widgets.core.i18n import t
 
 
 # ══════════════════════════════════════════════════════════
@@ -47,27 +54,37 @@ class BomNodeRawData:
 
 
 # ══════════════════════════════════════════════════════════
-# ألوان وتصنيفات
+# مساعد ألوان الثيم — قراءة كسولة لتفادي استيراد دائري
 # ══════════════════════════════════════════════════════════
 
-_TYPE_LABELS = {
-    "raw":        "🧱 خامة",
-    "semi":       "🔧 نصف مصنع",
-    "labor_op":   "👷 عملية عمالة",
-    "machine_op": "⚙️ عملية تشغيل",
-}
+def _theme_colors() -> dict:
+    """يرجع dict الألوان الحالي (_C) من ui.theme — قراءة كسولة."""
+    from ui.theme import _C
+    return _C
 
-_TYPE_COLORS = {
-    "raw":        "#1565c0",
-    "semi":       "#6a1b9a",
-    "labor_op":   "#2e7d32",
-    "machine_op": "#e65100",
-}
 
-SCENARIO_DEFAULT_BG = QColor("#e8f5e9")
-SCENARIO_DEFAULT_FG = QColor("#1b5e20")
-SCENARIO_NORMAL_BG  = QColor("#e3f2fd")
-SCENARIO_NORMAL_FG  = QColor("#0d47a1")
+def _type_label(child_type: str) -> str:
+    """يبني تسمية النوع (أيقونة + نص مترجم) من مفاتيح i18n."""
+    base_key = {
+        "raw":        "raw_material",
+        "semi":       "semi_product",
+        "labor_op":   "labor_op",
+        "machine_op": "machine_op",
+    }.get(child_type)
+    if base_key is None:
+        return ""
+    icon_key = f"bom_type_label_{child_type}"
+    return t(icon_key).format(label=t(base_key))
+
+
+def _type_color(child_type: str, colors: dict) -> str:
+    """يرجع لون النوع من ثيم التطبيق."""
+    return {
+        "raw":        colors["blue"],
+        "semi":       colors["purple"],
+        "labor_op":   colors["acc_type_capital"],
+        "machine_op": colors["orange"],
+    }.get(child_type, colors["text_primary"])
 
 
 # ══════════════════════════════════════════════════════════
@@ -84,8 +101,8 @@ def build_scenario_node(sc: dict) -> QTreeWidgetItem:
     sc_name    = sc["name"]
     is_default = bool(sc["is_default"])
 
-    star   = "⭐ " if is_default else "📋 "
-    suffix = "  (افتراضي)" if is_default else ""
+    star   = t("bom_scenario_star_icon") if is_default else t("bom_scenario_normal_icon")
+    suffix = t("bom_scenario_default_suffix") if is_default else ""
     label  = f"{star}{sc_name}{suffix}"
 
     node = QTreeWidgetItem([label, "", "", "", "", "", ""])
@@ -96,8 +113,9 @@ def build_scenario_node(sc: dict) -> QTreeWidgetItem:
     font.setPointSize(font.pointSize() + 1)
     node.setFont(0, font)
 
-    bg_color = SCENARIO_DEFAULT_BG if is_default else SCENARIO_NORMAL_BG
-    fg_color = SCENARIO_DEFAULT_FG if is_default else SCENARIO_NORMAL_FG
+    colors   = _theme_colors()
+    bg_color = QColor(colors["bom_scenario_default_bg"] if is_default else colors["bom_scenario_normal_bg"])
+    fg_color = QColor(colors["bom_scenario_default_fg"] if is_default else colors["bom_scenario_normal_fg"])
     for col in range(7):
         node.setBackground(col, QBrush(bg_color))
         node.setForeground(col, fg_color)
@@ -145,11 +163,11 @@ def build_component_node(
     total_cost = unit_cost * total_eff
 
     qty_str     = _fmt_qty(qty)
-    waste_str   = f"{waste_pct:.1f} %" if waste_pct > 0 else "—"
+    waste_str   = f"{waste_pct:.1f} %" if waste_pct > 0 else t("bom_qty_no_value")
     eff_qty_str = _fmt_qty(eff_qty) if waste_pct > 0 else qty_str
     unit_c_str  = f"{unit_cost:.4f}"
     total_c_str = f"{total_cost:.4f}"
-    type_lbl    = _TYPE_LABELS.get(child_type, "")
+    type_lbl    = _type_label(child_type)
 
     node = QTreeWidgetItem([
         name, qty_str, waste_str, eff_qty_str,
@@ -159,39 +177,43 @@ def build_component_node(
 
     # tooltips
     node.setToolTip(0, name)
-    node.setToolTip(1, f"الكمية المدخلة: {qty_str}")
+    node.setToolTip(1, t("bom_tooltip_qty_entered").format(qty=qty_str))
     if waste_pct > 0:
         node.setToolTip(
             2,
-            f"هادر {waste_pct:.1f}%\n"
-            f"الكمية الفعلية = {qty_str} × (1 + {waste_pct:.1f}/100) = {eff_qty_str}"
+            t("bom_tooltip_waste").format(pct=f"{waste_pct:.1f}", qty=qty_str, eff_qty=eff_qty_str)
         )
-        node.setToolTip(3, f"الكمية الفعلية = {eff_qty_str}")
-    node.setToolTip(4, f"تكلفة الوحدة: {unit_c_str}")
+        node.setToolTip(3, t("bom_tooltip_effective_qty").format(eff_qty=eff_qty_str))
+    node.setToolTip(4, t("bom_tooltip_unit_cost").format(cost=unit_c_str))
     node.setToolTip(
         5,
-        f"التكلفة الكلية = {unit_c_str} × {eff_qty_str} = {total_c_str}"
+        t("bom_tooltip_total_cost").format(unit_cost=unit_c_str, eff_qty=eff_qty_str, total_cost=total_c_str)
     )
     if child_type == "machine_op" and machine_op_row_id is not None:
-        node.setToolTip(4, f"تكلفة الصف المحدد (ID:{machine_op_row_id}): {unit_c_str}")
+        node.setToolTip(
+            4,
+            t("bom_tooltip_machine_op_row_cost").format(row_id=machine_op_row_id, cost=unit_c_str)
+        )
 
     # ألوان
-    color = QColor(_TYPE_COLORS.get(child_type, "#333"))
+    colors = _theme_colors()
+    color  = QColor(_type_color(child_type, colors))
     node.setForeground(6, color)
 
     if waste_pct > 0:
-        waste_color = QColor("#e65100")
+        waste_color = QColor(colors["orange"])
+        waste_bg    = QColor(colors["waste_low_bg"])
         node.setForeground(2, waste_color)
         node.setForeground(3, waste_color)
-        node.setBackground(2, QBrush(QColor("#fff8e1")))
-        node.setBackground(3, QBrush(QColor("#fff8e1")))
+        node.setBackground(2, QBrush(waste_bg))
+        node.setBackground(3, QBrush(waste_bg))
 
     # نصف مصنع → bold + أبناء
     if child_type == "semi":
         font = node.font(0)
         font.setBold(True)
         node.setFont(0, font)
-        node.setForeground(0, QColor(_TYPE_COLORS["semi"]))
+        node.setForeground(0, QColor(_type_color("semi", colors)))
 
         if fetch_sub_bom_fn:
             sub_bom = fetch_sub_bom_fn(child_id)

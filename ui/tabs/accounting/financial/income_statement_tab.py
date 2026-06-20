@@ -24,6 +24,7 @@ from ui.widgets.components.stat_card import StatRow, StatItem
 from ui.widgets.core.conn import SafeConnMixin
 from ui.theme import _C
 from ui.widgets.core.i18n import tr
+from ui.font import FS_SM
 from ._financial_helpers import _money
 
 
@@ -70,7 +71,7 @@ class IncomeStatementTab(SafeConnMixin, QWidget):
             wl.setContentsMargins(0, 4, 4, 0)
             lbl = QLabel(title)
             lbl.setStyleSheet(
-                f"font-weight:bold; color:{color}; font-size:11px;"
+                f"font-weight:bold; color:{color}; font-size:{FS_SM}px;"
                 "background:transparent; border:none;"
             )
             wl.addWidget(lbl)

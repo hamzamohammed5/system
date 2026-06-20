@@ -24,6 +24,7 @@ from ui.theme import _C
 from ui.widgets.core.i18n          import tr
 from ui.widgets.dialogs.confirm    import confirm_delete
 from ui.widgets.core.events import bus
+from ui.font import FS_XS, FS_SM, FS_MD
 
 from ui.tabs.costing.shared.bom_tree_helper._scenario_node_builder import (
     BomNodeRawData,
@@ -49,7 +50,7 @@ class BomTree(QWidget):
 
         lbl = QLabel(f"🔩 {tr('bom_tree')}")
         lbl.setStyleSheet(
-            f"font-weight:bold; font-size:13px; color:{_C['text_primary']};"
+            f"font-weight:bold; font-size:{FS_MD}px; color:{_C['text_primary']};"
         )
 
         lbl_legend = QLabel(
@@ -58,7 +59,7 @@ class BomTree(QWidget):
             f"⭐ = {tr('default_scenario')}"
         )
         lbl_legend.setStyleSheet(
-            f"font-size:9px; color:{_C['orange']}; background:{_C['warning_bg']};"
+            f"font-size:{FS_XS}px; color:{_C['orange']}; background:{_C['warning_bg']};"
             f"border:1px solid {_C['warning_border']}; border-radius:3px; padding:2px 6px;"
         )
 
@@ -127,7 +128,7 @@ class BomTree(QWidget):
                 border: 1px solid {_C['danger_border']};
                 border-radius: 4px;
                 padding: 2px 8px;
-                font-size: 11px;
+                font-size: {FS_SM}px;
             }}
             QPushButton:hover {{ background: {_C['danger']}; color: white; }}
             QPushButton:disabled {{
@@ -161,7 +162,7 @@ class BomTree(QWidget):
                 f"QHeaderView::section {{"
                 f"  background:{_C['bg_surface_2']}; color:{_C['text_sec']};"
                 f"  border:none; border-bottom:1px solid {_C['border']};"
-                f"  padding:4px 6px; font-weight:bold; font-size:11px;"
+                f"  padding:4px 6px; font-weight:bold; font-size:{FS_SM}px;"
                 f"}}"
             )
         if hasattr(self, "btn_del_node"):
@@ -172,7 +173,7 @@ class BomTree(QWidget):
                     border: 1px solid {_C['danger_border']};
                     border-radius: 4px;
                     padding: 2px 8px;
-                    font-size: 11px;
+                    font-size: {FS_SM}px;
                 }}
                 QPushButton:hover {{ background: {_C['danger']}; color: white; }}
                 QPushButton:disabled {{
@@ -400,7 +401,9 @@ class BomTree(QWidget):
 
                 if not confirm_delete(
                     self,
-                    f"{node_name} {tr('from_scenario')} «{sc_name}»"
+                    tr("bom_delete_from_scenario_msg").format(
+                        node_name=node_name, sc_name=sc_name
+                    )
                 ):
                     return
 

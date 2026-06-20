@@ -23,6 +23,7 @@ from ui.widgets.core.i18n          import tr
 from ui.widgets.components.button  import make_btn
 from ui.widgets.combo.category     import CategoryCombo
 from ui.widgets.theme.builders import wrap_in_scroll
+from ui.font                       import FS_BASE, FS_SM
 
 from ui.tabs.costing.shared.bom_scenarios_panel import _BomScenariosPanel
 
@@ -143,7 +144,7 @@ class _FormHeaderBar(QWidget):
             )
         if hasattr(self, "lbl_mode"):
             self.lbl_mode.setStyleSheet(
-                f"font-weight:bold; color:{_C['accent']}; font-size:12px;"
+                f"font-weight:bold; color:{_C['accent']}; font-size:{FS_BASE}px;"
             )
         if hasattr(self, "inp_name"):
             self.inp_name.setStyleSheet(
@@ -153,7 +154,7 @@ class _FormHeaderBar(QWidget):
         if hasattr(self, "_headers_widget"):
             for lbl in self._headers_widget.findChildren(QLabel):
                 lbl.setStyleSheet(
-                    f"font-size:11px; font-weight:bold; color:{_C['text_sec']};"
+                    f"font-size:{FS_SM}px; font-weight:bold; color:{_C['text_sec']};"
                     f"border-bottom:1px solid {_C['border']}; padding-bottom:2px;"
                 )
 

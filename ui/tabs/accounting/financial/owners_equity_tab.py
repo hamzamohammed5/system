@@ -24,6 +24,7 @@ from ui.widgets.components.stat_card import StatRow, StatItem
 from ui.widgets.core.conn import SafeConnMixin
 from ui.theme import _C
 from ui.widgets.core.i18n import tr
+from ui.font import FS_SM, FS_BASE
 from ._financial_helpers import _money
 
 
@@ -69,7 +70,7 @@ class OwnersEquityTab(SafeConnMixin, QWidget):
         ll.setContentsMargins(0, 4, 4, 0)
         cr_hdr = QLabel(tr("equity_increases"))
         cr_hdr.setStyleSheet(
-            f"font-weight:bold; color:{_C['acc_type_capital']}; font-size:11px;"
+            f"font-weight:bold; color:{_C['acc_type_capital']}; font-size:{FS_SM}px;"
             f"background:{_C['investor_capital_bg']}; border-radius:4px; padding:4px 8px;"
         )
         ll.addWidget(cr_hdr)
@@ -87,7 +88,7 @@ class OwnersEquityTab(SafeConnMixin, QWidget):
         rl.setContentsMargins(4, 4, 0, 0)
         dr_hdr = QLabel(tr("equity_decreases"))
         dr_hdr.setStyleSheet(
-            f"font-weight:bold; color:{_C['danger']}; font-size:11px;"
+            f"font-weight:bold; color:{_C['danger']}; font-size:{FS_SM}px;"
             f"background:{_C['investor_drawings_bg']}; border-radius:4px; padding:4px 8px;"
         )
         rl.addWidget(dr_hdr)
@@ -110,7 +111,7 @@ class OwnersEquityTab(SafeConnMixin, QWidget):
         eq_lay.setContentsMargins(12, 8, 12, 8)
         self.lbl_equation = QLabel("")
         self.lbl_equation.setStyleSheet(
-            f"font-size:12px; font-weight:bold; color:{_C['accent']};"
+            f"font-size:{FS_BASE}px; font-weight:bold; color:{_C['accent']};"
             "background:transparent; border:none;"
         )
         eq_lay.addWidget(self.lbl_equation)

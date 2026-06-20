@@ -18,6 +18,7 @@ from services.costing.scenario_service import ScenarioService
 from ui.theme import _C
 from ui.widgets.core.i18n         import tr
 from ui.widgets.components.stat_card import stat_card_pair
+from ui.font import FS_XS, FS_SM, FS_BASE, FS_MD, FS_LG
 from ui.widgets.core.events import bus
 
 
@@ -54,7 +55,7 @@ class ScenarioComparisonWidget(QFrame):
         header_row = QHBoxLayout()
         lbl_icon = QLabel("📊")
         lbl_icon.setStyleSheet(
-            "font-size:14px; background:transparent; border:none;"
+            f"font-size:{FS_LG}px; background:transparent; border:none;"
         )
         self.lbl_title = QLabel(tr("scenario_comparison"))
         self.lbl_title.setAlignment(Qt.AlignRight | Qt.AlignVCenter)
@@ -123,12 +124,12 @@ class ScenarioComparisonWidget(QFrame):
         self._apply_frame_style()
         if hasattr(self, "lbl_title"):
             self.lbl_title.setStyleSheet(
-                f"font-weight:bold; font-size:12px; color:{_C['purple']};"
+                f"font-weight:bold; font-size:{FS_BASE}px; color:{_C['purple']};"
                 "background:transparent; border:none;"
             )
         if hasattr(self, "_lbl_sc"):
             self._lbl_sc.setStyleSheet(
-                f"font-size:11px; color:{_C['purple']}; background:transparent; border:none;"
+                f"font-size:{FS_SM}px; color:{_C['purple']}; background:transparent; border:none;"
             )
         if hasattr(self, "cmb_scenario"):
             self.cmb_scenario.setStyleSheet(f"""
@@ -137,7 +138,7 @@ class ScenarioComparisonWidget(QFrame):
                     border: 1px solid {_C['purple_border']};
                     border-radius: 4px;
                     padding: 2px 8px;
-                    font-size: 11px;
+                    font-size: {FS_SM}px;
                     color: {_C['purple']};
                 }}
                 QComboBox:focus {{ border-color: {_C['purple']}; }}
@@ -145,7 +146,7 @@ class ScenarioComparisonWidget(QFrame):
             """)
         if hasattr(self, "lbl_note"):
             self.lbl_note.setStyleSheet(
-                f"font-size:10px; color:{_C['purple']}; background:transparent; border:none;"
+                f"font-size:{FS_XS}px; color:{_C['purple']}; background:transparent; border:none;"
             )
 
     # ══════════════════════════════════════════════════════
@@ -294,7 +295,7 @@ class ScenarioComparisonWidget(QFrame):
             else _C['text_sec'])
         )
         lbl.setStyleSheet(
-            f"font-size:13px; font-weight:bold; color:{color};"
+            f"font-size:{FS_MD}px; font-weight:bold; color:{color};"
             "background:transparent; border:none;"
         )
 

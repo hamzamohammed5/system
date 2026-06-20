@@ -23,6 +23,7 @@ from ui.theme          import _C
 from ui.widgets.core.i18n     import tr
 from ui.widgets.core.events   import emit_company_data_changed
 from ui.widgets.core.events import bus
+from ui.font import FS_XS, FS_SM
 
 
 def _spin_pieces(max_=999999, dec=4):
@@ -175,7 +176,7 @@ class _RawVariantsPanel(QGroupBox):
         self._apply_group_style()
         if hasattr(self, "lbl_info"):
             self.lbl_info.setStyleSheet(
-                f"font-size:10px; color:{_C['text_sec']}; font-weight:normal;"
+                f"font-size:{FS_XS}px; color:{_C['text_sec']}; font-weight:normal;"
                 f"background:{_C['info_bg']}; border-radius:4px; padding:5px 8px;"
                 f"border:1px solid {_C['info_border']};"
             )
@@ -186,11 +187,11 @@ class _RawVariantsPanel(QGroupBox):
             )
         if hasattr(self, "_lbl_pieces"):
             self._lbl_pieces.setStyleSheet(
-                f"font-weight:bold; font-size:11px; color:{_C['text_primary']};"
+                f"font-weight:bold; font-size:{FS_SM}px; color:{_C['text_primary']};"
             )
         if hasattr(self, "lbl_preview"):
             self.lbl_preview.setStyleSheet(
-                f"color:{_C['accent']}; font-weight:bold; font-size:11px;"
+                f"color:{_C['accent']}; font-weight:bold; font-size:{FS_SM}px;"
             )
         if hasattr(self, "table"):
             self.table.setStyleSheet(
@@ -343,7 +344,7 @@ class _RawVariantsPanel(QGroupBox):
         name = self.table.item(row, 1).text()
         if QMessageBox.question(
             self, tr("confirm"),
-            f"{tr('delete_variant_confirm')} «{name}»؟",
+            tr("delete_variant_confirm_msg").format(name=name),
             QMessageBox.Yes | QMessageBox.No
         ) == QMessageBox.Yes:
             try:

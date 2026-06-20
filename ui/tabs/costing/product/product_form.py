@@ -128,8 +128,8 @@ class _FormPanel(QWidget, LiveConnMixin):
             orphan_count = 0
 
         label = (
-            f"تعديل: {item.name}  {orphan_count} مكون ناقص"
-            if orphan_count else f"تعديل: {item.name}"
+            tr("editing_product_orphans_label").format(name=item.name, count=orphan_count)
+            if orphan_count else tr("editing_product_label").format(name=item.name)
         )
         self.enter_edit_mode(pid, label)
         self._header.inp_name.setFocus()

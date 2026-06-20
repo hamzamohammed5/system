@@ -19,6 +19,7 @@ _SaveLogic — منطق حفظ بيانات المنتج في DB.
 from PyQt5.QtWidgets import QMessageBox
 
 from services.costing.product_service import ProductService, BomComponent
+from ui.widgets.core.i18n             import tr
 
 
 class _SaveLogic:
@@ -61,10 +62,10 @@ class _SaveLogic:
           - product_id لو نجح
         """
         if not name:
-            QMessageBox.warning(parent_widget, "تنبيه", "ادخل اسم المنتج اولا")
+            QMessageBox.warning(parent_widget, tr("warning"), tr("enter_product_name"))
             return None
         if not rows:
-            QMessageBox.warning(parent_widget, "تنبيه", "اضف مكونا واحدا على الاقل")
+            QMessageBox.warning(parent_widget, tr("warning"), tr("add_one_component"))
             return None
 
         # تحويل الصفوف إلى BomComponent objects
@@ -121,5 +122,5 @@ class _SaveLogic:
             return result.product_id
 
         except Exception as e:
-            QMessageBox.warning(parent_widget, "خطأ", str(e))
+            QMessageBox.warning(parent_widget, tr("error"), str(e))
             return None
