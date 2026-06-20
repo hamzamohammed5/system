@@ -10,10 +10,7 @@ from PyQt5.QtCore import Qt
 from .values_panel._sets_list_panel  import _SetsListPanel
 from .values_panel._instances_table import _InstancesTable
 from ui.events import bus
-
-_BLUE_MID = "#bbdefb"
-_GRAY_BG  = "#f8f9fc"
-_BORDER   = "#e0e7f3"
+from ui.theme import _C
 
 
 class _ValuesPanel(QWidget):
@@ -36,17 +33,17 @@ class _ValuesPanel(QWidget):
         splitter = QSplitter(Qt.Horizontal)
         splitter.setHandleWidth(4)
         splitter.setStyleSheet(f"""
-            QSplitter::handle {{ background: {_BORDER}; }}
-            QSplitter::handle:hover {{ background: {_BLUE_MID}; }}
+            QSplitter::handle {{ background: {_C['border']}; }}
+            QSplitter::handle:hover {{ background: {_C['accent_mid']}; }}
         """)
 
         self._sets_list = _SetsListPanel(self.conn)
         self._sets_list.setMinimumWidth(240)
         self._sets_list.setMaximumWidth(360)
-        self._sets_list.setStyleSheet(f"background: {_GRAY_BG}; border-right: 1px solid {_BORDER};")
+        self._sets_list.setStyleSheet(f"background: {_C['bg_surface']}; border-right: 1px solid {_C['border']};")
 
         self._table = _InstancesTable(self.conn)
-        self._table.setStyleSheet("background: white;")
+        self._table.setStyleSheet(f"background: {_C['bg_input']};")
 
         self._sets_list.set_selected.connect(self._on_set_selected)
 

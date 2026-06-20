@@ -67,6 +67,9 @@ _LIGHT_THEME: Dict[str, str] = {
     "accent_light": "#D6E4F0",
     "accent_mid":   "#98C1D9",
     "accent_text":  "#2A3F5A",
+    "btn_primary_text": "#FFFFFF",
+    "success_hover_bg": "#D4EDDF",
+    "danger_hover_bg":  "#FCDBD9",
     "sidebar_bg":    "#1E1D1A",
     "sidebar_text":  "#E8E6E1",
     "sidebar_muted": "#7A7870",
@@ -206,6 +209,15 @@ _LIGHT_THEME: Dict[str, str] = {
     "danger_hover":        "#ffcdd2",
     "warning_hover":       "#ffecb3",
     "orange_hover":        "#bf360c",
+
+    # ── Design Module ───────────────────────────────────────────
+    "design_thumb_bg":          "#1E1B4B",   # خلفية الـ thumbnail في بطاقات التصميم
+    "design_thumb_bg_start":    "#2d2d5e",   # بداية تدرج placeholder الـ XCF
+    "design_thumb_bg_end":      "#1a1a2e",   # نهاية تدرج placeholder الـ XCF
+    "design_thumb_border":      "#5c6bc0",   # حد إطار placeholder الـ XCF
+    "design_thumb_icon":        "#7986cb",   # أيقونة 🎨 في placeholder
+    "design_thumb_text":        "#9fa8da",   # اسم الملف في placeholder
+    "card_badge_text":          "#FFFFFF",   # نص badge العدد فوق الـ thumbnail الداكن
 }
 
 _DARK_THEME: Dict[str, str] = {
@@ -229,6 +241,9 @@ _DARK_THEME: Dict[str, str] = {
     "accent_light": "#1A2A3A",
     "accent_mid":   "#2A4A6A",
     "accent_text":  "#A8D4F0",
+    "btn_primary_text": "#FFFFFF",
+    "success_hover_bg": "#123828",
+    "danger_hover_bg":  "#3A1818",
     "sidebar_bg":   "#080808",
     "sidebar_text": "#E8E6E1",
     "sidebar_muted":"#5A5850",
@@ -381,6 +396,15 @@ _DARK_THEME: Dict[str, str] = {
     "danger_hover":        "#5A2020",
     "warning_hover":       "#4A3800",
     "orange_hover":        "#CC5500",
+
+    # ── Design Module ───────────────────────────────────────────
+    "design_thumb_bg":          "#0A0A1E",   # خلفية الـ thumbnail في بطاقات التصميم
+    "design_thumb_bg_start":    "#1d1d3e",   # بداية تدرج placeholder الـ XCF
+    "design_thumb_bg_end":      "#0a0a1e",   # نهاية تدرج placeholder الـ XCF
+    "design_thumb_border":      "#3c4a8a",   # حد إطار placeholder الـ XCF
+    "design_thumb_icon":        "#5a6bb0",   # أيقونة 🎨 في placeholder
+    "design_thumb_text":        "#6f7aa0",   # اسم الملف في placeholder
+    "card_badge_text":          "#FFFFFF",   # نص badge العدد فوق الـ thumbnail الداكن
 }
 
 THEMES: Dict[str, Dict[str, str]] = {

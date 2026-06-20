@@ -13,23 +13,10 @@ from PyQt5.QtWidgets import (
 )
 from PyQt5.QtCore import Qt
 
-from db.designs.dimension_sets_repo import (
-    fetch_all_dimension_sets,
-    fetch_fields_for_set,
-)
-from db.designs.designs_sizes_repo import (
-    insert_design_size, update_design_size,
-    fetch_instances_for_set_with_values,
-    instance_already_used,
-)
-
-# ── ألوان ──
-_BLUE       = "#1565c0"
-_BLUE_LIGHT = "#e8f0fe"
-_BLUE_MID   = "#bbdefb"
-_GREEN      = "#2e7d32"
-_GREEN_LT   = "#e8f5e9"
-_GRAY_BG    = "#f8f9fc"
+from ui.theme import _C
+from ui.widgets.core.i18n import tr
+from ui.font import FS_XS, FS_SM, FS_BASE, FS_MD, FS_LG
+from services.design.dimension_set_service import DimensionSetService
 
 
 # ══════════════════════════════════════════════════════════
@@ -46,14 +33,15 @@ class _SizeDialog(QDialog):
                  size_data=None, parent=None):
         super().__init__(parent)
         self.conn       = conn
+        self._svc       = DimensionSetService(conn)
         self.design_id  = design_id
         self.size_id    = size_data["id"] if size_data else None
         self._size_data = size_data
 
-        self.setWindowTitle("تعديل مقاس" if size_data else "إضافة مقاس جديد")
+        self.setWindowTitle(tr("design_size_dlg_edit_title") if size_data else tr("design_size_dlg_new_title"))
         self.setMinimumWidth(520)
         self.setModal(True)
-        self.setStyleSheet(f"QDialog {{ background: {_GRAY_BG}; }}")
+        self.setStyleSheet(f"QDialog {{ background: {_C['bg_surface']}; }}")
         self._build()
         if size_data:
             self._load(size_data)
@@ -64,10 +52,10 @@ class _SizeDialog(QDialog):
         root.setSpacing(14)
 
         # ── رأس ──
-        hdr = QLabel("📐  " + ("تعديل مقاس" if self.size_id else "إضافة مقاس جديد"))
+        hdr = QLabel("📐  " + (tr("design_size_dlg_edit_title") if self.size_id else tr("design_size_dlg_new_title")))
         hdr.setStyleSheet(f"""
-            font-size: 13px; font-weight: bold; color: {_BLUE};
-            background: {_BLUE_LIGHT}; border-radius: 8px; padding: 8px 14px;
+            font-size: {FS_MD}px; font-weight: bold; color: {_C['accent']};
+            background: {_C['accent_light']}; border-radius: 8px; padding: 8px 14px;
         """)
         root.addWidget(hdr)
 
@@ -80,88 +68,88 @@ class _SizeDialog(QDialog):
         self.cmb_set.setMinimumHeight(34)
         self.cmb_set.currentIndexChanged.connect(self._on_set_changed)
         self._load_sets_combo()
-        form.addRow("مجموعة المقاسات :", self.cmb_set)
+        form.addRow(tr("design_size_set_label") + " :", self.cmb_set)
 
         # ── المقاس (instance) ──
         self.cmb_instance = QComboBox()
         self.cmb_instance.setMinimumHeight(34)
         self.cmb_instance.currentIndexChanged.connect(self._on_instance_changed)
-        form.addRow("المقاس :", self.cmb_instance)
+        form.addRow(tr("design_size_instance_label") + " :", self.cmb_instance)
 
         # ── حقل العرض ──
         self.cmb_width = QComboBox()
         self.cmb_width.setMinimumHeight(34)
         self.cmb_width.currentIndexChanged.connect(self._update_canvas_preview)
-        form.addRow("حقل العرض :", self.cmb_width)
+        form.addRow(tr("design_size_width_label") + " :", self.cmb_width)
 
         # ── حقل الطول ──
         self.cmb_height = QComboBox()
         self.cmb_height.setMinimumHeight(34)
         self.cmb_height.currentIndexChanged.connect(self._update_canvas_preview)
-        form.addRow("حقل الطول :", self.cmb_height)
+        form.addRow(tr("design_size_height_label") + " :", self.cmb_height)
 
         # ── حقل الـ DPI ──
         self.cmb_dpi = QComboBox()
         self.cmb_dpi.setMinimumHeight(34)
         self.cmb_dpi.currentIndexChanged.connect(self._update_canvas_preview)
-        form.addRow("حقل الدقة (DPI) :", self.cmb_dpi)
+        form.addRow(tr("design_size_dpi_label") + " :", self.cmb_dpi)
 
         # ── معاينة الكانفاس ──
         self.lbl_canvas = QLabel("─")
         self.lbl_canvas.setStyleSheet(f"""
-            color: {_GREEN}; font-weight: bold; font-size: 12px;
-            background: {_GREEN_LT}; border: 1px solid #a5d6a7;
+            color: {_C['success']}; font-weight: bold; font-size: {FS_BASE}px;
+            background: {_C['success_bg']}; border: 1px solid {_C['success_border']};
             border-radius: 6px; padding: 6px 12px;
         """)
-        form.addRow("مقاس الكانفاس :", self.lbl_canvas)
+        form.addRow(tr("design_size_canvas_label") + " :", self.lbl_canvas)
 
         # ── مسار ملف GIMP ──
         path_row = QHBoxLayout()
         self.inp_path = QLineEdit()
-        self.inp_path.setPlaceholderText("مسار ملف .xcf — اتركه فارغاً لإنشاء ملف جديد")
+        self.inp_path.setPlaceholderText(tr("design_size_gimp_placeholder"))
         self.inp_path.setMinimumHeight(34)
         btn_browse = QPushButton("📂")
         btn_browse.setFixedSize(34, 34)
-        btn_browse.setToolTip("اختر ملف .xcf موجود")
+        btn_browse.setToolTip(tr("design_size_gimp_browse_tooltip"))
         btn_browse.clicked.connect(self._browse_xcf)
         btn_browse.setStyleSheet(f"""
             QPushButton {{
-                background: {_BLUE_LIGHT}; border: 1.5px solid {_BLUE_MID};
-                border-radius: 6px; font-size: 14px;
+                background: {_C['accent_light']}; border: 1.5px solid {_C['accent_mid']};
+                border-radius: 6px; font-size: {FS_MD}px;
             }}
-            QPushButton:hover {{ background: {_BLUE_MID}; }}
+            QPushButton:hover {{ background: {_C['accent_mid']}; }}
         """)
         path_row.addWidget(self.inp_path)
         path_row.addWidget(btn_browse)
-        form.addRow("مسار ملف GIMP :", path_row)
+        form.addRow(tr("design_size_gimp_path_label") + " :", path_row)
 
         # ── ملاحظات ──
         self.inp_notes = QLineEdit()
-        self.inp_notes.setPlaceholderText("ملاحظات اختيارية...")
+        self.inp_notes.setPlaceholderText(tr("notes"))
         self.inp_notes.setMinimumHeight(34)
-        form.addRow("ملاحظات :", self.inp_notes)
+        form.addRow(tr("notes") + " :", self.inp_notes)
 
         root.addLayout(form)
 
         # ── أزرار ──
         btns = QDialogButtonBox()
-        btn_ok     = btns.addButton("💾  حفظ",   QDialogButtonBox.AcceptRole)
-        btn_cancel = btns.addButton("✖  إلغاء", QDialogButtonBox.RejectRole)
+        btn_ok     = btns.addButton("💾  " + tr("save"),   QDialogButtonBox.AcceptRole)
+        btn_cancel = btns.addButton("✖  " + tr("cancel"), QDialogButtonBox.RejectRole)
         btn_ok.setMinimumHeight(36)
         btn_cancel.setMinimumHeight(36)
         btn_ok.setStyleSheet(f"""
             QPushButton {{
-                background: {_BLUE}; color: white; border: none;
+                background: {_C['accent']}; color: {_C['btn_primary_text']}; border: none;
                 border-radius: 7px; padding: 6px 20px; font-weight: bold;
             }}
-            QPushButton:hover {{ background: #0d47a1; }}
+            QPushButton:hover {{ background: {_C['accent_hover']}; }}
         """)
         btn_cancel.setStyleSheet(f"""
             QPushButton {{
-                background: white; color: {_BLUE};
-                border: 1.5px solid {_BLUE_MID}; border-radius: 7px; padding: 5px 16px;
+                background: {_C['bg_input']}; color: {_C['accent']};
+                border: 1.5px solid {_C['accent_mid']}; border-radius: 7px; padding: 5px 16px;
             }}
-            QPushButton:hover {{ background: {_BLUE_LIGHT}; }}
+            QPushButton:hover {{ background: {_C['accent_light']}; }}
         """)
         btns.accepted.connect(self._save)
         btns.rejected.connect(self.reject)
@@ -172,8 +160,8 @@ class _SizeDialog(QDialog):
     def _load_sets_combo(self):
         self.cmb_set.blockSignals(True)
         self.cmb_set.clear()
-        self.cmb_set.addItem("─ اختر مجموعة مقاسات ─", None)
-        for ds in fetch_all_dimension_sets(self.conn):
+        self.cmb_set.addItem(tr("design_size_select_set"), None)
+        for ds in self._svc.list_sets():
             self.cmb_set.addItem(ds["name"], ds["id"])
         self.cmb_set.blockSignals(False)
 
@@ -189,17 +177,17 @@ class _SizeDialog(QDialog):
             return
 
         # instances
-        self.cmb_instance.addItem("─ اختر مقاساً ─", None)
-        for inst in fetch_instances_for_set_with_values(self.conn, set_id):
-            name = inst["name"].strip() or f"مقاس #{inst['id']}"
+        self.cmb_instance.addItem(tr("design_size_select_instance"), None)
+        for inst in self._svc.list_instances(set_id):
+            name = inst["name"].strip() or f"#{inst['id']}"
             self.cmb_instance.addItem(name, inst["id"])
 
         # حقول رقمية للعرض والطول والـ DPI
-        self.cmb_width.addItem("─ اختر حقل العرض ─", None)
-        self.cmb_height.addItem("─ اختر حقل الطول ─", None)
-        self.cmb_dpi.addItem("─ اختياري: حقل الدقة (DPI) ─", None)
+        self.cmb_width.addItem(tr("design_size_select_width"), None)
+        self.cmb_height.addItem(tr("design_size_select_height"), None)
+        self.cmb_dpi.addItem(tr("design_size_select_dpi"), None)
 
-        for f in fetch_fields_for_set(self.conn, set_id):
+        for f in self._svc.list_fields(set_id):
             if f["field_type"] == "number":
                 label = f"{f['label']} ({f['unit'] or 'cm'})"
                 self.cmb_width.addItem(label, f["id"])
@@ -222,57 +210,57 @@ class _SizeDialog(QDialog):
 
         w_val = h_val = dpi_val = None
 
-        # جلب قيمة العرض
-        r = self.conn.execute(
-            "SELECT value_num FROM dimension_set_values WHERE instance_id=? AND field_id=?",
-            (inst_id, w_fid)
-        ).fetchone()
-        w_val = r["value_num"] if r else None
-
-        # جلب قيمة الطول
-        r = self.conn.execute(
-            "SELECT value_num FROM dimension_set_values WHERE instance_id=? AND field_id=?",
-            (inst_id, h_fid)
-        ).fetchone()
-        h_val = r["value_num"] if r else None
+        # جلب القيم من service
+        w_val = self._svc.get_field_value(inst_id, w_fid)
+        h_val = self._svc.get_field_value(inst_id, h_fid)
 
         # جلب قيمة الـ DPI لو محدد
         if dpi_fid:
-            r = self.conn.execute(
-                "SELECT value_num FROM dimension_set_values WHERE instance_id=? AND field_id=?",
-                (inst_id, dpi_fid)
-            ).fetchone()
-            dpi_val = float(r["value_num"]) if r and r["value_num"] else None
+            dpi_val = self._svc.get_field_value(inst_id, dpi_fid)
 
         if w_val is not None and h_val is not None:
             # جلب الوحدة الافتراضية للمجموعة
             set_id = self.cmb_set.currentData()
-            unit = "cm"
-            if set_id:
-                row = self.conn.execute(
-                    "SELECT default_unit FROM dimension_sets WHERE id=?", (set_id,)
-                ).fetchone()
-                if row:
-                    unit = row["default_unit"] or "cm"
+            unit = self._svc.get_set_default_unit(set_id) if set_id else "cm"
 
             if dpi_val:
                 w_px = _to_px_preview(w_val, unit, dpi_val)
                 h_px = _to_px_preview(h_val, unit, dpi_val)
                 self.lbl_canvas.setText(
-                    f"{w_val:g} × {h_val:g} {unit}  →  {w_px} × {h_px} px  @  {dpi_val:g} DPI"
+                    tr("design_size_canvas_with_dpi").format(
+                        w=f"{w_val:g}", h=f"{h_val:g}", unit=unit,
+                        w_px=w_px, h_px=h_px, dpi=f"{dpi_val:g}"
+                    )
                 )
+                self.lbl_canvas.setStyleSheet(f"""
+                    color: {_C['success']}; font-weight: bold; font-size: {FS_BASE}px;
+                    background: {_C['success_bg']}; border: 1px solid {_C['success_border']};
+                    border-radius: 6px; padding: 6px 12px;
+                """)
             else:
                 self.lbl_canvas.setText(
-                    f"{w_val:g} × {h_val:g} {unit}  (حدد حقل DPI لحساب الـ px)"
+                    tr("design_size_canvas_no_dpi").format(
+                        w=f"{w_val:g}", h=f"{h_val:g}", unit=unit
+                    )
                 )
+                self.lbl_canvas.setStyleSheet(f"""
+                    color: {_C['warning']}; font-weight: bold; font-size: {FS_BASE}px;
+                    background: {_C['warning_bg']}; border: 1px solid {_C['warning_border']};
+                    border-radius: 6px; padding: 6px 12px;
+                """)
         else:
-            self.lbl_canvas.setText("⚠️  القيم غير مكتملة في هذا المقاس")
+            self.lbl_canvas.setText(tr("design_size_canvas_incomplete"))
+            self.lbl_canvas.setStyleSheet(f"""
+                color: {_C['warning']}; font-weight: bold; font-size: {FS_BASE}px;
+                background: {_C['warning_bg']}; border: 1px solid {_C['warning_border']};
+                border-radius: 6px; padding: 6px 12px;
+            """)
 
     def _browse_xcf(self):
         path, _ = QFileDialog.getOpenFileName(
-            self, "اختر ملف GIMP",
+            self, tr("design_size_card_link_file_title"),
             os.path.expanduser("~"),
-            "GIMP Files (*.xcf);;All Files (*)"
+            tr("design_size_card_gimp_filter")
         )
         if path:
             self.inp_path.setText(path)
@@ -324,25 +312,22 @@ class _SizeDialog(QDialog):
         notes     = self.inp_notes.text().strip()
 
         if not set_id:
-            QMessageBox.warning(self, "تنبيه", "اختر مجموعة مقاسات")
+            QMessageBox.warning(self, tr("warning"), tr("design_size_choose_set"))
             return
         if not inst_id:
-            QMessageBox.warning(self, "تنبيه", "اختر المقاس")
+            QMessageBox.warning(self, tr("warning"), tr("design_size_choose_instance"))
             return
 
         # تحقق من التكرار
-        if instance_already_used(self.conn, self.design_id, inst_id,
-                                  exclude_size_id=self.size_id):
-            QMessageBox.warning(self, "تنبيه", "هذا المقاس مضاف بالفعل لهذا التصميم")
+        if self._svc.is_instance_used(self.design_id, inst_id, exclude_size_id=self.size_id):
+            QMessageBox.warning(self, tr("warning"), tr("design_size_already_used"))
             return
 
         if self.size_id:
-            update_design_size(self.conn, self.size_id,
-                               w_fid, h_fid, path, notes,
-                               dpi_field_id=dpi_fid)
+            self._svc.update_size(self.size_id, w_fid, h_fid, path, notes, dpi_field_id=dpi_fid)
         else:
-            self.size_id = insert_design_size(
-                self.conn, self.design_id, set_id, inst_id,
+            self.size_id = self._svc.create_size(
+                self.design_id, set_id, inst_id,
                 w_fid, h_fid, path, notes,
                 dpi_field_id=dpi_fid
             )

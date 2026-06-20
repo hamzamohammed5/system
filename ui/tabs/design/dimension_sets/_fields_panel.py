@@ -10,10 +10,10 @@ from PyQt5.QtWidgets import (
 )
 from PyQt5.QtCore import Qt, pyqtSignal
 
-from db.designs.dimension_sets_repo import (
-    fetch_fields_for_set, fetch_field,
-    delete_field, reorder_fields,
-)
+from ui.theme import _C
+from ui.widgets.core.i18n import tr
+from ui.font import FS_BASE
+from services.design.dimension_set_service import DimensionSetService
 from ._field_dialog import _FieldDialog
 from ui.helpers import make_table, confirm_delete, danger_button
 
@@ -27,6 +27,7 @@ class _FieldsPanel(QWidget):
     def __init__(self, conn, parent=None):
         super().__init__(parent)
         self.conn    = conn
+        self._svc    = DimensionSetService(conn)
         self._set_id = None
         self._build()
 
@@ -35,12 +36,14 @@ class _FieldsPanel(QWidget):
         root.setContentsMargins(0, 0, 0, 0)
         root.setSpacing(6)
 
-        hdr = QLabel("حقول المجموعة")
-        hdr.setStyleSheet("font-weight: bold; color: #1565c0; font-size: 12px;")
+        hdr = QLabel(tr("dim_field_panel_title"))
+        hdr.setStyleSheet(f"font-weight: bold; color: {_C['accent']}; font-size: {FS_BASE}px;")
         root.addWidget(hdr)
 
         self.table = make_table(
-            ["الترتيب", "الاسم", "التسمية", "الوحدة", "النوع", "إلزامي", "يعتمد على"],
+            [tr("dim_field_col_order"), tr("dim_field_col_name_en"), tr("dim_field_col_label"),
+             tr("dim_field_col_unit"), tr("dim_field_col_type"), tr("dim_field_col_required"),
+             tr("dim_field_col_depends")],
             stretch_col=2
         )
         self.table.setColumnWidth(0, 60)
@@ -51,11 +54,11 @@ class _FieldsPanel(QWidget):
         self.table.setColumnWidth(6, 180)
         root.addWidget(self.table)
 
-        btn_add  = QPushButton("➕  إضافة حقل")
-        btn_edit = QPushButton("✏️  تعديل")
-        btn_del  = danger_button("🗑️  حذف")
-        btn_up   = QPushButton("▲")
-        btn_dn   = QPushButton("▼")
+        btn_add  = QPushButton(tr("dim_field_add_btn"))
+        btn_edit = QPushButton(tr("category_edit"))
+        btn_del  = danger_button(tr("category_delete"))
+        btn_up   = QPushButton(tr("dim_field_move_up"))
+        btn_dn   = QPushButton(tr("dim_field_move_down"))
         for btn in (btn_add, btn_edit, btn_del, btn_up, btn_dn):
             btn.setMinimumHeight(28)
         btn_up.setFixedWidth(34)
@@ -90,7 +93,7 @@ class _FieldsPanel(QWidget):
             self.table.setRowCount(0)
             return
         self.table.setRowCount(0)
-        fields = fetch_fields_for_set(self.conn, self._set_id)
+        fields = self._svc.list_fields(self._set_id)
         for f in fields:
             r = self.table.rowCount()
             self.table.insertRow(r)
@@ -99,7 +102,7 @@ class _FieldsPanel(QWidget):
             self.table.setItem(r, 2, QTableWidgetItem(f["label"]))
             self.table.setItem(r, 3, QTableWidgetItem(f["unit"] or "cm"))
             self.table.setItem(r, 4, QTableWidgetItem(
-                "رقم" if f["field_type"] == "number" else "نص"
+                tr("dim_field_type_number") if f["field_type"] == "number" else tr("dim_field_type_text")
             ))
             self.table.setItem(r, 5, QTableWidgetItem("✓" if f["required"] else ""))
 
@@ -143,7 +146,7 @@ class _FieldsPanel(QWidget):
 
     def _add_field(self):
         if self._set_id is None:
-            QMessageBox.information(self, "تنبيه", "اختر مجموعة مقاسات أولاً")
+            QMessageBox.information(self, tr("info"), tr("dim_field_select_first"))
             return
         dlg = _FieldDialog(self.conn, self._set_id, parent=self)
         if dlg.exec_() == QDialog.Accepted:
@@ -153,9 +156,9 @@ class _FieldsPanel(QWidget):
     def _edit_field(self):
         fid = self._selected_field_id()
         if fid is None:
-            QMessageBox.information(self, "تنبيه", "اختر حقلاً أولاً")
+            QMessageBox.information(self, tr("info"), tr("dim_field_select_first"))
             return
-        f = fetch_field(self.conn, fid)
+        f = self._svc.get_field(fid)
         dlg = _FieldDialog(self.conn, self._set_id, field_data=f, parent=self)
         if dlg.exec_() == QDialog.Accepted:
             self._refresh()
@@ -164,11 +167,11 @@ class _FieldsPanel(QWidget):
     def _del_field(self):
         fid = self._selected_field_id()
         if fid is None:
-            QMessageBox.information(self, "تنبيه", "اختر حقلاً أولاً")
+            QMessageBox.information(self, tr("info"), tr("dim_field_select_first"))
             return
-        f = fetch_field(self.conn, fid)
+        f = self._svc.get_field(fid)
         if f and confirm_delete(self, f["label"]):
-            delete_field(self.conn, fid)
+            self._svc.delete_field(fid)
             self._refresh()
             self.fields_changed.emit()
 
@@ -185,7 +188,7 @@ class _FieldsPanel(QWidget):
             for r in range(self.table.rowCount())
         ]
         ids[row], ids[new_row] = ids[new_row], ids[row]
-        reorder_fields(self.conn, self._set_id, ids)
+        self._svc.reorder_fields(self._set_id, ids)
         self._refresh()
         self.table.selectRow(new_row)
         self.fields_changed.emit()

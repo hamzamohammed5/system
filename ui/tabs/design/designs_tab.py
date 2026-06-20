@@ -17,6 +17,7 @@ from PyQt5.QtCore import Qt
 from .designs._designs_table            import _DesignsTable
 from .designs._design_detail_panel      import _DesignDetailPanel
 from .designs._designs_categories_panel import DesignsCategoriesPanel
+from ui.theme import _C
 
 
 class DesignsTab(QWidget):
@@ -36,13 +37,13 @@ class DesignsTab(QWidget):
         # ══ 2. Splitter: قائمة + تفاصيل ══════════════
         splitter = QSplitter(Qt.Horizontal)
         splitter.setHandleWidth(4)
-        splitter.setStyleSheet("""
-            QSplitter::handle {
-                background: #e2e8f0;
-            }
-            QSplitter::handle:hover {
-                background: #bfdbfe;
-            }
+        splitter.setStyleSheet(f"""
+            QSplitter::handle {{
+                background: {_C['border']};
+            }}
+            QSplitter::handle:hover {{
+                background: {_C['accent_mid']};
+            }}
         """)
 
         # لوحة التفاصيل (تُنشأ أولاً لأن _DesignsTable تحتاجها)
@@ -76,7 +77,7 @@ class DesignsTab(QWidget):
 
         sep = QFrame()
         sep.setFrameShape(QFrame.VLine)
-        sep.setStyleSheet("color: #e2e8f0;")
+        sep.setStyleSheet(f"color: {_C['border']};")
         root.addWidget(sep)
 
         root.addWidget(splitter, stretch=1)

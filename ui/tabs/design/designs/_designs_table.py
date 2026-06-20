@@ -25,29 +25,34 @@ from ._design_detail_panel import _DesignDetailPanel
 
 from .designs_table._design_card import _fetch_designs_filtered, _DesignCard, _ThumbWorker
 
+from ui.theme import _C
+from ui.widgets.core.i18n import tr
+from ui.font import get_font_size, fs
+
 import os
 
-# ── Palette ──────────────────────────────────────────────
-_BG          = "#FFFFFF"
-_BG_SURFACE  = "#F8F9FB"
-_BORDER      = "#E5E9F0"
-_BORDER_MED  = "#CDD3E0"
-_TEXT_PRI    = "#1A2035"
-_TEXT_SEC    = "#5A6680"
-_TEXT_MUT    = "#9BA5BE"
+# ── Palette من _C ──────────────────────────────────────
+_BG          = _C["bg_input"]
+_BG_SURFACE  = _C["bg_surface"]
+_BORDER      = _C["border"]
+_BORDER_MED  = _C["border_med"]
+_TEXT_PRI    = _C["text_primary"]
+_TEXT_SEC    = _C["text_sec"]
+_TEXT_MUT    = _C["text_muted"]
 
-_ACCENT      = "#4F6EF7"
+_ACCENT      = _C["accent"]
 _CARD_W      = 172
 _CARD_THUMB  = 128
 _RADIUS_SM   = "6px"
 
 
 def _btn_ss(bg, fg, bdr, hover_bg, radius=_RADIUS_SM, height=32):
+    base = get_font_size()
     return (
         f"QPushButton{{"
         f"  background:{bg}; color:{fg};"
         f"  border:1px solid {bdr}; border-radius:{radius};"
-        f"  padding:0 14px; font-size:12px; min-height:{height}px;"
+        f"  padding:0 14px; font-size:{fs(base,0)}pt; min-height:{height}px;"
         f"}}"
         f"QPushButton:hover{{background:{hover_bg};}}"
         f"QPushButton:pressed{{opacity:0.85;}}"
@@ -85,6 +90,7 @@ class _DesignsTable(QWidget):
         self._load()
 
     def _build(self):
+        base = get_font_size()
         root = QVBoxLayout(self)
         root.setContentsMargins(0, 0, 0, 0)
         root.setSpacing(0)
@@ -106,7 +112,7 @@ class _DesignsTable(QWidget):
         row1.setSpacing(8)
 
         self.inp_search = QLineEdit()
-        self.inp_search.setPlaceholderText("بحث بالاسم...")
+        self.inp_search.setPlaceholderText(tr("design_table_search_placeholder"))
         self.inp_search.setMinimumHeight(34)
         self.inp_search.setStyleSheet(f"""
             QLineEdit {{
@@ -114,7 +120,7 @@ class _DesignsTable(QWidget):
                 border: 1px solid {_BORDER};
                 border-radius: {_RADIUS_SM};
                 padding: 0 12px;
-                font-size: 12px;
+                font-size: {fs(base,0)}pt;
                 color: {_TEXT_PRI};
             }}
             QLineEdit:focus {{
@@ -124,10 +130,10 @@ class _DesignsTable(QWidget):
         """)
         self.inp_search.textChanged.connect(lambda: self._search_timer.start())
 
-        self.btn_new = QPushButton("  تصميم جديد  +")
+        self.btn_new = QPushButton(f"  {tr('design_table_new_btn')}")
         self.btn_new.setMinimumHeight(34)
         self.btn_new.setStyleSheet(
-            _btn_ss(_ACCENT, "#fff", _ACCENT, "#3D5BEF", height=34)
+            _btn_ss(_ACCENT, _C["accent_text"], _ACCENT, _C["accent_hover"], height=34)
         )
         self.btn_new.clicked.connect(self._new_design)
 
@@ -139,9 +145,9 @@ class _DesignsTable(QWidget):
         row2 = QHBoxLayout()
         row2.setSpacing(8)
 
-        lbl_set = QLabel("المجموعة:")
+        lbl_set = QLabel(tr("design_table_set_filter_label"))
         lbl_set.setStyleSheet(
-            f"font-size:11px; color:{_TEXT_SEC}; background:transparent;"
+            f"font-size:{fs(base,-1)}pt; color:{_TEXT_SEC}; background:transparent;"
         )
 
         self.cmb_set = QComboBox()
@@ -152,7 +158,7 @@ class _DesignsTable(QWidget):
                 border: 1px solid {_BORDER};
                 border-radius: {_RADIUS_SM};
                 padding: 0 8px;
-                font-size: 11px;
+                font-size: {fs(base,-1)}pt;
                 color: {_TEXT_PRI};
             }}
             QComboBox:focus {{ border-color: {_ACCENT}; }}
@@ -162,10 +168,10 @@ class _DesignsTable(QWidget):
 
         self.lbl_count = QLabel("")
         self.lbl_count.setStyleSheet(
-            f"font-size:11px; color:{_TEXT_MUT}; background:transparent;"
+            f"font-size:{fs(base,-1)}pt; color:{_TEXT_MUT}; background:transparent;"
         )
 
-        btn_rst = QPushButton("↺  مسح")
+        btn_rst = QPushButton(tr("design_table_reset_filters_btn"))
         btn_rst.setMinimumHeight(28)
         btn_rst.setStyleSheet(
             _btn_ss(_BG_SURFACE, _TEXT_SEC, _BORDER, _BG, height=28)
@@ -214,17 +220,17 @@ class _DesignsTable(QWidget):
 
         ef_icon = QLabel("🎨")
         ef_icon.setAlignment(Qt.AlignCenter)
-        ef_icon.setStyleSheet("font-size:48px; background:transparent;")
+        ef_icon.setStyleSheet(f"font-size:{fs(base,+18)}pt; background:transparent;")
 
-        self._empty_msg = QLabel("لا توجد تصميمات")
+        self._empty_msg = QLabel(tr("design_table_empty_no_designs"))
         self._empty_msg.setAlignment(Qt.AlignCenter)
         self._empty_msg.setStyleSheet(
-            f"color:{_TEXT_SEC}; font-size:14px; font-weight:600; background:transparent;"
+            f"color:{_TEXT_SEC}; font-size:{fs(base,+2)}pt; font-weight:600; background:transparent;"
         )
-        self._empty_sub = QLabel("اضغط «تصميم جديد» للبدء")
+        self._empty_sub = QLabel(tr("design_table_empty_start"))
         self._empty_sub.setAlignment(Qt.AlignCenter)
         self._empty_sub.setStyleSheet(
-            f"color:{_TEXT_MUT}; font-size:12px; background:transparent;"
+            f"color:{_TEXT_MUT}; font-size:{fs(base,0)}pt; background:transparent;"
         )
 
         ef_lay.addWidget(ef_icon)
@@ -241,7 +247,7 @@ class _DesignsTable(QWidget):
         prev = self.cmb_set.currentData()
         self.cmb_set.blockSignals(True)
         self.cmb_set.clear()
-        self.cmb_set.addItem("كل المجموعات", None)
+        self.cmb_set.addItem(tr("design_table_all_sets"), None)
         for ds in fetch_all_dimension_sets(self.conn):
             self.cmb_set.addItem(ds["name"], ds["id"])
         for i in range(self.cmb_set.count()):
@@ -301,11 +307,11 @@ class _DesignsTable(QWidget):
             self._scroll.setVisible(False)
             self._empty_frame.setVisible(True)
             if name_q or self._cat_filter or self._set_filter:
-                self._empty_msg.setText("لا توجد نتائج")
-                self._empty_sub.setText("جرّب تغيير معايير البحث")
+                self._empty_msg.setText(tr("design_table_empty_no_results"))
+                self._empty_sub.setText(tr("design_table_empty_change_criteria"))
             else:
-                self._empty_msg.setText("لا توجد تصميمات")
-                self._empty_sub.setText("اضغط «تصميم جديد +» للبدء")
+                self._empty_msg.setText(tr("design_table_empty_no_designs"))
+                self._empty_sub.setText(tr("design_table_empty_start"))
             self.lbl_count.setText("")
             return
 
@@ -341,7 +347,7 @@ class _DesignsTable(QWidget):
                 card.set_thumbnail(None)
 
         total = len(rows)
-        self.lbl_count.setText(f"{total} تصميم")
+        self.lbl_count.setText(tr("design_table_count").format(count=total))
 
     def _on_thumb_ready(self, xcf_path: str, pixmap):
         norm = os.path.normpath(xcf_path)

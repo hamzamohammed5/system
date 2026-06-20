@@ -28,23 +28,26 @@ from ._size_card   import _SizeCard
 from ._size_dialog import _SizeDialog
 from ui.events import bus
 from ui.tabs.design.design_styles import get_styles
+from ui.theme import _C
+from ui.widgets.core.i18n import tr
+from ui.font import get_font_size, fs
 
-# ── Palette ──────────────────────────────────────────────
-_BG          = "#FFFFFF"
-_BG_SURFACE  = "#F8F9FB"
-_BORDER      = "#E5E9F0"
-_BORDER_MED  = "#CDD3E0"
-_TEXT_PRI    = "#1A2035"
-_TEXT_SEC    = "#5A6680"
-_TEXT_MUT    = "#9BA5BE"
-_ACCENT      = "#4F6EF7"
-_ACCENT_LT   = "#EEF2FF"
-_ACCENT_BDR  = "#C7D2FE"
-_ACCENT_DARK = "#3D5BEF"
-_SUCCESS     = "#16A34A"
-_SUCCESS_LT  = "#F0FDF4"
-_SUCCESS_BDR = "#BBF7D0"
-_DANGER      = "#DC2626"
+# ── Palette من _C ──────────────────────────────────────
+_BG          = _C["bg_input"]
+_BG_SURFACE  = _C["bg_surface"]
+_BORDER      = _C["border"]
+_BORDER_MED  = _C["border_med"]
+_TEXT_PRI    = _C["text_primary"]
+_TEXT_SEC    = _C["text_sec"]
+_TEXT_MUT    = _C["text_muted"]
+_ACCENT      = _C["accent"]
+_ACCENT_LT   = _C["accent_light"]
+_ACCENT_BDR  = _C["accent_mid"]
+_ACCENT_DARK = _C["accent_hover"]
+_SUCCESS     = _C["success"]
+_SUCCESS_LT  = _C["success_bg"]
+_SUCCESS_BDR = _C["success_border"]
+_DANGER      = _C["danger"]
 _RADIUS_SM   = "6px"
 _RADIUS_XS   = "4px"
 
@@ -111,10 +114,10 @@ class _DesignDetailPanel(QWidget):
         title_row = QHBoxLayout()
         title_row.setSpacing(8)
 
-        self._lbl_title = QLabel("تصميم جديد")
+        self._lbl_title = QLabel(tr("design_detail_new_title"))
         self._lbl_title.setStyleSheet(s.label_header())
 
-        self._lbl_badge = QLabel("جديد")
+        self._lbl_badge = QLabel(tr("design_detail_new_badge"))
         self._lbl_badge.setStyleSheet(s.badge_accent())
         self._lbl_badge.setVisible(False)
 
@@ -125,11 +128,11 @@ class _DesignDetailPanel(QWidget):
         btn_row = QHBoxLayout()
         btn_row.setSpacing(6)
 
-        self.btn_new = QPushButton("جديد")
+        self.btn_new = QPushButton(tr("design_detail_new_btn"))
         self.btn_new.setStyleSheet(s.btn_ghost())
         self.btn_new.clicked.connect(self.reset)
 
-        self.btn_save = QPushButton("حفظ التصميم")
+        self.btn_save = QPushButton(tr("design_detail_save_btn"))
         self.btn_save.setStyleSheet(s.btn_primary())
         self.btn_save.clicked.connect(self._save)
 
@@ -141,12 +144,12 @@ class _DesignDetailPanel(QWidget):
         # حقل الاسم
         name_col = QVBoxLayout()
         name_col.setSpacing(4)
-        lbl_name = QLabel("الاسم")
+        lbl_name = QLabel(tr("design_detail_name_label"))
         lbl_name.setStyleSheet(s.label_field())
         self._field_labels.append(lbl_name)
         name_col.addWidget(lbl_name)
         self.inp_name = QLineEdit()
-        self.inp_name.setPlaceholderText("اسم التصميم...")
+        self.inp_name.setPlaceholderText(tr("design_detail_name_placeholder"))
         self.inp_name.setStyleSheet(s.input_field())
         name_col.addWidget(self.inp_name)
         hdr_lay.addLayout(name_col)
@@ -157,7 +160,7 @@ class _DesignDetailPanel(QWidget):
 
         cat_col = QVBoxLayout()
         cat_col.setSpacing(4)
-        lbl_cat = QLabel("التصنيف")
+        lbl_cat = QLabel(tr("design_detail_category_label"))
         lbl_cat.setStyleSheet(s.label_field())
         self._field_labels.append(lbl_cat)
         cat_col.addWidget(lbl_cat)
@@ -168,12 +171,12 @@ class _DesignDetailPanel(QWidget):
 
         notes_col = QVBoxLayout()
         notes_col.setSpacing(4)
-        lbl_notes = QLabel("ملاحظات")
+        lbl_notes = QLabel(tr("design_detail_notes_label"))
         lbl_notes.setStyleSheet(s.label_field())
         self._field_labels.append(lbl_notes)
         notes_col.addWidget(lbl_notes)
         self.inp_notes = QLineEdit()
-        self.inp_notes.setPlaceholderText("اختياري...")
+        self.inp_notes.setPlaceholderText(tr("design_detail_notes_placeholder"))
         self.inp_notes.setStyleSheet(s.input_field())
         notes_col.addWidget(self.inp_notes)
 
@@ -192,14 +195,14 @@ class _DesignDetailPanel(QWidget):
         sh_lay.setContentsMargins(18, 10, 18, 10)
         sh_lay.setSpacing(8)
 
-        self._lbl_sizes = QLabel("المقاسات")
+        self._lbl_sizes = QLabel(tr("design_detail_sizes_section"))
         self._lbl_sizes.setStyleSheet(s.label_section())
 
         self.lbl_sizes_count = QLabel("")
         self.lbl_sizes_count.setStyleSheet(s.badge_count())
         self.lbl_sizes_count.setVisible(False)
 
-        self._btn_add_size = QPushButton("+ إضافة مقاس")
+        self._btn_add_size = QPushButton(tr("design_detail_add_size_btn"))
         self._btn_add_size.setStyleSheet(s.btn_success())
         self._btn_add_size.clicked.connect(self._add_size)
 
@@ -243,13 +246,13 @@ class _DesignDetailPanel(QWidget):
 
         es_icon = QLabel("📐")
         es_icon.setAlignment(Qt.AlignCenter)
-        es_icon.setStyleSheet("font-size:28px; background:transparent;")
+        es_icon.setStyleSheet(f"font-size:{fs(get_font_size(),+12)}pt; background:transparent;")
 
-        self._es_lbl = QLabel("لا توجد مقاسات بعد")
+        self._es_lbl = QLabel(tr("design_detail_no_sizes_title"))
         self._es_lbl.setAlignment(Qt.AlignCenter)
         self._es_lbl.setStyleSheet(s.label_secondary())
 
-        self._es_sub = QLabel("اضغط «+ إضافة مقاس» لإضافة أول مقاس")
+        self._es_sub = QLabel(tr("design_detail_no_sizes_hint"))
         self._es_sub.setAlignment(Qt.AlignCenter)
         self._es_sub.setStyleSheet(s.label_muted())
 
@@ -275,7 +278,7 @@ class _DesignDetailPanel(QWidget):
         self.inp_name.setText(design["name"])
         self.inp_notes.setText(design["notes"] or "")
         self._lbl_title.setText(design["name"])
-        self._lbl_badge.setText("محفوظ")
+        self._lbl_badge.setText(tr("design_detail_saved_badge"))
         self._lbl_badge.setVisible(True)
 
         cat_id = design["item_category_id"]
@@ -291,7 +294,7 @@ class _DesignDetailPanel(QWidget):
         self.inp_name.clear()
         self.inp_notes.clear()
         self.cmb_cat.setCurrentIndex(0)
-        self._lbl_title.setText("تصميم جديد")
+        self._lbl_title.setText(tr("design_detail_new_title"))
         self._lbl_badge.setVisible(False)
         self._clear_size_cards()
         self.cleared.emit()
@@ -305,7 +308,7 @@ class _DesignDetailPanel(QWidget):
         prev = self.cmb_cat.currentData()
         self.cmb_cat.blockSignals(True)
         self.cmb_cat.clear()
-        self.cmb_cat.addItem("— بدون تصنيف —", None)
+        self.cmb_cat.addItem(tr("design_detail_no_category"), None)
 
         rows = fetch_all_item_categories(self.conn)
         tree = build_item_category_tree(rows)
@@ -337,7 +340,7 @@ class _DesignDetailPanel(QWidget):
             self.inp_name.setStyleSheet(
                 s.input_field() + f"QLineEdit{{border-color:{_DANGER};}}"
             )
-            QMessageBox.warning(self, "تنبيه", "أدخل اسم التصميم")
+            QMessageBox.warning(self, tr("warning"), tr("design_detail_name_required"))
             return
 
         self.inp_name.setStyleSheet(s.input_field())
@@ -350,7 +353,7 @@ class _DesignDetailPanel(QWidget):
             self._design_id = insert_design(self.conn, name, cat_id, notes)
 
         self._lbl_title.setText(name)
-        self._lbl_badge.setText("محفوظ")
+        self._lbl_badge.setText(tr("design_detail_saved_badge"))
         self._lbl_badge.setVisible(True)
         self.saved.emit()
 
@@ -399,7 +402,7 @@ class _DesignDetailPanel(QWidget):
         if not self._design_id:
             name = self.inp_name.text().strip()
             if not name:
-                QMessageBox.warning(self, "تنبيه", "احفظ التصميم أولاً قبل إضافة مقاسات")
+                QMessageBox.warning(self, tr("warning"), tr("design_detail_save_first_warn"))
                 return
             self._save()
             if not self._design_id:
@@ -421,8 +424,8 @@ class _DesignDetailPanel(QWidget):
 
     def _delete_size(self, size_id: int):
         if QMessageBox.question(
-            self, "تأكيد الحذف",
-            "حذف هذا المقاس من التصميم؟",
+            self, tr("confirm_delete"),
+            tr("design_detail_delete_size_confirm"),
             QMessageBox.Yes | QMessageBox.No
         ) == QMessageBox.Yes:
             delete_design_size(self.conn, size_id)

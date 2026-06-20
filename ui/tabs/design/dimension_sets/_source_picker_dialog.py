@@ -22,47 +22,40 @@ from PyQt5.QtWidgets import (
 from PyQt5.QtCore import Qt
 from PyQt5.QtGui import QColor
 
-from db.designs.dimension_sets_repo import (
-    fetch_instances_for_set,
-    fetch_instance_values,
-    fetch_field,
-)
+from ui.theme import _C
+from ui.widgets.core.i18n import tr
+from ui.font import FS_SM, FS_BASE, FS_MD
+from services.design.dimension_set_service import DimensionSetService
 
-# ── ألوان ──
-_BLUE       = "#1565c0"
-_BLUE_LIGHT = "#e8f0fe"
-_BLUE_MID   = "#bbdefb"
-_GREEN      = "#2e7d32"
-_GREEN_LT   = "#e8f5e9"
-_BORDER     = "#e0e7f3"
-_TEXT       = "#1a2340"
-_TEXT_MUTED = "#7a869a"
-_GRAY_BG    = "#f8f9fc"
 
-_BTN_PRIMARY = f"""
-    QPushButton {{
-        background: {_BLUE};
-        color: white;
-        border: none;
-        border-radius: 7px;
-        padding: 6px 20px;
-        font-weight: bold;
-        font-size: 12px;
-    }}
-    QPushButton:hover  {{ background: #0d47a1; }}
-    QPushButton:disabled {{ background: #b0bec5; color: #fff; }}
-"""
-_BTN_GHOST = f"""
-    QPushButton {{
-        background: white;
-        color: {_BLUE};
-        border: 1.5px solid {_BLUE_MID};
-        border-radius: 7px;
-        padding: 5px 16px;
-        font-size: 12px;
-    }}
-    QPushButton:hover {{ background: {_BLUE_LIGHT}; }}
-"""
+def _btn_primary_ss():
+    return f"""
+        QPushButton {{
+            background: {_C['accent']};
+            color: {_C['accent_text']};
+            border: none;
+            border-radius: 7px;
+            padding: 6px 20px;
+            font-weight: bold;
+            font-size: {FS_BASE}px;
+        }}
+        QPushButton:hover  {{ background: {_C['accent_hover']}; }}
+        QPushButton:disabled {{ background: {_C['border_med']}; color: {_C['text_disabled']}; }}
+    """
+
+
+def _btn_ghost_ss():
+    return f"""
+        QPushButton {{
+            background: {_C['bg_input']};
+            color: {_C['accent']};
+            border: 1.5px solid {_C['accent_mid']};
+            border-radius: 7px;
+            padding: 5px 16px;
+            font-size: {FS_BASE}px;
+        }}
+        QPushButton:hover {{ background: {_C['accent_light']}; }}
+    """
 
 
 class _SourcePickerDialog(QDialog):
@@ -88,6 +81,7 @@ class _SourcePickerDialog(QDialog):
                  parent=None):
         super().__init__(parent)
         self.conn             = conn
+        self._svc             = DimensionSetService(conn)
         self.source_set_id    = source_set_id
         self.source_field_id  = source_field_id
         self.offset           = offset
@@ -97,11 +91,11 @@ class _SourcePickerDialog(QDialog):
         # نخزن اسم كل instance هنا لاستخدامه في _on_instance_selected
         self._instance_names: dict[int, str] = {}
 
-        self.setWindowTitle("اختيار مصدر الحساب التلقائي")
+        self.setWindowTitle(tr("dim_src_picker_title"))
         self.setMinimumWidth(480)
         self.setMinimumHeight(360)
         self.setModal(True)
-        self.setStyleSheet(f"QDialog {{ background: {_GRAY_BG}; }}")
+        self.setStyleSheet(f"QDialog {{ background: {_C['bg_surface']}; }}")
         self._build()
 
     def _build(self):
@@ -113,33 +107,29 @@ class _SourcePickerDialog(QDialog):
         hdr_frame = QFrame()
         hdr_frame.setStyleSheet(f"""
             QFrame {{
-                background: {_BLUE_LIGHT};
+                background: {_C['accent_light']};
                 border-radius: 10px;
-                border: 1px solid {_BLUE_MID};
+                border: 1px solid {_C['accent_mid']};
             }}
         """)
         hdr_lay = QVBoxLayout(hdr_frame)
         hdr_lay.setContentsMargins(14, 12, 14, 12)
         hdr_lay.setSpacing(4)
 
-        title = QLabel("⟳  اختر مجموعة القيم المصدر")
+        title = QLabel(f"⟳  {tr('dim_src_picker_header')}")
         title.setStyleSheet(f"""
             font-weight: bold;
-            font-size: 13px;
-            color: {_BLUE};
+            font-size: {FS_MD}px;
+            color: {_C['accent']};
             background: transparent;
             border: none;
         """)
 
         # جلب بيانات المجموعة والحقل المصدر
-        src_set = self.conn.execute(
-            "SELECT name FROM dimension_sets WHERE id=?",
-            (self.source_set_id,)
-        ).fetchone()
-        src_set_name = src_set["name"] if src_set else f"مجموعة #{self.source_set_id}"
+        src_set_name = self._svc.get_set_name(self.source_set_id)
 
-        src_field = fetch_field(self.conn, self.source_field_id)
-        src_field_label = src_field["label"] if src_field else f"حقل #{self.source_field_id}"
+        src_field = self._svc.get_field(self.source_field_id)
+        src_field_label = src_field["label"] if src_field else f"#{self.source_field_id}"
         src_field_unit  = src_field["unit"]  if src_field else ""
 
         self._src_field_label = src_field_label
@@ -153,20 +143,20 @@ class _SourcePickerDialog(QDialog):
         )
 
         subtitle = QLabel(
-            f"من مجموعة:  <b>{src_set_name}</b>   ·   "
-            f"الحقل:  <b>{src_field_label}</b>"
+            f"{tr('dim_src_picker_from_group')}:  <b>{src_set_name}</b>   ·   "
+            f"{tr('dim_src_picker_field')}:  <b>{src_field_label}</b>"
         )
         subtitle.setStyleSheet(f"""
-            font-size: 11px;
-            color: {_TEXT};
+            font-size: {FS_SM}px;
+            color: {_C['text_primary']};
             background: transparent;
             border: none;
         """)
 
         formula_lbl = QLabel(f"📐  {formula}")
         formula_lbl.setStyleSheet(f"""
-            font-size: 11px;
-            color: {_TEXT_MUTED};
+            font-size: {FS_SM}px;
+            color: {_C['text_muted']};
             background: transparent;
             border: none;
         """)
@@ -177,11 +167,11 @@ class _SourcePickerDialog(QDialog):
         root.addWidget(hdr_frame)
 
         # ── تعليمات ──
-        hint = QLabel("اختر مجموعة القيم اللي هيتحسب منها الحقل:")
+        hint = QLabel(tr("dim_src_picker_hint") + ":")
         hint.setStyleSheet(f"""
-            font-size: 11px;
+            font-size: {FS_SM}px;
             font-weight: bold;
-            color: {_TEXT_MUTED};
+            color: {_C['text_muted']};
             background: transparent;
         """)
         root.addWidget(hint)
@@ -192,22 +182,22 @@ class _SourcePickerDialog(QDialog):
         scroll.setHorizontalScrollBarPolicy(Qt.ScrollBarAlwaysOff)
         scroll.setStyleSheet(f"""
             QScrollArea {{
-                border: 1.5px solid {_BORDER};
+                border: 1.5px solid {_C['border']};
                 border-radius: 8px;
-                background: white;
+                background: {_C['bg_input']};
             }}
             QScrollBar:vertical {{
-                background: #f0f0f0; width: 6px; border-radius: 3px;
+                background: {_C['bg_surface']}; width: 6px; border-radius: 3px;
             }}
             QScrollBar::handle:vertical {{
-                background: #c5cae9; border-radius: 3px; min-height: 24px;
+                background: {_C['border_med']}; border-radius: 3px; min-height: 24px;
             }}
             QScrollBar::add-line:vertical,
             QScrollBar::sub-line:vertical {{ height: 0; }}
         """)
 
         container = QWidget()
-        container.setStyleSheet("background: white;")
+        container.setStyleSheet(f"background: {_C['bg_input']};")
         self._list_lay = QVBoxLayout(container)
         self._list_lay.setSpacing(4)
         self._list_lay.setContentsMargins(10, 10, 10, 10)
@@ -215,12 +205,12 @@ class _SourcePickerDialog(QDialog):
         self._btn_group = QButtonGroup(self)
         self._btn_group.buttonClicked.connect(self._on_instance_selected)
 
-        instances = fetch_instances_for_set(self.conn, self.source_set_id)
+        instances = self._svc.list_instances(self.source_set_id)
 
         if not instances:
-            empty = QLabel("لا توجد قيم محفوظة في هذه المجموعة.")
+            empty = QLabel(tr("dim_src_picker_no_values"))
             empty.setAlignment(Qt.AlignCenter)
-            empty.setStyleSheet(f"color: {_TEXT_MUTED}; padding: 20px;")
+            empty.setStyleSheet(f"color: {_C['text_muted']}; padding: 20px;")
             self._list_lay.addWidget(empty)
         else:
             for inst in instances:
@@ -241,8 +231,8 @@ class _SourcePickerDialog(QDialog):
         self._preview_frame = QFrame()
         self._preview_frame.setStyleSheet(f"""
             QFrame {{
-                background: {_GREEN_LT};
-                border: 1.5px solid #a5d6a7;
+                background: {_C['success_bg']};
+                border: 1.5px solid {_C['success_border']};
                 border-radius: 8px;
             }}
         """)
@@ -252,9 +242,9 @@ class _SourcePickerDialog(QDialog):
 
         self._preview_lbl = QLabel("")
         self._preview_lbl.setStyleSheet(f"""
-            font-size: 12px;
+            font-size: {FS_BASE}px;
             font-weight: bold;
-            color: {_GREEN};
+            color: {_C['success']};
             background: transparent;
             border: none;
         """)
@@ -265,13 +255,13 @@ class _SourcePickerDialog(QDialog):
         btn_row = QHBoxLayout()
         btn_row.addStretch()
 
-        self.btn_cancel = QPushButton("إلغاء")
-        self.btn_cancel.setStyleSheet(_BTN_GHOST)
+        self.btn_cancel = QPushButton(tr("cancel"))
+        self.btn_cancel.setStyleSheet(_btn_ghost_ss())
         self.btn_cancel.setMinimumHeight(36)
         self.btn_cancel.clicked.connect(self.reject)
 
-        self.btn_ok = QPushButton("✓  تطبيق الحساب")
-        self.btn_ok.setStyleSheet(_BTN_PRIMARY)
+        self.btn_ok = QPushButton(tr("dim_src_picker_apply"))
+        self.btn_ok.setStyleSheet(_btn_primary_ss())
         self.btn_ok.setMinimumHeight(36)
         self.btn_ok.setMinimumWidth(140)
         self.btn_ok.setEnabled(False)
@@ -284,13 +274,13 @@ class _SourcePickerDialog(QDialog):
     def _add_instance_row(self, inst):
         """يبني row لكل instance مع قيمة الحقل المصدر."""
         iid   = inst["id"]
-        name  = inst["name"].strip() if inst["name"].strip() else f"مجموعة #{iid}"
+        name  = inst["name"].strip() if inst["name"].strip() else f"#{iid}"
 
         # خزّن الاسم للاستخدام لاحقاً بدون الاعتماد على widget hierarchy
         self._instance_names[iid] = name
 
         # جلب قيمة الحقل المصدر لهذا الـ instance
-        values   = fetch_instance_values(self.conn, iid)
+        values   = self._svc.get_instance_values(iid)
         val_info = values.get(self.source_field_id, {})
         src_val  = val_info.get("value_num")
 
@@ -298,13 +288,13 @@ class _SourcePickerDialog(QDialog):
         row_frame = QFrame()
         row_frame.setStyleSheet(f"""
             QFrame {{
-                background: white;
-                border: 1.5px solid {_BORDER};
+                background: {_C['bg_input']};
+                border: 1.5px solid {_C['border']};
                 border-radius: 8px;
             }}
             QFrame:hover {{
-                border-color: {_BLUE_MID};
-                background: #f5f8ff;
+                border-color: {_C['accent_mid']};
+                background: {_C['bg_hover']};
             }}
         """)
         row_lay = QHBoxLayout(row_frame)
@@ -322,12 +312,12 @@ class _SourcePickerDialog(QDialog):
                 width: 18px;
                 height: 18px;
                 border-radius: 9px;
-                border: 2px solid {_BLUE_MID};
-                background: white;
+                border: 2px solid {_C['accent_mid']};
+                background: {_C['bg_input']};
             }}
             QRadioButton::indicator:checked {{
-                background: {_BLUE};
-                border-color: {_BLUE};
+                background: {_C['accent']};
+                border-color: {_C['accent']};
             }}
         """)
         # نخزن البيانات كـ properties على الـ radio مباشرة
@@ -344,8 +334,8 @@ class _SourcePickerDialog(QDialog):
         name_lbl = QLabel(name)
         name_lbl.setStyleSheet(f"""
             font-weight: bold;
-            font-size: 12px;
-            color: {_TEXT if has_value else _TEXT_MUTED};
+            font-size: {FS_BASE}px;
+            color: {_C['text_primary'] if has_value else _C['text_muted']};
             background: transparent;
             border: none;
         """)
@@ -361,32 +351,32 @@ class _SourcePickerDialog(QDialog):
             )
             val_lbl = QLabel(val_txt)
             val_lbl.setStyleSheet(f"""
-                font-size: 12px;
-                color: {_TEXT};
+                font-size: {FS_BASE}px;
+                color: {_C['text_primary']};
                 background: transparent;
                 border: none;
             """)
             res_lbl = QLabel(res_txt)
             res_lbl.setStyleSheet(f"""
-                font-size: 12px;
+                font-size: {FS_BASE}px;
                 font-weight: bold;
-                color: {_GREEN};
-                background: {_GREEN_LT};
-                border: 1px solid #a5d6a7;
+                color: {_C['success']};
+                background: {_C['success_bg']};
+                border: 1px solid {_C['success_border']};
                 border-radius: 5px;
                 padding: 1px 8px;
             """)
         else:
-            val_lbl = QLabel("لا توجد قيمة")
+            val_lbl = QLabel(tr("dim_src_picker_no_value_short"))
             val_lbl.setStyleSheet(f"""
-                font-size: 11px;
-                color: #ef9a9a;
+                font-size: {FS_SM}px;
+                color: {_C['danger_border']};
                 background: transparent;
                 border: none;
             """)
-            res_lbl = QLabel("—")
+            res_lbl = QLabel(tr("dash"))
             res_lbl.setStyleSheet(
-                f"color: {_TEXT_MUTED}; background: transparent; border: none;"
+                f"color: {_C['text_muted']}; background: transparent; border: none;"
             )
 
         row_lay.addWidget(radio)

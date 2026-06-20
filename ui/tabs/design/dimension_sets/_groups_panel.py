@@ -16,15 +16,11 @@ from PyQt5.QtWidgets import (
 )
 from PyQt5.QtCore import Qt, pyqtSignal
 
-from db.designs.dimension_sets_repo import (
-    fetch_all_dimension_sets,
-    fetch_dimension_set,
-    insert_dimension_set,
-    update_dimension_set,
-    delete_dimension_set,
-    fetch_all_design_categories,
-    build_category_tree,
-)
+from ui.theme import _C
+from ui.widgets.core.i18n import tr
+from ui.font import FS_SM, FS_BASE, FS_MD
+from services.design.dimension_set_service import DimensionSetService
+
 from ._categories_panel import _CategoriesPanel
 from ._fields_panel      import _FieldsPanel
 from ui.helpers import make_table, danger_button, buttons_row
@@ -41,6 +37,7 @@ class _SetsManagerPanel(QWidget):
     def __init__(self, conn, parent=None):
         super().__init__(parent)
         self.conn        = conn
+        self._svc        = DimensionSetService(conn)
         self._editing_id = None
         self._all_rows   = []
         self._build()
@@ -51,17 +48,17 @@ class _SetsManagerPanel(QWidget):
         root.setContentsMargins(8, 8, 8, 8)
         root.setSpacing(8)
 
-        hdr = QLabel("📐  مجموعات المقاسات")
-        hdr.setStyleSheet("""
-            font-weight: bold; font-size: 13px; color: #1565c0;
-            background: #e8f0fe; border-radius: 6px; padding: 6px 12px;
+        hdr = QLabel(tr("dim_sets_panel_title"))
+        hdr.setStyleSheet(f"""
+            font-weight: bold; font-size: {FS_MD}px; color: {_C['accent']};
+            background: {_C['accent_light']}; border-radius: 6px; padding: 6px 12px;
         """)
         root.addWidget(hdr)
 
         # ── فلتر ──
         filter_row = QHBoxLayout()
         self.inp_search = QLineEdit()
-        self.inp_search.setPlaceholderText("🔍 بحث باسم المجموعة...")
+        self.inp_search.setPlaceholderText(tr("dim_sets_search_placeholder"))
         self.inp_search.setMinimumHeight(28)
         self.inp_search.textChanged.connect(self._apply_filter)
 
@@ -79,9 +76,9 @@ class _SetsManagerPanel(QWidget):
         # ══ Splitter رأسي ══
         v_splitter = QSplitter(Qt.Vertical)
         v_splitter.setHandleWidth(5)
-        v_splitter.setStyleSheet("""
-            QSplitter::handle { background: #e0e0e0; }
-            QSplitter::handle:hover { background: #bbdefb; }
+        v_splitter.setStyleSheet(f"""
+            QSplitter::handle {{ background: {_C['border']}; }}
+            QSplitter::handle:hover {{ background: {_C['accent_mid']}; }}
         """)
 
         # ── الجزء العلوي: جدول + فورم ──
@@ -91,7 +88,7 @@ class _SetsManagerPanel(QWidget):
         top_lay.setSpacing(6)
 
         self.table = make_table(
-            ["ID", "اسم المجموعة", "التصنيف", "الوحدة", "عدد الحقول"],
+            [tr("dim_sets_col_id"), tr("dim_sets_col_name"), tr("dim_sets_col_category"), tr("dim_sets_col_unit"), tr("dim_sets_col_fields")],
             stretch_col=1
         )
         self.table.setColumnWidth(0, 40)
@@ -101,8 +98,8 @@ class _SetsManagerPanel(QWidget):
         self.table.itemSelectionChanged.connect(self._on_set_select)
         top_lay.addWidget(self.table)
 
-        btn_edit_set = QPushButton("✏️  تعديل")
-        btn_del_set  = danger_button("🗑️  حذف")
+        btn_edit_set = QPushButton("✏️  " + tr("edit"))
+        btn_del_set  = danger_button("🗑️  " + tr("delete"))
         for b in (btn_edit_set, btn_del_set):
             b.setMinimumHeight(28)
         btn_edit_set.clicked.connect(self._edit_set)
@@ -110,23 +107,23 @@ class _SetsManagerPanel(QWidget):
         top_lay.addLayout(buttons_row(btn_edit_set, btn_del_set))
 
         # فورم إضافة / تعديل المجموعة
-        self._form_grp = QGroupBox("بيانات المجموعة")
+        self._form_grp = QGroupBox(tr("dim_sets_form_title"))
         form = QFormLayout(self._form_grp)
         form.setSpacing(8)
         form.setLabelAlignment(Qt.AlignRight)
 
-        self.lbl_mode = QLabel("─── مجموعة جديدة ───")
-        self.lbl_mode.setStyleSheet("font-weight: bold; color: #1565c0;")
+        self.lbl_mode = QLabel(tr("dim_sets_new_mode"))
+        self.lbl_mode.setStyleSheet(f"font-weight: bold; color: {_C['accent']};")
         form.addRow(self.lbl_mode)
 
         self.inp_name = QLineEdit()
-        self.inp_name.setPlaceholderText("مثال: مقاسات الثوب، مقاسات البنطلون...")
+        self.inp_name.setPlaceholderText(tr("dim_sets_name_placeholder"))
         self.inp_name.setMinimumHeight(30)
-        form.addRow("الاسم :", self.inp_name)
+        form.addRow(tr("name") + " :", self.inp_name)
 
         self.cmb_category = QComboBox()
         self.cmb_category.setMinimumHeight(28)
-        form.addRow("التصنيف :", self.cmb_category)
+        form.addRow(tr("category") + " :", self.cmb_category)
 
         # ── الوحدة الافتراضية — UnitCombo مع حفظ آخر اختيار ──
         self.cmb_unit = UnitCombo(
@@ -135,17 +132,17 @@ class _SetsManagerPanel(QWidget):
             current  = "cm",
         )
         self.cmb_unit.setMinimumHeight(28)
-        form.addRow("الوحدة الافتراضية :", self.cmb_unit)
+        form.addRow(tr("dim_sets_default_unit_label") + " :", self.cmb_unit)
 
         self.inp_notes = QLineEdit()
-        self.inp_notes.setPlaceholderText("ملاحظات...")
+        self.inp_notes.setPlaceholderText(tr("notes"))
         self.inp_notes.setMinimumHeight(28)
-        form.addRow("ملاحظات :", self.inp_notes)
+        form.addRow(tr("notes") + " :", self.inp_notes)
 
         btn_form_row = QHBoxLayout()
-        self.btn_add    = QPushButton("➕  إضافة مجموعة")
-        self.btn_save   = QPushButton("💾  حفظ")
-        self.btn_cancel = QPushButton("✖  إلغاء")
+        self.btn_add    = QPushButton(tr("dim_sets_add_btn"))
+        self.btn_save   = QPushButton("💾  " + tr("save"))
+        self.btn_cancel = QPushButton("✖  " + tr("cancel"))
         self.btn_save.setVisible(False)
         self.btn_cancel.setVisible(False)
         for b in (self.btn_add, self.btn_save, self.btn_cancel):
@@ -167,10 +164,10 @@ class _SetsManagerPanel(QWidget):
         bot_lay.setContentsMargins(0, 0, 0, 0)
         bot_lay.setSpacing(0)
 
-        fields_hdr = QLabel("📋  حقول المجموعة المختارة")
-        fields_hdr.setStyleSheet("""
-            font-weight: bold; font-size: 12px; color: #7b1fa2;
-            background: #f3e5f5; border-radius: 4px; padding: 5px 10px;
+        fields_hdr = QLabel(tr("dim_sets_fields_header"))
+        fields_hdr.setStyleSheet(f"""
+            font-weight: bold; font-size: {FS_BASE}px; color: {_C['purple']};
+            background: {_C['purple_bg']}; border-radius: 4px; padding: 5px 10px;
         """)
         bot_lay.addWidget(fields_hdr)
 
@@ -187,13 +184,13 @@ class _SetsManagerPanel(QWidget):
     # ── تحميل ──
 
     def _reload_cat_combos(self):
-        rows = fetch_all_design_categories(self.conn)
-        tree = build_category_tree(rows)
+        rows = self._svc.list_categories()
+        tree = self._svc.build_tree(rows)
 
         prev_f = self.cmb_cat_filter.currentData()
         self.cmb_cat_filter.blockSignals(True)
         self.cmb_cat_filter.clear()
-        self.cmb_cat_filter.addItem("— كل التصنيفات —", None)
+        self.cmb_cat_filter.addItem(tr("dim_sets_all_categories"), None)
         self._add_cat_nodes(self.cmb_cat_filter, tree, 0)
         for i in range(self.cmb_cat_filter.count()):
             if self.cmb_cat_filter.itemData(i) == prev_f:
@@ -204,7 +201,7 @@ class _SetsManagerPanel(QWidget):
         prev_c = self.cmb_category.currentData()
         self.cmb_category.blockSignals(True)
         self.cmb_category.clear()
-        self.cmb_category.addItem("— بدون تصنيف —", None)
+        self.cmb_category.addItem(tr("design_detail_no_category"), None)
         self._add_cat_nodes(self.cmb_category, tree, 0)
         for i in range(self.cmb_category.count()):
             if self.cmb_category.itemData(i) == prev_c:
@@ -221,7 +218,7 @@ class _SetsManagerPanel(QWidget):
                 self._add_cat_nodes(combo, node["children"], depth + 1)
 
     def _load(self):
-        self._all_rows = list(fetch_all_dimension_sets(self.conn))
+        self._all_rows = list(self._svc.list_sets())
         self._reload_cat_combos()
         self._apply_filter()
 
@@ -275,12 +272,12 @@ class _SetsManagerPanel(QWidget):
     def _add_set(self):
         name = self.inp_name.text().strip()
         if not name:
-            QMessageBox.warning(self, "تنبيه", "أدخل اسم المجموعة")
+            QMessageBox.warning(self, tr("warning"), tr("enter_field").format(label=tr("name")))
             return
         cat_id = self.cmb_category.currentData()
         unit   = self.cmb_unit.current_unit()
         notes  = self.inp_notes.text().strip()
-        new_id = insert_dimension_set(self.conn, name, cat_id, unit, notes)
+        new_id = self._svc.create_set(name, cat_id, unit, notes)
         self._reset_form()
         self._load()
         for r in range(self.table.rowCount()):
@@ -292,9 +289,9 @@ class _SetsManagerPanel(QWidget):
     def _edit_set(self):
         sid = self._selected_id()
         if sid is None:
-            QMessageBox.information(self, "تنبيه", "اختر مجموعة أولاً")
+            QMessageBox.information(self, tr("info"), tr("select_item_first"))
             return
-        ds = fetch_dimension_set(self.conn, sid)
+        ds = self._svc.get_set(sid)
         if not ds:
             return
         self._editing_id = sid
@@ -308,7 +305,7 @@ class _SetsManagerPanel(QWidget):
         # اختيار الوحدة الحالية في UnitCombo
         self.cmb_unit.set_unit(ds["default_unit"] or "cm")
 
-        self.lbl_mode.setText(f"─── تعديل: {ds['name']} ───")
+        self.lbl_mode.setText(tr("dim_sets_edit_mode").format(name=ds['name']))
         self.btn_add.setVisible(False)
         self.btn_save.setVisible(True)
         self.btn_cancel.setVisible(True)
@@ -318,12 +315,12 @@ class _SetsManagerPanel(QWidget):
             return
         name = self.inp_name.text().strip()
         if not name:
-            QMessageBox.warning(self, "تنبيه", "أدخل اسم المجموعة")
+            QMessageBox.warning(self, tr("warning"), tr("enter_field").format(label=tr("name")))
             return
         cat_id = self.cmb_category.currentData()
         unit   = self.cmb_unit.current_unit()
         notes  = self.inp_notes.text().strip()
-        update_dimension_set(self.conn, self._editing_id, name, cat_id, unit, notes)
+        self._svc.update_set(self._editing_id, name, cat_id, unit, notes)
         self._reset_form()
         self._load()
         self.sets_changed.emit()
@@ -331,37 +328,32 @@ class _SetsManagerPanel(QWidget):
     def _delete_set(self):
         sid = self._selected_id()
         if sid is None:
-            QMessageBox.information(self, "تنبيه", "اختر مجموعة أولاً")
+            QMessageBox.information(self, tr("info"), tr("select_item_first"))
             return
-        ds = fetch_dimension_set(self.conn, sid)
+        ds = self._svc.get_set(sid)
         if not ds:
             return
 
-        fields_cnt  = self.conn.execute(
-            "SELECT COUNT(*) as c FROM dimension_fields WHERE set_id=?", (sid,)
-        ).fetchone()["c"]
-        designs_cnt = self.conn.execute(
-            "SELECT COUNT(*) as c FROM design_dimensions WHERE set_id=?", (sid,)
-        ).fetchone()["c"]
+        fields_cnt  = self._svc.count_fields_for_set(sid)
+        designs_cnt = self._svc.count_designs_for_set(sid)
 
         if designs_cnt:
             QMessageBox.warning(
-                self, "تعذر الحذف",
-                f"المجموعة «{ds['name']}» مرتبطة بـ {designs_cnt} تصميم.\n"
-                "احذف الارتباط من التصميمات أولاً."
+                self, tr("warning"),
+                tr("dim_sets_linked_designs_warn").format(name=ds['name'], count=designs_cnt)
             )
             return
 
-        msg = f"حذف مجموعة «{ds['name']}»؟"
+        msg = tr("delete_confirm_msg").format(name=ds['name'])
         if fields_cnt:
-            msg += f"\n⚠️ تحتوي على {fields_cnt} حقل — سيتم حذفها جميعاً."
+            msg += f"\n{tr('dim_sets_has_fields_warn').format(count=fields_cnt)}"
 
         if QMessageBox.question(
-            self, "تأكيد الحذف", msg,
+            self, tr("confirm_delete"), msg,
             QMessageBox.Yes | QMessageBox.No
         ) == QMessageBox.Yes:
             self._fields_panel.clear()
-            delete_dimension_set(self.conn, sid)
+            self._svc.delete_set(sid)
             self._reset_form()
             self._load()
             self.sets_changed.emit()
@@ -372,7 +364,7 @@ class _SetsManagerPanel(QWidget):
         self.inp_notes.clear()
         self.cmb_category.setCurrentIndex(0)
         # UnitCombo يرجع لآخر اختيار محفوظ تلقائياً
-        self.lbl_mode.setText("─── مجموعة جديدة ───")
+        self.lbl_mode.setText(tr("dim_sets_new_mode"))
         self.btn_add.setVisible(True)
         self.btn_save.setVisible(False)
         self.btn_cancel.setVisible(False)
@@ -411,9 +403,9 @@ class _GroupsPanel(QWidget):
 
         splitter = QSplitter(Qt.Horizontal)
         splitter.setHandleWidth(5)
-        splitter.setStyleSheet("""
-            QSplitter::handle { background: #e0e0e0; }
-            QSplitter::handle:hover { background: #bbdefb; }
+        splitter.setStyleSheet(f"""
+            QSplitter::handle {{ background: {_C['border']}; }}
+            QSplitter::handle:hover {{ background: {_C['accent_light']}; }}
         """)
 
         self._cats_panel = _CategoriesPanel(self.conn)

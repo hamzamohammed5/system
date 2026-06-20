@@ -28,36 +28,35 @@ from db.designs.designs_sizes_repo import (
 )
 from ._xcf_thumbnail import get_watcher
 from .size_card.helper import _ThumbnailWidget, _to_px, _unit_for_set, _btn_ss, _open_gimp
+from ui.theme import _C
+from ui.widgets.core.i18n import tr
+from ui.font import get_font_size, fs, FS_SM
 
-# ── Palette ──────────────────────────────────────────────
-_BG          = "#FFFFFF"
-_BG_SURFACE  = "#F8F9FB"
-_BORDER      = "#E5E9F0"
-_BORDER_MED  = "#CDD3E0"
-_TEXT_PRI    = "#1A2035"
-_TEXT_SEC    = "#5A6680"
-_TEXT_MUT    = "#9BA5BE"
-
-_ACCENT      = "#4F6EF7"
-_ACCENT_DARK = "#3D5BEF"
-
-_SUCCESS     = "#16A34A"
-_SUCCESS_LT  = "#F0FDF4"
-_SUCCESS_BDR = "#BBF7D0"
-
-_WARNING     = "#D97706"
-_WARNING_LT  = "#FFFBEB"
-_WARNING_BDR = "#FDE68A"
-
-_DANGER      = "#DC2626"
-_DANGER_LT   = "#FEF2F2"
-_DANGER_BDR  = "#FECACA"
-
+# ── Layout Constants ──────────────────────────
 _RADIUS      = "10px"
 _RADIUS_XS   = "4px"
 
 _DEFAULT_DPI = 300.0
 _THUMB_SIZE  = 72
+
+# ── Palette من _C ──────────────────────────────────────
+_BG          = _C["bg_input"]
+_BG_SURFACE  = _C["bg_surface"]
+_BORDER      = _C["border"]
+_BORDER_MED  = _C["border_med"]
+_TEXT_SEC    = _C["text_sec"]
+_TEXT_MUT    = _C["text_muted"]
+_ACCENT      = _C["accent"]
+_ACCENT_DARK = _C["accent_hover"]
+_SUCCESS     = _C["success"]
+_SUCCESS_LT  = _C["success_bg"]
+_SUCCESS_BDR = _C["success_border"]
+_DANGER      = _C["danger"]
+_DANGER_LT   = _C["danger_bg"]
+_DANGER_BDR  = _C["danger_border"]
+_WARNING     = _C["warning"]
+_WARNING_LT  = _C["warning_bg"]
+_WARNING_BDR = _C["warning_border"]
 
 
 
@@ -139,18 +138,19 @@ class _SizeCard(QFrame):
 
         # اسم المقاس + مجموعته
         inst_name = (self._data.get("instance_name") or
-                     f"مقاس #{self._data.get('instance_id', '')}")
+                     tr("design_size_card_fallback_name").format(
+                         id=self._data.get('instance_id', '')))
         set_name  = self._data.get("set_name", "")
 
         lbl_name = QLabel(inst_name)
         font_n = QFont()
-        font_n.setPointSize(11)
+        font_n.setPointSize(fs(get_font_size(), -1))
         font_n.setWeight(QFont.Medium)
         lbl_name.setFont(font_n)
-        lbl_name.setStyleSheet(f"color:{_TEXT_PRI}; background:transparent;")
+        lbl_name.setStyleSheet(f"color:{_C['text_primary']}; background:transparent;")
 
         lbl_set = QLabel(set_name)
-        lbl_set.setStyleSheet(f"color:{_TEXT_MUT}; font-size:10px; background:transparent;")
+        lbl_set.setStyleSheet(f"color:{_C['text_muted']}; font-size:{FS_SM}px; background:transparent;")
 
         # الأبعاد
         w, h = fetch_canvas_size(self.conn, self._size_id)
@@ -161,14 +161,19 @@ class _SizeCard(QFrame):
             if dpi:
                 w_px = _to_px(w, unit, dpi)
                 h_px = _to_px(h, unit, dpi)
-                dims = f"{w:g} × {h:g} {unit}  →  {w_px:,} × {h_px:,} px"
+                dims = tr("design_size_card_dims_with_dpi").format(
+                    w=f"{w:g}", h=f"{h:g}", unit=unit,
+                    w_px=f"{w_px:,}", h_px=f"{h_px:,}"
+                )
             else:
-                dims = f"{w:g} × {h:g} {unit}"
+                dims = tr("design_size_card_dims_no_dpi").format(
+                    w=f"{w:g}", h=f"{h:g}", unit=unit
+                )
         else:
-            dims = "الأبعاد غير محددة"
+            dims = tr("design_size_card_dims_unknown")
 
         lbl_dims = QLabel(dims)
-        lbl_dims.setStyleSheet(f"color:{_TEXT_SEC}; font-size:10px; background:transparent;")
+        lbl_dims.setStyleSheet(f"color:{_C['text_sec']}; font-size:{FS_SM}px; background:transparent;")
 
         info.addWidget(lbl_name)
         info.addWidget(lbl_set)
@@ -184,15 +189,15 @@ class _SizeCard(QFrame):
 
         # الزر الرئيسي (GIMP)
         if file_exists:
-            btn_main = QPushButton("فتح في GIMP")
+            btn_main = QPushButton(tr("design_size_card_open_gimp_btn"))
             btn_main.setStyleSheet(
-                _btn_ss(_ACCENT, "#fff", _ACCENT, _ACCENT_DARK, height=30)
+                _btn_ss(_ACCENT, _C["accent_text"], _ACCENT, _ACCENT_DARK, height=30)
             )
             btn_main.clicked.connect(self._open_in_gimp)
         else:
-            btn_main = QPushButton("إنشاء في GIMP")
+            btn_main = QPushButton(tr("design_size_card_create_gimp_btn"))
             btn_main.setStyleSheet(
-                _btn_ss(_SUCCESS_LT, _SUCCESS, _SUCCESS_BDR, "#DCFCE7", height=30)
+                _btn_ss(_SUCCESS_LT, _SUCCESS, _SUCCESS_BDR, _SUCCESS_LT, height=30)
             )
             btn_main.clicked.connect(self._create_in_gimp)
 
@@ -204,7 +209,7 @@ class _SizeCard(QFrame):
         act.setSpacing(4)
 
         if not file_exists:
-            btn_link = QPushButton("ربط ملف")
+            btn_link = QPushButton(tr("design_size_card_link_file_btn"))
             btn_link.setStyleSheet(
                 _btn_ss(_BG_SURFACE, _TEXT_SEC, _BORDER, _BG, height=26)
             )
@@ -213,7 +218,7 @@ class _SizeCard(QFrame):
 
         btn_edit = QPushButton("✏")
         btn_edit.setFixedSize(28, 26)
-        btn_edit.setToolTip("تعديل")
+        btn_edit.setToolTip(tr("edit"))
         btn_edit.setStyleSheet(
             _btn_ss(_BG_SURFACE, _TEXT_SEC, _BORDER, _BG, height=26, radius=_RADIUS_XS)
         )
@@ -221,9 +226,9 @@ class _SizeCard(QFrame):
 
         btn_del = QPushButton("🗑")
         btn_del.setFixedSize(28, 26)
-        btn_del.setToolTip("حذف")
+        btn_del.setToolTip(tr("delete"))
         btn_del.setStyleSheet(
-            _btn_ss(_DANGER_LT, _DANGER, _DANGER_BDR, "#FEE2E2", height=26, radius=_RADIUS_XS)
+            _btn_ss(_DANGER_LT, _DANGER, _DANGER_BDR, _DANGER_LT, height=26, radius=_RADIUS_XS)
         )
         btn_del.clicked.connect(lambda: self.delete_requested.emit(self._size_id))
 
@@ -246,17 +251,17 @@ class _SizeCard(QFrame):
         if file_exists:
             bg     = _SUCCESS_LT
             border = _SUCCESS_BDR
-            txt    = "الملف موجود"
+            txt    = tr("design_size_card_file_exists")
             col    = _SUCCESS
         elif has_file:
             bg     = _WARNING_LT
             border = _WARNING_BDR
-            txt    = "الملف غير موجود"
+            txt    = tr("design_size_card_file_missing")
             col    = _WARNING
         else:
             bg     = _BG_SURFACE
             border = _BORDER
-            txt    = "لا يوجد ملف"
+            txt    = tr("design_size_card_file_none")
             col    = _TEXT_MUT
 
         bar.setStyleSheet(f"""
@@ -274,7 +279,7 @@ class _SizeCard(QFrame):
 
         lbl_s = QLabel(txt)
         lbl_s.setStyleSheet(
-            f"color:{col}; font-size:10px; font-weight:600; background:transparent;"
+            f"color:{col}; font-size:{FS_SM}px; font-weight:600; background:transparent;"
         )
 
         chips = QHBoxLayout()
@@ -288,7 +293,7 @@ class _SizeCard(QFrame):
                     border: 1px solid {_BORDER_MED};
                     border-radius: 3px;
                     padding: 1px 6px;
-                    font-size: 9px;
+                    font-size: {fs(FS_SM, -2)}px;
                 }}
             """)
             chips.addWidget(chip)
@@ -308,8 +313,8 @@ class _SizeCard(QFrame):
             _open_gimp(xcf_path=xcf)
         else:
             QMessageBox.warning(
-                self, "الملف غير موجود",
-                f"الملف:\n{xcf}\n\nاستخدم «ربط ملف» لتحديث المسار."
+                self, tr("file_not_found"),
+                tr("design_size_card_file_not_found_msg").format(path=xcf)
             )
 
     def _create_in_gimp(self):
@@ -327,9 +332,9 @@ class _SizeCard(QFrame):
                 start_dir = parent
 
         save_path, _ = QFileDialog.getSaveFileName(
-            self, "اختر مكان حفظ ملف GIMP",
+            self, tr("design_size_card_save_gimp_title"),
             os.path.join(start_dir, default_name),
-            "GIMP Files (*.xcf)"
+            tr("design_size_card_gimp_filter")
         )
         if not save_path:
             return
@@ -346,10 +351,11 @@ class _SizeCard(QFrame):
             w_px = _to_px(w, unit, actual_dpi)
             h_px = _to_px(h, unit, actual_dpi)
             QMessageBox.information(
-                self, "إنشاء كانفاس",
-                f"الأبعاد: {w:g} × {h:g} {unit}\n"
-                f"البكسل: {w_px:,} × {h_px:,} px  @  {int(actual_dpi)} DPI\n"
-                f"الملف: {save_path}"
+                self, tr("design_size_card_create_canvas_title"),
+                tr("design_size_card_create_canvas_msg").format(
+                    w=f"{w:g}", h=f"{h:g}", unit=unit,
+                    w_px=f"{w_px:,}", h_px=f"{h_px:,}", dpi=int(actual_dpi), path=save_path
+                )
             )
             _open_gimp(xcf_path=save_path, width_val=w, height_val=h,
                        unit=unit, dpi=actual_dpi)
@@ -367,8 +373,8 @@ class _SizeCard(QFrame):
                 start_dir = parent
 
         path, _ = QFileDialog.getOpenFileName(
-            self, "اختر ملف GIMP موجود",
-            start_dir, "GIMP Files (*.xcf);;All Files (*)"
+            self, tr("design_size_card_link_file_title"),
+            start_dir, tr("design_size_card_gimp_filter")
         )
         if path:
             old = self._data.get("xcf_path") or ""

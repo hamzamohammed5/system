@@ -14,12 +14,10 @@ from PyQt5.QtWidgets import (
 from PyQt5.QtCore import Qt
 
 
-from db.designs.dimension_sets_repo import (
-    fetch_all_dimension_sets,
-    fetch_fields_for_set, fetch_field,
-    insert_field, update_field,
-    fetch_field_dep, set_field_dep, remove_field_dep,
-)
+from ui.theme import _C
+from ui.widgets.core.i18n import tr
+from ui.font import FS_XS, FS_SM
+from services.design.dimension_set_service import DimensionSetService
 from ui.widgets.shared.unit_combo import UnitCombo
 
 
@@ -46,7 +44,8 @@ class _FieldDialog(QDialog):
         self.conn      = conn
         self.set_id    = set_id
         self.field_id  = field_data["id"] if field_data else None
-        self.setWindowTitle("تعديل حقل" if field_data else "إضافة حقل جديد")
+        self._svc = DimensionSetService(conn)
+        self.setWindowTitle(tr("dim_field_dlg_edit_title") if field_data else tr("dim_field_dlg_new_title"))
         self.setMinimumWidth(500)
         self.setModal(True)
         self._build()
@@ -63,11 +62,11 @@ class _FieldDialog(QDialog):
         form.setLabelAlignment(Qt.AlignRight)
 
         self.inp_name  = QLineEdit()
-        self.inp_name.setPlaceholderText("مثال: length, width ...")
+        self.inp_name.setPlaceholderText(tr("dim_field_name_en_placeholder"))
         self.inp_name.setMinimumHeight(30)
 
         self.inp_label = QLineEdit()
-        self.inp_label.setPlaceholderText("مثال: الطول، العرض ...")
+        self.inp_label.setPlaceholderText(tr("dim_field_label_ar_placeholder"))
         self.inp_label.setMinimumHeight(30)
 
         # ── وحدة الحقل — UnitCombo مع حفظ آخر اختيار ──
@@ -79,39 +78,39 @@ class _FieldDialog(QDialog):
         self.cmb_unit.setMinimumHeight(30)
 
         self.cmb_type = QComboBox()
-        self.cmb_type.addItem("رقم", "number")
-        self.cmb_type.addItem("نص",  "text")
+        self.cmb_type.addItem(tr("dim_field_type_number"), "number")
+        self.cmb_type.addItem(tr("dim_field_type_text"),  "text")
         self.cmb_type.setMinimumHeight(30)
         self.cmb_type.currentIndexChanged.connect(self._on_type_changed)
 
-        self.chk_required = QCheckBox("حقل إلزامي")
+        self.chk_required = QCheckBox(tr("dim_field_required_check"))
         self.chk_required.setChecked(True)
 
-        form.addRow("الاسم (إنجليزي) :", self.inp_name)
-        form.addRow("التسمية (عربي) :",  self.inp_label)
-        form.addRow("الوحدة :",           self.cmb_unit)
-        form.addRow("النوع :",            self.cmb_type)
+        form.addRow(tr("dim_field_name_en_label") + " :", self.inp_name)
+        form.addRow(tr("dim_field_label_ar_label") + " :",  self.inp_label)
+        form.addRow(tr("unit") + " :",           self.cmb_unit)
+        form.addRow(tr("type") + " :",            self.cmb_type)
         form.addRow("",                   self.chk_required)
         root.addLayout(form)
 
         # ── قسم الاعتمادية (cross-set) ──
-        self._dep_grp = QGroupBox("اعتماد على حقل من مجموعة مقاسات (اختياري)")
+        self._dep_grp = QGroupBox(tr("dim_field_dep_group_title"))
         self._dep_grp.setCheckable(True)
         self._dep_grp.setChecked(False)
-        self._dep_grp.setStyleSheet("""
-            QGroupBox {
+        self._dep_grp.setStyleSheet(f"""
+            QGroupBox {{
                 font-weight: bold;
-                color: #1565c0;
-                border: 1px solid #c5cae9;
+                color: {_C['accent']};
+                border: 1px solid {_C['accent_mid']};
                 border-radius: 6px;
                 margin-top: 8px;
                 padding-top: 8px;
-            }
-            QGroupBox::title {
+            }}
+            QGroupBox::title {{
                 subcontrol-origin: margin;
                 right: 12px;
                 padding: 0 4px;
-            }
+            }}
         """)
         dep_lay = QFormLayout(self._dep_grp)
         dep_lay.setSpacing(10)
@@ -119,12 +118,12 @@ class _FieldDialog(QDialog):
 
         self.cmb_source_set = QComboBox()
         self.cmb_source_set.setMinimumHeight(30)
-        self.cmb_source_set.addItem("— اختر مجموعة مقاسات —", None)
+        self.cmb_source_set.addItem(tr("dim_field_select_source_set"), None)
 
-        all_sets = fetch_all_dimension_sets(self.conn)
+        all_sets = self._svc.list_sets()
         for ds in all_sets:
             if ds["id"] == self.set_id:
-                self.cmb_source_set.addItem(f"← نفس المجموعة: {ds['name']}", ds["id"])
+                self.cmb_source_set.addItem(tr("dim_field_same_set_prefix").format(name=ds["name"]), ds["id"])
                 break
         for ds in all_sets:
             if ds["id"] != self.set_id:
@@ -137,9 +136,9 @@ class _FieldDialog(QDialog):
         self.cmb_source.setMinimumWidth(220)
 
         self._source_preview = QLabel("")
-        self._source_preview.setStyleSheet("""
-            color: #1565c0; font-size: 11px;
-            background: #e8f0fe; border: 1px solid #bbdefb;
+        self._source_preview.setStyleSheet(f"""
+            color: {_C['accent']}; font-size: {FS_SM}px;
+            background: {_C['accent_light']}; border: 1px solid {_C['accent_mid']};
             border-radius: 4px; padding: 4px 8px;
         """)
         self._source_preview.setVisible(False)
@@ -150,22 +149,22 @@ class _FieldDialog(QDialog):
         self.sp_offset.valueChanged.connect(self._update_preview)
         self.cmb_source.currentIndexChanged.connect(self._update_preview)
 
-        hint = QLabel("القيمة = قيمة الحقل المصدر + الإضافة (سالب للخصم)")
+        hint = QLabel(tr("dim_field_dep_hint"))
         hint.setStyleSheet(
-            "color: #1565c0; font-size: 10px;"
-            "background: #e8f0fe; border-radius: 4px; padding: 4px 8px;"
+            f"color: {_C['accent']}; font-size: {FS_XS}px;"
+            f"background: {_C['accent_light']}; border-radius: 4px; padding: 4px 8px;"
         )
 
-        dep_lay.addRow("المجموعة المصدر :", self.cmb_source_set)
-        dep_lay.addRow("الحقل المصدر :",    self.cmb_source)
-        dep_lay.addRow("إضافة / خصم :",     self.sp_offset)
-        dep_lay.addRow("المعاينة :",         self._source_preview)
+        dep_lay.addRow(tr("dim_field_source_set_label") + " :", self.cmb_source_set)
+        dep_lay.addRow(tr("dim_field_source_field_label") + " :",    self.cmb_source)
+        dep_lay.addRow(tr("dim_field_offset_label") + " :",     self.sp_offset)
+        dep_lay.addRow(tr("dim_field_preview_label") + " :",         self._source_preview)
         dep_lay.addRow(hint)
         root.addWidget(self._dep_grp)
 
         btns = QDialogButtonBox(QDialogButtonBox.Ok | QDialogButtonBox.Cancel)
-        btns.button(QDialogButtonBox.Ok).setText("💾  حفظ")
-        btns.button(QDialogButtonBox.Cancel).setText("✖  إلغاء")
+        btns.button(QDialogButtonBox.Ok).setText(tr("btn_save"))
+        btns.button(QDialogButtonBox.Cancel).setText(tr("btn_cancel"))
         btns.accepted.connect(self._save)
         btns.rejected.connect(self.reject)
         root.addWidget(btns)
@@ -184,7 +183,7 @@ class _FieldDialog(QDialog):
         if set_id is None:
             return
 
-        fields = fetch_fields_for_set(self.conn, set_id)
+        fields = self._svc.list_fields(set_id)
         added  = 0
         for f in fields:
             if f["field_type"] != "number":
@@ -195,7 +194,7 @@ class _FieldDialog(QDialog):
             added += 1
 
         if added == 0:
-            self.cmb_source.addItem("— لا توجد حقول رقمية —", None)
+            self.cmb_source.addItem(tr("dim_field_no_numeric_fields"), None)
         else:
             self._update_preview()
 
@@ -227,12 +226,15 @@ class _FieldDialog(QDialog):
             result  = src_val + offset
             sign    = f"+{offset:g}" if offset >= 0 else f"{offset:g}"
             self._source_preview.setText(
-                f"من «{row['set_name']}» → {row['label']} = {src_val:g}  |  "
-                f"النتيجة: {src_val:g} {sign} = {result:g}"
+                tr("dim_src_preview_fmt").format(
+                    name=f"{row['label']} ({row['set_name']})",
+                    val=f"{src_val:g}", sign=sign,
+                    result=f"{result:g}", unit=""
+                ).strip()
             )
             self._source_preview.setVisible(True)
         else:
-            self._source_preview.setText("لا توجد قيمة محفوظة بعد في المجموعة المصدر")
+            self._source_preview.setText(tr("dim_field_preview_no_value"))
             self._source_preview.setVisible(True)
 
     def _load(self, field_data):
@@ -249,7 +251,7 @@ class _FieldDialog(QDialog):
         self.chk_required.setChecked(bool(field_data["required"]))
 
         if self.field_id:
-            dep = fetch_field_dep(self.conn, self.field_id)
+            dep = self._svc.get_field_dep(self.field_id)
             if dep:
                 self._dep_grp.setChecked(True)
                 src_set_id = dep["source_set_id"] or self.set_id
@@ -273,7 +275,7 @@ class _FieldDialog(QDialog):
         name  = self.inp_name.text().strip()
         label = self.inp_label.text().strip()
         if not name or not label:
-            QMessageBox.warning(self, "تنبيه", "أدخل الاسم والتسمية")
+            QMessageBox.warning(self, tr("warning"), tr("dim_field_name_required"))
             return
 
         # الوحدة من UnitCombo
@@ -282,15 +284,15 @@ class _FieldDialog(QDialog):
         required = self.chk_required.isChecked()
 
         if self.field_id:
-            f = fetch_field(self.conn, self.field_id)
+            f = self._svc.get_field(self.field_id)
             sort_order = f["sort_order"] if f else 0
-            update_field(self.conn, self.field_id, name, label,
-                         unit, ftype, required, sort_order)
+            self._svc.update_field(self.field_id, name, label,
+                                   unit, ftype, required, sort_order)
         else:
-            existing   = fetch_fields_for_set(self.conn, self.set_id)
+            existing   = self._svc.list_fields(self.set_id)
             sort_order = len(existing)
-            self.field_id = insert_field(
-                self.conn, self.set_id, name, label,
+            self.field_id = self._svc.create_field(
+                self.set_id, name, label,
                 unit, ftype, required, sort_order
             )
 
@@ -299,12 +301,12 @@ class _FieldDialog(QDialog):
             if isinstance(d, tuple):
                 src_field_id, src_set_id = d
                 actual_src_set = None if src_set_id == self.set_id else src_set_id
-                set_field_dep(
-                    self.conn, self.field_id, src_field_id,
+                self._svc.set_field_dep(
+                    self.field_id, src_field_id,
                     self.sp_offset.value(), "",
-                    source_set_id=actual_src_set
+                    src_set_id=actual_src_set
                 )
         else:
-            remove_field_dep(self.conn, self.field_id)
+            self._svc.remove_field_dep(self.field_id)
 
         self.accept()

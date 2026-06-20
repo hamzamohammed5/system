@@ -22,27 +22,13 @@ from db.designs.design_item_categories_repo import (
     fetch_item_category_descendants,
 )
 from .._xcf_thumbnail import get_xcf_thumbnail
-
+from ui.theme import _C
+from ui.widgets.core.i18n import tr
+from ui.font import get_font_size, fs, FS_XS
 
 import os
 
-# ── Palette ──────────────────────────────────────────────
-_BG          = "#FFFFFF"
-_BG_SURFACE  = "#F8F9FB"
-_BORDER      = "#E5E9F0"
-_BORDER_MED  = "#CDD3E0"
-_TEXT_PRI    = "#1A2035"
-_TEXT_SEC    = "#5A6680"
-_TEXT_MUT    = "#9BA5BE"
-
-_ACCENT      = "#4F6EF7"
-_ACCENT_LT   = "#EEF2FF"
-_ACCENT_BDR  = "#C7D2FE"
-
-_SUCCESS     = "#16A34A"
-_WARNING     = "#D97706"
-_DANGER      = "#DC2626"
-
+# ── Layout Constants ──────────────────────────────────────────────
 _CARD_W      = 172
 _CARD_THUMB  = 128
 _RADIUS      = "10px"
@@ -228,7 +214,7 @@ class _DesignCard(QFrame):
         thumb_frame.setFixedSize(_CARD_W, _CARD_THUMB)
         thumb_frame.setStyleSheet(f"""
             QFrame {{
-                background: #1E1B4B;
+                background: {_C['design_thumb_bg']};
                 border-radius: {_RADIUS} {_RADIUS} 0 0;
             }}
         """)
@@ -237,7 +223,7 @@ class _DesignCard(QFrame):
         self._thumb_lbl.setFixedSize(_CARD_W, _CARD_THUMB)
         self._thumb_lbl.setAlignment(Qt.AlignCenter)
         self._thumb_lbl.setStyleSheet(
-            "background:transparent; font-size:28px; color:#6366F1;"
+            f"background:transparent; font-size:{fs(FS_XS,+18)}px; color:{_C['design_thumb_icon']};"
         )
         self._thumb_lbl.setText("🎨")
 
@@ -248,8 +234,8 @@ class _DesignCard(QFrame):
             badge.setGeometry(_CARD_W - 30, 8, 22, 18)
             badge.setAlignment(Qt.AlignCenter)
             badge.setStyleSheet(
-                "background:rgba(0,0,0,0.55); color:#fff;"
-                "border-radius:9px; font-size:9px; font-weight:700;"
+                f"background:rgba(0,0,0,0.55); color:{_C['card_badge_text']};"
+                f"border-radius:9px; font-size:{fs(FS_XS,-1)}px; font-weight:700;"
                 "border:1px solid rgba(255,255,255,0.2);"
             )
 
@@ -266,11 +252,11 @@ class _DesignCard(QFrame):
         lbl_name = QLabel(name)
         lbl_name.setWordWrap(True)
         font_n = QFont()
-        font_n.setPointSize(10)
+        font_n.setPointSize(fs(get_font_size(), -2))
         font_n.setWeight(QFont.Medium)
         lbl_name.setFont(font_n)
         lbl_name.setStyleSheet(
-            f"color:{_TEXT_PRI}; background:transparent; border:none;"
+            f"color:{_C['text_primary']}; background:transparent; border:none;"
         )
         info_lay.addWidget(lbl_name)
 
@@ -278,28 +264,28 @@ class _DesignCard(QFrame):
         if cat:
             lbl_cat = QLabel(cat)
             font_c = QFont()
-            font_c.setPointSize(8)
+            font_c.setPointSize(fs(FS_XS, -2))
             lbl_cat.setFont(font_c)
             lbl_cat.setStyleSheet(
-                f"color:{_TEXT_MUT}; background:transparent; border:none;"
+                f"color:{_C['text_muted']}; background:transparent; border:none;"
             )
             info_lay.addWidget(lbl_cat)
 
         fl_cnt = self._data.get("files_count") or 0
         if sz_cnt:
             if fl_cnt == sz_cnt:
-                status_col  = _SUCCESS
-                status_text = f"✓  {fl_cnt}/{sz_cnt} ملف"
+                status_col  = _C['success']
+                status_text = tr("design_card_status_all_files").format(count=fl_cnt, total=sz_cnt)
             elif fl_cnt > 0:
-                status_col  = _WARNING
-                status_text = f"⚡  {fl_cnt}/{sz_cnt} ملف"
+                status_col  = _C['warning']
+                status_text = tr("design_card_status_partial_files").format(count=fl_cnt, total=sz_cnt)
             else:
-                status_col  = _TEXT_MUT
-                status_text = f"○  {sz_cnt} مقاس — بدون ملفات"
+                status_col  = _C['text_muted']
+                status_text = tr("design_card_status_no_files").format(count=sz_cnt)
 
             lbl_status = QLabel(status_text)
             font_s = QFont()
-            font_s.setPointSize(8)
+            font_s.setPointSize(fs(FS_XS, -2))
             lbl_status.setFont(font_s)
             lbl_status.setStyleSheet(
                 f"color:{status_col}; background:transparent; border:none;"
@@ -359,21 +345,21 @@ class _DesignCard(QFrame):
         if self._selected:
             self.setStyleSheet(f"""
                 QFrame {{
-                    background: {_ACCENT_LT};
-                    border: 2px solid {_ACCENT};
+                    background: {_C['accent_light']};
+                    border: 2px solid {_C['accent']};
                     border-radius: {_RADIUS};
                 }}
             """)
         else:
             self.setStyleSheet(f"""
                 QFrame {{
-                    background: {_BG};
-                    border: 1px solid {_BORDER};
+                    background: {_C['bg_input']};
+                    border: 1px solid {_C['border']};
                     border-radius: {_RADIUS};
                 }}
                 QFrame:hover {{
-                    border-color: {_ACCENT_BDR};
-                    background: {_ACCENT_LT};
+                    border-color: {_C['accent_mid']};
+                    background: {_C['accent_light']};
                 }}
             """)
 

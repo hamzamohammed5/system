@@ -19,6 +19,9 @@ from db.designs.dimension_sets_repo import (
     fetch_all_dimension_sets,
 )
 from ui.helpers import make_table
+from ui.theme import _C
+from ui.widgets.core.i18n import tr
+from ui.font import FS_SM, FS_BASE, get_font_size, fs
 
 
 class _SetsPanel(QWidget):
@@ -42,18 +45,25 @@ class _SetsPanel(QWidget):
         root.setSpacing(6)
 
         # ── رأس ──
-        hdr = QLabel("📐  اختر مجموعة مقاسات")
-        hdr.setStyleSheet("""
-            font-weight: bold; font-size: 12px; color: #1565c0;
-            background: #e8f0fe; border-radius: 6px; padding: 6px 10px;
+        hdr = QLabel(tr("dim_sets_panel_title"))
+        hdr.setStyleSheet(f"""
+            font-weight: bold;
+            font-size: {fs(get_font_size(), +1)}px;
+            color: {_C["acc_type_asset"]};
+            background: {_C["accent_light"]};
+            border-radius: 6px;
+            padding: 6px 10px;
         """)
         root.addWidget(hdr)
 
         # ── تلميح ──
-        hint = QLabel("💡 لإضافة أو تعديل المجموعات والتصنيفات — اذهب لتبويب «المجموعات»")
+        hint = QLabel(tr("dim_sets_card_hint"))
         hint.setStyleSheet(
-            "color: #555; font-size: 10px; background: #fff8e1;"
-            "border: 1px solid #ffe082; border-radius: 4px; padding: 4px 8px;"
+            f"color: {_C['text_neutral']};"
+            f"font-size: {FS_SM}px;"
+            f"background: {_C['investor_link_bg']};"
+            f"border: 1px solid {_C['investor_link_border']};"
+            "border-radius: 4px; padding: 4px 8px;"
         )
         hint.setWordWrap(True)
         root.addWidget(hint)
@@ -61,7 +71,7 @@ class _SetsPanel(QWidget):
         # ── فلتر ──
         filter_row = QHBoxLayout()
         self.inp_search = QLineEdit()
-        self.inp_search.setPlaceholderText("🔍 بحث...")
+        self.inp_search.setPlaceholderText(tr("dim_sets_list_search"))
         self.inp_search.setMinimumHeight(28)
         self.inp_search.textChanged.connect(self._apply_filter)
 
@@ -78,7 +88,13 @@ class _SetsPanel(QWidget):
 
         # ── جدول (للاختيار فقط) ──
         self.table = make_table(
-            ["ID", "الاسم", "التصنيف", "الوحدة", "الحقول"],
+            [
+                tr("dim_sets_col_id"),
+                tr("dim_sets_col_name"),
+                tr("dim_sets_col_category"),
+                tr("dim_sets_col_unit"),
+                tr("dim_sets_col_fields"),
+            ],
             stretch_col=1
         )
         self.table.setColumnWidth(0, 40)
@@ -94,7 +110,7 @@ class _SetsPanel(QWidget):
         prev = self.cmb_cat_filter.currentData()
         self.cmb_cat_filter.blockSignals(True)
         self.cmb_cat_filter.clear()
-        self.cmb_cat_filter.addItem("— كل التصنيفات —", None)
+        self.cmb_cat_filter.addItem(tr("dim_sets_all_categories"), None)
         rows = fetch_all_design_categories(self.conn)
         tree = build_category_tree(rows)
         self._add_cat_nodes(tree, 0)

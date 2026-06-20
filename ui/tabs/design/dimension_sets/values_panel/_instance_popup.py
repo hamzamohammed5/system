@@ -12,61 +12,12 @@ from PyQt5.QtWidgets import (
 )
 from PyQt5.QtCore import Qt, pyqtSignal
 
-from db.designs.dimension_sets_repo import (
-    fetch_fields_for_set,
-    fetch_instance,
-    insert_instance, update_instance,
-    fetch_instance_values, save_instance_values, calc_instance_cross_auto,
-    fetch_field_dep,
-)
+from ui.theme import _C
+from ui.widgets.core.i18n import tr
+from ui.font import FS_XS, FS_SM, FS_BASE, FS_MD, FS_LG
+from services.design.dimension_set_service import DimensionSetService
 from ui.tabs.design.dimension_sets._source_picker_dialog import _SourcePickerDialog
 
-_BLUE       = "#1565c0"
-_BLUE_LIGHT = "#e8f0fe"
-_BLUE_MID   = "#bbdefb"
-_GRAY_BG    = "#f8f9fc"
-_BORDER     = "#e0e7f3"
-_TEXT       = "#1a2340"
-_TEXT_MUTED = "#7a869a"
-
-
-_BTN_ICON = f"""
-    QToolButton {{
-        background: transparent;
-        border: none;
-        color: {_TEXT_MUTED};
-        font-size: 14px;
-        border-radius: 5px;
-        padding: 3px 6px;
-    }}
-    QToolButton:hover {{ background: {_BLUE_LIGHT}; color: {_BLUE}; }}
-"""
-
-_BTN_PRIMARY = f"""
-    QPushButton {{
-        background: {_BLUE};
-        color: white;
-        border: none;
-        border-radius: 7px;
-        padding: 6px 18px;
-        font-weight: bold;
-        font-size: 12px;
-    }}
-    QPushButton:hover  {{ background: #0d47a1; }}
-    QPushButton:disabled {{ background: #b0bec5; }}
-"""
-
-_BTN_GHOST = f"""
-    QPushButton {{
-        background: white;
-        color: {_BLUE};
-        border: 1.5px solid {_BLUE_MID};
-        border-radius: 7px;
-        padding: 5px 14px;
-        font-size: 12px;
-    }}
-    QPushButton:hover {{ background: {_BLUE_LIGHT}; }}
-"""
 
 def _row_val(row, key, default=None):
     try:
@@ -90,21 +41,22 @@ class _InstancePopup(QDialog):
                  instance_id: int = None, parent=None):
         super().__init__(parent)
         self.conn        = conn
+        self._svc        = DimensionSetService(conn)
         self.set_id      = set_id
         self.instance_id = instance_id
         self._spins      = {}   # field_id → QDoubleSpinBox
 
-        title = "تعديل مجموعة قيم" if instance_id else "إضافة مجموعة قيم جديدة"
+        title = tr("dim_inst_dlg_edit_title") if instance_id else tr("dim_inst_dlg_new_title")
         self.setWindowTitle(title)
         self.setMinimumWidth(520)
         self.setMinimumHeight(400)
         self.setModal(True)
         self.setStyleSheet(f"""
             QDialog {{
-                background: {_GRAY_BG};
+                background: {_C['bg_surface']};
             }}
             QLabel {{
-                color: {_TEXT};
+                color: {_C['text_primary']};
             }}
         """)
         self._build()
@@ -118,14 +70,14 @@ class _InstancePopup(QDialog):
 
         # ── رأس ──
         hdr = QLabel(
-            "✏️  تعديل القيم" if self.instance_id
-            else "➕  إضافة مجموعة قيم جديدة"
+            tr("dim_inst_hdr_edit") if self.instance_id
+            else tr("dim_inst_hdr_new")
         )
         hdr.setStyleSheet(f"""
-            font-size: 14px;
+            font-size: {FS_MD}px;
             font-weight: bold;
-            color: {_BLUE};
-            background: {_BLUE_LIGHT};
+            color: {_C['accent']};
+            background: {_C['accent_light']};
             border-radius: 8px;
             padding: 8px 14px;
         """)
@@ -133,27 +85,27 @@ class _InstancePopup(QDialog):
 
         # ── اسم المجموعة ──
         name_row = QHBoxLayout()
-        lbl_name = QLabel("الاسم:")
+        lbl_name = QLabel(tr("dim_inst_name_label") + ":")
         lbl_name.setFixedWidth(90)
         lbl_name.setAlignment(Qt.AlignRight | Qt.AlignVCenter)
         lbl_name.setStyleSheet("font-weight: bold;")
 
         self.inp_name = QLineEdit()
-        self.inp_name.setPlaceholderText("مثال: A4، مقاس L، النموذج الأول...")
+        self.inp_name.setPlaceholderText(tr("dim_inst_name_placeholder"))
         self.inp_name.setMinimumHeight(36)
         self.inp_name.setStyleSheet(f"""
             QLineEdit {{
-                border: 1.5px solid {_BORDER};
+                border: 1.5px solid {_C['border']};
                 border-radius: 8px;
                 padding: 4px 12px;
-                font-size: 13px;
-                background: white;
+                font-size: {FS_BASE}px;
+                background: {_C['bg_input']};
             }}
-            QLineEdit:focus {{ border-color: {_BLUE}; }}
+            QLineEdit:focus {{ border-color: {_C['accent']}; }}
         """)
 
         if self.instance_id:
-            inst = fetch_instance(self.conn, self.instance_id)
+            inst = self._svc.get_instance(self.instance_id)
             if inst:
                 self.inp_name.setText(inst["name"])
 
@@ -164,12 +116,12 @@ class _InstancePopup(QDialog):
         # ── فاصل ──
         sep = QFrame()
         sep.setFrameShape(QFrame.HLine)
-        sep.setStyleSheet(f"color: {_BORDER};")
+        sep.setStyleSheet(f"color: {_C['border']};")
         root.addWidget(sep)
 
         # ── حقول الإدخال ──
-        fields_lbl = QLabel("القيم:")
-        fields_lbl.setStyleSheet(f"font-weight: bold; color: {_TEXT_MUTED}; font-size: 11px;")
+        fields_lbl = QLabel(tr("dim_inst_values_label") + ":")
+        fields_lbl.setStyleSheet(f"font-weight: bold; color: {_C['text_muted']}; font-size: {FS_SM}px;")
         root.addWidget(fields_lbl)
 
         scroll = QScrollArea()
@@ -177,10 +129,10 @@ class _InstancePopup(QDialog):
         scroll.setStyleSheet(f"""
             QScrollArea {{ border: none; background: transparent; }}
             QScrollBar:vertical {{
-                background: #f0f0f0; width: 6px; border-radius: 3px;
+                background: {_C['bg_surface']}; width: 6px; border-radius: 3px;
             }}
             QScrollBar::handle:vertical {{
-                background: #bdbdbd; border-radius: 3px; min-height: 24px;
+                background: {_C['border']}; border-radius: 3px; min-height: 24px;
             }}
             QScrollBar::add-line:vertical,
             QScrollBar::sub-line:vertical {{ height: 0; }}
@@ -192,13 +144,13 @@ class _InstancePopup(QDialog):
         grid.setSpacing(10)
         grid.setContentsMargins(0, 4, 0, 4)
 
-        fields = fetch_fields_for_set(self.conn, self.set_id)
+        fields = self._svc.list_fields(self.set_id)
         num_fields = [f for f in fields if f["field_type"] == "number"]
 
         for i, f in enumerate(num_fields):
             lbl = QLabel(f["label"])
             lbl.setAlignment(Qt.AlignRight | Qt.AlignVCenter)
-            lbl.setStyleSheet(f"font-weight: 500; color: {_TEXT};")
+            lbl.setStyleSheet(f"font-weight: 500; color: {_C['text_primary']};")
             lbl.setFixedWidth(130)
 
             spin = QDoubleSpinBox()
@@ -207,18 +159,18 @@ class _InstancePopup(QDialog):
             spin.setMinimumHeight(36)
             spin.setStyleSheet(f"""
                 QDoubleSpinBox {{
-                    border: 1.5px solid {_BORDER};
+                    border: 1.5px solid {_C['border']};
                     border-radius: 8px;
                     padding: 4px 10px;
-                    font-size: 13px;
-                    background: white;
+                    font-size: {FS_BASE}px;
+                    background: {_C['bg_input']};
                 }}
-                QDoubleSpinBox:focus {{ border-color: {_BLUE}; }}
+                QDoubleSpinBox:focus {{ border-color: {_C['accent']}; }}
             """)
 
             unit_lbl = QLabel(f["unit"] or "")
             unit_lbl.setFixedWidth(38)
-            unit_lbl.setStyleSheet(f"color: {_TEXT_MUTED}; font-size: 11px;")
+            unit_lbl.setStyleSheet(f"color: {_C['text_muted']}; font-size: {FS_SM}px;")
             unit_lbl.setAlignment(Qt.AlignVCenter)
 
             # زر الحساب التلقائي لو في اعتمادية
@@ -227,8 +179,18 @@ class _InstancePopup(QDialog):
                 btn_auto = QToolButton()
                 btn_auto.setText("⟳")
                 btn_auto.setFixedSize(32, 32)
-                btn_auto.setStyleSheet(_BTN_ICON)
-                btn_auto.setToolTip("حساب تلقائي من المصدر")
+                btn_auto.setStyleSheet(f"""
+                    QToolButton {{
+                        background: transparent;
+                        border: none;
+                        color: {_C['text_muted']};
+                        font-size: {FS_MD}px;
+                        border-radius: 5px;
+                        padding: 3px 6px;
+                    }}
+                    QToolButton:hover {{ background: {_C['accent_light']}; color: {_C['accent']}; }}
+                """)
+                btn_auto.setToolTip(tr("dim_inst_auto_tooltip"))
                 fid = f["id"]
                 btn_auto.clicked.connect(
                     lambda _, fid_=fid, sp_=spin: self._calc_one(fid_, sp_)
@@ -245,8 +207,8 @@ class _InstancePopup(QDialog):
             self._spins[f["id"]] = spin
 
         if not num_fields:
-            empty = QLabel("هذه المجموعة ليس لها حقول رقمية.")
-            empty.setStyleSheet(f"color: {_TEXT_MUTED}; padding: 12px;")
+            empty = QLabel(tr("dim_inst_no_numeric_fields"))
+            empty.setStyleSheet(f"color: {_C['text_muted']}; padding: 12px;")
             empty.setAlignment(Qt.AlignCenter)
             grid.addWidget(empty, 0, 0, 1, 3)
 
@@ -259,21 +221,53 @@ class _InstancePopup(QDialog):
         has_auto = any(bool(_row_val(f, "source_field_id"))
                        for f in num_fields)
         if has_auto:
-            btn_calc_all = QPushButton("⟳  حساب الكل تلقائياً")
-            btn_calc_all.setStyleSheet(_BTN_GHOST)
+            btn_calc_all = QPushButton(tr("dim_inst_calc_all_btn"))
+            btn_calc_all.setStyleSheet(f"""
+                QPushButton {{
+                    background: {_C['bg_input']};
+                    color: {_C['accent']};
+                    border: 1.5px solid {_C['accent_mid']};
+                    border-radius: 7px;
+                    padding: 5px 14px;
+                    font-size: {FS_BASE}px;
+                }}
+                QPushButton:hover {{ background: {_C['accent_light']}; }}
+            """)
             btn_calc_all.setMinimumHeight(36)
             btn_calc_all.clicked.connect(self._calc_all_auto)
             btn_row.addWidget(btn_calc_all)
 
         btn_row.addStretch()
 
-        btn_cancel = QPushButton("إلغاء")
-        btn_cancel.setStyleSheet(_BTN_GHOST)
+        btn_cancel = QPushButton(tr("cancel"))
+        btn_cancel.setStyleSheet(f"""
+            QPushButton {{
+                background: {_C['bg_input']};
+                color: {_C['accent']};
+                border: 1.5px solid {_C['accent_mid']};
+                border-radius: 7px;
+                padding: 5px 14px;
+                font-size: {FS_BASE}px;
+            }}
+            QPushButton:hover {{ background: {_C['accent_light']}; }}
+        """)
         btn_cancel.setMinimumHeight(36)
         btn_cancel.clicked.connect(self.reject)
 
-        btn_save = QPushButton("💾  حفظ")
-        btn_save.setStyleSheet(_BTN_PRIMARY)
+        btn_save = QPushButton("💾  " + tr("save"))
+        btn_save.setStyleSheet(f"""
+            QPushButton {{
+                background: {_C['accent']};
+                color: {_C['btn_primary_text']};
+                border: none;
+                border-radius: 7px;
+                padding: 6px 18px;
+                font-weight: bold;
+                font-size: {FS_BASE}px;
+            }}
+            QPushButton:hover  {{ background: {_C['accent_hover']}; }}
+            QPushButton:disabled {{ background: {_C['text_muted']}; }}
+        """)
         btn_save.setMinimumHeight(36)
         btn_save.setMinimumWidth(100)
         btn_save.clicked.connect(self._save)
@@ -283,7 +277,7 @@ class _InstancePopup(QDialog):
         root.addLayout(btn_row)
 
     def _load_values(self):
-        saved = fetch_instance_values(self.conn, self.instance_id)
+        saved = self._svc.get_instance_values(self.instance_id)
         for fid, spin in self._spins.items():
             val = saved.get(fid, {}).get("value_num")
             if val is not None:
@@ -299,7 +293,7 @@ class _InstancePopup(QDialog):
         لو same-set dependency → يرجع self.instance_id مباشرة.
         يرجع source_instance_id أو None لو ألغى المستخدم.
         """
-        dep = fetch_field_dep(self.conn, field_id)
+        dep = self._svc.get_field_dependency(field_id)
         if not dep:
             return None
 
@@ -312,14 +306,8 @@ class _InstancePopup(QDialog):
             return self.instance_id
 
         # مجموعة مختلفة: اسأل المستخدم دايماً حتى لو instance واحد
-        try:
-            target_field = self.conn.execute(
-                "SELECT label FROM dimension_fields WHERE id=?",
-                (field_id,)
-            ).fetchone()
-            target_label = target_field["label"] if target_field else ""
-        except Exception:
-            target_label = ""
+        target_field = self._svc.get_field(field_id)
+        target_label = target_field["label"] if target_field else ""
 
         dlg = _SourcePickerDialog(
             conn               = self.conn,
@@ -346,7 +334,7 @@ class _InstancePopup(QDialog):
         if not self.instance_id:
             self._save_temp()
 
-        dep = fetch_field_dep(self.conn, field_id)
+        dep = self._svc.get_field_dependency(field_id)
         if not dep:
             return
 
@@ -356,14 +344,13 @@ class _InstancePopup(QDialog):
 
         # نفس المجموعة: احسب مباشرة بدون dialog
         if source_set_id is None:
-            val = calc_instance_cross_auto(self.conn, field_id, self.instance_id)
+            val = self._svc.calc_same_set_auto(field_id, self.instance_id)
             if val is not None:
                 spin.setValue(val)
             else:
                 QMessageBox.information(
-                    self, "تنبيه",
-                    "لا توجد قيمة للحقل المصدر بعد.\n"
-                    "أدخل قيمة المصدر في هذه المجموعة أولاً."
+                    self, tr("info"),
+                    tr("dim_inst_no_source_value")
                 )
             return
 
@@ -372,20 +359,15 @@ class _InstancePopup(QDialog):
         if source_instance_id is None:
             return   # ألغى المستخدم
 
-        val_row = self.conn.execute(
-            "SELECT value_num FROM dimension_set_values "
-            "WHERE instance_id=? AND field_id=?",
-            (source_instance_id, source_field_id)
-        ).fetchone()
+        val = self._svc.get_field_value(source_instance_id, source_field_id)
 
-        if val_row and val_row["value_num"] is not None:
-            result = float(val_row["value_num"]) + offset
+        if val is not None:
+            result = float(val) + offset
             spin.setValue(result)
         else:
             QMessageBox.information(
-                self, "تنبيه",
-                "لا توجد قيمة للحقل المصدر في المجموعة المختارة.\n"
-                "أدخل القيمة في مجموعة القيم المصدر أولاً."
+                self, tr("info"),
+                tr("dim_inst_no_cross_value")
             )
 
     # ──────────────────────────────────────────────────────
@@ -400,7 +382,7 @@ class _InstancePopup(QDialog):
         if not self.instance_id:
             self._save_temp()
 
-        fields = fetch_fields_for_set(self.conn, self.set_id)
+        fields = self._svc.list_fields(self.set_id)
 
         # مجموعة مصدر → instance_id المختار (None = ألغى)
         # تُملأ تدريجياً لتجنب سؤال المستخدم مرتين عن نفس المجموعة
@@ -413,7 +395,7 @@ class _InstancePopup(QDialog):
             if fid not in self._spins:
                 continue
 
-            dep = fetch_field_dep(self.conn, fid)
+            dep = self._svc.get_field_dependency(fid)
             if not dep:
                 continue
 
@@ -424,7 +406,7 @@ class _InstancePopup(QDialog):
 
             # نفس المجموعة: احسب مباشرة
             if source_set_id is None:
-                val = calc_instance_cross_auto(self.conn, fid, self.instance_id)
+                val = self._svc.calc_same_set_auto(fid, self.instance_id)
                 if val is not None:
                     spin.setValue(val)
                 continue
@@ -438,33 +420,29 @@ class _InstancePopup(QDialog):
             if src_iid is None:
                 continue   # المستخدم ألغى لهذه المجموعة → تخطى
 
-            val_row = self.conn.execute(
-                "SELECT value_num FROM dimension_set_values "
-                "WHERE instance_id=? AND field_id=?",
-                (src_iid, source_field_id)
-            ).fetchone()
+            val = self._svc.get_field_value(src_iid, source_field_id)
 
-            if val_row and val_row["value_num"] is not None:
-                spin.setValue(float(val_row["value_num"]) + offset)
+            if val is not None:
+                spin.setValue(float(val) + offset)
 
     def _save_temp(self):
         """يحفظ مؤقتاً بدون إغلاق النافذة — للحساب التلقائي."""
         if not self.instance_id:
             name = self.inp_name.text().strip()
-            self.instance_id = insert_instance(self.conn, self.set_id, name)
+            self.instance_id = self._svc.create_instance(self.set_id, name)
         values = {fid: sp.value() for fid, sp in self._spins.items()}
-        save_instance_values(self.conn, self.instance_id, self.set_id, values)
+        self._svc.save_instance_values(self.instance_id, self.set_id, values)
 
     def _save(self):
         name = self.inp_name.text().strip()
 
         if self.instance_id:
-            update_instance(self.conn, self.instance_id, name)
+            self._svc.update_instance(self.instance_id, name)
         else:
-            self.instance_id = insert_instance(self.conn, self.set_id, name)
+            self.instance_id = self._svc.create_instance(self.set_id, name)
 
         values = {fid: sp.value() for fid, sp in self._spins.items()}
-        save_instance_values(self.conn, self.instance_id, self.set_id, values)
+        self._svc.save_instance_values(self.instance_id, self.set_id, values)
         self.saved.emit(self.instance_id)
         self.accept()
 

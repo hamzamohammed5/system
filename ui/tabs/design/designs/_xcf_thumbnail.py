@@ -24,6 +24,8 @@ import subprocess
 from PyQt5.QtGui  import QPixmap, QImage, QPainter, QColor
 from PyQt5.QtCore import Qt, QRect, QObject, pyqtSignal, QTimer, QFileSystemWatcher
 
+from ui.theme import _C
+
 # ── Cache: xcf_path → (mtime, QPixmap) ─────────────────
 _CACHE: dict[str, tuple[float, QPixmap]] = {}
 
@@ -385,28 +387,28 @@ def _make_placeholder(xcf_path: str, size: int = 80) -> QPixmap:
         name = name[:9] + "…"
 
     px = QPixmap(s, s)
-    px.fill(QColor("#1a1a2e"))
+    px.fill(QColor(_C["design_thumb_bg_end"]))
     painter = QPainter(px)
     painter.setRenderHint(QPainter.Antialiasing)
 
     from PyQt5.QtGui import QLinearGradient
     grad = QLinearGradient(0, 0, 0, s)
-    grad.setColorAt(0, QColor("#2d2d5e"))
-    grad.setColorAt(1, QColor("#1a1a2e"))
+    grad.setColorAt(0, QColor(_C["design_thumb_bg_start"]))
+    grad.setColorAt(1, QColor(_C["design_thumb_bg_end"]))
     painter.fillRect(0, 0, s, s, grad)
 
-    painter.setPen(QColor("#5c6bc0"))
+    painter.setPen(QColor(_C["design_thumb_border"]))
     painter.drawRoundedRect(1, 1, s-2, s-2, 6, 6)
 
     font = painter.font()
     font.setPointSize(s // 3)
     painter.setFont(font)
-    painter.setPen(QColor("#7986cb"))
+    painter.setPen(QColor(_C["design_thumb_icon"]))
     painter.drawText(QRect(0, s//8, s, s//2), Qt.AlignCenter, "🎨")
 
     font.setPointSize(max(6, s // 10))
     painter.setFont(font)
-    painter.setPen(QColor("#9fa8da"))
+    painter.setPen(QColor(_C["design_thumb_text"]))
     painter.drawText(QRect(2, s*6//8, s-4, s//5), Qt.AlignCenter, name)
 
     painter.end()

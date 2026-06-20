@@ -19,17 +19,18 @@ from PyQt5.QtWidgets import (
 
 )
 from PyQt5.QtCore import Qt, pyqtSignal, QThread, pyqtSignal as Signal
-
+from ui.widgets.core.i18n import tr
+from ui.theme import _C
+from ui.font import FS_SM, fs
 
 
 from .._xcf_thumbnail import get_xcf_thumbnail
 
-# ── Palette ──────────────────────────────────────────────
-_BG_SURFACE  = "#F8F9FB"
-_BORDER_MED  = "#CDD3E0"
-_TEXT_MUT    = "#9BA5BE"
-
-_ACCENT_BDR  = "#C7D2FE"
+# ── Palette من _C ──────────────────────────────────────
+_BG_SURFACE  = _C["bg_surface"]
+_BORDER_MED  = _C["border_med"]
+_TEXT_MUT    = _C["text_muted"]
+_ACCENT_BDR  = _C["accent_mid"]
 
 _RADIUS_SM   = "6px"
 
@@ -42,7 +43,7 @@ def _btn_ss(bg, fg, bdr, hover_bg, height=28, radius=_RADIUS_SM):
         f"QPushButton{{"
         f"  background:{bg}; color:{fg};"
         f"  border:1px solid {bdr}; border-radius:{radius};"
-        f"  padding:0 10px; font-size:11px; min-height:{height}px;"
+        f"  padding:0 10px; font-size:{FS_SM}px; min-height:{height}px;"
         f"}}"
         f"QPushButton:hover{{background:{hover_bg};}}"
         f"QPushButton:pressed{{opacity:0.85;}}"
@@ -124,8 +125,8 @@ def _open_gimp(xcf_path=None, width_val=None, height_val=None,
     gimp_exe = _find_gimp()
     if not gimp_exe:
         QMessageBox.warning(
-            None, "GIMP غير موجود",
-            "لم يتم العثور على GIMP.\nحدد مساره من ⚙️ الإعدادات."
+            None, tr("gimp_not_found"),
+            tr("design_size_card_missing_gimp")
         )
         return False
     try:
@@ -148,11 +149,11 @@ def _open_gimp(xcf_path=None, width_val=None, height_val=None,
         subprocess.Popen([gimp_exe])
         return True
     except ImportError:
-        QMessageBox.warning(None, "مكتبة ناقصة",
-                            "تحتاج تثبيت Pillow:\n\npip install Pillow")
+        QMessageBox.warning(None, tr("warning"),
+                            tr("design_size_card_pillow_missing"))
         return False
     except Exception as e:
-        QMessageBox.critical(None, "خطأ", f"فشل فتح GIMP:\n{e}")
+        QMessageBox.critical(None, tr("error"), tr("design_size_card_open_failed").format(error=e))
         return False
 
 
@@ -176,9 +177,9 @@ class _ThumbnailWidget(QLabel):
         self.setText("🎨")
         self.setStyleSheet(f"""
             QLabel {{
-                background: #1E1B4B;
+                background: {_C['design_thumb_bg']};
                 border-radius: {_RADIUS_SM};
-                font-size: 20px;
+                font-size: {fs(FS_SM, +9)}px;
             }}
         """)
 
@@ -198,20 +199,20 @@ class _ThumbnailWidget(QLabel):
             self.setPixmap(scaled)
             self.setStyleSheet(f"""
                 QLabel {{
-                    background: #0F0E17;
+                    background: {_C['design_thumb_bg']};
                     border-radius: {_RADIUS_SM};
-                    border: 1px solid {_ACCENT_BDR};
+                    border: 1px solid {_C['accent_mid']};
                 }}
             """)
         else:
             self.setText("📄")
             self.setStyleSheet(f"""
                 QLabel {{
-                    background: {_BG_SURFACE};
-                    border: 1px dashed {_BORDER_MED};
+                    background: {_C['bg_surface']};
+                    border: 1px dashed {_C['border_med']};
                     border-radius: {_RADIUS_SM};
-                    font-size: 22px;
-                    color: {_TEXT_MUT};
+                    font-size: {fs(FS_SM, +11)}px;
+                    color: {_C['text_muted']};
                 }}
             """)
 

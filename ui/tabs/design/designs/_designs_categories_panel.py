@@ -22,23 +22,25 @@ from db.designs.design_item_categories_repo import (
 )
 from ui.events import bus
 from ui.tabs.design.design_styles import get_styles
+from ui.widgets.core.i18n import tr
+from ui.theme import _C
 
 _SIDEBAR_W = 230
 
-# ── Palette ──────────────────────────────────────────────
-_BG          = "#FFFFFF"
-_BG_SURFACE  = "#F8F9FB"
-_BG_HOVER    = "#F1F4F9"
-_BG_SELECTED = "#EEF2FF"
-_BORDER      = "#E5E9F0"
-_BORDER_MED  = "#CDD3E0"
-_TEXT_PRI    = "#1A2035"
-_TEXT_SEC    = "#5A6680"
-_TEXT_MUT    = "#9BA5BE"
-_ACCENT      = "#4F6EF7"
-_DANGER      = "#DC2626"
-_DANGER_LT   = "#FEF2F2"
-_DANGER_BDR  = "#FECACA"
+# ── Palette من _C ──────────────────────────────────────
+_BG          = _C["bg_input"]
+_BG_SURFACE  = _C["bg_surface"]
+_BG_HOVER    = _C["bg_hover"]
+_BG_SELECTED = _C["accent_light"]
+_BORDER      = _C["border"]
+_BORDER_MED  = _C["border_med"]
+_TEXT_PRI    = _C["text_primary"]
+_TEXT_SEC    = _C["text_sec"]
+_TEXT_MUT    = _C["text_muted"]
+_ACCENT      = _C["accent"]
+_DANGER      = _C["danger"]
+_DANGER_LT   = _C["danger_bg"]
+_DANGER_BDR  = _C["danger_border"]
 _RADIUS_SM   = "5px"
 
 from .designs_categories._row_and_form import _btn_ss, _CatForm, _CatRow
@@ -69,11 +71,11 @@ class DesignsCategoriesPanel(QWidget):
         )
         self._btn_add.setStyleSheet(
             f"QPushButton{{"
-            f"  background:{_ACCENT}; color:#fff;"
+            f"  background:{_ACCENT}; color:{_C['accent_text']};"
             f"  border:none; border-radius:{s.normal + 2}px;"
             f"  font-size:{s.large}pt; font-weight:700;"
             f"}}"
-            f"QPushButton:hover{{background:#3D5BEF;}}"
+            f"QPushButton:hover{{background:{_C['accent_hover']};}}"
         )
         self._inp_search.setStyleSheet(s.input_search())
 
@@ -81,7 +83,7 @@ class DesignsCategoriesPanel(QWidget):
             s.btn(_BG, _TEXT_SEC, _BORDER_MED, _BG_HOVER)
         )
         self.btn_del.setStyleSheet(
-            s.btn(_DANGER_LT, _DANGER, _DANGER_BDR, "#FEE2E2")
+            s.btn(_DANGER_LT, _DANGER, _DANGER_BDR, _DANGER_LT)
         )
 
     def _build(self):
@@ -104,7 +106,7 @@ class DesignsCategoriesPanel(QWidget):
         hdr_lay.setContentsMargins(14, 0, 10, 0)
         hdr_lay.setSpacing(8)
 
-        self._lbl_header = QLabel("التصنيفات")
+        self._lbl_header = QLabel(tr("design_cats_panel_title"))
         self._lbl_header.setStyleSheet(
             f"font-size:{s.large}pt; font-weight:700; color:{_TEXT_PRI};"
             "background:transparent; border:none;"
@@ -112,14 +114,14 @@ class DesignsCategoriesPanel(QWidget):
 
         self._btn_add = QPushButton("+")
         self._btn_add.setFixedSize(26, 26)
-        self._btn_add.setToolTip("تصنيف جديد")
+        self._btn_add.setToolTip(tr("design_cats_add_tooltip"))
         self._btn_add.setStyleSheet(
             f"QPushButton{{"
-            f"  background:{_ACCENT}; color:#fff;"
+            f"  background:{_ACCENT}; color:{_C['accent_text']};"
             f"  border:none; border-radius:13px;"
             f"  font-size:{s.large}pt; font-weight:700;"
             f"}}"
-            f"QPushButton:hover{{background:#3D5BEF;}}"
+            f"QPushButton:hover{{background:{_C['accent_hover']};}}"
         )
         self._btn_add.clicked.connect(self._show_add_form)
 
@@ -137,7 +139,7 @@ class DesignsCategoriesPanel(QWidget):
         sf_lay.setSpacing(6)
 
         self._inp_search = QLineEdit()
-        self._inp_search.setPlaceholderText("بحث في التصنيفات...")
+        self._inp_search.setPlaceholderText(tr("design_cats_search_placeholder"))
         self._inp_search.setMinimumHeight(30)
         self._inp_search.setStyleSheet(s.input_search())
         self._inp_search.textChanged.connect(self._on_search)
@@ -193,16 +195,16 @@ class DesignsCategoriesPanel(QWidget):
         ab.setContentsMargins(10, 8, 10, 8)
         ab.setSpacing(6)
 
-        self.btn_edit = QPushButton("تعديل")
+        self.btn_edit = QPushButton(tr("design_cats_edit_btn"))
         self.btn_edit.setMinimumHeight(28)
         self.btn_edit.setEnabled(False)
         self.btn_edit.setStyleSheet(s.btn(_BG, _TEXT_SEC, _BORDER_MED, _BG_HOVER))
         self.btn_edit.clicked.connect(self._show_edit_form)
 
-        self.btn_del = QPushButton("حذف")
+        self.btn_del = QPushButton(tr("design_cats_delete_btn"))
         self.btn_del.setMinimumHeight(28)
         self.btn_del.setEnabled(False)
-        self.btn_del.setStyleSheet(s.btn(_DANGER_LT, _DANGER, _DANGER_BDR, "#FEE2E2"))
+        self.btn_del.setStyleSheet(s.btn(_DANGER_LT, _DANGER, _DANGER_BDR, _DANGER_LT))
         self.btn_del.clicked.connect(self._delete)
 
         ab.addWidget(self.btn_edit, stretch=1)
@@ -224,7 +226,7 @@ class DesignsCategoriesPanel(QWidget):
             item.deleteLater()
         self._items = []
 
-        all_row = _CatRow(None, "كل التصميمات", _ACCENT, depth=0)
+        all_row = _CatRow(None, tr("design_cats_all"), _ACCENT, depth=0)
         all_row.clicked.connect(self._on_clicked)
         all_row.set_selected(self._active_id == "ALL")
         self._list_lay.insertWidget(self._list_lay.count() - 1, all_row)
@@ -311,15 +313,15 @@ class DesignsCategoriesPanel(QWidget):
         counts = count_designs_per_category(self.conn)
         total  = sum(counts.get(d, 0) for d in desc)
 
-        msg = f"حذف تصنيف «{cat['name']}»؟"
+        msg = tr("delete_confirm_msg").format(name=cat['name'])
         cc  = len(desc) - 1
         if cc:
-            msg += f"\n⚠️ {cc} تصنيف فرعي سيُحذف."
+            msg += f"\n{tr('design_cats_has_children_warn').format(count=cc)}"
         if total:
-            msg += f"\n⚠️ {total} تصميم سيفقد تصنيفه."
+            msg += f"\n{tr('design_cats_has_designs_warn').format(count=total)}"
 
         if QMessageBox.question(
-            self, "تأكيد", msg, QMessageBox.Yes | QMessageBox.No
+            self, tr("confirm_delete"), msg, QMessageBox.Yes | QMessageBox.No
         ) == QMessageBox.Yes:
             for d in sorted(desc, reverse=True):
                 delete_item_category(self.conn, d)

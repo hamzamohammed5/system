@@ -21,21 +21,23 @@ from db.designs.design_item_categories_repo import (
     build_item_category_tree,
     fetch_item_category_descendants,
 )
+from ui.theme import _C
+from ui.widgets.core.i18n import tr
+from ui.font import FS_XS, FS_SM, FS_BASE, fs
 
+# ── Palette من _C ──────────────────────────────────────
+_BG          = _C["bg_input"]
+_BG_SURFACE  = _C["bg_surface"]
+_BG_HOVER    = _C["bg_hover"]
+_BG_SELECTED = _C["accent_light"]
+_BORDER      = _C["border"]
+_BORDER_MED  = _C["border_med"]
 
-# ── Palette — هادئ ومتناسق ──
-_BG          = "#FFFFFF"
-_BG_SURFACE  = "#F8F9FB"
-_BG_HOVER    = "#F1F4F9"
-_BG_SELECTED = "#EEF2FF"
-_BORDER      = "#E5E9F0"
-_BORDER_MED  = "#CDD3E0"
+_TEXT_PRI    = _C["text_primary"]
+_TEXT_SEC    = _C["text_sec"]
+_TEXT_MUT    = _C["text_muted"]
 
-_TEXT_PRI    = "#1A2035"
-_TEXT_SEC    = "#5A6680"
-_TEXT_MUT    = "#9BA5BE"
-
-_ACCENT      = "#4F6EF7"           # أزرق بنفسجي
+_ACCENT      = _C["accent"]
 
 _RADIUS_SM   = "5px"
 
@@ -45,7 +47,7 @@ def _btn_ss(bg, fg, bdr, hover_bg, height=28):
         f"QPushButton{{"
         f"  background:{bg}; color:{fg};"
         f"  border:1px solid {bdr}; border-radius:{_RADIUS_SM};"
-        f"  padding:0 12px; font-size:12px; min-height:{height}px;"
+        f"  padding:0 12px; font-size:{FS_BASE}px; min-height:{height}px;"
         f"}}"
         f"QPushButton:hover{{background:{hover_bg};}}"
         f"QPushButton:pressed{{opacity:0.85;}}"
@@ -85,14 +87,14 @@ class _CatRow(QFrame):
         self._dot = QLabel("●")
         self._dot.setFixedWidth(10)
         self._dot.setStyleSheet(
-            f"color:{self._color}; font-size:8px;"
+            f"color:{self._color}; font-size:{fs(FS_XS,-2)}px;"
             "background:transparent; border:none;"
         )
 
         # اسم التصنيف
         self._lbl = QLabel(name)
         font = QFont()
-        font.setPointSize(10)
+        font.setPointSize(FS_BASE)
         self._lbl.setFont(font)
         self._lbl.setStyleSheet(
             f"color:{_TEXT_PRI}; background:transparent; border:none;"
@@ -103,7 +105,7 @@ class _CatRow(QFrame):
         self._badge.setFixedSize(24, 18)
         self._badge.setAlignment(Qt.AlignCenter)
         font_b = QFont()
-        font_b.setPointSize(8)
+        font_b.setPointSize(fs(FS_XS, -2))
         self._badge.setFont(font_b)
         self._badge.setStyleSheet(
             f"color:{_TEXT_MUT}; font-weight:500;"
@@ -136,7 +138,7 @@ class _CatRow(QFrame):
                 "background:transparent; border:none;"
             )
             self._dot.setStyleSheet(
-                f"color:{_ACCENT}; font-size:8px;"
+                f"color:{_ACCENT}; font-size:{fs(FS_XS,-2)}px;"
                 "background:transparent; border:none;"
             )
         else:
@@ -153,7 +155,7 @@ class _CatRow(QFrame):
                 "background:transparent; border:none;"
             )
             self._dot.setStyleSheet(
-                f"color:{self._color}; font-size:8px;"
+                f"color:{self._color}; font-size:{fs(FS_XS,-2)}px;"
                 "background:transparent; border:none;"
             )
 
@@ -189,9 +191,9 @@ class _CatForm(QWidget):
         lay.setSpacing(8)
 
         # عنوان الفورم
-        self._mode_lbl = QLabel("تصنيف جديد")
+        self._mode_lbl = QLabel(tr("design_cats_new_form_title"))
         self._mode_lbl.setStyleSheet(
-            f"font-size:11px; font-weight:700; color:{_ACCENT};"
+            f"font-size:{FS_SM}px; font-weight:700; color:{_ACCENT};"
             "background:transparent; border:none;"
             "text-transform:uppercase; letter-spacing:0.5px;"
         )
@@ -199,14 +201,14 @@ class _CatForm(QWidget):
 
         # حقل الاسم
         self.inp_name = QLineEdit()
-        self.inp_name.setPlaceholderText("اسم التصنيف...")
+        self.inp_name.setPlaceholderText(tr("design_cats_name_placeholder"))
         self.inp_name.setMinimumHeight(32)
         self.inp_name.setStyleSheet(f"""
             QLineEdit {{
                 border: 1px solid {_BORDER_MED};
                 border-radius: {_RADIUS_SM};
                 padding: 0 10px;
-                font-size: 12px;
+                font-size: {FS_BASE}px;
                 background: {_BG};
                 color: {_TEXT_PRI};
             }}
@@ -218,9 +220,9 @@ class _CatForm(QWidget):
         lay.addWidget(self.inp_name)
 
         # التصنيف الأب
-        lbl_p = QLabel("تابع لـ:")
+        lbl_p = QLabel(tr("design_cats_parent_label"))
         lbl_p.setStyleSheet(
-            f"font-size:11px; color:{_TEXT_SEC}; background:transparent; border:none;"
+            f"font-size:{FS_SM}px; color:{_TEXT_SEC}; background:transparent; border:none;"
         )
         lay.addWidget(lbl_p)
 
@@ -231,7 +233,7 @@ class _CatForm(QWidget):
                 border: 1px solid {_BORDER_MED};
                 border-radius: {_RADIUS_SM};
                 padding: 0 8px;
-                font-size: 11px;
+                font-size: {FS_SM}px;
                 background: {_BG};
                 color: {_TEXT_PRI};
             }}
@@ -244,16 +246,16 @@ class _CatForm(QWidget):
         crow = QHBoxLayout()
         crow.setSpacing(8)
 
-        lbl_c = QLabel("اللون:")
+        lbl_c = QLabel(tr("design_cats_color_label"))
         lbl_c.setStyleSheet(
-            f"font-size:11px; color:{_TEXT_SEC}; background:transparent; border:none;"
+            f"font-size:{FS_SM}px; color:{_TEXT_SEC}; background:transparent; border:none;"
         )
 
         self._color_preview = QFrame()
         self._color_preview.setFixedSize(24, 24)
         self._update_color_preview()
 
-        btn_c = QPushButton("اختر لون")
+        btn_c = QPushButton(tr("design_cats_pick_color_btn"))
         btn_c.setMinimumHeight(26)
         btn_c.setStyleSheet(_btn_ss(_BG, _TEXT_SEC, _BORDER_MED, _BG_HOVER))
         btn_c.clicked.connect(self._pick_color)
@@ -273,12 +275,12 @@ class _CatForm(QWidget):
         brow = QHBoxLayout()
         brow.setSpacing(6)
 
-        self.btn_save = QPushButton("حفظ")
+        self.btn_save = QPushButton(tr("design_cats_save_btn"))
         self.btn_save.setMinimumHeight(30)
-        self.btn_save.setStyleSheet(_btn_ss(_ACCENT, "#fff", _ACCENT, "#3D5BEF", 30))
+        self.btn_save.setStyleSheet(_btn_ss(_ACCENT, _C["accent_text"], _ACCENT, _C["accent_hover"], 30))
         self.btn_save.clicked.connect(self._save)
 
-        btn_cancel = QPushButton("إلغاء")
+        btn_cancel = QPushButton(tr("design_cats_cancel_btn"))
         btn_cancel.setMinimumHeight(30)
         btn_cancel.setStyleSheet(_btn_ss(_BG, _TEXT_SEC, _BORDER_MED, _BG_HOVER, 30))
         btn_cancel.clicked.connect(self.canceled.emit)
@@ -296,7 +298,7 @@ class _CatForm(QWidget):
     def _reload_parent(self, exclude_id=None):
         self.cmb_parent.blockSignals(True)
         self.cmb_parent.clear()
-        self.cmb_parent.addItem("— بدون أب —", None)
+        self.cmb_parent.addItem(tr("design_cats_no_parent"), None)
         rows = fetch_all_item_categories(self.conn)
         tree = build_item_category_tree(rows)
         excl = set()
@@ -326,7 +328,7 @@ class _CatForm(QWidget):
         self._color = _ACCENT
         self.inp_name.clear()
         self._update_color_preview()
-        self._mode_lbl.setText("تصنيف جديد")
+        self._mode_lbl.setText(tr("design_cats_new_form_title"))
         self._reload_parent()
 
     def load_edit(self, cat_id):
@@ -337,7 +339,7 @@ class _CatForm(QWidget):
         self._color = cat["color"] or _ACCENT
         self.inp_name.setText(cat["name"])
         self._update_color_preview()
-        self._mode_lbl.setText(f"تعديل: {cat['name']}")
+        self._mode_lbl.setText(tr("design_cats_edit_form_title").format(name=cat['name']))
         self._reload_parent(exclude_id=cat_id)
         for i in range(self.cmb_parent.count()):
             if self.cmb_parent.itemData(i) == cat["parent_id"]:
@@ -357,5 +359,5 @@ class _CatForm(QWidget):
                 insert_item_category(self.conn, name, self._color, pid)
             self.saved.emit()
         except ValueError as e:
-            QMessageBox.warning(self, "خطأ", str(e))
+            QMessageBox.warning(self, tr("error"), str(e))
 

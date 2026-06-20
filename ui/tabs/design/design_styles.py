@@ -4,7 +4,8 @@ ui/tabs/design/design_styles.py
 أنماط CSS ديناميكية لوحدة التصميمات — متناسقة مع app_settings.py
 """
 
-from ui.app_settings import get_font_size, fs, _C as APP_COLORS
+from ui.font import get_font_size, fs
+from ui.theme import _C as APP_COLORS
 
 
 class _Styles:
@@ -27,12 +28,15 @@ class _Styles:
     ACCENT_BDR  = APP_COLORS["accent_mid"]
     ACCENT_DARK = APP_COLORS["accent_hover"]
     ACCENT_TEXT = APP_COLORS["accent_text"]
+    BTN_PRIMARY_TEXT = APP_COLORS["btn_primary_text"]
     SUCCESS     = APP_COLORS["success"]
     SUCCESS_LT  = APP_COLORS["success_bg"]
     SUCCESS_BDR = APP_COLORS["success_border"]
+    SUCCESS_HOVER_BG = APP_COLORS["success_hover_bg"]
     DANGER      = APP_COLORS["danger"]
     DANGER_LT   = APP_COLORS["danger_bg"]
     DANGER_BDR  = APP_COLORS["danger_border"]
+    DANGER_HOVER_BG = APP_COLORS["danger_hover_bg"]
     WARNING     = APP_COLORS["warning"]
 
     RADIUS    = "6px"
@@ -125,14 +129,14 @@ class _Styles:
         h = height or self._h()
         return (
             f"QPushButton{{"
-            f"  background:{self.ACCENT}; color:#FFFFFF;"
+            f"  background:{self.ACCENT}; color:{self.BTN_PRIMARY_TEXT};"
             f"  border:none; border-radius:{self.RADIUS};"
             f"  padding:0 18px; font-size:{self.normal}pt; font-weight:600;"
             f"  min-height:{h}px;"
             f"}}"
             f"QPushButton:hover{{background:{self.ACCENT_DARK};}}"
             f"QPushButton:pressed{{background:{self.ACCENT_DARK}; opacity:0.9;}}"
-            f"QPushButton:disabled{{background:{self.BORDER_MED}; color:#FFFFFF;}}"
+            f"QPushButton:disabled{{background:{self.BORDER_MED}; color:{self.BTN_PRIMARY_TEXT};}}"
         )
 
     def btn_ghost(self, height: int = None) -> str:
@@ -156,7 +160,7 @@ class _Styles:
             f"  padding:0 14px; font-size:{self.normal}pt; font-weight:600;"
             f"  min-height:{h}px;"
             f"}}"
-            f"QPushButton:hover{{background:#D4EDDF; border-color:{self.SUCCESS};}}"
+            f"QPushButton:hover{{background:{self.SUCCESS_HOVER_BG}; border-color:{self.SUCCESS};}}"
         )
 
     def btn_danger(self, height: int = None) -> str:
@@ -168,7 +172,7 @@ class _Styles:
             f"  padding:0 14px; font-size:{self.normal}pt;"
             f"  min-height:{h}px;"
             f"}}"
-            f"QPushButton:hover{{background:#FCDBD9; border-color:{self.DANGER};}}"
+            f"QPushButton:hover{{background:{self.DANGER_HOVER_BG}; border-color:{self.DANGER};}}"
         )
 
     # ══════════════════════════════════════════════════════

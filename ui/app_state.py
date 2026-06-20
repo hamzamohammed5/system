@@ -4,8 +4,14 @@ ui/app_state.py
 AppState — Cache مركزي لإعدادات التطبيق.
 
 المسؤولية الوحيدة:
-  - cache حجم الخط (يُقرأ من DB مرة واحدة)
+  - cache حجم الخط (يُقرأ من DB مرة واحدة عبر FontService)
   - invalidate عند تغيير الشركة النشطة
+
+التسلسل الكامل لحجم الخط:
+    ui/font.py  →  AppState  →  FontService  →  settings_repo  →  DB
+
+AppState لا يتواصل مع DB أو settings_repo مباشرةً —
+كل عمليات القراءة والكتابة تمر عبر FontService.
 """
 
 from __future__ import annotations
@@ -19,6 +25,9 @@ class AppState:
     """
     Cache مركزي لإعدادات التطبيق.
     كل الـ attributes هي class-level — مفيش instance.
+
+    القاعدة الذهبية:
+        AppState يكلّم FontService فقط — لا يعرف settings_repo أو DB.
     """
 
     _font_size: int | None = None
@@ -27,21 +36,39 @@ class AppState:
 
     @classmethod
     def font_size(cls) -> int:
-        """يرجع حجم الخط — يحمّل من DB مرة واحدة ثم يرجع من الـ cache."""
+        """
+        يرجع حجم الخط الحالي.
+        يقرأ من الـ cache أولاً — إن لم يوجد يحمّل عبر FontService.
+        """
         if cls._font_size is None:
-            cls._font_size = cls._load_font_size_from_db()
+            cls._font_size = cls._load_font_size()
         return cls._font_size
 
     @classmethod
     def on_font_changed(cls, size: int):
-        """يُستدعى عند تغيير حجم الخط — يحدّث الـ cache."""
+        """
+        يُستدعى عند تغيير حجم الخط (من SettingsDialog أو font.set_font_size).
+        - يحدّث الـ cache
+        - يحفظ في DB عبر FontService
+        - يبطّل caches الـ widgets
+        """
         size = max(MIN_FONT_SIZE, min(MAX_FONT_SIZE, size))
         cls._font_size = size
+
+        # تحديث module cache في font.py
         try:
             from ui.font import _set_module_font_cache
             _set_module_font_cache(size)
         except Exception:
             pass
+
+        # الحفظ في DB عبر FontService (لا نتواصل مع DB مباشرة)
+        try:
+            from services.shared.font_service import FontService
+            FontService.save(size)
+        except Exception as e:
+            logger.debug("AppState.on_font_changed: FontService.save failed — %s", e)
+
         cls._invalidate_button_cache()
         logger.debug("AppState.on_font_changed: %d", size)
 
@@ -63,26 +90,16 @@ class AppState:
     # ── Internal ───────────────────────────────────────────
 
     @classmethod
-    def _load_font_size_from_db(cls) -> int:
-        """يحمّل font_size من DB — fallback للـ DEFAULT لو فشل."""
+    def _load_font_size(cls) -> int:
+        """
+        يحمّل font_size عبر FontService.
+        لا يتواصل مع DB مباشرة.
+        """
         try:
-            from db.shared.connection import get_connection
-            conn = get_connection()
-        except Exception:
-            return DEFAULT_FONT_SIZE
-
-        try:
-            from db.shared.settings_repo import get_setting, set_setting
-            raw = get_setting(conn, "font_size", None)
-            if raw is None:
-                set_setting(conn, "font_size", DEFAULT_FONT_SIZE)
-                return DEFAULT_FONT_SIZE
-            val = int(float(raw))
-            if not (MIN_FONT_SIZE <= val <= MAX_FONT_SIZE):
-                set_setting(conn, "font_size", DEFAULT_FONT_SIZE)
-                return DEFAULT_FONT_SIZE
-            return val
-        except Exception:
+            from services.shared.font_service import FontService
+            return FontService.load()
+        except Exception as e:
+            logger.debug("AppState._load_font_size: FontService.load failed — %s", e)
             return DEFAULT_FONT_SIZE
 
     @classmethod

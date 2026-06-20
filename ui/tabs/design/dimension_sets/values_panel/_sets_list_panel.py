@@ -15,32 +15,34 @@ from db.designs.dimension_sets_repo import (
     fetch_all_dimension_sets,
     fetch_all_design_categories, build_category_tree,
 )
-from ui.app_settings import get_font_size, fs
+from ui.font import get_font_size, fs
+from ui.widgets.core.i18n import tr
+from ui.theme import _C
 
-_BLUE       = "#1565c0"
-_BLUE_LIGHT = "#e8f0fe"
-_BLUE_MID   = "#bbdefb"
-_GRAY_BG    = "#f8f9fc"
-_BORDER     = "#e0e7f3"
-_TEXT       = "#1a2340"
-_TEXT_MUTED = "#7a869a"
+_BLUE       = _C["acc_type_asset"]
+_BLUE_LIGHT = _C["accent_light"]
+_BLUE_MID   = _C["accent_mid"]
+_GRAY_BG    = _C["bg_surface"]
+_BORDER     = _C["border"]
+_TEXT       = _C["text_primary"]
+_TEXT_MUTED = _C["text_muted"]
 
 _CARD_NORMAL = f"""
     QFrame {{
-        background: white;
-        border: 1.5px solid {_BORDER};
+        background: {_C["bg_input"]};
+        border: 1.5px solid {_C["border"]};
         border-radius: 10px;
     }}
     QFrame:hover {{
-        border-color: {_BLUE_MID};
-        background: #f5f8ff;
+        border-color: {_C["accent_mid"]};
+        background: {_C["accent_light"]};
     }}
 """
 
 _CARD_SELECTED = f"""
     QFrame {{
-        background: {_BLUE_LIGHT};
-        border: 2px solid {_BLUE};
+        background: {_C["accent_light"]};
+        border: 2px solid {_C["accent"]};
         border-radius: 10px;
     }}
 """
@@ -89,7 +91,8 @@ class _SetCard(QFrame):
         """)
 
         self._meta_lbl = QLabel(
-            f"{category or '—'}  ·  {unit}  ·  {fields_cnt} حقل"
+            f"{category or '—'}  ·  {unit}  ·  "
+            + tr("dim_sets_card_field_suffix").format(count=fields_cnt)
         )
         self._meta_lbl.setStyleSheet(f"""
             font-size: {fs(base,-1)}pt;
@@ -101,7 +104,7 @@ class _SetCard(QFrame):
         text_col.addWidget(self._name_lbl)
         text_col.addWidget(self._meta_lbl)
 
-        self._badge = QLabel(f"{instances_cnt} قيمة")
+        self._badge = QLabel(tr("dim_sets_badge_values").format(count=instances_cnt))
         self._badge.setAlignment(Qt.AlignCenter)
         self._badge.setFixedSize(58, 22)
         self._badge.setStyleSheet(f"""
@@ -174,8 +177,8 @@ class _SetsListPanel(QWidget):
         self._hdr_lbl.setStyleSheet(f"""
             font-weight: bold;
             font-size: {fs(base,+1)}pt;
-            color: {_BLUE};
-            background: {_BLUE_LIGHT};
+            color: {_C['accent']};
+            background: {_C['accent_light']};
             padding: 10px 16px;
             border-bottom: 1px solid {_BORDER};
         """)
@@ -188,14 +191,14 @@ class _SetsListPanel(QWidget):
                 font-size: {fs(base,0)}pt;
                 background: {_GRAY_BG};
             }}
-            QLineEdit:focus {{ border-color: {_BLUE}; background: white; }}
+            QLineEdit:focus {{ border-color: {_C['accent']}; background: {_C['bg_input']}; }}
         """)
         # تحديث عداد النتائج
         self._count_lbl.setStyleSheet(f"""
             color: {_TEXT_MUTED};
             font-size: {fs(base,-1)}pt;
             padding: 6px;
-            background: white;
+            background: {_C['bg_input']};
             border-top: 1px solid {_BORDER};
         """)
         # تحديث كل الكروت
@@ -208,12 +211,12 @@ class _SetsListPanel(QWidget):
         root.setContentsMargins(0, 0, 0, 0)
         root.setSpacing(0)
 
-        self._hdr_lbl = QLabel("📐  مجموعات المقاسات")
+        self._hdr_lbl = QLabel(tr("dim_sets_list_title"))
         self._hdr_lbl.setStyleSheet(f"""
             font-weight: bold;
             font-size: {fs(base,+1)}pt;
-            color: {_BLUE};
-            background: {_BLUE_LIGHT};
+            color: {_C['accent']};
+            background: {_C['accent_light']};
             padding: 10px 16px;
             border-bottom: 1px solid {_BORDER};
         """)
@@ -222,7 +225,7 @@ class _SetsListPanel(QWidget):
         search_frame = QFrame()
         search_frame.setStyleSheet(f"""
             QFrame {{
-                background: white;
+                background: {_C['bg_input']};
                 border-bottom: 1px solid {_BORDER};
             }}
         """)
@@ -231,7 +234,7 @@ class _SetsListPanel(QWidget):
         s_lay.setSpacing(6)
 
         self._search_inp = QLineEdit()
-        self._search_inp.setPlaceholderText("🔍  بحث...")
+        self._search_inp.setPlaceholderText(tr("dim_sets_list_search"))
         self._search_inp.setMinimumHeight(32)
         self._search_inp.setStyleSheet(f"""
             QLineEdit {{
@@ -241,7 +244,7 @@ class _SetsListPanel(QWidget):
                 font-size: {fs(base,0)}pt;
                 background: {_GRAY_BG};
             }}
-            QLineEdit:focus {{ border-color: {_BLUE}; background: white; }}
+            QLineEdit:focus {{ border-color: {_C['accent']}; background: {_C['bg_input']}; }}
         """)
         self._search_inp.textChanged.connect(self._apply_filter)
 
@@ -256,7 +259,7 @@ class _SetsListPanel(QWidget):
                 font-size: {fs(base,-1)}pt;
                 background: {_GRAY_BG};
             }}
-            QComboBox:focus {{ border-color: {_BLUE}; }}
+            QComboBox:focus {{ border-color: {_C['accent']}; }}
             QComboBox::drop-down {{ border: none; }}
         """)
         self._cmb_cat.currentIndexChanged.connect(self._apply_filter)
@@ -271,10 +274,10 @@ class _SetsListPanel(QWidget):
         scroll.setStyleSheet(f"""
             QScrollArea {{ border: none; background: {_GRAY_BG}; }}
             QScrollBar:vertical {{
-                background: #f0f0f0; width: 6px; border-radius: 3px;
+                background: {_C['bg_surface']}; width: 6px; border-radius: 3px;
             }}
             QScrollBar::handle:vertical {{
-                background: #c5cae9; border-radius: 3px; min-height: 24px;
+                background: {_C['border_med']}; border-radius: 3px; min-height: 24px;
             }}
             QScrollBar::add-line:vertical,
             QScrollBar::sub-line:vertical {{ height: 0; }}
@@ -296,7 +299,7 @@ class _SetsListPanel(QWidget):
             color: {_TEXT_MUTED};
             font-size: {fs(base,-1)}pt;
             padding: 6px;
-            background: white;
+            background: {_C['bg_input']};
             border-top: 1px solid {_BORDER};
         """)
         root.addWidget(self._count_lbl)
@@ -305,7 +308,7 @@ class _SetsListPanel(QWidget):
         prev = self._cmb_cat.currentData()
         self._cmb_cat.blockSignals(True)
         self._cmb_cat.clear()
-        self._cmb_cat.addItem("كل التصنيفات", None)
+        self._cmb_cat.addItem(tr("dim_sets_list_all_cats"), None)
         rows = fetch_all_design_categories(self.conn)
         tree = build_category_tree(rows)
         self._add_cat_nodes(tree, 0)
@@ -372,8 +375,8 @@ class _SetsListPanel(QWidget):
 
         total = len(self._all_rows)
         self._count_lbl.setText(
-            f"{shown} مجموعة" if shown == total
-            else f"{shown} من {total} مجموعة"
+            tr("dim_sets_list_count_all").format(count=shown) if shown == total
+            else tr("dim_sets_list_count_filtered").format(shown=shown, total=total)
         )
 
     def _on_card_click(self, set_id: int):

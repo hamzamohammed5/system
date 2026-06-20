@@ -18,6 +18,7 @@ from PyQt5.QtCore import Qt
 
 from .dimension_sets._values_panel import _ValuesPanel
 from .dimension_sets._groups_panel import _GroupsPanel
+from ui.widgets.core.i18n import tr
 
 
 class DimensionSetsTab(QWidget):
@@ -34,7 +35,7 @@ class DimensionSetsTab(QWidget):
 
         # ══ تبويب 1: إدخال المقاسات ══
         self._values_panel = _ValuesPanel(self.conn)
-        inner_tabs.addTab(self._values_panel, "📏  إدخال المقاسات")
+        inner_tabs.addTab(self._values_panel, tr("dimension_sets_tab_values"))
 
         # ══ تبويب 2: المجموعات ══
         self._groups_panel = _GroupsPanel(self.conn)
@@ -47,7 +48,7 @@ class DimensionSetsTab(QWidget):
             self._values_panel._sets_list.refresh
         )
 
-        inner_tabs.addTab(self._groups_panel, "📋  المجموعات")
+        inner_tabs.addTab(self._groups_panel, tr("dimension_sets_tab_groups"))
         inner_tabs.currentChanged.connect(self._on_tab_changed)
 
         root.addWidget(inner_tabs)
