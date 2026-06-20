@@ -13,9 +13,9 @@ from PyQt5.QtWidgets import (
 )
 from PyQt5.QtCore import Qt
 
-from ui.app_settings        import _C
+from ui.theme import _C
 from ui.widgets.core.i18n   import tr
-from ui.events              import bus
+from ui.widgets.core.events         import bus
 from .bulk_replace_helpers  import fetch_affected_products, ProductRow
 
 

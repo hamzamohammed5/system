@@ -15,10 +15,10 @@ from PyQt5.QtCore import Qt
 
 from models.costing               import calc_cost
 from services.costing.scenario_service import ScenarioService
-from ui.app_settings              import _C
+from ui.theme import _C
 from ui.widgets.core.i18n         import tr
-from ui.widgets.components.stat_row import stat_card_pair
-from ui.events                    import bus
+from ui.widgets.components.stat_card import stat_card_pair
+from ui.widgets.core.events import bus
 
 
 class ScenarioComparisonWidget(QFrame):

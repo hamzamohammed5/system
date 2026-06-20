@@ -1,18 +1,14 @@
 """
-ui/main_window.py  (نسخة multi-company — مُصلَحة v12)
+ui/main_window.py  (نسخة multi-company — مُصلَحة v13)
 =====================================================
-التغييرات عن v11:
-  - [إصلاح C] _build_tabs: يبني CostingSection فقط — باقي الـ sections
-    تظهر كـ placeholder "قيد التطوير" بدل بناء كل شيء دفعةً واحدة.
-    يسهّل التطوير التدريجي ويقلل وقت الإقلاع.
+[إصلاح v13]:
+  - كل الـ sections تُبنى فعلياً (costing, pricing, accounting,
+    inventory, design, orders) بدل الـ placeholders.
+  - كل section بتفتح الـ connection بتاعتها بنفسها من جوه
+    (حسب التصميم الفعلي لكل كلاس) — لا تمرير conn_fn.
 
-  - [إصلاح D] إزالة كل hardcoded strings من الـ UI:
-    عنوان النافذة والـ placeholder يستخدمان tr() بدل نصوص مباشرة.
-
-  - [إصلاح E] توحيد index_map في مكان واحد (_INDEX_MAP) بدل تكراره
-    في _validate_index_map و _on_nav.
-
-  - [محفوظ إصلاح A] _try_build_section يعزل import errors.
+  - [محفوظ إصلاح A] _try_build_section يعزل import/runtime errors
+    لكل section بشكل مستقل — فشل واحد لا يوقف الباقي.
   - [محفوظ إصلاح B] _destroy_tabs يستدعي company_state.refresh_connections().
   - [محفوظ] _on_company_changed يستدعي AppState.invalidate().
   - [محفوظ] emit_company_data_changed عبر الدالة لا bus.emit مباشرة.
@@ -55,8 +51,8 @@ _INDEX_MAP: dict[str, int] = {
 
 def _make_placeholder_tab(section_name: str, error: str = "") -> QWidget:
     """
-    Placeholder مؤقت لـ section لم يُبنَ بعد أو فشل import.
-    يعرض رسالة واضحة للمطور.
+    Placeholder احتياطي — يُستخدم فقط لو فشل بناء section فعلياً
+    (ImportError أو Exception)، وليس كحالة افتراضية بعد الآن.
     كل الألوان من _C — لا hardcoded.
     """
     w = QWidget()
@@ -101,11 +97,11 @@ def _try_build_section(builder_fn, section_name: str) -> QWidget:
     """
     يحاول بناء section — يرجع placeholder مع رسالة خطأ لو فشل.
     يضمن أن فشل section واحد لا يمنع بقية الـ sections من العمل.
+    
     """
     return builder_fn()
-    
     # try:
-        # return builder_fn()
+    #     return builder_fn()
     # except ImportError as e:
     #     logger.warning("_try_build_section: import فشل لـ %s: %s", section_name, e)
     #     return _make_placeholder_tab(section_name, f"ImportError: {e}")
@@ -213,53 +209,53 @@ class MainWindow(QMainWindow):
 
     def _build_tabs(self):
         """
-        يبني tabs الـ sections.
+        يبني tabs كل الـ sections فعلياً.
 
-        [إصلاح C] CostingSection تُبنى فعلياً — باقي الـ sections تظهر
-        كـ placeholder "قيد التطوير" لتسريع الإقلاع وتسهيل التطوير التدريجي.
+        [إصلاح v13] كل section تُبنى من كلاسها الحقيقي — لا placeholders
+        إلا في حالة فشل البناء (import error أو exception).
+
+        كل section بتفتح الـ connection بتاعتها بنفسها من جوه
+        (CostingSection, PricingSection, AccountingTab, InventoryTab,
+        DesignSection, OrdersSection) — لذلك لا حاجة لتمرير conn_fn.
 
         الترتيب يجب أن يتطابق مع _INDEX_MAP:
-            index 1 → costing     (مبني فعلياً)
-            index 2 → pricing     (placeholder)
-            index 3 → accounting  (placeholder)
-            index 4 → inventory   (placeholder)
-            index 5 → design      (placeholder)
-            index 6 → orders      (placeholder)
+            index 1 → costing
+            index 2 → pricing
+            index 3 → accounting
+            index 4 → inventory
+            index 5 → design
+            index 6 → orders
         """
         if self._tabs_built:
             self._destroy_tabs()
 
-        # جلب الـ connection
-        try:
-            from db.companies.company_state import company_state
-            conn = company_state.get_erp_conn()
-        except Exception as e:
-            logger.error("_build_tabs: تعذر الحصول على conn: %s", e)
-            conn = None
-
         # ── تعريف الـ builders ──
         # كل builder دالة تُبنى lazy — لا تُنفَّذ إلا عند الاستدعاء
+        # كل section تفتح اتصالها بنفسها — لا conn_fn يُمرَّر
 
         def _build_costing():
             from ui.tabs.costing_section import CostingSection
-            return CostingSection(conn_fn=lambda: conn)
+            return CostingSection()
 
-        # [إصلاح C] الـ sections الأخرى placeholder حتى تُفعَّل لاحقاً
-        # لتفعيل section: استبدل lambda بدالة بناء فعلية مثل _build_costing
         def _build_pricing():
-            return _make_placeholder_tab(tr("pricing"))
+            from ui.tabs.pricing_section import PricingSection
+            return PricingSection()
 
         def _build_accounting():
-            return _make_placeholder_tab(tr("accounting"))
+            from ui.tabs.accounting_section import AccountingTab
+            return AccountingTab()
 
         def _build_inventory():
-            return _make_placeholder_tab(tr("inventory"))
+            from ui.tabs.inventory_section import InventoryTab
+            return InventoryTab()
 
         def _build_design():
-            return _make_placeholder_tab(tr("design"))
+            from ui.tabs.design_section import DesignSection
+            return DesignSection()
 
         def _build_orders():
-            return _make_placeholder_tab(tr("orders"))
+            from ui.tabs.orders_section import OrdersSection
+            return OrdersSection()
 
         # الترتيب يجب أن يطابق _INDEX_MAP بالضبط
         _builders = [
@@ -274,6 +270,11 @@ class MainWindow(QMainWindow):
         for builder_fn, name in _builders:
             w = _try_build_section(builder_fn, name)
             self._stack.addWidget(w)
+
+        # حفظ مرجع AccountingTab لو احتجناه لاحقاً (refresh_for_company إلخ)
+        accounting_widget = self._stack.widget(_INDEX_MAP["accounting"])
+        if accounting_widget is not None and hasattr(accounting_widget, "refresh_for_company"):
+            self._accounting = accounting_widget
 
         # الانتقال لـ costing (index 1) وتفعيل زره في الـ sidebar
         if self._stack.count() > 1:

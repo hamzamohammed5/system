@@ -13,7 +13,7 @@ from PyQt5.QtCore import Qt
 from db.shared.items_repo       import fetch_items_by_type
 from db.costing.operations_repo import fetch_all_labor_ops, fetch_all_machine_ops
 from models.costing             import calc_cost
-from ui.app_settings            import _C
+from ui.theme import _C
 from ui.widgets.core.i18n       import tr
 
 

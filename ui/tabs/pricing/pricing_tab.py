@@ -13,7 +13,7 @@ from PyQt5.QtWidgets import QWidget, QVBoxLayout, QTabWidget
 
 from db.companies.company_state import company_state
 from ui.widgets.core.i18n import tr
-from ui.widgets.shared.category_manager import CategoryManager
+from ui.widgets.managers.category import CategoryManager
 
 from .pricing._pricing_panel import _PricingPanel
 

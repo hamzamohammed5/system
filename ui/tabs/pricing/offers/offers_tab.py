@@ -10,8 +10,8 @@ from PyQt5.QtWidgets import (
 from PyQt5.QtCore import Qt
 
 from db.pricing.offers_repo import fetch_offer, delete_offer
-from ui.helpers import confirm_delete
-from ui.widgets.shared.category_manager import CategoryManager
+from ui.widgets.dialogs.confirm      import confirm_delete
+from ui.widgets.managers.category import CategoryManager
 from ui.widgets.core.i18n import tr
 from ui.widgets.core.events import emit_company_data_changed
 from ui.theme import _C

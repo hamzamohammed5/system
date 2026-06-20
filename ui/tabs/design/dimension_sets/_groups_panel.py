@@ -23,10 +23,19 @@ from services.design.dimension_set_service import DimensionSetService
 
 from ._categories_panel import _CategoriesPanel
 from ._fields_panel      import _FieldsPanel
-from ui.helpers import make_table, danger_button, buttons_row
-from ui.widgets.shared.unit_combo import UnitCombo
+from ui.widgets.components.button   import make_btn
+from ui.widgets.tables.tables       import make_table
 
+from ui.widgets.combo.unit import UnitCombo
 
+def buttons_row(*buttons) -> QHBoxLayout:
+    """صف أزرار أفقي."""
+    row = QHBoxLayout()
+    row.setSpacing(6)
+    for btn in buttons:
+        row.addWidget(btn)
+    row.addStretch()
+    return row
 # ══════════════════════════════════════════════════════════
 # لوحة إدارة المجموعات + حقولها (يمين)
 # ══════════════════════════════════════════════════════════
@@ -99,7 +108,7 @@ class _SetsManagerPanel(QWidget):
         top_lay.addWidget(self.table)
 
         btn_edit_set = QPushButton("✏️  " + tr("edit"))
-        btn_del_set  = danger_button("🗑️  " + tr("delete"))
+        btn_del_set  = make_btn("🗑️  " + tr("delete"), style="danger")
         for b in (btn_edit_set, btn_del_set):
             b.setMinimumHeight(28)
         btn_edit_set.clicked.connect(self._edit_set)

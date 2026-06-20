@@ -68,6 +68,14 @@ class SharedItemsListPanel(BaseListPanel, SharedOpsMixin, LiveConnMixin):
     لو لم يُحدَّد FILTER_SCOPE صراحةً في الـ subclass.
     """
 
+    # [إصلاح] يُحدَّد صريحاً لإسكات false-positive warning من LiveConnMixin.
+    # السبب: __init_subclass__ بتفحص substring "conn" في أسماء الـ class attrs،
+    # و"CONNECT_BUS" تحتوي "conn" (من Connect) بالغلط مع إنها بوليني غير متعلق
+    # بـ DB connection خالص. القيمة "conn" هي الصحيحة فعلياً (موروثة من
+    # BaseListPanel وتُستخدم في self.conn بكل الكود) — لكن لازم تُذكر هنا
+    # صريحةً في cls.__dict__ لإيقاف الفحص قبل ما يصل لـ CONNECT_BUS.
+    _conn_attr = "conn"
+
     # ── إعدادات الـ subclass ──────────────────────────────
     SHARED_TYPE      : str  = "raw"
     TABLE_COLS       : list = []

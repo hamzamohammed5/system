@@ -3,7 +3,7 @@ ui/tabs/inventory/items/_items_table.py
 ========================================
 _ItemsTable — جدول أصناف المخزن مع تعديل وحذف.
 """
-
+from PyQt5.QtWidgets import QHBoxLayout
 from PyQt5.QtWidgets import (
     QWidget, QVBoxLayout, QPushButton, QTableWidgetItem, QMessageBox,
 )
@@ -12,15 +12,27 @@ from PyQt5.QtGui import QColor
 from db.inventory.inventory_repo import (
     fetch_all_inventory, fetch_inventory_item, delete_inventory_item,
 )
-from ui.helpers import (
-    make_table, setup_table_columns, buttons_row,
-    section_label, danger_button, confirm_delete,
-)
+
+from ui.widgets.tables.tables       import auto_fit_columns
+from ui.widgets.panels.form_labels   import section_title
+from ui.widgets.components.button   import make_btn
+from ui.widgets.dialogs.confirm      import confirm_delete
+
+from ui.widgets.tables.tables       import make_table
+
 from ui.widgets.mixins.bus import BusConnectedMixin
 from ui.widgets.core.events import emit_company_data_changed
 from ui.widgets.core.i18n import tr
 from ui.theme import _C
 
+def buttons_row(*buttons) -> QHBoxLayout:
+    """صف أزرار أفقي."""
+    row = QHBoxLayout()
+    row.setSpacing(6)
+    for btn in buttons:
+        row.addWidget(btn)
+    row.addStretch()
+    return row
 
 class _ItemsTable(QWidget, BusConnectedMixin):
     def __init__(self, inv_conn, form, on_select, parent=None):
@@ -39,17 +51,14 @@ class _ItemsTable(QWidget, BusConnectedMixin):
         root = QVBoxLayout(self)
         root.setContentsMargins(12, 8, 12, 12)
         root.setSpacing(6)
-        root.addWidget(section_label(tr("inventory_items_header")))
+        root.addWidget(section_title(tr("inventory_items_header")))
 
         self.table = make_table(
             [tr("id_col"), tr("item"), tr("unit"), tr("balance"), tr("inventory_min_qty_label"),
              tr("avg_cost"), tr("total_value")],
             stretch_col=1
         )
-        setup_table_columns(self.table,
-            widths={0: 40, 2: 70, 3: 80, 4: 80, 5: 110, 6: 110},
-            stretch_col=1
-        )
+
         self.table.setAlternatingRowColors(True)
         self.table.itemSelectionChanged.connect(
             lambda: self._on_select(self._selected_id())
@@ -57,7 +66,7 @@ class _ItemsTable(QWidget, BusConnectedMixin):
         root.addWidget(self.table, stretch=1)
 
         btn_edit = QPushButton(f"✏️  {tr('edit')}")
-        btn_del  = danger_button(f"🗑️  {tr('delete')}")
+        btn_del  = make_btn("🗑️  " + tr("delete"), style="danger")
         for btn in (btn_edit, btn_del):
             btn.setMinimumHeight(30)
         btn_edit.clicked.connect(self._edit)
@@ -91,6 +100,13 @@ class _ItemsTable(QWidget, BusConnectedMixin):
             self.table.setItem(r, 4, QTableWidgetItem(f"{inv['qty_min']:,.4g}"))
             self.table.setItem(r, 5, QTableWidgetItem(f"{inv['avg_cost']:,.4f}"))
             self.table.setItem(r, 6, QTableWidgetItem(f"{inv['total_value']:,.2f}"))
+        auto_fit_columns(
+        self.table,
+        fixed_cols=[0, 2, 3, 4, 5, 6],
+        stretch_col=1,
+        min_width=40,
+        max_width=150,
+    )
 
     def _edit(self):
         inv_id = self._selected_id()

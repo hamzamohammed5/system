@@ -22,7 +22,7 @@ from ui.widgets.panels.form_group import FormGroup
 
 from ui.widgets.theme.builders import wrap_in_scroll
 from ui.widgets.core.i18n import tr
-from ui.widgets.core.events import bus, emit_company_data_changed
+from ui.widgets.core.events import bus
 
 
 class _LaborSettingsPanel(QWidget):
@@ -116,7 +116,7 @@ class _LaborSettingsPanel(QWidget):
             self, tr("done"),
             f"✅  {tr('labor_settings_saved')}"
         )
-        emit_company_data_changed()
+        bus.data_changed.emit()
 
     def get_hourly_rate(self):
         return self._calc_rate()

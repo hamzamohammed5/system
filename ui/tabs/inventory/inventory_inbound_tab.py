@@ -20,9 +20,11 @@ from db.inventory.inventory_repo import (
 )
 from db.accounting.accounting_accounts_repo import fetch_leaf_accounts
 from db.accounting.accounting_inventory_repo import purchase_inventory
-from ui.helpers import (
-    make_table, setup_table_columns, section_label,
-)
+
+from ui.widgets.tables.tables import auto_fit_columns
+from ui.widgets.panels.form_labels   import section_title
+from ui.widgets.tables.tables       import make_table
+
 from ui.widgets.mixins.bus import BusConnectedMixin
 from ui.widgets.core.events import emit_company_data_changed
 from ui.widgets.core.i18n import tr
@@ -143,15 +145,12 @@ class _InboundTab(QWidget, BusConnectedMixin):
 
         root.addWidget(grp)
 
-        root.addWidget(section_label(tr("inventory_recent_inbound")))
+        root.addWidget(section_title(tr("inventory_recent_inbound")))
         self.table = make_table(
             [tr("date"), tr("item"), tr("quantity"), tr("unit_price"), tr("total"), tr("entry_no_col")],
             stretch_col=1
         )
-        setup_table_columns(self.table,
-            widths={0: 90, 2: 80, 3: 100, 4: 100, 5: 100},
-            stretch_col=1
-        )
+
         self.table.setAlternatingRowColors(True)
         root.addWidget(self.table, stretch=1)
 
@@ -228,7 +227,7 @@ class _InboundTab(QWidget, BusConnectedMixin):
             """).fetchall()
         except Exception:
             rows = []
-
+        
         self.table.setRowCount(0)
         for r in rows:
             row = self.table.rowCount()
@@ -242,7 +241,14 @@ class _InboundTab(QWidget, BusConnectedMixin):
             self.table.setItem(row, 4, QTableWidgetItem(f"{r['total_cost']:,.2f}"))
             ref = r["ref_entry_no"] if "ref_entry_no" in r.keys() else "—"
             self.table.setItem(row, 5, QTableWidgetItem(ref or "—"))
-
+            
+        auto_fit_columns(
+            self.table,
+            fixed_cols=[0, 2, 3, 4, 5],
+            stretch_col=1,
+            min_width=40,
+            max_width=150,
+        )
     def closeEvent(self, event):
         self._disconnect_bus()
         super().closeEvent(event)

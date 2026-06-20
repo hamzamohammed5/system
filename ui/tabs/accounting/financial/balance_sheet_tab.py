@@ -157,14 +157,14 @@ class BalanceSheetTab(SafeConnMixin, QWidget):
         if diff < 0.01:
             self._btn_balanced.setText(tr("balance_sheet_balanced"))
             self._btn_balanced.setStyleSheet(
-                f"QPushButton {{ background:{_C['success_bg']}; color:{_C['success']};"
+                f"QPushButton {{ background:{_C['success_bg']}; color:{_C['success']}}};"
                 f" border:1px solid {_C['success_border']}; border-radius:6px;"
                 " padding:0 12px; font-weight:bold; }}"
             )
         else:
             self._btn_balanced.setText(tr("balance_sheet_diff").format(diff=f"{diff:,.2f}"))
             self._btn_balanced.setStyleSheet(
-                f"QPushButton {{ background:{_C['danger_bg']}; color:{_C['danger']};"
+                f"QPushButton {{ background:{_C['danger_bg']}; color:{_C['danger']}}};"
                 f" border:1px solid {_C['danger_border']}; border-radius:6px;"
                 " padding:0 12px; font-weight:bold; }}"
             )

@@ -3,6 +3,7 @@ ui/tabs/pricing/offers/offers_table.py
 ================================
 _OffersTable — جدول العروض المحفوظة مع فلتر وأزرار تعديل/حذف.
 """
+from PyQt5.QtWidgets import QHBoxLayout
 
 from PyQt5.QtWidgets import (
     QWidget, QVBoxLayout, QPushButton,
@@ -11,13 +12,26 @@ from PyQt5.QtWidgets import (
 from PyQt5.QtGui import QColor
 
 from db.pricing.offers_repo import fetch_all_offers, calc_offer_summary
-from ui.helpers import (
-    make_table, buttons_row, section_label, danger_button,
-)
-from ui.widgets.shared.filter_bar import FilterBar
+
+from ui.widgets.components.button   import make_btn
+
+from ui.widgets.panels.form_labels   import section_title
+from ui.widgets.tables.tables       import make_table
+
+from ui.widgets.panels.filter import FilterToolbar
 from ui.widgets.mixins.bus import BusConnectedMixin
 from ui.widgets.core.i18n import tr
 from ui.theme import _C
+
+
+def buttons_row(*buttons) -> QHBoxLayout:
+    """صف أزرار أفقي."""
+    row = QHBoxLayout()
+    row.setSpacing(6)
+    for btn in buttons:
+        row.addWidget(btn)
+    row.addStretch()
+    return row
 
 
 class _OffersTable(QWidget, BusConnectedMixin):
@@ -62,9 +76,9 @@ class _OffersTable(QWidget, BusConnectedMixin):
         root.setContentsMargins(12, 8, 12, 10)
         root.setSpacing(6)
 
-        root.addWidget(section_label(tr("offer_saved_list")))
+        root.addWidget(section_title(tr("offer_saved_list")))
 
-        self._filter = FilterBar(self._live_conn(), scope="all")
+        self._filter = FilterToolbar(self._live_conn(), scope="all")
         self._filter.filter_changed.connect(self._apply_filter)
         root.addWidget(self._filter)
 
@@ -93,8 +107,8 @@ class _OffersTable(QWidget, BusConnectedMixin):
         self.table.itemSelectionChanged.connect(self._on_selection)
         root.addWidget(self.table, stretch=1)
 
-        btn_edit = QPushButton(tr("btn_edit"))
-        btn_del  = danger_button(tr("btn_delete"))
+        btn_edit = make_btn(f"✏️  {tr('btn_edit')}", style="normal")
+        btn_del  = make_btn("🗑️  " + tr("btn_delete"), style="danger")
         for btn in (btn_edit, btn_del):
             btn.setMinimumHeight(30)
         btn_edit.clicked.connect(lambda: self._on_edit(self.selected_id()))

@@ -18,7 +18,7 @@ from db.designs.dimension_sets_repo import (
     build_category_tree,
     fetch_all_dimension_sets,
 )
-from ui.helpers import make_table
+from ui.widgets.tables.tables       import make_table
 from ui.theme import _C
 from ui.widgets.core.i18n import tr
 from ui.font import FS_SM, FS_BASE, get_font_size, fs

@@ -15,8 +15,11 @@ from ui.widgets.core.i18n import tr
 from ui.font import FS_BASE
 from services.design.dimension_set_service import DimensionSetService
 from ._field_dialog import _FieldDialog
-from ui.helpers import make_table, confirm_delete, danger_button
+from ui.widgets.components.button   import make_btn
 
+from ui.widgets.tables.tables       import make_table
+
+from ui.widgets.dialogs.confirm      import confirm_delete
 
 class _FieldsPanel(QWidget):
     """محرر حقول مجموعة مقاسات — إضافة / تعديل / حذف / ترتيب."""
@@ -54,15 +57,15 @@ class _FieldsPanel(QWidget):
         self.table.setColumnWidth(6, 180)
         root.addWidget(self.table)
 
-        btn_add  = QPushButton(tr("dim_field_add_btn"))
-        btn_edit = QPushButton(tr("category_edit"))
-        btn_del  = danger_button(tr("category_delete"))
-        btn_up   = QPushButton(tr("dim_field_move_up"))
-        btn_dn   = QPushButton(tr("dim_field_move_down"))
+        btn_add  = make_btn(f"➕  {tr('dim_field_add_btn')}", style="success")
+        btn_edit = make_btn(f"✏️  {tr('category_edit')}",     style="normal")
+        btn_del  = make_btn(f"🗑️  {tr('category_delete')}",   style="danger")
+        btn_up   = make_btn("⬆️",  style="ghost", fixed_size=False)
+        btn_dn   = make_btn("⬇️",  style="ghost", fixed_size=False)
+        
         for btn in (btn_add, btn_edit, btn_del, btn_up, btn_dn):
             btn.setMinimumHeight(28)
-        btn_up.setFixedWidth(34)
-        btn_dn.setFixedWidth(34)
+
 
         btn_add.clicked.connect(self._add_field)
         btn_edit.clicked.connect(self._edit_field)

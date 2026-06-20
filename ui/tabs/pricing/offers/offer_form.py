@@ -18,8 +18,7 @@ from db.pricing.offers_repo import (
     replace_offer_items,
 )
 from models.costing import calc_cost
-from ui.helpers import buttons_row
-from ui.widgets.shared.category_manager import CategoryCombo
+from ui.widgets.combo.category import CategoryCombo
 from ui.widgets.core.i18n import tr
 from ui.widgets.core.events import emit_company_data_changed
 from ui.theme import _C
@@ -27,6 +26,14 @@ from ui.theme import _C
 from .offer_item_row import _OfferItemRow
 from ..pricing._stat_box import stat_box
 
+def _buttons_row(*buttons) -> QHBoxLayout:
+    """صف أزرار أفقي."""
+    row = QHBoxLayout()
+    row.setSpacing(6)
+    for btn in buttons:
+        row.addWidget(btn)
+    row.addStretch()
+    return row
 
 def _spin(max_=999999, dec=2):
     s = QDoubleSpinBox()

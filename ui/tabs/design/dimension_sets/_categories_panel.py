@@ -19,7 +19,17 @@ from ui.theme import _C
 from ui.widgets.core.i18n import tr
 from ui.font import FS_MD
 from services.design.dimension_set_service import DimensionSetService
-from ui.helpers import buttons_row, danger_button
+from ui.widgets.components.button   import make_btn
+
+
+def buttons_row(*buttons) -> QHBoxLayout:
+    """صف أزرار أفقي."""
+    row = QHBoxLayout()
+    row.setSpacing(6)
+    for btn in buttons:
+        row.addWidget(btn)
+    row.addStretch()
+    return row
 
 # ══════════════════════════════════════════════════════════
 # لوحة إدارة التصنيفات — تُستخدم داخل _GroupsPanel
@@ -67,7 +77,7 @@ class _CategoriesPanel(QWidget):
 
         # أزرار الشجرة
         btn_edit_cat = QPushButton(tr("category_edit"))
-        btn_del_cat  = danger_button(tr("category_delete"))
+        btn_del_cat  = make_btn("🗑️  " + tr("category_delete"), style="danger")
         for b in (btn_edit_cat, btn_del_cat):
             b.setMinimumHeight(28)
         btn_edit_cat.clicked.connect(self._edit_category)
