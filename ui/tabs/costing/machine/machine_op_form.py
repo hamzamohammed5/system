@@ -36,7 +36,7 @@ from ui.tabs.costing.shared.machine_op_rows_editor import _OpRowsEditor
 from ui.widgets.core.events             import emit_company_data_changed, bus
 
 
-def _buttons_row(*buttons) -> QHBoxLayout:
+def buttons_row(*buttons) -> QHBoxLayout:
     """صف أزرار أفقي."""
     row = QHBoxLayout()
     row.setSpacing(6)
@@ -111,7 +111,7 @@ class _MachineOpForm(QWidget, EditModeMixin, LiveConnMixin):
         self.btn_add.clicked.connect(self._add)
         self.btn_save.clicked.connect(self._save_edit)
         self.btn_cancel.clicked.connect(self._cancel)
-        root.addLayout(_buttons_row(self.btn_add, self.btn_save, self.btn_cancel))
+        root.addLayout(buttons_row(self.btn_add, self.btn_save, self.btn_cancel))
 
         self._rows_editor = _OpRowsEditor(self._live_conn())
         root.addWidget(self._rows_editor)

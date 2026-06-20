@@ -27,7 +27,7 @@ from ...helpers import TYPE_COLORS
 from ui.theme import _C
 from ui.widgets.core.i18n import tr
 
-_TYPE_ORDER = ["asset", "liability", "capital", "drawings", "revenue", "expense"]
+_TYPE_ORDER = {
     "asset":     "🏦",
     "liability": "📋",
     "capital":   "👑",

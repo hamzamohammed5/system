@@ -18,6 +18,7 @@ from ui.widgets.panels.form_badges import ResultBadge
 from ui.widgets.forms.inputs      import RequiredLineEdit
 from ui.widgets.combo.category    import CategoryCombo
 from ui.widgets.core.events       import bus
+from ui.widgets.core.i18n         import tr
 
 
 class LaborOpForm(BaseCrudForm):
@@ -29,9 +30,9 @@ class LaborOpForm(BaseCrudForm):
         settings : _LaborSettingsPanel — لحساب معدل الأجر
     """
 
-    FORM_TITLE = "بيانات العملية"
-    ADD_TEXT   = "➕  إضافة"
-    SAVE_TEXT  = "💾  حفظ التعديل"
+    FORM_TITLE = tr("labor_op_form_title")
+    ADD_TEXT   = f"➕  {tr('add')}"
+    SAVE_TEXT  = f"💾  {tr('save_edit')}"
 
     def __init__(self, conn, settings, parent=None):
         self._settings = settings
@@ -50,15 +51,15 @@ class LaborOpForm(BaseCrudForm):
     # ══════════════════════════════════════════════════════
 
     def _build_fields(self, group: FormGroup):
-        self._inp_name    = RequiredLineEdit("مثال: خياطة، تغليف...")
+        self._inp_name    = RequiredLineEdit(tr("labor_op_name_placeholder"))
         self._sp_minutes  = spin_field(max_=99999, dec=2)
         self._cmb_cat     = CategoryCombo(self.conn, scope="labor")
         self._lbl_cost    = ResultBadge()
 
-        group.add_row("اسم العملية :", self._inp_name)
-        group.add_row("الوقت :",       labeled_widget(self._sp_minutes, "دقيقة"))
-        group.add_row("التصنيف :",     self._cmb_cat)
-        group.add_row("التكلفة :",     self._lbl_cost)
+        group.add_row(f"{tr('op_name')} :",   self._inp_name)
+        group.add_row(f"{tr('time_label')} :", labeled_widget(self._sp_minutes, tr('minutes_label')))
+        group.add_row(f"{tr('category')} :",  self._cmb_cat)
+        group.add_row(f"{tr('cost_label')} :", self._lbl_cost)
 
     # ══════════════════════════════════════════════════════
     # Live preview
@@ -68,8 +69,8 @@ class LaborOpForm(BaseCrudForm):
         rate = self._settings.get_hourly_rate()
         cost = (self._sp_minutes.value() / 60.0) * rate
         self._lbl_cost.set_value(
-            f"{cost:.2f} جنيه / وحدة"
-            f"   ({self._sp_minutes.value():.2f} د ÷ 60 × {rate:.2f})"
+            f"{cost:.2f} {tr('currency_per_unit')}"
+            f"   ({self._sp_minutes.value():.2f} {tr('minutes_abbr')} ÷ 60 × {rate:.2f})"
         )
 
     # ══════════════════════════════════════════════════════

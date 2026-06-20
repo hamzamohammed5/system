@@ -36,7 +36,7 @@ from ui.theme import _C
 from ui.widgets.core.i18n import tr
 from ui.widgets.dialogs.message import msg_info, msg_warning, msg_critical
 from .tree._tree_builder import (
-    rows_to_tree, filter_by_group, add_acc_nodes, add_type_header, EQUITY_COLOR,
+    rows_to_tree, filter_by_group, add_acc_nodes, add_type_header,
 )
 from .tree._account_form  import _AccountForm
 from .tree._group_filter  import _GroupFilterCombo
@@ -184,7 +184,7 @@ class AccountsTreePanel(SafeConnMixin, QWidget):
             f.setBold(True)
             f.setPointSize(f.pointSize() + 1)
             equity_item.setFont(1, f)
-            equity_item.setForeground(1, QColor(EQUITY_COLOR))
+            equity_item.setForeground(1, QColor(_C["investor_capital_text"]))
             equity_item.setBackground(0, QColor(_C["success_bg"]))
             equity_item.setBackground(1, QColor(_C["success_bg"]))
             equity_item.setBackground(2, QColor(_C["success_bg"]))
@@ -202,7 +202,7 @@ class AccountsTreePanel(SafeConnMixin, QWidget):
                 sf = sub_item.font(1)
                 sf.setBold(True)
                 sub_item.setFont(1, sf)
-                sub_item.setForeground(1, QColor(TYPE_COLORS.get(acc_type, EQUITY_COLOR)))
+                sub_item.setForeground(1, QColor(TYPE_COLORS.get(acc_type, _C["investor_capital_text"])))
                 equity_item.addChild(sub_item)
                 add_acc_nodes(conn, self.tree, nodes, sub_item)
                 sub_item.setExpanded(True)

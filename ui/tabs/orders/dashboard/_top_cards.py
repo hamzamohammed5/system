@@ -15,16 +15,16 @@ def build_top_cards(dashboard) -> QHBoxLayout:
     row = QHBoxLayout()
     row.setSpacing(12)
 
-    f1, dashboard._lbl_total = make_stat_card_simple(
-        "📋", tr("order_total_count"),  color=_C['accent'])
-    f2, dashboard._lbl_urgent = make_stat_card_simple(
-        "🔴", tr("order_urgent_count"), color=_C['danger'])
-    f3, dashboard._lbl_total_value = make_stat_card_simple(
-        "💰", tr("order_total_value"),  color=_C['success'])
-    f4, dashboard._lbl_total_paid = make_stat_card_simple(
-        "✅", tr("order_total_paid"),   color=_C['accent'])
+    card1 = make_stat_card_simple(tr("order_total_count"),  color=_C['accent'], icon="📋")
+    card2 = make_stat_card_simple(tr("order_urgent_count"), color=_C['danger'], icon="🔴")
+    card3 = make_stat_card_simple(tr("order_total_value"),  color=_C['success'], icon="💰")
+    card4 = make_stat_card_simple(tr("order_total_paid"),   color=_C['accent'], icon="✅")
+    dashboard._lbl_total       = card1.value_label()
+    dashboard._lbl_urgent      = card2.value_label()
+    dashboard._lbl_total_value = card3.value_label()
+    dashboard._lbl_total_paid  = card4.value_label()
 
-    for f in (f1, f2, f3, f4):
-        row.addWidget(f, stretch=1)
+    for card in (card1, card2, card3, card4):
+        row.addWidget(card, stretch=1)
 
     return row

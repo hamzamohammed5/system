@@ -26,7 +26,7 @@ from ui.theme import _C
 from .offer_item_row import _OfferItemRow
 from ..pricing._stat_box import stat_box
 
-def _buttons_row(*buttons) -> QHBoxLayout:
+def buttons_row(*buttons) -> QHBoxLayout:
     """صف أزرار أفقي."""
     row = QHBoxLayout()
     row.setSpacing(6)

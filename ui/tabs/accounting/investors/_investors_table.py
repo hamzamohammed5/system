@@ -12,7 +12,7 @@ _InvestorsTable — جدول المستثمرين مع أزرار الإضافة
 
 from PyQt5.QtWidgets import (
     QWidget, QVBoxLayout, QHBoxLayout,
-    QTableWidgetItem,
+    QLabel, QTableWidgetItem,
 )
 from PyQt5.QtGui  import QColor, QFont
 

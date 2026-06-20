@@ -1334,6 +1334,17 @@ AR_STRINGS: dict[str, str] = {
     "pricing_save_price_btn":       "💾  حفظ السعر",
     "pricing_delete_price_btn":     "🗑️  حذف السعر",
     "pricing_cost_suffix":          "{cost:.2f}  ج (تكلفة)",
+    "pricing_margin_pct_sign":      "%",
+    "pricing_select_product_placeholder": "— اختر منتجاً —",
+    "pricing_col_id":               "ID",
+    "pricing_col_product":          "المنتج",
+    "pricing_col_category":         "التصنيف",
+    "pricing_col_cost":             "التكلفة",
+    "pricing_col_margin_pct":       "الهامش %",
+    "pricing_col_price":            "السعر",
+    "pricing_col_profit":           "الربح",
+    "pricing_col_margin_actual_pct":"هامش فعلي %",
+    "pricing_amount_currency_fmt":  "{amount:.2f}  ج",
 
     # ══════════════════════════════════════════════════════════════════
     # الشركات والعناصر المشتركة

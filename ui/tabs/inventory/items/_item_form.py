@@ -76,7 +76,7 @@ class _ItemForm(QWidget, EditModeMixin):
         self.cmb_item = QComboBox()
         self.cmb_item.setMinimumHeight(28)
         self.cmb_item.addItem(tr("investor_no_link"), None)
-        for item in fetch_items_by_type(company_state.get_shared_conn(), "raw"):
+        for item in fetch_items_by_type(company_state.get_erp_conn(), "raw"):
             self.cmb_item.addItem(tr("inventory_raw_item_fmt").format(name=item["name"]), item["id"])
 
         # ربط بحساب محاسبي

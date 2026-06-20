@@ -25,7 +25,7 @@ from ui.widgets.theme.builders          import wrap_in_scroll
 from ui.widgets.core.events             import emit_company_data_changed
 
 
-def _buttons_row(*buttons) -> QHBoxLayout:
+def buttons_row(*buttons) -> QHBoxLayout:
     """صف أزرار أفقي."""
     row = QHBoxLayout()
     row.setSpacing(6)
@@ -84,7 +84,7 @@ class _MachineForm(QWidget, EditModeMixin, LiveConnMixin):
         self.btn_add.clicked.connect(self._add)
         self.btn_save.clicked.connect(self._save_edit)
         self.btn_cancel.clicked.connect(self._cancel)
-        root.addLayout(_buttons_row(self.btn_add, self.btn_save, self.btn_cancel))
+        root.addLayout(buttons_row(self.btn_add, self.btn_save, self.btn_cancel))
         root.addStretch()
 
     def load_for_edit(self, machine_id: int):

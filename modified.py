@@ -13,6 +13,22 @@ from ui.widgets.panels.form_labels   import section_title # بدل section_label
 from ui.widgets.components.button    import make_btn
 from ui.widgets.tables.tables        import auto_fit_columns
 from ui.widgets.combo.unit import UnitCombo
+from ui.widgets.core.conn import SafeConnMixin
+from ui.widgets.components.headers_list import ListHeader, StatusBar # ListStatusBar
+from ui.widgets.theme.layout_styles      import tree_style # get_tree_style
+from ui.widgets.components.headers_page import PageHeader
+from ui.widgets.components.amount_label  import BalanceDisplay
+from ui.widgets.components.stat_card import StatRow, StatItem
+from db.accounting.accounting_repo import get_account_balance
+from db.accounting.accounting_accounts_repo import _get_group_descendants
+
+# sep
+from ui.widgets.theme.builders import v_divider
+sep = v_divider()
+
+#
+from ui.widgets.theme.input_styles import input_style
+self._style_combo(self.cmb_move_type)
 
 # setup_table_columns
 from ui.widgets.tables.tables       import auto_fit_columns

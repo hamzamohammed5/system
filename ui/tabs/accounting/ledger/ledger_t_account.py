@@ -20,7 +20,8 @@ from PyQt5.QtGui  import QColor, QFont
 from db.accounting.accounting_repo import fetch_t_account
 from db.accounting.accounting_schema import TYPE_AR
 from ui.tabs.accounting.helpers import TYPE_COLORS
-from ui.widgets.shared.panels import PageHeader, BalanceDisplay
+from ui.widgets.components.headers_page import PageHeader
+from ui.widgets.components.amount_label  import BalanceDisplay
 from .ledger_filter_bar import _LedgerFilterBar
 from .ledger_stat_cards import _StatCards
 

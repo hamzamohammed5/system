@@ -12,12 +12,10 @@ from PyQt5.QtGui  import QColor
 
 from db.accounting.accounting_repo    import fetch_all_accounts
 from db.accounting.accounting_schema  import TYPE_AR
-from ui.widgets.shared.safe_conn_mixin import SafeConnMixin
-from ui.widgets.shared.panels import (
-    ListHeader,
-    ListStatusBar,
-    get_tree_style,
-)
+from ui.widgets.core.conn import SafeConnMixin
+
+from ui.widgets.components.headers_list import ListHeader, StatusBar
+from ui.widgets.theme.layout_styles      import tree_style
 # انتقل لمجلد الحسابات — مخصص لـ TYPE_AR
 from ui.tabs.accounting.accounts_combo_widget import AccountTypeFilter
 from ui.tabs.accounting.helpers import TYPE_COLORS
@@ -59,11 +57,11 @@ class _AccountsPanel(SafeConnMixin, QWidget):
         self.lst.setColumnWidth(0, 65)
         self.lst.setColumnWidth(2, 90)
         self.lst.setAlternatingRowColors(True)
-        self.lst.setStyleSheet(get_tree_style())
+        self.lst.setStyleSheet(tree_style())
         self.lst.itemSelectionChanged.connect(self._on_selected)
         root.addWidget(self.lst, stretch=1)
 
-        self._status = ListStatusBar()
+        self._status = StatusBar()
         root.addWidget(self._status)
 
     def _refresh_accounts(self):

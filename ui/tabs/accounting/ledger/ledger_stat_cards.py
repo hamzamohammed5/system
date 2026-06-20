@@ -9,8 +9,7 @@ _StatCards — بطاقات الإحصائيات في دفتر الأستاذ.
 from PyQt5.QtWidgets import QFrame, QVBoxLayout
 
 from db.accounting.accounting_schema import TYPE_AR
-from ui.widgets.shared.stat_row import StatRow, StatItem
-
+from ui.widgets.components.stat_card import StatRow, StatItem
 
 class _StatCards(QFrame):
     def __init__(self, parent=None):

@@ -32,7 +32,7 @@ class RawSection(BaseSection):
     def _create_list(self):
         self._table_panel = RawTablePanel(
             conn=self.conn,
-            input_panel=self._form_panel,
+            input_panel=None,
         )
         return self._table_panel
 
@@ -44,3 +44,6 @@ class RawSection(BaseSection):
             self._table_panel.item_double_clicked.connect(
                 self._form_panel.load_for_edit
             )
+        # نربط input_panel بعد التأكد إن الاثنين اتبنوا
+        if hasattr(self._table_panel, "input_panel"):
+            self._table_panel.input_panel = self._form_panel

@@ -23,6 +23,7 @@ from ui.widgets.components.button   import make_btn
 from ui.widgets.panels.form_labels  import section_title
 from ui.widgets.panels.filter       import FilterToolbar
 from ui.widgets.core.events         import bus, emit_company_data_changed
+from ui.widgets.core.i18n           import tr
 
 from ui.tabs.costing.shared.scenario_comparison_widget import ScenarioComparisonWidget
 
@@ -37,7 +38,7 @@ def _spin(max_=9999999, dec=2):
     return s
 
 
-def _buttons_row(*widgets):
+def buttons_row(*widgets):
     """بديل buttons_row القديمة — صف أزرار بسيط."""
     lay = QHBoxLayout()
     lay.setSpacing(8)
@@ -77,14 +78,14 @@ class _PricingPanel(QWidget):
         form_lay.setContentsMargins(14, 12, 14, 12)
         form_lay.setSpacing(10)
 
-        self.lbl_mode = QLabel("─── تسعير منتج ───")
+        self.lbl_mode = QLabel(tr("pricing_new_mode"))
         self.lbl_mode.setStyleSheet("font-weight:bold; color:#e65100; font-size:12px;")
         form_lay.addWidget(self.lbl_mode)
 
         row1 = QHBoxLayout()
         row1.setSpacing(12)
 
-        lbl_prod = QLabel("المنتج:")
+        lbl_prod = QLabel(tr("pricing_product_label") + ":")
         lbl_prod.setStyleSheet("font-weight:bold;")
 
         self.cmb_product = QComboBox()
@@ -92,7 +93,7 @@ class _PricingPanel(QWidget):
         self.cmb_product.setMinimumWidth(200)
         self.cmb_product.currentIndexChanged.connect(self._on_product_selected)
 
-        lbl_margin = QLabel("هامش الربح:")
+        lbl_margin = QLabel(tr("pricing_margin_label") + ":")
         lbl_margin.setStyleSheet("font-weight:bold;")
 
         self.sp_margin = _spin(1000, 2)
@@ -100,10 +101,10 @@ class _PricingPanel(QWidget):
         self.sp_margin.setFixedWidth(110)
         self.sp_margin.valueChanged.connect(self._update_preview)
 
-        lbl_pct = QLabel("%")
+        lbl_pct = QLabel(tr("pricing_margin_pct_sign"))
         lbl_pct.setStyleSheet("font-weight:bold; color:#e65100; font-size:13px;")
 
-        lbl_price = QLabel("السعر النهائي:")
+        lbl_price = QLabel(tr("pricing_final_price_label") + ":")
         lbl_price.setStyleSheet("font-weight:bold;")
         self.sp_price = _spin()
         self.sp_price.setFixedWidth(130)
@@ -123,11 +124,11 @@ class _PricingPanel(QWidget):
 
         stats_row = QHBoxLayout()
         stats_row.setSpacing(8)
-        f1, self.lbl_stat_cost       = stat_box("التكلفة",              "info")
-        f2, self.lbl_stat_price      = stat_box("سعر البيع المقترح",    "success")
-        f3, self.lbl_stat_manual     = stat_box("السعر اليدوي",         "orange")
-        f4, self.lbl_stat_profit     = stat_box("الربح",                "success")
-        f5, self.lbl_stat_margin_pct = stat_box("هامش الربح الفعلي %", "purple")
+        f1, self.lbl_stat_cost       = stat_box(tr("pricing_cost_stat"),              "info")
+        f2, self.lbl_stat_price      = stat_box(tr("pricing_suggested_stat"),    "success")
+        f3, self.lbl_stat_manual     = stat_box(tr("pricing_manual_stat"),         "orange")
+        f4, self.lbl_stat_profit     = stat_box(tr("pricing_profit_stat"),                "success")
+        f5, self.lbl_stat_margin_pct = stat_box(tr("pricing_margin_actual_stat"), "purple")
         for f in (f1, f2, f3, f4, f5):
             stats_row.addWidget(f, stretch=1)
         form_lay.addLayout(stats_row)
@@ -136,27 +137,27 @@ class _PricingPanel(QWidget):
         self._scenario_comparison = ScenarioComparisonWidget(self.conn)
         form_lay.addWidget(self._scenario_comparison)
 
-        self.btn_save   = make_btn("💾  حفظ السعر", "success")
-        self.btn_cancel = make_btn("✖  إلغاء", "ghost")
-        self.btn_del    = make_btn("🗑️  حذف السعر", "danger")
+        self.btn_save   = make_btn(tr("pricing_save_price_btn"), "success")
+        self.btn_cancel = make_btn(tr("btn_cancel"), "ghost")
+        self.btn_del    = make_btn(tr("pricing_delete_price_btn"), "danger")
         self.btn_cancel.setVisible(False)
         self.btn_del.setVisible(False)
         self.btn_save.clicked.connect(self._save)
         self.btn_cancel.clicked.connect(self._reset_form)
         self.btn_del.clicked.connect(self._delete)
-        form_lay.addLayout(_buttons_row(self.btn_save, self.btn_cancel, self.btn_del))
+        form_lay.addLayout(buttons_row(self.btn_save, self.btn_cancel, self.btn_del))
 
         root.addWidget(form_frame)
 
-        root.addWidget(section_title("─── قائمة الأسعار ───"))
+        root.addWidget(section_title(tr("pricing_saved_prices")))
         # [إصلاح] FilterBar → FilterToolbar
         self._filter = FilterToolbar(self.conn, scope="final")
         self._filter.filter_changed.connect(self._apply_filter)
         root.addWidget(self._filter)
 
         self.table = make_table(
-            ["ID", "المنتج", "التصنيف", "التكلفة", "الهامش %",
-             "السعر", "الربح", "هامش فعلي %"],
+            [tr("pricing_col_id"), tr("pricing_col_product"), tr("pricing_col_category"), tr("pricing_col_cost"), tr("pricing_col_margin_pct"),
+             tr("pricing_col_price"), tr("pricing_col_profit"), tr("pricing_col_margin_actual_pct")],
             stretch_col=1
         )
         self.table.setColumnWidth(0, 40)
@@ -171,9 +172,9 @@ class _PricingPanel(QWidget):
         self.table.itemSelectionChanged.connect(self._on_table_select)
         root.addWidget(self.table, stretch=1)
 
-        btn_edit = make_btn("✏️  تعديل المحدد", "normal")
+        btn_edit = make_btn(tr("pricing_edit_selected_btn"), "normal")
         btn_edit.clicked.connect(self._edit_selected)
-        root.addLayout(_buttons_row(btn_edit))
+        root.addLayout(buttons_row(btn_edit))
 
     # ══════════════════════════════════════════════════════
     # تحميل وتحديث Combo المنتجات
@@ -183,7 +184,7 @@ class _PricingPanel(QWidget):
         prev = self.cmb_product.currentData()
         self.cmb_product.blockSignals(True)
         self.cmb_product.clear()
-        self.cmb_product.addItem("— اختر منتجاً —", None)
+        self.cmb_product.addItem(tr("pricing_select_product_placeholder"), None)
         for row in fetch_items_by_type(self.conn, "final"):
             self.cmb_product.addItem(row["name"], row["id"])
         restored = False
@@ -215,8 +216,8 @@ class _PricingPanel(QWidget):
         cost   = calc_cost(self.conn, prod_id)
         margin = self.sp_margin.value() / 100.0
         price  = cost * (1 + margin)
-        self.lbl_stat_cost.setText(f"{cost:.2f}  ج")
-        self.lbl_stat_price.setText(f"{price:.2f}  ج")
+        self.lbl_stat_cost.setText(tr("pricing_amount_currency_fmt", amount=cost))
+        self.lbl_stat_price.setText(tr("pricing_amount_currency_fmt", amount=price))
         if self._editing_id is None:
             self.sp_price.blockSignals(True)
             self.sp_price.setValue(price)
@@ -235,9 +236,9 @@ class _PricingPanel(QWidget):
         manual = self.sp_price.value()
         profit = manual - cost
         margin_pct = ((manual - cost) / cost * 100) if cost > 0 else 0.0
-        self.lbl_stat_manual.setText(f"{manual:.2f}  ج")
+        self.lbl_stat_manual.setText(tr("pricing_amount_currency_fmt", amount=manual))
         color_profit = _C["success"] if profit >= 0 else _C["danger"]
-        self.lbl_stat_profit.setText(f"{profit:.2f}  ج")
+        self.lbl_stat_profit.setText(tr("pricing_amount_currency_fmt", amount=profit))
         self.lbl_stat_profit.setStyleSheet(
             f"font-size:14px; font-weight:bold; color:{color_profit};"
             "background:transparent; border:none;"
@@ -259,11 +260,11 @@ class _PricingPanel(QWidget):
     def _save(self):
         prod_id = self.cmb_product.currentData()
         if prod_id is None:
-            QMessageBox.warning(self, "تنبيه", "اختر منتجاً أولاً")
+            QMessageBox.warning(self, tr("warning"), tr("pricing_select_product"))
             return
         price = self.sp_price.value()
         if price <= 0:
-            QMessageBox.warning(self, "تنبيه", "السعر يجب أن يكون أكبر من صفر")
+            QMessageBox.warning(self, tr("warning"), tr("pricing_price_positive"))
             return
         upsert_pricing(self.conn, prod_id, self.sp_margin.value(), price)
         self._reset_form()
@@ -275,7 +276,7 @@ class _PricingPanel(QWidget):
         item = fetch_item(self.conn, self._editing_id)
         name = item["name"] if item else f"ID:{self._editing_id}"
         if QMessageBox.question(
-            self, "تأكيد", f"حذف سعر «{name}»؟",
+            self, tr("confirm_delete"), tr("pricing_delete_confirm", name=name),
             QMessageBox.Yes | QMessageBox.No
         ) == QMessageBox.Yes:
             delete_pricing(self.conn, self._editing_id)
@@ -291,7 +292,7 @@ class _PricingPanel(QWidget):
                     self.lbl_stat_manual, self.lbl_stat_profit,
                     self.lbl_stat_margin_pct):
             lbl.setText("─")
-        self.lbl_mode.setText("─── تسعير منتج ───")
+        self.lbl_mode.setText(tr("pricing_new_mode"))
         self.btn_cancel.setVisible(False)
         self.btn_del.setVisible(False)
         self._scenario_comparison.clear()
@@ -299,7 +300,7 @@ class _PricingPanel(QWidget):
     def _edit_selected(self):
         row = self.table.currentRow()
         if row == -1:
-            QMessageBox.information(self, "تنبيه", "اختر منتجاً من الجدول أولاً")
+            QMessageBox.information(self, tr("warning"), tr("pricing_select_product_table"))
             return
         self._load_for_edit(int(self.table.item(row, 0).text()))
 
@@ -309,7 +310,7 @@ class _PricingPanel(QWidget):
             return
         prod_id = int(self.table.item(row, 0).text())
         cost = calc_cost(self.conn, prod_id)
-        self.lbl_stat_cost.setText(f"{cost:.2f}  ج (تكلفة)")
+        self.lbl_stat_cost.setText(tr("pricing_cost_suffix", cost=cost))
 
     def _load_for_edit(self, prod_id: int):
         pricing = fetch_pricing(self.conn, prod_id)
@@ -328,7 +329,7 @@ class _PricingPanel(QWidget):
         else:
             self.sp_margin.setValue(30)
             self.sp_price.setValue(cost * 1.3)
-        self.lbl_mode.setText(f"─── تعديل سعر: {item['name']} ───")
+        self.lbl_mode.setText(tr("pricing_edit_mode", name=item['name']))
         self.btn_cancel.setVisible(True)
         self.btn_del.setVisible(bool(pricing))
         self._refresh_manual_stats(cost)

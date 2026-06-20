@@ -13,8 +13,9 @@ _LedgerFilterBar — شريط فلاتر دفتر الأستاذ.
 from PyQt5.QtWidgets import QComboBox, QLabel
 from PyQt5.QtCore import QDate
 
-from ui.widgets.shared.panles_helper.filter_toolbar import FilterToolbar
-
+from ui.widgets.panels.filter       import FilterToolbar
+from ui.widgets.theme.builders import v_divider
+from ui.widgets.theme.input_styles import input_style
 
 class _LedgerFilterBar(FilterToolbar):
     """
@@ -40,7 +41,7 @@ class _LedgerFilterBar(FilterToolbar):
     def _add_move_type_filter(self):
         """يضيف فلتر نوع الحركة بعد شريط البحث."""
         # separator
-        sep = self._make_sep()
+        sep = v_divider()
         # نضيف قبل زر المسح — نجد موقعه في الـ layout
         lay = self.layout()
         # نعثر على زر المسح (آخر widget قبل lbl_count)
@@ -54,7 +55,7 @@ class _LedgerFilterBar(FilterToolbar):
         self.cmb_move_type.addItem("كل الحركات", None)
         self.cmb_move_type.addItem("مدين فقط",   "dr")
         self.cmb_move_type.addItem("دائن فقط",   "cr")
-        self._style_combo(self.cmb_move_type)
+        self.cmb_move_type.setStyleSheet(input_style(height=28))
         self.cmb_move_type.currentIndexChanged.connect(
             lambda _: self.filter_changed.emit()
         )

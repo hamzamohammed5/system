@@ -15,8 +15,8 @@ def build_status_grid(dashboard) -> CardGrid:
     grid = CardGrid(cols=4, spacing=10)
 
     for status, (icon, label, color, bg, border) in get_status_config().items():
-        chip, cnt_lbl = make_status_chip(icon, label, 0, color, bg, border)
+        chip = make_status_chip(icon, label, 0, color)
         grid.add_widget(chip)
-        dashboard._status_chips[status] = cnt_lbl
+        dashboard._status_chips[status] = chip
 
     return grid

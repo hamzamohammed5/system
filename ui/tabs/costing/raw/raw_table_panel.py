@@ -17,6 +17,7 @@ from ui.widgets.mixins.shared_ops      import SharedOpsMixin
 from ui.widgets.tables.tables           import make_item, colored_item
 from ui.widgets.dialogs.confirm        import confirm_delete          # ✅ كان: ui.helpers
 from ui.widgets.core.events            import emit_company_data_changed
+from ui.widgets.core.i18n              import tr
 from ui.tabs.costing.shared._utils     import (
     to_dict, SHARED_COLOR, SHARED_BG, PUBLISHED_COLOR, PUBLISHED_BG,
 )
@@ -37,11 +38,12 @@ class RawTablePanel(BaseListPanel, SharedOpsMixin):
       - bus.data_changed auto-connect
     """
 
-    COLUMNS            = ["ID", "الاسم", "التصنيف", "السعر الكلي", "الكمية", "سعر الوحدة"]
+    COLUMNS            = [tr("raw_col_id"), tr("raw_col_name"), tr("raw_col_category"),
+                           tr("raw_col_total_price"), tr("raw_col_qty"), tr("raw_col_unit_price")]
     STRETCH_COL        = 1
     EMPTY_ICON         = "🧱"
-    EMPTY_TITLE        = "لا توجد خامات"
-    LIST_TITLE         = "─── الخامات المحفوظة ───"
+    EMPTY_TITLE        = "no_raws"
+    LIST_TITLE         = f"─── {tr('saved_raws')} ───"
     ADD_TEXT           = ""
     SHOW_CATEGORY      = True
     FILTER_SCOPE       = "raw"
@@ -89,11 +91,11 @@ class RawTablePanel(BaseListPanel, SharedOpsMixin):
         id_text = "🔗" if is_shared else ("📤" if is_published else str(row.get("id", "")))
         id_item = make_item(id_text, user_data=row.get("id"))
         table.setItem(r, 0, id_item)
-        table.setItem(r, 1, make_item(prefix + row.get("name", ""), color=color))
-        table.setItem(r, 2, make_item(row.get("category_name") or "—", color=color))
-        table.setItem(r, 3, make_item(f"{price:.2f}", color=color))
-        table.setItem(r, 4, make_item(str(tq) if tq is not None else "—", color=color))
-        table.setItem(r, 5, make_item(f"{unit:.4f}", color=color))
+        table.setItem(r, 1, colored_item(prefix + row.get("name", ""), color=color))
+        table.setItem(r, 2, colored_item(row.get("category_name") or "—", color=color))
+        table.setItem(r, 3, colored_item(f"{price:.2f}", color=color))
+        table.setItem(r, 4, colored_item(str(tq) if tq is not None else "—", color=color))
+        table.setItem(r, 5, colored_item(f"{unit:.4f}", color=color))
 
         if color:
             bg = SHARED_BG if is_shared else PUBLISHED_BG
@@ -118,9 +120,9 @@ class RawTablePanel(BaseListPanel, SharedOpsMixin):
     # ══════════════════════════════════════════════════════
 
     def _build_extra_header_actions(self, header):
-        header.add_action("🔄 استبدال شامل",  self._bulk_replace,     "primary")
-        header.add_action("🔗 تعديل المشترك", self._edit_shared_selected)
-        header.add_action("📤 نشر كمشترك",    self._publish_selected)
+        header.add_action(tr("raw_bulk_replace_btn"),  self._bulk_replace,     "primary")
+        header.add_action(tr("raw_edit_shared_btn"), self._edit_shared_selected)
+        header.add_action(tr("raw_publish_btn"),    self._publish_selected)
 
     # ══════════════════════════════════════════════════════
     # إجراءات الأزرار
@@ -139,11 +141,11 @@ class RawTablePanel(BaseListPanel, SharedOpsMixin):
 
         item_id = self.selected_id()
         if item_id is None:
-            QMessageBox.information(self, "تنبيه", "اختر خامة من الجدول أولاً")
+            QMessageBox.information(self, tr("warning"), tr("raw_select_first"))
             return
         if is_shared_id(item_id):
-            QMessageBox.information(self, "تنبيه",
-                                    "الاستبدال الشامل غير متاح للعناصر المشتركة.")
+            QMessageBox.information(self, tr("warning"),
+                                    tr("raw_bulk_replace_not_available"))
             return
         row = self._get_current_row_dict()
         name = row.get("name", f"ID:{item_id}") if row else f"ID:{item_id}"
@@ -156,7 +158,7 @@ class RawTablePanel(BaseListPanel, SharedOpsMixin):
         from PyQt5.QtWidgets import QMessageBox
         item_id = self.selected_id()
         if item_id is None:
-            QMessageBox.information(self, "تنبيه", "اختر خامة من الجدول أولاً")
+            QMessageBox.information(self, tr("warning"), tr("raw_select_first"))
             return
         self._edit_shared_item(item_id, "raw", self)
 
@@ -164,7 +166,7 @@ class RawTablePanel(BaseListPanel, SharedOpsMixin):
         from PyQt5.QtWidgets import QMessageBox
         item_id = self.selected_id()
         if item_id is None:
-            QMessageBox.information(self, "تنبيه", "اختر خامة من الجدول أولاً")
+            QMessageBox.information(self, tr("warning"), tr("raw_select_first"))
             return
         row = self._get_current_row_dict()
         if not row:
@@ -184,8 +186,8 @@ class RawTablePanel(BaseListPanel, SharedOpsMixin):
         from PyQt5.QtWidgets import QMessageBox
         if is_shared_id(item_id):
             QMessageBox.information(
-                self, "عنصر مشترك",
-                "هذه خامة مشتركة واردة — استخدم زر «🔗 تعديل المشترك» لتعديلها."
+                self, tr("shared_item_title"),
+                tr("raw_shared_edit_notice")
             )
             return
         if self._input_panel:
@@ -197,9 +199,8 @@ class RawTablePanel(BaseListPanel, SharedOpsMixin):
 
         if is_shared_id(item_id):
             QMessageBox.warning(
-                self, "عنصر مشترك",
-                "لا يمكن حذف خامة مشتركة من هنا.\n"
-                "استخدم نافذة «العناصر المشتركة» لحذفها أو فك الربط."
+                self, tr("shared_item_title"),
+                tr("raw_shared_delete_blocked")
             )
             return
         item_id_int = int(item_id)
@@ -211,7 +212,7 @@ class RawTablePanel(BaseListPanel, SharedOpsMixin):
             try:
                 delete_item(self.conn, item_id_int)
             except Exception as e:
-                QMessageBox.warning(self, "خطأ", str(e))
+                QMessageBox.warning(self, tr("error"), str(e))
                 return
             emit_company_data_changed()
 

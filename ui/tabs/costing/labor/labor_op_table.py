@@ -16,13 +16,15 @@ from ui.tabs.companies.shared_items_mixin                  import get_shared_lab
 from ui.tabs.costing.shared._utils                         import to_dict
 from ui.tabs.costing.shared.bulk_replace.bulk_replace_dialog import BulkReplaceDialog
 from ui.widgets.core.events                                import emit_company_data_changed
+from ui.widgets.core.i18n                                  import tr
 
 
 class LaborOpTable(SharedItemsListPanel):
     SHARED_TYPE      = "labor_op"
-    TABLE_COLS       = ["ID", "اسم العملية", "التصنيف", "الوقت (دقيقة)", "التكلفة / وحدة"]
+    TABLE_COLS       = [tr("id_col"), tr("op_name"), tr("category"),
+                        tr("labor_time_lbl"), tr("cost_per_unit_col")]
     FILTER_SCOPE     = "labor"
-    TABLE_TITLE      = "─── عمليات العمالة المحفوظة ───"
+    TABLE_TITLE      = tr("labor_op_table_title")
     HAS_BULK_REPLACE = True
 
     def __init__(self, conn, settings, form, parent=None):
@@ -58,7 +60,7 @@ class LaborOpTable(SharedItemsListPanel):
         rate         = self._settings.get_hourly_rate()
         minutes      = item.get("minutes", 0)
         cost         = (minutes / 60.0) * rate
-        cat_display  = item.get("category_name") or "—"
+        cat_display  = item.get("category_name") or tr("dash")
 
         if is_shared:
             prefix  = "🔗 "
@@ -76,7 +78,7 @@ class LaborOpTable(SharedItemsListPanel):
         self.table.setItem(r, 1, QTableWidgetItem(prefix + item.get("name", "")))
         self.table.setItem(r, 2, QTableWidgetItem(cat_display))
         self.table.setItem(r, 3, QTableWidgetItem(f"{minutes:.2f}"))
-        self.table.setItem(r, 4, QTableWidgetItem(f"{cost:.2f} جنيه"))
+        self.table.setItem(r, 4, QTableWidgetItem(f"{cost:.2f} {tr('currency_abbr')}"))
 
     def _edit_item(self, item_id: int):
         self._form.load_for_edit(item_id)
@@ -90,7 +92,7 @@ class LaborOpTable(SharedItemsListPanel):
                 from services.costing.labor_op_service import LaborOpService
                 LaborOpService(self._live_conn()).delete(item_id)
             except Exception as e:
-                QMessageBox.warning(self, "خطأ", str(e))
+                QMessageBox.warning(self, tr("error"), str(e))
                 return
             emit_company_data_changed()
 

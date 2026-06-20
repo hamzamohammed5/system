@@ -19,6 +19,9 @@ from ui.widgets.panels.form_group import FormGroup
 from ui.widgets.forms.inputs           import RequiredLineEdit, AmountSpinBox
 from ui.widgets.combo.category         import CategoryCombo
 from ui.tabs.costing.shared.raw_variants_panel import _RawVariantsPanel
+from ui.widgets.core.i18n              import tr
+from ui.theme                          import _C
+from ui.font                           import FS_XS
 
 
 def _live_price(inp_price) -> float:
@@ -41,9 +44,9 @@ class RawInputPanel(BaseCrudForm):
       - EditModeMixin + LiveConnMixin
     """
 
-    FORM_TITLE = "بيانات الخامة"
-    ADD_TEXT   = "➕  إضافة خامة"
-    SAVE_TEXT  = "💾  حفظ التعديل"
+    FORM_TITLE = tr("raw_form_title")
+    ADD_TEXT   = tr("raw_add_btn")
+    SAVE_TEXT  = tr("btn_save")
 
     def __init__(self, conn, parent=None):
         super().__init__(conn, parent)
@@ -56,7 +59,7 @@ class RawInputPanel(BaseCrudForm):
     # ══════════════════════════════════════════════════════
 
     def _build_fields(self, group: FormGroup):
-        self.inp_name    = RequiredLineEdit("أدخل اسم الخامة...")
+        self.inp_name    = RequiredLineEdit(tr("raw_name_required"))
         self.inp_name.setMinimumHeight(32)
 
         self.inp_price   = AmountSpinBox(dec=2)
@@ -64,25 +67,22 @@ class RawInputPanel(BaseCrudForm):
 
         self.sp_total_qty = spin_field(max_=999999, dec=4)
         self.sp_total_qty.setFixedWidth(120)
-        self.sp_total_qty.setToolTip(
-            "اتركه صفراً لو السعر بالوحدة\n"
-            "سعر الوحدة = السعر الكلي ÷ الكمية الإجمالية"
-        )
+        self.sp_total_qty.setToolTip(tr("raw_qty_tooltip"))
 
         self.lbl_hint = QLabel()
         self.lbl_hint.setStyleSheet(
-            "color: #1565c0; font-size: 10px;"
-            "background: #e8f0fe; border-radius: 4px; padding: 4px 8px;"
+            f"color: {_C['info']}; font-size: {FS_XS}px;"
+            f"background: {_C['info_bg']}; border-radius: 4px; padding: 4px 8px;"
         )
         self.lbl_hint.setWordWrap(True)
 
         self.cmb_category = CategoryCombo(self.conn, scope="raw")
 
-        group.add_row("اسم الخامة *",      self.inp_name)
-        group.add_row("السعر الكلي :",      labeled_widget(self.inp_price, "جنيه"))
-        group.add_row("الكمية الإجمالية :", labeled_widget(self.sp_total_qty, "وحدة"))
+        group.add_row(f"{tr('raw_name_label')} *",      self.inp_name)
+        group.add_row(f"{tr('raw_price_label')} :",      labeled_widget(self.inp_price, tr("currency_abbr")))
+        group.add_row(f"{tr('raw_qty_label')} :", labeled_widget(self.sp_total_qty, tr("raw_qty_unit")))
         group.add_row("",                   self.lbl_hint)
-        group.add_row("التصنيف :",          self.cmb_category)
+        group.add_row(f"{tr('category')} :",          self.cmb_category)
 
         # لوحة variants تُضاف بعد الـ group عبر _build_extra
         self._variants = _RawVariantsPanel(self.conn)
@@ -107,14 +107,12 @@ class RawInputPanel(BaseCrudForm):
         if tq and tq > 0 and price > 0:
             unit = price / tq
             self.lbl_hint.setText(
-                f"💡 سعر الوحدة = {price:.2f} ÷ {tq:.4g} = {unit:.4f} جنيه/وحدة"
+                tr("raw_hint_with_qty", price=f"{price:.2f}", qty=f"{tq:.4g}", unit=f"{unit:.4f}")
             )
         elif tq and tq > 0:
-            self.lbl_hint.setText("💡 سعر الوحدة = السعر الكلي ÷ الكمية الإجمالية")
+            self.lbl_hint.setText(tr("raw_hint_qty_only"))
         else:
-            self.lbl_hint.setText(
-                "💡 بدون كمية إجمالية: السعر المسجل = سعر الوحدة مباشرة"
-            )
+            self.lbl_hint.setText(tr("raw_hint_no_qty"))
 
     # ══════════════════════════════════════════════════════
     # BaseCrudForm interface
@@ -142,7 +140,7 @@ class RawInputPanel(BaseCrudForm):
         )
         self._variants.load_item(new_id, data["price"])
         # إبقاء الفورم في وضع التعديل لإضافة variants
-        self.enter_edit_mode(new_id, f"─── أضف وحدات إنتاج لـ: {data['name']} ───")
+        self.enter_edit_mode(new_id, f"─── {tr('raw_add_variants_mode', name=data['name'])} ───")
         self.btn_add.setVisible(False)
         self.btn_save.setVisible(True)
         self.btn_cancel.setVisible(True)

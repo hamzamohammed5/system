@@ -18,6 +18,7 @@ from ui.widgets.theme.layout_styles import tab_style
 from ui.theme                        import _C
 from ui.widgets.core.i18n           import tr
 from ui.widgets.core.events         import bus
+from ui.font                        import FS_MD, FS_LG
 
 from .costing.raw_tab     import RawTab
 from .costing.product_tab import ProductTab
@@ -30,7 +31,7 @@ def _make_error_tab(msg: str) -> QLabel:
     lbl = QLabel(f"⚠️  {msg}")
     lbl.setAlignment(Qt.AlignCenter)
     lbl.setStyleSheet(
-        f"color:{_C['danger']}; font-size:13px;"
+        f"color:{_C['danger']}; font-size:{FS_MD}px;"
         f"background:{_C['danger_bg']}; border:1px solid {_C['danger_border']};"
         "border-radius:6px; padding:12px;"
     )
@@ -78,7 +79,7 @@ class CostingSection(QWidget):
             try:
                 widget = factory()
             except Exception as e:
-                widget = _make_error_tab(f"خطأ في تحميل التبويب: {e}")
+                widget = _make_error_tab(tr("tab_load_error", error=str(e)))
             self._tabs.addTab(widget, label)
 
         layout.addWidget(self._tabs)
@@ -88,7 +89,7 @@ class CostingSection(QWidget):
             QLabel {{
                 background: {_C['bg_surface']};
                 border-bottom: 1px solid {_C['border']};
-                font-size: 14px;
+                font-size: {FS_LG}px;
                 font-weight: bold;
                 color: {_C['accent']};
                 padding-right: 16px;

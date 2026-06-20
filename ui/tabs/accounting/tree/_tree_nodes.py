@@ -13,7 +13,8 @@ from PyQt5.QtWidgets import QTreeWidget, QTreeWidgetItem
 from PyQt5.QtCore import Qt
 from PyQt5.QtGui  import QColor
 
-from db.accounting.accounting_repo import get_account_balance, _get_group_descendants
+from db.accounting.accounting_repo import get_account_balance
+from db.accounting.accounting_accounts_repo import _get_group_descendants
 from ui.tabs.accounting.helpers import TYPE_COLORS
 from ui.theme import _C
 

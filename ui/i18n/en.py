@@ -1334,6 +1334,17 @@ EN_STRINGS: dict[str, str] = {
     "pricing_save_price_btn":       "💾  Save Price",
     "pricing_delete_price_btn":     "🗑️  Delete Price",
     "pricing_cost_suffix":          "{cost:.2f}  EGP (cost)",
+    "pricing_margin_pct_sign":      "%",
+    "pricing_select_product_placeholder": "— Select a product —",
+    "pricing_col_id":               "ID",
+    "pricing_col_product":          "Product",
+    "pricing_col_category":         "Category",
+    "pricing_col_cost":             "Cost",
+    "pricing_col_margin_pct":       "Margin %",
+    "pricing_col_price":            "Price",
+    "pricing_col_profit":           "Profit",
+    "pricing_col_margin_actual_pct":"Actual Margin %",
+    "pricing_amount_currency_fmt":  "{amount:.2f}  EGP",
 
     # ══════════════════════════════════════════════════════════════════
     # Companies & Shared Items
