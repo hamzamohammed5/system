@@ -1,5 +1,5 @@
 File Tree Snapshot
-Generated : 2026-06-20 14:51:31
+Generated : 2026-06-20 15:22:42
 Source    : D:\My Workspace\Hg\Alhabaar\accountant\system
 Extensions: .md, .py
 ────────────────────────────────────────────────────────────
@@ -296,6 +296,7 @@ system/
 │   │   │   │   ├── _orders_list_panel.py
 │   │   │   │   └── _status_delegate.py
 │   │   │   ├── _customer_form.py
+│   │   │   ├── _customer_form_orig.py
 │   │   │   ├── _item_form.py
 │   │   │   ├── _order_detail.py
 │   │   │   ├── _order_form.py

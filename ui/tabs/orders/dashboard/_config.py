@@ -1,54 +1,70 @@
 """
 ui/tabs/orders/dashboard/_config.py
-=====================================
-ثوابت لوحة المتابعة — الحالات والأعمدة.
 """
+from ui.theme import _C
+from ui.widgets.core.i18n import tr
 
-# ── ثوابت الحالة: (icon, label, color, bg, border) ──
-STATUS_CONFIG = {
-    "pending":     ("⏳", "انتظار",   "#f59e0b", "#fffbeb", "#fde68a"),
-    "confirmed":   ("✅", "مؤكد",     "#3b82f6", "#eff6ff", "#bfdbfe"),
-    "in_progress": ("🔧", "تنفيذ",   "#8b5cf6", "#f5f3ff", "#ddd6fe"),
-    "ready":       ("📦", "جاهز",    "#10b981", "#ecfdf5", "#a7f3d0"),
-    "delivered":   ("🚚", "مُسلَّم",  "#6b7280", "#f9fafb", "#e5e7eb"),
-    "cancelled":   ("❌", "ملغي",    "#ef4444", "#fef2f2", "#fecaca"),
-    "on_hold":     ("⏸", "معلق",    "#f97316", "#fff7ed", "#fed7aa"),
-}
 
-STATUS_MAP = {
-    "pending":     "⏳ انتظار",
-    "confirmed":   "✅ مؤكد",
-    "in_progress": "🔧 تنفيذ",
-    "ready":       "📦 جاهز",
-    "delivered":   "🚚 مُسلَّم",
-    "cancelled":   "❌ ملغي",
-    "on_hold":     "⏸ معلق",
-}
+def get_status_config() -> dict:
+    """يرجع إعدادات الحالات مع الألوان من _C."""
+    return {
+        "pending":     ("⏳", tr("status_pending"),     _C['warning'],  _C['warning_bg'],  _C['warning_border']),
+        "confirmed":   ("✅", tr("status_confirmed"),   _C['accent'],   _C['accent_light'],_C['accent_mid']),
+        "in_progress": ("🔧", tr("status_in_progress"), _C['purple'],   _C['purple_bg'],   _C['purple_border']),
+        "ready":       ("📦", tr("status_ready"),       _C['success'],  _C['success_bg'],  _C['success_border']),
+        "delivered":   ("🚚", tr("status_delivered"),   _C['text_sec'], _C['bg_surface_2'],_C['border']),
+        "cancelled":   ("❌", tr("status_cancelled"),   _C['danger'],   _C['danger_bg'],   _C['danger_border']),
+        "on_hold":     ("⏸", tr("status_on_hold"),     _C['orange'],   _C['orange_bg'],   _C['orange_border']),
+    }
 
-STATUS_COLOR = {
-    "pending":     "#f59e0b",
-    "confirmed":   "#3b82f6",
-    "in_progress": "#8b5cf6",
-    "ready":       "#10b981",
-    "delivered":   "#6b7280",
-    "cancelled":   "#ef4444",
-    "on_hold":     "#f97316",
-}
 
-TYPE_MAP = {
-    "new":     "جديد",
-    "reorder": "إعادة طلب",
-    "custom":  "مخصص",
-}
+def get_status_map() -> dict:
+    return {
+        "pending":     f"⏳ {tr('status_pending')}",
+        "confirmed":   f"✅ {tr('status_confirmed')}",
+        "in_progress": f"🔧 {tr('status_in_progress')}",
+        "ready":       f"📦 {tr('status_ready')}",
+        "delivered":   f"🚚 {tr('status_delivered')}",
+        "cancelled":   f"❌ {tr('status_cancelled')}",
+        "on_hold":     f"⏸ {tr('status_on_hold')}",
+    }
 
-PRIORITY_MAP = {
-    "low":    "⬇ منخفض",
-    "normal": "➡ عادي",
-    "high":   "⬆ عالي",
-    "urgent": "🔴 عاجل",
-}
 
-# ── أعمدة الجدول وعرضها ──
-TABLE_COLS   = ["رقم الطلب", "العميل", "النوع", "الحالة", "الأولوية", "الإجمالي", "التاريخ"]
-COL_WIDTHS   = {0: 130, 1: 160, 2: 80, 3: 100, 4: 75, 5: 100, 6: 90}
+def get_status_color() -> dict:
+    return {
+        "pending":     _C['warning'],
+        "confirmed":   _C['accent'],
+        "in_progress": _C['purple'],
+        "ready":       _C['success'],
+        "delivered":   _C['text_sec'],
+        "cancelled":   _C['danger'],
+        "on_hold":     _C['orange'],
+    }
+
+
+def get_type_map() -> dict:
+    return {
+        "new":     tr("order_type_new"),
+        "reorder": tr("order_type_reorder"),
+        "custom":  tr("order_type_custom"),
+    }
+
+
+def get_priority_map() -> dict:
+    return {
+        "low":    tr("priority_low"),
+        "normal": tr("priority_normal"),
+        "high":   tr("priority_high"),
+        "urgent": tr("priority_urgent"),
+    }
+
+
+def get_table_cols() -> list:
+    return [tr(k) for k in [
+        "order_col_number", "order_col_customer", "order_type_label",
+        "order_col_status", "order_col_priority", "order_header_total", "order_col_date",
+    ]]
+
+
+COL_WIDTHS    = {0: 130, 1: 160, 2: 80, 3: 100, 4: 75, 5: 100, 6: 90}
 TABLE_TOTAL_W = sum(COL_WIDTHS.values()) + 4  # +4 للـ border

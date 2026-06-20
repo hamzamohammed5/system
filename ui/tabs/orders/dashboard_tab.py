@@ -1,12 +1,6 @@
 """
 ui/tabs/orders/dashboard_tab.py
-================================
-لوحة متابعة الطلبات.
-
-✅ الجدول بعرضه الطبيعي جوا QSplitter — قابل للتوسيع بالـ handle
-✅ الجزء العلوي (cards + status) في ScrollArea
 """
-
 from PyQt5.QtWidgets import (
     QWidget, QVBoxLayout, QHBoxLayout,
     QLabel, QPushButton, QScrollArea, QSizePolicy,
@@ -14,6 +8,7 @@ from PyQt5.QtWidgets import (
 from PyQt5.QtCore import Qt
 
 from db.orders.orders_repo import fetch_orders_summary, fetch_all_orders
+from ui.widgets.core.i18n import tr
 
 from .dashboard._top_cards    import build_top_cards
 from .dashboard._status_grid  import build_status_grid
@@ -31,7 +26,6 @@ class OrdersDashboardTab(QWidget):
         root.setContentsMargins(0, 0, 0, 0)
         root.setSpacing(0)
 
-        # ── الجزء العلوي: cards + status grid ──
         scroll = QScrollArea()
         scroll.setWidgetResizable(True)
         scroll.setHorizontalScrollBarPolicy(Qt.ScrollBarAlwaysOff)
@@ -46,7 +40,7 @@ class OrdersDashboardTab(QWidget):
 
         top_lay.addLayout(build_top_cards(self))
 
-        lbl_status = QLabel("توزيع الطلبات حسب الحالة")
+        lbl_status = QLabel(tr("dashboard_status_dist"))
         lbl_status.setStyleSheet("font-weight:bold;")
         top_lay.addWidget(lbl_status)
         top_lay.addWidget(build_status_grid(self))
@@ -54,15 +48,14 @@ class OrdersDashboardTab(QWidget):
         scroll.setWidget(top_content)
         root.addWidget(scroll)
 
-        # ── رأس الجدول ──
         hdr_widget = QWidget()
         recent_hdr = QHBoxLayout(hdr_widget)
         recent_hdr.setContentsMargins(20, 8, 20, 4)
 
-        lbl_recent = QLabel("آخر الطلبات")
+        lbl_recent = QLabel(tr("dashboard_recent_orders"))
         lbl_recent.setStyleSheet("font-weight:bold;")
 
-        btn_refresh = QPushButton("↺  تحديث")
+        btn_refresh = QPushButton(tr("order_refresh_btn"))
         btn_refresh.setMinimumHeight(30)
         btn_refresh.setSizePolicy(QSizePolicy.Fixed, QSizePolicy.Fixed)
         btn_refresh.clicked.connect(self.refresh)
@@ -72,7 +65,6 @@ class OrdersDashboardTab(QWidget):
         recent_hdr.addWidget(btn_refresh)
         root.addWidget(hdr_widget)
 
-        # ── الجدول + splitter ──
         table_container = QWidget()
         tc_lay = QVBoxLayout(table_container)
         tc_lay.setContentsMargins(20, 0, 20, 16)
@@ -85,8 +77,8 @@ class OrdersDashboardTab(QWidget):
 
         self._lbl_total.setText(str(summary.get("total") or 0))
         self._lbl_urgent.setText(str(summary.get("urgent") or 0))
-        self._lbl_total_value.setText(f"{(summary.get('total_value') or 0):,.0f} ج")
-        self._lbl_total_paid.setText(f"{(summary.get('total_paid') or 0):,.0f} ج")
+        self._lbl_total_value.setText(f"{(summary.get('total_value') or 0):,.0f} {tr('currency_sym')}")
+        self._lbl_total_paid.setText(f"{(summary.get('total_paid') or 0):,.0f} {tr('currency_sym')}")
 
         for status, lbl in self._status_chips.items():
             lbl.setText(str(summary.get(status) or 0))

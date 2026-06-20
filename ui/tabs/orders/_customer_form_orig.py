@@ -1,6 +1,13 @@
 """
 ui/tabs/orders/_customer_form.py
+=================================
+Dialog لإنشاء عميل جديد أو تعديل عميل موجود.
+
+✅ يستخدم _make_btn من panels
+✅ يستخدم _C palette
+✅ يستخدم make_compact_table من table_utils
 """
+
 from PyQt5.QtWidgets import (
     QDialog, QVBoxLayout, QHBoxLayout, QFormLayout,
     QLabel, QLineEdit, QPushButton,
@@ -22,7 +29,25 @@ from ui.theme import _C
 from ui.font import FS_BASE, FS_SM
 
 
-def _group_ss() -> str:
+def _input_ss():
+    return f"""
+        QLineEdit, QTextEdit, QComboBox {{
+            background: {_C['bg_input']};
+            border: 1px solid {_C['border_med']};
+            border-radius: 6px;
+            padding: 4px 10px;
+            color: {_C['text_primary']};
+            min-height: 34px;
+        }}
+        QLineEdit:focus, QTextEdit:focus, QComboBox:focus {{
+            border-color: {_C['accent']};
+            background: white;
+        }}
+        QComboBox::drop-down {{ border: none; width: 20px; }}
+    """
+
+
+def _group_ss():
     return f"""
         QGroupBox {{
             font-weight: bold;
@@ -51,10 +76,12 @@ class _CustomerForm(QDialog):
         self.customer_id = customer_id
         self._contacts   = []
 
-        self.setWindowTitle(tr("customer_edit_title") if customer_id else tr("customer_new_title"))
+        title = tr("customer_edit_title") if customer_id else tr("customer_new_title")
+        self.setWindowTitle(title)
         self.setMinimumWidth(580)
         self.setMinimumHeight(620)
         self.setModal(True)
+
         self._build()
         if customer_id:
             self._load()
@@ -71,7 +98,8 @@ class _CustomerForm(QDialog):
             border-radius: 8px; padding: 8px 14px;
         """)
         root.addWidget(hdr)
-        self.setStyleSheet(input_style())
+
+        self.setStyleSheet(self.styleSheet() + input_style())
 
         basic_grp = QGroupBox(tr("customer_basic_section"))
         basic_grp.setStyleSheet(_group_ss())
@@ -85,7 +113,7 @@ class _CustomerForm(QDialog):
 
         self.cmb_type = QComboBox()
         self.cmb_type.addItem(tr("customer_type_individual"), "individual")
-        self.cmb_type.addItem(tr("customer_type_company"),    "company")
+        self.cmb_type.addItem(tr("customer_type_company"), "company")
         form.addRow(tr("customer_type_lbl"), self.cmb_type)
 
         self.inp_phone = QLineEdit()
@@ -128,20 +156,26 @@ class _CustomerForm(QDialog):
         c_btn_row = QHBoxLayout()
         btn_add_c = make_btn(tr("contact_add_btn"), "success")
         btn_add_c.clicked.connect(self._add_contact_dialog)
+
         btn_del_c = make_btn(tr("contact_del_btn"), "danger")
         btn_del_c.clicked.connect(self._del_contact)
+
         c_btn_row.addWidget(btn_add_c)
         c_btn_row.addWidget(btn_del_c)
         c_btn_row.addStretch()
         c_lay.addLayout(c_btn_row)
+
         root.addWidget(contacts_grp)
 
+        # ══ أزرار ══
         btn_row = QHBoxLayout()
         btn_cancel = make_btn(tr("cancel"), "ghost")
         btn_cancel.clicked.connect(self.reject)
+
         btn_save = make_btn(tr("customer_save_btn"), "primary")
         btn_save.setMinimumHeight(38)
         btn_save.clicked.connect(self._save)
+
         btn_row.addWidget(btn_cancel)
         btn_row.addWidget(btn_save, stretch=1)
         root.addLayout(btn_row)
@@ -150,6 +184,7 @@ class _CustomerForm(QDialog):
         c = fetch_customer(self.conn, self.customer_id)
         if not c:
             return
+
         self.inp_name.setText(c["name"])
         self.inp_phone.setText(c["phone"] or "")
         self.inp_phone2.setText(c["phone2"] or "")
@@ -157,10 +192,12 @@ class _CustomerForm(QDialog):
         self.inp_city.setText(c["city"] or "")
         self.inp_address.setText(c["address"] or "")
         self.inp_notes.setPlainText(c["notes"] or "")
+
         for i in range(self.cmb_type.count()):
             if self.cmb_type.itemData(i) == c["customer_type"]:
                 self.cmb_type.setCurrentIndex(i)
                 break
+
         self._contacts = list(fetch_contacts(self.conn, self.customer_id))
         self._refresh_contacts_table()
 
@@ -174,16 +211,19 @@ class _CustomerForm(QDialog):
             phone = ct.get("phone", "") or ""
             email = ct.get("email", "") or ""
             notes = ct.get("notes", "") or ""
-            self.contacts_table.setItem(r, 0, make_item(name, user_data=cid))
-            self.contacts_table.setItem(r, 1, make_item(role))
-            self.contacts_table.setItem(r, 2, make_item(phone))
-            self.contacts_table.setItem(r, 3, make_item(email))
-            self.contacts_table.setItem(r, 4, make_item(notes))
+
+            item0 = make_table_item(name, user_data=cid)
+            self.contacts_table.setItem(r, 0, item0)
+            self.contacts_table.setItem(r, 1, make_table_item(role))
+            self.contacts_table.setItem(r, 2, make_table_item(phone))
+            self.contacts_table.setItem(r, 3, make_table_item(email))
+            self.contacts_table.setItem(r, 4, make_table_item(notes))
 
     def _add_contact_dialog(self):
         dlg = _ContactDialog(parent=self)
         if dlg.exec_() == QDialog.Accepted:
-            self._contacts.append(dlg.get_data())
+            data = dlg.get_data()
+            self._contacts.append(data)
             self._refresh_contacts_table()
 
     def _del_contact(self):
@@ -196,7 +236,7 @@ class _CustomerForm(QDialog):
     def _save(self):
         name = self.inp_name.text().strip()
         if not name:
-            QMessageBox.warning(self, tr("warning"), tr("customer_name_warn"))
+            QMessageBox.warning(self, "تنبيه", "أدخل اسم العميل")
             self.inp_name.setFocus()
             return
 
@@ -209,29 +249,46 @@ class _CustomerForm(QDialog):
         notes   = self.inp_notes.toPlainText().strip()
 
         if self.customer_id:
-            update_customer(self.conn, self.customer_id, name=name, customer_type=ctype,
-                            phone=phone, phone2=phone2, email=email,
-                            address=address, city=city, notes=notes)
+            update_customer(
+                self.conn, self.customer_id,
+                name=name, customer_type=ctype,
+                phone=phone, phone2=phone2,
+                email=email, address=address,
+                city=city, notes=notes,
+            )
             cid = self.customer_id
         else:
-            cid = insert_customer(self.conn, name=name, customer_type=ctype,
-                                  phone=phone, phone2=phone2, email=email,
-                                  address=address, city=city, notes=notes)
+            cid = insert_customer(
+                self.conn,
+                name=name, customer_type=ctype,
+                phone=phone, phone2=phone2,
+                email=email, address=address,
+                city=city, notes=notes,
+            )
 
         for ct in self._contacts:
             if not ct.get("id"):
-                insert_contact(self.conn, cid, name=ct.get("name", ""),
-                               role=ct.get("role", ""), phone=ct.get("phone", ""),
-                               email=ct.get("email", ""), notes=ct.get("notes", ""))
+                insert_contact(
+                    self.conn, cid,
+                    name=ct.get("name", ""),
+                    role=ct.get("role", ""),
+                    phone=ct.get("phone", ""),
+                    email=ct.get("email", ""),
+                    notes=ct.get("notes", ""),
+                )
 
         self.saved.emit(cid)
         self.accept()
 
 
+# ══════════════════════════════════════════════════════════
+# Dialog إضافة جهة اتصال
+# ══════════════════════════════════════════════════════════
+
 class _ContactDialog(QDialog):
     def __init__(self, data: dict = None, parent=None):
         super().__init__(parent)
-        self.setWindowTitle(tr("contact_title"))
+        self.setWindowTitle("جهة اتصال")
         self.setMinimumWidth(400)
         self.setModal(True)
         self._build()
@@ -242,24 +299,53 @@ class _ContactDialog(QDialog):
         root = QVBoxLayout(self)
         root.setContentsMargins(16, 16, 16, 16)
         root.setSpacing(10)
-        self.setStyleSheet(input_style())
 
         form = QFormLayout()
         form.setSpacing(8)
         form.setLabelAlignment(Qt.AlignRight)
 
-        self.inp_name  = QLineEdit(); form.addRow(tr("contact_name_lbl"),  self.inp_name)
-        self.inp_role  = QLineEdit(); form.addRow(tr("contact_role_lbl"),  self.inp_role)
-        self.inp_phone = QLineEdit(); form.addRow(tr("contact_phone_lbl"), self.inp_phone)
-        self.inp_email = QLineEdit(); form.addRow(tr("contact_email_lbl"), self.inp_email)
-        self.inp_notes = QLineEdit(); form.addRow(tr("contact_notes_lbl"), self.inp_notes)
+        _inp_ss = f"""
+            QLineEdit {{
+                background: {_C['bg_input']};
+                border: 1px solid {_C['border_med']};
+                border-radius: 6px;
+                padding: 4px 8px;
+                min-height: 32px;
+            }}
+            QLineEdit:focus {{ border-color: {_C['accent']}; }}
+        """
+
+        self.inp_name = QLineEdit()
+        self.inp_name.setPlaceholderText("اسم جهة الاتصال...")
+        self.inp_name.setStyleSheet(_inp_ss)
+        form.addRow("الاسم * :", self.inp_name)
+
+        self.inp_role = QLineEdit()
+        self.inp_role.setPlaceholderText("مثال: مدير، محاسب، مندوب...")
+        self.inp_role.setStyleSheet(_inp_ss)
+        form.addRow("الصفة :", self.inp_role)
+
+        self.inp_phone = QLineEdit()
+        self.inp_phone.setStyleSheet(_inp_ss)
+        form.addRow("الهاتف :", self.inp_phone)
+
+        self.inp_email = QLineEdit()
+        self.inp_email.setStyleSheet(_inp_ss)
+        form.addRow("الإيميل :", self.inp_email)
+
+        self.inp_notes = QLineEdit()
+        self.inp_notes.setStyleSheet(_inp_ss)
+        form.addRow("ملاحظات :", self.inp_notes)
+
         root.addLayout(form)
 
         btn_row = QHBoxLayout()
-        btn_cancel = make_btn(tr("cancel"), "ghost")
+        btn_cancel = _make_btn("إلغاء", "ghost")
         btn_cancel.clicked.connect(self.reject)
-        btn_ok = make_btn(tr("contact_ok_btn"), "primary")
+
+        btn_ok = _make_btn("✅  إضافة", "primary")
         btn_ok.clicked.connect(self._ok)
+
         btn_row.addWidget(btn_cancel)
         btn_row.addWidget(btn_ok, stretch=1)
         root.addLayout(btn_row)
@@ -273,7 +359,7 @@ class _ContactDialog(QDialog):
 
     def _ok(self):
         if not self.inp_name.text().strip():
-            QMessageBox.warning(self, tr("warning"), tr("contact_name_warn"))
+            QMessageBox.warning(self, "تنبيه", "أدخل اسم جهة الاتصال")
             return
         self.accept()
 

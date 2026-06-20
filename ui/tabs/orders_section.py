@@ -5,13 +5,13 @@ ui/tabs/orders_section.py
 """
 
 from PyQt5.QtWidgets import QWidget, QVBoxLayout, QTabWidget
-from PyQt5.QtCore    import Qt
 
 from db.orders.orders_schema import get_orders_connection, create_orders_tables
 from ui.tabs.orders.orders_tab    import OrdersTab
 from ui.tabs.orders.customers_tab import CustomersTab
 from ui.tabs.orders.dashboard_tab import OrdersDashboardTab
-from ui.app_settings import _C, get_font_size, fs
+from ui.widgets.theme.layout_styles import tab_style
+from ui.widgets.core.i18n import tr
 
 
 class OrdersSection(QWidget):
@@ -28,23 +28,15 @@ class OrdersSection(QWidget):
 
         tabs = QTabWidget()
         tabs.setTabPosition(QTabWidget.North)
-
-        # ✅ التبويبات تأخذ مساحة كافية — بدون min-width ضيق
-        base = get_font_size()
-        tabs.setStyleSheet(f"""
-            QTabBar::tab {{
-                min-width: 110px;
-                padding: 8px 14px;
-            }}
-        """)
+        tabs.setStyleSheet(tab_style())
 
         self._dashboard_tab = OrdersDashboardTab(self.conn)
         self._orders_tab    = OrdersTab(self.conn)
         self._customers_tab = CustomersTab(self.conn)
 
-        tabs.addTab(self._dashboard_tab, "📊 لوحة المتابعة")
-        tabs.addTab(self._orders_tab,    "📋 الطلبات")
-        tabs.addTab(self._customers_tab, "👥 العملاء")
+        tabs.addTab(self._dashboard_tab, tr("orders_section_tab_dashboard"))
+        tabs.addTab(self._orders_tab,    tr("orders_section_tab_orders"))
+        tabs.addTab(self._customers_tab, tr("orders_section_tab_customers"))
 
         tabs.currentChanged.connect(self._on_tab_changed)
         layout.addWidget(tabs)

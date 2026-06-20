@@ -7,7 +7,7 @@ ui/tabs/orders/customers_tab.py
 from ui.tabs.orders._customer_form                   import _CustomerForm
 from ui.tabs.orders.customers.customers_list_panel   import CustomersListPanel
 from ui.tabs.orders.customers.customer_detail_panel  import CustomerDetailPanel
-from ui.widgets.shared.base_section                  import BaseSection
+from ui.widgets.base.section                         import BaseSection
 
 
 class CustomersTab(BaseSection):

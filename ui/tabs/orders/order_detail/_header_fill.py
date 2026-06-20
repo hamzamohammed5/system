@@ -1,21 +1,27 @@
 """
 ui/tabs/orders/order_detail/_header_fill.py
 """
-from ._status_config import STATUS_LABELS, STATUS_TRANSITIONS, PRIORITY_LABELS, TYPE_LABELS
-
-_GREEN = "#10b981"
+from ui.widgets.core.i18n import tr
+from ._status_config import (
+    get_status_labels, get_priority_labels, get_type_labels, get_status_transitions
+)
+from ui.theme import _C
 
 
 def _fill_header(detail):
     d = detail._order_data
+    STATUS_LABELS      = get_status_labels()
+    PRIORITY_LABELS     = get_priority_labels()
+    TYPE_LABELS          = get_type_labels()
+    STATUS_TRANSITIONS  = get_status_transitions()
 
     detail._hdr.set_title(d["order_number"])
     detail._hdr.set_type_badge(TYPE_LABELS.get(d["order_type"], ""))
 
-    si = STATUS_LABELS.get(d["status"], (d["status"], "#555", "#fff", "#eee"))
+    si = STATUS_LABELS.get(d["status"], (d["status"], _C['text_sec'], _C['bg_surface_2'], _C['border']))
     detail._hdr.set_status_badge(si[0], si[1], si[2], si[3])
 
-    pri_lbl, pri_color = PRIORITY_LABELS.get(d["priority"], ("", "#6b7280"))
+    pri_lbl, pri_color = PRIORITY_LABELS.get(d["priority"], ("", _C['text_muted']))
     detail._hdr.set_priority_badge(pri_lbl, pri_color)
 
     customer_line = f"👤  {d['customer_name']}  ({d['customer_code']})"
@@ -30,10 +36,10 @@ def _fill_header(detail):
     paid   = d.get("paid_amount") or 0
     remain = net - paid
 
-    detail._card_total.set_value(f"{net:,.2f} ج")
-    detail._card_paid.set_value(f"{paid:,.2f} ج")
-    detail._card_balance.set_value(f"{remain:,.2f} ج")
-    detail._card_balance.set_color("#ef4444" if remain > 0 else _GREEN)
+    detail._card_total.set_value(f"{net:,.2f} {tr('currency_sym')}")
+    detail._card_paid.set_value(f"{paid:,.2f} {tr('currency_sym')}")
+    detail._card_balance.set_value(f"{remain:,.2f} {tr('currency_sym')}")
+    detail._card_balance.set_color(_C['danger'] if remain > 0 else _C['success'])
     detail._card_due.set_value(d.get("due_date") or "─")
 
     status     = d["status"]
