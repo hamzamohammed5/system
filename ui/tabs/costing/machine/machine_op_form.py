@@ -34,6 +34,8 @@ from ui.widgets.panels.form_badges       import ModeBadge
 from ui.widgets.theme.builders          import wrap_in_scroll
 from ui.tabs.costing.shared.machine_op_rows_editor import _OpRowsEditor
 from ui.widgets.core.events             import emit_company_data_changed, bus
+from ui.widgets.core.i18n               import tr
+from ui.theme                           import _C
 
 
 def buttons_row(*buttons) -> QHBoxLayout:
@@ -74,38 +76,35 @@ class _MachineOpForm(QWidget, EditModeMixin, LiveConnMixin):
         scroll = wrap_in_scroll(inner)
         outer_layout.addWidget(scroll)
 
-        grp = FormGroup("بيانات عملية التشغيل")
+        grp = FormGroup(tr("machine_op_form_title"))
 
-        self.lbl_mode = QLabel("─── إضافة عملية تشغيل جديدة ───")
-        self.lbl_mode.setStyleSheet("font-weight:bold; color:#1565c0;")
+        self.lbl_mode = QLabel(f"─── {tr('add_machine_op_new')} ───")
+        self.lbl_mode.setStyleSheet(f"font-weight:bold; color:{_C['accent']};")
         grp.add_label_row(self.lbl_mode)
 
         self.inp_name = QLineEdit()
-        self.inp_name.setPlaceholderText("مثال: خياطة غرزة، كبس...")
+        self.inp_name.setPlaceholderText(tr("machine_op_name_placeholder"))
         self.inp_name.setMinimumHeight(30)
 
         self.cmb_machine = QComboBox()
         self.cmb_machine.setMinimumHeight(30)
 
         self.lbl_machine_mode = ModeBadge(color="orange")
-        self.lbl_machine_mode.setToolTip(
-            "وضع الحساب يُحدد تلقائياً من الماكينة المختارة\n"
-            "لتغييره، عدّل إعداد الماكينة في تبويب الماكينات"
-        )
+        self.lbl_machine_mode.setToolTip(tr("machine_mode_tooltip"))
 
         self.cmb_category = CategoryCombo(self._live_conn(), scope="machine")
         self.lbl_cost     = ResultBadge()
 
-        grp.add_row("اسم العملية :",     self.inp_name)
-        grp.add_row("الماكينة :",        self.cmb_machine)
-        grp.add_row("وضع الحساب :",      self.lbl_machine_mode)
-        grp.add_row("التصنيف :",         self.cmb_category)
-        grp.add_row("إجمالي التكلفة :", self.lbl_cost)
+        grp.add_row(f"{tr('op_name')} :",        self.inp_name)
+        grp.add_row(f"{tr('machine_label')} :",  self.cmb_machine)
+        grp.add_row(f"{tr('calc_mode_label')} :", self.lbl_machine_mode)
+        grp.add_row(f"{tr('category')} :",       self.cmb_category)
+        grp.add_row(f"{tr('total_cost_label')} :", self.lbl_cost)
         root.addWidget(grp)
 
-        self.btn_add    = QPushButton("➕  إضافة العملية")
-        self.btn_save   = QPushButton("💾  حفظ التعديل")
-        self.btn_cancel = QPushButton("✖  إلغاء")
+        self.btn_add    = QPushButton(f"➕  {tr('add_op')}")
+        self.btn_save   = QPushButton(f"💾  {tr('save_edit')}")
+        self.btn_cancel = QPushButton(f"✖  {tr('cancel')}")
         for btn in (self.btn_add, self.btn_save, self.btn_cancel):
             btn.setMinimumHeight(30)
         self.btn_add.clicked.connect(self._add)
@@ -160,13 +159,13 @@ class _MachineOpForm(QWidget, EditModeMixin, LiveConnMixin):
         if float(m.rate_per_hour) > 0:
             mode = "time"
             self.lbl_machine_mode.set_mode(
-                f"⏱ بالوقت  │  {m.rate_per_hour:.2f} جنيه/ساعة",
+                f"{tr('mode_time_label')}  │  {m.rate_per_hour:.2f} {tr('currency_per_hour')}",
                 color="orange"
             )
         else:
             mode = "unit"
             self.lbl_machine_mode.set_mode(
-                f"📦 بالوحدة  │  {m.rate_per_unit:.2f} جنيه/وحدة",
+                f"{tr('mode_unit_label')}  │  {m.rate_per_unit:.2f} {tr('currency_per_unit')}",
                 color="blue"
             )
 
@@ -182,11 +181,11 @@ class _MachineOpForm(QWidget, EditModeMixin, LiveConnMixin):
         if editing_id is not None and editing_id > 0:
             try:
                 total = calc_op_total_cost(self._live_conn(), editing_id)
-                self.lbl_cost.set_value(f"{total:.4f} جنيه / قطعة")
+                self.lbl_cost.set_value(f"{total:.4f} {tr('currency_per_piece')}")
             except Exception:
                 self.lbl_cost.reset()
         else:
-            self.lbl_cost.set_value("─ (أضف العملية أولاً لتظهر الصفوف)")
+            self.lbl_cost.set_value(f"─ ({tr('add_op_first_hint')})")
 
     # ══════════════════════════════════════════════════════
     # تحميل للتعديل
@@ -206,7 +205,7 @@ class _MachineOpForm(QWidget, EditModeMixin, LiveConnMixin):
                 self.cmb_machine.setCurrentIndex(i)
                 break
         self.cmb_category.set_category(op.category_id)
-        self.enter_edit_mode(op_id, f"─── تعديل: {op.name} ───")
+        self.enter_edit_mode(op_id, f"─── {tr('editing_prefix')}: {op.name} ───")
 
         try:
             m_svc = MachineService(self._live_conn())
@@ -229,11 +228,11 @@ class _MachineOpForm(QWidget, EditModeMixin, LiveConnMixin):
     def _collect(self):
         name = self.inp_name.text().strip()
         if not name:
-            QMessageBox.warning(self, "تنبيه", "أدخل اسم العملية")
+            QMessageBox.warning(self, tr("warning"), tr("enter_op_name"))
             return None
         machine_id = self.cmb_machine.currentData()
         if machine_id is None:
-            QMessageBox.warning(self, "تنبيه", "اختر ماكينة أولاً")
+            QMessageBox.warning(self, tr("warning"), tr("select_machine_first"))
             return None
         try:
             svc = MachineService(self._live_conn())
@@ -257,7 +256,7 @@ class _MachineOpForm(QWidget, EditModeMixin, LiveConnMixin):
                 category_id=self.cmb_category.get_category(),
             )
         except Exception as e:
-            QMessageBox.warning(self, "خطأ", str(e))
+            QMessageBox.warning(self, tr("error"), str(e))
             return
 
         emit_company_data_changed()
@@ -271,13 +270,13 @@ class _MachineOpForm(QWidget, EditModeMixin, LiveConnMixin):
             rate_h = rate_u = 0.0
 
         self._rows_editor.load_op(op_id, mode, rate_h, rate_u)
-        self.enter_edit_mode(op_id, f"─── تعديل صفوف: {name} ───")
+        self.enter_edit_mode(op_id, f"─── {tr('editing_rows_prefix')}: {name} ───")
         self.btn_add.setVisible(False)
         self._update_cost_label()
 
         QMessageBox.information(
-            self, "تم",
-            f"✅ تمت إضافة العملية «{name}»\nأضف الصفوف الآن ثم اضغط «حفظ التعديل»"
+            self, tr("done"),
+            f"✅ {tr('op_added_success').format(name=name)}"
         )
 
     def _save_edit(self):
@@ -298,7 +297,7 @@ class _MachineOpForm(QWidget, EditModeMixin, LiveConnMixin):
                     mode, float(m.rate_per_hour), float(m.rate_per_unit)
                 )
         except Exception as e:
-            QMessageBox.warning(self, "خطأ", str(e))
+            QMessageBox.warning(self, tr("error"), str(e))
             return
         self._reset()
         emit_company_data_changed()
@@ -311,5 +310,5 @@ class _MachineOpForm(QWidget, EditModeMixin, LiveConnMixin):
         self.cmb_category.setCurrentIndex(0)
         self.lbl_cost.reset()
         self._rows_editor.clear()
-        self.exit_edit_mode("─── إضافة عملية تشغيل جديدة ───")
+        self.exit_edit_mode(f"─── {tr('add_machine_op_new')} ───")
         self.btn_add.setVisible(True)

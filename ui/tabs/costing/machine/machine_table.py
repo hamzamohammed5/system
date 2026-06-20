@@ -22,14 +22,16 @@ from ui.widgets.shared.list_panel_with_shared  import SharedItemsListPanel
 from ui.tabs.companies.shared_items_mixin      import get_shared_machines
 from ui.tabs.costing.shared._utils             import to_dict
 from ui.widgets.core.events                    import emit_company_data_changed
+from ui.widgets.core.i18n                      import tr
 from .machine_form import _MachineForm
 
 
 class _MachineTable(SharedItemsListPanel):
     SHARED_TYPE      = "machine"
-    TABLE_COLS       = ["ID", "الاسم", "التصنيف", "جنيه/ساعة", "جنيه/وحدة"]
+    TABLE_COLS       = [tr("id_col"), tr("name"), tr("category"),
+                        tr("currency_per_hour_short"), tr("currency_per_unit_short")]
     FILTER_SCOPE     = "machine"
-    TABLE_TITLE      = "─── الماكينات المحفوظة ───"
+    TABLE_TITLE      = tr("machines_table_title")
     HAS_BULK_REPLACE = False
 
     def __init__(self, conn, form: _MachineForm, parent=None):
@@ -62,7 +64,7 @@ class _MachineTable(SharedItemsListPanel):
     def _fill_table_row(self, r: int, item: dict):
         is_shared    = item.get("_is_shared", False)
         is_published = item.get("_is_published", False)
-        cat_display  = item.get("category_name") or "—"
+        cat_display  = item.get("category_name") or tr("dash")
 
         if is_shared:
             prefix = "🔗 "
@@ -93,7 +95,7 @@ class _MachineTable(SharedItemsListPanel):
                 from services.costing.machine_service import MachineService
                 MachineService(self._live_conn()).delete(item_id)
             except Exception as e:
-                QMessageBox.warning(self, "خطأ", str(e))
+                QMessageBox.warning(self, tr("error"), str(e))
                 return
             # [Fix] emit_company_data_changed بدل bus.data_changed.emit()
             emit_company_data_changed()
@@ -111,6 +113,6 @@ class _MachineTable(SharedItemsListPanel):
         item_id, _ = self._selected_row_data()
         if item_id is None:
             from PyQt5.QtWidgets import QMessageBox
-            QMessageBox.information(self, "تنبيه", "اختر ماكينة أولاً")
+            QMessageBox.information(self, tr("warning"), tr("select_machine_first"))
             return
         self._edit_shared_item(item_id, self.SHARED_TYPE, self)

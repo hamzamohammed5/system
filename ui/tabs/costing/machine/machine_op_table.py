@@ -22,14 +22,16 @@ from ui.widgets.dialogs.confirm                              import confirm_dele
 from ui.widgets.shared.list_panel_with_shared                import SharedItemsListPanel
 from ui.tabs.costing.shared.bulk_replace.bulk_replace_dialog import BulkReplaceDialog
 from ui.widgets.core.events                                  import emit_company_data_changed
+from ui.widgets.core.i18n                                     import tr
 from .machine_op_form import _MachineOpForm
 
 
 class _MachineOpTable(SharedItemsListPanel):
     SHARED_TYPE      = "machine_op"
-    TABLE_COLS       = ["ID", "اسم العملية", "التصنيف", "الماكينة", "الوضع", "القيمة", "التكلفة"]
+    TABLE_COLS       = [tr("id_col"), tr("op_name"), tr("category"), tr("machine_name_col"),
+                        tr("mode_col"), tr("value_col"), tr("cost_col")]
     FILTER_SCOPE     = "machine"
-    TABLE_TITLE      = "─── عمليات التشغيل المحفوظة ───"
+    TABLE_TITLE      = tr("machine_op_table_title")
     HAS_BULK_REPLACE = True
 
     def __init__(self, conn, form: _MachineOpForm, parent=None):
@@ -73,8 +75,8 @@ class _MachineOpTable(SharedItemsListPanel):
         is_shared    = item.get("_is_shared", False)
         is_published = item.get("_is_published", False)
 
-        mode_ar     = "وقت" if item.get("mode") == "time" else "وحدة"
-        cat_display = item.get("category_name") or "—"
+        mode_ar     = tr("time_mode_short") if item.get("mode") == "time" else tr("unit_mode_short")
+        cat_display = item.get("category_name") or tr("dash")
 
         try:
             conn  = self._live_conn()
@@ -97,10 +99,10 @@ class _MachineOpTable(SharedItemsListPanel):
         self.table.setItem(r, 0, id_item)
         self.table.setItem(r, 1, QTableWidgetItem(prefix + item.get("name", "")))
         self.table.setItem(r, 2, QTableWidgetItem(cat_display))
-        self.table.setItem(r, 3, QTableWidgetItem(item.get("machine_name", "—")))
+        self.table.setItem(r, 3, QTableWidgetItem(item.get("machine_name", tr("dash"))))
         self.table.setItem(r, 4, QTableWidgetItem(mode_ar))
         self.table.setItem(r, 5, QTableWidgetItem(f"{item.get('value', 0):.4f}"))
-        self.table.setItem(r, 6, QTableWidgetItem(f"{cost:.2f} جنيه"))
+        self.table.setItem(r, 6, QTableWidgetItem(f"{cost:.2f} {tr('currency_abbr')}"))
 
     def _edit_item(self, item_id: int):
         self._form.load_for_edit(item_id)
@@ -113,7 +115,7 @@ class _MachineOpTable(SharedItemsListPanel):
                 from services.costing.machine_service import MachineOpService
                 MachineOpService(self._live_conn()).delete(item_id)
             except Exception as e:
-                QMessageBox.warning(self, "خطأ", str(e))
+                QMessageBox.warning(self, tr("error"), str(e))
                 return
             # [Fix] emit_company_data_changed بدل bus.data_changed.emit()
             emit_company_data_changed()

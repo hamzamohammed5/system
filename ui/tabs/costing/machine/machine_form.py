@@ -23,6 +23,8 @@ from ui.widgets.panels.form_group       import FormGroup
 from ui.widgets.panels.form_fields      import spin_field, labeled_widget
 from ui.widgets.theme.builders          import wrap_in_scroll
 from ui.widgets.core.events             import emit_company_data_changed
+from ui.widgets.core.i18n               import tr
+from ui.theme                           import _C
 
 
 def buttons_row(*buttons) -> QHBoxLayout:
@@ -56,29 +58,29 @@ class _MachineForm(QWidget, EditModeMixin, LiveConnMixin):
         scroll = wrap_in_scroll(inner)
         outer_layout.addWidget(scroll)
 
-        grp = FormGroup("بيانات الماكينة")
+        grp = FormGroup(tr("machine_form_title"))
 
-        self.lbl_mode = QLabel("─── إضافة ماكينة جديدة ───")
-        self.lbl_mode.setStyleSheet("font-weight:bold; color:#1565c0;")
+        self.lbl_mode = QLabel(f"─── {tr('add_machine_new')} ───")
+        self.lbl_mode.setStyleSheet(f"font-weight:bold; color:{_C['accent']};")
         grp.add_label_row(self.lbl_mode)
 
         self.inp_name = QLineEdit()
-        self.inp_name.setPlaceholderText("مثال: ماكينة خياطة، فرن، مكبس...")
+        self.inp_name.setPlaceholderText(tr("machine_name_placeholder"))
         self.inp_name.setMinimumHeight(30)
 
         self.sp_rate_hour = spin_field(max_=999999, dec=2)
         self.sp_rate_unit = spin_field(max_=999999, dec=2)
         self.cmb_category = CategoryCombo(self._live_conn(), scope="machine")
 
-        grp.add_row("اسم الماكينة :",       self.inp_name)
-        grp.add_row("معدل التشغيل / ساعة :", labeled_widget(self.sp_rate_hour, "جنيه / ساعة"))
-        grp.add_row("معدل التشغيل / وحدة :", labeled_widget(self.sp_rate_unit, "جنيه / وحدة"))
-        grp.add_row("التصنيف :",             self.cmb_category)
+        grp.add_row(f"{tr('machine_name')} :",   self.inp_name)
+        grp.add_row(f"{tr('rate_per_hour')} :", labeled_widget(self.sp_rate_hour, tr('currency_per_hour')))
+        grp.add_row(f"{tr('rate_per_unit')} :", labeled_widget(self.sp_rate_unit, tr('currency_per_unit')))
+        grp.add_row(f"{tr('category')} :",      self.cmb_category)
         root.addWidget(grp)
 
-        self.btn_add    = QPushButton("➕  إضافة")
-        self.btn_save   = QPushButton("💾  حفظ التعديل")
-        self.btn_cancel = QPushButton("✖  إلغاء")
+        self.btn_add    = QPushButton(f"➕  {tr('add')}")
+        self.btn_save   = QPushButton(f"💾  {tr('save_edit')}")
+        self.btn_cancel = QPushButton(f"✖  {tr('cancel')}")
         for btn in (self.btn_add, self.btn_save, self.btn_cancel):
             btn.setMinimumHeight(30)
         self.btn_add.clicked.connect(self._add)
@@ -99,12 +101,12 @@ class _MachineForm(QWidget, EditModeMixin, LiveConnMixin):
         self.sp_rate_hour.setValue(m.rate_per_hour)
         self.sp_rate_unit.setValue(m.rate_per_unit)
         self.cmb_category.set_category(m.category_id)
-        self.enter_edit_mode(machine_id, f"─── تعديل: {m.name} ───")
+        self.enter_edit_mode(machine_id, f"─── {tr('editing_prefix')}: {m.name} ───")
 
     def _add(self):
         name = self.inp_name.text().strip()
         if not name:
-            QMessageBox.warning(self, "تنبيه", "أدخل اسم الماكينة")
+            QMessageBox.warning(self, tr("warning"), tr("machine_name_required"))
             return
         try:
             svc = MachineService(self._live_conn())
@@ -115,7 +117,7 @@ class _MachineForm(QWidget, EditModeMixin, LiveConnMixin):
                 category_id=self.cmb_category.get_category(),
             )
         except Exception as e:
-            QMessageBox.warning(self, "خطأ", str(e))
+            QMessageBox.warning(self, tr("error"), str(e))
             return
         self._reset()
         emit_company_data_changed()
@@ -123,7 +125,7 @@ class _MachineForm(QWidget, EditModeMixin, LiveConnMixin):
     def _save_edit(self):
         name = self.inp_name.text().strip()
         if not name:
-            QMessageBox.warning(self, "تنبيه", "أدخل الاسم")
+            QMessageBox.warning(self, tr("warning"), tr("enter_name"))
             return
         try:
             svc = MachineService(self._live_conn())
@@ -135,7 +137,7 @@ class _MachineForm(QWidget, EditModeMixin, LiveConnMixin):
                 category_id=self.cmb_category.get_category(),
             )
         except Exception as e:
-            QMessageBox.warning(self, "خطأ", str(e))
+            QMessageBox.warning(self, tr("error"), str(e))
             return
         self._reset()
         emit_company_data_changed()
@@ -148,4 +150,4 @@ class _MachineForm(QWidget, EditModeMixin, LiveConnMixin):
         self.sp_rate_hour.setValue(0)
         self.sp_rate_unit.setValue(0)
         self.cmb_category.setCurrentIndex(0)
-        self.exit_edit_mode("─── إضافة ماكينة جديدة ───")
+        self.exit_edit_mode(f"─── {tr('add_machine_new')} ───")
