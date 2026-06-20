@@ -20,7 +20,7 @@ from db.designs.design_item_categories_repo import (
     fetch_item_category_descendants,
     count_designs_per_category,
 )
-from ui.events import bus
+from ui.widgets.core.events import bus
 from ui.tabs.design.design_styles import get_styles
 from ui.widgets.core.i18n import tr
 from ui.theme import _C

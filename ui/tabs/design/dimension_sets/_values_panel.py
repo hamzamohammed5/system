@@ -9,7 +9,7 @@ from PyQt5.QtCore import Qt
 
 from .values_panel._sets_list_panel  import _SetsListPanel
 from .values_panel._instances_table import _InstancesTable
-from ui.events import bus
+from ui.widgets.core.events import bus
 from ui.theme import _C
 
 

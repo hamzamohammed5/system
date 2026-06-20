@@ -17,7 +17,7 @@ from PyQt5.QtWidgets import (
 )
 from PyQt5.QtCore import Qt
 
-from ui.widgets.core.events import bus
+from ui.widgets.core.events import bus, emit_company_data_changed
 from ui.widgets.core.conn import DualConnMixin
 from ui.widgets.panels.form_group import FormGroup
 from ui.widgets.components.button import make_btn as _make_btn
@@ -160,10 +160,7 @@ class _MovementDialog(DualConnMixin, QDialog):
                     self.investor_id, self.investor_name,
                     equity_acc, asset_acc, amount, date, notes
                 )
-            if self._company_id is not None:
-                bus.company_data_changed.emit(self._company_id)
-            else:
-                bus.data_changed.emit()
+            emit_company_data_changed()
             self.accept()
         except Exception as e:
             from PyQt5.QtWidgets import QMessageBox

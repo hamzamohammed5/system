@@ -6,7 +6,7 @@ ui/widgets/shared/no_company_screen.py
 
 from PyQt5.QtWidgets import QWidget, QVBoxLayout, QLabel, QPushButton
 from PyQt5.QtCore    import Qt, pyqtSignal
-from ui.app_settings import _C
+from ui.theme import _C
 from ui.widgets.core.i18n import tr
 
 

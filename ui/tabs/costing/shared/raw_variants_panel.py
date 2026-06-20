@@ -19,10 +19,10 @@ from PyQt5.QtCore import Qt
 from PyQt5.QtGui  import QColor
 
 from services.costing.variant_service import VariantService
-from ui.app_settings          import _C
+from ui.theme          import _C
 from ui.widgets.core.i18n     import tr
 from ui.widgets.core.events   import emit_company_data_changed
-from ui.events                import bus
+from ui.widgets.core.events import bus
 
 
 def _spin_pieces(max_=999999, dec=4):

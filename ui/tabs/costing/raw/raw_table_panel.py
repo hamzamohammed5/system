@@ -14,7 +14,7 @@ from PyQt5.QtCore import Qt
 
 from ui.widgets.base.list_panel        import BaseListPanel
 from ui.widgets.mixins.shared_ops      import SharedOpsMixin
-from ui.widgets.tables.items           import make_item, colored_item
+from ui.widgets.tables.tables           import make_item, colored_item
 from ui.widgets.dialogs.confirm        import confirm_delete          # ✅ كان: ui.helpers
 from ui.widgets.core.events            import emit_company_data_changed
 from ui.tabs.costing.shared._utils     import (

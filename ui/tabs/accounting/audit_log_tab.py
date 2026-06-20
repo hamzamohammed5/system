@@ -13,6 +13,13 @@ ui/tabs/accounting/audit_log_tab.py
     # في accounting_tabs_builder.py أو accounting_section.py:
     from ui.tabs.accounting.audit_log_tab import AuditLogTab
     tabs.addTab(AuditLogTab(acc_conn), "🔍 سجل العمليات")
+
+[إصلاح v2]:
+  - كل النصوص تُقرأ من tr() — لا نص مكتوب مباشرة.
+  - كل الألوان تُقرأ من _C — لا قيمة لون مكتوبة مباشرة.
+  - الخطوط تُقرأ من font.py (get_font_size, fs, FS_SM, FS_BASE, FS_MD).
+  - _ACTION_COLORS → يعكس _C['audit_*'] مباشرة.
+  - _TABLE_LABELS  → يُبنى من tr() عند الحاجة.
 """
 
 import json
@@ -25,36 +32,50 @@ from PyQt5.QtWidgets import (
 from PyQt5.QtCore import Qt, QTimer
 from PyQt5.QtGui  import QColor, QFont
 
-from ui.app_settings  import _C, fs, get_font_size
-from ui.widgets.theme.styles  import (
-    table_style, scroll_style, splitter_style,
-    ROW_HEIGHT_NORMAL,
-)
-from ui.widgets.components.headers  import ListHeader, StatusBar
-from ui.widgets.components.button   import make_btn
-from ui.widgets.panels.state        import EmptyState
-from ui.widgets.core.conn           import LiveConnMixin
+from ui.theme              import _C
+from ui.font               import get_font_size, fs, FS_SM, FS_BASE, FS_MD
+from ui.widgets.theme.table_styles  import table_style, splitter_style
+from ui.widgets.components.headers_list import StatusBar
+from ui.widgets.components.button       import make_btn
+from ui.widgets.panels.state            import EmptyState
+from ui.widgets.core.conn               import SafeConnMixin
+from ui.widgets.core.i18n              import tr
 
 
-# ── ألوان الـ actions ─────────────────────────────────────
-_ACTION_COLORS = {
-    "delete": ("#C0392B", "#FDF0EF"),   # أحمر
-    "update": ("#7A5C00", "#FDF8E7"),   # برتقالي
-    "create": ("#2E7D52", "#EDF7F2"),   # أخضر
-}
+# ══════════════════════════════════════════════════════════
+# ثوابت مساعدة — كل ألوان _ACTION_COLORS تأتي من _C
+# ══════════════════════════════════════════════════════════
+
+def _action_colors() -> dict:
+    """
+    ألوان أنواع العمليات — تُقرأ من _C دائماً لدعم الثيمات.
+    يرجع dict: action → (fg, bg)
+    """
+    return {
+        "delete": (_C["audit_delete_fg"], _C["audit_delete_bg"]),
+        "update": (_C["audit_update_fg"], _C["audit_update_bg"]),
+        "create": (_C["audit_create_fg"], _C["audit_create_bg"]),
+    }
+
+
+def _table_labels() -> dict:
+    """
+    تسميات الجداول — تُقرأ من tr() دائماً.
+    يرجع dict: table_key → label
+    """
+    return {
+        "journal_entries":  tr("audit_table_journal_entries"),
+        "journal_lines":    tr("audit_table_journal_lines"),
+        "accounts":         tr("audit_table_accounts"),
+        "inventory_moves":  tr("audit_table_inventory_moves"),
+        "investor_entries": tr("audit_table_investor_entries"),
+    }
+
 
 _ACTION_ICONS = {
-    "delete": "🗑️",
-    "update": "✏️",
-    "create": "➕",
-}
-
-_TABLE_LABELS = {
-    "journal_entries":  "قيود محاسبية",
-    "journal_lines":    "سطور قيود",
-    "accounts":         "حسابات",
-    "inventory_moves":  "حركات مخزون",
-    "investor_entries": "ربط مستثمرين",
+    "delete": tr("audit_log_delete"),
+    "update": tr("audit_log_update"),
+    "create": tr("audit_log_create"),
 }
 
 _PAGE_SIZE = 200
@@ -72,7 +93,7 @@ class _AuditDetailDialog(QDialog):
             parent,
             Qt.Dialog | Qt.WindowTitleHint | Qt.WindowCloseButtonHint,
         )
-        self.setWindowTitle("تفاصيل العملية")
+        self.setWindowTitle(tr("audit_detail_title"))
         self.setModal(True)
         self.setMinimumSize(560, 420)
         self.setLayoutDirection(Qt.RightToLeft)
@@ -87,9 +108,10 @@ class _AuditDetailDialog(QDialog):
         base = get_font_size()
 
         # ── Header ───────────────────────────────────────
-        action = r.get("action", "")
-        fg, bg = _ACTION_COLORS.get(action, (_C["text_primary"], _C["bg_surface_2"]))
-        icon   = _ACTION_ICONS.get(action, "📋")
+        action       = r.get("action", "")
+        colors       = _action_colors()
+        fg, bg       = colors.get(action, (_C["text_primary"], _C["bg_surface_2"]))
+        icon         = _ACTION_ICONS.get(action, "📋")
 
         hdr = QFrame()
         hdr.setStyleSheet(f"""
@@ -103,7 +125,7 @@ class _AuditDetailDialog(QDialog):
 
         lbl_action = QLabel(f"{icon}  {action.upper()}")
         lbl_action.setStyleSheet(
-            f"font-weight:bold; font-size:{fs(base,+1)}pt;"
+            f"font-weight:bold; font-size:{fs(base, +1)}pt;"
             f"color:{fg}; background:transparent; border:none;"
         )
         hdr_lay.addWidget(lbl_action)
@@ -111,32 +133,33 @@ class _AuditDetailDialog(QDialog):
 
         lbl_time = QLabel(r.get("created_at", ""))
         lbl_time.setStyleSheet(
-            f"color:{_C['text_muted']}; font-size:{fs(base,-1)}pt;"
+            f"color:{_C['text_muted']}; font-size:{fs(base, -1)}pt;"
             "background:transparent; border:none;"
         )
         hdr_lay.addWidget(lbl_time)
         root.addWidget(hdr)
 
         # ── Meta ──────────────────────────────────────────
-        table_label = _TABLE_LABELS.get(r.get("table_name", ""),
-                                        r.get("table_name", "─"))
-        meta_text = (
-            f"الجدول: {table_label}  │  "
-            f"ID السجل: {r.get('record_id', '─')}  │  "
-            f"بواسطة: {r.get('changed_by', 'system')}"
+        labels      = _table_labels()
+        table_label = labels.get(r.get("table_name", ""), r.get("table_name", "─"))
+        meta_text   = tr(
+            "audit_meta_line",
+            table      = table_label,
+            record_id  = r.get("record_id", "─"),
+            changed_by = r.get("changed_by", "system"),
         )
         lbl_meta = QLabel(meta_text)
         lbl_meta.setStyleSheet(
-            f"color:{_C['text_sec']}; font-size:{fs(base,0)}pt;"
+            f"color:{_C['text_sec']}; font-size:{fs(base, 0)}pt;"
             "background:transparent; border:none;"
         )
         root.addWidget(lbl_meta)
 
         # ── Old Data ──────────────────────────────────────
-        lbl_data = QLabel("البيانات القديمة:")
+        lbl_data = QLabel(tr("old_data") + ":")
         lbl_data.setStyleSheet(
             f"font-weight:bold; color:{_C['text_primary']};"
-            f"font-size:{fs(base,0)}pt; background:transparent; border:none;"
+            f"font-size:{fs(base, 0)}pt; background:transparent; border:none;"
         )
         root.addWidget(lbl_data)
 
@@ -146,7 +169,7 @@ class _AuditDetailDialog(QDialog):
             QTextEdit {{
                 background:{_C['bg_surface_2']}; border:1px solid {_C['border_med']};
                 border-radius:6px; padding:8px;
-                font-family:monospace; font-size:{fs(base,-1)}pt;
+                font-family:monospace; font-size:{fs(base, -1)}pt;
                 color:{_C['text_primary']};
             }}
         """)
@@ -159,13 +182,13 @@ class _AuditDetailDialog(QDialog):
             except Exception:
                 display = old_data
         else:
-            display = "─ لا توجد بيانات محفوظة ─"
+            display = tr("audit_no_old_data")
 
         txt.setPlainText(display)
         root.addWidget(txt, stretch=1)
 
         # ── Close ─────────────────────────────────────────
-        btn_close = make_btn("إغلاق", "ghost")
+        btn_close = make_btn(tr("close"), "ghost")
         btn_close.clicked.connect(self.accept)
         btn_row = QHBoxLayout()
         btn_row.addStretch()
@@ -177,7 +200,7 @@ class _AuditDetailDialog(QDialog):
 # AuditLogTab
 # ══════════════════════════════════════════════════════════
 
-class AuditLogTab(QWidget, LiveConnMixin):
+class AuditLogTab(SafeConnMixin, QWidget):
     """
     [E-04] Tab لعرض سجل العمليات الحساسة.
 
@@ -188,7 +211,7 @@ class AuditLogTab(QWidget, LiveConnMixin):
 
     def __init__(self, conn, parent=None):
         super().__init__(parent)
-        self.conn = conn
+        self._init_safe_conn(conn, "accounting")
         self._all_records : list = []
         self._offset      : int  = 0
         self._total_count : int  = 0
@@ -212,7 +235,7 @@ class AuditLogTab(QWidget, LiveConnMixin):
 
     def _build_header(self) -> QWidget:
         base = get_font_size()
-        hdr = QFrame()
+        hdr  = QFrame()
         hdr.setStyleSheet(f"""
             QFrame {{
                 background:{_C['bg_surface']};
@@ -222,15 +245,15 @@ class AuditLogTab(QWidget, LiveConnMixin):
         lay = QHBoxLayout(hdr)
         lay.setContentsMargins(16, 12, 16, 12)
 
-        lbl = QLabel("🔍  سجل العمليات الحساسة")
+        lbl = QLabel(tr("audit_log_header_title"))
         lbl.setStyleSheet(
-            f"font-weight:bold; font-size:{fs(base,+2)}pt;"
+            f"font-weight:bold; font-size:{fs(base, +2)}pt;"
             f"color:{_C['text_primary']}; background:transparent; border:none;"
         )
         lay.addWidget(lbl)
         lay.addStretch()
 
-        self._btn_refresh = make_btn("🔄 تحديث", "normal")
+        self._btn_refresh = make_btn(tr("btn_refresh"), "normal")
         self._btn_refresh.clicked.connect(self._load)
         lay.addWidget(self._btn_refresh)
 
@@ -238,7 +261,7 @@ class AuditLogTab(QWidget, LiveConnMixin):
 
     def _build_filter_bar(self) -> QWidget:
         base = get_font_size()
-        bar = QFrame()
+        bar  = QFrame()
         bar.setStyleSheet(f"""
             QFrame {{
                 background:{_C['bg_surface_2']};
@@ -253,37 +276,38 @@ class AuditLogTab(QWidget, LiveConnMixin):
             QComboBox {{
                 background:{_C['bg_input']}; border:1px solid {_C['border_med']};
                 border-radius:5px; padding:3px 10px;
-                font-size:{fs(base,-1)}pt; color:{_C['text_primary']};
+                font-size:{fs(base, -1)}pt; color:{_C['text_primary']};
                 min-height:28px;
             }}
             QComboBox:focus {{ border-color:{_C['accent']}; }}
             QComboBox::drop-down {{ border:none; width:20px; }}
         """
 
-        # فلتر الجدول
-        lbl_table = QLabel("الجدول:")
-        lbl_table.setStyleSheet(
-            f"color:{_C['text_sec']}; font-size:{fs(base,-1)}pt;"
+        lbl_style = (
+            f"color:{_C['text_sec']}; font-size:{fs(base, -1)}pt;"
             "background:transparent; border:none; font-weight:bold;"
         )
+
+        # فلتر الجدول
+        lbl_table = QLabel(tr("audit_table_filter_label"))
+        lbl_table.setStyleSheet(lbl_style)
+
         self._cmb_table = QComboBox()
         self._cmb_table.setMinimumWidth(180)
         self._cmb_table.setStyleSheet(combo_style)
-        self._cmb_table.addItem("— كل الجداول —", None)
-        for key, label in _TABLE_LABELS.items():
+        self._cmb_table.addItem(tr("audit_all_tables"), None)
+        for key, label in _table_labels().items():
             self._cmb_table.addItem(f"{label}  ({key})", key)
         self._cmb_table.currentIndexChanged.connect(self._on_filter_changed)
 
         # فلتر النوع
-        lbl_action = QLabel("النوع:")
-        lbl_action.setStyleSheet(
-            f"color:{_C['text_sec']}; font-size:{fs(base,-1)}pt;"
-            "background:transparent; border:none; font-weight:bold;"
-        )
+        lbl_action = QLabel(tr("audit_col_type") + ":")
+        lbl_action.setStyleSheet(lbl_style)
+
         self._cmb_action = QComboBox()
         self._cmb_action.setMinimumWidth(130)
         self._cmb_action.setStyleSheet(combo_style)
-        self._cmb_action.addItem("— كل الأنواع —", None)
+        self._cmb_action.addItem(tr("audit_all_types"), None)
         for action, icon in _ACTION_ICONS.items():
             self._cmb_action.addItem(f"{icon}  {action}", action)
         self._cmb_action.currentIndexChanged.connect(self._on_filter_changed)
@@ -297,7 +321,14 @@ class AuditLogTab(QWidget, LiveConnMixin):
         return bar
 
     def _build_table(self) -> QWidget:
-        cols = ["#", "النوع", "الجدول", "ID السجل", "بواسطة", "التاريخ"]
+        cols = [
+            tr("audit_col_index"),
+            tr("audit_col_type"),
+            tr("audit_col_table"),
+            tr("audit_col_record_id"),
+            tr("changed_by"),
+            tr("audit_col_date"),
+        ]
         self.table = QTableWidget()
         self.table.setColumnCount(len(cols))
         self.table.setHorizontalHeaderLabels(cols)
@@ -319,7 +350,7 @@ class AuditLogTab(QWidget, LiveConnMixin):
         hh.setSectionResizeMode(5, QHeaderView.Stretch)
 
         vh = self.table.verticalHeader()
-        vh.setDefaultSectionSize(ROW_HEIGHT_NORMAL)
+        vh.setDefaultSectionSize(32)
         vh.setSectionResizeMode(QHeaderView.Fixed)
 
         self.table.setHorizontalScrollMode(QAbstractItemView.ScrollPerPixel)
@@ -328,12 +359,10 @@ class AuditLogTab(QWidget, LiveConnMixin):
 
         # Empty state
         self._empty = EmptyState(
-            icon="🔍",
-            title="لا توجد سجلات",
-            subtitle="لم يُسجَّل أي عملية حتى الآن",
-            style="plain",
-            color=_C['text_muted'],
-            min_height=120,
+            icon     = "🔍",
+            title    = tr("no_audit_records"),
+            subtitle = tr("no_audit_yet"),
+            expandable = True,
         )
         self._empty.setVisible(False)
 
@@ -352,7 +381,7 @@ class AuditLogTab(QWidget, LiveConnMixin):
 
     def _build_pagination(self) -> QWidget:
         base = get_font_size()
-        bar = QFrame()
+        bar  = QFrame()
         bar.setStyleSheet(f"""
             QFrame {{
                 background:{_C['bg_surface_2']};
@@ -367,12 +396,14 @@ class AuditLogTab(QWidget, LiveConnMixin):
 
         self._lbl_page = QLabel("")
         self._lbl_page.setStyleSheet(
-            f"color:{_C['text_muted']}; font-size:{fs(base,-1)}pt;"
+            f"color:{_C['text_muted']}; font-size:{fs(base, -1)}pt;"
             "background:transparent; border:none;"
         )
         lay.addWidget(self._lbl_page, stretch=1)
 
-        self._btn_load_more = make_btn(f"تحميل {_PAGE_SIZE} إضافي  ▼", "normal")
+        self._btn_load_more = make_btn(
+            tr("load_more", count=_PAGE_SIZE), "normal"
+        )
         self._btn_load_more.clicked.connect(self._load_more)
         self._btn_load_more.setVisible(False)
         lay.addWidget(self._btn_load_more)
@@ -384,7 +415,7 @@ class AuditLogTab(QWidget, LiveConnMixin):
 
     def _load(self):
         """يُعيد تحميل من البداية."""
-        self._offset = 0
+        self._offset      = 0
         self._all_records = []
         self.table.setRowCount(0)
         self._fetch_and_fill()
@@ -397,9 +428,8 @@ class AuditLogTab(QWidget, LiveConnMixin):
         self._load()
 
     def _fetch_and_fill(self):
-        try:
-            conn = self._live_conn()
-        except Exception:
+        conn = self._get_safe_conn()
+        if conn is None:
             return
 
         table_filter  = self._cmb_table.currentData()
@@ -437,12 +467,14 @@ class AuditLogTab(QWidget, LiveConnMixin):
         self._update_pagination()
 
     def _fill_table(self, rows: list):
-        base = get_font_size()
+        base   = get_font_size()
+        colors = _action_colors()
+        labels = _table_labels()
 
         for r in rows:
             row_idx = self.table.rowCount()
             self.table.insertRow(row_idx)
-            self.table.setRowHeight(row_idx, ROW_HEIGHT_NORMAL)
+            self.table.setRowHeight(row_idx, 32)
 
             # [0] ID
             item_id = QTableWidgetItem(str(r.get("id", "")))
@@ -453,7 +485,7 @@ class AuditLogTab(QWidget, LiveConnMixin):
             # [1] النوع مع لون
             action = r.get("action", "")
             icon   = _ACTION_ICONS.get(action, "")
-            fg, _  = _ACTION_COLORS.get(action, (_C["text_primary"], ""))
+            fg, _  = colors.get(action, (_C["text_primary"], ""))
             item_action = QTableWidgetItem(f"{icon} {action}")
             item_action.setTextAlignment(Qt.AlignCenter | Qt.AlignVCenter)
             item_action.setForeground(QColor(fg))
@@ -464,13 +496,13 @@ class AuditLogTab(QWidget, LiveConnMixin):
 
             # [2] الجدول
             table_name  = r.get("table_name", "")
-            table_label = _TABLE_LABELS.get(table_name, table_name)
+            table_label = labels.get(table_name, table_name)
             item_table  = QTableWidgetItem(table_label)
             item_table.setTextAlignment(Qt.AlignRight | Qt.AlignVCenter)
             self.table.setItem(row_idx, 2, item_table)
 
             # [3] ID السجل
-            item_rec = QTableWidgetItem(str(r.get("record_id") or "─"))
+            item_rec = QTableWidgetItem(str(r.get("record_id") or tr("dash")))
             item_rec.setTextAlignment(Qt.AlignCenter | Qt.AlignVCenter)
             self.table.setItem(row_idx, 3, item_rec)
 
@@ -496,20 +528,19 @@ class AuditLogTab(QWidget, LiveConnMixin):
 
         remaining = total - shown
         if remaining > 0:
-            self._lbl_page.setText(f"يعرض {shown:,} من {total:,}")
+            self._lbl_page.setText(tr("showing_records", shown=shown, total=total))
             self._btn_load_more.setText(
-                f"تحميل {min(remaining, _PAGE_SIZE):,} إضافي  ▼"
+                tr("load_more", count=min(remaining, _PAGE_SIZE))
             )
             self._btn_load_more.setVisible(True)
         else:
-            self._lbl_page.setText(f"يعرض كل {shown:,} سجل")
+            self._lbl_page.setText(tr("showing_all_records", shown=shown))
             self._btn_load_more.setVisible(False)
 
     # ── Double click → Detail dialog ──────────────────────
 
     def _on_row_double_clicked(self, item):
-        # نجلب الـ record من العمود الأول
-        row = item.row()
+        row     = item.row()
         id_item = self.table.item(row, 0)
         if not id_item:
             return

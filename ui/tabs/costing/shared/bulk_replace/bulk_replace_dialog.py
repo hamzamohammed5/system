@@ -29,7 +29,8 @@ from PyQt5.QtWidgets import (
 from PyQt5.QtCore import Qt
 
 from services.costing.bulk_replace_service import BulkReplaceService
-from ui.events import bus
+from ui.widgets.core.events import bus, emit_company_data_changed
+
 
 from .bulk_replace_helpers        import get_element_name, fetch_candidates
 from .bulk_replace_products_panel import _ProductsPanel
@@ -235,7 +236,7 @@ class BulkReplaceDialog(QDialog):
             QMessageBox.warning(self, "خطأ", str(e))
             return
 
-        bus.data_changed.emit()
+        emit_company_data_changed()
 
         if errors:
             QMessageBox.warning(

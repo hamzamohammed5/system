@@ -2,12 +2,6 @@
 ui/tabs/pricing/pricing/_pricing_panel.py
 ==========================================
 _PricingPanel — لوحة إدارة أسعار المنتجات النهائية.
-
-تحتوي على:
-  - فورم اختيار المنتج وضبط الهامش والسعر
-  - بطاقات إحصائيات (تكلفة، سعر مقترح، سعر يدوي، ربح، هامش فعلي)
-  - ScenarioComparisonWidget — مقارنة تكلفة السيناريوهات
-  - جدول قائمة الأسعار مع فلتر
 """
 
 from PyQt5.QtWidgets import (
@@ -18,13 +12,18 @@ from PyQt5.QtWidgets import (
 from PyQt5.QtCore import Qt
 from PyQt5.QtGui  import QColor
 
-from db.shared.items_repo    import fetch_items_by_type, fetch_item
-from db.pricing.pricing_repo  import fetch_all_pricing, upsert_pricing, delete_pricing
-from models.costing   import calc_cost
-from ui.helpers       import make_table, buttons_row, section_label, danger_button
-from ui.widgets.shared.filter_bar import FilterBar
+from db.shared.items_repo     import fetch_items_by_type, fetch_item
+from db.pricing.pricing_repo  import fetch_all_pricing, upsert_pricing, delete_pricing, fetch_pricing
+from models.costing            import calc_cost
+
+# ── الاستدعاءات المُصحَّحة ──────────────────────────────
+from ui.widgets.tables.tables       import make_table
+from ui.widgets.components.button   import make_btn
+from ui.widgets.panels.form_labels  import section_title
+from ui.widgets.panels.filter       import FilterToolbar
+from ui.widgets.core.events         import bus, emit_company_data_changed
+
 from ui.tabs.costing.shared.scenario_comparison_widget import ScenarioComparisonWidget
-from ui.events import bus
 
 from ._stat_box import stat_box
 
@@ -37,6 +36,16 @@ def _spin(max_=9999999, dec=2):
     return s
 
 
+def _buttons_row(*widgets):
+    """بديل buttons_row القديمة — صف أزرار بسيط."""
+    lay = QHBoxLayout()
+    lay.setSpacing(8)
+    for w in widgets:
+        lay.addWidget(w)
+    lay.addStretch()
+    return lay
+
+
 class _PricingPanel(QWidget):
     def __init__(self, conn, parent=None):
         super().__init__(parent)
@@ -46,8 +55,9 @@ class _PricingPanel(QWidget):
         self._build()
         self._load_products_combo()
         self._load()
-        bus.data_changed.connect(self._load_products_combo)
-        bus.data_changed.connect(self._load)
+        # [إصلاح] data_changed محذوف — استخدم company_data_changed
+        bus.company_data_changed.connect(lambda _cid: self._load_products_combo())
+        bus.company_data_changed.connect(lambda _cid: self._load())
 
     # ══════════════════════════════════════════════════════
     # بناء الواجهة
@@ -125,22 +135,21 @@ class _PricingPanel(QWidget):
         self._scenario_comparison = ScenarioComparisonWidget(self.conn)
         form_lay.addWidget(self._scenario_comparison)
 
-        self.btn_save   = QPushButton("💾  حفظ السعر")
-        self.btn_cancel = QPushButton("✖  إلغاء")
-        self.btn_del    = danger_button("🗑️  حذف السعر")
-        for btn in (self.btn_save, self.btn_cancel, self.btn_del):
-            btn.setMinimumHeight(30)
+        self.btn_save   = make_btn("💾  حفظ السعر", "success")
+        self.btn_cancel = make_btn("✖  إلغاء", "ghost")
+        self.btn_del    = make_btn("🗑️  حذف السعر", "danger")
         self.btn_cancel.setVisible(False)
         self.btn_del.setVisible(False)
         self.btn_save.clicked.connect(self._save)
         self.btn_cancel.clicked.connect(self._reset_form)
         self.btn_del.clicked.connect(self._delete)
-        form_lay.addLayout(buttons_row(self.btn_save, self.btn_cancel, self.btn_del))
+        form_lay.addLayout(_buttons_row(self.btn_save, self.btn_cancel, self.btn_del))
 
         root.addWidget(form_frame)
 
-        root.addWidget(section_label("─── قائمة الأسعار ───"))
-        self._filter = FilterBar(self.conn, scope="final")
+        root.addWidget(section_title("─── قائمة الأسعار ───"))
+        # [إصلاح] FilterBar → FilterToolbar
+        self._filter = FilterToolbar(self.conn, scope="final")
         self._filter.filter_changed.connect(self._apply_filter)
         root.addWidget(self._filter)
 
@@ -161,10 +170,9 @@ class _PricingPanel(QWidget):
         self.table.itemSelectionChanged.connect(self._on_table_select)
         root.addWidget(self.table, stretch=1)
 
-        btn_edit = QPushButton("✏️  تعديل المحدد")
-        btn_edit.setMinimumHeight(30)
+        btn_edit = make_btn("✏️  تعديل المحدد", "normal")
         btn_edit.clicked.connect(self._edit_selected)
-        root.addLayout(buttons_row(btn_edit))
+        root.addLayout(_buttons_row(btn_edit))
 
     # ══════════════════════════════════════════════════════
     # تحميل وتحديث Combo المنتجات
@@ -220,7 +228,6 @@ class _PricingPanel(QWidget):
             return
         cost = calc_cost(self.conn, prod_id)
         self._refresh_manual_stats(cost)
-        # تحديث السعر في مقارنة السيناريوهات عند تغيير السعر اليدوي
         self._scenario_comparison.update_price(self.sp_price.value())
 
     def _refresh_manual_stats(self, cost: float):
@@ -237,7 +244,6 @@ class _PricingPanel(QWidget):
         self.lbl_stat_margin_pct.setText(f"{margin_pct:.1f} %")
 
     def _refresh_scenario_comparison(self):
-        """تحديث widget مقارنة السيناريوهات بناءً على المنتج والسعر الحاليين."""
         prod_id = self.cmb_product.currentData()
         if prod_id is None:
             self._scenario_comparison.clear()
@@ -260,7 +266,7 @@ class _PricingPanel(QWidget):
             return
         upsert_pricing(self.conn, prod_id, self.sp_margin.value(), price)
         self._reset_form()
-        bus.data_changed.emit()
+        emit_company_data_changed()   # [إصلاح] بدل bus.data_changed.emit()
 
     def _delete(self):
         if self._editing_id is None:
@@ -273,7 +279,7 @@ class _PricingPanel(QWidget):
         ) == QMessageBox.Yes:
             delete_pricing(self.conn, self._editing_id)
             self._reset_form()
-            bus.data_changed.emit()
+            emit_company_data_changed()   # [إصلاح]
 
     def _reset_form(self):
         self._editing_id = None
@@ -287,7 +293,6 @@ class _PricingPanel(QWidget):
         self.lbl_mode.setText("─── تسعير منتج ───")
         self.btn_cancel.setVisible(False)
         self.btn_del.setVisible(False)
-        # مسح مقارنة السيناريوهات
         self._scenario_comparison.clear()
 
     def _edit_selected(self):
@@ -306,7 +311,6 @@ class _PricingPanel(QWidget):
         self.lbl_stat_cost.setText(f"{cost:.2f}  ج (تكلفة)")
 
     def _load_for_edit(self, prod_id: int):
-        from db.pricing.pricing_repo import fetch_pricing
         pricing = fetch_pricing(self.conn, prod_id)
         item    = fetch_item(self.conn, prod_id)
         if not item:
@@ -327,7 +331,6 @@ class _PricingPanel(QWidget):
         self.btn_cancel.setVisible(True)
         self.btn_del.setVisible(bool(pricing))
         self._refresh_manual_stats(cost)
-        # تحميل مقارنة السيناريوهات بالسعر الحالي
         self._scenario_comparison.load_product(prod_id, self.sp_price.value())
 
     # ══════════════════════════════════════════════════════

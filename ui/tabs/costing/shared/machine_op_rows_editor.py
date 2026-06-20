@@ -19,10 +19,11 @@ from PyQt5.QtCore import Qt
 from PyQt5.QtGui  import QColor
 
 from services.costing.machine_op_rows_service import MachineOpRowsService
-from ui.app_settings          import _C
+from ui.theme          import _C
 from ui.widgets.core.i18n     import tr
 from ui.widgets.core.events   import emit_company_data_changed
-from ui.events                import bus
+from ui.widgets.core.events import bus
+
 
 
 class _OpRowsEditor(QGroupBox):

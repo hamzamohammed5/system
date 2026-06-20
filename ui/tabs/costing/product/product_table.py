@@ -19,7 +19,7 @@ _ProductTable  — جدول المنتجات المحفوظة مع FilterBar.
 from db.shared.items_repo  import fetch_items_by_type
 from models.costing        import calc_cost
 from ui.widgets.base.list_panel  import BaseListPanel
-from ui.widgets.tables.items     import make_item, colored_item
+from ui.widgets.tables.tables     import make_item, colored_item
 
 _PRODUCT_SCOPE = {
     "semi":  "semi",

@@ -17,7 +17,7 @@ from PyQt5.QtGui  import QColor
 from db.companies.companies_schema import get_central_connection, create_central_tables
 from db.companies.companies_repo   import fetch_all_companies
 from db.companies.company_state    import company_state
-from ui.app_settings               import _C
+from ui.theme               import _C
 from ui.widgets.core.i18n          import tr
 
 

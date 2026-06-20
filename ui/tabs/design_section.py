@@ -4,40 +4,26 @@ ui/tabs/design_section.py
 قسم "التصميمات" — تبويبات داخلية:
   📐 المقاسات     → DimensionSetsTab
   🎨 التصميمات   → DesignsTab
+
+[تحديث] توحيد القسم مع باقي الأقسام:
+  - النصوص عبر tr() بدلاً من نصوص مباشرة (ar.py / en.py).
+  - الألوان عبر _C من ui.theme (المصدر: ui.theme_manager).
+  - الخط عبر font.py (FS_*).
+  - تحديث الثيم الديناميكي عبر bus.theme_changed.
 """
 
 from PyQt5.QtWidgets import QWidget, QVBoxLayout, QTabWidget, QLabel
 
 from db.designs.design_schema import get_designs_connection, create_designs_tables
 
+from ui.widgets.theme.layout_styles import tab_style
+from ui.theme                        import _C
+from ui.widgets.core.i18n           import tr
+from ui.widgets.core.events         import bus
+from ui.font                        import FS_MD
+
 from .design.dimension_sets_tab import DimensionSetsTab
 from .design.designs_tab        import DesignsTab
-
-_TAB_STYLE = """
-    QTabWidget::pane {
-        border: none;
-        background: #f9f9f9;
-    }
-    QTabBar::tab {
-        background: #f0f0f0;
-        border: 1px solid #ddd;
-        border-bottom: none;
-        padding: 8px 18px;
-        margin-left: 2px;
-        font-size: 12px;
-        color: #555;
-    }
-    QTabBar::tab:selected {
-        background: #ffffff;
-        color: #7b1fa2;
-        font-weight: bold;
-        border-top: 2px solid #7b1fa2;
-    }
-    QTabBar::tab:hover:!selected {
-        background: #f3e5f5;
-        color: #7b1fa2;
-    }
-"""
 
 
 class DesignSection(QWidget):
@@ -47,44 +33,52 @@ class DesignSection(QWidget):
         self.conn = get_designs_connection()
         create_designs_tables(self.conn)
         self._build()
+        bus.theme_changed.connect(self._apply_theme)
 
     def _build(self):
         layout = QVBoxLayout(self)
         layout.setContentsMargins(0, 0, 0, 0)
         layout.setSpacing(0)
 
-        header = QLabel("  🎨  التصميمات")
-        header.setFixedHeight(42)
-        header.setStyleSheet("""
-            QLabel {
-                background: #ffffff;
-                border-bottom: 1px solid #e0e0e0;
-                font-size: 14px;
-                font-weight: bold;
-                color: #7b1fa2;
-                padding-right: 16px;
-            }
-        """)
-        layout.addWidget(header)
+        # ── هيدر القسم ──
+        self._header = QLabel(f"  🎨  {tr('nav_design')}")
+        self._header.setFixedHeight(42)
+        self._apply_theme()
+        layout.addWidget(self._header)
 
-        tabs = QTabWidget()
-        tabs.setTabPosition(QTabWidget.North)
-        tabs.setStyleSheet(_TAB_STYLE)
+        # ── التبويبات ──
+        self._tabs = QTabWidget()
+        self._tabs.setTabPosition(QTabWidget.North)
+        self._tabs.setStyleSheet(tab_style())
 
         self._dim_tab     = DimensionSetsTab(self.conn)
         self._designs_tab = DesignsTab(self.conn)
 
-        tabs.addTab(self._dim_tab,     "📐  المقاسات")
-        tabs.addTab(self._designs_tab, "🎨  التصميمات")
+        self._tabs.addTab(self._dim_tab,     tr("design_section_tab_dimensions"))
+        self._tabs.addTab(self._designs_tab, tr("design_section_tab_designs"))
 
         # عند تغيير التبويب لـ "التصميمات"، نعمل refresh لتحميل أي مجموعات جديدة
-        tabs.currentChanged.connect(self._on_tab_changed)
+        self._tabs.currentChanged.connect(self._on_tab_changed)
 
-        layout.addWidget(tabs)
+        layout.addWidget(self._tabs)
 
     def _on_tab_changed(self, index):
         if index == 1:  # تبويب التصميمات
             self._designs_tab.refresh()
+
+    def _apply_theme(self, _=None):
+        self._header.setStyleSheet(f"""
+            QLabel {{
+                background: {_C['bg_surface']};
+                border-bottom: 1px solid {_C['border']};
+                font-size: {FS_MD}px;
+                font-weight: bold;
+                color: {_C['purple']};
+                padding-right: 16px;
+            }}
+        """)
+        if hasattr(self, "_tabs"):
+            self._tabs.setStyleSheet(tab_style())
 
     def closeEvent(self, event):
         try:

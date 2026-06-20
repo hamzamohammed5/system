@@ -10,9 +10,12 @@ from PyQt5.QtWidgets import QWidget, QHBoxLayout, QLabel, QSizePolicy
 from PyQt5.QtCore import Qt
 
 from ui.widgets.base.crud_form         import BaseCrudForm
-from ui.widgets.panels.form_parts      import (
-    FormGroup, spin_field, labeled_widget, hint_label,
-)
+
+from ui.widgets.panels.form_fields import (labeled_widget, spin_field)
+from ui.widgets.panels.form_badges import ResultBadge
+from ui.widgets.panels.form_group import FormGroup
+
+
 from ui.widgets.forms.inputs           import RequiredLineEdit, AmountSpinBox
 from ui.widgets.combo.category         import CategoryCombo
 from ui.tabs.costing.shared.raw_variants_panel import _RawVariantsPanel

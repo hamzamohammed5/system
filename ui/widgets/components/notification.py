@@ -185,7 +185,7 @@ class BaseWarningBar(QFrame):
         }
         lines = [
             f"• {_labels.get(o['child_type'], o['child_type'])}: "
-            f"«{o.get('child_name') or f'ID:{o[\"child_id\"]}'}»"
+            f"«{o.get('child_name') or f'ID:{o["child_id"]}'}»"
             for o in orphans
         ]
         msg = f"«{product_name}» — {len(orphans)} مكوّن محذوف:\n" + "  ".join(lines)

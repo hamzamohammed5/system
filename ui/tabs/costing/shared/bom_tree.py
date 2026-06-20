@@ -20,10 +20,10 @@ from PyQt5.QtWidgets import (
 from PyQt5.QtCore import Qt
 
 from services.costing.bom_tree_service import BomTreeService
-from ui.app_settings               import _C
+from ui.theme import _C
 from ui.widgets.core.i18n          import tr
 from ui.widgets.dialogs.confirm    import confirm_delete
-from ui.events                     import bus
+from ui.widgets.core.events import bus
 
 from ui.tabs.costing.shared.bom_tree_helper._scenario_node_builder import (
     BomNodeRawData,

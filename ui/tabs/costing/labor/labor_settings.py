@@ -14,12 +14,15 @@ from PyQt5.QtWidgets import (
 )
 
 from db.shared.settings_repo import get_setting, set_setting
-from ui.widgets.panels.form_parts import (
-    FormGroup, labeled_widget, spin_field, ResultBadge,
-)
-from ui.widgets.theme.styles import wrap_in_scroll
+from ui.widgets.panels.form_fields import (labeled_widget, spin_field)
+from ui.widgets.panels.form_badges import ResultBadge
+
+from ui.widgets.panels.form_group import FormGroup
+
+
+from ui.widgets.theme.builders import wrap_in_scroll
 from ui.widgets.core.i18n import tr
-from ui.events import bus
+from ui.widgets.core.events import bus, emit_company_data_changed
 
 
 class _LaborSettingsPanel(QWidget):
@@ -113,7 +116,7 @@ class _LaborSettingsPanel(QWidget):
             self, tr("done"),
             f"✅  {tr('labor_settings_saved')}"
         )
-        bus.data_changed.emit()
+        emit_company_data_changed()
 
     def get_hourly_rate(self):
         return self._calc_rate()

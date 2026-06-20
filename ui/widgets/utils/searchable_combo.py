@@ -41,7 +41,8 @@ from PyQt5.QtCore import (
 )
 from PyQt5.QtGui  import QColor, QFont, QStandardItemModel, QStandardItem
 
-from ui.app_settings import _C, fs, get_font_size
+from ui.theme import _C
+from ui.font import fs, get_font_size
 
 _SEP = ("__sep__", None)
 

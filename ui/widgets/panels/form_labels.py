@@ -27,7 +27,7 @@ def form_label(text: str, color: str = None) -> QLabel:
 
 def required_label(text: str) -> QLabel:
     base = get_font_size()
-    lbl = QLabel(f"<span style='color:{_C[\"danger\"]};'>*</span> {text}")
+    lbl = QLabel(f"<span style='color:{_C["danger"]};'>*</span> {text}")
     lbl.setStyleSheet(
         f"font-size:{fs(base,0)}pt; font-weight:600;"
         f"color:{_C['text_sec']}; background:transparent; border:none;"

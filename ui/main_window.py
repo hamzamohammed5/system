@@ -102,14 +102,16 @@ def _try_build_section(builder_fn, section_name: str) -> QWidget:
     يحاول بناء section — يرجع placeholder مع رسالة خطأ لو فشل.
     يضمن أن فشل section واحد لا يمنع بقية الـ sections من العمل.
     """
-    try:
-        return builder_fn()
-    except ImportError as e:
-        logger.warning("_try_build_section: import فشل لـ %s: %s", section_name, e)
-        return _make_placeholder_tab(section_name, f"ImportError: {e}")
-    except Exception as e:
-        logger.error("_try_build_section: فشل بناء %s: %s", section_name, e)
-        return _make_placeholder_tab(section_name, f"خطأ: {e}")
+    return builder_fn()
+    
+    # try:
+        # return builder_fn()
+    # except ImportError as e:
+    #     logger.warning("_try_build_section: import فشل لـ %s: %s", section_name, e)
+    #     return _make_placeholder_tab(section_name, f"ImportError: {e}")
+    # except Exception as e:
+    #     logger.error("_try_build_section: فشل بناء %s: %s", section_name, e)
+    #     return _make_placeholder_tab(section_name, f"خطأ: {e}")
 
 
 # ── MainWindow ────────────────────────────────────────────────────────────────

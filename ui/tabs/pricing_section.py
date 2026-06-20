@@ -4,70 +4,63 @@ ui/tabs/pricing_section.py
 قسم "التسعير" — تبويبات داخلية:
   💰 الأسعار الأساسية
   🎁 العروض
+
+[تحديث] توحيد القسم مع باقي الأقسام:
+  - النصوص عبر tr() بدلاً من نصوص مباشرة (ar.py / en.py).
+  - الألوان عبر _C من ui.theme (المصدر: ui.theme_manager).
+  - الخط عبر font.py (FS_*).
+  - تحديث الثيم الديناميكي عبر bus.theme_changed.
 """
 
 from PyQt5.QtWidgets import QWidget, QVBoxLayout, QTabWidget, QLabel
-from PyQt5.QtCore    import Qt
+
+from ui.widgets.theme.layout_styles import tab_style
+from ui.theme                        import _C
+from ui.widgets.core.i18n           import tr
+from ui.widgets.core.events         import bus
+from ui.font                        import FS_MD
 
 from .pricing.pricing_tab import PricingTab
 from .pricing.offers import OffersTab
-
-_TAB_STYLE = """
-    QTabWidget::pane {
-        border: none;
-        background: #f9f9f9;
-    }
-    QTabBar::tab {
-        background: #f0f0f0;
-        border: 1px solid #ddd;
-        border-bottom: none;
-        padding: 8px 18px;
-        margin-left: 2px;
-        font-size: 12px;
-        color: #555;
-    }
-    QTabBar::tab:selected {
-        background: #ffffff;
-        color: #e65100;
-        font-weight: bold;
-        border-top: 2px solid #e65100;
-    }
-    QTabBar::tab:hover:!selected {
-        background: #fff3e0;
-        color: #e65100;
-    }
-"""
 
 
 class PricingSection(QWidget):
     def __init__(self, parent=None):
         super().__init__(parent)
         self._build()
+        bus.theme_changed.connect(self._apply_theme)
 
     def _build(self):
         layout = QVBoxLayout(self)
         layout.setContentsMargins(0, 0, 0, 0)
         layout.setSpacing(0)
 
-        header = QLabel("  💰  التسعير")
-        header.setFixedHeight(42)
-        header.setStyleSheet("""
-            QLabel {
-                background: #ffffff;
-                border-bottom: 1px solid #e0e0e0;
-                font-size: 14px;
+        # ── هيدر القسم ──
+        self._header = QLabel(f"  💰  {tr('nav_pricing')}")
+        self._header.setFixedHeight(42)
+        self._apply_theme()
+        layout.addWidget(self._header)
+
+        # ── التبويبات ──
+        self._tabs = QTabWidget()
+        self._tabs.setTabPosition(QTabWidget.North)
+        self._tabs.setStyleSheet(tab_style())
+
+        self._tabs.addTab(PricingTab(), tr("pricing_section_tab_base"))
+        self._tabs.addTab(OffersTab(),  tr("pricing_section_tab_offers"))
+
+        layout.addWidget(self._tabs)
+
+    def _apply_theme(self, _=None):
+        self._header.setStyleSheet(f"""
+            QLabel {{
+                background: {_C['bg_surface']};
+                border-bottom: 1px solid {_C['border']};
+                font-size: {FS_MD}px;
                 font-weight: bold;
-                color: #e65100;
+                color: {_C['orange']};
                 padding-right: 16px;
-            }
+            }}
         """)
-        layout.addWidget(header)
-
-        tabs = QTabWidget()
-        tabs.setTabPosition(QTabWidget.North)
-        tabs.setStyleSheet(_TAB_STYLE)
-
-        tabs.addTab(PricingTab(), "💰  الأسعار الأساسية")
-        tabs.addTab(OffersTab(),  "🎁  العروض")
-
-        layout.addWidget(tabs)
+        if hasattr(self, "_tabs"):
+            self._tabs.setStyleSheet(tab_style())
