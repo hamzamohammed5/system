@@ -18,9 +18,11 @@ from db.inventory.inventory_repo import (
     fetch_all_inventory, fetch_inventory_item,
     record_inventory_move,
 )
-from ui.helpers import (
-    make_table, setup_table_columns, section_label,
-)
+
+from ui.widgets.tables.tables import auto_fit_columns
+from ui.widgets.panels.form_labels   import section_title
+from ui.widgets.tables.tables       import make_table
+
 from ui.widgets.mixins.bus import BusConnectedMixin
 from ui.widgets.core.events import emit_company_data_changed
 from ui.widgets.core.i18n import tr
@@ -105,16 +107,13 @@ class _OutboundTab(QWidget, BusConnectedMixin):
 
         root.addWidget(grp)
 
-        root.addWidget(section_label(tr("inventory_recent_outbound")))
+        root.addWidget(section_title(tr("inventory_recent_outbound")))
         self.table = make_table(
             [tr("date"), tr("item"), tr("quantity"), tr("avg_cost"),
              tr("total_value"), tr("statement_col")],
             stretch_col=1
         )
-        setup_table_columns(self.table,
-            widths={0: 90, 2: 80, 3: 110, 4: 110, 5: 150},
-            stretch_col=1
-        )
+        
         self.table.setAlternatingRowColors(True)
         root.addWidget(self.table, stretch=1)
 
@@ -193,7 +192,14 @@ class _OutboundTab(QWidget, BusConnectedMixin):
             notes_item = QTableWidgetItem(r["notes"] or "—")
             notes_item.setToolTip(r["notes"] or "")
             self.table.setItem(row, 5, notes_item)
-
+        auto_fit_columns(
+            self.table,
+            fixed_cols=[0, 2, 3, 4],
+            stretch_col=1,
+            min_width=40,
+            max_width=150,
+        )
+        
     def closeEvent(self, event):
         self._disconnect_bus()
         super().closeEvent(event)

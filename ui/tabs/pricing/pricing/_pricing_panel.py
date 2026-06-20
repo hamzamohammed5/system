@@ -15,6 +15,7 @@ from PyQt5.QtGui  import QColor
 from db.shared.items_repo     import fetch_items_by_type, fetch_item
 from db.pricing.pricing_repo  import fetch_all_pricing, upsert_pricing, delete_pricing, fetch_pricing
 from models.costing            import calc_cost
+from ui.theme import _C
 
 # ── الاستدعاءات المُصحَّحة ──────────────────────────────
 from ui.widgets.tables.tables       import make_table
@@ -122,11 +123,11 @@ class _PricingPanel(QWidget):
 
         stats_row = QHBoxLayout()
         stats_row.setSpacing(8)
-        f1, self.lbl_stat_cost       = stat_box("التكلفة",              "#1565c0")
-        f2, self.lbl_stat_price      = stat_box("سعر البيع المقترح",    "#2e7d32")
-        f3, self.lbl_stat_manual     = stat_box("السعر اليدوي",         "#e65100")
-        f4, self.lbl_stat_profit     = stat_box("الربح",                "#1b5e20")
-        f5, self.lbl_stat_margin_pct = stat_box("هامش الربح الفعلي %", "#6a1b9a")
+        f1, self.lbl_stat_cost       = stat_box("التكلفة",              "info")
+        f2, self.lbl_stat_price      = stat_box("سعر البيع المقترح",    "success")
+        f3, self.lbl_stat_manual     = stat_box("السعر اليدوي",         "orange")
+        f4, self.lbl_stat_profit     = stat_box("الربح",                "success")
+        f5, self.lbl_stat_margin_pct = stat_box("هامش الربح الفعلي %", "purple")
         for f in (f1, f2, f3, f4, f5):
             stats_row.addWidget(f, stretch=1)
         form_lay.addLayout(stats_row)
@@ -235,7 +236,7 @@ class _PricingPanel(QWidget):
         profit = manual - cost
         margin_pct = ((manual - cost) / cost * 100) if cost > 0 else 0.0
         self.lbl_stat_manual.setText(f"{manual:.2f}  ج")
-        color_profit = "#1b5e20" if profit >= 0 else "#b71c1c"
+        color_profit = _C["success"] if profit >= 0 else _C["danger"]
         self.lbl_stat_profit.setText(f"{profit:.2f}  ج")
         self.lbl_stat_profit.setStyleSheet(
             f"font-size:14px; font-weight:bold; color:{color_profit};"
@@ -371,7 +372,8 @@ class _PricingPanel(QWidget):
             )
             if profit is not None:
                 profit_item.setForeground(
-                    QColor("#1b5e20") if profit >= 0 else QColor("#b71c1c")
+                    QColor(_C["success"]) if profit >= 0 else QColor(_C["danger"])
+
                 )
             self.table.setItem(r, 6, profit_item)
             self.table.setItem(r, 7, QTableWidgetItem(

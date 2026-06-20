@@ -18,7 +18,7 @@ from ui.theme import _C
 from ui.widgets.core.i18n import tr
 from ui.font import FS_XS, FS_SM
 from services.design.dimension_set_service import DimensionSetService
-from ui.widgets.shared.unit_combo import UnitCombo
+from ui.widgets.combo.unit import UnitCombo
 
 
 def _spin(min_=None, max_=9999, dec=2):

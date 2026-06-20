@@ -19,9 +19,8 @@ from db.inventory.inventory_repo import (
     fetch_all_inventory, fetch_inventory_item,
     fetch_inventory_moves,
 )
-from ui.helpers import (
-    make_table, setup_table_columns, section_label,
-)
+from ui.widgets.panels.form_labels   import section_title
+from ui.widgets.tables.tables       import make_table, auto_fit_columns
 from ui.widgets.mixins.bus import BusConnectedMixin
 from ui.widgets.core.events import emit_company_data_changed
 from ui.widgets.core.i18n import tr
@@ -85,16 +84,13 @@ class _ReportTab(QWidget, BusConnectedMixin):
 
         root.addLayout(cards_row)
 
-        root.addWidget(section_label(tr("inventory_detailed_report_header")))
+        root.addWidget(section_title(tr("inventory_detailed_report_header")))
         self.table = make_table(
             [tr("item"), tr("unit"), tr("balance"), tr("inventory_min_qty_label"),
              tr("avg_cost"), tr("total_value"), tr("status")],
             stretch_col=0
         )
-        setup_table_columns(self.table,
-            widths={1: 70, 2: 80, 3: 80, 4: 110, 5: 120, 6: 90},
-            stretch_col=0
-        )
+        
         self.table.setAlternatingRowColors(True)
         root.addWidget(self.table, stretch=1)
 
@@ -138,6 +134,8 @@ class _ReportTab(QWidget, BusConnectedMixin):
         self.lbl_total_value.setText(f"{total_val:,.2f}  {tr('currency_abbr')}")
         self.lbl_low_stock.setText(str(low_count))
         self.lbl_zero_stock.setText(str(zero_count))
+        auto_fit_columns(self.table, fixed_cols=[1, 2, 3, 4, 5, 6], stretch_col=0, min_width=40, max_width=150)
+
 
 
 # ══════════════════════════════════════════════════════════
@@ -167,10 +165,7 @@ class _MovesPanel(QWidget):
              tr("total"), tr("entry_no_col"), tr("notes")],
             stretch_col=6
         )
-        setup_table_columns(self.table,
-            widths={0: 90, 1: 70, 2: 80, 3: 100, 4: 100, 5: 100},
-            stretch_col=6
-        )
+        
         self.table.setAlternatingRowColors(True)
         root.addWidget(self.table, stretch=1)
 
@@ -217,6 +212,7 @@ class _MovesPanel(QWidget):
             notes_item = QTableWidgetItem(m["notes"] or "—")
             notes_item.setToolTip(m["notes"] or "")
             self.table.setItem(r, 6, notes_item)
+        auto_fit_columns(self.table, fixed_cols=[0, 1, 2, 3, 4, 5], stretch_col=6, min_width=40, max_width=150)
 
     def clear(self):
         self.table.setRowCount(0)
