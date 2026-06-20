@@ -112,6 +112,7 @@ EN_STRINGS: dict[str, str] = {
     "success_save":         "Saved successfully",
     "success_delete":       "Deleted successfully",
     "error_load":           "Error loading data",
+    "tab_load_error":       "Error loading tab: {error}",
     "error_save":           "Error saving",
     "error_delete":         "Error deleting",
     "warning":              "Warning",
@@ -571,11 +572,20 @@ EN_STRINGS: dict[str, str] = {
     "new_product":              "New Product",
     "product_name_placeholder": "Product name...",
     "saved_products":           "Saved Products",
+    "products_table_title":     "─── Saved Products ───",
     "no_products":              "No products found",
     "enter_product_name":       "Please enter a product name first",
     "add_one_component":        "Please add at least one component",
     "product_name":             "Product Name",
     "add_component":            "Component",
+    "edit_selected_btn":        "✏️ Edit Selected",
+    "delete_selected_btn":      "🗑️ Delete Selected",
+    "editing_product_label":          "Editing: {name}",
+    "editing_product_orphans_label":  "Editing: {name}  {count} missing component(s)",
+    "orphans_deleted_title":          "Done",
+    "orphans_deleted_with_product_title": "Done — Product Deleted",
+    "orphans_deleted_msg":            "✅ Deleted {count} missing component(s):\n{names}",
+    "orphans_deleted_product_removed_msg": "✅ Deleted {count} missing component(s):\n{names}\n\nSince «{product_name}» no longer has any components,\nit was deleted automatically.",
 
     # ══════════════════════════════════════════════
     # Components / BOM
@@ -586,6 +596,7 @@ EN_STRINGS: dict[str, str] = {
     "waste_pct_col":      "Waste %",
     "effective_qty":      "Effective Qty",
     "component_scenario": "Component / Scenario",
+    "total_cost":         "Total Cost",
 
     # ══════════════════════════════════════════════
     # BOM Tree
@@ -597,7 +608,26 @@ EN_STRINGS: dict[str, str] = {
     "default_scenario":                "Default Scenario",
     "delete_from_scenario":            "Delete",
     "from_scenario":                   "from scenario",
+    "bom_delete_from_scenario_msg":    "{node_name} from scenario «{sc_name}»",
     "delete_sub_components_from_semi": "Delete sub-components from the semi-finished product itself",
+
+    # ── BOM Tree — Scenario node ──────────────────
+    "bom_scenario_default_suffix":     "  (Default)",
+    "bom_scenario_star_icon":          "⭐ ",
+    "bom_scenario_normal_icon":        "📋 ",
+
+    # ── BOM Tree — Component node (tooltips) ──────
+    "bom_tooltip_qty_entered":         "Entered quantity: {qty}",
+    "bom_tooltip_waste":               "Waste {pct} %\nEffective qty = {qty} × (1 + {pct}/100) = {eff_qty}",
+    "bom_tooltip_effective_qty":       "Effective qty = {eff_qty}",
+    "bom_tooltip_unit_cost":           "Unit cost: {cost}",
+    "bom_tooltip_total_cost":          "Total cost = {unit_cost} × {eff_qty} = {total_cost}",
+    "bom_tooltip_machine_op_row_cost": "Selected row cost (ID:{row_id}): {cost}",
+    "bom_qty_no_value":                "—",
+    "bom_type_label_raw":              "🧱 {label}",
+    "bom_type_label_semi":             "🔧 {label}",
+    "bom_type_label_labor_op":         "👷 {label}",
+    "bom_type_label_machine_op":       "⚙️ {label}",
 
     # ══════════════════════════════════════════════
     # Scenarios
@@ -610,10 +640,12 @@ EN_STRINGS: dict[str, str] = {
     "new_scenario":                "New Scenario",
     "new_scenario_name":           "New Scenario Name",
     "scenario_name":               "Scenario Name",
+    "default_scenario_initial_name": "Scenario 1",
     "new_name":                    "New Name",
     "copy_of":                     "Copy of",
     "cannot_delete_last_scenario": "Cannot delete the only scenario",
     "delete_scenario_confirm":     "Delete scenario",
+    "delete_scenario_confirm_msg": "Delete scenario «{name}»?",
     "delete_scenario_failed":      "Failed to delete scenario",
     "select_scenario":             "Select scenario",
 
@@ -659,6 +691,18 @@ EN_STRINGS: dict[str, str] = {
     "no_products_linked":     "No products linked to this element",
     "quick_select":           "Quick Select",
     "apply_to_selected":      "Apply to Selected",
+    "bulk_replace_window_title":     "🔄  Bulk Replace / Edit",
+    "bulk_replace_header_title":     "Bulk Replace  —  {name}",
+    "select_at_least_one_product":   "Select at least one product",
+    "select_replacement_first":      "Select the replacement element first\nor choose “Edit quantity only” if you don’t want to replace it.",
+    "bulk_replace_desc_line":        "•  Replace  “{old}”  with  “{new}”",
+    "bulk_set_qty_desc_line":        "•  Set quantity = {qty}",
+    "bulk_keep_qty_desc_line":       "•  Keep the custom quantity for each product",
+    "bulk_apply_confirm_msg":        "The following will be applied to {count} product(s):\n\n{ops}\n\nDo you want to continue?",
+    "confirm_apply_title":           "Confirm Apply",
+    "bulk_completed_with_errors_title": "Completed with Errors",
+    "bulk_completed_success_msg":    "✅ {count} product(s) updated successfully",
+    "bulk_completed_with_errors_msg":   "✅ {updated} product(s) updated successfully\n\n⚠️ {failed} product(s) failed:\n{errors}",
 
     # ══════════════════════════════════════════════
     # Machine Op Rows
@@ -694,6 +738,7 @@ EN_STRINGS: dict[str, str] = {
     "enter_variant_name":          "Please enter a variant name",
     "select_variant_first":        "Please select a variant first",
     "delete_variant_confirm":      "Delete variant",
+    "delete_variant_confirm_msg":  "Delete variant «{name}»?",
     "currency_per_piece_short":    "EGP/piece",
 
     # ══════════════════════════════════════════════
@@ -702,6 +747,20 @@ EN_STRINGS: dict[str, str] = {
     "raw_materials": "Raw Materials",
     "no_raws":       "No raw materials found",
     "saved_raws":    "Saved Raw Materials",
+    "raw_select_first":              "Select a raw material from the table first",
+    "raw_bulk_replace_btn":          "🔄 Bulk Replace",
+    "raw_edit_shared_btn":           "🔗 Edit Shared",
+    "raw_publish_btn":               "📤 Publish as Shared",
+    "raw_bulk_replace_not_available":"Bulk replace is not available for shared items.",
+    "shared_item_title":             "Shared Item",
+    "raw_shared_edit_notice":        "This is an incoming shared raw material — use the «🔗 Edit Shared» button to edit it.",
+    "raw_shared_delete_blocked":     "A shared raw material cannot be deleted from here.\nUse the «Shared Items» window to delete it or unlink it.",
+    "raw_col_id":                    "ID",
+    "raw_col_name":                  "Name",
+    "raw_col_category":              "Category",
+    "raw_col_total_price":           "Total Price",
+    "raw_col_qty":                   "Quantity",
+    "raw_col_unit_price":            "Unit Price",
 
     # ══════════════════════════════════════════════
     # Labor
@@ -807,6 +866,9 @@ EN_STRINGS: dict[str, str] = {
     "add_machine_new":            "Add New Machine",
     "editing_prefix":             "Edit",
     "enter_name":                 "Enter Name",
+    "currency_per_hour_short":    "/hr",
+    "currency_per_unit_short":    "/unit",
+    "machines_table_title":       "─── Saved Machines ───",
 
     # ══════════════════════════════════════════════
     # Machine Op Form — New Keys
@@ -814,14 +876,25 @@ EN_STRINGS: dict[str, str] = {
     "machine_op_form_title":       "Machine Operation Data",
     "machine_op_name_placeholder": "e.g. Stitch, Press...",
     "add_machine_op_new":          "Add New Machine Operation",
+    "add_op":                      "Add Operation",
     "op_name":                     "Operation Name",
     "machine_label":               "Machine",
     "select_machine_first":        "Select a machine first",
     "add_op_first_hint":           "Add the operation first to see rows",
     "mode_time_label":             "⏱ By Time",
     "mode_unit_label":             "📦 By Unit",
+    "calc_mode_label":             "Calculation Mode",
+    "machine_mode_tooltip":        "How the machine cost is calculated: by time or by unit",
     "total_cost_label":            "Total Cost",
     "op_added_success":            "Operation «{name}» added\nAdd rows now then click Save",
+    "editing_rows_prefix":         "Editing Rows",
+    "enter_op_name":               "Enter operation name",
+    "machine_op_table_title":      "─── Saved Machine Operations ───",
+    "mode_col":                    "Mode",
+    "value_col":                   "Value",
+    "cost_col":                    "Cost",
+    "time_mode_short":             "⏱ Time",
+    "unit_mode_short":             "📦 Unit",
 
     # ══════════════════════════════════════════════
     # Labor Op Form — New Keys
@@ -830,11 +903,15 @@ EN_STRINGS: dict[str, str] = {
     "time_label":                 "Time",
     "cost_label":                 "Cost",
     "minutes_label":              "minutes",
+    "labor_op_name_placeholder":  "e.g. Sewing, Packaging...",
+    "labor_op_table_title":       "─── Saved Labor Operations ───",
+    "cost_per_unit_col":          "Cost / Unit",
 
     # ══════════════════════════════════════════════
     # Raw Form — New Keys
     # ══════════════════════════════════════════════
     "raw_form_title":             "Raw Material Data",
+    "raw_add_btn":                "➕  Add Raw Material",
     "raw_name_label":             "Raw Material Name",
     "raw_name_required":          "Enter raw material name...",
     "raw_price_label":            "Total Price",

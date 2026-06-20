@@ -26,6 +26,7 @@ from ui.widgets.dialogs.confirm import confirm_action
 from ui.widgets.dialogs.message import msg_info
 from ui.theme import _C
 from ui.widgets.core.i18n import tr
+from ui.font import FS_MD, FS_SM
 
 from ._details_table import build_movements_table, fill_movement_row
 
@@ -50,7 +51,7 @@ class _InvestorDetails(DualConnMixin, QWidget):
 
         self.lbl_title = QLabel(tr("investor_detail_placeholder"))
         self.lbl_title.setStyleSheet(
-            f"font-weight:bold; font-size:13px; color:{_C['accent']};"
+            f"font-weight:bold; font-size:{FS_MD}px; color:{_C['accent']};"
             f"background:{_C['info_bg']}; border:1px solid {_C['info_border']};"
             "border-radius:6px; padding:8px 14px;"
         )

@@ -103,6 +103,11 @@ _LIGHT_THEME: Dict[str, str] = {
     "orange":        "#e65100",
     "orange_bg":     "#fff3e0",
     "orange_border": "#ffcc80",
+    "blue":          "#1565c0",
+    "blue_bg":       "#e3f2fd",
+    "blue_border":   "#90caf9",
+    "blue_hover":    "#1976d2",
+    "blue_strong":   "#0d47a1",
     "teal":          "#0891b2",
     "teal_bg":       "#e0f7fa",
     "teal_border":   "#80deea",
@@ -218,6 +223,12 @@ _LIGHT_THEME: Dict[str, str] = {
     "design_thumb_icon":        "#7986cb",   # أيقونة 🎨 في placeholder
     "design_thumb_text":        "#9fa8da",   # اسم الملف في placeholder
     "card_badge_text":          "#FFFFFF",   # نص badge العدد فوق الـ thumbnail الداكن
+
+    # ── BOM Tree — Scenario node ──────────────────────────────
+    "bom_scenario_default_bg":  "#e8f5e9",   # خلفية node السيناريو الافتراضي
+    "bom_scenario_default_fg":  "#1b5e20",   # نص node السيناريو الافتراضي
+    "bom_scenario_normal_bg":   "#e3f2fd",   # == blue_bg — خلفية node سيناريو عادي
+    "bom_scenario_normal_fg":   "#0d47a1",   # نص node سيناريو عادي
 }
 
 _DARK_THEME: Dict[str, str] = {
@@ -277,6 +288,11 @@ _DARK_THEME: Dict[str, str] = {
     "orange":        "#FFB74D",
     "orange_bg":     "#281400",
     "orange_border": "#503000",
+    "blue":          "#5B8DB8",
+    "blue_bg":       "#1a2a3a",
+    "blue_border":   "#2a4a6a",
+    "blue_hover":    "#7AABD4",
+    "blue_strong":   "#0d47a1",
     "teal":          "#26C6DA",
     "teal_bg":       "#0a2830",
     "teal_border":   "#1a5060",
@@ -405,6 +421,12 @@ _DARK_THEME: Dict[str, str] = {
     "design_thumb_icon":        "#5a6bb0",   # أيقونة 🎨 في placeholder
     "design_thumb_text":        "#6f7aa0",   # اسم الملف في placeholder
     "card_badge_text":          "#FFFFFF",   # نص badge العدد فوق الـ thumbnail الداكن
+
+    # ── BOM Tree — Scenario node ──────────────────────────────
+    "bom_scenario_default_bg":  "#0a2018",   # == success_bg — خلفية node السيناريو الافتراضي
+    "bom_scenario_default_fg":  "#66BB8A",   # == success — نص node السيناريو الافتراضي
+    "bom_scenario_normal_bg":   "#1a2a3a",   # == blue_bg — خلفية node سيناريو عادي
+    "bom_scenario_normal_fg":   "#5B8DB8",   # == blue — نص node سيناريو عادي
 }
 
 THEMES: Dict[str, Dict[str, str]] = {
