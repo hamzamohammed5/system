@@ -1,5 +1,5 @@
 File Tree Snapshot
-Generated : 2026-06-19 13:55:00
+Generated : 2026-06-20 13:23:23
 Source    : D:\My Workspace\Hg\Alhabaar\accountant\system
 Extensions: .md, .py
 ────────────────────────────────────────────────────────────
@@ -96,12 +96,17 @@ system/
 │   │   ├── product_service.py
 │   │   ├── scenario_service.py
 │   │   └── variant_service.py
+│   ├── design/
+│   │   ├── design_service.py
+│   │   ├── design_size_service.py
+│   │   └── dimension_set_service.py
 │   ├── inventory/
 │   │   └── inventory_service.py
 │   ├── orders/
 │   │   └── order_service.py
 │   └── shared/
 │       ├── category_service.py
+│       ├── font_service.py
 │       └── item_service.py
 ├── ui/
 │   ├── i18n/
@@ -232,7 +237,6 @@ system/
 │   │   │   └── raw_tab.py
 │   │   ├── design/
 │   │   │   ├── designs/
-│   │   │   │   ├── design_detail_panel/
 │   │   │   │   ├── designs_categories/
 │   │   │   │   │   └── _row_and_form.py
 │   │   │   │   ├── designs_table/
@@ -246,8 +250,6 @@ system/
 │   │   │   │   ├── _size_dialog.py
 │   │   │   │   └── _xcf_thumbnail.py
 │   │   │   ├── dimension_sets/
-│   │   │   │   ├── _GroupsPanel/
-│   │   │   │   ├── _GroupsPanel.py/
 │   │   │   │   ├── values_panel/
 │   │   │   │   │   ├── _instance_popup.py
 │   │   │   │   │   ├── _instances_table.py
