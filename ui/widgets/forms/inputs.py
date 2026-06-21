@@ -12,11 +12,9 @@ Input widgets الموحدة للتطبيق.
           بما أن setStyleSheet المحلي على الـ widget له أولوية أعلى من
           الـ global app stylesheet في Qt، كانت الألوان تتجمد على الثيم
           الذي بُني فيه الـ widget ولا تتحدث عند تبديل الثيم لاحقاً.
-          الحل: كل widget يربط نفسه بـ bus.theme_changed عبر weakref slot
-          ويعيد بناء الـ stylesheet بقيم _C المحدثة.
+          الحل: كل widget يستخدم WidgetMixin (theme=True) بدل الربط اليدوي
+          بـ bus.theme_changed، ويعيد بناء الـ stylesheet بقيم _C المحدثة.
 """
-import weakref
-
 from PyQt5.QtWidgets import (
     QWidget, QHBoxLayout, QLineEdit, QLabel,
     QDoubleSpinBox, QSpinBox, QDateEdit, QComboBox, QSizePolicy,
@@ -27,29 +25,13 @@ from ui.theme import _C
 from ui.font  import fs, get_font_size
 # [إصلاح 1] المسار الصحيح بعد Refactor V3
 from ..theme.input_styles import input_style as _input_style, spinbox_style as _spinbox_style
-from ui.widgets.core.events import bus
+from ui.widgets.core.widget_mixin import WidgetMixin
 # [إصلاح 2] السطر المحذوف: from ..core import get_font_size as _get_font_size
-
-
-def _connect_theme_refresh(widget, slot) -> None:
-    """
-    [إصلاح ثيم] يربط widget بـ bus.theme_changed عبر weakref حتى لا يمنع GC.
-    slot يُحفظ كـ attribute على الـ widget نفسه لمنع جمعه قبل الـ widget.
-    """
-    _weak = weakref.ref(widget)
-
-    def _on_theme_changed(_theme_name=None):
-        obj = _weak()
-        if obj is not None:
-            slot(obj)
-
-    widget._theme_refresh_slot = _on_theme_changed
-    bus.theme_changed.connect(widget._theme_refresh_slot, Qt.UniqueConnection)
 
 
 # ── AmountSpinBox ─────────────────────────────────────────
 
-class AmountSpinBox(QDoubleSpinBox):
+class AmountSpinBox(QDoubleSpinBox, WidgetMixin):
     """QDoubleSpinBox للمبالغ المالية."""
 
     def __init__(self, max_: float = 999_999_999, dec: int = 2,
@@ -62,10 +44,9 @@ class AmountSpinBox(QDoubleSpinBox):
         self._h = height
         if currency:
             self.setSuffix(f"  {currency}")
+        self._init_widget_mixin(theme=True, font=False)
         self._refresh_style()
         self.valueChanged.connect(self._refresh_style)
-        # [إصلاح ثيم] إعادة بناء الستايل عند تغيير الثيم
-        _connect_theme_refresh(self, AmountSpinBox._refresh_style)
 
     def _refresh_style(self, *_):
         self.setStyleSheet(_spinbox_style(self._h, positive=self.value() > 0))
@@ -73,7 +54,7 @@ class AmountSpinBox(QDoubleSpinBox):
 
 # ── DateField ─────────────────────────────────────────────
 
-class DateField(QDateEdit):
+class DateField(QDateEdit, WidgetMixin):
     """QDateEdit موحد."""
 
     def __init__(self, date: QDate = None, height: int = 32,
@@ -85,9 +66,8 @@ class DateField(QDateEdit):
         self._h = height
         if width:
             self.setFixedWidth(width)
+        self._init_widget_mixin(theme=True, font=False)
         self._refresh_style()
-        # [إصلاح ثيم]
-        _connect_theme_refresh(self, DateField._refresh_style)
 
     def _refresh_style(self, *_):
         self.setStyleSheet(
@@ -107,16 +87,15 @@ class DateField(QDateEdit):
 
 # ── StyledComboBox ────────────────────────────────────────
 
-class StyledComboBox(QComboBox):
+class StyledComboBox(QComboBox, WidgetMixin):
     """QComboBox بستايل موحد."""
 
     def __init__(self, height: int = 32, parent=None):
         super().__init__(parent)
         self.setMinimumHeight(height)
         self._h = height
+        self._init_widget_mixin(theme=True, font=False)
         self._refresh_style()
-        # [إصلاح ثيم]
-        _connect_theme_refresh(self, StyledComboBox._refresh_style)
 
     def _refresh_style(self, *_):
         self.setStyleSheet(
@@ -129,7 +108,7 @@ class StyledComboBox(QComboBox):
 
 # ── LabeledInput ──────────────────────────────────────────
 
-class LabeledInput(QWidget):
+class LabeledInput(QWidget, WidgetMixin):
     """حقل مع label أفقي."""
 
     def __init__(self, label: str, widget: QWidget, unit: str = "",
@@ -156,9 +135,8 @@ class LabeledInput(QWidget):
             self._unit_lbl = QLabel(unit)
             lay.addWidget(self._unit_lbl)
 
+        self._init_widget_mixin(theme=True, font=False)
         self._refresh_style()
-        # [إصلاح ثيم]
-        _connect_theme_refresh(self, LabeledInput._refresh_style)
 
     def _refresh_style(self, *_):
         base = get_font_size()
@@ -179,7 +157,7 @@ class LabeledInput(QWidget):
 
 # ── RequiredLineEdit ──────────────────────────────────────
 
-class RequiredLineEdit(QLineEdit):
+class RequiredLineEdit(QLineEdit, WidgetMixin):
     """QLineEdit مع تحقق بصري من الفراغ."""
 
     def __init__(self, placeholder: str = "", height: int = 32, parent=None):
@@ -188,23 +166,22 @@ class RequiredLineEdit(QLineEdit):
         self.setMinimumHeight(height)
         self._h     = height
         self._error = False
-        self._refresh()
+        self._init_widget_mixin(theme=True, font=False)
+        self._refresh_style()
         self.textChanged.connect(self._on_change)
-        # [إصلاح ثيم]
-        _connect_theme_refresh(self, RequiredLineEdit._refresh)
 
-    def _refresh(self, *_):
+    def _refresh_style(self, *_):
         self.setStyleSheet(f"QLineEdit {{ {_input_style(self._h, self._error)} }}")
 
     def _on_change(self):
         if self._error and self.text().strip():
             self._error = False
-            self._refresh()
+            self._refresh_style()
 
     def validate(self) -> bool:
         if not self.text().strip():
             self._error = True
-            self._refresh()
+            self._refresh_style()
             self.setFocus()
             return False
         return True
@@ -214,12 +191,12 @@ class RequiredLineEdit(QLineEdit):
 
     def clear_error(self):
         self._error = False
-        self._refresh()
+        self._refresh_style()
 
 
 # ── NotesLineEdit ─────────────────────────────────────────
 
-class NotesLineEdit(QLineEdit):
+class NotesLineEdit(QLineEdit, WidgetMixin):
     """حقل ملاحظات بستايل مخصص يتزامن مع الثيم."""
 
     def __init__(self, placeholder: str = "ملاحظات اختيارية...",
@@ -228,9 +205,8 @@ class NotesLineEdit(QLineEdit):
         self.setPlaceholderText(placeholder)
         self.setMinimumHeight(height)
         self._h = height
+        self._init_widget_mixin(theme=True, font=False)
         self._refresh_style()
-        # [إصلاح ثيم]
-        _connect_theme_refresh(self, NotesLineEdit._refresh_style)
 
     def _refresh_style(self, *_):
         base = get_font_size()

@@ -15,7 +15,7 @@ from ui.font                         import fs, get_font_size
 from ..components.headers_page       import DetailHeader
 from ..panels.state                  import EmptyState
 from ..components.notification       import NotificationBar
-from ..mixins.bus                    import BusConnectedMixin
+from ui.widgets.core.widget_mixin    import WidgetMixin
 from ..theme.layout_styles           import scroll_style   # [إصلاح 2.2]
 
 
@@ -27,7 +27,7 @@ def _tr_safe(key: str) -> str:
         return key
 
 
-class BaseDetailPanel(QWidget, BusConnectedMixin):
+class BaseDetailPanel(QWidget, WidgetMixin):
     """
     قاعدة مشتركة لكل لوحات التفاصيل.
 
@@ -40,7 +40,7 @@ class BaseDetailPanel(QWidget, BusConnectedMixin):
         _build_header_cards()
         _build_header_buttons()
         _fill_header(data)
-        _on_data_changed()
+        _refresh_data(company_id)
         EMPTY_ICON, EMPTY_TITLE, EMPTY_SUBTITLE, HEADER_BG
         MIN_CONTENT_W, CONNECT_BUS
     """
@@ -66,7 +66,10 @@ class BaseDetailPanel(QWidget, BusConnectedMixin):
         self._set_mode(has_data=False)
 
         if self.CONNECT_BUS:
-            self._connect_bus(data=True, theme=True, lang=True)
+            self._init_widget_mixin(theme=True, font=True, lang=True, data=True)
+        else:
+            self._init_widget_mixin(theme=True, lang=True)
+        self._refresh_style()
 
     # ── override hooks ────────────────────────────────────
 
@@ -88,17 +91,16 @@ class BaseDetailPanel(QWidget, BusConnectedMixin):
     def _fill_header(self, data: dict):
         self._hdr.set_title(data.get("name", "─"))
 
-    def _on_data_changed(self):
+    def _refresh_data(self, company_id=None):
         if self._item_id is not None:
             self.load_item(self._item_id)
 
     # ── بناء الواجهة ──────────────────────────────────────
 
     def _build(self):
-        _bg = _C['bg_page']
+        from ui.theme import _C
         header_bg = self.HEADER_BG or _C['bg_surface']
 
-        self.setStyleSheet(f"background:{_bg};")
         root = QVBoxLayout(self)
         root.setContentsMargins(0, 0, 0, 0)
         root.setSpacing(0)
@@ -115,7 +117,6 @@ class BaseDetailPanel(QWidget, BusConnectedMixin):
 
         inner = QWidget()
         inner.setMinimumWidth(self.MIN_CONTENT_W)
-        inner.setStyleSheet(f"background:{_bg};")
         inner_lay = QVBoxLayout(inner)
         inner_lay.setContentsMargins(0, 0, 0, 0)
         inner_lay.setSpacing(0)
@@ -126,7 +127,6 @@ class BaseDetailPanel(QWidget, BusConnectedMixin):
         inner_lay.addWidget(self._hdr)
 
         content = QWidget()
-        content.setStyleSheet(f"background:{_bg};")
         self._content_lay = QVBoxLayout(content)
         self._content_lay.setContentsMargins(16, 14, 16, 16)
         self._content_lay.setSpacing(12)
@@ -144,11 +144,9 @@ class BaseDetailPanel(QWidget, BusConnectedMixin):
         )
         root.addWidget(self._empty)
 
-        self._bg_color = _bg
-
     # ── [i18n/themes] Theme & Language handlers ───────────
 
-    def _on_theme_changed(self, theme_name: str):
+    def _refresh_style(self, *_):
         _bg = _C['bg_page']
         self._bg_color = _bg
         self.setStyleSheet(f"background:{_bg};")
@@ -159,8 +157,13 @@ class BaseDetailPanel(QWidget, BusConnectedMixin):
             for child in inner.children():
                 if isinstance(child, QWidget) and child is not self._hdr:
                     child.setStyleSheet(f"background:{_bg};")
+        # تحديث لون header عند تغيير الثيم (لو لم يُحدَّد HEADER_BG ثابت)
+        if self.HEADER_BG is None:
+            self._hdr.set_bg(_C['bg_surface'])
+        # تحديث لون نص EmptyState
+        self._empty.set_color(_C['text_muted'])
 
-    def _on_language_changed(self, lang_code: str):
+    def _refresh_lang(self, *_):
         translated = _tr_safe(self.EMPTY_TITLE)
         try:
             self._empty.set_title(translated)

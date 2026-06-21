@@ -31,7 +31,7 @@ from ..tables.tables import (
 from ..panels.state            import EmptyState
 from ..components.headers_list import ListHeader, StatusBar
 from ..panels.filter      import FilterToolbar
-from ..mixins.bus         import BusConnectedMixin
+from ui.widgets.core.widget_mixin import WidgetMixin
 
 
 def _tr_safe(key: str) -> str:
@@ -42,7 +42,7 @@ def _tr_safe(key: str) -> str:
         return key
 
 
-class BaseListPanel(QWidget, BusConnectedMixin):
+class BaseListPanel(QWidget, WidgetMixin):
     """
     قاعدة مشتركة لكل لوحات القوائم.
 
@@ -56,7 +56,7 @@ class BaseListPanel(QWidget, BusConnectedMixin):
         _match_category(row, cat_id)   → bool
         _match_date(row)               → bool
         _on_add_clicked()
-        _on_data_changed()
+        _refresh_data(company_id)
         _build_extra_header_actions(header)
         COL_WIDTHS, LIST_TITLE, ADD_TEXT, SEARCH_PLACEHOLDER
         SHOW_CATEGORY, SHOW_DATE, FILTER_SCOPE
@@ -118,7 +118,10 @@ class BaseListPanel(QWidget, BusConnectedMixin):
         self._build()
 
         if self.CONNECT_BUS:
-            self._connect_bus(data=True, theme=True, lang=True)
+            self._init_widget_mixin(theme=True, font=True, lang=True, data=True)
+        else:
+            self._init_widget_mixin(theme=True, font=True, lang=True)
+        self._refresh_style()
 
         self.refresh()
 
@@ -146,9 +149,6 @@ class BaseListPanel(QWidget, BusConnectedMixin):
     def _on_add_clicked(self):
         pass
 
-    def _on_data_changed(self):
-        self.refresh()
-
     def _build_extra_header_actions(self, header: ListHeader):
         pass
 
@@ -169,7 +169,6 @@ class BaseListPanel(QWidget, BusConnectedMixin):
         root = QVBoxLayout(self)
         root.setContentsMargins(0, 0, 0, 0)
         root.setSpacing(0)
-        self.setStyleSheet(f"background:{_C['bg_input']};")
 
         self._header = self._build_header()
         root.addWidget(self._header)
@@ -200,9 +199,6 @@ class BaseListPanel(QWidget, BusConnectedMixin):
         self._empty_state = EmptyState(
             icon=self.EMPTY_ICON, title=self.EMPTY_TITLE,
             style="plain", color=_C['text_muted'], min_height=100,
-        )
-        self._empty_state.setStyleSheet(
-            f"QFrame {{ background:{_C['bg_input']}; border:none; }}"
         )
         self._empty_state.setVisible(False)
         root.addWidget(self._empty_state)
@@ -244,7 +240,7 @@ class BaseListPanel(QWidget, BusConnectedMixin):
 
     # ── [i18n/themes] Theme & Language handlers ───────────
 
-    def _on_theme_changed(self, theme_name: str):
+    def _refresh_style(self, *_):
         self.setStyleSheet(f"background:{_C['bg_input']};")
         self._empty_state.setStyleSheet(
             f"QFrame {{ background:{_C['bg_input']}; border:none; }}"
@@ -252,12 +248,15 @@ class BaseListPanel(QWidget, BusConnectedMixin):
         self._rebuild_pagination_styles()
         self._rebuild_status_style()
 
-    def _on_language_changed(self, lang_code: str):
+    def _refresh_lang(self, *_):
         if self._header.search_bar:
             placeholder = _tr_safe(self.SEARCH_PLACEHOLDER)
             self._header.search_bar.set_placeholder(placeholder)
         self._update_empty_state_title()
         self._update_pagination_texts()
+
+    def _refresh_data(self, company_id=None):
+        self.refresh()
 
     def _rebuild_pagination_styles(self):
         base = get_font_size()
@@ -323,56 +322,24 @@ class BaseListPanel(QWidget, BusConnectedMixin):
 
     def _build_pagination_bar(self) -> QWidget:
         bar = QFrame()
-        bar.setStyleSheet(f"""
-            QFrame {{
-                background: {_C['bg_surface_2']};
-                border-top: 1px solid {_C['border']};
-            }}
-        """)
         bar.setFixedHeight(44)
 
         lay = QHBoxLayout(bar)
         lay.setContentsMargins(12, 6, 12, 6)
         lay.setSpacing(10)
 
-        base = get_font_size()
-
         self._lbl_page_info = QLabel("")
-        self._lbl_page_info.setStyleSheet(
-            f"color: {_C['text_muted']}; font-size: {fs(base, -1)}pt;"
-            "background: transparent; border: none;"
-        )
         lay.addWidget(self._lbl_page_info, stretch=1)
 
         self._btn_load_more = QPushButton()
         self._btn_load_more.setCursor(Qt.PointingHandCursor)
         self._btn_load_more.setFixedHeight(30)
-        self._btn_load_more.setStyleSheet(f"""
-            QPushButton {{
-                background: {_C['accent_light']}; color: {_C['accent_text']};
-                border: 1px solid {_C['accent_mid']}; border-radius: 5px;
-                padding: 0 14px; font-size: {fs(base, -1)}pt; font-weight: bold;
-            }}
-            QPushButton:hover {{
-                background: {_C['accent_mid']}; border-color: {_C['accent']};
-            }}
-        """)
         self._btn_load_more.clicked.connect(self._on_load_more)
         lay.addWidget(self._btn_load_more)
 
         self._btn_show_all = QPushButton("عرض الكل")
         self._btn_show_all.setCursor(Qt.PointingHandCursor)
         self._btn_show_all.setFixedHeight(30)
-        self._btn_show_all.setStyleSheet(f"""
-            QPushButton {{
-                background: transparent; color: {_C['text_muted']};
-                border: 1px solid {_C['border_med']}; border-radius: 5px;
-                padding: 0 12px; font-size: {fs(base, -1)}pt;
-            }}
-            QPushButton:hover {{
-                color: {_C['text_primary']}; border-color: {_C['border_strong']};
-            }}
-        """)
         self._btn_show_all.clicked.connect(self._on_show_all)
         lay.addWidget(self._btn_show_all)
 
@@ -385,7 +352,6 @@ class BaseListPanel(QWidget, BusConnectedMixin):
             self._pagination_bar.setVisible(False)
             return
 
-        base = get_font_size()
         self._lbl_page_info.setText(f"يعرض {shown} من {total}")
         self._btn_load_more.setText(
             f"تحميل {min(remaining, self.PAGE_SIZE):,} إضافي  ▼"

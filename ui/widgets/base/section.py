@@ -24,7 +24,7 @@ BaseSection — قاعدة مشتركة للأقسام اللي فيها list + 
   - override الاختياري:
       _create_form()        → QWidget | None
       _connect_signals()
-      _on_data_changed()
+      _refresh_data(company_id)
       _on_item_selected(item_id)
       LIST_MIN_W, LIST_MAX_W, DETAIL_MIN_W
       CONNECT_BUS, LAYOUT_REVERSED, FORM_POSITION, SPLITTER_RATIO
@@ -36,10 +36,10 @@ from PyQt5.QtWidgets import (
 from PyQt5.QtCore import Qt, QTimer
 
 from ..theme.table_styles import splitter_style
-from ..mixins.bus   import BusConnectedMixin
+from ui.widgets.core.widget_mixin import WidgetMixin
 
 
-class BaseSection(QWidget, BusConnectedMixin):
+class BaseSection(QWidget, WidgetMixin):
     """
     قاعدة مشتركة للأقسام ذات التخطيط list + detail.
 
@@ -50,7 +50,7 @@ class BaseSection(QWidget, BusConnectedMixin):
     Override الاختياري:
         _create_form()        → QWidget | None  (افتراضي: None)
         _connect_signals()
-        _on_data_changed()
+        _refresh_data(company_id)
         _on_item_selected(item_id)
         LIST_MIN_W, LIST_MAX_W, DETAIL_MIN_W
         CONNECT_BUS, LAYOUT_REVERSED, FORM_POSITION, SPLITTER_RATIO
@@ -77,8 +77,9 @@ class BaseSection(QWidget, BusConnectedMixin):
         self._form: "QWidget | None" = None
         self._build()
         self._connect_signals()
-        if self.CONNECT_BUS:
-            self._connect_bus(data=True)
+        self._init_widget_mixin(theme=True, font=False, lang=False,
+                                data=self.CONNECT_BUS)
+        self._refresh_style()
         QTimer.singleShot(50, self._apply_sizes)
 
     # ── override المطلوب ──────────────────────────────────
@@ -99,11 +100,16 @@ class BaseSection(QWidget, BusConnectedMixin):
         """
         return None
 
+    # ── [i18n/themes] Theme handler ───────────────────────
+
+    def _refresh_style(self, *_):
+        self._splitter.setStyleSheet(splitter_style())
+
     def _connect_signals(self):
         if hasattr(self._list, "item_selected") and hasattr(self._detail, "load_item"):
             self._list.item_selected.connect(self._detail.load_item)
 
-    def _on_data_changed(self):
+    def _refresh_data(self, company_id=None):
         self.refresh()
 
     def _on_item_selected(self, item_id: int):
@@ -123,7 +129,6 @@ class BaseSection(QWidget, BusConnectedMixin):
 
         self._splitter = QSplitter(Qt.Horizontal)
         self._splitter.setHandleWidth(5)
-        self._splitter.setStyleSheet(splitter_style())
         self._splitter.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Expanding)
 
         self._list   = self._create_list()

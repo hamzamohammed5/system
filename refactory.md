@@ -1,23 +1,36 @@
 ## السياق
 
-لدينا `WidgetMixin` في `ui/widgets/core/widget_mixin.py` يوفر ربطاً موحداً بـ bus events
-بدلاً من كتابة weakref وconnection يدوياً في كل widget.
+لدينا `WidgetMixin` في `ui/widgets/core/widget_mixin.py` يوفر ربطاً موحداً بـ bus events، بدلاً من كتابة weakref وconnection يدوياً في كل widget.
 
-الـ Mixin يحل مشكلة `Could not parse stylesheet of object QPushButton(0x...)` عبر
-`sip.isdeleted()` قبل أي استدعاء لـ `setStyleSheet`.
+الـ Mixin يحل مشكلة `Could not parse stylesheet of object QPushButton(0x...)` عبر التحقق من `sip.isdeleted()` قبل أي استدعاء لـ `setStyleSheet`.
 
 ---
 
-## مهمتك
+## المهمة
 
-حوّل الـ widget في الملفات المرفقة عشان تستخدم `WidgetMixin` بدل ربط الـ bus يدوياً.
-اتبع القواعد دي بالترتيب:
+حوّل الـ widgets الموجودة في الملفات المرفقة لتستخدم `WidgetMixin`.
+
+**نطاق التحويل (مهم):** المطلوب ليس فقط الـ widgets اللي بتعمل ربط يدوي مع bus events. أي widget يستخدم مباشرةً أحد APIs الآتية **داخل تعريفه نفسه** يدخل في النطاق ويجب تحويله، حتى لو لم يكن مشتركاً في أي bus signal أصلاً:
+
+- ألوان الثيم (مثل `_C` من `ui/theme.py`)
+- حجم الخط (مثل `get_font_size()` من `ui/font.py`)
+- النصوص القابلة للترجمة (مثل `tr()` من `ui/widgets/core/i18n`)
+
+هذا يشمل، على سبيل المثال، widget بيطبّق الـ style مرة واحدة بس جوا `__init__` ومش بيتحدث تاني عند تغيير الثيم أو الخط — هذه الحالة **تدخل في النطاق وتحتاج تحويل**، لأن الهدف هو ضمان أن أي widget يعتمد على هذه القيم سيتحدث تلقائياً عبر `WidgetMixin` بدل ما يفضل ثابت بعد أول رسم.
+
+**خارج النطاق:** لو الاستخدام غير مباشر — أي الـ widget بيستدعي دالة في كلاس أو module تاني وهي اللي بتطبّق الستايل أو تجيب الترجمة — متبعش الاستدعاء ومتعدلش الكلاس الآخر؛ ركّز فقط على الكود المباشر جوا تعريف الـ widget نفسه.
+
+إذا كان أحد الملفات المرفقة لا يستخدم أي من الأنظمة دي (لا bus events ولا theme/font/lang APIs) أصلاً، تجاهله ولا تعدّل فيه.
+
+**ملاحظة مهمة:** عدّل الملفات المرفقة مباشرة — لا تكتب أي ملف من الصفر.
+
+اتبع القواعد التالية بالترتيب:
 
 ---
 
-## قواعد التحويل
+## خطوات التحويل
 
-### ١. الـ class definition
+### ١. تعديل تعريف الـ class
 
 ```python
 # قبل
@@ -25,12 +38,13 @@ class MyWidget(QComboBox):
 
 # بعد
 from ui.widgets.core.widget_mixin import WidgetMixin
+
 class MyWidget(QComboBox, WidgetMixin):
 ```
 
 ---
 
-### ٢. في `__init__` — استبدل كل ربط bus يدوي بـ `_init_widget_mixin`
+### ٢. استبدال الربط اليدوي (أو غياب الربط) في `__init__`
 
 ```python
 # قبل — ربط يدوي
@@ -47,58 +61,81 @@ self._init_widget_mixin(theme=True, font=True, lang=True)
 self._refresh_style()   # أول رسم فوري
 ```
 
-اختر الـ parameters حسب الاحتياج:
+```python
+# قبل — استخدام مباشر بدون أي اشتراك في bus (الستايل بيتطبق مرة واحدة بس)
+class MyWidget(QLabel):
+    def __init__(self, parent=None):
+        super().__init__(parent)
+        from ui.theme import _C
+        self.setStyleSheet(f"color: {_C['text_primary']};")
 
-| parameter | متى تحدده |
-|-----------|-----------|
-| `theme=True` | لو الـ widget بيستجيب لتغيير الثيم |
-| `font=True`  | لو الـ widget بيستجيب لتغيير حجم الخط |
-| `lang=True`  | لو الـ widget فيه نصوص تتترجم |
-| `data=True`  | لو الـ widget بيجيب بيانات من DB |
+# بعد — نفس المبدأ: حتى مفيش bus.connect، لازم يتحول
+from ui.widgets.core.widget_mixin import WidgetMixin
+
+class MyWidget(QLabel, WidgetMixin):
+    def __init__(self, parent=None):
+        super().__init__(parent)
+        self._init_widget_mixin(theme=True)
+        self._refresh_style()
+
+    def _refresh_style(self, *_):
+        from ui.theme import _C
+        self.setStyleSheet(f"color: {_C['text_primary']};")
+```
+
+اختر الـ parameters المناسبة حسب احتياج الـ widget:
+
+| Parameter | يُستخدم عندما... |
+|-----------|-------------------|
+| `theme=True` | الـ widget يستخدم ألوان الثيم (مثل `_C`) في أي مكان داخل تعريفه |
+| `font=True`  | الـ widget يستخدم حجم الخط (مثل `get_font_size()`) داخل تعريفه |
+| `lang=True`  | الـ widget يحتوي نصوصاً قابلة للترجمة (مثل `tr()`) داخل تعريفه |
+| `data=True`  | الـ widget يجلب بيانات من قاعدة البيانات |
 
 ---
 
-### ٣. عرّف الدوال المناسبة فقط
+### ٣. تعريف الدوال المناسبة فقط (حسب الـ parameters المختارة)
 
 ```python
 def _refresh_style(self, *_):
-    # الـ WidgetMixin بيتحقق من sip.isdeleted قبل ما ينادي الدالة دي
-    # مش محتاج تضيف try/except هنا إلا لو فيه منطق خاص
+    # WidgetMixin يتحقق من sip.isdeleted تلقائياً قبل استدعاء هذه الدالة
+    # لا داعي لـ try/except هنا إلا لو فيه منطق خاص إضافي
     from ui.theme import _C
     from ui.font import get_font_size
     base = get_font_size()
     self.setStyleSheet(f"color: {_C['text_primary']}; font-size: {base}pt;")
 
 def _refresh_lang(self, *_):
-    # بس لو lang=True اتحددت
+    # فقط إذا كان lang=True
     from ui.widgets.core.i18n import tr
     self.setPlaceholderText(tr('search'))
 
 def _refresh_data(self, company_id=None):
-    # بس لو data=True اتحددت
+    # فقط إذا كان data=True
     from db.companies.company_state import company_state
     conn = company_state.get_erp_conn()
-    # ... جيب البيانات وحدّث الـ widget
+    # ... جلب البيانات وتحديث الـ widget
 ```
 
 ---
 
-### ٤. امسح الكود القديم
+### ٤. حذف الكود القديم
 
-- احذف أي `weakref.ref(self)` مربوط بـ bus
-- احذف أي `bus.theme_changed.connect(...)` يدوي
-- احذف أي `bus.font_changed.connect(...)` يدوي
-- احذف أي `bus.language_changed.connect(...)` يدوي
-- احذف أي `bus.company_data_changed.connect(...)` يدوي
-- احذف imports مش محتاجها بعد كده زي `import weakref`
-- لو فيه `closeEvent` بيفصل slots يدوياً — احذفه، الـ WidgetMixin بيستخدم weakref فمش محتاج disconnect يدوي
+احذف كل ما يلي إن وُجد:
+- أي `weakref.ref(self)` مرتبط بالـ bus
+- أي `bus.theme_changed.connect(...)` يدوي
+- أي `bus.font_changed.connect(...)` يدوي
+- أي `bus.language_changed.connect(...)` يدوي
+- أي `bus.company_data_changed.connect(...)` يدوي
+- أي استدعاء مباشر لـ `_C` أو `get_font_size()` أو `tr()` تم تطبيقه مرة واحدة بس في `__init__` بدون اشتراك — يُنقل داخل `_refresh_style` / `_refresh_lang` كما هو موضح في الخطوة ٢
+- الـ imports غير المستخدمة بعد التحويل (مثل `import weakref`)
+- أي `closeEvent` يفصل الـ slots يدوياً (غير ضروري لأن WidgetMixin يستخدم weakref تلقائياً)
 
 ---
 
-## تحذيرات مهمة
+## أخطاء يجب تجنبها
 
-**[خطأ ١]** لا تستدعي `_refresh_style` في `__init__` قبل `_init_widget_mixin`:
-
+**خطأ ١ — ترتيب الاستدعاء:**
 ```python
 # خطأ
 self._refresh_style()
@@ -109,35 +146,59 @@ self._init_widget_mixin()
 self._refresh_style()
 ```
 
-**[خطأ ٢]** لا تعرّف `_widget_mixin_init` أو `_widget_mixin_slots` على الـ class:
-
+**خطأ ٢ — تعريف متغيرات الحالة على مستوى الـ class:**
 ```python
-# خطأ — هيتشارك بين كل الـ instances
+# خطأ — هتتشارك بين كل الـ instances
 class MyWidget(QWidget, WidgetMixin):
     _widget_mixin_init = False
 
-# صح — الـ WidgetMixin بيحطهم على الـ instance تلقائياً
+# صح — WidgetMixin يضبطها تلقائياً على مستوى الـ instance
 class MyWidget(QWidget, WidgetMixin):
     pass
 ```
 
-**[خطأ ٣]** لا تحط `setStyleSheet` في `__init__` مباشرة لو الـ widget بيتحدث مع الثيم:
-
+**خطأ ٣ — وضع الـ style مباشرة في `__init__`:**
 ```python
-# خطأ — الـ style هيتطبق مرة واحدة بس عند الإنشاء
+# خطأ — الـ style هيتطبق مرة واحدة بس عند الإنشاء، ولن يتحدث مع الثيم
 self.setStyleSheet(f"color: {_C['text_primary']}")
 
-# صح — حطه في _refresh_style عشان يتحدث مع الثيم
+# صح — ضعه داخل _refresh_style ليتحدث تلقائياً مع تغيير الثيم
 def _refresh_style(self, *_):
     self.setStyleSheet(f"color: {_C['text_primary']}")
 ```
 
+**خطأ ٤ — تجاهل widget بسبب عدم وجود bus.connect:**
+```python
+# خطأ — "مفيش bus.connect إذن مش محتاج تحويل"
+class MyWidget(QLabel):
+    def __init__(self, parent=None):
+        super().__init__(parent)
+        from ui.theme import _C
+        self.setStyleSheet(f"color: {_C['text_primary']};")
+    # ← تم تجاهله غلط لمجرد عدم وجود ربط يدوي بالـ bus
+
+# صح — أي استخدام مباشر لـ _C / get_font_size / tr داخل تعريف الـ widget
+# يدخل في نطاق التحويل، بغض النظر عن وجود bus.connect من عدمه
+```
+
+**خطأ ٥ — تتبّع الاستخدام غير المباشر:**
+```python
+# خطأ — الذهاب لتعديل StyleHelper لأن MyWidget يستدعيه
+class MyWidget(QLabel):
+    def __init__(self, parent=None):
+        super().__init__(parent)
+        StyleHelper.apply(self)   # الستايل الفعلي معرف في كلاس تاني
+
+# صح — هذا خارج النطاق؛ لا تعدّل StyleHelper ولا تتبع الاستدعاء،
+# فقط الكود المباشر جوا تعريف الـ widget نفسه يدخل في التحويل
+```
+
 ---
 
-## مثال كامل
+## مثال كامل (قبل وبعد)
 
 ```python
-# قبل التحويل
+# ===== قبل التحويل =====
 class StatusCombo(QComboBox):
     def __init__(self, conn, parent=None):
         super().__init__(parent)
@@ -157,7 +218,7 @@ class StatusCombo(QComboBox):
         self.setStyleSheet(f"color:{_C['text_primary']};")
 
 
-# بعد التحويل
+# ===== بعد التحويل =====
 from ui.widgets.core.widget_mixin import WidgetMixin
 
 class StatusCombo(QComboBox, WidgetMixin):
@@ -172,7 +233,13 @@ class StatusCombo(QComboBox, WidgetMixin):
         self.setStyleSheet(f"color:{_C['text_primary']};")
 ```
 
+---
 
-لو فيه اي ملف بيستخدم ألوان  او نصوص او خطوط  hardcoded ومش بيتخدم  ملف  font.py  للخطوط| theme  للالوان| i18n للنصوص فعرفني عشان ابعتلك الملفات تختار منها المفايتح المناسبة للنص او اللون الموجود والكود يكون نظيف تمام 
-لو الملفات المرفقة مش من الملفات اللي هتستخدم النظام دا تخطاها 
-والملفات اللي هتتعدل فعدل في الملفات المرفقة مباشرة وماتكتبش ملف من الصفر 
+## ملاحظة إضافية بخصوص القيم الثابتة (Hardcoded Values)
+
+إذا وجدت في أي ملف ألواناً أو نصوصاً أو خطوطاً مكتوبة مباشرة (hardcoded) بدلاً من استخدام:
+- `font.py` لأحجام الخطوط
+- `theme.py` للألوان
+- `i18n` للنصوص القابلة للترجمة
+
+**فلا تستبدلها تلقائياً.** بدلاً من ذلك، أخبرني بذلك أولاً، وسأرسل لك الملفات المرجعية (`font.py`, ملف الألوان, ملفات الترجمة) لتختار منها المفاتيح (keys) الصحيحة المطابقة للون أو النص الموجود، حتى يكون الكود الناتج نظيفاً ومتسقاً مع باقي المشروع.

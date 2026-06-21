@@ -6,6 +6,10 @@ ui/widgets/dialogs/message.py
 التحسينات:
   - [i18n] نصوص الأزرار ("حسناً"، "نعم"، "لا") تستخدم مفاتيح الترجمة
     بدل النصوص العربية المباشرة.
+  - [إصلاح ثيم] _ICONS كان dict على مستوى الـ module بيقرأ _C وقت الـ
+    import فقط، فالألوان كانت تتجمد على الثيم الأول. اتحول لدالة
+    _icon_for(kind) بتُستدعى من جوه _refresh_style عشان تفضل محدّثة.
+    باقي الستايلات (label, أزرار) بقت تتبني عبر WidgetMixin.
 """
 from PyQt5.QtWidgets import QLabel
 from PyQt5.QtCore    import Qt
@@ -16,12 +20,15 @@ from ..components.button import make_btn
 from ..core.i18n         import tr
 from .dialogs_base import DialogShell
 
-_ICONS = {
-    "question": ("❓", _C["accent"]),
-    "info":     ("ℹ️",  _C["accent"]),
-    "warning":  ("⚠️",  _C["warning"]),
-    "critical": ("❌",  _C["danger"]),
-}
+
+def _icon_for(kind: str) -> tuple:
+    icons = {
+        "question": ("❓", _C["accent"]),
+        "info":     ("ℹ️",  _C["accent"]),
+        "warning":  ("⚠️",  _C["warning"]),
+        "critical": ("❌",  _C["danger"]),
+    }
+    return icons.get(kind, ("ℹ️", _C["accent"]))
 
 
 class MessageDialog(DialogShell):
@@ -29,38 +36,53 @@ class MessageDialog(DialogShell):
 
     def __init__(self, parent, title: str, text: str,
                  kind: str = "info", yes_no: bool = False):
-        icon, accent = _ICONS.get(kind, ("ℹ️", _C["accent"]))
+        icon, accent = _icon_for(kind)
         super().__init__(parent, title=title, icon=icon,
                          accent=accent, min_width=380)
         self._result = False
-        self._build_body(text, yes_no, accent)
+        self._text    = text
+        self._yes_no  = yes_no
+        self._build_body(text, yes_no)
+        self._init_widget_mixin(theme=True, font=True, lang=True)
+        self._refresh_style()
+        self._refresh_lang()
 
-    def _build_body(self, text: str, yes_no: bool, accent: str):
+    def _build_body(self, text: str, yes_no: bool):
+        self._lbl = QLabel(text)
+        self._lbl.setWordWrap(True)
+        self._lbl.setAlignment(Qt.AlignRight | Qt.AlignVCenter)
+        self.body_layout.addWidget(self._lbl)
+
+        if yes_no:
+            self._btn_yes = make_btn(tr("yes"), "primary")
+            self._btn_no  = make_btn(tr("no"),  "ghost")
+            self._btn_yes.setMinimumHeight(32)
+            self._btn_no.setMinimumHeight(32)
+            self._btn_yes.clicked.connect(self._on_yes)
+            self._btn_no.clicked.connect(self.reject)
+            self.btn_layout.addWidget(self._btn_yes)
+            self.btn_layout.addWidget(self._btn_no)
+        else:
+            self._result = True
+            self._btn_ok = make_btn(tr("ok"), "primary")
+            self._btn_ok.setMinimumHeight(32)
+            self._btn_ok.clicked.connect(self.accept)
+            self.btn_layout.addWidget(self._btn_ok)
+
+    def _refresh_style(self, *_):
+        super()._refresh_style()
         base = get_font_size()
-        lbl = QLabel(text)
-        lbl.setWordWrap(True)
-        lbl.setAlignment(Qt.AlignRight | Qt.AlignVCenter)
-        lbl.setStyleSheet(
+        self._lbl.setStyleSheet(
             f"font-size:{fs(base,0)}pt; color:{_C.get('text_primary')};"
             "background:transparent; border:none;"
         )
-        self.body_layout.addWidget(lbl)
 
-        if yes_no:
-            btn_yes = make_btn(tr("yes"), "primary")
-            btn_no  = make_btn(tr("no"),  "ghost")
-            btn_yes.setMinimumHeight(32)
-            btn_no.setMinimumHeight(32)
-            btn_yes.clicked.connect(self._on_yes)
-            btn_no.clicked.connect(self.reject)
-            self.btn_layout.addWidget(btn_yes)
-            self.btn_layout.addWidget(btn_no)
+    def _refresh_lang(self, *_):
+        if self._yes_no:
+            self._btn_yes.setText(tr("yes"))
+            self._btn_no.setText(tr("no"))
         else:
-            self._result = True
-            btn_ok = make_btn(tr("ok"), "primary")
-            btn_ok.setMinimumHeight(32)
-            btn_ok.clicked.connect(self.accept)
-            self.btn_layout.addWidget(btn_ok)
+            self._btn_ok.setText(tr("ok"))
 
     def _on_yes(self):
         self._result = True

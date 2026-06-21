@@ -7,8 +7,12 @@ ui/widgets/dialogs/confirm.py
   - [i18n] نصوص الأزرار والرسائل الافتراضية تستخدم مفاتيح الترجمة
     من i18n.py بدل النصوص العربية المباشرة.
   - confirm_delete, confirm_action, confirm_save تستخدم tr() بمفاتيح.
+  - [إصلاح ثيم] ConfirmDialog كان بيبني الـ stylesheet بتاع label
+    والأزرار مرة واحدة بس في _build_body بقيم _C/get_font_size وقت
+    الإنشاء. اتحول لـ WidgetMixin (theme+font) عشان يتحدث تلقائياً،
+    وبناء الأزرار اتفصل عن تطبيق الستايل عليها.
 """
-from PyQt5.QtWidgets import QLabel
+from PyQt5.QtWidgets import QLabel, QPushButton
 from PyQt5.QtCore    import Qt
 
 from ui.theme import _C
@@ -19,22 +23,23 @@ from ..core.i18n         import tr
 from .dialogs_base import DialogShell
 
 
-def _confirm_btn(text: str, accent: str, ghost: bool = False) -> 'QPushButton':
-    from PyQt5.QtWidgets import QPushButton
+def _confirm_btn(text: str, ghost: bool = False) -> QPushButton:
     btn = make_btn(text, "ghost" if ghost else "primary")
     btn.setMinimumHeight(34)
     btn.setMinimumWidth(80)
-    if not ghost and accent and accent != _C.get("accent"):
-        base = get_font_size()
-        btn.setStyleSheet(f"""
-            QPushButton {{
-                background:{accent}; color:white; font-weight:bold;
-                border:none; border-radius:6px; padding:0 20px;
-                font-size:{fs(base, 0)}pt; min-height:34px; min-width:80px;
-            }}
-            QPushButton:hover {{ background:{accent}dd; }}
-        """)
     return btn
+
+
+def _style_confirm_btn(btn: QPushButton, accent: str) -> None:
+    base = get_font_size()
+    btn.setStyleSheet(f"""
+        QPushButton {{
+            background:{accent}; color:white; font-weight:bold;
+            border:none; border-radius:6px; padding:0 20px;
+            font-size:{fs(base, 0)}pt; min-height:34px; min-width:80px;
+        }}
+        QPushButton:hover {{ background:{accent}dd; }}
+    """)
 
 
 class ConfirmDialog(DialogShell):
@@ -44,33 +49,54 @@ class ConfirmDialog(DialogShell):
                  message: str = "", icon: str = "❓",
                  confirm_text: str = "", cancel_text: str = "",
                  danger: bool = False, accent: str = None):
-        _accent = accent or (_C["danger"] if danger else _C.get("accent"))
+        self._danger      = danger
+        self._explicit_accent = accent
+        _accent = self._resolve_accent()
         _title = title or tr("confirm_action")
         super().__init__(parent, title=_title, icon=icon,
                          accent=_accent, min_width=380)
         self.setMaximumWidth(520)
         self._result = False
-        _confirm = confirm_text or tr("confirm")
-        _cancel  = cancel_text  or tr("cancel")
-        self._build_body(message, _confirm, _cancel, _accent)
+        self._message      = message
+        self._confirm_text = confirm_text
+        self._cancel_text  = cancel_text
+        self._build_body(message)
+        self._init_widget_mixin(theme=True, font=True, lang=True)
+        self._refresh_style()
+        self._refresh_lang()
 
-    def _build_body(self, message, confirm_text, cancel_text, accent):
+    def _resolve_accent(self) -> str:
+        return self._explicit_accent or (
+            _C["danger"] if self._danger else _C.get("accent")
+        )
+
+    def _build_body(self, message: str):
+        self._lbl = QLabel(message)
+        self._lbl.setWordWrap(True)
+        self._lbl.setAlignment(Qt.AlignRight | Qt.AlignTop)
+        self.body_layout.addWidget(self._lbl)
+
+        self._btn_cancel = _confirm_btn(self._cancel_text or tr("cancel"), ghost=True)
+        self._btn_ok     = _confirm_btn(self._confirm_text or tr("confirm"))
+        self._btn_cancel.clicked.connect(self.reject)
+        self._btn_ok.clicked.connect(self._on_confirm)
+        self.btn_layout.addWidget(self._btn_cancel)
+        self.btn_layout.addWidget(self._btn_ok)
+
+    def _refresh_style(self, *_):
+        super()._refresh_style()
         base = get_font_size()
-        lbl = QLabel(message)
-        lbl.setWordWrap(True)
-        lbl.setAlignment(Qt.AlignRight | Qt.AlignTop)
-        lbl.setStyleSheet(
+        self._lbl.setStyleSheet(
             f"font-size:{fs(base, 0)}pt; color:{_C['text_primary']};"
             "background:transparent; border:none; line-height:1.6;"
         )
-        self.body_layout.addWidget(lbl)
+        accent = self._resolve_accent()
+        if accent and accent != _C.get("accent"):
+            _style_confirm_btn(self._btn_ok, accent)
 
-        btn_cancel = _confirm_btn(cancel_text, accent, ghost=True)
-        btn_ok     = _confirm_btn(confirm_text, accent)
-        btn_cancel.clicked.connect(self.reject)
-        btn_ok.clicked.connect(self._on_confirm)
-        self.btn_layout.addWidget(btn_cancel)
-        self.btn_layout.addWidget(btn_ok)
+    def _refresh_lang(self, *_):
+        self._btn_cancel.setText(self._cancel_text or tr("cancel"))
+        self._btn_ok.setText(self._confirm_text or tr("confirm"))
 
     def _on_confirm(self):
         self._result = True

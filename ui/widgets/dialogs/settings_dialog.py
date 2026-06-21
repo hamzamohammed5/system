@@ -9,6 +9,15 @@ ui/widgets/dialogs/settings_dialog.py
 
 [دمج events] المصدر الوحيد للـ bus هو ui.widgets.core.events.
   الجديد: from ui.widgets.core.events import bus
+
+[إصلاح ثيم] SettingsDialog كان بيبني كل الـ stylesheets (تبويبات: خط/
+  ثيم/لغة/وحدات/GIMP) مرة واحدة بس وقت الإنشاء بقيم _C و get_font_size.
+  بما إنها QDialog مودال طويلة العمر نسبياً، الستايل كان بيتجمد لو
+  المستخدم غيّر الثيم من نافذة تانية والنافذة دي لسه مفتوحة. الحل:
+  WidgetMixin (theme=True, font=True) + فصل بناء كل widget (مرة واحدة
+  جوه _build_*_tab) عن تطبيق الستايل (_refresh_style مركزية).
+  ملاحظة: bus.font_changed.emit و bus.language_changed.emit في _save()
+  هي عملية نشر (publish) مش اشتراك (subscribe) — فضلت زي ما هي.
 """
 
 import os
@@ -33,6 +42,7 @@ from ui.widgets.combo.unit_service import (
 from ui.widgets.dialogs.message  import msg_info, msg_warning
 from ui.widgets.dialogs.confirm  import confirm_action
 from ui.widgets.components.button import make_btn
+from ui.widgets.core.widget_mixin import WidgetMixin
 
 
 def _get_settings_conn_and_status() -> "tuple":
@@ -61,11 +71,12 @@ def _has_active_company() -> bool:
     return has_company
 
 
-class SettingsDialog(QDialog):
+class SettingsDialog(QDialog, WidgetMixin):
     def __init__(self, app, parent=None):
         super().__init__(parent)
         self._app           = app
         self._original_size = get_font_size()
+        self._notice_labels = []  # لافتات "اختر شركة نشطة" — تتبنى ديناميكياً
 
         self.setWindowTitle("⚙️  إعدادات")
         self.setMinimumWidth(560)
@@ -73,16 +84,41 @@ class SettingsDialog(QDialog):
         self.setModal(True)
         self._build()
         self._slider.setValue(self._original_size)
+        self._init_widget_mixin(theme=True, font=True)
+        self._refresh_style()
         self._load_settings()
 
     def _build(self):
-        base = get_font_size()
-
         outer = QVBoxLayout(self)
         outer.setContentsMargins(0, 0, 0, 0)
         outer.setSpacing(0)
 
         self._tabs = QTabWidget()
+
+        self._tabs.addTab(self._build_font_tab(),    "🔤  الخط")
+        self._tabs.addTab(self._build_theme_tab(),   "🎨  المظهر")
+        self._tabs.addTab(self._build_lang_tab(),    "🌐  اللغة")
+        self._tabs.addTab(self._build_units_tab(),   "📏  الوحدات")
+        self._tabs.addTab(self._build_gimp_tab(),    "🖼️  GIMP")
+        outer.addWidget(self._tabs, stretch=1)
+
+        self._btn_bar = QWidget()
+        btn_bar_lay = QHBoxLayout(self._btn_bar)
+        btn_bar_lay.setContentsMargins(20, 8, 20, 8)
+
+        btns       = QDialogButtonBox()
+        btn_ok     = btns.addButton("✅  حفظ",   QDialogButtonBox.AcceptRole)
+        btn_cancel = btns.addButton("✖  إلغاء", QDialogButtonBox.RejectRole)
+        btn_ok.setMinimumHeight(34)
+        btn_cancel.setMinimumHeight(34)
+        btn_ok.clicked.connect(self._save)
+        btn_cancel.clicked.connect(self._cancel)
+        btn_bar_lay.addWidget(btns)
+        outer.addWidget(self._btn_bar)
+
+    def _refresh_style(self, *_):
+        base = get_font_size()
+
         self._tabs.setStyleSheet(f"""
             QTabWidget::pane {{
                 border: none;
@@ -108,29 +144,16 @@ class SettingsDialog(QDialog):
             }}
         """)
 
-        self._tabs.addTab(self._build_font_tab(),    "🔤  الخط")
-        self._tabs.addTab(self._build_theme_tab(),   "🎨  المظهر")
-        self._tabs.addTab(self._build_lang_tab(),    "🌐  اللغة")
-        self._tabs.addTab(self._build_units_tab(),   "📏  الوحدات")
-        self._tabs.addTab(self._build_gimp_tab(),    "🖼️  GIMP")
-        outer.addWidget(self._tabs, stretch=1)
-
-        btn_bar = QWidget()
-        btn_bar.setStyleSheet(
+        self._btn_bar.setStyleSheet(
             f"background:{_C['bg_surface']}; border-top:1px solid {_C['border']};"
         )
-        btn_bar_lay = QHBoxLayout(btn_bar)
-        btn_bar_lay.setContentsMargins(20, 8, 20, 8)
 
-        btns       = QDialogButtonBox()
-        btn_ok     = btns.addButton("✅  حفظ",   QDialogButtonBox.AcceptRole)
-        btn_cancel = btns.addButton("✖  إلغاء", QDialogButtonBox.RejectRole)
-        btn_ok.setMinimumHeight(34)
-        btn_cancel.setMinimumHeight(34)
-        btn_ok.clicked.connect(self._save)
-        btn_cancel.clicked.connect(self._cancel)
-        btn_bar_lay.addWidget(btns)
-        outer.addWidget(btn_bar)
+        self._refresh_font_tab_style()
+        self._refresh_theme_tab_style()
+        self._refresh_lang_tab_style()
+        self._refresh_units_tab_style()
+        self._refresh_gimp_tab_style()
+        self._refresh_notice_labels_style()
 
     # ══════════════════════════════════════════════════════
     # تبويب الخط
@@ -149,8 +172,7 @@ class SettingsDialog(QDialog):
         row = QHBoxLayout()
         row.setSpacing(8)
 
-        lbl_small = QLabel("أ")
-        lbl_small.setStyleSheet(f"font-size: {fs(base, -2)}pt;")
+        self._lbl_small = QLabel("أ")
 
         self._slider = QSlider(Qt.Horizontal)
         self._slider.setRange(8, 20)
@@ -158,16 +180,15 @@ class SettingsDialog(QDialog):
         self._slider.setTickPosition(QSlider.TicksBelow)
         self._slider.valueChanged.connect(self._on_font_change)
 
-        lbl_big = QLabel("أ")
-        lbl_big.setStyleSheet(f"font-size: {fs(base, +4)}pt; font-weight: bold;")
+        self._lbl_big = QLabel("أ")
 
         self._lbl_val = QLabel(f"{base} pt")
         self._lbl_val.setMinimumWidth(44)
         self._lbl_val.setAlignment(Qt.AlignCenter)
 
-        row.addWidget(lbl_small)
+        row.addWidget(self._lbl_small)
         row.addWidget(self._slider, stretch=1)
-        row.addWidget(lbl_big)
+        row.addWidget(self._lbl_big)
         row.addSpacing(8)
         row.addWidget(self._lbl_val)
         grp_lay.addLayout(row)
@@ -179,31 +200,38 @@ class SettingsDialog(QDialog):
         )
         self._preview.setAlignment(Qt.AlignCenter)
         self._preview.setWordWrap(True)
-        self._preview.setStyleSheet(
-            f"font-size: {self._original_size}pt;"
-            f"border: 1px solid {_C['border']}; border-radius: 6px;"
-            f"padding: 12px; background:{_C['bg_surface']}; color:{_C['text_primary']};"
-        )
         grp_lay.addWidget(self._preview)
 
-        lbl_hint = QLabel(
+        self._lbl_font_hint = QLabel(
             "💡  اضغط حفظ لتطبيق حجم الخط الجديد على كامل الواجهة"
         )
-        lbl_hint.setWordWrap(True)
-        lbl_hint.setStyleSheet(
-            f"color:{_C['text_muted']}; font-size: {fs(base, -2)}pt; background: transparent;"
-        )
-        grp_lay.addWidget(lbl_hint)
+        self._lbl_font_hint.setWordWrap(True)
+        grp_lay.addWidget(self._lbl_font_hint)
         lay.addWidget(grp)
         lay.addStretch()
         return widget
+
+    def _refresh_font_tab_style(self):
+        base = get_font_size()
+        self._lbl_small.setStyleSheet(f"font-size: {fs(base, -2)}pt;")
+        self._lbl_big.setStyleSheet(f"font-size: {fs(base, +4)}pt; font-weight: bold;")
+        # المعاينة بتعكس قيمة الـ slider الحالية (قد تكون مختلفة عن
+        # get_font_size() لو المستخدم بيجرب قيم لسه ما حفظهاش)
+        preview_size = self._slider.value() if hasattr(self, "_slider") else base
+        self._preview.setStyleSheet(
+            f"font-size: {preview_size}pt;"
+            f"border: 1px solid {_C['border']}; border-radius: 6px;"
+            f"padding: 12px; background:{_C['bg_surface']}; color:{_C['text_primary']};"
+        )
+        self._lbl_font_hint.setStyleSheet(
+            f"color:{_C['text_muted']}; font-size: {fs(base, -2)}pt; background: transparent;"
+        )
 
     # ══════════════════════════════════════════════════════
     # تبويب الثيم
     # ══════════════════════════════════════════════════════
 
     def _build_theme_tab(self) -> QWidget:
-        base   = get_font_size()
         widget = QWidget()
         lay    = QVBoxLayout(widget)
         lay.setContentsMargins(20, 16, 20, 16)
@@ -217,6 +245,7 @@ class SettingsDialog(QDialog):
 
         self._theme_btn_group = QButtonGroup(self)
         self._theme_radios    = {}
+        self._theme_cards     = []
         current = theme_manager.current_theme
 
         themes_info = {
@@ -238,22 +267,19 @@ class SettingsDialog(QDialog):
         preview_grp_lay = QHBoxLayout(preview_grp)
         preview_grp_lay.setSpacing(6)
 
-        color_samples = [
-            (_C['accent'],       "accent"),
-            (_C['success'],      "success"),
-            (_C['warning'],      "warning"),
-            (_C['danger'],       "danger"),
-            (_C['bg_surface'],   "surface"),
-            (_C['text_primary'], "text"),
+        self._color_swatches = []
+        swatch_info = [
+            ("accent",       "accent"),
+            ("success",      "success"),
+            ("warning",      "warning"),
+            ("danger",       "danger"),
+            ("bg_surface",   "surface"),
+            ("text_primary", "text"),
         ]
-        for color, label in color_samples:
+        for key, display_label in swatch_info:
             swatch = QFrame()
             swatch.setFixedSize(36, 36)
-            swatch.setStyleSheet(
-                f"background:{color}; border-radius:6px; "
-                f"border:1px solid {_C['border']};"
-            )
-            swatch.setToolTip(f"{label}: {color}")
+            self._color_swatches.append((swatch, key, display_label))
             preview_grp_lay.addWidget(swatch)
 
         preview_grp_lay.addStretch()
@@ -263,12 +289,7 @@ class SettingsDialog(QDialog):
 
     def _make_theme_card(self, icon: str, name: str,
                           desc: str, is_selected: bool) -> QWidget:
-        base  = get_font_size()
         card  = QFrame()
-        card.setStyleSheet(
-            f"QFrame {{ background:{_C['bg_surface_2']}; border-radius:8px;"
-            f"border:1px solid {_C['border']}; padding:4px; }}"
-        )
         lay   = QHBoxLayout(card)
         lay.setContentsMargins(12, 8, 12, 8)
         lay.setSpacing(12)
@@ -278,24 +299,42 @@ class SettingsDialog(QDialog):
         lay.addWidget(radio)
 
         lbl_icon = QLabel(icon)
-        lbl_icon.setStyleSheet(f"font-size:{fs(base, +4)}pt; background:transparent;")
         lay.addWidget(lbl_icon)
 
         text_col = QVBoxLayout()
         text_col.setSpacing(2)
         lbl_name = QLabel(name)
-        lbl_name.setStyleSheet(
-            f"font-weight:700; font-size:{fs(base, +1)}pt; background:transparent;"
-        )
         lbl_desc = QLabel(desc)
-        lbl_desc.setStyleSheet(
-            f"color:{_C['text_muted']}; font-size:{fs(base, -1)}pt; background:transparent;"
-        )
         text_col.addWidget(lbl_name)
         text_col.addWidget(lbl_desc)
         lay.addLayout(text_col)
         lay.addStretch()
+
+        self._theme_cards.append((card, lbl_icon, lbl_name, lbl_desc))
         return card
+
+    def _refresh_theme_tab_style(self):
+        base = get_font_size()
+        for card, lbl_icon, lbl_name, lbl_desc in self._theme_cards:
+            card.setStyleSheet(
+                f"QFrame {{ background:{_C['bg_surface_2']}; border-radius:8px;"
+                f"border:1px solid {_C['border']}; padding:4px; }}"
+            )
+            lbl_icon.setStyleSheet(f"font-size:{fs(base, +4)}pt; background:transparent;")
+            lbl_name.setStyleSheet(
+                f"font-weight:700; font-size:{fs(base, +1)}pt; background:transparent;"
+            )
+            lbl_desc.setStyleSheet(
+                f"color:{_C['text_muted']}; font-size:{fs(base, -1)}pt; background:transparent;"
+            )
+
+        for swatch, key, display_label in self._color_swatches:
+            color = _C[key]
+            swatch.setStyleSheet(
+                f"background:{color}; border-radius:6px; "
+                f"border:1px solid {_C['border']};"
+            )
+            swatch.setToolTip(f"{display_label}: {color}")
 
     def _get_selected_theme(self) -> str:
         for key, radio in self._theme_radios.items():
@@ -308,7 +347,6 @@ class SettingsDialog(QDialog):
     # ══════════════════════════════════════════════════════
 
     def _build_lang_tab(self) -> QWidget:
-        base   = get_font_size()
         widget = QWidget()
         lay    = QVBoxLayout(widget)
         lay.setContentsMargins(20, 16, 20, 16)
@@ -326,6 +364,7 @@ class SettingsDialog(QDialog):
 
         self._lang_btn_group = QButtonGroup(self)
         self._lang_radios    = {}
+        self._lang_cards     = []
 
         langs_info = {
             "ar": ("🇸🇦", "العربية",  "واجهة باللغة العربية (RTL)"),
@@ -334,10 +373,6 @@ class SettingsDialog(QDialog):
 
         for key, (flag, name, desc) in langs_info.items():
             card  = QFrame()
-            card.setStyleSheet(
-                f"QFrame {{ background:{_C['bg_surface_2']}; border-radius:8px;"
-                f"border:1px solid {_C['border']}; padding:4px; }}"
-            )
             cLay  = QHBoxLayout(card)
             cLay.setContentsMargins(12, 8, 12, 8)
             cLay.setSpacing(12)
@@ -349,38 +384,47 @@ class SettingsDialog(QDialog):
             cLay.addWidget(radio)
 
             lbl_flag = QLabel(flag)
-            lbl_flag.setStyleSheet(
-                f"font-size:{fs(base, +4)}pt; background:transparent;"
-            )
             cLay.addWidget(lbl_flag)
 
             text_col = QVBoxLayout()
             text_col.setSpacing(2)
             lbl_name = QLabel(name)
-            lbl_name.setStyleSheet(
-                f"font-weight:700; font-size:{fs(base, +1)}pt; background:transparent;"
-            )
             lbl_desc = QLabel(desc)
-            lbl_desc.setStyleSheet(
-                f"color:{_C['text_muted']}; font-size:{fs(base, -1)}pt; background:transparent;"
-            )
             text_col.addWidget(lbl_name)
             text_col.addWidget(lbl_desc)
             cLay.addLayout(text_col)
             cLay.addStretch()
 
+            self._lang_cards.append((card, lbl_flag, lbl_name, lbl_desc))
             grp_lay.addWidget(card)
 
         lay.addWidget(grp)
 
-        hint = QLabel("💡  تغيير اللغة يُطبَّق فوراً بعد الحفظ")
-        hint.setWordWrap(True)
-        hint.setStyleSheet(
-            f"color:{_C['text_muted']}; font-size:{fs(base, -1)}pt; background:transparent;"
-        )
-        lay.addWidget(hint)
+        self._lbl_lang_hint = QLabel("💡  تغيير اللغة يُطبَّق فوراً بعد الحفظ")
+        self._lbl_lang_hint.setWordWrap(True)
+        lay.addWidget(self._lbl_lang_hint)
         lay.addStretch()
         return widget
+
+    def _refresh_lang_tab_style(self):
+        base = get_font_size()
+        for card, lbl_flag, lbl_name, lbl_desc in self._lang_cards:
+            card.setStyleSheet(
+                f"QFrame {{ background:{_C['bg_surface_2']}; border-radius:8px;"
+                f"border:1px solid {_C['border']}; padding:4px; }}"
+            )
+            lbl_flag.setStyleSheet(
+                f"font-size:{fs(base, +4)}pt; background:transparent;"
+            )
+            lbl_name.setStyleSheet(
+                f"font-weight:700; font-size:{fs(base, +1)}pt; background:transparent;"
+            )
+            lbl_desc.setStyleSheet(
+                f"color:{_C['text_muted']}; font-size:{fs(base, -1)}pt; background:transparent;"
+            )
+        self._lbl_lang_hint.setStyleSheet(
+            f"color:{_C['text_muted']}; font-size:{fs(base, -1)}pt; background:transparent;"
+        )
 
     def _get_selected_lang(self) -> str:
         for key, radio in self._lang_radios.items():
@@ -393,7 +437,6 @@ class SettingsDialog(QDialog):
     # ══════════════════════════════════════════════════════
 
     def _build_units_tab(self) -> QWidget:
-        base   = get_font_size()
         widget = QWidget()
         lay    = QVBoxLayout(widget)
         lay.setContentsMargins(20, 16, 20, 16)
@@ -420,15 +463,18 @@ class SettingsDialog(QDialog):
         btn_row.addStretch()
         grp_lay.addLayout(btn_row)
 
-        hint = QLabel("💡  الوحدات الافتراضية (باللون الرمادي) لا يمكن حذفها")
-        hint.setWordWrap(True)
-        hint.setStyleSheet(
-            f"color:{_C['text_muted']}; font-size:{fs(base, -2)}pt; background:transparent;"
-        )
-        grp_lay.addWidget(hint)
+        self._lbl_units_hint = QLabel("💡  الوحدات الافتراضية (باللون الرمادي) لا يمكن حذفها")
+        self._lbl_units_hint.setWordWrap(True)
+        grp_lay.addWidget(self._lbl_units_hint)
         lay.addWidget(grp)
         lay.addStretch()
         return widget
+
+    def _refresh_units_tab_style(self):
+        base = get_font_size()
+        self._lbl_units_hint.setStyleSheet(
+            f"color:{_C['text_muted']}; font-size:{fs(base, -2)}pt; background:transparent;"
+        )
 
     # ══════════════════════════════════════════════════════
     # تبويب GIMP

@@ -16,15 +16,16 @@ from PyQt5.QtWidgets import (
 )
 from PyQt5.QtCore import pyqtSignal
 
-from ui.widgets.mixins.form_mixins import EditModeMixin   # [إصلاح 2.4]
-from ui.widgets.core.conn          import LiveConnMixin
-from ui.widgets.panels.form_group  import FormGroup
-from ui.widgets.theme.builders     import wrap_in_scroll
+from ui.widgets.mixins.form_mixins  import EditModeMixin   # [إصلاح 2.4]
+from ui.widgets.core.conn           import LiveConnMixin
+from ui.widgets.panels.form_group   import FormGroup
+from ui.widgets.theme.builders      import wrap_in_scroll
 # [FIX] استيراد emit_company_data_changed بدل bus مباشرة
-from ui.widgets.core.events        import emit_company_data_changed
+from ui.widgets.core.events         import emit_company_data_changed
+from ui.widgets.core.widget_mixin   import WidgetMixin
 
 
-class BaseCrudForm(QWidget, EditModeMixin, LiveConnMixin):
+class BaseCrudForm(QWidget, EditModeMixin, LiveConnMixin, WidgetMixin):
     """
     قاعدة مشتركة لكل فورمات CRUD.
     راجع docstring الملف للتفاصيل الكاملة.
@@ -45,6 +46,8 @@ class BaseCrudForm(QWidget, EditModeMixin, LiveConnMixin):
         self.init_edit_mode(
             self.btn_add, self.btn_save, self.btn_cancel, self.lbl_mode
         )
+        self._init_widget_mixin(theme=True, font=False, lang=False)
+        self._refresh_style()
 
     # ══════════════════════════════════════════════════════
     # بناء الواجهة
@@ -67,7 +70,6 @@ class BaseCrudForm(QWidget, EditModeMixin, LiveConnMixin):
         grp = FormGroup(self.FORM_TITLE)
 
         self.lbl_mode = QLabel()
-        self.lbl_mode.setStyleSheet("font-weight:bold; color:#1565c0;")
         grp.add_label_row(self.lbl_mode)
 
         # hook الـ subclass لإضافة الحقول
@@ -95,6 +97,12 @@ class BaseCrudForm(QWidget, EditModeMixin, LiveConnMixin):
         btn_row.addStretch()
         root.addLayout(btn_row)
         root.addStretch()
+
+    # ── [i18n/themes] Theme handler ───────────────────────
+
+    def _refresh_style(self, *_):
+        from ui.theme import _C
+        self.lbl_mode.setStyleSheet(f"font-weight:bold; color:{_C['blue']};")
 
     # ══════════════════════════════════════════════════════
     # Hooks — المطلوب override في الـ subclass

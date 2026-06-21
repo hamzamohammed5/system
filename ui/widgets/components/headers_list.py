@@ -16,6 +16,7 @@ from ui.theme import _C
 from ui.font  import fs, get_font_size
 from .button  import make_btn
 from ..core.i18n import tr
+from ui.widgets.core.widget_mixin import WidgetMixin
 
 
 # ══════════════════════════════════════════════════════════
@@ -128,7 +129,7 @@ class StatusBar(QLabel):
 # ListHeader
 # ══════════════════════════════════════════════════════════
 
-class ListHeader(QFrame):
+class ListHeader(QFrame, WidgetMixin):
     """هيدر لوحة قائمة: عنوان + بحث + زر إضافة + أزرار إضافية."""
 
     search_changed = pyqtSignal(str)
@@ -147,7 +148,7 @@ class ListHeader(QFrame):
         self._btn_row     = None
         _placeholder = search_placeholder or tr("list_search_placeholder")
         self._build(_placeholder, search_delay)
-        self._connect_language_bus()
+        self._init_widget_mixin(theme=False, font=False, lang=True)
 
     def _build(self, placeholder: str, delay: int):
         self.setStyleSheet(f"""
@@ -189,16 +190,7 @@ class ListHeader(QFrame):
             self._search_bar.search_changed.connect(self.search_changed.emit)
             root.addWidget(self._search_bar)
 
-    def _connect_language_bus(self):
-        try:
-            from ui.widgets.core.events import bus
-            bus.language_changed.connect(
-                self._on_language_changed, Qt.UniqueConnection
-            )
-        except Exception:
-            pass
-
-    def _on_language_changed(self, lang_code: str):
+    def _refresh_lang(self, *_):
         if self._search_bar:
             self._search_bar.set_placeholder(tr("list_search_placeholder"))
 

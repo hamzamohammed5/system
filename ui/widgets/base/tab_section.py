@@ -18,8 +18,9 @@ get_connection() ترجع shared connection من company_state،
 """
 from PyQt5.QtWidgets import QWidget, QVBoxLayout, QTabWidget
 
-from db.shared.connection      import get_connection
-from ..theme.layout_styles     import tab_style
+from db.shared.connection            import get_connection
+from ..theme.layout_styles           import tab_style
+from ui.widgets.core.widget_mixin    import WidgetMixin
 
 
 def _is_owned_connection(conn) -> bool:
@@ -53,7 +54,7 @@ def _is_owned_connection(conn) -> bool:
         return False
 
 
-class TabSectionBase(QWidget):
+class TabSectionBase(QWidget, WidgetMixin):
     """
     قاعدة مشتركة للأقسام ذات التبويبات.
 
@@ -69,6 +70,8 @@ class TabSectionBase(QWidget):
         self.conn  = (conn_fn or get_connection)()
         self._tabs: "QTabWidget | None" = None
         self._setup()
+        self._init_widget_mixin(theme=True, font=False, lang=False)
+        self._refresh_style()
 
     def _setup(self):
         root = QVBoxLayout(self)
@@ -76,9 +79,12 @@ class TabSectionBase(QWidget):
         root.setSpacing(0)
 
         self._tabs = QTabWidget()
-        self._tabs.setStyleSheet(tab_style())
         self._build_tabs(self._tabs)
         root.addWidget(self._tabs)
+
+    def _refresh_style(self, *_):
+        if self._tabs:
+            self._tabs.setStyleSheet(tab_style())
 
     def _build_tabs(self, tabs: QTabWidget):
         """Override هنا لإضافة التبويبات."""
