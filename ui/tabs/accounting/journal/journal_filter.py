@@ -20,6 +20,7 @@ from ui.widgets.utils.date_range import DateRangeFilter
 from ui.widgets.core.events import bus, get_active_company_id
 from ui.widgets.core.i18n import tr
 from ui.theme import _C
+from ui.font import FS_XS, FS_SM, FS_BASE, FS_MD, FS_XL
 from .journal_group_combo import _TreeGroupCombo
 
 
@@ -83,7 +84,7 @@ class _JournalFilterBar(SafeConnMixin, QFrame):
         row1.setSpacing(8)
 
         lbl_s = QLabel("🔍")
-        lbl_s.setStyleSheet("background:transparent; border:none; font-size:13px;")
+        lbl_s.setStyleSheet(f"background:transparent; border:none; font-size:{FS_MD}px;")
         lbl_s.setFixedWidth(20)
 
         self.inp_search = QLineEdit()
@@ -92,7 +93,7 @@ class _JournalFilterBar(SafeConnMixin, QFrame):
         self.inp_search.setStyleSheet(f"""
             QLineEdit {{
                 background: {_C['bg_input']}; border: 1px solid {_C['border_med']};
-                border-radius: 5px; padding: 2px 8px; font-size: 12px;
+                border-radius: 5px; padding: 2px 8px; font-size: {FS_BASE}px;
             }}
             QLineEdit:focus {{ border-color: {_C['accent']}; }}
         """)
@@ -100,7 +101,7 @@ class _JournalFilterBar(SafeConnMixin, QFrame):
         lbl_grp = QLabel(tr("group_filter"))
         lbl_grp.setStyleSheet(
             f"background:transparent; border:none; font-weight:bold;"
-            f"font-size:11px; color:{_C['text_sec']};"
+            f"font-size:{FS_SM}px; color:{_C['text_sec']};"
         )
 
         self.cmb_group = _TreeGroupCombo(self._get_safe_conn())
@@ -110,7 +111,7 @@ class _JournalFilterBar(SafeConnMixin, QFrame):
         self.cmb_group.setStyleSheet(f"""
             QComboBox {{
                 background: {_C['bg_input']}; border: 1px solid {_C['border_med']};
-                border-radius: 5px; padding: 2px 8px; font-size: 11px;
+                border-radius: 5px; padding: 2px 8px; font-size: {FS_SM}px;
             }}
             QComboBox::drop-down {{ border: none; width: 20px; }}
         """)
@@ -127,7 +128,7 @@ class _JournalFilterBar(SafeConnMixin, QFrame):
         self.cmb_balance.setStyleSheet(f"""
             QComboBox {{
                 background: {_C['bg_input']}; border: 1px solid {_C['border_med']};
-                border-radius: 5px; padding: 2px 8px; font-size: 11px;
+                border-radius: 5px; padding: 2px 8px; font-size: {FS_SM}px;
             }}
             QComboBox::drop-down {{ border: none; }}
         """)
@@ -145,7 +146,7 @@ class _JournalFilterBar(SafeConnMixin, QFrame):
         row2.setSpacing(8)
 
         lbl_date = QLabel("📅")
-        lbl_date.setStyleSheet("background:transparent; border:none; font-size:13px;")
+        lbl_date.setStyleSheet(f"background:transparent; border:none; font-size:{FS_MD}px;")
         lbl_date.setFixedWidth(20)
         row2.addWidget(lbl_date)
 
@@ -160,7 +161,7 @@ class _JournalFilterBar(SafeConnMixin, QFrame):
 
         sep = QLabel("│")
         sep.setStyleSheet(
-            "color:#c5cae9; background:transparent; border:none; font-size:16px;"
+            f"color:{_C['input_accent_border']}; background:transparent; border:none; font-size:{FS_XL}px;"
         )
         row2.addWidget(sep)
 
@@ -171,7 +172,7 @@ class _JournalFilterBar(SafeConnMixin, QFrame):
             QPushButton {{
                 background: {_C['accent_light']}; border: 1px solid {_C['border_med']};
                 border-radius: 5px; color: {_C['accent']};
-                font-size: 11px; padding: 2px 8px;
+                font-size: {FS_SM}px; padding: 2px 8px;
             }}
             QPushButton:hover {{ background: {_C['border_med']}; }}
         """)
@@ -181,7 +182,7 @@ class _JournalFilterBar(SafeConnMixin, QFrame):
 
         self.lbl_count = QLabel("")
         self.lbl_count.setStyleSheet(
-            f"color:{_C['accent']}; font-size:10px; font-weight:bold;"
+            f"color:{_C['accent']}; font-size:{FS_XS}px; font-weight:bold;"
             "background:transparent; border:none; min-width:70px;"
         )
         self.lbl_count.setAlignment(Qt.AlignCenter)
@@ -228,6 +229,6 @@ class _JournalFilterBar(SafeConnMixin, QFrame):
 
     def set_count(self, shown: int, total: int):
         if shown == total:
-            self.lbl_count.setText(f"({total} قيد)")
+            self.lbl_count.setText(tr("journal_count_label", count=total))
         else:
-            self.lbl_count.setText(f"({shown} / {total})")
+            self.lbl_count.setText(tr("journal_count_filtered", shown=shown, total=total))

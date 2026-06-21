@@ -67,7 +67,7 @@ class _InvestorDetails(DualConnMixin, QWidget):
 
         lbl_mov = QLabel(tr("investor_movements_header"))
         lbl_mov.setStyleSheet(
-            f"font-weight:bold; color:{_C['accent']}; font-size:11px;"
+            f"font-weight:bold; color:{_C['accent']}; font-size:{FS_SM}px;"
             "background:transparent; border:none;"
         )
         root.addWidget(lbl_mov)

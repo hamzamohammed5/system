@@ -28,6 +28,7 @@ from ui.widgets.core.events import bus
 from ui.widgets.core.conn import DualConnMixin
 from ui.theme import _C
 from ui.widgets.core.i18n import tr
+from ui.font import FS_SM
 from ._investor_form    import _InvestorForm
 from ._movement_dialog  import _MovementDialog
 
@@ -66,7 +67,7 @@ class _InvestorsTable(DualConnMixin, QWidget):
 
         lbl = QLabel(tr("investor_list_title"))
         lbl.setStyleSheet(
-            f"font-weight:bold; color:{_C['accent']}; font-size:11px;"
+            f"font-weight:bold; color:{_C['accent']}; font-size:{FS_SM}px;"
             "background:transparent; border:none;"
         )
         root.addWidget(lbl)

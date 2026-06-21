@@ -13,6 +13,7 @@ from PyQt5.QtWidgets import (
 from PyQt5.QtCore import pyqtSignal
 from ui.theme import _C
 from ui.widgets.core.i18n import tr
+from ui.font import FS_BASE, FS_LG, FS_XL
 
 
 class _BalanceBar(QFrame):
@@ -52,14 +53,14 @@ class _BalanceBar(QFrame):
 
         def _sep():
             s = QLabel("│")
-            s.setStyleSheet(f"color:{_C['border_med']}; font-size:18px; margin:0 8px;")
+            s.setStyleSheet(f"color:{_C['border_med']}; font-size:{FS_XL}px; margin:0 8px;")
             return s
 
         lbl_dr_t = QLabel(tr("total_debit") + ":")
         lbl_dr_t.setStyleSheet(f"font-weight:bold; color:{_C['journal_dr_accent']};")
         self.lbl_sum_dr = QLabel("0.00")
         self.lbl_sum_dr.setStyleSheet(
-            f"font-size:14px; font-weight:bold; color:{_C['journal_dr_accent']};"
+            f"font-size:{FS_LG}px; font-weight:bold; color:{_C['journal_dr_accent']};"
             f"background:{_C['badge_dr_bg']}; border-radius:4px; padding:3px 10px; margin-left:4px;"
         )
 
@@ -67,7 +68,7 @@ class _BalanceBar(QFrame):
         lbl_cr_t.setStyleSheet(f"font-weight:bold; color:{_C['journal_cr_accent']};")
         self.lbl_sum_cr = QLabel("0.00")
         self.lbl_sum_cr.setStyleSheet(
-            f"font-size:14px; font-weight:bold; color:{_C['journal_cr_accent']};"
+            f"font-size:{FS_LG}px; font-weight:bold; color:{_C['journal_cr_accent']};"
             f"background:{_C['badge_cr_bg']}; border-radius:4px; padding:3px 10px; margin-left:4px;"
         )
 
@@ -75,13 +76,13 @@ class _BalanceBar(QFrame):
         lbl_diff_t.setStyleSheet(f"font-weight:bold; color:{_C['text_sec']};")
         self.lbl_diff = QLabel("0.00")
         self.lbl_diff.setStyleSheet(
-            f"font-size:14px; font-weight:bold; color:{_C['text_hint']};"
+            f"font-size:{FS_LG}px; font-weight:bold; color:{_C['text_hint']};"
             f"background:{_C['bg_surface_2']}; border-radius:4px; padding:3px 10px; margin-left:4px;"
         )
 
         self.lbl_status = QLabel(tr("balance_bar_add_rows"))
         self.lbl_status.setStyleSheet(
-            f"font-size:12px; font-weight:bold; color:{_C['text_hint']};"
+            f"font-size:{FS_BASE}px; font-weight:bold; color:{_C['text_hint']};"
         )
 
         for w in (lbl_dr_t, self.lbl_sum_dr, _sep(),
@@ -118,20 +119,20 @@ class _BalanceBar(QFrame):
     def _set_neutral(self):
         self.lbl_status.setText(tr("balance_bar_add_rows"))
         self.lbl_status.setStyleSheet(
-            f"font-size:12px; font-weight:bold; color:{_C['text_hint']};"
+            f"font-size:{FS_BASE}px; font-weight:bold; color:{_C['text_hint']};"
         )
         self.lbl_diff.setStyleSheet(
-            f"font-size:14px; font-weight:bold; color:{_C['text_hint']};"
+            f"font-size:{FS_LG}px; font-weight:bold; color:{_C['text_hint']};"
             f"background:{_C['bg_surface_2']}; border-radius:4px; padding:3px 10px; margin-left:4px;"
         )
 
     def _set_balanced(self):
         self.lbl_status.setText(tr("journal_balanced"))
         self.lbl_status.setStyleSheet(
-            f"font-size:12px; font-weight:bold; color:{_C['investor_capital_text']};"
+            f"font-size:{FS_BASE}px; font-weight:bold; color:{_C['investor_capital_text']};"
         )
         self.lbl_diff.setStyleSheet(
-            f"font-size:14px; font-weight:bold; color:{_C['investor_capital_text']};"
+            f"font-size:{FS_LG}px; font-weight:bold; color:{_C['investor_capital_text']};"
             f"background:{_C['investor_capital_bg']}; border-radius:4px; padding:3px 10px; margin-left:4px;"
         )
 
@@ -141,9 +142,9 @@ class _BalanceBar(QFrame):
             tr("journal_unbalanced_detail", side=side, diff=f"{abs(diff):,.2f}")
         )
         self.lbl_status.setStyleSheet(
-            f"font-size:12px; font-weight:bold; color:{_C['journal_cr_accent']};"
+            f"font-size:{FS_BASE}px; font-weight:bold; color:{_C['journal_cr_accent']};"
         )
         self.lbl_diff.setStyleSheet(
-            f"font-size:14px; font-weight:bold; color:{_C['journal_cr_accent']};"
+            f"font-size:{FS_LG}px; font-weight:bold; color:{_C['journal_cr_accent']};"
             f"background:{_C['badge_cr_bg']}; border-radius:4px; padding:3px 10px; margin-left:4px;"
         )

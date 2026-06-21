@@ -13,6 +13,7 @@ from PyQt5.QtWidgets import (
 from PyQt5.QtCore import QDate
 from ui.widgets.core.i18n import tr
 from ui.theme import _C
+from ui.font import FS_SM
 
 
 def _get_entry_types():
@@ -60,7 +61,15 @@ class _JournalHeader(QWidget):
         for key, label in _get_entry_types():
             self.cmb_type.addItem(label, key)
         self.cmb_type.setStyleSheet(
-            f"QComboBox {{ background: {_C['bg_input']}; border: 1px solid {_C['border_med']};"            "border-radius: 4px; padding: 2px 6px; font-size: 11px; }"            f"QComboBox:focus {{ border-color: {_C['accent']}; }}"            "QComboBox::drop-down { border: none; }"
+            f"QComboBox {{"
+            f"    background: {_C['bg_input']};"
+            f"    border: 1px solid {_C['border_med']};"
+            f"    border-radius: 4px;"
+            f"    padding: 2px 6px;"
+            f"    font-size: {FS_SM}px;"
+            f"}}"
+            f"QComboBox:focus {{ border-color: {_C['accent']}; }}"
+            f"QComboBox::drop-down {{ border: none; }}"
         )
 
         # ── الوصف ──

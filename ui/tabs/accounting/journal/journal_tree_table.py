@@ -44,7 +44,7 @@ class _JournalTreeTable(SafeConnMixin, QWidget):
 
     @staticmethod
     def _cols():
-        return ["#", tr("date"), tr("ref_no"), tr("journal_description"), "DR", "CR", tr("status")]
+        return ["#", tr("date"), tr("ref_no"), tr("journal_description"), tr("journal_dr_col"), tr("journal_cr_col"), tr("status")]
 
     def __init__(self, conn, parent=None):
         super().__init__(parent)
@@ -209,7 +209,7 @@ class _JournalTreeTable(SafeConnMixin, QWidget):
                     acc_name  = line.get("account_name", "")
                     acc_code  = line.get("account_code", "")
                     acc_type  = line.get("account_type", "")
-                    acc_color = TYPE_COLORS.get(acc_type, "#333")
+                    acc_color = TYPE_COLORS.get(acc_type, _C["text_primary"])
 
                     prefix    = "    └─ "
                     desc_text = f"{prefix}{acc_code} — {acc_name}"

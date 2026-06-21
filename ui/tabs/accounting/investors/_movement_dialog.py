@@ -24,6 +24,7 @@ from ui.widgets.components.button import make_btn as _make_btn
 from ui.widgets.forms.inputs import NotesLineEdit, DateField, AmountSpinBox
 from ui.theme import _C
 from ui.widgets.core.i18n import tr
+from ui.font import FS_MD, FS_SM
 from ._helpers import (
     _fill_capital_combo, _fill_drawings_combo, _fill_asset_combo,
     _post_capital_entry, _post_drawings_entry,
@@ -60,7 +61,7 @@ class _MovementDialog(DualConnMixin, QDialog):
 
         lbl_title = QLabel(f"{icon}  {self.investor_name}  —  {op_ar}")
         lbl_title.setStyleSheet(
-            f"font-size:13px; font-weight:bold; color:{color};"
+            f"font-size:{FS_MD}px; font-weight:bold; color:{color};"
             f"background:{_C['investor_capital_bg'] if is_cap else _C['investor_drawings_bg']};"
             "border-radius:6px; padding:8px 14px;"
         )
@@ -92,7 +93,7 @@ class _MovementDialog(DualConnMixin, QDialog):
         self.lbl_preview = QLabel()
         self.lbl_preview.setStyleSheet(
             f"background:{_C['bg_surface_2']}; border:1px solid {_C['journal_header_border']};"
-            "border-radius:6px; padding:8px 12px; font-size:11px;"
+            f"border-radius:6px; padding:8px 12px; font-size:{FS_SM}px;"
         )
         self.lbl_preview.setWordWrap(True)
         self.sp_amount.valueChanged.connect(self._update_preview)

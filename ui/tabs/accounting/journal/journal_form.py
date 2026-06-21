@@ -28,6 +28,7 @@ from ui.widgets.core.conn import DualConnMixin
 from ui.widgets.core.events import emit_company_data_changed
 from ui.widgets.core.i18n import tr
 from ui.theme import _C
+from ui.font import FS_BASE
 from ui.widgets.dialogs.message import msg_warning, msg_info
 from .journal_lines import _LinesPanel
 from .form._balance_bar    import _BalanceBar
@@ -49,7 +50,7 @@ class _JournalForm(DualConnMixin, QWidget):
 
         self.lbl_mode = QLabel(tr("new_journal_entry"))
         self.lbl_mode.setStyleSheet(
-            f"font-weight:bold; color:{_C['accent']}; font-size:12px;"
+            f"font-weight:bold; color:{_C['accent']}; font-size:{FS_BASE}px;"
         )
         root.addWidget(self.lbl_mode)
 

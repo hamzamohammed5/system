@@ -27,6 +27,7 @@ from ui.widgets.panels.form_group import FormGroup
 from ui.widgets.components.label import ModeLabel
 from ui.widgets.components.button import make_btn as _make_btn
 from ui.widgets.forms.inputs import NotesLineEdit, DateField, AmountSpinBox
+from ui.font import FS_XS
 from ui.theme import _C
 from ui.widgets.core.i18n import tr
 from ._helpers import (
@@ -88,7 +89,7 @@ class _InvestorForm(DualConnMixin, QWidget, EditModeMixin):
 
         self.lbl_init_preview = QLabel("─")
         self.lbl_init_preview.setStyleSheet(
-            f"color:{_C['investor_capital_text']}; font-size:10px;"
+            f"color:{_C['investor_capital_text']}; font-size:{FS_XS}px;"
             "background:transparent; border:none;"
         )
         self.lbl_init_preview.setWordWrap(True)

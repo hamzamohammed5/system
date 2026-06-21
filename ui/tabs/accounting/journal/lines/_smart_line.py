@@ -26,6 +26,7 @@ from ui.widgets.core.events import bus, get_active_company_id
 from ui.widgets.core.conn import DualConnMixin
 from ui.theme import _C
 from ui.widgets.core.i18n import tr
+from ui.font import FS_XS, FS_SM, FS_BASE
 from ..journal_account_picker import _AccountPickerButton
 
 _INVESTOR_TYPES = {"capital", "drawings"}
@@ -80,7 +81,7 @@ class _SmartLine(DualConnMixin, QFrame):
         for b in (self.btn_up, self.btn_dn):
             b.setFixedSize(18, 18)
             b.setStyleSheet(
-                f"QPushButton {{ background:transparent; border:none; color:{_C['text_disabled']}; font-size:8px; }}"
+                f"QPushButton {{ background:transparent; border:none; color:{_C['text_disabled']}; font-size:{FS_XS}px; }}"
                 f"QPushButton:hover {{ color:{_C['accent']}; }}"
             )
         self.btn_up.clicked.connect(lambda: self._on_move_up(self))
@@ -104,8 +105,8 @@ class _SmartLine(DualConnMixin, QFrame):
         self.rdo_inc = QRadioButton(tr("journal_increase"))
         self.rdo_dec = QRadioButton(tr("journal_decrease"))
         self.rdo_inc.setChecked(True)
-        self.rdo_inc.setStyleSheet(f"font-size:10px; color:{_C['investor_capital_text']}; font-weight:bold;")
-        self.rdo_dec.setStyleSheet(f"font-size:10px; color:{_C['journal_cr_accent']}; font-weight:bold;")
+        self.rdo_inc.setStyleSheet(f"font-size:{FS_XS}px; color:{_C['investor_capital_text']}; font-weight:bold;")
+        self.rdo_dec.setStyleSheet(f"font-size:{FS_XS}px; color:{_C['journal_cr_accent']}; font-weight:bold;")
         self._dir_group = QButtonGroup(self)
         self._dir_group.addButton(self.rdo_inc, 1)
         self._dir_group.addButton(self.rdo_dec, 0)
@@ -131,7 +132,7 @@ class _SmartLine(DualConnMixin, QFrame):
         btn_del = QPushButton("✖")
         btn_del.setFixedSize(22, 22)
         btn_del.setStyleSheet(
-            f"QPushButton {{ background:transparent; border:none; color:{_C['text_disabled']}; font-size:11px; }}"
+            f"QPushButton {{ background:transparent; border:none; color:{_C['text_disabled']}; font-size:{FS_SM}px; }}"
             f"QPushButton:hover {{ color:{_C['danger']}; }}"
         )
         btn_del.clicked.connect(lambda: self._on_remove(self))
@@ -150,7 +151,7 @@ class _SmartLine(DualConnMixin, QFrame):
 
         lbl_inv = QLabel(tr("link_investor_to_entry"))
         lbl_inv.setStyleSheet(
-            f"font-size:10px; font-weight:bold; color:{_C['investor_link_text']};"
+            f"font-size:{FS_XS}px; font-weight:bold; color:{_C['investor_link_text']};"
             "background:transparent; border:none;"
         )
         lbl_inv.setFixedWidth(95)
@@ -158,13 +159,13 @@ class _SmartLine(DualConnMixin, QFrame):
 
         self.cmb_investor = QComboBox()
         self.cmb_investor.setMinimumHeight(24)
-        self.cmb_investor.setStyleSheet("font-size:11px;")
+        self.cmb_investor.setStyleSheet(f"font-size:{FS_SM}px;")
         self._reload_investors()
         inv_lay.addWidget(self.cmb_investor, stretch=1)
 
         lbl_hint = QLabel(tr("investor_link_optional"))
         lbl_hint.setStyleSheet(
-            f"font-size:9px; color:{_C['text_disabled']}; background:transparent; border:none;"
+            f"font-size:{FS_XS}px; color:{_C['text_disabled']}; background:transparent; border:none;"
         )
         inv_lay.addWidget(lbl_hint)
 

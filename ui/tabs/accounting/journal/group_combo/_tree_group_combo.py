@@ -19,6 +19,7 @@ from ui.widgets.core.events import bus, get_active_company_id
 from ui.widgets.core.conn import SafeConnMixin
 from ui.widgets.core.i18n import tr
 from ui.theme import _C
+from ui.font import FS_SM
 from ui.tabs.accounting.helpers import TYPE_COLORS
 from ._no_select_delegate import _NoSelectDelegate
 
@@ -70,7 +71,7 @@ class _TreeGroupCombo(SafeConnMixin, QComboBox):
                 border: 1px solid {_C['border_med']};
                 background: {_C['bg_input']};
                 outline: none;
-                font-size: 11px;
+                font-size: {FS_SM}px;
             }}
             QTreeView::item {{
                 padding: 3px 6px;
@@ -151,7 +152,7 @@ class _TreeGroupCombo(SafeConnMixin, QComboBox):
             header_item.setFlags(Qt.ItemIsEnabled)
             hf = QFont(); hf.setBold(True); hf.setPointSize(hf.pointSize() + 1)
             header_item.setFont(hf)
-            header_item.setForeground(QColor(TYPE_COLORS.get(acc_type, "#333")))
+            header_item.setForeground(QColor(TYPE_COLORS.get(acc_type, _C['text_primary'])))
             bg = _C["investor_capital_bg"] if acc_type in EQUITY_TYPES else _C["journal_header_bg"]
             header_item.setBackground(QColor(bg))
             self._model.appendRow(header_item)
@@ -166,7 +167,7 @@ class _TreeGroupCombo(SafeConnMixin, QComboBox):
             item.setData(node["id"], _ROLE_GROUP_ID)
             item.setData(False, _ROLE_IS_HEADER)
             item.setFlags(item.flags() | Qt.ItemIsEnabled | Qt.ItemIsSelectable)
-            item.setForeground(QColor(node.get("color", TYPE_COLORS.get(acc_type, "#333"))))
+            item.setForeground(QColor(node.get("color", TYPE_COLORS.get(acc_type, _C['text_primary']))))
             parent_item.appendRow(item)
             if node.get("children"):
                 self._add_group_items(item, node["children"], acc_type)

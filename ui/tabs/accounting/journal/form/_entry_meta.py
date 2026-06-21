@@ -18,6 +18,7 @@ from PyQt5.QtWidgets import QLabel
 from PyQt5.QtCore import Qt
 from ui.theme import _C
 from ui.widgets.core.i18n import tr
+from ui.font import FS_XS, FS_SM
 
 def _get_type_colors(entry_type: str) -> tuple:
     """يرجع (fg, bg, border) من _C حسب نوع القيد."""
@@ -32,11 +33,11 @@ def _get_type_colors(entry_type: str) -> tuple:
 
 def _get_type_label(entry_type: str) -> str:
     mapping = {
-        "manual":   tr("entry_type_manual").replace("📝 ", ""),
-        "opening":  tr("entry_type_opening").replace("🟢 ", ""),
-        "closing":  tr("entry_type_closing").replace("🔴 ", ""),
-        "transfer": tr("entry_type_transfer").replace("🔄 ", ""),
-        "auto":     tr("entry_type_auto").replace("🤖 ", ""),
+        "manual":   tr("entry_type_manual_short"),
+        "opening":  tr("entry_type_opening_short"),
+        "closing":  tr("entry_type_closing_short"),
+        "transfer": tr("entry_type_transfer_short"),
+        "auto":     tr("entry_type_auto_short"),
     }
     return mapping.get(entry_type, entry_type)
 
@@ -60,7 +61,15 @@ class _EntryTypeBadge(QLabel):
         label = _get_type_label(entry_type)
         self.setText(label)
         self.setStyleSheet(
-            f"QLabel {{ color: {fg}; background: {bg}; border: 1px solid {border};"            "border-radius: 4px; padding: 2px 10px; font-size: 10px; font-weight: bold; }}"
+            f"QLabel {{"
+            f"    color: {fg};"
+            f"    background: {bg};"
+            f"    border: 1px solid {border};"
+            f"    border-radius: 4px;"
+            f"    padding: 2px 10px;"
+            f"    font-size: {FS_XS}px;"
+            f"    font-weight: bold;"
+            f"}}"
         )
 
 
@@ -76,7 +85,16 @@ class _EntryRefLabel(QLabel):
         super().__init__(ref_no, parent)
         self.setAlignment(Qt.AlignCenter)
         self.setStyleSheet(
-            f"QLabel {{ color: {_C['badge_dr_text']}; background: {_C['accent_light']};"            f"border: 1px solid {_C['accent_mid']};"            "border-radius: 4px; padding: 2px 10px; font-size: 11px; font-weight: bold; font-family: monospace; }}"
+            f"QLabel {{"
+            f"    color: {_C['badge_dr_text']};"
+            f"    background: {_C['accent_light']};"
+            f"    border: 1px solid {_C['accent_mid']};"
+            f"    border-radius: 4px;"
+            f"    padding: 2px 10px;"
+            f"    font-size: {FS_SM}px;"
+            f"    font-weight: bold;"
+            f"    font-family: monospace;"
+            f"}}"
         )
 
     def set_ref(self, ref_no: str):

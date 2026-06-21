@@ -17,6 +17,7 @@ from PyQt5.QtWidgets import (
 from ui.widgets.core.conn import DualConnMixin
 from ui.theme import _C
 from ui.widgets.core.i18n import tr
+from ui.font import FS_XS, FS_SM, FS_BASE
 from ._smart_line import _SmartLine
 
 
@@ -51,18 +52,18 @@ class _LinesPanel(DualConnMixin, QFrame):
 
         lbl = QLabel(tr("journal_lines_title"))
         lbl.setStyleSheet(
-            f"font-weight:bold; font-size:12px; color:{_C['accent']};"
+            f"font-weight:bold; font-size:{FS_BASE}px; color:{_C['accent']};"
             "background:transparent; border:none;"
         )
-        self.lbl_dr = QLabel("DR: 0.00")
+        self.lbl_dr = QLabel(tr("journal_dr_total", amount="0.00"))
         self.lbl_dr.setStyleSheet(
             f"font-weight:bold; color:{_C['journal_dr_accent']}; background:{_C['badge_dr_bg']};"
-            "border-radius:4px; padding:2px 8px; font-size:11px; border:none;"
+            f"border-radius:4px; padding:2px 8px; font-size:{FS_SM}px; border:none;"
         )
-        self.lbl_cr = QLabel("CR: 0.00")
+        self.lbl_cr = QLabel(tr("journal_cr_total", amount="0.00"))
         self.lbl_cr.setStyleSheet(
             f"font-weight:bold; color:{_C['journal_cr_accent']}; background:{_C['badge_cr_bg']};"
-            "border-radius:4px; padding:2px 8px; font-size:11px; border:none;"
+            f"border-radius:4px; padding:2px 8px; font-size:{FS_SM}px; border:none;"
         )
         hl.addWidget(lbl)
         hl.addStretch()
@@ -81,7 +82,7 @@ class _LinesPanel(DualConnMixin, QFrame):
         def _ch(text, w=None, stretch=0):
             lbl2 = QLabel(text)
             lbl2.setStyleSheet(
-                f"font-size:9px; color:{_C['text_sec']}; font-weight:bold;"
+                f"font-size:{FS_XS}px; color:{_C['text_sec']}; font-weight:bold;"
                 "background:transparent; border:none;"
             )
             if w:
@@ -177,8 +178,8 @@ class _LinesPanel(DualConnMixin, QFrame):
     def _refresh_totals(self):
         total_dr = sum(ln.get_amount() for ln in self._lines if ln.get_side() == "dr")
         total_cr = sum(ln.get_amount() for ln in self._lines if ln.get_side() == "cr")
-        self.lbl_dr.setText(f"DR: {total_dr:,.2f}")
-        self.lbl_cr.setText(f"CR: {total_cr:,.2f}")
+        self.lbl_dr.setText(tr("journal_dr_total", amount=f"{total_dr:,.2f}"))
+        self.lbl_cr.setText(tr("journal_cr_total", amount=f"{total_cr:,.2f}"))
 
     def get_total_dr(self) -> float:
         return sum(ln.get_amount() for ln in self._lines if ln.get_side() == "dr")

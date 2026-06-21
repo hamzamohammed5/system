@@ -29,6 +29,7 @@ from ui.widgets.forms.inputs import NotesLineEdit
 from ui.widgets.dialogs.message import msg_warning
 from ui.theme import _C
 from ui.widgets.core.i18n import tr
+from ui.font import FS_SM
 
 
 class _LinkToEntryPanel(DualConnMixin, QWidget):
@@ -53,7 +54,7 @@ class _LinkToEntryPanel(DualConnMixin, QWidget):
         lbl_info = QLabel(tr("link_entry_info"))
         lbl_info.setStyleSheet(
             f"background:{_C['orange_bg']}; border:1px solid {_C['orange_border']};"
-            f"border-radius:6px; padding:10px; color:{_C['orange']}; font-size:11px;"
+            f"border-radius:6px; padding:10px; color:{_C['orange']}; font-size:{FS_SM}px;"
         )
         lbl_info.setWordWrap(True)
         root.addWidget(lbl_info)

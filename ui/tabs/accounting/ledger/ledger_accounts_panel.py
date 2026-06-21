@@ -13,6 +13,8 @@ from PyQt5.QtGui  import QColor
 from db.accounting.accounting_repo    import fetch_all_accounts
 from db.accounting.accounting_schema  import TYPE_AR
 from ui.widgets.core.conn import SafeConnMixin
+from ui.widgets.core.i18n import tr
+from ui.theme import _C
 
 from ui.widgets.components.headers_list import ListHeader, StatusBar
 from ui.widgets.theme.layout_styles      import tree_style
@@ -36,9 +38,9 @@ class _AccountsPanel(SafeConnMixin, QWidget):
         root.setSpacing(0)
 
         self._header = ListHeader(
-            title="📚  الحسابات",
+            title=tr("ledger_accounts_title"),
             show_search=True,
-            search_placeholder="🔍  بحث بالاسم أو الكود...",
+            search_placeholder=tr("account_search_placeholder"),
         )
         self._header.search_changed.connect(self._filter_accounts)
         root.addWidget(self._header)
@@ -49,7 +51,7 @@ class _AccountsPanel(SafeConnMixin, QWidget):
         root.addWidget(self._type_filter)
 
         self.lst = QTreeWidget()
-        self.lst.setHeaderLabels(["الكود", "الاسم", "الرصيد"])
+        self.lst.setHeaderLabels([tr("code"), tr("name"), tr("balance")])
         hh = self.lst.header()
         hh.setSectionResizeMode(0, QHeaderView.Interactive)
         hh.setSectionResizeMode(1, QHeaderView.Stretch)
@@ -103,14 +105,14 @@ class _AccountsPanel(SafeConnMixin, QWidget):
             item.setText(2, f"{bal:,.2f}")
             item.setData(0, Qt.UserRole, acc["id"])
 
-            color = TYPE_COLORS.get(acc["type"], "#333")
+            color = TYPE_COLORS.get(acc["type"], _C["text_primary"])
             item.setForeground(0, QColor(color))
             item.setToolTip(1, f"{acc['code']} — {acc['name']}")
 
             if bal < 0:
-                item.setForeground(2, QColor("#c62828"))
+                item.setForeground(2, QColor(_C["acc_type_liability"]))
             elif bal > 0:
-                item.setForeground(2, QColor("#2e7d32"))
+                item.setForeground(2, QColor(_C["acc_type_capital"]))
 
             self.lst.addTopLevelItem(item)
             count += 1

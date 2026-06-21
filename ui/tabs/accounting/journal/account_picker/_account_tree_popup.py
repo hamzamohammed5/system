@@ -25,6 +25,7 @@ from db.accounting.accounting_repo import (
 from db.accounting.accounting_schema import TYPE_AR, EQUITY_TYPES
 from ...helpers import TYPE_COLORS
 from ui.theme import _C
+from ui.font import FS_XS, FS_BASE
 from ui.widgets.core.i18n import tr
 
 _TYPE_ORDER = {
@@ -77,7 +78,7 @@ class _AccountTreePopup(QDialog):
         self.inp_search.setPlaceholderText(tr("account_search_placeholder"))
         self.inp_search.setMinimumHeight(30)
         self.inp_search.setStyleSheet(
-            f"QLineEdit {{ background: {_C['journal_header_bg']}; border: 1px solid {_C['journal_header_border']};"            "border-radius: 4px; padding: 2px 8px; font-size: 12px; }"            f"QLineEdit:focus {{ border-color: {_C['accent']}; background: {_C['bg_input']}; }}"
+            f"QLineEdit {{ background: {_C['journal_header_bg']}; border: 1px solid {_C['journal_header_border']};"            f"border-radius: 4px; padding: 2px 8px; font-size: {FS_BASE}px; }}"            f"QLineEdit:focus {{ border-color: {_C['accent']}; background: {_C['bg_input']}; }}"
         )
         self.inp_search.textChanged.connect(self._on_search)
         root.addWidget(self.inp_search)
@@ -91,7 +92,7 @@ class _AccountTreePopup(QDialog):
         root.addWidget(self.list_widget)
 
         hint = QLabel(tr("popup_hint_select"))
-        hint.setStyleSheet("font-size:9px; color:#aaa; background:transparent;")
+        hint.setStyleSheet(f"font-size:{FS_XS}px; color:{_C['text_hint']}; background:transparent;")
         hint.setAlignment(Qt.AlignCenter)
         root.addWidget(hint)
 
@@ -132,7 +133,7 @@ class _AccountTreePopup(QDialog):
             t = acc["type"]
             if t not in by_type:
                 by_type[t] = {}
-            grp_key  = acc["group_name"] or "─── بدون تصنيف ───"
+            grp_key  = acc["group_name"] or tr("account_group_unassigned")
             grp_id   = acc["group_id"]   or -1
             grp_full = (grp_id, grp_key)
             if grp_full not in by_type[t]:
@@ -207,7 +208,7 @@ class _AccountTreePopup(QDialog):
         icon       = _TYPE_ICONS.get(acc_type, "📁")
         type_label = TYPE_AR.get(acc_type, acc_type)
         toggle     = "▼" if expanded else "▶"
-        color      = TYPE_COLORS.get(acc_type, "#333")
+        color      = TYPE_COLORS.get(acc_type, _C['text_muted'])
         pad        = "    " * indent
 
         type_item = QListWidgetItem(f"{pad}{toggle} {icon}  {type_label}")
@@ -238,7 +239,7 @@ class _AccountTreePopup(QDialog):
             grp_item.setData(Qt.UserRole, {"kind": "group", "key": grp_key_full})
             gf = QFont(); gf.setBold(True); gf.setItalic(True)
             grp_item.setFont(gf)
-            grp_item.setForeground(QColor("#546e7a"))
+            grp_item.setForeground(QColor(_C['group_label_text']))
             grp_item.setBackground(QColor(_C["journal_neutral_bg"]))
             self.list_widget.addItem(grp_item)
 
@@ -248,7 +249,7 @@ class _AccountTreePopup(QDialog):
             acc_pad = "    " * (indent + 2)
             for acc in sorted(matched_accs, key=lambda a: a["code"]):
                 nb = get_normal_balance(acc["type"])
-                nb_text = "DR↑" if nb == "dr" else "CR↑"
+                nb_text = tr("dr_badge") if nb == "dr" else tr("cr_badge")
                 label = f"{acc_pad}{acc['code']} — {acc['name']}  [{nb_text}]"
                 acc_item = QListWidgetItem(label)
                 acc_item.setData(Qt.UserRole, {

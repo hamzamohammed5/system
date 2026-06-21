@@ -18,6 +18,7 @@ from PyQt5.QtCore import Qt, QPoint, QTimer
 from db.accounting.accounting_repo import fetch_account, get_normal_balance
 from ui.widgets.core.conn import SafeConnMixin
 from ui.theme import _C
+from ui.font import FS_SM, FS_XS
 from ui.widgets.core.i18n import tr
 from ._account_tree_popup import _AccountTreePopup, _TYPE_ORDER
 
@@ -44,7 +45,7 @@ class _AccountPickerButton(SafeConnMixin, QWidget):
         self.btn.setMinimumHeight(30)
         self.btn.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Fixed)
         self.btn.setStyleSheet(
-            f"QPushButton {{ background: {_C['bg_input']}; border: 1px solid {_C['border_med']};"            "border-radius: 4px; padding: 2px 10px;"            f"text-align: right; font-size: 11px; color: {_C['text_primary']}; }}"            f"QPushButton:hover {{ border-color: {_C['accent']}; background: {_C['journal_header_bg']}; }}"
+            f"QPushButton {{ background: {_C['bg_input']}; border: 1px solid {_C['border_med']};"            "border-radius: 4px; padding: 2px 10px;"            f"text-align: right; font-size: {FS_SM}px; color: {_C['text_primary']}; }}"            f"QPushButton:hover {{ border-color: {_C['accent']}; background: {_C['journal_header_bg']}; }}"
         )
         self.btn.clicked.connect(self._open_popup)
 
@@ -52,7 +53,7 @@ class _AccountPickerButton(SafeConnMixin, QWidget):
         self.lbl_nb.setFixedWidth(44)
         self.lbl_nb.setAlignment(Qt.AlignCenter)
         self.lbl_nb.setStyleSheet(
-            f"font-size:10px; font-weight:bold; border-radius:3px; padding:2px 4px; color:{_C["text_disabled"]};"
+            f"font-size:{FS_XS}px; font-weight:bold; border-radius:3px; padding:2px 4px; color:{_C['text_disabled']};"
         )
 
         lay.addWidget(self.btn, stretch=1)
@@ -93,7 +94,7 @@ class _AccountPickerButton(SafeConnMixin, QWidget):
         if not self._account_id:
             self.lbl_nb.setText("")
             self.lbl_nb.setStyleSheet(
-                f"font-size:10px; font-weight:bold; border-radius:3px; padding:2px 4px; color:{_C["text_disabled"]};"
+                f"font-size:{FS_XS}px; font-weight:bold; border-radius:3px; padding:2px 4px; color:{_C['text_disabled']};"
             )
             return
         acc = fetch_account(self._get_safe_conn(), self._account_id)
@@ -101,14 +102,14 @@ class _AccountPickerButton(SafeConnMixin, QWidget):
             return
         nb = get_normal_balance(acc["type"])
         if nb == "dr":
-            self.lbl_nb.setText("DR↑")
+            self.lbl_nb.setText(tr("dr_badge"))
             self.lbl_nb.setStyleSheet(
-                f"font-size:10px; font-weight:bold; color:{_C['badge_dr_text']};"                f"background:{_C['badge_dr_bg']}; border-radius:3px; padding:2px 4px;"
+                f"font-size:{FS_XS}px; font-weight:bold; color:{_C['badge_dr_text']};"                f"background:{_C['badge_dr_bg']}; border-radius:3px; padding:2px 4px;"
             )
         else:
-            self.lbl_nb.setText("CR↑")
+            self.lbl_nb.setText(tr("cr_badge"))
             self.lbl_nb.setStyleSheet(
-                f"font-size:10px; font-weight:bold; color:{_C['badge_cr_text']};"                f"background:{_C['badge_cr_bg']}; border-radius:3px; padding:2px 4px;"
+                f"font-size:{FS_XS}px; font-weight:bold; color:{_C['badge_cr_text']};"                f"background:{_C['badge_cr_bg']}; border-radius:3px; padding:2px 4px;"
             )
 
     def current_account_id(self):
@@ -136,5 +137,5 @@ class _AccountPickerButton(SafeConnMixin, QWidget):
         self.btn.setText(tr("select_account"))
         self.lbl_nb.setText("")
         self.lbl_nb.setStyleSheet(
-            f"font-size:10px; font-weight:bold; border-radius:3px; padding:2px 4px; color:{_C["text_disabled"]};"
+            f"font-size:{FS_XS}px; font-weight:bold; border-radius:3px; padding:2px 4px; color:{_C['text_disabled']};"
         )
