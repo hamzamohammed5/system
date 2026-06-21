@@ -80,8 +80,11 @@ class RawTablePanel(BaseListPanel, SharedOpsMixin):
         )
 
         prefix = "🔗 " if is_shared else ("📤 " if is_published else "")
-        color  = SHARED_COLOR    if is_shared    else \
-                 PUBLISHED_COLOR if is_published else None
+        color = (
+                SHARED_COLOR()    if is_shared    else
+                PUBLISHED_COLOR() if is_published else
+                None
+            )
 
         tq     = row.get("total_qty")
         price  = float(row.get("price", 0))
@@ -98,7 +101,7 @@ class RawTablePanel(BaseListPanel, SharedOpsMixin):
         table.setItem(r, 5, colored_item(f"{unit:.4f}", color=color))
 
         if color:
-            bg = SHARED_BG if is_shared else PUBLISHED_BG
+            bg = SHARED_BG() if is_shared else PUBLISHED_BG()
             for col in range(table.columnCount()):
                 itm = table.item(r, col)
                 if itm:

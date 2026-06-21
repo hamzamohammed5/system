@@ -46,8 +46,8 @@ class PricingSection(QWidget):
         self._tabs.setTabPosition(QTabWidget.North)
         self._tabs.setStyleSheet(tab_style())
 
-        self._tabs.addTab(PricingTab(), tr("pricing_section_tab_base"))
-        self._tabs.addTab(OffersTab(),  tr("pricing_section_tab_offers"))
+        self._tabs.addTab(PricingTab(), tr("pricing_tab"))
+        self._tabs.addTab(OffersTab(),  tr("offers_tab"))
 
         layout.addWidget(self._tabs)
 

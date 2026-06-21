@@ -10,6 +10,8 @@ from ui.widgets.tables.tables import (
     auto_fit_columns,
 )
 from ui.widgets.core.i18n import tr
+from ui.theme import _C
+from ui.font import FS_BASE
 from ._config import get_status_map, get_status_color, get_type_map, get_priority_map, get_table_cols, COL_WIDTHS
 
 
@@ -34,6 +36,7 @@ def fill_recent_table(dashboard, orders: list):
         num_item = QTableWidgetItem(o["order_number"])
         f = QFont()
         f.setWeight(QFont.Medium)
+        f.setPointSize(FS_BASE)
         num_item.setFont(f)
         table.setItem(r, 0, num_item)
 
@@ -41,7 +44,7 @@ def fill_recent_table(dashboard, orders: list):
         table.setItem(r, 2, QTableWidgetItem(type_map.get(o["order_type"], o["order_type"])))
 
         status_item = QTableWidgetItem(status_map.get(o["status"], o["status"]))
-        status_item.setForeground(QColor(status_color.get(o["status"], "#555")))
+        status_item.setForeground(QColor(status_color.get(o["status"], _C['text_neutral'])))
         status_item.setTextAlignment(Qt.AlignCenter)
         table.setItem(r, 3, status_item)
 

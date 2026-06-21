@@ -10,7 +10,7 @@ from ui.widgets.base.section import BaseSection
 
 from .raw_input_panel import RawInputPanel
 from .raw_table_panel import RawTablePanel
-
+from PyQt5.QtWidgets import QWidget
 
 class RawSection(BaseSection):
     """
@@ -47,3 +47,8 @@ class RawSection(BaseSection):
         # نربط input_panel بعد التأكد إن الاثنين اتبنوا
         if hasattr(self._table_panel, "input_panel"):
             self._table_panel.input_panel = self._form_panel
+    def _create_detail(self) -> QWidget:
+        w = QWidget()
+        w.hide()
+        w.setMaximumWidth(0)
+        return w

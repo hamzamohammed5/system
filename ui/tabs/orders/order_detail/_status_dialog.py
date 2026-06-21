@@ -8,6 +8,7 @@ from PyQt5.QtWidgets import (
 from PyQt5.QtCore import Qt
 
 from ui.theme import _C
+from ui.font import FS_MD, FS_BASE
 from ui.widgets.components.button import make_btn
 from ui.widgets.theme.input_styles import input_style
 from ui.widgets.core.i18n import tr
@@ -35,7 +36,7 @@ class _StatusDialog(QDialog):
 
         lbl_hdr = QLabel(tr("status_change_title"))
         lbl_hdr.setStyleSheet(f"""
-            font-size: 14px; font-weight: bold; color: {_C['accent_text']};
+            font-size: {FS_MD}px; font-weight: bold; color: {_C['accent_text']};
             background: {_C['accent_light']};
             border-radius: 8px; padding: 8px 14px; border: none;
         """)
@@ -44,7 +45,7 @@ class _StatusDialog(QDialog):
         cur_info = STATUS_COLORS.get(current, (_C['text_sec'], _C['bg_surface_2'], _C['border']))
         lbl_cur  = QLabel(f"{tr('status_current_lbl')}  {STATUS_LABELS_SHORT.get(current, current)}")
         lbl_cur.setStyleSheet(
-            f"color:{cur_info[0]}; font-weight:600; font-size:12px;"
+            f"color:{cur_info[0]}; font-weight:600; font-size:{FS_BASE}px;"
             f"background:{cur_info[1]}; border:1px solid {cur_info[2]};"
             "border-radius:6px; padding:6px 10px;"
         )

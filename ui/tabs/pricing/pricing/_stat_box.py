@@ -8,6 +8,7 @@ from PyQt5.QtWidgets import QFrame, QVBoxLayout, QLabel
 from PyQt5.QtCore import Qt
 
 from ui.theme import _C
+from ui.font import FS_XS, FS_LG
 
 
 def stat_box(label: str, color_key: str = "accent") -> tuple:
@@ -32,12 +33,12 @@ def stat_box(label: str, color_key: str = "accent") -> tuple:
     lay.setSpacing(2)
     lbl_title = QLabel(label)
     lbl_title.setStyleSheet(
-        f"font-size:10px; color:{_C['text_muted']}; background:transparent; border:none;"
+        f"font-size:{FS_XS}px; color:{_C['text_muted']}; background:transparent; border:none;"
     )
     lbl_title.setAlignment(Qt.AlignCenter)
     lbl_val = QLabel("─")
     lbl_val.setStyleSheet(
-        f"font-size:14px; font-weight:bold; color:{color};"
+        f"font-size:{FS_LG}px; font-weight:bold; color:{color};"
         "background:transparent; border:none;"
     )
     lbl_val.setAlignment(Qt.AlignCenter)

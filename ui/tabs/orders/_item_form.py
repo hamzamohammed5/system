@@ -12,7 +12,7 @@ from ui.widgets.components.button import make_btn
 from ui.widgets.theme.input_styles import input_style
 from ui.widgets.core.i18n import tr
 from ui.theme import _C
-from ui.font import FS_BASE, FS_SM
+from ui.font import FS_BASE
 
 
 def _spin(min_=0, max_=9999999, dec=2, suffix=""):

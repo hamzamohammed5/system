@@ -52,11 +52,11 @@ class InventoryTab(QWidget):
 
         self._tabs.addTab(
             _ItemsTab(self.inv_conn, self.acc_conn, self._on_item_selected),
-            tr("inventory_section_tab_items")
+            tr("inventory_items_tab")
         )
-        self._tabs.addTab(_InboundTab(self.inv_conn, self.acc_conn),  tr("inventory_section_tab_inbound"))
-        self._tabs.addTab(_OutboundTab(self.inv_conn),                tr("inventory_section_tab_outbound"))
-        self._tabs.addTab(_ReportTab(self.inv_conn),                  tr("inventory_section_tab_report"))
+        self._tabs.addTab(_InboundTab(self.inv_conn, self.acc_conn),  tr("inventory_inbound_tab"))
+        self._tabs.addTab(_OutboundTab(self.inv_conn),                tr("inventory_outbound_tab"))
+        self._tabs.addTab(_ReportTab(self.inv_conn),                  tr("inventory_report_tab"))
         self._tabs.addTab(self._moves_panel,                          tr("inventory_section_tab_moves"))
 
         root.addWidget(self._tabs)

@@ -40,7 +40,7 @@ class MemoryScenariosMixin:
         self._in_memory  = True
         self._item_id    = None
         temp_id = self._next_temp_id()
-        self._scenarios  = [{"id": temp_id, "name": t("default_scenario_initial_name"), "is_default": True}]
+        self._scenarios  = [{"id": temp_id, "name": tr("default_scenario_initial_name"), "is_default": True}]
         self._current_id = temp_id
         self._rebuild_combo()
         self._sync_current()

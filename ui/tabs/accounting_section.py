@@ -79,7 +79,7 @@ class AccountingTab(QWidget):
         root.setContentsMargins(0, 0, 0, 0)
 
         if not is_ready():
-            lbl = QLabel(tr("accounting_section_select_company"))
+            lbl = QLabel(tr("accounting_no_company_msg"))
             lbl.setAlignment(Qt.AlignCenter)
             lbl.setStyleSheet(f"font-size:{FS_MD}px; color:{_C['text_muted']}; padding:40px;")
             root.addWidget(lbl)
@@ -130,11 +130,11 @@ class AccountingTab(QWidget):
         main_tabs.setStyleSheet(tab_style())
         self._main_tabs = main_tabs
 
-        main_tabs.addTab(build_accounts_tabs(acc),  tr("accounting_section_tab_accounts"))
-        main_tabs.addTab(JournalTab(acc, erp),       tr("accounting_section_tab_journal"))
-        main_tabs.addTab(LedgerTab(acc),             tr("accounting_section_tab_ledger"))
-        main_tabs.addTab(build_financial_tab(acc),   tr("accounting_section_tab_financial"))
-        main_tabs.addTab(InvestorsTab(erp, acc),     tr("accounting_section_tab_investors"))
+        main_tabs.addTab(build_accounts_tabs(acc),  tr("accounts_tab"))
+        main_tabs.addTab(JournalTab(acc, erp),       tr("journal_tab"))
+        main_tabs.addTab(LedgerTab(acc),             tr("ledger_tab"))
+        main_tabs.addTab(build_financial_tab(acc),   tr("financial_tab"))
+        main_tabs.addTab(InvestorsTab(erp, acc),     tr("investors_tab"))
 
         root.addWidget(main_tabs)
 

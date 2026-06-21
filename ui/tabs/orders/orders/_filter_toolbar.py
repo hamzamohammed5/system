@@ -41,7 +41,7 @@ def _combo_ss() -> str:
 def _new_btn_ss() -> str:
     return f"""
         QPushButton {{
-            background: {_C['accent']}; color: white;
+            background: {_C['accent']}; color: {_C['btn_primary_text']};
             border: none; border-radius: 8px;
             padding: 0 16px; font-weight: 700; font-size: {FS_BASE}px;
         }}

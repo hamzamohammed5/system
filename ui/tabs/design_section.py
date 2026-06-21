@@ -54,8 +54,8 @@ class DesignSection(QWidget):
         self._dim_tab     = DimensionSetsTab(self.conn)
         self._designs_tab = DesignsTab(self.conn)
 
-        self._tabs.addTab(self._dim_tab,     tr("design_section_tab_dimensions"))
-        self._tabs.addTab(self._designs_tab, tr("design_section_tab_designs"))
+        self._tabs.addTab(self._dim_tab,     tr("dimension_sets_tab"))
+        self._tabs.addTab(self._designs_tab, tr("designs_tab"))
 
         # عند تغيير التبويب لـ "التصميمات"، نعمل refresh لتحميل أي مجموعات جديدة
         self._tabs.currentChanged.connect(self._on_tab_changed)

@@ -176,6 +176,17 @@ class BaseSection(QWidget, BusConnectedMixin):
             lay.addWidget(form)
             self._form = form
             return container
+        
+        elif self.FORM_POSITION == "top":      
+            container = QWidget()
+            container.setStyleSheet("background:transparent;")
+            lay = QVBoxLayout(container)
+            lay.setContentsMargins(0, 0, 0, 0)
+            lay.setSpacing(0)
+            lay.addWidget(form)                # الفورم فوق
+            lay.addWidget(self._list, stretch=1)  # الجدول تحت
+            self._form = form
+            return container
 
         # FORM_POSITION = "left" أو أي قيمة أخرى → list فقط
         self._form = form

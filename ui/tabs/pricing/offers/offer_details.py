@@ -15,6 +15,7 @@ from PyQt5.QtGui  import QColor
 from db.pricing.offers_repo import calc_offer_summary
 from ui.widgets.core.i18n import tr
 from ui.theme import _C
+from ui.font import FS_XS, FS_MD, FS_LG
 
 from ..pricing._stat_box import stat_box
 
@@ -52,7 +53,7 @@ class _OfferDetails(QFrame):
 
         self.lbl_title = QLabel(tr("offer_details_placeholder"))
         self.lbl_title.setStyleSheet(
-            f"font-weight:bold; color:{_C['orange']}; font-size:13px;"
+            f"font-weight:bold; color:{_C['orange']}; font-size:{FS_MD}px;"
             "background:transparent; border:none;"
         )
         self.lbl_title.setAlignment(Qt.AlignCenter)
@@ -92,7 +93,7 @@ class _OfferDetails(QFrame):
 
         self.lbl_notes = QLabel("")
         self.lbl_notes.setStyleSheet(
-            f"font-size:10px; color:{_C['text_muted']}; background:transparent; border:none;"
+            f"font-size:{FS_XS}px; color:{_C['text_muted']}; background:transparent; border:none;"
         )
         self.lbl_notes.setWordWrap(True)
         root.addWidget(self.lbl_notes)
@@ -172,7 +173,7 @@ class _OfferDetails(QFrame):
         profit_key = "success" if profit >= 0 else "danger"
         self.sl_profit.setText(tr("amount_fmt").format(amount=profit))
         self.sl_profit.setStyleSheet(
-            f"font-size:14px; font-weight:bold; color:{_C[profit_key]};"
+            f"font-size:{FS_LG}px; font-weight:bold; color:{_C[profit_key]};"
             "background:transparent; border:none;"
         )
 

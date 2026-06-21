@@ -76,10 +76,11 @@ class CostingSection(QWidget):
         ]
 
         for factory, label in _tab_defs:
-            try:
-                widget = factory()
-            except Exception as e:
-                widget = _make_error_tab(tr("tab_load_error", error=str(e)))
+            widget = factory()
+            # try:
+            #     widget = factory()
+            # except Exception as e:
+            #     widget = _make_error_tab(tr("tab_load_error", error=str(e)))
             self._tabs.addTab(widget, label)
 
         layout.addWidget(self._tabs)

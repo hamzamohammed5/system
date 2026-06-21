@@ -22,6 +22,7 @@ from ui.widgets.combo.category import CategoryCombo
 from ui.widgets.core.i18n import tr
 from ui.widgets.core.events import emit_company_data_changed
 from ui.theme import _C
+from ui.font import FS_XS, FS_BASE, FS_LG
 
 from .offer_item_row import _OfferItemRow
 from ..pricing._stat_box import stat_box
@@ -82,7 +83,7 @@ class _OfferForm(QWidget):
 
         self.lbl_mode = QLabel(tr("offer_new_mode"))
         self.lbl_mode.setStyleSheet(
-            f"font-weight:bold; color:{_C['orange']}; font-size:12px;"
+            f"font-weight:bold; color:{_C['orange']}; font-size:{FS_BASE}px;"
         )
         h_lay.addWidget(self.lbl_mode)
 
@@ -100,7 +101,7 @@ class _OfferForm(QWidget):
         self.sp_discount = _spin(100, 2)
         self.sp_discount.setValue(0)
         self.sp_discount.setFixedWidth(90)
-        lbl_disc_pct = QLabel(tr("offer_times_sym").replace("×", "%"))
+        lbl_disc_pct = QLabel(tr("offer_discount_pct_sym"))
         lbl_disc_pct.setStyleSheet(f"font-weight:bold; color:{_C['orange']};")
 
         lbl_cat = QLabel(tr("offer_category_field"))
@@ -150,7 +151,7 @@ class _OfferForm(QWidget):
         def _hdr(text, w=None, stretch=0):
             lbl = QLabel(text)
             lbl.setStyleSheet(
-                f"font-size:9px; font-weight:bold; color:{_C['text_muted']};"
+                f"font-size:{FS_XS}px; font-weight:bold; color:{_C['text_muted']};"
                 f"border-bottom:1px solid {_C['border']}; background:transparent;"
             )
             if w:
@@ -290,7 +291,7 @@ class _OfferForm(QWidget):
         profit_key = "success" if profit >= 0 else "danger"
         self.lbl_profit.setText(tr("amount_fmt").format(amount=profit))
         self.lbl_profit.setStyleSheet(
-            f"font-size:14px; font-weight:bold; color:{_C[profit_key]};"
+            f"font-size:{FS_LG}px; font-weight:bold; color:{_C[profit_key]};"
             "background:transparent; border:none;"
         )
 

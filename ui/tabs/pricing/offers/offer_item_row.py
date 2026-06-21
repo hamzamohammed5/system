@@ -15,6 +15,7 @@ from models.costing import calc_cost
 from ui.widgets.mixins.bus import BusConnectedMixin
 from ui.widgets.core.i18n import tr
 from ui.theme import _C
+from ui.font import FS_SM, FS_MD
 
 
 def _spin(max_=999999, dec=2):
@@ -77,7 +78,7 @@ class _OfferItemRow(QFrame, BusConnectedMixin):
                 border: 1px solid {_C['input_accent_border']};
                 border-radius: 4px;
                 padding: 2px 6px;
-                font-size: 11px;
+                font-size: {FS_SM}px;
             }}
             QLineEdit:focus {{ border-color: {_C['orange']}; }}
         """)
@@ -93,7 +94,7 @@ class _OfferItemRow(QFrame, BusConnectedMixin):
         self.lbl_cost = QLabel("─")
         self.lbl_cost.setFixedWidth(72)
         self.lbl_cost.setStyleSheet(
-            f"color:{_C['journal_dr_accent']}; font-size:11px;"
+            f"color:{_C['journal_dr_accent']}; font-size:{FS_SM}px;"
             "background:transparent; border:none;"
         )
         self.lbl_cost.setAlignment(Qt.AlignCenter)
@@ -102,7 +103,7 @@ class _OfferItemRow(QFrame, BusConnectedMixin):
         self.lbl_listed = QLabel("─")
         self.lbl_listed.setFixedWidth(72)
         self.lbl_listed.setStyleSheet(
-            f"color:{_C['success']}; font-size:11px; background:transparent; border:none;"
+            f"color:{_C['success']}; font-size:{FS_SM}px; background:transparent; border:none;"
         )
         self.lbl_listed.setAlignment(Qt.AlignCenter)
         self.lbl_listed.setToolTip(tr("offer_col_unit_price"))
@@ -115,7 +116,7 @@ class _OfferItemRow(QFrame, BusConnectedMixin):
         self.lbl_line = QLabel("─")
         self.lbl_line.setFixedWidth(80)
         self.lbl_line.setStyleSheet(
-            f"color:{_C['orange']}; font-weight:bold; font-size:11px;"
+            f"color:{_C['orange']}; font-weight:bold; font-size:{FS_SM}px;"
             "background:transparent; border:none;"
         )
         self.lbl_line.setAlignment(Qt.AlignCenter)
@@ -123,16 +124,16 @@ class _OfferItemRow(QFrame, BusConnectedMixin):
 
         self.lbl_warn = QLabel("⚠️")
         self.lbl_warn.setStyleSheet(
-            f"color:{_C['orange']}; font-size:11px; background:transparent; border:none;"
+            f"color:{_C['orange']}; font-size:{FS_SM}px; background:transparent; border:none;"
         )
         self.lbl_warn.setFixedWidth(20)
         self.lbl_warn.setToolTip(tr("offer_no_price_tooltip"))
         self.lbl_warn.setVisible(False)
 
-        btn_del = QPushButton("❌")
+        btn_del = QPushButton(tr("offer_row_remove_btn"))
         btn_del.setFixedSize(28, 28)
         btn_del.setStyleSheet(
-            f"QPushButton {{ background:transparent; border:none; font-size:13px; }}"
+            f"QPushButton {{ background:transparent; border:none; font-size:{FS_MD}px; }}"
             f"QPushButton:hover {{ color:{_C['danger']}; }}"
         )
         btn_del.clicked.connect(lambda: self._on_remove(self))

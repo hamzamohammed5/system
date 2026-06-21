@@ -11,6 +11,7 @@ from ui.widgets.tables.tables import (
     ROW_HEIGHT_COMPACT,
 )
 from ui.widgets.core.i18n import tr
+from ui.theme import _C
 from ._status_config import get_status_labels
 
 
@@ -41,7 +42,7 @@ def _fill_log(detail):
 
         old_lbl  = STATUS_LABELS.get(log.get("old_status") or "", ("—",))[0]
         new_info = STATUS_LABELS.get(log.get("new_status", ""),
-                                     (log.get("new_status", ""), "#555", "#f5f5f5", "#e0e0e0"))
+                                     (log.get("new_status", ""), _C['text_neutral'], _C['card_fallback_bg'], _C['card_fallback_border']))
         new_lbl, new_color = new_info[0], new_info[1]
 
         table.setItem(r, 0, muted_item(make_item(old_lbl)))
