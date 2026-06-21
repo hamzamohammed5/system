@@ -1,43 +1,61 @@
 """
 ui/widgets/panels/form_group.py
-=================================
-FormGroup — QGroupBox مع QFormLayout جاهز وستايل موحد.
-
-مستخرج من panels/form_parts.py.
 """
+import weakref
 
 from PyQt5.QtWidgets import QGroupBox, QFormLayout, QFrame, QWidget
 from PyQt5.QtCore    import Qt
 
 from ui.theme import _C
 from ui.font  import get_font_size, fs
+from ui.widgets.core.events import bus
+
+
+def _connect_theme_refresh(widget, slot) -> None:
+    _weak = weakref.ref(widget)
+
+    def _on_theme_changed(_theme_name=None):
+        obj = _weak()
+        if obj is not None:
+            slot(obj)
+
+    widget._theme_refresh_slot = _on_theme_changed
+    bus.theme_changed.connect(widget._theme_refresh_slot, Qt.UniqueConnection)
 
 
 class FormGroup(QGroupBox):
-    """QGroupBox مع QFormLayout جاهز وستايل موحد."""
 
     def __init__(self, title: str = "", accent: str = None, parent=None):
         super().__init__(title, parent)
-        self._accent = accent or _C["accent"]
-        self._apply_style()
+        # None = يقرأ من _C في كل refresh بدل تجميده وقت الإنشاء
+        self._custom_accent = accent
         self.form = QFormLayout(self)
         self.form.setSpacing(10)
         self.form.setLabelAlignment(Qt.AlignRight | Qt.AlignVCenter)
         self.form.setContentsMargins(12, 14, 12, 12)
+        self.form.setFieldGrowthPolicy(QFormLayout.ExpandingFieldsGrow)
+        self._apply_style()
+        _connect_theme_refresh(self, FormGroup._apply_style)
 
-    def _apply_style(self):
-        base = get_font_size()
-        color = self._accent
+    def _apply_style(self, *_):
+        base  = get_font_size()
+        color = self._custom_accent or _C['accent']
         self.setStyleSheet(f"""
             QGroupBox {{
-                font-weight:700; font-size:{fs(base,0)}pt;
-                color:{_C['text_sec']}; background:{_C['bg_surface']};
-                border:1px solid {_C['border']}; border-radius:10px;
-                margin-top:10px; padding-top:6px;
+                font-weight: 700;
+                font-size: {fs(base, 0)}pt;
+                color: {_C['text_sec']};
+                background: {_C['bg_surface']};
+                border: 1px solid {_C['border']};
+                border-radius: 10px;
+                margin-top: 10px;
+                padding-top: 6px;
             }}
             QGroupBox::title {{
-                subcontrol-origin:margin; subcontrol-position:top right;
-                padding:0 8px; color:{color};
+                subcontrol-origin: margin;
+                subcontrol-position: top right;
+                padding: 0 8px;
+                color: {color};
             }}
         """)
 
@@ -48,8 +66,19 @@ class FormGroup(QGroupBox):
         self.form.addRow(label_widget)
 
     def add_separator(self):
-        sep = QFrame()
-        sep.setFrameShape(QFrame.HLine)
-        sep.setFixedHeight(1)
-        sep.setStyleSheet(f"background:{_C['border']}; border:none;")
+        sep = _ThemedSeparator()
         self.form.addRow(sep)
+
+
+class _ThemedSeparator(QFrame):
+    """فاصل يتابع الثيم — بدل بناء stylesheet ثابت في add_separator."""
+
+    def __init__(self):
+        super().__init__()
+        self.setFrameShape(QFrame.HLine)
+        self.setFixedHeight(1)
+        self._refresh_style()
+        _connect_theme_refresh(self, _ThemedSeparator._refresh_style)
+
+    def _refresh_style(self, *_):
+        self.setStyleSheet(f"background:{_C['border']}; border:none;")

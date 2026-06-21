@@ -9,6 +9,7 @@ from PyQt5.QtCore    import Qt
 from ui.theme import _C
 from ui.font  import get_font_size, fs
 from ui.widgets.core.events import bus
+from ui.widgets.core.widget_mixin import ThemeRefreshMixin
 
 
 def _connect_theme_refresh(widget, slot) -> None:
@@ -25,11 +26,12 @@ def _connect_theme_refresh(widget, slot) -> None:
 
 # ── FormLabel ─────────────────────────────────────────────
 
-class _FormLabel(QLabel):
+class _FormLabel(QLabel, ThemeRefreshMixin):
     def __init__(self, text: str, color: str = None):
         super().__init__(text)
         self._color = color
         self.setAlignment(Qt.AlignRight | Qt.AlignVCenter)
+        self._init_theme_refresh()
         self._refresh_style()
         _connect_theme_refresh(self, _FormLabel._refresh_style)
 

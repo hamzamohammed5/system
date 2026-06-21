@@ -1,5 +1,5 @@
 File Tree Snapshot
-Generated : 2026-06-21 16:41:54
+Generated : 2026-06-21 17:37:16
 Source    : D:\My Workspace\Hg\Alhabaar\accountant\system
 Extensions: .md, .py
 ────────────────────────────────────────────────────────────
@@ -355,7 +355,8 @@ system/
 │   │   │   ├── conn.py
 │   │   │   ├── events.py
 │   │   │   ├── guard.py
-│   │   │   └── i18n.py
+│   │   │   ├── i18n.py
+│   │   │   └── widget_mixin.py
 │   │   ├── dialogs/
 │   │   │   ├── confirm.py
 │   │   │   ├── dialogs_base.py
