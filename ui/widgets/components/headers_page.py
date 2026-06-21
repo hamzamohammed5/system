@@ -20,18 +20,23 @@ from ..theme.builders import h_divider, v_divider
 from .button         import make_btn
 from .badge          import BadgeLabel           # [إصلاح 2.5]
 from .label          import InfoRow
+from ..core.widget_mixin import WidgetMixin
 
 
 # ══════════════════════════════════════════════════════════
 # SectionHeader
 # ══════════════════════════════════════════════════════════
 
-class SectionHeader(QWidget):
+class SectionHeader(QWidget, WidgetMixin):
     """هيدر قسم داخلي: accent bar + عنوان + أزرار."""
 
     def __init__(self, title: str = "", parent=None):
         super().__init__(parent)
+        self._title_text = title
+        self._bar = None
+        self._lbl = None
         self._build(title)
+        self._init_widget_mixin(theme=True, font=True)
 
     def _build(self, title: str):
         self.setStyleSheet("background:transparent;")
@@ -39,20 +44,23 @@ class SectionHeader(QWidget):
         lay.setContentsMargins(0, 6, 0, 6)
         lay.setSpacing(10)
 
-        bar = QLabel()
-        bar.setFixedSize(3, 18)
-        bar.setStyleSheet(f"background:{_C['accent']}; border-radius:2px; border:none;")
-        lay.addWidget(bar)
+        self._bar = QLabel()
+        self._bar.setFixedSize(3, 18)
+        lay.addWidget(self._bar)
 
-        base = get_font_size()
         self._lbl = QLabel(title)
+        lay.addWidget(self._lbl)
+        lay.addStretch()
+        self._btn_row = lay
+        self._refresh_style()
+
+    def _refresh_style(self, *_):
+        self._bar.setStyleSheet(f"background:{_C['accent']}; border-radius:2px; border:none;")
+        base = get_font_size()
         self._lbl.setStyleSheet(
             f"font-weight:700; font-size:{fs(base,+1)}pt;"
             f"color:{_C['text_primary']}; background:transparent; border:none;"
         )
-        lay.addWidget(self._lbl)
-        lay.addStretch()
-        self._btn_row = lay
 
     def set_title(self, title: str):
         self._lbl.setText(title)
@@ -70,7 +78,7 @@ class SectionHeader(QWidget):
 # PageHeader
 # ══════════════════════════════════════════════════════════
 
-class PageHeader(QFrame):
+class PageHeader(QFrame, WidgetMixin):
     """هيدر صفحة رئيسية: أيقونة + عنوان + subtitle + أزرار."""
 
     def __init__(self, title: str = "", subtitle: str = "",
@@ -79,15 +87,14 @@ class PageHeader(QFrame):
         super().__init__(parent)
         self._accent  = accent or _C.get('accent', '#1565c0')
         self._compact = compact
+        self._icon    = icon
+        self._lbl_icon = None
+        self._lbl_title = None
+        self._lbl_sub   = None
         self._build(title, subtitle, icon)
+        self._init_widget_mixin(theme=True, font=True)
 
     def _build(self, title: str, subtitle: str, icon: str):
-        self.setStyleSheet(f"""
-            QFrame {{
-                background:{_C.get('bg_surface','white')};
-                border-bottom:1px solid {_C.get('border','#e0e0e0')};
-            }}
-        """)
         self.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Fixed)
 
         h_pad = 12 if self._compact else 20
@@ -97,38 +104,21 @@ class PageHeader(QFrame):
         lay.setContentsMargins(h_pad, v_pad, h_pad, v_pad)
         lay.setSpacing(12)
 
-        base = get_font_size()
-
         if icon:
-            sz = fs(base, +1) if self._compact else fs(base, +2)
-            lbl_icon = QLabel(icon)
-            lbl_icon.setStyleSheet(
-                f"font-size:{sz}pt; background:transparent; border:none;"
-            )
-            lbl_icon.setAlignment(Qt.AlignVCenter)
-            lay.addWidget(lbl_icon)
+            self._lbl_icon = QLabel(icon)
+            self._lbl_icon.setAlignment(Qt.AlignVCenter)
+            lay.addWidget(self._lbl_icon)
 
         col = QVBoxLayout()
         col.setSpacing(2)
         col.setContentsMargins(0, 0, 0, 0)
 
         self._lbl_title = QLabel(title)
-        f = QFont()
-        f.setPointSize(fs(base, +1) if self._compact else fs(base, +2))
-        f.setBold(True)
-        self._lbl_title.setFont(f)
-        self._lbl_title.setStyleSheet(
-            f"color:{_C.get('text_primary','#1c1b18')}; background:transparent; border:none;"
-        )
         col.addWidget(self._lbl_title)
 
         self._lbl_sub = None
         if subtitle:
             self._lbl_sub = QLabel(subtitle)
-            self._lbl_sub.setStyleSheet(
-                f"color:{_C.get('text_muted','#9ca3af')}; font-size:{fs(base,-1)}pt;"
-                "background:transparent; border:none;"
-            )
             col.addWidget(self._lbl_sub)
 
         lay.addLayout(col, stretch=1)
@@ -136,6 +126,37 @@ class PageHeader(QFrame):
         self._btn_row = QHBoxLayout()
         self._btn_row.setSpacing(8)
         lay.addLayout(self._btn_row)
+
+        self._refresh_style()
+
+    def _refresh_style(self, *_):
+        self.setStyleSheet(f"""
+            QFrame {{
+                background:{_C.get('bg_surface','white')};
+                border-bottom:1px solid {_C.get('border','#e0e0e0')};
+            }}
+        """)
+        base = get_font_size()
+
+        if self._lbl_icon:
+            sz = fs(base, +1) if self._compact else fs(base, +2)
+            self._lbl_icon.setStyleSheet(
+                f"font-size:{sz}pt; background:transparent; border:none;"
+            )
+
+        f = QFont()
+        f.setPointSize(fs(base, +1) if self._compact else fs(base, +2))
+        f.setBold(True)
+        self._lbl_title.setFont(f)
+        self._lbl_title.setStyleSheet(
+            f"color:{_C.get('text_primary','#1c1b18')}; background:transparent; border:none;"
+        )
+
+        if self._lbl_sub:
+            self._lbl_sub.setStyleSheet(
+                f"color:{_C.get('text_muted','#9ca3af')}; font-size:{fs(base,-1)}pt;"
+                "background:transparent; border:none;"
+            )
 
     def set_title(self, text: str):
         self._lbl_title.setText(text)
@@ -230,7 +251,7 @@ class DetailHeader(QFrame):
         self._lbl_customer.setVisible(False)
         top_lay.addWidget(self._lbl_customer)
 
-        self._info_row = InfoRow(separator="  ·  ")
+        self._info_row = InfoRow()
         top_lay.addWidget(self._info_row)
 
         root.addWidget(top)
@@ -276,14 +297,20 @@ class DetailHeader(QFrame):
                 "background:transparent; border:none; font-weight:500;"
             )
 
-    def set_status_badge(self, text: str, text_color: str = "#555",
-                         bg: str = "#f5f5f5", border: str = "#e0e0e0"):
-        self._badge_status.set_badge(text, text_color, bg, border)
+    def set_status_badge(self, text: str, text_color: str = None,
+                         bg: str = None, border: str = None):
+        self._badge_status.set_badge(
+            text,
+            text_color or _C['text_neutral'],
+            bg         or _C['card_fallback_bg'],
+            border     or _C['card_fallback_border'],
+        )
 
-    def set_priority_badge(self, text: str, color: str = "#6b7280"):
+    def set_priority_badge(self, text: str, color: str = None):
+        _color = color or _C['text_neutral']
         self._badge_priority.setText(text)
         self._badge_priority.setStyleSheet(
-            f"color:{color}; background:transparent; border:none;"
+            f"color:{_color}; background:transparent; border:none;"
             f"font-size:{fs(get_font_size(),+1)}pt;"
         )
 

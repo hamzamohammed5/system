@@ -11,15 +11,23 @@ from PyQt5.QtCore    import Qt
 
 from ui.theme import _C
 from ui.font  import fs, get_font_size
+from ..core.widget_mixin import WidgetMixin
 
 
-class BadgeLabel(QLabel):
+class BadgeLabel(QLabel, WidgetMixin):
     """شارة نصية ملونة."""
 
     def __init__(self, parent=None):
         super().__init__(parent)
         self.setAlignment(Qt.AlignCenter)
-        self._apply(_C["text_sec"], _C["bg_surface_2"], _C["border"])
+        self._fg = _C["text_sec"]
+        self._bg = _C["bg_surface_2"]
+        self._border = _C["border"]
+        self._init_widget_mixin(theme=True, font=True)
+        self._refresh_style()
+
+    def _refresh_style(self, *_):
+        self._apply(self._fg, self._bg, self._border)
 
     def _apply(self, fg: str, bg: str, border: str):
         base = get_font_size()
@@ -32,12 +40,14 @@ class BadgeLabel(QLabel):
     def set_badge(self, text: str, text_color: str = None,
                   bg: str = None, border: str = None):
         self.setText(text)
-        self._apply(
-            text_color or _C["text_sec"],
-            bg         or _C["bg_surface_2"],
-            border     or _C["border"],
-        )
+        self._fg     = text_color or _C["text_sec"]
+        self._bg     = bg         or _C["bg_surface_2"]
+        self._border = border     or _C["border"]
+        self._apply(self._fg, self._bg, self._border)
 
     def clear_badge(self):
         self.setText("")
-        self._apply(_C["text_sec"], _C["bg_surface_2"], _C["border"])
+        self._fg = _C["text_sec"]
+        self._bg = _C["bg_surface_2"]
+        self._border = _C["border"]
+        self._apply(self._fg, self._bg, self._border)

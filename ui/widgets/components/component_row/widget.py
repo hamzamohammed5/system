@@ -53,13 +53,13 @@ class _OrphanState:
         self.name    = None
 
     def display(self) -> str:
-        name_part = f" «{self.name}»" if self.name else ""
+        name_part = tr('component_row_orphan_name_part').format(name=self.name) if self.name else ""
         return tr('component_row_orphan_display').format(
             name_part=name_part, item_id=self.item_id
         )
 
     def tooltip(self) -> str:
-        name_part = f" «{self.name}»" if self.name else ""
+        name_part = tr('component_row_orphan_name_part').format(name=self.name) if self.name else ""
         return tr('component_row_orphan_tooltip').format(
             type_=self.type_, name_part=name_part, item_id=self.item_id
         )

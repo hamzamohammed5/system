@@ -23,7 +23,7 @@ from ui.widgets.core.widget_mixin import WidgetMixin
 # SearchBar
 # ══════════════════════════════════════════════════════════
 
-class SearchBar(QWidget):
+class SearchBar(QWidget, WidgetMixin):
     """حقل بحث موحد مع debounce delay."""
 
     search_changed = pyqtSignal(str)
@@ -33,24 +33,31 @@ class SearchBar(QWidget):
                  height: int = 34,
                  parent=None):
         super().__init__(parent)
-        _placeholder = placeholder or tr("list_search_placeholder")
+        self._placeholder = placeholder or tr("list_search_placeholder")
+        self._height = height
         self._delay = delay_ms
         self._timer = QTimer(self)
         self._timer.setSingleShot(True)
         self._timer.setInterval(delay_ms)
         self._timer.timeout.connect(self._emit)
-        self._build(_placeholder, height)
+        self._build(self._placeholder, height)
+        self._init_widget_mixin(theme=True, font=True, lang=True)
 
     def _build(self, placeholder: str, height: int):
         lay = QHBoxLayout(self)
         lay.setContentsMargins(0, 0, 0, 0)
 
-        base = get_font_size()
         self.inp = QLineEdit()
         self.inp.setPlaceholderText(placeholder)
         self.inp.setFixedHeight(height)
         self.inp.setClearButtonEnabled(True)
         self.inp.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Fixed)
+        self.inp.textChanged.connect(self._on_change)
+        lay.addWidget(self.inp)
+        self._refresh_style()
+
+    def _refresh_style(self, *_):
+        base = get_font_size()
         self.inp.setStyleSheet(f"""
             QLineEdit {{
                 background:{_C['bg_input']};
@@ -58,10 +65,12 @@ class SearchBar(QWidget):
                 border-radius:6px; padding:0 10px;
                 font-size:{fs(base,0)}pt; color:{_C['text_primary']};
             }}
-            QLineEdit:focus {{ border-color:{_C['accent']}; background:white; }}
+            QLineEdit:focus {{ border-color:{_C['accent']}; background:{_C['bg_input_focus']}; }}
         """)
-        self.inp.textChanged.connect(self._on_change)
-        lay.addWidget(self.inp)
+
+    def _refresh_lang(self, *_):
+        if not self.inp.text():
+            self.inp.setPlaceholderText(tr("list_search_placeholder"))
 
     def _on_change(self):
         if self._delay > 0:
@@ -86,18 +95,21 @@ class SearchBar(QWidget):
 # StatusBar
 # ══════════════════════════════════════════════════════════
 
-class StatusBar(QLabel):
+class StatusBar(QLabel, WidgetMixin):
     """شريط حالة بسيط يعرض عدد العناصر."""
 
     def __init__(self, parent=None):
         super().__init__(parent)
         self.setAlignment(Qt.AlignCenter)
         self.setFixedHeight(24)
-        self._apply_style()
         self._shown = 0
         self._total = 0
+        self._has_count = False
+        self._custom_text = None
+        self._init_widget_mixin(theme=True, font=True, lang=True)
+        self._refresh_style()
 
-    def _apply_style(self):
+    def _refresh_style(self, *_):
         base = get_font_size()
         self.setStyleSheet(f"""
             background:{_C['bg_surface_2']};
@@ -108,21 +120,33 @@ class StatusBar(QLabel):
             border-top:1px solid {_C['border']};
         """)
 
+    def _refresh_lang(self, *_):
+        if self._custom_text is not None:
+            return
+        if self._has_count:
+            self.set_count(self._shown, self._total)
+
     def set_count(self, shown: int, total: int):
         self._shown = shown
         self._total = total
+        self._has_count = True
+        self._custom_text = None
         if shown == total:
             self.setText(tr("showing_all", total=total))
         else:
             self.setText(tr("showing_of", shown=shown, total=total))
 
     def set_text(self, text: str):
+        self._custom_text = text
+        self._has_count = False
         self.setText(text)
 
     def clear_count(self):
         self.setText("")
         self._shown = 0
         self._total = 0
+        self._has_count = False
+        self._custom_text = None
 
 
 # ══════════════════════════════════════════════════════════
@@ -146,17 +170,12 @@ class ListHeader(QFrame, WidgetMixin):
         self._btn_add     = None
         self._search_bar  = None
         self._btn_row     = None
+        self._lbl_title   = None
         _placeholder = search_placeholder or tr("list_search_placeholder")
         self._build(_placeholder, search_delay)
-        self._init_widget_mixin(theme=False, font=False, lang=True)
+        self._init_widget_mixin(theme=True, font=True, lang=True)
 
     def _build(self, placeholder: str, delay: int):
-        self.setStyleSheet(f"""
-            QFrame {{
-                background:{_C['bg_input']};
-                border-bottom:1px solid {_C['border']};
-            }}
-        """)
         self.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Fixed)
 
         root = QVBoxLayout(self)
@@ -168,13 +187,8 @@ class ListHeader(QFrame, WidgetMixin):
             self._btn_row.setSpacing(8)
 
             if self._title:
-                base = get_font_size()
-                lbl = QLabel(self._title)
-                lbl.setStyleSheet(
-                    f"font-weight:700; font-size:{fs(base,0)}pt;"
-                    f"color:{_C['text_primary']}; background:transparent; border:none;"
-                )
-                self._btn_row.addWidget(lbl)
+                self._lbl_title = QLabel(self._title)
+                self._btn_row.addWidget(self._lbl_title)
 
             self._btn_row.addStretch()
 
@@ -189,6 +203,22 @@ class ListHeader(QFrame, WidgetMixin):
             self._search_bar = SearchBar(placeholder=placeholder, delay_ms=delay)
             self._search_bar.search_changed.connect(self.search_changed.emit)
             root.addWidget(self._search_bar)
+
+        self._refresh_style()
+
+    def _refresh_style(self, *_):
+        self.setStyleSheet(f"""
+            QFrame {{
+                background:{_C['bg_input']};
+                border-bottom:1px solid {_C['border']};
+            }}
+        """)
+        if self._lbl_title:
+            base = get_font_size()
+            self._lbl_title.setStyleSheet(
+                f"font-weight:700; font-size:{fs(base,0)}pt;"
+                f"color:{_C['text_primary']}; background:transparent; border:none;"
+            )
 
     def _refresh_lang(self, *_):
         if self._search_bar:

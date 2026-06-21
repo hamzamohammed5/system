@@ -15,6 +15,8 @@ from PyQt5.QtGui     import QFont
 from ui.theme import _C
 from ui.font  import fs, get_font_size
 from ..core.colors import status_colors
+from ..core.i18n import tr
+from ..core.widget_mixin import WidgetMixin
 
 
 # ── helpers ───────────────────────────────────────────────
@@ -45,7 +47,7 @@ def dr_cr_color(side: str) -> str:
 
 # ── AmountLabel ───────────────────────────────────────────
 
-class AmountLabel(QLabel):
+class AmountLabel(QLabel, WidgetMixin):
     """Label يعرض مبلغ مع ألوان تلقائية وتنسيق موحد."""
 
     def __init__(self, value: float = None, currency: str = "ج",
@@ -55,25 +57,42 @@ class AmountLabel(QLabel):
         super().__init__(parent)
         self._currency   = currency
         self._decimals   = decimals
+        self._bold       = bold
+        self._font_size_offset = font_size_offset
         self._auto_color = auto_color
+        self._value      = value
 
-        base = get_font_size()
-        f = QFont()
-        f.setPointSize(fs(base, font_size_offset))
-        if bold:
-            f.setBold(True)
-        self.setFont(f)
-        self.setAlignment(Qt.AlignLeft | Qt.AlignVCenter)
-        self.setStyleSheet("background:transparent; border:none;")
-
+        self._init_widget_mixin(theme=True, font=True, lang=True)
+        self._refresh_style()
         if value is not None:
             self.set_amount(value)
         else:
             self.reset()
 
+    def _refresh_style(self, *_):
+        base = get_font_size()
+        f = QFont()
+        f.setPointSize(fs(base, self._font_size_offset))
+        if self._bold:
+            f.setBold(True)
+        self.setFont(f)
+        self.setAlignment(Qt.AlignLeft | Qt.AlignVCenter)
+        self.setStyleSheet("background:transparent; border:none;")
+        # أعد تطبيق اللون الحالي بعد تغيير الثيم/الخط
+        if self._value is not None and self._value != 0:
+            self._set_color(amount_color(self._value) if self._auto_color else _C["text_muted"])
+        else:
+            self._set_color(_C["text_muted"])
+
+    def _refresh_lang(self, *_):
+        # أعد رسم النص لو كان الرصيد صفر/فارغ (نص قابل للترجمة)
+        if self._value is None or self._value == 0:
+            self.setText(tr('amount_dash_placeholder'))
+
     def set_amount(self, value: float, color: str = None):
+        self._value = value
         if value == 0:
-            self.setText("─")
+            self.setText(tr('amount_dash_placeholder'))
             self._set_color(_C["text_muted"])
             return
         self.setText(format_amount(value, self._decimals, self._currency))
@@ -87,8 +106,9 @@ class AmountLabel(QLabel):
         color = status_colors("danger")["fg"]
         self.set_amount(value, color) if value > 0 else self.reset()
 
-    def reset(self, placeholder: str = "─"):
-        self.setText(placeholder)
+    def reset(self, placeholder: str = None):
+        self._value = None
+        self.setText(placeholder if placeholder is not None else tr('amount_dash_placeholder'))
         self._set_color(_C["text_muted"])
 
     def _set_color(self, color: str):
@@ -97,12 +117,13 @@ class AmountLabel(QLabel):
 
 # ── DebitCreditDisplay ────────────────────────────────────
 
-class DebitCreditDisplay(QWidget):
+class DebitCreditDisplay(QWidget, WidgetMixin):
     """عرض DR و CR في شريط أفقي."""
 
     def __init__(self, currency: str = "ج", parent=None):
         super().__init__(parent)
         self._currency = currency
+        self._init_widget_mixin(theme=True, font=True, lang=True)
         self._build()
 
     def _build(self):
@@ -114,58 +135,100 @@ class DebitCreditDisplay(QWidget):
         cr_s = status_colors("danger")
         base = get_font_size()
 
-        for attr, text, s in [
-            ("_lbl_dr", "إجمالي DR:", dr_s),
-            ("_lbl_cr", "إجمالي CR:", cr_s),
+        for attr, attr_t, key, s in [
+            ("_lbl_dr", "_lbl_dr_t", "dr_total_label", dr_s),
+            ("_lbl_cr", "_lbl_cr_t", "cr_total_label", cr_s),
         ]:
-            lbl_t = QLabel(text)
+            lbl_t = QLabel(tr(key))
             lbl_t.setStyleSheet(
                 f"font-weight:bold; color:{s['fg']};"
                 "background:transparent; border:none;"
             )
-            lbl_v = QLabel("0.00")
+            lbl_v = QLabel(tr('amount_zero_placeholder'))
             lbl_v.setStyleSheet(
                 f"font-size:{fs(base, +1)}pt; font-weight:bold; color:{s['fg']};"
                 f"background:{s['bg']}; border-radius:4px; padding:3px 10px;"
             )
             setattr(self, attr, lbl_v)
+            setattr(self, attr_t, lbl_t)
             lay.addWidget(lbl_t)
             lay.addWidget(lbl_v)
             if attr == "_lbl_dr":
-                sep = QLabel("│")
+                sep = QLabel(tr('vertical_separator'))
                 sep.setStyleSheet(
                     f"color:{_C['border_med']}; font-size:{fs(base, +4)}pt;"
                     "background:transparent; border:none;"
                 )
+                self._sep = sep
                 lay.addWidget(sep)
 
         lay.addStretch()
+
+    def _refresh_style(self, *_):
+        base = get_font_size()
+        dr_s = status_colors("primary")
+        cr_s = status_colors("danger")
+        self._lbl_dr_t.setStyleSheet(
+            f"font-weight:bold; color:{dr_s['fg']};"
+            "background:transparent; border:none;"
+        )
+        self._lbl_dr.setStyleSheet(
+            f"font-size:{fs(base, +1)}pt; font-weight:bold; color:{dr_s['fg']};"
+            f"background:{dr_s['bg']}; border-radius:4px; padding:3px 10px;"
+        )
+        self._lbl_cr_t.setStyleSheet(
+            f"font-weight:bold; color:{cr_s['fg']};"
+            "background:transparent; border:none;"
+        )
+        self._lbl_cr.setStyleSheet(
+            f"font-size:{fs(base, +1)}pt; font-weight:bold; color:{cr_s['fg']};"
+            f"background:{cr_s['bg']}; border-radius:4px; padding:3px 10px;"
+        )
+        self._sep.setStyleSheet(
+            f"color:{_C['border_med']}; font-size:{fs(base, +4)}pt;"
+            "background:transparent; border:none;"
+        )
+
+    def _refresh_lang(self, *_):
+        self._lbl_dr_t.setText(tr('dr_total_label'))
+        self._lbl_cr_t.setText(tr('cr_total_label'))
+        self._sep.setText(tr('vertical_separator'))
 
     def update(self, total_dr: float, total_cr: float):
         self._lbl_dr.setText(f"{total_dr:,.2f} {self._currency}")
         self._lbl_cr.setText(f"{total_cr:,.2f} {self._currency}")
 
     def reset(self):
-        self._lbl_dr.setText("0.00")
-        self._lbl_cr.setText("0.00")
+        self._lbl_dr.setText(tr('amount_zero_placeholder'))
+        self._lbl_cr.setText(tr('amount_zero_placeholder'))
 
 
 # ── BalanceDisplay ────────────────────────────────────────
 
-class BalanceDisplay(QLabel):
+class BalanceDisplay(QLabel, WidgetMixin):
     """Label رصيد موحد مع تلوين تلقائي."""
 
     def __init__(self, currency: str = "ج", parent=None):
         super().__init__(parent)
         self._currency = currency
+        self._last_value = None
+        self._last_side_label = ""
+        self._last_color = None
+        self._is_neutral = True
+        self._init_widget_mixin(theme=True, font=True, lang=True)
         self.setAlignment(Qt.AlignCenter)
         self._apply_neutral()
 
     def set_balance(self, value: float, side_label: str = "", color: str = None):
+        self._last_value = value
+        self._last_side_label = side_label
+        self._last_color = color
+        self._is_neutral = False
+
         abs_val = abs(value)
-        text = "الرصيد"
+        text = tr('balance')
         if side_label:
-            text += f" ({side_label})"
+            text += tr('balance_with_side').format(side_label=side_label)
         text += f": {abs_val:,.2f} {self._currency}"
         self.setText(text)
 
@@ -181,10 +244,11 @@ class BalanceDisplay(QLabel):
 
     def set_debit_credit_balance(self, dr: float, cr: float):
         balance = dr - cr
-        self.set_balance(balance, "مدين" if balance >= 0 else "دائن")
+        self.set_balance(balance, tr('debit') if balance >= 0 else tr('credit'))
 
     def reset(self):
-        self.setText("الرصيد: ─")
+        self._is_neutral = True
+        self.setText(tr('balance_dash'))
         self._apply_neutral()
 
     def _apply_neutral(self):
@@ -194,3 +258,15 @@ class BalanceDisplay(QLabel):
             f"background:{_C['bg_surface_2']}; border:1px solid {_C['border']};"
             "border-radius:6px; padding:6px 16px;"
         )
+
+    def _refresh_style(self, *_):
+        if self._is_neutral:
+            self._apply_neutral()
+        else:
+            self.set_balance(self._last_value, self._last_side_label, self._last_color)
+
+    def _refresh_lang(self, *_):
+        if self._is_neutral:
+            self.setText(tr('balance_dash'))
+        else:
+            self.set_balance(self._last_value, self._last_side_label, self._last_color)

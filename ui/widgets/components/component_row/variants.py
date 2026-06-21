@@ -20,6 +20,7 @@ VariantsMixin — منطق تحميل وعرض variants الخامة في Compon
 
 
 from ui.widgets.utils.signals import blocked_signals
+from ui.widgets.core.i18n import tr
 
 
 class VariantsMixin:
@@ -78,18 +79,22 @@ class VariantsMixin:
 
         with blocked_signals(self.cmb_variant):
             self.cmb_variant.clear()
-            self.cmb_variant.addItem("─ بدون variant ─", None)
+            self.cmb_variant.addItem(tr('variant_combo_none'), None)
 
             for var in variants:
                 pieces = float(var["pieces"])
                 if pieces > 0 and item_price > 0:
                     unit_cost = item_price / pieces
-                    label = (
-                        f"📐 {var['name']}  "
-                        f"({pieces:.4g} قطعة → {unit_cost:.3f} ج/قطعة)"
+                    label = tr('variant_combo_item_priced').format(
+                        name=var['name'],
+                        pieces=f"{pieces:.4g}",
+                        unit_cost=f"{unit_cost:.3f}",
                     )
                 else:
-                    label = f"📐 {var['name']}  ({var['pieces']:.4g} قطعة)"
+                    label = tr('variant_combo_item_plain').format(
+                        name=var['name'],
+                        pieces=f"{var['pieces']:.4g}",
+                    )
                 self.cmb_variant.addItem(label, var["id"])
 
             if selected_id is not None:
@@ -117,7 +122,7 @@ class VariantsMixin:
 
         cost = self._calc_variant_unit_cost(variant_id, item_id)
         if cost is not None:
-            self.lbl_variant_cost.setText(f"= {cost:.3f} ج")
+            self.lbl_variant_cost.setText(tr('variant_cost_suffix').format(cost=f"{cost:.3f}"))
             self.lbl_variant_cost.setVisible(True)
         else:
             self.lbl_variant_cost.setVisible(False)

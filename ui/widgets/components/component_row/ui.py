@@ -231,9 +231,7 @@ def _build_variant_widgets(widget, layout: QHBoxLayout):
     widget.cmb_variant.setMinimumHeight(26)
     widget.cmb_variant.setMinimumWidth(130)
     widget.cmb_variant.setMaximumWidth(180)
-    widget.cmb_variant.setToolTip(
-        "وحدة الإنتاج — تكلفة الوحدة = سعر الخامة ÷ عدد القطع"
-    )
+    widget.cmb_variant.setToolTip(tr('variant_combo_tooltip'))
     widget.cmb_variant.setStyleSheet(_variant_combo_style())
     widget.cmb_variant.setVisible(False)
     widget.cmb_variant.currentIndexChanged.connect(widget._on_variant_changed)
@@ -248,7 +246,7 @@ def _build_variant_widgets(widget, layout: QHBoxLayout):
 
 def _build_qty_widget(widget, qty: float, layout: QHBoxLayout):
     widget.qty_edit = QLineEdit()
-    widget.qty_edit.setPlaceholderText("الكمية")
+    widget.qty_edit.setPlaceholderText(tr('quantity'))
     widget.qty_edit.setSizePolicy(QSizePolicy.Preferred, QSizePolicy.Fixed)
     widget.qty_edit.setMinimumWidth(60)
     widget.qty_edit.setMaximumWidth(90)
@@ -261,24 +259,22 @@ def _build_waste_widget(widget, waste_pct: float, layout: QHBoxLayout):
     widget.waste_spin = QDoubleSpinBox()
     widget.waste_spin.setRange(0, 100)
     widget.waste_spin.setDecimals(1)
-    widget.waste_spin.setSuffix(" %")
+    widget.waste_spin.setSuffix(tr('waste_spin_suffix'))
     widget.waste_spin.setValue(waste_pct or 0.0)
     widget.waste_spin.setMinimumWidth(75)
     widget.waste_spin.setMaximumWidth(90)
     widget.waste_spin.setMinimumHeight(26)
-    widget.waste_spin.setToolTip(
-        "نسبة الهادر %\nمثال: 10% → الكمية الفعلية = الكمية × 1.10"
-    )
+    widget.waste_spin.setToolTip(tr('waste_spin_tooltip'))
     widget.waste_spin.valueChanged.connect(widget._on_waste_changed)
 
     s_warning = _status_colors("warning")
-    widget.lbl_waste = QLabel("⚠️")
+    widget.lbl_waste = QLabel(tr('waste_icon'))
     widget.lbl_waste.setFixedWidth(18)
     widget.lbl_waste.setStyleSheet(
         f"color:{s_warning['fg']}; font-size:{fs(base, -1)}pt;"
         "background:transparent; border:none;"
     )
-    widget.lbl_waste.setToolTip("نسبة الهادر")
+    widget.lbl_waste.setToolTip(tr('waste_pct'))
 
     update_waste_style(widget, waste_pct or 0.0)
 
@@ -290,15 +286,15 @@ def _build_total_qty_widget(widget, raw_total_qty,
                              show_total_qty: bool, layout: QHBoxLayout):
     base = get_font_size()
     widget.total_qty_edit = QLineEdit()
-    widget.total_qty_edit.setPlaceholderText("الكلي")
+    widget.total_qty_edit.setPlaceholderText(tr('total_qty_placeholder'))
     widget.total_qty_edit.setSizePolicy(QSizePolicy.Preferred, QSizePolicy.Fixed)
     widget.total_qty_edit.setMinimumWidth(60)
     widget.total_qty_edit.setMaximumWidth(90)
-    widget.total_qty_edit.setToolTip("الكمية الكلية للخامة.")
+    widget.total_qty_edit.setToolTip(tr('total_qty_tooltip'))
     if raw_total_qty is not None:
         widget.total_qty_edit.setText(str(raw_total_qty))
 
-    widget.lbl_total_qty = QLabel("÷")
+    widget.lbl_total_qty = QLabel(tr('divide_symbol'))
     widget.lbl_total_qty.setStyleSheet(
         f"color:{_C['text_muted']}; font-size:{fs(base, -1)}pt;"
     )
@@ -313,7 +309,7 @@ def _build_total_qty_widget(widget, raw_total_qty,
 
 
 def _build_delete_button(widget, layout: QHBoxLayout):
-    btn = QPushButton("❌")
+    btn = QPushButton(tr('component_row_remove_btn'))
     btn.setSizePolicy(QSizePolicy.Fixed, QSizePolicy.Fixed)
     btn.setFixedWidth(32)
     btn.clicked.connect(lambda: widget.removed.emit(widget))
@@ -332,7 +328,7 @@ def _build_sub_row(widget, outer: QVBoxLayout):
     sub_layout.setContentsMargins(8, 3, 8, 3)
     sub_layout.setSpacing(8)
 
-    lbl_icon = QLabel("↳ صف العملية:")
+    lbl_icon = QLabel(tr('sub_row_label'))
     lbl_icon.setStyleSheet(
         f"color:{s_purple['fg']}; font-weight:bold; font-size:{fs(base, -1)}pt;"
         "background:transparent; border:none;"
