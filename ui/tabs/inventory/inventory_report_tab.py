@@ -25,6 +25,7 @@ from ui.widgets.mixins.bus import BusConnectedMixin
 from ui.widgets.core.events import emit_company_data_changed
 from ui.widgets.core.i18n import tr
 from ui.theme import _C
+from ui.font import FS_XS, FS_XL, FS_MD
 
 
 # ══════════════════════════════════════════════════════════
@@ -64,12 +65,12 @@ class _ReportTab(QWidget, BusConnectedMixin):
             lay.setContentsMargins(12, 8, 12, 8)
             lbl_t = QLabel(label)
             lbl_t.setStyleSheet(
-                f"font-size:10px; color:{_C['text_muted']};"
+                f"font-size:{FS_XS}px; color:{_C['text_muted']};"
                 "background:transparent; border:none;"
             )
-            lbl_v = QLabel("─")
+            lbl_v = QLabel(tr("dash"))
             lbl_v.setStyleSheet(
-                f"font-size:16px; font-weight:bold; color:{color};"
+                f"font-size:{FS_XL}px; font-weight:bold; color:{color};"
                 "background:transparent; border:none;"
             )
             lay.addWidget(lbl_t)
@@ -156,7 +157,7 @@ class _MovesPanel(QWidget):
 
         self.lbl_title = QLabel(tr("inventory_select_item_for_moves"))
         self.lbl_title.setStyleSheet(
-            f"font-weight:bold; color:{_C['accent']}; font-size:13px;"
+            f"font-weight:bold; color:{_C['accent']}; font-size:{FS_MD}px;"
         )
         root.addWidget(self.lbl_title)
 
@@ -207,9 +208,9 @@ class _MovesPanel(QWidget):
             self.table.setItem(r, 2, QTableWidgetItem(f"{m['qty']:,.4g}"))
             self.table.setItem(r, 3, QTableWidgetItem(f"{m['unit_cost']:,.4f}"))
             self.table.setItem(r, 4, QTableWidgetItem(f"{m['total_cost']:,.2f}"))
-            ref = m["ref_entry_no"] if "ref_entry_no" in m.keys() else "—"
-            self.table.setItem(r, 5, QTableWidgetItem(ref or "—"))
-            notes_item = QTableWidgetItem(m["notes"] or "—")
+            ref = m["ref_entry_no"] if "ref_entry_no" in m.keys() else tr("dash")
+            self.table.setItem(r, 5, QTableWidgetItem(ref or tr("dash")))
+            notes_item = QTableWidgetItem(m["notes"] or tr("dash"))
             notes_item.setToolTip(m["notes"] or "")
             self.table.setItem(r, 6, notes_item)
         auto_fit_columns(self.table, fixed_cols=[0, 1, 2, 3, 4, 5], stretch_col=6, min_width=40, max_width=150)

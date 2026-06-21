@@ -29,6 +29,7 @@ from ui.widgets.mixins.bus import BusConnectedMixin
 from ui.widgets.core.events import emit_company_data_changed
 from ui.widgets.core.i18n import tr
 from ui.theme import _C
+from ui.font import FS_LG
 
 
 def _spin(max_=999999999, dec=4):
@@ -91,7 +92,7 @@ class _InboundTab(QWidget, BusConnectedMixin):
 
         self.lbl_total = QLabel(f"0.00  {tr('currency_abbr')}")
         self.lbl_total.setStyleSheet(
-            f"font-weight:bold; color:{_C['success']}; font-size:14px;"
+            f"font-weight:bold; color:{_C['success']}; font-size:{FS_LG}px;"
         )
         self.sp_qty.valueChanged.connect(self._update_total)
         self.sp_unit_cost.valueChanged.connect(self._update_total)
@@ -239,8 +240,8 @@ class _InboundTab(QWidget, BusConnectedMixin):
             self.table.setItem(row, 2, QTableWidgetItem(f"{r['qty']:,.4g}"))
             self.table.setItem(row, 3, QTableWidgetItem(f"{r['unit_cost']:,.4f}"))
             self.table.setItem(row, 4, QTableWidgetItem(f"{r['total_cost']:,.2f}"))
-            ref = r["ref_entry_no"] if "ref_entry_no" in r.keys() else "—"
-            self.table.setItem(row, 5, QTableWidgetItem(ref or "—"))
+            ref = r["ref_entry_no"] if "ref_entry_no" in r.keys() else tr("dash")
+            self.table.setItem(row, 5, QTableWidgetItem(ref or tr("dash")))
             
         auto_fit_columns(
             self.table,

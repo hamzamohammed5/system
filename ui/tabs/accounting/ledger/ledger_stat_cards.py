@@ -19,7 +19,7 @@ class _StatCards(QFrame):
         self.setStyleSheet(f"""
             QFrame {{
                 background: {_C['bg_surface']};
-                border: 1px solid {_C['border_med']};
+                border: 1px solid {_C['border_subtle']};
                 border-radius: 8px;
             }}
         """)

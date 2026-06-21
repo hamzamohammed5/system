@@ -189,7 +189,7 @@ class _OutboundTab(QWidget, BusConnectedMixin):
             self.table.setItem(row, 2, QTableWidgetItem(f"{r['qty']:,.4g}"))
             self.table.setItem(row, 3, QTableWidgetItem(f"{r['unit_cost']:,.4f}"))
             self.table.setItem(row, 4, QTableWidgetItem(f"{r['total_cost']:,.2f}"))
-            notes_item = QTableWidgetItem(r["notes"] or "—")
+            notes_item = QTableWidgetItem(r["notes"] or tr("dash"))
             notes_item.setToolTip(r["notes"] or "")
             self.table.setItem(row, 5, notes_item)
         auto_fit_columns(

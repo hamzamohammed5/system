@@ -160,10 +160,10 @@ class _TAccountPanel(QWidget):
         tbl.setColumnWidth(3, 90)
 
         tbl.setStyleSheet(f"""
-            QTableWidget {{ border: none; background: transparent; gridline-color: {_C['border']}; }}
+            QTableWidget {{ border: none; background: transparent; gridline-color: {_C['table_gridline']}; }}
             QHeaderView::section {{
                 background: {_C['row_alt_bg']}; border: none;
-                border-bottom: 1px solid {_C['border_med']};
+                border-bottom: 1px solid {_C['border_subtle']};
                 padding: 4px; font-weight: bold; font-size: {FS_SM}px; color: {_C['text_neutral']};
             }}
         """)
