@@ -1,5 +1,5 @@
 File Tree Snapshot
-Generated : 2026-06-21 16:29:00
+Generated : 2026-06-21 16:41:54
 Source    : D:\My Workspace\Hg\Alhabaar\accountant\system
 Extensions: .md, .py
 ────────────────────────────────────────────────────────────

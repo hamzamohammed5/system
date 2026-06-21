@@ -1,73 +1,110 @@
 """
 ui/widgets/panels/form_fields.py
-==================================
-Field builders للفورمات.
-
-مستخرج من panels/form_parts.py:
-  spin_field, int_spin_field, labeled_widget,
-  field_row, labeled_row, make_form_layout
-
-  [FIX] استبدال from ..theme.styles import spinbox_style
-        بـ from ..theme.input_styles import spinbox_style
-        لأن spinbox_style انتقلت لـ input_styles.py بعد Refactor V3،
-        و theme/styles.py لم يعد موجوداً.
 """
+import weakref
 
 from PyQt5.QtWidgets import (
     QWidget, QHBoxLayout, QLabel, QFormLayout,
-    QDoubleSpinBox, QSpinBox,
+    QDoubleSpinBox, QSpinBox, QVBoxLayout,
 )
 from PyQt5.QtCore import Qt
 
 from ui.theme import _C
 from ui.font  import get_font_size, fs
-
-# [FIX] input_styles بدل styles (المسار القديم المحذوف)
 from ..theme.input_styles import spinbox_style
-
 from .form_labels import form_label, required_label, hint_label
+from ui.widgets.core.events import bus
+
+
+def _connect_theme_refresh(widget, slot) -> None:
+    _weak = weakref.ref(widget)
+
+    def _on_theme_changed(_theme_name=None):
+        obj = _weak()
+        if obj is not None:
+            slot(obj)
+
+    widget._theme_refresh_slot = _on_theme_changed
+    bus.theme_changed.connect(widget._theme_refresh_slot, Qt.UniqueConnection)
+
+
+# ── spin_field ────────────────────────────────────────────
+
+class _ThemedDoubleSpinBox(QDoubleSpinBox):
+    def __init__(self, min_height: int = 30):
+        super().__init__()
+        self._h = min_height
+        self._refresh_style()
+        _connect_theme_refresh(self, _ThemedDoubleSpinBox._refresh_style)
+
+    def _refresh_style(self, *_):
+        self.setStyleSheet(spinbox_style(self._h, widget="QDoubleSpinBox"))
+
+
+class _ThemedSpinBox(QSpinBox):
+    def __init__(self, min_height: int = 30):
+        super().__init__()
+        self._h = min_height
+        self._refresh_style()
+        _connect_theme_refresh(self, _ThemedSpinBox._refresh_style)
+
+    def _refresh_style(self, *_):
+        self.setStyleSheet(spinbox_style(self._h, widget="QSpinBox"))
 
 
 def spin_field(max_: float = 999999, dec: int = 2,
                min_: float = 0, min_height: int = 30) -> QDoubleSpinBox:
-    s = QDoubleSpinBox()
+    s = _ThemedDoubleSpinBox(min_height)
     s.setRange(min_, max_)
     s.setDecimals(dec)
     s.setMinimumHeight(min_height)
-    s.setStyleSheet(spinbox_style(min_height, widget="QDoubleSpinBox"))
     return s
 
 
 def int_spin_field(max_: int = 9999, min_: int = 0,
                    min_height: int = 30) -> QSpinBox:
-    s = QSpinBox()
+    s = _ThemedSpinBox(min_height)
     s.setRange(min_, max_)
     s.setMinimumHeight(min_height)
-    s.setStyleSheet(spinbox_style(min_height, widget="QSpinBox"))
     return s
+
+
+# ── labeled_widget ────────────────────────────────────────
+
+class _LabeledWidgetContainer(QWidget):
+    def __init__(self, widget: QWidget, unit: str,
+                 unit_color: str = None, spacing: int = 6):
+        super().__init__()
+        self._unit_color = unit_color
+        self.setStyleSheet("background:transparent;")
+        lay = QHBoxLayout(self)
+        lay.setContentsMargins(0, 0, 0, 0)
+        lay.setSpacing(spacing)
+        lay.addWidget(widget)
+        self._lbl = QLabel(unit)
+        lay.addWidget(self._lbl)
+        lay.addStretch()
+        self._refresh_style()
+        _connect_theme_refresh(self, _LabeledWidgetContainer._refresh_style)
+
+    def _refresh_style(self, *_):
+        color = self._unit_color or _C['text_muted']
+        self._lbl.setStyleSheet(
+            f"color:{color}; background:transparent; border:none;"
+            f"font-size:{fs(get_font_size(), -1)}pt;"
+        )
 
 
 def labeled_widget(widget: QWidget, unit: str,
                    unit_color: str = None, spacing: int = 6) -> QWidget:
-    w = QWidget()
-    w.setStyleSheet("background:transparent;")
-    lay = QHBoxLayout(w)
-    lay.setContentsMargins(0, 0, 0, 0)
-    lay.setSpacing(spacing)
-    lay.addWidget(widget)
-    lbl = QLabel(unit)
-    lbl.setStyleSheet(
-        f"color:{unit_color or _C['text_muted']}; background:transparent; border:none;"
-        f"font-size:{fs(get_font_size(),-1)}pt;"
-    )
-    lay.addWidget(lbl)
-    lay.addStretch()
-    return w
+    return _LabeledWidgetContainer(widget, unit, unit_color, spacing)
 
+
+# ── field_row / labeled_row / make_form_layout ────────────
+# (دوال تبني widgets مؤقتة — لا stylesheet محلي ثابت، تعتمد على الـ children)
 
 def field_row(label_text: str, widget: QWidget,
               required: bool = False, hint: str = "") -> tuple:
-    from PyQt5.QtWidgets import QVBoxLayout
     lbl = required_label(label_text) if required else form_label(label_text)
     if hint:
         container = QWidget()
