@@ -61,6 +61,7 @@ _LIGHT_THEME: Dict[str, str] = {
     "text_sec":     "#4A4843",
     "text_muted":   "#7A7870",
     "text_disabled":"#A8A69E",
+    "text_state_neutral": "#888888",   # نص حالات محايدة (تحميل، تنبيه عام)
     "text_hint":    "#B0ADA5",
     "accent":       "#3D5A80",
     "accent_hover": "#2E4460",
@@ -85,6 +86,8 @@ _LIGHT_THEME: Dict[str, str] = {
     "input_accent_border": "#c5cae9",  # حد حقل بحث indigo
     "row_alt_bg":    "#fafafa",   # خلفية صف متبادلة
     "row_alt_border":"#e8e8e8",   # حد صف متبادل
+    "border_subtle": "#e0e0e0",   # حد خفيف جداً (بطاقات، فواصل رؤوس جداول)
+    "table_gridline":"#f0f0f0",   # خطوط شبكة الجدول
     "scroll_warm_bg":"#fffaf5",   # خلفية scroll ذهبي فاتح
     "success":       "#2E7D52",
     "success_bg":    "#EDF7F2",
@@ -197,6 +200,7 @@ _LIGHT_THEME: Dict[str, str] = {
     "acc_type_drawings":      "#4e342e",
     # ── Separator / muted ────────────────────────────────────
     "text_separator":         "#78909c",
+    "group_label_text":       "#546e7a",   # نص رأس المجموعة في الأشجار/القوائم (popup، tree)
     
     # ── Shared / Published items ──────────────────────────────
     "shared_item_fg":      "#6a1b9a",   # نص العنصر المشترك
@@ -223,6 +227,8 @@ _LIGHT_THEME: Dict[str, str] = {
     "design_thumb_icon":        "#7986cb",   # أيقونة 🎨 في placeholder
     "design_thumb_text":        "#9fa8da",   # اسم الملف في placeholder
     "card_badge_text":          "#FFFFFF",   # نص badge العدد فوق الـ thumbnail الداكن
+    "card_badge_bg":            "rgba(0,0,0,0.55)",      # خلفية badge العدد فوق الـ thumbnail
+    "card_badge_border":        "rgba(255,255,255,0.2)", # حد badge العدد فوق الـ thumbnail
 
     # ── BOM Tree — Scenario node ──────────────────────────────
     "bom_scenario_default_bg":  "#e8f5e9",   # خلفية node السيناريو الافتراضي
@@ -246,6 +252,7 @@ _DARK_THEME: Dict[str, str] = {
     "text_sec":     "#B8B5AE",
     "text_muted":   "#7A7870",
     "text_disabled":"#4A4843",
+    "text_state_neutral": "#9A9890",   # نص حالات محايدة (dark)
     "text_hint":    "#5A5850",
     "accent":       "#5B8DB8",
     "accent_hover": "#7AABD4",
@@ -270,6 +277,8 @@ _DARK_THEME: Dict[str, str] = {
     "input_accent_border": "#5c6bc0",  # حد حقل بحث indigo (dark)
     "row_alt_bg":    "#1E1E1E",   # خلفية صف متبادلة (dark)
     "row_alt_border":"#2A2A2A",   # حد صف متبادل (dark)
+    "border_subtle": "#2E2E2E",   # حد خفيف جداً (dark)
+    "table_gridline":"#2A2A2A",   # خطوط شبكة الجدول (dark)
     "scroll_warm_bg":"#1A1208",   # خلفية scroll ذهبي (dark)
     "success":       "#66BB8A",
     "success_bg":    "#0A2018",
@@ -392,6 +401,7 @@ _DARK_THEME: Dict[str, str] = {
     "acc_type_drawings":      "#BCAAA4",
     # ── Separator / muted ────────────────────────────────────
     "text_separator":         "#607d8b",
+    "group_label_text":       "#90a4ae",   # نص رأس المجموعة في الأشجار/القوائم (popup، tree)
     # ── Investor link ─────────────────────────────────────────
     # investor_link_bg == warning_bg (#2A2000), investor_link_border == warning_border (#4A3800)
     # investor_link_text == warning (#FFD54F)
@@ -421,6 +431,8 @@ _DARK_THEME: Dict[str, str] = {
     "design_thumb_icon":        "#5a6bb0",   # أيقونة 🎨 في placeholder
     "design_thumb_text":        "#6f7aa0",   # اسم الملف في placeholder
     "card_badge_text":          "#FFFFFF",   # نص badge العدد فوق الـ thumbnail الداكن
+    "card_badge_bg":            "rgba(0,0,0,0.55)",      # خلفية badge العدد فوق الـ thumbnail
+    "card_badge_border":        "rgba(255,255,255,0.2)", # حد badge العدد فوق الـ thumbnail
 
     # ── BOM Tree — Scenario node ──────────────────────────────
     "bom_scenario_default_bg":  "#0a2018",   # == success_bg — خلفية node السيناريو الافتراضي

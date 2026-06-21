@@ -84,7 +84,7 @@ class CustomersListPanel(BaseListPanel):
         btn_new.setSizePolicy(QSizePolicy.Fixed, QSizePolicy.Fixed)
         btn_new.setStyleSheet(f"""
             QPushButton {{
-                background: {_C['accent']}; color: white;
+                background: {_C['accent']}; color: {_C['btn_primary_text']};
                 border: none; border-radius: 6px;
                 padding: 0 14px; font-weight: bold; font-size: {FS_BASE}px;
             }}
@@ -157,9 +157,9 @@ class CustomersListPanel(BaseListPanel):
         table.setItem(r, 1, name_item)
 
         table.setItem(r, 2, muted_item(make_item(
-            row["phone"] or "—", tooltip=row["phone"] or "")))
+            row["phone"] or tr("dash"), tooltip=row["phone"] or "")))
         table.setItem(r, 3, muted_item(make_item(
-            row["city"] or "—", tooltip=row["city"] or "")))
+            row["city"] or tr("dash"), tooltip=row["city"] or "")))
 
         cnt_item = make_item(str(row["orders_count"] or 0),
                              align=Qt.AlignCenter)
