@@ -61,31 +61,31 @@ class _Styles:
 
     def label_header(self) -> str:
         return (
-            f"font-size:{self.xlarge}pt; font-weight:700; color:{self.TEXT_PRI};"
+            f"font-size:{self.xlarge}px; font-weight:700; color:{self.TEXT_PRI};"
             "background:transparent; border:none;"
         )
 
     def label_section(self) -> str:
         return (
-            f"font-size:{self.large}pt; font-weight:600; color:{self.TEXT_SEC};"
+            f"font-size:{self.large}px; font-weight:600; color:{self.TEXT_SEC};"
             "background:transparent; border:none;"
         )
 
     def label_field(self) -> str:
         return (
-            f"font-size:{self.small}pt; font-weight:600; color:{self.TEXT_MUT};"
+            f"font-size:{self.small}px; font-weight:600; color:{self.TEXT_MUT};"
             "background:transparent; border:none; letter-spacing:0.2px;"
         )
 
     def label_secondary(self) -> str:
         return (
-            f"font-size:{self.normal}pt; color:{self.TEXT_SEC};"
+            f"font-size:{self.normal}px; color:{self.TEXT_SEC};"
             "background:transparent; border:none;"
         )
 
     def label_muted(self) -> str:
         return (
-            f"font-size:{self.small}pt; color:{self.TEXT_MUT};"
+            f"font-size:{self.small}px; color:{self.TEXT_MUT};"
             "background:transparent; border:none;"
         )
 
@@ -95,14 +95,14 @@ class _Styles:
 
     def badge_accent(self) -> str:
         return (
-            f"font-size:{self.small}pt; font-weight:600; color:{self.ACCENT_TEXT};"
+            f"font-size:{self.small}px; font-weight:600; color:{self.ACCENT_TEXT};"
             f"background:{self.ACCENT_LT}; border:1px solid {self.ACCENT_BDR};"
             f"border-radius:{self.RADIUS_SM}; padding:2px 8px;"
         )
 
     def badge_count(self) -> str:
         return (
-            f"font-size:{self.small}pt; font-weight:700; color:{self.ACCENT_TEXT};"
+            f"font-size:{self.small}px; font-weight:700; color:{self.ACCENT_TEXT};"
             f"background:{self.ACCENT_LT}; border:1px solid {self.ACCENT_BDR};"
             f"border-radius:10px; padding:1px 8px; min-width:20px;"
         )
@@ -118,7 +118,7 @@ class _Styles:
             f"QPushButton{{"
             f"  background:{bg}; color:{fg};"
             f"  border:1px solid {bdr}; border-radius:{r};"
-            f"  padding:0 14px; font-size:{self.normal}pt; font-weight:500;"
+            f"  padding:0 14px; font-size:{self.normal}px; font-weight:500;"
             f"  min-height:{h}px;"
             f"}}"
             f"QPushButton:hover{{background:{hover_bg}; border-color:{self.BORDER_MED};}}"
@@ -131,7 +131,7 @@ class _Styles:
             f"QPushButton{{"
             f"  background:{self.ACCENT}; color:{self.BTN_PRIMARY_TEXT};"
             f"  border:none; border-radius:{self.RADIUS};"
-            f"  padding:0 18px; font-size:{self.normal}pt; font-weight:600;"
+            f"  padding:0 18px; font-size:{self.normal}px; font-weight:600;"
             f"  min-height:{h}px;"
             f"}}"
             f"QPushButton:hover{{background:{self.ACCENT_DARK};}}"
@@ -145,7 +145,7 @@ class _Styles:
             f"QPushButton{{"
             f"  background:transparent; color:{self.ACCENT};"
             f"  border:1.5px solid {self.ACCENT_BDR}; border-radius:{self.RADIUS};"
-            f"  padding:0 14px; font-size:{self.normal}pt; font-weight:500;"
+            f"  padding:0 14px; font-size:{self.normal}px; font-weight:500;"
             f"  min-height:{h}px;"
             f"}}"
             f"QPushButton:hover{{background:{self.ACCENT_LT}; border-color:{self.ACCENT};}}"
@@ -157,7 +157,7 @@ class _Styles:
             f"QPushButton{{"
             f"  background:{self.SUCCESS_LT}; color:{self.SUCCESS};"
             f"  border:1px solid {self.SUCCESS_BDR}; border-radius:{self.RADIUS};"
-            f"  padding:0 14px; font-size:{self.normal}pt; font-weight:600;"
+            f"  padding:0 14px; font-size:{self.normal}px; font-weight:600;"
             f"  min-height:{h}px;"
             f"}}"
             f"QPushButton:hover{{background:{self.SUCCESS_HOVER_BG}; border-color:{self.SUCCESS};}}"
@@ -169,7 +169,7 @@ class _Styles:
             f"QPushButton{{"
             f"  background:{self.DANGER_LT}; color:{self.DANGER};"
             f"  border:1px solid {self.DANGER_BDR}; border-radius:{self.RADIUS};"
-            f"  padding:0 14px; font-size:{self.normal}pt;"
+            f"  padding:0 14px; font-size:{self.normal}px;"
             f"  min-height:{h}px;"
             f"}}"
             f"QPushButton:hover{{background:{self.DANGER_HOVER_BG}; border-color:{self.DANGER};}}"
@@ -184,7 +184,7 @@ class _Styles:
         return (
             f"QLineEdit{{"
             f"  border:1px solid {self.BORDER_MED}; border-radius:{self.RADIUS};"
-            f"  padding:0 10px; font-size:{self.normal}pt;"
+            f"  padding:0 10px; font-size:{self.normal}px;"
             f"  background:{self.BG}; color:{self.TEXT_PRI};"
             f"  min-height:{h}px;"
             f"}}"
@@ -197,7 +197,7 @@ class _Styles:
         return (
             f"QLineEdit{{"
             f"  border:1px solid {self.BORDER}; border-radius:{self.RADIUS};"
-            f"  padding:0 10px; font-size:{self.normal}pt;"
+            f"  padding:0 10px; font-size:{self.normal}px;"
             f"  background:{self.BG_SURFACE}; color:{self.TEXT_PRI};"
             f"  min-height:{h}px;"
             f"}}"
@@ -209,7 +209,7 @@ class _Styles:
         return (
             f"QComboBox{{"
             f"  border:1px solid {self.BORDER_MED}; border-radius:{self.RADIUS};"
-            f"  padding:0 8px; font-size:{self.normal}pt;"
+            f"  padding:0 8px; font-size:{self.normal}px;"
             f"  background:{self.BG}; color:{self.TEXT_PRI};"
             f"  min-height:{h}px;"
             f"}}"

@@ -239,7 +239,7 @@ class _GroupManagerPanel(SafeConnMixin, QWidget):
         except Exception:
             count = 0
 
-        extra = f"⚠️ {count} حساب سيفقد تصنيفه." if count else ""
+        extra = tr("group_delete_accounts_warn", count=count) if count else ""
         if confirm_delete(self, grp["name"], extra_msg=extra):
             delete_group(conn, gid)
             bus.company_data_changed.emit(self._company_id or 0)

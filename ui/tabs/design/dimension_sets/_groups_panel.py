@@ -18,7 +18,7 @@ from PyQt5.QtCore import Qt, pyqtSignal
 
 from ui.theme import _C
 from ui.widgets.core.i18n import tr
-from ui.font import FS_SM, FS_BASE, FS_MD
+from ui.font import FS_BASE, FS_MD
 from services.design.dimension_set_service import DimensionSetService
 
 from ._categories_panel import _CategoriesPanel
@@ -252,7 +252,7 @@ class _SetsManagerPanel(QWidget):
             self.table.insertRow(r)
             self.table.setItem(r, 0, QTableWidgetItem(str(ds["id"])))
             self.table.setItem(r, 1, QTableWidgetItem(ds["name"]))
-            self.table.setItem(r, 2, QTableWidgetItem(ds["category_name"] or "—"))
+            self.table.setItem(r, 2, QTableWidgetItem(ds["category_name"] or tr("dash")))
             self.table.setItem(r, 3, QTableWidgetItem(ds["default_unit"] or "cm"))
             self.table.setItem(r, 4, QTableWidgetItem(str(cnt)))
             self.table.item(r, 0).setData(Qt.UserRole, ds["id"])

@@ -40,7 +40,7 @@ class _FieldsPanel(QWidget):
         root.setSpacing(6)
 
         hdr = QLabel(tr("dim_field_panel_title"))
-        hdr.setStyleSheet(f"font-weight: bold; color: {_C['accent']}; font-size: {FS_BASE}px;")
+        hdr.setStyleSheet(f"font-weight: bold; color: {_C['accent']}; font-size: {FS_BASE}pt;")
         root.addWidget(hdr)
 
         self.table = make_table(
@@ -57,11 +57,11 @@ class _FieldsPanel(QWidget):
         self.table.setColumnWidth(6, 180)
         root.addWidget(self.table)
 
-        btn_add  = make_btn(f"➕  {tr('dim_field_add_btn')}", style="success")
-        btn_edit = make_btn(f"✏️  {tr('category_edit')}",     style="normal")
-        btn_del  = make_btn(f"🗑️  {tr('category_delete')}",   style="danger")
-        btn_up   = make_btn("⬆️",  style="ghost", fixed_size=False)
-        btn_dn   = make_btn("⬇️",  style="ghost", fixed_size=False)
+        btn_add  = make_btn(tr("dim_field_add_btn"),       style="success")
+        btn_edit = make_btn(tr("category_edit"),            style="normal")
+        btn_del  = make_btn(tr("category_delete"),          style="danger")
+        btn_up   = make_btn(tr("dim_field_move_up_btn"),   style="ghost", fixed_size=False)
+        btn_dn   = make_btn(tr("dim_field_move_down_btn"), style="ghost", fixed_size=False)
         
         for btn in (btn_add, btn_edit, btn_del, btn_up, btn_dn):
             btn.setMinimumHeight(28)
@@ -107,7 +107,7 @@ class _FieldsPanel(QWidget):
             self.table.setItem(r, 4, QTableWidgetItem(
                 tr("dim_field_type_number") if f["field_type"] == "number" else tr("dim_field_type_text")
             ))
-            self.table.setItem(r, 5, QTableWidgetItem("✓" if f["required"] else ""))
+            self.table.setItem(r, 5, QTableWidgetItem(tr("dim_field_required_yes") if f["required"] else ""))
 
             # ── عمود الاعتمادية — sqlite3.Row لا يدعم .get() ──
             dep_text = ""

@@ -25,17 +25,18 @@ from ui.widgets.core.events import bus
 from ui.widgets.core.conn import SafeConnMixin
 from ui.theme import _C
 from ui.widgets.core.i18n import tr
+from ui.font import FS_XS
 from .helpers import _get_type_colors
 
 
 def _badge_style(side: str = "") -> str:
     if side == "dr":
-        return (f"font-size:10px; font-weight:bold; color:{_C['badge_dr_text']};"
+        return (f"font-size:{FS_XS}px; font-weight:bold; color:{_C['badge_dr_text']};"
                 f"background:{_C['badge_dr_bg']}; border-radius:3px; padding:2px 4px;")
     if side == "cr":
-        return (f"font-size:10px; font-weight:bold; color:{_C['badge_cr_text']};"
+        return (f"font-size:{FS_XS}px; font-weight:bold; color:{_C['badge_cr_text']};"
                 f"background:{_C['badge_cr_bg']}; border-radius:3px; padding:2px 4px;")
-    return "font-size:10px; font-weight:bold; border-radius:3px; padding:2px 4px;"
+    return f"font-size:{FS_XS}px; font-weight:bold; border-radius:3px; padding:2px 4px;"
 
 _BADGE_WIDTH = 44
 

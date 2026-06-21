@@ -7,6 +7,7 @@ ui/widgets/shared/no_company_screen.py
 from PyQt5.QtWidgets import QWidget, QVBoxLayout, QLabel, QPushButton
 from PyQt5.QtCore    import Qt, pyqtSignal
 from ui.theme import _C
+from ui.font import FS_BASE, FS_XL, fs
 from ui.widgets.core.i18n import tr
 
 
@@ -26,20 +27,20 @@ class NoCompanyScreen(QWidget):
 
         ico = QLabel("🏢")
         ico.setAlignment(Qt.AlignCenter)
-        ico.setStyleSheet("font-size: 48pt; background: transparent;")
+        ico.setStyleSheet(f"font-size: {fs(FS_XL, 32)}px; background: transparent;")
         lay.addWidget(ico)
 
         title = QLabel(tr("no_company_welcome"))
         title.setAlignment(Qt.AlignCenter)
         title.setStyleSheet(
-            f"font-size: 18pt; font-weight: bold; color: {_C['text_primary']};"
+            f"font-size: {fs(FS_XL, 2)}px; font-weight: bold; color: {_C['text_primary']};"
         )
         lay.addWidget(title)
 
         sub = QLabel(tr("no_company_subtitle"))
         sub.setAlignment(Qt.AlignCenter)
         sub.setWordWrap(True)
-        sub.setStyleSheet(f"font-size: 12pt; color: {_C['text_muted']};")
+        sub.setStyleSheet(f"font-size: {FS_BASE}px; color: {_C['text_muted']};")
         lay.addWidget(sub)
 
         btn = QPushButton(tr("no_company_add_btn"))
@@ -48,7 +49,7 @@ class NoCompanyScreen(QWidget):
         btn.setStyleSheet(f"""
             QPushButton {{
                 background: {_C['accent']}; color: {_C['bg_input']};
-                font-weight: 600; font-size: 11pt;
+                font-weight: 600; font-size: {FS_BASE}px;
                 border: none; border-radius: 8px;
             }}
             QPushButton:hover {{ background: {_C['accent_hover']}; }}

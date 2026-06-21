@@ -137,7 +137,7 @@ class _FieldDialog(QDialog):
 
         self._source_preview = QLabel("")
         self._source_preview.setStyleSheet(f"""
-            color: {_C['accent']}; font-size: {FS_SM}px;
+            color: {_C['accent']}; font-size: {FS_SM}pt;
             background: {_C['accent_light']}; border: 1px solid {_C['accent_mid']};
             border-radius: 4px; padding: 4px 8px;
         """)
@@ -151,7 +151,7 @@ class _FieldDialog(QDialog):
 
         hint = QLabel(tr("dim_field_dep_hint"))
         hint.setStyleSheet(
-            f"color: {_C['accent']}; font-size: {FS_XS}px;"
+            f"color: {_C['accent']}; font-size: {FS_XS}pt;"
             f"background: {_C['accent_light']}; border-radius: 4px; padding: 4px 8px;"
         )
 

@@ -61,7 +61,7 @@ class _CategoriesPanel(QWidget):
 
         hdr = QLabel(tr("dim_cat_panel_title"))
         hdr.setStyleSheet(f"""
-            font-weight: bold; font-size: {FS_MD}px; color: {_C['accent']};
+            font-weight: bold; font-size: {FS_MD}pt; color: {_C['accent']};
             background: {_C['accent_light']}; border-radius: 6px; padding: 6px 12px;
         """)
         root.addWidget(hdr)
@@ -77,7 +77,7 @@ class _CategoriesPanel(QWidget):
 
         # أزرار الشجرة
         btn_edit_cat = QPushButton(tr("category_edit"))
-        btn_del_cat  = make_btn("🗑️  " + tr("category_delete"), style="danger")
+        btn_del_cat  = make_btn(tr("category_delete"), style="danger")
         for b in (btn_edit_cat, btn_del_cat):
             b.setMinimumHeight(28)
         btn_edit_cat.clicked.connect(self._edit_category)
@@ -164,7 +164,7 @@ class _CategoriesPanel(QWidget):
             item.setForeground(0, QColor(node["color"]))
 
             cnt = self._svc.count_sets_in_category(node["id"])
-            item.setText(1, str(cnt) if cnt else "—")
+            item.setText(1, str(cnt) if cnt else tr("dim_cat_zero_sets"))
 
             if parent is None:
                 self.tree.addTopLevelItem(item)

@@ -23,6 +23,7 @@ from db.companies.companies_repo import fetch_all_companies
 from ui.widgets.core.events import emit_company_data_changed
 from ui.widgets.core.i18n import tr
 from ui.theme import _C
+from ui.font import FS_SM
 
 
 def _spin(max_=9999999, dec=4):
@@ -57,7 +58,7 @@ class PublishAsSharedDialog(QDialog):
         lbl_hint.setWordWrap(True)
         lbl_hint.setStyleSheet(
             f"background:{_C['accent_light']}; border:1px solid {_C['accent_mid']}; border-radius:6px;"
-            f"padding:8px 12px; color:{_C['accent_text']}; font-size:11px;"
+            f"padding:8px 12px; color:{_C['accent_text']}; font-size:{FS_SM}px;"
         )
         root.addWidget(lbl_hint)
 

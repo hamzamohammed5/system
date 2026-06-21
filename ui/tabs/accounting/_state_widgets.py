@@ -13,6 +13,9 @@ from PyQt5.QtWidgets import QLabel, QFrame, QVBoxLayout
 from PyQt5.QtCore import Qt
 
 from ui.widgets.panels.state import EmptyState
+from ui.widgets.core.i18n import tr
+from ui.theme import _C
+from ui.font import FS_BASE, FS_LG
 
 
 # ══════════════════════════════════════════════════════════
@@ -21,15 +24,15 @@ from ui.widgets.panels.state import EmptyState
 
 def make_no_company_widget() -> QLabel:
     """Widget 'اختر شركة أولاً'."""
-    lbl = QLabel("⚠️  اختر شركة أولاً لعرض الحسابات")
+    lbl = QLabel(tr("accounting_no_company_msg"))
     lbl.setAlignment(Qt.AlignCenter)
-    lbl.setStyleSheet("font-size:14px; color:#888; padding:40px;")
+    lbl.setStyleSheet(f"font-size:{FS_LG}px; color:{_C['text_state_neutral']}; padding:40px;")
     return lbl
 
 
 def make_error_widget(message: str,
-                      bg: str = "#fdecea",
-                      color: str = "#c62828") -> QLabel:
+                      bg: str = None,
+                      color: str = None) -> QLabel:
     """
     Widget خطأ عام — يستبدل make_conn_error_widget + make_init_failed_widget.
 
@@ -37,11 +40,13 @@ def make_error_widget(message: str,
         w = make_error_widget(f"خطأ في الاتصال:\n{e}")
         w = make_error_widget("تعذّر تهيئة قاعدة البيانات")
     """
+    bg    = bg or _C["badge_cr_bg"]
+    color = color or _C["badge_cr_text"]
     lbl = QLabel(message)
     lbl.setAlignment(Qt.AlignCenter)
     lbl.setWordWrap(True)
     lbl.setStyleSheet(
-        f"font-size:13px; color:{color}; padding:40px;"
+        f"font-size:{FS_BASE}px; color:{color}; padding:40px;"
         f"background:{bg}; border-radius:8px; margin:20px;"
     )
     return lbl
@@ -49,28 +54,25 @@ def make_error_widget(message: str,
 
 # للتوافق مع الكود القديم
 def make_conn_error_widget(error: Exception) -> QLabel:
-    return make_error_widget(f"❌  خطأ في الاتصال بقاعدة البيانات:\n{error}")
+    return make_error_widget(tr("conn_error_msg", error=error))
 
 
 def make_init_failed_widget() -> QLabel:
-    return make_error_widget(
-        "❌  تعذّر تهيئة قاعدة بيانات المحاسبة\n"
-        "جرّب إعادة تشغيل البرنامج أو تحديد الشركة مجدداً"
-    )
+    return make_error_widget(tr("init_failed_msg"))
 
 
 def make_loading_widget(attempt: int, max_attempts: int = 5,
                         text: str = None) -> QLabel:
     """Widget التحميل مع عداد المحاولات."""
-    msg = text or f"⏳  جاري تهيئة قاعدة البيانات... ({attempt}/{max_attempts})"
+    msg = text or tr("loading_db_msg", attempt=attempt, max=max_attempts)
     lbl = QLabel(msg)
     lbl.setAlignment(Qt.AlignCenter)
-    lbl.setStyleSheet("font-size:13px; color:#888; padding:40px;")
+    lbl.setStyleSheet(f"font-size:{FS_BASE}px; color:{_C['text_state_neutral']}; padding:40px;")
     return lbl
 
 
 def make_empty_state(icon: str = "📋",
-                     title: str = "لا توجد بيانات",
+                     title: str = None,
                      subtitle: str = "",
                      action_text: str = "") -> EmptyState:
     """
@@ -78,7 +80,7 @@ def make_empty_state(icon: str = "📋",
     """
     return EmptyState(
         icon=icon,
-        title=title,
+        title=title or tr("no_data"),
         subtitle=subtitle,
         action_text=action_text,
         expandable=True,

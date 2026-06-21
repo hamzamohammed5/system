@@ -10,16 +10,18 @@ from PyQt5.QtWidgets import QFrame, QVBoxLayout
 
 from db.accounting.accounting_schema import TYPE_AR
 from ui.widgets.components.stat_card import StatRow, StatItem
+from ui.widgets.core.i18n import tr
+from ui.theme import _C
 
 class _StatCards(QFrame):
     def __init__(self, parent=None):
         super().__init__(parent)
-        self.setStyleSheet("""
-            QFrame {
-                background: white;
-                border: 1px solid #e0e0e0;
+        self.setStyleSheet(f"""
+            QFrame {{
+                background: {_C['bg_surface']};
+                border: 1px solid {_C['border_med']};
                 border-radius: 8px;
-            }
+            }}
         """)
         self._build()
 
@@ -29,12 +31,12 @@ class _StatCards(QFrame):
         lay.setSpacing(0)
 
         self._row = StatRow([
-            StatItem("إجمالي المدين",  "#1565c0", icon="📥", compact=True),
-            StatItem("إجمالي الدائن",  "#c62828", icon="📤", compact=True),
-            StatItem("الرصيد",          "#2e7d32", icon="⚖️",  compact=True),
-            StatItem("عدد الحركات",    "#6a1b9a", icon="🔢", compact=True),
-            StatItem("الرصيد الطبيعي", "#e65100", icon="📌", compact=True),
-        ], separator=True, bg="white")
+            StatItem(tr("total_debit"),  _C["acc_type_asset"],     icon="📥", compact=True),
+            StatItem(tr("total_credit"), _C["acc_type_liability"], icon="📤", compact=True),
+            StatItem(tr("balance"),      _C["acc_type_capital"],   icon="⚖️",  compact=True),
+            StatItem(tr("ledger_movements_count"),     _C["acc_type_revenue"], icon="🔢", compact=True),
+            StatItem(tr("ledger_normal_balance_card"), _C["acc_type_expense"], icon="📌", compact=True),
+        ], separator=True, bg=_C["bg_surface"])
 
         lay.addWidget(self._row)
 
@@ -47,17 +49,18 @@ class _StatCards(QFrame):
 
     def update(self, total_dr: float, total_cr: float,
                balance: float, count: int, normal_balance: str, acc_type: str):
-        self.lbl_dr.setText(f"{total_dr:,.2f}  ج")
-        self.lbl_cr.setText(f"{total_cr:,.2f}  ج")
+        currency = tr("currency_sym")
+        self.lbl_dr.setText(f"{total_dr:,.2f}  {currency}")
+        self.lbl_cr.setText(f"{total_cr:,.2f}  {currency}")
 
-        bal_color = "#2e7d32" if balance >= 0 else "#c62828"
-        self._row.set_value(2, f"{abs(balance):,.2f}  ج", bal_color)
+        bal_color = _C["acc_type_capital"] if balance >= 0 else _C["acc_type_liability"]
+        self._row.set_value(2, f"{abs(balance):,.2f}  {currency}", bal_color)
 
         self.lbl_cnt.setText(str(count))
 
-        nb_ar    = "مدين (DR↑)" if normal_balance == "dr" else "دائن (CR↑)"
+        nb_ar    = tr("ledger_card_nb_dr") if normal_balance == "dr" else tr("ledger_card_nb_cr")
         type_ar  = TYPE_AR.get(acc_type, "")
-        nb_color = "#1565c0" if normal_balance == "dr" else "#c62828"
+        nb_color = _C["acc_type_asset"] if normal_balance == "dr" else _C["acc_type_liability"]
         self._row.set_value(4, f"{nb_ar} — {type_ar}", nb_color)
 
     def clear(self):

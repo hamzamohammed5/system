@@ -18,6 +18,7 @@ from db.companies.companies_schema import get_central_connection, create_central
 from db.companies.companies_repo   import fetch_all_companies
 from db.companies.company_state    import company_state
 from ui.theme               import _C
+from ui.font                import FS_BASE, FS_LG
 from ui.widgets.core.i18n          import tr
 
 
@@ -42,7 +43,7 @@ class CompanySelector(QWidget):
 
         # أيقونة
         ico = QLabel("🏢")
-        ico.setStyleSheet("font-size: 13pt; background: transparent; border: none;")
+        ico.setStyleSheet(f"font-size: {FS_LG}px; background: transparent; border: none;")
         ico.setFixedWidth(22)
         lay.addWidget(ico)
 
@@ -53,7 +54,7 @@ class CompanySelector(QWidget):
         self._combo.setSizePolicy(QSizePolicy.Preferred, QSizePolicy.Fixed)
         self._combo.setStyleSheet(f"""
             QComboBox {{
-                font-size: 11pt;
+                font-size: {FS_BASE}px;
                 font-weight: 600;
                 color: {_C['sidebar_text']};
                 background: {_C['sidebar_hover']};
@@ -93,7 +94,7 @@ class CompanySelector(QWidget):
                 border: 1px solid {_C['sidebar_border']};
                 border-radius: 5px;
                 color: {_C['sidebar_muted']};
-                font-size: 12pt;
+                font-size: {FS_LG}px;
             }}
             QPushButton:hover {{
                 background: {_C['sidebar_hover']};

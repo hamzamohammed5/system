@@ -35,7 +35,7 @@ from PyQt5.QtCore    import Qt
 from PyQt5.QtGui     import QColor, QBrush
 
 from models.costing_base import effective_qty
-from ui.widgets.core.i18n import t
+from ui.widgets.core.i18n import tr
 
 
 # ══════════════════════════════════════════════════════════

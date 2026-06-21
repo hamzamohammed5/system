@@ -52,7 +52,7 @@ class _AccountForm(SafeConnMixin, QWidget):
         fl.setSpacing(8)
         fl.setLabelAlignment(Qt.AlignRight)
 
-        self.lbl_form_mode = QLabel(tr("new_journal_entry").replace("قيد يومية", tr("accounts")).strip("─ "))
+        self.lbl_form_mode = QLabel(tr("account_form_new"))
         self.lbl_form_mode.setStyleSheet(f"font-weight:bold; color:{_C['accent']};")
         fl.addRow(self.lbl_form_mode)
 
@@ -78,9 +78,9 @@ class _AccountForm(SafeConnMixin, QWidget):
 
         self.cmb_type.currentIndexChanged.connect(self._on_type_changed)
 
-        btn_add         = QPushButton("➕ إضافة")
-        self.btn_save   = QPushButton("💾 حفظ")
-        self.btn_cancel = QPushButton("✖ إلغاء")
+        btn_add         = QPushButton(tr("btn_add"))
+        self.btn_save   = QPushButton(tr("btn_save"))
+        self.btn_cancel = QPushButton(tr("btn_cancel"))
         self.btn_save.setVisible(False)
         self.btn_cancel.setVisible(False)
         for b in (btn_add, self.btn_save, self.btn_cancel):
@@ -118,7 +118,7 @@ class _AccountForm(SafeConnMixin, QWidget):
         self.cmb_group.blockSignals(True)
         prev = self.cmb_group.currentData()
         self.cmb_group.clear()
-        self.cmb_group.addItem("— بدون تصنيف —", None)
+        self.cmb_group.addItem(tr("account_group_unassigned"), None)
         try:
             rows = fetch_all_groups(conn, acc_type)
             tree = build_group_tree(rows)
@@ -148,7 +148,7 @@ class _AccountForm(SafeConnMixin, QWidget):
         code = self.inp_code.text().strip()
         name = self.inp_name.text().strip()
         if not code or not name:
-            QMessageBox.warning(self, "تنبيه", "أدخل الكود والاسم")
+            QMessageBox.warning(self, tr("warning"), tr("account_form_enter_code_name"))
             return
         acc_type    = self.cmb_type.currentData()
         group_id    = self.cmb_group.currentData()
@@ -164,7 +164,7 @@ class _AccountForm(SafeConnMixin, QWidget):
             self.inp_name.clear()
             emit_company_data_changed()
         except Exception as e:
-            QMessageBox.warning(self, "خطأ", str(e))
+            QMessageBox.warning(self, tr("error"), str(e))
 
     def load_for_edit(self, acc_id: int):
         conn = self._get_safe_conn()
@@ -184,7 +184,7 @@ class _AccountForm(SafeConnMixin, QWidget):
             if self.cmb_group.itemData(i) == acc["group_id"]:
                 self.cmb_group.setCurrentIndex(i)
                 break
-        self.lbl_form_mode.setText(f"── تعديل: {acc['name']} ──")
+        self.lbl_form_mode.setText(tr("account_form_edit", name=acc["name"]))
         self.btn_save.setVisible(True)
         self.btn_cancel.setVisible(True)
 
@@ -202,6 +202,6 @@ class _AccountForm(SafeConnMixin, QWidget):
         self.inp_code.clear()
         self.inp_code.setReadOnly(False)
         self.inp_name.clear()
-        self.lbl_form_mode.setText("── حساب جديد ──")
+        self.lbl_form_mode.setText(tr("account_form_new"))
         self.btn_save.setVisible(False)
         self.btn_cancel.setVisible(False)

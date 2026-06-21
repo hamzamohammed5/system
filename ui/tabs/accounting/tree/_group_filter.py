@@ -15,6 +15,7 @@ from PyQt5.QtGui  import QColor
 from db.accounting.accounting_repo import fetch_all_groups, build_group_tree
 from ui.tabs.accounting.helpers import TYPE_COLORS
 from ui.widgets.core.conn import SafeConnMixin
+from ui.widgets.core.i18n import tr
 
 
 class _GroupFilterCombo(SafeConnMixin, QComboBox):
@@ -37,7 +38,7 @@ class _GroupFilterCombo(SafeConnMixin, QComboBox):
         self.blockSignals(True)
         prev = restore_id if restore_id is not None else self.currentData()
         self.clear()
-        self.addItem("— كل التصنيفات —", None)
+        self.addItem(tr("all_groups"), None)
         for t in self.acc_types:
             try:
                 rows = fetch_all_groups(effective_conn, t)

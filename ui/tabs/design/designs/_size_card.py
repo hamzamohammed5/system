@@ -31,6 +31,7 @@ from .size_card.helper import _ThumbnailWidget, _to_px, _unit_for_set, _btn_ss, 
 from ui.theme import _C
 from ui.widgets.core.i18n import tr
 from ui.font import get_font_size, fs, FS_SM
+from ui.widgets.core.events import bus
 
 # ── Layout Constants ──────────────────────────
 _RADIUS      = "10px"
@@ -80,6 +81,16 @@ class _SizeCard(QFrame):
         if xcf and os.path.exists(xcf):
             get_watcher().watch(xcf)
             get_watcher().file_changed.connect(self._on_xcf_changed)
+
+        bus.font_changed.connect(self._apply_name_font)
+
+    def _apply_name_font(self, size: int = None):
+        """يحدّث خط اسم المقاس ديناميكياً عند تغيير حجم الخط من الإعدادات."""
+        size = size or get_font_size()
+        font_n = QFont()
+        font_n.setPointSize(fs(size, -1))
+        font_n.setWeight(QFont.Medium)
+        self._lbl_name.setFont(font_n)
 
     def _on_xcf_changed(self, path: str):
         xcf = os.path.normpath(self._data.get("xcf_path") or "")
@@ -142,12 +153,9 @@ class _SizeCard(QFrame):
                          id=self._data.get('instance_id', '')))
         set_name  = self._data.get("set_name", "")
 
-        lbl_name = QLabel(inst_name)
-        font_n = QFont()
-        font_n.setPointSize(fs(get_font_size(), -1))
-        font_n.setWeight(QFont.Medium)
-        lbl_name.setFont(font_n)
-        lbl_name.setStyleSheet(f"color:{_C['text_primary']}; background:transparent;")
+        self._lbl_name = QLabel(inst_name)
+        self._apply_name_font()
+        self._lbl_name.setStyleSheet(f"color:{_C['text_primary']}; background:transparent;")
 
         lbl_set = QLabel(set_name)
         lbl_set.setStyleSheet(f"color:{_C['text_muted']}; font-size:{FS_SM}px; background:transparent;")
@@ -175,7 +183,7 @@ class _SizeCard(QFrame):
         lbl_dims = QLabel(dims)
         lbl_dims.setStyleSheet(f"color:{_C['text_sec']}; font-size:{FS_SM}px; background:transparent;")
 
-        info.addWidget(lbl_name)
+        info.addWidget(self._lbl_name)
         info.addWidget(lbl_set)
         info.addWidget(lbl_dims)
         info.addStretch()

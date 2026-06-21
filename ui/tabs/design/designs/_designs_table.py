@@ -28,6 +28,7 @@ from .designs_table._design_card import _fetch_designs_filtered, _DesignCard, _T
 from ui.theme import _C
 from ui.widgets.core.i18n import tr
 from ui.font import get_font_size, fs
+from ui.widgets.core.events import bus
 
 import os
 
@@ -88,9 +89,13 @@ class _DesignsTable(QWidget):
 
         self._build()
         self._load()
+        bus.font_changed.connect(self._on_font_changed)
+
+    def _on_font_changed(self, size: int = None):
+        """إعادة تطبيق الـ stylesheets المعتمدة على حجم الخط عند تغييره من الإعدادات."""
+        self._apply_dynamic_styles()
 
     def _build(self):
-        base = get_font_size()
         root = QVBoxLayout(self)
         root.setContentsMargins(0, 0, 0, 0)
         root.setSpacing(0)
@@ -114,27 +119,10 @@ class _DesignsTable(QWidget):
         self.inp_search = QLineEdit()
         self.inp_search.setPlaceholderText(tr("design_table_search_placeholder"))
         self.inp_search.setMinimumHeight(34)
-        self.inp_search.setStyleSheet(f"""
-            QLineEdit {{
-                background: {_BG_SURFACE};
-                border: 1px solid {_BORDER};
-                border-radius: {_RADIUS_SM};
-                padding: 0 12px;
-                font-size: {fs(base,0)}pt;
-                color: {_TEXT_PRI};
-            }}
-            QLineEdit:focus {{
-                border-color: {_ACCENT};
-                background: {_BG};
-            }}
-        """)
         self.inp_search.textChanged.connect(lambda: self._search_timer.start())
 
         self.btn_new = QPushButton(f"  {tr('design_table_new_btn')}")
         self.btn_new.setMinimumHeight(34)
-        self.btn_new.setStyleSheet(
-            _btn_ss(_ACCENT, _C["accent_text"], _ACCENT, _C["accent_hover"], height=34)
-        )
         self.btn_new.clicked.connect(self._new_design)
 
         row1.addWidget(self.inp_search, stretch=1)
@@ -145,43 +133,22 @@ class _DesignsTable(QWidget):
         row2 = QHBoxLayout()
         row2.setSpacing(8)
 
-        lbl_set = QLabel(tr("design_table_set_filter_label"))
-        lbl_set.setStyleSheet(
-            f"font-size:{fs(base,-1)}pt; color:{_TEXT_SEC}; background:transparent;"
-        )
+        self._lbl_set = QLabel(tr("design_table_set_filter_label"))
 
         self.cmb_set = QComboBox()
         self.cmb_set.setMinimumHeight(28)
-        self.cmb_set.setStyleSheet(f"""
-            QComboBox {{
-                background: {_BG_SURFACE};
-                border: 1px solid {_BORDER};
-                border-radius: {_RADIUS_SM};
-                padding: 0 8px;
-                font-size: {fs(base,-1)}pt;
-                color: {_TEXT_PRI};
-            }}
-            QComboBox:focus {{ border-color: {_ACCENT}; }}
-            QComboBox::drop-down {{ border: none; width: 16px; }}
-        """)
         self.cmb_set.currentIndexChanged.connect(self._on_set_changed)
 
         self.lbl_count = QLabel("")
-        self.lbl_count.setStyleSheet(
-            f"font-size:{fs(base,-1)}pt; color:{_TEXT_MUT}; background:transparent;"
-        )
 
-        btn_rst = QPushButton(tr("design_table_reset_filters_btn"))
-        btn_rst.setMinimumHeight(28)
-        btn_rst.setStyleSheet(
-            _btn_ss(_BG_SURFACE, _TEXT_SEC, _BORDER, _BG, height=28)
-        )
-        btn_rst.clicked.connect(self._reset_filters)
+        self._btn_rst = QPushButton(tr("design_table_reset_filters_btn"))
+        self._btn_rst.setMinimumHeight(28)
+        self._btn_rst.clicked.connect(self._reset_filters)
 
-        row2.addWidget(lbl_set)
+        row2.addWidget(self._lbl_set)
         row2.addWidget(self.cmb_set, stretch=1)
         row2.addWidget(self.lbl_count)
-        row2.addWidget(btn_rst)
+        row2.addWidget(self._btn_rst)
         tb_lay.addLayout(row2)
 
         root.addWidget(toolbar)
@@ -218,28 +185,78 @@ class _DesignsTable(QWidget):
         ef_lay.setAlignment(Qt.AlignCenter)
         ef_lay.setSpacing(12)
 
-        ef_icon = QLabel("🎨")
-        ef_icon.setAlignment(Qt.AlignCenter)
-        ef_icon.setStyleSheet(f"font-size:{fs(base,+18)}pt; background:transparent;")
+        self._ef_icon = QLabel("🎨")
+        self._ef_icon.setAlignment(Qt.AlignCenter)
 
         self._empty_msg = QLabel(tr("design_table_empty_no_designs"))
         self._empty_msg.setAlignment(Qt.AlignCenter)
-        self._empty_msg.setStyleSheet(
-            f"color:{_TEXT_SEC}; font-size:{fs(base,+2)}pt; font-weight:600; background:transparent;"
-        )
         self._empty_sub = QLabel(tr("design_table_empty_start"))
         self._empty_sub.setAlignment(Qt.AlignCenter)
-        self._empty_sub.setStyleSheet(
-            f"color:{_TEXT_MUT}; font-size:{fs(base,0)}pt; background:transparent;"
-        )
 
-        ef_lay.addWidget(ef_icon)
+        ef_lay.addWidget(self._ef_icon)
         ef_lay.addWidget(self._empty_msg)
         ef_lay.addWidget(self._empty_sub)
         root.addWidget(self._empty_frame)
         self._empty_frame.setVisible(False)
 
+        self._apply_dynamic_styles()
         self._reload_set_combo()
+
+    def _apply_dynamic_styles(self):
+        """يطبّق كل الـ stylesheets المعتمدة على حجم الخط — يُستدعى عند البناء وعند تغيير الخط."""
+        base = get_font_size()
+
+        self.inp_search.setStyleSheet(f"""
+            QLineEdit {{
+                background: {_BG_SURFACE};
+                border: 1px solid {_BORDER};
+                border-radius: {_RADIUS_SM};
+                padding: 0 12px;
+                font-size: {fs(base,0)}pt;
+                color: {_TEXT_PRI};
+            }}
+            QLineEdit:focus {{
+                border-color: {_ACCENT};
+                background: {_BG};
+            }}
+        """)
+
+        self.btn_new.setStyleSheet(
+            _btn_ss(_ACCENT, _C["accent_text"], _ACCENT, _C["accent_hover"], height=34)
+        )
+
+        self._lbl_set.setStyleSheet(
+            f"font-size:{fs(base,-1)}pt; color:{_TEXT_SEC}; background:transparent;"
+        )
+
+        self.cmb_set.setStyleSheet(f"""
+            QComboBox {{
+                background: {_BG_SURFACE};
+                border: 1px solid {_BORDER};
+                border-radius: {_RADIUS_SM};
+                padding: 0 8px;
+                font-size: {fs(base,-1)}pt;
+                color: {_TEXT_PRI};
+            }}
+            QComboBox:focus {{ border-color: {_ACCENT}; }}
+            QComboBox::drop-down {{ border: none; width: 16px; }}
+        """)
+
+        self.lbl_count.setStyleSheet(
+            f"font-size:{fs(base,-1)}pt; color:{_TEXT_MUT}; background:transparent;"
+        )
+
+        self._btn_rst.setStyleSheet(
+            _btn_ss(_BG_SURFACE, _TEXT_SEC, _BORDER, _BG, height=28)
+        )
+
+        self._ef_icon.setStyleSheet(f"font-size:{fs(base,+18)}pt; background:transparent;")
+        self._empty_msg.setStyleSheet(
+            f"color:{_TEXT_SEC}; font-size:{fs(base,+2)}pt; font-weight:600; background:transparent;"
+        )
+        self._empty_sub.setStyleSheet(
+            f"color:{_TEXT_MUT}; font-size:{fs(base,0)}pt; background:transparent;"
+        )
 
     # ── تحميل combo المجموعات ──────────────────────────────
 

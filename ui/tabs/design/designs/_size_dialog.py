@@ -95,7 +95,7 @@ class _SizeDialog(QDialog):
         form.addRow(tr("design_size_dpi_label") + " :", self.cmb_dpi)
 
         # ── معاينة الكانفاس ──
-        self.lbl_canvas = QLabel("─")
+        self.lbl_canvas = QLabel(tr("design_size_canvas_dash"))
         self.lbl_canvas.setStyleSheet(f"""
             color: {_C['success']}; font-weight: bold; font-size: {FS_BASE}px;
             background: {_C['success_bg']}; border: 1px solid {_C['success_border']};
@@ -170,8 +170,7 @@ class _SizeDialog(QDialog):
         self.cmb_instance.clear()
         self.cmb_width.clear()
         self.cmb_height.clear()
-        self.cmb_dpi.clear()
-        self.lbl_canvas.setText("─")
+        self.lbl_canvas.setText(tr("design_size_canvas_dash"))
 
         if not set_id:
             return
@@ -205,7 +204,7 @@ class _SizeDialog(QDialog):
         dpi_fid = self.cmb_dpi.currentData()
 
         if not inst_id or not w_fid or not h_fid:
-            self.lbl_canvas.setText("─")
+            self.lbl_canvas.setText(tr("design_size_canvas_dash"))
             return
 
         w_val = h_val = dpi_val = None

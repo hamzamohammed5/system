@@ -16,6 +16,7 @@ from PyQt5.QtCore import QDate
 from ui.widgets.panels.filter       import FilterToolbar
 from ui.widgets.theme.builders import v_divider
 from ui.widgets.theme.input_styles import input_style
+from ui.widgets.core.i18n import tr
 
 class _LedgerFilterBar(FilterToolbar):
     """
@@ -33,7 +34,7 @@ class _LedgerFilterBar(FilterToolbar):
             show_category=False,
             show_date=True,
             show_presets=False,
-            placeholder="بحث في البيان أو رقم القيد...",
+            placeholder=tr("ledger_search_placeholder"),
             parent=parent,
         )
         self._add_move_type_filter()
@@ -52,9 +53,9 @@ class _LedgerFilterBar(FilterToolbar):
         self.cmb_move_type = QComboBox()
         self.cmb_move_type.setMinimumHeight(28)
         self.cmb_move_type.setFixedWidth(120)
-        self.cmb_move_type.addItem("كل الحركات", None)
-        self.cmb_move_type.addItem("مدين فقط",   "dr")
-        self.cmb_move_type.addItem("دائن فقط",   "cr")
+        self.cmb_move_type.addItem(tr("move_type_all"), None)
+        self.cmb_move_type.addItem(tr("move_type_dr"),   "dr")
+        self.cmb_move_type.addItem(tr("move_type_cr"),   "cr")
         self.cmb_move_type.setStyleSheet(input_style(height=28))
         self.cmb_move_type.currentIndexChanged.connect(
             lambda _: self.filter_changed.emit()

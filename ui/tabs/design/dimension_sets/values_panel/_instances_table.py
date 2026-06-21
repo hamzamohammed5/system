@@ -231,9 +231,9 @@ class _InstancesTable(QWidget):
         self._empty_state.setStyleSheet(f"background: {_C['bg_input']}; border: none;")
         e_lay = QVBoxLayout(self._empty_state)
         e_lay.setAlignment(Qt.AlignCenter)
-        e_lbl = QLabel("📋")
+        e_lbl = QLabel(tr("dim_inst_empty_icon"))
         e_lbl.setAlignment(Qt.AlignCenter)
-        e_lbl.setStyleSheet(f"font-size: {fs(FS_XL, +24)}px; background: transparent;")
+        e_lbl.setStyleSheet(f"font-size: {fs(FS_XL, +24)}pt; background: transparent;")
         e_msg = QLabel(tr("dim_inst_table_placeholder"))
         e_msg.setAlignment(Qt.AlignCenter)
         e_msg.setStyleSheet(f"color: {_C['text_muted']}; font-size: {fs(base,+1)}pt; background: transparent;")
@@ -260,7 +260,7 @@ class _InstancesTable(QWidget):
             set_name = ds["name"] if ds else tr("dim_unnamed_set_fallback").format(id=set_id)
         except Exception:
             set_name = tr("dim_unnamed_set_fallback").format(id=set_id)
-        self._lbl_set_name.setText(f"📐  {set_name}")
+        self._lbl_set_name.setText(f"{tr('dim_sets_set_icon')}  {set_name}")
 
         self._fields = [
             f for f in fetch_fields_for_set(self.conn, set_id)
@@ -312,7 +312,7 @@ class _InstancesTable(QWidget):
                 val_info = values.get(f["id"], {})
                 val = val_info.get("value_num")
                 unit = f["unit"] or ""
-                txt  = f"{val:g}  {unit}".strip() if val is not None else "—"
+                txt  = f"{val:g}  {unit}".strip() if val is not None else tr("dim_value_empty")
                 item = QTableWidgetItem(txt)
                 item.setTextAlignment(Qt.AlignRight | Qt.AlignVCenter)
                 if val is None:

@@ -73,7 +73,7 @@ class _SetCard(QFrame):
 
         base = get_font_size()
 
-        icon_lbl = QLabel("📐")
+        icon_lbl = QLabel(tr("dim_sets_set_icon"))
         icon_lbl.setStyleSheet(f"font-size: {fs(base,+4)}pt; background: transparent; border: none;")
         icon_lbl.setFixedWidth(34)
         icon_lbl.setAlignment(Qt.AlignCenter)
@@ -91,7 +91,7 @@ class _SetCard(QFrame):
         """)
 
         self._meta_lbl = QLabel(
-            f"{category or '—'}  ·  {unit}  ·  "
+            f"{category or tr('dim_sets_card_no_category')}  ·  {unit}  ·  "
             + tr("dim_sets_card_field_suffix").format(count=fields_cnt)
         )
         self._meta_lbl.setStyleSheet(f"""

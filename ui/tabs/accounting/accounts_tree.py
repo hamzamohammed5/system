@@ -34,6 +34,7 @@ from ui.widgets.dialogs.confirm import confirm_delete
 
 from ui.theme import _C
 from ui.widgets.core.i18n import tr
+from ui.font import FS_MD, FS_SM
 from ui.widgets.dialogs.message import msg_info, msg_warning, msg_critical
 from .tree._tree_builder import (
     rows_to_tree, filter_by_group, add_acc_nodes, add_type_header,
@@ -182,7 +183,7 @@ class AccountsTreePanel(SafeConnMixin, QWidget):
             equity_item.setFlags(equity_item.flags() & ~Qt.ItemIsSelectable)
             f = equity_item.font(1)
             f.setBold(True)
-            f.setPointSize(f.pointSize() + 1)
+            f.setPointSize(FS_MD)
             equity_item.setFont(1, f)
             equity_item.setForeground(1, QColor(_C["investor_capital_text"]))
             equity_item.setBackground(0, QColor(_C["success_bg"]))

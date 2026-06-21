@@ -203,6 +203,17 @@ class _DesignCard(QFrame):
         self.setFixedWidth(_CARD_W)
         self._build()
 
+        from ui.widgets.core.events import bus
+        bus.font_changed.connect(self._apply_name_font)
+
+    def _apply_name_font(self, size: int = None):
+        """يحدّث خط اسم التصميم ديناميكياً عند تغيير حجم الخط من الإعدادات."""
+        size = size or get_font_size()
+        font_n = QFont()
+        font_n.setPointSize(fs(size, -2))
+        font_n.setWeight(QFont.Medium)
+        self._lbl_name.setFont(font_n)
+
     def _build(self):
         self._update_style()
         root = QVBoxLayout(self)
@@ -234,9 +245,9 @@ class _DesignCard(QFrame):
             badge.setGeometry(_CARD_W - 30, 8, 22, 18)
             badge.setAlignment(Qt.AlignCenter)
             badge.setStyleSheet(
-                f"background:rgba(0,0,0,0.55); color:{_C['card_badge_text']};"
+                f"background:{_C['card_badge_bg']}; color:{_C['card_badge_text']};"
                 f"border-radius:9px; font-size:{fs(FS_XS,-1)}px; font-weight:700;"
-                "border:1px solid rgba(255,255,255,0.2);"
+                f"border:1px solid {_C['card_badge_border']};"
             )
 
         root.addWidget(thumb_frame)
@@ -249,16 +260,13 @@ class _DesignCard(QFrame):
         info_lay.setSpacing(3)
 
         name = self._data.get("name", "")
-        lbl_name = QLabel(name)
-        lbl_name.setWordWrap(True)
-        font_n = QFont()
-        font_n.setPointSize(fs(get_font_size(), -2))
-        font_n.setWeight(QFont.Medium)
-        lbl_name.setFont(font_n)
-        lbl_name.setStyleSheet(
+        self._lbl_name = QLabel(name)
+        self._lbl_name.setWordWrap(True)
+        self._lbl_name.setStyleSheet(
             f"color:{_C['text_primary']}; background:transparent; border:none;"
         )
-        info_lay.addWidget(lbl_name)
+        self._apply_name_font()
+        info_lay.addWidget(self._lbl_name)
 
         cat = self._data.get("category_name") or ""
         if cat:

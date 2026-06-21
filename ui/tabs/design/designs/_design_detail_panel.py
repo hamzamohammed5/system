@@ -95,6 +95,13 @@ class _DesignDetailPanel(QWidget):
         for lbl in self._field_labels:
             lbl.setStyleSheet(s.label_field())
 
+        # Empty sizes state
+        self._es_icon.setStyleSheet(
+            f"font-size:{fs(get_font_size(),+12)}pt; background:transparent;"
+        )
+        self._es_lbl.setStyleSheet(s.label_secondary())
+        self._es_sub.setStyleSheet(s.label_muted())
+
     def _build(self):
         s = get_styles()
         root = QVBoxLayout(self)
@@ -244,9 +251,8 @@ class _DesignDetailPanel(QWidget):
         es_lay.setAlignment(Qt.AlignCenter)
         es_lay.setSpacing(6)
 
-        es_icon = QLabel("📐")
-        es_icon.setAlignment(Qt.AlignCenter)
-        es_icon.setStyleSheet(f"font-size:{fs(get_font_size(),+12)}pt; background:transparent;")
+        self._es_icon = QLabel("📐")
+        self._es_icon.setAlignment(Qt.AlignCenter)
 
         self._es_lbl = QLabel(tr("design_detail_no_sizes_title"))
         self._es_lbl.setAlignment(Qt.AlignCenter)
@@ -256,7 +262,7 @@ class _DesignDetailPanel(QWidget):
         self._es_sub.setAlignment(Qt.AlignCenter)
         self._es_sub.setStyleSheet(s.label_muted())
 
-        es_lay.addWidget(es_icon)
+        es_lay.addWidget(self._es_icon)
         es_lay.addWidget(self._es_lbl)
         es_lay.addWidget(self._es_sub)
 

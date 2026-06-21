@@ -14,7 +14,7 @@ from PyQt5.QtCore import Qt, pyqtSignal
 
 from ui.theme import _C
 from ui.widgets.core.i18n import tr
-from ui.font import FS_XS, FS_SM, FS_BASE, FS_MD, FS_LG
+from ui.font import FS_XS, FS_SM, FS_BASE, FS_MD, FS_LG, get_font_size, fs
 from services.design.dimension_set_service import DimensionSetService
 from ui.tabs.design.dimension_sets._source_picker_dialog import _SourcePickerDialog
 
@@ -74,7 +74,7 @@ class _InstancePopup(QDialog):
             else tr("dim_inst_hdr_new")
         )
         hdr.setStyleSheet(f"""
-            font-size: {FS_MD}px;
+            font-size: {FS_MD}pt;
             font-weight: bold;
             color: {_C['accent']};
             background: {_C['accent_light']};
@@ -98,7 +98,7 @@ class _InstancePopup(QDialog):
                 border: 1.5px solid {_C['border']};
                 border-radius: 8px;
                 padding: 4px 12px;
-                font-size: {FS_BASE}px;
+                font-size: {FS_BASE}pt;
                 background: {_C['bg_input']};
             }}
             QLineEdit:focus {{ border-color: {_C['accent']}; }}
@@ -121,7 +121,7 @@ class _InstancePopup(QDialog):
 
         # ── حقول الإدخال ──
         fields_lbl = QLabel(tr("dim_inst_values_label") + ":")
-        fields_lbl.setStyleSheet(f"font-weight: bold; color: {_C['text_muted']}; font-size: {FS_SM}px;")
+        fields_lbl.setStyleSheet(f"font-weight: bold; color: {_C['text_muted']}; font-size: {FS_SM}pt;")
         root.addWidget(fields_lbl)
 
         scroll = QScrollArea()
@@ -162,7 +162,7 @@ class _InstancePopup(QDialog):
                     border: 1.5px solid {_C['border']};
                     border-radius: 8px;
                     padding: 4px 10px;
-                    font-size: {FS_BASE}px;
+                    font-size: {FS_BASE}pt;
                     background: {_C['bg_input']};
                 }}
                 QDoubleSpinBox:focus {{ border-color: {_C['accent']}; }}
@@ -170,21 +170,21 @@ class _InstancePopup(QDialog):
 
             unit_lbl = QLabel(f["unit"] or "")
             unit_lbl.setFixedWidth(38)
-            unit_lbl.setStyleSheet(f"color: {_C['text_muted']}; font-size: {FS_SM}px;")
+            unit_lbl.setStyleSheet(f"color: {_C['text_muted']}; font-size: {FS_SM}pt;")
             unit_lbl.setAlignment(Qt.AlignVCenter)
 
             # زر الحساب التلقائي لو في اعتمادية
             has_dep = bool(_row_val(f, "source_field_id"))
             if has_dep:
                 btn_auto = QToolButton()
-                btn_auto.setText("⟳")
+                btn_auto.setText(tr("dim_inst_auto_icon"))
                 btn_auto.setFixedSize(32, 32)
                 btn_auto.setStyleSheet(f"""
                     QToolButton {{
                         background: transparent;
                         border: none;
                         color: {_C['text_muted']};
-                        font-size: {FS_MD}px;
+                        font-size: {FS_MD}pt;
                         border-radius: 5px;
                         padding: 3px 6px;
                     }}
@@ -229,7 +229,7 @@ class _InstancePopup(QDialog):
                     border: 1.5px solid {_C['accent_mid']};
                     border-radius: 7px;
                     padding: 5px 14px;
-                    font-size: {FS_BASE}px;
+                    font-size: {FS_BASE}pt;
                 }}
                 QPushButton:hover {{ background: {_C['accent_light']}; }}
             """)
@@ -247,14 +247,14 @@ class _InstancePopup(QDialog):
                 border: 1.5px solid {_C['accent_mid']};
                 border-radius: 7px;
                 padding: 5px 14px;
-                font-size: {FS_BASE}px;
+                font-size: {FS_BASE}pt;
             }}
             QPushButton:hover {{ background: {_C['accent_light']}; }}
         """)
         btn_cancel.setMinimumHeight(36)
         btn_cancel.clicked.connect(self.reject)
 
-        btn_save = QPushButton("💾  " + tr("save"))
+        btn_save = QPushButton(tr("dim_inst_save_btn"))
         btn_save.setStyleSheet(f"""
             QPushButton {{
                 background: {_C['accent']};
@@ -263,7 +263,7 @@ class _InstancePopup(QDialog):
                 border-radius: 7px;
                 padding: 6px 18px;
                 font-weight: bold;
-                font-size: {FS_BASE}px;
+                font-size: {FS_BASE}pt;
             }}
             QPushButton:hover  {{ background: {_C['accent_hover']}; }}
             QPushButton:disabled {{ background: {_C['text_muted']}; }}

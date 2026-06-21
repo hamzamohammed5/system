@@ -29,6 +29,7 @@ from db.companies.shared_items_repo import (
 from ui.widgets.core.events import emit_company_data_changed
 from ui.widgets.core.i18n import tr
 from ui.theme import _C
+from ui.font import FS_SM, FS_LG
 
 
 def _type_label(t: str) -> str:
@@ -95,7 +96,7 @@ class SharedItemsManagerDialog(QDialog):
         lbl_hint.setWordWrap(True)
         lbl_hint.setStyleSheet(
             f"background:{_C['success_bg']}; border:1px solid {_C['success_border']};"
-            f"border-radius:6px; padding:8px 12px; color:{_C['success']}; font-size:11px;"
+            f"border-radius:6px; padding:8px 12px; color:{_C['success']}; font-size:{FS_SM}px;"
         )
         body_lay.addWidget(lbl_hint)
 
@@ -196,7 +197,7 @@ class SharedItemsManagerDialog(QDialog):
         h_lay.setContentsMargins(20, 0, 20, 0)
         lbl = QLabel(tr("shared_item_header"))
         lbl.setStyleSheet(
-            f"font-size:14px; font-weight:bold; color:{_C['bg_surface']};"
+            f"font-size:{FS_LG}px; font-weight:bold; color:{_C['bg_surface']};"
             "background:transparent; border:none;"
         )
         h_lay.addWidget(lbl)

@@ -17,6 +17,7 @@ from db.companies.companies_repo import (
     delete_company, toggle_company_active,
 )
 from ui.theme import _C
+from ui.font import FS_SM, FS_BASE, FS_MD, FS_LG, FS_XL
 from ui.widgets.core.i18n import tr
 from ui.widgets.shared.message_box import msg_question, msg_info, msg_warning, msg_critical
 
@@ -41,7 +42,7 @@ class CompaniesDialog(QDialog):
 
         title = QLabel(tr("companies_manage_title"))
         title.setStyleSheet(f"""
-            font-size: 14pt; font-weight: bold;
+            font-size: {FS_XL}px; font-weight: bold;
             color: {_C['accent']}; padding: 4px 0;
             background: transparent;
         """)
@@ -80,7 +81,7 @@ class CompaniesDialog(QDialog):
 
         toolbar = QHBoxLayout()
         lbl = QLabel(tr("companies_registered"))
-        lbl.setStyleSheet("font-weight: bold; font-size: 11pt; background: transparent;")
+        lbl.setStyleSheet(f"font-weight: bold; font-size: {FS_MD}px; background: transparent;")
         toolbar.addWidget(lbl)
         toolbar.addStretch()
 
@@ -150,7 +151,7 @@ class CompaniesDialog(QDialog):
 
         self._form_title = QLabel(tr("company_new_title"))
         self._form_title.setStyleSheet(
-            "font-weight: bold; font-size: 11pt; background: transparent;"
+            f"font-weight: bold; font-size: {FS_MD}px; background: transparent;"
         )
         lay.addWidget(self._form_title)
 
@@ -163,7 +164,7 @@ class CompaniesDialog(QDialog):
         def _lbl(text):
             l = QLabel(text)
             l.setStyleSheet(
-                f"font-size: 10pt; color: {_C['text_sec']}; background: transparent;"
+                f"font-size: {FS_SM}px; color: {_C['text_sec']}; background: transparent;"
             )
             return l
 
@@ -220,7 +221,7 @@ class CompaniesDialog(QDialog):
             QTextEdit {{
                 border: 1px solid {_C['border_med']};
                 border-radius: 5px; padding: 4px;
-                background: {_C['bg_input']}; font-size: 10pt;
+                background: {_C['bg_input']}; font-size: {FS_BASE}px;
             }}
             QTextEdit:focus {{ border-color: {_C['accent']}; }}
         """)
@@ -299,7 +300,7 @@ class CompaniesDialog(QDialog):
             _btn_ss = lambda bg, hov: f"""
                 QPushButton {{
                     background: {bg}; border: none;
-                    border-radius: 4px; font-size: 12pt;
+                    border-radius: 4px; font-size: {FS_LG}px;
                     min-width: 28px; min-height: 28px;
                     max-width: 28px; max-height: 28px;
                 }}

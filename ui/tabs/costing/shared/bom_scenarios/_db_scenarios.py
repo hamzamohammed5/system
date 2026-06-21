@@ -17,7 +17,7 @@ from PyQt5.QtWidgets import QMessageBox
 
 from services.costing.scenario_service import ScenarioService
 from ui.widgets.core.events import emit_company_data_changed
-from ui.widgets.core.i18n import t
+from ui.widgets.core.i18n import tr
 
 
 class DbScenariosMixin:

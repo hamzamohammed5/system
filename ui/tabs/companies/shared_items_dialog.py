@@ -31,6 +31,7 @@ from db.companies.companies_repo import fetch_all_companies
 from ui.widgets.core.events import emit_company_data_changed
 from ui.widgets.core.i18n import tr
 from ui.theme import _C
+from ui.font import FS_SM, FS_LG
 
 
 def _spin(max_=9999999, dec=4):
@@ -103,7 +104,7 @@ class SharedItemsDialog(QDialog):
         )
         header.setTextFormat(Qt.RichText)
         header.setStyleSheet(
-            f"font-size:14px; font-weight:bold; color:{_C['acc_type_asset']};"
+            f"font-size:{FS_LG}px; font-weight:bold; color:{_C['acc_type_asset']};"
             f"background:{_C['t_account_dr_bg']}; border:1px solid {_C['accent_mid']};"
             "border-radius:8px; padding:8px 16px;"
         )
@@ -157,7 +158,7 @@ class SharedItemsDialog(QDialog):
         self.lst_companies.setStyleSheet(f"""
             QListWidget {{
                 border:1px solid {_C['border']}; border-radius:6px;
-                font-size:11px;
+                font-size:{FS_SM}px;
             }}
             QListWidget::item {{ padding:5px 10px; }}
             QListWidget::item:selected {{
@@ -224,7 +225,7 @@ class SharedItemsDialog(QDialog):
             # معاينة سعر الوحدة
             self.lbl_unit = QLabel(tr("dash"))
             self.lbl_unit.setStyleSheet(
-                f"color:{_C['acc_type_asset']}; font-weight:bold; font-size:11px;"
+                f"color:{_C['acc_type_asset']}; font-weight:bold; font-size:{FS_SM}px;"
                 f"background:{_C['t_account_dr_bg']}; border-radius:4px; padding:4px 8px;"
             )
             sp.valueChanged.connect(self._update_raw_preview)
@@ -257,7 +258,7 @@ class SharedItemsDialog(QDialog):
             form_lay.addRow(lbl, sp)
 
             lbl_machine = QLabel(self._data.get("machine_name", tr("dash")))
-            lbl_machine.setStyleSheet(f"color:{_C['text_muted']}; font-size:11px;")
+            lbl_machine.setStyleSheet(f"color:{_C['text_muted']}; font-size:{FS_SM}px;")
             form_lay.addRow(tr("machine_name_col"), lbl_machine)
 
     def _update_raw_preview(self):

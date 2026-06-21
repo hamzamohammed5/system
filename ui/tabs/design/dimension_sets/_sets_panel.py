@@ -21,7 +21,8 @@ from db.designs.dimension_sets_repo import (
 from ui.widgets.tables.tables       import make_table
 from ui.theme import _C
 from ui.widgets.core.i18n import tr
-from ui.font import FS_SM, FS_BASE, get_font_size, fs
+from ui.widgets.core.events import bus
+from ui.font import FS_SM, get_font_size, fs
 
 
 class _SetsPanel(QWidget):
@@ -38,6 +39,25 @@ class _SetsPanel(QWidget):
         self._all_rows = []
         self._build()
         self._load()
+        bus.font_changed.connect(self._on_font_changed)
+
+    def _on_font_changed(self, size: int = None):
+        size = size or get_font_size()
+        self._hdr.setStyleSheet(f"""
+            font-weight: bold;
+            font-size: {fs(size, +1)}px;
+            color: {_C["acc_type_asset"]};
+            background: {_C["accent_light"]};
+            border-radius: 6px;
+            padding: 6px 10px;
+        """)
+        self._hint.setStyleSheet(
+            f"color: {_C['text_neutral']};"
+            f"font-size: {FS_SM}px;"
+            f"background: {_C['investor_link_bg']};"
+            f"border: 1px solid {_C['investor_link_border']};"
+            "border-radius: 4px; padding: 4px 8px;"
+        )
 
     def _build(self):
         root = QVBoxLayout(self)
@@ -45,8 +65,8 @@ class _SetsPanel(QWidget):
         root.setSpacing(6)
 
         # ── رأس ──
-        hdr = QLabel(tr("dim_sets_panel_title"))
-        hdr.setStyleSheet(f"""
+        self._hdr = QLabel(tr("dim_sets_panel_title"))
+        self._hdr.setStyleSheet(f"""
             font-weight: bold;
             font-size: {fs(get_font_size(), +1)}px;
             color: {_C["acc_type_asset"]};
@@ -54,19 +74,19 @@ class _SetsPanel(QWidget):
             border-radius: 6px;
             padding: 6px 10px;
         """)
-        root.addWidget(hdr)
+        root.addWidget(self._hdr)
 
         # ── تلميح ──
-        hint = QLabel(tr("dim_sets_card_hint"))
-        hint.setStyleSheet(
+        self._hint = QLabel(tr("dim_sets_card_hint"))
+        self._hint.setStyleSheet(
             f"color: {_C['text_neutral']};"
             f"font-size: {FS_SM}px;"
             f"background: {_C['investor_link_bg']};"
             f"border: 1px solid {_C['investor_link_border']};"
             "border-radius: 4px; padding: 4px 8px;"
         )
-        hint.setWordWrap(True)
-        root.addWidget(hint)
+        self._hint.setWordWrap(True)
+        root.addWidget(self._hint)
 
         # ── فلتر ──
         filter_row = QHBoxLayout()
@@ -152,7 +172,7 @@ class _SetsPanel(QWidget):
             self.table.insertRow(r)
             self.table.setItem(r, 0, QTableWidgetItem(str(ds["id"])))
             self.table.setItem(r, 1, QTableWidgetItem(ds["name"]))
-            self.table.setItem(r, 2, QTableWidgetItem(ds["category_name"] or "—"))
+            self.table.setItem(r, 2, QTableWidgetItem(ds["category_name"] or tr("dash")))
             self.table.setItem(r, 3, QTableWidgetItem(ds["default_unit"] or "cm"))
             self.table.setItem(r, 4, QTableWidgetItem(str(cnt)))
             self.table.item(r, 0).setData(Qt.UserRole, ds["id"])

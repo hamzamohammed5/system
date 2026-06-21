@@ -22,6 +22,9 @@ from db.accounting.accounting_schema import TYPE_AR
 from ui.tabs.accounting.helpers import TYPE_COLORS
 from ui.widgets.components.headers_page import PageHeader
 from ui.widgets.components.amount_label  import BalanceDisplay
+from ui.widgets.core.i18n import tr
+from ui.theme import _C
+from ui.font import FS_BASE, FS_SM
 from .ledger_filter_bar import _LedgerFilterBar
 from .ledger_stat_cards import _StatCards
 
@@ -39,9 +42,9 @@ class _TAccountPanel(QWidget):
 
         # ── هيدر الحساب (بدل lbl_title اليدوي) ──
         self._page_hdr = PageHeader(
-            title="اختر حسابًا من القائمة لعرض حركاته",
+            title=tr("ledger_select_account_prompt"),
             icon="📒",
-            accent="#1565c0",
+            accent=_C["acc_type_asset"],
             compact=True,
         )
         root.addWidget(self._page_hdr)
@@ -64,12 +67,12 @@ class _TAccountPanel(QWidget):
         root.addWidget(self._filter)
 
         t_frame = QFrame()
-        t_frame.setStyleSheet("""
-            QFrame {
-                background: white;
-                border: 2px solid #c5cae9;
+        t_frame.setStyleSheet(f"""
+            QFrame {{
+                background: {_C['bg_surface']};
+                border: 2px solid {_C['t_account_frame']};
                 border-radius: 8px;
-            }
+            }}
         """)
         t_lay = QHBoxLayout(t_frame)
         t_lay.setContentsMargins(0, 0, 0, 0)
@@ -82,27 +85,27 @@ class _TAccountPanel(QWidget):
         dr_lay.setContentsMargins(8, 8, 4, 8)
         dr_lay.setSpacing(4)
 
-        dr_hdr = QLabel("📥  مدين  (DR)")
+        dr_hdr = QLabel(tr("t_account_dr_header"))
         dr_hdr.setAlignment(Qt.AlignCenter)
-        dr_hdr.setStyleSheet("""
-            font-weight: bold; color: #1565c0; font-size: 12px;
-            background: #e3f2fd; border-radius: 5px; padding: 5px;
+        dr_hdr.setStyleSheet(f"""
+            font-weight: bold; color: {_C['acc_type_asset']}; font-size: {FS_BASE}px;
+            background: {_C['t_account_dr_bg']}; border-radius: 5px; padding: 5px;
         """)
         dr_lay.addWidget(dr_hdr)
         self.t_dr_table = self._make_t_table()
         dr_lay.addWidget(self.t_dr_table, stretch=1)
 
-        self.lbl_dr_total = QLabel("الإجمالي: 0.00")
+        self.lbl_dr_total = QLabel(tr("t_account_total", label=tr("total"), amount="0.00"))
         self.lbl_dr_total.setAlignment(Qt.AlignCenter)
-        self.lbl_dr_total.setStyleSheet("""
-            font-weight: bold; color: #1565c0; font-size: 11px;
-            background: #e3f2fd; border-radius: 4px; padding: 4px 8px;
+        self.lbl_dr_total.setStyleSheet(f"""
+            font-weight: bold; color: {_C['acc_type_asset']}; font-size: {FS_SM}px;
+            background: {_C['t_account_dr_bg']}; border-radius: 4px; padding: 4px 8px;
         """)
         dr_lay.addWidget(self.lbl_dr_total)
 
         sep = QFrame()
         sep.setFrameShape(QFrame.VLine)
-        sep.setStyleSheet("color: #1565c0; background: #c5cae9;")
+        sep.setStyleSheet(f"color: {_C['acc_type_asset']}; background: {_C['t_account_frame']};")
         sep.setFixedWidth(2)
 
         # جانب الدائن
@@ -112,21 +115,21 @@ class _TAccountPanel(QWidget):
         cr_lay.setContentsMargins(4, 8, 8, 8)
         cr_lay.setSpacing(4)
 
-        cr_hdr = QLabel("📤  دائن  (CR)")
+        cr_hdr = QLabel(tr("t_account_cr_header"))
         cr_hdr.setAlignment(Qt.AlignCenter)
-        cr_hdr.setStyleSheet("""
-            font-weight: bold; color: #c62828; font-size: 12px;
-            background: #fdecea; border-radius: 5px; padding: 5px;
+        cr_hdr.setStyleSheet(f"""
+            font-weight: bold; color: {_C['acc_type_liability']}; font-size: {FS_BASE}px;
+            background: {_C['t_account_cr_bg']}; border-radius: 5px; padding: 5px;
         """)
         cr_lay.addWidget(cr_hdr)
         self.t_cr_table = self._make_t_table()
         cr_lay.addWidget(self.t_cr_table, stretch=1)
 
-        self.lbl_cr_total = QLabel("الإجمالي: 0.00")
+        self.lbl_cr_total = QLabel(tr("t_account_total", label=tr("total"), amount="0.00"))
         self.lbl_cr_total.setAlignment(Qt.AlignCenter)
-        self.lbl_cr_total.setStyleSheet("""
-            font-weight: bold; color: #c62828; font-size: 11px;
-            background: #fdecea; border-radius: 4px; padding: 4px 8px;
+        self.lbl_cr_total.setStyleSheet(f"""
+            font-weight: bold; color: {_C['acc_type_liability']}; font-size: {FS_SM}px;
+            background: {_C['t_account_cr_bg']}; border-radius: 4px; padding: 4px 8px;
         """)
         cr_lay.addWidget(self.lbl_cr_total)
 
@@ -142,7 +145,7 @@ class _TAccountPanel(QWidget):
     def _make_t_table(self) -> QTableWidget:
         tbl = QTableWidget()
         tbl.setColumnCount(4)
-        tbl.setHorizontalHeaderLabels(["التاريخ", "رقم القيد", "البيان", "المبلغ"])
+        tbl.setHorizontalHeaderLabels([tr("date"), tr("entry_no_col"), tr("lines_col_desc"), tr("amount")])
         tbl.setSelectionBehavior(QAbstractItemView.SelectRows)
         tbl.setEditTriggers(QAbstractItemView.NoEditTriggers)
         tbl.setAlternatingRowColors(True)
@@ -156,13 +159,13 @@ class _TAccountPanel(QWidget):
         tbl.setColumnWidth(1, 80)
         tbl.setColumnWidth(3, 90)
 
-        tbl.setStyleSheet("""
-            QTableWidget { border: none; background: transparent; gridline-color: #f0f0f0; }
-            QHeaderView::section {
-                background: #fafafa; border: none;
-                border-bottom: 1px solid #e0e0e0;
-                padding: 4px; font-weight: bold; font-size: 11px; color: #555;
-            }
+        tbl.setStyleSheet(f"""
+            QTableWidget {{ border: none; background: transparent; gridline-color: {_C['border']}; }}
+            QHeaderView::section {{
+                background: {_C['row_alt_bg']}; border: none;
+                border-bottom: 1px solid {_C['border_med']};
+                padding: 4px; font-weight: bold; font-size: {FS_SM}px; color: {_C['text_neutral']};
+            }}
         """)
         tbl.verticalHeader().setVisible(False)
         tbl.setShowGrid(True)
@@ -178,12 +181,12 @@ class _TAccountPanel(QWidget):
         nb  = data["normal_balance"]
 
         type_ar  = TYPE_AR.get(acc["type"], "")
-        color    = TYPE_COLORS.get(acc["type"], "#1565c0")
-        nb_ar    = "DR↑" if nb == "dr" else "CR↑"
+        color    = TYPE_COLORS.get(acc["type"], _C["acc_type_asset"])
+        nb_ar    = tr("ledger_nb_short_dr") if nb == "dr" else tr("ledger_nb_short_cr")
 
         # تحديث PageHeader بدل lbl_title
         self._page_hdr.set_title(
-            f"{acc['code']} — {acc['name']}  │  {type_ar}  │  رصيد طبيعي: {nb_ar}"
+            tr("t_account_summary", code=acc["code"], name=acc["name"], type=type_ar, nb=nb_ar)
         )
         self._apply_filter()
 
@@ -207,17 +210,17 @@ class _TAccountPanel(QWidget):
             if line["debit"] > 0:
                 r = self.t_dr_table.rowCount()
                 self.t_dr_table.insertRow(r)
-                self._fill_t_row(self.t_dr_table, r, line, line["debit"], "#1565c0")
+                self._fill_t_row(self.t_dr_table, r, line, line["debit"], _C["acc_type_asset"])
                 filt_dr += line["debit"]
 
             if line["credit"] > 0:
                 r = self.t_cr_table.rowCount()
                 self.t_cr_table.insertRow(r)
-                self._fill_t_row(self.t_cr_table, r, line, line["credit"], "#c62828")
+                self._fill_t_row(self.t_cr_table, r, line, line["credit"], _C["acc_type_liability"])
                 filt_cr += line["credit"]
 
-        self.lbl_dr_total.setText(f"الإجمالي: {filt_dr:,.2f}")
-        self.lbl_cr_total.setText(f"الإجمالي: {filt_cr:,.2f}")
+        self.lbl_dr_total.setText(tr("t_account_total", label=tr("total"), amount=f"{filt_dr:,.2f}"))
+        self.lbl_cr_total.setText(tr("t_account_total", label=tr("total"), amount=f"{filt_cr:,.2f}"))
 
         # BalanceDisplay بدل lbl_balance اليدوي
         self._balance_disp.set_debit_credit_balance(filt_dr, filt_cr)
@@ -235,12 +238,12 @@ class _TAccountPanel(QWidget):
                     amount: float, color: str):
         date_item = QTableWidgetItem(line.get("date", "—"))
         date_item.setTextAlignment(Qt.AlignCenter)
-        date_item.setForeground(QColor("#555"))
+        date_item.setForeground(QColor(_C["text_neutral"]))
         tbl.setItem(r, 0, date_item)
 
         ref_item = QTableWidgetItem(line.get("ref_no", "—"))
         ref_item.setTextAlignment(Qt.AlignCenter)
-        ref_item.setForeground(QColor("#1565c0"))
+        ref_item.setForeground(QColor(_C["acc_type_asset"]))
         tbl.setItem(r, 1, ref_item)
 
         desc = line.get("description") or line.get("entry_desc") or "—"
@@ -260,8 +263,8 @@ class _TAccountPanel(QWidget):
         self._all_data = None
         self.t_dr_table.setRowCount(0)
         self.t_cr_table.setRowCount(0)
-        self.lbl_dr_total.setText("الإجمالي: 0.00")
-        self.lbl_cr_total.setText("الإجمالي: 0.00")
+        self.lbl_dr_total.setText(tr("t_account_total", label=tr("total"), amount="0.00"))
+        self.lbl_cr_total.setText(tr("t_account_total", label=tr("total"), amount="0.00"))
         self._balance_disp.reset()
         self._stats.clear()
-        self._page_hdr.set_title("اختر حسابًا من القائمة لعرض حركاته")
+        self._page_hdr.set_title(tr("ledger_select_account_prompt"))

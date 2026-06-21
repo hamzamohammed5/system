@@ -24,6 +24,7 @@ from PyQt5.QtCore import pyqtSignal
 
 from ui.theme import _C
 from ui.widgets.core.i18n import tr
+from ui.font import FS_SM
 
 
 class AccountTypeFilter(QWidget):
@@ -52,7 +53,7 @@ class AccountTypeFilter(QWidget):
         lay.setContentsMargins(0, 0, 0, 0)
         lay.setSpacing(6)
 
-        lbl = QLabel("🏷")
+        lbl = QLabel(tr("group_tag_icon"))
         lbl.setStyleSheet("background:transparent; border:none;")
         lbl.setFixedWidth(20)
         lay.addWidget(lbl)
@@ -65,7 +66,7 @@ class AccountTypeFilter(QWidget):
                 border: 1px solid {_C['border_med']};
                 border-radius: 5px;
                 padding: 2px 8px;
-                font-size: 11px;
+                font-size: {FS_SM}px;
                 color: {_C['text_primary']};
             }}
             QComboBox::drop-down {{ border: none; }}

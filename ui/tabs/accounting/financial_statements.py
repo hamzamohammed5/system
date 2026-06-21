@@ -17,7 +17,6 @@ from .financial.owners_equity_tab    import OwnersEquityTab
 from .financial.balance_sheet_tab    import BalanceSheetTab
 from ui.widgets.core.conn import SafeConnMixin
 from ui.widgets.core.events import bus
-from PyQt5.QtWidgets import QTabWidget
 from PyQt5.QtCore import Qt
 from ui.widgets.theme.layout_styles import tab_style
 from ui.widgets.core.i18n import tr
