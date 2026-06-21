@@ -1,39 +1,23 @@
 """
 ui/widgets/panels/form_labels.py
 """
-import weakref
-
 from PyQt5.QtWidgets import QLabel, QFrame
 from PyQt5.QtCore    import Qt
 
 from ui.theme import _C
 from ui.font  import get_font_size, fs
-from ui.widgets.core.events import bus
-from ui.widgets.core.widget_mixin import ThemeRefreshMixin
-
-
-def _connect_theme_refresh(widget, slot) -> None:
-    _weak = weakref.ref(widget)
-
-    def _on_theme_changed(_theme_name=None):
-        obj = _weak()
-        if obj is not None:
-            slot(obj)
-
-    widget._theme_refresh_slot = _on_theme_changed
-    bus.theme_changed.connect(widget._theme_refresh_slot, Qt.UniqueConnection)
+from ui.widgets.core.widget_mixin import WidgetMixin
 
 
 # ── FormLabel ─────────────────────────────────────────────
 
-class _FormLabel(QLabel, ThemeRefreshMixin):
+class _FormLabel(QLabel, WidgetMixin):
     def __init__(self, text: str, color: str = None):
         super().__init__(text)
         self._color = color
         self.setAlignment(Qt.AlignRight | Qt.AlignVCenter)
-        self._init_theme_refresh()
+        self._init_widget_mixin(font=False)
         self._refresh_style()
-        _connect_theme_refresh(self, _FormLabel._refresh_style)
 
     def _refresh_style(self, *_):
         base = get_font_size()
@@ -49,14 +33,14 @@ def form_label(text: str, color: str = None) -> QLabel:
 
 # ── RequiredLabel ─────────────────────────────────────────
 
-class _RequiredLabel(QLabel):
+class _RequiredLabel(QLabel, WidgetMixin):
     def __init__(self, text: str):
         super().__init__()
         self._text = text
         self.setTextFormat(Qt.RichText)
         self.setAlignment(Qt.AlignRight | Qt.AlignVCenter)
+        self._init_widget_mixin(font=False)
         self._refresh_style()
-        _connect_theme_refresh(self, _RequiredLabel._refresh_style)
 
     def _refresh_style(self, *_):
         base = get_font_size()
@@ -73,13 +57,13 @@ def required_label(text: str) -> QLabel:
 
 # ── HintLabel ─────────────────────────────────────────────
 
-class _HintLabel(QLabel):
+class _HintLabel(QLabel, WidgetMixin):
     def __init__(self, text: str, color: str = None):
         super().__init__(text)
         self._color = color
         self.setWordWrap(True)
+        self._init_widget_mixin(font=False)
         self._refresh_style()
-        _connect_theme_refresh(self, _HintLabel._refresh_style)
 
     def _refresh_style(self, *_):
         base = get_font_size()
@@ -95,13 +79,13 @@ def hint_label(text: str, color: str = None) -> QLabel:
 
 # ── SectionTitle ──────────────────────────────────────────
 
-class _SectionTitle(QLabel):
+class _SectionTitle(QLabel, WidgetMixin):
     def __init__(self, text: str, color: str = None, icon: str = ""):
         display = f"{icon}  {text}" if icon else text
         super().__init__(display)
         self._color = color
+        self._init_widget_mixin(font=False)
         self._refresh_style()
-        _connect_theme_refresh(self, _SectionTitle._refresh_style)
 
     def _refresh_style(self, *_):
         base = get_font_size()
@@ -117,13 +101,13 @@ def section_title(text: str, color: str = None, icon: str = "") -> QLabel:
 
 # ── SeparatorLine ─────────────────────────────────────────
 
-class _SeparatorLine(QFrame):
+class _SeparatorLine(QFrame, WidgetMixin):
     def __init__(self):
         super().__init__()
         self.setFrameShape(QFrame.HLine)
         self.setFixedHeight(1)
+        self._init_widget_mixin(font=False)
         self._refresh_style()
-        _connect_theme_refresh(self, _SeparatorLine._refresh_style)
 
     def _refresh_style(self, *_):
         self.setStyleSheet(f"background:{_C['border']}; border:none;")

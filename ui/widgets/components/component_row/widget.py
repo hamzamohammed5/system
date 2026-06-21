@@ -10,8 +10,8 @@ ComponentRow — صف مكوّن واحد في BOM.
   لكن المشكلة أن _on_type_changed لا تستدعيها في الترتيب الصحيح.
   التأكد أن lbl_variant_cost.setVisible(False) يُستدعى صراحةً.
 
-[دمج events] المصدر الوحيد للـ bus هو ui.widgets.core.events.
-  الجديد: from ui.widgets.core.events import bus
+[WidgetMixin] استبدال weakref وربط bus يدوي بـ WidgetMixin._init_widget_mixin.
+  الـ _init_widget_mixin تُستدعى عبر QTimer.singleShot(0) للحفاظ على التأجيل الأصلي.
 
 باقي التغييرات من النسخة الأصلية محفوظة كما هي.
 """
@@ -26,7 +26,7 @@ from PyQt5.QtCore import pyqtSignal, QTimer
 from ui.widgets.utils.searchable_combo import (
     SearchableCombo, build_grouped_items,
 )
-from ui.widgets.core.events import bus
+from ui.widgets.core.widget_mixin import WidgetMixin
 
 from .ui      import (
     build_row_ui, update_waste_style,
@@ -66,7 +66,7 @@ class _OrphanState:
 
 # ── ComponentRow ───────────────────────────────────────────
 
-class ComponentRow(QWidget, OpRowsMixin, VariantsMixin):
+class ComponentRow(QWidget, OpRowsMixin, VariantsMixin, WidgetMixin):
     """
     صف مكوّن واحد في BOM مع:
       - اختيار النوع (خامة / نصف مصنع / عمالة / تشغيل)
@@ -75,7 +75,7 @@ class ComponentRow(QWidget, OpRowsMixin, VariantsMixin):
       - variants للخامات
       - صفوف العملية لعمليات التشغيل
 
-    [A-06] _bus_slot: مرجع الـ bus connection محفوظ ويُفصل في closeEvent.
+    [WidgetMixin] ربط company_data_changed عبر _init_widget_mixin بدل weakref يدوي.
     [E-03] refresh_cost(): يُحدِّث تكلفة الخامة عند تغيير السعر.
     [إصلاح 6] _on_type_changed: يُخفي lbl_variant_cost صراحةً عند تغيير النوع.
     """
@@ -99,10 +99,6 @@ class ComponentRow(QWidget, OpRowsMixin, VariantsMixin):
         self._show_total_qty = show_total_qty
         self._orphan         = _OrphanState()
         self._conn_cache     = None
-
-        # [A-06] مرجع الـ bus slots لفصلها لاحقاً
-        self._bus_slot              = None   # company_data_changed
-        self._bus_slot_company      = None   # company_data_changed (مُستبقى للتوافق)
 
         # pinned state (يُحفظ عند التنقل بين الأنواع)
         self._pinned_type      = child_type
@@ -131,7 +127,7 @@ class ComponentRow(QWidget, OpRowsMixin, VariantsMixin):
 
         # ── QTimers للتحميل المؤجل ──────────────────────────
         self._schedule_deferred_loads(child_type, child_id, variant_id, machine_op_row_id)
-        QTimer.singleShot(0, self._connect_bus)
+        QTimer.singleShot(0, lambda: self._init_widget_mixin(theme=False, font=False, data=True))
 
     # ── Shared deleted-check ───────────────────────────────
 
@@ -168,42 +164,9 @@ class ComponentRow(QWidget, OpRowsMixin, VariantsMixin):
         except Exception:
             return None
 
-    # ── Bus ────────────────────────────────────────────────
-
-    def _connect_bus(self):
-        """
-        [إصلاح 20] يستخدم weakref لمنع dangling reference.
-        [A-06] يحفظ مرجع الـ slots في instance variables لفصلها لاحقاً.
-        [دمج events] يربط company_data_changed فقط — data_changed محذوف.
-        """
-        weak = weakref.ref(self)
-
-        def _on_company_bus_event(_company_id: int):
-            s = weak()
-            if s is None:
-                return
-            QTimer.singleShot(0, s._on_catalog_changed)
-
-        self._bus_slot_company = _on_company_bus_event
-
-        bus.company_data_changed.connect(self._bus_slot_company)
-
-    def _disconnect_bus(self):
-        """
-        [A-06] يفصل الـ slots من الـ bus صريحاً.
-        يُستدعى من closeEvent() لضمان إزالة الـ connections تماماً.
-        """
-        if self._bus_slot_company is not None:
-            try:
-                bus.company_data_changed.disconnect(self._bus_slot_company)
-            except (TypeError, RuntimeError):
-                pass
-            self._bus_slot_company = None
-
-    def closeEvent(self, event):
-        """[A-06] يفصل الـ bus connections عند إغلاق الـ widget."""
-        self._disconnect_bus()
-        super().closeEvent(event)
+    def _refresh_data(self, company_id=None):
+        self._conn_cache = None
+        QTimer.singleShot(0, self._on_catalog_changed)
 
     # ── Deferred loads ─────────────────────────────────────
 

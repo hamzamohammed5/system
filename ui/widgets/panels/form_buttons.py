@@ -11,11 +11,12 @@ from PyQt5.QtCore    import Qt, pyqtSignal
 
 from ui.theme import _C
 from ui.font  import get_font_size, fs
-from ..components.button import make_btn
-from ..core.i18n         import tr
+from ..components.button      import make_btn
+from ..core.i18n              import tr
+from ui.widgets.core.widget_mixin import WidgetMixin
 
 
-class CrudButtonsBar(QWidget):
+class CrudButtonsBar(QWidget, WidgetMixin):
     """
     شريط أزرار موحد: إضافة / حفظ / إلغاء + label الوضع.
 
@@ -36,7 +37,7 @@ class CrudButtonsBar(QWidget):
         self._cancel_text = cancel_text or tr("btn_cancel")
         self._show_mode   = show_mode
         self._build(show_mode)
-        self._connect_language_bus()
+        self._init_widget_mixin(theme=False, font=False, lang=True)
 
     def _build(self, show_mode):
         self.setStyleSheet("background:transparent;")
@@ -72,17 +73,7 @@ class CrudButtonsBar(QWidget):
         if not show_mode:
             self.lbl_mode = QLabel()
 
-    def _connect_language_bus(self):
-        try:
-            from ui.widgets.core.events import bus
-
-            bus.language_changed.connect(
-                self._on_language_changed, Qt.UniqueConnection
-            )
-        except Exception:
-            pass
-
-    def _on_language_changed(self, lang_code: str):
+    def _refresh_lang(self, *_):
         self.btn_add.setText(tr("btn_add"))
         self.btn_save.setText(tr("btn_save"))
         self.btn_cancel.setText(tr("btn_cancel"))

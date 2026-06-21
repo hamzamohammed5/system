@@ -1,8 +1,6 @@
 """
 ui/widgets/panels/form_fields.py
 """
-import weakref
-
 from PyQt5.QtWidgets import (
     QWidget, QHBoxLayout, QLabel, QFormLayout,
     QDoubleSpinBox, QSpinBox, QVBoxLayout,
@@ -13,40 +11,28 @@ from ui.theme import _C
 from ui.font  import get_font_size, fs
 from ..theme.input_styles import spinbox_style
 from .form_labels import form_label, required_label, hint_label
-from ui.widgets.core.events import bus
-
-
-def _connect_theme_refresh(widget, slot) -> None:
-    _weak = weakref.ref(widget)
-
-    def _on_theme_changed(_theme_name=None):
-        obj = _weak()
-        if obj is not None:
-            slot(obj)
-
-    widget._theme_refresh_slot = _on_theme_changed
-    bus.theme_changed.connect(widget._theme_refresh_slot, Qt.UniqueConnection)
+from ui.widgets.core.widget_mixin import WidgetMixin
 
 
 # ── spin_field ────────────────────────────────────────────
 
-class _ThemedDoubleSpinBox(QDoubleSpinBox):
+class _ThemedDoubleSpinBox(QDoubleSpinBox, WidgetMixin):
     def __init__(self, min_height: int = 30):
         super().__init__()
         self._h = min_height
+        self._init_widget_mixin(font=False)
         self._refresh_style()
-        _connect_theme_refresh(self, _ThemedDoubleSpinBox._refresh_style)
 
     def _refresh_style(self, *_):
         self.setStyleSheet(spinbox_style(self._h, widget="QDoubleSpinBox"))
 
 
-class _ThemedSpinBox(QSpinBox):
+class _ThemedSpinBox(QSpinBox, WidgetMixin):
     def __init__(self, min_height: int = 30):
         super().__init__()
         self._h = min_height
+        self._init_widget_mixin(font=False)
         self._refresh_style()
-        _connect_theme_refresh(self, _ThemedSpinBox._refresh_style)
 
     def _refresh_style(self, *_):
         self.setStyleSheet(spinbox_style(self._h, widget="QSpinBox"))
@@ -71,7 +57,7 @@ def int_spin_field(max_: int = 9999, min_: int = 0,
 
 # ── labeled_widget ────────────────────────────────────────
 
-class _LabeledWidgetContainer(QWidget):
+class _LabeledWidgetContainer(QWidget, WidgetMixin):
     def __init__(self, widget: QWidget, unit: str,
                  unit_color: str = None, spacing: int = 6):
         super().__init__()
@@ -84,8 +70,8 @@ class _LabeledWidgetContainer(QWidget):
         self._lbl = QLabel(unit)
         lay.addWidget(self._lbl)
         lay.addStretch()
+        self._init_widget_mixin(font=False)
         self._refresh_style()
-        _connect_theme_refresh(self, _LabeledWidgetContainer._refresh_style)
 
     def _refresh_style(self, *_):
         color = self._unit_color or _C['text_muted']

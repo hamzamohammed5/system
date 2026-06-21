@@ -15,16 +15,15 @@ CategoryCombo — QComboBox للتصنيفات الهرمية.
   - [دمج events] حذف bus.data_changed — يستخدم company_data_changed فقط.
     القديم: bus.data_changed + bus.company_data_changed
     الجديد: bus.company_data_changed فقط
+  - [WidgetMixin] استبدال weakref وربط bus يدوي بـ WidgetMixin._init_widget_mixin.
 """
-import weakref
-
 from PyQt5.QtWidgets import QComboBox
 from PyQt5.QtCore    import Qt
 from PyQt5.QtGui     import QColor
 
-from ..core.conn          import LiveConnMixin
-from ..utils.signals      import blocked_signals
-from ui.widgets.core.events import bus
+from ..core.conn              import LiveConnMixin
+from ..utils.signals          import blocked_signals
+from ui.widgets.core.widget_mixin import WidgetMixin
 
 
 def populate_category_combo(combo: QComboBox, conn,
@@ -60,14 +59,13 @@ def _add_nodes(combo: QComboBox, nodes: list, depth: int) -> None:
             _add_nodes(combo, node["children"], depth + 1)
 
 
-class CategoryCombo(QComboBox, LiveConnMixin):
+class CategoryCombo(QComboBox, LiveConnMixin, WidgetMixin):
     """
     QComboBox للتصنيفات الهرمية مع تحديث تلقائي.
 
     [إصلاح 2] يسمع لـ company_data_changed فقط (data_changed محذوف).
-    [FIX-14] Qt.UniqueConnection على كل ربط bus لمنع التسجيل المضاعف.
-    [إصلاح memory leak] استخدام weakref بدل lambda.
     [إصلاح هيكلة] يستخدم CategoryService عبر populate_category_combo.
+    [WidgetMixin] ربط bus عبر _init_widget_mixin بدل weakref يدوي.
     """
 
     def __init__(self, conn, scope: str = "all", parent=None):
@@ -76,21 +74,10 @@ class CategoryCombo(QComboBox, LiveConnMixin):
         self.scope = scope
         self.refresh()
 
-        # [دمج events] company_data_changed فقط — data_changed محذوف
-        # [إصلاح memory leak] weakref بدل lambda
-        _weak = weakref.ref(self)
+        self._init_widget_mixin(theme=False, font=False, data=True)
 
-        def _on_company_data_changed(_cid: int):
-            obj = _weak()
-            if obj is not None:
-                obj.refresh()
-
-        # نحفظ مرجع الـ slot لأن weakref لا يحمي الـ closure من الـ GC
-        self._company_data_slot = _on_company_data_changed
-
-        bus.company_data_changed.connect(
-            self._company_data_slot, Qt.UniqueConnection
-        )
+    def _refresh_data(self, company_id=None):
+        self.refresh()
 
     def refresh(self):
         try:

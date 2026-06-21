@@ -22,7 +22,8 @@ from PyQt5.QtCore import QDate, pyqtSignal
 from ui.font  import fs, get_font_size
 from ui.theme import _C
 
-from ..utils.signals import blocked_signals
+from ..utils.signals          import blocked_signals
+from ui.widgets.core.widget_mixin import WidgetMixin
 
 
 def _combo_style() -> str:
@@ -48,7 +49,7 @@ def _reset_btn_style() -> str:
     """
 
 
-class FilterToolbar(QWidget):
+class FilterToolbar(QWidget, WidgetMixin):
     """شريط فلاتر: [بحث] | [تصنيف] | [نطاق التاريخ] [↺]"""
 
     filter_changed = pyqtSignal()
@@ -66,7 +67,7 @@ class FilterToolbar(QWidget):
         self._show_date    = show_date
         self._show_presets = show_presets
         self._build(placeholder)
-        self._connect_company_bus()
+        self._init_widget_mixin(theme=False, font=False, data=True)
 
     # ── بناء ──────────────────────────────────────────────
 
@@ -142,16 +143,7 @@ class FilterToolbar(QWidget):
         )
         return sep
 
-    # ── [إصلاح 14] ربط الـ bus ────────────────────────────
-
-    def _connect_company_bus(self):
-        try:
-            from ui.widgets.core.events import bus
-            bus.company_data_changed.connect(self._on_company_changed)
-        except Exception:
-            pass
-
-    def _on_company_changed(self, company_id: int):
+    def _refresh_data(self, company_id=None):
         if self.cmb_cat is None:
             return
         try:
