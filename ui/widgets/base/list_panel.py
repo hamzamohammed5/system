@@ -13,6 +13,9 @@ ui/widgets/base/list_panel.py — إصلاح refresh() double apply_filter
   الحل:
     إيقاف الـ timer قبل reload() حتى لو بدأ من تغيير الـ combo،
     ثم _apply_filter() الفورية هي الوحيدة التي تُنفَّذ.
+
+[i18n] EMPTY_ICON/EMPTY_TITLE/SEARCH_PLACEHOLDER الافتراضية، زر "عرض الكل"،
+       ونصوص شريط الـ pagination — كلها استُبدلت بمفاتيح tr() من ar.py/en.py.
 """
 from PyQt5.QtWidgets import (
     QWidget, QVBoxLayout, QHBoxLayout, QLabel,
@@ -34,10 +37,11 @@ from ..panels.filter      import FilterToolbar
 from ui.widgets.core.widget_mixin import WidgetMixin
 
 
-def _tr_safe(key: str) -> str:
+def _tr_safe(key: str, **kwargs) -> str:
     try:
         from ui.widgets.core.i18n import tr
-        return tr(key)
+        text = tr(key)
+        return text.format(**kwargs) if kwargs else text
     except Exception:
         return key
 
@@ -79,11 +83,11 @@ class BaseListPanel(QWidget, WidgetMixin):
     STRETCH_COL        : int  = -1
     COL_WIDTHS         : dict = None
     MIN_W              : int  = 260
-    EMPTY_ICON         : str  = "📋"
-    EMPTY_TITLE        : str  = "لا توجد بيانات"
+    EMPTY_ICON         : str  = "empty_icon_default"
+    EMPTY_TITLE        : str  = "no_data"
     LIST_TITLE         : str  = ""
     ADD_TEXT           : str  = ""
-    SEARCH_PLACEHOLDER : str  = "🔍  بحث..."
+    SEARCH_PLACEHOLDER : str  = "list_search_placeholder"
     SHOW_CATEGORY      : bool = False
     SHOW_DATE          : bool = False
     FILTER_SCOPE       : str  = "all"
@@ -197,7 +201,7 @@ class BaseListPanel(QWidget, WidgetMixin):
         root.addWidget(self._splitter, stretch=1)
 
         self._empty_state = EmptyState(
-            icon=self.EMPTY_ICON, title=self.EMPTY_TITLE,
+            icon=_tr_safe(self.EMPTY_ICON), title=_tr_safe(self.EMPTY_TITLE),
             style="plain", color=_C['text_muted'], min_height=100,
         )
         self._empty_state.setVisible(False)
@@ -215,7 +219,7 @@ class BaseListPanel(QWidget, WidgetMixin):
             title              = self.LIST_TITLE,
             add_text           = self.ADD_TEXT,
             show_search        = use_search,
-            search_placeholder = self.SEARCH_PLACEHOLDER,
+            search_placeholder = _tr_safe(self.SEARCH_PLACEHOLDER),
         )
         if use_search:
             header.search_changed.connect(lambda _: self._timer.start())
@@ -232,7 +236,7 @@ class BaseListPanel(QWidget, WidgetMixin):
             scope         = self.FILTER_SCOPE,
             show_category = self.SHOW_CATEGORY,
             show_date     = self.SHOW_DATE,
-            placeholder   = self.SEARCH_PLACEHOLDER,
+            placeholder   = _tr_safe(self.SEARCH_PLACEHOLDER),
         )
         toolbar.filter_changed.connect(lambda: self._timer.start())
         self.inp_search = toolbar.inp_search
@@ -337,7 +341,7 @@ class BaseListPanel(QWidget, WidgetMixin):
         self._btn_load_more.clicked.connect(self._on_load_more)
         lay.addWidget(self._btn_load_more)
 
-        self._btn_show_all = QPushButton("عرض الكل")
+        self._btn_show_all = QPushButton(_tr_safe("show_all_records"))
         self._btn_show_all.setCursor(Qt.PointingHandCursor)
         self._btn_show_all.setFixedHeight(30)
         self._btn_show_all.clicked.connect(self._on_show_all)
@@ -352,9 +356,9 @@ class BaseListPanel(QWidget, WidgetMixin):
             self._pagination_bar.setVisible(False)
             return
 
-        self._lbl_page_info.setText(f"يعرض {shown} من {total}")
+        self._lbl_page_info.setText(_tr_safe("showing_records", shown=shown, total=total))
         self._btn_load_more.setText(
-            f"تحميل {min(remaining, self.PAGE_SIZE):,} إضافي  ▼"
+            _tr_safe("load_more", count=min(remaining, self.PAGE_SIZE))
         )
         self._pagination_bar.setVisible(True)
 

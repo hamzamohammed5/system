@@ -14,16 +14,30 @@ Business logic لوحدات القياس — مفصول عن الـ widget.
 import json
 import logging
 
+from ui.widgets.core.i18n import tr
+
 logger = logging.getLogger(__name__)
 
-_UNITS_KEY     = "custom_units"
-_DEFAULT_UNITS = [
-    ("px",   "px — بكسل"),
-    ("mm",   "mm — مليمتر"),
-    ("cm",   "cm — سنتيمتر"),
-    ("m",    "m  — متر"),
-    ("inch", "inch — بوصة"),
-]
+_UNITS_KEY = "custom_units"
+
+# قيم الوحدات الافتراضية كمعرّفات داخلية فقط (بدون نص معروض) —
+# تُستخدم في remove_unit للتحقق من كون الوحدة "افتراضية" أم لا
+_DEFAULT_UNIT_KEYS = ("px", "mm", "cm", "m", "inch")
+
+
+def _default_units() -> list:
+    """
+    [i18n] الوحدات الافتراضية بقت دالة تُستدعى وقت الحاجة، بدل ثابت
+    module-level كان يُحسب وقت import (قبل تحميل اللغة) ولا يتحدث
+    بعد ذلك أبداً عند تغيير اللغة.
+    """
+    return [
+        ("px",   tr('unit_label_px')),
+        ("mm",   tr('unit_label_mm')),
+        ("cm",   tr('unit_label_cm')),
+        ("m",    tr('unit_label_m')),
+        ("inch", tr('unit_label_inch')),
+    ]
 
 # cache: db_path → list[tuple[str, str]]
 _units_cache: dict = {}
@@ -60,7 +74,7 @@ def load_units(conn, force: bool = False) -> list:
     if not force and key in _units_cache:
         return _units_cache[key]
 
-    result = list(_DEFAULT_UNITS)
+    result = _default_units()
     try:
         from db.shared.settings_repo import get_setting
         raw = get_setting(conn, _UNITS_KEY, "")
@@ -112,7 +126,7 @@ def add_unit(conn, value: str, label: str) -> bool:
 
 
 def remove_unit(conn, value: str) -> bool:
-    if value in {u[0] for u in _DEFAULT_UNITS}:
+    if value in _DEFAULT_UNIT_KEYS:
         return False
     units = load_units(conn)
     new_units = [u for u in units if u[0] != value]
@@ -127,4 +141,4 @@ def get_all_units(conn) -> list:
 
 
 def reset_units_to_default(conn):
-    save_units(conn, list(_DEFAULT_UNITS))
+    save_units(conn, _default_units())

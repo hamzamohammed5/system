@@ -18,7 +18,7 @@ from ..utils.signals import blocked_signals
 from .unit_service   import (
     load_units, invalidate_units_cache,
     get_last_unit, set_last_unit,
-    _DEFAULT_UNITS,
+    _default_units,
 )
 
 logger = logging.getLogger(__name__)
@@ -92,7 +92,7 @@ def make_unit_combo(conn=None, current: str = "cm",
         combo = UnitCombo(conn, last_key=last_key, current=current)
     else:
         combo = QComboBox()
-        for val, label in _DEFAULT_UNITS:
+        for val, label in _default_units():
             combo.addItem(label, val)
 
     for i in range(combo.count()):

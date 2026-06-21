@@ -27,6 +27,7 @@ from ui.widgets.utils.searchable_combo import (
     SearchableCombo, build_grouped_items,
 )
 from ui.widgets.core.widget_mixin import WidgetMixin
+from ui.widgets.core.i18n import tr
 
 from .ui      import (
     build_row_ui, update_waste_style,
@@ -53,14 +54,14 @@ class _OrphanState:
 
     def display(self) -> str:
         name_part = f" «{self.name}»" if self.name else ""
-        return f"⚠️  {name_part}محذوف  (ID: {self.item_id})"
+        return tr('component_row_orphan_display').format(
+            name_part=name_part, item_id=self.item_id
+        )
 
     def tooltip(self) -> str:
         name_part = f" «{self.name}»" if self.name else ""
-        return (
-            f"⚠️ هذا المكون ({self.type_}{name_part} ID:{self.item_id}) "
-            "تم حذفه من قاعدة البيانات.\n"
-            "اختر بديلاً من القائمة أو احذف هذا الصف."
+        return tr('component_row_orphan_tooltip').format(
+            type_=self.type_, name_part=name_part, item_id=self.item_id
         )
 
 
@@ -127,7 +128,10 @@ class ComponentRow(QWidget, OpRowsMixin, VariantsMixin, WidgetMixin):
 
         # ── QTimers للتحميل المؤجل ──────────────────────────
         self._schedule_deferred_loads(child_type, child_id, variant_id, machine_op_row_id)
-        QTimer.singleShot(0, lambda: self._init_widget_mixin(theme=False, font=False, data=True))
+        QTimer.singleShot(
+            0,
+            lambda: self._init_widget_mixin(theme=False, font=False, lang=True, data=True),
+        )
 
     # ── Shared deleted-check ───────────────────────────────
 
@@ -142,6 +146,35 @@ class ComponentRow(QWidget, OpRowsMixin, VariantsMixin, WidgetMixin):
             return any(sip.isdeleted(w) for w in widgets)
         except Exception:
             return True
+
+    # ── Language refresh ────────────────────────────────────
+
+    def _refresh_lang(self, *_):
+        """
+        [i18n] يحدّث كل النصوص المعروضة عند تغيير اللغة:
+          - tooltip/label الـ orphan لو كان نشطاً
+          - تكلفة الخامة وتولتيبها
+          - يفوّض لـ OpRowsMixin/VariantsMixin لتحديث نصوصهم الداخلية
+            (الكومبوهات وlabels التكلفة) لأنها تستخدم tr() كذلك.
+        """
+        if self._is_widget_deleted():
+            return
+        if self._orphan.active:
+            self.setToolTip(self._orphan.tooltip())
+            self._item_combo.block_signals(True)
+            self._item_combo.set_item_text(0, self._orphan.display())
+            self._item_combo.block_signals(False)
+        self._refresh_cost_label()
+        if hasattr(self, "_update_op_row_cost_label"):
+            self._update_op_row_cost_label()
+        if hasattr(self, "_update_variant_cost_label"):
+            self._update_variant_cost_label()
+        if hasattr(self, "_populate_op_row_combo") and self.cmb_type.currentData() == "machine_op":
+            self._ensure_machine_op_rows()
+        if hasattr(self, "_load_variants") and self.cmb_type.currentData() == "raw":
+            data = self._item_combo.current_data()
+            if data and data[0] not in ("__sep__", "__orphan__") and data[1] is not None:
+                self._load_variants(data[1], selected_variant_id=self.get_variant_id())
 
     # ── Connection ─────────────────────────────────────────
 
@@ -345,10 +378,16 @@ class ComponentRow(QWidget, OpRowsMixin, VariantsMixin, WidgetMixin):
             try:
                 if hasattr(cost_label, "setText"):
                     cost_label.setText(f"{unit_cost:,.4g}")
+                    total_qty_line = (
+                        tr('component_row_total_qty_line').format(total_qty=total_qty)
+                        if total_qty else ""
+                    )
                     cost_label.setToolTip(
-                        f"سعر الوحدة: {unit_cost:,.4f}\n"
-                        f"السعر الإجمالي: {price:,.4f}"
-                        + (f"\nالكمية الكلية: {total_qty}" if total_qty else "")
+                        tr('component_row_cost_tooltip').format(
+                            unit_cost=f"{unit_cost:,.4f}",
+                            price=f"{price:,.4f}",
+                            total_qty_line=total_qty_line,
+                        )
                     )
             except Exception:
                 pass

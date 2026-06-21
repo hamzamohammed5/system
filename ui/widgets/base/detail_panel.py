@@ -5,6 +5,9 @@ BaseDetailPanel — قاعدة مشتركة لكل لوحات التفاصيل.
 
 [إصلاح 2.2] from ..theme.styles import scroll_style
          → from ..theme.layout_styles import scroll_style
+
+[i18n] EMPTY_ICON/EMPTY_TITLE الافتراضية، علامة الـ "─" الافتراضية لاسم العنصر،
+       ورسالة خطأ التحميل — كلها استُبدلت بمفاتيح tr() من ar.py/en.py.
 """
 
 from PyQt5.QtWidgets import QWidget, QVBoxLayout, QScrollArea, QSizePolicy
@@ -19,10 +22,11 @@ from ui.widgets.core.widget_mixin    import WidgetMixin
 from ..theme.layout_styles           import scroll_style   # [إصلاح 2.2]
 
 
-def _tr_safe(key: str) -> str:
+def _tr_safe(key: str, **kwargs) -> str:
     try:
         from ui.widgets.core.i18n import tr
-        return tr(key)
+        text = tr(key)
+        return text.format(**kwargs) if kwargs else text
     except Exception:
         return key
 
@@ -48,8 +52,8 @@ class BaseDetailPanel(QWidget, WidgetMixin):
     saved   = pyqtSignal(int)
     deleted = pyqtSignal()
 
-    EMPTY_ICON     : str  = "📋"
-    EMPTY_TITLE    : str  = "اختر عنصراً من القائمة"
+    EMPTY_ICON     : str  = "empty_icon_default"
+    EMPTY_TITLE    : str  = "detail_select_item"
     EMPTY_SUBTITLE : str  = ""
     HEADER_BG      : str  = None
     MIN_CONTENT_W  : int  = 500
@@ -89,7 +93,7 @@ class BaseDetailPanel(QWidget, WidgetMixin):
         pass
 
     def _fill_header(self, data: dict):
-        self._hdr.set_title(data.get("name", "─"))
+        self._hdr.set_title(data.get("name", _tr_safe("value_dash")))
 
     def _refresh_data(self, company_id=None):
         if self._item_id is not None:
@@ -138,7 +142,7 @@ class BaseDetailPanel(QWidget, WidgetMixin):
         root.addWidget(scroll, stretch=1)
 
         self._empty = EmptyState(
-            icon=self.EMPTY_ICON, title=self.EMPTY_TITLE,
+            icon=_tr_safe(self.EMPTY_ICON), title=_tr_safe(self.EMPTY_TITLE),
             subtitle=self.EMPTY_SUBTITLE,
             style="plain", color=_C['text_muted'], min_height=200,
         )
@@ -177,7 +181,7 @@ class BaseDetailPanel(QWidget, WidgetMixin):
         try:
             data = self._load_data(item_id)
         except Exception as e:
-            self.show_error(f"خطأ في تحميل البيانات: {e}")
+            self.show_error(_tr_safe("detail_load_error", error=e))
             return
 
         self._item_data = dict(data) if data else None

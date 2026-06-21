@@ -30,6 +30,7 @@ from PyQt5.QtWidgets import (
 
 from ui.theme import _C
 from ui.font  import fs, get_font_size
+from ui.widgets.core.i18n import tr
 from ui.widgets.utils.searchable_combo import SearchableCombo
 from ui.widgets.core.colors import (
     waste_colors      as _waste_colors,
@@ -43,12 +44,23 @@ from ui.widgets.core.colors import (
 )
 
 # ── أنواع المكونات ─────────────────────────────────────────
-COMPONENT_TYPES = [
-    ("raw",        "🧱 خامة"),
-    ("semi",       "🔧 نصف مصنع"),
-    ("labor_op",   "👷 عملية عمالة"),
-    ("machine_op", "⚙️ عملية تشغيل"),
-]
+def _component_types() -> list:
+    """
+    [i18n] دالة بدل ثابت module-level، لأن tr() لازم يُستدعى وقت
+    الاستخدام (بعد تحميل اللغة) مش وقت import الـ module — نفس مبدأ
+    _default_units() في unit_service.py.
+    """
+    return [
+        ("raw",        f"🧱 {tr('raw_material')}"),
+        ("semi",       f"🔧 {tr('semi_product')}"),
+        ("labor_op",   f"👷 {tr('labor_op')}"),
+        ("machine_op", f"⚙️ {tr('machine_op')}"),
+    ]
+
+
+# اسم قديم محفوظ للتوافق الخلفي — استخدم _component_types() للحصول على
+# النصوص المترجمة حسب اللغة الحالية؛ هذا الثابت يُحسب عند أول import فقط.
+COMPONENT_TYPES = _component_types()
 
 # ── ستايلات الصف ───────────────────────────────────────────
 STYLE_NORMAL = ""

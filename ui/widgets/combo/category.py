@@ -24,17 +24,21 @@ from PyQt5.QtGui     import QColor
 from ..core.conn              import LiveConnMixin
 from ..utils.signals          import blocked_signals
 from ui.widgets.core.widget_mixin import WidgetMixin
+from ui.widgets.core.i18n     import tr
 
 
 def populate_category_combo(combo: QComboBox, conn,
                              scope: str = "all",
-                             all_label: str = "— الكل —") -> None:
+                             all_label: str = None) -> None:
     """
     يملأ أي QComboBox بالتصنيفات الهرمية.
     تُستخدم من CategoryCombo وأي widget آخر.
 
     [إصلاح هيكلة] يستخدم CategoryService بدل db import مباشر.
+    [i18n] all_label الافتراضي بقى tr('filter_all') بدل النص المكتوب مباشرة.
     """
+    if all_label is None:
+        all_label = tr('filter_all')
     if all_label:
         combo.addItem(all_label, None)
 
@@ -51,7 +55,7 @@ def populate_category_combo(combo: QComboBox, conn,
 
 def _add_nodes(combo: QComboBox, nodes: list, depth: int) -> None:
     indent = "    " * depth
-    arrow  = "↳ " if depth > 0 else ""
+    arrow  = tr('tree_node_arrow') if depth > 0 else ""
     for node in nodes:
         combo.addItem(f"{indent}{arrow}{node['name']}", node["id"])
         combo.setItemData(combo.count() - 1, QColor(node["color"]), Qt.ForegroundRole)
@@ -66,6 +70,8 @@ class CategoryCombo(QComboBox, LiveConnMixin, WidgetMixin):
     [إصلاح 2] يسمع لـ company_data_changed فقط (data_changed محذوف).
     [إصلاح هيكلة] يستخدم CategoryService عبر populate_category_combo.
     [WidgetMixin] ربط bus عبر _init_widget_mixin بدل weakref يدوي.
+    [i18n] lang=True مضاف لأن populate_category_combo/_add_nodes بقيا يستخدما tr()
+           (filter_all + tree_node_arrow)، فلازم الكومبو يتحدث عند تغيير اللغة.
     """
 
     def __init__(self, conn, scope: str = "all", parent=None):
@@ -74,9 +80,12 @@ class CategoryCombo(QComboBox, LiveConnMixin, WidgetMixin):
         self.scope = scope
         self.refresh()
 
-        self._init_widget_mixin(theme=False, font=False, data=True)
+        self._init_widget_mixin(theme=False, font=False, lang=True, data=True)
 
     def _refresh_data(self, company_id=None):
+        self.refresh()
+
+    def _refresh_lang(self, *_):
         self.refresh()
 
     def refresh(self):
