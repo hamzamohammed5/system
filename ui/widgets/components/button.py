@@ -20,6 +20,7 @@ from PyQt5.QtGui     import QFont, QFontMetrics
 
 from ui.font  import fs, get_font_size
 from ui.theme import _C
+from ui.constants import BTN_HEIGHT_PAD, BTN_PAD_H, BTN_BORDER_RADIUS, BTN_TEXT_PAD
 
 # cache: (style_name, font_size) → stylesheet string
 _stylesheet_cache: dict[tuple[str, int], str] = {}
@@ -62,7 +63,7 @@ def _styles() -> dict[str, dict]:
 def _build_stylesheet(style: str, base: int) -> str:
     all_styles = _styles()
     s    = all_styles.get(style, all_styles["normal"])
-    h    = base * 2 + 8
+    h    = base * 2 + BTN_HEIGHT_PAD
     fsz  = fs(base, 0)
     bold = "font-weight:700;" if s["bold"] else ""
 
@@ -70,8 +71,8 @@ def _build_stylesheet(style: str, base: int) -> str:
         QPushButton {{
             background:{s['bg']}; color:{s['fg']};
             border:1.5px solid {s['border']};
-            font-size:{fsz}pt; border-radius:6px;
-            padding:0 14px; min-height:{h}px;
+            font-size:{fsz}pt; border-radius:{BTN_BORDER_RADIUS}px;
+            padding:0 {BTN_PAD_H}px; min-height:{h}px;
             {bold}
         }}
         QPushButton:hover {{
@@ -109,7 +110,7 @@ def make_btn(text: str, style: str = "normal",
     fixed_size: True = عرض ثابت، False = عرض أدنى قابل للتمدد
     """
     base = get_font_size()
-    h    = base * 2 + 8
+    h    = base * 2 + BTN_HEIGHT_PAD
     fsz  = fs(base, 0)
 
     btn = QPushButton(text)
@@ -121,7 +122,7 @@ def make_btn(text: str, style: str = "normal",
 
     f = QFont()
     f.setPointSize(fsz)
-    w = QFontMetrics(f).horizontalAdvance(text) + 32
+    w = QFontMetrics(f).horizontalAdvance(text) + BTN_TEXT_PAD
     if fixed_size:
         btn.setFixedWidth(w)
         btn.setSizePolicy(QSizePolicy.Fixed, QSizePolicy.Fixed)
@@ -147,7 +148,7 @@ def refresh_visible_buttons(root_widget) -> int:
             if style:
                 try:
                     btn.setStyleSheet(_get_stylesheet(style, base))
-                    h = base * 2 + 8
+                    h = base * 2 + BTN_HEIGHT_PAD
                     if btn.minimumHeight() > 0:
                         btn.setFixedHeight(h)
                     count += 1
@@ -159,7 +160,7 @@ def refresh_visible_buttons(root_widget) -> int:
     return count
 
 
-def calc_btn_width(text: str, font_size: int, padding: int = 32) -> int:
+def calc_btn_width(text: str, font_size: int, padding: int = BTN_TEXT_PAD) -> int:
     f = QFont()
     f.setPointSize(font_size)
     return QFontMetrics(f).horizontalAdvance(text) + padding

@@ -11,9 +11,13 @@ from PyQt5.QtCore    import pyqtSignal
 from PyQt5.QtGui     import QColor
 
 from ..components.button import make_btn
+from ui.widgets.core.widget_mixin import WidgetMixin
+from ui.theme import _C
+from ui.widgets.core.i18n import tr
+from ui.constants import SPACING_SM, COLOR_PICKER_PREVIEW_SIZE, COLOR_PICKER_PREVIEW_RADIUS
 
 
-class ColorPickerWidget(QWidget):
+class ColorPickerWidget(QWidget, WidgetMixin):
     """
     Widget مدمج: [■ مربع اللون] [اختر لون]
 
@@ -23,36 +27,50 @@ class ColorPickerWidget(QWidget):
 
     color_changed = pyqtSignal(str)
 
-    def __init__(self, default: str = "#607d8b",
-                 btn_text: str = "اختر لون",
+    def __init__(self, default: str = "",
+                 btn_text: str = "",
                  parent=None):
         super().__init__(parent)
         self._color = default
-        self._build(btn_text)
+        self._btn_text = btn_text
+        self._build()
+        self._init_widget_mixin(theme=True, font=False, lang=True, data=False)
+        self._refresh_style()
+        self._refresh_lang()
 
-    def _build(self, btn_text: str):
+    def _build(self):
         self.setStyleSheet("background:transparent;")
         lay = QHBoxLayout(self)
         lay.setContentsMargins(0, 0, 0, 0)
-        lay.setSpacing(6)
+        lay.setSpacing(SPACING_SM)
 
         self._preview = QLabel()
-        self._preview.setFixedSize(28, 28)
+        self._preview.setFixedSize(COLOR_PICKER_PREVIEW_SIZE, COLOR_PICKER_PREVIEW_SIZE)
         self._apply_preview()
         lay.addWidget(self._preview)
 
-        btn = make_btn(btn_text, "normal")
-        btn.clicked.connect(self._pick)
-        lay.addWidget(btn)
+        self._btn = make_btn("", "normal")
+        self._btn.clicked.connect(self._pick)
+        lay.addWidget(self._btn)
         lay.addStretch()
 
+    def _refresh_style(self, *_):
+        self._apply_preview()
+
+    def _refresh_lang(self, *_):
+        label = self._btn_text if self._btn_text else tr("color_picker_btn")
+        self._btn.setText(label)
+
     def _apply_preview(self):
+        color = self._color if self._color else _C['color_picker_default']
         self._preview.setStyleSheet(
-            f"background:{self._color}; border-radius:4px; border:1px solid #ccc;"
+            f"background:{color}; border-radius:{COLOR_PICKER_PREVIEW_RADIUS}px;"
+            f" border:1px solid {_C['border_light']};"
         )
 
     def _pick(self):
-        col = QColorDialog.getColor(QColor(self._color), self, "اختر لون")
+        color = self._color if self._color else _C['color_picker_default']
+        col = QColorDialog.getColor(QColor(color), self, tr("color_picker_title"))
         if col.isValid():
             self._color = col.name()
             self._apply_preview()

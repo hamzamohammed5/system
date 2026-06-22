@@ -30,17 +30,23 @@ from PyQt5.QtGui  import QColor
 
 from ..core.conn          import LiveConnMixin
 from ..core.i18n          import tr
+from ..core.widget_mixin  import WidgetMixin
 from ..components.button  import make_btn
 from ..dialogs.confirm    import confirm_delete
 from ..dialogs.message    import msg_info, msg_warning
 from ..theme.layout_styles import tree_style
 from ..components.label   import ModeLabel
 from ui.widgets.core.events import emit_company_data_changed
+from ui.constants import (
+    BTN_MIN_HEIGHT,
+    CATEGORY_MANAGER_MARGIN, CATEGORY_FORM_SPACING, CATEGORY_MANAGER_SPACING,
+    CATEGORY_TREE_COL0_W, CATEGORY_TREE_COL1_W, CATEGORY_TREE_COL2_W,
+)
 
 
 # ── CategoryForm ──────────────────────────────────────────
 
-class CategoryForm(QGroupBox, LiveConnMixin):
+class CategoryForm(QGroupBox, LiveConnMixin, WidgetMixin):
     """فورم إضافة/تعديل التصنيف."""
 
     def __init__(self, conn, scope: str, tree_widget, parent=None):
@@ -49,20 +55,10 @@ class CategoryForm(QGroupBox, LiveConnMixin):
         self.scope       = scope
         self._tree       = tree_widget
         self._editing_id = None
+        self._init_widget_mixin(theme=False, font=False, data=False)
         self._build()
-        self._connect_language_bus()
 
-    def _connect_language_bus(self):
-        """[i18n] يشترك في bus.language_changed لتحديث النصوص."""
-        try:
-            from ui.widgets.core.events import bus
-            bus.language_changed.connect(
-                self._on_language_changed, Qt.UniqueConnection
-            )
-        except Exception:
-            pass
-
-    def _on_language_changed(self, lang_code: str):
+    def _refresh_lang(self, *_):
         """[i18n] يُحدّث نصوص الـ groupbox والأزرار."""
         self.setTitle(tr("category_data"))
         self.btn_add.setText(tr("btn_add"))
@@ -73,22 +69,22 @@ class CategoryForm(QGroupBox, LiveConnMixin):
         from ..helpers.color_picker import ColorPickerWidget
 
         form = QFormLayout(self)
-        form.setSpacing(10)
+        form.setSpacing(CATEGORY_FORM_SPACING)
         form.setLabelAlignment(Qt.AlignRight)
 
         self.lbl_mode = ModeLabel(add_text=tr("category_add"))
         form.addRow(self.lbl_mode)
 
         self.inp_name = QLineEdit()
-        self.inp_name.setMinimumHeight(30)
+        self.inp_name.setMinimumHeight(BTN_MIN_HEIGHT)
         self.inp_name.setPlaceholderText(tr("category_name"))
         form.addRow(f"{tr('category_name')} :", self.inp_name)
 
         self.cmb_parent = QComboBox()
-        self.cmb_parent.setMinimumHeight(30)
+        self.cmb_parent.setMinimumHeight(BTN_MIN_HEIGHT)
         form.addRow(f"{tr('category_parent')} :", self.cmb_parent)
 
-        self._color_picker = ColorPickerWidget(default="#607d8b")
+        self._color_picker = ColorPickerWidget()
         form.addRow(f"{tr('category_color')} :", self._color_picker)
 
         btn_row = QHBoxLayout()
@@ -143,7 +139,7 @@ class CategoryForm(QGroupBox, LiveConnMixin):
 
     def _add_parent_nodes(self, nodes, depth, excluded):
         indent = "    " * depth
-        arrow  = "↳ " if depth > 0 else ""
+        arrow  = tr("category_tree_arrow") if depth > 0 else ""
         for node in nodes:
             if node["id"] in excluded:
                 continue
@@ -235,7 +231,8 @@ class CategoryForm(QGroupBox, LiveConnMixin):
 
     def _reset(self, conn=None):
         self._editing_id = None
-        self._color_picker.set_color("#607d8b")
+        from ui.theme import _C
+        self._color_picker.set_color(_C['color_picker_default'])
         self.inp_name.clear()
         self.lbl_mode.set_add_mode()
         self.btn_add.setVisible(True)
@@ -246,30 +243,18 @@ class CategoryForm(QGroupBox, LiveConnMixin):
 
 # ── CategoryManager ───────────────────────────────────────
 
-class CategoryManager(QWidget, LiveConnMixin):
+class CategoryManager(QWidget, LiveConnMixin, WidgetMixin):
     """شجرة QTreeWidget لإدارة التصنيفات الهرمية."""
 
     def __init__(self, conn, scope: str = "all", parent=None):
         super().__init__(parent)
         self.conn  = conn
         self.scope = scope
+        self._init_widget_mixin(theme=False, font=False)
         self._build()
         self._load()
-        from ui.widgets.core.events import bus
-        bus.company_data_changed.connect(self._load)
-        self._connect_language_bus()
 
-    def _connect_language_bus(self):
-        """[i18n] يشترك في bus.language_changed لتحديث النصوص."""
-        try:
-            from ui.widgets.core.events import bus
-            bus.language_changed.connect(
-                self._on_language_changed, Qt.UniqueConnection
-            )
-        except Exception:
-            pass
-
-    def _on_language_changed(self, lang_code: str):
+    def _refresh_lang(self, *_):
         """[i18n] يُحدّث عناوين الأعمدة ونصوص الأزرار."""
         self.tree.setHeaderLabels([
             tr("category"), tr("category_new"), tr("quantity")
@@ -277,18 +262,21 @@ class CategoryManager(QWidget, LiveConnMixin):
         self.btn_edit.setText(tr("btn_edit"))
         self.btn_del.setText(tr("btn_delete"))
 
+    def _refresh_data(self, company_id=None):
+        self._load()
+
     def _build(self):
         root = QVBoxLayout(self)
-        root.setContentsMargins(12, 12, 12, 12)
-        root.setSpacing(10)
+        root.setContentsMargins(*CATEGORY_MANAGER_MARGIN)
+        root.setSpacing(CATEGORY_MANAGER_SPACING)
 
         self.tree = QTreeWidget()
         self.tree.setHeaderLabels([
             tr("category"), tr("category_new"), tr("quantity")
         ])
-        self.tree.setColumnWidth(0, 260)
-        self.tree.setColumnWidth(1, 60)
-        self.tree.setColumnWidth(2, 80)
+        self.tree.setColumnWidth(0, CATEGORY_TREE_COL0_W)
+        self.tree.setColumnWidth(1, CATEGORY_TREE_COL1_W)
+        self.tree.setColumnWidth(2, CATEGORY_TREE_COL2_W)
         self.tree.setAlternatingRowColors(True)
         self.tree.setAnimated(True)
         self.tree.setStyleSheet(tree_style())
@@ -355,7 +343,7 @@ class CategoryManager(QWidget, LiveConnMixin):
             item.setForeground(0, QColor(node["color"]))
 
             child_count = len(node["children"])
-            item.setText(1, str(child_count) if child_count else "—")
+            item.setText(1, str(child_count) if child_count else tr("value_dash"))
 
             # [إصلاح هيكلة] استخدام CategoryService بدل count_category_items مباشرة
             try:
@@ -364,7 +352,7 @@ class CategoryManager(QWidget, LiveConnMixin):
                 total  = sum(counts.values())
             except Exception:
                 total = 0
-            item.setText(2, str(total) if total else "—")
+            item.setText(2, str(total) if total else tr("value_dash"))
 
             if parent is None:
                 self.tree.addTopLevelItem(item)

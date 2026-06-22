@@ -36,6 +36,12 @@ from PyQt5.QtWidgets import (
 from PyQt5.QtCore import Qt, QTimer
 
 from ..theme.table_styles import splitter_style
+from ui.constants import (
+    LIST_PANEL_MIN_W, LIST_PANEL_MAX_W, DETAIL_PANEL_MIN_W,
+    SPLITTER_HANDLE_W, SPLITTER_RATIO, SPLITTER_APPLY_DELAY,
+    SPLITTER_RETRY_DELAY, REFRESH_AFTER_SAVE_DELAY,
+    LIST_W_OFFSET,
+)
 from ui.widgets.core.widget_mixin import WidgetMixin
 
 
@@ -56,9 +62,9 @@ class BaseSection(QWidget, WidgetMixin):
         CONNECT_BUS, LAYOUT_REVERSED, FORM_POSITION, SPLITTER_RATIO
     """
 
-    LIST_MIN_W      : int   = 280
-    LIST_MAX_W      : int   = 560
-    DETAIL_MIN_W    : int   = 320
+    LIST_MIN_W      : int   = LIST_PANEL_MIN_W
+    LIST_MAX_W      : int   = LIST_PANEL_MAX_W
+    DETAIL_MIN_W    : int   = DETAIL_PANEL_MIN_W
     CONNECT_BUS     : bool  = False
     LAYOUT_REVERSED : bool  = False
 
@@ -69,7 +75,7 @@ class BaseSection(QWidget, WidgetMixin):
     FORM_POSITION   : str   = "none"
 
     # [T-05] من CrudSection — نسبة الـ splitter
-    SPLITTER_RATIO  : tuple = (1, 2)
+    SPLITTER_RATIO  : tuple = SPLITTER_RATIO
 
     def __init__(self, conn=None, parent=None):
         super().__init__(parent)
@@ -80,7 +86,7 @@ class BaseSection(QWidget, WidgetMixin):
         self._init_widget_mixin(theme=True, font=False, lang=False,
                                 data=self.CONNECT_BUS)
         self._refresh_style()
-        QTimer.singleShot(50, self._apply_sizes)
+        QTimer.singleShot(SPLITTER_APPLY_DELAY, self._apply_sizes)
 
     # ── override المطلوب ──────────────────────────────────
 
@@ -128,7 +134,7 @@ class BaseSection(QWidget, WidgetMixin):
         root.setSpacing(0)
 
         self._splitter = QSplitter(Qt.Horizontal)
-        self._splitter.setHandleWidth(5)
+        self._splitter.setHandleWidth(SPLITTER_HANDLE_W)
         self._splitter.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Expanding)
 
         self._list   = self._create_list()
@@ -200,10 +206,10 @@ class BaseSection(QWidget, WidgetMixin):
     def _apply_sizes(self):
         total = self._splitter.width() or self.width()
         if total <= 0:
-            QTimer.singleShot(100, self._apply_sizes)
+            QTimer.singleShot(SPLITTER_RETRY_DELAY, self._apply_sizes)
             return
 
-        list_w   = max(self.LIST_MIN_W, min(self.LIST_MIN_W + 60, self.LIST_MAX_W))
+        list_w   = max(self.LIST_MIN_W, min(self.LIST_MIN_W + LIST_W_OFFSET, self.LIST_MAX_W))
         detail_w = max(self.DETAIL_MIN_W, total - list_w - self._splitter.handleWidth())
 
         self._splitter.blockSignals(True)
@@ -218,7 +224,7 @@ class BaseSection(QWidget, WidgetMixin):
     def refresh(self):
         if hasattr(self._list, "refresh"):
             self._list.refresh()
-        QTimer.singleShot(80, self._apply_sizes)
+        QTimer.singleShot(REFRESH_AFTER_SAVE_DELAY, self._apply_sizes)
 
     def clear_detail(self):
         if hasattr(self._detail, "clear"):

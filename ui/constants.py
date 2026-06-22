@@ -17,3 +17,140 @@ SIDEBAR_COLLAPSED_WIDTH = 56
 # ── أبعاد النافذة ─────────────────────────────────────────
 CONTENT_MIN_WIDTH = 820
 WINDOW_DEFAULT_W  = SIDEBAR_EXPANDED_WIDTH + CONTENT_MIN_WIDTH
+
+# ── Spacing & Margins ─────────────────────────────────────
+# استخدم دي في كل الـ widgets بدل أرقام hardcoded
+SPACING_XS = 4
+SPACING_SM = 6
+SPACING_MD = 8
+SPACING_LG = 12
+SPACING_XL = 16
+
+# ── Margins (left, top, right, bottom) ───────────────────
+MARGIN_ZERO          = (0, 0, 0, 0)
+MARGIN_FORM          = (8, 8, 8, 8)       # BaseCrudForm inner layout
+MARGIN_CONTENT_PANEL = (16, 14, 16, 16)   # BaseDetailPanel content area
+
+# ── أبعاد الـ Panels ──────────────────────────────────────
+# BaseSection
+LIST_PANEL_MIN_W  = 280
+LIST_PANEL_MAX_W  = 560
+DETAIL_PANEL_MIN_W = 320
+
+# BaseDetailPanel
+DETAIL_CONTENT_MIN_W = 500
+DETAIL_MIN_W         = 300
+DETAIL_EMPTY_MIN_H   = 200    # EmptyState min_height
+
+# BaseCrudForm
+FORM_MIN_W       = 260
+BTN_MIN_HEIGHT   = 30
+
+# ── Dialog Shell ──────────────────────────────────────────
+DIALOG_HDR_H_WITH_SUB  = 64           # ارتفاع header النافذة مع subtitle
+DIALOG_HDR_H           = 52           # ارتفاع header النافذة بدون subtitle
+DIALOG_BTN_BAR_H       = 54           # ارتفاع شريط الأزرار في النافذة
+DIALOG_BTN_MIN_H       = 36           # ارتفاع أدنى لأزرار النوافذ
+DIALOG_MIN_WIDTH       = 380          # عرض أدنى افتراضي للنوافذ
+DIALOG_BODY_MARGINS    = (20, 16, 20, 12)  # margins منطقة المحتوى (l,t,r,b)
+DIALOG_HDR_MARGIN_H    = 16           # left/right margin لـ header النافذة
+DIALOG_HDR_COL_SPACING = 2            # spacing عمود العنوان/subtitle في header
+DIALOG_BTN_PAD_H       = 20           # padding أفقي لأزرار النافذة ذات accent مخصص
+MSG_BTN_MIN_H          = 32           # ارتفاع أدنى لأزرار MessageDialog
+
+# ── Confirm Dialog ────────────────────────────────────────
+CONFIRM_BTN_MIN_H     = 34   # ارتفاع أدنى لأزرار نافذة التأكيد
+CONFIRM_BTN_MIN_W     = 80   # عرض أدنى لأزرار نافذة التأكيد
+CONFIRM_MAX_WIDTH     = 520  # عرض أقصى لنافذة التأكيد
+
+# ── Splitter ──────────────────────────────────────────────
+SPLITTER_HANDLE_W    = 5
+SPLITTER_RATIO       = (1, 2)    # (list, detail)
+SPLITTER_APPLY_DELAY = 50        # ms — QTimer.singleShot قبل apply sizes
+SPLITTER_RETRY_DELAY = 100       # ms — إعادة المحاولة لو width=0
+
+# ── Notifications / Timers ────────────────────────────────
+NOTIF_AUTO_HIDE_SUCCESS = 3000   # ms — BaseDetailPanel.show_success
+NOTIF_AUTO_HIDE_DEFAULT = 0      # ms — 0 = لا تختفي تلقائياً
+
+# ── Refresh delays ────────────────────────────────────────
+REFRESH_AFTER_SAVE_DELAY = 80    # ms — BaseSection.refresh → _apply_sizes
+
+# ── ComponentRow ──────────────────────────────────────────
+COMPONENT_ROW_LOAD_DELAY = 50    # ms — QTimer deferred load للـ variants/op_rows
+
+# ── Pagination Bar ────────────────────────────────────────
+PAGINATION_BAR_H       = 44    # ارتفاع شريط الـ pagination
+PAGINATION_BTN_SPACING = 10    # مسافة بين أزرار الـ pagination
+
+# ── BaseListPanel ─────────────────────────────────────────
+LIST_PANEL_MIN_W_DEFAULT = 260   # MIN_W الافتراضي لـ BaseListPanel
+FILTER_DEBOUNCE_MS       = 250   # تأخير الـ timer قبل تطبيق الفلتر
+LIST_EMPTY_MIN_H         = 100   # EmptyState min_height في list panel
+
+# ── Table helpers ──────────────────────────────────────────
+TABLE_EXTRA_PAD = 24    # extra_pad في fit_splitter_table
+COL_MIN_WIDTH   = 40    # auto_fit_columns — min_width
+COL_MAX_WIDTH   = 300   # auto_fit_columns — max_width
+
+# ── Splitter list offset ───────────────────────────────────
+LIST_W_OFFSET = 60   # section._apply_sizes: LIST_MIN_W + LIST_W_OFFSET
+
+# ── Widget-specific heights ────────────────────────────────
+SEARCH_BAR_H     = 34   # SearchBar fixed height
+STATUS_BAR_H     = 24   # StatusBar fixed height
+SECTION_BAR_W    = 3    # SectionHeader accent bar width
+SECTION_BAR_H    = 18   # SectionHeader accent bar height
+
+# ── Button dimensions ─────────────────────────────────────
+BTN_HEIGHT_PAD    = 8   # إضافة لـ font*2: h = base*2 + BTN_HEIGHT_PAD
+BTN_PAD_H         = 14  # padding أفقي داخل الزر (padding:0 Xpx)
+BTN_BORDER_RADIUS = 6   # border-radius للأزرار
+BTN_TEXT_PAD      = 32  # QFontMetrics.horizontalAdvance + BTN_TEXT_PAD
+DROPDOWN_ARROW_W  = 24  # عرض سهم القوائم المنسدلة (drop-down arrow)
+
+# ── List header margins ────────────────────────────────────
+LIST_HEADER_MARGIN_H = 10   # left/right margin لـ ListHeader
+LIST_HEADER_MARGIN_T = 10   # top margin لـ ListHeader
+LIST_HEADER_MARGIN_B = 8    # bottom margin لـ ListHeader
+
+# ── Detail header layout ───────────────────────────────────
+DETAIL_HEADER_MARGIN_H = 20   # left/right margin لـ DetailHeader
+DETAIL_HEADER_MARGIN_T = 14   # top margin لـ DetailHeader
+
+# ── Notification / Warning bars ────────────────────────────
+NOTIF_MARGIN_H   = 10   # left/right margin لـ NotificationBar و BaseWarningBar
+NOTIF_MARGIN_V   = 6    # top/bottom margin لـ NotificationBar و BaseWarningBar
+NOTIF_SPACING    = 8    # spacing بين عناصر NotificationBar
+DISMISS_BTN_SIZE = 22   # حجم زر الإغلاق في NotificationBar
+
+# ── ProgressBar ────────────────────────────────────────────
+PROGRESS_BAR_H       = 8   # ارتفاع شريط التقدم الافتراضي
+PROGRESS_TOP_SPACING = 3   # spacing بين صف العنوان والشريط
+
+# ── LoadingOverlay ─────────────────────────────────────────
+OVERLAY_MARGIN        = 20   # margin في LoadingOverlay (كل الجهات)
+OVERLAY_BORDER_RADIUS = 8    # border-radius لـ LoadingOverlay
+
+# ── StatCard ──────────────────────────────────────────────
+STAT_CARD_MARGIN_COMPACT  = (10, 8, 10, 8)    # margins الـ StatCard compact
+STAT_CARD_MARGIN_NORMAL   = (14, 12, 14, 12)  # margins الـ StatCard normal
+STAT_CARD_SPACING_COMPACT = 2                  # spacing الـ StatCard compact
+STAT_CARD_SPACING_NORMAL  = 3                  # spacing الـ StatCard normal
+STAT_CARD_BORDER_RADIUS   = 10                 # border-radius لـ StatCard
+
+# ── _StatCard (inner) ─────────────────────────────────────
+STAT_INNER_MARGIN_COMPACT  = (10, 6, 10, 6)   # margins الـ _StatCard compact
+STAT_INNER_MARGIN_NORMAL   = (14, 10, 14, 10) # margins الـ _StatCard normal
+STAT_INNER_TOP_SPACING     = 4                 # spacing صف العنوان في _StatCard
+STAT_INNER_BORDER_RADIUS   = 8                 # border-radius لـ _StatCard
+
+# ── StatusChip ────────────────────────────────────────────
+STATUS_CHIP_MARGIN_COMPACT = (10, 6, 10, 6)   # margins الـ StatusChip compact
+STATUS_CHIP_MARGIN_NORMAL  = (12, 8, 12, 8)   # margins الـ StatusChip normal
+STATUS_CHIP_BORDER_RADIUS  = 8                 # border-radius لـ StatusChip
+
+# ── StatusCard ────────────────────────────────────────────
+STATUS_CARD_MARGIN        = (16, 14, 16, 14)  # margins الـ StatusCard
+STATUS_CARD_SPACING       = 4                  # spacing الـ StatusCard
+STATUS_CARD_BORDER_RADIUS = 12                 # border-radius لـ StatusCard

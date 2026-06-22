@@ -16,7 +16,7 @@ class _FormLabel(QLabel, WidgetMixin):
         super().__init__(text)
         self._color = color
         self.setAlignment(Qt.AlignRight | Qt.AlignVCenter)
-        self._init_widget_mixin(font=False)
+        self._init_widget_mixin(font=False, lang=False, data=False)
         self._refresh_style()
 
     def _refresh_style(self, *_):
@@ -39,7 +39,7 @@ class _RequiredLabel(QLabel, WidgetMixin):
         self._text = text
         self.setTextFormat(Qt.RichText)
         self.setAlignment(Qt.AlignRight | Qt.AlignVCenter)
-        self._init_widget_mixin(font=False)
+        self._init_widget_mixin(font=False, lang=False, data=False)
         self._refresh_style()
 
     def _refresh_style(self, *_):
@@ -62,7 +62,7 @@ class _HintLabel(QLabel, WidgetMixin):
         super().__init__(text)
         self._color = color
         self.setWordWrap(True)
-        self._init_widget_mixin(font=False)
+        self._init_widget_mixin(font=False, lang=False, data=False)
         self._refresh_style()
 
     def _refresh_style(self, *_):
@@ -84,7 +84,7 @@ class _SectionTitle(QLabel, WidgetMixin):
         display = f"{icon}  {text}" if icon else text
         super().__init__(display)
         self._color = color
-        self._init_widget_mixin(font=False)
+        self._init_widget_mixin(font=False, lang=False, data=False)
         self._refresh_style()
 
     def _refresh_style(self, *_):
@@ -106,7 +106,7 @@ class _SeparatorLine(QFrame, WidgetMixin):
         super().__init__()
         self.setFrameShape(QFrame.HLine)
         self.setFixedHeight(1)
-        self._init_widget_mixin(font=False)
+        self._init_widget_mixin(font=False, lang=False, data=False)
         self._refresh_style()
 
     def _refresh_style(self, *_):

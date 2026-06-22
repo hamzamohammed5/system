@@ -75,18 +75,17 @@ class WidgetMixin:
     def _init_widget_mixin(self,
                             theme: bool = True,
                             font: bool = True,
-                            lang: bool = False,
-                            data: bool = False) -> None:
+                            lang: bool = True,
+                            data: bool = True) -> None:
         """
         يربط الـ widget بالـ bus events المطلوبة.
         استدعيه في __init__ بعد super().__init__() مباشرة.
 
         مثال:
-            self._init_widget_mixin()                      # theme + font
-            self._init_widget_mixin(lang=True)             # theme + font + lang
-            self._init_widget_mixin(theme=False)           # font فقط
-            self._init_widget_mixin(font=False)            # theme فقط
-            self._init_widget_mixin(lang=True, data=True)  # كل حاجة
+            self._init_widget_mixin()                      # كل حاجة theme + font + lang + data
+            self._init_widget_mixin(lang=False)             # theme + font + data
+            self._init_widget_mixin(theme=False)           # font + lang + data
+            self._init_widget_mixin(font=False)            # theme + lang + data
         """
         # ── حماية من double init (instance-level) ─────────────────────────
         # [إصلاح] القيم دي بتتحط على الـ instance مش الـ class عشان
@@ -192,21 +191,9 @@ class WidgetMixin:
                     return
 
                 try:
-                    cached = obj._cached_company_id
-
-                    if cached is None:
-                        # أول إشعار — lazy init
-                        obj._cached_company_id = company_id
-                        obj._refresh_data(company_id)
-                        return
-
-                    if company_id != cached:
-                        # شركة جديدة — حدّث الـ cache وأعد التحميل
-                        obj._cached_company_id = company_id
-                        obj._refresh_data(company_id)
-                        return
-
-                    # نفس الشركة — بيانات اتغيرت
+                    # حدّث الـ cache دايماً (lazy init + شركة جديدة + نفس الشركة)
+                    # ثم استدعي _refresh_data في كل الحالات
+                    obj._cached_company_id = company_id
                     obj._refresh_data(company_id)
 
                 except RuntimeError:

@@ -15,54 +15,77 @@ from PyQt5.QtGui  import QFont
 from ui.theme import _C
 from ui.font  import fs, get_font_size
 from ..core.colors import card_colors
+from ..core.widget_mixin import WidgetMixin
+from ui.constants import (
+    SPACING_MD, SPACING_XS,
+    STATUS_CHIP_MARGIN_COMPACT, STATUS_CHIP_MARGIN_NORMAL, STATUS_CHIP_BORDER_RADIUS,
+    STATUS_CARD_MARGIN, STATUS_CARD_SPACING, STATUS_CARD_BORDER_RADIUS,
+)
 
 
-class StatusChip(QFrame):
+class StatusChip(QFrame, WidgetMixin):
     """شريحة حالة: أيقونة + اسم + عدد."""
 
     def __init__(self, icon: str = "", label: str = "", count: int = 0,
-                 color: str = "#6b7280", bg: str = None, border: str = None,
+                 color: str = None, bg: str = None, border: str = None,
                  compact: bool = False, parent=None):
         super().__init__(parent)
-        _bg, _bdr = card_colors(color)
-        self._build(icon, label, count, color,
-                    bg or _bg, border or _bdr, compact)
+        self._custom_color = color
+        self._color  = color or _C["text_neutral"]
+        self._custom_bg     = bg
+        self._custom_border = border
+        self._compact = compact
+        self._build(icon, label, count, compact)
+        self._init_widget_mixin(theme=True, font=True)
+        self._refresh_style()
 
-    def _build(self, icon, label, count, color, bg, border, compact):
-        self.setStyleSheet(f"""
-            QFrame {{
-                background:{bg}; border:1px solid {border};
-                border-radius:8px;
-            }}
-        """)
+    def _build(self, icon, label, count, compact):
         self.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Fixed)
-        base = get_font_size()
-        m = (10, 6, 10, 6) if compact else (12, 8, 12, 8)
+        m = STATUS_CHIP_MARGIN_COMPACT if compact else STATUS_CHIP_MARGIN_NORMAL
         lay = QHBoxLayout(self)
         lay.setContentsMargins(*m)
-        lay.setSpacing(8)
+        lay.setSpacing(SPACING_MD)
 
+        self._lbl_icon = None
         if icon:
-            lbl_icon = QLabel(icon)
-            lbl_icon.setStyleSheet("background:transparent; border:none;")
-            lay.addWidget(lbl_icon)
+            self._lbl_icon = QLabel(icon)
+            self._lbl_icon.setStyleSheet("background:transparent; border:none;")
+            lay.addWidget(self._lbl_icon)
 
-        lbl_label = QLabel(label)
-        lbl_label.setStyleSheet(
-            f"font-weight:600; color:{color}; background:transparent;"
-            f"border:none; font-size:{fs(base,0)}pt;"
-        )
-        lay.addWidget(lbl_label, stretch=1)
+        self._lbl_label = QLabel(label)
+        lay.addWidget(self._lbl_label, stretch=1)
 
         self._lbl_count = QLabel(str(count))
+        lay.addWidget(self._lbl_count)
+
+    def _refresh_style(self, *_):
+        if self._custom_color is None:
+            self._color = _C["text_neutral"]
+        _bg, _bdr = card_colors(self._color)
+        if self._custom_bg:     _bg  = self._custom_bg
+        if self._custom_border: _bdr = self._custom_border
+
+        self.setStyleSheet(f"""
+            QFrame {{
+                background:{_bg}; border:1px solid {_bdr};
+                border-radius:{STATUS_CHIP_BORDER_RADIUS}px;
+            }}
+        """)
+
+        base = get_font_size()
+
+        self._lbl_label.setStyleSheet(
+            f"font-weight:600; color:{self._color}; background:transparent;"
+            f"border:none; font-size:{fs(base,0)}pt;"
+        )
+
         f = QFont()
-        f.setPointSize(fs(base, +1 if compact else +2))
+        f.setPointSize(fs(base, +1 if self._compact else +2))
         f.setBold(True)
         self._lbl_count.setFont(f)
         self._lbl_count.setStyleSheet(
-            f"color:{color}; background:transparent; border:none;"
+            f"color:{self._color}; background:transparent; border:none;"
         )
-        lay.addWidget(self._lbl_count)
 
     def set_count(self, count: int):
         self._lbl_count.setText(str(count))
@@ -74,63 +97,78 @@ class StatusChip(QFrame):
             return 0
 
 
-class StatusCard(QFrame):
+class StatusCard(QFrame, WidgetMixin):
     """بطاقة حالة بسيطة — أيقونة + label + عدد كبير."""
 
     def __init__(self, icon: str = "", label: str = "",
-                 value: str = "─", color: str = "#1565c0",
+                 value: str = "─", color: str = None,
                  sub: str = "", parent=None):
         super().__init__(parent)
-        _bg, _bdr = card_colors(color)
-        self._build(icon, label, value, color, _bg, _bdr, sub)
+        self._custom_color = color
+        self._color = color or _C["blue"]
+        self._sub   = sub
+        self._build(icon, label, value, sub)
+        self._init_widget_mixin(theme=True, font=True)
+        self._refresh_style()
 
-    def _build(self, icon, label, value, color, bg, border, sub):
-        self.setStyleSheet(f"""
-            QFrame {{
-                background:{bg}; border:1px solid {border};
-                border-radius:12px;
-            }}
-        """)
+    def _build(self, icon, label, value, sub):
         self.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Fixed)
 
-        lay  = QVBoxLayout(self)
-        lay.setContentsMargins(16, 14, 16, 14)
-        lay.setSpacing(4)
+        lay = QVBoxLayout(self)
+        lay.setContentsMargins(*STATUS_CARD_MARGIN)
+        lay.setSpacing(STATUS_CARD_SPACING)
 
-        base = get_font_size()
-        top  = QHBoxLayout()
+        top = QHBoxLayout()
 
-        lbl_icon = QLabel(icon)
-        lbl_icon.setStyleSheet("background:transparent; border:none;")
-        top.addWidget(lbl_icon)
+        self._lbl_icon = QLabel(icon)
+        self._lbl_icon.setStyleSheet("background:transparent; border:none;")
+        top.addWidget(self._lbl_icon)
         top.addStretch()
 
         self._lbl_value = QLabel(value)
+        self._lbl_value.setAlignment(Qt.AlignLeft | Qt.AlignVCenter)
+        top.addWidget(self._lbl_value)
+        lay.addLayout(top)
+
+        self._lbl_title = QLabel(label)
+        lay.addWidget(self._lbl_title)
+
+        self._lbl_sub = None
+        if sub:
+            self._lbl_sub = QLabel(sub)
+            lay.addWidget(self._lbl_sub)
+
+    def _refresh_style(self, *_):
+        if self._custom_color is None:
+            self._color = _C["blue"]
+        _bg, _bdr = card_colors(self._color)
+        self.setStyleSheet(f"""
+            QFrame {{
+                background:{_bg}; border:1px solid {_bdr};
+                border-radius:{STATUS_CARD_BORDER_RADIUS}px;
+            }}
+        """)
+
+        base = get_font_size()
+
         f = QFont()
         f.setPointSize(fs(base, +5))
         f.setBold(True)
         self._lbl_value.setFont(f)
         self._lbl_value.setStyleSheet(
-            f"color:{color}; background:transparent; border:none;"
+            f"color:{self._color}; background:transparent; border:none;"
         )
-        self._lbl_value.setAlignment(Qt.AlignLeft | Qt.AlignVCenter)
-        top.addWidget(self._lbl_value)
-        lay.addLayout(top)
 
-        lbl_title = QLabel(label)
-        lbl_title.setStyleSheet(
-            f"color:{color}; font-weight:600; font-size:{fs(base,0)}pt;"
+        self._lbl_title.setStyleSheet(
+            f"color:{self._color}; font-weight:600; font-size:{fs(base,0)}pt;"
             "background:transparent; border:none;"
         )
-        lay.addWidget(lbl_title)
 
-        if sub:
-            lbl_sub = QLabel(sub)
-            lbl_sub.setStyleSheet(
+        if self._lbl_sub:
+            self._lbl_sub.setStyleSheet(
                 f"color:{_C['text_muted']}; font-size:{fs(base,-1)}pt;"
                 "background:transparent; border:none;"
             )
-            lay.addWidget(lbl_sub)
 
     def set_value(self, text: str):
         self._lbl_value.setText(text)
@@ -140,5 +178,5 @@ class StatusCard(QFrame):
 
 
 def make_status_chip(icon: str, label: str, count: int = 0,
-                     color: str = "#6b7280") -> StatusChip:
-    return StatusChip(icon=icon, label=label, count=count, color=color)
+                     color: str = None) -> StatusChip:
+    return StatusChip(icon=icon, label=label, count=count, color=color or _C["text_neutral"])

@@ -24,6 +24,12 @@ from ui.theme import _C
 from ui.font  import get_font_size, fs
 from ..components.button import make_btn
 from ui.widgets.core.widget_mixin import WidgetMixin
+from ui.constants import (
+    DIALOG_HDR_H_WITH_SUB, DIALOG_HDR_H,
+    DIALOG_BTN_BAR_H, DIALOG_BTN_MIN_H, DIALOG_MIN_WIDTH,
+    DIALOG_BODY_MARGINS, DIALOG_HDR_MARGIN_H, DIALOG_HDR_COL_SPACING,
+    DIALOG_BTN_PAD_H, BTN_BORDER_RADIUS, SPACING_MD,
+)
 
 
 # ══════════════════════════════════════════════════════════
@@ -43,7 +49,7 @@ class DialogShell(QDialog, WidgetMixin):
 
     def __init__(self, parent=None, title: str = "", icon: str = "📋",
                  subtitle: str = "", accent: str = None,
-                 min_width: int = 380, min_height: int = 0):
+                 min_width: int = DIALOG_MIN_WIDTH, min_height: int = 0):
         super().__init__(
             parent,
             Qt.Dialog | Qt.WindowTitleHint | Qt.WindowCloseButtonHint,
@@ -75,8 +81,8 @@ class DialogShell(QDialog, WidgetMixin):
 
         self._body = QWidget()
         self._body_layout = QVBoxLayout(self._body)
-        self._body_layout.setContentsMargins(20, 16, 20, 12)
-        self._body_layout.setSpacing(10)
+        self._body_layout.setContentsMargins(*DIALOG_BODY_MARGINS)
+        self._body_layout.setSpacing(SPACING_MD)
         root.addWidget(self._body, stretch=1)
 
         self._sep = QFrame()
@@ -85,27 +91,27 @@ class DialogShell(QDialog, WidgetMixin):
         root.addWidget(self._sep)
 
         self._bar = QWidget()
-        self._bar.setFixedHeight(54)
+        self._bar.setFixedHeight(DIALOG_BTN_BAR_H)
         self._btn_layout = QHBoxLayout(self._bar)
-        self._btn_layout.setContentsMargins(16, 0, 16, 0)
-        self._btn_layout.setSpacing(8)
+        self._btn_layout.setContentsMargins(DIALOG_HDR_MARGIN_H, 0, DIALOG_HDR_MARGIN_H, 0)
+        self._btn_layout.setSpacing(SPACING_MD)
         self._btn_layout.addStretch()
         root.addWidget(self._bar)
 
     def _make_header(self, icon: str, title: str, subtitle: str) -> QFrame:
         hdr = QFrame()
-        hdr.setFixedHeight(64 if subtitle else 52)
+        hdr.setFixedHeight(DIALOG_HDR_H_WITH_SUB if subtitle else DIALOG_HDR_H)
 
         lay = QHBoxLayout(hdr)
-        lay.setContentsMargins(16, 0, 16, 0)
-        lay.setSpacing(10)
+        lay.setContentsMargins(DIALOG_HDR_MARGIN_H, 0, DIALOG_HDR_MARGIN_H, 0)
+        lay.setSpacing(SPACING_MD)
 
         self._lbl_ico = QLabel(icon)
         self._lbl_ico.setAlignment(Qt.AlignVCenter)
         lay.addWidget(self._lbl_ico)
 
         col = QVBoxLayout()
-        col.setSpacing(2)
+        col.setSpacing(DIALOG_HDR_COL_SPACING)
 
         self._lbl_title = QLabel(title)
         col.addWidget(self._lbl_title)
@@ -143,12 +149,12 @@ class DialogShell(QDialog, WidgetMixin):
             f"font-size:{fs(base,+2)}pt; background:transparent; border:none;"
         )
         self._lbl_title.setStyleSheet(
-            f"font-size:{fs(base,+1)}pt; font-weight:bold; color:white;"
+            f"font-size:{fs(base,+1)}pt; font-weight:bold; color:{_C['btn_primary_text']};"
             "background:transparent; border:none;"
         )
         if self._lbl_sub is not None:
             self._lbl_sub.setStyleSheet(
-                f"font-size:{fs(base,-1)}pt; color:rgba(255,255,255,0.8);"
+                f"font-size:{fs(base,-1)}pt; color:{_C['dialog_hdr_sub_text']};"
                 "background:transparent; border:none;"
             )
 
@@ -192,12 +198,13 @@ class BaseDialog(DialogShell):
         self._refresh_style()
 
     def _add_default_buttons(self):
-        btn_cancel = make_btn("✖  إلغاء", "ghost")
-        btn_cancel.setMinimumHeight(36)
+        from ui.widgets.core.i18n import tr
+        btn_cancel = make_btn(tr("btn_cancel"), "ghost")
+        btn_cancel.setMinimumHeight(DIALOG_BTN_MIN_H)
         btn_cancel.clicked.connect(self.reject)
 
-        self._btn_ok = make_btn("✅  حفظ", "primary")
-        self._btn_ok.setMinimumHeight(36)
+        self._btn_ok = make_btn(tr("btn_save"), "primary")
+        self._btn_ok.setMinimumHeight(DIALOG_BTN_MIN_H)
 
         self._btn_ok.clicked.connect(self._on_accept)
         self.btn_layout.addWidget(btn_cancel)
@@ -212,9 +219,9 @@ class BaseDialog(DialogShell):
         base = get_font_size()
         self._btn_ok.setStyleSheet(f"""
             QPushButton {{
-                background:{self._accent}; color:white; font-weight:bold;
-                border-radius:6px; padding:0 20px;
-                font-size:{fs(base,0)}pt; border:none; min-height:36px;
+                background:{self._accent}; color:{_C['btn_primary_text']}; font-weight:bold;
+                border-radius:{BTN_BORDER_RADIUS}px; padding:0 {DIALOG_BTN_PAD_H}px;
+                font-size:{fs(base,0)}pt; border:none; min-height:{DIALOG_BTN_MIN_H}px;
             }}
             QPushButton:hover {{ background:{self._accent}dd; }}
             QPushButton:disabled {{ background:{_C['text_disabled']}; }}

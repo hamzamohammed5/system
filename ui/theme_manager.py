@@ -53,6 +53,7 @@ _LIGHT_THEME: Dict[str, str] = {
     "bg_hover":     "#ECEAE4",
     "bg_active":    "#E4E2DA",
     "bg_input":     "#FFFFFF",
+    "bg_input_focus": "#FFFFFF",
     "border":       "#DDD9CF",
     "border_med":   "#C8C4B8",
     "border_focus": "#8B8680",
@@ -235,6 +236,11 @@ _LIGHT_THEME: Dict[str, str] = {
     "bom_scenario_default_fg":  "#1b5e20",   # نص node السيناريو الافتراضي
     "bom_scenario_normal_bg":   "#e3f2fd",   # == blue_bg — خلفية node سيناريو عادي
     "bom_scenario_normal_fg":   "#0d47a1",   # نص node سيناريو عادي
+
+    "overlay_bg":               "rgba(255,255,255,180)",   # خلفية شفافة لطبقة LoadingOverlay
+
+    # ── Dialog Shell header ───────────────────────────────
+    "dialog_hdr_sub_text":      "rgba(255,255,255,0.8)",  # نص الـ subtitle في header النافذة
 }
 
 _DARK_THEME: Dict[str, str] = {
@@ -244,6 +250,7 @@ _DARK_THEME: Dict[str, str] = {
     "bg_hover":     "#2E2E2E",
     "bg_active":    "#383838",
     "bg_input":     "#1E1E1E",
+    "bg_input_focus": "#242424",
     "border":       "#2E2E2E",
     "border_med":   "#3A3A3A",
     "border_focus": "#5A5A5A",
@@ -439,6 +446,11 @@ _DARK_THEME: Dict[str, str] = {
     "bom_scenario_default_fg":  "#66BB8A",   # == success — نص node السيناريو الافتراضي
     "bom_scenario_normal_bg":   "#1a2a3a",   # == blue_bg — خلفية node سيناريو عادي
     "bom_scenario_normal_fg":   "#5B8DB8",   # == blue — نص node سيناريو عادي
+
+    "overlay_bg":               "rgba(15,15,15,180)",   # خلفية شفافة لطبقة LoadingOverlay (dark)
+
+    # ── Dialog Shell header ───────────────────────────────
+    "dialog_hdr_sub_text":      "rgba(255,255,255,0.7)",  # نص الـ subtitle في header النافذة (dark)
 }
 
 THEMES: Dict[str, Dict[str, str]] = {
@@ -446,9 +458,9 @@ THEMES: Dict[str, Dict[str, str]] = {
     "dark":  _DARK_THEME,
 }
 
-THEME_DISPLAY_NAMES: Dict[str, str] = {
-    "light": "فاتح",
-    "dark":  "داكن",
+THEME_DISPLAY_NAME_KEYS: Dict[str, str] = {
+    "light": "theme_light",
+    "dark":  "theme_dark",
 }
 
 
@@ -624,10 +636,11 @@ class ThemeManager(QObject):
             pass
 
     def get_available_themes(self) -> list:
+        from ui.widgets.core.i18n import tr
         return [
             {
                 "key":    key,
-                "name":   THEME_DISPLAY_NAMES.get(key, key),
+                "name":   tr(THEME_DISPLAY_NAME_KEYS.get(key, key)),
                 "active": key == self._current_theme,
             }
             for key in THEMES

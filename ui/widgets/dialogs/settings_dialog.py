@@ -34,15 +34,17 @@ from PyQt5.QtWidgets import (
 
 from ui.font  import get_font_size, set_font_size, apply_font, fs
 from ui.theme import _C
+from ui.constants import DIALOG_BTN_MIN_H, MIN_FONT_SIZE, MAX_FONT_SIZE, BTN_MIN_HEIGHT
 
 from ui.widgets.combo.unit_service import (
     load_units, add_unit, remove_unit,
-    reset_units_to_default, _DEFAULT_UNITS,
+    reset_units_to_default, _default_units, _DEFAULT_UNIT_KEYS,
 )
 from ui.widgets.dialogs.message  import msg_info, msg_warning
 from ui.widgets.dialogs.confirm  import confirm_action
 from ui.widgets.components.button import make_btn
 from ui.widgets.core.widget_mixin import WidgetMixin
+from ui.widgets.core.i18n import tr
 
 
 def _get_settings_conn_and_status() -> "tuple":
@@ -78,14 +80,15 @@ class SettingsDialog(QDialog, WidgetMixin):
         self._original_size = get_font_size()
         self._notice_labels = []  # لافتات "اختر شركة نشطة" — تتبنى ديناميكياً
 
-        self.setWindowTitle("⚙️  إعدادات")
+        self.setWindowTitle(tr("settings_title"))
         self.setMinimumWidth(560)
         self.setMinimumHeight(480)
         self.setModal(True)
         self._build()
         self._slider.setValue(self._original_size)
-        self._init_widget_mixin(theme=True, font=True)
+        self._init_widget_mixin(theme=True, font=True, lang=True)
         self._refresh_style()
+        self._refresh_lang()
         self._load_settings()
 
     def _build(self):
@@ -95,11 +98,11 @@ class SettingsDialog(QDialog, WidgetMixin):
 
         self._tabs = QTabWidget()
 
-        self._tabs.addTab(self._build_font_tab(),    "🔤  الخط")
-        self._tabs.addTab(self._build_theme_tab(),   "🎨  المظهر")
-        self._tabs.addTab(self._build_lang_tab(),    "🌐  اللغة")
-        self._tabs.addTab(self._build_units_tab(),   "📏  الوحدات")
-        self._tabs.addTab(self._build_gimp_tab(),    "🖼️  GIMP")
+        self._tabs.addTab(self._build_font_tab(),    tr("settings_tab_font"))
+        self._tabs.addTab(self._build_theme_tab(),   tr("settings_tab_theme"))
+        self._tabs.addTab(self._build_lang_tab(),    tr("settings_tab_lang"))
+        self._tabs.addTab(self._build_units_tab(),   tr("settings_tab_units"))
+        self._tabs.addTab(self._build_gimp_tab(),    tr("settings_tab_gimp"))
         outer.addWidget(self._tabs, stretch=1)
 
         self._btn_bar = QWidget()
@@ -107,10 +110,12 @@ class SettingsDialog(QDialog, WidgetMixin):
         btn_bar_lay.setContentsMargins(20, 8, 20, 8)
 
         btns       = QDialogButtonBox()
-        btn_ok     = btns.addButton("✅  حفظ",   QDialogButtonBox.AcceptRole)
-        btn_cancel = btns.addButton("✖  إلغاء", QDialogButtonBox.RejectRole)
-        btn_ok.setMinimumHeight(34)
-        btn_cancel.setMinimumHeight(34)
+        self._btn_ok_bar     = btns.addButton(tr("settings_btn_save"),   QDialogButtonBox.AcceptRole)
+        self._btn_cancel_bar = btns.addButton(tr("settings_btn_cancel"), QDialogButtonBox.RejectRole)
+        btn_ok     = self._btn_ok_bar
+        btn_cancel = self._btn_cancel_bar
+        btn_ok.setMinimumHeight(DIALOG_BTN_MIN_H)
+        btn_cancel.setMinimumHeight(DIALOG_BTN_MIN_H)
         btn_ok.clicked.connect(self._save)
         btn_cancel.clicked.connect(self._cancel)
         btn_bar_lay.addWidget(btns)
@@ -166,7 +171,7 @@ class SettingsDialog(QDialog, WidgetMixin):
         lay.setContentsMargins(20, 16, 20, 16)
         lay.setSpacing(12)
 
-        grp = QGroupBox("حجم الخط")
+        grp = QGroupBox(tr("settings_grp_font"))
         grp_lay = QVBoxLayout(grp)
 
         row = QHBoxLayout()
@@ -175,7 +180,7 @@ class SettingsDialog(QDialog, WidgetMixin):
         self._lbl_small = QLabel("أ")
 
         self._slider = QSlider(Qt.Horizontal)
-        self._slider.setRange(8, 20)
+        self._slider.setRange(MIN_FONT_SIZE, MAX_FONT_SIZE)
         self._slider.setTickInterval(1)
         self._slider.setTickPosition(QSlider.TicksBelow)
         self._slider.valueChanged.connect(self._on_font_change)
@@ -193,18 +198,12 @@ class SettingsDialog(QDialog, WidgetMixin):
         row.addWidget(self._lbl_val)
         grp_lay.addLayout(row)
 
-        self._preview = QLabel(
-            "معاينة النص — Preview 123\n"
-            "أبجد هوز حطي كلمن — The quick brown fox\n"
-            "١٢٣٤٥٦٧٨٩٠ — ABCDEFG abcdefg"
-        )
+        self._preview = QLabel(tr("settings_font_preview"))
         self._preview.setAlignment(Qt.AlignCenter)
         self._preview.setWordWrap(True)
         grp_lay.addWidget(self._preview)
 
-        self._lbl_font_hint = QLabel(
-            "💡  اضغط حفظ لتطبيق حجم الخط الجديد على كامل الواجهة"
-        )
+        self._lbl_font_hint = QLabel(tr("settings_font_hint"))
         self._lbl_font_hint.setWordWrap(True)
         grp_lay.addWidget(self._lbl_font_hint)
         lay.addWidget(grp)
@@ -237,11 +236,11 @@ class SettingsDialog(QDialog, WidgetMixin):
         lay.setContentsMargins(20, 16, 20, 16)
         lay.setSpacing(12)
 
-        grp     = QGroupBox("اختر مظهر التطبيق")
+        grp     = QGroupBox(tr("settings_grp_theme"))
         grp_lay = QVBoxLayout(grp)
         grp_lay.setSpacing(10)
 
-        from ui.theme_manager import theme_manager, THEMES, THEME_DISPLAY_NAMES
+        from ui.theme_manager import theme_manager, THEMES
 
         self._theme_btn_group = QButtonGroup(self)
         self._theme_radios    = {}
@@ -249,8 +248,8 @@ class SettingsDialog(QDialog, WidgetMixin):
         current = theme_manager.current_theme
 
         themes_info = {
-            "light": ("☀️", "فاتح",  "خلفية بيضاء دافئة مريحة للعين"),
-            "dark":  ("🌙", "داكن",  "خلفية داكنة للاستخدام الليلي"),
+            "light": ("☀️", tr("settings_theme_light_name"), tr("settings_theme_light_desc")),
+            "dark":  ("🌙", tr("settings_theme_dark_name"),  tr("settings_theme_dark_desc")),
         }
 
         for key, (icon, name, desc) in themes_info.items():
@@ -263,7 +262,7 @@ class SettingsDialog(QDialog, WidgetMixin):
 
         lay.addWidget(grp)
 
-        preview_grp     = QGroupBox("معاينة الألوان")
+        preview_grp     = QGroupBox(tr("settings_grp_theme_preview"))
         preview_grp_lay = QHBoxLayout(preview_grp)
         preview_grp_lay.setSpacing(6)
 
@@ -352,7 +351,7 @@ class SettingsDialog(QDialog, WidgetMixin):
         lay.setContentsMargins(20, 16, 20, 16)
         lay.setSpacing(12)
 
-        grp     = QGroupBox("اختر لغة الواجهة")
+        grp     = QGroupBox(tr("settings_grp_lang"))
         grp_lay = QVBoxLayout(grp)
         grp_lay.setSpacing(10)
 
@@ -367,8 +366,8 @@ class SettingsDialog(QDialog, WidgetMixin):
         self._lang_cards     = []
 
         langs_info = {
-            "ar": ("🇸🇦", "العربية",  "واجهة باللغة العربية (RTL)"),
-            "en": ("🇬🇧", "English", "Interface in English (LTR)"),
+            "ar": ("🇸🇦", tr("settings_lang_ar_name"), tr("settings_lang_ar_desc")),
+            "en": ("🇬🇧", tr("settings_lang_en_name"), tr("settings_lang_en_desc")),
         }
 
         for key, (flag, name, desc) in langs_info.items():
@@ -400,7 +399,7 @@ class SettingsDialog(QDialog, WidgetMixin):
 
         lay.addWidget(grp)
 
-        self._lbl_lang_hint = QLabel("💡  تغيير اللغة يُطبَّق فوراً بعد الحفظ")
+        self._lbl_lang_hint = QLabel(tr("settings_lang_hint"))
         self._lbl_lang_hint.setWordWrap(True)
         lay.addWidget(self._lbl_lang_hint)
         lay.addStretch()
@@ -442,7 +441,7 @@ class SettingsDialog(QDialog, WidgetMixin):
         lay.setContentsMargins(20, 16, 20, 16)
         lay.setSpacing(12)
 
-        grp     = QGroupBox("وحدات القياس المتاحة")
+        grp     = QGroupBox(tr("settings_grp_units"))
         grp_lay = QVBoxLayout(grp)
 
         self._units_list = QListWidget()
@@ -451,9 +450,9 @@ class SettingsDialog(QDialog, WidgetMixin):
         grp_lay.addWidget(self._units_list)
 
         btn_row = QHBoxLayout()
-        btn_add   = make_btn("➕  إضافة وحدة",        "primary")
-        btn_del   = make_btn("🗑️  حذف المحددة",       "danger")
-        btn_reset = make_btn("↺  استعادة الافتراضية", "ghost")
+        btn_add   = make_btn(tr("settings_btn_add_unit"),   "primary")
+        btn_del   = make_btn(tr("settings_btn_del_unit"),   "danger")
+        btn_reset = make_btn(tr("settings_btn_reset_units"), "ghost")
         btn_add.clicked.connect(self._add_unit)
         btn_del.clicked.connect(self._del_unit)
         btn_reset.clicked.connect(self._reset_units)
@@ -463,7 +462,7 @@ class SettingsDialog(QDialog, WidgetMixin):
         btn_row.addStretch()
         grp_lay.addLayout(btn_row)
 
-        self._lbl_units_hint = QLabel("💡  الوحدات الافتراضية (باللون الرمادي) لا يمكن حذفها")
+        self._lbl_units_hint = QLabel(tr("settings_units_hint"))
         self._lbl_units_hint.setWordWrap(True)
         grp_lay.addWidget(self._lbl_units_hint)
         lay.addWidget(grp)
@@ -481,27 +480,21 @@ class SettingsDialog(QDialog, WidgetMixin):
     # ══════════════════════════════════════════════════════
 
     def _build_gimp_tab(self) -> QWidget:
-        base   = get_font_size()
         widget = QWidget()
         lay    = QVBoxLayout(widget)
         lay.setContentsMargins(20, 16, 20, 16)
         lay.setSpacing(12)
 
-        grp     = QGroupBox("مسار برنامج GIMP")
+        grp     = QGroupBox(tr("settings_grp_gimp"))
         grp_lay = QVBoxLayout(grp)
 
         self._inp_gimp = QLineEdit()
-        self._inp_gimp.setMinimumHeight(30)
-        self._inp_gimp.setPlaceholderText(r"مثال: C:\Program Files\GIMP 2\bin\gimp-2.10.exe")
-        self._inp_gimp.setStyleSheet(
-            f"font-size:{fs(base, -1)}pt; color:{_C['text_primary']};"
-            f"background:{_C['bg_input']}; border:1px solid {_C['border_med']};"
-            "border-radius:4px; padding:4px 8px;"
-        )
+        self._inp_gimp.setMinimumHeight(BTN_MIN_HEIGHT)
+        self._inp_gimp.setPlaceholderText(tr("settings_gimp_placeholder"))
 
         gimp_row = QHBoxLayout()
-        btn_browse = make_btn("📂  تصفح", "normal")
-        btn_clear  = make_btn("✖",        "ghost")
+        btn_browse = make_btn(tr("settings_btn_browse"), "normal")
+        btn_clear  = make_btn(tr("clear"),               "ghost")
         btn_clear.setFixedWidth(28)
         btn_browse.clicked.connect(self._browse_gimp)
         btn_clear.clicked.connect(lambda: self._inp_gimp.clear())
@@ -511,14 +504,38 @@ class SettingsDialog(QDialog, WidgetMixin):
         gimp_row.addWidget(btn_clear)
         grp_lay.addLayout(gimp_row)
 
-        lbl_hint = QLabel("💡  اتركه فارغاً للبحث التلقائي في المسارات الشائعة")
-        lbl_hint.setStyleSheet(
-            f"color:{_C['text_muted']}; font-size:{fs(base, -2)}pt; background: transparent;"
-        )
-        grp_lay.addWidget(lbl_hint)
+        self._lbl_gimp_hint = QLabel(tr("settings_gimp_hint"))
+        self._lbl_gimp_hint.setWordWrap(True)
+        grp_lay.addWidget(self._lbl_gimp_hint)
         lay.addWidget(grp)
         lay.addStretch()
         return widget
+
+    def _refresh_gimp_tab_style(self):
+        base = get_font_size()
+        self._lbl_gimp_hint.setStyleSheet(
+            f"color:{_C['text_muted']}; font-size:{fs(base, -2)}pt; background:transparent;"
+        )
+        self._inp_gimp.setStyleSheet(
+            f"font-size:{fs(base, -1)}pt; color:{_C['text_primary']};"
+            f"background:{_C['bg_input']}; border:1px solid {_C['border_med']};"
+            "border-radius:4px; padding:4px 8px;"
+        )
+
+    def _refresh_notice_labels_style(self):
+        if not self._notice_labels:
+            return
+        base = get_font_size()
+        from ui.widgets.core.colors import status_colors
+        s = status_colors("warning")
+        notice_style = (
+            f"color: {s['fg']}; font-size: {fs(base, -1)}pt;"
+            f"background: {s['bg']}; border: 1px solid {s['border']};"
+            "border-radius: 6px; padding: 6px 10px;"
+        )
+        for lbl in self._notice_labels:
+            lbl.setStyleSheet(notice_style)
+    # ══════════════════════════════════════════════════════
 
     # ══════════════════════════════════════════════════════
     # تحميل الإعدادات
@@ -550,7 +567,7 @@ class SettingsDialog(QDialog, WidgetMixin):
             f"background: {s['bg']}; border: 1px solid {s['border']};"
             "border-radius: 6px; padding: 6px 10px;"
         )
-        notice_text = "⚠️  اختر شركة نشطة لعرض وحدات القياس ومسار GIMP"
+        notice_text = tr("settings_no_company_notice")
 
         units_tab = self._tabs.widget(3)
         if units_tab:
@@ -560,6 +577,7 @@ class SettingsDialog(QDialog, WidgetMixin):
             lay = units_tab.layout()
             if lay:
                 lay.insertWidget(0, lbl)
+            self._notice_labels.append(lbl)
 
         gimp_tab = self._tabs.widget(4)
         if gimp_tab:
@@ -569,6 +587,7 @@ class SettingsDialog(QDialog, WidgetMixin):
             lay2 = gimp_tab.layout()
             if lay2:
                 lay2.insertWidget(0, lbl2)
+            self._notice_labels.append(lbl2)
 
     def _reload_units_list(self):
         self._units_list.clear()
@@ -577,18 +596,18 @@ class SettingsDialog(QDialog, WidgetMixin):
             try:
                 units = load_units(conn)
             except Exception:
-                units = list(_DEFAULT_UNITS)
+                units = _default_units()
         else:
-            units = list(_DEFAULT_UNITS)
+            units = _default_units()
 
-        default_vals = {u[0] for u in _DEFAULT_UNITS}
+        default_vals = set(_DEFAULT_UNIT_KEYS)
         for val, label in units:
             item = QListWidgetItem(label)
             item.setData(Qt.UserRole, val)
             if val in default_vals:
                 from PyQt5.QtGui import QColor
                 item.setForeground(QColor(_C['text_muted']))
-                item.setToolTip("وحدة افتراضية — لا يمكن حذفها")
+                item.setToolTip(tr("settings_unit_default_tip"))
             self._units_list.addItem(item)
 
     # ══════════════════════════════════════════════════════
@@ -598,18 +617,18 @@ class SettingsDialog(QDialog, WidgetMixin):
     def _add_unit(self):
         conn = _get_settings_conn()
         if not conn:
-            msg_warning(self, "تنبيه", "اختر شركة نشطة أولاً لإضافة وحدات قياس")
+            msg_warning(self, tr("settings_warning_title"), tr("settings_no_company_units"))
             return
 
         val, ok = QInputDialog.getText(
-            self, "إضافة وحدة", "اكتب رمز الوحدة (مثال: ft, yd, pt):",
+            self, tr("settings_add_unit_title"), tr("settings_add_unit_prompt"),
         )
         if not ok or not val.strip():
             return
         val = val.strip().lower()
         label, ok2 = QInputDialog.getText(
-            self, "إضافة وحدة",
-            f"اكتب التسمية الكاملة للوحدة «{val}» (مثال: ft — قدم):",
+            self, tr("settings_add_unit_title"),
+            tr("settings_add_unit_label", val=val),
             text=val,
         )
         if not ok2 or not label.strip():
@@ -617,51 +636,52 @@ class SettingsDialog(QDialog, WidgetMixin):
         try:
             result = add_unit(conn, val, label.strip())
         except Exception as e:
-            msg_warning(self, "خطأ", str(e))
+            msg_warning(self, tr("settings_error_title"), str(e))
             return
         if result:
             self._reload_units_list()
         else:
-            msg_info(self, "تنبيه", f"الوحدة «{val}» موجودة بالفعل.")
+            msg_info(self, tr("settings_warning_title"), tr("settings_unit_exists", val=val))
 
     def _del_unit(self):
         item = self._units_list.currentItem()
         if not item:
-            msg_info(self, "تنبيه", "اختر وحدة أولاً")
+            msg_info(self, tr("settings_warning_title"), tr("settings_select_unit"))
             return
         val = item.data(Qt.UserRole)
-        default_vals = {u[0] for u in _DEFAULT_UNITS}
+        default_vals = set(_DEFAULT_UNIT_KEYS)
         if val in default_vals:
-            msg_warning(self, "تنبيه", f"لا يمكن حذف الوحدة الافتراضية «{val}».")
+            msg_warning(self, tr("settings_warning_title"), tr("settings_no_del_default", val=val))
             return
 
         conn = _get_settings_conn()
         if not conn:
-            msg_warning(self, "تنبيه", "اختر شركة نشطة أولاً لحذف وحدات القياس")
+            msg_warning(self, tr("settings_warning_title"), tr("settings_no_company_del"))
             return
 
-        if confirm_action(self, "تأكيد الحذف", f"حذف الوحدة «{item.text()}»؟",
-                          icon="🗑️", confirm_text="حذف", danger=True):
+        if confirm_action(self, tr("settings_del_unit_title"),
+                          tr("settings_del_unit_msg", label=item.text()),
+                          icon="🗑️", confirm_text=tr("settings_del_unit_btn"), danger=True):
             try:
                 remove_unit(conn, val)
             except Exception as e:
-                msg_warning(self, "خطأ", str(e))
+                msg_warning(self, tr("settings_error_title"), str(e))
                 return
             self._reload_units_list()
 
     def _reset_units(self):
         conn = _get_settings_conn()
         if not conn:
-            msg_warning(self, "تنبيه", "اختر شركة نشطة أولاً لاستعادة الوحدات الافتراضية")
+            msg_warning(self, tr("settings_warning_title"), tr("settings_no_company_reset"))
             return
 
-        if confirm_action(self, "استعادة الافتراضية",
-                          "حذف كل الوحدات المضافة والرجوع للقائمة الافتراضية؟",
-                          icon="↺", confirm_text="استعادة"):
+        if confirm_action(self, tr("settings_reset_units_title"),
+                          tr("settings_reset_units_msg"),
+                          icon="↺", confirm_text=tr("settings_reset_units_btn")):
             try:
                 reset_units_to_default(conn)
             except Exception as e:
-                msg_warning(self, "خطأ", str(e))
+                msg_warning(self, tr("settings_error_title"), str(e))
                 return
             self._reload_units_list()
 
@@ -676,8 +696,8 @@ class SettingsDialog(QDialog, WidgetMixin):
         else:
             start_dir = r"C:\Program Files"
         path, _ = QFileDialog.getOpenFileName(
-            self, "اختر ملف GIMP التنفيذي", start_dir,
-            "GIMP (gimp*.exe);;Executable Files (*.exe);;All Files (*)"
+            self, tr("settings_browse_gimp"), start_dir,
+            tr("settings_gimp_filter")
         )
         if path:
             self._inp_gimp.setText(path)
@@ -730,3 +750,18 @@ class SettingsDialog(QDialog, WidgetMixin):
 
     def _cancel(self):
         self.reject()
+
+    def _refresh_lang(self, *_):
+        self.setWindowTitle(tr("settings_title"))
+        self._tabs.setTabText(0, tr("settings_tab_font"))
+        self._tabs.setTabText(1, tr("settings_tab_theme"))
+        self._tabs.setTabText(2, tr("settings_tab_lang"))
+        self._tabs.setTabText(3, tr("settings_tab_units"))
+        self._tabs.setTabText(4, tr("settings_tab_gimp"))
+        self._btn_ok_bar.setText(tr("settings_btn_save"))
+        self._btn_cancel_bar.setText(tr("settings_btn_cancel"))
+        self._lbl_font_hint.setText(tr("settings_font_hint"))
+        self._lbl_lang_hint.setText(tr("settings_lang_hint"))
+        self._lbl_units_hint.setText(tr("settings_units_hint"))
+        self._lbl_gimp_hint.setText(tr("settings_gimp_hint"))
+        self._inp_gimp.setPlaceholderText(tr("settings_gimp_placeholder"))

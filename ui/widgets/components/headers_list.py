@@ -17,6 +17,11 @@ from ui.font  import fs, get_font_size
 from .button  import make_btn
 from ..core.i18n import tr
 from ui.widgets.core.widget_mixin import WidgetMixin
+from ui.constants import (
+    SPACING_XS, SPACING_SM, SPACING_MD, SPACING_LG,
+    SEARCH_BAR_H, STATUS_BAR_H, SECTION_BAR_W, SECTION_BAR_H,
+    LIST_HEADER_MARGIN_H, LIST_HEADER_MARGIN_T, LIST_HEADER_MARGIN_B,
+)
 
 
 # ══════════════════════════════════════════════════════════
@@ -30,7 +35,7 @@ class SearchBar(QWidget, WidgetMixin):
 
     def __init__(self, placeholder: str = "",
                  delay_ms: int = 250,
-                 height: int = 34,
+                 height: int = SEARCH_BAR_H,
                  parent=None):
         super().__init__(parent)
         self._placeholder = placeholder or tr("list_search_placeholder")
@@ -42,6 +47,7 @@ class SearchBar(QWidget, WidgetMixin):
         self._timer.timeout.connect(self._emit)
         self._build(self._placeholder, height)
         self._init_widget_mixin(theme=True, font=True, lang=True)
+        self._refresh_style()
 
     def _build(self, placeholder: str, height: int):
         lay = QHBoxLayout(self)
@@ -101,7 +107,7 @@ class StatusBar(QLabel, WidgetMixin):
     def __init__(self, parent=None):
         super().__init__(parent)
         self.setAlignment(Qt.AlignCenter)
-        self.setFixedHeight(24)
+        self.setFixedHeight(STATUS_BAR_H)
         self._shown = 0
         self._total = 0
         self._has_count = False
@@ -174,17 +180,19 @@ class ListHeader(QFrame, WidgetMixin):
         _placeholder = search_placeholder or tr("list_search_placeholder")
         self._build(_placeholder, search_delay)
         self._init_widget_mixin(theme=True, font=True, lang=True)
+        self._refresh_style()
 
     def _build(self, placeholder: str, delay: int):
         self.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Fixed)
 
         root = QVBoxLayout(self)
-        root.setContentsMargins(10, 10, 10, 8)
-        root.setSpacing(6)
+        root.setContentsMargins(LIST_HEADER_MARGIN_H, LIST_HEADER_MARGIN_T,
+                                LIST_HEADER_MARGIN_H, LIST_HEADER_MARGIN_B)
+        root.setSpacing(SPACING_SM)
 
         if self._title or self._add_text:
             self._btn_row = QHBoxLayout()
-            self._btn_row.setSpacing(8)
+            self._btn_row.setSpacing(SPACING_MD)
 
             if self._title:
                 self._lbl_title = QLabel(self._title)

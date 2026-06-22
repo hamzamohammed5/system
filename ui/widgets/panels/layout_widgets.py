@@ -109,21 +109,32 @@ class CollapsibleCard(QFrame):
         self._content_widget = QWidget()
         self._content_widget.setStyleSheet("background:transparent;")
         self.content_layout  = QVBoxLayout(self._content_widget)
-        self.content_layout.setContentsMargins(12, 10, 12, 12)
-        self.content_layout.setSpacing(8)
+        from ui.constants import (
+            COLLAPSIBLE_CARD_CONTENT_MARGIN_H, COLLAPSIBLE_CARD_CONTENT_MARGIN_V,
+            COLLAPSIBLE_CARD_CONTENT_SPACING,
+        )
+        self.content_layout.setContentsMargins(
+            COLLAPSIBLE_CARD_CONTENT_MARGIN_H, COLLAPSIBLE_CARD_CONTENT_MARGIN_V,
+            COLLAPSIBLE_CARD_CONTENT_MARGIN_H, COLLAPSIBLE_CARD_CONTENT_MARGIN_V,
+        )
+        self.content_layout.setSpacing(COLLAPSIBLE_CARD_CONTENT_SPACING)
         self._content_widget.setVisible(self._expanded)
         root.addWidget(self._content_widget)
 
         self._update_header_text()
 
     def _update_header_style(self):
+        from ui.constants import (
+            COLLAPSIBLE_CARD_HDR_BORDER_RADIUS, COLLAPSIBLE_CARD_HDR_PAD_V,
+            COLLAPSIBLE_CARD_HDR_PAD_H,
+        )
         base = get_font_size()
         self._header_btn.setStyleSheet(f"""
             QPushButton {{
                 background:{_C['bg_surface_2']};
                 border:none;
-                border-radius:10px 10px 0 0;
-                padding:10px 14px;
+                border-radius:{COLLAPSIBLE_CARD_HDR_BORDER_RADIUS};
+                padding:{COLLAPSIBLE_CARD_HDR_PAD_V}px {COLLAPSIBLE_CARD_HDR_PAD_H}px;
                 text-align:right;
                 font-weight:700;
                 font-size:{fs(base, 0)}pt;
@@ -136,7 +147,8 @@ class CollapsibleCard(QFrame):
         """)
 
     def _update_header_text(self):
-        arrow = "▼" if self._expanded else "▶"
+        from ui.widgets.core.i18n import tr
+        arrow = tr('collapsible_arrow_expanded') if self._expanded else tr('collapsible_arrow_collapsed')
         self._header_btn.setText(f"{arrow}   {self._title}")
 
     def _toggle(self):

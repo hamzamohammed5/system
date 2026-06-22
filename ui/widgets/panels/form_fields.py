@@ -12,12 +12,16 @@ from ui.font  import get_font_size, fs
 from ..theme.input_styles import spinbox_style
 from .form_labels import form_label, required_label, hint_label
 from ui.widgets.core.widget_mixin import WidgetMixin
+from ui.constants import (
+    FORM_FIELD_DEFAULT_H, FORM_HINT_SPACING,
+    FORM_LAYOUT_SPACING, FORM_LAYOUT_MARGIN,
+)
 
 
 # ── spin_field ────────────────────────────────────────────
 
 class _ThemedDoubleSpinBox(QDoubleSpinBox, WidgetMixin):
-    def __init__(self, min_height: int = 30):
+    def __init__(self, min_height: int = FORM_FIELD_DEFAULT_H):
         super().__init__()
         self._h = min_height
         self._init_widget_mixin(font=False)
@@ -28,7 +32,7 @@ class _ThemedDoubleSpinBox(QDoubleSpinBox, WidgetMixin):
 
 
 class _ThemedSpinBox(QSpinBox, WidgetMixin):
-    def __init__(self, min_height: int = 30):
+    def __init__(self, min_height: int = FORM_FIELD_DEFAULT_H):
         super().__init__()
         self._h = min_height
         self._init_widget_mixin(font=False)
@@ -39,7 +43,7 @@ class _ThemedSpinBox(QSpinBox, WidgetMixin):
 
 
 def spin_field(max_: float = 999999, dec: int = 2,
-               min_: float = 0, min_height: int = 30) -> QDoubleSpinBox:
+               min_: float = 0, min_height: int = FORM_FIELD_DEFAULT_H) -> QDoubleSpinBox:
     s = _ThemedDoubleSpinBox(min_height)
     s.setRange(min_, max_)
     s.setDecimals(dec)
@@ -48,7 +52,7 @@ def spin_field(max_: float = 999999, dec: int = 2,
 
 
 def int_spin_field(max_: int = 9999, min_: int = 0,
-                   min_height: int = 30) -> QSpinBox:
+                   min_height: int = FORM_FIELD_DEFAULT_H) -> QSpinBox:
     s = _ThemedSpinBox(min_height)
     s.setRange(min_, max_)
     s.setMinimumHeight(min_height)
@@ -97,7 +101,7 @@ def field_row(label_text: str, widget: QWidget,
         container.setStyleSheet("background:transparent;")
         lay = QVBoxLayout(container)
         lay.setContentsMargins(0, 0, 0, 0)
-        lay.setSpacing(2)
+        lay.setSpacing(FORM_HINT_SPACING)
         lay.addWidget(widget)
         lay.addWidget(hint_label(hint))
         return lbl, container
@@ -122,9 +126,9 @@ def labeled_row(label_text: str, *widgets, spacing: int = 6) -> QWidget:
     return w
 
 
-def make_form_layout(spacing: int = 10,
+def make_form_layout(spacing: int = FORM_LAYOUT_SPACING,
                      label_align: int = Qt.AlignRight | Qt.AlignVCenter,
-                     contents_margins: tuple = (12, 10, 12, 10)) -> QFormLayout:
+                     contents_margins: tuple = FORM_LAYOUT_MARGIN) -> QFormLayout:
     form = QFormLayout()
     form.setSpacing(spacing)
     form.setLabelAlignment(label_align)

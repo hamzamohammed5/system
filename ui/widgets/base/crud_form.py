@@ -24,9 +24,11 @@ from ui.widgets.mixins.form_mixins  import EditModeMixin   # [إصلاح 2.4]
 from ui.widgets.core.conn           import LiveConnMixin
 from ui.widgets.panels.form_group   import FormGroup
 from ui.widgets.theme.builders      import wrap_in_scroll
-# [FIX] استيراد emit_company_data_changed بدل bus مباشرة
 from ui.widgets.core.events         import emit_company_data_changed
 from ui.widgets.core.widget_mixin   import WidgetMixin
+from ui.constants                   import (
+    FORM_MIN_W, MARGIN_FORM, SPACING_MD, SPACING_SM, BTN_MIN_HEIGHT,
+)
 
 
 def _tr_safe(key: str, **kwargs) -> str:
@@ -77,10 +79,10 @@ class BaseCrudForm(QWidget, EditModeMixin, LiveConnMixin, WidgetMixin):
         outer.setSpacing(0)
 
         inner = QWidget()
-        inner.setMinimumWidth(260)
+        inner.setMinimumWidth(FORM_MIN_W)
         root = QVBoxLayout(inner)
-        root.setContentsMargins(8, 8, 8, 8)
-        root.setSpacing(8)
+        root.setContentsMargins(*MARGIN_FORM)
+        root.setSpacing(SPACING_MD)
 
         outer.addWidget(wrap_in_scroll(inner))
 
@@ -102,14 +104,14 @@ class BaseCrudForm(QWidget, EditModeMixin, LiveConnMixin, WidgetMixin):
         self.btn_save   = QPushButton(_tr_safe(self.SAVE_TEXT))
         self.btn_cancel = QPushButton(_tr_safe("btn_cancel"))
         for btn in (self.btn_add, self.btn_save, self.btn_cancel):
-            btn.setMinimumHeight(30)
+            btn.setMinimumHeight(BTN_MIN_HEIGHT)
 
         self.btn_add.clicked.connect(self._on_add)
         self.btn_save.clicked.connect(self._on_save)
         self.btn_cancel.clicked.connect(self._on_cancel)
 
         btn_row = QHBoxLayout()
-        btn_row.setSpacing(6)
+        btn_row.setSpacing(SPACING_SM)
         for btn in (self.btn_add, self.btn_save, self.btn_cancel):
             btn_row.addWidget(btn)
         btn_row.addStretch()

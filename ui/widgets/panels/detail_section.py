@@ -16,10 +16,18 @@ from PyQt5.QtCore import Qt
 
 from ui.font  import fs, get_font_size
 from ui.theme import _C
+from ui.widgets.core.widget_mixin import WidgetMixin
+from ui.constants import (
+    DETAIL_SECTION_RADIUS, DETAIL_SECTION_MARGIN_B, DETAIL_SECTION_HDR_MARGIN_H,
+    DETAIL_GRID_MARGIN_H, DETAIL_GRID_H_SPACING,
+    DETAIL_GRID_V_SPACING, DETAIL_GRID_V_SPACING_C,
+    DETAIL_GRID_PAD_COMPACT, DETAIL_GRID_PAD_NORMAL,
+    DETAIL_LABEL_MIN_W, TWO_COL_H_SPACING, TWO_COL_V_SPACING,
+)
 from ..components.headers_page import SectionHeader   # [إصلاح 2.3]
 
 
-class DetailSection(QFrame):
+class DetailSection(QFrame, WidgetMixin):
     """قسم تفاصيل موحد — يعرض أزواج (عنوان: قيمة) في grid منظم."""
 
     def __init__(self, title: str = "",
@@ -31,32 +39,39 @@ class DetailSection(QFrame):
         self._compact = compact
         self._rows: list[tuple[QLabel, QLabel]] = []
         self._count   = 0
+        self._init_widget_mixin(theme=True, font=True, lang=False, data=False)
         self._build(title)
 
-    def _build(self, title: str):
+    def _refresh_style(self, *_):
         self.setStyleSheet(f"""
             QFrame {{
                 background:{_C['bg_surface']};
                 border:1px solid {_C['border']};
-                border-radius:10px;
+                border-radius:{DETAIL_SECTION_RADIUS}px;
             }}
         """)
+
+    def _build(self, title: str):
+        self._refresh_style()
         self.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Fixed)
 
         root = QVBoxLayout(self)
-        root.setContentsMargins(0, 0, 0, 12)
+        root.setContentsMargins(0, 0, 0, DETAIL_SECTION_MARGIN_B)
         root.setSpacing(0)
 
         if title:
             hdr = SectionHeader(title)
-            hdr.setContentsMargins(12, 0, 12, 0)
+            hdr.setContentsMargins(DETAIL_SECTION_HDR_MARGIN_H, 0,
+                                   DETAIL_SECTION_HDR_MARGIN_H, 0)
             root.addWidget(hdr)
 
         self._grid = QGridLayout()
-        v_pad      = 4 if self._compact else 6
-        self._grid.setContentsMargins(12, v_pad, 12, v_pad)
-        self._grid.setHorizontalSpacing(16)
-        self._grid.setVerticalSpacing(6 if self._compact else 10)
+        v_pad      = DETAIL_GRID_PAD_COMPACT if self._compact else DETAIL_GRID_PAD_NORMAL
+        self._grid.setContentsMargins(DETAIL_GRID_MARGIN_H, v_pad,
+                                      DETAIL_GRID_MARGIN_H, v_pad)
+        self._grid.setHorizontalSpacing(DETAIL_GRID_H_SPACING)
+        self._grid.setVerticalSpacing(DETAIL_GRID_V_SPACING_C if self._compact
+                                      else DETAIL_GRID_V_SPACING)
 
         for c in range(self._cols):
             self._grid.setColumnStretch(c * 2, 0)
@@ -77,7 +92,7 @@ class DetailSection(QFrame):
             "background:transparent; border:none; font-weight:500;"
         )
         lbl_key.setAlignment(Qt.AlignRight | Qt.AlignTop)
-        lbl_key.setMinimumWidth(80)
+        lbl_key.setMinimumWidth(DETAIL_LABEL_MIN_W)
 
         display = f"{icon} {value}" if icon else value
         lbl_val = QLabel(display)
@@ -204,7 +219,7 @@ def make_detail_row(label: str, value: str = "─",
 # TwoColDetails
 # ══════════════════════════════════════════════════════════
 
-class TwoColDetails(QWidget):
+class TwoColDetails(QWidget, WidgetMixin):
     """عرض تفاصيل في عمودين."""
 
     def __init__(self, parent=None):
@@ -212,12 +227,13 @@ class TwoColDetails(QWidget):
         self.setStyleSheet("background:transparent;")
         self._grid = QGridLayout(self)
         self._grid.setContentsMargins(0, 0, 0, 0)
-        self._grid.setHorizontalSpacing(24)
-        self._grid.setVerticalSpacing(8)
+        self._grid.setHorizontalSpacing(TWO_COL_H_SPACING)
+        self._grid.setVerticalSpacing(TWO_COL_V_SPACING)
         self._grid.setColumnStretch(1, 1)
         self._grid.setColumnStretch(3, 1)
         self._count = 0
         self._vals: list[QLabel] = []
+        self._init_widget_mixin(theme=True, font=True, lang=False, data=False)
 
     def add(self, label: str, value: str = "─",
             color: str = None, bold: bool = False) -> QLabel:

@@ -19,6 +19,7 @@ from ui.theme import _C
 from ..components.button import make_btn
 from ..core.i18n         import tr
 from .dialogs_base import DialogShell
+from ui.constants import DIALOG_MIN_WIDTH, MSG_BTN_MIN_H
 
 
 def _icon_for(kind: str) -> tuple:
@@ -38,7 +39,7 @@ class MessageDialog(DialogShell):
                  kind: str = "info", yes_no: bool = False):
         icon, accent = _icon_for(kind)
         super().__init__(parent, title=title, icon=icon,
-                         accent=accent, min_width=380)
+                         accent=accent, min_width=DIALOG_MIN_WIDTH)
         self._result = False
         self._text    = text
         self._yes_no  = yes_no
@@ -56,8 +57,8 @@ class MessageDialog(DialogShell):
         if yes_no:
             self._btn_yes = make_btn(tr("yes"), "primary")
             self._btn_no  = make_btn(tr("no"),  "ghost")
-            self._btn_yes.setMinimumHeight(32)
-            self._btn_no.setMinimumHeight(32)
+            self._btn_yes.setMinimumHeight(MSG_BTN_MIN_H)
+            self._btn_no.setMinimumHeight(MSG_BTN_MIN_H)
             self._btn_yes.clicked.connect(self._on_yes)
             self._btn_no.clicked.connect(self.reject)
             self.btn_layout.addWidget(self._btn_yes)
@@ -65,7 +66,7 @@ class MessageDialog(DialogShell):
         else:
             self._result = True
             self._btn_ok = make_btn(tr("ok"), "primary")
-            self._btn_ok.setMinimumHeight(32)
+            self._btn_ok.setMinimumHeight(MSG_BTN_MIN_H)
             self._btn_ok.clicked.connect(self.accept)
             self.btn_layout.addWidget(self._btn_ok)
 

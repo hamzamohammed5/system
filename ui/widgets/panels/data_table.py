@@ -12,13 +12,15 @@ from PyQt5.QtCore    import Qt, pyqtSignal
 
 from ...font import fs, get_font_size
 from ...theme import _C
+from ui.widgets.core.widget_mixin import WidgetMixin
+from ui.widgets.core.i18n import tr
 
 from ..tables.tables         import make_list_table, ROW_HEIGHT_LARGE, auto_fit_columns
 from ..components.headers_list import ListHeader, StatusBar
 from ..panels.state          import EmptyState
 
 
-class DataTableWidget(QWidget):
+class DataTableWidget(QWidget, WidgetMixin):
     """
     جدول بيانات موحد: هيدر + جدول + حالة فارغة + عداد.
 
@@ -41,20 +43,21 @@ class DataTableWidget(QWidget):
                  col_widths: dict = None,
                  title: str = "",
                  add_text: str = "",
-                 search_placeholder: str = "🔍  بحث...",
+                 search_placeholder: str = None,
                  row_height: int = ROW_HEIGHT_LARGE,
                  empty_icon: str = "📋",
-                 empty_title: str = "لا توجد بيانات",
+                 empty_title: str = None,
                  parent=None):
         super().__init__(parent)
 
         self.EMPTY_ICON  = empty_icon
-        self.EMPTY_TITLE = empty_title
+        self.EMPTY_TITLE = empty_title or tr('no_data')
         self._row_height  = row_height
         self._stretch_col = stretch_col
 
+        self._init_widget_mixin(theme=True, font=False, lang=True, data=False)
         self._build(columns, stretch_col, col_widths,
-                    title, add_text, search_placeholder)
+                    title, add_text, search_placeholder or tr('list_search_placeholder'))
 
     # ── بناء الواجهة ──────────────────────────────────────
 
@@ -102,8 +105,8 @@ class DataTableWidget(QWidget):
         # [إصلاح 7] Empty state ثانية لـ "لا نتائج للبحث"
         self._empty_filtered = EmptyState(
             icon="🔍",
-            title="لا توجد نتائج",
-            subtitle="جرب تغيير كلمة البحث أو الفلتر",
+            title=tr('no_results'),
+            subtitle=tr('no_search_results'),
             style="plain",
             color=_C['text_muted'],
             min_height=100,

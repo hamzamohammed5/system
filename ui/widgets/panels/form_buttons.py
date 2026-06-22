@@ -14,6 +14,7 @@ from ui.font  import get_font_size, fs
 from ..components.button      import make_btn
 from ..core.i18n              import tr
 from ui.widgets.core.widget_mixin import WidgetMixin
+from ui.constants import SPACING_XS, SPACING_SM, SPACING_MD
 
 
 class CrudButtonsBar(QWidget, WidgetMixin):
@@ -42,11 +43,11 @@ class CrudButtonsBar(QWidget, WidgetMixin):
     def _build(self, show_mode):
         self.setStyleSheet("background:transparent;")
         lay = QVBoxLayout(self)
-        lay.setContentsMargins(0, 4, 0, 4)
-        lay.setSpacing(6)
+        lay.setContentsMargins(0, SPACING_XS, 0, SPACING_XS)
+        lay.setSpacing(SPACING_SM)
 
         if show_mode:
-            self.lbl_mode = QLabel(f"─── {tr('add')} ───")
+            self.lbl_mode = QLabel(tr('mode_label_wrap').format(content=tr('add')))
             base = get_font_size()
             self.lbl_mode.setStyleSheet(
                 f"font-weight:bold; font-size:{fs(base,0)}pt;"
@@ -55,7 +56,7 @@ class CrudButtonsBar(QWidget, WidgetMixin):
             lay.addWidget(self.lbl_mode)
 
         btn_row = QHBoxLayout()
-        btn_row.setSpacing(8)
+        btn_row.setSpacing(SPACING_MD)
 
         self.btn_add    = make_btn(self._add_text,    "primary")
         self.btn_save   = make_btn(self._save_text,   "success")

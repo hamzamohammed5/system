@@ -19,8 +19,14 @@ from PyQt5.QtWidgets import (
 from PyQt5.QtCore import QDate, pyqtSignal
 
 # [FIX] absolute imports — ثلاث نقاط كانت خاطئة تُسبب ImportError
-from ui.font  import fs, get_font_size
+from ui.font  import fs, get_font_size, FS_SM
 from ui.theme import _C
+from ui.widgets.core.i18n import tr
+from ui.constants import (
+    FILTER_TOOLBAR_MARGIN_H, FILTER_TOOLBAR_MARGIN_V, FILTER_TOOLBAR_SPACING,
+    FILTER_COMBO_MIN_H, FILTER_COMBO_MIN_W, FILTER_RESET_BTN_W, FILTER_SEARCH_H,
+    SPACING_SM,
+)
 
 from ..utils.signals          import blocked_signals
 from ui.widgets.core.widget_mixin import WidgetMixin
@@ -80,11 +86,12 @@ class FilterToolbar(QWidget, WidgetMixin):
             }}
         """)
         lay = QHBoxLayout(self)
-        lay.setContentsMargins(8, 6, 8, 6)
-        lay.setSpacing(8)
+        lay.setContentsMargins(FILTER_TOOLBAR_MARGIN_H, FILTER_TOOLBAR_MARGIN_V,
+                               FILTER_TOOLBAR_MARGIN_H, FILTER_TOOLBAR_MARGIN_V)
+        lay.setSpacing(FILTER_TOOLBAR_SPACING)
 
         from ..components.headers_list import SearchBar
-        self._search = SearchBar(placeholder=placeholder, delay_ms=250, height=28)
+        self._search = SearchBar(placeholder=placeholder, delay_ms=250, height=FILTER_SEARCH_H)
         self._search.search_changed.connect(lambda _: self.filter_changed.emit())
         self.inp_search = self._search.inp
         lay.addWidget(self._search, stretch=2)
@@ -92,13 +99,13 @@ class FilterToolbar(QWidget, WidgetMixin):
         self.cmb_cat = None
         if self._show_cat:
             lay.addWidget(self._sep())
-            lbl = QLabel("🏷")
-            lbl.setStyleSheet("background:transparent; border:none; font-size:13px;")
+            lbl = QLabel(tr('filter_cat_icon'))
+            lbl.setStyleSheet(f"background:transparent; border:none; font-size:{FS_SM}pt;")
             lbl.setFixedWidth(20)
             lay.addWidget(lbl)
             self.cmb_cat = QComboBox()
-            self.cmb_cat.setMinimumHeight(28)
-            self.cmb_cat.setMinimumWidth(160)
+            self.cmb_cat.setMinimumHeight(FILTER_COMBO_MIN_H)
+            self.cmb_cat.setMinimumWidth(FILTER_COMBO_MIN_W)
             self.cmb_cat.setStyleSheet(_combo_style())
             self._reload_categories()
             self.cmb_cat.currentIndexChanged.connect(lambda _: self.filter_changed.emit())
@@ -119,10 +126,10 @@ class FilterToolbar(QWidget, WidgetMixin):
             self.dt_to   = self._date_filter.dt_to
             lay.addWidget(self._date_filter)
 
-        btn_reset = QPushButton("↺")
-        btn_reset.setToolTip("مسح الكل")
-        btn_reset.setMinimumHeight(28)
-        btn_reset.setFixedWidth(32)
+        btn_reset = QPushButton(tr('filter_reset_btn'))
+        btn_reset.setToolTip(tr('filter_reset_tooltip'))
+        btn_reset.setMinimumHeight(FILTER_COMBO_MIN_H)
+        btn_reset.setFixedWidth(FILTER_RESET_BTN_W)
         btn_reset.setStyleSheet(_reset_btn_style())
         btn_reset.clicked.connect(self.reset)
         lay.addWidget(btn_reset)
@@ -139,7 +146,7 @@ class FilterToolbar(QWidget, WidgetMixin):
         sep = QLabel("│")
         sep.setStyleSheet(
             f"color:{_C['border_med']}; background:transparent;"
-            "border:none; font-size:16px;"
+            f"border:none; font-size:{FS_SM}pt;"
         )
         return sep
 

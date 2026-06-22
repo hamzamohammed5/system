@@ -21,17 +21,18 @@ from ..core.widget_mixin import WidgetMixin
 
 # ── helpers ───────────────────────────────────────────────
 
-def format_amount(value: float, decimals: int = 2, currency: str = "ج") -> str:
+def format_amount(value: float, decimals: int = 2, currency: str = None) -> str:
+    _currency = currency if currency is not None else tr('currency_sym')
     fmt = f"{{:,.{decimals}f}}"
-    return f"{fmt.format(value)} {currency}" if currency else fmt.format(value)
+    return f"{fmt.format(value)} {_currency}" if _currency else fmt.format(value)
 
 
 def amount_color(value: float,
                  positive_color: str = None,
                  negative_color: str = None,
                  zero_color: str = None) -> str:
-    pos  = positive_color or _C.get("success", "#2E7D52")
-    neg  = negative_color or _C.get("danger",  "#C0392B")
+    pos  = positive_color or _C["success"]
+    neg  = negative_color or _C["danger"]
     zero = zero_color     or _C["text_muted"]
     if value > 0:
         return pos
@@ -50,12 +51,13 @@ def dr_cr_color(side: str) -> str:
 class AmountLabel(QLabel, WidgetMixin):
     """Label يعرض مبلغ مع ألوان تلقائية وتنسيق موحد."""
 
-    def __init__(self, value: float = None, currency: str = "ج",
+    def __init__(self, value: float = None, currency: str = None,
                  decimals: int = 2, bold: bool = True,
                  font_size_offset: int = 0, auto_color: bool = True,
                  parent=None):
         super().__init__(parent)
-        self._currency   = currency
+        self._custom_currency = currency
+        self._currency   = currency if currency is not None else tr('currency_sym')
         self._decimals   = decimals
         self._bold       = bold
         self._font_size_offset = font_size_offset
@@ -85,9 +87,13 @@ class AmountLabel(QLabel, WidgetMixin):
             self._set_color(_C["text_muted"])
 
     def _refresh_lang(self, *_):
+        if self._custom_currency is None:
+            self._currency = tr('currency_sym')
         # أعد رسم النص لو كان الرصيد صفر/فارغ (نص قابل للترجمة)
         if self._value is None or self._value == 0:
             self.setText(tr('amount_dash_placeholder'))
+        elif self._custom_currency is None:
+            self.setText(format_amount(self._value, self._decimals, self._currency))
 
     def set_amount(self, value: float, color: str = None):
         self._value = value
@@ -120,45 +126,34 @@ class AmountLabel(QLabel, WidgetMixin):
 class DebitCreditDisplay(QWidget, WidgetMixin):
     """عرض DR و CR في شريط أفقي."""
 
-    def __init__(self, currency: str = "ج", parent=None):
+    def __init__(self, currency: str = None, parent=None):
         super().__init__(parent)
-        self._currency = currency
-        self._init_widget_mixin(theme=True, font=True, lang=True)
+        self._custom_currency = currency
+        self._currency = currency if currency is not None else tr('currency_sym')
         self._build()
+        self._init_widget_mixin(theme=True, font=True, lang=True)
+        self._refresh_style()
 
     def _build(self):
         lay = QHBoxLayout(self)
         lay.setContentsMargins(0, 0, 0, 0)
         lay.setSpacing(12)
 
-        dr_s = status_colors("primary")
-        cr_s = status_colors("danger")
-        base = get_font_size()
-
-        for attr, attr_t, key, s in [
-            ("_lbl_dr", "_lbl_dr_t", "dr_total_label", dr_s),
-            ("_lbl_cr", "_lbl_cr_t", "cr_total_label", cr_s),
+        for attr, attr_t, key in [
+            ("_lbl_dr", "_lbl_dr_t", "dr_total_label"),
+            ("_lbl_cr", "_lbl_cr_t", "cr_total_label"),
         ]:
             lbl_t = QLabel(tr(key))
-            lbl_t.setStyleSheet(
-                f"font-weight:bold; color:{s['fg']};"
-                "background:transparent; border:none;"
-            )
+            lbl_t.setStyleSheet("background:transparent; border:none;")
             lbl_v = QLabel(tr('amount_zero_placeholder'))
-            lbl_v.setStyleSheet(
-                f"font-size:{fs(base, +1)}pt; font-weight:bold; color:{s['fg']};"
-                f"background:{s['bg']}; border-radius:4px; padding:3px 10px;"
-            )
+            lbl_v.setStyleSheet("background:transparent; border:none;")
             setattr(self, attr, lbl_v)
             setattr(self, attr_t, lbl_t)
             lay.addWidget(lbl_t)
             lay.addWidget(lbl_v)
             if attr == "_lbl_dr":
                 sep = QLabel(tr('vertical_separator'))
-                sep.setStyleSheet(
-                    f"color:{_C['border_med']}; font-size:{fs(base, +4)}pt;"
-                    "background:transparent; border:none;"
-                )
+                sep.setStyleSheet("background:transparent; border:none;")
                 self._sep = sep
                 lay.addWidget(sep)
 
@@ -190,6 +185,8 @@ class DebitCreditDisplay(QWidget, WidgetMixin):
         )
 
     def _refresh_lang(self, *_):
+        if self._custom_currency is None:
+            self._currency = tr('currency_sym')
         self._lbl_dr_t.setText(tr('dr_total_label'))
         self._lbl_cr_t.setText(tr('cr_total_label'))
         self._sep.setText(tr('vertical_separator'))
@@ -208,9 +205,10 @@ class DebitCreditDisplay(QWidget, WidgetMixin):
 class BalanceDisplay(QLabel, WidgetMixin):
     """Label رصيد موحد مع تلوين تلقائي."""
 
-    def __init__(self, currency: str = "ج", parent=None):
+    def __init__(self, currency: str = None, parent=None):
         super().__init__(parent)
-        self._currency = currency
+        self._custom_currency = currency
+        self._currency = currency if currency is not None else tr('currency_sym')
         self._last_value = None
         self._last_side_label = ""
         self._last_color = None
@@ -266,6 +264,8 @@ class BalanceDisplay(QLabel, WidgetMixin):
             self.set_balance(self._last_value, self._last_side_label, self._last_color)
 
     def _refresh_lang(self, *_):
+        if self._custom_currency is None:
+            self._currency = tr('currency_sym')
         if self._is_neutral:
             self.setText(tr('balance_dash'))
         else:

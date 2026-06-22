@@ -26,6 +26,8 @@ from ui.font  import fs, get_font_size
 # [إصلاح 1] المسار الصحيح بعد Refactor V3
 from ..theme.input_styles import input_style as _input_style, spinbox_style as _spinbox_style
 from ui.widgets.core.widget_mixin import WidgetMixin
+from ui.widgets.core.i18n import tr
+from ui.constants import BTN_BORDER_RADIUS, SPACING_MD, DROPDOWN_ARROW_W
 # [إصلاح 2] السطر المحذوف: from ..core import get_font_size as _get_font_size
 
 
@@ -72,7 +74,7 @@ class DateField(QDateEdit, WidgetMixin):
     def _refresh_style(self, *_):
         self.setStyleSheet(
             f"QDateEdit {{ {_input_style(self._h)} }}"
-            "QDateEdit::drop-down { border:none; width:24px; }"
+            f"QDateEdit::drop-down {{ border:none; width:{DROPDOWN_ARROW_W}px; }}"
         )
 
     def date_str(self) -> str:
@@ -100,7 +102,7 @@ class StyledComboBox(QComboBox, WidgetMixin):
     def _refresh_style(self, *_):
         self.setStyleSheet(
             f"QComboBox {{ {_input_style(self._h)} }}"
-            "QComboBox::drop-down { border:none; width:24px; }"
+            f"QComboBox::drop-down {{ border:none; width:{DROPDOWN_ARROW_W}px; }}"
             f"QComboBox:disabled {{ background:{_C['bg_surface_2']};"
             f" color:{_C['text_disabled']}; }}"
         )
@@ -199,14 +201,15 @@ class RequiredLineEdit(QLineEdit, WidgetMixin):
 class NotesLineEdit(QLineEdit, WidgetMixin):
     """حقل ملاحظات بستايل مخصص يتزامن مع الثيم."""
 
-    def __init__(self, placeholder: str = "ملاحظات اختيارية...",
+    def __init__(self, placeholder: str = "",
                  height: int = 30, parent=None):
         super().__init__(parent)
-        self.setPlaceholderText(placeholder)
+        self._custom_placeholder = placeholder
         self.setMinimumHeight(height)
         self._h = height
-        self._init_widget_mixin(theme=True, font=False)
+        self._init_widget_mixin(theme=True, font=False, lang=True)
         self._refresh_style()
+        self._refresh_lang()
 
     def _refresh_style(self, *_):
         base = get_font_size()
@@ -214,7 +217,7 @@ class NotesLineEdit(QLineEdit, WidgetMixin):
             QLineEdit {{
                 background:{_C['bg_surface_2']};
                 border:1px solid {_C['border']};
-                border-radius:6px; padding:0 8px;
+                border-radius:{BTN_BORDER_RADIUS}px; padding:0 8px;
                 font-size:{fs(base,-1)}pt; color:{_C['text_sec']};
                 font-style:italic; min-height:{self._h}px;
             }}
@@ -225,3 +228,10 @@ class NotesLineEdit(QLineEdit, WidgetMixin):
                 color:{_C['text_primary']};
             }}
         """)
+
+    def _refresh_lang(self, *_):
+        from ui.widgets.core.i18n import tr
+        self.setPlaceholderText(
+            self._custom_placeholder if self._custom_placeholder
+            else tr('notes_optional_placeholder')
+        )

@@ -49,12 +49,13 @@ def _component_types() -> list:
     [i18n] دالة بدل ثابت module-level، لأن tr() لازم يُستدعى وقت
     الاستخدام (بعد تحميل اللغة) مش وقت import الـ module — نفس مبدأ
     _default_units() في unit_service.py.
+    [i18n إصلاح] الإيموجيات نُقلت داخل مفاتيح tr() بدل hardcoded في الكود.
     """
     return [
-        ("raw",        f"🧱 {tr('raw_material')}"),
-        ("semi",       f"🔧 {tr('semi_product')}"),
-        ("labor_op",   f"👷 {tr('labor_op')}"),
-        ("machine_op", f"⚙️ {tr('machine_op')}"),
+        ("raw",        tr('component_type_raw')),
+        ("semi",       tr('component_type_semi')),
+        ("labor_op",   tr('component_type_labor_op')),
+        ("machine_op", tr('component_type_machine_op')),
     ]
 
 

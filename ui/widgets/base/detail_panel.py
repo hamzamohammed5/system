@@ -15,6 +15,11 @@ from PyQt5.QtCore    import Qt, pyqtSignal
 
 from ui.theme                        import _C
 from ui.font                         import fs, get_font_size
+from ui.constants                    import (
+    DETAIL_CONTENT_MIN_W, DETAIL_MIN_W, DETAIL_EMPTY_MIN_H,
+    MARGIN_CONTENT_PANEL, SPACING_LG,
+    NOTIF_AUTO_HIDE_SUCCESS, NOTIF_AUTO_HIDE_DEFAULT,
+)
 from ..components.headers_page       import DetailHeader
 from ..panels.state                  import EmptyState
 from ..components.notification       import NotificationBar
@@ -56,7 +61,7 @@ class BaseDetailPanel(QWidget, WidgetMixin):
     EMPTY_TITLE    : str  = "detail_select_item"
     EMPTY_SUBTITLE : str  = ""
     HEADER_BG      : str  = None
-    MIN_CONTENT_W  : int  = 500
+    MIN_CONTENT_W  : int  = DETAIL_CONTENT_MIN_W
     CONNECT_BUS    : bool = False
 
     def __init__(self, conn=None, parent=None):
@@ -65,7 +70,7 @@ class BaseDetailPanel(QWidget, WidgetMixin):
         self._item_id   = None
         self._item_data = None
         self.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Expanding)
-        self.setMinimumWidth(300)
+        self.setMinimumWidth(DETAIL_MIN_W)
         self._build()
         self._set_mode(has_data=False)
 
@@ -132,8 +137,8 @@ class BaseDetailPanel(QWidget, WidgetMixin):
 
         content = QWidget()
         self._content_lay = QVBoxLayout(content)
-        self._content_lay.setContentsMargins(16, 14, 16, 16)
-        self._content_lay.setSpacing(12)
+        self._content_lay.setContentsMargins(*MARGIN_CONTENT_PANEL)
+        self._content_lay.setSpacing(SPACING_LG)
         self._build_content(self._content_lay)
         self._content_lay.addStretch()
         inner_lay.addWidget(content, stretch=1)
@@ -144,7 +149,7 @@ class BaseDetailPanel(QWidget, WidgetMixin):
         self._empty = EmptyState(
             icon=_tr_safe(self.EMPTY_ICON), title=_tr_safe(self.EMPTY_TITLE),
             subtitle=self.EMPTY_SUBTITLE,
-            style="plain", color=_C['text_muted'], min_height=200,
+            style="plain", color=_C['text_muted'], min_height=DETAIL_EMPTY_MIN_H,
         )
         root.addWidget(self._empty)
 
@@ -163,9 +168,8 @@ class BaseDetailPanel(QWidget, WidgetMixin):
                     child.setStyleSheet(f"background:{_bg};")
         # تحديث لون header عند تغيير الثيم (لو لم يُحدَّد HEADER_BG ثابت)
         if self.HEADER_BG is None:
-            self._hdr.set_bg(_C['bg_surface'])
-        # تحديث لون نص EmptyState
-        self._empty.set_color(_C['text_muted'])
+            self._hdr.setStyleSheet(f"background:{_C['bg_surface']};")
+        # تحديث لون نص EmptyState — يُعاد بناؤها عند تغيير اللغة فقط
 
     def _refresh_lang(self, *_):
         translated = _tr_safe(self.EMPTY_TITLE)
@@ -201,16 +205,16 @@ class BaseDetailPanel(QWidget, WidgetMixin):
 
     # ── إشعارات ───────────────────────────────────────────
 
-    def show_success(self, msg: str, auto_hide: int = 3000):
+    def show_success(self, msg: str, auto_hide: int = NOTIF_AUTO_HIDE_SUCCESS):
         self._notif.show(msg, "success", auto_hide)
 
     def show_error(self, msg: str):
         self._notif.show(msg, "danger")
 
-    def show_warning(self, msg: str, auto_hide: int = 0):
+    def show_warning(self, msg: str, auto_hide: int = NOTIF_AUTO_HIDE_DEFAULT):
         self._notif.show(msg, "warning", auto_hide)
 
-    def show_info(self, msg: str, auto_hide: int = 0):
+    def show_info(self, msg: str, auto_hide: int = NOTIF_AUTO_HIDE_DEFAULT):
         self._notif.show(msg, "info", auto_hide)
 
     # ── state ─────────────────────────────────────────────

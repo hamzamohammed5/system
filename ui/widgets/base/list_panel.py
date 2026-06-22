@@ -25,6 +25,12 @@ from PyQt5.QtCore    import Qt, pyqtSignal, QTimer
 
 from ui.theme        import _C
 from ui.font         import fs, get_font_size
+from ui.constants    import (
+    BTN_MIN_HEIGHT, SPACING_SM,
+    PAGINATION_BAR_H, PAGINATION_BTN_SPACING,
+    LIST_PANEL_MIN_W_DEFAULT, FILTER_DEBOUNCE_MS, LIST_EMPTY_MIN_H,
+    TABLE_EXTRA_PAD, COL_MIN_WIDTH, COL_MAX_WIDTH,
+)
 from ..tables.tables import (
     make_splitter_table_guarded,
     fit_splitter_table,
@@ -82,7 +88,7 @@ class BaseListPanel(QWidget, WidgetMixin):
     COLUMNS            : list = []
     STRETCH_COL        : int  = -1
     COL_WIDTHS         : dict = None
-    MIN_W              : int  = 260
+    MIN_W              : int  = LIST_PANEL_MIN_W_DEFAULT
     EMPTY_ICON         : str  = "empty_icon_default"
     EMPTY_TITLE        : str  = "no_data"
     LIST_TITLE         : str  = ""
@@ -108,7 +114,7 @@ class BaseListPanel(QWidget, WidgetMixin):
         self._all_rows : list = []
         self._timer    = QTimer(self)
         self._timer.setSingleShot(True)
-        self._timer.setInterval(250)
+        self._timer.setInterval(FILTER_DEBOUNCE_MS)
         self._timer.timeout.connect(self._apply_filter)
 
         self._sort_col : int  = self.SORT_DEFAULT_COL
@@ -202,7 +208,7 @@ class BaseListPanel(QWidget, WidgetMixin):
 
         self._empty_state = EmptyState(
             icon=_tr_safe(self.EMPTY_ICON), title=_tr_safe(self.EMPTY_TITLE),
-            style="plain", color=_C['text_muted'], min_height=100,
+            style="plain", color=_C['text_muted'], min_height=LIST_EMPTY_MIN_H,
         )
         self._empty_state.setVisible(False)
         root.addWidget(self._empty_state)
@@ -326,24 +332,24 @@ class BaseListPanel(QWidget, WidgetMixin):
 
     def _build_pagination_bar(self) -> QWidget:
         bar = QFrame()
-        bar.setFixedHeight(44)
+        bar.setFixedHeight(PAGINATION_BAR_H)
 
         lay = QHBoxLayout(bar)
-        lay.setContentsMargins(12, 6, 12, 6)
-        lay.setSpacing(10)
+        lay.setContentsMargins(12, SPACING_SM, 12, SPACING_SM)
+        lay.setSpacing(PAGINATION_BTN_SPACING)
 
         self._lbl_page_info = QLabel("")
         lay.addWidget(self._lbl_page_info, stretch=1)
 
         self._btn_load_more = QPushButton()
         self._btn_load_more.setCursor(Qt.PointingHandCursor)
-        self._btn_load_more.setFixedHeight(30)
+        self._btn_load_more.setFixedHeight(BTN_MIN_HEIGHT)
         self._btn_load_more.clicked.connect(self._on_load_more)
         lay.addWidget(self._btn_load_more)
 
         self._btn_show_all = QPushButton(_tr_safe("show_all_records"))
         self._btn_show_all.setCursor(Qt.PointingHandCursor)
-        self._btn_show_all.setFixedHeight(30)
+        self._btn_show_all.setFixedHeight(BTN_MIN_HEIGHT)
         self._btn_show_all.clicked.connect(self._on_show_all)
         lay.addWidget(self._btn_show_all)
 
@@ -514,7 +520,7 @@ class BaseListPanel(QWidget, WidgetMixin):
         self._update_pagination_bar(len(rows), self._shown_count)
 
         if has_data:
-            fit_splitter_table(self._splitter, self.table, extra_pad=24)
+            fit_splitter_table(self._splitter, self.table, extra_pad=TABLE_EXTRA_PAD)
             self._table_guard.refresh()
             self._auto_resize()
 
@@ -527,7 +533,7 @@ class BaseListPanel(QWidget, WidgetMixin):
     def _auto_resize(self):
         fixed = [i for i in range(self.table.columnCount()) if i != self.STRETCH_COL]
         auto_fit_columns(self.table, fixed_cols=fixed,
-                         stretch_col=self.STRETCH_COL, min_width=40, max_width=300)
+                         stretch_col=self.STRETCH_COL, min_width=COL_MIN_WIDTH, max_width=COL_MAX_WIDTH)
 
     # ── selection ─────────────────────────────────────────
 

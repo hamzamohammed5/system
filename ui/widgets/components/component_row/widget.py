@@ -28,6 +28,7 @@ from ui.widgets.utils.searchable_combo import (
 )
 from ui.widgets.core.widget_mixin import WidgetMixin
 from ui.widgets.core.i18n import tr
+from ui.constants import COMPONENT_ROW_LOAD_DELAY
 
 from .ui      import (
     build_row_ui, update_waste_style,
@@ -215,7 +216,7 @@ class ComponentRow(QWidget, OpRowsMixin, VariantsMixin, WidgetMixin):
                     return
                 s._load_variants(cid, selected_variant_id=vid)
 
-            QTimer.singleShot(50, _timer_variants)
+            QTimer.singleShot(COMPONENT_ROW_LOAD_DELAY, _timer_variants)
 
         if child_type == "machine_op" and child_id is not None:
             weak = weakref.ref(self)
@@ -227,7 +228,7 @@ class ComponentRow(QWidget, OpRowsMixin, VariantsMixin, WidgetMixin):
                     return
                 s._load_op_rows(op_id, row_id)
 
-            QTimer.singleShot(50, _timer_load)
+            QTimer.singleShot(COMPONENT_ROW_LOAD_DELAY, _timer_load)
 
     # ── Waste ──────────────────────────────────────────────
 
@@ -410,7 +411,7 @@ class ComponentRow(QWidget, OpRowsMixin, VariantsMixin, WidgetMixin):
             self._auto_fill_total_qty()
             item_id = data[1]
             weak    = weakref.ref(self)
-            QTimer.singleShot(50, lambda: (s := weak()) and s._load_variants(item_id))
+            QTimer.singleShot(COMPONENT_ROW_LOAD_DELAY, lambda: (s := weak()) and s._load_variants(item_id))
             self._hide_op_rows()
 
         elif child_type == "machine_op":

@@ -21,12 +21,13 @@ from ui.font  import get_font_size, fs
 from ..components.button import make_btn
 from ..core.i18n         import tr
 from .dialogs_base import DialogShell
+from ui.constants import CONFIRM_BTN_MIN_H, CONFIRM_BTN_MIN_W, DIALOG_MIN_WIDTH, BTN_BORDER_RADIUS, CONFIRM_MAX_WIDTH, DIALOG_BTN_PAD_H
 
 
 def _confirm_btn(text: str, ghost: bool = False) -> QPushButton:
     btn = make_btn(text, "ghost" if ghost else "primary")
-    btn.setMinimumHeight(34)
-    btn.setMinimumWidth(80)
+    btn.setMinimumHeight(CONFIRM_BTN_MIN_H)
+    btn.setMinimumWidth(CONFIRM_BTN_MIN_W)
     return btn
 
 
@@ -34,9 +35,9 @@ def _style_confirm_btn(btn: QPushButton, accent: str) -> None:
     base = get_font_size()
     btn.setStyleSheet(f"""
         QPushButton {{
-            background:{accent}; color:white; font-weight:bold;
-            border:none; border-radius:6px; padding:0 20px;
-            font-size:{fs(base, 0)}pt; min-height:34px; min-width:80px;
+            background:{accent}; color:{_C['btn_primary_text']}; font-weight:bold;
+            border:none; border-radius:{BTN_BORDER_RADIUS}px; padding:0 {DIALOG_BTN_PAD_H}px;
+            font-size:{fs(base, 0)}pt; min-height:{CONFIRM_BTN_MIN_H}px; min-width:{CONFIRM_BTN_MIN_W}px;
         }}
         QPushButton:hover {{ background:{accent}dd; }}
     """)
@@ -54,8 +55,8 @@ class ConfirmDialog(DialogShell):
         _accent = self._resolve_accent()
         _title = title or tr("confirm_action")
         super().__init__(parent, title=_title, icon=icon,
-                         accent=_accent, min_width=380)
-        self.setMaximumWidth(520)
+                         accent=_accent, min_width=DIALOG_MIN_WIDTH)
+        self.setMaximumWidth(CONFIRM_MAX_WIDTH)
         self._result = False
         self._message      = message
         self._confirm_text = confirm_text
@@ -146,7 +147,7 @@ def confirm_save(parent, item_name: str = "", extra_msg: str = "") -> bool:
     if item_name:
         msg = tr("save_confirm_msg", name=item_name)
     else:
-        msg = tr("confirm_save") + "؟"
+        msg = tr("confirm_save_q")
     if extra_msg:
         msg += f"\n\n{extra_msg}"
     return confirm_action(

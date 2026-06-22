@@ -12,6 +12,7 @@ SharedOpsMixin — منطق النشر والتعديل المشترك.
 import logging
 
 from ui.widgets.core.events import emit_company_data_changed
+from ui.widgets.core.i18n import tr
 
 logger = logging.getLogger(__name__)
 
@@ -58,7 +59,7 @@ class SharedOpsMixin:
             if row and self._is_published(row):
                 self._edit_published_item(row, shared_type, parent)
                 return
-            msg_info(parent, "تنبيه", "هذا عنصر عادي — استخدم «✏️ تعديل».")
+            msg_info(parent, tr("warning"), tr("shared_item_not_shared_use_edit"))
             return
 
         shared_id = self._extract_shared_id(item_id)
@@ -76,7 +77,7 @@ class SharedOpsMixin:
             central.close()
             emit_company_data_changed()
         except Exception as e:
-            msg_warning(parent, "خطأ", str(e))
+            msg_warning(parent, tr("error"), str(e))
 
     def _edit_published_item(self, row: dict, shared_type: str, parent=None):
         from ..dialogs.message import msg_warning
@@ -97,7 +98,7 @@ class SharedOpsMixin:
             central.close()
             emit_company_data_changed()
         except Exception as e:
-            msg_warning(parent, "خطأ", str(e))
+            msg_warning(parent, tr("error"), str(e))
 
     def _publish_item(self, row: dict, shared_type: str,
                       item_data: dict, parent=None):
@@ -132,4 +133,4 @@ class SharedOpsMixin:
             # لكن _publish_item كانت تنتهي صامتةً
             emit_company_data_changed()
         except Exception as e:
-            msg_warning(parent, "خطأ", str(e))
+            msg_warning(parent, tr("error"), str(e))

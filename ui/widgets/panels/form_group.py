@@ -14,15 +14,20 @@ class FormGroup(QGroupBox, WidgetMixin):
     def __init__(self, title: str = "", accent: str = None, parent=None):
         super().__init__(title, parent)
         self._custom_accent = accent
+        from ui.constants import FORM_LAYOUT_SPACING, FORM_GROUP_FORM_MARGIN
         self.form = QFormLayout(self)
-        self.form.setSpacing(10)
+        self.form.setSpacing(FORM_LAYOUT_SPACING)
         self.form.setLabelAlignment(Qt.AlignRight | Qt.AlignVCenter)
-        self.form.setContentsMargins(12, 14, 12, 12)
+        self.form.setContentsMargins(*FORM_GROUP_FORM_MARGIN)
         self.form.setFieldGrowthPolicy(QFormLayout.ExpandingFieldsGrow)
-        self._init_widget_mixin(font=False)
+        self._init_widget_mixin(font=False, lang=False, data=False)
         self._refresh_style()
 
     def _refresh_style(self, *_):
+        from ui.constants import (
+            FORM_GROUP_BORDER_RADIUS, FORM_GROUP_MARGIN_TOP,
+            FORM_GROUP_PADDING_TOP, FORM_GROUP_TITLE_PAD_H,
+        )
         base  = get_font_size()
         color = self._custom_accent or _C['accent']
         self.setStyleSheet(f"""
@@ -32,14 +37,14 @@ class FormGroup(QGroupBox, WidgetMixin):
                 color: {_C['text_sec']};
                 background: {_C['bg_surface']};
                 border: 1px solid {_C['border']};
-                border-radius: 10px;
-                margin-top: 10px;
-                padding-top: 6px;
+                border-radius: {FORM_GROUP_BORDER_RADIUS}px;
+                margin-top: {FORM_GROUP_MARGIN_TOP}px;
+                padding-top: {FORM_GROUP_PADDING_TOP}px;
             }}
             QGroupBox::title {{
                 subcontrol-origin: margin;
                 subcontrol-position: top right;
-                padding: 0 8px;
+                padding: 0 {FORM_GROUP_TITLE_PAD_H}px;
                 color: {color};
             }}
         """)
@@ -62,7 +67,7 @@ class _ThemedSeparator(QFrame, WidgetMixin):
         super().__init__()
         self.setFrameShape(QFrame.HLine)
         self.setFixedHeight(1)
-        self._init_widget_mixin(font=False)
+        self._init_widget_mixin(font=False, lang=False, data=False)
         self._refresh_style()
 
     def _refresh_style(self, *_):

@@ -13,48 +13,71 @@ from PyQt5.QtCore import Qt, QTimer
 
 from ui.theme import _C
 from ui.font  import fs, get_font_size
+from ..core.i18n import tr
+from ..core.widget_mixin import WidgetMixin
+from ui.constants import (
+    MARGIN_ZERO, SPACING_MD,
+    OVERLAY_MARGIN, OVERLAY_BORDER_RADIUS,
+)
 
 
 _FRAMES = ["⠋", "⠙", "⠸", "⠴", "⠦", "⠇"]
 
 
-class LoadingSpinner(QWidget):
+class LoadingSpinner(QWidget, WidgetMixin):
     """مؤشر تحميل نصي متحرك."""
 
-    def __init__(self, text: str = "جارٍ التحميل...",
+    def __init__(self, text: str = None,
                  color: str = None, compact: bool = False, parent=None):
         super().__init__(parent)
-        self._text    = text
-        self._color   = color or _C.get("accent", "#1565c0")
+        self._custom_text = text
+        self._text    = text if text is not None else tr('spinner_loading_text')
+        self._custom_color = color
+        self._color   = color or _C["accent"]
+        self._compact = compact
         self._frame   = 0
         self._timer   = QTimer(self)
         self._timer.setInterval(100)
         self._timer.timeout.connect(self._tick)
-        self._build(compact)
+        self._build(self._text)
+        self._init_widget_mixin(theme=True, font=True, lang=True)
+        self._refresh_style()
 
-    def _build(self, compact: bool):
-        self.setStyleSheet("background:transparent;")
+    def _build(self, text: str):
         lay = QHBoxLayout(self)
-        lay.setContentsMargins(0, 0, 0, 0)
-        lay.setSpacing(8)
+        lay.setContentsMargins(*MARGIN_ZERO)
+        lay.setSpacing(SPACING_MD)
         lay.setAlignment(Qt.AlignCenter)
 
-        base = get_font_size()
-        sz   = fs(base, 0 if compact else +2)
-
         self._lbl_icon = QLabel(_FRAMES[0])
+        lay.addWidget(self._lbl_icon)
+
+        self._lbl_text = None
+        if text:
+            self._lbl_text = QLabel(text)
+            lay.addWidget(self._lbl_text)
+
+    def _refresh_style(self, *_):
+        if self._custom_color is None:
+            self._color = _C["accent"]
+
+        self.setStyleSheet("background:transparent;")
+        base = get_font_size()
+        sz   = fs(base, 0 if self._compact else +2)
+
         self._lbl_icon.setStyleSheet(
             f"font-size:{sz}pt; color:{self._color}; background:transparent; border:none;"
         )
-        lay.addWidget(self._lbl_icon)
-
-        if self._text:
-            self._lbl_text = QLabel(self._text)
+        if self._lbl_text:
             self._lbl_text.setStyleSheet(
                 f"font-size:{fs(base,0)}pt; color:{self._color};"
                 "background:transparent; border:none;"
             )
-            lay.addWidget(self._lbl_text)
+
+    def _refresh_lang(self, *_):
+        if self._custom_text is None and self._lbl_text and not self._timer.isActive():
+            self._text = tr('spinner_loading_text')
+            self._lbl_text.setText(self._text)
 
     def _tick(self):
         self._frame = (self._frame + 1) % len(_FRAMES)
@@ -66,31 +89,39 @@ class LoadingSpinner(QWidget):
 
     def stop(self):
         self._timer.stop()
-        self._lbl_icon.setText("✓")
+        self._lbl_icon.setText(tr('spinner_done_check'))
 
     def set_text(self, text: str):
-        if hasattr(self, "_lbl_text"):
+        self._custom_text = text
+        self._text = text
+        if self._lbl_text:
             self._lbl_text.setText(text)
 
     def is_running(self) -> bool:
         return self._timer.isActive()
 
 
-class LoadingOverlay(QFrame):
+class LoadingOverlay(QFrame, WidgetMixin):
     """طبقة شفافة فوق أي widget تعرض رسالة تحميل."""
 
     def __init__(self, parent: QWidget = None):
         super().__init__(parent)
-        self.setStyleSheet("QFrame { background:rgba(255,255,255,180); border-radius:8px; }")
         lay = QVBoxLayout(self)
         lay.setAlignment(Qt.AlignCenter)
-        lay.setContentsMargins(20, 20, 20, 20)
+        lay.setContentsMargins(OVERLAY_MARGIN, OVERLAY_MARGIN, OVERLAY_MARGIN, OVERLAY_MARGIN)
         self._spinner = LoadingSpinner(compact=False)
         lay.addWidget(self._spinner, alignment=Qt.AlignCenter)
+        self._init_widget_mixin(theme=True, font=False)
+        self._refresh_style()
         self.hide()
 
-    def show_loading(self, text: str = "جارٍ التحميل..."):
-        self._spinner.set_text(text)
+    def _refresh_style(self, *_):
+        self.setStyleSheet(
+            f"QFrame {{ background:{_C['overlay_bg']}; border-radius:{OVERLAY_BORDER_RADIUS}px; }}"
+        )
+
+    def show_loading(self, text: str = None):
+        self._spinner.set_text(text if text is not None else tr('spinner_loading_text'))
         if self.parent():
             self.resize(self.parent().size())
         self.show()
@@ -107,7 +138,7 @@ class LoadingOverlay(QFrame):
         super().resizeEvent(event)
 
 
-class LoadingButton(QPushButton):
+class LoadingButton(QPushButton, WidgetMixin):
     """زر يعرض spinner عند تفعيل التحميل."""
 
     def __init__(self, text: str = "", parent=None):
@@ -117,10 +148,15 @@ class LoadingButton(QPushButton):
         self._timer  = QTimer(self)
         self._timer.setInterval(100)
         self._timer.timeout.connect(self._tick)
+        self._init_widget_mixin(theme=False, font=False, lang=True)
 
     def _tick(self):
         self._frame = (self._frame + 1) % len(_FRAMES)
-        self.setText(f"{_FRAMES[self._frame]}  جارٍ الحفظ...")
+        self.setText(f"{_FRAMES[self._frame]}  {tr('loading_button_saving_text')}")
+
+    def _refresh_lang(self, *_):
+        if not self._timer.isActive():
+            self.setText(self._original_text)
 
     def set_loading(self, loading: bool, text: str = None):
         self.setEnabled(not loading)
