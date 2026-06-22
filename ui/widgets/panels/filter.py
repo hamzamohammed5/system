@@ -25,7 +25,7 @@ from ui.widgets.core.i18n import tr
 from ui.constants import (
     FILTER_TOOLBAR_MARGIN_H, FILTER_TOOLBAR_MARGIN_V, FILTER_TOOLBAR_SPACING,
     FILTER_COMBO_MIN_H, FILTER_COMBO_MIN_W, FILTER_RESET_BTN_W, FILTER_SEARCH_H,
-    SPACING_SM,
+    SPACING_SM, FILTER_COUNT_LABEL_MIN_W, FILTER_DEBOUNCE_MS,
 )
 
 from ..utils.signals          import blocked_signals
@@ -33,11 +33,12 @@ from ui.widgets.core.widget_mixin import WidgetMixin
 
 
 def _combo_style() -> str:
+    from ui.constants import FILTER_COMBO_BORDER_RADIUS, FILTER_COMBO_PAD_H
     base = get_font_size()
     return f"""
         QComboBox {{
             background:{_C['bg_input']}; border:1px solid {_C['border_med']};
-            border-radius:4px; padding:2px 8px; font-size:{fs(base,-1)}pt;
+            border-radius:{FILTER_COMBO_BORDER_RADIUS}px; padding:2px {FILTER_COMBO_PAD_H}px; font-size:{fs(base,-1)}pt;
             color:{_C['text_primary']};
         }}
         QComboBox:focus {{ border-color:{_C['accent']}; }}
@@ -46,10 +47,12 @@ def _combo_style() -> str:
 
 
 def _reset_btn_style() -> str:
+    from ui.font import FS_MD
+    from ui.constants import FILTER_COMBO_BORDER_RADIUS
     return f"""
         QPushButton {{
             background:{_C['bg_hover']}; border:1px solid {_C['border_med']};
-            border-radius:4px; font-size:13px; color:{_C['accent']};
+            border-radius:{FILTER_COMBO_BORDER_RADIUS}px; font-size:{FS_MD}px; color:{_C['accent']};
         }}
         QPushButton:hover {{ background:{_C['border_med']}; }}
     """
@@ -63,7 +66,7 @@ class FilterToolbar(QWidget, WidgetMixin):
     def __init__(self, conn=None, scope: str = "all",
                  show_category: bool = True,
                  show_date: bool = False,
-                 placeholder: str = "بحث...",
+                 placeholder: str = None,
                  show_presets: bool = False,
                  parent=None):
         super().__init__(parent)
@@ -72,17 +75,18 @@ class FilterToolbar(QWidget, WidgetMixin):
         self._show_cat     = show_category
         self._show_date    = show_date
         self._show_presets = show_presets
-        self._build(placeholder)
+        self._build(placeholder or tr('search'))
         self._init_widget_mixin(theme=False, font=False, data=True)
 
     # ── بناء ──────────────────────────────────────────────
 
     def _build(self, placeholder: str):
+        from ui.constants import FILTER_TOOLBAR_BORDER_RADIUS
         self.setStyleSheet(f"""
             QWidget {{
                 background:{_C['bg_surface_2']};
                 border:1px solid {_C['border']};
-                border-radius:6px;
+                border-radius:{FILTER_TOOLBAR_BORDER_RADIUS}px;
             }}
         """)
         lay = QHBoxLayout(self)
@@ -91,7 +95,7 @@ class FilterToolbar(QWidget, WidgetMixin):
         lay.setSpacing(FILTER_TOOLBAR_SPACING)
 
         from ..components.headers_list import SearchBar
-        self._search = SearchBar(placeholder=placeholder, delay_ms=250, height=FILTER_SEARCH_H)
+        self._search = SearchBar(placeholder=placeholder, delay_ms=FILTER_DEBOUNCE_MS, height=FILTER_SEARCH_H)
         self._search.search_changed.connect(lambda _: self.filter_changed.emit())
         self.inp_search = self._search.inp
         lay.addWidget(self._search, stretch=2)
@@ -101,7 +105,8 @@ class FilterToolbar(QWidget, WidgetMixin):
             lay.addWidget(self._sep())
             lbl = QLabel(tr('filter_cat_icon'))
             lbl.setStyleSheet(f"background:transparent; border:none; font-size:{FS_SM}pt;")
-            lbl.setFixedWidth(20)
+            from ui.constants import FILTER_CAT_ICON_W
+            lbl.setFixedWidth(FILTER_CAT_ICON_W)
             lay.addWidget(lbl)
             self.cmb_cat = QComboBox()
             self.cmb_cat.setMinimumHeight(FILTER_COMBO_MIN_H)
@@ -138,12 +143,12 @@ class FilterToolbar(QWidget, WidgetMixin):
         self.lbl_count = QLabel("")
         self.lbl_count.setStyleSheet(
             f"color:{_C['accent']}; font-size:{fs(base,-2)}pt; font-weight:bold;"
-            "background:transparent; border:none; min-width:50px;"
+            f"background:transparent; border:none; min-width:{FILTER_COUNT_LABEL_MIN_W}px;"
         )
         lay.addWidget(self.lbl_count)
 
     def _sep(self) -> QLabel:
-        sep = QLabel("│")
+        sep = QLabel(tr('vertical_separator'))
         sep.setStyleSheet(
             f"color:{_C['border_med']}; background:transparent;"
             f"border:none; font-size:{FS_SM}pt;"
@@ -175,9 +180,9 @@ class FilterToolbar(QWidget, WidgetMixin):
             try:
                 from ..combo.category import populate_category_combo
                 populate_category_combo(self.cmb_cat, self._conn, self._scope,
-                                        all_label="— كل التصنيفات —")
+                                        all_label=tr('filter_all_categories'))
             except Exception:
-                self.cmb_cat.addItem("— كل التصنيفات —", None)
+                self.cmb_cat.addItem(tr('filter_all_categories'), None)
 
             for i in range(self.cmb_cat.count()):
                 if self.cmb_cat.itemData(i) == prev:

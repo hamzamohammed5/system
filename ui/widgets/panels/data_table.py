@@ -35,7 +35,7 @@ class DataTableWidget(QWidget, WidgetMixin):
     row_selected   = pyqtSignal(int)
 
     EMPTY_ICON  : str = "📋"
-    EMPTY_TITLE : str = "لا توجد بيانات"
+    EMPTY_TITLE : str = ""   # يُحدَّث في __init__ عبر tr()
 
     def __init__(self,
                  columns: list,
@@ -89,12 +89,13 @@ class DataTableWidget(QWidget, WidgetMixin):
         root.addWidget(self.table, stretch=1)
 
         # Empty state — "لا بيانات"
+        from ui.constants import LIST_EMPTY_MIN_H, COL_MIN_WIDTH, COL_MAX_WIDTH
         self._empty = EmptyState(
             icon=self.EMPTY_ICON,
             title=self.EMPTY_TITLE,
             style="plain",
             color=_C['text_muted'],
-            min_height=100,
+            min_height=LIST_EMPTY_MIN_H,
         )
         self._empty.setStyleSheet(
             f"QFrame {{ background:{_C['bg_input']}; border:none; }}"
@@ -104,12 +105,12 @@ class DataTableWidget(QWidget, WidgetMixin):
 
         # [إصلاح 7] Empty state ثانية لـ "لا نتائج للبحث"
         self._empty_filtered = EmptyState(
-            icon="🔍",
+            icon=tr('empty_icon_search'),
             title=tr('no_results'),
             subtitle=tr('no_search_results'),
             style="plain",
             color=_C['text_muted'],
-            min_height=100,
+            min_height=LIST_EMPTY_MIN_H,
         )
         self._empty_filtered.setStyleSheet(
             f"QFrame {{ background:{_C['bg_input']}; border:none; }}"
@@ -154,14 +155,15 @@ class DataTableWidget(QWidget, WidgetMixin):
             self._auto_resize()
 
     def _auto_resize(self):
+        from ui.constants import COL_MIN_WIDTH, COL_MAX_WIDTH
         fixed = [i for i in range(self.table.columnCount())
                  if i != self._stretch_col]
         auto_fit_columns(
             self.table,
             fixed_cols=fixed,
             stretch_col=self._stretch_col,
-            min_width=40,
-            max_width=300,
+            min_width=COL_MIN_WIDTH,
+            max_width=COL_MAX_WIDTH,
         )
 
     # ── Selection ─────────────────────────────────────────

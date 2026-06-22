@@ -14,7 +14,7 @@ from .form_labels import form_label, required_label, hint_label
 from ui.widgets.core.widget_mixin import WidgetMixin
 from ui.constants import (
     FORM_FIELD_DEFAULT_H, FORM_HINT_SPACING,
-    FORM_LAYOUT_SPACING, FORM_LAYOUT_MARGIN,
+    FORM_LAYOUT_SPACING, FORM_LAYOUT_MARGIN, LABELED_WIDGET_SPACING,
 )
 
 
@@ -24,7 +24,7 @@ class _ThemedDoubleSpinBox(QDoubleSpinBox, WidgetMixin):
     def __init__(self, min_height: int = FORM_FIELD_DEFAULT_H):
         super().__init__()
         self._h = min_height
-        self._init_widget_mixin(font=False)
+        self._init_widget_mixin(font=False, lang=False, data=False)
         self._refresh_style()
 
     def _refresh_style(self, *_):
@@ -35,7 +35,7 @@ class _ThemedSpinBox(QSpinBox, WidgetMixin):
     def __init__(self, min_height: int = FORM_FIELD_DEFAULT_H):
         super().__init__()
         self._h = min_height
-        self._init_widget_mixin(font=False)
+        self._init_widget_mixin(font=False, lang=False, data=False)
         self._refresh_style()
 
     def _refresh_style(self, *_):
@@ -63,7 +63,7 @@ def int_spin_field(max_: int = 9999, min_: int = 0,
 
 class _LabeledWidgetContainer(QWidget, WidgetMixin):
     def __init__(self, widget: QWidget, unit: str,
-                 unit_color: str = None, spacing: int = 6):
+                 unit_color: str = None, spacing: int = LABELED_WIDGET_SPACING):
         super().__init__()
         self._unit_color = unit_color
         self.setStyleSheet("background:transparent;")
@@ -74,7 +74,7 @@ class _LabeledWidgetContainer(QWidget, WidgetMixin):
         self._lbl = QLabel(unit)
         lay.addWidget(self._lbl)
         lay.addStretch()
-        self._init_widget_mixin(font=False)
+        self._init_widget_mixin(font=False, lang=False, data=False)
         self._refresh_style()
 
     def _refresh_style(self, *_):
@@ -86,7 +86,7 @@ class _LabeledWidgetContainer(QWidget, WidgetMixin):
 
 
 def labeled_widget(widget: QWidget, unit: str,
-                   unit_color: str = None, spacing: int = 6) -> QWidget:
+                   unit_color: str = None, spacing: int = LABELED_WIDGET_SPACING) -> QWidget:
     return _LabeledWidgetContainer(widget, unit, unit_color, spacing)
 
 
@@ -108,7 +108,7 @@ def field_row(label_text: str, widget: QWidget,
     return lbl, widget
 
 
-def labeled_row(label_text: str, *widgets, spacing: int = 6) -> QWidget:
+def labeled_row(label_text: str, *widgets, spacing: int = LABELED_WIDGET_SPACING) -> QWidget:
     w = QWidget()
     w.setStyleSheet("background:transparent;")
     lay = QHBoxLayout(w)

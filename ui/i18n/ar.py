@@ -1958,4 +1958,27 @@ AR_STRINGS: dict[str, str] = {
     "orphan_line_item":                  "• {type_label}: «{name}»",
     "orphans_warning_msg":               "«{product_name}» — {count} مكوّن محذوف:\n{lines}",
 
+    # ── ColorPickerWidget ──────────────────────────────────
+    "color_picker_btn":   "اختر لون",
+    "color_picker_title": "اختر لون",
+
+    # ── CategoryManager ────────────────────────────────────
+    "category_tree_arrow": "↳ ",
+
+    # ── FilterToolbar ──────────────────────────────────────
+    "filter_reset_btn":         "↺",
+    "filter_reset_tooltip":     "مسح الكل",
+    "filter_cat_icon":          "🏷",
+
+    # ── CollapsibleCard ────────────────────────────────────
+    "collapsible_arrow_expanded":  "▼",
+    "collapsible_arrow_collapsed": "▶",
+
+    # ── InlinePreview / DataTable ──────────────────────────
+    "inline_preview_label": "النتيجة:",
+    "empty_icon_search":    "🔍",
+
+    # ── SharedOpsMixin ─────────────────────────────────────
+    "shared_item_not_shared_use_edit": "هذا عنصر عادي — استخدم «✏️ تعديل».",
+
 }

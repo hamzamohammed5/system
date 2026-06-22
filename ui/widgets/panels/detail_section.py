@@ -81,9 +81,12 @@ class DetailSection(QFrame, WidgetMixin):
 
     # ── إضافة صفوف ────────────────────────────────────────
 
-    def add_row(self, label: str, value: str = "─",
+    def add_row(self, label: str, value: str = None,
                 color: str = None, bold: bool = False,
                 icon: str = "") -> QLabel:
+        from ui.widgets.core.i18n import tr
+        if value is None:
+            value = tr('amount_dash_placeholder')
         base = get_font_size()
 
         lbl_key = QLabel(label)
@@ -118,9 +121,10 @@ class DetailSection(QFrame, WidgetMixin):
 
     def add_separator(self):
         from PyQt5.QtWidgets import QFrame as _F
+        from ui.constants import SEPARATOR_LINE_H
         sep = _F()
         sep.setFrameShape(_F.HLine)
-        sep.setFixedHeight(1)
+        sep.setFixedHeight(SEPARATOR_LINE_H)
         sep.setStyleSheet(f"background:{_C['border']}; border:none;")
         row = (self._count + self._cols - 1) // self._cols
         self._grid.addWidget(sep, row, 0, 1, self._cols * 2)
@@ -138,7 +142,8 @@ class DetailSection(QFrame, WidgetMixin):
                     lv.setVisible(False)
 
         for label, value in data.items():
-            str_val = str(value) if value is not None else "─"
+            from ui.widgets.core.i18n import tr
+            str_val = str(value) if value is not None else tr('amount_dash_placeholder')
             if label in existing:
                 lk, lv = existing[label]
                 lv.setText(str_val)
@@ -177,8 +182,10 @@ class DetailSection(QFrame, WidgetMixin):
         return None
 
     def reset_values(self):
+        from ui.widgets.core.i18n import tr
+        _dash = tr('amount_dash_placeholder')
         for _, lbl_val in self._rows:
-            lbl_val.setText("─")
+            lbl_val.setText(_dash)
 
     def show_all_rows(self):
         for lbl_key, lbl_val in self._rows:
@@ -190,9 +197,12 @@ class DetailSection(QFrame, WidgetMixin):
 # make_detail_row
 # ══════════════════════════════════════════════════════════
 
-def make_detail_row(label: str, value: str = "─",
+def make_detail_row(label: str, value: str = None,
                     color: str = None,
                     bold: bool = False) -> "tuple[QLabel, QLabel]":
+    from ui.widgets.core.i18n import tr
+    if value is None:
+        value = tr('amount_dash_placeholder')
     base = get_font_size()
 
     lbl_key = QLabel(label)
@@ -235,8 +245,11 @@ class TwoColDetails(QWidget, WidgetMixin):
         self._vals: list[QLabel] = []
         self._init_widget_mixin(theme=True, font=True, lang=False, data=False)
 
-    def add(self, label: str, value: str = "─",
+    def add(self, label: str, value: str = None,
             color: str = None, bold: bool = False) -> QLabel:
+        from ui.widgets.core.i18n import tr
+        if value is None:
+            value = tr('amount_dash_placeholder')
         base = get_font_size()
 
         lbl_key = QLabel(label)
@@ -267,5 +280,7 @@ class TwoColDetails(QWidget, WidgetMixin):
         return lbl_val
 
     def reset(self):
+        from ui.widgets.core.i18n import tr
+        _dash = tr('amount_dash_placeholder')
         for lbl in self._vals:
-            lbl.setText("─")
+            lbl.setText(_dash)

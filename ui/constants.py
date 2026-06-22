@@ -154,3 +154,92 @@ STATUS_CHIP_BORDER_RADIUS  = 8                 # border-radius لـ StatusChip
 STATUS_CARD_MARGIN        = (16, 14, 16, 14)  # margins الـ StatusCard
 STATUS_CARD_SPACING       = 4                  # spacing الـ StatusCard
 STATUS_CARD_BORDER_RADIUS = 12                 # border-radius لـ StatusCard
+# ── ColorPickerWidget ──────────────────────────────────────
+COLOR_PICKER_PREVIEW_SIZE   = 28   # حجم مربع معاينة اللون (عرض وارتفاع)
+COLOR_PICKER_PREVIEW_RADIUS = 4    # border-radius لمربع معاينة اللون
+
+# ── FilterToolbar ─────────────────────────────────────────
+FILTER_TOOLBAR_MARGIN_H  = 8    # left/right margin لـ FilterToolbar
+FILTER_TOOLBAR_MARGIN_V  = 6    # top/bottom margin لـ FilterToolbar
+FILTER_TOOLBAR_SPACING   = 8    # spacing بين عناصر FilterToolbar
+FILTER_COMBO_MIN_H       = 28   # ارتفاع أدنى للـ combo في FilterToolbar
+FILTER_COMBO_MIN_W       = 160  # عرض أدنى للـ combo في FilterToolbar
+FILTER_RESET_BTN_W       = 32   # عرض زر reset في FilterToolbar
+FILTER_SEARCH_H          = 28   # ارتفاع SearchBar في FilterToolbar
+FILTER_TOOLBAR_BORDER_RADIUS = 6   # border-radius لـ FilterToolbar QWidget
+FILTER_COMBO_BORDER_RADIUS   = 4   # border-radius للـ combo وزر reset في FilterToolbar
+FILTER_COMBO_PAD_H           = 8   # padding أفقي للـ combo في FilterToolbar
+FILTER_CAT_ICON_W            = 20  # عرض label أيقونة التصنيف في FilterToolbar
+FILTER_COUNT_LABEL_MIN_W     = 50  # عرض أدنى لـ lbl_count في FilterToolbar
+
+# ── Separator line ─────────────────────────────────────────
+SEPARATOR_LINE_H = 1   # ارتفاع فاصل HLine (detail_section، form_group)
+
+# ── DetailSection ─────────────────────────────────────────
+DETAIL_SECTION_RADIUS    = 10   # border-radius لـ DetailSection
+DETAIL_SECTION_MARGIN_B  = 12   # bottom margin لـ DetailSection root layout
+DETAIL_SECTION_HDR_MARGIN_H = 12  # left/right margin للهيدر في DetailSection
+DETAIL_GRID_MARGIN_H     = 12   # left/right margin للـ grid في DetailSection
+DETAIL_GRID_H_SPACING    = 16   # horizontal spacing للـ grid في DetailSection
+DETAIL_GRID_V_SPACING    = 10   # vertical spacing للـ grid في DetailSection (normal)
+DETAIL_GRID_V_SPACING_C  = 6    # vertical spacing للـ grid في DetailSection (compact)
+DETAIL_GRID_PAD_COMPACT  = 4    # top/bottom padding للـ grid (compact)
+DETAIL_GRID_PAD_NORMAL   = 6    # top/bottom padding للـ grid (normal)
+DETAIL_LABEL_MIN_W       = 80   # عرض أدنى لـ label العنوان في DetailSection
+TWO_COL_H_SPACING        = 24   # horizontal spacing في TwoColDetails
+TWO_COL_V_SPACING        = 8    # vertical spacing في TwoColDetails
+
+# ── FormFields ────────────────────────────────────────────
+FORM_FIELD_DEFAULT_H     = 30   # min_height الافتراضي لـ spin_field / int_spin_field
+FORM_HINT_SPACING        = 2    # spacing بين الـ widget والـ hint label في field_row
+FORM_LAYOUT_SPACING      = 10   # spacing الافتراضي لـ make_form_layout
+FORM_LAYOUT_MARGIN       = (12, 10, 12, 10)  # contentsMargins الافتراضية لـ make_form_layout
+LABELED_WIDGET_SPACING   = 6    # spacing الافتراضي لـ labeled_widget
+
+# ── FormBadges ────────────────────────────────────────────
+BADGE_BORDER_RADIUS      = 4    # border-radius لـ ResultBadge / ModeBadge
+BADGE_PAD_H              = 8    # padding أفقي لـ ResultBadge / ModeBadge
+BADGE_PAD_V              = 4    # padding عمودي لـ ResultBadge
+MODE_BADGE_PAD_V         = 3    # padding عمودي لـ ModeBadge
+PREVIEW_LABEL_RADIUS     = 6    # border-radius لـ make_preview_label
+PREVIEW_LABEL_PAD_V      = 8    # padding عمودي لـ make_preview_label
+PREVIEW_LABEL_PAD_H      = 12   # padding أفقي لـ make_preview_label
+INLINE_PREVIEW_SPACING   = 8    # spacing بين عناصر InlinePreview
+
+# ── CategoryManager ────────────────────────────────────────
+CATEGORY_MANAGER_MARGIN  = (0, 0, 0, 0)   # contentsMargins للـ CategoryManager layout
+CATEGORY_MANAGER_SPACING = 6               # spacing بين عناصر CategoryManager
+CATEGORY_FORM_SPACING    = 6               # spacing داخل QFormLayout في CategoryForm
+CATEGORY_TREE_COL0_W     = 200             # عرض عمود الاسم في شجرة التصنيفات
+CATEGORY_TREE_COL1_W     = 80             # عرض عمود التصنيفات الفرعية
+CATEGORY_TREE_COL2_W     = 80             # عرض عمود الكمية
+
+# ── FormGroup ─────────────────────────────────────────────
+FORM_GROUP_BORDER_RADIUS = 10   # border-radius لـ FormGroup QGroupBox
+FORM_GROUP_MARGIN_TOP    = 10   # margin-top لـ FormGroup QGroupBox
+FORM_GROUP_PADDING_TOP   = 6    # padding-top لـ FormGroup QGroupBox
+FORM_GROUP_TITLE_PAD_H   = 8    # padding أفقي للعنوان في FormGroup::title
+FORM_GROUP_FORM_MARGIN   = (12, 14, 12, 12)  # contentsMargins لـ QFormLayout داخل FormGroup
+
+# ── CollapsibleCard ───────────────────────────────────────
+COLLAPSIBLE_CARD_HDR_BORDER_RADIUS  = "10px 10px 0 0"   # border-radius لزر header CollapsibleCard
+COLLAPSIBLE_CARD_HDR_PAD_V          = 10                 # padding عمودي لزر header CollapsibleCard
+COLLAPSIBLE_CARD_HDR_PAD_H          = 14                 # padding أفقي لزر header CollapsibleCard
+COLLAPSIBLE_CARD_CONTENT_MARGIN_H   = 12                 # left/right margin لـ content_layout
+COLLAPSIBLE_CARD_CONTENT_MARGIN_V   = 10                 # top/bottom margin لـ content_layout (approx)
+COLLAPSIBLE_CARD_CONTENT_SPACING    = 8                  # spacing لـ content_layout
+
+# ── EmptyState ────────────────────────────────────────────
+EMPTY_STATE_SPACING          = 6    # spacing الافتراضي لـ EmptyState layout
+EMPTY_STATE_SPACING_EXPANDED = 8    # spacing لـ EmptyState (expandable)
+EMPTY_STATE_MARGIN_H         = 20   # left/right margin لـ EmptyState layout
+EMPTY_STATE_MARGIN_V         = 16   # top/bottom margin لـ EmptyState layout (normal)
+EMPTY_STATE_MARGIN_V_EXPANDED= 30   # top/bottom margin لـ EmptyState layout (expandable)
+EMPTY_STATE_BORDER_RADIUS    = 10   # border-radius لـ EmptyState QFrame
+EMPTY_STATE_ACTION_BTN_W     = 140  # عرض زر الإجراء في EmptyState (غير expandable)
+EMPTY_STATE_TABLE_ROW_H      = 60   # ارتفاع صف الحالة الفارغة في الجداول
+EMPTY_STATE_DEFAULT_MIN_H    = 80   # min_height الافتراضي لـ EmptyState (غير محدد)
+
+# ── CardGrid ──────────────────────────────────────────────
+CARD_GRID_DEFAULT_COLS    = 4    # عدد الأعمدة الافتراضي لـ CardGrid
+CARD_GRID_DEFAULT_SPACING = 10   # spacing الافتراضي لـ CardGrid

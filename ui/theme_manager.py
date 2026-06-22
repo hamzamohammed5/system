@@ -241,6 +241,8 @@ _LIGHT_THEME: Dict[str, str] = {
 
     # ── Dialog Shell header ───────────────────────────────
     "dialog_hdr_sub_text":      "rgba(255,255,255,0.8)",  # نص الـ subtitle في header النافذة
+    # ── ColorPickerWidget ────────────────────────────────
+    "color_picker_default":     "#607d8b",   # اللون الافتراضي لـ ColorPickerWidget
 }
 
 _DARK_THEME: Dict[str, str] = {
@@ -451,6 +453,8 @@ _DARK_THEME: Dict[str, str] = {
 
     # ── Dialog Shell header ───────────────────────────────
     "dialog_hdr_sub_text":      "rgba(255,255,255,0.7)",  # نص الـ subtitle في header النافذة (dark)
+    # ── ColorPickerWidget ────────────────────────────────
+    "color_picker_default":     "#607d8b",   # اللون الافتراضي لـ ColorPickerWidget (dark)
 }
 
 THEMES: Dict[str, Dict[str, str]] = {

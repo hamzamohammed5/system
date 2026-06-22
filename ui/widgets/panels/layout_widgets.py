@@ -22,6 +22,8 @@ from ui.theme import _C
 
 from ..theme.builders    import h_divider
 from ..theme.card_styles import card_style
+from ui.constants import CARD_GRID_DEFAULT_COLS, CARD_GRID_DEFAULT_SPACING
+from ui.widgets.core.widget_mixin import WidgetMixin
 
 
 # ══════════════════════════════════════════════════════════
@@ -31,7 +33,8 @@ from ..theme.card_styles import card_style
 class CardGrid(QWidget):
     """شبكة بطاقات بعدد أعمدة ثابت — تملأ الصفوف تلقائياً."""
 
-    def __init__(self, cols: int = 4, spacing: int = 10, parent=None):
+    def __init__(self, cols: int = CARD_GRID_DEFAULT_COLS,
+                 spacing: int = CARD_GRID_DEFAULT_SPACING, parent=None):
         super().__init__(parent)
         self._cols  = cols
         self._count = 0
@@ -59,8 +62,8 @@ class CardGrid(QWidget):
         self._count = 0
 
     @classmethod
-    def from_widgets(cls, widgets: list, cols: int = 4,
-                     spacing: int = 10) -> "CardGrid":
+    def from_widgets(cls, widgets: list, cols: int = CARD_GRID_DEFAULT_COLS,
+                     spacing: int = CARD_GRID_DEFAULT_SPACING) -> "CardGrid":
         grid = cls(cols=cols, spacing=spacing)
         for w in widgets:
             grid.add_widget(w)
@@ -71,7 +74,7 @@ class CardGrid(QWidget):
 # CollapsibleCard
 # ══════════════════════════════════════════════════════════
 
-class CollapsibleCard(QFrame):
+class CollapsibleCard(QFrame, WidgetMixin):
     """
     بطاقة قابلة للطي مع header زر ومحتوى قابل للإخفاء.
 
@@ -88,6 +91,7 @@ class CollapsibleCard(QFrame):
         self._accent   = accent or _C['accent']
         self._title    = title
         self._build(title)
+        self._init_widget_mixin(theme=True, font=True, lang=True, data=False)
 
     def _build(self, title: str):
         self.setStyleSheet(card_style())
@@ -121,6 +125,13 @@ class CollapsibleCard(QFrame):
         self._content_widget.setVisible(self._expanded)
         root.addWidget(self._content_widget)
 
+        self._update_header_text()
+
+    def _refresh_style(self, *_):
+        self.setStyleSheet(card_style())
+        self._update_header_style()
+
+    def _refresh_lang(self, *_):
         self._update_header_text()
 
     def _update_header_style(self):

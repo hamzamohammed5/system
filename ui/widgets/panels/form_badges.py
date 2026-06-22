@@ -117,26 +117,37 @@ class ModeBadge(QLabel, WidgetMixin):
         self.setText(tr('amount_dash_placeholder'))
 
 
-class InlinePreview(QWidget):
+class InlinePreview(QWidget, WidgetMixin):
     """يعرض: [label] [القيمة المحسوبة]"""
 
-    def __init__(self, label: str = "النتيجة:", color: str = None,
+    def __init__(self, label: str = None, color: str = None,
                  status: str = "success", parent=None):
         super().__init__(parent)
+        self._label_text = label
         self.setStyleSheet("background:transparent;")
         lay = QHBoxLayout(self)
         lay.setContentsMargins(0, 0, 0, 0)
         lay.setSpacing(INLINE_PREVIEW_SPACING)
 
-        lbl = QLabel(label)
-        lbl.setStyleSheet(
+        self._lbl = QLabel()
+        self._lbl_value = ResultBadge(color=color, status=status)
+        lay.addWidget(self._lbl)
+        lay.addWidget(self._lbl_value)
+        lay.addStretch()
+
+        self._init_widget_mixin(theme=True, font=True, lang=True, data=False)
+        self._refresh_style()
+        self._refresh_lang()
+
+    def _refresh_style(self, *_):
+        self._lbl.setStyleSheet(
             f"color:{_C['text_sec']}; font-weight:600;"
             f"font-size:{fs(get_font_size(),-1)}pt; background:transparent;"
         )
-        self._lbl_value = ResultBadge(color=color, status=status)
-        lay.addWidget(lbl)
-        lay.addWidget(self._lbl_value)
-        lay.addStretch()
+
+    def _refresh_lang(self, *_):
+        text = self._label_text if self._label_text is not None else tr('inline_preview_label')
+        self._lbl.setText(text)
 
     def set_value(self, text: str):
         self._lbl_value.set_value(text)

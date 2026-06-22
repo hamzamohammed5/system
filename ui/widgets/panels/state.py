@@ -18,13 +18,15 @@ from PyQt5.QtGui  import QColor, QFont
 from ui.font  import fs, get_font_size
 from ui.theme import _C
 from ..core.colors import card_colors, status_colors
+from ui.constants import EMPTY_STATE_DEFAULT_MIN_H
+from ui.widgets.core.widget_mixin import WidgetMixin
 
 
 # ══════════════════════════════════════════════════════════
 # EmptyState
 # ══════════════════════════════════════════════════════════
 
-class EmptyState(QFrame):
+class EmptyState(QFrame, WidgetMixin):
     """
     QFrame حالة فارغة مع أيقونة ونص وزر اختياري.
 
@@ -36,16 +38,26 @@ class EmptyState(QFrame):
     def __init__(self, icon: str = "📋", title: str = "",
                  subtitle: str = "", action_text: str = "",
                  style: str = "dashed", color: str = None,
-                 min_height: int = 80,
+                 min_height: int = EMPTY_STATE_DEFAULT_MIN_H,
                  expandable: bool = False,
                  parent=None):
         super().__init__(parent)
         self._expandable = expandable
         self._lbl_title  = None
+        self._lbl_icon   = None
+        self._lbl_sub    = None
+        self._icon       = icon
+        self._color_arg  = color
+        self._style      = style
+        self._min_h      = min_height
+        self._subtitle   = subtitle
+        self._action_text = action_text
         _color = color or _C['text_muted']
         from ui.widgets.core.i18n import tr
         _title = title or tr('no_data')
+        self._title_text = title
         self._build(icon, _title, subtitle, action_text, style, _color, min_height)
+        self._init_widget_mixin(theme=True, font=True, lang=True, data=False)
 
     def _build(self, icon, title, subtitle, action_text, style, color, min_h):
         bg, border = card_colors(color)
@@ -88,6 +100,7 @@ class EmptyState(QFrame):
                 f"background:transparent; border:none; font-size:{fs(base, +8)}pt;"
             )
             lay.addWidget(lbl_icon)
+            self._lbl_icon = lbl_icon
 
         lbl_title = QLabel(title)
         lbl_title.setAlignment(Qt.AlignCenter)
@@ -108,6 +121,7 @@ class EmptyState(QFrame):
                 "background:transparent; border:none;"
             )
             lay.addWidget(lbl_sub)
+            self._lbl_sub = lbl_sub
 
         if action_text:
             from ..components.button import make_btn
@@ -118,6 +132,40 @@ class EmptyState(QFrame):
                 btn.setFixedWidth(EMPTY_STATE_ACTION_BTN_W)
             btn.clicked.connect(self.action_clicked.emit)
             lay.addWidget(btn, alignment=Qt.AlignCenter)
+
+    def _refresh_style(self, *_):
+        from ui.constants import EMPTY_STATE_BORDER_RADIUS
+        color = self._color_arg or _C['text_muted']
+        bg, border = card_colors(color)
+        border_css = {"dashed": "dashed", "solid": "solid", "plain": "none"}.get(
+            self._style, "dashed"
+        )
+        self.setStyleSheet(f"""
+            QFrame {{
+                background:{bg}; border:2px {border_css} {border};
+                border-radius:{EMPTY_STATE_BORDER_RADIUS}px;
+            }}
+        """)
+        base = get_font_size()
+        if self._lbl_icon is not None:
+            self._lbl_icon.setStyleSheet(
+                f"background:transparent; border:none; font-size:{fs(base, +8)}pt;"
+            )
+        if self._lbl_title is not None:
+            self._lbl_title.setStyleSheet(
+                f"color:{color}; font-weight:700; font-size:{fs(base, +1)}pt;"
+                "background:transparent; border:none;"
+            )
+        if self._lbl_sub is not None:
+            self._lbl_sub.setStyleSheet(
+                f"color:{_C['text_muted']}; font-size:{fs(base, -1)}pt;"
+                "background:transparent; border:none;"
+            )
+
+    def _refresh_lang(self, *_):
+        if self._lbl_title is not None and not self._title_text:
+            from ui.widgets.core.i18n import tr
+            self._lbl_title.setText(tr('no_data'))
 
     def set_title(self, text: str):
         if self._lbl_title is not None:

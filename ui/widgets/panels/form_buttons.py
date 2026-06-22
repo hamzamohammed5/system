@@ -38,7 +38,7 @@ class CrudButtonsBar(QWidget, WidgetMixin):
         self._cancel_text = cancel_text or tr("btn_cancel")
         self._show_mode   = show_mode
         self._build(show_mode)
-        self._init_widget_mixin(theme=False, font=False, lang=True)
+        self._init_widget_mixin(theme=False, font=False, lang=True, data=False)
 
     def _build(self, show_mode):
         self.setStyleSheet("background:transparent;")

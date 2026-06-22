@@ -1958,4 +1958,27 @@ EN_STRINGS: dict[str, str] = {
     "orphan_line_item":                  "• {type_label}: \u00ab{name}\u00bb",
     "orphans_warning_msg":               "\u00ab{product_name}\u00bb — {count} missing component(s):\n{lines}",
 
+    # ── ColorPickerWidget ──────────────────────────────────
+    "color_picker_btn":   "Pick Color",
+    "color_picker_title": "Pick Color",
+
+    # ── CategoryManager ────────────────────────────────────
+    "category_tree_arrow": "↳ ",
+
+    # ── FilterToolbar ──────────────────────────────────────
+    "filter_reset_btn":         "↺",
+    "filter_reset_tooltip":     "Clear All",
+    "filter_cat_icon":          "🏷",
+
+    # ── CollapsibleCard ────────────────────────────────────
+    "collapsible_arrow_expanded":  "▼",
+    "collapsible_arrow_collapsed": "▶",
+
+    # ── InlinePreview / DataTable ──────────────────────────
+    "inline_preview_label": "Result:",
+    "empty_icon_search":    "🔍",
+
+    # ── SharedOpsMixin ─────────────────────────────────────
+    "shared_item_not_shared_use_edit": "This is a regular item — use «✏️ Edit» instead.",
+
 }

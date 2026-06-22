@@ -7,6 +7,7 @@ from PyQt5.QtCore    import Qt
 from ui.theme import _C
 from ui.font  import get_font_size, fs
 from ui.widgets.core.widget_mixin import WidgetMixin
+from ui.constants import SEPARATOR_LINE_H
 
 
 class FormGroup(QGroupBox, WidgetMixin):
@@ -66,7 +67,7 @@ class _ThemedSeparator(QFrame, WidgetMixin):
     def __init__(self):
         super().__init__()
         self.setFrameShape(QFrame.HLine)
-        self.setFixedHeight(1)
+        self.setFixedHeight(SEPARATOR_LINE_H)
         self._init_widget_mixin(font=False, lang=False, data=False)
         self._refresh_style()
 
