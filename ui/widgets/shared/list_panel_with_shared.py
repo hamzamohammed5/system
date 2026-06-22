@@ -52,6 +52,7 @@ from ui.tabs.costing.shared._utils    import (
     SHARED_COLOR, SHARED_BG, PUBLISHED_COLOR, PUBLISHED_BG,
 )
 from ui.tabs.companies.shared_items_mixin import get_published_local_names
+from ui.widgets.core.i18n             import tr
 
 
 class SharedItemsListPanel(BaseListPanel, SharedOpsMixin, LiveConnMixin):
@@ -212,11 +213,11 @@ class SharedItemsListPanel(BaseListPanel, SharedOpsMixin, LiveConnMixin):
 
     def _build_extra_header_actions(self, header):
         if self.HAS_BULK_REPLACE:
-            header.add_action("🔄 استبدال شامل",  self._on_bulk_replace,  "primary")
-        header.add_action("✏️ تعديل المحدد",   self._on_edit_selected)
-        header.add_action("🗑️ حذف المحدد",     self._on_delete_selected, "danger")
-        header.add_action("🔗 تعديل المشترك",  self._on_edit_shared)
-        header.add_action("📤 نشر كمشترك",     self._on_publish_selected)
+            header.add_action(tr("shared_bulk_replace_btn"),  self._on_bulk_replace,  "primary")
+        header.add_action(tr("edit_selected_btn"),   self._on_edit_selected)
+        header.add_action(tr("delete_selected_btn"), self._on_delete_selected, "danger")
+        header.add_action(tr("shared_edit_shared_btn"),  self._on_edit_shared)
+        header.add_action(tr("shared_publish_as_shared_btn"), self._on_publish_selected)
 
     # ══════════════════════════════════════════════════════
     # إجراءات الأزرار
@@ -225,35 +226,35 @@ class SharedItemsListPanel(BaseListPanel, SharedOpsMixin, LiveConnMixin):
     def _on_edit_selected(self):
         item_id, _ = self._selected_row_data()
         if item_id is None:
-            QMessageBox.information(self, "تنبيه", "اختر عنصراً أولاً")
+            QMessageBox.information(self, tr("warning"), tr("select_item_first"))
             return
         self._edit_item(item_id)
 
     def _on_delete_selected(self):
         item_id, item_name = self._selected_row_data()
         if item_id is None:
-            QMessageBox.information(self, "تنبيه", "اختر عنصراً أولاً")
+            QMessageBox.information(self, tr("warning"), tr("select_item_first"))
             return
         self._delete_item(item_id, item_name)
 
     def _on_bulk_replace(self):
         item_id, item_name = self._selected_row_data()
         if item_id is None:
-            QMessageBox.information(self, "تنبيه", "اختر عنصراً أولاً")
+            QMessageBox.information(self, tr("warning"), tr("select_item_first"))
             return
         self._bulk_replace_item(item_id, item_name)
 
     def _on_edit_shared(self):
         item_id, _ = self._selected_row_data()
         if item_id is None:
-            QMessageBox.information(self, "تنبيه", "اختر عنصراً أولاً")
+            QMessageBox.information(self, tr("warning"), tr("select_item_first"))
             return
         self._edit_shared_item(item_id, self.SHARED_TYPE, self)
 
     def _on_publish_selected(self):
         item_id, _ = self._selected_row_data()
         if item_id is None:
-            QMessageBox.information(self, "تنبيه", "اختر عنصراً أولاً")
+            QMessageBox.information(self, tr("warning"), tr("select_item_first"))
             return
         row = self._get_current_row_dict()
         if not row:

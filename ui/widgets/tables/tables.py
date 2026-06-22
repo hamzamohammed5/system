@@ -15,6 +15,15 @@ from PyQt5.QtCore import Qt, QTimer
 from PyQt5.QtGui  import QColor, QFont, QBrush
 
 from ui.theme import _C
+from ui.constants import (
+    COL_MIN_WIDTH, COL_MAX_WIDTH,
+    TABLE_MIN_SECTION_SIZE, TABLE_MIN_HEIGHT_DEFAULT,
+    TABLE_COMPACT_MAX_HEIGHT, TABLE_SPLITTER_MIN_HEIGHT,
+    TABLE_SPLITTER_EXTRA_PAD, TABLE_SPLITTER_HANDLE_W,
+    CALC_WIDTH_EXTRA_PAD, TABLE_COL_DEFAULT_W,
+    TABLE_FIXED_COL_DEFAULT_W, TABLE_FIXED_WIDTH_PAD,
+    TABLE_ROW_MIN_SECTION_PAD,
+)
 from ..theme.table_styles import (       # [إصلاح 3.2]
     table_style, splitter_style,
     ROW_HEIGHT_NORMAL, ROW_HEIGHT_COMPACT, ROW_HEIGHT_LARGE,
@@ -95,7 +104,7 @@ def apply_row_height(table: QTableWidget, height: int = ROW_HEIGHT_NORMAL):
         table.setRowHeight(r, height)
 
 
-def calc_width(table: QTableWidget, extra_pad: int = 4) -> int:
+def calc_width(table: QTableWidget, extra_pad: int = CALC_WIDTH_EXTRA_PAD) -> int:
     total = extra_pad
     for col in range(table.columnCount()):
         total += table.columnWidth(col)
@@ -107,7 +116,7 @@ def calc_width(table: QTableWidget, extra_pad: int = 4) -> int:
 
 def auto_fit_columns(table: QTableWidget, fixed_cols: list = None,
                      stretch_col: int = -1,
-                     min_width: int = 40, max_width: int = 300):
+                     min_width: int = COL_MIN_WIDTH, max_width: int = COL_MAX_WIDTH):
     hh   = table.horizontalHeader()
     n    = table.columnCount()
     cols = fixed_cols if fixed_cols is not None else list(range(n))
@@ -156,7 +165,7 @@ def _build_table(columns: list, stretch_col: int = -1,
     hh.setSectionsClickable(True)
     hh.setDefaultAlignment(Qt.AlignRight | Qt.AlignVCenter)
     hh.setHighlightSections(False)
-    hh.setMinimumSectionSize(30)
+    hh.setMinimumSectionSize(TABLE_MIN_SECTION_SIZE)
 
     _row_h = row_height or (
         ROW_HEIGHT_COMPACT if variant == "compact"
@@ -164,7 +173,7 @@ def _build_table(columns: list, stretch_col: int = -1,
         else ROW_HEIGHT_NORMAL
     )
     vh.setDefaultSectionSize(_row_h)
-    vh.setMinimumSectionSize(_row_h - 4)
+    vh.setMinimumSectionSize(_row_h - TABLE_ROW_MIN_SECTION_PAD)
     vh.setSectionResizeMode(QHeaderView.Fixed)
 
     if col_widths:
@@ -173,14 +182,14 @@ def _build_table(columns: list, stretch_col: int = -1,
                 hh.setSectionResizeMode(i, QHeaderView.Stretch)
             else:
                 hh.setSectionResizeMode(i, QHeaderView.Interactive)
-                table.setColumnWidth(i, col_widths.get(i, 100))
+                table.setColumnWidth(i, col_widths.get(i, TABLE_COL_DEFAULT_W))
     else:
         for i in range(len(columns)):
             if i == stretch_col:
                 hh.setSectionResizeMode(i, QHeaderView.Stretch)
             else:
                 hh.setSectionResizeMode(i, QHeaderView.Interactive)
-                table.setColumnWidth(i, 100)
+                table.setColumnWidth(i, TABLE_COL_DEFAULT_W)
         if stretch_col < 0:
             hh.setStretchLastSection(True)
 
@@ -198,7 +207,7 @@ def _build_table(columns: list, stretch_col: int = -1,
 
 def make_table(columns: list, stretch_col: int = -1,
                col_widths: dict = None, max_height: int = None,
-               min_height: int = 100,
+               min_height: int = TABLE_MIN_HEIGHT_DEFAULT,
                row_height: int = ROW_HEIGHT_NORMAL) -> QTableWidget:
     return _build_table(columns, stretch_col, col_widths,
                         max_height=max_height, min_height=min_height,
@@ -207,7 +216,7 @@ def make_table(columns: list, stretch_col: int = -1,
 
 def make_compact_table(columns: list, stretch_col: int = -1,
                        col_widths: dict = None,
-                       max_height: int = 200) -> QTableWidget:
+                       max_height: int = TABLE_COMPACT_MAX_HEIGHT) -> QTableWidget:
     return _build_table(columns, stretch_col, col_widths,
                         variant="compact", max_height=max_height,
                         row_height=ROW_HEIGHT_COMPACT)
@@ -224,7 +233,7 @@ def make_list_table(columns: list, stretch_col: int = -1,
 
 
 def make_fixed_table(columns: list, col_widths: dict,
-                     max_height: int = None, min_height: int = 60,
+                     max_height: int = None, min_height: int = TABLE_SPLITTER_MIN_HEIGHT,
                      row_height: int = ROW_HEIGHT_NORMAL) -> QTableWidget:
     table = _build_table(columns, stretch_col=-1, col_widths=col_widths,
                          max_height=max_height, min_height=min_height,
@@ -235,7 +244,7 @@ def make_fixed_table(columns: list, col_widths: dict,
         if i in col_widths:
             table.setColumnWidth(i, col_widths[i])
     hh.setStretchLastSection(False)
-    total_w = sum(col_widths.get(i, 80) for i in range(len(columns))) + 4
+    total_w = sum(col_widths.get(i, TABLE_FIXED_COL_DEFAULT_W) for i in range(len(columns))) + TABLE_FIXED_WIDTH_PAD
     table.setFixedWidth(total_w)
     table.setSizePolicy(QSizePolicy.Fixed, QSizePolicy.Preferred)
     return table
@@ -243,9 +252,9 @@ def make_fixed_table(columns: list, col_widths: dict,
 
 def make_splitter_table(columns: list, stretch_col: int = -1,
                         col_widths: dict = None, max_height: int = None,
-                        min_height: int = 60, row_height: int = None,
+                        min_height: int = TABLE_SPLITTER_MIN_HEIGHT, row_height: int = None,
                         variant: str = "normal",
-                        extra_pad: int = 20) -> tuple:
+                        extra_pad: int = TABLE_SPLITTER_EXTRA_PAD) -> tuple:
     table = _build_table(columns, stretch_col, col_widths,
                          variant=variant, max_height=max_height,
                          min_height=min_height, row_height=row_height)
@@ -256,7 +265,7 @@ def make_splitter_table(columns: list, stretch_col: int = -1,
     spacer.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Expanding)
 
     splitter = QSplitter(Qt.Horizontal)
-    splitter.setHandleWidth(6)
+    splitter.setHandleWidth(TABLE_SPLITTER_HANDLE_W)
     splitter.setStyleSheet(splitter_style())
     splitter.addWidget(table)
     splitter.addWidget(spacer)
@@ -269,9 +278,9 @@ def make_splitter_table(columns: list, stretch_col: int = -1,
 
 def make_splitter_table_guarded(columns: list, stretch_col: int = -1,
                                 col_widths: dict = None, max_height: int = None,
-                                min_height: int = 60, row_height: int = None,
+                                min_height: int = TABLE_SPLITTER_MIN_HEIGHT, row_height: int = None,
                                 variant: str = "normal",
-                                extra_pad: int = 20) -> tuple:
+                                extra_pad: int = TABLE_SPLITTER_EXTRA_PAD) -> tuple:
     from ..utils.splitter import SplitterScrollGuard
 
     splitter, table = make_splitter_table(
@@ -284,7 +293,7 @@ def make_splitter_table_guarded(columns: list, stretch_col: int = -1,
 
 
 def fit_splitter_table(splitter: QSplitter, table: QTableWidget,
-                       extra_pad: int = 20, delay_ms: int = 0):
+                       extra_pad: int = TABLE_SPLITTER_EXTRA_PAD, delay_ms: int = 0):
     """يضبط عرض الـ splitter حسب عرض الجدول — المصدر الوحيد."""
     def _fit():
         table_w   = calc_width(table, extra_pad)

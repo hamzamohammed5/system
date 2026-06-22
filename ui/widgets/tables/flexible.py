@@ -17,11 +17,18 @@ from PyQt5.QtWidgets import (
 from PyQt5.QtCore import Qt, QSize, QRect
 from PyQt5.QtGui  import QFontMetrics, QPainter, QTextOption
 
+from ui.constants import (
+    COL_MIN_WIDTH,
+    FLEX_WRAP_MIN_ROW_H, FLEX_WRAP_PADDING,
+    FLEX_DEFAULT_COL_WIDTH, FLEX_TABLE_MIN_ROW_H,
+    FLEX_ROW_HEIGHT_PAD,
+)
+
 
 class WrapDelegate(QStyledItemDelegate):
     """Delegate يعمل word-wrap في خلايا الجدول."""
 
-    def __init__(self, parent=None, min_row_height: int = 28, padding: int = 6):
+    def __init__(self, parent=None, min_row_height: int = FLEX_WRAP_MIN_ROW_H, padding: int = FLEX_WRAP_PADDING):
         super().__init__(parent)
         self._min_h  = min_row_height
         self._pad    = padding
@@ -61,13 +68,13 @@ class WrapDelegate(QStyledItemDelegate):
         elif option.rect.isValid():
             col_width = option.rect.width()
         else:
-            col_width = 200
+            col_width = FLEX_DEFAULT_COL_WIDTH
 
-        text_width = max(col_width - self._pad * 2, 40)
+        text_width = max(col_width - self._pad * 2, COL_MIN_WIDTH)
         fm = QFontMetrics(option.font)
         text_rect = fm.boundingRect(0, 0, text_width, 9999,
                                     Qt.AlignRight | Qt.AlignTop | Qt.TextWordWrap, text)
-        return QSize(col_width, max(self._min_h, text_rect.height() + 8))
+        return QSize(col_width, max(self._min_h, text_rect.height() + FLEX_ROW_HEIGHT_PAD))
 
 
 class AutoTooltipDelegate(QStyledItemDelegate):
@@ -90,7 +97,7 @@ class FlexItem(QTableWidgetItem):
 
 
 def set_flexible_columns(table: QTableWidget, wrap_cols: list = None,
-                         min_row_height: int = 32):
+                         min_row_height: int = FLEX_TABLE_MIN_ROW_H):
     table.setWordWrap(True)
     table.verticalHeader().setSectionResizeMode(QHeaderView.ResizeToContents)
     delegate = WrapDelegate(table, min_row_height=min_row_height)
@@ -106,7 +113,7 @@ def set_flexible_columns(table: QTableWidget, wrap_cols: list = None,
 
 def make_flexible_table(columns: list, stretch_col: int = -1,
                         wrap_cols: list = None,
-                        min_row_height: int = 32) -> QTableWidget:
+                        min_row_height: int = FLEX_TABLE_MIN_ROW_H) -> QTableWidget:
     table = QTableWidget()
     table.setColumnCount(len(columns))
     table.setHorizontalHeaderLabels(columns)
@@ -128,7 +135,7 @@ def make_flexible_table(columns: list, stretch_col: int = -1,
     if stretch_col < 0:
         hh.setStretchLastSection(True)
 
-    hh.setMinimumSectionSize(40)
+    hh.setMinimumSectionSize(COL_MIN_WIDTH)
     hh.setDefaultAlignment(Qt.AlignRight | Qt.AlignVCenter)
     table.setHorizontalScrollMode(QAbstractItemView.ScrollPerPixel)
     table.setVerticalScrollMode(QAbstractItemView.ScrollPerPixel)
@@ -145,7 +152,7 @@ class FlexibleTreeWidget(QTreeWidget):
         self.header().setSectionResizeMode(0, QHeaderView.Stretch)
         self.setHorizontalScrollMode(QAbstractItemView.ScrollPerPixel)
         self.setUniformRowHeights(False)
-        self._wrap_delegate = WrapDelegate(self, min_row_height=28)
+        self._wrap_delegate = WrapDelegate(self, min_row_height=FLEX_WRAP_MIN_ROW_H)
 
     def setWrapColumn(self, col: int):
         self.setItemDelegateForColumn(col, self._wrap_delegate)
