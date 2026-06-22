@@ -23,13 +23,13 @@ from PyQt5.QtWidgets import (
 )
 from PyQt5.QtCore    import Qt, pyqtSignal, QTimer
 
-from ui.theme        import _C
-from ui.font         import fs, get_font_size
 from ui.constants    import (
     BTN_MIN_HEIGHT, SPACING_SM,
     PAGINATION_BAR_H, PAGINATION_BTN_SPACING,
+    PAGINATION_BTN_RADIUS, PAGINATION_BTN_PAD_H, PAGINATION_BTN_PAD_H_SM,
     LIST_PANEL_MIN_W_DEFAULT, FILTER_DEBOUNCE_MS, LIST_EMPTY_MIN_H,
     TABLE_EXTRA_PAD, COL_MIN_WIDTH, COL_MAX_WIDTH,
+    SPACING_LG,
 )
 from ..tables.tables import (
     make_splitter_table_guarded,
@@ -208,7 +208,7 @@ class BaseListPanel(QWidget, WidgetMixin):
 
         self._empty_state = EmptyState(
             icon=_tr_safe(self.EMPTY_ICON), title=_tr_safe(self.EMPTY_TITLE),
-            style="plain", color=_C['text_muted'], min_height=LIST_EMPTY_MIN_H,
+            style="plain", color=None, min_height=LIST_EMPTY_MIN_H,
         )
         self._empty_state.setVisible(False)
         root.addWidget(self._empty_state)
@@ -251,10 +251,12 @@ class BaseListPanel(QWidget, WidgetMixin):
     # ── [i18n/themes] Theme & Language handlers ───────────
 
     def _refresh_style(self, *_):
+        from ui.theme import _C
         self.setStyleSheet(f"background:{_C['bg_input']};")
         self._empty_state.setStyleSheet(
             f"QFrame {{ background:{_C['bg_input']}; border:none; }}"
         )
+        self._empty_state.set_color(_C['text_muted'])
         self._rebuild_pagination_styles()
         self._rebuild_status_style()
 
@@ -269,6 +271,8 @@ class BaseListPanel(QWidget, WidgetMixin):
         self.refresh()
 
     def _rebuild_pagination_styles(self):
+        from ui.theme import _C
+        from ui.font import fs, get_font_size
         base = get_font_size()
         self._pagination_bar.setStyleSheet(f"""
             QFrame {{
@@ -283,8 +287,8 @@ class BaseListPanel(QWidget, WidgetMixin):
         self._btn_load_more.setStyleSheet(f"""
             QPushButton {{
                 background: {_C['accent_light']}; color: {_C['accent_text']};
-                border: 1px solid {_C['accent_mid']}; border-radius: 5px;
-                padding: 0 14px; font-size: {fs(base, -1)}pt; font-weight: bold;
+                border: 1px solid {_C['accent_mid']}; border-radius: {PAGINATION_BTN_RADIUS}px;
+                padding: 0 {PAGINATION_BTN_PAD_H}px; font-size: {fs(base, -1)}pt; font-weight: bold;
             }}
             QPushButton:hover {{
                 background: {_C['accent_mid']}; border-color: {_C['accent']};
@@ -293,8 +297,8 @@ class BaseListPanel(QWidget, WidgetMixin):
         self._btn_show_all.setStyleSheet(f"""
             QPushButton {{
                 background: transparent; color: {_C['text_muted']};
-                border: 1px solid {_C['border_med']}; border-radius: 5px;
-                padding: 0 12px; font-size: {fs(base, -1)}pt;
+                border: 1px solid {_C['border_med']}; border-radius: {PAGINATION_BTN_RADIUS}px;
+                padding: 0 {PAGINATION_BTN_PAD_H_SM}px; font-size: {fs(base, -1)}pt;
             }}
             QPushButton:hover {{
                 color: {_C['text_primary']}; border-color: {_C['border_strong']};
@@ -302,6 +306,8 @@ class BaseListPanel(QWidget, WidgetMixin):
         """)
 
     def _rebuild_status_style(self):
+        from ui.theme import _C
+        from ui.font import fs, get_font_size
         base = get_font_size()
         self._status_bar.setStyleSheet(f"""
             background:{_C['bg_surface_2']};
@@ -335,7 +341,7 @@ class BaseListPanel(QWidget, WidgetMixin):
         bar.setFixedHeight(PAGINATION_BAR_H)
 
         lay = QHBoxLayout(bar)
-        lay.setContentsMargins(12, SPACING_SM, 12, SPACING_SM)
+        lay.setContentsMargins(SPACING_LG, SPACING_SM, SPACING_LG, SPACING_SM)
         lay.setSpacing(PAGINATION_BTN_SPACING)
 
         self._lbl_page_info = QLabel("")

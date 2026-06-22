@@ -12,9 +12,10 @@ Stylesheet generators للـ inputs.
 """
 from ui.theme import _C
 from ui.font  import fs, get_font_size
+from ui.constants import INPUT_HEIGHT, SEARCH_INPUT_HEIGHT, INPUT_BORDER_RADIUS, INPUT_PAD_H, INPUT_BORDER_W, SEARCH_PAD_H
 
 
-def input_style(height: int = 32, error: bool = False) -> str:
+def input_style(height: int = INPUT_HEIGHT, error: bool = False) -> str:
     """
     Stylesheet موحد لـ QLineEdit / QComboBox / QDateEdit.
 
@@ -26,14 +27,14 @@ def input_style(height: int = 32, error: bool = False) -> str:
     bg     = _C["input_error_bg"]     if error else _C["bg_input"]
     border = _C["input_error_border"] if error else _C["border_med"]
     return (
-        f"background:{bg}; border:1.5px solid {border};"
-        f"border-radius:6px; padding:0 8px;"
+        f"background:{bg}; border:{INPUT_BORDER_W}px solid {border};"
+        f"border-radius:{INPUT_BORDER_RADIUS}px; padding:0 {INPUT_PAD_H}px;"
         f"font-size:{fs(base,0)}pt; color:{_C['text_primary']};"
         f"min-height:{height}px;"
     )
 
 
-def spinbox_style(height: int = 32, positive: bool = False,
+def spinbox_style(height: int = INPUT_HEIGHT, positive: bool = False,
                   widget: str = "QDoubleSpinBox") -> str:
     """
     Stylesheet موحد لـ QDoubleSpinBox / QSpinBox.
@@ -55,8 +56,8 @@ def spinbox_style(height: int = 32, positive: bool = False,
         weight = "normal"
     return f"""
         {widget} {{
-            background:{bg}; border:1.5px solid {border};
-            border-radius:6px; padding:0 8px;
+            background:{bg}; border:{INPUT_BORDER_W}px solid {border};
+            border-radius:{INPUT_BORDER_RADIUS}px; padding:0 {INPUT_PAD_H}px;
             font-size:{fs(base,0)}pt; color:{color};
             font-weight:{weight}; min-height:{height}px;
         }}
@@ -67,14 +68,14 @@ def spinbox_style(height: int = 32, positive: bool = False,
     """
 
 
-def search_input_style(height: int = 34) -> str:
+def search_input_style(height: int = SEARCH_INPUT_HEIGHT) -> str:
     """Stylesheet لحقول البحث."""
     base = get_font_size()
     return f"""
         QLineEdit {{
             background:{_C['bg_input']};
-            border:1.5px solid {_C['border_med']};
-            border-radius:6px; padding:0 10px;
+            border:{INPUT_BORDER_W}px solid {_C['border_med']};
+            border-radius:{INPUT_BORDER_RADIUS}px; padding:0 {SEARCH_PAD_H}px;
             font-size:{fs(base,0)}pt; color:{_C['text_primary']};
         }}
         QLineEdit:focus {{ border-color:{_C['accent']}; background:{_C['bg_input']}; }}

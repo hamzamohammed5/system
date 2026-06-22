@@ -93,6 +93,19 @@ TABLE_EXTRA_PAD = 24    # extra_pad في fit_splitter_table
 COL_MIN_WIDTH   = 40    # auto_fit_columns — min_width
 COL_MAX_WIDTH   = 300   # auto_fit_columns — max_width
 
+# ── Table build helpers ────────────────────────────────────────
+TABLE_MIN_SECTION_SIZE      = 30    # minimumSectionSize للـ QHeaderView الأفقي
+TABLE_MIN_HEIGHT_DEFAULT    = 120   # min_height الافتراضي لـ make_table
+TABLE_COMPACT_MAX_HEIGHT    = 300   # max_height الافتراضي لـ make_compact_table
+TABLE_SPLITTER_MIN_HEIGHT   = 80    # min_height الافتراضي لجداول الـ splitter
+TABLE_SPLITTER_EXTRA_PAD    = 24    # extra_pad الافتراضي في make_splitter_table
+TABLE_SPLITTER_HANDLE_W     = 0     # handleWidth للـ QSplitter المحيط بالجدول
+CALC_WIDTH_EXTRA_PAD        = 24    # extra_pad الافتراضي في calc_width
+TABLE_COL_DEFAULT_W         = 100   # عرض العمود الافتراضي في _build_table
+TABLE_FIXED_COL_DEFAULT_W   = 100   # عرض العمود الافتراضي في make_fixed_table
+TABLE_FIXED_WIDTH_PAD       = 4     # padding إضافي لحساب fixed width الكلي
+TABLE_ROW_MIN_SECTION_PAD   = 4     # يُطرح من row_height لـ minimumSectionSize
+
 # ── Splitter list offset ───────────────────────────────────
 LIST_W_OFFSET = 60   # section._apply_sizes: LIST_MIN_W + LIST_W_OFFSET
 
@@ -167,6 +180,10 @@ FILTER_COMBO_MIN_W       = 160  # عرض أدنى للـ combo في FilterToolba
 FILTER_RESET_BTN_W       = 32   # عرض زر reset في FilterToolbar
 FILTER_SEARCH_H          = 28   # ارتفاع SearchBar في FilterToolbar
 FILTER_TOOLBAR_BORDER_RADIUS = 6   # border-radius لـ FilterToolbar QWidget
+FILTER_BAR_BORDER_RADIUS     = 8   # border-radius لـ filter_bar_style QFrame
+TREE_BORDER_RADIUS           = 6   # border-radius لـ QTreeWidget
+LIST_BORDER_RADIUS           = 4   # border-radius لـ QListWidget
+TABLE_BORDER_RADIUS          = 8   # border-radius لـ QTableWidget
 FILTER_COMBO_BORDER_RADIUS   = 4   # border-radius للـ combo وزر reset في FilterToolbar
 FILTER_COMBO_PAD_H           = 8   # padding أفقي للـ combo في FilterToolbar
 FILTER_CAT_ICON_W            = 20  # عرض label أيقونة التصنيف في FilterToolbar
@@ -243,3 +260,27 @@ EMPTY_STATE_DEFAULT_MIN_H    = 80   # min_height الافتراضي لـ EmptySt
 # ── CardGrid ──────────────────────────────────────────────
 CARD_GRID_DEFAULT_COLS    = 4    # عدد الأعمدة الافتراضي لـ CardGrid
 CARD_GRID_DEFAULT_SPACING = 10   # spacing الافتراضي لـ CardGrid
+
+# ── Card / Frame styles ────────────────────────────────────
+CARD_BORDER_RADIUS        = 10   # border-radius افتراضي لـ card_style (QFrame)
+STATUS_CARD_STYLE_RADIUS  = 8    # border-radius لـ status_card_style (QFrame)
+
+# ── Input heights ──────────────────────────────────────────
+INPUT_HEIGHT              = 32   # min-height افتراضي لـ QLineEdit / QComboBox / QSpinBox
+SEARCH_INPUT_HEIGHT       = 34   # min-height لـ search_input_style (= SEARCH_BAR_H)
+
+# ── ScrollBar ──────────────────────────────────────────────
+SCROLL_BAR_WIDTH          = 6    # عرض شريط التمرير الافتراضي
+
+# ── Tab sizes ──────────────────────────────────────────────
+TAB_MIN_W_SMALL           = 60   # min-width للتبويب الصغير
+TAB_MIN_W_NORMAL          = 80   # min-width للتبويب العادي
+
+# ── Table row heights ──────────────────────────────────────
+ROW_HEIGHT_COMPACT        = 34   # ارتفاع صف الجدول (compact)
+ROW_HEIGHT_NORMAL         = 40   # ارتفاع صف الجدول (normal)
+ROW_HEIGHT_LARGE          = 48   # ارتفاع صف الجدول (large)
+
+# ── Divider ────────────────────────────────────────────────
+V_DIVIDER_WIDTH           = 1    # عرض الفاصل العمودي الافتراضي
+V_DIVIDER_MARGIN_V        = 4    # margin عمودي للفاصل العمودي الافتراضي

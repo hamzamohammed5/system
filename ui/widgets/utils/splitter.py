@@ -9,11 +9,12 @@ from PyQt5.QtCore    import Qt, QTimer, QObject, QEvent
 
 from ..theme.table_styles import splitter_style  # المصدر الوحيد — لا تكرار
 from ..tables.tables      import calc_width       # [إصلاح 2.1] من tables.tables بدل tables.items
+from ui.constants import SPLITTER_LIST_MIN_W, SPLITTER_LIST_MAX_W, SMART_SPLITTER_HANDLE_W
 
 logger = logging.getLogger(__name__)
 
-_MIN_LIST_W = 280
-_MAX_LIST_W = 620
+_MIN_LIST_W = SPLITTER_LIST_MIN_W
+_MAX_LIST_W = SPLITTER_LIST_MAX_W
 
 
 def fit_list_panel(splitter: QSplitter, list_index: int,
@@ -69,7 +70,7 @@ class SmartSplitter(QSplitter):
         self._table      = None
         self._min_w      = _MIN_LIST_W
         self._max_w      = _MAX_LIST_W
-        self.setHandleWidth(4)
+        self.setHandleWidth(SMART_SPLITTER_HANDLE_W)
         self.setStyleSheet(splitter_style())
 
     def set_list_widget(self, widget: QWidget, list_table: QTableWidget,

@@ -7,10 +7,7 @@ Stylesheet generators للجداول والـ splitters.
 """
 from ui.theme import _C
 from ui.font  import fs, get_font_size
-
-ROW_HEIGHT_COMPACT = 34
-ROW_HEIGHT_NORMAL  = 40
-ROW_HEIGHT_LARGE   = 48
+from ui.constants import ROW_HEIGHT_COMPACT, ROW_HEIGHT_NORMAL, ROW_HEIGHT_LARGE, TABLE_BORDER_RADIUS
 
 
 def table_style(variant: str = "normal") -> str:
@@ -30,7 +27,7 @@ def table_style(variant: str = "normal") -> str:
         QTableWidget {{
             font-size:{font_sz}pt; color:{c['text_primary']};
             background:{c['bg_input']}; border:1px solid {c['border']};
-            border-radius:8px; gridline-color:{c['border']};
+            border-radius:{TABLE_BORDER_RADIUS}px; gridline-color:{c['border']};
             alternate-background-color:{c['bg_surface']}; outline:none;
         }}
         QTableWidget::item {{

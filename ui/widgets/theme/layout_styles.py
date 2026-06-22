@@ -7,6 +7,7 @@ Stylesheet generators للـ layout widgets (tabs, scroll, tree, list, etc).
 """
 from ui.theme import _C
 from ui.font  import fs, get_font_size
+from ui.constants import SCROLL_BAR_WIDTH, TAB_MIN_W_SMALL, TAB_MIN_W_NORMAL, FILTER_TOOLBAR_BORDER_RADIUS, FILTER_BAR_BORDER_RADIUS, TREE_BORDER_RADIUS, LIST_BORDER_RADIUS
 
 
 def tab_style(accent: str = None, size: str = "normal") -> str:
@@ -19,7 +20,7 @@ def tab_style(accent: str = None, size: str = "normal") -> str:
     is_small = size in ("inner", "small")
     padding  = "6px 12px" if is_small else "8px 16px"
     font_sz  = fs(base, -1) if is_small else fs(base, 0)
-    min_w    = "60px" if is_small else "80px"
+    min_w    = f"{TAB_MIN_W_SMALL}px" if is_small else f"{TAB_MIN_W_NORMAL}px"
 
     return f"""
         QTabWidget::pane {{ border:none; background:{_C['bg_page']}; }}
@@ -38,7 +39,7 @@ def tab_style(accent: str = None, size: str = "normal") -> str:
     """
 
 
-def scroll_style(width: int = 6) -> str:
+def scroll_style(width: int = SCROLL_BAR_WIDTH) -> str:
     """Stylesheet موحد لـ QScrollArea / QScrollBar — المصدر الوحيد."""
     r = width // 2
     return f"""
@@ -66,7 +67,7 @@ def filter_bar_style() -> str:
     return f"""
         QFrame {{
             background:{_C['bg_surface_2']}; border:1px solid {_C['border']};
-            border-radius:8px;
+            border-radius:{FILTER_BAR_BORDER_RADIUS}px;
         }}
     """
 
@@ -83,8 +84,8 @@ def toolbar_style() -> str:
 def tree_style() -> str:
     return f"""
         QTreeWidget {{
-            border:1px solid {_C['border']}; border-radius:6px;
-            background:white; outline:none;
+            border:1px solid {_C['border']}; border-radius:{TREE_BORDER_RADIUS}px;
+            background:{_C['bg_surface']}; outline:none;
         }}
         QTreeWidget::item {{ padding:3px 2px; }}
         QTreeWidget::item:selected {{
@@ -97,8 +98,8 @@ def tree_style() -> str:
 def list_style() -> str:
     return f"""
         QListWidget {{
-            border:1px solid {_C['border']}; border-radius:4px;
-            background:white; outline:none;
+            border:1px solid {_C['border']}; border-radius:{LIST_BORDER_RADIUS}px;
+            background:{_C['bg_surface']}; outline:none;
         }}
         QListWidget::item {{
             padding:3px 6px; border-bottom:1px solid {_C['border']};

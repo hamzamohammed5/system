@@ -7,9 +7,10 @@ Stylesheet generators للبطاقات والـ frames.
 """
 from ui.theme import _C
 from ui.font  import fs, get_font_size
+from ui.constants import CARD_BORDER_RADIUS, STATUS_CARD_STYLE_RADIUS, FORM_GROUP_MARGIN_TOP, FORM_GROUP_PADDING_TOP, FORM_GROUP_TITLE_PAD_H, FORM_GROUP_BORDER_RADIUS
 
 
-def card_style(bg: str = None, border: str = None, radius: int = 10) -> str:
+def card_style(bg: str = None, border: str = None, radius: int = CARD_BORDER_RADIUS) -> str:
     return f"""
         QFrame {{
             background:{bg or _C['bg_surface']};
@@ -19,7 +20,7 @@ def card_style(bg: str = None, border: str = None, radius: int = 10) -> str:
     """
 
 
-def status_card_style(status: str = "info", radius: int = 8) -> str:
+def status_card_style(status: str = "info", radius: int = STATUS_CARD_STYLE_RADIUS) -> str:
     from ui.widgets.core.colors import status_colors
     s = status_colors(status)
     return f"""
@@ -37,11 +38,11 @@ def group_box_style(accent: str = None) -> str:
         QGroupBox {{
             font-weight:700; font-size:{fs(base,0)}pt;
             color:{_C['text_sec']}; background:{_C['bg_surface']};
-            border:1px solid {_C['border']}; border-radius:10px;
-            margin-top:10px; padding-top:6px;
+            border:1px solid {_C['border']}; border-radius:{FORM_GROUP_BORDER_RADIUS}px;
+            margin-top:{FORM_GROUP_MARGIN_TOP}px; padding-top:{FORM_GROUP_PADDING_TOP}px;
         }}
         QGroupBox::title {{
             subcontrol-origin:margin; subcontrol-position:top right;
-            padding:0 8px; color:{color};
+            padding:0 {FORM_GROUP_TITLE_PAD_H}px; color:{color};
         }}
     """

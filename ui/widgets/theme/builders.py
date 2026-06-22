@@ -9,10 +9,11 @@ from PyQt5.QtWidgets import QFrame, QScrollArea, QWidget
 from PyQt5.QtCore    import Qt
 
 from ui.theme import _C
+from ui.constants import SEPARATOR_LINE_H, V_DIVIDER_WIDTH, V_DIVIDER_MARGIN_V, V_DIVIDER_INNER_MARGIN_H
 from .layout_styles import scroll_style
 
 
-def h_divider(color: str = None, height: int = 1) -> QFrame:
+def h_divider(color: str = None, height: int = SEPARATOR_LINE_H) -> QFrame:
     """فاصل أفقي موحد."""
     sep = QFrame()
     sep.setFrameShape(QFrame.HLine)
@@ -21,14 +22,14 @@ def h_divider(color: str = None, height: int = 1) -> QFrame:
     return sep
 
 
-def v_divider(color: str = None, width: int = 1, margin_v: int = 4) -> QFrame:
+def v_divider(color: str = None, width: int = V_DIVIDER_WIDTH, margin_v: int = V_DIVIDER_MARGIN_V) -> QFrame:
     """فاصل عمودي موحد — للـ toolbars."""
     sep = QFrame()
     sep.setFrameShape(QFrame.VLine)
     sep.setFixedWidth(width)
     sep.setStyleSheet(
         f"background:{color or _C.get('border_med','#bdbdbd')};"
-        f"border:none; margin:{margin_v}px 2px;"
+        f"border:none; margin:{margin_v}px {V_DIVIDER_INNER_MARGIN_H}px;"
     )
     return sep
 

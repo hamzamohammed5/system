@@ -7,6 +7,7 @@ Stylesheet generators للـ labels والأزرار النصية.
 """
 from ui.theme import _C
 from ui.font  import fs, get_font_size
+from ui.constants import STATUS_LABEL_RADIUS, STATUS_LABEL_PAD_V, STATUS_LABEL_PAD_H, LINK_BTN_RADIUS
 
 
 def status_label_style(status: str = "info", font_offset: int = 0) -> str:
@@ -16,7 +17,7 @@ def status_label_style(status: str = "info", font_offset: int = 0) -> str:
     return (
         f"font-size:{fs(base,font_offset)}pt; font-weight:bold;"
         f"color:{s['fg']}; background:{s['bg']};"
-        f"border:1px solid {s['border']}; border-radius:6px; padding:6px 14px;"
+        f"border:1px solid {s['border']}; border-radius:{STATUS_LABEL_RADIUS}px; padding:{STATUS_LABEL_PAD_V}px {STATUS_LABEL_PAD_H}px;"
     )
 
 
@@ -37,10 +38,12 @@ def section_title_style(color: str = None, font_offset: int = 0) -> str:
     )
 
 
-def icon_btn_style(color: str = "#aaa", hover_color: str = "#e53935") -> str:
+def icon_btn_style(color: str = None, hover_color: str = None) -> str:
+    c       = color       or _C.get("icon_btn_color",       _C["text_muted"])
+    c_hover = hover_color or _C.get("icon_btn_hover_color", _C["danger"])
     return (
-        f"QPushButton {{ background:transparent; border:none; color:{color}; }}"
-        f"QPushButton:hover {{ color:{hover_color}; }}"
+        f"QPushButton {{ background:transparent; border:none; color:{c}; }}"
+        f"QPushButton:hover {{ color:{c_hover}; }}"
     )
 
 

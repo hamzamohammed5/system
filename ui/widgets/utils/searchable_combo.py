@@ -41,8 +41,15 @@ from PyQt5.QtCore import (
 )
 from PyQt5.QtGui  import QColor, QFont, QStandardItemModel, QStandardItem
 
-from ui.theme import _C
-from ui.font import fs, get_font_size
+from ui.constants import (
+    SEARCHABLE_COMBO_SEARCH_W, SEARCHABLE_COMBO_SEARCH_H,
+    SEARCHABLE_COMBO_CLEAR_SIZE, SEARCHABLE_COMBO_CMB_MIN_W,
+    SEARCHABLE_COMBO_INNER_RADIUS, SEARCHABLE_COMBO_PAD_H, SEARCHABLE_COMBO_PAD_V,
+    SEARCHABLE_COMBO_SEARCH_DELAY,
+    SPACING_XS,
+    MIN_FONT_SIZE,
+)
+from ui.widgets.core.widget_mixin import WidgetMixin
 
 _SEP = ("__sep__", None)
 
@@ -61,6 +68,7 @@ def build_grouped_items(items: list) -> list:
     Returns:
         list of (display_text, user_data, is_separator)
     """
+    from ui.widgets.core.i18n import tr
     groups: dict = {}
     NO_CAT = "__no_category__"
 
@@ -80,7 +88,7 @@ def build_grouped_items(items: list) -> list:
 
     if NO_CAT in groups:
         if result:
-            result.append(("─── بدون تصنيف ───", _SEP, True))
+            result.append((tr('combo_sep_no_category'), _SEP, True))
         for item_id, name in groups[NO_CAT]:
             result.append((f"{item_id} — {name}", (None, item_id), False))
 
@@ -176,7 +184,7 @@ def _is_sep_data(user_data) -> bool:
              user_data[0] == "__sep__"))
 
 
-class SearchableCombo(QWidget):
+class SearchableCombo(QWidget, WidgetMixin):
     """
     Combo مع حقل بحث: [🔍] [✖] [القائمة ▼]
 
@@ -191,7 +199,7 @@ class SearchableCombo(QWidget):
 
     item_selected = pyqtSignal(object)
 
-    SEARCH_DELAY_MS: int = 120
+    SEARCH_DELAY_MS: int = SEARCHABLE_COMBO_SEARCH_DELAY
 
     def __init__(self, parent=None):
         super().__init__(parent)
@@ -207,7 +215,7 @@ class SearchableCombo(QWidget):
         # [تحسين 41] _sep_font يُنشأ مرة واحدة
         self._sep_font = QFont()
         self._sep_font.setBold(True)
-        self._sep_font.setPointSize(max(7, self._sep_font.pointSize() - 1))
+        self._sep_font.setPointSize(max(MIN_FONT_SIZE - 1, self._sep_font.pointSize() - 1))
 
         # Source model + proxy model
         self._source_model = QStandardItemModel(self)
@@ -215,42 +223,28 @@ class SearchableCombo(QWidget):
         self._proxy_model.setSourceModel(self._source_model)
 
         self._build()
+        self._init_widget_mixin(lang=True, data=False)
+        self._refresh_style()
+        self._refresh_lang()
 
     def _build(self):
         lay = QHBoxLayout(self)
         lay.setContentsMargins(0, 0, 0, 0)
-        lay.setSpacing(4)
+        lay.setSpacing(SPACING_XS)
 
-        base = get_font_size()
         self.inp_search = QLineEdit()
-        self.inp_search.setPlaceholderText("🔍 بحث...")
-        self.inp_search.setFixedWidth(90)
-        self.inp_search.setMinimumHeight(28)
-        self.inp_search.setStyleSheet(f"""
-            QLineEdit {{
-                background:{_C['bg_surface_2']}; border:1px solid {_C['border_med']};
-                border-radius:4px; padding:2px 6px; font-size:{fs(base, -1)}pt;
-                color:{_C['text_primary']};
-            }}
-            QLineEdit:focus {{ border-color:{_C['accent']}; background:{_C['bg_input']}; }}
-        """)
+        self.inp_search.setFixedWidth(SEARCHABLE_COMBO_SEARCH_W)
+        self.inp_search.setMinimumHeight(SEARCHABLE_COMBO_SEARCH_H)
         self.inp_search.textChanged.connect(self._on_search)
 
-        self.btn_clear = QPushButton("✖")
-        self.btn_clear.setFixedSize(20, 20)
-        self.btn_clear.setStyleSheet(f"""
-            QPushButton {{
-                background:transparent; border:none;
-                color:{_C['text_disabled']}; font-size:{fs(base, -2)}pt;
-            }}
-            QPushButton:hover {{ color:{_C['danger']}; }}
-        """)
+        self.btn_clear = QPushButton()
+        self.btn_clear.setFixedSize(SEARCHABLE_COMBO_CLEAR_SIZE, SEARCHABLE_COMBO_CLEAR_SIZE)
         self.btn_clear.clicked.connect(self._clear_search)
         self.btn_clear.setVisible(False)
 
         self.cmb = QComboBox()
         self.cmb.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Fixed)
-        self.cmb.setMinimumWidth(150)
+        self.cmb.setMinimumWidth(SEARCHABLE_COMBO_CMB_MIN_W)
         self.cmb.setSizeAdjustPolicy(QComboBox.AdjustToContents)
         self.cmb.setModel(self._proxy_model)
         self.cmb.currentIndexChanged.connect(self._on_combo_changed)
@@ -258,6 +252,33 @@ class SearchableCombo(QWidget):
         lay.addWidget(self.inp_search)
         lay.addWidget(self.btn_clear)
         lay.addWidget(self.cmb, stretch=1)
+
+    def _refresh_style(self, *_):
+        from ui.theme import _C
+        from ui.font import fs, get_font_size
+        base = get_font_size()
+        self.inp_search.setStyleSheet(f"""
+            QLineEdit {{
+                background:{_C['bg_surface_2']}; border:1px solid {_C['border_med']};
+                border-radius:{SEARCHABLE_COMBO_INNER_RADIUS}px;
+                padding:{SEARCHABLE_COMBO_PAD_V}px {SEARCHABLE_COMBO_PAD_H}px;
+                font-size:{fs(base, -1)}pt;
+                color:{_C['text_primary']};
+            }}
+            QLineEdit:focus {{ border-color:{_C['accent']}; background:{_C['bg_input']}; }}
+        """)
+        self.btn_clear.setStyleSheet(f"""
+            QPushButton {{
+                background:transparent; border:none;
+                color:{_C['text_disabled']}; font-size:{fs(base, -2)}pt;
+            }}
+            QPushButton:hover {{ color:{_C['danger']}; }}
+        """)
+
+    def _refresh_lang(self, *_):
+        from ui.widgets.core.i18n import tr
+        self.inp_search.setPlaceholderText(tr('search_placeholder'))
+        self.btn_clear.setText(tr('combo_clear_search'))
 
     # ── handlers ──────────────────────────────────────────
 
@@ -329,6 +350,7 @@ class SearchableCombo(QWidget):
 
     def _add_source_item(self, display: str, user_data,
                           is_separator: bool):
+        from ui.theme import _C
         item = QStandardItem(display)
         item.setData(user_data, Qt.UserRole)
 
@@ -420,6 +442,7 @@ class SearchableCombo(QWidget):
             item.setText(text)
 
     def add_item_at_start(self, text: str, data):
+        from ui.theme import _C
         item = QStandardItem(text)
         item.setData(data, Qt.UserRole)
         item.setForeground(QColor(_C['danger']))

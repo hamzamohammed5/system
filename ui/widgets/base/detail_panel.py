@@ -13,8 +13,6 @@ BaseDetailPanel — قاعدة مشتركة لكل لوحات التفاصيل.
 from PyQt5.QtWidgets import QWidget, QVBoxLayout, QScrollArea, QSizePolicy
 from PyQt5.QtCore    import Qt, pyqtSignal
 
-from ui.theme                        import _C
-from ui.font                         import fs, get_font_size
 from ui.constants                    import (
     DETAIL_CONTENT_MIN_W, DETAIL_MIN_W, DETAIL_EMPTY_MIN_H,
     MARGIN_CONTENT_PANEL, SPACING_LG,
@@ -156,6 +154,7 @@ class BaseDetailPanel(QWidget, WidgetMixin):
     # ── [i18n/themes] Theme & Language handlers ───────────
 
     def _refresh_style(self, *_):
+        from ui.theme import _C
         _bg = _C['bg_page']
         self._bg_color = _bg
         self.setStyleSheet(f"background:{_bg};")
