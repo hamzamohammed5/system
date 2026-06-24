@@ -17,18 +17,19 @@ from PyQt5.QtWidgets import QWidget, QVBoxLayout, QTabWidget, QLabel
 from ui.widgets.theme.layout_styles import tab_style
 from ui.theme                        import _C
 from ui.widgets.core.i18n           import tr
-from ui.widgets.core.events         import bus
 from ui.font                        import FS_MD
+from ui.constants                    import SECTION_HEADER_HEIGHT, SPACING_XL
+from ui.widgets.core.widget_mixin   import WidgetMixin
 
 from .pricing.pricing_tab import PricingTab
 from .pricing.offers import OffersTab
 
 
-class PricingSection(QWidget):
+class PricingSection(QWidget, WidgetMixin):
     def __init__(self, parent=None):
         super().__init__(parent)
         self._build()
-        bus.theme_changed.connect(self._apply_theme)
+        self._init_widget_mixin(theme=True, font=True, lang=True, data=False)
 
     def _build(self):
         layout = QVBoxLayout(self)
@@ -36,9 +37,9 @@ class PricingSection(QWidget):
         layout.setSpacing(0)
 
         # ── هيدر القسم ──
-        self._header = QLabel(f"  💰  {tr('nav_pricing')}")
-        self._header.setFixedHeight(42)
-        self._apply_theme()
+        self._header = QLabel(f"  {tr('nav_icon_pricing')}  {tr('nav_pricing')}")
+        self._header.setFixedHeight(SECTION_HEADER_HEIGHT)
+        self._refresh_style()
         layout.addWidget(self._header)
 
         # ── التبويبات ──
@@ -51,7 +52,7 @@ class PricingSection(QWidget):
 
         layout.addWidget(self._tabs)
 
-    def _apply_theme(self, _=None):
+    def _refresh_style(self, *_):
         self._header.setStyleSheet(f"""
             QLabel {{
                 background: {_C['bg_surface']};
@@ -59,8 +60,16 @@ class PricingSection(QWidget):
                 font-size: {FS_MD}px;
                 font-weight: bold;
                 color: {_C['orange']};
-                padding-right: 16px;
+                padding-right: {SPACING_XL}px;
             }}
         """)
         if hasattr(self, "_tabs"):
             self._tabs.setStyleSheet(tab_style())
+
+    def _refresh_lang(self, *_):
+        if not hasattr(self, "_header"):
+            return
+        self._header.setText(f"  {tr('nav_icon_pricing')}  {tr('nav_pricing')}")
+        if hasattr(self, "_tabs"):
+            self._tabs.setTabText(0, tr("pricing_tab"))
+            self._tabs.setTabText(1, tr("offers_tab"))

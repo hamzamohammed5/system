@@ -23,7 +23,7 @@ from db.shared.connection import get_accounting_connection, get_inventory_connec
 from ui.widgets.theme.layout_styles import tab_style
 from ui.theme                        import _C
 from ui.widgets.core.i18n           import tr
-from ui.widgets.core.events         import bus
+from ui.widgets.core.widget_mixin   import WidgetMixin
 
 from .inventory.inventory_items_tab    import _ItemsTab
 from .inventory.inventory_inbound_tab  import _InboundTab
@@ -31,7 +31,7 @@ from .inventory.inventory_outbound_tab import _OutboundTab
 from .inventory.inventory_report_tab   import _ReportTab, _MovesPanel
 
 
-class InventoryTab(QWidget):
+class InventoryTab(QWidget, WidgetMixin):
     def __init__(self, parent=None):
         super().__init__(parent)
         self.inv_conn     = get_inventory_connection()
@@ -39,7 +39,7 @@ class InventoryTab(QWidget):
         self._moves_panel = None
         self._tabs         = None
         self._build()
-        bus.theme_changed.connect(self._apply_theme)
+        self._init_widget_mixin(theme=True, font=False, lang=True, data=False)
 
     def _build(self):
         root = QVBoxLayout(self)
@@ -48,7 +48,7 @@ class InventoryTab(QWidget):
         self._moves_panel = _MovesPanel(self.inv_conn)
 
         self._tabs = QTabWidget()
-        self._apply_theme()
+        self._refresh_style()
 
         self._tabs.addTab(
             _ItemsTab(self.inv_conn, self.acc_conn, self._on_item_selected),
@@ -65,7 +65,7 @@ class InventoryTab(QWidget):
         if inv_id and self._moves_panel:
             self._moves_panel.load(inv_id)
 
-    def _apply_theme(self, _=None):
+    def _refresh_style(self, *_):
         if not self._tabs:
             return
         self._tabs.setStyleSheet(
@@ -76,6 +76,15 @@ class InventoryTab(QWidget):
             }}
             """
         )
+
+    def _refresh_lang(self, *_):
+        if not self._tabs:
+            return
+        self._tabs.setTabText(0, tr("inventory_items_tab"))
+        self._tabs.setTabText(1, tr("inventory_inbound_tab"))
+        self._tabs.setTabText(2, tr("inventory_outbound_tab"))
+        self._tabs.setTabText(3, tr("inventory_report_tab"))
+        self._tabs.setTabText(4, tr("inventory_section_tab_moves"))
 
     def closeEvent(self, event):
         self.inv_conn.close()

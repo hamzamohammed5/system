@@ -19,21 +19,22 @@ from db.designs.design_schema import get_designs_connection, create_designs_tabl
 from ui.widgets.theme.layout_styles import tab_style
 from ui.theme                        import _C
 from ui.widgets.core.i18n           import tr
-from ui.widgets.core.events         import bus
 from ui.font                        import FS_MD
+from ui.constants                    import SECTION_HEADER_HEIGHT
+from ui.widgets.core.widget_mixin   import WidgetMixin
 
 from .design.dimension_sets_tab import DimensionSetsTab
 from .design.designs_tab        import DesignsTab
 
 
-class DesignSection(QWidget):
+class DesignSection(QWidget, WidgetMixin):
     def __init__(self, parent=None):
         super().__init__(parent)
         # إنشاء قاعدة بيانات التصميمات
         self.conn = get_designs_connection()
         create_designs_tables(self.conn)
         self._build()
-        bus.theme_changed.connect(self._apply_theme)
+        self._init_widget_mixin(theme=True, font=True, lang=False, data=False)
 
     def _build(self):
         layout = QVBoxLayout(self)
@@ -41,9 +42,9 @@ class DesignSection(QWidget):
         layout.setSpacing(0)
 
         # ── هيدر القسم ──
-        self._header = QLabel(f"  🎨  {tr('nav_design')}")
-        self._header.setFixedHeight(42)
-        self._apply_theme()
+        self._header = QLabel(f"  {tr('nav_icon_design')}  {tr('nav_design')}")
+        self._header.setFixedHeight(SECTION_HEADER_HEIGHT)
+        self._refresh_style()
         layout.addWidget(self._header)
 
         # ── التبويبات ──
@@ -66,7 +67,7 @@ class DesignSection(QWidget):
         if index == 1:  # تبويب التصميمات
             self._designs_tab.refresh()
 
-    def _apply_theme(self, _=None):
+    def _refresh_style(self, *_):
         self._header.setStyleSheet(f"""
             QLabel {{
                 background: {_C['bg_surface']};

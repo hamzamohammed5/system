@@ -14,27 +14,32 @@ from PyQt5.QtWidgets import (
 )
 from PyQt5.QtCore import Qt
 
-from ui.theme     import _C
 from ui.font      import get_font_size, fs
 from ui.constants import (
     SIDEBAR_EXPANDED_WIDTH,
     SIDEBAR_COLLAPSED_WIDTH,
-    CONTENT_MIN_WIDTH,
-    WINDOW_DEFAULT_W,
     NAV_BTN_H,
     NAV_BTN_W_OFFSET,
     NAV_ICO_W,
     NAV_ICO_FS,
     NAV_BTN_HEIGHT_PAD,
     BADGE_FS,
+    NAV_LAYOUT_MARGIN_H,
+    NAV_LAYOUT_SPACING,
+    NAV_BTN_BORDER_RADIUS,
+    NAV_ACTIVE_BORDER_W,
+    NAV_BADGE_PAD_V,
+    NAV_BADGE_PAD_H,
+    NAV_BADGE_RADIUS,
 )
+from ui.widgets.core.widget_mixin import WidgetMixin
 
 
 # ══════════════════════════════════════════════════════════
 # _NavButton
 # ══════════════════════════════════════════════════════════
 
-class _NavButton(QPushButton):
+class _NavButton(QPushButton, WidgetMixin):
     def __init__(self, icon, label, badge="", parent=None):
         super().__init__(parent)
         self._icon = icon; self._label = label
@@ -42,43 +47,49 @@ class _NavButton(QPushButton):
         self.setCheckable(True)
         self.setCursor(Qt.PointingHandCursor)
         self.setSizePolicy(QSizePolicy.Fixed, QSizePolicy.Fixed)
-        self._build_content(); self._update_style()
+        self._build_content()
+        self._init_widget_mixin(lang=False, data=False)
+        self._refresh_style()
 
     def _build_content(self):
         lay = QHBoxLayout(self)
-        lay.setContentsMargins(10, 0, 10, 0)
-        lay.setSpacing(10)
+        lay.setContentsMargins(NAV_LAYOUT_MARGIN_H, 0, NAV_LAYOUT_MARGIN_H, 0)
+        lay.setSpacing(NAV_LAYOUT_SPACING)
         lay.setAlignment(Qt.AlignVCenter)
         self._ico_lbl = QLabel(self._icon)
         self._ico_lbl.setFixedWidth(NAV_ICO_W)
         self._ico_lbl.setAlignment(Qt.AlignCenter)
-        self._ico_lbl.setStyleSheet(
-            f"background:transparent;border:none;font-size:{NAV_ICO_FS}pt;color:{_C['sidebar_text']};"
-        )
         self._txt_lbl = QLabel(self._label)
         self._txt_lbl.setAlignment(Qt.AlignRight | Qt.AlignVCenter)
         self._txt_lbl.setWordWrap(False)
-        self._txt_lbl.setStyleSheet(
-            f"background:transparent;border:none;color:{_C['sidebar_text']};"
-        )
         self._badge_lbl = QLabel(self._badge)
         self._badge_lbl.setVisible(bool(self._badge))
         self._badge_lbl.setAlignment(Qt.AlignCenter)
-        # [إصلاح] _C['danger'] و _C['bg_input'] بدل "#C0392B" و "#FFF" hardcoded
-        self._apply_badge_style()
         lay.addWidget(self._txt_lbl, stretch=1)
         lay.addWidget(self._badge_lbl)
         lay.addWidget(self._ico_lbl)
 
+    def _refresh_style(self, *_):
+        from ui.theme import _C
+        self._ico_lbl.setStyleSheet(
+            f"background:transparent;border:none;font-size:{NAV_ICO_FS}pt;color:{_C['sidebar_text']};"
+        )
+        self._txt_lbl.setStyleSheet(
+            f"background:transparent;border:none;color:{_C['sidebar_text']};"
+        )
+        self._apply_badge_style()
+        self._update_style()
+
     def _apply_badge_style(self):
         """
         [إصلاح] يطبق badge stylesheet من _C الحالي.
-        يُستدعى من _build_content() وعند تغيير الثيم.
+        يُستدعى من _refresh_style() وعند تغيير الثيم.
         """
+        from ui.theme import _C
         self._badge_lbl.setStyleSheet(
             f"QLabel{{background:{_C['danger']};color:{_C['bg_input']};"
             f"font-size:{BADGE_FS}pt;font-weight:700;"
-            "padding:1px 6px;border-radius:8px;border:none;}"
+            f"padding:{NAV_BADGE_PAD_V}px {NAV_BADGE_PAD_H}px;border-radius:{NAV_BADGE_RADIUS}px;border:none;}}"
         )
 
     def set_badge(self, text):
@@ -96,16 +107,17 @@ class _NavButton(QPushButton):
             self.layout().setAlignment(Qt.AlignCenter)
         else:
             self.setFixedWidth(SIDEBAR_EXPANDED_WIDTH - NAV_BTN_W_OFFSET)
-            self.layout().setContentsMargins(10, 0, 10, 0)
+            self.layout().setContentsMargins(NAV_LAYOUT_MARGIN_H, 0, NAV_LAYOUT_MARGIN_H, 0)
             self.layout().setAlignment(Qt.AlignVCenter)
 
     def _update_style(self):
+        from ui.theme import _C
         if self.isChecked():
             self.setStyleSheet(f"""
                 QPushButton {{
                     background:{_C['sidebar_active']};border:none;
-                    border-right:2px solid {_C['accent']};
-                    border-radius:6px;color:{_C['sidebar_text']};
+                    border-right:{NAV_ACTIVE_BORDER_W}px solid {_C['accent']};
+                    border-radius:{NAV_BTN_BORDER_RADIUS}px;color:{_C['sidebar_text']};
                     font-weight:600;text-align:right;padding:0px;min-height:{NAV_BTN_H}px;
                 }}
             """)
@@ -118,7 +130,7 @@ class _NavButton(QPushButton):
         else:
             self.setStyleSheet(f"""
                 QPushButton {{
-                    background:transparent;border:none;border-radius:6px;
+                    background:transparent;border:none;border-radius:{NAV_BTN_BORDER_RADIUS}px;
                     color:{_C['sidebar_text']};text-align:right;
                     padding:0px;min-height:{NAV_BTN_H}px;
                 }}

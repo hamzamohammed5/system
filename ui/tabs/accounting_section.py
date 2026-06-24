@@ -24,8 +24,8 @@ from PyQt5.QtCore import Qt
 from ui.widgets.theme.layout_styles import tab_style
 from ui.theme                        import _C
 from ui.widgets.core.i18n           import tr
-from ui.widgets.core.events         import bus
 from ui.font                        import FS_BASE, FS_MD
+from ui.widgets.core.widget_mixin   import WidgetMixin
 
 from .accounting.journal_tab   import JournalTab
 from .accounting.ledger_tab    import LedgerTab
@@ -46,7 +46,7 @@ from .accounting._conn_guard import (
 )
 
 
-class AccountingTab(QWidget):
+class AccountingTab(QWidget, WidgetMixin):
     def __init__(self, parent=None):
         super().__init__(parent)
         self._main_tabs: QTabWidget | None = None
@@ -54,7 +54,7 @@ class AccountingTab(QWidget):
         self._initialized: dict[int, str] = {}
         self._build_attempts = 0
         self._build()
-        bus.theme_changed.connect(self._apply_theme)
+        self._init_widget_mixin(theme=True, font=True, lang=False, data=False)
 
     def _cleanup_layout(self):
         old_layout = self.layout()
@@ -138,7 +138,7 @@ class AccountingTab(QWidget):
 
         root.addWidget(main_tabs)
 
-    def _apply_theme(self, _=None):
+    def _refresh_style(self, *_):
         if self._main_tabs is not None:
             self._main_tabs.setStyleSheet(tab_style())
 

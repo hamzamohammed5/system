@@ -4,6 +4,7 @@ ui/main_window_helper/_sidebar.py
 [تحسين 20] refresh_all_buttons تحدّث الآن _SectionLabel أيضاً عند تغيير حجم الخط.
 القديم: refresh_all_buttons تحدّث الأزرار فقط وتتجاهل الـ section labels.
 الجديد: تستدعي lbl._apply_style() على كل label بعد تحديث الأزرار.
+[Refactor V4] تحويل _Sidebar إلى WidgetMixin لتحديث stylesheet تلقائياً عند تغيير الثيم.
 """
 
 from PyQt5.QtWidgets import (
@@ -12,17 +13,23 @@ from PyQt5.QtWidgets import (
 )
 from PyQt5.QtCore import Qt, QPropertyAnimation, QEasingCurve
 
-from ui.theme import _C
 from ui.widgets.core.i18n import tr
+from ui.widgets.core.widget_mixin import WidgetMixin
 
 from ._section_label import _SectionLabel
-from ._nav_button import _NavButton, SIDEBAR_COLLAPSED_WIDTH, SIDEBAR_EXPANDED_WIDTH
+from ._nav_button import _NavButton
 from ._toggle_button import _ToggleButton
 from ui.constants import (
     NAV_BTN_H, NAV_BTN_W_OFFSET,
-    SIDEBAR_COMPANY_H, SIDEBAR_TOGGLE_H, SIDEBAR_DIVIDER_H,
+    SIDEBAR_EXPANDED_WIDTH, SIDEBAR_COLLAPSED_WIDTH,
+    SIDEBAR_COMPANY_H, SIDEBAR_DIVIDER_H,
     SIDEBAR_SCROLL_W, SIDEBAR_SCROLL_MIN_H,
     SPACING_XS,
+    SIDEBAR_NAV_MARGIN, SIDEBAR_NAV_SPACING,
+    SIDEBAR_FOOTER_MARGIN_H, SIDEBAR_FOOTER_MARGIN_V, SIDEBAR_FOOTER_SPACING,
+    SIDEBAR_DIV_MARGIN_V, SIDEBAR_DIV_MARGIN_H,
+    SIDEBAR_ANIM_DURATION,
+    SIDEBAR_SCROLL_RADIUS, SIDEBAR_BORDER_W,
 )
 
 
@@ -30,22 +37,48 @@ from ui.constants import (
 # _Sidebar
 # ══════════════════════════════════════════════════════════
 
-class _Sidebar(QFrame):
+class _Sidebar(QFrame, WidgetMixin):
     def __init__(self, on_company_changed, parent=None):
         super().__init__(parent)
         self._on_company_changed = on_company_changed
         self._collapsed = False
         self.setFixedWidth(SIDEBAR_EXPANDED_WIDTH)
         self.setSizePolicy(QSizePolicy.Fixed, QSizePolicy.Expanding)
-        self.setStyleSheet(f"""
-            QFrame {{
-                background:{_C['sidebar_bg']};
-                border-left:1px solid {_C['sidebar_border']};
-            }}
-        """)
         self._buttons: list        = []
         self._section_labels: list = []
         self._build()
+        self._init_widget_mixin(lang=False, data=False)
+        self._refresh_style()
+
+    def _refresh_style(self, *_):
+        from ui.theme import _C
+        self.setStyleSheet(f"""
+            QFrame {{
+                background:{_C['sidebar_bg']};
+                border-left:{SIDEBAR_BORDER_W}px solid {_C['sidebar_border']};
+            }}
+        """)
+        if hasattr(self, '_company_selector'):
+            self._company_selector.setStyleSheet(
+                f"background:{_C['sidebar_bg']};"
+                f"border-bottom:{SIDEBAR_BORDER_W}px solid {_C['sidebar_border']};"
+            )
+        if hasattr(self, '_nav_scroll'):
+            self._nav_scroll.setStyleSheet(f"""
+                QScrollArea {{ border:none;background:transparent; }}
+                QScrollBar:vertical {{
+                    background:transparent;width:{SIDEBAR_SCROLL_W}px;border-radius:{SIDEBAR_SCROLL_RADIUS}px;
+                }}
+                QScrollBar::handle:vertical {{
+                    background:{_C['sidebar_border']};border-radius:{SIDEBAR_SCROLL_RADIUS}px;min-height:{SIDEBAR_SCROLL_MIN_H}px;
+                }}
+                QScrollBar::add-line:vertical,QScrollBar::sub-line:vertical {{ height:0px; }}
+            """)
+        if hasattr(self, '_div'):
+            self._div.setStyleSheet(
+                f"background:{_C['sidebar_border']};border:none;"
+                f"margin:{SIDEBAR_DIV_MARGIN_V}px {SIDEBAR_DIV_MARGIN_H}px;"
+            )
 
     def _build(self):
         layout = QVBoxLayout(self)
@@ -56,33 +89,19 @@ class _Sidebar(QFrame):
         from ..tabs.companies.company_selector import CompanySelector
         self._company_selector = CompanySelector()
         self._company_selector.setFixedHeight(SIDEBAR_COMPANY_H)
-        self._company_selector.setStyleSheet(
-            f"background:{_C['sidebar_bg']};"
-            f"border-bottom:1px solid {_C['sidebar_border']};"
-        )
         self._company_selector.company_changed.connect(self._on_company_changed)
         layout.addWidget(self._company_selector)
 
         # ── Nav Scroll ──
-        nav_scroll = QScrollArea()
-        nav_scroll.setWidgetResizable(True)
-        nav_scroll.setHorizontalScrollBarPolicy(Qt.ScrollBarAlwaysOff)
-        nav_scroll.setVerticalScrollBarPolicy(Qt.ScrollBarAsNeeded)
-        nav_scroll.setStyleSheet(f"""
-            QScrollArea {{ border:none;background:transparent; }}
-            QScrollBar:vertical {{
-                background:transparent;width:{SIDEBAR_SCROLL_W}px;border-radius:1px;
-            }}
-            QScrollBar::handle:vertical {{
-                background:{_C['sidebar_border']};border-radius:1px;min-height:{SIDEBAR_SCROLL_MIN_H}px;
-            }}
-            QScrollBar::add-line:vertical,QScrollBar::sub-line:vertical {{ height:0px; }}
-        """)
+        self._nav_scroll = QScrollArea()
+        self._nav_scroll.setWidgetResizable(True)
+        self._nav_scroll.setHorizontalScrollBarPolicy(Qt.ScrollBarAlwaysOff)
+        self._nav_scroll.setVerticalScrollBarPolicy(Qt.ScrollBarAsNeeded)
         nav_widget = QWidget()
         nav_widget.setStyleSheet("background:transparent;")
         nav_lay = QVBoxLayout(nav_widget)
-        nav_lay.setContentsMargins(8, 8, 8, 8)
-        nav_lay.setSpacing(1)
+        nav_lay.setContentsMargins(SIDEBAR_NAV_MARGIN, SIDEBAR_NAV_MARGIN, SIDEBAR_NAV_MARGIN, SIDEBAR_NAV_MARGIN)
+        nav_lay.setSpacing(SIDEBAR_NAV_SPACING)
 
         nav_sections = [
             (tr("nav_section_production"), [
@@ -113,21 +132,20 @@ class _Sidebar(QFrame):
         nav_lay.addSpacing(SPACING_XS)
 
         nav_lay.addStretch()
-        nav_scroll.setWidget(nav_widget)
-        layout.addWidget(nav_scroll, stretch=1)
+        self._nav_scroll.setWidget(nav_widget)
+        layout.addWidget(self._nav_scroll, stretch=1)
 
         # ── Footer ──
         footer = QWidget()
         footer.setStyleSheet("QWidget{background:transparent;}")
         f_lay = QVBoxLayout(footer)
-        f_lay.setContentsMargins(8, 4, 8, 4)
-        f_lay.setSpacing(1)
+        f_lay.setContentsMargins(SIDEBAR_FOOTER_MARGIN_H, SIDEBAR_FOOTER_MARGIN_V, SIDEBAR_FOOTER_MARGIN_H, SIDEBAR_FOOTER_MARGIN_V)
+        f_lay.setSpacing(SIDEBAR_FOOTER_SPACING)
 
-        div = QFrame()
-        div.setFrameShape(QFrame.HLine)
-        div.setFixedHeight(SIDEBAR_DIVIDER_H)
-        div.setStyleSheet(f"background:{_C['sidebar_border']};border:none;margin:2px 4px;")
-        f_lay.addWidget(div)
+        self._div = QFrame()
+        self._div.setFrameShape(QFrame.HLine)
+        self._div.setFixedHeight(SIDEBAR_DIVIDER_H)
+        f_lay.addWidget(self._div)
 
         shared_btn = _NavButton(tr("nav_icon_shared"), tr("nav_shared"))
         shared_btn.setProperty("nav_key", "shared_items")
@@ -155,13 +173,13 @@ class _Sidebar(QFrame):
         target = SIDEBAR_COLLAPSED_WIDTH if self._collapsed else SIDEBAR_EXPANDED_WIDTH
 
         self._anim_min = QPropertyAnimation(self, b"minimumWidth")
-        self._anim_min.setDuration(200)
+        self._anim_min.setDuration(SIDEBAR_ANIM_DURATION)
         self._anim_min.setEasingCurve(QEasingCurve.InOutCubic)
         self._anim_min.setStartValue(self.width())
         self._anim_min.setEndValue(target)
 
         self._anim_max = QPropertyAnimation(self, b"maximumWidth")
-        self._anim_max.setDuration(200)
+        self._anim_max.setDuration(SIDEBAR_ANIM_DURATION)
         self._anim_max.setEasingCurve(QEasingCurve.InOutCubic)
         self._anim_max.setStartValue(self.width())
         self._anim_max.setEndValue(target)
