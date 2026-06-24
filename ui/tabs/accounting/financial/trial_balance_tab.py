@@ -13,23 +13,31 @@ from PyQt5.QtWidgets import (
     QWidget, QVBoxLayout, QHBoxLayout, QFrame,
     QLabel, QTableWidgetItem,
 )
-from PyQt5.QtGui import QColor
 
 from db.accounting.accounting_repo import trial_balance, get_normal_balance
 from ui.widgets.core.events import bus
 from ui.widgets.core.conn import SafeConnMixin
+from ui.widgets.core.widget_mixin import WidgetMixin
 from ui.widgets.components.headers_page import PageHeader
 from ui.widgets.tables.tables import (
     make_list_table,
-    bold_item as bold_table_item,
     colored_item as colored_table_item,
 )
 from ui.widgets.core.i18n import tr
 from ui.theme import _C
 from ui.font import FS_XS, FS_BASE
+from ui.constants import (
+    FINANCIAL_TAB_MARGIN_H, FINANCIAL_TAB_MARGIN_T, FINANCIAL_TAB_MARGIN_B,
+    FINANCIAL_TB_SPACING, INPUT_BORDER_W,
+    FINANCIAL_LEGEND_BORDER_RADIUS, FINANCIAL_LEGEND_PAD_V, FINANCIAL_LEGEND_PAD_H,
+    FINANCIAL_TB_COL_CODE_W, FINANCIAL_TB_COL_TYPE_W,
+    FINANCIAL_TB_COL_DEBIT_W, FINANCIAL_TB_COL_CREDIT_W, FINANCIAL_TB_COL_BALANCE_W,
+    FINANCIAL_FRAME_BORDER_RADIUS, FINANCIAL_FRAME_MARGIN_H, FINANCIAL_FRAME_MARGIN_V,
+    FINANCIAL_TOTALS_SPACING,
+)
 
 
-class TrialBalanceTab(SafeConnMixin, QWidget):
+class TrialBalanceTab(SafeConnMixin, QWidget, WidgetMixin):
     def __init__(self, conn, parent=None):
         super().__init__(parent)
         self._init_safe_conn(conn, "accounting")
@@ -37,15 +45,19 @@ class TrialBalanceTab(SafeConnMixin, QWidget):
         self._build()
         self._load()
         bus.company_data_changed.connect(self._on_company_event)
+        self._init_widget_mixin(theme=True, font=False, lang=True, data=False)
 
     def _on_company_event(self, company_id: int):
         if self._on_company_event_safe(company_id):
             self._load()
 
+    def _refresh_lang(self, *_):
+        pass  # النصوص داخل _build — تُعاد عند إعادة البناء الكاملة
+
     def _build(self):
         root = QVBoxLayout(self)
-        root.setContentsMargins(12, 10, 12, 12)
-        root.setSpacing(8)
+        root.setContentsMargins(FINANCIAL_TAB_MARGIN_H, FINANCIAL_TAB_MARGIN_T, FINANCIAL_TAB_MARGIN_H, FINANCIAL_TAB_MARGIN_B)
+        root.setSpacing(FINANCIAL_TB_SPACING)
 
         # ── هيدر الصفحة (بدل section_label اليدوي) ──
         root.addWidget(PageHeader(
@@ -58,7 +70,9 @@ class TrialBalanceTab(SafeConnMixin, QWidget):
         legend = QLabel(tr("trial_balance_legend"))
         legend.setStyleSheet(
             f"font-size:{FS_XS}px; color:{_C['text_sec']}; background:{_C['journal_header_bg']};"
-            f"border:1px solid {_C['journal_header_border']}; border-radius:4px; padding:4px 10px;"
+            f"border:{INPUT_BORDER_W}px solid {_C['journal_header_border']};"
+            f" border-radius:{FINANCIAL_LEGEND_BORDER_RADIUS}px;"
+            f" padding:{FINANCIAL_LEGEND_PAD_V}px {FINANCIAL_LEGEND_PAD_H}px;"
         )
         root.addWidget(legend)
 
@@ -68,26 +82,33 @@ class TrialBalanceTab(SafeConnMixin, QWidget):
                 tr("total_debit_col"), tr("total_credit_col"), tr("balance_col"),
             ],
             stretch_col=1,
-            col_widths={0: 70, 2: 100, 3: 120, 4: 120, 5: 110},
+            col_widths={
+                0: FINANCIAL_TB_COL_CODE_W,
+                2: FINANCIAL_TB_COL_TYPE_W,
+                3: FINANCIAL_TB_COL_DEBIT_W,
+                4: FINANCIAL_TB_COL_CREDIT_W,
+                5: FINANCIAL_TB_COL_BALANCE_W,
+            },
         )
         self.table.setAlternatingRowColors(True)
         root.addWidget(self.table, stretch=1)
 
         totals = QFrame()
         totals.setStyleSheet(
-            f"QFrame {{ background:{_C['journal_header_bg']}; border:1px solid {_C['journal_header_border']}; border-radius:6px; }}"
+            f"QFrame {{ background:{_C['journal_header_bg']}; border:{INPUT_BORDER_W}px solid {_C['journal_header_border']};"
+            f" border-radius:{FINANCIAL_FRAME_BORDER_RADIUS}px; }}"
         )
         tl = QHBoxLayout(totals)
-        tl.setContentsMargins(12, 8, 12, 8)
+        tl.setContentsMargins(FINANCIAL_FRAME_MARGIN_H, FINANCIAL_FRAME_MARGIN_V, FINANCIAL_FRAME_MARGIN_H, FINANCIAL_FRAME_MARGIN_V)
         self.lbl_sum_d  = QLabel(tr("sum_debit_label").format(val="0.00"))
         self.lbl_sum_c  = QLabel(tr("sum_credit_label").format(val="0.00"))
-        self.lbl_status = QLabel("─")
+        self.lbl_status = QLabel(tr("amount_dash_placeholder"))
         for lbl in (self.lbl_sum_d, self.lbl_sum_c, self.lbl_status):
             lbl.setStyleSheet(f"font-weight:bold; font-size:{FS_BASE}px;")
         tl.addWidget(self.lbl_sum_d)
-        tl.addSpacing(24)
+        tl.addSpacing(FINANCIAL_TOTALS_SPACING)
         tl.addWidget(self.lbl_sum_c)
-        tl.addSpacing(24)
+        tl.addSpacing(FINANCIAL_TOTALS_SPACING)
         tl.addWidget(self.lbl_status)
         tl.addStretch()
         root.addWidget(totals)

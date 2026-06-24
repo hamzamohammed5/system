@@ -22,13 +22,19 @@ from ui.widgets.core.events import bus
 from ui.widgets.components.headers_page import PageHeader
 from ui.widgets.components.stat_card import StatRow, StatItem
 from ui.widgets.core.conn import SafeConnMixin
+from ui.widgets.core.widget_mixin import WidgetMixin
 from ui.theme import _C
 from ui.widgets.core.i18n import tr
 from ui.font import FS_SM
+from ui.constants import (
+    FINANCIAL_TAB_MARGIN_H, FINANCIAL_TAB_MARGIN_T, FINANCIAL_TAB_MARGIN_B,
+    FINANCIAL_TAB_SPACING, FINANCIAL_SPLITTER_HANDLE_W, FINANCIAL_TABLE_MARGIN_INNER,
+    FINANCIAL_COL_CODE_W, FINANCIAL_COL_AMOUNT_W,
+)
 from ._financial_helpers import _money
 
 
-class IncomeStatementTab(SafeConnMixin, QWidget):
+class IncomeStatementTab(SafeConnMixin, QWidget, WidgetMixin):
     def __init__(self, conn, parent=None):
         super().__init__(parent)
         self._init_safe_conn(conn, "accounting")
@@ -36,6 +42,7 @@ class IncomeStatementTab(SafeConnMixin, QWidget):
         self._build()
         self._load()
         bus.company_data_changed.connect(self._on_company_event)
+        self._init_widget_mixin(theme=True, font=False, lang=True, data=False)
 
     def _on_company_event(self, company_id: int):
         if self._on_company_event_safe(company_id):
@@ -43,8 +50,8 @@ class IncomeStatementTab(SafeConnMixin, QWidget):
 
     def _build(self):
         root = QVBoxLayout(self)
-        root.setContentsMargins(12, 10, 12, 12)
-        root.setSpacing(10)
+        root.setContentsMargins(FINANCIAL_TAB_MARGIN_H, FINANCIAL_TAB_MARGIN_T, FINANCIAL_TAB_MARGIN_H, FINANCIAL_TAB_MARGIN_B)
+        root.setSpacing(FINANCIAL_TAB_SPACING)
 
         root.addWidget(PageHeader(
             title=tr("income_statement_title"),
@@ -60,29 +67,47 @@ class IncomeStatementTab(SafeConnMixin, QWidget):
         root.addWidget(self._stats)
 
         splitter = QSplitter(Qt.Horizontal)
-        splitter.setHandleWidth(6)
+        splitter.setHandleWidth(FINANCIAL_SPLITTER_HANDLE_W)
 
-        for attr_name, title, color in [
-            ("table_rev", tr("revenues_section"), _C["acc_type_revenue"]),
-            ("table_exp", tr("expenses_section"), _C["acc_type_expense"]),
+        self._section_labels = []
+        for attr_name, title, color_key in [
+            ("table_rev", tr("revenues_section"), "acc_type_revenue"),
+            ("table_exp", tr("expenses_section"), "acc_type_expense"),
         ]:
             w  = QWidget()
             wl = QVBoxLayout(w)
-            wl.setContentsMargins(0, 4, 4, 0)
+            wl.setContentsMargins(0, FINANCIAL_TABLE_MARGIN_INNER, FINANCIAL_TABLE_MARGIN_INNER, 0)
             lbl = QLabel(title)
             lbl.setStyleSheet(
-                f"font-weight:bold; color:{color}; font-size:{FS_SM}px;"
+                f"font-weight:bold; color:{_C[color_key]}; font-size:{FS_SM}px;"
                 "background:transparent; border:none;"
             )
+            self._section_labels.append((lbl, color_key))
             wl.addWidget(lbl)
             tbl = make_table([tr("code"), tr("item_col"), tr("amount")], stretch_col=1)
-            tbl.setColumnWidth(0, 60)
-            tbl.setColumnWidth(2, 110)
+            tbl.setColumnWidth(0, FINANCIAL_COL_CODE_W)
+            tbl.setColumnWidth(2, FINANCIAL_COL_AMOUNT_W)
             setattr(self, attr_name, tbl)
             wl.addWidget(tbl)
             splitter.addWidget(w)
 
         root.addWidget(splitter, stretch=1)
+
+    def _refresh_style(self, *_):
+        if not hasattr(self, "_section_labels"):
+            return
+        for lbl, color_key in self._section_labels:
+            lbl.setStyleSheet(
+                f"font-weight:bold; color:{_C[color_key]}; font-size:{FS_SM}px;"
+                "background:transparent; border:none;"
+            )
+
+    def _refresh_lang(self, *_):
+        if not hasattr(self, "_section_labels"):
+            return
+        texts = [tr("revenues_section"), tr("expenses_section")]
+        for (lbl, _color_key), text in zip(self._section_labels, texts):
+            lbl.setText(text)
 
     def _load(self):
         try:

@@ -13,6 +13,10 @@ from PyQt5.QtGui import QColor
 from ui.widgets.tables.tables import make_table, auto_fit_columns
 from ui.widgets.core.i18n import tr
 from ui.theme import _C
+from ui.constants import (
+    INVESTOR_MOV_COL_DATE_W, INVESTOR_MOV_COL_TYPE_W,
+    INVESTOR_MOV_COL_AMOUNT_W, INVESTOR_MOV_COL_REF_W,
+)
 
 
 def build_movements_table():

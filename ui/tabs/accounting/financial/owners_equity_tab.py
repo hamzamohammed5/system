@@ -22,13 +22,23 @@ from ui.widgets.core.events import bus
 from ui.widgets.components.headers_page import PageHeader
 from ui.widgets.components.stat_card import StatRow, StatItem
 from ui.widgets.core.conn import SafeConnMixin
+from ui.widgets.core.widget_mixin import WidgetMixin
 from ui.theme import _C
 from ui.widgets.core.i18n import tr
 from ui.font import FS_SM, FS_BASE
+from ui.constants import (
+    FINANCIAL_TAB_MARGIN_H, FINANCIAL_TAB_MARGIN_T, FINANCIAL_TAB_MARGIN_B,
+    FINANCIAL_TAB_SPACING, FINANCIAL_SPLITTER_HANDLE_W, FINANCIAL_TABLE_MARGIN_INNER,
+    FINANCIAL_COL_CODE_W, FINANCIAL_COL_TYPE_W,
+    FINANCIAL_COL_AMOUNT_OE_W, FINANCIAL_HDR_BORDER_RADIUS,
+    FINANCIAL_HDR_PAD_V, FINANCIAL_HDR_PAD_H,
+    FINANCIAL_FRAME_MARGIN_H, FINANCIAL_FRAME_MARGIN_V,
+    FINANCIAL_FRAME_BORDER_RADIUS, INPUT_BORDER_W,
+)
 from ._financial_helpers import _money
 
 
-class OwnersEquityTab(SafeConnMixin, QWidget):
+class OwnersEquityTab(SafeConnMixin, QWidget, WidgetMixin):
     def __init__(self, conn, parent=None):
         super().__init__(parent)
         self._init_safe_conn(conn, "accounting")
@@ -36,15 +46,19 @@ class OwnersEquityTab(SafeConnMixin, QWidget):
         self._build()
         self._load()
         bus.company_data_changed.connect(self._on_company_event)
+        self._init_widget_mixin(theme=True, font=False, lang=True, data=False)
 
     def _on_company_event(self, company_id: int):
         if self._on_company_event_safe(company_id):
             self._load()
 
+    def _refresh_lang(self, *_):
+        pass  # النصوص داخل _build — تُعاد عند إعادة البناء الكاملة
+
     def _build(self):
         root = QVBoxLayout(self)
-        root.setContentsMargins(12, 10, 12, 12)
-        root.setSpacing(10)
+        root.setContentsMargins(FINANCIAL_TAB_MARGIN_H, FINANCIAL_TAB_MARGIN_T, FINANCIAL_TAB_MARGIN_H, FINANCIAL_TAB_MARGIN_B)
+        root.setSpacing(FINANCIAL_TAB_SPACING)
 
         # ── هيدر الصفحة (بدل hdr اليدوي) ──
         root.addWidget(PageHeader(
@@ -63,41 +77,43 @@ class OwnersEquityTab(SafeConnMixin, QWidget):
         root.addWidget(self._stats)
 
         splitter = QSplitter(Qt.Horizontal)
-        splitter.setHandleWidth(6)
+        splitter.setHandleWidth(FINANCIAL_SPLITTER_HANDLE_W)
 
         left_w = QWidget()
         ll = QVBoxLayout(left_w)
-        ll.setContentsMargins(0, 4, 4, 0)
+        ll.setContentsMargins(0, FINANCIAL_TABLE_MARGIN_INNER, FINANCIAL_TABLE_MARGIN_INNER, 0)
         cr_hdr = QLabel(tr("equity_increases"))
         cr_hdr.setStyleSheet(
             f"font-weight:bold; color:{_C['acc_type_capital']}; font-size:{FS_SM}px;"
-            f"background:{_C['investor_capital_bg']}; border-radius:4px; padding:4px 8px;"
+            f"background:{_C['investor_capital_bg']}; border-radius:{FINANCIAL_HDR_BORDER_RADIUS}px;"
+            f" padding:{FINANCIAL_HDR_PAD_V}px {FINANCIAL_HDR_PAD_H}px;"
         )
         ll.addWidget(cr_hdr)
         self.table_cr = make_table(
             [tr("code"), tr("item_col"), tr("type"), tr("amount")], stretch_col=1
         )
-        self.table_cr.setColumnWidth(0, 60)
-        self.table_cr.setColumnWidth(2, 80)
-        self.table_cr.setColumnWidth(3, 100)
+        self.table_cr.setColumnWidth(0, FINANCIAL_COL_CODE_W)
+        self.table_cr.setColumnWidth(2, FINANCIAL_COL_TYPE_W)
+        self.table_cr.setColumnWidth(3, FINANCIAL_COL_AMOUNT_OE_W)
         ll.addWidget(self.table_cr)
         splitter.addWidget(left_w)
 
         right_w = QWidget()
         rl = QVBoxLayout(right_w)
-        rl.setContentsMargins(4, 4, 0, 0)
+        rl.setContentsMargins(FINANCIAL_TABLE_MARGIN_INNER, FINANCIAL_TABLE_MARGIN_INNER, 0, 0)
         dr_hdr = QLabel(tr("equity_decreases"))
         dr_hdr.setStyleSheet(
             f"font-weight:bold; color:{_C['danger']}; font-size:{FS_SM}px;"
-            f"background:{_C['investor_drawings_bg']}; border-radius:4px; padding:4px 8px;"
+            f"background:{_C['investor_drawings_bg']}; border-radius:{FINANCIAL_HDR_BORDER_RADIUS}px;"
+            f" padding:{FINANCIAL_HDR_PAD_V}px {FINANCIAL_HDR_PAD_H}px;"
         )
         rl.addWidget(dr_hdr)
         self.table_dr = make_table(
             [tr("code"), tr("item_col"), tr("type"), tr("amount")], stretch_col=1
         )
-        self.table_dr.setColumnWidth(0, 60)
-        self.table_dr.setColumnWidth(2, 80)
-        self.table_dr.setColumnWidth(3, 100)
+        self.table_dr.setColumnWidth(0, FINANCIAL_COL_CODE_W)
+        self.table_dr.setColumnWidth(2, FINANCIAL_COL_TYPE_W)
+        self.table_dr.setColumnWidth(3, FINANCIAL_COL_AMOUNT_OE_W)
         rl.addWidget(self.table_dr)
         splitter.addWidget(right_w)
 
@@ -105,10 +121,11 @@ class OwnersEquityTab(SafeConnMixin, QWidget):
 
         eq_frame = QFrame()
         eq_frame.setStyleSheet(
-            f"QFrame {{ background:{_C['info_bg']}; border:1px solid {_C['info_border']}; border-radius:6px; }}"
+            f"QFrame {{ background:{_C['info_bg']}; border:{INPUT_BORDER_W}px solid {_C['info_border']};"
+            f" border-radius:{FINANCIAL_FRAME_BORDER_RADIUS}px; }}"
         )
         eq_lay = QHBoxLayout(eq_frame)
-        eq_lay.setContentsMargins(12, 8, 12, 8)
+        eq_lay.setContentsMargins(FINANCIAL_FRAME_MARGIN_H, FINANCIAL_FRAME_MARGIN_V, FINANCIAL_FRAME_MARGIN_H, FINANCIAL_FRAME_MARGIN_V)
         self.lbl_equation = QLabel("")
         self.lbl_equation.setStyleSheet(
             f"font-size:{FS_BASE}px; font-weight:bold; color:{_C['accent']};"

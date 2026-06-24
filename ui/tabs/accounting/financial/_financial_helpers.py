@@ -21,5 +21,6 @@ def _money(value: float) -> str:
         _money(0)        → "─"
     """
     if value == 0:
-        return "─"
+        from ui.widgets.core.i18n import tr
+        return tr("amount_dash_placeholder")
     return f"{value:,.2f}"
