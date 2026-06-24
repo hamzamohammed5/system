@@ -15,12 +15,18 @@ from PyQt5.QtWidgets import (
 from PyQt5.QtCore import Qt
 
 from ui.theme     import _C
-from ui.font      import get_font_size
+from ui.font      import get_font_size, fs
 from ui.constants import (
     SIDEBAR_EXPANDED_WIDTH,
     SIDEBAR_COLLAPSED_WIDTH,
     CONTENT_MIN_WIDTH,
     WINDOW_DEFAULT_W,
+    NAV_BTN_H,
+    NAV_BTN_W_OFFSET,
+    NAV_ICO_W,
+    NAV_ICO_FS,
+    NAV_BTN_HEIGHT_PAD,
+    BADGE_FS,
 )
 
 
@@ -44,10 +50,10 @@ class _NavButton(QPushButton):
         lay.setSpacing(10)
         lay.setAlignment(Qt.AlignVCenter)
         self._ico_lbl = QLabel(self._icon)
-        self._ico_lbl.setFixedWidth(22)
+        self._ico_lbl.setFixedWidth(NAV_ICO_W)
         self._ico_lbl.setAlignment(Qt.AlignCenter)
         self._ico_lbl.setStyleSheet(
-            f"background:transparent;border:none;font-size:15pt;color:{_C['sidebar_text']};"
+            f"background:transparent;border:none;font-size:{NAV_ICO_FS}pt;color:{_C['sidebar_text']};"
         )
         self._txt_lbl = QLabel(self._label)
         self._txt_lbl.setAlignment(Qt.AlignRight | Qt.AlignVCenter)
@@ -71,7 +77,7 @@ class _NavButton(QPushButton):
         """
         self._badge_lbl.setStyleSheet(
             f"QLabel{{background:{_C['danger']};color:{_C['bg_input']};"
-            "font-size:8pt;font-weight:700;"
+            f"font-size:{BADGE_FS}pt;font-weight:700;"
             "padding:1px 6px;border-radius:8px;border:none;}"
         )
 
@@ -89,7 +95,7 @@ class _NavButton(QPushButton):
             self.layout().setContentsMargins(0, 0, 0, 0)
             self.layout().setAlignment(Qt.AlignCenter)
         else:
-            self.setFixedWidth(SIDEBAR_EXPANDED_WIDTH - 16)
+            self.setFixedWidth(SIDEBAR_EXPANDED_WIDTH - NAV_BTN_W_OFFSET)
             self.layout().setContentsMargins(10, 0, 10, 0)
             self.layout().setAlignment(Qt.AlignVCenter)
 
@@ -100,11 +106,11 @@ class _NavButton(QPushButton):
                     background:{_C['sidebar_active']};border:none;
                     border-right:2px solid {_C['accent']};
                     border-radius:6px;color:{_C['sidebar_text']};
-                    font-weight:600;text-align:right;padding:0px;min-height:38px;
+                    font-weight:600;text-align:right;padding:0px;min-height:{NAV_BTN_H}px;
                 }}
             """)
             self._ico_lbl.setStyleSheet(
-                f"background:transparent;border:none;font-size:15pt;color:{_C['accent_mid']};"
+                f"background:transparent;border:none;font-size:{NAV_ICO_FS}pt;color:{_C['accent_mid']};"
             )
             self._txt_lbl.setStyleSheet(
                 f"background:transparent;border:none;color:{_C['sidebar_text']};font-weight:600;"
@@ -114,12 +120,12 @@ class _NavButton(QPushButton):
                 QPushButton {{
                     background:transparent;border:none;border-radius:6px;
                     color:{_C['sidebar_text']};text-align:right;
-                    padding:0px;min-height:38px;
+                    padding:0px;min-height:{NAV_BTN_H}px;
                 }}
                 QPushButton:hover {{ background:{_C['sidebar_hover']}; }}
             """)
             self._ico_lbl.setStyleSheet(
-                f"background:transparent;border:none;font-size:15pt;color:{_C['sidebar_muted']};"
+                f"background:transparent;border:none;font-size:{NAV_ICO_FS}pt;color:{_C['sidebar_muted']};"
             )
             self._txt_lbl.setStyleSheet(
                 f"background:transparent;border:none;color:{_C['sidebar_text']};font-weight:400;"
@@ -131,14 +137,14 @@ class _NavButton(QPushButton):
     def refresh_sizes(self):
         base = get_font_size()
         self._ico_lbl.setStyleSheet(
-            f"background:transparent;border:none;font-size:{base+4}pt;"
+            f"background:transparent;border:none;font-size:{fs(base, +4)}pt;"
         )
         self._txt_lbl.setStyleSheet(
             f"background:transparent;border:none;font-size:{base}pt;"
         )
-        h = base * 2 + 14
-        self.setFixedHeight(max(38, h))
+        h = base * 2 + NAV_BTN_HEIGHT_PAD
+        self.setFixedHeight(max(NAV_BTN_H, h))
         if not self._collapsed:
-            self.setFixedWidth(SIDEBAR_EXPANDED_WIDTH - 16)
+            self.setFixedWidth(SIDEBAR_EXPANDED_WIDTH - NAV_BTN_W_OFFSET)
         # [إصلاح] إعادة تطبيق badge style عند تغيير حجم الخط (قد يتغير الثيم أيضاً)
         self._apply_badge_style()

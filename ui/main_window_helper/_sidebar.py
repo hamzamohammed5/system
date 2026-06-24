@@ -13,10 +13,17 @@ from PyQt5.QtWidgets import (
 from PyQt5.QtCore import Qt, QPropertyAnimation, QEasingCurve
 
 from ui.theme import _C
+from ui.widgets.core.i18n import tr
 
 from ._section_label import _SectionLabel
 from ._nav_button import _NavButton, SIDEBAR_COLLAPSED_WIDTH, SIDEBAR_EXPANDED_WIDTH
 from ._toggle_button import _ToggleButton
+from ui.constants import (
+    NAV_BTN_H, NAV_BTN_W_OFFSET,
+    SIDEBAR_COMPANY_H, SIDEBAR_TOGGLE_H, SIDEBAR_DIVIDER_H,
+    SIDEBAR_SCROLL_W, SIDEBAR_SCROLL_MIN_H,
+    SPACING_XS,
+)
 
 
 # ══════════════════════════════════════════════════════════
@@ -48,7 +55,7 @@ class _Sidebar(QFrame):
         # ── Header: CompanySelector ──
         from ..tabs.companies.company_selector import CompanySelector
         self._company_selector = CompanySelector()
-        self._company_selector.setFixedHeight(46)
+        self._company_selector.setFixedHeight(SIDEBAR_COMPANY_H)
         self._company_selector.setStyleSheet(
             f"background:{_C['sidebar_bg']};"
             f"border-bottom:1px solid {_C['sidebar_border']};"
@@ -64,10 +71,10 @@ class _Sidebar(QFrame):
         nav_scroll.setStyleSheet(f"""
             QScrollArea {{ border:none;background:transparent; }}
             QScrollBar:vertical {{
-                background:transparent;width:3px;border-radius:1px;
+                background:transparent;width:{SIDEBAR_SCROLL_W}px;border-radius:1px;
             }}
             QScrollBar::handle:vertical {{
-                background:{_C['sidebar_border']};border-radius:1px;min-height:20px;
+                background:{_C['sidebar_border']};border-radius:1px;min-height:{SIDEBAR_SCROLL_MIN_H}px;
             }}
             QScrollBar::add-line:vertical,QScrollBar::sub-line:vertical {{ height:0px; }}
         """)
@@ -78,17 +85,17 @@ class _Sidebar(QFrame):
         nav_lay.setSpacing(1)
 
         nav_sections = [
-            ("الإنتاج", [
-                ("📊", "حساب التكلفة", "costing",    ""),
-                ("💰", "التسعير",       "pricing",    ""),
+            (tr("nav_section_production"), [
+                (tr("nav_icon_costing"),    tr("nav_costing"),    "costing",    ""),
+                (tr("nav_icon_pricing"),    tr("nav_pricing"),    "pricing",    ""),
             ]),
-            ("المالية", [
-                ("🏦", "الحسابات",     "accounting", ""),
-                ("📦", "المخزن",        "inventory",  ""),
+            (tr("nav_section_finance"), [
+                (tr("nav_icon_accounting"), tr("nav_accounting"), "accounting", ""),
+                (tr("nav_icon_inventory"),  tr("nav_inventory"),  "inventory",  ""),
             ]),
-            ("العمل", [
-                ("🎨", "التصميمات",    "design",     ""),
-                ("📋", "الطلبات",       "orders",     ""),
+            (tr("nav_section_work"), [
+                (tr("nav_icon_design"),     tr("nav_design"),     "design",     ""),
+                (tr("nav_icon_orders"),     tr("nav_orders"),     "orders",     ""),
             ]),
         ]
 
@@ -99,11 +106,11 @@ class _Sidebar(QFrame):
             for icon, label, key, badge in items:
                 btn = _NavButton(icon, label, badge)
                 btn.setProperty("nav_key", key)
-                btn.setFixedWidth(SIDEBAR_EXPANDED_WIDTH - 16)
-                btn.setFixedHeight(38)
+                btn.setFixedWidth(SIDEBAR_EXPANDED_WIDTH - NAV_BTN_W_OFFSET)
+                btn.setFixedHeight(NAV_BTN_H)
                 self._buttons.append(btn)
                 nav_lay.addWidget(btn)
-            nav_lay.addSpacing(4)
+        nav_lay.addSpacing(SPACING_XS)
 
         nav_lay.addStretch()
         nav_scroll.setWidget(nav_widget)
@@ -118,21 +125,21 @@ class _Sidebar(QFrame):
 
         div = QFrame()
         div.setFrameShape(QFrame.HLine)
-        div.setFixedHeight(1)
+        div.setFixedHeight(SIDEBAR_DIVIDER_H)
         div.setStyleSheet(f"background:{_C['sidebar_border']};border:none;margin:2px 4px;")
         f_lay.addWidget(div)
 
-        shared_btn = _NavButton("🔗", "العناصر المشتركة")
+        shared_btn = _NavButton(tr("nav_icon_shared"), tr("nav_shared"))
         shared_btn.setProperty("nav_key", "shared_items")
-        shared_btn.setFixedWidth(SIDEBAR_EXPANDED_WIDTH - 16)
-        shared_btn.setFixedHeight(38)
+        shared_btn.setFixedWidth(SIDEBAR_EXPANDED_WIDTH - NAV_BTN_W_OFFSET)
+        shared_btn.setFixedHeight(NAV_BTN_H)
         self._buttons.append(shared_btn)
         f_lay.addWidget(shared_btn)
 
-        btn_settings = _NavButton("⚙️", "الإعدادات")
+        btn_settings = _NavButton(tr("nav_icon_settings"), tr("nav_settings"))
         btn_settings.setProperty("nav_key", "settings")
-        btn_settings.setFixedWidth(SIDEBAR_EXPANDED_WIDTH - 16)
-        btn_settings.setFixedHeight(38)
+        btn_settings.setFixedWidth(SIDEBAR_EXPANDED_WIDTH - NAV_BTN_W_OFFSET)
+        btn_settings.setFixedHeight(NAV_BTN_H)
         self._buttons.append(btn_settings)
         f_lay.addWidget(btn_settings)
 
