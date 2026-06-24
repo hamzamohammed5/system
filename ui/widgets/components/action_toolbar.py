@@ -9,6 +9,7 @@ from PyQt5.QtWidgets import QWidget, QFrame, QPushButton, QSizePolicy
 from .button            import make_btn
 from ..theme.builders   import v_divider
 from ..utils.flow_layout import FlowLayout
+from ui.constants import SPACING_XS, ACTION_TOOLBAR_FLOW_V_SPACING, ACTION_TOOLBAR_MARGIN_V
 
 
 class ActionToolbar(QWidget):
@@ -33,8 +34,8 @@ class ActionToolbar(QWidget):
 
     def _build(self):
         self.setStyleSheet("background:transparent;")
-        self._flow = FlowLayout(self, h_spacing=self._spacing, v_spacing=4)
-        self._flow.setContentsMargins(0, 4, 0, 4)
+        self._flow = FlowLayout(self, h_spacing=self._spacing, v_spacing=ACTION_TOOLBAR_FLOW_V_SPACING)
+        self._flow.setContentsMargins(0, ACTION_TOOLBAR_MARGIN_V, 0, ACTION_TOOLBAR_MARGIN_V)
         self.setLayout(self._flow)
 
     # ── إضافة أزرار ───────────────────────────────────────

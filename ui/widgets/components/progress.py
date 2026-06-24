@@ -166,7 +166,7 @@ class ProgressBar(QWidget, WidgetMixin):
             self._fill.setFixedWidth(int(total_w * self._value / 100))
 
 
-class MultiProgressBar(QWidget):
+class MultiProgressBar(QWidget, WidgetMixin):
     """أشرطة تقدم متعددة في عمود."""
 
     def __init__(self, spacing: int = SPACING_MD, parent=None):
@@ -176,9 +176,14 @@ class MultiProgressBar(QWidget):
         self._lay = QVBoxLayout(self)
         self._lay.setContentsMargins(0, 0, 0, 0)
         self._lay.setSpacing(spacing)
+        self._init_widget_mixin(theme=True, font=False, lang=False, data=False)
+
+    def _refresh_style(self, *_):
+        self.setStyleSheet("background:transparent;")
 
     def add_bar(self, label: str, value: float = 0,
                 color: str = None) -> ProgressBar:
+        from ui.theme import _C
         bar = ProgressBar(label=label, color=color or _C.get("accent"))
         bar.set_value(value)
         self._lay.addWidget(bar)

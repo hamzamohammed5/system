@@ -35,7 +35,7 @@ class EmptyState(QFrame, WidgetMixin):
 
     action_clicked = pyqtSignal()
 
-    def __init__(self, icon: str = "📋", title: str = "",
+    def __init__(self, icon: str = None, title: str = "",
                  subtitle: str = "", action_text: str = "",
                  style: str = "dashed", color: str = None,
                  min_height: int = EMPTY_STATE_DEFAULT_MIN_H,
@@ -54,9 +54,11 @@ class EmptyState(QFrame, WidgetMixin):
         self._action_text = action_text
         _color = color or _C['text_muted']
         from ui.widgets.core.i18n import tr
+        _icon  = icon or tr('empty_icon_table')
+        self._icon       = _icon
         _title = title or tr('no_data')
         self._title_text = title
-        self._build(icon, _title, subtitle, action_text, style, _color, min_height)
+        self._build(_icon, _title, subtitle, action_text, style, _color, min_height)
         self._init_widget_mixin(theme=True, font=True, lang=True, data=False)
 
     def _build(self, icon, title, subtitle, action_text, style, color, min_h):
@@ -179,7 +181,7 @@ class EmptyState(QFrame, WidgetMixin):
 
 # ── alias للتوافق مع الكود القديم ─────────────────────────
 
-def EmptyPanelState(icon: str = "📋", title: str = "",
+def EmptyPanelState(icon: str = None, title: str = "",
                     subtitle: str = "", action_text: str = "",
                     color: str = None, parent=None) -> EmptyState:
     """Alias لـ EmptyState(expandable=True). محفوظ للتوافق."""
@@ -198,18 +200,19 @@ def EmptyPanelState(icon: str = "📋", title: str = "",
 
 def set_table_empty_state(table: QTableWidget,
                            message: str = "",
-                           icon: str = "📋",
+                           icon: str = None,
                            color: str = None):
     """يضيف صفاً واحداً يعرض رسالة فارغة في الجدول."""
     from ui.widgets.core.i18n import tr
     _color = color or _C['text_muted']
     _message = message or tr('no_data')
+    _icon = icon or tr('empty_icon_table')
     from ui.constants import EMPTY_STATE_TABLE_ROW_H
     table.setRowCount(1)
     table.setRowHeight(0, EMPTY_STATE_TABLE_ROW_H)
 
     col_count = table.columnCount()
-    msg_text  = f"{icon}  {_message}" if icon else _message
+    msg_text  = f"{_icon}  {_message}" if _icon else _message
 
     item = QTableWidgetItem(msg_text)
     item.setTextAlignment(Qt.AlignCenter)

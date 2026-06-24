@@ -12,6 +12,10 @@ from PyQt5.QtCore    import Qt
 from ui.theme import _C
 from ui.font  import fs, get_font_size
 from ..core.widget_mixin import WidgetMixin
+from ui.constants import (
+    BADGE_LABEL_PAD_V, BADGE_LABEL_PAD_H,
+    BADGE_LABEL_BORDER_RADIUS, BADGE_LABEL_BORDER_W,
+)
 
 
 class BadgeLabel(QLabel, WidgetMixin):
@@ -37,8 +41,9 @@ class BadgeLabel(QLabel, WidgetMixin):
         base = get_font_size()
         self.setStyleSheet(
             f"font-weight:700; font-size:{fs(base,-1)}pt;"
-            f"padding:3px 12px; border-radius:20px;"
-            f"color:{fg}; background:{bg}; border:1.5px solid {border};"
+            f"padding:{BADGE_LABEL_PAD_V}px {BADGE_LABEL_PAD_H}px;"
+            f"border-radius:{BADGE_LABEL_BORDER_RADIUS}px;"
+            f"color:{fg}; background:{bg}; border:{BADGE_LABEL_BORDER_W}px solid {border};"
         )
 
     def set_badge(self, text: str, text_color: str = None,

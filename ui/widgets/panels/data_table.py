@@ -34,7 +34,7 @@ class DataTableWidget(QWidget, WidgetMixin):
     search_changed = pyqtSignal(str)
     row_selected   = pyqtSignal(int)
 
-    EMPTY_ICON  : str = "📋"
+    EMPTY_ICON  : str = ""
     EMPTY_TITLE : str = ""   # يُحدَّث في __init__ عبر tr()
 
     def __init__(self,
@@ -45,12 +45,12 @@ class DataTableWidget(QWidget, WidgetMixin):
                  add_text: str = "",
                  search_placeholder: str = None,
                  row_height: int = ROW_HEIGHT_LARGE,
-                 empty_icon: str = "📋",
+                 empty_icon: str = None,
                  empty_title: str = None,
                  parent=None):
         super().__init__(parent)
 
-        self.EMPTY_ICON  = empty_icon
+        self.EMPTY_ICON  = empty_icon or tr('empty_icon_table')
         self.EMPTY_TITLE = empty_title or tr('no_data')
         self._row_height  = row_height
         self._stretch_col = stretch_col

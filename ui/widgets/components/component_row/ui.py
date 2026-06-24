@@ -33,6 +33,7 @@ from ui.font  import fs, get_font_size
 from ui.widgets.core.i18n import tr
 from ui.constants import (
     COMPONENT_ROW_OUTER_MARGIN_V,
+    COMPONENT_ROW_OUTER_SPACING,
     COMPONENT_ROW_MAIN_SPACING,
     COMPONENT_ROW_VARIANT_MIN_W,
     COMPONENT_ROW_VARIANT_MAX_W,
@@ -40,6 +41,9 @@ from ui.constants import (
     COMPONENT_ROW_QTY_MAX_W,
     COMPONENT_ROW_WASTE_MIN_W,
     COMPONENT_ROW_WASTE_MAX_W,
+    COMPONENT_ROW_WASTE_MIN_PCT,
+    COMPONENT_ROW_WASTE_MAX_PCT,
+    COMPONENT_ROW_WASTE_DECIMALS,
     COMPONENT_ROW_WIDGET_MIN_H,
     COMPONENT_ROW_WASTE_ICON_W,
     COMPONENT_ROW_DIVIDE_ICON_W,
@@ -201,7 +205,7 @@ def build_row_ui(widget, child_type: str, child_id,
     """
     outer = QVBoxLayout(widget)
     outer.setContentsMargins(0, COMPONENT_ROW_OUTER_MARGIN_V, 0, COMPONENT_ROW_OUTER_MARGIN_V)
-    outer.setSpacing(2)
+    outer.setSpacing(COMPONENT_ROW_OUTER_SPACING)
 
     # ── الصف الرئيسي ──────────────────────────────────────
     main_row = QHBoxLayout()
@@ -277,8 +281,8 @@ def _build_qty_widget(widget, qty: float, layout: QHBoxLayout):
 def _build_waste_widget(widget, waste_pct: float, layout: QHBoxLayout):
     base = get_font_size()
     widget.waste_spin = QDoubleSpinBox()
-    widget.waste_spin.setRange(0, 100)
-    widget.waste_spin.setDecimals(1)
+    widget.waste_spin.setRange(COMPONENT_ROW_WASTE_MIN_PCT, COMPONENT_ROW_WASTE_MAX_PCT)
+    widget.waste_spin.setDecimals(COMPONENT_ROW_WASTE_DECIMALS)
     widget.waste_spin.setSuffix(tr('waste_spin_suffix'))
     widget.waste_spin.setValue(waste_pct or 0.0)
     widget.waste_spin.setMinimumWidth(COMPONENT_ROW_WASTE_MIN_W)

@@ -52,7 +52,7 @@ def _reset_btn_style() -> str:
     return f"""
         QPushButton {{
             background:{_C['bg_hover']}; border:1px solid {_C['border_med']};
-            border-radius:{FILTER_COMBO_BORDER_RADIUS}px; font-size:{FS_MD}px; color:{_C['accent']};
+            border-radius:{FILTER_COMBO_BORDER_RADIUS}px; font-size:{FS_MD}pt; color:{_C['accent']};
         }}
         QPushButton:hover {{ background:{_C['border_med']}; }}
     """
@@ -76,7 +76,8 @@ class FilterToolbar(QWidget, WidgetMixin):
         self._show_date    = show_date
         self._show_presets = show_presets
         self._build(placeholder or tr('search'))
-        self._init_widget_mixin(theme=False, font=False, data=True)
+        self._init_widget_mixin(theme=True, font=False, data=True)
+        self._refresh_style()
 
     # ── بناء ──────────────────────────────────────────────
 
@@ -139,12 +140,7 @@ class FilterToolbar(QWidget, WidgetMixin):
         btn_reset.clicked.connect(self.reset)
         lay.addWidget(btn_reset)
 
-        base = get_font_size()
         self.lbl_count = QLabel("")
-        self.lbl_count.setStyleSheet(
-            f"color:{_C['accent']}; font-size:{fs(base,-2)}pt; font-weight:bold;"
-            f"background:transparent; border:none; min-width:{FILTER_COUNT_LABEL_MIN_W}px;"
-        )
         lay.addWidget(self.lbl_count)
 
     def _sep(self) -> QLabel:
@@ -155,9 +151,16 @@ class FilterToolbar(QWidget, WidgetMixin):
         )
         return sep
 
+    def _refresh_style(self, *_):
+        base = get_font_size()
+        self.lbl_count.setStyleSheet(
+            f"color:{_C['accent']}; font-size:{fs(base,-2)}pt; font-weight:bold;"
+            f"background:transparent; border:none; min-width:{FILTER_COUNT_LABEL_MIN_W}px;"
+        )
+        if self.cmb_cat is not None:
+            self.cmb_cat.setStyleSheet(_combo_style())
+
     def _refresh_data(self, company_id=None):
-        if self.cmb_cat is None:
-            return
         try:
             from db.companies.company_state import company_state
             if company_state.is_ready:

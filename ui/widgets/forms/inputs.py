@@ -27,7 +27,7 @@ from ui.font  import fs, get_font_size
 from ..theme.input_styles import input_style as _input_style, spinbox_style as _spinbox_style
 from ui.widgets.core.widget_mixin import WidgetMixin
 from ui.widgets.core.i18n import tr
-from ui.constants import BTN_BORDER_RADIUS, SPACING_MD, DROPDOWN_ARROW_W
+from ui.constants import BTN_BORDER_RADIUS, SPACING_MD, DROPDOWN_ARROW_W, LABELED_INPUT_SPACING
 # [إصلاح 2] السطر المحذوف: from ..core import get_font_size as _get_font_size
 
 
@@ -114,7 +114,7 @@ class LabeledInput(QWidget, WidgetMixin):
     """حقل مع label أفقي."""
 
     def __init__(self, label: str, widget: QWidget, unit: str = "",
-                 spacing: int = 8, label_width: int = None, parent=None):
+                 spacing: int = LABELED_INPUT_SPACING, label_width: int = None, parent=None):
         super().__init__(parent)
         self._widget      = widget
         self._label_text  = label
@@ -137,7 +137,7 @@ class LabeledInput(QWidget, WidgetMixin):
             self._unit_lbl = QLabel(unit)
             lay.addWidget(self._unit_lbl)
 
-        self._init_widget_mixin(theme=True, font=False)
+        self._init_widget_mixin(theme=True, font=True)
         self._refresh_style()
 
     def _refresh_style(self, *_):
@@ -217,7 +217,7 @@ class NotesLineEdit(QLineEdit, WidgetMixin):
             QLineEdit {{
                 background:{_C['bg_surface_2']};
                 border:1px solid {_C['border']};
-                border-radius:{BTN_BORDER_RADIUS}px; padding:0 8px;
+                border-radius:{BTN_BORDER_RADIUS}px; padding:0 {SPACING_MD}px;
                 font-size:{fs(base,-1)}pt; color:{_C['text_sec']};
                 font-style:italic; min-height:{self._h}px;
             }}

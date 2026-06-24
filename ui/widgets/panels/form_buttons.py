@@ -38,7 +38,16 @@ class CrudButtonsBar(QWidget, WidgetMixin):
         self._cancel_text = cancel_text or tr("btn_cancel")
         self._show_mode   = show_mode
         self._build(show_mode)
-        self._init_widget_mixin(theme=False, font=False, lang=True, data=False)
+        self._init_widget_mixin(theme=True, font=True, lang=True, data=False)
+        self._refresh_style()
+
+    def _refresh_style(self, *_):
+        if self._show_mode:
+            base = get_font_size()
+            self.lbl_mode.setStyleSheet(
+                f"font-weight:bold; font-size:{fs(base,0)}pt;"
+                f"color:{_C['accent']}; background:transparent;"
+            )
 
     def _build(self, show_mode):
         self.setStyleSheet("background:transparent;")
@@ -48,11 +57,6 @@ class CrudButtonsBar(QWidget, WidgetMixin):
 
         if show_mode:
             self.lbl_mode = QLabel(tr('mode_label_wrap').format(content=tr('add')))
-            base = get_font_size()
-            self.lbl_mode.setStyleSheet(
-                f"font-weight:bold; font-size:{fs(base,0)}pt;"
-                f"color:{_C['accent']}; background:transparent;"
-            )
             lay.addWidget(self.lbl_mode)
 
         btn_row = QHBoxLayout()

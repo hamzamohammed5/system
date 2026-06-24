@@ -111,7 +111,7 @@ class LoadingOverlay(QFrame, WidgetMixin):
         lay.setContentsMargins(OVERLAY_MARGIN, OVERLAY_MARGIN, OVERLAY_MARGIN, OVERLAY_MARGIN)
         self._spinner = LoadingSpinner(compact=False)
         lay.addWidget(self._spinner, alignment=Qt.AlignCenter)
-        self._init_widget_mixin(theme=True, font=False)
+        self._init_widget_mixin(theme=True, font=False, lang=False, data=False)
         self._refresh_style()
         self.hide()
 
