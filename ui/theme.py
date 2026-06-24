@@ -118,7 +118,7 @@ def build_stylesheet(base: int) -> str:
     يبني الـ stylesheet الكامل لحجم خط معين.
     Cache key = (font_size, theme_hash).
     """
-    from ui.constants import MIN_FONT_SIZE, MAX_FONT_SIZE
+    from ui.constants import MIN_FONT_SIZE, MAX_FONT_SIZE, INPUT_HEIGHT_PAD, BTN_HEIGHT_PAD
     from ui.font import fs
 
     base = max(MIN_FONT_SIZE, min(MAX_FONT_SIZE, base))
@@ -133,8 +133,8 @@ def build_stylesheet(base: int) -> str:
     small   = fs(base, -1)
     normal  = fs(base,  0)
     large   = fs(base, +1)
-    input_h = normal * 2 + 6
-    btn_h   = normal * 2 + 8
+    input_h = normal * 2 + INPUT_HEIGHT_PAD
+    btn_h   = normal * 2 + BTN_HEIGHT_PAD
 
     kw = dict(
         base=base, c=c,

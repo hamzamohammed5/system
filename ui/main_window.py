@@ -32,6 +32,7 @@ from .main_window_helper._nav_button import (
     SIDEBAR_COLLAPSED_WIDTH,
     CONTENT_MIN_WIDTH,
 )
+from ui.constants import WINDOW_DEFAULT_H, WINDOW_MIN_H, WINDOW_MIN_CONTENT_W, V_DIVIDER_WIDTH
 
 logger = logging.getLogger(__name__)
 
@@ -65,7 +66,7 @@ def _make_placeholder_tab(section_name: str, error: str = "") -> QWidget:
 
     base = get_font_size()
 
-    lbl_icon = QLabel("🚧")
+    lbl_icon = QLabel(tr('placeholder_icon'))
     lbl_icon.setAlignment(Qt.AlignCenter)
     lbl_icon.setStyleSheet(
         f"font-size:{fs(base, +8)}pt; background:transparent; border:none;"
@@ -120,9 +121,9 @@ class MainWindow(QMainWindow):
         self._accounting = None
 
         self.setWindowTitle(tr("app_title"))
-        self.resize(WINDOW_DEFAULT_W, 820)
+        self.resize(WINDOW_DEFAULT_W, WINDOW_DEFAULT_H)
         self.setLayoutDirection(Qt.RightToLeft)
-        self.setMinimumSize(SIDEBAR_COLLAPSED_WIDTH + 400, 500)
+        self.setMinimumSize(SIDEBAR_COLLAPSED_WIDTH + WINDOW_MIN_CONTENT_W, WINDOW_MIN_H)
 
         self._build()
 
@@ -144,7 +145,7 @@ class MainWindow(QMainWindow):
         # ── فاصل عمودي ──
         sep = QFrame()
         sep.setFrameShape(QFrame.VLine)
-        sep.setFixedWidth(1)
+        sep.setFixedWidth(V_DIVIDER_WIDTH)
         sep.setStyleSheet(f"background:{_C['border']};border:none;")
         sep.setSizePolicy(QSizePolicy.Fixed, QSizePolicy.Expanding)
         main_layout.addWidget(sep)
@@ -259,12 +260,12 @@ class MainWindow(QMainWindow):
 
         # الترتيب يجب أن يطابق _INDEX_MAP بالضبط
         _builders = [
-            (_build_costing,    tr("costing")),
-            (_build_pricing,    tr("pricing")),
-            (_build_accounting, tr("accounting")),
-            (_build_inventory,  tr("inventory")),
-            (_build_design,     tr("design")),
-            (_build_orders,     tr("orders")),
+            (_build_costing,    tr("nav_costing")),
+            (_build_pricing,    tr("nav_pricing")),
+            (_build_accounting, tr("nav_accounting")),
+            (_build_inventory,  tr("nav_inventory")),
+            (_build_design,     tr("nav_design")),
+            (_build_orders,     tr("nav_orders")),
         ]
 
         for builder_fn, name in _builders:
