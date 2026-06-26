@@ -23,25 +23,30 @@ from db.accounting.investors_repo import (
 from ui.widgets.mixins.form_mixins import EditModeMixin
 from ui.widgets.core.events import bus
 from ui.widgets.core.conn import DualConnMixin
+from ui.widgets.core.widget_mixin import WidgetMixin
 from ui.widgets.panels.form_group import FormGroup
 from ui.widgets.components.label import ModeLabel
 from ui.widgets.components.button import make_btn as _make_btn
 from ui.widgets.forms.inputs import NotesLineEdit, DateField, AmountSpinBox
-from ui.font import FS_XS
-from ui.theme import _C
 from ui.widgets.core.i18n import tr
+from ui.constants import (
+    BTN_MIN_HEIGHT, FILTER_COMBO_MIN_H,
+    SPACING_LG, SPACING_MD, FORM_GROUP_MARGIN_TOP,
+)
 from ._helpers import (
     _fill_capital_combo, _fill_asset_combo,
     _post_capital_entry,
 )
 
 
-class _InvestorForm(DualConnMixin, QWidget, EditModeMixin):
+class _InvestorForm(DualConnMixin, QWidget, WidgetMixin, EditModeMixin):
     def __init__(self, acc_conn, erp_conn, parent=None):
         super().__init__(parent)
         self._init_dual_conn(acc_conn, erp_conn)
+        self._init_widget_mixin(lang=False, data=False)
 
         self._build()
+        self._refresh_style()
         self.init_edit_mode(self.btn_add, self.btn_save, self.btn_cancel, self.lbl_mode)
         bus.company_data_changed.connect(self._on_company_event)
 
@@ -49,10 +54,18 @@ class _InvestorForm(DualConnMixin, QWidget, EditModeMixin):
         if self._on_dual_company_event(company_id):
             self._refresh_account_combos()
 
+    def _refresh_style(self, *_):
+        from ui.theme import _C
+        from ui.font import FS_XS
+        self.lbl_init_preview.setStyleSheet(
+            f"color:{_C['investor_capital_text']}; font-size:{FS_XS}px;"
+            "background:transparent; border:none;"
+        )
+
     def _build(self):
         root = QVBoxLayout(self)
-        root.setContentsMargins(12, 10, 12, 10)
-        root.setSpacing(8)
+        root.setContentsMargins(SPACING_LG, FORM_GROUP_MARGIN_TOP, SPACING_LG, FORM_GROUP_MARGIN_TOP)
+        root.setSpacing(SPACING_MD)
 
         grp = FormGroup(tr("investor_data_header"))
 
@@ -61,10 +74,10 @@ class _InvestorForm(DualConnMixin, QWidget, EditModeMixin):
 
         self.inp_name = QLineEdit()
         self.inp_name.setPlaceholderText(tr("investor_name_placeholder"))
-        self.inp_name.setMinimumHeight(30)
+        self.inp_name.setMinimumHeight(BTN_MIN_HEIGHT)
         grp.add_row(tr("name") + ":", self.inp_name)
 
-        self.dt_joined = DateField(height=30)
+        self.dt_joined = DateField(height=BTN_MIN_HEIGHT)
         grp.add_row(tr("investor_join_date") + ":", self.dt_joined)
 
         self.inp_notes = NotesLineEdit()
@@ -72,26 +85,23 @@ class _InvestorForm(DualConnMixin, QWidget, EditModeMixin):
 
         root.addWidget(grp)
 
+        from ui.theme import _C
         self._initial_grp = FormGroup(tr("initial_capital_header"), accent=_C["investor_capital_text"])
 
-        self.sp_initial = AmountSpinBox(max_=999_999_999, dec=2, height=30)
+        self.sp_initial = AmountSpinBox(max_=999_999_999, dec=2, height=BTN_MIN_HEIGHT)
         self._initial_grp.add_row(tr("amount_label"), self.sp_initial)
 
         self.cmb_capital_acc = QComboBox()
-        self.cmb_capital_acc.setMinimumHeight(28)
+        self.cmb_capital_acc.setMinimumHeight(FILTER_COMBO_MIN_H)
         _fill_capital_combo(self.cmb_capital_acc, self._get_safe_conn())
         self._initial_grp.add_row(tr("capital_account_label"), self.cmb_capital_acc)
 
         self.cmb_asset_acc = QComboBox()
-        self.cmb_asset_acc.setMinimumHeight(28)
+        self.cmb_asset_acc.setMinimumHeight(FILTER_COMBO_MIN_H)
         _fill_asset_combo(self.cmb_asset_acc, self._get_safe_conn())
         self._initial_grp.add_row(tr("deposit_account_label"), self.cmb_asset_acc)
 
         self.lbl_init_preview = QLabel("─")
-        self.lbl_init_preview.setStyleSheet(
-            f"color:{_C['investor_capital_text']}; font-size:{FS_XS}px;"
-            "background:transparent; border:none;"
-        )
         self.lbl_init_preview.setWordWrap(True)
         self.sp_initial.valueChanged.connect(self._update_init_preview)
         self.cmb_capital_acc.currentIndexChanged.connect(self._update_init_preview)
@@ -104,7 +114,7 @@ class _InvestorForm(DualConnMixin, QWidget, EditModeMixin):
         self.btn_save   = _make_btn(tr("btn_save"),          "success")
         self.btn_cancel = _make_btn(tr("btn_cancel"),        "ghost")
         for btn in (self.btn_add, self.btn_save, self.btn_cancel):
-            btn.setMinimumHeight(30)
+            btn.setMinimumHeight(BTN_MIN_HEIGHT)
         self.btn_add.clicked.connect(self._add)
         self.btn_save.clicked.connect(self._save_edit)
         self.btn_cancel.clicked.connect(self._cancel)

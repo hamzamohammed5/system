@@ -62,7 +62,7 @@ def _fill_asset_combo(cmb: QComboBox, acc_conn, prev_id=None):
     cmb.clear()
     for acc in _fetch_asset_accounts(acc_conn):
         sub  = acc["subtype"] if "subtype" in acc.keys() else ""
-        icon = "🏦" if sub == "bank" else ("💵" if sub == "cash" else "📦")
+        icon = tr("asset_icon_bank") if sub == "bank" else (tr("asset_icon_cash") if sub == "cash" else tr("asset_icon_other"))
         cmb.addItem(f"{icon} {acc['code']} — {acc['name']}", acc["id"])
 
     restored = False

@@ -12,6 +12,13 @@ from PyQt5.QtCore import Qt
 
 from ui.widgets.theme.table_styles import splitter_style as get_splitter_style
 
+from ui.constants import (
+    FINANCIAL_SPLITTER_HANDLE_W,
+    INVESTOR_FORM_SPLIT_SIZES,
+    INVESTOR_PANEL_TOP_H,
+    INVESTOR_PANEL_DETAIL_H,
+)
+
 from ._investor_form   import _InvestorForm
 from ._investors_table import _InvestorsTable
 
@@ -29,7 +36,7 @@ def build_main_panel(acc_conn, erp_conn,
     main_lay.setContentsMargins(0, 0, 0, 0)
 
     splitter_v = QSplitter(Qt.Vertical)
-    splitter_v.setHandleWidth(6)
+    splitter_v.setHandleWidth(FINANCIAL_SPLITTER_HANDLE_W)
     splitter_v.setStyleSheet(get_splitter_style())
 
     top_widget = QWidget()
@@ -37,7 +44,7 @@ def build_main_panel(acc_conn, erp_conn,
     top_lay.setContentsMargins(0, 0, 0, 0)
 
     splitter_h = QSplitter(Qt.Horizontal)
-    splitter_h.setHandleWidth(6)
+    splitter_h.setHandleWidth(FINANCIAL_SPLITTER_HANDLE_W)
     splitter_h.setStyleSheet(get_splitter_style())
 
     form    = _InvestorForm(acc_conn, erp_conn)
@@ -49,12 +56,12 @@ def build_main_panel(acc_conn, erp_conn,
 
     splitter_h.addWidget(form)
     splitter_h.addWidget(table)
-    splitter_h.setSizes([310, 600])
+    splitter_h.setSizes(list(INVESTOR_FORM_SPLIT_SIZES))
 
     top_lay.addWidget(splitter_h)
     splitter_v.addWidget(top_widget)
     splitter_v.addWidget(details)
-    splitter_v.setSizes([320, 320])
+    splitter_v.setSizes([INVESTOR_PANEL_TOP_H, INVESTOR_PANEL_DETAIL_H])
 
     main_lay.addWidget(splitter_v)
     return main_widget, details

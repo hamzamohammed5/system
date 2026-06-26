@@ -34,10 +34,10 @@ def build_movements_table():
     ]
     table = make_table(cols, stretch_col=5)
     table.setColumnHidden(0, True)
-    table.setColumnWidth(1, 90)
-    table.setColumnWidth(2, 90)
-    table.setColumnWidth(3, 110)
-    table.setColumnWidth(4, 95)
+    table.setColumnWidth(1, INVESTOR_MOV_COL_DATE_W)
+    table.setColumnWidth(2, INVESTOR_MOV_COL_TYPE_W)
+    table.setColumnWidth(3, INVESTOR_MOV_COL_AMOUNT_W)
+    table.setColumnWidth(4, INVESTOR_MOV_COL_REF_W)
     table.setAlternatingRowColors(True)
     return table
 

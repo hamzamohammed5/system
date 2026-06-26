@@ -20,24 +20,32 @@ from db.accounting.investors_repo import (
 from db.accounting.accounting_repo import delete_entry
 from ui.widgets.core.events import bus
 from ui.widgets.core.conn import DualConnMixin
+from ui.widgets.core.widget_mixin import WidgetMixin
 from ui.widgets.components.stat_card import StatRow, StatItem
 from ui.widgets.components.button import make_btn
 from ui.widgets.dialogs.confirm import confirm_action
 from ui.widgets.dialogs.message import msg_info
-from ui.theme import _C
 from ui.widgets.core.i18n import tr
 from ui.font import FS_MD, FS_SM
+from ui.constants import (
+    INVESTOR_DETAIL_MARGIN_H, INVESTOR_DETAIL_MARGIN_T, INVESTOR_DETAIL_MARGIN_B,
+    INVESTOR_DETAIL_SPACING,
+    INVESTOR_TITLE_BORDER_RADIUS, INVESTOR_TITLE_PAD_V, INVESTOR_TITLE_PAD_H,
+    INPUT_BORDER_W,
+    INVESTOR_DEL_BTN_MIN_H,
+)
 
 from ._details_table import build_movements_table, fill_movement_row
 
 
-class _InvestorDetails(DualConnMixin, QWidget):
+class _InvestorDetails(DualConnMixin, WidgetMixin, QWidget):
     def __init__(self, acc_conn, erp_conn, parent=None):
         super().__init__(parent)
         self._init_dual_conn(acc_conn, erp_conn)
         self._inv_id = None
 
         self._build()
+        self._init_widget_mixin(font=False, lang=False, data=False)
         bus.company_data_changed.connect(self._on_company_event)
 
     def _on_company_event(self, company_id: int):
@@ -46,28 +54,25 @@ class _InvestorDetails(DualConnMixin, QWidget):
 
     def _build(self):
         root = QVBoxLayout(self)
-        root.setContentsMargins(12, 8, 12, 12)
-        root.setSpacing(8)
+        root.setContentsMargins(INVESTOR_DETAIL_MARGIN_H, INVESTOR_DETAIL_MARGIN_T,
+                                INVESTOR_DETAIL_MARGIN_H, INVESTOR_DETAIL_MARGIN_B)
+        root.setSpacing(INVESTOR_DETAIL_SPACING)
 
         self.lbl_title = QLabel(tr("investor_detail_placeholder"))
-        self.lbl_title.setStyleSheet(
-            f"font-weight:bold; font-size:{FS_MD}px; color:{_C['accent']};"
-            f"background:{_C['info_bg']}; border:1px solid {_C['info_border']};"
-            "border-radius:6px; padding:8px 14px;"
-        )
+        self._refresh_style()
         self.lbl_title.setAlignment(Qt.AlignCenter)
         root.addWidget(self.lbl_title)
 
         self._stat_row = StatRow([
-            StatItem(label=tr("total_capital"),   color=_C["investor_capital_text"],  icon="💰"),
-            StatItem(label=tr("total_drawings"),  color=_C["investor_drawings_text"], icon="💸"),
-            StatItem(label=tr("net_investment"),  color=_C["accent"],                 icon="⚖️"),
+            StatItem(label=tr("total_capital"),   color=None,  icon="💰"),
+            StatItem(label=tr("total_drawings"),  color=None, icon="💸"),
+            StatItem(label=tr("net_investment"),  color=None,                 icon="⚖️"),
         ])
         root.addWidget(self._stat_row)
 
         lbl_mov = QLabel(tr("investor_movements_header"))
         lbl_mov.setStyleSheet(
-            f"font-weight:bold; color:{_C['accent']}; font-size:{FS_SM}px;"
+            f"font-weight:bold; font-size:{FS_SM}px;"
             "background:transparent; border:none;"
         )
         root.addWidget(lbl_mov)
@@ -76,7 +81,7 @@ class _InvestorDetails(DualConnMixin, QWidget):
         root.addWidget(self.table, stretch=1)
 
         btn_del_move = make_btn(tr("delete_movement_btn"), "danger")
-        btn_del_move.setMinimumHeight(28)
+        btn_del_move.setMinimumHeight(INVESTOR_DEL_BTN_MIN_H)
         btn_del_move.clicked.connect(self._delete_movement)
         btn_row = QHBoxLayout()
         btn_row.addWidget(btn_del_move)
@@ -87,9 +92,19 @@ class _InvestorDetails(DualConnMixin, QWidget):
         self._inv_id = inv_id
         self._refresh()
 
+    def _refresh_style(self, *_):
+        from ui.theme import _C
+        self.lbl_title.setStyleSheet(
+            f"font-weight:bold; font-size:{FS_MD}px; color:{_C['accent']};"
+            f"background:{_C['info_bg']}; border:{INPUT_BORDER_W}px solid {_C['info_border']};"
+            f"border-radius:{INVESTOR_TITLE_BORDER_RADIUS}px;"
+            f"padding:{INVESTOR_TITLE_PAD_V}px {INVESTOR_TITLE_PAD_H}px;"
+        )
+
     def _refresh(self):
         if self._inv_id is None:
             return
+        from ui.theme import _C
         erp = self._get_erp_conn()
         acc = self._get_safe_conn()
         s   = calc_investor_summary(erp, self._inv_id, acc)
@@ -97,7 +112,11 @@ class _InvestorDetails(DualConnMixin, QWidget):
             return
 
         self.lbl_title.setText(
-            f"👤  {s['investor_name']}  │  {tr('investor_joined')}: {s.get('joined_at','—')}"
+            tr("investor_title_fmt").format(
+                name=s["investor_name"],
+                joined_label=tr("investor_joined"),
+                date=s.get("joined_at", "—"),
+            )
         )
 
         self._stat_row.set_value(0, f"{s['total_capital']:,.2f}  {tr('currency_abbr')}")
