@@ -20,6 +20,7 @@ from PyQt5.QtCore import Qt
 from db.accounting.investors_repo import fetch_all_investors, link_investor_to_line
 from ui.widgets.core.events import bus
 from ui.widgets.core.conn import DualConnMixin
+from ui.widgets.core.widget_mixin import WidgetMixin
 from ui.widgets.panels.form_group import FormGroup
 from ui.widgets.panels.form_fields import spin_field
 from ui.widgets.panels.form_labels import required_label, form_label
@@ -27,17 +28,28 @@ from ui.widgets.components.button import make_btn as _make_btn
 from ui.widgets.components.notification import NotificationBar
 from ui.widgets.forms.inputs import NotesLineEdit
 from ui.widgets.dialogs.message import msg_warning
-from ui.theme import _C
 from ui.widgets.core.i18n import tr
-from ui.font import FS_SM
+from ui.constants import BTN_MIN_HEIGHT, LINK_PANEL_MARGINS, LINK_PANEL_SPACING, LINK_PANEL_INFO_RADIUS, LINK_PANEL_INFO_PAD
 
 
-class _LinkToEntryPanel(DualConnMixin, QWidget):
+class _LinkToEntryPanel(DualConnMixin, WidgetMixin, QWidget):
     def __init__(self, acc_conn, erp_conn, parent=None):
         super().__init__(parent)
         self._init_dual_conn(acc_conn, erp_conn)
+        self._init_widget_mixin(lang=False, data=False)
         self._build()
+        self._refresh_style()
         bus.company_data_changed.connect(self._on_company_event)
+
+    def _refresh_style(self, *_):
+        from ui.theme import _C
+        from ui.font import FS_SM
+        if hasattr(self, 'lbl_info'):
+            self.lbl_info.setStyleSheet(
+                f"background:{_C['orange_bg']}; border:1px solid {_C['orange_border']};"
+                f"border-radius:{LINK_PANEL_INFO_RADIUS}px; padding:{LINK_PANEL_INFO_PAD}px;"
+                f"color:{_C['orange']}; font-size:{FS_SM}px;"
+            )
 
     def _on_company_event(self, company_id: int):
         if self._on_dual_company_event(company_id):
@@ -45,37 +57,33 @@ class _LinkToEntryPanel(DualConnMixin, QWidget):
 
     def _build(self):
         root = QVBoxLayout(self)
-        root.setContentsMargins(12, 10, 12, 10)
-        root.setSpacing(10)
+        root.setContentsMargins(*LINK_PANEL_MARGINS)
+        root.setSpacing(LINK_PANEL_SPACING)
 
         self._notif = NotificationBar(show_dismiss=True)
         root.addWidget(self._notif)
 
-        lbl_info = QLabel(tr("link_entry_info"))
-        lbl_info.setStyleSheet(
-            f"background:{_C['orange_bg']}; border:1px solid {_C['orange_border']};"
-            f"border-radius:6px; padding:10px; color:{_C['orange']}; font-size:{FS_SM}px;"
-        )
-        lbl_info.setWordWrap(True)
-        root.addWidget(lbl_info)
+        self.lbl_info = QLabel(tr("link_entry_info"))
+        self.lbl_info.setWordWrap(True)
+        root.addWidget(self.lbl_info)
 
         grp = FormGroup(tr("link_data_header"))
         form = grp.form
 
         self.cmb_investor = QComboBox()
-        self.cmb_investor.setMinimumHeight(30)
+        self.cmb_investor.setMinimumHeight(BTN_MIN_HEIGHT)
         self._reload_investors()
         form.addRow(required_label(tr("investors") + ":"), self.cmb_investor)
 
         self.cmb_move = QComboBox()
         self.cmb_move.addItem(tr("investor_capital_badge") + " (capital)",   "capital")
         self.cmb_move.addItem(tr("investor_drawings_badge") + " (drawings)", "drawings")
-        self.cmb_move.setMinimumHeight(30)
+        self.cmb_move.setMinimumHeight(BTN_MIN_HEIGHT)
         form.addRow(form_label(tr("move_type_label")), self.cmb_move)
 
         self.inp_entry_ref = QLineEdit()
         self.inp_entry_ref.setPlaceholderText(tr("entry_ref_placeholder"))
-        self.inp_entry_ref.setMinimumHeight(30)
+        self.inp_entry_ref.setMinimumHeight(BTN_MIN_HEIGHT)
         form.addRow(required_label(tr("ref_no_label")), self.inp_entry_ref)
 
         self.sp_amount = spin_field(max_=999_999_999, dec=2)

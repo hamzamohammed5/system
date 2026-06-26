@@ -19,24 +19,33 @@ from PyQt5.QtCore import Qt
 
 from ui.widgets.core.events import bus, emit_company_data_changed
 from ui.widgets.core.conn import DualConnMixin
+from ui.widgets.core.widget_mixin import WidgetMixin
 from ui.widgets.panels.form_group import FormGroup
 from ui.widgets.components.button import make_btn as _make_btn
 from ui.widgets.forms.inputs import NotesLineEdit, DateField, AmountSpinBox
-from ui.theme import _C
 from ui.widgets.core.i18n import tr
 from ui.font import FS_MD, FS_SM
+from ui.constants import (
+    BTN_MIN_HEIGHT, CONFIRM_BTN_MIN_H,
+    MOVEMENT_DIALOG_MIN_W, MOVEMENT_DIALOG_SPACING,
+    MOVEMENT_DIALOG_MARGINS, MOVEMENT_DIALOG_BTN_H,
+    MOVEMENT_DIALOG_TITLE_RADIUS, MOVEMENT_DIALOG_TITLE_PAD_V,
+    MOVEMENT_DIALOG_TITLE_PAD_H, MOVEMENT_DIALOG_PREVIEW_RADIUS,
+    MOVEMENT_DIALOG_PREVIEW_PAD_V, MOVEMENT_DIALOG_PREVIEW_PAD_H,
+)
 from ._helpers import (
     _fill_capital_combo, _fill_drawings_combo, _fill_asset_combo,
     _post_capital_entry, _post_drawings_entry,
 )
 
 
-class _MovementDialog(DualConnMixin, QDialog):
+class _MovementDialog(DualConnMixin, WidgetMixin, QDialog):
     def __init__(self, acc_conn, erp_conn,
                  investor_id, investor_name,
                  move_type="capital", parent=None):
         super().__init__(parent)
         self._init_dual_conn(acc_conn, erp_conn)
+        self._init_widget_mixin(lang=False, data=False)
         self.investor_id   = investor_id
         self.investor_name = investor_name
         self.move_type     = move_type
@@ -44,28 +53,47 @@ class _MovementDialog(DualConnMixin, QDialog):
         is_cap = move_type == "capital"
         title  = tr("add_capital_title") if is_cap else tr("add_drawings_title")
         self.setWindowTitle(title)
-        self.setMinimumWidth(500)
+        self._is_cap = is_cap
+        self.setMinimumWidth(MOVEMENT_DIALOG_MIN_W)
         self.setModal(True)
         self.setLayoutDirection(Qt.RightToLeft)
         self._build()
 
+    def _refresh_style(self, *_):
+        from ui.theme import _C
+        if hasattr(self, 'lbl_title'):
+            is_cap = self.move_type == "capital"
+            color  = _C["investor_capital_text"] if is_cap else _C["investor_drawings_text"]
+            bg     = _C["investor_capital_bg"] if is_cap else _C["investor_drawings_bg"]
+            self.lbl_title.setStyleSheet(
+                f"font-size:{FS_MD}px; font-weight:bold; color:{color};"
+                f"background:{bg};"
+                f"border-radius:{MOVEMENT_DIALOG_TITLE_RADIUS}px;"
+                f"padding:{MOVEMENT_DIALOG_TITLE_PAD_V}px {MOVEMENT_DIALOG_TITLE_PAD_H}px;"
+            )
+        if hasattr(self, 'lbl_preview'):
+            self.lbl_preview.setStyleSheet(
+                f"background:{_C['bg_surface_2']};"
+                f"border:1px solid {_C['journal_header_border']};"
+                f"border-radius:{MOVEMENT_DIALOG_PREVIEW_RADIUS}px;"
+                f"padding:{MOVEMENT_DIALOG_PREVIEW_PAD_V}px {MOVEMENT_DIALOG_PREVIEW_PAD_H}px;"
+                f"font-size:{FS_SM}px;"
+            )
+
     def _build(self):
+        from ui.theme import _C
         root   = QVBoxLayout(self)
-        root.setSpacing(14)
-        root.setContentsMargins(20, 16, 20, 16)
+        root.setSpacing(MOVEMENT_DIALOG_SPACING)
+        root.setContentsMargins(*MOVEMENT_DIALOG_MARGINS)
         acc    = self._get_safe_conn()
         is_cap = self.move_type == "capital"
         color  = _C["investor_capital_text"] if is_cap else _C["investor_drawings_text"]
-        icon   = "💰" if is_cap else "💸"
+        icon   = tr("movement_icon_capital") if is_cap else tr("movement_icon_drawings")
         op_ar  = tr("add_capital_title") if is_cap else tr("add_drawings_title")
 
-        lbl_title = QLabel(f"{icon}  {self.investor_name}  —  {op_ar}")
-        lbl_title.setStyleSheet(
-            f"font-size:{FS_MD}px; font-weight:bold; color:{color};"
-            f"background:{_C['investor_capital_bg'] if is_cap else _C['investor_drawings_bg']};"
-            "border-radius:6px; padding:8px 14px;"
-        )
-        root.addWidget(lbl_title)
+        self.lbl_title = QLabel(f"{icon}  {self.investor_name}  —  {op_ar}")
+        self._refresh_style()
+        root.addWidget(self.lbl_title)
 
         grp = FormGroup(accent=color)
 
@@ -76,7 +104,7 @@ class _MovementDialog(DualConnMixin, QDialog):
         grp.add_row(tr("date") + ":", self.dt_date)
 
         self.cmb_equity_acc = QComboBox()
-        self.cmb_equity_acc.setMinimumHeight(30)
+        self.cmb_equity_acc.setMinimumHeight(BTN_MIN_HEIGHT)
         if is_cap:
             _fill_capital_combo(self.cmb_equity_acc, acc)
             grp.add_row(tr("capital_account_row"), self.cmb_equity_acc)
@@ -85,21 +113,18 @@ class _MovementDialog(DualConnMixin, QDialog):
             grp.add_row(tr("drawings_account_row"), self.cmb_equity_acc)
 
         self.cmb_asset_acc = QComboBox()
-        self.cmb_asset_acc.setMinimumHeight(30)
+        self.cmb_asset_acc.setMinimumHeight(BTN_MIN_HEIGHT)
         _fill_asset_combo(self.cmb_asset_acc, acc)
         asset_lbl = tr("deposit_account_row") if is_cap else tr("payment_account_label")
         grp.add_row(asset_lbl, self.cmb_asset_acc)
 
         self.lbl_preview = QLabel()
-        self.lbl_preview.setStyleSheet(
-            f"background:{_C['bg_surface_2']}; border:1px solid {_C['journal_header_border']};"
-            f"border-radius:6px; padding:8px 12px; font-size:{FS_SM}px;"
-        )
         self.lbl_preview.setWordWrap(True)
         self.sp_amount.valueChanged.connect(self._update_preview)
         self.cmb_equity_acc.currentIndexChanged.connect(self._update_preview)
         self.cmb_asset_acc.currentIndexChanged.connect(self._update_preview)
         grp.add_row(tr("expected_entry"), self.lbl_preview)
+        self._refresh_style()
         self._update_preview()
 
         self.inp_notes = NotesLineEdit()
@@ -109,8 +134,8 @@ class _MovementDialog(DualConnMixin, QDialog):
 
         btn_ok     = _make_btn(tr("record_btn"),  "success" if is_cap else "danger")
         btn_cancel = _make_btn(tr("btn_cancel"),  "ghost")
-        btn_ok.setMinimumHeight(34)
-        btn_cancel.setMinimumHeight(34)
+        btn_ok.setMinimumHeight(MOVEMENT_DIALOG_BTN_H)
+        btn_cancel.setMinimumHeight(MOVEMENT_DIALOG_BTN_H)
         btn_ok.clicked.connect(self._accept)
         btn_cancel.clicked.connect(self.reject)
 

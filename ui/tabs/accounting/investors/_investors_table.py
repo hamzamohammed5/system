@@ -29,6 +29,11 @@ from ui.widgets.core.conn import DualConnMixin
 from ui.theme import _C
 from ui.widgets.core.i18n import tr
 from ui.font import FS_SM
+from ui.constants import (
+    SPACING_LG, SPACING_SM, BTN_MIN_HEIGHT,
+    COL_MIN_WIDTH, INVESTOR_TABLE_COL_MAX_W,
+)
+from ui.widgets.core.widget_mixin import WidgetMixin
 from ._investor_form    import _InvestorForm
 from ._movement_dialog  import _MovementDialog
 
@@ -45,14 +50,16 @@ def _get_cols():
 _COL_WIDTHS = {0: 40, 2: 100, 3: 110, 4: 100, 5: 120}
 
 
-class _InvestorsTable(DualConnMixin, QWidget):
+class _InvestorsTable(DualConnMixin, WidgetMixin, QWidget):
     def __init__(self, acc_conn, erp_conn, form: _InvestorForm,
                  on_select, parent=None):
         super().__init__(parent)
         self._init_dual_conn(acc_conn, erp_conn)
+        self._init_widget_mixin(lang=True, data=False)
         self._form      = form
         self._on_select = on_select
         self._build()
+        self._refresh_lang()
         self._load()
         bus.company_data_changed.connect(self._on_company_event)
 
@@ -60,17 +67,26 @@ class _InvestorsTable(DualConnMixin, QWidget):
         if self._on_dual_company_event(company_id):
             self._load()
 
+    def _refresh_style(self, *_):
+        from ui.theme import _C
+        if hasattr(self, 'lbl_title'):
+            self.lbl_title.setStyleSheet(
+                f"font-weight:bold; color:{_C['accent']}; font-size:{FS_SM}px;"
+                "background:transparent; border:none;"
+            )
+
+    def _refresh_lang(self, *_):
+        if hasattr(self, 'table'):
+            self.table.setHorizontalHeaderLabels(_get_cols())
+
     def _build(self):
         root = QVBoxLayout(self)
-        root.setContentsMargins(12, 8, 12, 12)
-        root.setSpacing(6)
+        root.setContentsMargins(SPACING_LG, SPACING_SM, SPACING_LG, SPACING_LG)
+        root.setSpacing(SPACING_SM)
 
-        lbl = QLabel(tr("investor_list_title"))
-        lbl.setStyleSheet(
-            f"font-weight:bold; color:{_C['accent']}; font-size:{FS_SM}px;"
-            "background:transparent; border:none;"
-        )
-        root.addWidget(lbl)
+        self.lbl_title = QLabel(tr("investor_list_title"))
+        root.addWidget(self.lbl_title)
+        self._refresh_style()
 
         self.table = make_list_table(
             columns=_get_cols(),
@@ -89,7 +105,7 @@ class _InvestorsTable(DualConnMixin, QWidget):
         btn_draw    = _make_btn(tr("investor_drawings_badge"), "danger")
 
         for btn in (btn_edit, btn_del, btn_capital, btn_draw):
-            btn.setMinimumHeight(30)
+            btn.setMinimumHeight(BTN_MIN_HEIGHT)
 
         btn_edit.clicked.connect(self._edit)
         btn_del.clicked.connect(self._delete)
@@ -97,7 +113,7 @@ class _InvestorsTable(DualConnMixin, QWidget):
         btn_draw.clicked.connect(lambda: self._open_movement("drawings"))
 
         btn_row = QHBoxLayout()
-        btn_row.setSpacing(6)
+        btn_row.setSpacing(SPACING_SM)
         for btn in (btn_edit, btn_del, btn_capital, btn_draw):
             btn_row.addWidget(btn)
         btn_row.addStretch()
@@ -144,8 +160,8 @@ class _InvestorsTable(DualConnMixin, QWidget):
                 self.table,
                 fixed_cols=[0, 2, 3, 4, 5],
                 stretch_col=1,
-                min_width=40,
-                max_width=200,
+                min_width=COL_MIN_WIDTH,
+                max_width=INVESTOR_TABLE_COL_MAX_W,
             )
 
     def _edit(self):
