@@ -17,21 +17,28 @@ from db.accounting.accounting_repo import fetch_all_groups, build_group_tree
 from db.accounting.accounting_schema import TYPE_AR, EQUITY_TYPES
 from ui.widgets.core.events import bus, get_active_company_id
 from ui.widgets.core.conn import SafeConnMixin
+from ui.widgets.core.widget_mixin import WidgetMixin
 from ui.widgets.core.i18n import tr
-from ui.theme import _C
 from ui.font import FS_SM
 from ui.tabs.accounting.helpers import TYPE_COLORS
+from ui.constants import (
+    TREE_GROUP_COMBO_BORDER_W,
+    TREE_GROUP_COMBO_ITEM_PAD_V,
+    TREE_GROUP_COMBO_ITEM_PAD_H,
+    TREE_GROUP_COMBO_ITEM_MIN_H,
+    TREE_GROUP_COMBO_HEADER_FONT_DELTA,
+)
 from ._no_select_delegate import _NoSelectDelegate
 
 _TYPE_ORDER = ["asset", "liability", "capital", "drawings", "revenue", "expense"]
 
-_TYPE_ICONS = {
-    "asset":     "🏦",
-    "liability": "📋",
-    "capital":   "👑",
-    "drawings":  "💸",
-    "revenue":   "💹",
-    "expense":   "📤",
+_TYPE_ICON_KEYS = {
+    "asset":     "account_tree_icon_asset",
+    "liability": "account_tree_icon_liability",
+    "capital":   "account_tree_icon_capital",
+    "drawings":  "account_tree_icon_drawings",
+    "revenue":   "account_tree_icon_revenue",
+    "expense":   "account_tree_icon_expense",
 }
 
 _ROLE_GROUP_ID  = Qt.UserRole + 1
@@ -39,10 +46,11 @@ _ROLE_IS_HEADER = Qt.UserRole + 2
 
 def _equity_color() -> str:
     """لون حقوق الملكية من الثيم — يُقرأ في runtime لدعم تغيير الثيم."""
+    from ui.theme import _C
     return _C["investor_capital_text"]
 
 
-class _TreeGroupCombo(SafeConnMixin, QComboBox):
+class _TreeGroupCombo(SafeConnMixin, QComboBox, WidgetMixin):
     """
     QComboBox يعرض التصنيفات في شجرة هرمية.
     عناصر الرأس (أنواع الحسابات) غير قابلة للاختيار.
@@ -54,7 +62,6 @@ class _TreeGroupCombo(SafeConnMixin, QComboBox):
         self._init_safe_conn(conn, "accounting")
         self._group_entry_ids = None
         self._company_id      = get_active_company_id()
-        self._destroyed       = False
 
         self._model = QStandardItemModel()
         self.setModel(self._model)
@@ -66,54 +73,40 @@ class _TreeGroupCombo(SafeConnMixin, QComboBox):
         )
         self._tree_view.setEditTriggers(QTreeView.NoEditTriggers)
         self._tree_view.setSelectionBehavior(QTreeView.SelectRows)
-        self._tree_view.setStyleSheet(f"""
-            QTreeView {{
-                border: 1px solid {_C['border_med']};
-                background: {_C['bg_input']};
-                outline: none;
-                font-size: {FS_SM}px;
-            }}
-            QTreeView::item {{
-                padding: 3px 6px;
-                min-height: 24px;
-            }}
-            QTreeView::item:selected {{
-                background: {_C['badge_dr_bg']};
-                color: {_C['accent']};
-            }}
-            QTreeView::item:hover:!selected {{
-                background: {_C['bg_hover']};
-            }}
-        """)
         self.setView(self._tree_view)
         self._tree_view.clicked.connect(self._on_tree_clicked)
 
+        self._init_widget_mixin(lang=False)
+        self._refresh_style()
         self._populate()
-        bus.company_data_changed.connect(self._on_company_event)
 
-    def _on_company_event(self, company_id: int):
-        if self._destroyed:
-            return
-        if self._on_company_event_safe(company_id):
-            self._reload()
+    def _refresh_style(self, *_):
+        from ui.theme import _C
+        self._tree_view.setStyleSheet(
+            f"QTreeView {{"
+            f"    border: {TREE_GROUP_COMBO_BORDER_W}px solid {_C['border_med']};"
+            f"    background: {_C['bg_input']};"
+            f"    outline: none;"
+            f"    font-size: {FS_SM}px;"
+            f"}}"
+            f"QTreeView::item {{"
+            f"    padding: {TREE_GROUP_COMBO_ITEM_PAD_V}px {TREE_GROUP_COMBO_ITEM_PAD_H}px;"
+            f"    min-height: {TREE_GROUP_COMBO_ITEM_MIN_H}px;"
+            f"}}"
+            f"QTreeView::item:selected {{"
+            f"    background: {_C['badge_dr_bg']};"
+            f"    color: {_C['accent']};"
+            f"}}"
+            f"QTreeView::item:hover:!selected {{"
+            f"    background: {_C['bg_hover']};"
+            f"}}"
+        )
 
-    def closeEvent(self, event):
-        self._destroyed = True
-        try:
-            bus.company_data_changed.disconnect(self._on_company_event)
-        except Exception:
-            pass
-        super().closeEvent(event)
-
-    def deleteLater(self):
-        self._destroyed = True
-        try:
-            bus.company_data_changed.disconnect(self._on_company_event)
-        except Exception:
-            pass
-        super().deleteLater()
+    def _refresh_data(self, company_id=None):
+        self._reload()
 
     def _populate(self):
+        from ui.theme import _C
         conn = self._get_safe_conn()
         prev_gid = self.currentData()
         self._model.clear()
@@ -144,13 +137,14 @@ class _TreeGroupCombo(SafeConnMixin, QComboBox):
             if not tree:
                 continue
 
-            icon = _TYPE_ICONS.get(acc_type, "📁")
+            icon_key = _TYPE_ICON_KEYS.get(acc_type)
+            icon = tr(icon_key) if icon_key else tr("account_tree_default_icon")
             type_label = f"{icon}  {TYPE_AR.get(acc_type, acc_type)}"
             header_item = QStandardItem(type_label)
             header_item.setData(None, _ROLE_GROUP_ID)
             header_item.setData(True, _ROLE_IS_HEADER)
             header_item.setFlags(Qt.ItemIsEnabled)
-            hf = QFont(); hf.setBold(True); hf.setPointSize(hf.pointSize() + 1)
+            hf = QFont(); hf.setBold(True); hf.setPointSize(hf.pointSize() + TREE_GROUP_COMBO_HEADER_FONT_DELTA)
             header_item.setFont(hf)
             header_item.setForeground(QColor(TYPE_COLORS.get(acc_type, _C['text_primary'])))
             bg = _C["investor_capital_bg"] if acc_type in EQUITY_TYPES else _C["journal_header_bg"]
@@ -162,6 +156,7 @@ class _TreeGroupCombo(SafeConnMixin, QComboBox):
         self._restore_selection(prev_gid)
 
     def _add_group_items(self, parent_item: QStandardItem, nodes: list, acc_type: str):
+        from ui.theme import _C
         for node in nodes:
             item = QStandardItem(f"  {node['name']}")
             item.setData(node["id"], _ROLE_GROUP_ID)

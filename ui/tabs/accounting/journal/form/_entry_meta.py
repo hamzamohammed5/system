@@ -16,12 +16,17 @@ _EntryRefLabel  — label موحد لرقم مرجعي للقيد.
 
 from PyQt5.QtWidgets import QLabel
 from PyQt5.QtCore import Qt
-from ui.theme import _C
 from ui.widgets.core.i18n import tr
 from ui.font import FS_XS, FS_SM
+from ui.widgets.core.widget_mixin import WidgetMixin
+from ui.constants import (
+    ENTRY_BADGE_BORDER_W, ENTRY_BADGE_BORDER_RADIUS, ENTRY_BADGE_PAD_V, ENTRY_BADGE_PAD_H,
+    ENTRY_REF_BORDER_W, ENTRY_REF_BORDER_RADIUS, ENTRY_REF_PAD_V, ENTRY_REF_PAD_H,
+)
 
 def _get_type_colors(entry_type: str) -> tuple:
     """يرجع (fg, bg, border) من _C حسب نوع القيد."""
+    from ui.theme import _C
     mapping = {
         "manual":   (_C["accent"],      _C["accent_light"],    _C["accent_mid"]),
         "opening":  (_C["success"],     _C["success_bg"],      _C["success_border"]),
@@ -42,7 +47,7 @@ def _get_type_label(entry_type: str) -> str:
     return mapping.get(entry_type, entry_type)
 
 
-class _EntryTypeBadge(QLabel):
+class _EntryTypeBadge(QLabel, WidgetMixin):
     """
     Badge لعرض نوع القيد بألوان موحدة.
 
@@ -53,10 +58,16 @@ class _EntryTypeBadge(QLabel):
 
     def __init__(self, entry_type: str = "manual", parent=None):
         super().__init__(parent)
+        self._entry_type = entry_type
         self.setAlignment(Qt.AlignCenter)
-        self.set_type(entry_type)
+        self._init_widget_mixin(data=False)
+        self._refresh_style()
+
+    def _refresh_style(self, *_):
+        self.set_type(self._entry_type)
 
     def set_type(self, entry_type: str):
+        self._entry_type = entry_type
         fg, bg, border = _get_type_colors(entry_type)
         label = _get_type_label(entry_type)
         self.setText(label)
@@ -64,16 +75,16 @@ class _EntryTypeBadge(QLabel):
             f"QLabel {{"
             f"    color: {fg};"
             f"    background: {bg};"
-            f"    border: 1px solid {border};"
-            f"    border-radius: 4px;"
-            f"    padding: 2px 10px;"
+            f"    border: {ENTRY_BADGE_BORDER_W}px solid {border};"
+            f"    border-radius: {ENTRY_BADGE_BORDER_RADIUS}px;"
+            f"    padding: {ENTRY_BADGE_PAD_V}px {ENTRY_BADGE_PAD_H}px;"
             f"    font-size: {FS_XS}px;"
             f"    font-weight: bold;"
             f"}}"
         )
 
 
-class _EntryRefLabel(QLabel):
+class _EntryRefLabel(QLabel, WidgetMixin):
     """
     Label لعرض رقم مرجعي للقيد.
 
@@ -81,16 +92,21 @@ class _EntryRefLabel(QLabel):
         ref = _EntryRefLabel("QD-2025-001")
     """
 
-    def __init__(self, ref_no: str = "─", parent=None):
-        super().__init__(ref_no, parent)
+    def __init__(self, ref_no: str = None, parent=None):
+        super().__init__(ref_no or tr("amount_dash_placeholder"), parent)
         self.setAlignment(Qt.AlignCenter)
+        self._init_widget_mixin(lang=False, data=False)
+        self._refresh_style()
+
+    def _refresh_style(self, *_):
+        from ui.theme import _C
         self.setStyleSheet(
             f"QLabel {{"
             f"    color: {_C['badge_dr_text']};"
             f"    background: {_C['accent_light']};"
-            f"    border: 1px solid {_C['accent_mid']};"
-            f"    border-radius: 4px;"
-            f"    padding: 2px 10px;"
+            f"    border: {ENTRY_REF_BORDER_W}px solid {_C['accent_mid']};"
+            f"    border-radius: {ENTRY_REF_BORDER_RADIUS}px;"
+            f"    padding: {ENTRY_REF_PAD_V}px {ENTRY_REF_PAD_H}px;"
             f"    font-size: {FS_SM}px;"
             f"    font-weight: bold;"
             f"    font-family: monospace;"
@@ -98,4 +114,4 @@ class _EntryRefLabel(QLabel):
         )
 
     def set_ref(self, ref_no: str):
-        self.setText(ref_no or "─")
+        self.setText(ref_no or tr("amount_dash_placeholder"))

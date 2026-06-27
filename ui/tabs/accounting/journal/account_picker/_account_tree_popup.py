@@ -24,23 +24,30 @@ from db.accounting.accounting_repo import (
 )
 from db.accounting.accounting_schema import TYPE_AR, EQUITY_TYPES
 from ...helpers import TYPE_COLORS
-from ui.theme import _C
 from ui.font import FS_XS, FS_BASE
 from ui.widgets.core.i18n import tr
+from ui.widgets.core.widget_mixin import WidgetMixin
+from ui.constants import (
+    SPACING_XS, BTN_MIN_HEIGHT, INPUT_BORDER_RADIUS, FILTER_BAR_BORDER_RADIUS,
+    ACCOUNT_TREE_POPUP_MIN_W, ACCOUNT_TREE_POPUP_MAX_H, ACCOUNT_TREE_POPUP_MARGINS,
+    ACCOUNT_TREE_LIST_BORDER_RADIUS, ACCOUNT_TREE_LIST_ITEM_PAD_V, ACCOUNT_TREE_LIST_ITEM_PAD_H,
+    ACCOUNT_TREE_SEARCH_PAD_V, ACCOUNT_TREE_SEARCH_PAD_H, ACCOUNT_TREE_BORDER_W,
+    ACCOUNT_TREE_FONT_SIZE_DELTA_L0, ACCOUNT_TREE_FONT_SIZE_DELTA_L1,
+)
 
 _TYPE_ORDER = {
-    "asset":     "🏦",
-    "liability": "📋",
-    "capital":   "👑",
-    "drawings":  "💸",
-    "revenue":   "💹",
-    "expense":   "📤",
+    "asset":     "account_tree_icon_asset",
+    "liability": "account_tree_icon_liability",
+    "capital":   "account_tree_icon_capital",
+    "drawings":  "account_tree_icon_drawings",
+    "revenue":   "account_tree_icon_revenue",
+    "expense":   "account_tree_icon_expense",
 }
 
 # _EQUITY_COLOR now uses _C at runtime
 
 
-class _AccountTreePopup(QDialog):
+class _AccountTreePopup(QDialog, WidgetMixin):
     """
     نافذة popup تعرض الحسابات في شجرة قابلة للطي مع بحث نصي.
 
@@ -61,40 +68,51 @@ class _AccountTreePopup(QDialog):
             self._expanded.add(f"type:{t}")
         self._all_accounts = []
         self._filter_text  = ""
+        self._init_widget_mixin(lang=False, data=False)
         self._build()
+        self._refresh_style()
         self._load_accounts(conn)  # conn يُستخدم هنا فقط
 
     def _build(self):
-        self.setMinimumWidth(440)
-        self.setMaximumHeight(520)
-        self.setStyleSheet(
-            f"QDialog {{ background: {_C['bg_surface']}; border: 1px solid {_C['journal_header_border']}; border-radius: 8px; }}"
-        )
+        self.setMinimumWidth(ACCOUNT_TREE_POPUP_MIN_W)
+        self.setMaximumHeight(ACCOUNT_TREE_POPUP_MAX_H)
         root = QVBoxLayout(self)
-        root.setContentsMargins(6, 6, 6, 6)
-        root.setSpacing(4)
+        root.setContentsMargins(*ACCOUNT_TREE_POPUP_MARGINS)
+        root.setSpacing(SPACING_XS)
 
         self.inp_search = QLineEdit()
         self.inp_search.setPlaceholderText(tr("account_search_placeholder"))
-        self.inp_search.setMinimumHeight(30)
-        self.inp_search.setStyleSheet(
-            f"QLineEdit {{ background: {_C['journal_header_bg']}; border: 1px solid {_C['journal_header_border']};"            f"border-radius: 4px; padding: 2px 8px; font-size: {FS_BASE}px; }}"            f"QLineEdit:focus {{ border-color: {_C['accent']}; background: {_C['bg_input']}; }}"
-        )
+        self.inp_search.setMinimumHeight(BTN_MIN_HEIGHT)
         self.inp_search.textChanged.connect(self._on_search)
         root.addWidget(self.inp_search)
 
         self.list_widget = QListWidget()
-        self.list_widget.setStyleSheet(
-            f"QListWidget {{ border: 1px solid {_C['border']}; border-radius: 4px;"            f"background: {_C['bg_surface']}; outline: none; }}"            f"QListWidget::item {{ padding: 3px 6px; border-bottom: 1px solid {_C['border']}; }}"            f"QListWidget::item:selected {{ background: {_C['badge_dr_bg']}; color: {_C['accent']}; }}"            f"QListWidget::item:hover:!selected {{ background: {_C['bg_hover']}; }}"
-        )
         self.list_widget.itemClicked.connect(self._on_item_clicked)
         self.list_widget.itemDoubleClicked.connect(self._on_item_double_clicked)
         root.addWidget(self.list_widget)
 
-        hint = QLabel(tr("popup_hint_select"))
-        hint.setStyleSheet(f"font-size:{FS_XS}px; color:{_C['text_hint']}; background:transparent;")
-        hint.setAlignment(Qt.AlignCenter)
-        root.addWidget(hint)
+        self.hint_label = QLabel(tr("popup_hint_select"))
+        self.hint_label.setAlignment(Qt.AlignCenter)
+        root.addWidget(self.hint_label)
+
+    def _refresh_style(self, *_):
+        from ui.theme import _C
+        self.setStyleSheet(
+            f"QDialog {{ background: {_C['bg_surface']}; border: {ACCOUNT_TREE_BORDER_W}px solid {_C['journal_header_border']}; border-radius: {FILTER_BAR_BORDER_RADIUS}px; }}"
+        )
+        self.inp_search.setStyleSheet(
+            f"QLineEdit {{ background: {_C['journal_header_bg']}; border: {ACCOUNT_TREE_BORDER_W}px solid {_C['journal_header_border']};"
+            f"border-radius: {INPUT_BORDER_RADIUS}px; padding: {ACCOUNT_TREE_SEARCH_PAD_V}px {ACCOUNT_TREE_SEARCH_PAD_H}px; font-size: {FS_BASE}px; }}"
+            f"QLineEdit:focus {{ border-color: {_C['accent']}; background: {_C['bg_input']}; }}"
+        )
+        self.list_widget.setStyleSheet(
+            f"QListWidget {{ border: {ACCOUNT_TREE_BORDER_W}px solid {_C['border']}; border-radius: {ACCOUNT_TREE_LIST_BORDER_RADIUS}px;"
+            f"background: {_C['bg_surface']}; outline: none; }}"
+            f"QListWidget::item {{ padding: {ACCOUNT_TREE_LIST_ITEM_PAD_V}px {ACCOUNT_TREE_LIST_ITEM_PAD_H}px; border-bottom: {ACCOUNT_TREE_BORDER_W}px solid {_C['border']}; }}"
+            f"QListWidget::item:selected {{ background: {_C['badge_dr_bg']}; color: {_C['accent']}; }}"
+            f"QListWidget::item:hover:!selected {{ background: {_C['bg_hover']}; }}"
+        )
+        self.hint_label.setStyleSheet(f"font-size:{FS_XS}px; color:{_C['text_hint']}; background:transparent;")
 
     def _load_accounts(self, conn):
         """يُستدعى مرة واحدة في __init__ بـ conn حي من المستدعي."""
@@ -125,6 +143,7 @@ class _AccountTreePopup(QDialog):
         self._render()
 
     def _render(self):
+        from ui.theme import _C
         self.list_widget.clear()
         q = self._filter_text
 
@@ -177,11 +196,11 @@ class _AccountTreePopup(QDialog):
         if equity_types and equity_has_match:
             equity_key = "group:equity"
             expanded   = equity_key in self._expanded
-            toggle     = "▼" if expanded else "▶"
+            toggle     = tr("tree_toggle_expanded") if expanded else tr("tree_toggle_collapsed")
 
-            eq_item = QListWidgetItem(f"{toggle} 👑  {tr('equity_label')}")
+            eq_item = QListWidgetItem(f"{toggle} {tr('account_tree_equity_icon')}  {tr('equity_label')}")
             eq_item.setData(Qt.UserRole, {"kind": "equity_group", "key": equity_key})
-            f = QFont(); f.setBold(True); f.setPointSize(f.pointSize() + 1)
+            f = QFont(); f.setBold(True); f.setPointSize(f.pointSize() + ACCOUNT_TREE_FONT_SIZE_DELTA_L0)
             eq_item.setFont(f)
             eq_item.setForeground(QColor(_C["investor_capital_text"]))
             eq_item.setBackground(QColor(_C["investor_capital_bg"]))
@@ -203,17 +222,18 @@ class _AccountTreePopup(QDialog):
                     self._render_type_section(acc_type, groups, q, indent=1)
 
     def _render_type_section(self, acc_type, groups, q, indent=0):
+        from ui.theme import _C
         type_key   = f"type:{acc_type}"
         expanded   = type_key in self._expanded
-        icon       = _TYPE_ICONS.get(acc_type, "📁")
+        icon       = tr(_TYPE_ORDER.get(acc_type, "account_tree_default_icon"))
         type_label = TYPE_AR.get(acc_type, acc_type)
-        toggle     = "▼" if expanded else "▶"
+        toggle     = tr("tree_toggle_expanded") if expanded else tr("tree_toggle_collapsed")
         color      = TYPE_COLORS.get(acc_type, _C['text_muted'])
         pad        = "    " * indent
 
         type_item = QListWidgetItem(f"{pad}{toggle} {icon}  {type_label}")
         type_item.setData(Qt.UserRole, {"kind": "type", "type": acc_type, "key": type_key})
-        f = QFont(); f.setBold(True); f.setPointSize(f.pointSize() + (0 if indent else 1))
+        f = QFont(); f.setBold(True); f.setPointSize(f.pointSize() + (ACCOUNT_TREE_FONT_SIZE_DELTA_L1 if indent else ACCOUNT_TREE_FONT_SIZE_DELTA_L0))
         type_item.setFont(f)
         type_item.setForeground(QColor(color))
         type_item.setBackground(QColor(_C["journal_header_bg"] if indent == 0 else _C["bg_surface_2"]))
@@ -232,10 +252,10 @@ class _AccountTreePopup(QDialog):
 
             grp_key_full = f"grp:{acc_type}:{grp_id}"
             grp_expanded = grp_key_full in self._expanded
-            toggle_g  = "▼" if grp_expanded else "▶"
+            toggle_g  = tr("tree_toggle_expanded") if grp_expanded else tr("tree_toggle_collapsed")
             inner_pad = "    " * (indent + 1)
 
-            grp_item = QListWidgetItem(f"{inner_pad}{toggle_g} 🏷  {grp_name}")
+            grp_item = QListWidgetItem(f"{inner_pad}{toggle_g} {tr('account_tree_group_icon')}  {grp_name}")
             grp_item.setData(Qt.UserRole, {"kind": "group", "key": grp_key_full})
             gf = QFont(); gf.setBold(True); gf.setItalic(True)
             grp_item.setFont(gf)
@@ -250,12 +270,12 @@ class _AccountTreePopup(QDialog):
             for acc in sorted(matched_accs, key=lambda a: a["code"]):
                 nb = get_normal_balance(acc["type"])
                 nb_text = tr("dr_badge") if nb == "dr" else tr("cr_badge")
-                label = f"{acc_pad}{acc['code']} — {acc['name']}  [{nb_text}]"
+                label = f"{acc_pad}{acc['code']}{tr('account_code_name_sep')}{acc['name']}  [{nb_text}]"
                 acc_item = QListWidgetItem(label)
                 acc_item.setData(Qt.UserRole, {
                     "kind": "account",
                     "id":   acc["id"],
-                    "name": f"{acc['code']} — {acc['name']}",
+                    "name": f"{acc['code']}{tr('account_code_name_sep')}{acc['name']}",
                     "type": acc["type"],
                 })
                 acc_item.setForeground(QColor(color))
