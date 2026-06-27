@@ -16,7 +16,7 @@ from PyQt5.QtGui  import QColor
 from db.accounting.accounting_repo import get_account_balance
 from db.accounting.accounting_accounts_repo import _get_group_descendants
 from ui.tabs.accounting.helpers import TYPE_COLORS
-from ui.theme import _C
+from ui.widgets.core.i18n import tr
 
 
 def rows_to_tree(rows) -> list:
@@ -70,6 +70,7 @@ def filter_by_group(conn, nodes: list, gid: int) -> list:
 
 def add_acc_nodes(conn, tree_widget: QTreeWidget, nodes: list, parent):
     """يضيف عقد الحسابات للشجرة بشكل متكرر."""
+    from ui.theme import _C
     for node in sorted(nodes, key=lambda n: n.get("code", "")):
         try:
             bal = get_account_balance(conn, node["id"])
@@ -84,7 +85,7 @@ def add_acc_nodes(conn, tree_widget: QTreeWidget, nodes: list, parent):
         item.setData(0, Qt.UserRole, node["id"])
         item.setForeground(0, QColor(color))
         item.setToolTip(1, (
-            f"{node['name']}  |  🏷 {node['group_name']}"
+            tr("account_node_tooltip_with_group", name=node["name"], group=node["group_name"])
             if node.get("group_name") else node["name"]
         ))
 

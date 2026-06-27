@@ -13,18 +13,22 @@ from PyQt5.QtCore import Qt
 from PyQt5.QtGui  import QColor
 
 from db.accounting.accounting_repo import fetch_all_groups, build_group_tree
-from ui.tabs.accounting.helpers import TYPE_COLORS
 from ui.widgets.core.conn import SafeConnMixin
 from ui.widgets.core.i18n import tr
+from ui.widgets.core.widget_mixin import WidgetMixin
 
 
-class _GroupFilterCombo(SafeConnMixin, QComboBox):
+class _GroupFilterCombo(SafeConnMixin, QComboBox, WidgetMixin):
     """Combo لفلترة الحسابات بالتصنيف."""
 
     def __init__(self, conn, acc_types: list, parent=None):
         super().__init__(parent)
         self._init_safe_conn(conn, "accounting")
+        self._init_widget_mixin(theme=False, font=False, lang=True, data=False)
         self.acc_types = acc_types
+        self.refresh()
+
+    def _refresh_lang(self, *_):
         self.refresh()
 
     def refresh(self, restore_id=None, conn=None):
@@ -54,7 +58,7 @@ class _GroupFilterCombo(SafeConnMixin, QComboBox):
 
     def _add_nodes(self, nodes, depth):
         indent = "  " * depth
-        arrow  = "↳ " if depth > 0 else ""
+        arrow  = tr("tree_node_arrow") if depth > 0 else ""
         for node in nodes:
             self.addItem(f"{indent}{arrow}{node['name']}", node["id"])
             self.setItemData(

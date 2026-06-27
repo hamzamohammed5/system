@@ -14,7 +14,8 @@ from db.accounting.accounting_repo    import fetch_all_accounts
 from db.accounting.accounting_schema  import TYPE_AR
 from ui.widgets.core.conn import SafeConnMixin
 from ui.widgets.core.i18n import tr
-from ui.theme import _C
+from ui.widgets.core.widget_mixin import WidgetMixin
+from ui.constants import ACCOUNTS_PANEL_COL_CODE_W, ACCOUNTS_PANEL_COL_BAL_W, ACCOUNTS_PANEL_TYPE_FILTER_MARGIN, MARGIN_ZERO, SPACING_ZERO
 
 from ui.widgets.components.headers_list import ListHeader, StatusBar
 from ui.widgets.theme.layout_styles      import tree_style
@@ -23,10 +24,11 @@ from ui.tabs.accounting.accounts_combo_widget import AccountTypeFilter
 from ui.tabs.accounting.helpers import TYPE_COLORS
 
 
-class _AccountsPanel(SafeConnMixin, QWidget):
+class _AccountsPanel(SafeConnMixin, QWidget, WidgetMixin):
     def __init__(self, conn, on_select, parent=None):
         super().__init__(parent)
         self._init_safe_conn(conn, "accounting")
+        self._init_widget_mixin(lang=False, data=False)
         self._on_select = on_select
         self._all       = []
         self._build()
@@ -34,8 +36,8 @@ class _AccountsPanel(SafeConnMixin, QWidget):
 
     def _build(self):
         root = QVBoxLayout(self)
-        root.setContentsMargins(0, 0, 0, 0)
-        root.setSpacing(0)
+        root.setContentsMargins(*MARGIN_ZERO)
+        root.setSpacing(SPACING_ZERO)
 
         self._header = ListHeader(
             title=tr("ledger_accounts_title"),
@@ -46,7 +48,7 @@ class _AccountsPanel(SafeConnMixin, QWidget):
         root.addWidget(self._header)
 
         self._type_filter = AccountTypeFilter(TYPE_AR, include_all=True)
-        self._type_filter.setContentsMargins(8, 4, 8, 4)
+        self._type_filter.setContentsMargins(*ACCOUNTS_PANEL_TYPE_FILTER_MARGIN)
         self._type_filter.type_changed.connect(self._filter_accounts)
         root.addWidget(self._type_filter)
 
@@ -56,8 +58,8 @@ class _AccountsPanel(SafeConnMixin, QWidget):
         hh.setSectionResizeMode(0, QHeaderView.Interactive)
         hh.setSectionResizeMode(1, QHeaderView.Stretch)
         hh.setSectionResizeMode(2, QHeaderView.Interactive)
-        self.lst.setColumnWidth(0, 65)
-        self.lst.setColumnWidth(2, 90)
+        self.lst.setColumnWidth(0, ACCOUNTS_PANEL_COL_CODE_W)
+        self.lst.setColumnWidth(2, ACCOUNTS_PANEL_COL_BAL_W)
         self.lst.setAlternatingRowColors(True)
         self.lst.setStyleSheet(tree_style())
         self.lst.itemSelectionChanged.connect(self._on_selected)
@@ -75,6 +77,7 @@ class _AccountsPanel(SafeConnMixin, QWidget):
         self._filter_accounts()
 
     def _filter_accounts(self, _=None):
+        from ui.theme import _C
         q         = self._header.search_text()
         type_filt = self._type_filter.current_type()
 

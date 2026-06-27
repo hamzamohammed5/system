@@ -23,22 +23,71 @@ from ui.tabs.accounting.helpers import TYPE_COLORS
 from ui.widgets.components.headers_page import PageHeader
 from ui.widgets.components.amount_label  import BalanceDisplay
 from ui.widgets.core.i18n import tr
-from ui.theme import _C
+from ui.widgets.core.widget_mixin import WidgetMixin
 from ui.font import FS_BASE, FS_SM
+from ui.constants import (
+    T_ACCOUNT_COL_DATE_W, T_ACCOUNT_COL_REF_W, T_ACCOUNT_COL_AMT_W,
+    T_ACCOUNT_FRAME_RADIUS, T_ACCOUNT_FRAME_BORDER_W,
+    T_ACCOUNT_HDR_RADIUS, T_ACCOUNT_HDR_PAD, T_ACCOUNT_HDR_BORDER_W,
+    T_ACCOUNT_TOT_RADIUS, T_ACCOUNT_TOT_PAD_V, T_ACCOUNT_TOT_PAD_H,
+    T_ACCOUNT_DR_MARGIN, T_ACCOUNT_CR_MARGIN, T_ACCOUNT_SIDE_SPACING,
+    T_ACCOUNT_ROOT_SPACING, T_ACCOUNT_SEP_W, T_ACCOUNT_HDR_CELL_PAD,
+    MARGIN_ZERO, SPACING_ZERO,
+)
 from .ledger_filter_bar import _LedgerFilterBar
 from .ledger_stat_cards import _StatCards
 
 
-class _TAccountPanel(QWidget):
+class _TAccountPanel(QWidget, WidgetMixin):
     def __init__(self, parent=None):
         super().__init__(parent)
         self._all_data = None
+        self._init_widget_mixin(lang=False, data=False)
         self._build()
 
+    def _refresh_style(self, *_):
+        from ui.theme import _C
+        if not hasattr(self, '_t_frame'):
+            return
+        self._t_frame.setStyleSheet(f"""
+            QFrame {{
+                background: {_C['bg_surface']};
+                border: {T_ACCOUNT_FRAME_BORDER_W}px solid {_C['t_account_frame']};
+                border-radius: {T_ACCOUNT_FRAME_RADIUS}px;
+            }}
+        """)
+        self._dr_hdr.setStyleSheet(f"""
+            font-weight: bold; color: {_C['acc_type_asset']}; font-size: {FS_BASE}px;
+            background: {_C['t_account_dr_bg']}; border-radius: {T_ACCOUNT_HDR_RADIUS}px; padding: {T_ACCOUNT_HDR_PAD}px;
+        """)
+        self._cr_hdr.setStyleSheet(f"""
+            font-weight: bold; color: {_C['acc_type_liability']}; font-size: {FS_BASE}px;
+            background: {_C['t_account_cr_bg']}; border-radius: {T_ACCOUNT_HDR_RADIUS}px; padding: {T_ACCOUNT_HDR_PAD}px;
+        """)
+        self.lbl_dr_total.setStyleSheet(f"""
+            font-weight: bold; color: {_C['acc_type_asset']}; font-size: {FS_SM}px;
+            background: {_C['t_account_dr_bg']}; border-radius: {T_ACCOUNT_TOT_RADIUS}px; padding: {T_ACCOUNT_TOT_PAD_V}px {T_ACCOUNT_TOT_PAD_H}px;
+        """)
+        self.lbl_cr_total.setStyleSheet(f"""
+            font-weight: bold; color: {_C['acc_type_liability']}; font-size: {FS_SM}px;
+            background: {_C['t_account_cr_bg']}; border-radius: {T_ACCOUNT_TOT_RADIUS}px; padding: {T_ACCOUNT_TOT_PAD_V}px {T_ACCOUNT_TOT_PAD_H}px;
+        """)
+        self._sep.setStyleSheet(f"color: {_C['acc_type_asset']}; background: {_C['t_account_frame']};")
+        self.t_dr_table.setStyleSheet(f"""
+            QTableWidget {{ border: none; background: transparent; gridline-color: {_C['table_gridline']}; }}
+            QHeaderView::section {{
+                background: {_C['row_alt_bg']}; border: none;
+                border-bottom: {T_ACCOUNT_HDR_BORDER_W}px solid {_C['border_subtle']};
+                padding: {T_ACCOUNT_HDR_CELL_PAD}px; font-weight: bold; font-size: {FS_SM}px; color: {_C['text_neutral']};
+            }}
+        """)
+        self.t_cr_table.setStyleSheet(self.t_dr_table.styleSheet())
+
     def _build(self):
+        from ui.theme import _C
         root = QVBoxLayout(self)
-        root.setContentsMargins(0, 0, 0, 0)
-        root.setSpacing(6)
+        root.setContentsMargins(*MARGIN_ZERO)
+        root.setSpacing(T_ACCOUNT_ROOT_SPACING)
 
         # ── هيدر الحساب (بدل lbl_title اليدوي) ──
         self._page_hdr = PageHeader(
@@ -66,32 +115,32 @@ class _TAccountPanel(QWidget):
         self._filter.reset = _reset_and_apply
         root.addWidget(self._filter)
 
-        t_frame = QFrame()
-        t_frame.setStyleSheet(f"""
+        self._t_frame = QFrame()
+        self._t_frame.setStyleSheet(f"""
             QFrame {{
                 background: {_C['bg_surface']};
-                border: 2px solid {_C['t_account_frame']};
-                border-radius: 8px;
+                border: {T_ACCOUNT_FRAME_BORDER_W}px solid {_C['t_account_frame']};
+                border-radius: {T_ACCOUNT_FRAME_RADIUS}px;
             }}
         """)
-        t_lay = QHBoxLayout(t_frame)
-        t_lay.setContentsMargins(0, 0, 0, 0)
-        t_lay.setSpacing(0)
+        t_lay = QHBoxLayout(self._t_frame)
+        t_lay.setContentsMargins(*MARGIN_ZERO)
+        t_lay.setSpacing(SPACING_ZERO)
 
         # جانب المدين
         dr_widget = QWidget()
         dr_widget.setStyleSheet("background: transparent;")
         dr_lay = QVBoxLayout(dr_widget)
-        dr_lay.setContentsMargins(8, 8, 4, 8)
-        dr_lay.setSpacing(4)
+        dr_lay.setContentsMargins(*T_ACCOUNT_DR_MARGIN)
+        dr_lay.setSpacing(T_ACCOUNT_SIDE_SPACING)
 
-        dr_hdr = QLabel(tr("t_account_dr_header"))
-        dr_hdr.setAlignment(Qt.AlignCenter)
-        dr_hdr.setStyleSheet(f"""
+        self._dr_hdr = QLabel(tr("t_account_dr_header"))
+        self._dr_hdr.setAlignment(Qt.AlignCenter)
+        self._dr_hdr.setStyleSheet(f"""
             font-weight: bold; color: {_C['acc_type_asset']}; font-size: {FS_BASE}px;
-            background: {_C['t_account_dr_bg']}; border-radius: 5px; padding: 5px;
+            background: {_C['t_account_dr_bg']}; border-radius: {T_ACCOUNT_HDR_RADIUS}px; padding: {T_ACCOUNT_HDR_PAD}px;
         """)
-        dr_lay.addWidget(dr_hdr)
+        dr_lay.addWidget(self._dr_hdr)
         self.t_dr_table = self._make_t_table()
         dr_lay.addWidget(self.t_dr_table, stretch=1)
 
@@ -99,29 +148,29 @@ class _TAccountPanel(QWidget):
         self.lbl_dr_total.setAlignment(Qt.AlignCenter)
         self.lbl_dr_total.setStyleSheet(f"""
             font-weight: bold; color: {_C['acc_type_asset']}; font-size: {FS_SM}px;
-            background: {_C['t_account_dr_bg']}; border-radius: 4px; padding: 4px 8px;
+            background: {_C['t_account_dr_bg']}; border-radius: {T_ACCOUNT_TOT_RADIUS}px; padding: {T_ACCOUNT_TOT_PAD_V}px {T_ACCOUNT_TOT_PAD_H}px;
         """)
         dr_lay.addWidget(self.lbl_dr_total)
 
-        sep = QFrame()
-        sep.setFrameShape(QFrame.VLine)
-        sep.setStyleSheet(f"color: {_C['acc_type_asset']}; background: {_C['t_account_frame']};")
-        sep.setFixedWidth(2)
+        self._sep = QFrame()
+        self._sep.setFrameShape(QFrame.VLine)
+        self._sep.setStyleSheet(f"color: {_C['acc_type_asset']}; background: {_C['t_account_frame']};")
+        self._sep.setFixedWidth(T_ACCOUNT_SEP_W)
 
         # جانب الدائن
         cr_widget = QWidget()
         cr_widget.setStyleSheet("background: transparent;")
         cr_lay = QVBoxLayout(cr_widget)
-        cr_lay.setContentsMargins(4, 8, 8, 8)
-        cr_lay.setSpacing(4)
+        cr_lay.setContentsMargins(*T_ACCOUNT_CR_MARGIN)
+        cr_lay.setSpacing(T_ACCOUNT_SIDE_SPACING)
 
-        cr_hdr = QLabel(tr("t_account_cr_header"))
-        cr_hdr.setAlignment(Qt.AlignCenter)
-        cr_hdr.setStyleSheet(f"""
+        self._cr_hdr = QLabel(tr("t_account_cr_header"))
+        self._cr_hdr.setAlignment(Qt.AlignCenter)
+        self._cr_hdr.setStyleSheet(f"""
             font-weight: bold; color: {_C['acc_type_liability']}; font-size: {FS_BASE}px;
-            background: {_C['t_account_cr_bg']}; border-radius: 5px; padding: 5px;
+            background: {_C['t_account_cr_bg']}; border-radius: {T_ACCOUNT_HDR_RADIUS}px; padding: {T_ACCOUNT_HDR_PAD}px;
         """)
-        cr_lay.addWidget(cr_hdr)
+        cr_lay.addWidget(self._cr_hdr)
         self.t_cr_table = self._make_t_table()
         cr_lay.addWidget(self.t_cr_table, stretch=1)
 
@@ -129,20 +178,21 @@ class _TAccountPanel(QWidget):
         self.lbl_cr_total.setAlignment(Qt.AlignCenter)
         self.lbl_cr_total.setStyleSheet(f"""
             font-weight: bold; color: {_C['acc_type_liability']}; font-size: {FS_SM}px;
-            background: {_C['t_account_cr_bg']}; border-radius: 4px; padding: 4px 8px;
+            background: {_C['t_account_cr_bg']}; border-radius: {T_ACCOUNT_TOT_RADIUS}px; padding: {T_ACCOUNT_TOT_PAD_V}px {T_ACCOUNT_TOT_PAD_H}px;
         """)
         cr_lay.addWidget(self.lbl_cr_total)
 
         t_lay.addWidget(dr_widget, stretch=1)
-        t_lay.addWidget(sep)
+        t_lay.addWidget(self._sep)
         t_lay.addWidget(cr_widget, stretch=1)
-        root.addWidget(t_frame, stretch=1)
+        root.addWidget(self._t_frame, stretch=1)
 
         # ── رصيد الحساب (بدل lbl_balance اليدوي) ──
         self._balance_disp = BalanceDisplay()
         root.addWidget(self._balance_disp)
 
     def _make_t_table(self) -> QTableWidget:
+        from ui.theme import _C
         tbl = QTableWidget()
         tbl.setColumnCount(4)
         tbl.setHorizontalHeaderLabels([tr("date"), tr("entry_no_col"), tr("lines_col_desc"), tr("amount")])
@@ -155,16 +205,16 @@ class _TAccountPanel(QWidget):
         hh.setSectionResizeMode(1, QHeaderView.Interactive)
         hh.setSectionResizeMode(2, QHeaderView.Stretch)
         hh.setSectionResizeMode(3, QHeaderView.Interactive)
-        tbl.setColumnWidth(0, 90)
-        tbl.setColumnWidth(1, 80)
-        tbl.setColumnWidth(3, 90)
+        tbl.setColumnWidth(0, T_ACCOUNT_COL_DATE_W)
+        tbl.setColumnWidth(1, T_ACCOUNT_COL_REF_W)
+        tbl.setColumnWidth(3, T_ACCOUNT_COL_AMT_W)
 
         tbl.setStyleSheet(f"""
             QTableWidget {{ border: none; background: transparent; gridline-color: {_C['table_gridline']}; }}
             QHeaderView::section {{
                 background: {_C['row_alt_bg']}; border: none;
-                border-bottom: 1px solid {_C['border_subtle']};
-                padding: 4px; font-weight: bold; font-size: {FS_SM}px; color: {_C['text_neutral']};
+                border-bottom: {T_ACCOUNT_HDR_BORDER_W}px solid {_C['border_subtle']};
+                padding: {T_ACCOUNT_HDR_CELL_PAD}px; font-weight: bold; font-size: {FS_SM}px; color: {_C['text_neutral']};
             }}
         """)
         tbl.verticalHeader().setVisible(False)
@@ -172,6 +222,7 @@ class _TAccountPanel(QWidget):
         return tbl
 
     def load(self, conn, account_id: int):
+        from ui.theme import _C
         data = fetch_t_account(conn, account_id)
         if not data:
             return
@@ -194,6 +245,7 @@ class _TAccountPanel(QWidget):
         if not self._all_data:
             return
 
+        from ui.theme import _C
         data    = self._all_data
         lines   = data["lines"]
         acc     = data["account"]
@@ -236,6 +288,7 @@ class _TAccountPanel(QWidget):
 
     def _fill_t_row(self, tbl: QTableWidget, r: int, line: dict,
                     amount: float, color: str):
+        from ui.theme import _C
         date_item = QTableWidgetItem(line.get("date", "—"))
         date_item.setTextAlignment(Qt.AlignCenter)
         date_item.setForeground(QColor(_C["text_neutral"]))

@@ -17,6 +17,7 @@ from ui.widgets.panels.filter       import FilterToolbar
 from ui.widgets.theme.builders import v_divider
 from ui.widgets.theme.input_styles import input_style
 from ui.widgets.core.i18n import tr
+from ui.constants import LEDGER_MOVE_CMB_MIN_H, LEDGER_MOVE_CMB_W
 
 class _LedgerFilterBar(FilterToolbar):
     """
@@ -51,12 +52,12 @@ class _LedgerFilterBar(FilterToolbar):
         insert_pos = max(1, count - 2)
 
         self.cmb_move_type = QComboBox()
-        self.cmb_move_type.setMinimumHeight(28)
-        self.cmb_move_type.setFixedWidth(120)
+        self.cmb_move_type.setMinimumHeight(LEDGER_MOVE_CMB_MIN_H)
+        self.cmb_move_type.setFixedWidth(LEDGER_MOVE_CMB_W)
         self.cmb_move_type.addItem(tr("move_type_all"), None)
         self.cmb_move_type.addItem(tr("move_type_dr"),   "dr")
         self.cmb_move_type.addItem(tr("move_type_cr"),   "cr")
-        self.cmb_move_type.setStyleSheet(input_style(height=28))
+        self.cmb_move_type.setStyleSheet(input_style(height=LEDGER_MOVE_CMB_MIN_H))
         self.cmb_move_type.currentIndexChanged.connect(
             lambda _: self.filter_changed.emit()
         )

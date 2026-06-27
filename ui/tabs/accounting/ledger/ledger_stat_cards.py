@@ -11,24 +11,31 @@ from PyQt5.QtWidgets import QFrame, QVBoxLayout
 from db.accounting.accounting_schema import TYPE_AR
 from ui.widgets.components.stat_card import StatRow, StatItem
 from ui.widgets.core.i18n import tr
-from ui.theme import _C
+from ui.widgets.core.widget_mixin import WidgetMixin
+from ui.constants import LEDGER_STAT_BORDER_RADIUS, LEDGER_STAT_BORDER_W, MARGIN_ZERO, SPACING_ZERO
 
-class _StatCards(QFrame):
+class _StatCards(QFrame, WidgetMixin):
     def __init__(self, parent=None):
         super().__init__(parent)
+        self._init_widget_mixin(lang=False, data=False)
+        self._build()
+        self._refresh_style()
+
+    def _refresh_style(self, *_):
+        from ui.theme import _C
         self.setStyleSheet(f"""
             QFrame {{
                 background: {_C['bg_surface']};
-                border: 1px solid {_C['border_subtle']};
-                border-radius: 8px;
+                border: {LEDGER_STAT_BORDER_W}px solid {_C['border_subtle']};
+                border-radius: {LEDGER_STAT_BORDER_RADIUS}px;
             }}
         """)
-        self._build()
 
     def _build(self):
+        from ui.theme import _C
         lay = QVBoxLayout(self)
-        lay.setContentsMargins(0, 0, 0, 0)
-        lay.setSpacing(0)
+        lay.setContentsMargins(*MARGIN_ZERO)
+        lay.setSpacing(SPACING_ZERO)
 
         self._row = StatRow([
             StatItem(tr("total_debit"),  _C["acc_type_asset"],     icon="📥", compact=True),
@@ -49,6 +56,7 @@ class _StatCards(QFrame):
 
     def update(self, total_dr: float, total_cr: float,
                balance: float, count: int, normal_balance: str, acc_type: str):
+        from ui.theme import _C
         currency = tr("currency_sym")
         self.lbl_dr.setText(f"{total_dr:,.2f}  {currency}")
         self.lbl_cr.setText(f"{total_cr:,.2f}  {currency}")

@@ -22,58 +22,73 @@ from db.accounting.accounting_repo import (
 )
 from db.accounting.accounting_repo_ui_helpers import fetch_account_by_code
 from db.accounting.accounting_schema import TYPE_AR
-from ui.theme import _C
 from ui.widgets.core.events import emit_company_data_changed
 from ui.widgets.core.conn import SafeConnMixin
 from ui.widgets.core.i18n import tr
+from ui.widgets.core.widget_mixin import WidgetMixin
+from ui.constants import (
+    MARGIN_ZERO,
+    ACCOUNT_FORM_ROOT_MARGIN, ACCOUNT_FORM_ROOT_SPACING,
+    ACCOUNT_FORM_GRP_BORDER_W, ACCOUNT_FORM_GRP_BORDER_RADIUS,
+    ACCOUNT_FORM_GRP_MARGIN_TOP, ACCOUNT_FORM_GRP_PAD_TOP,
+    ACCOUNT_FORM_GRP_TITLE_PAD_H, ACCOUNT_FORM_FL_SPACING,
+    ACCOUNT_FORM_INPUT_MIN_H, ACCOUNT_FORM_BTN_MIN_H,
+)
 
 
-class _AccountForm(SafeConnMixin, QWidget):
+class _AccountForm(SafeConnMixin, QWidget, WidgetMixin):
     def __init__(self, conn, acc_types: list, parent=None):
         super().__init__(parent)
         self._init_safe_conn(conn, "accounting")
+        self._init_widget_mixin(lang=False, data=False)
         self.acc_types   = acc_types
         self._editing_id = None
         self._build()
+        self._refresh_style()
+
+    def _refresh_style(self, *_):
+        from ui.theme import _C
+        if not hasattr(self, '_grp'):
+            return
+        self._grp.setStyleSheet(f"""
+            QGroupBox {{ font-weight:bold; color:{_C['accent']};
+                border:{ACCOUNT_FORM_GRP_BORDER_W}px solid {_C['border']}; border-radius:{ACCOUNT_FORM_GRP_BORDER_RADIUS}px;
+                margin-top:{ACCOUNT_FORM_GRP_MARGIN_TOP}px; padding-top:{ACCOUNT_FORM_GRP_PAD_TOP}px; }}
+            QGroupBox::title {{ subcontrol-origin:margin; padding:0 {ACCOUNT_FORM_GRP_TITLE_PAD_H}px; }}
+        """)
+        self.lbl_form_mode.setStyleSheet(f"font-weight:bold; color:{_C['accent']};")
 
     def _build(self):
         root = QVBoxLayout(self)
-        root.setContentsMargins(6, 8, 10, 10)
-        root.setSpacing(8)
+        root.setContentsMargins(*ACCOUNT_FORM_ROOT_MARGIN)
+        root.setSpacing(ACCOUNT_FORM_ROOT_SPACING)
 
-        grp = QGroupBox(tr("group_add_edit_header", type_name=tr("accounts")))
-        grp.setStyleSheet(f"""
-            QGroupBox {{ font-weight:bold; color:{_C['accent']};
-                border:1px solid {_C['border']}; border-radius:6px;
-                margin-top:8px; padding-top:8px; }}
-            QGroupBox::title {{ subcontrol-origin:margin; padding:0 6px; }}
-        """)
-        fl = QFormLayout(grp)
-        fl.setSpacing(8)
+        self._grp = QGroupBox(tr("group_add_edit_header", type_name=tr("accounts")))
+        fl = QFormLayout(self._grp)
+        fl.setSpacing(ACCOUNT_FORM_FL_SPACING)
         fl.setLabelAlignment(Qt.AlignRight)
 
         self.lbl_form_mode = QLabel(tr("account_form_new"))
-        self.lbl_form_mode.setStyleSheet(f"font-weight:bold; color:{_C['accent']};")
         fl.addRow(self.lbl_form_mode)
 
         self.inp_code = QLineEdit()
-        self.inp_code.setPlaceholderText("1141")
-        self.inp_code.setMinimumHeight(28)
+        self.inp_code.setPlaceholderText(tr("account_code_placeholder"))
+        self.inp_code.setMinimumHeight(ACCOUNT_FORM_INPUT_MIN_H)
         fl.addRow(f"{tr('account_code')}:", self.inp_code)
 
         self.inp_name = QLineEdit()
-        self.inp_name.setPlaceholderText(tr("name") + "...")
-        self.inp_name.setMinimumHeight(28)
+        self.inp_name.setPlaceholderText(tr("account_name_placeholder"))
+        self.inp_name.setMinimumHeight(ACCOUNT_FORM_INPUT_MIN_H)
         fl.addRow(f"{tr('name')}:", self.inp_name)
 
         self.cmb_type = QComboBox()
-        self.cmb_type.setMinimumHeight(28)
+        self.cmb_type.setMinimumHeight(ACCOUNT_FORM_INPUT_MIN_H)
         for t in self.acc_types:
             self.cmb_type.addItem(TYPE_AR.get(t, t), t)
         fl.addRow(f"{tr('account_type')}:", self.cmb_type)
 
         self.cmb_group = QComboBox()
-        self.cmb_group.setMinimumHeight(28)
+        self.cmb_group.setMinimumHeight(ACCOUNT_FORM_INPUT_MIN_H)
         fl.addRow(f"{tr('account_group')}:", self.cmb_group)
 
         self.cmb_type.currentIndexChanged.connect(self._on_type_changed)
@@ -84,21 +99,21 @@ class _AccountForm(SafeConnMixin, QWidget):
         self.btn_save.setVisible(False)
         self.btn_cancel.setVisible(False)
         for b in (btn_add, self.btn_save, self.btn_cancel):
-            b.setMinimumHeight(28)
+            b.setMinimumHeight(ACCOUNT_FORM_BTN_MIN_H)
         btn_add.clicked.connect(self._add)
         self.btn_save.clicked.connect(self._save_edit)
         self.btn_cancel.clicked.connect(self._cancel_edit)
 
         btn_w = QWidget()
         bl    = QHBoxLayout(btn_w)
-        bl.setContentsMargins(0, 0, 0, 0)
+        bl.setContentsMargins(*MARGIN_ZERO)
         bl.addWidget(btn_add)
         bl.addWidget(self.btn_save)
         bl.addWidget(self.btn_cancel)
         bl.addStretch()
         fl.addRow(btn_w)
 
-        root.addWidget(grp)
+        root.addWidget(self._grp)
         root.addStretch()
         self.refresh_group_combos()
 
@@ -133,7 +148,7 @@ class _AccountForm(SafeConnMixin, QWidget):
 
     def _add_group_nodes(self, nodes, depth):
         indent = "  " * depth
-        arrow  = "↳ " if depth > 0 else ""
+        arrow  = tr("tree_node_arrow") if depth > 0 else ""
         for node in nodes:
             self.cmb_group.addItem(f"{indent}{arrow}{node['name']}", node["id"])
             self.cmb_group.setItemData(
