@@ -24,9 +24,36 @@ from db.accounting.accounting_repo import fetch_account, get_normal_balance
 from db.accounting.accounting_schema import NORMAL_BALANCE
 from ui.widgets.core.events import bus, get_active_company_id
 from ui.widgets.core.conn import DualConnMixin
+from ui.widgets.core.widget_mixin import WidgetMixin
 from ui.theme import _C
 from ui.widgets.core.i18n import tr
 from ui.font import FS_XS, FS_SM, FS_BASE
+from ui.constants import (
+    SMART_LINE_BORDER_RADIUS,
+    SMART_LINE_BORDER_W,
+    SMART_LINE_MARGIN_H,
+    SMART_LINE_MARGIN_V,
+    SMART_LINE_SPACING,
+    SMART_LINE_MAIN_ROW_SPACING,
+    SMART_LINE_MOVE_BTN_SIZE,
+    SMART_LINE_DIR_FRAME_W,
+    SMART_LINE_DIR_SPACING,
+    SMART_LINE_AMOUNT_MIN_H,
+    SMART_LINE_AMOUNT_W,
+    SMART_LINE_AMOUNT_MAX,
+    SMART_LINE_AMOUNT_DECIMALS,
+    SMART_LINE_DESC_MIN_H,
+    SMART_LINE_DEL_BTN_SIZE,
+    SMART_LINE_INV_ROW_RADIUS,
+    SMART_LINE_INV_ROW_BORDER_W,
+    SMART_LINE_INV_MARGIN_H,
+    SMART_LINE_INV_MARGIN_V,
+    SMART_LINE_INV_SPACING,
+    SMART_LINE_INV_LBL_W,
+    SMART_LINE_INV_CMB_MIN_H,
+    SMART_LINE_ACCENT_BORDER_W,
+    SMART_LINE_INV_ROW_MARGIN_T,
+)
 from ..journal_account_picker import _AccountPickerButton
 
 _INVESTOR_TYPES = {"capital", "drawings"}
@@ -37,7 +64,7 @@ def _resolve_side(acc_type: str, is_increase: bool) -> str:
     return nb if is_increase else ("cr" if nb == "dr" else "dr")
 
 
-class _SmartLine(DualConnMixin, QFrame):
+class _SmartLine(DualConnMixin, QFrame, WidgetMixin):
     """صف قيد واحد: حساب + زيادة/نقص + مبلغ + بيان + ربط مستثمر اختياري."""
 
     def __init__(self, conn, erp_conn, on_change, on_remove,
@@ -53,6 +80,7 @@ class _SmartLine(DualConnMixin, QFrame):
         self._company_id      = get_active_company_id()
 
         self._build()
+        self._init_widget_mixin(lang=False, data=False)
         bus.company_data_changed.connect(self._on_company_event)
 
     def _on_company_event(self, company_id: int):
@@ -64,22 +92,23 @@ class _SmartLine(DualConnMixin, QFrame):
         self.setStyleSheet(f"""
             QFrame {{
                 background: {_C['journal_neutral_bg']};
-                border: 1px solid {_C['journal_neutral_border']};
-                border-radius: 6px;
+                border: {SMART_LINE_BORDER_W}px solid {_C['journal_neutral_border']};
+                border-radius: {SMART_LINE_BORDER_RADIUS}px;
             }}
             QFrame:hover {{ border-color: {_C['border_med']}; }}
         """)
         lay = QVBoxLayout(self)
-        lay.setContentsMargins(6, 4, 6, 4)
-        lay.setSpacing(4)
+        lay.setContentsMargins(SMART_LINE_MARGIN_H, SMART_LINE_MARGIN_V,
+                               SMART_LINE_MARGIN_H, SMART_LINE_MARGIN_V)
+        lay.setSpacing(SMART_LINE_SPACING)
 
         main_row = QHBoxLayout()
-        main_row.setSpacing(6)
+        main_row.setSpacing(SMART_LINE_MAIN_ROW_SPACING)
 
         self.btn_up = QPushButton("▲")
         self.btn_dn = QPushButton("▼")
         for b in (self.btn_up, self.btn_dn):
-            b.setFixedSize(18, 18)
+            b.setFixedSize(SMART_LINE_MOVE_BTN_SIZE, SMART_LINE_MOVE_BTN_SIZE)
             b.setStyleSheet(
                 f"QPushButton {{ background:transparent; border:none; color:{_C['text_disabled']}; font-size:{FS_XS}px; }}"
                 f"QPushButton:hover {{ color:{_C['accent']}; }}"
@@ -101,7 +130,7 @@ class _SmartLine(DualConnMixin, QFrame):
         dir_frame.setStyleSheet("QFrame { background:transparent; border:none; }")
         dir_lay = QHBoxLayout(dir_frame)
         dir_lay.setContentsMargins(0, 0, 0, 0)
-        dir_lay.setSpacing(3)
+        dir_lay.setSpacing(SMART_LINE_DIR_SPACING)
         self.rdo_inc = QRadioButton(tr("journal_increase"))
         self.rdo_dec = QRadioButton(tr("journal_decrease"))
         self.rdo_inc.setChecked(True)
@@ -113,24 +142,24 @@ class _SmartLine(DualConnMixin, QFrame):
         self.rdo_inc.toggled.connect(self._on_dir_changed)
         dir_lay.addWidget(self.rdo_inc)
         dir_lay.addWidget(self.rdo_dec)
-        dir_frame.setFixedWidth(130)
+        dir_frame.setFixedWidth(SMART_LINE_DIR_FRAME_W)
         main_row.addWidget(dir_frame)
 
         self.sp_amount = QDoubleSpinBox()
-        self.sp_amount.setRange(0, 999_999_999)
-        self.sp_amount.setDecimals(2)
-        self.sp_amount.setMinimumHeight(28)
-        self.sp_amount.setFixedWidth(110)
+        self.sp_amount.setRange(0, SMART_LINE_AMOUNT_MAX)
+        self.sp_amount.setDecimals(SMART_LINE_AMOUNT_DECIMALS)
+        self.sp_amount.setMinimumHeight(SMART_LINE_AMOUNT_MIN_H)
+        self.sp_amount.setFixedWidth(SMART_LINE_AMOUNT_W)
         self.sp_amount.valueChanged.connect(self._on_change)
         main_row.addWidget(self.sp_amount)
 
         self.inp_desc = QLineEdit()
         self.inp_desc.setPlaceholderText(tr("line_description_placeholder"))
-        self.inp_desc.setMinimumHeight(28)
+        self.inp_desc.setMinimumHeight(SMART_LINE_DESC_MIN_H)
         main_row.addWidget(self.inp_desc, stretch=2)
 
         btn_del = QPushButton("✖")
-        btn_del.setFixedSize(22, 22)
+        btn_del.setFixedSize(SMART_LINE_DEL_BTN_SIZE, SMART_LINE_DEL_BTN_SIZE)
         btn_del.setStyleSheet(
             f"QPushButton {{ background:transparent; border:none; color:{_C['text_disabled']}; font-size:{FS_SM}px; }}"
             f"QPushButton:hover {{ color:{_C['danger']}; }}"
@@ -142,23 +171,24 @@ class _SmartLine(DualConnMixin, QFrame):
 
         self._investor_row = QFrame()
         self._investor_row.setStyleSheet(
-            f"QFrame {{ background:{_C['investor_link_bg']}; border:1px solid {_C['investor_link_border']};"
-            "border-radius:4px; margin-top:2px; }"
+            f"QFrame {{ background:{_C['investor_link_bg']}; border:{SMART_LINE_INV_ROW_BORDER_W}px solid {_C['investor_link_border']};"
+            f"border-radius:{SMART_LINE_INV_ROW_RADIUS}px; margin-top:{SMART_LINE_INV_ROW_MARGIN_T}px; }}"
         )
         inv_lay = QHBoxLayout(self._investor_row)
-        inv_lay.setContentsMargins(8, 4, 8, 4)
-        inv_lay.setSpacing(8)
+        inv_lay.setContentsMargins(SMART_LINE_INV_MARGIN_H, SMART_LINE_INV_MARGIN_V,
+                                   SMART_LINE_INV_MARGIN_H, SMART_LINE_INV_MARGIN_V)
+        inv_lay.setSpacing(SMART_LINE_INV_SPACING)
 
         lbl_inv = QLabel(tr("link_investor_to_entry"))
         lbl_inv.setStyleSheet(
             f"font-size:{FS_XS}px; font-weight:bold; color:{_C['investor_link_text']};"
             "background:transparent; border:none;"
         )
-        lbl_inv.setFixedWidth(95)
+        lbl_inv.setFixedWidth(SMART_LINE_INV_LBL_W)
         inv_lay.addWidget(lbl_inv)
 
         self.cmb_investor = QComboBox()
-        self.cmb_investor.setMinimumHeight(24)
+        self.cmb_investor.setMinimumHeight(SMART_LINE_INV_CMB_MIN_H)
         self.cmb_investor.setStyleSheet(f"font-size:{FS_SM}px;")
         self._reload_investors()
         inv_lay.addWidget(self.cmb_investor, stretch=1)
@@ -185,7 +215,7 @@ class _SmartLine(DualConnMixin, QFrame):
             self.cmb_investor.clear()
             self.cmb_investor.addItem(tr("filter_all"), None)
             for inv in fetch_all_investors(erp):
-                self.cmb_investor.addItem(f"👤 {inv['name']}", inv["id"])
+                self.cmb_investor.addItem(f"{tr('investor_icon')} {inv['name']}", inv["id"])
             self.cmb_investor.blockSignals(False)
             if prev:
                 for i in range(self.cmb_investor.count()):
@@ -218,18 +248,18 @@ class _SmartLine(DualConnMixin, QFrame):
                 self.setStyleSheet(f"""
                     QFrame {{
                         background: {_C['journal_dr_bg']};
-                        border: 1px solid {_C['journal_dr_border']};
-                        border-right: 3px solid {_C['journal_dr_accent']};
-                        border-radius: 6px;
+                        border: {SMART_LINE_BORDER_W}px solid {_C['journal_dr_border']};
+                        border-right: {SMART_LINE_ACCENT_BORDER_W}px solid {_C['journal_dr_accent']};
+                        border-radius: {SMART_LINE_BORDER_RADIUS}px;
                     }}
                 """)
             else:
                 self.setStyleSheet(f"""
                     QFrame {{
                         background: {_C['journal_cr_bg']};
-                        border: 1px solid {_C['journal_cr_border']};
-                        border-right: 3px solid {_C['journal_cr_accent']};
-                        border-radius: 6px;
+                        border: {SMART_LINE_BORDER_W}px solid {_C['journal_cr_border']};
+                        border-right: {SMART_LINE_ACCENT_BORDER_W}px solid {_C['journal_cr_accent']};
+                        border-radius: {SMART_LINE_BORDER_RADIUS}px;
                     }}
                 """)
         else:
@@ -237,10 +267,13 @@ class _SmartLine(DualConnMixin, QFrame):
             self.setStyleSheet(f"""
                 QFrame {{
                     background: {_C['journal_neutral_bg']};
-                    border: 1px solid {_C['journal_neutral_border']};
-                    border-radius: 6px;
+                    border: {SMART_LINE_BORDER_W}px solid {_C['journal_neutral_border']};
+                    border-radius: {SMART_LINE_BORDER_RADIUS}px;
                 }}
             """)
+
+    def _refresh_style(self, *_):
+        self._update_side_style()
 
     def _on_acc_changed(self):
         """

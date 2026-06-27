@@ -15,7 +15,6 @@ from PyQt5.QtWidgets import (
     QAbstractItemView,
 )
 from PyQt5.QtCore import Qt, QTimer
-from PyQt5.QtGui  import QColor
 
 from db.accounting.accounting_repo import (
     fetch_all_entries, fetch_entry_lines,
@@ -23,6 +22,7 @@ from db.accounting.accounting_repo import (
 )
 from ui.widgets.core.events import bus, get_active_company_id, emit_company_data_changed
 from ui.widgets.core.conn import SafeConnMixin
+from ui.widgets.core.widget_mixin import WidgetMixin
 from ui.widgets.components.headers_list import ListHeader, StatusBar as ListStatusBar
 from ui.widgets.dialogs.confirm import confirm_delete
 from ui.widgets.components.button import make_btn as _make_btn
@@ -32,14 +32,24 @@ from ui.widgets.tables.tables import (
     center_item as center_table_item,
     set_row_bg as set_row_background,
 )
-from ui.theme import _C
 from ui.widgets.core.i18n import tr
+from ui.constants import (
+    MARGIN_ZERO,
+    SPACING_ZERO,
+    JOURNAL_BALANCE_EPSILON,
+    JOURNAL_TREE_COL_TOGGLE_W,
+    JOURNAL_TREE_COL_DATE_W,
+    JOURNAL_TREE_COL_REF_W,
+    JOURNAL_TREE_COL_DR_W,
+    JOURNAL_TREE_COL_CR_W,
+    JOURNAL_TREE_COL_STATUS_W,
+)
 from ..helpers  import TYPE_COLORS
 from .journal_filter  import _JournalFilterBar
 from .journal_form    import _JournalForm
 
 
-class _JournalTreeTable(SafeConnMixin, QWidget):
+class _JournalTreeTable(SafeConnMixin, QWidget, WidgetMixin):
     """جدول القيود المحاسبية — SafeConnMixin يضمن conn الشركة الصح."""
 
     @staticmethod
@@ -56,16 +66,24 @@ class _JournalTreeTable(SafeConnMixin, QWidget):
 
         self._build()
         self._load()
+        self._init_widget_mixin(lang=False, data=False)
+        self._refresh_style()
         bus.company_data_changed.connect(self._on_company_data_changed)
 
     def _on_company_data_changed(self, company_id: int):
         if self._on_company_event_safe(company_id):
             self._load()
 
+    def _refresh_style(self, *_):
+        from ui.theme import _C
+        self.table.setStyleSheet(
+            f"QTableWidget {{ gridline-color: {_C['border']}; }}"
+        )
+
     def _build(self):
         root = QVBoxLayout(self)
-        root.setContentsMargins(0, 0, 0, 0)
-        root.setSpacing(0)
+        root.setContentsMargins(*MARGIN_ZERO)
+        root.setSpacing(SPACING_ZERO)
 
         # ── هيدر موحد ──
         self._header = ListHeader(
@@ -109,12 +127,12 @@ class _JournalTreeTable(SafeConnMixin, QWidget):
         hh.setSectionResizeMode(5, QHeaderView.Interactive)
         hh.setSectionResizeMode(6, QHeaderView.Interactive)
 
-        self.table.setColumnWidth(0, 28)
-        self.table.setColumnWidth(1, 92)
-        self.table.setColumnWidth(2, 85)
-        self.table.setColumnWidth(4, 95)
-        self.table.setColumnWidth(5, 95)
-        self.table.setColumnWidth(6, 85)
+        self.table.setColumnWidth(0, JOURNAL_TREE_COL_TOGGLE_W)
+        self.table.setColumnWidth(1, JOURNAL_TREE_COL_DATE_W)
+        self.table.setColumnWidth(2, JOURNAL_TREE_COL_REF_W)
+        self.table.setColumnWidth(4, JOURNAL_TREE_COL_DR_W)
+        self.table.setColumnWidth(5, JOURNAL_TREE_COL_CR_W)
+        self.table.setColumnWidth(6, JOURNAL_TREE_COL_STATUS_W)
         self.table.horizontalHeader().setDefaultAlignment(Qt.AlignRight | Qt.AlignVCenter)
         self.table.setWordWrap(False)
         self.table.cellClicked.connect(self._on_cell_clicked)
@@ -166,6 +184,7 @@ class _JournalTreeTable(SafeConnMixin, QWidget):
         self._render(filtered)
 
     def _render(self, entries=None):
+        from ui.theme import _C
         if entries is None:
             entries = self._entries_data
 
@@ -183,7 +202,7 @@ class _JournalTreeTable(SafeConnMixin, QWidget):
             self._row_meta[r] = {"entry_id": eid, "is_parent": True, "is_child": False}
 
             self.table.setItem(r, 0, center_table_item(
-                "▼" if expanded else "▶", color=_C["accent"], bold=True,
+                tr("tree_toggle_expanded") if expanded else tr("tree_toggle_collapsed"), color=_C["accent"], bold=True,
             ))
             self.table.setItem(r, 1, center_table_item(entry["date"], color=_C["success"], bold=True))
             self.table.setItem(r, 2, bold_table_item(entry["ref_no"],      _C["accent"]))
@@ -192,8 +211,8 @@ class _JournalTreeTable(SafeConnMixin, QWidget):
             self.table.setItem(r, 5, bold_table_item(f"{total_cr:,.2f}",   _C["acc_type_liability"]))
 
             diff      = total_dr - total_cr
-            bal_color = _C["success"] if abs(diff) < 0.01 else _C["danger"]
-            bal_text  = tr("journal_status_balanced") if abs(diff) < 0.01 else tr("journal_status_unbalanced", diff=f"{abs(diff):,.2f}")
+            bal_color = _C["success"] if abs(diff) < JOURNAL_BALANCE_EPSILON else _C["danger"]
+            bal_text  = tr("journal_status_balanced") if abs(diff) < JOURNAL_BALANCE_EPSILON else tr("journal_status_unbalanced", diff=f"{abs(diff):,.2f}")
             self.table.setItem(r, 6, bold_table_item(bal_text, bal_color))
 
             set_row_background(self.table, r, _C["accent_light"])
@@ -211,10 +230,10 @@ class _JournalTreeTable(SafeConnMixin, QWidget):
                     acc_type  = line.get("account_type", "")
                     acc_color = TYPE_COLORS.get(acc_type, _C["text_primary"])
 
-                    prefix    = "    └─ "
+                    prefix    = tr("journal_tree_entry_prefix")
                     desc_text = f"{prefix}{acc_code} — {acc_name}"
                     if line.get("description"):
-                        desc_text += f"  │  {line['description']}"
+                        desc_text += f"{tr('journal_tree_desc_sep')}{line['description']}"
 
                     is_dr  = line["debit"] > 0
                     row_bg = _C["journal_dr_bg"] if is_dr else _C["journal_cr_bg"]

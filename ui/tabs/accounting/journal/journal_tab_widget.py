@@ -12,13 +12,18 @@ from PyQt5.QtCore import Qt, QTimer
 
 from ui.widgets.core.conn import SafeConnMixin
 from ui.widgets.core.events import bus
-from ui.theme import _C
+from ui.widgets.core.widget_mixin import WidgetMixin
+from ui.constants import (
+    MARGIN_ZERO,
+    JOURNAL_TAB_SPLITTER_HANDLE_W,
+    JOURNAL_TAB_SPLITTER_SIZES,
+)
 
 from .journal_tree_table import _JournalTreeTable
 from .journal_form       import _JournalForm
 
 
-class JournalTab(SafeConnMixin, QWidget):
+class JournalTab(SafeConnMixin, QWidget, WidgetMixin):
     """
     التبويب الرئيسي لليومية — splitter رأسي بين الفورم والجدول.
 
@@ -35,6 +40,8 @@ class JournalTab(SafeConnMixin, QWidget):
         self._form       = None
         self._tree_table = None
         self._build()
+        self._init_widget_mixin(lang=False, data=False)
+        self._refresh_style()
         bus.company_data_changed.connect(self._on_company_event)
 
     def _on_company_event(self, company_id: int):
@@ -56,15 +63,20 @@ class JournalTab(SafeConnMixin, QWidget):
         except Exception:
             return self._erp_conn
 
+    def _refresh_style(self, *_):
+        from ui.theme import _C
+        if self._splitter is not None:
+            self._splitter.setStyleSheet(
+                f"QSplitter::handle {{ background:{_C['border']}; }}"
+                f"QSplitter::handle:hover {{ background:{_C['badge_dr_bg']}; }}"
+            )
+
     def _build(self):
         root = QVBoxLayout(self)
-        root.setContentsMargins(0, 0, 0, 0)
+        root.setContentsMargins(*MARGIN_ZERO)
 
         self._splitter = QSplitter(Qt.Vertical)
-        self._splitter.setHandleWidth(6)
-        self._splitter.setStyleSheet(
-            f"QSplitter::handle {{ background:{_C['border']}; }}"            f"QSplitter::handle:hover {{ background:{_C['badge_dr_bg']}; }}"
-        )
+        self._splitter.setHandleWidth(JOURNAL_TAB_SPLITTER_HANDLE_W)
 
         conn = self._get_safe_conn()
         erp  = self._get_erp_conn()
@@ -74,7 +86,7 @@ class JournalTab(SafeConnMixin, QWidget):
 
         self._splitter.addWidget(self._form)
         self._splitter.addWidget(self._tree_table)
-        self._splitter.setSizes([440, 360])
+        self._splitter.setSizes(list(JOURNAL_TAB_SPLITTER_SIZES))
         self._splitter.setCollapsible(0, True)
 
         root.addWidget(self._splitter)
@@ -110,4 +122,4 @@ class JournalTab(SafeConnMixin, QWidget):
         if sizes and len(sizes) >= 2:
             self._splitter.setSizes(sizes)
         else:
-            self._splitter.setSizes([440, 360])
+            self._splitter.setSizes(list(JOURNAL_TAB_SPLITTER_SIZES))

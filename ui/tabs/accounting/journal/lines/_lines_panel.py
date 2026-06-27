@@ -15,13 +15,41 @@ from PyQt5.QtWidgets import (
 )
 
 from ui.widgets.core.conn import DualConnMixin
+from ui.widgets.core.widget_mixin import WidgetMixin
 from ui.theme import _C
 from ui.widgets.core.i18n import tr
 from ui.font import FS_XS, FS_SM, FS_BASE
+from ui.constants import (
+    LINES_PANEL_BORDER_W,
+    LINES_PANEL_BORDER_RADIUS,
+    LINES_PANEL_HDR_H,
+    LINES_PANEL_HDR_BORDER_RADIUS,
+    LINES_PANEL_HDR_MARGIN_H,
+    LINES_PANEL_HDR_MARGIN_V,
+    LINES_PANEL_BADGE_RADIUS,
+    LINES_PANEL_BADGE_PAD_V,
+    LINES_PANEL_BADGE_PAD_H,
+    LINES_PANEL_HDR_SPACING,
+    LINES_PANEL_COL_HDR_MARGIN_L,
+    LINES_PANEL_COL_HDR_MARGIN_R,
+    LINES_PANEL_COL_HDR_MARGIN_V,
+    LINES_PANEL_COL_HDR_SPACING,
+    LINES_PANEL_ROWS_SPACING,
+    LINES_PANEL_ROWS_MARGIN,
+    LINES_PANEL_SCROLL_MIN_H,
+    LINES_PANEL_SCROLL_MAX_H,
+    LINES_PANEL_BTN_ADD_MIN_H,
+    LINES_PANEL_BTN_ADD_RADIUS,
+    LINES_PANEL_BTN_ADD_BORDER_W,
+    LINES_PANEL_BTN_ADD_PAD_V,
+    LINES_PANEL_BTN_ADD_PAD_H,
+    LINES_PANEL_BTN_ADD_MARGIN_V,
+    LINES_PANEL_BTN_ADD_MARGIN_H,
+)
 from ._smart_line import _SmartLine
 
 
-class _LinesPanel(DualConnMixin, QFrame):
+class _LinesPanel(DualConnMixin, QFrame, WidgetMixin):
     """لوحة صفوف القيد: رأس DR/CR + scroll + زر إضافة."""
 
     def __init__(self, conn, erp_conn, on_balance_changed, parent=None):
@@ -30,13 +58,14 @@ class _LinesPanel(DualConnMixin, QFrame):
         self._on_balance_changed = on_balance_changed
         self._lines: list[_SmartLine] = []
         self._build()
+        self._init_widget_mixin(lang=False, data=False)
 
     def _build(self):
         self.setStyleSheet(f"""
             QFrame {{
                 background: {_C['bg_surface']};
-                border: 1px solid {_C['border']};
-                border-radius: 8px;
+                border: {LINES_PANEL_BORDER_W}px solid {_C['border']};
+                border-radius: {LINES_PANEL_BORDER_RADIUS}px;
             }}
         """)
         root = QVBoxLayout(self)
@@ -45,10 +74,11 @@ class _LinesPanel(DualConnMixin, QFrame):
 
         # رأس
         hdr = QFrame()
-        hdr.setStyleSheet(f"background:{_C['journal_header_bg']}; border-radius:7px 7px 0 0;")
-        hdr.setFixedHeight(38)
+        hdr.setStyleSheet(f"background:{_C['journal_header_bg']}; border-radius:{LINES_PANEL_HDR_BORDER_RADIUS};")
+        hdr.setFixedHeight(LINES_PANEL_HDR_H)
         hl = QHBoxLayout(hdr)
-        hl.setContentsMargins(12, 4, 12, 4)
+        hl.setContentsMargins(LINES_PANEL_HDR_MARGIN_H, LINES_PANEL_HDR_MARGIN_V,
+                              LINES_PANEL_HDR_MARGIN_H, LINES_PANEL_HDR_MARGIN_V)
 
         lbl = QLabel(tr("journal_lines_title"))
         lbl.setStyleSheet(
@@ -58,17 +88,17 @@ class _LinesPanel(DualConnMixin, QFrame):
         self.lbl_dr = QLabel(tr("journal_dr_total", amount="0.00"))
         self.lbl_dr.setStyleSheet(
             f"font-weight:bold; color:{_C['journal_dr_accent']}; background:{_C['badge_dr_bg']};"
-            f"border-radius:4px; padding:2px 8px; font-size:{FS_SM}px; border:none;"
+            f"border-radius:{LINES_PANEL_BADGE_RADIUS}px; padding:{LINES_PANEL_BADGE_PAD_V}px {LINES_PANEL_BADGE_PAD_H}px; font-size:{FS_SM}px; border:none;"
         )
         self.lbl_cr = QLabel(tr("journal_cr_total", amount="0.00"))
         self.lbl_cr.setStyleSheet(
             f"font-weight:bold; color:{_C['journal_cr_accent']}; background:{_C['badge_cr_bg']};"
-            f"border-radius:4px; padding:2px 8px; font-size:{FS_SM}px; border:none;"
+            f"border-radius:{LINES_PANEL_BADGE_RADIUS}px; padding:{LINES_PANEL_BADGE_PAD_V}px {LINES_PANEL_BADGE_PAD_H}px; font-size:{FS_SM}px; border:none;"
         )
         hl.addWidget(lbl)
         hl.addStretch()
         hl.addWidget(self.lbl_dr)
-        hl.addSpacing(8)
+        hl.addSpacing(LINES_PANEL_HDR_SPACING)
         hl.addWidget(self.lbl_cr)
         root.addWidget(hdr)
 
@@ -76,8 +106,9 @@ class _LinesPanel(DualConnMixin, QFrame):
         col_hdr = QFrame()
         col_hdr.setStyleSheet(f"background:{_C['bg_surface_2']};")
         ch_lay = QHBoxLayout(col_hdr)
-        ch_lay.setContentsMargins(28, 2, 8, 2)
-        ch_lay.setSpacing(6)
+        ch_lay.setContentsMargins(LINES_PANEL_COL_HDR_MARGIN_L, LINES_PANEL_COL_HDR_MARGIN_V,
+                                  LINES_PANEL_COL_HDR_MARGIN_R, LINES_PANEL_COL_HDR_MARGIN_V)
+        ch_lay.setSpacing(LINES_PANEL_COL_HDR_SPACING)
 
         def _ch(text, w=None, stretch=0):
             lbl2 = QLabel(text)
@@ -100,30 +131,41 @@ class _LinesPanel(DualConnMixin, QFrame):
         self._rows_w   = QFrame()
         self._rows_w.setStyleSheet("background:transparent;")
         self._rows_lay = QVBoxLayout(self._rows_w)
-        self._rows_lay.setSpacing(3)
-        self._rows_lay.setContentsMargins(6, 6, 6, 6)
+        self._rows_lay.setSpacing(LINES_PANEL_ROWS_SPACING)
+        self._rows_lay.setContentsMargins(LINES_PANEL_ROWS_MARGIN, LINES_PANEL_ROWS_MARGIN,
+                                          LINES_PANEL_ROWS_MARGIN, LINES_PANEL_ROWS_MARGIN)
         self._rows_lay.addStretch()
 
         scroll = QScrollArea()
         scroll.setWidgetResizable(True)
         scroll.setWidget(self._rows_w)
-        scroll.setMinimumHeight(150)
-        scroll.setMaximumHeight(380)
+        scroll.setMinimumHeight(LINES_PANEL_SCROLL_MIN_H)
+        scroll.setMaximumHeight(LINES_PANEL_SCROLL_MAX_H)
         scroll.setStyleSheet(f"QScrollArea {{ border:none; background:{_C['bg_surface']}; }}")
         root.addWidget(scroll)
 
         btn_add = QPushButton(tr("add_journal_line"))
-        btn_add.setMinimumHeight(28)
+        btn_add.setMinimumHeight(LINES_PANEL_BTN_ADD_MIN_H)
         btn_add.setStyleSheet(f"""
             QPushButton {{
                 background: {_C['journal_header_bg']}; color: {_C['accent']};
-                border: 1px solid {_C['journal_header_border']}; border-radius: 4px;
-                font-weight: bold; padding: 2px 12px; margin: 4px 8px;
+                border: {LINES_PANEL_BTN_ADD_BORDER_W}px solid {_C['journal_header_border']}; border-radius: {LINES_PANEL_BTN_ADD_RADIUS}px;
+                font-weight: bold; padding: {LINES_PANEL_BTN_ADD_PAD_V}px {LINES_PANEL_BTN_ADD_PAD_H}px; margin: {LINES_PANEL_BTN_ADD_MARGIN_V}px {LINES_PANEL_BTN_ADD_MARGIN_H}px;
             }}
             QPushButton:hover {{ background: {_C['accent']}; color: {_C['accent_text']}; }}
         """)
         btn_add.clicked.connect(self.add_line)
         root.addWidget(btn_add)
+
+    def _refresh_style(self, *_):
+        from ui.theme import _C
+        self.setStyleSheet(f"""
+            QFrame {{
+                background: {_C['bg_surface']};
+                border: {LINES_PANEL_BORDER_W}px solid {_C['border']};
+                border-radius: {LINES_PANEL_BORDER_RADIUS}px;
+            }}
+        """)
 
     def add_line(self) -> _SmartLine:
         line = _SmartLine(

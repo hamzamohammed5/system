@@ -15,7 +15,6 @@ _JournalForm — فورم إدخال القيد اليومي الكامل.
 from PyQt5.QtWidgets import (
     QWidget, QVBoxLayout, QHBoxLayout, QLabel, QPushButton,
 )
-from PyQt5.QtCore import Qt
 
 from db.accounting.accounting_repo import (
     insert_entry, add_entry_lines, validate_entry_balance,
@@ -27,31 +26,63 @@ from db.accounting.accounting_repo_ui_helpers import (
 from ui.widgets.core.conn import DualConnMixin
 from ui.widgets.core.events import emit_company_data_changed
 from ui.widgets.core.i18n import tr
-from ui.theme import _C
 from ui.font import FS_BASE
 from ui.widgets.dialogs.message import msg_warning, msg_info
+from ui.widgets.core.widget_mixin import WidgetMixin
+from ui.constants import (
+    JOURNAL_FORM_MARGIN_H,
+    JOURNAL_FORM_MARGIN_V,
+    JOURNAL_FORM_SPACING,
+    JOURNAL_FORM_BTN_MIN_H,
+    JOURNAL_FORM_BTN_RADIUS,
+    JOURNAL_FORM_BTN_SAVE_PAD_H,
+    JOURNAL_FORM_BTN_CANCEL_PAD_H,
+    JOURNAL_FORM_BORDER_W,
+)
 from .journal_lines import _LinesPanel
 from .form._balance_bar    import _BalanceBar
 from .form._journal_header import _JournalHeader
 
 
-class _JournalForm(DualConnMixin, QWidget):
+class _JournalForm(DualConnMixin, QWidget, WidgetMixin):
     """فورم كامل لإدخال قيد يومية جديد مع صفوف ذكية وشريط توازن."""
 
     def __init__(self, conn, erp_conn=None, parent=None):
         super().__init__(parent)
         self._init_dual_conn(conn, erp_conn)
         self._build()
+        self._init_widget_mixin(lang=True, data=False)
+        self._refresh_style()
 
-    def _build(self):
-        root = QVBoxLayout(self)
-        root.setContentsMargins(12, 10, 12, 10)
-        root.setSpacing(8)
+    def _refresh_lang(self, *_):
+        self.lbl_mode.setText(tr("new_journal_entry"))
+        self.btn_save.setText(tr("entry_save_btn"))
+        self.btn_cancel.setText(tr("entry_clear_btn"))
 
-        self.lbl_mode = QLabel(tr("new_journal_entry"))
+    def _refresh_style(self, *_):
+        from ui.theme import _C
         self.lbl_mode.setStyleSheet(
             f"font-weight:bold; color:{_C['accent']}; font-size:{FS_BASE}px;"
         )
+        self.btn_save.setStyleSheet(
+            f"QPushButton {{ background:{_C['accent']}; color:{_C['accent_text']};"
+            f"font-weight:bold; border-radius:{JOURNAL_FORM_BTN_RADIUS}px; padding:0 {JOURNAL_FORM_BTN_SAVE_PAD_H}px; }}"
+            f"QPushButton:hover {{ background:{_C['accent_hover']}; }}"
+            f"QPushButton:disabled {{ background:{_C['text_disabled']}; color:{_C['bg_surface_2']}; }}"
+        )
+        self.btn_cancel.setStyleSheet(
+            f"QPushButton {{ background:{_C['bg_surface_2']}; color:{_C['text_sec']};"
+            f"border:{JOURNAL_FORM_BORDER_W}px solid {_C['border']}; border-radius:{JOURNAL_FORM_BTN_RADIUS}px; padding:0 {JOURNAL_FORM_BTN_CANCEL_PAD_H}px; }}"
+            f"QPushButton:hover {{ background:{_C['bg_hover']}; }}"
+        )
+
+    def _build(self):
+        root = QVBoxLayout(self)
+        root.setContentsMargins(JOURNAL_FORM_MARGIN_H, JOURNAL_FORM_MARGIN_V,
+                                JOURNAL_FORM_MARGIN_H, JOURNAL_FORM_MARGIN_V)
+        root.setSpacing(JOURNAL_FORM_SPACING)
+
+        self.lbl_mode = QLabel(tr("new_journal_entry"))
         root.addWidget(self.lbl_mode)
 
         self._hdr = _JournalHeader()
@@ -67,19 +98,14 @@ class _JournalForm(DualConnMixin, QWidget):
 
         self.btn_save   = QPushButton(tr("entry_save_btn"))
         self.btn_cancel = QPushButton(tr("entry_clear_btn"))
-        self.btn_save.setMinimumHeight(34)
-        self.btn_cancel.setMinimumHeight(34)
+        self.btn_save.setMinimumHeight(JOURNAL_FORM_BTN_MIN_H)
+        self.btn_cancel.setMinimumHeight(JOURNAL_FORM_BTN_MIN_H)
         self.btn_save.setEnabled(False)
-        self.btn_save.setStyleSheet(
-            f"QPushButton {{ background:{_C['accent']}; color:{_C['accent_text']};"            "font-weight:bold; border-radius:6px; padding:0 20px; }"            f"QPushButton:hover {{ background:{_C['accent_hover']}; }}"            f"QPushButton:disabled {{ background:{_C['text_disabled']}; color:{_C['bg_surface_2']}; }}"
-        )
-        self.btn_cancel.setStyleSheet(
-            f"QPushButton {{ background:{_C['bg_surface_2']}; color:{_C['text_sec']};"            f"border:1px solid {_C['border']}; border-radius:6px; padding:0 14px; }}"            f"QPushButton:hover {{ background:{_C['bg_hover']}; }}"
-        )
+
         self.btn_save.clicked.connect(self._save)
         self.btn_cancel.clicked.connect(self._clear)
         _btn_row = QHBoxLayout()
-        _btn_row.setSpacing(8)
+        _btn_row.setSpacing(JOURNAL_FORM_SPACING)
         _btn_row.addWidget(self.btn_save)
         _btn_row.addWidget(self.btn_cancel)
         _btn_row.addStretch()
