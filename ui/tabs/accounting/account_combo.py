@@ -7,6 +7,13 @@ SafeConnMixin (v4): _get_safe_conn() بدل self.conn في كل query.
 [إصلاح v5]:
   - _on_company_event(): حذف snapshot_id الزائد —
     _on_company_event_safe() تتحقق بالفعل من تطابق الشركة.
+
+[تحديث v6]:
+  - حذف _on_company_event() نفسها (كانت pass فقط، بدون أي استدعاء فعلي
+    بعد التحويل لـ WidgetMixin الذي يوجّه company_data_changed مباشرة
+    لـ _refresh_data).
+  - استبدال القيم الـ hardcoded (الفاصل البصري "—"، spacing=4) بـ
+    tr("dash") و ACCOUNT_COMBO_LAYOUT_SPACING.
 """
 
 from PyQt5.QtWidgets import (
@@ -21,64 +28,76 @@ from db.accounting.accounting_repo import (
     get_normal_balance, _get_group_descendants,
 )
 from db.accounting.accounting_schema import TYPE_AR
-from ui.widgets.core.events import bus
 from ui.widgets.core.conn import SafeConnMixin
-from ui.theme import _C
 from ui.widgets.core.i18n import tr
+from ui.widgets.core.widget_mixin import WidgetMixin
 from ui.font import FS_XS
+from ui.constants import (
+    ACCOUNT_COMBO_GROUP_W,
+    ACCOUNT_COMBO_SEARCH_W,
+    ACCOUNT_COMBO_ACCOUNT_MIN_W,
+    ACCOUNT_COMBO_NB_BADGE_W,
+    ACCOUNT_COMBO_BADGE_BORDER_RADIUS,
+    ACCOUNT_COMBO_BADGE_PAD_V,
+    ACCOUNT_COMBO_BADGE_PAD_H,
+    ACCOUNT_COMBO_LAYOUT_SPACING,
+)
 from .helpers import _get_type_colors
 
 
 def _badge_style(side: str = "") -> str:
+    from ui.theme import _C
+    _pad = f"{ACCOUNT_COMBO_BADGE_PAD_V}px {ACCOUNT_COMBO_BADGE_PAD_H}px"
+    _r   = f"{ACCOUNT_COMBO_BADGE_BORDER_RADIUS}px"
     if side == "dr":
         return (f"font-size:{FS_XS}px; font-weight:bold; color:{_C['badge_dr_text']};"
-                f"background:{_C['badge_dr_bg']}; border-radius:3px; padding:2px 4px;")
+                f"background:{_C['badge_dr_bg']}; border-radius:{_r}; padding:{_pad};")
     if side == "cr":
         return (f"font-size:{FS_XS}px; font-weight:bold; color:{_C['badge_cr_text']};"
-                f"background:{_C['badge_cr_bg']}; border-radius:3px; padding:2px 4px;")
-    return f"font-size:{FS_XS}px; font-weight:bold; border-radius:3px; padding:2px 4px;"
-
-_BADGE_WIDTH = 44
+                f"background:{_C['badge_cr_bg']}; border-radius:{_r}; padding:{_pad};")
+    return f"font-size:{FS_XS}px; font-weight:bold; border-radius:{_r}; padding:{_pad};"
 
 
-class _AccountCombo(SafeConnMixin, QWidget):
+class _AccountCombo(SafeConnMixin, QWidget, WidgetMixin):
     def __init__(self, conn, acc_types: list = None, parent=None):
         super().__init__(parent)
         self._init_safe_conn(conn, "accounting")
+        self._init_widget_mixin(theme=True, font=False, lang=False, data=True)
         self.acc_types   = acc_types
         self._all_accs   = []
         self._company_id = self._get_company_id()
         self._build()
+        self._refresh_style()
         self.refresh()
-        bus.company_data_changed.connect(self._on_company_event)
 
-    def _on_company_event(self, company_id: int):
-        # [إصلاح v5] _on_company_event_safe() تتحقق بالفعل من تطابق الشركة
-        # لا حاجة لـ snapshot_id إضافي
+    def _refresh_style(self, *_):
+        self.lbl_nb.setStyleSheet(_badge_style())
+
+    def _refresh_data(self, company_id=None):
         if self._on_company_event_safe(company_id):
             QTimer.singleShot(0, self.refresh)
 
     def _build(self):
         lay = QHBoxLayout(self)
         lay.setContentsMargins(0, 0, 0, 0)
-        lay.setSpacing(4)
+        lay.setSpacing(ACCOUNT_COMBO_LAYOUT_SPACING)
 
         self.cmb_group = QComboBox()
-        self.cmb_group.setFixedWidth(130)
+        self.cmb_group.setFixedWidth(ACCOUNT_COMBO_GROUP_W)
         self.cmb_group.setToolTip(tr("group_filter_tooltip"))
         self.cmb_group.currentIndexChanged.connect(self._apply_filter)
 
         self.inp_search = QLineEdit()
         self.inp_search.setPlaceholderText(tr("search_placeholder"))
-        self.inp_search.setFixedWidth(90)
+        self.inp_search.setFixedWidth(ACCOUNT_COMBO_SEARCH_W)
         self.inp_search.textChanged.connect(self._apply_filter)
 
         self.cmb_account = QComboBox()
         self.cmb_account.setSizeAdjustPolicy(QComboBox.AdjustToMinimumContentsLength)
-        self.cmb_account.setMinimumWidth(200)
+        self.cmb_account.setMinimumWidth(ACCOUNT_COMBO_ACCOUNT_MIN_W)
 
         self.lbl_nb = QLabel("")
-        self.lbl_nb.setFixedWidth(_BADGE_WIDTH)
+        self.lbl_nb.setFixedWidth(ACCOUNT_COMBO_NB_BADGE_W)
         self.lbl_nb.setAlignment(Qt.AlignCenter)
         self.lbl_nb.setStyleSheet(_badge_style())
         self.cmb_account.currentIndexChanged.connect(self._update_nb_label)
@@ -114,7 +133,7 @@ class _AccountCombo(SafeConnMixin, QWidget):
 
     def _add_group_nodes(self, nodes, depth):
         indent = "  " * depth
-        arrow  = "↳ " if depth > 0 else ""
+        arrow  = tr("tree_node_arrow") if depth > 0 else ""
         for node in nodes:
             self.cmb_group.addItem(f"{indent}{arrow}{node['name']}", node["id"])
             idx = self.cmb_group.count() - 1
@@ -133,6 +152,7 @@ class _AccountCombo(SafeConnMixin, QWidget):
         self._apply_filter()
 
     def _apply_filter(self):
+        from ui.theme import _C
         conn    = self._get_safe_conn()
         prev_id = self.current_account_id()
         q       = self.inp_search.text().strip().lower()
@@ -155,7 +175,7 @@ class _AccountCombo(SafeConnMixin, QWidget):
                 continue
 
             if acc["type"] != last_type:
-                sep_text = f"── {TYPE_AR.get(acc['type'], acc['type'])} ──"
+                sep_text = tr("account_tree_type_header", type=TYPE_AR.get(acc["type"], acc["type"]))
                 self.cmb_account.addItem(sep_text, "__sep__")
                 sep_index = self.cmb_account.count() - 1
                 self._disable_item(sep_index)
@@ -164,7 +184,7 @@ class _AccountCombo(SafeConnMixin, QWidget):
             color   = _get_type_colors().get(acc["type"], _C["text_primary"])
             nb      = get_normal_balance(acc["type"])
             nb_text = tr("dr_badge") if nb == "dr" else tr("cr_badge")
-            label   = f"{acc['code']} — {acc['name']}  [{nb_text}]"
+            label   = f"{acc['code']} {tr('dash')} {acc['name']}  [{nb_text}]"
             self.cmb_account.addItem(label, acc["id"])
             idx2 = self.cmb_account.count() - 1
             self.cmb_account.setItemData(idx2, QColor(color), Qt.ForegroundRole)
@@ -183,6 +203,7 @@ class _AccountCombo(SafeConnMixin, QWidget):
         self._update_nb_label()
 
     def _disable_item(self, idx: int):
+        from ui.theme import _C
         model = self.cmb_account.model()
         item  = model.item(idx)
         if item:

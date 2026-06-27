@@ -15,7 +15,7 @@ from .financial.balance_sheet_tab    import BalanceSheetTab
 from ui.widgets.theme.layout_styles import tab_style
 from ui.widgets.theme.table_styles import splitter_style
 from ui.widgets.core.i18n import tr
-from db.accounting.accounting_schema import TYPE_AR
+from ui.constants import SPLITTER_HANDLE_W, EQUITY_TAB_SPLITTER_SIZES
 
 
 # للتوافق مع accounting_section.py الذي يستورد _INNER_TAB_STYLE
@@ -50,7 +50,7 @@ def build_equity_tab(acc) -> QWidget:
     root     = QVBoxLayout(widget)
     root.setContentsMargins(0, 0, 0, 0)
     splitter = QSplitter(Qt.Horizontal)
-    splitter.setHandleWidth(5)
+    splitter.setHandleWidth(SPLITTER_HANDLE_W)
     splitter.setStyleSheet(splitter_style())
 
     tree_panel = AccountsTreePanel(
@@ -66,7 +66,7 @@ def build_equity_tab(acc) -> QWidget:
     cat_tabs.addTab(_GroupManagerPanel(acc, "revenue"),   tr("revenue_tab"))
     cat_tabs.addTab(_GroupManagerPanel(acc, "expense"),   tr("expense_tab"))
     splitter.addWidget(cat_tabs)
-    splitter.setSizes([600, 300])
+    splitter.setSizes(list(EQUITY_TAB_SPLITTER_SIZES))
 
     root.addWidget(splitter)
     return widget

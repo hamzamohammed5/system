@@ -27,12 +27,15 @@ from ui.theme                   import _C
 from ui.widgets.core.events     import bus, emit_company_data_changed
 from ui.widgets.core.i18n       import tr
 from .main_window_helper._sidebar import _Sidebar
-from .main_window_helper._nav_button import (
+from ui.constants import (
     WINDOW_DEFAULT_W,
     SIDEBAR_COLLAPSED_WIDTH,
     CONTENT_MIN_WIDTH,
+    WINDOW_DEFAULT_H,
+    WINDOW_MIN_H,
+    WINDOW_MIN_CONTENT_W,
+    V_DIVIDER_WIDTH,
 )
-from ui.constants import WINDOW_DEFAULT_H, WINDOW_MIN_H, WINDOW_MIN_CONTENT_W, V_DIVIDER_WIDTH
 
 logger = logging.getLogger(__name__)
 

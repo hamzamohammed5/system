@@ -24,26 +24,34 @@ from db.accounting.accounting_repo import (
     fetch_all_groups, build_group_tree,
 )
 from db.accounting.accounting_schema import TYPE_AR, EQUITY_TYPES
-from ui.widgets.core.events import bus
 from ui.widgets.core.conn import SafeConnMixin
+from ui.widgets.core.widget_mixin import WidgetMixin
 from ui.widgets.components.headers_page import SectionHeader
 from ui.widgets.components.button import make_btn as _make_btn
 from ui.widgets.theme.table_styles import splitter_style as get_splitter_style
 from ui.widgets.theme.layout_styles import tree_style as get_tree_style
 from ui.widgets.dialogs.confirm import confirm_delete
 
-from ui.theme import _C
 from ui.widgets.core.i18n import tr
-from ui.font import FS_MD, FS_SM
+from ui.font import FS_MD
 from ui.widgets.dialogs.message import msg_info, msg_warning, msg_critical
 from .tree._tree_builder import (
     rows_to_tree, filter_by_group, add_acc_nodes, add_type_header,
 )
 from .tree._account_form  import _AccountForm
 from .tree._group_filter  import _GroupFilterCombo
+from ui.constants import (
+    SPLITTER_HANDLE_W,
+    ACCOUNTS_TREE_COL_CODE_W, ACCOUNTS_TREE_COL_BAL_W,
+    ACCOUNTS_TREE_SPLITTER_L, ACCOUNTS_TREE_SPLITTER_R,
+    ACCOUNTS_TREE_FILTER_MIN_H,
+    ACCOUNTS_TREE_LEFT_MARGIN_L, ACCOUNTS_TREE_LEFT_MARGIN_T,
+    ACCOUNTS_TREE_LEFT_MARGIN_R, ACCOUNTS_TREE_LEFT_MARGIN_B,
+    ACCOUNTS_TREE_LEFT_SPACING,
+)
 
 
-class AccountsTreePanel(SafeConnMixin, QWidget):
+class AccountsTreePanel(SafeConnMixin, QWidget, WidgetMixin):
     def __init__(self, conn, acc_types: list, title: str, parent=None):
         super().__init__(parent)
         self._init_safe_conn(conn, "accounting")
@@ -52,10 +60,10 @@ class AccountsTreePanel(SafeConnMixin, QWidget):
         self._loading    = False
         self._company_id = self._get_company_id()
         self._build()
+        self._init_widget_mixin(theme=False, font=False, lang=False, data=True)
         self._load()
-        bus.company_data_changed.connect(self._on_company_event)
 
-    def _on_company_event(self, company_id: int):
+    def _refresh_data(self, company_id=None):
         if self._on_company_event_safe(company_id):
             self._load()
 
@@ -65,13 +73,16 @@ class AccountsTreePanel(SafeConnMixin, QWidget):
         main_layout.setSpacing(0)
 
         splitter = QSplitter(Qt.Horizontal)
-        splitter.setHandleWidth(5)
+        splitter.setHandleWidth(SPLITTER_HANDLE_W)
         splitter.setStyleSheet(get_splitter_style())
 
         left = QWidget()
         ll   = QVBoxLayout(left)
-        ll.setContentsMargins(10, 8, 6, 10)
-        ll.setSpacing(6)
+        ll.setContentsMargins(
+            ACCOUNTS_TREE_LEFT_MARGIN_L, ACCOUNTS_TREE_LEFT_MARGIN_T,
+            ACCOUNTS_TREE_LEFT_MARGIN_R, ACCOUNTS_TREE_LEFT_MARGIN_B,
+        )
+        ll.setSpacing(ACCOUNTS_TREE_LEFT_SPACING)
 
         # ── هيدر القسم ──
         hdr = SectionHeader(self.title)
@@ -82,7 +93,7 @@ class AccountsTreePanel(SafeConnMixin, QWidget):
         lbl_tag = QLabel(tr("group_tag_icon"))
         lbl_tag.setStyleSheet("background:transparent; border:none;")
         self.cmb_group_filter = _GroupFilterCombo(self._get_safe_conn(), self.acc_types)
-        self.cmb_group_filter.setMinimumHeight(26)
+        self.cmb_group_filter.setMinimumHeight(ACCOUNTS_TREE_FILTER_MIN_H)
         self.cmb_group_filter.currentIndexChanged.connect(self._on_filter_changed)
         filter_row.addWidget(lbl_tag)
         filter_row.addWidget(self.cmb_group_filter, stretch=1)
@@ -95,8 +106,8 @@ class AccountsTreePanel(SafeConnMixin, QWidget):
         hh.setSectionResizeMode(0, QHeaderView.Interactive)
         hh.setSectionResizeMode(1, QHeaderView.Stretch)
         hh.setSectionResizeMode(2, QHeaderView.Interactive)
-        self.tree.setColumnWidth(0, 70)
-        self.tree.setColumnWidth(2, 110)
+        self.tree.setColumnWidth(0, ACCOUNTS_TREE_COL_CODE_W)
+        self.tree.setColumnWidth(2, ACCOUNTS_TREE_COL_BAL_W)
         self.tree.setAlternatingRowColors(True)
         self.tree.setStyleSheet(get_tree_style())
         ll.addWidget(self.tree, stretch=1)
@@ -116,7 +127,7 @@ class AccountsTreePanel(SafeConnMixin, QWidget):
 
         self._form = _AccountForm(self._get_safe_conn(), self.acc_types)
         splitter.addWidget(self._form)
-        splitter.setSizes([420, 280])
+        splitter.setSizes([ACCOUNTS_TREE_SPLITTER_L, ACCOUNTS_TREE_SPLITTER_R])
 
         main_layout.addWidget(splitter)
 
@@ -138,6 +149,7 @@ class AccountsTreePanel(SafeConnMixin, QWidget):
             self._loading = False
 
     def _build_tree(self):
+        from ui.theme import _C
         self.tree.clear()
         conn       = self._get_safe_conn()
         gid_filter = self.cmb_group_filter.currentData()
@@ -198,7 +210,7 @@ class AccountsTreePanel(SafeConnMixin, QWidget):
                 from ui.tabs.accounting.helpers import TYPE_COLORS
                 sub_item = QTreeWidgetItem()
                 sub_item.setText(0, "")
-                sub_item.setText(1, f"── {TYPE_AR.get(acc_type, acc_type)} ──")
+                sub_item.setText(1, tr("accounts_tree_sub_type_wrap", name=TYPE_AR.get(acc_type, acc_type)))
                 sub_item.setFlags(sub_item.flags() & ~Qt.ItemIsSelectable)
                 sf = sub_item.font(1)
                 sf.setBold(True)
@@ -269,6 +281,7 @@ class AccountsTreePanel(SafeConnMixin, QWidget):
             try:
                 for del_id in reversed(all_ids):
                     conn.execute("DELETE FROM accounts WHERE id=?", (del_id,))
+                from ui.widgets.core.events import bus
                 bus.company_data_changed.emit(self._company_id or 0)
             except Exception as e:
                 msg_critical(self, tr("error"), tr("delete_failed_msg", error=str(e)))

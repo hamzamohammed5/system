@@ -16,6 +16,11 @@ from ui.widgets.panels.state import EmptyState
 from ui.widgets.core.i18n import tr
 from ui.theme import _C
 from ui.font import FS_BASE, FS_LG
+from ui.constants import (
+    STATE_LABEL_PADDING,
+    STATE_ERROR_BORDER_RADIUS,
+    STATE_ERROR_MARGIN,
+)
 
 
 # ══════════════════════════════════════════════════════════
@@ -26,7 +31,7 @@ def make_no_company_widget() -> QLabel:
     """Widget 'اختر شركة أولاً'."""
     lbl = QLabel(tr("accounting_no_company_msg"))
     lbl.setAlignment(Qt.AlignCenter)
-    lbl.setStyleSheet(f"font-size:{FS_LG}px; color:{_C['text_state_neutral']}; padding:40px;")
+    lbl.setStyleSheet(f"font-size:{FS_LG}px; color:{_C['text_state_neutral']}; padding:{STATE_LABEL_PADDING}px;")
     return lbl
 
 
@@ -46,8 +51,8 @@ def make_error_widget(message: str,
     lbl.setAlignment(Qt.AlignCenter)
     lbl.setWordWrap(True)
     lbl.setStyleSheet(
-        f"font-size:{FS_BASE}px; color:{color}; padding:40px;"
-        f"background:{bg}; border-radius:8px; margin:20px;"
+        f"font-size:{FS_BASE}px; color:{color}; padding:{STATE_LABEL_PADDING}px;"
+        f"background:{bg}; border-radius:{STATE_ERROR_BORDER_RADIUS}px; margin:{STATE_ERROR_MARGIN}px;"
     )
     return lbl
 
@@ -67,11 +72,11 @@ def make_loading_widget(attempt: int, max_attempts: int = 5,
     msg = text or tr("loading_db_msg", attempt=attempt, max=max_attempts)
     lbl = QLabel(msg)
     lbl.setAlignment(Qt.AlignCenter)
-    lbl.setStyleSheet(f"font-size:{FS_BASE}px; color:{_C['text_state_neutral']}; padding:40px;")
+    lbl.setStyleSheet(f"font-size:{FS_BASE}px; color:{_C['text_state_neutral']}; padding:{STATE_LABEL_PADDING}px;")
     return lbl
 
 
-def make_empty_state(icon: str = "📋",
+def make_empty_state(icon: str = None,
                      title: str = None,
                      subtitle: str = "",
                      action_text: str = "") -> EmptyState:
@@ -79,7 +84,7 @@ def make_empty_state(icon: str = "📋",
     يبني EmptyState موحد من panels.
     """
     return EmptyState(
-        icon=icon,
+        icon=icon or tr("empty_icon_table"),
         title=title or tr("no_data"),
         subtitle=subtitle,
         action_text=action_text,

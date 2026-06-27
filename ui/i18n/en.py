@@ -69,6 +69,28 @@ EN_STRINGS: dict[str, str] = {
     "nav_shared":        "Shared Items",
     "nav_settings":      "Settings",
 
+    # ── sidebar — section labels, icons, toggle ────────────
+    "nav_section_production": "Production",
+    "nav_section_finance":    "Finance",
+    "nav_section_work":       "Operations",
+    "nav_icon_costing":       "📊",
+    "nav_icon_pricing":       "💰",
+    "nav_icon_accounting":    "🏦",
+    "nav_icon_inventory":     "📦",
+    "nav_icon_design":        "🎨",
+    "nav_icon_orders":        "📋",
+    "nav_icon_shared":        "🔗",
+    "nav_icon_settings":      "⚙️",
+    "tab_icon_raw":           "📦",
+    "tab_icon_semi":          "🔧",
+    "tab_icon_final":         "🏭",
+    "tab_icon_labor":         "👷",
+    "tab_icon_machine":       "⚙️",
+    "sidebar_collapse_tip":   "Collapse Sidebar",
+    "sidebar_expand_tip":     "Expand Sidebar",
+    "sidebar_collapse_icon":  "◀",
+    "sidebar_expand_icon":    "▶",
+
     # ══════════════════════════════════════════════
     # Settings
     # ══════════════════════════════════════════════
@@ -377,6 +399,8 @@ EN_STRINGS: dict[str, str] = {
     "category_select_first":  "Select a category first",
     "category_name_required": "Enter category name",
     "no_category":            "No Category",
+    "combo_clear_search":     "✖",
+    "combo_sep_no_category":  "─── No Category ───",
 
     # ══════════════════════════════════════════════
     # Operations
@@ -1243,6 +1267,7 @@ EN_STRINGS: dict[str, str] = {
     "delete_movement_btn":     "🗑️  Delete Selected Movement",
     "select_movement_first":   "Select a movement first",
     "investor_joined":         "Joined",
+    "investor_title_fmt":      "👤  {name}  │  {joined_label}: {date}",
 
     # ══════════════════════════════════════════════
     # Investor form (_investor_form)
@@ -1403,6 +1428,10 @@ EN_STRINGS: dict[str, str] = {
     "popup_hint_select":           "Double-click or press Enter to select",
     "account_search_placeholder":  "🔍 Search by name or code...",
     "account_group_unassigned":    "─── Unassigned ───",
+    "account_code_placeholder":    "1141",
+    "account_name_placeholder":    "Account name...",
+    "account_tree_type_header":    "── {type} ──",
+    "account_node_tooltip_with_group": "{name}  |  🏷 {group}",
 
     # ══════════════════════════════════════════════════════════════════
     # Inventory
@@ -1972,6 +2001,7 @@ EN_STRINGS: dict[str, str] = {
     "filter_reset_btn":         "↺",
     "filter_reset_tooltip":     "Clear All",
     "filter_cat_icon":          "🏷",
+    "filter_date_icon":         "📅",
 
     # ── CollapsibleCard ────────────────────────────────────
     "collapsible_arrow_expanded":  "▼",
@@ -1980,8 +2010,43 @@ EN_STRINGS: dict[str, str] = {
     # ── InlinePreview / DataTable ──────────────────────────
     "inline_preview_label": "Result:",
     "empty_icon_search":    "🔍",
+    "empty_icon_table":     "📋",
 
     # ── SharedOpsMixin ─────────────────────────────────────
     "shared_item_not_shared_use_edit": "This is a regular item — use «✏️ Edit» instead.",
+
+    # ── Asset account icons (fill_asset_combo) ─────────────
+    "asset_icon_bank":  "🏦",
+    "asset_icon_cash":  "💵",
+    "asset_icon_other": "📦",
+
+    # ── Movement Dialog icons ───────────────────────────────
+    "movement_icon_capital":  "💰",
+    "movement_icon_drawings": "💸",
+
+    # ── Investor icon ────────────────────────────────────────
+    "investor_icon":          "👤",
+
+    # ── AccountTreePopup icons ──────────────────────────────
+    "account_tree_equity_icon": "👑",
+    "account_tree_group_icon":  "🏷",
+    "account_tree_default_icon": "📁",
+
+    # ── AccountTreePopup type icons ──────────────────────────
+    "account_tree_icon_asset":     "🏦",
+    "account_tree_icon_liability": "📋",
+    "account_tree_icon_capital":   "👑",
+    "account_tree_icon_drawings":  "💸",
+    "account_tree_icon_revenue":   "💹",
+    "account_tree_icon_expense":   "📤",
+
+    # ── AccountTreePopup tree toggles / separators ───────────
+    "tree_toggle_expanded":   "▼",
+    "tree_toggle_collapsed":  "▶",
+    "account_code_name_sep":  " — ",
+
+    # ── _JournalTreeTable — prefixes / separators ─────────
+    "journal_tree_entry_prefix": "    └─ ",
+    "journal_tree_desc_sep":     "  │  ",
 
 }

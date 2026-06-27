@@ -32,7 +32,6 @@ from PyQt5.QtWidgets import (
 from PyQt5.QtCore import Qt, QTimer
 from PyQt5.QtGui  import QColor, QFont
 
-from ui.theme              import _C
 from ui.font               import get_font_size, fs, FS_SM, FS_BASE, FS_MD
 from ui.widgets.theme.table_styles  import table_style, splitter_style
 from ui.widgets.components.headers_list import StatusBar
@@ -40,6 +39,21 @@ from ui.widgets.components.button       import make_btn
 from ui.widgets.panels.state            import EmptyState
 from ui.widgets.core.conn               import SafeConnMixin
 from ui.widgets.core.i18n              import tr
+from ui.widgets.core.widget_mixin       import WidgetMixin
+from ui.constants import (
+    AUDIT_DETAIL_MIN_W, AUDIT_DETAIL_MIN_H,
+    AUDIT_DETAIL_BODY_MARGIN_H, AUDIT_DETAIL_BODY_MARGIN_V, AUDIT_DETAIL_BODY_SPACING,
+    AUDIT_DETAIL_HDR_RADIUS, AUDIT_DETAIL_HDR_MARGIN_H, AUDIT_DETAIL_HDR_MARGIN_V,
+    AUDIT_DETAIL_TXT_RADIUS, AUDIT_DETAIL_TXT_PAD,
+    AUDIT_HDR_MARGIN_H, AUDIT_HDR_MARGIN_V,
+    AUDIT_FILTER_MARGIN_H, AUDIT_FILTER_MARGIN_V, AUDIT_FILTER_SPACING,
+    AUDIT_FILTER_CMB_TABLE_W, AUDIT_FILTER_CMB_ACTION_W,
+    AUDIT_COL_INDEX_W, AUDIT_COL_TYPE_W, AUDIT_COL_TABLE_W,
+    AUDIT_COL_RECORD_W, AUDIT_COL_BY_W, AUDIT_ROW_H,
+    AUDIT_PAGIN_BAR_H, AUDIT_PAGIN_MARGIN_H, AUDIT_PAGIN_MARGIN_V, AUDIT_PAGIN_SPACING,
+    AUDIT_FILTER_CMB_RADIUS, AUDIT_FILTER_CMB_PAD_V, AUDIT_FILTER_CMB_PAD_H,
+    AUDIT_FILTER_DROP_W, FILTER_COMBO_MIN_H,
+)
 
 
 # ══════════════════════════════════════════════════════════
@@ -51,6 +65,7 @@ def _action_colors() -> dict:
     ألوان أنواع العمليات — تُقرأ من _C دائماً لدعم الثيمات.
     يرجع dict: action → (fg, bg)
     """
+    from ui.theme import _C
     return {
         "delete": (_C["audit_delete_fg"], _C["audit_delete_bg"]),
         "update": (_C["audit_update_fg"], _C["audit_update_bg"]),
@@ -95,15 +110,17 @@ class _AuditDetailDialog(QDialog):
         )
         self.setWindowTitle(tr("audit_detail_title"))
         self.setModal(True)
-        self.setMinimumSize(560, 420)
+        self.setMinimumSize(AUDIT_DETAIL_MIN_W, AUDIT_DETAIL_MIN_H)
         self.setLayoutDirection(Qt.RightToLeft)
         self._build(record)
 
     def _build(self, r: dict):
+        from ui.theme import _C
         self.setStyleSheet(f"QDialog {{ background:{_C['bg_page']}; }}")
         root = QVBoxLayout(self)
-        root.setContentsMargins(20, 16, 20, 16)
-        root.setSpacing(12)
+        root.setContentsMargins(AUDIT_DETAIL_BODY_MARGIN_H, AUDIT_DETAIL_BODY_MARGIN_V,
+                                AUDIT_DETAIL_BODY_MARGIN_H, AUDIT_DETAIL_BODY_MARGIN_V)
+        root.setSpacing(AUDIT_DETAIL_BODY_SPACING)
 
         base = get_font_size()
 
@@ -117,11 +134,12 @@ class _AuditDetailDialog(QDialog):
         hdr.setStyleSheet(f"""
             QFrame {{
                 background:{bg}; border:1px solid {fg}44;
-                border-radius:8px; padding:4px;
+                border-radius:{AUDIT_DETAIL_HDR_RADIUS}px; padding:4px;
             }}
         """)
         hdr_lay = QHBoxLayout(hdr)
-        hdr_lay.setContentsMargins(12, 8, 12, 8)
+        hdr_lay.setContentsMargins(AUDIT_DETAIL_HDR_MARGIN_H, AUDIT_DETAIL_HDR_MARGIN_V,
+                                   AUDIT_DETAIL_HDR_MARGIN_H, AUDIT_DETAIL_HDR_MARGIN_V)
 
         lbl_action = QLabel(f"{icon}  {action.upper()}")
         lbl_action.setStyleSheet(
@@ -168,7 +186,7 @@ class _AuditDetailDialog(QDialog):
         txt.setStyleSheet(f"""
             QTextEdit {{
                 background:{_C['bg_surface_2']}; border:1px solid {_C['border_med']};
-                border-radius:6px; padding:8px;
+                border-radius:{AUDIT_DETAIL_TXT_RADIUS}px; padding:{AUDIT_DETAIL_TXT_PAD}px;
                 font-family:monospace; font-size:{fs(base, -1)}pt;
                 color:{_C['text_primary']};
             }}
@@ -200,7 +218,7 @@ class _AuditDetailDialog(QDialog):
 # AuditLogTab
 # ══════════════════════════════════════════════════════════
 
-class AuditLogTab(SafeConnMixin, QWidget):
+class AuditLogTab(SafeConnMixin, QWidget, WidgetMixin):
     """
     [E-04] Tab لعرض سجل العمليات الحساسة.
 
@@ -216,13 +234,14 @@ class AuditLogTab(SafeConnMixin, QWidget):
         self._offset      : int  = 0
         self._total_count : int  = 0
         self._build()
+        self._init_widget_mixin(theme=True, font=True, lang=False, data=False)
+        self._refresh_style()
         # تأجيل التحميل لبعد ظهور الـ widget
         QTimer.singleShot(100, self._load)
 
     # ── بناء الواجهة ──────────────────────────────────────
 
     def _build(self):
-        self.setStyleSheet(f"background:{_C['bg_page']};")
         root = QVBoxLayout(self)
         root.setContentsMargins(0, 0, 0, 0)
         root.setSpacing(0)
@@ -233,23 +252,71 @@ class AuditLogTab(SafeConnMixin, QWidget):
         root.addWidget(self._build_pagination())
         root.addWidget(self._status_bar)
 
-    def _build_header(self) -> QWidget:
+    def _refresh_style(self, *_):
+        from ui.theme import _C
         base = get_font_size()
-        hdr  = QFrame()
-        hdr.setStyleSheet(f"""
+
+        self.setStyleSheet(f"background:{_C['bg_page']};")
+
+        self._hdr_frame.setStyleSheet(f"""
             QFrame {{
                 background:{_C['bg_surface']};
                 border-bottom:1px solid {_C['border']};
             }}
         """)
-        lay = QHBoxLayout(hdr)
-        lay.setContentsMargins(16, 12, 16, 12)
-
-        lbl = QLabel(tr("audit_log_header_title"))
-        lbl.setStyleSheet(
+        self._lbl_header.setStyleSheet(
             f"font-weight:bold; font-size:{fs(base, +2)}pt;"
             f"color:{_C['text_primary']}; background:transparent; border:none;"
         )
+
+        self._filter_bar_frame.setStyleSheet(f"""
+            QFrame {{
+                background:{_C['bg_surface_2']};
+                border-bottom:1px solid {_C['border']};
+            }}
+        """)
+        combo_style = f"""
+            QComboBox {{
+                background:{_C['bg_input']}; border:1px solid {_C['border_med']};
+                border-radius:{AUDIT_FILTER_CMB_RADIUS}px; padding:{AUDIT_FILTER_CMB_PAD_V}px {AUDIT_FILTER_CMB_PAD_H}px;
+                font-size:{fs(base, -1)}pt; color:{_C['text_primary']};
+                min-height:{FILTER_COMBO_MIN_H}px;
+            }}
+            QComboBox:focus {{ border-color:{_C['accent']}; }}
+            QComboBox::drop-down {{ border:none; width:{AUDIT_FILTER_DROP_W}px; }}
+        """
+        lbl_style = (
+            f"color:{_C['text_sec']}; font-size:{fs(base, -1)}pt;"
+            "background:transparent; border:none; font-weight:bold;"
+        )
+        self._cmb_table.setStyleSheet(combo_style)
+        self._cmb_action.setStyleSheet(combo_style)
+        self._lbl_table.setStyleSheet(lbl_style)
+        self._lbl_action.setStyleSheet(lbl_style)
+
+        self._table_container.setStyleSheet(f"background:{_C['bg_input']};")
+
+        self._pagination_bar.setStyleSheet(f"""
+            QFrame {{
+                background:{_C['bg_surface_2']};
+                border-top:1px solid {_C['border']};
+            }}
+        """)
+        self._lbl_page.setStyleSheet(
+            f"color:{_C['text_muted']}; font-size:{fs(base, -1)}pt;"
+            "background:transparent; border:none;"
+        )
+
+    def _build_header(self) -> QWidget:
+        base = get_font_size()
+        hdr  = QFrame()
+        self._hdr_frame = hdr
+        lay = QHBoxLayout(hdr)
+        lay.setContentsMargins(AUDIT_HDR_MARGIN_H, AUDIT_HDR_MARGIN_V,
+                               AUDIT_HDR_MARGIN_H, AUDIT_HDR_MARGIN_V)
+
+        lbl = QLabel(tr("audit_log_header_title"))
+        self._lbl_header = lbl
         lay.addWidget(lbl)
         lay.addStretch()
 
@@ -262,39 +329,18 @@ class AuditLogTab(SafeConnMixin, QWidget):
     def _build_filter_bar(self) -> QWidget:
         base = get_font_size()
         bar  = QFrame()
-        bar.setStyleSheet(f"""
-            QFrame {{
-                background:{_C['bg_surface_2']};
-                border-bottom:1px solid {_C['border']};
-            }}
-        """)
+        self._filter_bar_frame = bar
         lay = QHBoxLayout(bar)
-        lay.setContentsMargins(12, 8, 12, 8)
-        lay.setSpacing(12)
-
-        combo_style = f"""
-            QComboBox {{
-                background:{_C['bg_input']}; border:1px solid {_C['border_med']};
-                border-radius:5px; padding:3px 10px;
-                font-size:{fs(base, -1)}pt; color:{_C['text_primary']};
-                min-height:28px;
-            }}
-            QComboBox:focus {{ border-color:{_C['accent']}; }}
-            QComboBox::drop-down {{ border:none; width:20px; }}
-        """
-
-        lbl_style = (
-            f"color:{_C['text_sec']}; font-size:{fs(base, -1)}pt;"
-            "background:transparent; border:none; font-weight:bold;"
-        )
+        lay.setContentsMargins(AUDIT_FILTER_MARGIN_H, AUDIT_FILTER_MARGIN_V,
+                               AUDIT_FILTER_MARGIN_H, AUDIT_FILTER_MARGIN_V)
+        lay.setSpacing(AUDIT_FILTER_SPACING)
 
         # فلتر الجدول
         lbl_table = QLabel(tr("audit_table_filter_label"))
-        lbl_table.setStyleSheet(lbl_style)
+        self._lbl_table = lbl_table
 
         self._cmb_table = QComboBox()
-        self._cmb_table.setMinimumWidth(180)
-        self._cmb_table.setStyleSheet(combo_style)
+        self._cmb_table.setMinimumWidth(AUDIT_FILTER_CMB_TABLE_W)
         self._cmb_table.addItem(tr("audit_all_tables"), None)
         for key, label in _table_labels().items():
             self._cmb_table.addItem(f"{label}  ({key})", key)
@@ -302,11 +348,10 @@ class AuditLogTab(SafeConnMixin, QWidget):
 
         # فلتر النوع
         lbl_action = QLabel(tr("audit_col_type") + ":")
-        lbl_action.setStyleSheet(lbl_style)
+        self._lbl_action = lbl_action
 
         self._cmb_action = QComboBox()
-        self._cmb_action.setMinimumWidth(130)
-        self._cmb_action.setStyleSheet(combo_style)
+        self._cmb_action.setMinimumWidth(AUDIT_FILTER_CMB_ACTION_W)
         self._cmb_action.addItem(tr("audit_all_types"), None)
         for action, icon in _ACTION_ICONS.items():
             self._cmb_action.addItem(f"{icon}  {action}", action)
@@ -342,15 +387,15 @@ class AuditLogTab(SafeConnMixin, QWidget):
         hh = self.table.horizontalHeader()
         hh.setDefaultAlignment(Qt.AlignRight | Qt.AlignVCenter)
         hh.setSectionsClickable(False)
-        hh.setSectionResizeMode(0, QHeaderView.Fixed);  self.table.setColumnWidth(0, 55)
-        hh.setSectionResizeMode(1, QHeaderView.Fixed);  self.table.setColumnWidth(1, 90)
-        hh.setSectionResizeMode(2, QHeaderView.Fixed);  self.table.setColumnWidth(2, 140)
-        hh.setSectionResizeMode(3, QHeaderView.Fixed);  self.table.setColumnWidth(3, 80)
-        hh.setSectionResizeMode(4, QHeaderView.Fixed);  self.table.setColumnWidth(4, 100)
+        hh.setSectionResizeMode(0, QHeaderView.Fixed);  self.table.setColumnWidth(0, AUDIT_COL_INDEX_W)
+        hh.setSectionResizeMode(1, QHeaderView.Fixed);  self.table.setColumnWidth(1, AUDIT_COL_TYPE_W)
+        hh.setSectionResizeMode(2, QHeaderView.Fixed);  self.table.setColumnWidth(2, AUDIT_COL_TABLE_W)
+        hh.setSectionResizeMode(3, QHeaderView.Fixed);  self.table.setColumnWidth(3, AUDIT_COL_RECORD_W)
+        hh.setSectionResizeMode(4, QHeaderView.Fixed);  self.table.setColumnWidth(4, AUDIT_COL_BY_W)
         hh.setSectionResizeMode(5, QHeaderView.Stretch)
 
         vh = self.table.verticalHeader()
-        vh.setDefaultSectionSize(32)
+        vh.setDefaultSectionSize(AUDIT_ROW_H)
         vh.setSectionResizeMode(QHeaderView.Fixed)
 
         self.table.setHorizontalScrollMode(QAbstractItemView.ScrollPerPixel)
@@ -370,7 +415,7 @@ class AuditLogTab(SafeConnMixin, QWidget):
         self._status_bar = StatusBar()
 
         container = QWidget()
-        container.setStyleSheet(f"background:{_C['bg_input']};")
+        self._table_container = container
         lay = QVBoxLayout(container)
         lay.setContentsMargins(0, 0, 0, 0)
         lay.setSpacing(0)
@@ -382,23 +427,15 @@ class AuditLogTab(SafeConnMixin, QWidget):
     def _build_pagination(self) -> QWidget:
         base = get_font_size()
         bar  = QFrame()
-        bar.setStyleSheet(f"""
-            QFrame {{
-                background:{_C['bg_surface_2']};
-                border-top:1px solid {_C['border']};
-            }}
-        """)
-        bar.setFixedHeight(44)
+        bar.setFixedHeight(AUDIT_PAGIN_BAR_H)
+        self._pagination_bar = bar
 
         lay = QHBoxLayout(bar)
-        lay.setContentsMargins(12, 6, 12, 6)
-        lay.setSpacing(10)
+        lay.setContentsMargins(AUDIT_PAGIN_MARGIN_H, AUDIT_PAGIN_MARGIN_V,
+                               AUDIT_PAGIN_MARGIN_H, AUDIT_PAGIN_MARGIN_V)
+        lay.setSpacing(AUDIT_PAGIN_SPACING)
 
         self._lbl_page = QLabel("")
-        self._lbl_page.setStyleSheet(
-            f"color:{_C['text_muted']}; font-size:{fs(base, -1)}pt;"
-            "background:transparent; border:none;"
-        )
         lay.addWidget(self._lbl_page, stretch=1)
 
         self._btn_load_more = make_btn(
@@ -408,7 +445,6 @@ class AuditLogTab(SafeConnMixin, QWidget):
         self._btn_load_more.setVisible(False)
         lay.addWidget(self._btn_load_more)
 
-        self._pagination_bar = bar
         return bar
 
     # ── تحميل البيانات ────────────────────────────────────
@@ -467,6 +503,7 @@ class AuditLogTab(SafeConnMixin, QWidget):
         self._update_pagination()
 
     def _fill_table(self, rows: list):
+        from ui.theme import _C
         base   = get_font_size()
         colors = _action_colors()
         labels = _table_labels()
@@ -474,7 +511,7 @@ class AuditLogTab(SafeConnMixin, QWidget):
         for r in rows:
             row_idx = self.table.rowCount()
             self.table.insertRow(row_idx)
-            self.table.setRowHeight(row_idx, 32)
+            self.table.setRowHeight(row_idx, AUDIT_ROW_H)
 
             # [0] ID
             item_id = QTableWidgetItem(str(r.get("id", "")))

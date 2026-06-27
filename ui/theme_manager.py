@@ -243,6 +243,10 @@ _LIGHT_THEME: Dict[str, str] = {
     "dialog_hdr_sub_text":      "rgba(255,255,255,0.8)",  # نص الـ subtitle في header النافذة
     # ── ColorPickerWidget ────────────────────────────────
     "color_picker_default":     "#607d8b",   # اللون الافتراضي لـ ColorPickerWidget
+
+    # ── Icon button ───────────────────────────────────────
+    "icon_btn_color":           "#7A7870",   # == text_muted — لون أيقونة زر الـ icon افتراضي
+    "icon_btn_hover_color":     "#e53935",   # == danger_strong — لون hover لزر الأيقونة
 }
 
 _DARK_THEME: Dict[str, str] = {
@@ -455,6 +459,10 @@ _DARK_THEME: Dict[str, str] = {
     "dialog_hdr_sub_text":      "rgba(255,255,255,0.7)",  # نص الـ subtitle في header النافذة (dark)
     # ── ColorPickerWidget ────────────────────────────────
     "color_picker_default":     "#607d8b",   # اللون الافتراضي لـ ColorPickerWidget (dark)
+
+    # ── Icon button ───────────────────────────────────────
+    "icon_btn_color":           "#7A7870",   # == text_muted — لون أيقونة زر الـ icon افتراضي (dark)
+    "icon_btn_hover_color":     "#ef5350",   # == danger_strong — لون hover لزر الأيقونة (dark)
 }
 
 THEMES: Dict[str, Dict[str, str]] = {
