@@ -30,15 +30,30 @@ from db.companies.shared_items_repo import (
 from db.companies.companies_repo import fetch_all_companies
 from ui.widgets.core.events import emit_company_data_changed
 from ui.widgets.core.i18n import tr
-from ui.theme import _C
 from ui.font import FS_SM, FS_LG
+from ui.constants import (
+    SHARED_DLG_MIN_W, SHARED_DLG_MIN_H,
+    SHARED_DLG_ROOT_SPACING, SHARED_DLG_ROOT_MARGIN,
+    SHARED_DLG_HDR_RADIUS, SHARED_DLG_HDR_PAD_V, SHARED_DLG_HDR_PAD_H,
+    SHARED_DLG_GRP_RADIUS, SHARED_DLG_GRP_PAD_TOP, SHARED_DLG_GRP_MARGIN_TOP,
+    SHARED_DLG_GRP_TITLE_PAD_H, SHARED_DLG_DATA_SPACING, SHARED_DLG_INPUT_MIN_H,
+    SHARED_DLG_LIST_MAX_H, SHARED_DLG_LIST_RADIUS,
+    SHARED_DLG_LIST_ITEM_PAD_V, SHARED_DLG_LIST_ITEM_PAD_H,
+    SHARED_DLG_LINK_BTN_RADIUS, SHARED_DLG_LINK_BTN_PAD_V, SHARED_DLG_LINK_BTN_PAD_H,
+    SHARED_DLG_LINK_BTN_MIN_H, SHARED_DLG_SAVE_BTN_MIN_H,
+    SHARED_DLG_SAVE_BTN_RADIUS, SHARED_DLG_SAVE_BTN_PAD_H,
+    SHARED_DLG_PREVIEW_RADIUS, SHARED_DLG_PREVIEW_PAD_V, SHARED_DLG_PREVIEW_PAD_H,
+    SHARED_DLG_HDR_BORDER_W, SHARED_DLG_LINK_BTN_BORDER_W,
+    SHARED_DLG_SPIN_MAX_DEFAULT, SHARED_DLG_SPIN_DEC_DEFAULT,
+    SHARED_DLG_SPIN_MAX_MINUTES, SHARED_DLG_SPIN_DEC_MINUTES,
+)
 
 
-def _spin(max_=9999999, dec=4):
+def _spin(max_=SHARED_DLG_SPIN_MAX_DEFAULT, dec=SHARED_DLG_SPIN_DEC_DEFAULT):
     s = QDoubleSpinBox()
     s.setRange(0, max_)
     s.setDecimals(dec)
-    s.setMinimumHeight(32)
+    s.setMinimumHeight(SHARED_DLG_INPUT_MIN_H)
     return s
 
 
@@ -63,7 +78,7 @@ class SharedItemsDialog(QDialog):
         self._data    = {}
 
         self.setWindowTitle(tr("shared_item_header"))
-        self.setMinimumSize(600, 500)
+        self.setMinimumSize(SHARED_DLG_MIN_W, SHARED_DLG_MIN_H)
         self.setModal(True)
         self.setLayoutDirection(Qt.RightToLeft)
 
@@ -94,19 +109,21 @@ class SharedItemsDialog(QDialog):
             return
 
         root = QVBoxLayout(self)
-        root.setSpacing(12)
-        root.setContentsMargins(16, 16, 16, 12)
+        root.setSpacing(SHARED_DLG_ROOT_SPACING)
+        root.setContentsMargins(*SHARED_DLG_ROOT_MARGIN)
 
         # ── Header ──
+        from ui.theme import _C
         header = QLabel(
-            f"🔗  {self._item['name']}  —  "
+            f"{tr('shared_item_linked_icon')}  {self._item['name']}  —  "
             f"<span style='color:{_C['text_muted']};'>{self._type_ar()}</span>"
         )
         header.setTextFormat(Qt.RichText)
         header.setStyleSheet(
             f"font-size:{FS_LG}px; font-weight:bold; color:{_C['acc_type_asset']};"
-            f"background:{_C['t_account_dr_bg']}; border:1px solid {_C['accent_mid']};"
-            "border-radius:8px; padding:8px 16px;"
+            f"background:{_C['t_account_dr_bg']}; border:{SHARED_DLG_HDR_BORDER_W}px solid {_C['accent_mid']};"
+            f"border-radius:{SHARED_DLG_HDR_RADIUS}px;"
+            f"padding:{SHARED_DLG_HDR_PAD_V}px {SHARED_DLG_HDR_PAD_H}px;"
         )
         root.addWidget(header)
 
@@ -115,21 +132,21 @@ class SharedItemsDialog(QDialog):
         data_grp.setStyleSheet(f"""
             QGroupBox {{
                 font-weight:bold; color:{_C['text_primary']};
-                border:1px solid {_C['border']}; border-radius:8px;
-                padding-top:10px; margin-top:6px;
+                border:1px solid {_C['border']}; border-radius:{SHARED_DLG_GRP_RADIUS}px;
+                padding-top:{SHARED_DLG_GRP_PAD_TOP}px; margin-top:{SHARED_DLG_GRP_MARGIN_TOP}px;
             }}
             QGroupBox::title {{
-                subcontrol-origin:margin; padding:0 8px;
+                subcontrol-origin:margin; padding:0 {SHARED_DLG_GRP_TITLE_PAD_H}px;
                 subcontrol-position:top right;
             }}
         """)
         data_lay = QFormLayout(data_grp)
-        data_lay.setSpacing(10)
+        data_lay.setSpacing(SHARED_DLG_DATA_SPACING)
         data_lay.setLabelAlignment(Qt.AlignRight)
 
         # اسم العنصر
         self.inp_name = QLineEdit(self._item["name"])
-        self.inp_name.setMinimumHeight(32)
+        self.inp_name.setMinimumHeight(SHARED_DLG_INPUT_MIN_H)
         data_lay.addRow(tr("shared_name_colon"), self.inp_name)
 
         # حقول حسب النوع
@@ -143,24 +160,24 @@ class SharedItemsDialog(QDialog):
         companies_grp.setStyleSheet(f"""
             QGroupBox {{
                 font-weight:bold; color:{_C['text_primary']};
-                border:1px solid {_C['border']}; border-radius:8px;
-                padding-top:10px; margin-top:6px;
+                border:1px solid {_C['border']}; border-radius:{SHARED_DLG_GRP_RADIUS}px;
+                padding-top:{SHARED_DLG_GRP_PAD_TOP}px; margin-top:{SHARED_DLG_GRP_MARGIN_TOP}px;
             }}
             QGroupBox::title {{
-                subcontrol-origin:margin; padding:0 8px;
+                subcontrol-origin:margin; padding:0 {SHARED_DLG_GRP_TITLE_PAD_H}px;
                 subcontrol-position:top right;
             }}
         """)
         c_lay = QVBoxLayout(companies_grp)
 
         self.lst_companies = QListWidget()
-        self.lst_companies.setMaximumHeight(130)
+        self.lst_companies.setMaximumHeight(SHARED_DLG_LIST_MAX_H)
         self.lst_companies.setStyleSheet(f"""
             QListWidget {{
-                border:1px solid {_C['border']}; border-radius:6px;
+                border:1px solid {_C['border']}; border-radius:{SHARED_DLG_LIST_RADIUS}px;
                 font-size:{FS_SM}px;
             }}
-            QListWidget::item {{ padding:5px 10px; }}
+            QListWidget::item {{ padding:{SHARED_DLG_LIST_ITEM_PAD_V}px {SHARED_DLG_LIST_ITEM_PAD_H}px; }}
             QListWidget::item:selected {{
                 background:{_C['accent_light']}; color:{_C['accent_text']};
             }}
@@ -172,16 +189,20 @@ class SharedItemsDialog(QDialog):
         self.btn_unlink = QPushButton(tr("shared_unlink_btn"))
         self.btn_link.setStyleSheet(
             f"background:{_C['success_bg']}; color:{_C['success']};"
-            f"border:1px solid {_C['success_border']};"
-            "border-radius:4px; padding:4px 12px; font-weight:bold;"
+            f"border:{SHARED_DLG_LINK_BTN_BORDER_W}px solid {_C['success_border']};"
+            f"border-radius:{SHARED_DLG_LINK_BTN_RADIUS}px;"
+            f"padding:{SHARED_DLG_LINK_BTN_PAD_V}px {SHARED_DLG_LINK_BTN_PAD_H}px;"
+            "font-weight:bold;"
         )
         self.btn_unlink.setStyleSheet(
             f"background:{_C['danger_bg']}; color:{_C['danger']};"
-            f"border:1px solid {_C['danger_border']};"
-            "border-radius:4px; padding:4px 12px; font-weight:bold;"
+            f"border:{SHARED_DLG_LINK_BTN_BORDER_W}px solid {_C['danger_border']};"
+            f"border-radius:{SHARED_DLG_LINK_BTN_RADIUS}px;"
+            f"padding:{SHARED_DLG_LINK_BTN_PAD_V}px {SHARED_DLG_LINK_BTN_PAD_H}px;"
+            "font-weight:bold;"
         )
         for btn in (self.btn_link, self.btn_unlink):
-            btn.setMinimumHeight(30)
+            btn.setMinimumHeight(SHARED_DLG_LINK_BTN_MIN_H)
         self.btn_link.clicked.connect(self._link_company)
         self.btn_unlink.clicked.connect(self._unlink_company)
         c_btn_row.addWidget(self.btn_link)
@@ -195,11 +216,12 @@ class SharedItemsDialog(QDialog):
         btns = QDialogButtonBox()
         btn_save   = btns.addButton(tr("shared_save_btn"), QDialogButtonBox.AcceptRole)
         btn_cancel = btns.addButton(tr("shared_close_btn"), QDialogButtonBox.RejectRole)
-        btn_save.setMinimumHeight(34)
-        btn_cancel.setMinimumHeight(34)
+        btn_save.setMinimumHeight(SHARED_DLG_SAVE_BTN_MIN_H)
+        btn_cancel.setMinimumHeight(SHARED_DLG_SAVE_BTN_MIN_H)
         btn_save.setStyleSheet(
             f"background:{_C['accent']}; color:{_C['bg_surface']}; font-weight:bold;"
-            "border-radius:6px; padding:0 18px;"
+            f"border-radius:{SHARED_DLG_SAVE_BTN_RADIUS}px;"
+            f"padding:0 {SHARED_DLG_SAVE_BTN_PAD_H}px;"
         )
         btn_save.clicked.connect(self._save)
         btn_cancel.clicked.connect(self.reject)
@@ -207,6 +229,7 @@ class SharedItemsDialog(QDialog):
 
     def _build_type_fields(self, form_lay: QFormLayout):
         """يبني حقول الإدخال حسب نوع العنصر المشترك."""
+        from ui.theme import _C
         t = self._item["shared_type"]
 
         if t == "raw":
@@ -226,7 +249,9 @@ class SharedItemsDialog(QDialog):
             self.lbl_unit = QLabel(tr("dash"))
             self.lbl_unit.setStyleSheet(
                 f"color:{_C['acc_type_asset']}; font-weight:bold; font-size:{FS_SM}px;"
-                f"background:{_C['t_account_dr_bg']}; border-radius:4px; padding:4px 8px;"
+                f"background:{_C['t_account_dr_bg']};"
+                f"border-radius:{SHARED_DLG_PREVIEW_RADIUS}px;"
+                f"padding:{SHARED_DLG_PREVIEW_PAD_V}px {SHARED_DLG_PREVIEW_PAD_H}px;"
             )
             sp.valueChanged.connect(self._update_raw_preview)
             sp2.valueChanged.connect(self._update_raw_preview)
@@ -244,7 +269,7 @@ class SharedItemsDialog(QDialog):
             form_lay.addRow(tr("machine_rate_unit_lbl"), sp_u)
 
         elif t == "labor_op":
-            sp = _spin(9999, 2)
+            sp = _spin(SHARED_DLG_SPIN_MAX_MINUTES, SHARED_DLG_SPIN_DEC_MINUTES)
             sp.setValue(float(self._data.get("minutes", 0.0)))
             self._field_widgets["minutes"] = sp
             form_lay.addRow(tr("labor_time_lbl"), sp)
@@ -282,17 +307,17 @@ class SharedItemsDialog(QDialog):
             self._update_raw_preview()
 
     def _load_companies_list(self):
+        from PyQt5.QtGui import QColor
+        from ui.theme import _C
         self.lst_companies.clear()
         linked = {r["id"] for r in fetch_linked_companies(self._conn, self._item_id)}
         all_cos = fetch_all_companies(self._conn)
         for co in all_cos:
-            item = QListWidgetItem(
-                f"{'✅' if co['id'] in linked else '○'}  {co['name']}"
-            )
+            icon = tr("shared_linked_company_icon") if co["id"] in linked else tr("shared_unlinked_company_icon")
+            item = QListWidgetItem(f"{icon}  {co['name']}")
             item.setData(Qt.UserRole, co["id"])
             item.setData(Qt.UserRole + 1, co["id"] in linked)
             if co["id"] in linked:
-                from PyQt5.QtGui import QColor
                 item.setForeground(QColor(_C["success"]))
             self.lst_companies.addItem(item)
 

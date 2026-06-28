@@ -9,8 +9,17 @@ from PyQt5.QtWidgets import (
     QLabel, QPushButton, QListWidget, QListWidgetItem,
 )
 from PyQt5.QtCore import Qt
-from ui.theme import _C
 from ui.widgets.core.i18n import tr
+from ui.widgets.core.widget_mixin import WidgetMixin
+from ui.constants import (
+    LINK_PICKER_MIN_W, LINK_PICKER_MIN_H,
+    LINK_PICKER_SPACING, LINK_PICKER_MARGIN,
+    LINK_PICKER_LIST_RADIUS,
+    LINK_PICKER_LIST_ITEM_PAD_V, LINK_PICKER_LIST_ITEM_PAD_H,
+    LINK_PICKER_OK_BTN_H, LINK_PICKER_OK_BTN_RADIUS, LINK_PICKER_OK_BTN_PAD_H,
+    LINK_PICKER_BTN_PAD_V,
+    LINK_PICKER_CANCEL_BTN_H, LINK_PICKER_CANCEL_BTN_RADIUS, LINK_PICKER_CANCEL_BTN_PAD_H,
+)
 
 _TYPE_AR = {
     "raw":        tr("shared_type_raw"),
@@ -20,37 +29,27 @@ _TYPE_AR = {
 }
 
 
-class LinkItemPicker(QDialog):
+class LinkItemPicker(QDialog, WidgetMixin):
     def __init__(self, items: list, parent=None):
         super().__init__(parent)
         self.selected_id = None
         self._items      = items
 
         self.setWindowTitle(tr("link_item_title"))
-        self.setMinimumSize(460, 380)
+        self.setMinimumSize(LINK_PICKER_MIN_W, LINK_PICKER_MIN_H)
         self.setModal(True)
+        self._init_widget_mixin(data=False)
         self._build()
+        self._refresh_style()
 
     def _build(self):
         lay = QVBoxLayout(self)
-        lay.setSpacing(10)
-        lay.setContentsMargins(16, 16, 16, 16)
+        lay.setSpacing(LINK_PICKER_SPACING)
+        lay.setContentsMargins(*LINK_PICKER_MARGIN)
 
         lay.addWidget(QLabel(tr("link_item_prompt")))
 
         self._list = QListWidget()
-        self._list.setStyleSheet(f"""
-            QListWidget {{
-                border: 1px solid {_C['border']};
-                border-radius: 6px;
-            }}
-            QListWidget::item {{ padding: 8px 12px; }}
-            QListWidget::item:selected {{
-                background: {_C['accent_light']};
-                color: {_C['accent_text']};
-            }}
-            QListWidget::item:hover {{ background: {_C['bg_hover']}; }}
-        """)
         self._list.itemDoubleClicked.connect(self._accept)
 
         for item in self._items:
@@ -64,33 +63,50 @@ class LinkItemPicker(QDialog):
         lay.addWidget(self._list)
 
         btn_row = QHBoxLayout()
-        ok_btn = QPushButton(tr("link_item_btn"))
-        ok_btn.setFixedHeight(34)
-        ok_btn.setStyleSheet(f"""
+        self._ok_btn = QPushButton(tr("link_item_btn"))
+        self._ok_btn.setFixedHeight(LINK_PICKER_OK_BTN_H)
+        self._ok_btn.clicked.connect(self._accept)
+
+        self._cancel_btn = QPushButton(tr("btn_cancel"))
+        self._cancel_btn.setFixedHeight(LINK_PICKER_CANCEL_BTN_H)
+        self._cancel_btn.clicked.connect(self.reject)
+
+        btn_row.addStretch()
+        btn_row.addWidget(self._ok_btn)
+        btn_row.addWidget(self._cancel_btn)
+        lay.addLayout(btn_row)
+
+    def _refresh_style(self, *_):
+        from ui.theme import _C
+        self._list.setStyleSheet(f"""
+            QListWidget {{
+                border: 1px solid {_C['border']};
+                border-radius: {LINK_PICKER_LIST_RADIUS}px;
+            }}
+            QListWidget::item {{ padding: {LINK_PICKER_LIST_ITEM_PAD_V}px {LINK_PICKER_LIST_ITEM_PAD_H}px; }}
+            QListWidget::item:selected {{
+                background: {_C['accent_light']};
+                color: {_C['accent_text']};
+            }}
+            QListWidget::item:hover {{ background: {_C['bg_hover']}; }}
+        """)
+        self._ok_btn.setStyleSheet(f"""
             QPushButton {{
                 background: {_C['accent']}; color: {_C['bg_input']}; font-weight: 600;
-                border: none; border-radius: 5px; padding: 4px 18px;
+                border: none; border-radius: {LINK_PICKER_OK_BTN_RADIUS}px;
+                padding: {LINK_PICKER_BTN_PAD_V}px {LINK_PICKER_OK_BTN_PAD_H}px;
             }}
             QPushButton:hover {{ background: {_C['accent_hover']}; }}
         """)
-        ok_btn.clicked.connect(self._accept)
-
-        cancel_btn = QPushButton(tr("btn_cancel"))
-        cancel_btn.setFixedHeight(34)
-        cancel_btn.setStyleSheet(f"""
+        self._cancel_btn.setStyleSheet(f"""
             QPushButton {{
                 background: {_C['bg_surface_2']};
                 border: 1px solid {_C['border_med']};
-                border-radius: 5px; padding: 4px 14px;
+                border-radius: {LINK_PICKER_CANCEL_BTN_RADIUS}px;
+                padding: {LINK_PICKER_BTN_PAD_V}px {LINK_PICKER_CANCEL_BTN_PAD_H}px;
             }}
             QPushButton:hover {{ background: {_C['bg_hover']}; }}
         """)
-        cancel_btn.clicked.connect(self.reject)
-
-        btn_row.addStretch()
-        btn_row.addWidget(ok_btn)
-        btn_row.addWidget(cancel_btn)
-        lay.addLayout(btn_row)
 
     def _accept(self):
         item = self._list.currentItem()

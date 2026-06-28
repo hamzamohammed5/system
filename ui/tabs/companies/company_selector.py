@@ -11,15 +11,14 @@ from PyQt5.QtWidgets import (
     QWidget, QHBoxLayout, QLabel, QComboBox,
     QPushButton, QSizePolicy,
 )
-from PyQt5.QtCore import Qt, pyqtSignal
-from PyQt5.QtGui  import QColor
+from PyQt5.QtCore import pyqtSignal
 
 from db.companies.companies_schema import get_central_connection, create_central_tables
 from db.companies.companies_repo   import fetch_all_companies
 from db.companies.company_state    import company_state
-from ui.theme               import _C
 from ui.font                import FS_BASE, FS_LG
 from ui.widgets.core.i18n          import tr
+from ui.widgets.core.widget_mixin  import WidgetMixin
 from ui.constants import (
     COMPANY_SELECTOR_MARGIN_H, COMPANY_SELECTOR_MARGIN_V, COMPANY_SELECTOR_SPACING,
     COMPANY_SELECTOR_ICO_W,
@@ -31,7 +30,7 @@ from ui.constants import (
 )
 
 
-class CompanySelector(QWidget):
+class CompanySelector(QWidget, WidgetMixin):
     """
     شريط اختيار الشركة النشطة.
     signal: company_changed(company_id: int)
@@ -42,25 +41,41 @@ class CompanySelector(QWidget):
         super().__init__(parent)
         self._central_conn = None
         self._companies    = []
+        self._init_widget_mixin(data=False)
         self._build()
+        self._refresh_style()
         self._load()
 
     def _build(self):
         lay = QHBoxLayout(self)
-        lay.setContentsMargins(8, 4, 8, 4)
-        lay.setSpacing(6)
+        lay.setContentsMargins(
+            COMPANY_SELECTOR_MARGIN_H, COMPANY_SELECTOR_MARGIN_V,
+            COMPANY_SELECTOR_MARGIN_H, COMPANY_SELECTOR_MARGIN_V,
+        )
+        lay.setSpacing(COMPANY_SELECTOR_SPACING)
 
         # أيقونة
-        ico = QLabel("🏢")
-        ico.setStyleSheet(f"font-size: {FS_LG}px; background: transparent; border: none;")
-        ico.setFixedWidth(22)
-        lay.addWidget(ico)
+        self._ico = QLabel(tr("company_selector_icon"))
+        self._ico.setFixedWidth(COMPANY_SELECTOR_ICO_W)
+        lay.addWidget(self._ico)
 
         # الـ combo
         self._combo = QComboBox()
-        self._combo.setMinimumWidth(180)
-        self._combo.setFixedHeight(30)
+        self._combo.setMinimumWidth(COMPANY_SELECTOR_COMBO_MIN_W)
+        self._combo.setFixedHeight(COMPANY_SELECTOR_COMBO_H)
         self._combo.setSizePolicy(QSizePolicy.Preferred, QSizePolicy.Fixed)
+        self._combo.currentIndexChanged.connect(self._on_changed)
+        lay.addWidget(self._combo)
+
+        # زر الإدارة
+        self._manage_btn = QPushButton(tr("company_selector_manage_icon"))
+        self._manage_btn.setFixedSize(COMPANY_SELECTOR_MANAGE_BTN_SIZE, COMPANY_SELECTOR_MANAGE_BTN_SIZE)
+        self._manage_btn.clicked.connect(self._open_manager)
+        lay.addWidget(self._manage_btn)
+
+    def _refresh_style(self, *_):
+        from ui.theme import _C
+        self._ico.setStyleSheet(f"font-size: {FS_LG}px; background: transparent; border: none;")
         self._combo.setStyleSheet(f"""
             QComboBox {{
                 font-size: {FS_BASE}px;
@@ -68,8 +83,8 @@ class CompanySelector(QWidget):
                 color: {_C['sidebar_text']};
                 background: {_C['sidebar_hover']};
                 border: 1px solid {_C['sidebar_border']};
-                border-radius: 5px;
-                padding: 2px 8px;
+                border-radius: {COMPANY_SELECTOR_COMBO_RADIUS}px;
+                padding: {COMPANY_SELECTOR_COMBO_PAD_V}px {COMPANY_SELECTOR_COMBO_PAD_H}px;
             }}
             QComboBox:hover {{
                 background: {_C['sidebar_active']};
@@ -77,7 +92,7 @@ class CompanySelector(QWidget):
             }}
             QComboBox::drop-down {{
                 border: none;
-                width: 20px;
+                width: {COMPANY_SELECTOR_DROP_W}px;
             }}
             QComboBox QAbstractItemView {{
                 background: {_C['sidebar_bg']};
@@ -86,22 +101,15 @@ class CompanySelector(QWidget):
                 selection-background-color: {_C['sidebar_active']};
             }}
             QComboBox QAbstractItemView::item {{
-                padding: 6px 10px;
-                min-height: 28px;
+                padding: {COMPANY_SELECTOR_ITEM_PAD_V}px {COMPANY_SELECTOR_ITEM_PAD_H}px;
+                min-height: {COMPANY_SELECTOR_ITEM_MIN_H}px;
             }}
         """)
-        self._combo.currentIndexChanged.connect(self._on_changed)
-        lay.addWidget(self._combo)
-
-        # زر الإدارة
-        self._manage_btn = QPushButton("⚙")
-        self._manage_btn.setFixedSize(30, 30)
-        self._manage_btn.setToolTip(tr("manage_companies"))
         self._manage_btn.setStyleSheet(f"""
             QPushButton {{
                 background: transparent;
                 border: 1px solid {_C['sidebar_border']};
-                border-radius: 5px;
+                border-radius: {COMPANY_SELECTOR_MANAGE_BTN_RADIUS}px;
                 color: {_C['sidebar_muted']};
                 font-size: {FS_LG}px;
             }}
@@ -110,8 +118,11 @@ class CompanySelector(QWidget):
                 color: {_C['sidebar_text']};
             }}
         """)
-        self._manage_btn.clicked.connect(self._open_manager)
-        lay.addWidget(self._manage_btn)
+
+    def _refresh_lang(self, *_):
+        self._ico.setText(tr("company_selector_icon"))
+        self._manage_btn.setText(tr("company_selector_manage_icon"))
+        self._manage_btn.setToolTip(tr("manage_companies"))
 
     # ── تحميل الشركات ─────────────────────────────────────
 
@@ -164,6 +175,7 @@ class CompanySelector(QWidget):
             self._activate(idx)
 
     def _activate(self, idx: int):
+        from ui.theme import _C
         company = self._companies[idx]
         cid     = company["id"]
         name    = company["name"]

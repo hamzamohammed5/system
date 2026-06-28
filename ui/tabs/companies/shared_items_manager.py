@@ -28,20 +28,32 @@ from db.companies.shared_items_repo import (
 )
 from ui.widgets.core.events import emit_company_data_changed
 from ui.widgets.core.i18n import tr
-from ui.theme import _C
 from ui.font import FS_SM, FS_LG
+from ui.constants import (
+    SHARED_MGR_MIN_W, SHARED_MGR_MIN_H,
+    SHARED_MGR_BODY_MARGIN, SHARED_MGR_BODY_SPACING,
+    SHARED_MGR_HINT_RADIUS, SHARED_MGR_HINT_PAD_V, SHARED_MGR_HINT_PAD_H,
+    SHARED_MGR_BTN_MIN_H, SHARED_MGR_BTN_ADD_RADIUS, SHARED_MGR_BTN_ADD_PAD_H,
+    SHARED_MGR_BTN_DEL_RADIUS, SHARED_MGR_BTN_DEL_PAD_H,
+    SHARED_MGR_TREE_RADIUS, SHARED_MGR_TREE_ITEM_PAD_V, SHARED_MGR_TREE_ITEM_PAD_H,
+    SHARED_MGR_COL1_W, SHARED_MGR_COL2_W, SHARED_MGR_COL3_W, SHARED_MGR_COL4_W,
+    SHARED_MGR_HDR_H, SHARED_MGR_HDR_MARGIN_H, SHARED_MGR_CLOSE_BTN_H,
+    MARGIN_ZERO, SPACING_ZERO, SHARED_MGR_TREE_TYPE_FONT_DELTA,
+    SHARED_MGR_HDR_BORDER_W, SHARED_MGR_HINT_BORDER_W, SHARED_MGR_BTN_DEL_BORDER_W,
+)
 
 
 def _type_label(t: str) -> str:
     return {
-        "raw":        f"🧱  {tr('shared_type_raw')}",
-        "machine":    f"🖥️  {tr('shared_type_machine')}",
-        "labor_op":   f"👷  {tr('shared_type_labor_op')}",
-        "machine_op": f"⚙️  {tr('shared_type_machine_op')}",
+        "raw":        f"{tr('shared_type_icon_raw')}  {tr('shared_type_raw')}",
+        "machine":    f"{tr('shared_type_icon_machine')}  {tr('shared_type_machine')}",
+        "labor_op":   f"{tr('shared_type_icon_labor_op')}  {tr('shared_type_labor_op')}",
+        "machine_op": f"{tr('shared_type_icon_machine_op')}  {tr('shared_type_machine_op')}",
     }.get(t, t)
 
 
 def _type_color(t: str) -> str:
+    from ui.theme import _C   # lazy import — يُقرأ عند كل استدعاء
     return {
         "raw":        _C["acc_type_asset"],
         "machine":    _C["purple"],
@@ -68,7 +80,7 @@ class SharedItemsManagerDialog(QDialog):
         super().__init__(parent)
         self._conn = central_conn
         self.setWindowTitle(tr("shared_item_header"))
-        self.setMinimumSize(820, 600)
+        self.setMinimumSize(SHARED_MGR_MIN_W, SHARED_MGR_MIN_H)
         self.setModal(True)
         self.setLayoutDirection(Qt.RightToLeft)
         self._build()
@@ -80,23 +92,24 @@ class SharedItemsManagerDialog(QDialog):
 
     def _build(self):
         root = QVBoxLayout(self)
-        root.setContentsMargins(0, 0, 0, 0)
-        root.setSpacing(0)
+        root.setContentsMargins(*MARGIN_ZERO)
+        root.setSpacing(SPACING_ZERO)
 
         root.addWidget(self._build_header())
 
+        from ui.theme import _C
         body = QWidget()
         body.setStyleSheet(f"background:{_C['bg_page']};")
         body_lay = QVBoxLayout(body)
-        body_lay.setContentsMargins(16, 14, 16, 14)
-        body_lay.setSpacing(10)
+        body_lay.setContentsMargins(*SHARED_MGR_BODY_MARGIN)
+        body_lay.setSpacing(SHARED_MGR_BODY_SPACING)
 
         # ── شرح ──
         lbl_hint = QLabel(tr("shared_item_hint"))
         lbl_hint.setWordWrap(True)
         lbl_hint.setStyleSheet(
-            f"background:{_C['success_bg']}; border:1px solid {_C['success_border']};"
-            f"border-radius:6px; padding:8px 12px; color:{_C['success']}; font-size:{FS_SM}px;"
+            f"background:{_C['success_bg']}; border:{SHARED_MGR_HINT_BORDER_W}px solid {_C['success_border']};"
+            f"border-radius:{SHARED_MGR_HINT_RADIUS}px; padding:{SHARED_MGR_HINT_PAD_V}px {SHARED_MGR_HINT_PAD_H}px; color:{_C['success']}; font-size:{FS_SM}px;"
         )
         body_lay.addWidget(lbl_hint)
 
@@ -104,28 +117,28 @@ class SharedItemsManagerDialog(QDialog):
         btn_row = QHBoxLayout()
 
         self.btn_add = QPushButton(tr("shared_add_btn"))
-        self.btn_add.setMinimumHeight(32)
+        self.btn_add.setMinimumHeight(SHARED_MGR_BTN_MIN_H)
         self.btn_add.setStyleSheet(
             f"background:{_C['accent']}; color:{_C['bg_surface']}; font-weight:bold;"
-            "border-radius:6px; padding:0 14px;"
+            f"border-radius:{SHARED_MGR_BTN_ADD_RADIUS}px; padding:0 {SHARED_MGR_BTN_ADD_PAD_H}px;"
         )
         self.btn_add.clicked.connect(self._add_item)
 
         self.btn_edit = QPushButton(tr("shared_edit_btn"))
-        self.btn_edit.setMinimumHeight(32)
+        self.btn_edit.setMinimumHeight(SHARED_MGR_BTN_MIN_H)
         self.btn_edit.clicked.connect(self._edit_item)
 
         self.btn_delete = QPushButton(tr("shared_delete_btn"))
-        self.btn_delete.setMinimumHeight(32)
+        self.btn_delete.setMinimumHeight(SHARED_MGR_BTN_MIN_H)
         self.btn_delete.setStyleSheet(
             f"background:{_C['danger_bg']}; color:{_C['danger']};"
-            f"border:1px solid {_C['danger_border']};"
-            "border-radius:4px; padding:0 12px; font-weight:bold;"
+            f"border:{SHARED_MGR_BTN_DEL_BORDER_W}px solid {_C['danger_border']};"
+            f"border-radius:{SHARED_MGR_BTN_DEL_RADIUS}px; padding:0 {SHARED_MGR_BTN_DEL_PAD_H}px; font-weight:bold;"
         )
         self.btn_delete.clicked.connect(self._delete_item)
 
         self.btn_refresh = QPushButton(tr("shared_refresh_btn"))
-        self.btn_refresh.setMinimumHeight(32)
+        self.btn_refresh.setMinimumHeight(SHARED_MGR_BTN_MIN_H)
         self.btn_refresh.clicked.connect(self._load)
 
         btn_row.addWidget(self.btn_add)
@@ -151,11 +164,11 @@ class SharedItemsManagerDialog(QDialog):
         self.tree.itemDoubleClicked.connect(self._on_double_click)
         self.tree.setStyleSheet(f"""
             QTreeWidget {{
-                border:1px solid {_C['border']}; border-radius:8px;
+                border:1px solid {_C['border']}; border-radius:{SHARED_MGR_TREE_RADIUS}px;
                 background:{_C['bg_input']};
                 alternate-background-color:{_C['bg_surface']};
             }}
-            QTreeWidget::item {{ padding:5px 8px; }}
+            QTreeWidget::item {{ padding:{SHARED_MGR_TREE_ITEM_PAD_V}px {SHARED_MGR_TREE_ITEM_PAD_H}px; }}
             QTreeWidget::item:selected {{
                 background:{_C['accent_light']}; color:{_C['accent_text']};
             }}
@@ -167,15 +180,15 @@ class SharedItemsManagerDialog(QDialog):
         hh.setSectionResizeMode(2, QHeaderView.Interactive)
         hh.setSectionResizeMode(3, QHeaderView.Interactive)
         hh.setSectionResizeMode(4, QHeaderView.Interactive)
-        self.tree.setColumnWidth(1, 110)
-        self.tree.setColumnWidth(2, 180)
-        self.tree.setColumnWidth(3, 160)
-        self.tree.setColumnWidth(4, 130)
+        self.tree.setColumnWidth(1, SHARED_MGR_COL1_W)
+        self.tree.setColumnWidth(2, SHARED_MGR_COL2_W)
+        self.tree.setColumnWidth(3, SHARED_MGR_COL3_W)
+        self.tree.setColumnWidth(4, SHARED_MGR_COL4_W)
 
         body_lay.addWidget(self.tree, stretch=1)
 
         btn_close = QPushButton(tr("shared_close_btn"))
-        btn_close.setMinimumHeight(34)
+        btn_close.setMinimumHeight(SHARED_MGR_CLOSE_BTN_H)
         btn_close.clicked.connect(self.accept)
         close_row = QHBoxLayout()
         close_row.addStretch()
@@ -185,16 +198,17 @@ class SharedItemsManagerDialog(QDialog):
         root.addWidget(body, stretch=1)
 
     def _build_header(self) -> QFrame:
+        from ui.theme import _C
         header = QFrame()
         header.setStyleSheet(f"""
             QFrame {{
                 background: {_C['accent']};
-                border-bottom: 2px solid {_C['accent_hover']};
+                border-bottom: {SHARED_MGR_HDR_BORDER_W}px solid {_C['accent_hover']};
             }}
         """)
-        header.setFixedHeight(60)
+        header.setFixedHeight(SHARED_MGR_HDR_H)
         h_lay = QHBoxLayout(header)
-        h_lay.setContentsMargins(20, 0, 20, 0)
+        h_lay.setContentsMargins(SHARED_MGR_HDR_MARGIN_H, 0, SHARED_MGR_HDR_MARGIN_H, 0)
         lbl = QLabel(tr("shared_item_header"))
         lbl.setStyleSheet(
             f"font-size:{FS_LG}px; font-weight:bold; color:{_C['bg_surface']};"
@@ -209,6 +223,7 @@ class SharedItemsManagerDialog(QDialog):
     # ══════════════════════════════════════════════════════
 
     def _load(self):
+        from ui.theme import _C
         self.tree.clear()
         items = fetch_all_shared_items(self._conn)
 
@@ -226,7 +241,7 @@ class SharedItemsManagerDialog(QDialog):
             ])
             font = QFont()
             font.setBold(True)
-            font.setPointSize(font.pointSize() + 1)
+            font.setPointSize(font.pointSize() + SHARED_MGR_TREE_TYPE_FONT_DELTA)
             type_node.setFont(0, font)
             color = QColor(_type_color(shared_type))
             type_node.setForeground(0, color)
@@ -250,7 +265,7 @@ class SharedItemsManagerDialog(QDialog):
                     item["name"],
                     type_short,
                     data_summary,
-                    f"🏢 {co_names}  ({len(linked_cos)} {tr('companies')})",
+                    f"{tr('shared_company_prefix')}{co_names}  ({len(linked_cos)} {tr('companies')})",
                     item["updated_at"][:16] if item["updated_at"] else tr("dash"),
                 ])
                 child.setData(0, Qt.UserRole, ("item", item["id"]))
@@ -263,16 +278,17 @@ class SharedItemsManagerDialog(QDialog):
 
     def _data_summary(self, shared_type: str, data: dict) -> str:
         """ملخص قصير لبيانات العنصر."""
+        sep = f"  {tr('vertical_separator')}  "
         if shared_type == "raw":
             price = data.get("price", 0)
             tq    = data.get("total_qty")
             if tq:
-                return f"{tr('price')}: {price:.2f}  │  {tr('quantity')}: {tq}"
+                return f"{tr('price')}: {price:.2f}{sep}{tr('quantity')}: {tq}"
             return f"{tr('price')}: {price:.2f}"
         elif shared_type == "machine":
             rh = data.get("rate_per_hour", 0)
             ru = data.get("rate_per_unit", 0)
-            return f"{rh:.2f} / {tr('hour')}  │  {ru:.2f} / {tr('unit')}"
+            return f"{rh:.2f} / {tr('hour')}{sep}{ru:.2f} / {tr('unit')}"
         elif shared_type == "labor_op":
             m = data.get("minutes", 0)
             return f"{m:.2f} {tr('labor_time_lbl').split('(')[-1].rstrip(')')}"
