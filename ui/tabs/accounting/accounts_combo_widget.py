@@ -25,7 +25,10 @@ from PyQt5.QtCore import pyqtSignal
 from ui.widgets.core.i18n import tr
 from ui.widgets.core.widget_mixin import WidgetMixin
 from ui.font import FS_SM
-from ui.constants import FILTER_CAT_ICON_W, FILTER_COMBO_MIN_H
+from ui.constants import (
+    FILTER_CAT_ICON_W, FILTER_COMBO_MIN_H, FILTER_COMBO_PAD_H,
+    ACCT_TYPE_FILTER_CMB_RADIUS, ACCT_TYPE_FILTER_CMB_PAD_V, ACCT_TYPE_FILTER_SPACING,
+)
 
 
 class AccountTypeFilter(QWidget, WidgetMixin):
@@ -54,7 +57,7 @@ class AccountTypeFilter(QWidget, WidgetMixin):
     def _build(self, include_all: bool):
         lay = QHBoxLayout(self)
         lay.setContentsMargins(0, 0, 0, 0)
-        lay.setSpacing(6)
+        lay.setSpacing(ACCT_TYPE_FILTER_SPACING)
 
         lbl = QLabel(tr("group_tag_icon"))
         lbl.setStyleSheet("background:transparent; border:none;")
@@ -78,8 +81,8 @@ class AccountTypeFilter(QWidget, WidgetMixin):
             QComboBox {{
                 background: {_C['bg_input']};
                 border: 1px solid {_C['border_med']};
-                border-radius: 5px;
-                padding: 2px 8px;
+                border-radius: {ACCT_TYPE_FILTER_CMB_RADIUS}px;
+                padding: {ACCT_TYPE_FILTER_CMB_PAD_V}px {FILTER_COMBO_PAD_H}px;
                 font-size: {FS_SM}px;
                 color: {_C['text_primary']};
             }}

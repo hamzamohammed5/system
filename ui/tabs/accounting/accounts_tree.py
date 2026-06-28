@@ -47,7 +47,7 @@ from ui.constants import (
     ACCOUNTS_TREE_FILTER_MIN_H,
     ACCOUNTS_TREE_LEFT_MARGIN_L, ACCOUNTS_TREE_LEFT_MARGIN_T,
     ACCOUNTS_TREE_LEFT_MARGIN_R, ACCOUNTS_TREE_LEFT_MARGIN_B,
-    ACCOUNTS_TREE_LEFT_SPACING,
+    ACCOUNTS_TREE_LEFT_SPACING, ACCOUNTS_TREE_EXPAND_DEPTH,
 )
 
 
@@ -222,7 +222,7 @@ class AccountsTreePanel(SafeConnMixin, QWidget, WidgetMixin):
 
             equity_item.setExpanded(True)
 
-        self.tree.expandToDepth(2)
+        self.tree.expandToDepth(ACCOUNTS_TREE_EXPAND_DEPTH)
 
     def _selected_id(self):
         items = self.tree.selectedItems()

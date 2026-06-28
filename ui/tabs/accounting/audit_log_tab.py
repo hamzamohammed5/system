@@ -53,6 +53,7 @@ from ui.constants import (
     AUDIT_PAGIN_BAR_H, AUDIT_PAGIN_MARGIN_H, AUDIT_PAGIN_MARGIN_V, AUDIT_PAGIN_SPACING,
     AUDIT_FILTER_CMB_RADIUS, AUDIT_FILTER_CMB_PAD_V, AUDIT_FILTER_CMB_PAD_H,
     AUDIT_FILTER_DROP_W, FILTER_COMBO_MIN_H,
+    AUDIT_PAGE_SIZE, AUDIT_LOAD_DELAY,
 )
 
 
@@ -93,7 +94,7 @@ _ACTION_ICONS = {
     "create": tr("audit_log_create"),
 }
 
-_PAGE_SIZE = 200
+_PAGE_SIZE = AUDIT_PAGE_SIZE
 
 
 # ══════════════════════════════════════════════════════════
@@ -237,7 +238,7 @@ class AuditLogTab(SafeConnMixin, QWidget, WidgetMixin):
         self._init_widget_mixin(theme=True, font=True, lang=False, data=False)
         self._refresh_style()
         # تأجيل التحميل لبعد ظهور الـ widget
-        QTimer.singleShot(100, self._load)
+        QTimer.singleShot(AUDIT_LOAD_DELAY, self._load)
 
     # ── بناء الواجهة ──────────────────────────────────────
 
