@@ -17,6 +17,10 @@ from ui.tabs.costing.shared._utils                         import to_dict
 from ui.tabs.costing.shared.bulk_replace.bulk_replace_dialog import BulkReplaceDialog
 from ui.widgets.core.events                                import emit_company_data_changed
 from ui.widgets.core.i18n                                  import tr
+from ui.constants import (
+    LABOR_TABLE_COL0_W, LABOR_TABLE_COL2_W,
+    LABOR_TABLE_COL3_W, LABOR_TABLE_COL4_W,
+)
 
 
 class LaborOpTable(SharedItemsListPanel):
@@ -33,10 +37,10 @@ class LaborOpTable(SharedItemsListPanel):
         super().__init__(conn, parent)
 
     def _setup_column_widths(self, table):
-        table.setColumnWidth(0, 40)
-        table.setColumnWidth(2, 110)
-        table.setColumnWidth(3, 110)
-        table.setColumnWidth(4, 130)
+        table.setColumnWidth(0, LABOR_TABLE_COL0_W)
+        table.setColumnWidth(2, LABOR_TABLE_COL2_W)
+        table.setColumnWidth(3, LABOR_TABLE_COL3_W)
+        table.setColumnWidth(4, LABOR_TABLE_COL4_W)
 
     def _fetch_local_rows(self) -> list:
         from services.costing.labor_op_service import LaborOpService

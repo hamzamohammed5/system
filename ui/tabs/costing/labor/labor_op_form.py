@@ -19,6 +19,7 @@ from ui.widgets.forms.inputs      import RequiredLineEdit
 from ui.widgets.combo.category    import CategoryCombo
 from ui.widgets.core.events       import bus
 from ui.widgets.core.i18n         import tr
+from ui.constants import LABOR_FORM_SPIN_MAX_MINUTES, LABOR_FORM_SPIN_DEC_MINUTES
 
 
 class LaborOpForm(BaseCrudForm):
@@ -52,7 +53,7 @@ class LaborOpForm(BaseCrudForm):
 
     def _build_fields(self, group: FormGroup):
         self._inp_name    = RequiredLineEdit(tr("labor_op_name_placeholder"))
-        self._sp_minutes  = spin_field(max_=99999, dec=2)
+        self._sp_minutes  = spin_field(max_=LABOR_FORM_SPIN_MAX_MINUTES, dec=LABOR_FORM_SPIN_DEC_MINUTES)
         self._cmb_cat     = CategoryCombo(self.conn, scope="labor")
         self._lbl_cost    = ResultBadge()
 

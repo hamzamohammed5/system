@@ -22,7 +22,16 @@ from ui.widgets.panels.form_group import FormGroup
 
 from ui.widgets.theme.builders import wrap_in_scroll
 from ui.widgets.core.i18n import tr
-from ui.widgets.core.events import bus
+from ui.widgets.core.events import emit_company_data_changed
+from ui.constants import (
+    MARGIN_ZERO, SPACING_ZERO,
+    LABOR_SETTINGS_MIN_W, LABOR_SETTINGS_INNER_MARGIN, LABOR_SETTINGS_INNER_SPACING,
+    LABOR_SETTINGS_BTN_MIN_H,
+    LABOR_SETTINGS_SPIN_MAX_SALARY, LABOR_SETTINGS_SPIN_MAX_DAYS,
+    LABOR_SETTINGS_SPIN_MAX_HOURS, LABOR_SETTINGS_SPIN_MAX_OVHD,
+    LABOR_SETTINGS_SPIN_DEC_SALARY, LABOR_SETTINGS_SPIN_DEC_DAYS,
+    LABOR_SETTINGS_SPIN_DEC_HOURS, LABOR_SETTINGS_SPIN_DEC_OVHD,
+)
 
 
 class _LaborSettingsPanel(QWidget):
@@ -34,25 +43,25 @@ class _LaborSettingsPanel(QWidget):
 
     def _build(self):
         outer_layout = QVBoxLayout(self)
-        outer_layout.setContentsMargins(0, 0, 0, 0)
-        outer_layout.setSpacing(0)
+        outer_layout.setContentsMargins(*MARGIN_ZERO)
+        outer_layout.setSpacing(SPACING_ZERO)
 
         inner = QWidget()
-        inner.setMinimumWidth(260)
+        inner.setMinimumWidth(LABOR_SETTINGS_MIN_W)
         layout = QVBoxLayout(inner)
-        layout.setContentsMargins(8, 8, 8, 8)
-        layout.setSpacing(8)
+        layout.setContentsMargins(*LABOR_SETTINGS_INNER_MARGIN)
+        layout.setSpacing(LABOR_SETTINGS_INNER_SPACING)
 
         scroll = wrap_in_scroll(inner)
         outer_layout.addWidget(scroll)
 
         grp = FormGroup(tr("labor_cost_settings"))
 
-        self.sp_salary   = spin_field(max_=999999, dec=2)
-        self.sp_days     = spin_field(max_=31,     dec=0)
-        self.sp_holidays = spin_field(max_=31,     dec=0)
-        self.sp_hours    = spin_field(max_=24,     dec=1)
-        self.sp_overhead = spin_field(max_=10,     dec=2)
+        self.sp_salary   = spin_field(max_=LABOR_SETTINGS_SPIN_MAX_SALARY, dec=LABOR_SETTINGS_SPIN_DEC_SALARY)
+        self.sp_days     = spin_field(max_=LABOR_SETTINGS_SPIN_MAX_DAYS,   dec=LABOR_SETTINGS_SPIN_DEC_DAYS)
+        self.sp_holidays = spin_field(max_=LABOR_SETTINGS_SPIN_MAX_DAYS,   dec=LABOR_SETTINGS_SPIN_DEC_DAYS)
+        self.sp_hours    = spin_field(max_=LABOR_SETTINGS_SPIN_MAX_HOURS,  dec=LABOR_SETTINGS_SPIN_DEC_HOURS)
+        self.sp_overhead = spin_field(max_=LABOR_SETTINGS_SPIN_MAX_OVHD,   dec=LABOR_SETTINGS_SPIN_DEC_OVHD)
 
         grp.add_row(
             f"{tr('base_salary')} :",
@@ -84,7 +93,7 @@ class _LaborSettingsPanel(QWidget):
             sp.valueChanged.connect(self._update_preview)
 
         btn = QPushButton(f"💾  {tr('save_labor_settings')}")
-        btn.setMinimumHeight(32)
+        btn.setMinimumHeight(LABOR_SETTINGS_BTN_MIN_H)
         btn.clicked.connect(self._save)
         layout.addWidget(btn)
         layout.addStretch()
@@ -116,7 +125,7 @@ class _LaborSettingsPanel(QWidget):
             self, tr("done"),
             f"✅  {tr('labor_settings_saved')}"
         )
-        bus.data_changed.emit()
+        emit_company_data_changed()
 
     def get_hourly_rate(self):
         return self._calc_rate()
