@@ -24,13 +24,24 @@ from ui.widgets.core.events import emit_company_data_changed
 from ui.widgets.core.i18n import tr
 from ui.theme import _C
 from ui.font import FS_SM
+from ui.constants import (
+    PUBLISH_DLG_MIN_W, PUBLISH_DLG_MIN_H,
+    PUBLISH_DLG_ROOT_SPACING, PUBLISH_DLG_ROOT_MARGIN,
+    PUBLISH_DLG_HINT_RADIUS, PUBLISH_DLG_HINT_PAD_V, PUBLISH_DLG_HINT_PAD_H,
+    PUBLISH_DLG_GRP_RADIUS, PUBLISH_DLG_GRP_PAD_TOP, PUBLISH_DLG_GRP_MARGIN_TOP,
+    PUBLISH_DLG_GRP_TITLE_PAD_H, PUBLISH_DLG_DATA_SPACING, PUBLISH_DLG_INPUT_MIN_H,
+    PUBLISH_DLG_LIST_MAX_H, PUBLISH_DLG_LIST_RADIUS,
+    PUBLISH_DLG_LIST_ITEM_PAD_V, PUBLISH_DLG_LIST_ITEM_PAD_H,
+    PUBLISH_DLG_QUICK_BTN_MIN_H, PUBLISH_DLG_QUICK_BTN_MAX_W,
+    PUBLISH_DLG_OK_BTN_MIN_H, PUBLISH_DLG_OK_BTN_RADIUS, PUBLISH_DLG_OK_BTN_PAD_H,
+)
 
 
 def _spin(max_=9999999, dec=4):
     s = QDoubleSpinBox()
     s.setRange(0, max_)
     s.setDecimals(dec)
-    s.setMinimumHeight(32)
+    s.setMinimumHeight(PUBLISH_DLG_INPUT_MIN_H)
     return s
 
 
@@ -44,37 +55,37 @@ class PublishAsSharedDialog(QDialog):
         self._item_data   = item_data or {}
 
         self.setWindowTitle(tr("shared_publish_title"))
-        self.setMinimumSize(480, 440)
+        self.setMinimumSize(PUBLISH_DLG_MIN_W, PUBLISH_DLG_MIN_H)
         self.setModal(True)
         self.setLayoutDirection(Qt.RightToLeft)
         self._build()
 
     def _build(self):
         root = QVBoxLayout(self)
-        root.setSpacing(12)
-        root.setContentsMargins(16, 16, 16, 12)
+        root.setSpacing(PUBLISH_DLG_ROOT_SPACING)
+        root.setContentsMargins(*PUBLISH_DLG_ROOT_MARGIN)
 
         lbl_hint = QLabel(tr("shared_publish_hint"))
         lbl_hint.setWordWrap(True)
         lbl_hint.setStyleSheet(
-            f"background:{_C['accent_light']}; border:1px solid {_C['accent_mid']}; border-radius:6px;"
-            f"padding:8px 12px; color:{_C['accent_text']}; font-size:{FS_SM}px;"
+            f"background:{_C['accent_light']}; border:1px solid {_C['accent_mid']}; border-radius:{PUBLISH_DLG_HINT_RADIUS}px;"
+            f"padding:{PUBLISH_DLG_HINT_PAD_V}px {PUBLISH_DLG_HINT_PAD_H}px; color:{_C['accent_text']}; font-size:{FS_SM}px;"
         )
         root.addWidget(lbl_hint)
 
         data_grp = QGroupBox(tr("shared_item_data_section"))
         data_grp.setStyleSheet(
             f"QGroupBox {{ font-weight:bold; border:1px solid {_C['border']};"
-            "border-radius:8px; padding-top:10px; margin-top:6px; }"
-            "QGroupBox::title { subcontrol-origin:margin; padding:0 8px;"
+            f"border-radius:{PUBLISH_DLG_GRP_RADIUS}px; padding-top:{PUBLISH_DLG_GRP_PAD_TOP}px; margin-top:{PUBLISH_DLG_GRP_MARGIN_TOP}px; }}"
+            f"QGroupBox::title {{ subcontrol-origin:margin; padding:0 {PUBLISH_DLG_GRP_TITLE_PAD_H}px;"
             "subcontrol-position:top right; }"
         )
         data_lay = QFormLayout(data_grp)
-        data_lay.setSpacing(10)
+        data_lay.setSpacing(PUBLISH_DLG_DATA_SPACING)
         data_lay.setLabelAlignment(Qt.AlignRight)
 
         self.inp_name = QLineEdit(self._item_name)
-        self.inp_name.setMinimumHeight(32)
+        self.inp_name.setMinimumHeight(PUBLISH_DLG_INPUT_MIN_H)
         data_lay.addRow(tr("shared_name_colon"), self.inp_name)
 
         self._field_widgets = {}
@@ -85,17 +96,17 @@ class PublishAsSharedDialog(QDialog):
         cos_grp = QGroupBox(tr("shared_companies_share"))
         cos_grp.setStyleSheet(
             f"QGroupBox {{ font-weight:bold; border:1px solid {_C['border']};"
-            "border-radius:8px; padding-top:10px; margin-top:6px; }"
-            "QGroupBox::title { subcontrol-origin:margin; padding:0 8px;"
+            f"border-radius:{PUBLISH_DLG_GRP_RADIUS}px; padding-top:{PUBLISH_DLG_GRP_PAD_TOP}px; margin-top:{PUBLISH_DLG_GRP_MARGIN_TOP}px; }}"
+            f"QGroupBox::title {{ subcontrol-origin:margin; padding:0 {PUBLISH_DLG_GRP_TITLE_PAD_H}px;"
             "subcontrol-position:top right; }"
         )
         cos_lay = QVBoxLayout(cos_grp)
 
         self.lst_companies = QListWidget()
-        self.lst_companies.setMaximumHeight(120)
+        self.lst_companies.setMaximumHeight(PUBLISH_DLG_LIST_MAX_H)
         self.lst_companies.setStyleSheet(
-            f"QListWidget {{ border:1px solid {_C['border']}; border-radius:6px; }}"
-            "QListWidget::item { padding:5px 10px; }"
+            f"QListWidget {{ border:1px solid {_C['border']}; border-radius:{PUBLISH_DLG_LIST_RADIUS}px; }}"
+            f"QListWidget::item {{ padding:{PUBLISH_DLG_LIST_ITEM_PAD_V}px {PUBLISH_DLG_LIST_ITEM_PAD_H}px; }}"
             f"QListWidget::item:selected {{ background:{_C['accent_light']}; color:{_C['accent_text']}; }}"
         )
         cos_lay.addWidget(self.lst_companies)
@@ -121,8 +132,8 @@ class PublishAsSharedDialog(QDialog):
         btn_all  = QPushButton(tr("shared_select_all_btn"))
         btn_none = QPushButton(tr("shared_select_none_btn"))
         for btn in (btn_all, btn_none):
-            btn.setMinimumHeight(26)
-            btn.setMaximumWidth(90)
+            btn.setMinimumHeight(PUBLISH_DLG_QUICK_BTN_MIN_H)
+            btn.setMaximumWidth(PUBLISH_DLG_QUICK_BTN_MAX_W)
         btn_all.clicked.connect(lambda: self._check_all(True))
         btn_none.clicked.connect(lambda: self._check_all(False))
         quick_row.addWidget(QLabel(tr("shared_quick_select")))
@@ -136,11 +147,11 @@ class PublishAsSharedDialog(QDialog):
         btns = QDialogButtonBox()
         btn_ok     = btns.addButton(tr("shared_publish_btn"), QDialogButtonBox.AcceptRole)
         btn_cancel = btns.addButton(tr("btn_cancel"),          QDialogButtonBox.RejectRole)
-        btn_ok.setMinimumHeight(34)
-        btn_cancel.setMinimumHeight(34)
+        btn_ok.setMinimumHeight(PUBLISH_DLG_OK_BTN_MIN_H)
+        btn_cancel.setMinimumHeight(PUBLISH_DLG_OK_BTN_MIN_H)
         btn_ok.setStyleSheet(
             f"background:{_C['accent']}; color:{_C['bg_surface']}; font-weight:bold;"
-            "border-radius:6px; padding:0 18px;"
+            f"border-radius:{PUBLISH_DLG_OK_BTN_RADIUS}px; padding:0 {PUBLISH_DLG_OK_BTN_PAD_H}px;"
         )
         btn_ok.clicked.connect(self._publish)
         btn_cancel.clicked.connect(self.reject)

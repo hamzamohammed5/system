@@ -35,6 +35,10 @@ from ui.widgets.panels.form_group import FormGroup
 from ui.widgets.components.label import ModeLabel
 from ui.widgets.core.i18n import tr
 from ui.widgets.dialogs.message import msg_warning, msg_info
+from ui.constants import (
+    GROUP_MGR_ROOT_MARGIN, GROUP_MGR_ROOT_SPACING,
+    GROUP_MGR_COL_COUNT_W, GROUP_MGR_INPUT_MIN_H,
+)
 
 
 class _GroupManagerPanel(SafeConnMixin, QWidget):
@@ -54,8 +58,8 @@ class _GroupManagerPanel(SafeConnMixin, QWidget):
 
     def _build(self):
         root = QVBoxLayout(self)
-        root.setContentsMargins(8, 8, 8, 8)
-        root.setSpacing(8)
+        root.setContentsMargins(*GROUP_MGR_ROOT_MARGIN)
+        root.setSpacing(GROUP_MGR_ROOT_SPACING)
 
         # ── هيدر القسم ──
         hdr = SectionHeader(tr("group_categories_header", type_name=TYPE_AR.get(self.acc_type, '')))
@@ -66,7 +70,7 @@ class _GroupManagerPanel(SafeConnMixin, QWidget):
         self.tree.setHeaderLabels([tr("group_tree_col"), tr("group_count_col")])
         self.tree.header().setSectionResizeMode(0, QHeaderView.Stretch)
         self.tree.header().setSectionResizeMode(1, QHeaderView.Interactive)
-        self.tree.setColumnWidth(1, 100)
+        self.tree.setColumnWidth(1, GROUP_MGR_COL_COUNT_W)
         self.tree.setAlternatingRowColors(True)
         self.tree.setStyleSheet(get_tree_style())
         root.addWidget(self.tree, stretch=1)
@@ -93,12 +97,12 @@ class _GroupManagerPanel(SafeConnMixin, QWidget):
         grp.add_label_row(self._lbl_mode)
 
         self.inp_name = QLineEdit()
-        self.inp_name.setMinimumHeight(28)
+        self.inp_name.setMinimumHeight(GROUP_MGR_INPUT_MIN_H)
         self.inp_name.setPlaceholderText(tr("group_name_placeholder"))
         grp.add_row(tr("name") + ":", self.inp_name)
 
         self.cmb_parent = QComboBox()
-        self.cmb_parent.setMinimumHeight(28)
+        self.cmb_parent.setMinimumHeight(GROUP_MGR_INPUT_MIN_H)
         grp.add_row(tr("group_parent_label"), self.cmb_parent)
 
         # ── ColorPickerWidget الموحد ──
@@ -150,7 +154,7 @@ class _GroupManagerPanel(SafeConnMixin, QWidget):
                 count = 0
             item = QTreeWidgetItem()
             item.setText(0, node["name"])
-            item.setText(1, str(count) if count else "—")
+            item.setText(1, str(count) if count else tr("dash"))
             item.setData(0, Qt.UserRole, node["id"])
             item.setForeground(0, QColor(node["color"]))
             if parent:
@@ -172,7 +176,7 @@ class _GroupManagerPanel(SafeConnMixin, QWidget):
 
     def _add_parent_nodes(self, nodes, depth, exclude_id):
         indent = "  " * depth
-        arrow  = "↳ " if depth > 0 else ""
+        arrow  = tr("category_tree_arrow") if depth > 0 else ""
         for node in nodes:
             if node["id"] == exclude_id:
                 continue

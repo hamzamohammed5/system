@@ -19,6 +19,10 @@ from .ledger.ledger_t_account import _TAccountPanel
 from ui.widgets.core.conn import SafeConnMixin
 from ui.widgets.core.events import bus
 from ui.widgets.theme.table_styles import splitter_style as get_splitter_style
+from ui.constants import (
+    LEDGER_SPLITTER_HANDLE_W, LEDGER_LEFT_MARGIN,
+    LEDGER_RIGHT_MARGIN, LEDGER_SPLITTER_SIZES,
+)
 
 
 class LedgerTab(SafeConnMixin, QWidget):
@@ -39,12 +43,12 @@ class LedgerTab(SafeConnMixin, QWidget):
         root.setContentsMargins(0, 0, 0, 0)
 
         splitter = QSplitter(Qt.Horizontal)
-        splitter.setHandleWidth(6)
+        splitter.setHandleWidth(LEDGER_SPLITTER_HANDLE_W)
         splitter.setStyleSheet(get_splitter_style())
 
         left = QWidget()
         ll   = QVBoxLayout(left)
-        ll.setContentsMargins(10, 10, 6, 10)
+        ll.setContentsMargins(*LEDGER_LEFT_MARGIN)
         ll.setSpacing(0)
         self._accounts_panel = _AccountsPanel(
             self._get_safe_conn(),
@@ -55,14 +59,14 @@ class LedgerTab(SafeConnMixin, QWidget):
 
         right = QWidget()
         rl    = QVBoxLayout(right)
-        rl.setContentsMargins(6, 10, 10, 10)
+        rl.setContentsMargins(*LEDGER_RIGHT_MARGIN)
         rl.setSpacing(0)
         # [إصلاح] لا نمرر conn هنا — يتمرر في كل load()
         self._t_panel = _TAccountPanel()
         rl.addWidget(self._t_panel)
         splitter.addWidget(right)
 
-        splitter.setSizes([240, 760])
+        splitter.setSizes(list(LEDGER_SPLITTER_SIZES))
         root.addWidget(splitter)
 
     def _on_account_selected(self, acc_id: int):
