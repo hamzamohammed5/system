@@ -20,6 +20,32 @@ from ui.theme import _C
 from ui.font import FS_SM, FS_BASE, FS_MD, FS_LG, FS_XL
 from ui.widgets.core.i18n import tr
 from ui.widgets.shared.message_box import msg_question, msg_info, msg_warning, msg_critical
+from ui.constants import (
+    SEPARATOR_LINE_H,
+    COMPANIES_DLG_MIN_W, COMPANIES_DLG_MIN_H,
+    COMPANIES_DLG_ROOT_MARGIN, COMPANIES_DLG_ROOT_SPACING,
+    COMPANIES_DLG_TITLE_PAD_V,
+    COMPANIES_DLG_SPLITTER_HANDLE_W,
+    COMPANIES_DLG_SPLITTER_L, COMPANIES_DLG_SPLITTER_R,
+    COMPANIES_DLG_CLOSE_BTN_H, COMPANIES_DLG_CLOSE_BTN_RADIUS, COMPANIES_DLG_CLOSE_BTN_PAD_H,
+    COMPANIES_DLG_TABLE_PANEL_SPACING, COMPANIES_DLG_ADD_BTN_H,
+    COMPANIES_DLG_TABLE_COL3_W, COMPANIES_DLG_TABLE_RADIUS,
+    COMPANIES_DLG_TABLE_ITEM_PAD_V, COMPANIES_DLG_TABLE_ITEM_PAD_H,
+    COMPANIES_DLG_HDR_PAD_V, COMPANIES_DLG_HDR_PAD_H,
+    COMPANIES_DLG_FORM_RADIUS, COMPANIES_DLG_FORM_MARGIN, COMPANIES_DLG_FORM_SPACING,
+    COMPANIES_DLG_INP_H, COMPANIES_DLG_INP_RADIUS,
+    COMPANIES_DLG_INP_PAD_V, COMPANIES_DLG_INP_PAD_H,
+    COMPANIES_DLG_COLOR_PREVIEW_SIZE, COMPANIES_DLG_COLOR_PREVIEW_RADIUS,
+    COMPANIES_DLG_COLOR_BTN_H, COMPANIES_DLG_COLOR_BTN_PAD_H,
+    COMPANIES_DLG_NOTES_MAX_H, COMPANIES_DLG_NOTES_RADIUS, COMPANIES_DLG_NOTES_PAD,
+    COMPANIES_DLG_SAVE_BTN_H, COMPANIES_DLG_CANCEL_BTN_H,
+    COMPANIES_DLG_CANCEL_BTN_RADIUS, COMPANIES_DLG_CANCEL_BTN_PAD_H,
+    COMPANIES_DLG_BTN_RADIUS, COMPANIES_DLG_BTN_PAD_H,
+    COMPANIES_DLG_NAME_BADGE_RADIUS, COMPANIES_DLG_NAME_BADGE_PAD_V, COMPANIES_DLG_NAME_BADGE_PAD_H,
+    COMPANIES_DLG_BTNS_CELL_MARGIN_H, COMPANIES_DLG_BTNS_CELL_MARGIN_V, COMPANIES_DLG_BTNS_CELL_SPACING,
+    COMPANIES_DLG_ACTION_BTN_SIZE, COMPANIES_DLG_ACTION_BTN_RADIUS,
+    COMPANIES_DLG_ROW_H,
+)
 
 
 class CompaniesDialog(QDialog):
@@ -30,41 +56,41 @@ class CompaniesDialog(QDialog):
         self._color      = _C['accent']
 
         self.setWindowTitle(tr("companies_manage_title"))
-        self.setMinimumSize(820, 560)
+        self.setMinimumSize(COMPANIES_DLG_MIN_W, COMPANIES_DLG_MIN_H)
         self.setModal(True)
         self._build()
         self._load()
 
     def _build(self):
         root = QVBoxLayout(self)
-        root.setContentsMargins(12, 12, 12, 12)
-        root.setSpacing(10)
+        root.setContentsMargins(*COMPANIES_DLG_ROOT_MARGIN)
+        root.setSpacing(COMPANIES_DLG_ROOT_SPACING)
 
         title = QLabel(tr("companies_manage_title"))
         title.setStyleSheet(f"""
             font-size: {FS_XL}px; font-weight: bold;
-            color: {_C['accent']}; padding: 4px 0;
+            color: {_C['accent']}; padding: {COMPANIES_DLG_TITLE_PAD_V}px 0;
             background: transparent;
         """)
         root.addWidget(title)
 
         splitter = QSplitter(Qt.Horizontal)
-        splitter.setHandleWidth(6)
+        splitter.setHandleWidth(COMPANIES_DLG_SPLITTER_HANDLE_W)
 
         splitter.addWidget(self._build_table_panel())
         splitter.addWidget(self._build_form_panel())
-        splitter.setSizes([460, 320])
+        splitter.setSizes([COMPANIES_DLG_SPLITTER_L, COMPANIES_DLG_SPLITTER_R])
         root.addWidget(splitter)
 
         btn_row = QHBoxLayout()
         btn_row.addStretch()
         close_btn = QPushButton(tr("shared_close_btn"))
-        close_btn.setFixedHeight(34)
+        close_btn.setFixedHeight(COMPANIES_DLG_CLOSE_BTN_H)
         close_btn.setStyleSheet(f"""
             QPushButton {{
                 background: {_C['bg_surface_2']};
                 border: 1px solid {_C['border_med']};
-                border-radius: 5px; padding: 4px 18px;
+                border-radius: {COMPANIES_DLG_CLOSE_BTN_RADIUS}px; padding: {COMPANIES_DLG_TITLE_PAD_V}px {COMPANIES_DLG_CLOSE_BTN_PAD_H}px;
             }}
             QPushButton:hover {{ background: {_C['bg_hover']}; }}
         """)
@@ -77,7 +103,7 @@ class CompaniesDialog(QDialog):
         panel.setStyleSheet("background: transparent;")
         lay   = QVBoxLayout(panel)
         lay.setContentsMargins(0, 0, 0, 0)
-        lay.setSpacing(6)
+        lay.setSpacing(COMPANIES_DLG_TABLE_PANEL_SPACING)
 
         toolbar = QHBoxLayout()
         lbl = QLabel(tr("companies_registered"))
@@ -86,7 +112,7 @@ class CompaniesDialog(QDialog):
         toolbar.addStretch()
 
         add_btn = QPushButton(tr("company_add_btn"))
-        add_btn.setFixedHeight(32)
+        add_btn.setFixedHeight(COMPANIES_DLG_ADD_BTN_H)
         add_btn.setStyleSheet(self._btn_style(_C['success'], _C['success_hover']))
         add_btn.clicked.connect(self._new_company)
         toolbar.addWidget(add_btn)
@@ -107,17 +133,17 @@ class CompaniesDialog(QDialog):
         hh.setSectionResizeMode(1, QHeaderView.ResizeToContents)
         hh.setSectionResizeMode(2, QHeaderView.ResizeToContents)
         hh.setSectionResizeMode(3, QHeaderView.Fixed)
-        self._table.setColumnWidth(3, 110)
+        self._table.setColumnWidth(3, COMPANIES_DLG_TABLE_COL3_W)
         self._table.setStyleSheet(f"""
             QTableWidget {{
                 border: 1px solid {_C['border']};
-                border-radius: 6px;
+                border-radius: {COMPANIES_DLG_TABLE_RADIUS}px;
                 background: {_C['bg_input']};
                 alternate-background-color: {_C['bg_surface']};
                 gridline-color: {_C['border']};
             }}
             QTableWidget::item {{
-                padding: 4px 8px;
+                padding: {COMPANIES_DLG_TABLE_ITEM_PAD_V}px {COMPANIES_DLG_TABLE_ITEM_PAD_H}px;
                 border: none;
                 border-bottom: 1px solid {_C['border']};
                 background: transparent;
@@ -128,7 +154,7 @@ class CompaniesDialog(QDialog):
             }}
             QHeaderView::section {{
                 background: {_C['bg_surface_2']};
-                padding: 6px 8px; border: none;
+                padding: {COMPANIES_DLG_HDR_PAD_V}px {COMPANIES_DLG_HDR_PAD_H}px; border: none;
                 border-bottom: 2px solid {_C['border_med']};
                 font-weight: 600; color: {_C['text_muted']};
             }}
@@ -142,12 +168,12 @@ class CompaniesDialog(QDialog):
             QWidget {{
                 background: {_C['bg_surface']};
                 border: 1px solid {_C['border']};
-                border-radius: 8px;
+                border-radius: {COMPANIES_DLG_FORM_RADIUS}px;
             }}
         """)
         lay = QVBoxLayout(panel)
-        lay.setContentsMargins(16, 16, 16, 16)
-        lay.setSpacing(10)
+        lay.setContentsMargins(*COMPANIES_DLG_FORM_MARGIN)
+        lay.setSpacing(COMPANIES_DLG_FORM_SPACING)
 
         self._form_title = QLabel(tr("company_new_title"))
         self._form_title.setStyleSheet(
@@ -158,7 +184,7 @@ class CompaniesDialog(QDialog):
         sep = QFrame()
         sep.setFrameShape(QFrame.HLine)
         sep.setStyleSheet(f"background: {_C['border']}; border: none;")
-        sep.setFixedHeight(1)
+        sep.setFixedHeight(SEPARATOR_LINE_H)
         lay.addWidget(sep)
 
         def _lbl(text):
@@ -171,11 +197,11 @@ class CompaniesDialog(QDialog):
         def _inp(placeholder=""):
             e = QLineEdit()
             e.setPlaceholderText(placeholder)
-            e.setFixedHeight(32)
+            e.setFixedHeight(COMPANIES_DLG_INP_H)
             e.setStyleSheet(f"""
                 QLineEdit {{
                     border: 1px solid {_C['border_med']};
-                    border-radius: 5px; padding: 2px 8px;
+                    border-radius: {COMPANIES_DLG_INP_RADIUS}px; padding: {COMPANIES_DLG_INP_PAD_V}px {COMPANIES_DLG_INP_PAD_H}px;
                     background: {_C['bg_input']};
                 }}
                 QLineEdit:focus {{ border-color: {_C['accent']}; }}
@@ -193,18 +219,18 @@ class CompaniesDialog(QDialog):
         lay.addWidget(_lbl(tr("company_color_label")))
         color_row = QHBoxLayout()
         self._color_preview = QLabel()
-        self._color_preview.setFixedSize(32, 32)
+        self._color_preview.setFixedSize(COMPANIES_DLG_COLOR_PREVIEW_SIZE, COMPANIES_DLG_COLOR_PREVIEW_SIZE)
         self._color_preview.setStyleSheet(
-            f"background: {self._color}; border-radius: 5px;"
+            f"background: {self._color}; border-radius: {COMPANIES_DLG_COLOR_PREVIEW_RADIUS}px;"
             f"border: 1px solid {_C['border_med']};"
         )
         color_btn = QPushButton(tr("company_choose_color"))
-        color_btn.setFixedHeight(32)
+        color_btn.setFixedHeight(COMPANIES_DLG_COLOR_BTN_H)
         color_btn.setStyleSheet(f"""
             QPushButton {{
                 background: {_C['bg_surface_2']};
                 border: 1px solid {_C['border_med']};
-                border-radius: 5px; padding: 2px 10px;
+                border-radius: {COMPANIES_DLG_INP_RADIUS}px; padding: {COMPANIES_DLG_INP_PAD_V}px {COMPANIES_DLG_COLOR_BTN_PAD_H}px;
             }}
             QPushButton:hover {{ background: {_C['bg_hover']}; }}
         """)
@@ -216,11 +242,11 @@ class CompaniesDialog(QDialog):
 
         lay.addWidget(_lbl(tr("company_notes_label")))
         self._inp_notes = QTextEdit()
-        self._inp_notes.setMaximumHeight(80)
+        self._inp_notes.setMaximumHeight(COMPANIES_DLG_NOTES_MAX_H)
         self._inp_notes.setStyleSheet(f"""
             QTextEdit {{
                 border: 1px solid {_C['border_med']};
-                border-radius: 5px; padding: 4px;
+                border-radius: {COMPANIES_DLG_NOTES_RADIUS}px; padding: {COMPANIES_DLG_NOTES_PAD}px;
                 background: {_C['bg_input']}; font-size: {FS_BASE}px;
             }}
             QTextEdit:focus {{ border-color: {_C['accent']}; }}
@@ -231,7 +257,7 @@ class CompaniesDialog(QDialog):
 
         form_btns = QHBoxLayout()
         self._save_btn = QPushButton(tr("btn_save"))
-        self._save_btn.setFixedHeight(34)
+        self._save_btn.setFixedHeight(COMPANIES_DLG_SAVE_BTN_H)
         self._save_btn.setStyleSheet(
             self._btn_style(_C['accent'], _C['accent_hover'])
         )
@@ -239,12 +265,12 @@ class CompaniesDialog(QDialog):
         form_btns.addWidget(self._save_btn)
 
         self._cancel_btn = QPushButton(tr("btn_cancel"))
-        self._cancel_btn.setFixedHeight(34)
+        self._cancel_btn.setFixedHeight(COMPANIES_DLG_CANCEL_BTN_H)
         self._cancel_btn.setStyleSheet(f"""
             QPushButton {{
                 background: {_C['bg_surface_2']};
                 border: 1px solid {_C['border_med']};
-                border-radius: 5px; padding: 4px 14px;
+                border-radius: {COMPANIES_DLG_CANCEL_BTN_RADIUS}px; padding: {COMPANIES_DLG_INP_PAD_V}px {COMPANIES_DLG_CANCEL_BTN_PAD_H}px;
             }}
             QPushButton:hover {{ background: {_C['bg_hover']}; }}
         """)
@@ -258,7 +284,7 @@ class CompaniesDialog(QDialog):
         return f"""
             QPushButton {{
                 background: {bg}; color: {_C['bg_input']}; font-weight: 600;
-                border: none; border-radius: 5px; padding: 4px 14px;
+                border: none; border-radius: {COMPANIES_DLG_BTN_RADIUS}px; padding: {COMPANIES_DLG_INP_PAD_V}px {COMPANIES_DLG_BTN_PAD_H}px;
             }}
             QPushButton:hover {{ background: {hover}; }}
         """
@@ -274,7 +300,7 @@ class CompaniesDialog(QDialog):
             name_lbl.setStyleSheet(f"""
                 background: {r['color'] or _C['accent']};
                 color: {_C['bg_input']}; font-weight: 600;
-                border-radius: 4px; padding: 3px 8px;
+                border-radius: {COMPANIES_DLG_NAME_BADGE_RADIUS}px; padding: {COMPANIES_DLG_NAME_BADGE_PAD_V}px {COMPANIES_DLG_NAME_BADGE_PAD_H}px;
             """)
             self._table.setCellWidget(ri, 0, name_lbl)
 
@@ -293,35 +319,36 @@ class CompaniesDialog(QDialog):
             btns_widget = QWidget()
             btns_widget.setStyleSheet("background: transparent; border: none;")
             btns_lay = QHBoxLayout(btns_widget)
-            btns_lay.setContentsMargins(4, 2, 4, 2)
-            btns_lay.setSpacing(4)
+            btns_lay.setContentsMargins(COMPANIES_DLG_BTNS_CELL_MARGIN_H, COMPANIES_DLG_BTNS_CELL_MARGIN_V,
+                                         COMPANIES_DLG_BTNS_CELL_MARGIN_H, COMPANIES_DLG_BTNS_CELL_MARGIN_V)
+            btns_lay.setSpacing(COMPANIES_DLG_BTNS_CELL_SPACING)
             btns_lay.setAlignment(Qt.AlignCenter)
 
             _btn_ss = lambda bg, hov: f"""
                 QPushButton {{
                     background: {bg}; border: none;
-                    border-radius: 4px; font-size: {FS_LG}px;
-                    min-width: 28px; min-height: 28px;
-                    max-width: 28px; max-height: 28px;
+                    border-radius: {COMPANIES_DLG_ACTION_BTN_RADIUS}px; font-size: {FS_LG}px;
+                    min-width: {COMPANIES_DLG_ACTION_BTN_SIZE}px; min-height: {COMPANIES_DLG_ACTION_BTN_SIZE}px;
+                    max-width: {COMPANIES_DLG_ACTION_BTN_SIZE}px; max-height: {COMPANIES_DLG_ACTION_BTN_SIZE}px;
                 }}
                 QPushButton:hover {{ background: {hov}; }}
             """
 
-            edit_btn = QPushButton("✏")
+            edit_btn = QPushButton(tr("company_edit_icon"))
             edit_btn.setToolTip(tr("company_tooltip_edit"))
             edit_btn.setStyleSheet(_btn_ss(_C["t_account_dr_bg"], _C["accent_mid"]))
             edit_btn.clicked.connect(
                 lambda _, rid=r["id"]: self._edit_company(rid)
             )
 
-            toggle_btn = QPushButton("⏸" if r["is_active"] else "▶")
+            toggle_btn = QPushButton(tr("company_toggle_pause") if r["is_active"] else tr("company_toggle_play"))
             toggle_btn.setToolTip(tr("company_tooltip_toggle"))
             toggle_btn.setStyleSheet(_btn_ss(_C["warning_bg"], _C["warning_border"]))
             toggle_btn.clicked.connect(
                 lambda _, rid=r["id"]: self._toggle(rid)
             )
 
-            del_btn = QPushButton("🗑")
+            del_btn = QPushButton(tr("company_delete_icon"))
             del_btn.setToolTip(tr("company_tooltip_delete"))
             del_btn.setStyleSheet(_btn_ss(_C["danger_bg"], _C["danger_hover"]))
             del_btn.clicked.connect(
@@ -332,7 +359,7 @@ class CompaniesDialog(QDialog):
             btns_lay.addWidget(toggle_btn)
             btns_lay.addWidget(del_btn)
             self._table.setCellWidget(ri, 3, btns_widget)
-            self._table.setRowHeight(ri, 42)
+            self._table.setRowHeight(ri, COMPANIES_DLG_ROW_H)
 
     def _new_company(self):
         self._editing_id = None
@@ -342,7 +369,7 @@ class CompaniesDialog(QDialog):
         self._inp_notes.clear()
         self._color = _C["accent"]
         self._color_preview.setStyleSheet(
-            f"background: {self._color}; border-radius: 5px;"
+            f"background: {self._color}; border-radius: {COMPANIES_DLG_COLOR_PREVIEW_RADIUS}px;"
             f"border: 1px solid {_C['border_med']};"
         )
         self._inp_name.setFocus()
@@ -358,7 +385,7 @@ class CompaniesDialog(QDialog):
         self._inp_notes.setPlainText(row["notes"] or "")
         self._color = row["color"] or _C["accent"]
         self._color_preview.setStyleSheet(
-            f"background: {self._color}; border-radius: 5px;"
+            f"background: {self._color}; border-radius: {COMPANIES_DLG_COLOR_PREVIEW_RADIUS}px;"
             f"border: 1px solid {_C['border_med']};"
         )
 
@@ -408,7 +435,7 @@ class CompaniesDialog(QDialog):
         self._inp_notes.clear()
         self._color = _C["accent"]
         self._color_preview.setStyleSheet(
-            f"background: {self._color}; border-radius: 5px;"
+            f"background: {self._color}; border-radius: {COMPANIES_DLG_COLOR_PREVIEW_RADIUS}px;"
             f"border: 1px solid {_C['border_med']};"
         )
 

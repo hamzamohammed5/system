@@ -78,10 +78,8 @@ class AccountsTreePanel(SafeConnMixin, QWidget, WidgetMixin):
 
         left = QWidget()
         ll   = QVBoxLayout(left)
-        ll.setContentsMargins(
-            ACCOUNTS_TREE_LEFT_MARGIN_L, ACCOUNTS_TREE_LEFT_MARGIN_T,
-            ACCOUNTS_TREE_LEFT_MARGIN_R, ACCOUNTS_TREE_LEFT_MARGIN_B,
-        )
+        ll.setContentsMargins(ACCOUNTS_TREE_LEFT_MARGIN_L, ACCOUNTS_TREE_LEFT_MARGIN_T,
+                              ACCOUNTS_TREE_LEFT_MARGIN_R, ACCOUNTS_TREE_LEFT_MARGIN_B)
         ll.setSpacing(ACCOUNTS_TREE_LEFT_SPACING)
 
         # ── هيدر القسم ──
