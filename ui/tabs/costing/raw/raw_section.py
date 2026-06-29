@@ -11,6 +11,7 @@ from ui.widgets.base.section import BaseSection
 from .raw_input_panel import RawInputPanel
 from .raw_table_panel import RawTablePanel
 from PyQt5.QtWidgets import QWidget
+from ui.constants import RAW_SECTION_LIST_MIN_W
 
 class RawSection(BaseSection):
     """
@@ -22,7 +23,7 @@ class RawSection(BaseSection):
     """
 
     FORM_POSITION = "top"
-    LIST_MIN_W    = 400
+    LIST_MIN_W    = RAW_SECTION_LIST_MIN_W
     CONNECT_BUS   = False    # كل panel بيتعامل مع bus بنفسه
 
     def _create_form(self):

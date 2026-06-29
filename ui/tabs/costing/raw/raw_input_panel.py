@@ -10,6 +10,7 @@ from PyQt5.QtWidgets import QWidget, QHBoxLayout, QLabel, QSizePolicy
 from PyQt5.QtCore import Qt
 
 from ui.widgets.base.crud_form         import BaseCrudForm
+from ui.widgets.core.widget_mixin      import WidgetMixin
 
 from ui.widgets.panels.form_fields import (labeled_widget, spin_field)
 from ui.widgets.panels.form_badges import ResultBadge
@@ -20,8 +21,15 @@ from ui.widgets.forms.inputs           import RequiredLineEdit, AmountSpinBox
 from ui.widgets.combo.category         import CategoryCombo
 from ui.tabs.costing.shared.raw_variants_panel import _RawVariantsPanel
 from ui.widgets.core.i18n              import tr
-from ui.theme                          import _C
 from ui.font                           import FS_XS
+from ui.constants import (
+    INPUT_HEIGHT,
+    RAW_PRICE_INPUT_W,
+    RAW_QTY_INPUT_W,
+    RAW_HINT_BORDER_RADIUS,
+    RAW_HINT_PAD_V,
+    RAW_HINT_PAD_H,
+)
 
 
 def _live_price(inp_price) -> float:
@@ -32,7 +40,7 @@ def _live_price(inp_price) -> float:
         return 0.0
 
 
-class RawInputPanel(BaseCrudForm):
+class RawInputPanel(BaseCrudForm, WidgetMixin):
     """
     فورم الخامة — يرث من BaseCrudForm.
 
@@ -50,9 +58,11 @@ class RawInputPanel(BaseCrudForm):
 
     def __init__(self, conn, parent=None):
         super().__init__(conn, parent)
+        self._init_widget_mixin(lang=False, data=False)
         # ربط live preview بعد بناء الـ fields
         self.inp_price.textChanged.connect(self._on_price_changed)
         self.sp_total_qty.valueChanged.connect(self._update_hint)
+        self._refresh_style()
 
     # ══════════════════════════════════════════════════════
     # بناء الحقول
@@ -60,20 +70,16 @@ class RawInputPanel(BaseCrudForm):
 
     def _build_fields(self, group: FormGroup):
         self.inp_name    = RequiredLineEdit(tr("raw_name_required"))
-        self.inp_name.setMinimumHeight(32)
+        self.inp_name.setMinimumHeight(INPUT_HEIGHT)
 
         self.inp_price   = AmountSpinBox(dec=2)
-        self.inp_price.setFixedWidth(120)
+        self.inp_price.setFixedWidth(RAW_PRICE_INPUT_W)
 
         self.sp_total_qty = spin_field(max_=999999, dec=4)
-        self.sp_total_qty.setFixedWidth(120)
+        self.sp_total_qty.setFixedWidth(RAW_QTY_INPUT_W)
         self.sp_total_qty.setToolTip(tr("raw_qty_tooltip"))
 
         self.lbl_hint = QLabel()
-        self.lbl_hint.setStyleSheet(
-            f"color: {_C['info']}; font-size: {FS_XS}px;"
-            f"background: {_C['info_bg']}; border-radius: 4px; padding: 4px 8px;"
-        )
         self.lbl_hint.setWordWrap(True)
 
         self.cmb_category = CategoryCombo(self.conn, scope="raw")
@@ -140,7 +146,7 @@ class RawInputPanel(BaseCrudForm):
         )
         self._variants.load_item(new_id, data["price"])
         # إبقاء الفورم في وضع التعديل لإضافة variants
-        self.enter_edit_mode(new_id, f"─── {tr('raw_add_variants_mode').format(name=data['name'])} ───")
+        self.enter_edit_mode(new_id, tr("mode_label_wrap").format(content=tr("raw_add_variants_mode").format(name=data["name"])))
         self.btn_add.setVisible(False)
         self.btn_save.setVisible(True)
         self.btn_cancel.setVisible(True)

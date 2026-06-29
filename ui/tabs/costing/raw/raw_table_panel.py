@@ -41,9 +41,9 @@ class RawTablePanel(BaseListPanel, SharedOpsMixin):
     COLUMNS            = [tr("raw_col_id"), tr("raw_col_name"), tr("raw_col_category"),
                            tr("raw_col_total_price"), tr("raw_col_qty"), tr("raw_col_unit_price")]
     STRETCH_COL        = 1
-    EMPTY_ICON         = "🧱"
+    EMPTY_ICON         = tr("raw_empty_icon")
     EMPTY_TITLE        = tr("no_raws")
-    LIST_TITLE         = f"─── {tr('saved_raws')} ───"
+    LIST_TITLE         = tr("raw_table_list_title")
     ADD_TEXT           = ""
     SHOW_CATEGORY      = True
     FILTER_SCOPE       = "raw"
@@ -79,7 +79,7 @@ class RawTablePanel(BaseListPanel, SharedOpsMixin):
             str(row.get("name", "")).strip().lower() in self._published_names
         )
 
-        prefix = "🔗 " if is_shared else ("📤 " if is_published else "")
+        prefix = tr("table_shared_prefix") if is_shared else (tr("table_published_prefix") if is_published else "")
         color = (
                 SHARED_COLOR()    if is_shared    else
                 PUBLISHED_COLOR() if is_published else
@@ -91,7 +91,7 @@ class RawTablePanel(BaseListPanel, SharedOpsMixin):
         unit   = (price / float(tq)) if (tq and float(tq) > 0 and is_shared) \
                  else raw_unit_price(row)
 
-        id_text = "🔗" if is_shared else ("📤" if is_published else str(row.get("id", "")))
+        id_text = tr("table_shared_icon") if is_shared else (tr("table_published_icon") if is_published else str(row.get("id", "")))
         id_item = make_item(id_text, user_data=row.get("id"))
         table.setItem(r, 0, id_item)
         table.setItem(r, 1, colored_item(prefix + row.get("name", ""), color=color))
