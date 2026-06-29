@@ -24,10 +24,10 @@ from PyQt5.QtCore import Qt
 from services.shared.item_service       import ItemService
 from ui.widgets.dialogs.confirm         import confirm_delete
 from ui.widgets.core.conn               import LiveConnMixin
+from ui.widgets.core.widget_mixin       import WidgetMixin
 from ui.widgets.core.i18n              import tr
 from ui.widgets.components.notification import BaseWarningBar
 from ui.tabs.costing.shared.bom_tree    import BomTree
-from ui.theme                           import _C
 from ui.widgets.core.events             import bus, emit_company_data_changed
 
 from .product_form  import _FormPanel
@@ -35,26 +35,21 @@ from .product_table import _ProductTable
 from ._catalog_provider import build_product_catalog
 from ._orphan_handler   import _OrphanHandler
 
-
-def _splitter_style() -> str:
-    """style موحد للـ QSplitter مربوط بـ _C."""
-    return f"""
-        QSplitter::handle {{
-            background: {_C['border']};
-            border-top: 1px solid {_C['border_med']};
-        }}
-        QSplitter::handle:hover {{ background: {_C['accent_mid']}; }}
-        QSplitter::handle:pressed {{ background: {_C['accent']}; }}
-    """
+from ui.constants import (
+    PRODUCT_MAIN_SPLITTER_HANDLE_W,
+    PRODUCT_MAIN_SPLITTER_SIZES,
+)
 
 
-class _ProductMainPanel(QWidget, LiveConnMixin):
+class _ProductMainPanel(QWidget, LiveConnMixin, WidgetMixin):
     def __init__(self, conn, product_type: str, parent=None):
         super().__init__(parent)
+        self._init_widget_mixin(lang=False, data=False)
         self.conn         = conn
         self.product_type = product_type
         self._orphan      = _OrphanHandler(parent=self)
         self._build()
+        self._refresh_style()
         # [Fix D1] named slots بدل lambda لتجنب memory leaks
         bus.company_data_changed.connect(self._on_company_data_changed)
 
@@ -68,14 +63,27 @@ class _ProductMainPanel(QWidget, LiveConnMixin):
         except Exception:
             return {"raw": [], "semi": [], "labor_op": [], "machine_op": []}
 
+    def _refresh_style(self, *_):
+        """يُطبق stylesheet الـ splitter عند تغيير الثيم."""
+        from ui.theme import _C
+        if hasattr(self, '_splitter'):
+            self._splitter.setStyleSheet(f"""
+                QSplitter::handle {{
+                    background: {_C['border']};
+                    border-top: 1px solid {_C['border_med']};
+                }}
+                QSplitter::handle:hover {{ background: {_C['accent_mid']}; }}
+                QSplitter::handle:pressed {{ background: {_C['accent']}; }}
+            """)
+
     def _build(self):
         root = QVBoxLayout(self)
         root.setContentsMargins(0, 0, 0, 0)
         root.setSpacing(0)
 
         splitter = QSplitter(Qt.Vertical)
-        splitter.setHandleWidth(6)
-        splitter.setStyleSheet(_splitter_style())
+        splitter.setHandleWidth(PRODUCT_MAIN_SPLITTER_HANDLE_W)
+        self._splitter = splitter
 
         self._form = _FormPanel(self.conn, self.product_type, self._get_catalog)
         # [Fix D1] named slot لتحديث الـ catalog
@@ -89,8 +97,8 @@ class _ProductMainPanel(QWidget, LiveConnMixin):
         self._warning = BaseWarningBar(
             on_fix=self._fix_orphans,
             on_edit=self._edit_selected,
-            fix_text=f"🗑️ {tr('delete_orphan_components')}",
-            edit_text=f"✏️ {tr('edit')}",
+            fix_text=tr("warning_bar_fix_text"),
+            edit_text=tr("warning_bar_edit_text"),
         )
         mid_layout.addWidget(self._warning)
 
@@ -108,7 +116,7 @@ class _ProductMainPanel(QWidget, LiveConnMixin):
         splitter.addWidget(self._form)
         splitter.addWidget(mid_widget)
         splitter.addWidget(self._bom_tree)
-        splitter.setSizes([280, 220, 250])
+        splitter.setSizes(list(PRODUCT_MAIN_SPLITTER_SIZES))
         splitter.setCollapsible(0, True)
         splitter.setCollapsible(1, False)
         splitter.setCollapsible(2, True)
