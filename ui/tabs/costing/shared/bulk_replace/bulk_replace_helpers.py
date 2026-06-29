@@ -15,6 +15,14 @@ from db.costing.operations_repo import fetch_all_labor_ops, fetch_all_machine_op
 from models.costing             import calc_cost
 from ui.theme import _C
 from ui.widgets.core.i18n       import tr
+from ui.widgets.core.widget_mixin import WidgetMixin
+from ui.constants import (
+    PRODUCT_ROW_MARGIN_H, PRODUCT_ROW_MARGIN_V, PRODUCT_ROW_SPACING,
+    PRODUCT_ROW_CHK_W, PRODUCT_ROW_TYPE_ICON_W,
+    PRODUCT_ROW_SP_W, PRODUCT_ROW_SP_MIN_H, PRODUCT_ROW_RADIUS,
+    SPACING_MD,
+)
+from ui.font import FS_BASE, FS_SM, FS_XS
 
 
 # ══════════════════════════════════════════════════════════
@@ -96,7 +104,7 @@ def fetch_affected_products(conn, child_type: str, child_id: int) -> list:
 # ProductRow — صف منتج واحد في اللوحة
 # ══════════════════════════════════════════════════════════
 
-class ProductRow(QFrame):
+class ProductRow(QFrame, WidgetMixin):
     """
     صف يعرض معلومات منتج واحد مع:
       - checkbox للاختيار
@@ -107,6 +115,7 @@ class ProductRow(QFrame):
     def __init__(self, product: dict, parent=None):
         super().__init__(parent)
         self._product = product
+        self._init_widget_mixin(data=False)
         self._build()
 
     def _build(self):
@@ -114,36 +123,37 @@ class ProductRow(QFrame):
         self._apply_style(checked=True)
 
         lay = QHBoxLayout(self)
-        lay.setContentsMargins(10, 8, 10, 8)
-        lay.setSpacing(10)
+        lay.setContentsMargins(PRODUCT_ROW_MARGIN_H, PRODUCT_ROW_MARGIN_V,
+                               PRODUCT_ROW_MARGIN_H, PRODUCT_ROW_MARGIN_V)
+        lay.setSpacing(PRODUCT_ROW_SPACING)
 
         # ── checkbox ──
         self.chk = QCheckBox()
         self.chk.setChecked(True)
-        self.chk.setFixedWidth(20)
+        self.chk.setFixedWidth(PRODUCT_ROW_CHK_W)
         self.chk.toggled.connect(self._on_toggle)
         lay.addWidget(self.chk)
 
         # ── نوع المنتج ──
         type_icon = "🔧" if self._product["type"] == "semi" else "🏭"
         lbl_type = QLabel(type_icon)
-        lbl_type.setFixedWidth(20)
+        lbl_type.setFixedWidth(PRODUCT_ROW_TYPE_ICON_W)
         lbl_type.setAlignment(Qt.AlignCenter)
         lay.addWidget(lbl_type)
 
         # ── الاسم والتصنيف ──
         from PyQt5.QtWidgets import QVBoxLayout as VL
         info = VL()
-        info.setSpacing(2)
+        info.setSpacing(SPACING_MD // 4)
         self.lbl_name = QLabel(self._product["name"])
         self.lbl_name.setStyleSheet(
-            f"font-weight:bold; font-size:12px; color:{_C['text_primary']};"
+            f"font-weight:bold; font-size:{FS_BASE}px; color:{_C['text_primary']};"
         )
         lbl_cat = QLabel(
             f"🏷 {self._product['category_name']}  "
             f"│  💰 {self._product['cost']:.2f} {tr('currency_abbr')}"
         )
-        lbl_cat.setStyleSheet(f"color:{_C['text_sec']}; font-size:10px;")
+        lbl_cat.setStyleSheet(f"color:{_C['text_sec']}; font-size:{FS_XS}px;")
         info.addWidget(self.lbl_name)
         info.addWidget(lbl_cat)
         lay.addLayout(info, stretch=1)
@@ -154,12 +164,21 @@ class ProductRow(QFrame):
         self.sp_qty.setRange(0.0001, 999999)
         self.sp_qty.setDecimals(4)
         self.sp_qty.setValue(self._product["qty"])
-        self.sp_qty.setFixedWidth(90)
-        self.sp_qty.setMinimumHeight(28)
+        self.sp_qty.setFixedWidth(PRODUCT_ROW_SP_W)
+        self.sp_qty.setMinimumHeight(PRODUCT_ROW_SP_MIN_H)
         self.sp_qty.setToolTip(
             f"{tr('qty')} — {tr('element')}"
         )
         lay.addWidget(self.sp_qty)
+
+    def _refresh_style(self, *_):
+        checked = self.chk.isChecked() if hasattr(self, 'chk') else True
+        self._apply_style(checked=checked)
+        if hasattr(self, 'lbl_name'):
+            color = _C['text_primary'] if checked else _C['text_disabled']
+            self.lbl_name.setStyleSheet(
+                f"font-weight:bold; font-size:{FS_BASE}px; color:{color};"
+            )
 
     def _apply_style(self, checked: bool):
         if checked:
@@ -167,7 +186,7 @@ class ProductRow(QFrame):
                 QFrame {{
                     background: {_C['bg_input']};
                     border: 1px solid {_C['border']};
-                    border-radius: 6px;
+                    border-radius: {PRODUCT_ROW_RADIUS}px;
                     margin: 1px 0;
                 }}
                 QFrame:hover {{
@@ -180,7 +199,7 @@ class ProductRow(QFrame):
                 QFrame {{
                     background: {_C['bg_surface']};
                     border: 1px solid {_C['border']};
-                    border-radius: 6px;
+                    border-radius: {PRODUCT_ROW_RADIUS}px;
                     margin: 1px 0;
                 }}
             """)
@@ -191,7 +210,7 @@ class ProductRow(QFrame):
         if hasattr(self, 'lbl_name'):
             color = _C['text_primary'] if checked else _C['text_disabled']
             self.lbl_name.setStyleSheet(
-                f"font-weight:bold; font-size:12px; color:{color};"
+                f"font-weight:bold; font-size:{FS_BASE}px; color:{color};"
             )
 
     @property

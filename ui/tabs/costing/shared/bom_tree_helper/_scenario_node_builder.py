@@ -74,7 +74,7 @@ def _type_label(child_type: str) -> str:
     if base_key is None:
         return ""
     icon_key = f"bom_type_label_{child_type}"
-    return t(icon_key).format(label=t(base_key))
+    return tr(icon_key).format(label=tr(base_key))
 
 
 def _type_color(child_type: str, colors: dict) -> str:
@@ -101,8 +101,8 @@ def build_scenario_node(sc: dict) -> QTreeWidgetItem:
     sc_name    = sc["name"]
     is_default = bool(sc["is_default"])
 
-    star   = t("bom_scenario_star_icon") if is_default else t("bom_scenario_normal_icon")
-    suffix = t("bom_scenario_default_suffix") if is_default else ""
+    star   = tr("bom_scenario_star_icon") if is_default else tr("bom_scenario_normal_icon")
+    suffix = tr("bom_scenario_default_suffix") if is_default else ""
     label  = f"{star}{sc_name}{suffix}"
 
     node = QTreeWidgetItem([label, "", "", "", "", "", ""])
@@ -163,7 +163,7 @@ def build_component_node(
     total_cost = unit_cost * total_eff
 
     qty_str     = _fmt_qty(qty)
-    waste_str   = f"{waste_pct:.1f} %" if waste_pct > 0 else t("bom_qty_no_value")
+    waste_str   = f"{waste_pct:.1f} %" if waste_pct > 0 else tr("bom_qty_no_value")
     eff_qty_str = _fmt_qty(eff_qty) if waste_pct > 0 else qty_str
     unit_c_str  = f"{unit_cost:.4f}"
     total_c_str = f"{total_cost:.4f}"
@@ -177,22 +177,22 @@ def build_component_node(
 
     # tooltips
     node.setToolTip(0, name)
-    node.setToolTip(1, t("bom_tooltip_qty_entered").format(qty=qty_str))
+    node.setToolTip(1, tr("bom_tooltip_qty_entered").format(qty=qty_str))
     if waste_pct > 0:
         node.setToolTip(
             2,
-            t("bom_tooltip_waste").format(pct=f"{waste_pct:.1f}", qty=qty_str, eff_qty=eff_qty_str)
+            tr("bom_tooltip_waste").format(pct=f"{waste_pct:.1f}", qty=qty_str, eff_qty=eff_qty_str)
         )
-        node.setToolTip(3, t("bom_tooltip_effective_qty").format(eff_qty=eff_qty_str))
-    node.setToolTip(4, t("bom_tooltip_unit_cost").format(cost=unit_c_str))
+        node.setToolTip(3, tr("bom_tooltip_effective_qty").format(eff_qty=eff_qty_str))
+    node.setToolTip(4, tr("bom_tooltip_unit_cost").format(cost=unit_c_str))
     node.setToolTip(
         5,
-        t("bom_tooltip_total_cost").format(unit_cost=unit_c_str, eff_qty=eff_qty_str, total_cost=total_c_str)
+        tr("bom_tooltip_total_cost").format(unit_cost=unit_c_str, eff_qty=eff_qty_str, total_cost=total_c_str)
     )
     if child_type == "machine_op" and machine_op_row_id is not None:
         node.setToolTip(
             4,
-            t("bom_tooltip_machine_op_row_cost").format(row_id=machine_op_row_id, cost=unit_c_str)
+            tr("bom_tooltip_machine_op_row_cost").format(row_id=machine_op_row_id, cost=unit_c_str)
         )
 
     # ألوان

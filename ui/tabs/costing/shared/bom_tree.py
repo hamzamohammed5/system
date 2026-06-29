@@ -23,8 +23,16 @@ from services.costing.bom_tree_service import BomTreeService
 from ui.theme import _C
 from ui.widgets.core.i18n          import tr
 from ui.widgets.dialogs.confirm    import confirm_delete
-from ui.widgets.core.events import bus
+from ui.widgets.core.widget_mixin  import WidgetMixin
 from ui.font import FS_XS, FS_SM, FS_MD
+from ui.constants import (
+    BOM_TREE_BTN_MIN_H, BOM_TREE_BTN_RADIUS, BOM_TREE_BTN_PAD_H,
+    BOM_TREE_BTN_PAD_V, BOM_TREE_LEGEND_RADIUS, BOM_TREE_LEGEND_PAD_H,
+    BOM_TREE_LEGEND_PAD_V, BOM_TREE_HDR_PAD_H, BOM_TREE_HDR_PAD_V,
+    BOM_TREE_COL_QTY_W, BOM_TREE_COL_WASTE_W, BOM_TREE_COL_EFF_QTY_W,
+    BOM_TREE_COL_COST_UNIT_W, BOM_TREE_COL_TOTAL_COST_W, BOM_TREE_COL_TYPE_W,
+    BOM_TREE_MIN_SECTION_SIZE,
+)
 
 from ui.tabs.costing.shared.bom_tree_helper._scenario_node_builder import (
     BomNodeRawData,
@@ -33,14 +41,13 @@ from ui.tabs.costing.shared.bom_tree_helper._scenario_node_builder import (
 )
 
 
-class BomTree(QWidget):
+class BomTree(QWidget, WidgetMixin):
     def __init__(self, parent=None):
         super().__init__(parent)
         self._pid  : int | None = None
         self._conn = None
         self._build()
-        # [Fix #10] ربط bus.theme_changed لتحديث الـ stylesheet ديناميكياً
-        bus.theme_changed.connect(self._apply_theme)
+        self._init_widget_mixin(lang=False, data=False)
 
     def _build(self):
         layout = QVBoxLayout(self)
@@ -60,7 +67,8 @@ class BomTree(QWidget):
         )
         lbl_legend.setStyleSheet(
             f"font-size:{FS_XS}px; color:{_C['orange']}; background:{_C['warning_bg']};"
-            f"border:1px solid {_C['warning_border']}; border-radius:3px; padding:2px 6px;"
+            f"border:1px solid {_C['warning_border']}; border-radius:{BOM_TREE_LEGEND_RADIUS}px;"
+            f"padding:{BOM_TREE_LEGEND_PAD_V}px {BOM_TREE_LEGEND_PAD_H}px;"
         )
 
         self.btn_expand   = QPushButton(f"⊞ {tr('expand_all')}")
@@ -69,7 +77,7 @@ class BomTree(QWidget):
 
         for btn in (self.btn_expand, self.btn_collapse, self.btn_del_node):
             btn.setEnabled(False)
-            btn.setMinimumHeight(28)
+            btn.setMinimumHeight(BOM_TREE_BTN_MIN_H)
 
         self.btn_expand.clicked.connect(lambda: self.tree.expandAll())
         self.btn_collapse.clicked.connect(lambda: self.tree.collapseAll())
@@ -98,13 +106,13 @@ class BomTree(QWidget):
         hh.setSectionResizeMode(0, QHeaderView.Stretch)
         for col in range(1, 7):
             hh.setSectionResizeMode(col, QHeaderView.Interactive)
-        hh.setMinimumSectionSize(50)
-        self.tree.setColumnWidth(1, 65)
-        self.tree.setColumnWidth(2, 65)
-        self.tree.setColumnWidth(3, 95)
-        self.tree.setColumnWidth(4, 90)
-        self.tree.setColumnWidth(5, 95)
-        self.tree.setColumnWidth(6, 130)
+        hh.setMinimumSectionSize(BOM_TREE_MIN_SECTION_SIZE)
+        self.tree.setColumnWidth(1, BOM_TREE_COL_QTY_W)
+        self.tree.setColumnWidth(2, BOM_TREE_COL_WASTE_W)
+        self.tree.setColumnWidth(3, BOM_TREE_COL_EFF_QTY_W)
+        self.tree.setColumnWidth(4, BOM_TREE_COL_COST_UNIT_W)
+        self.tree.setColumnWidth(5, BOM_TREE_COL_TOTAL_COST_W)
+        self.tree.setColumnWidth(6, BOM_TREE_COL_TYPE_W)
 
         self.tree.setHorizontalScrollMode(QAbstractItemView.ScrollPerPixel)
         self.tree.setEditTriggers(QTreeWidget.NoEditTriggers)
@@ -116,7 +124,7 @@ class BomTree(QWidget):
         layout.addWidget(self.tree)
 
         # تطبيق الـ theme الأولي
-        self._apply_theme()
+        self._refresh_style()
 
     @staticmethod
     def _make_danger_btn(text: str) -> QPushButton:
@@ -126,11 +134,11 @@ class BomTree(QWidget):
                 background: {_C['danger_bg']};
                 color: {_C['danger']};
                 border: 1px solid {_C['danger_border']};
-                border-radius: 4px;
-                padding: 2px 8px;
+                border-radius: {BOM_TREE_BTN_RADIUS}px;
+                padding: {BOM_TREE_BTN_PAD_V}px {BOM_TREE_BTN_PAD_H}px;
                 font-size: {FS_SM}px;
             }}
-            QPushButton:hover {{ background: {_C['danger']}; color: white; }}
+            QPushButton:hover {{ background: {_C['danger']}; color: {_C['btn_primary_text']}; }}
             QPushButton:disabled {{
                 background: {_C['bg_surface']};
                 color: {_C['text_disabled']};
@@ -140,7 +148,7 @@ class BomTree(QWidget):
         return btn
 
     # [Fix #10] دالة تطبيق الـ theme — تُستدعى عند البناء وعند تغيير الثيم
-    def _apply_theme(self, _=None):
+    def _refresh_style(self, _=None):
         """يُطبق الـ stylesheet عند تغيير الثيم."""
         if hasattr(self, "tree"):
             self.tree.setStyleSheet(f"""
@@ -162,7 +170,8 @@ class BomTree(QWidget):
                 f"QHeaderView::section {{"
                 f"  background:{_C['bg_surface_2']}; color:{_C['text_sec']};"
                 f"  border:none; border-bottom:1px solid {_C['border']};"
-                f"  padding:4px 6px; font-weight:bold; font-size:{FS_SM}px;"
+                f"  padding:{BOM_TREE_HDR_PAD_V}px {BOM_TREE_HDR_PAD_H}px;"
+                f"  font-weight:bold; font-size:{FS_SM}px;"
                 f"}}"
             )
         if hasattr(self, "btn_del_node"):
@@ -171,11 +180,11 @@ class BomTree(QWidget):
                     background: {_C['danger_bg']};
                     color: {_C['danger']};
                     border: 1px solid {_C['danger_border']};
-                    border-radius: 4px;
-                    padding: 2px 8px;
+                    border-radius: {BOM_TREE_BTN_RADIUS}px;
+                    padding: {BOM_TREE_BTN_PAD_V}px {BOM_TREE_BTN_PAD_H}px;
                     font-size: {FS_SM}px;
                 }}
-                QPushButton:hover {{ background: {_C['danger']}; color: white; }}
+                QPushButton:hover {{ background: {_C['danger']}; color: {_C['btn_primary_text']}; }}
                 QPushButton:disabled {{
                     background: {_C['bg_surface']};
                     color: {_C['text_disabled']};

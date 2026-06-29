@@ -109,7 +109,7 @@ class DbScenariosMixin:
             emit_company_data_changed()
             return new_id
         except Exception as e:
-            QMessageBox.warning(None, t("error"), str(e))
+            QMessageBox.warning(None, tr("error"), str(e))
             return None
 
     def _db_add_new(self, name: str) -> int | None:

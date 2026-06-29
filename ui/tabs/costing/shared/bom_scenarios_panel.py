@@ -12,13 +12,24 @@ from PyQt5.QtCore import Qt, pyqtSignal
 
 from ui.theme import _C
 from ui.widgets.core.i18n import tr
+from ui.widgets.core.widget_mixin import WidgetMixin
 from ui.font import FS_XS, FS_SM, FS_LG
+from ui.constants import (
+    SCENARIOS_PANEL_H, SCENARIOS_PANEL_MARGIN_H, SCENARIOS_PANEL_MARGIN_V,
+    SCENARIOS_PANEL_SPACING, SCENARIOS_PANEL_CMB_MIN_W, SCENARIOS_PANEL_CMB_MIN_H,
+    SCENARIOS_PANEL_CMB_RADIUS, SCENARIOS_PANEL_CMB_PAD_V, SCENARIOS_PANEL_CMB_PAD_H,
+    SCENARIOS_PANEL_BTN_MIN_H, SCENARIOS_PANEL_BTN_RADIUS, SCENARIOS_PANEL_BTN_PAD_V,
+    SCENARIOS_PANEL_BTN_PAD_H, SCENARIOS_PANEL_FRAME_RADIUS,
+    SCENARIOS_PANEL_BTN_DEFAULT_W, SCENARIOS_PANEL_BTN_RENAME_W,
+    SCENARIOS_PANEL_BTN_CLONE_W, SCENARIOS_PANEL_BTN_ADD_W, SCENARIOS_PANEL_BTN_DEL_W,
+)
+
 
 from .bom_scenarios._memory_scenarios import MemoryScenariosMixin
 from .bom_scenarios._db_scenarios     import DbScenariosMixin
 
 
-class _BomScenariosPanel(QFrame, MemoryScenariosMixin, DbScenariosMixin):
+class _BomScenariosPanel(QFrame, MemoryScenariosMixin, DbScenariosMixin, WidgetMixin):
     """
     لوحة أفقية تعرض السيناريوهات وتتيح التبديل بينها.
 
@@ -37,6 +48,8 @@ class _BomScenariosPanel(QFrame, MemoryScenariosMixin, DbScenariosMixin):
         self._in_memory  = True
         self._build()
         self._init_memory_scenario()
+        self._init_widget_mixin(lang=False, data=False)
+        self._refresh_style()
 
     # ══════════════════════════════════════════════════════
     # بناء الواجهة
@@ -45,11 +58,12 @@ class _BomScenariosPanel(QFrame, MemoryScenariosMixin, DbScenariosMixin):
     def _build(self):
         self.setFrameShape(QFrame.StyledPanel)
         self._apply_frame_style()
-        self.setFixedHeight(46)
+        self.setFixedHeight(SCENARIOS_PANEL_H)
 
         lay = QHBoxLayout(self)
-        lay.setContentsMargins(8, 4, 8, 4)
-        lay.setSpacing(8)
+        lay.setContentsMargins(SCENARIOS_PANEL_MARGIN_H, SCENARIOS_PANEL_MARGIN_V,
+                               SCENARIOS_PANEL_MARGIN_H, SCENARIOS_PANEL_MARGIN_V)
+        lay.setSpacing(SCENARIOS_PANEL_SPACING)
 
         lbl_icon = QLabel("🎯")
         lbl_icon.setStyleSheet(f"background:transparent; border:none; font-size:{FS_LG}px;")
@@ -63,8 +77,8 @@ class _BomScenariosPanel(QFrame, MemoryScenariosMixin, DbScenariosMixin):
         lay.addWidget(lbl)
 
         self.cmb_scenarios = QComboBox()
-        self.cmb_scenarios.setMinimumWidth(200)
-        self.cmb_scenarios.setMinimumHeight(30)
+        self.cmb_scenarios.setMinimumWidth(SCENARIOS_PANEL_CMB_MIN_W)
+        self.cmb_scenarios.setMinimumHeight(SCENARIOS_PANEL_CMB_MIN_H)
         self._apply_combo_style()
         self.cmb_scenarios.currentIndexChanged.connect(self._on_scenario_changed)
         lay.addWidget(self.cmb_scenarios)
@@ -80,7 +94,7 @@ class _BomScenariosPanel(QFrame, MemoryScenariosMixin, DbScenariosMixin):
         lay.addStretch()
 
         self.btn_set_default = self._make_btn(
-            f"⭐ {tr('default_scenario')}", 100,
+            f"⭐ {tr('default_scenario')}", SCENARIOS_PANEL_BTN_DEFAULT_W,
             _C['warning_bg'], _C['warning'], _C['warning_border'], _C['warning_bg'],
         )
         self.btn_set_default.setToolTip(tr("set_as_default"))
@@ -88,7 +102,7 @@ class _BomScenariosPanel(QFrame, MemoryScenariosMixin, DbScenariosMixin):
         lay.addWidget(self.btn_set_default)
 
         btn_rename = self._make_btn(
-            f"✏️ {tr('edit')}", 80,
+            f"✏️ {tr('edit')}", SCENARIOS_PANEL_BTN_RENAME_W,
             _C['orange_bg'], _C['orange'], _C['orange_border'], _C['orange_bg'],
         )
         btn_rename.setToolTip(tr("rename_scenario"))
@@ -96,7 +110,7 @@ class _BomScenariosPanel(QFrame, MemoryScenariosMixin, DbScenariosMixin):
         lay.addWidget(btn_rename)
 
         btn_clone = self._make_btn(
-            f"📋 {tr('clone')}", 70,
+            f"📋 {tr('clone')}", SCENARIOS_PANEL_BTN_CLONE_W,
             _C['info_bg'], _C['info'], _C['info_border'], _C['info_bg'],
         )
         btn_clone.setToolTip(tr("clone_scenario"))
@@ -104,7 +118,7 @@ class _BomScenariosPanel(QFrame, MemoryScenariosMixin, DbScenariosMixin):
         lay.addWidget(btn_clone)
 
         btn_add = self._make_btn(
-            f"➕ {tr('new')}", 70,
+            f"➕ {tr('new')}", SCENARIOS_PANEL_BTN_ADD_W,
             _C['success_bg'], _C['success'], _C['success_border'], _C['success_bg'],
         )
         btn_add.setToolTip(tr("add_scenario"))
@@ -112,19 +126,25 @@ class _BomScenariosPanel(QFrame, MemoryScenariosMixin, DbScenariosMixin):
         lay.addWidget(btn_add)
 
         btn_del = self._make_btn(
-            "🗑", 36,
+            "🗑", SCENARIOS_PANEL_BTN_DEL_W,
             _C['danger_bg'], _C['danger'], _C['danger_border'], _C['danger_bg'],
         )
         btn_del.setToolTip(tr("delete"))
         btn_del.clicked.connect(self._delete)
         lay.addWidget(btn_del)
 
+    def _refresh_style(self, *_):
+        """يُطبق الـ stylesheet عند تغيير الثيم أو حجم الخط."""
+        self._apply_frame_style()
+        if hasattr(self, "cmb_scenarios"):
+            self._apply_combo_style()
+
     def _apply_frame_style(self):
         self.setStyleSheet(f"""
             QFrame {{
                 background: {_C['purple_bg']};
                 border: 1px solid {_C['purple_border']};
-                border-radius: 6px;
+                border-radius: {SCENARIOS_PANEL_FRAME_RADIUS}px;
             }}
         """)
 
@@ -133,8 +153,8 @@ class _BomScenariosPanel(QFrame, MemoryScenariosMixin, DbScenariosMixin):
             QComboBox {{
                 background: {_C['bg_input']};
                 border: 1px solid {_C['purple_border']};
-                border-radius: 4px;
-                padding: 2px 8px;
+                border-radius: {SCENARIOS_PANEL_CMB_RADIUS}px;
+                padding: {SCENARIOS_PANEL_CMB_PAD_V}px {SCENARIOS_PANEL_CMB_PAD_H}px;
                 font-size: {FS_SM}px;
                 color: {_C['purple']};
             }}
@@ -146,17 +166,17 @@ class _BomScenariosPanel(QFrame, MemoryScenariosMixin, DbScenariosMixin):
     def _make_btn(text: str, width: int,
                   bg: str, fg: str, border: str, hover: str) -> QPushButton:
         btn = QPushButton(text)
-        btn.setMinimumHeight(28)
+        btn.setMinimumHeight(SCENARIOS_PANEL_BTN_MIN_H)
         btn.setFixedWidth(width)
         btn.setStyleSheet(f"""
             QPushButton {{
                 background: {bg};
                 color: {fg};
                 border: 1px solid {border};
-                border-radius: 4px;
+                border-radius: {SCENARIOS_PANEL_BTN_RADIUS}px;
                 font-size: {FS_XS}px;
                 font-weight: bold;
-                padding: 2px 6px;
+                padding: {SCENARIOS_PANEL_BTN_PAD_V}px {SCENARIOS_PANEL_BTN_PAD_H}px;
             }}
             QPushButton:hover {{ background: {hover}; }}
             QPushButton:disabled {{

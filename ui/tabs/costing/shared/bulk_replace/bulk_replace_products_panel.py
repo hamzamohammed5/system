@@ -15,11 +15,22 @@ from PyQt5.QtCore import Qt
 
 from ui.theme import _C
 from ui.widgets.core.i18n   import tr
-from ui.widgets.core.events         import bus
+from ui.widgets.core.widget_mixin import WidgetMixin
+from ui.constants import (
+    PRODUCTS_PANEL_CMB_H, PRODUCTS_PANEL_CMB_W, PRODUCTS_PANEL_CMB_RADIUS,
+    PRODUCTS_PANEL_CMB_PAD_H, PRODUCTS_PANEL_CMB_PAD_V,
+    PRODUCTS_PANEL_SCROLL_MIN_H, PRODUCTS_PANEL_SCROLL_RADIUS,
+    PRODUCTS_PANEL_BAR_RADIUS, PRODUCTS_PANEL_BAR_PAD, PRODUCTS_PANEL_BAR_SPACING,
+    PRODUCTS_PANEL_BTN_H, PRODUCTS_PANEL_BTN_RADIUS, PRODUCTS_PANEL_BTN_PAD_H,
+    PRODUCTS_PANEL_ROWS_SPACING, PRODUCTS_PANEL_ROWS_PAD_R,
+    PRODUCTS_PANEL_EMPTY_PAD,
+    SPACING_LG, SPACING_MD, SPACING_ZERO,
+)
+from ui.font import FS_SM
 from .bulk_replace_helpers  import fetch_affected_products, ProductRow
 
 
-class _ProductsPanel(QWidget):
+class _ProductsPanel(QWidget, WidgetMixin):
     """
     لوحة المنتجات المتأثرة:
       - فلتر بالتصنيف
@@ -36,9 +47,9 @@ class _ProductsPanel(QWidget):
         self._all_products: list = []
         self._product_rows: list = []
 
+        self._init_widget_mixin(data=False)
         self._build()
         self.load()
-        bus.theme_changed.connect(self._apply_theme)
 
     # ══════════════════════════════════════════════════════
     # بناء الواجهة
@@ -47,7 +58,7 @@ class _ProductsPanel(QWidget):
     def _build(self):
         lay = QVBoxLayout(self)
         lay.setContentsMargins(0, 0, 0, 0)
-        lay.setSpacing(8)
+        lay.setSpacing(SPACING_MD)
 
         # ── شريط الفلتر ──
         filter_row = QHBoxLayout()
@@ -56,14 +67,14 @@ class _ProductsPanel(QWidget):
         filter_row.addWidget(self._lbl_filter)
 
         self.cmb_cat_filter = QComboBox()
-        self.cmb_cat_filter.setMinimumHeight(30)
-        self.cmb_cat_filter.setFixedWidth(200)
+        self.cmb_cat_filter.setMinimumHeight(PRODUCTS_PANEL_CMB_H)
+        self.cmb_cat_filter.setFixedWidth(PRODUCTS_PANEL_CMB_W)
         self.cmb_cat_filter.addItem(f"— {tr('all')} —", None)
         self.cmb_cat_filter.currentIndexChanged.connect(self._apply_filter)
 
         self.lbl_count = QLabel()
         filter_row.addWidget(self.cmb_cat_filter)
-        filter_row.addSpacing(16)
+        filter_row.addSpacing(SPACING_LG)
         filter_row.addWidget(self.lbl_count)
         filter_row.addStretch()
         lay.addLayout(filter_row)
@@ -72,28 +83,29 @@ class _ProductsPanel(QWidget):
         self._scroll_content = QWidget()
         self._scroll_content.setStyleSheet("background: transparent;")
         self._rows_layout = QVBoxLayout(self._scroll_content)
-        self._rows_layout.setSpacing(4)
-        self._rows_layout.setContentsMargins(0, 0, 4, 0)
+        self._rows_layout.setSpacing(PRODUCTS_PANEL_ROWS_SPACING)
+        self._rows_layout.setContentsMargins(0, 0, PRODUCTS_PANEL_ROWS_PAD_R, 0)
         self._rows_layout.addStretch()
 
         self._scroll = QScrollArea()
         self._scroll.setWidgetResizable(True)
         self._scroll.setWidget(self._scroll_content)
-        self._scroll.setMinimumHeight(200)
+        self._scroll.setMinimumHeight(PRODUCTS_PANEL_SCROLL_MIN_H)
         lay.addWidget(self._scroll, stretch=1)
 
         # ── شريط التحديد السريع ──
         self._quick_bar = self._build_quick_bar()
         lay.addWidget(self._quick_bar)
 
-        self._apply_theme()
+        self._refresh_style()
 
     def _build_quick_bar(self) -> QFrame:
         bar = QFrame()
         self._bar_ref = bar
         lay = QHBoxLayout(bar)
-        lay.setContentsMargins(8, 4, 8, 4)
-        lay.setSpacing(8)
+        lay.setContentsMargins(SPACING_MD, PRODUCTS_PANEL_BAR_PAD,
+                               SPACING_MD, PRODUCTS_PANEL_BAR_PAD)
+        lay.setSpacing(PRODUCTS_PANEL_BAR_SPACING)
 
         lbl = QLabel(f"{tr('quick_select')}:")
         self._lbl_quick = lbl
@@ -103,7 +115,7 @@ class _ProductsPanel(QWidget):
         self.btn_none = QPushButton(f"☐ {tr('select_none')}")
         self.btn_inv  = QPushButton(f"⇄ {tr('invert_selection')}")
         for btn in (self.btn_all, self.btn_none, self.btn_inv):
-            btn.setMinimumHeight(26)
+            btn.setMinimumHeight(PRODUCTS_PANEL_BTN_H)
 
         self.btn_all.clicked.connect(lambda: self.select_all(True))
         self.btn_none.clicked.connect(lambda: self.select_all(False))
@@ -114,47 +126,60 @@ class _ProductsPanel(QWidget):
         lay.addStretch()
         return bar
 
-    def _apply_theme(self, _=None):
-        """يُطبق الـ stylesheet عند تغيير الثيم."""
+    def _refresh_style(self, *_):
         if hasattr(self, "cmb_cat_filter"):
             self.cmb_cat_filter.setStyleSheet(
                 f"background:{_C['bg_input']}; border:1px solid {_C['border']};"
-                f"border-radius:4px; padding:2px 6px; color:{_C['text_primary']};"
+                f"border-radius:{PRODUCTS_PANEL_CMB_RADIUS}px;"
+                f"padding:{PRODUCTS_PANEL_CMB_PAD_V}px {PRODUCTS_PANEL_CMB_PAD_H}px;"
+                f"color:{_C['text_primary']};"
             )
         if hasattr(self, "lbl_count"):
             self.lbl_count.setStyleSheet(
-                f"color:{_C['accent']}; font-weight:bold; font-size:11px;"
+                f"color:{_C['accent']}; font-weight:bold; font-size:{FS_SM}px;"
             )
         if hasattr(self, "_lbl_filter"):
             self._lbl_filter.setStyleSheet(
-                f"font-size:11px; color:{_C['text_sec']};"
+                f"font-size:{FS_SM}px; color:{_C['text_sec']};"
             )
         if hasattr(self, "_scroll"):
             self._scroll.setStyleSheet(f"""
                 QScrollArea {{
                     border: 1px solid {_C['border']};
-                    border-radius: 8px;
+                    border-radius: {PRODUCTS_PANEL_SCROLL_RADIUS}px;
                     background: {_C['bg_surface']};
                 }}
             """)
         if hasattr(self, "_bar_ref"):
             self._bar_ref.setStyleSheet(
                 f"QFrame {{ background:{_C['bg_input']}; border:1px solid {_C['border']};"
-                "border-radius:6px; padding:2px; }"
+                f"border-radius:{PRODUCTS_PANEL_BAR_RADIUS}px;"
+                f"padding:{PRODUCTS_PANEL_BAR_PAD}px; }}"
             )
         if hasattr(self, "_lbl_quick"):
             self._lbl_quick.setStyleSheet(
-                f"font-size:11px; color:{_C['text_sec']};"
+                f"font-size:{FS_SM}px; color:{_C['text_sec']};"
             )
         _btn_style = (
             f"QPushButton {{ background:{_C['bg_surface']}; border:1px solid {_C['border']};"
-            "border-radius:4px; padding:2px 10px; font-size:11px; }"
+            f"border-radius:{PRODUCTS_PANEL_BTN_RADIUS}px;"
+            f"padding:2px {PRODUCTS_PANEL_BTN_PAD_H}px; font-size:{FS_SM}px; }}"
             f"QPushButton:hover {{ background:{_C['accent_light']}; "
             f"border-color:{_C['border_focus']}; }}"
         )
         for btn in (self.btn_all, self.btn_none, self.btn_inv):
             if btn:
                 btn.setStyleSheet(_btn_style)
+
+    def _refresh_lang(self, *_):
+        if hasattr(self, "_lbl_filter"):
+            self._lbl_filter.setText(f"🏷  {tr('filter_by_category')}:")
+        if hasattr(self, "_lbl_quick"):
+            self._lbl_quick.setText(f"{tr('quick_select')}:")
+        if hasattr(self, "btn_all"):
+            self.btn_all.setText(f"✅ {tr('select_all')}")
+            self.btn_none.setText(f"☐ {tr('select_none')}")
+            self.btn_inv.setText(f"⇄ {tr('invert_selection')}")
 
     # ══════════════════════════════════════════════════════
     # تحميل البيانات
@@ -215,7 +240,8 @@ class _ProductsPanel(QWidget):
             lbl = QLabel(f"⚠️  {tr('no_products_linked')}")
             lbl.setAlignment(Qt.AlignCenter)
             lbl.setStyleSheet(
-                f"color:{_C['text_muted']}; font-size:12px; padding:20px;"
+                f"color:{_C['text_muted']}; font-size:{FS_SM}px;"
+                f"padding:{PRODUCTS_PANEL_EMPTY_PAD}px;"
             )
             self._rows_layout.insertWidget(0, lbl)
             self._update_count()

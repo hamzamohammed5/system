@@ -18,11 +18,11 @@ from services.costing.scenario_service import ScenarioService
 from ui.theme import _C
 from ui.widgets.core.i18n         import tr
 from ui.widgets.components.stat_card import stat_card_pair
+from ui.widgets.core.widget_mixin import WidgetMixin
 from ui.font import FS_XS, FS_SM, FS_BASE, FS_MD, FS_LG
-from ui.widgets.core.events import bus
 
 
-class ScenarioComparisonWidget(QFrame):
+class ScenarioComparisonWidget(QFrame, WidgetMixin):
     """
     يقارن السيناريو الافتراضي بسيناريو مختار ويعرض:
       - التكلفة في كل سيناريو
@@ -38,7 +38,7 @@ class ScenarioComparisonWidget(QFrame):
         self._fixed_price  = 0.0
         self._default_cost = 0.0
         self._build()
-        bus.theme_changed.connect(self._apply_theme)
+        self._init_widget_mixin(lang=False, data=False)
 
     # ══════════════════════════════════════════════════════
     # بناء الواجهة
@@ -47,8 +47,7 @@ class ScenarioComparisonWidget(QFrame):
     def _build(self):
         self._apply_frame_style()
 
-        root = QVBoxLayout(self)
-        root.setContentsMargins(12, 10, 12, 12)
+        root = QVBoxLayout(self)        root.setContentsMargins(12, 10, 12, 12)
         root.setSpacing(8)
 
         # ── رأس ──
@@ -108,7 +107,7 @@ class ScenarioComparisonWidget(QFrame):
         self.lbl_note.setAlignment(Qt.AlignCenter)
         root.addWidget(self.lbl_note)
 
-        self._apply_theme()
+        self._refresh_style()
 
     def _apply_frame_style(self):
         self.setStyleSheet(f"""
@@ -119,7 +118,7 @@ class ScenarioComparisonWidget(QFrame):
             }}
         """)
 
-    def _apply_theme(self, _=None):
+    def _refresh_style(self, *_):
         """يُطبق الـ stylesheet عند تغيير الثيم."""
         self._apply_frame_style()
         if hasattr(self, "lbl_title"):

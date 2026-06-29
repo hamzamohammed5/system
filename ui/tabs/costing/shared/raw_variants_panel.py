@@ -22,20 +22,27 @@ from services.costing.variant_service import VariantService
 from ui.theme          import _C
 from ui.widgets.core.i18n     import tr
 from ui.widgets.core.events   import emit_company_data_changed
-from ui.widgets.core.events import bus
+from ui.widgets.core.widget_mixin import WidgetMixin
 from ui.font import FS_XS, FS_SM
+from ui.constants import (
+    RAW_VARIANTS_SPIN_MAX, RAW_VARIANTS_SPIN_MIN, RAW_VARIANTS_SPIN_DEC,
+    RAW_VARIANTS_SPIN_H, RAW_VARIANTS_SPIN_W, RAW_VARIANTS_INP_H,
+    RAW_VARIANTS_PREVIEW_MIN_W, RAW_VARIANTS_CANCEL_BTN_W, RAW_VARIANTS_BTN_H,
+    RAW_VARIANTS_TABLE_MAX_H, RAW_VARIANTS_COL2_W, RAW_VARIANTS_COL3_W,
+    RAW_VARIANTS_EDIT_BTN_H,
+)
 
 
-def _spin_pieces(max_=999999, dec=4):
+def _spin_pieces(max_=RAW_VARIANTS_SPIN_MAX, dec=RAW_VARIANTS_SPIN_DEC):
     s = QDoubleSpinBox()
-    s.setRange(0.0001, max_)
+    s.setRange(RAW_VARIANTS_SPIN_MIN, max_)
     s.setDecimals(dec)
-    s.setMinimumHeight(28)
+    s.setMinimumHeight(RAW_VARIANTS_SPIN_H)
     s.setValue(1.0)
     return s
 
 
-class _RawVariantsPanel(QGroupBox):
+class _RawVariantsPanel(QGroupBox, WidgetMixin):
     """
     لوحة إدارة variants الخامة — تُضاف داخل فورم الخامة.
 
@@ -52,7 +59,8 @@ class _RawVariantsPanel(QGroupBox):
         self._editing_id = None
         self._build()
         self.setEnabled(False)
-        bus.theme_changed.connect(self._apply_theme)
+        self._init_widget_mixin(lang=False, data=False)
+        self._refresh_style()
 
     def _build(self):
         self._apply_group_style()
@@ -75,19 +83,19 @@ class _RawVariantsPanel(QGroupBox):
 
         self.inp_name = QLineEdit()
         self.inp_name.setPlaceholderText(tr("variant_name_placeholder"))
-        self.inp_name.setMinimumHeight(30)
+        self.inp_name.setMinimumHeight(RAW_VARIANTS_INP_H)
 
         lbl_pieces = QLabel(f"{tr('pieces_count')}:")
         self._lbl_pieces = lbl_pieces
 
         self.sp_pieces = _spin_pieces()
-        self.sp_pieces.setFixedWidth(100)
+        self.sp_pieces.setFixedWidth(RAW_VARIANTS_SPIN_W)
         self.sp_pieces.setToolTip(
             f"{tr('pieces_tooltip_line1')}\n{tr('variant_unit_cost_formula')}"
         )
 
         self.lbl_preview = QLabel("─")
-        self.lbl_preview.setMinimumWidth(120)
+        self.lbl_preview.setMinimumWidth(RAW_VARIANTS_PREVIEW_MIN_W)
         self.sp_pieces.valueChanged.connect(self._update_preview)
 
         self.btn_add    = QPushButton(f"➕ {tr('add')}")
@@ -95,10 +103,10 @@ class _RawVariantsPanel(QGroupBox):
         self.btn_cancel = QPushButton("✖")
         self.btn_save.setVisible(False)
         self.btn_cancel.setVisible(False)
-        self.btn_cancel.setFixedWidth(28)
+        self.btn_cancel.setFixedWidth(RAW_VARIANTS_CANCEL_BTN_W)
 
         for btn in (self.btn_add, self.btn_save, self.btn_cancel):
-            btn.setMinimumHeight(30)
+            btn.setMinimumHeight(RAW_VARIANTS_BTN_H)
 
         self.btn_add.clicked.connect(self._add)
         self.btn_save.clicked.connect(self._save_edit)
@@ -125,7 +133,7 @@ class _RawVariantsPanel(QGroupBox):
         self.table.setSelectionBehavior(QAbstractItemView.SelectRows)
         self.table.setEditTriggers(QAbstractItemView.NoEditTriggers)
         self.table.setAlternatingRowColors(True)
-        self.table.setMaximumHeight(160)
+        self.table.setMaximumHeight(RAW_VARIANTS_TABLE_MAX_H)
 
         hh = self.table.horizontalHeader()
         hh.setSectionResizeMode(0, QHeaderView.Fixed)
@@ -134,8 +142,8 @@ class _RawVariantsPanel(QGroupBox):
         hh.setSectionResizeMode(3, QHeaderView.Interactive)
         self.table.setColumnWidth(0, 0)
         self.table.setColumnHidden(0, True)
-        self.table.setColumnWidth(2, 90)
-        self.table.setColumnWidth(3, 110)
+        self.table.setColumnWidth(2, RAW_VARIANTS_COL2_W)
+        self.table.setColumnWidth(3, RAW_VARIANTS_COL3_W)
         self.table.verticalHeader().setVisible(False)
         root.addWidget(self.table)
 
@@ -144,7 +152,7 @@ class _RawVariantsPanel(QGroupBox):
         self.btn_edit = QPushButton(f"✏️ {tr('edit')}")
         self.btn_del  = QPushButton(f"🗑️ {tr('delete')}")
         for btn in (self.btn_edit, self.btn_del):
-            btn.setMinimumHeight(26)
+            btn.setMinimumHeight(RAW_VARIANTS_EDIT_BTN_H)
         self.btn_edit.clicked.connect(self._edit)
         self.btn_del.clicked.connect(self._delete)
         btn_row.addWidget(self.btn_edit)
@@ -171,7 +179,7 @@ class _RawVariantsPanel(QGroupBox):
             }}
         """)
 
-    def _apply_theme(self, _=None):
+    def _refresh_style(self, *_):
         """يُطبق الـ stylesheet عند تغيير الثيم."""
         self._apply_group_style()
         if hasattr(self, "lbl_info"):

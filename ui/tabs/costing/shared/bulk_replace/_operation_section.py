@@ -14,9 +14,19 @@ from PyQt5.QtGui  import QColor, QFont
 
 from ui.theme import _C
 from ui.widgets.core.i18n import tr
+from ui.widgets.core.widget_mixin import WidgetMixin
+from ui.constants import (
+    OP_SECTION_SPACING, OP_SECTION_GRP_RADIUS, OP_SECTION_GRP_PAD_TOP,
+    OP_SECTION_GRP_TITLE_PAD_H, OP_SECTION_FORM_SPACING,
+    OP_SECTION_CMB_MIN_H, OP_SECTION_CMB_MIN_W, OP_SECTION_CMB_RADIUS,
+    OP_SECTION_CMB_PAD_H, OP_SECTION_CMB_PAD_V,
+    OP_SECTION_SP_W, OP_SECTION_FRAME_RADIUS, OP_SECTION_FRAME_PAD,
+    SPACING_MD, SPACING_LG,
+)
+from ui.font import FS_BASE, FS_SM
 
 
-class _OperationSection(QGroupBox):
+class _OperationSection(QGroupBox, WidgetMixin):
     """
     قسم اختيار العملية في نافذة الاستبدال الشامل.
 
@@ -28,25 +38,26 @@ class _OperationSection(QGroupBox):
     """
 
     def __init__(self, child_type: str, parent=None):
-        super().__init__(f"⚙️  {tr('operation_required')}", parent)
+        super().__init__(tr('operation_section_title'), parent)
         self._child_type = child_type
+        self._init_widget_mixin(data=False)
         self._build()
 
     def _build(self):
-        self._apply_group_style()
+        self._refresh_style()
 
         lay = QVBoxLayout(self)
-        lay.setSpacing(10)
+        lay.setSpacing(OP_SECTION_SPACING)
 
         # ── خيارات العملية ──
         ops_row = QHBoxLayout()
-        self._rdo_replace = QRadioButton(f"🔀  {tr('replace_element')}")
-        self._rdo_qty     = QRadioButton(f"🔢  {tr('edit_qty_only')}")
-        self._rdo_both    = QRadioButton(f"✅  {tr('both_operations')}")
+        self._rdo_replace = QRadioButton(tr('replace_element_btn'))
+        self._rdo_qty     = QRadioButton(tr('edit_qty_only_btn'))
+        self._rdo_both    = QRadioButton(tr('both_operations_btn'))
         self._rdo_both.setChecked(True)
         for rdo in (self._rdo_replace, self._rdo_qty, self._rdo_both):
             rdo.setStyleSheet(
-                f"font-size:12px; color:{_C['text_primary']};"
+                f"font-size:{FS_BASE}px; color:{_C['text_primary']};"
             )
             ops_row.addWidget(rdo)
         ops_row.addStretch()
@@ -58,21 +69,23 @@ class _OperationSection(QGroupBox):
 
         from PyQt5.QtWidgets import QFormLayout
         rf_lay = QFormLayout(self._replace_frame)
-        rf_lay.setSpacing(8)
+        rf_lay.setSpacing(OP_SECTION_FORM_SPACING)
         rf_lay.setLabelAlignment(Qt.AlignRight)
 
         self._cmb_replacement = QComboBox()
-        self._cmb_replacement.setMinimumHeight(32)
-        self._cmb_replacement.setMinimumWidth(280)
+        self._cmb_replacement.setMinimumHeight(OP_SECTION_CMB_MIN_H)
+        self._cmb_replacement.setMinimumWidth(OP_SECTION_CMB_MIN_W)
         self._cmb_replacement.setStyleSheet(
             f"background:{_C['bg_input']}; border:1px solid {_C['border']};"
-            f"border-radius:4px; padding:2px 6px; color:{_C['text_primary']};"
+            f"border-radius:{OP_SECTION_CMB_RADIUS}px;"
+            f"padding:{OP_SECTION_CMB_PAD_V}px {OP_SECTION_CMB_PAD_H}px;"
+            f"color:{_C['text_primary']};"
         )
 
         _child_labels = {
-            "raw":        f"🧱  {tr('replacement_raw')}:",
-            "labor_op":   f"👷  {tr('replacement_labor_op')}:",
-            "machine_op": f"⚙️  {tr('replacement_machine_op')}:",
+            "raw":        f"{tr('replacement_raw')}:",
+            "labor_op":   f"{tr('replacement_labor_op')}:",
+            "machine_op": f"{tr('replacement_machine_op')}:",
         }
         lbl_new = _child_labels.get(self._child_type, f"{tr('replacement')}:")
         rf_lay.addRow(lbl_new, self._cmb_replacement)
@@ -82,13 +95,13 @@ class _OperationSection(QGroupBox):
             f"{tr('apply_uniform_qty')}:"
         )
         self._chk_uniform.setStyleSheet(
-            f"font-size:11px; color:{_C['text_primary']};"
+            f"font-size:{FS_SM}px; color:{_C['text_primary']};"
         )
         self._sp_uniform = QDoubleSpinBox()
         self._sp_uniform.setRange(0.0001, 999999)
         self._sp_uniform.setDecimals(4)
         self._sp_uniform.setValue(1.0)
-        self._sp_uniform.setFixedWidth(100)
+        self._sp_uniform.setFixedWidth(OP_SECTION_SP_W)
         self._sp_uniform.setEnabled(False)
         self._chk_uniform.toggled.connect(self._sp_uniform.setEnabled)
         qty_row.addWidget(self._chk_uniform)
@@ -101,22 +114,50 @@ class _OperationSection(QGroupBox):
             rdo.toggled.connect(self._update_ui)
         self._update_ui()
 
-    def _apply_group_style(self):
+    def _refresh_style(self, *_):
         self.setStyleSheet(f"""
             QGroupBox {{
                 background: {_C['bg_input']};
                 border: 1px solid {_C['border']};
-                border-radius: 8px;
+                border-radius: {OP_SECTION_GRP_RADIUS}px;
                 font-weight: bold;
                 color: {_C['accent']};
-                padding-top: 10px;
+                padding-top: {OP_SECTION_GRP_PAD_TOP}px;
             }}
             QGroupBox::title {{
                 subcontrol-origin: margin;
                 subcontrol-position: top right;
-                padding: 0 8px;
+                padding: 0 {OP_SECTION_GRP_TITLE_PAD_H}px;
             }}
         """)
+        # تحديث لون الـ radio buttons عند تغيير الثيم
+        if hasattr(self, '_rdo_replace'):
+            for rdo in (self._rdo_replace, self._rdo_qty, self._rdo_both):
+                rdo.setStyleSheet(
+                    f"font-size:{FS_BASE}px; color:{_C['text_primary']};"
+                )
+        if hasattr(self, '_chk_uniform'):
+            self._chk_uniform.setStyleSheet(
+                f"font-size:{FS_SM}px; color:{_C['text_primary']};"
+            )
+        if hasattr(self, '_cmb_replacement'):
+            self._cmb_replacement.setStyleSheet(
+                f"background:{_C['bg_input']}; border:1px solid {_C['border']};"
+                f"border-radius:{OP_SECTION_CMB_RADIUS}px;"
+                f"padding:{OP_SECTION_CMB_PAD_V}px {OP_SECTION_CMB_PAD_H}px;"
+                f"color:{_C['text_primary']};"
+            )
+        if hasattr(self, '_replace_frame'):
+            self._update_frame_style(active=self.do_replace)
+
+    def _refresh_lang(self, *_):
+        self.setTitle(tr('operation_section_title'))
+        if hasattr(self, '_rdo_replace'):
+            self._rdo_replace.setText(tr('replace_element_btn'))
+            self._rdo_qty.setText(tr('edit_qty_only_btn'))
+            self._rdo_both.setText(tr('both_operations_btn'))
+        if hasattr(self, '_chk_uniform'):
+            self._chk_uniform.setText(f"{tr('apply_uniform_qty')}:")
 
     # ── خصائص الحالة ─────────────────────────────────────
 
@@ -188,11 +229,13 @@ class _OperationSection(QGroupBox):
             self._replace_frame.setStyleSheet(
                 f"QFrame {{ background:{_C['info_bg']}; "
                 f"border:1px solid {_C['info_border']};"
-                "border-radius:6px; padding:4px; }"
+                f"border-radius:{OP_SECTION_FRAME_RADIUS}px;"
+                f"padding:{OP_SECTION_FRAME_PAD}px; }}"
             )
         else:
             self._replace_frame.setStyleSheet(
                 f"QFrame {{ background:{_C['bg_surface']}; "
                 f"border:1px solid {_C['border']};"
-                "border-radius:6px; padding:4px; }"
+                f"border-radius:{OP_SECTION_FRAME_RADIUS}px;"
+                f"padding:{OP_SECTION_FRAME_PAD}px; }}"
             )
