@@ -20,8 +20,11 @@ from PyQt5.QtWidgets import (
 )
 from PyQt5.QtCore import QTimer
 
-# ✅ [Refactor] استخدام ComponentRow الجديد بدل القديم
 from ui.widgets.components.component_row.widget import ComponentRow
+from ui.constants import (
+    PRODUCT_FORM_ROWS_SPACING, PRODUCT_FORM_ROWS_MARGIN,
+    PRODUCT_FORM_ROWS_SCROLL_MIN_H, MARGIN_ZERO, SPACING_ZERO,
+)
 
 
 class _RowsManager(QWidget):
@@ -50,19 +53,19 @@ class _RowsManager(QWidget):
     def _build(self):
         from PyQt5.QtWidgets import QVBoxLayout as _VL
         outer = _VL(self)
-        outer.setContentsMargins(0, 0, 0, 0)
-        outer.setSpacing(0)
+        outer.setContentsMargins(*MARGIN_ZERO)
+        outer.setSpacing(SPACING_ZERO)
 
         self.rows_container = QWidget()
         self.rows_layout    = QVBoxLayout(self.rows_container)
-        self.rows_layout.setSpacing(2)
-        self.rows_layout.setContentsMargins(12, 4, 12, 4)
+        self.rows_layout.setSpacing(PRODUCT_FORM_ROWS_SPACING)
+        self.rows_layout.setContentsMargins(*PRODUCT_FORM_ROWS_MARGIN)
         self.rows_layout.addStretch()
 
         scroll = QScrollArea()
         scroll.setWidgetResizable(True)
         scroll.setWidget(self.rows_container)
-        scroll.setMinimumHeight(80)
+        scroll.setMinimumHeight(PRODUCT_FORM_ROWS_SCROLL_MIN_H)
         scroll.setStyleSheet("border:none;")
         outer.addWidget(scroll, stretch=1)
 

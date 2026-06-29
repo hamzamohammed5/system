@@ -17,18 +17,25 @@ from PyQt5.QtWidgets import (
 )
 from PyQt5.QtCore import pyqtSignal
 
-from ui.widgets.core.events import bus
-from ui.theme import _C
+from ui.widgets.core.widget_mixin  import WidgetMixin
 from ui.widgets.core.i18n          import tr
 from ui.widgets.components.button  import make_btn
 from ui.widgets.combo.category     import CategoryCombo
-from ui.widgets.theme.builders import wrap_in_scroll
+from ui.widgets.theme.builders     import wrap_in_scroll
 from ui.font                       import FS_BASE, FS_SM
+from ui.constants import (
+    PRODUCT_FORM_HEADER_MIN_W, PRODUCT_FORM_HEADER_H,
+    PRODUCT_FORM_HEADER_MARGIN, PRODUCT_FORM_HEADER_SPACING,
+    PRODUCT_FORM_TOP_SPACING, PRODUCT_FORM_MODE_MIN_W,
+    PRODUCT_FORM_INP_MIN_H, PRODUCT_FORM_CAT_W,
+    PRODUCT_FORM_TOP_INNER_SPACING, PRODUCT_FORM_TOP_BTN_SPACING,
+    SPACING_ZERO, MARGIN_ZERO,
+)
 
 from ui.tabs.costing.shared.bom_scenarios_panel import _BomScenariosPanel
 
 
-class _FormHeaderBar(QWidget):
+class _FormHeaderBar(QWidget, WidgetMixin):
     """
     الشريط العلوي للفورم.
 
@@ -48,59 +55,60 @@ class _FormHeaderBar(QWidget):
         super().__init__(parent)
         self._scope = scope
         self._conn  = conn
+        self._init_widget_mixin(lang=False, data=False)
         self._build()
-        bus.theme_changed.connect(self._apply_theme)
+        self._refresh_style()
 
     def _build(self):
         outer = QVBoxLayout(self)
-        outer.setContentsMargins(0, 0, 0, 0)
-        outer.setSpacing(0)
+        outer.setContentsMargins(*MARGIN_ZERO)
+        outer.setSpacing(SPACING_ZERO)
 
         header_inner = QWidget()
-        header_inner.setMinimumWidth(400)
+        header_inner.setMinimumWidth(PRODUCT_FORM_HEADER_MIN_W)
         header_inner.setSizePolicy(QSizePolicy.Preferred, QSizePolicy.Minimum)
         self._header_inner = header_inner
 
         header_scroll = wrap_in_scroll(header_inner)
-        header_scroll.setFixedHeight(150)
+        header_scroll.setFixedHeight(PRODUCT_FORM_HEADER_H)
 
         header_lay = QVBoxLayout(header_inner)
-        header_lay.setContentsMargins(12, 8, 12, 8)
-        header_lay.setSpacing(6)
+        header_lay.setContentsMargins(*PRODUCT_FORM_HEADER_MARGIN)
+        header_lay.setSpacing(PRODUCT_FORM_HEADER_SPACING)
 
         # ── صف الأزرار والحقول ──
         top = QHBoxLayout()
-        top.setSpacing(8)
+        top.setSpacing(PRODUCT_FORM_TOP_SPACING)
 
-        self.lbl_mode = QLabel(f"─── {tr('new_product')} ───")
-        self.lbl_mode.setMinimumWidth(160)
+        self.lbl_mode = QLabel(tr("mode_label_wrap").format(content=tr("new_product")))
+        self.lbl_mode.setMinimumWidth(PRODUCT_FORM_MODE_MIN_W)
 
         self.inp_name = QLineEdit()
         self.inp_name.setPlaceholderText(tr("product_name_placeholder"))
-        self.inp_name.setMinimumHeight(32)
+        self.inp_name.setMinimumHeight(PRODUCT_FORM_INP_MIN_H)
 
         self.cmb_category = CategoryCombo(self._conn, scope=self._scope)
-        self.cmb_category.setMinimumHeight(32)
-        self.cmb_category.setFixedWidth(160)
+        self.cmb_category.setMinimumHeight(PRODUCT_FORM_INP_MIN_H)
+        self.cmb_category.setFixedWidth(PRODUCT_FORM_CAT_W)
 
-        self.btn_add_row = QPushButton(f"+ {tr('add_component')}")
-        self.btn_add_row.setMinimumHeight(32)
+        self.btn_add_row = QPushButton(tr("btn_add_component"))
+        self.btn_add_row.setMinimumHeight(PRODUCT_FORM_INP_MIN_H)
         self.btn_add_row.clicked.connect(self.add_row_clicked.emit)
 
         self.btn_save   = make_btn(tr("save"), style="success")
-        self.btn_cancel = QPushButton(f"✖ {tr('cancel')}")
-        self.btn_save.setMinimumHeight(32)
-        self.btn_cancel.setMinimumHeight(32)
+        self.btn_cancel = QPushButton(tr("btn_cancel"))
+        self.btn_save.setMinimumHeight(PRODUCT_FORM_INP_MIN_H)
+        self.btn_cancel.setMinimumHeight(PRODUCT_FORM_INP_MIN_H)
         self.btn_save.clicked.connect(self.save_clicked.emit)
         self.btn_cancel.clicked.connect(self.cancel_clicked.emit)
         self.btn_cancel.setVisible(False)
 
         top.addWidget(self.lbl_mode)
         top.addWidget(self.inp_name, stretch=3)
-        top.addSpacing(4)
+        top.addSpacing(PRODUCT_FORM_TOP_INNER_SPACING)
         top.addWidget(QLabel(f"{tr('category')}:"))
         top.addWidget(self.cmb_category)
-        top.addSpacing(8)
+        top.addSpacing(PRODUCT_FORM_TOP_BTN_SPACING)
         top.addWidget(self.btn_add_row)
         top.addWidget(self.btn_save)
         top.addWidget(self.btn_cancel)
@@ -136,8 +144,9 @@ class _FormHeaderBar(QWidget):
         outer.addWidget(header_scroll)
         self._apply_theme()
 
-    def _apply_theme(self, _=None):
+    def _refresh_style(self, _=None):
         """يُطبق الـ stylesheet الحالي عند تغيير الثيم."""
+        from ui.theme import _C
         if hasattr(self, "_header_inner"):
             self._header_inner.setStyleSheet(
                 f"background:{_C['bg_surface']};"
@@ -188,7 +197,7 @@ class _FormHeaderBar(QWidget):
         self.btn_cancel.setVisible(True)
 
     def exit_edit_mode(self, label: str = ""):
-        self.lbl_mode.setText(label or tr("new_product"))
+        self.lbl_mode.setText(label or tr("mode_label_wrap").format(content=tr("new_product")))
         self.btn_cancel.setVisible(False)
 
     def reset(self):

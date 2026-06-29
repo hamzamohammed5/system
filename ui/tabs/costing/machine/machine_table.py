@@ -23,6 +23,10 @@ from ui.tabs.companies.shared_items_mixin      import get_shared_machines
 from ui.tabs.costing.shared._utils             import to_dict
 from ui.widgets.core.events                    import emit_company_data_changed
 from ui.widgets.core.i18n                      import tr
+from ui.constants import (
+    MACHINE_TABLE_COL0_W, MACHINE_TABLE_COL2_W,
+    MACHINE_TABLE_COL3_W, MACHINE_TABLE_COL4_W,
+)
 from .machine_form import _MachineForm
 
 
@@ -39,10 +43,10 @@ class _MachineTable(SharedItemsListPanel):
         super().__init__(conn, parent)
 
     def _setup_column_widths(self, table):
-        table.setColumnWidth(0, 40)
-        table.setColumnWidth(2, 110)
-        table.setColumnWidth(3, 90)
-        table.setColumnWidth(4, 90)
+        table.setColumnWidth(0, MACHINE_TABLE_COL0_W)
+        table.setColumnWidth(2, MACHINE_TABLE_COL2_W)
+        table.setColumnWidth(3, MACHINE_TABLE_COL3_W)
+        table.setColumnWidth(4, MACHINE_TABLE_COL4_W)
 
     def _fetch_local_rows(self) -> list:
         from services.costing.machine_service import MachineService
@@ -67,11 +71,11 @@ class _MachineTable(SharedItemsListPanel):
         cat_display  = item.get("category_name") or tr("dash")
 
         if is_shared:
-            prefix = "🔗 "
-            id_text = "🔗"
+            prefix = tr("table_shared_prefix")
+            id_text = tr("table_shared_icon")
         elif is_published:
-            prefix = "📤 "
-            id_text = "📤"
+            prefix = tr("table_published_prefix")
+            id_text = tr("table_published_icon")
         else:
             prefix  = ""
             id_text = str(item.get("id", ""))

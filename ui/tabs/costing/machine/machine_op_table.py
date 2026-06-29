@@ -23,6 +23,11 @@ from ui.widgets.shared.list_panel_with_shared                import SharedItemsL
 from ui.tabs.costing.shared.bulk_replace.bulk_replace_dialog import BulkReplaceDialog
 from ui.widgets.core.events                                  import emit_company_data_changed
 from ui.widgets.core.i18n                                     import tr
+from ui.constants import (
+    MACHINE_OP_TABLE_COL0_W, MACHINE_OP_TABLE_COL1_W, MACHINE_OP_TABLE_COL2_W,
+    MACHINE_OP_TABLE_COL3_W, MACHINE_OP_TABLE_COL4_W, MACHINE_OP_TABLE_COL5_W,
+    MACHINE_OP_TABLE_COL6_W,
+)
 from .machine_op_form import _MachineOpForm
 
 
@@ -39,13 +44,13 @@ class _MachineOpTable(SharedItemsListPanel):
         super().__init__(conn, parent)
 
     def _setup_column_widths(self, table):
-        table.setColumnWidth(0, 40)
-        table.setColumnWidth(1, 140)
-        table.setColumnWidth(2, 100)
-        table.setColumnWidth(3, 120)
-        table.setColumnWidth(4, 70)
-        table.setColumnWidth(5, 70)
-        table.setColumnWidth(6, 110)
+        table.setColumnWidth(0, MACHINE_OP_TABLE_COL0_W)
+        table.setColumnWidth(1, MACHINE_OP_TABLE_COL1_W)
+        table.setColumnWidth(2, MACHINE_OP_TABLE_COL2_W)
+        table.setColumnWidth(3, MACHINE_OP_TABLE_COL3_W)
+        table.setColumnWidth(4, MACHINE_OP_TABLE_COL4_W)
+        table.setColumnWidth(5, MACHINE_OP_TABLE_COL5_W)
+        table.setColumnWidth(6, MACHINE_OP_TABLE_COL6_W)
         table.setAlternatingRowColors(True)
 
     def _fetch_local_rows(self) -> list:
@@ -85,11 +90,11 @@ class _MachineOpTable(SharedItemsListPanel):
             cost = 0.0
 
         if is_shared:
-            prefix  = "🔗 "
-            id_text = "🔗"
+            prefix  = tr("table_shared_prefix")
+            id_text = tr("table_shared_icon")
         elif is_published:
-            prefix  = "📤 "
-            id_text = "📤"
+            prefix  = tr("table_published_prefix")
+            id_text = tr("table_published_icon")
         else:
             prefix  = ""
             id_text = str(item.get("id", ""))

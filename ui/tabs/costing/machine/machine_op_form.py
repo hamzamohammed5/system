@@ -26,6 +26,7 @@ from services.costing.machine_service   import MachineService, MachineOpService
 from db.costing.machine_op_rows_repo    import calc_op_total_cost
 from ui.widgets.mixins.form_mixins      import EditModeMixin
 from ui.widgets.core.conn               import LiveConnMixin
+from ui.widgets.core.widget_mixin       import WidgetMixin
 from ui.widgets.combo.category          import CategoryCombo
 from ui.widgets.panels.form_group import FormGroup
 from ui.widgets.panels.form_badges import ResultBadge
@@ -35,29 +36,42 @@ from ui.widgets.theme.builders          import wrap_in_scroll
 from ui.tabs.costing.shared.machine_op_rows_editor import _OpRowsEditor
 from ui.widgets.core.events             import emit_company_data_changed, bus
 from ui.widgets.core.i18n               import tr
-from ui.theme                           import _C
 from ui.font                            import FS_MD
+from ui.constants import (
+    MARGIN_ZERO, SPACING_ZERO, SPACING_SM,
+    MARGIN_FORM, SPACING_MD, BTN_MIN_HEIGHT,
+    MACHINE_FORM_INP_MIN_H,
+    MACHINE_OP_FORM_MIN_W,
+)
 
 
 def buttons_row(*buttons) -> QHBoxLayout:
     """صف أزرار أفقي."""
     row = QHBoxLayout()
-    row.setSpacing(6)
+    row.setSpacing(SPACING_SM)
     for btn in buttons:
         row.addWidget(btn)
     row.addStretch()
     return row
 
 
-class _MachineOpForm(QWidget, EditModeMixin, LiveConnMixin):
+class _MachineOpForm(QWidget, EditModeMixin, LiveConnMixin, WidgetMixin):
     def __init__(self, conn, parent=None):
         super().__init__(parent)
         self.conn = conn
         self._rows_editor = None
+        self._init_widget_mixin(lang=False, data=False)
         self._build()
         self.init_edit_mode(self.btn_add, self.btn_save, self.btn_cancel, self.lbl_mode)
+        self._refresh_style()
         # [Fix D2] استخدام named slot بدل lambda لتجنب memory leaks
         bus.company_data_changed.connect(self._on_company_data_changed)
+
+    def _refresh_style(self, *_):
+        from ui.theme import _C
+        self.lbl_mode.setStyleSheet(
+            f"font-weight:bold; font-size:{FS_MD}px; color:{_C['accent']};"
+        )
 
     def _on_company_data_changed(self, _company_id: int = None):
         """يُستدعى عند تغيير بيانات الشركة — يحدّث قائمة الماكينات."""
@@ -65,30 +79,29 @@ class _MachineOpForm(QWidget, EditModeMixin, LiveConnMixin):
 
     def _build(self):
         outer_layout = QVBoxLayout(self)
-        outer_layout.setContentsMargins(0, 0, 0, 0)
-        outer_layout.setSpacing(0)
+        outer_layout.setContentsMargins(*MARGIN_ZERO)
+        outer_layout.setSpacing(SPACING_ZERO)
 
         inner = QWidget()
-        inner.setMinimumWidth(280)
+        inner.setMinimumWidth(MACHINE_OP_FORM_MIN_W)
         root = QVBoxLayout(inner)
-        root.setContentsMargins(8, 8, 8, 8)
-        root.setSpacing(8)
+        root.setContentsMargins(*MARGIN_FORM)
+        root.setSpacing(SPACING_MD)
 
         scroll = wrap_in_scroll(inner)
         outer_layout.addWidget(scroll)
 
         grp = FormGroup(tr("machine_op_form_title"))
 
-        self.lbl_mode = QLabel(f"─── {tr('add_machine_op_new')} ───")
-        self.lbl_mode.setStyleSheet(f"font-weight:bold; font-size:{FS_MD}px; color:{_C['accent']};")
+        self.lbl_mode = QLabel(tr("mode_label_wrap").format(content=tr("add_machine_op_new")))
         grp.add_label_row(self.lbl_mode)
 
         self.inp_name = QLineEdit()
         self.inp_name.setPlaceholderText(tr("machine_op_name_placeholder"))
-        self.inp_name.setMinimumHeight(30)
+        self.inp_name.setMinimumHeight(MACHINE_FORM_INP_MIN_H)
 
         self.cmb_machine = QComboBox()
-        self.cmb_machine.setMinimumHeight(30)
+        self.cmb_machine.setMinimumHeight(MACHINE_FORM_INP_MIN_H)
 
         self.lbl_machine_mode = ModeBadge(color="orange")
         self.lbl_machine_mode.setToolTip(tr("machine_mode_tooltip"))
@@ -103,11 +116,11 @@ class _MachineOpForm(QWidget, EditModeMixin, LiveConnMixin):
         grp.add_row(f"{tr('total_cost_label')} :", self.lbl_cost)
         root.addWidget(grp)
 
-        self.btn_add    = QPushButton(f"➕  {tr('add_op')}")
-        self.btn_save   = QPushButton(f"💾  {tr('save_edit')}")
-        self.btn_cancel = QPushButton(f"✖  {tr('cancel')}")
+        self.btn_add    = QPushButton(tr("btn_add_op"))
+        self.btn_save   = QPushButton(tr("btn_save"))
+        self.btn_cancel = QPushButton(tr("btn_cancel"))
         for btn in (self.btn_add, self.btn_save, self.btn_cancel):
-            btn.setMinimumHeight(30)
+            btn.setMinimumHeight(BTN_MIN_HEIGHT)
         self.btn_add.clicked.connect(self._add)
         self.btn_save.clicked.connect(self._save_edit)
         self.btn_cancel.clicked.connect(self._cancel)
@@ -160,13 +173,13 @@ class _MachineOpForm(QWidget, EditModeMixin, LiveConnMixin):
         if float(m.rate_per_hour) > 0:
             mode = "time"
             self.lbl_machine_mode.set_mode(
-                f"{tr('mode_time_label')}  │  {m.rate_per_hour:.2f} {tr('currency_per_hour')}",
+                f"{tr('mode_time_label')}  {tr('vertical_separator')}  {m.rate_per_hour:.2f} {tr('currency_per_hour')}",
                 color="orange"
             )
         else:
             mode = "unit"
             self.lbl_machine_mode.set_mode(
-                f"{tr('mode_unit_label')}  │  {m.rate_per_unit:.2f} {tr('currency_per_unit')}",
+                f"{tr('mode_unit_label')}  {tr('vertical_separator')}  {m.rate_per_unit:.2f} {tr('currency_per_unit')}",
                 color="blue"
             )
 
@@ -186,7 +199,7 @@ class _MachineOpForm(QWidget, EditModeMixin, LiveConnMixin):
             except Exception:
                 self.lbl_cost.reset()
         else:
-            self.lbl_cost.set_value(f"─ ({tr('add_op_first_hint')})")
+            self.lbl_cost.set_value(f"{tr('amount_dash_placeholder')} ({tr('add_op_first_hint')})")
 
     # ══════════════════════════════════════════════════════
     # تحميل للتعديل
@@ -206,7 +219,7 @@ class _MachineOpForm(QWidget, EditModeMixin, LiveConnMixin):
                 self.cmb_machine.setCurrentIndex(i)
                 break
         self.cmb_category.set_category(op.category_id)
-        self.enter_edit_mode(op_id, f"─── {tr('editing_prefix')}: {op.name} ───")
+        self.enter_edit_mode(op_id, tr("mode_label_wrap").format(content=f"{tr('editing_prefix')}: {op.name}"))
 
         try:
             m_svc = MachineService(self._live_conn())
@@ -271,7 +284,7 @@ class _MachineOpForm(QWidget, EditModeMixin, LiveConnMixin):
             rate_h = rate_u = 0.0
 
         self._rows_editor.load_op(op_id, mode, rate_h, rate_u)
-        self.enter_edit_mode(op_id, f"─── {tr('editing_rows_prefix')}: {name} ───")
+        self.enter_edit_mode(op_id, tr("mode_label_wrap").format(content=f"{tr('editing_rows_prefix')}: {name}"))
         self.btn_add.setVisible(False)
         self._update_cost_label()
 
@@ -311,5 +324,5 @@ class _MachineOpForm(QWidget, EditModeMixin, LiveConnMixin):
         self.cmb_category.setCurrentIndex(0)
         self.lbl_cost.reset()
         self._rows_editor.clear()
-        self.exit_edit_mode(f"─── {tr('add_machine_op_new')} ───")
+        self.exit_edit_mode(tr("mode_label_wrap").format(content=tr("add_machine_op_new")))
         self.btn_add.setVisible(True)
