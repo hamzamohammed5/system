@@ -1,3 +1,6 @@
+# ui/tabs/costing/machine_tab.py
+# ================================
+# MachineTab — التبويب الرئيسي للماكينات وعمليات التشغيل.
 """
 ui/tabs/costing/machine_tab.py
 ================================
@@ -7,6 +10,9 @@ MachineTab — التبويب الرئيسي للماكينات وعمليات �
 
 [Fix A1] استبدال from ui.app_settings import _C بـ from ui.theme import _C
 [Fix C3] استبدال tr() بنصوص عربية مباشرة بمفاتيح i18n صحيحة
+[Fix E-icons] استبدال إيموجي hardcoded بمفاتيح tr() جديدة
+[Fix C-const] استبدال أحجام splitter الـ hardcoded بثوابت constants.py
+[Fix B] تحويل _MachinesTab و _MachineOpsTab إلى WidgetMixin لتحديث stylesheet الـ splitter ديناميكياً
 """
 
 from PyQt5.QtWidgets import QTabWidget, QWidget, QVBoxLayout, QSplitter
@@ -15,7 +21,12 @@ from PyQt5.QtCore import Qt
 from ui.widgets.base.tab_section  import TabSectionBase
 from ui.widgets.managers.category import CategoryManager
 from ui.widgets.core.i18n         import tr
-from ui.theme                     import _C
+from ui.widgets.core.widget_mixin import WidgetMixin
+from ui.constants import (
+    MACHINE_TAB_SPLITTER_HANDLE_W,
+    MACHINE_TAB_MACHINES_SPLITTER_SIZES,
+    MACHINE_TAB_OPS_SPLITTER_SIZES,
+)
 
 from .machine.machine_form     import _MachineForm
 from .machine.machine_table    import _MachineTable
@@ -23,56 +34,70 @@ from .machine.machine_op_form  import _MachineOpForm
 from .machine.machine_op_table import _MachineOpTable
 
 
-def _splitter_style() -> str:
-    """style موحد للـ QSplitter مربوط بـ _C."""
-    return f"""
-        QSplitter::handle {{
-            background: {_C['border']};
-            border-top: 1px solid {_C['border_med']};
-        }}
-        QSplitter::handle:hover {{ background: {_C['accent_mid']}; }}
-        QSplitter::handle:pressed {{ background: {_C['accent']}; }}
-    """
-
-
-class _MachinesTab(QWidget):
+class _MachinesTab(QWidget, WidgetMixin):
     def __init__(self, conn, parent=None):
         super().__init__(parent)
-        splitter = QSplitter(Qt.Vertical)
-        splitter.setHandleWidth(6)
-        splitter.setStyleSheet(_splitter_style())
+        self._splitter = QSplitter(Qt.Vertical)
+        self._splitter.setHandleWidth(MACHINE_TAB_SPLITTER_HANDLE_W)
 
         form  = _MachineForm(conn)
         table = _MachineTable(conn, form)
 
-        splitter.addWidget(form)
-        splitter.addWidget(table)
-        splitter.setSizes([260, 380])
-        splitter.setCollapsible(0, True)
+        self._splitter.addWidget(form)
+        self._splitter.addWidget(table)
+        self._splitter.setSizes(list(MACHINE_TAB_MACHINES_SPLITTER_SIZES))
+        self._splitter.setCollapsible(0, True)
 
         root = QVBoxLayout(self)
         root.setContentsMargins(0, 0, 0, 0)
-        root.addWidget(splitter)
+        root.addWidget(self._splitter)
+
+        self._init_widget_mixin(lang=False, data=False)
+        self._refresh_style()
+
+    def _refresh_style(self, *_):
+        from ui.theme import _C
+        self._splitter.setStyleSheet(f"""
+            QSplitter::handle {{
+                background: {_C['border']};
+                border-top: 1px solid {_C['border_med']};
+            }}
+            QSplitter::handle:hover {{ background: {_C['accent_mid']}; }}
+            QSplitter::handle:pressed {{ background: {_C['accent']}; }}
+        """)
 
 
-class _MachineOpsTab(QWidget):
+class _MachineOpsTab(QWidget, WidgetMixin):
     def __init__(self, conn, parent=None):
         super().__init__(parent)
-        splitter = QSplitter(Qt.Vertical)
-        splitter.setHandleWidth(6)
-        splitter.setStyleSheet(_splitter_style())
+        self._splitter = QSplitter(Qt.Vertical)
+        self._splitter.setHandleWidth(MACHINE_TAB_SPLITTER_HANDLE_W)
 
         form  = _MachineOpForm(conn)
         table = _MachineOpTable(conn, form)
 
-        splitter.addWidget(form)
-        splitter.addWidget(table)
-        splitter.setSizes([300, 400])
-        splitter.setCollapsible(0, True)
+        self._splitter.addWidget(form)
+        self._splitter.addWidget(table)
+        self._splitter.setSizes(list(MACHINE_TAB_OPS_SPLITTER_SIZES))
+        self._splitter.setCollapsible(0, True)
 
         root = QVBoxLayout(self)
         root.setContentsMargins(0, 0, 0, 0)
-        root.addWidget(splitter)
+        root.addWidget(self._splitter)
+
+        self._init_widget_mixin(lang=False, data=False)
+        self._refresh_style()
+
+    def _refresh_style(self, *_):
+        from ui.theme import _C
+        self._splitter.setStyleSheet(f"""
+            QSplitter::handle {{
+                background: {_C['border']};
+                border-top: 1px solid {_C['border_med']};
+            }}
+            QSplitter::handle:hover {{ background: {_C['accent_mid']}; }}
+            QSplitter::handle:pressed {{ background: {_C['accent']}; }}
+        """)
 
 
 class MachineTab(TabSectionBase):
@@ -82,8 +107,8 @@ class MachineTab(TabSectionBase):
 
     def _build_tabs(self, tabs: QTabWidget):
         tabs.addTab(_MachinesTab(self.conn),
-                    f"🖥️  {tr('machines')}")
+                    f"{tr('machines_icon')}  {tr('machines')}")
         tabs.addTab(_MachineOpsTab(self.conn),
-                    f"⚙️  {tr('machine_operations')}")
+                    f"{tr('machine_operations_icon')}  {tr('machine_operations')}")
         tabs.addTab(CategoryManager(self.conn, scope="machine"),
-                    f"🏷️  {tr('categories_tab')}")
+                    f"{tr('categories_tab_icon')}  {tr('categories_tab')}")

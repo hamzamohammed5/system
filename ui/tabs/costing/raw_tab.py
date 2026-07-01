@@ -26,6 +26,6 @@ class RawTab(TabSectionBase):
 
     def _build_tabs(self, tabs: QTabWidget):
         tabs.addTab(RawSection(self.conn),
-                    f"📦  {tr('raw_tab')}")
+                    f"{tr('tab_icon_raw')}  {tr('raw_tab')}")
         tabs.addTab(CategoryManager(self.conn, scope="raw"),
-                    f"🏷️  {tr('categories_tab')}")
+                    f"{tr('categories_tab_icon')}  {tr('categories_tab')}")

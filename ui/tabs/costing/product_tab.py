@@ -21,10 +21,11 @@ _SCOPE_MAP = {
     "final": "final",
 }
 
-_ICON_MAP = {
-    "semi":  "🔧",
-    "final": "🏭",
-}
+def _icon_map():
+    return {
+        "semi":  tr("tab_icon_semi"),
+        "final": tr("tab_icon_final"),
+    }
 
 
 class ProductTab(TabSectionBase):
@@ -44,7 +45,7 @@ class ProductTab(TabSectionBase):
 
     def _build_tabs(self, tabs: QTabWidget):
         scope = _SCOPE_MAP.get(self.product_type, self.product_type)
-        icon  = _ICON_MAP.get(self.product_type, "🏭")
+        icon  = _icon_map().get(self.product_type, tr("tab_icon_final"))
 
         tabs.addTab(
             _ProductMainPanel(self.conn, self.product_type),
@@ -52,5 +53,5 @@ class ProductTab(TabSectionBase):
         )
         tabs.addTab(
             CategoryManager(self.conn, scope=scope),
-            f"🏷️  {tr('categories_tab')}",
+            f"{tr('categories_tab_icon')}  {tr('categories_tab')}",
         )
