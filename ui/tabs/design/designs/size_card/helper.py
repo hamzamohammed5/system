@@ -20,30 +20,31 @@ from PyQt5.QtWidgets import (
 )
 from PyQt5.QtCore import Qt, pyqtSignal, QThread, pyqtSignal as Signal
 from ui.widgets.core.i18n import tr
+from ui.widgets.core.widget_mixin import WidgetMixin
 from ui.theme import _C
 from ui.font import FS_SM, fs
-
+from ui.constants import (
+    SIZE_CARD_THUMB_SIZE,
+    SIZE_CARD_BTN_HEIGHT,
+    SIZE_CARD_BTN_RADIUS,
+    SIZE_CARD_BTN_PAD_H,
+    SIZE_CARD_DEFAULT_DPI,
+    SIZE_CARD_SCREEN_DPI,
+    INPUT_BORDER_W,
+)
 
 from .._xcf_thumbnail import get_xcf_thumbnail
 
-# ── Palette من _C ──────────────────────────────────────
-_BG_SURFACE  = _C["bg_surface"]
-_BORDER_MED  = _C["border_med"]
-_TEXT_MUT    = _C["text_muted"]
-_ACCENT_BDR  = _C["accent_mid"]
-
-_RADIUS_SM   = "6px"
-
-_DEFAULT_DPI = 300.0
-_THUMB_SIZE  = 72
+_DEFAULT_DPI = SIZE_CARD_DEFAULT_DPI
+_THUMB_SIZE  = SIZE_CARD_THUMB_SIZE
 
 
-def _btn_ss(bg, fg, bdr, hover_bg, height=28, radius=_RADIUS_SM):
+def _btn_ss(bg, fg, bdr, hover_bg, height=SIZE_CARD_BTN_HEIGHT, radius=SIZE_CARD_BTN_RADIUS):
     return (
         f"QPushButton{{"
         f"  background:{bg}; color:{fg};"
-        f"  border:1px solid {bdr}; border-radius:{radius};"
-        f"  padding:0 10px; font-size:{FS_SM}px; min-height:{height}px;"
+        f"  border:{INPUT_BORDER_W}px solid {bdr}; border-radius:{radius};"
+        f"  padding:0 {SIZE_CARD_BTN_PAD_H}px; font-size:{FS_SM}px; min-height:{height}px;"
         f"}}"
         f"QPushButton:hover{{background:{hover_bg};}}"
         f"QPushButton:pressed{{opacity:0.85;}}"
@@ -76,7 +77,7 @@ _GIMP_UNIT_MAP = {
 }
 
 
-def _to_px(value: float, unit: str, dpi: float = 300.0) -> int:
+def _to_px(value: float, unit: str, dpi: float = _DEFAULT_DPI) -> int:
     u = unit.strip().lower()
     if u == "px":    return max(1, int(round(value)))
     if u == "mm":    return max(1, int(round(value / 25.4 * dpi)))
@@ -137,7 +138,7 @@ def _open_gimp(xcf_path=None, width_val=None, height_val=None,
             import tempfile
             from PIL import Image
             u = unit.strip().lower()
-            actual_dpi = 96.0 if u == "px" else float(dpi)
+            actual_dpi = float(SIZE_CARD_SCREEN_DPI) if u == "px" else float(dpi)
             w_px = _to_px(width_val, unit, actual_dpi)
             h_px = _to_px(height_val, unit, actual_dpi)
             tmp  = tempfile.NamedTemporaryFile(suffix=".png", delete=False)
@@ -161,24 +162,49 @@ def _open_gimp(xcf_path=None, width_val=None, height_val=None,
 # Thumbnail Widget
 # ════════════════════════════════════════════════════════
 
-class _ThumbnailWidget(QLabel):
+class _ThumbnailWidget(QLabel, WidgetMixin):
     def __init__(self, xcf_path: str, size: int = _THUMB_SIZE, parent=None):
         super().__init__(parent)
         self._size     = size
         self._xcf_path = xcf_path
+        self._thumb_loaded = False
+        self._thumb_pixmap = None
         self.setFixedSize(size, size)
         self.setAlignment(Qt.AlignCenter)
+        self._init_widget_mixin(lang=False, data=False)
         self._show_placeholder()
 
         if xcf_path and os.path.exists(xcf_path):
             self._load_async(xcf_path)
 
+    def _refresh_style(self, *_):
+        if self._thumb_loaded and self._thumb_pixmap and not self._thumb_pixmap.isNull():
+            self.setStyleSheet(f"""
+                QLabel {{
+                    background: {_C['design_thumb_bg']};
+                    border-radius: {SIZE_CARD_BTN_RADIUS};
+                    border: {INPUT_BORDER_W}px solid {_C['accent_mid']};
+                }}
+            """)
+        elif self._thumb_loaded:
+            self.setStyleSheet(f"""
+                QLabel {{
+                    background: {_C['bg_surface']};
+                    border: {INPUT_BORDER_W}px dashed {_C['border_med']};
+                    border-radius: {SIZE_CARD_BTN_RADIUS};
+                    font-size: {fs(FS_SM, +11)}px;
+                    color: {_C['text_muted']};
+                }}
+            """)
+        else:
+            self._show_placeholder()
+
     def _show_placeholder(self):
-        self.setText("🎨")
+        self.setText(tr('design_card_thumb_placeholder_icon'))
         self.setStyleSheet(f"""
             QLabel {{
                 background: {_C['design_thumb_bg']};
-                border-radius: {_RADIUS_SM};
+                border-radius: {SIZE_CARD_BTN_RADIUS};
                 font-size: {fs(FS_SM, +9)}px;
             }}
         """)
@@ -189,6 +215,8 @@ class _ThumbnailWidget(QLabel):
         self._worker.start()
 
     def _on_thumb_ready(self, pixmap):
+        self._thumb_loaded = True
+        self._thumb_pixmap = pixmap
         if pixmap and not pixmap.isNull():
             self.setText("")
             scaled = pixmap.scaled(
@@ -200,17 +228,17 @@ class _ThumbnailWidget(QLabel):
             self.setStyleSheet(f"""
                 QLabel {{
                     background: {_C['design_thumb_bg']};
-                    border-radius: {_RADIUS_SM};
-                    border: 1px solid {_C['accent_mid']};
+                    border-radius: {SIZE_CARD_BTN_RADIUS};
+                    border: {INPUT_BORDER_W}px solid {_C['accent_mid']};
                 }}
             """)
         else:
-            self.setText("📄")
+            self.setText(tr('design_size_card_thumb_no_file_icon'))
             self.setStyleSheet(f"""
                 QLabel {{
                     background: {_C['bg_surface']};
-                    border: 1px dashed {_C['border_med']};
-                    border-radius: {_RADIUS_SM};
+                    border: {INPUT_BORDER_W}px dashed {_C['border_med']};
+                    border-radius: {SIZE_CARD_BTN_RADIUS};
                     font-size: {fs(FS_SM, +11)}px;
                     color: {_C['text_muted']};
                 }}

@@ -26,33 +26,38 @@ from db.designs.design_item_categories_repo import (
 )
 from ._size_card   import _SizeCard
 from ._size_dialog import _SizeDialog
-from ui.widgets.core.events import bus
 from ui.tabs.design.design_styles import get_styles
-from ui.theme import _C
 from ui.widgets.core.i18n import tr
+from ui.widgets.core.widget_mixin import WidgetMixin
 from ui.font import get_font_size, fs
+from ui.constants import (
+    INPUT_BORDER_W,
+    DESIGN_DETAIL_HDR_MARGIN_H,
+    DESIGN_DETAIL_HDR_MARGIN_T,
+    DESIGN_DETAIL_HDR_MARGIN_B,
+    DESIGN_DETAIL_HDR_SPACING,
+    DESIGN_DETAIL_TITLE_ROW_SPACING,
+    DESIGN_DETAIL_BTN_ROW_SPACING,
+    DESIGN_DETAIL_FIELD_SPACING,
+    DESIGN_DETAIL_ROW2_SPACING,
+    DESIGN_DETAIL_SH_MARGIN_H,
+    DESIGN_DETAIL_SH_MARGIN_V,
+    DESIGN_DETAIL_SH_SPACING,
+    DESIGN_DETAIL_SIZES_MARGIN,
+    DESIGN_DETAIL_SIZES_SPACING,
+    DESIGN_DETAIL_SCROLL_W,
+    DESIGN_DETAIL_SCROLL_RADIUS,
+    DESIGN_DETAIL_SCROLL_MIN_H,
+    DESIGN_DETAIL_CMB_MIN_W,
+    DESIGN_DETAIL_ES_SPACING,
+)
 
 # ── Palette من _C ──────────────────────────────────────
-_BG          = _C["bg_input"]
-_BG_SURFACE  = _C["bg_surface"]
-_BORDER      = _C["border"]
-_BORDER_MED  = _C["border_med"]
-_TEXT_PRI    = _C["text_primary"]
-_TEXT_SEC    = _C["text_sec"]
-_TEXT_MUT    = _C["text_muted"]
-_ACCENT      = _C["accent"]
-_ACCENT_LT   = _C["accent_light"]
-_ACCENT_BDR  = _C["accent_mid"]
-_ACCENT_DARK = _C["accent_hover"]
-_SUCCESS     = _C["success"]
-_SUCCESS_LT  = _C["success_bg"]
-_SUCCESS_BDR = _C["success_border"]
-_DANGER      = _C["danger"]
 _RADIUS_SM   = "6px"
 _RADIUS_XS   = "4px"
 
 
-class _DesignDetailPanel(QWidget):
+class _DesignDetailPanel(QWidget, WidgetMixin):
     saved   = pyqtSignal()
     cleared = pyqtSignal()
 
@@ -64,14 +69,11 @@ class _DesignDetailPanel(QWidget):
         self._size_cards = []
         self._build()
         self._reload_categories()
-        bus.font_changed.connect(self._on_font_changed)
+        self._init_widget_mixin(lang=False, data=False)
 
-    def _on_font_changed(self, size: int):
-        """إعادة تطبيق الـ stylesheets عند تغيير حجم الخط."""
-        self._apply_dynamic_styles()
-
-    def _apply_dynamic_styles(self):
+    def _refresh_style(self, *_):
         s = get_styles()
+        from ui.theme import _C
 
         # Header labels
         self._lbl_title.setStyleSheet(s.label_header())
@@ -103,6 +105,7 @@ class _DesignDetailPanel(QWidget):
         self._es_sub.setStyleSheet(s.label_muted())
 
     def _build(self):
+        from ui.theme import _C
         s = get_styles()
         root = QVBoxLayout(self)
         root.setContentsMargins(0, 0, 0, 0)
@@ -112,14 +115,15 @@ class _DesignDetailPanel(QWidget):
 
         # ── Header ──────────────────────────────────────
         hdr = QFrame()
-        hdr.setStyleSheet(f"QFrame {{ background:{_BG}; border-bottom:1px solid {_BORDER}; }}")
+        hdr.setStyleSheet(f"QFrame {{ background:{_C['bg_input']}; border-bottom:{INPUT_BORDER_W}px solid {_C['border']}; }}")
         hdr_lay = QVBoxLayout(hdr)
-        hdr_lay.setContentsMargins(18, 14, 18, 16)
-        hdr_lay.setSpacing(14)
+        hdr_lay.setContentsMargins(DESIGN_DETAIL_HDR_MARGIN_H, DESIGN_DETAIL_HDR_MARGIN_T,
+                                   DESIGN_DETAIL_HDR_MARGIN_H, DESIGN_DETAIL_HDR_MARGIN_B)
+        hdr_lay.setSpacing(DESIGN_DETAIL_HDR_SPACING)
 
         # صف العنوان
         title_row = QHBoxLayout()
-        title_row.setSpacing(8)
+        title_row.setSpacing(DESIGN_DETAIL_TITLE_ROW_SPACING)
 
         self._lbl_title = QLabel(tr("design_detail_new_title"))
         self._lbl_title.setStyleSheet(s.label_header())
@@ -133,7 +137,7 @@ class _DesignDetailPanel(QWidget):
 
         # أزرار الحفظ
         btn_row = QHBoxLayout()
-        btn_row.setSpacing(6)
+        btn_row.setSpacing(DESIGN_DETAIL_BTN_ROW_SPACING)
 
         self.btn_new = QPushButton(tr("design_detail_new_btn"))
         self.btn_new.setStyleSheet(s.btn_ghost())
@@ -150,7 +154,7 @@ class _DesignDetailPanel(QWidget):
 
         # حقل الاسم
         name_col = QVBoxLayout()
-        name_col.setSpacing(4)
+        name_col.setSpacing(DESIGN_DETAIL_FIELD_SPACING)
         lbl_name = QLabel(tr("design_detail_name_label"))
         lbl_name.setStyleSheet(s.label_field())
         self._field_labels.append(lbl_name)
@@ -163,21 +167,21 @@ class _DesignDetailPanel(QWidget):
 
         # التصنيف + الملاحظات
         row2 = QHBoxLayout()
-        row2.setSpacing(10)
+        row2.setSpacing(DESIGN_DETAIL_ROW2_SPACING)
 
         cat_col = QVBoxLayout()
-        cat_col.setSpacing(4)
+        cat_col.setSpacing(DESIGN_DETAIL_FIELD_SPACING)
         lbl_cat = QLabel(tr("design_detail_category_label"))
         lbl_cat.setStyleSheet(s.label_field())
         self._field_labels.append(lbl_cat)
         cat_col.addWidget(lbl_cat)
         self.cmb_cat = QComboBox()
         self.cmb_cat.setStyleSheet(s.combo_field())
-        self.cmb_cat.setMinimumWidth(160)
+        self.cmb_cat.setMinimumWidth(DESIGN_DETAIL_CMB_MIN_W)
         cat_col.addWidget(self.cmb_cat)
 
         notes_col = QVBoxLayout()
-        notes_col.setSpacing(4)
+        notes_col.setSpacing(DESIGN_DETAIL_FIELD_SPACING)
         lbl_notes = QLabel(tr("design_detail_notes_label"))
         lbl_notes.setStyleSheet(s.label_field())
         self._field_labels.append(lbl_notes)
@@ -196,11 +200,12 @@ class _DesignDetailPanel(QWidget):
         # ── قسم المقاسات ────────────────────────────────
         sizes_hdr = QFrame()
         sizes_hdr.setStyleSheet(
-            f"QFrame {{ background:{_BG_SURFACE}; border-bottom:1px solid {_BORDER}; }}"
+            f"QFrame {{ background:{_C['bg_surface']}; border-bottom:{INPUT_BORDER_W}px solid {_C['border']}; }}"
         )
         sh_lay = QHBoxLayout(sizes_hdr)
-        sh_lay.setContentsMargins(18, 10, 18, 10)
-        sh_lay.setSpacing(8)
+        sh_lay.setContentsMargins(DESIGN_DETAIL_SH_MARGIN_H, DESIGN_DETAIL_SH_MARGIN_V,
+                                  DESIGN_DETAIL_SH_MARGIN_H, DESIGN_DETAIL_SH_MARGIN_V)
+        sh_lay.setSpacing(DESIGN_DETAIL_SH_SPACING)
 
         self._lbl_sizes = QLabel(tr("design_detail_sizes_section"))
         self._lbl_sizes.setStyleSheet(s.label_section())
@@ -224,21 +229,22 @@ class _DesignDetailPanel(QWidget):
         self._sizes_scroll.setWidgetResizable(True)
         self._sizes_scroll.setHorizontalScrollBarPolicy(Qt.ScrollBarAlwaysOff)
         self._sizes_scroll.setStyleSheet(f"""
-            QScrollArea {{ border:none; background:{_BG_SURFACE}; }}
+            QScrollArea {{ border:none; background:{_C['bg_surface']}; }}
             QScrollBar:vertical {{
-                background:{_BG_SURFACE}; width:5px; border-radius:2px;
+                background:{_C['bg_surface']}; width:{DESIGN_DETAIL_SCROLL_W}px; border-radius:{DESIGN_DETAIL_SCROLL_RADIUS}px;
             }}
             QScrollBar::handle:vertical {{
-                background:{_BORDER_MED}; border-radius:2px; min-height:20px;
+                background:{_C['border_med']}; border-radius:{DESIGN_DETAIL_SCROLL_RADIUS}px; min-height:{DESIGN_DETAIL_SCROLL_MIN_H}px;
             }}
             QScrollBar::add-line:vertical, QScrollBar::sub-line:vertical {{ height:0; }}
         """)
 
         self._sizes_widget = QWidget()
-        self._sizes_widget.setStyleSheet(f"background:{_BG_SURFACE};")
+        self._sizes_widget.setStyleSheet(f"background:{_C['bg_surface']};")
         self._sizes_layout = QVBoxLayout(self._sizes_widget)
-        self._sizes_layout.setContentsMargins(14, 14, 14, 14)
-        self._sizes_layout.setSpacing(10)
+        self._sizes_layout.setContentsMargins(DESIGN_DETAIL_SIZES_MARGIN, DESIGN_DETAIL_SIZES_MARGIN,
+                                              DESIGN_DETAIL_SIZES_MARGIN, DESIGN_DETAIL_SIZES_MARGIN)
+        self._sizes_layout.setSpacing(DESIGN_DETAIL_SIZES_SPACING)
         self._sizes_layout.addStretch()
 
         self._sizes_scroll.setWidget(self._sizes_widget)
@@ -249,9 +255,9 @@ class _DesignDetailPanel(QWidget):
         self._empty_sizes.setStyleSheet("background:transparent; border:none;")
         es_lay = QVBoxLayout(self._empty_sizes)
         es_lay.setAlignment(Qt.AlignCenter)
-        es_lay.setSpacing(6)
+        es_lay.setSpacing(DESIGN_DETAIL_ES_SPACING)
 
-        self._es_icon = QLabel("📐")
+        self._es_icon = QLabel(tr("design_detail_no_sizes_icon"))
         self._es_icon.setAlignment(Qt.AlignCenter)
 
         self._es_lbl = QLabel(tr("design_detail_no_sizes_title"))
@@ -328,7 +334,7 @@ class _DesignDetailPanel(QWidget):
 
     def _add_cat_nodes(self, nodes, depth):
         indent = "    " * depth
-        arrow  = "↳ " if depth > 0 else ""
+        arrow  = tr("design_detail_cat_arrow") if depth > 0 else ""
         for node in nodes:
             self.cmb_cat.addItem(f"{indent}{arrow}{node['name']}", node["id"])
             if node["children"]:
@@ -339,12 +345,13 @@ class _DesignDetailPanel(QWidget):
     # ══════════════════════════════════════════════════════
 
     def _save(self):
+        from ui.theme import _C
         s = get_styles()
         name = self.inp_name.text().strip()
         if not name:
             self.inp_name.setFocus()
             self.inp_name.setStyleSheet(
-                s.input_field() + f"QLineEdit{{border-color:{_DANGER};}}"
+                s.input_field() + f"QLineEdit{{border-color:{_C['danger']};}}"
             )
             QMessageBox.warning(self, tr("warning"), tr("design_detail_name_required"))
             return

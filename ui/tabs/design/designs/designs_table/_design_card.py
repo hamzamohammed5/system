@@ -22,17 +22,26 @@ from db.designs.design_item_categories_repo import (
     fetch_item_category_descendants,
 )
 from .._xcf_thumbnail import get_xcf_thumbnail
-from ui.theme import _C
+from ui.widgets.core.widget_mixin import WidgetMixin
 from ui.widgets.core.i18n import tr
-from ui.font import get_font_size, fs, FS_XS
+from ui.font import fs, FS_XS
+from ui.theme import _C
+from ui.constants import (
+    DESIGN_CARD_W, DESIGN_CARD_THUMB,
+    DESIGN_CARD_RADIUS, DESIGN_CARD_RADIUS_SM,
+    DESIGN_CARD_BADGE_X_OFFSET, DESIGN_CARD_BADGE_Y,
+    DESIGN_CARD_BADGE_W, DESIGN_CARD_BADGE_H, DESIGN_CARD_BADGE_RADIUS,
+    DESIGN_CARD_INFO_MARGIN_H, DESIGN_CARD_INFO_MARGIN_T,
+    DESIGN_CARD_INFO_MARGIN_B, DESIGN_CARD_INFO_SPACING,
+)
 
 import os
 
 # ── Layout Constants ──────────────────────────────────────────────
-_CARD_W      = 172
-_CARD_THUMB  = 128
-_RADIUS      = "10px"
-_RADIUS_SM   = "6px"
+_CARD_W      = DESIGN_CARD_W
+_CARD_THUMB  = DESIGN_CARD_THUMB
+_RADIUS      = DESIGN_CARD_RADIUS
+_RADIUS_SM   = DESIGN_CARD_RADIUS_SM
 
 
 # ════════════════════════════════════════════════════════
@@ -187,12 +196,13 @@ def _fetch_designs_filtered(conn, name_q="", category_id=None, set_id=None):
 # بطاقة تصميم واحد
 # ════════════════════════════════════════════════════════
 
-class _DesignCard(QFrame):
+class _DesignCard(QFrame, WidgetMixin):
     selected = pyqtSignal(int)
     deleted  = pyqtSignal(int)
 
     def __init__(self, conn, design_data, set_id=None, parent=None):
         super().__init__(parent)
+        self._init_widget_mixin(lang=False, data=False)
         self.conn      = conn
         self._data     = dict(design_data)
         self._did      = self._data["id"]
@@ -203,11 +213,15 @@ class _DesignCard(QFrame):
         self.setFixedWidth(_CARD_W)
         self._build()
 
-        from ui.widgets.core.events import bus
-        bus.font_changed.connect(self._apply_name_font)
+    def _refresh_style(self, *_):
+        """يُعيد بناء الـ stylesheet عند تغيير الثيم أو الخط."""
+        self._update_style()
+        if hasattr(self, '_lbl_name'):
+            self._apply_name_font()
 
     def _apply_name_font(self, size: int = None):
         """يحدّث خط اسم التصميم ديناميكياً عند تغيير حجم الخط من الإعدادات."""
+        from ui.font import get_font_size
         size = size or get_font_size()
         font_n = QFont()
         font_n.setPointSize(fs(size, -2))
@@ -223,32 +237,27 @@ class _DesignCard(QFrame):
         # ── منطقة الـ Thumbnail ──
         thumb_frame = QFrame()
         thumb_frame.setFixedSize(_CARD_W, _CARD_THUMB)
-        thumb_frame.setStyleSheet(f"""
-            QFrame {{
-                background: {_C['design_thumb_bg']};
-                border-radius: {_RADIUS} {_RADIUS} 0 0;
-            }}
-        """)
+        self._thumb_frame = thumb_frame
+        self._apply_thumb_style()
 
         self._thumb_lbl = QLabel(thumb_frame)
         self._thumb_lbl.setFixedSize(_CARD_W, _CARD_THUMB)
         self._thumb_lbl.setAlignment(Qt.AlignCenter)
-        self._thumb_lbl.setStyleSheet(
-            f"background:transparent; font-size:{fs(FS_XS,+18)}px; color:{_C['design_thumb_icon']};"
-        )
-        self._thumb_lbl.setText("🎨")
+        self._apply_thumb_lbl_style()
+        self._thumb_lbl.setText(tr("design_card_thumb_placeholder_icon"))
 
         # badge عدد المقاسات
         sz_cnt = self._data.get("sizes_count") or 0
         if sz_cnt:
             badge = QLabel(f"{sz_cnt}", thumb_frame)
-            badge.setGeometry(_CARD_W - 30, 8, 22, 18)
-            badge.setAlignment(Qt.AlignCenter)
-            badge.setStyleSheet(
-                f"background:{_C['card_badge_bg']}; color:{_C['card_badge_text']};"
-                f"border-radius:9px; font-size:{fs(FS_XS,-1)}px; font-weight:700;"
-                f"border:1px solid {_C['card_badge_border']};"
+            badge.setGeometry(
+                _CARD_W - DESIGN_CARD_BADGE_X_OFFSET,
+                DESIGN_CARD_BADGE_Y,
+                DESIGN_CARD_BADGE_W,
+                DESIGN_CARD_BADGE_H,
             )
+            badge.setAlignment(Qt.AlignCenter)
+            self._apply_badge_style(badge)
 
         root.addWidget(thumb_frame)
 
@@ -256,8 +265,13 @@ class _DesignCard(QFrame):
         info = QFrame()
         info.setStyleSheet("QFrame{background:transparent; border:none;}")
         info_lay = QVBoxLayout(info)
-        info_lay.setContentsMargins(10, 8, 10, 10)
-        info_lay.setSpacing(3)
+        info_lay.setContentsMargins(
+            DESIGN_CARD_INFO_MARGIN_H,
+            DESIGN_CARD_INFO_MARGIN_T,
+            DESIGN_CARD_INFO_MARGIN_H,
+            DESIGN_CARD_INFO_MARGIN_B,
+        )
+        info_lay.setSpacing(DESIGN_CARD_INFO_SPACING)
 
         name = self._data.get("name", "")
         self._lbl_name = QLabel(name)
@@ -316,7 +330,7 @@ class _DesignCard(QFrame):
             self._thumb_lbl.setText("")
         else:
             self._thumb_lbl.setPixmap(QPixmap())
-            self._thumb_lbl.setText("🎨")
+            self._thumb_lbl.setText(tr("design_card_thumb_placeholder_icon"))
 
     def load_thumbnail(self, xcf_path: str = None):
         """

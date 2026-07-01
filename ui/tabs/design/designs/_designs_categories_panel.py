@@ -20,33 +20,38 @@ from db.designs.design_item_categories_repo import (
     fetch_item_category_descendants,
     count_designs_per_category,
 )
-from ui.widgets.core.events import bus
 from ui.tabs.design.design_styles import get_styles
 from ui.widgets.core.i18n import tr
-from ui.theme import _C
-
-_SIDEBAR_W = 230
-
-# ── Palette من _C ──────────────────────────────────────
-_BG          = _C["bg_input"]
-_BG_SURFACE  = _C["bg_surface"]
-_BG_HOVER    = _C["bg_hover"]
-_BG_SELECTED = _C["accent_light"]
-_BORDER      = _C["border"]
-_BORDER_MED  = _C["border_med"]
-_TEXT_PRI    = _C["text_primary"]
-_TEXT_SEC    = _C["text_sec"]
-_TEXT_MUT    = _C["text_muted"]
-_ACCENT      = _C["accent"]
-_DANGER      = _C["danger"]
-_DANGER_LT   = _C["danger_bg"]
-_DANGER_BDR  = _C["danger_border"]
-_RADIUS_SM   = "5px"
+from ui.widgets.core.widget_mixin import WidgetMixin
+from ui.constants import (
+    DESIGN_CATS_SIDEBAR_W,
+    DESIGN_CATS_HDR_H,
+    DESIGN_CATS_HDR_MARGIN_L,
+    DESIGN_CATS_HDR_MARGIN_R,
+    DESIGN_CATS_HDR_SPACING,
+    DESIGN_CATS_BTN_ADD_SIZE,
+    DESIGN_CATS_BTN_ADD_RADIUS,
+    DESIGN_CATS_SEARCH_MARGIN_V,
+    DESIGN_CATS_SEARCH_SPACING,
+    DESIGN_CATS_INP_MIN_H,
+    DESIGN_CATS_BTN_CLEAR_SIZE,
+    DESIGN_CATS_LIST_MARGIN_V,
+    DESIGN_CATS_LIST_SPACING,
+    DESIGN_CATS_ACT_MARGIN_H,
+    DESIGN_CATS_ACT_MARGIN_V,
+    DESIGN_CATS_ACT_SPACING,
+    DESIGN_CATS_BTN_MIN_H,
+    DESIGN_CATS_SEP_H,
+    DESIGN_CATS_SCROLL_W,
+    DESIGN_CATS_SCROLL_RADIUS,
+    DESIGN_CATS_SCROLL_MIN_H,
+    INPUT_BORDER_W,
+)
 
 from .designs_categories._row_and_form import _btn_ss, _CatForm, _CatRow
 
 
-class DesignsCategoriesPanel(QWidget):
+class DesignsCategoriesPanel(QWidget, WidgetMixin):
     category_changed = pyqtSignal(object)
 
     def __init__(self, conn, parent=None):
@@ -56,23 +61,21 @@ class DesignsCategoriesPanel(QWidget):
         self._items     = []
         self._build()
         self._load()
-        bus.font_changed.connect(self._on_font_changed)
+        self._init_widget_mixin(lang=False, data=False)
+        self._refresh_style()
 
-    def _on_font_changed(self, size: int):
-        self._apply_dynamic_styles()
-
-    def _apply_dynamic_styles(self):
+    def _refresh_style(self, *_):
+        from ui.theme import _C
         s = get_styles()
 
-        # header
         self._lbl_header.setStyleSheet(
-            f"font-size:{s.large}pt; font-weight:700; color:{_TEXT_PRI};"
+            f"font-size:{s.large}pt; font-weight:700; color:{_C['text_primary']};"
             "background:transparent; border:none;"
         )
         self._btn_add.setStyleSheet(
             f"QPushButton{{"
-            f"  background:{_ACCENT}; color:{_C['accent_text']};"
-            f"  border:none; border-radius:{s.normal + 2}px;"
+            f"  background:{_C['accent']}; color:{_C['accent_text']};"
+            f"  border:none; border-radius:{DESIGN_CATS_BTN_ADD_RADIUS}px;"
             f"  font-size:{s.large}pt; font-weight:700;"
             f"}}"
             f"QPushButton:hover{{background:{_C['accent_hover']};}}"
@@ -80,17 +83,18 @@ class DesignsCategoriesPanel(QWidget):
         self._inp_search.setStyleSheet(s.input_search())
 
         self.btn_edit.setStyleSheet(
-            s.btn(_BG, _TEXT_SEC, _BORDER_MED, _BG_HOVER)
+            s.btn(_C["bg_input"], _C["text_sec"], _C["border_med"], _C["bg_hover"])
         )
         self.btn_del.setStyleSheet(
-            s.btn(_DANGER_LT, _DANGER, _DANGER_BDR, _DANGER_LT)
+            s.btn(_C["danger_bg"], _C["danger"], _C["danger_border"], _C["danger_bg"])
         )
 
     def _build(self):
+        from ui.theme import _C
         s = get_styles()
-        self.setFixedWidth(_SIDEBAR_W)
+        self.setFixedWidth(DESIGN_CATS_SIDEBAR_W)
         self.setStyleSheet(
-            f"QWidget{{ background:{_BG}; border-left:1px solid {_BORDER}; }}"
+            f"QWidget{{ background:{_C['bg_input']}; border-left:{INPUT_BORDER_W}px solid {_C['border']}; }}"
         )
         root = QVBoxLayout(self)
         root.setContentsMargins(0, 0, 0, 0)
@@ -98,27 +102,27 @@ class DesignsCategoriesPanel(QWidget):
 
         # ── رأس ──────────────────────────────────────
         hdr = QFrame()
-        hdr.setFixedHeight(52)
+        hdr.setFixedHeight(DESIGN_CATS_HDR_H)
         hdr.setStyleSheet(
-            f"QFrame{{ background:{_BG}; border-bottom:1px solid {_BORDER}; }}"
+            f"QFrame{{ background:{_C['bg_input']}; border-bottom:{INPUT_BORDER_W}px solid {_C['border']}; }}"
         )
         hdr_lay = QHBoxLayout(hdr)
-        hdr_lay.setContentsMargins(14, 0, 10, 0)
-        hdr_lay.setSpacing(8)
+        hdr_lay.setContentsMargins(DESIGN_CATS_HDR_MARGIN_L, 0, DESIGN_CATS_HDR_MARGIN_R, 0)
+        hdr_lay.setSpacing(DESIGN_CATS_HDR_SPACING)
 
         self._lbl_header = QLabel(tr("design_cats_panel_title"))
         self._lbl_header.setStyleSheet(
-            f"font-size:{s.large}pt; font-weight:700; color:{_TEXT_PRI};"
+            f"font-size:{s.large}pt; font-weight:700; color:{_C['text_primary']};"
             "background:transparent; border:none;"
         )
 
         self._btn_add = QPushButton("+")
-        self._btn_add.setFixedSize(26, 26)
+        self._btn_add.setFixedSize(DESIGN_CATS_BTN_ADD_SIZE, DESIGN_CATS_BTN_ADD_SIZE)
         self._btn_add.setToolTip(tr("design_cats_add_tooltip"))
         self._btn_add.setStyleSheet(
             f"QPushButton{{"
-            f"  background:{_ACCENT}; color:{_C['accent_text']};"
-            f"  border:none; border-radius:13px;"
+            f"  background:{_C['accent']}; color:{_C['accent_text']};"
+            f"  border:none; border-radius:{DESIGN_CATS_BTN_ADD_RADIUS}px;"
             f"  font-size:{s.large}pt; font-weight:700;"
             f"}}"
             f"QPushButton:hover{{background:{_C['accent_hover']};}}"
@@ -132,25 +136,25 @@ class DesignsCategoriesPanel(QWidget):
         # ── شريط البحث ──────────────────────────────
         search_frame = QFrame()
         search_frame.setStyleSheet(
-            f"QFrame{{ background:{_BG}; border-bottom:1px solid {_BORDER}; padding:8px 12px; }}"
+            f"QFrame{{ background:{_C['bg_input']}; border-bottom:{INPUT_BORDER_W}px solid {_C['border']}; padding:8px 12px; }}"
         )
         sf_lay = QHBoxLayout(search_frame)
-        sf_lay.setContentsMargins(0, 6, 0, 6)
-        sf_lay.setSpacing(6)
+        sf_lay.setContentsMargins(0, DESIGN_CATS_SEARCH_MARGIN_V, 0, DESIGN_CATS_SEARCH_MARGIN_V)
+        sf_lay.setSpacing(DESIGN_CATS_SEARCH_SPACING)
 
         self._inp_search = QLineEdit()
         self._inp_search.setPlaceholderText(tr("design_cats_search_placeholder"))
-        self._inp_search.setMinimumHeight(30)
+        self._inp_search.setMinimumHeight(DESIGN_CATS_INP_MIN_H)
         self._inp_search.setStyleSheet(s.input_search())
         self._inp_search.textChanged.connect(self._on_search)
 
-        self._btn_clear_search = QPushButton("✕")
-        self._btn_clear_search.setFixedSize(22, 22)
+        self._btn_clear_search = QPushButton(tr("combo_clear_search"))
+        self._btn_clear_search.setFixedSize(DESIGN_CATS_BTN_CLEAR_SIZE, DESIGN_CATS_BTN_CLEAR_SIZE)
         self._btn_clear_search.setVisible(False)
         self._btn_clear_search.setStyleSheet(
             f"QPushButton{{background:transparent;border:none;"
-            f"color:{_TEXT_MUT};}}"
-            f"QPushButton:hover{{color:{_DANGER};}}"
+            f"color:{_C['text_muted']};}}"
+            f"QPushButton:hover{{color:{_C['danger']};}}"
         )
         self._btn_clear_search.clicked.connect(self._clear_search)
         self._inp_search.textChanged.connect(
@@ -166,21 +170,21 @@ class DesignsCategoriesPanel(QWidget):
         scroll.setWidgetResizable(True)
         scroll.setHorizontalScrollBarPolicy(Qt.ScrollBarAlwaysOff)
         scroll.setStyleSheet(
-            f"QScrollArea{{border:none; background:{_BG};}}"
-            "QScrollBar:vertical{"
-            f"  background:{_BG_SURFACE}; width:4px; border-radius:2px;"
-            "}"
-            "QScrollBar::handle:vertical{"
-            f"  background:{_BORDER_MED}; border-radius:2px; min-height:20px;"
-            "}"
+            f"QScrollArea{{border:none; background:{_C['bg_input']};}}"
+            f"QScrollBar:vertical{{"
+            f"  background:{_C['bg_surface']}; width:{DESIGN_CATS_SCROLL_W}px; border-radius:{DESIGN_CATS_SCROLL_RADIUS}px;"
+            f"}}"
+            f"QScrollBar::handle:vertical{{"
+            f"  background:{_C['border_med']}; border-radius:{DESIGN_CATS_SCROLL_RADIUS}px; min-height:{DESIGN_CATS_SCROLL_MIN_H}px;"
+            f"}}"
             "QScrollBar::add-line:vertical, QScrollBar::sub-line:vertical{height:0;}"
         )
 
         self._list_w = QWidget()
-        self._list_w.setStyleSheet(f"background:{_BG};")
+        self._list_w.setStyleSheet(f"background:{_C['bg_input']};")
         self._list_lay = QVBoxLayout(self._list_w)
-        self._list_lay.setContentsMargins(0, 6, 0, 6)
-        self._list_lay.setSpacing(1)
+        self._list_lay.setContentsMargins(0, DESIGN_CATS_LIST_MARGIN_V, 0, DESIGN_CATS_LIST_MARGIN_V)
+        self._list_lay.setSpacing(DESIGN_CATS_LIST_SPACING)
         self._list_lay.addStretch()
 
         scroll.setWidget(self._list_w)
@@ -189,22 +193,23 @@ class DesignsCategoriesPanel(QWidget):
         # ── شريط الإجراءات ──────────────────────────
         act = QFrame()
         act.setStyleSheet(
-            f"QFrame{{ background:{_BG_SURFACE}; border-top:1px solid {_BORDER}; }}"
+            f"QFrame{{ background:{_C['bg_surface']}; border-top:{INPUT_BORDER_W}px solid {_C['border']}; }}"
         )
         ab = QHBoxLayout(act)
-        ab.setContentsMargins(10, 8, 10, 8)
-        ab.setSpacing(6)
+        ab.setContentsMargins(DESIGN_CATS_ACT_MARGIN_H, DESIGN_CATS_ACT_MARGIN_V,
+                              DESIGN_CATS_ACT_MARGIN_H, DESIGN_CATS_ACT_MARGIN_V)
+        ab.setSpacing(DESIGN_CATS_ACT_SPACING)
 
         self.btn_edit = QPushButton(tr("design_cats_edit_btn"))
-        self.btn_edit.setMinimumHeight(28)
+        self.btn_edit.setMinimumHeight(DESIGN_CATS_BTN_MIN_H)
         self.btn_edit.setEnabled(False)
-        self.btn_edit.setStyleSheet(s.btn(_BG, _TEXT_SEC, _BORDER_MED, _BG_HOVER))
+        self.btn_edit.setStyleSheet(s.btn(_C["bg_input"], _C["text_sec"], _C["border_med"], _C["bg_hover"]))
         self.btn_edit.clicked.connect(self._show_edit_form)
 
         self.btn_del = QPushButton(tr("design_cats_delete_btn"))
-        self.btn_del.setMinimumHeight(28)
+        self.btn_del.setMinimumHeight(DESIGN_CATS_BTN_MIN_H)
         self.btn_del.setEnabled(False)
-        self.btn_del.setStyleSheet(s.btn(_DANGER_LT, _DANGER, _DANGER_BDR, _DANGER_LT))
+        self.btn_del.setStyleSheet(s.btn(_C["danger_bg"], _C["danger"], _C["danger_border"], _C["danger_bg"]))
         self.btn_del.clicked.connect(self._delete)
 
         ab.addWidget(self.btn_edit, stretch=1)
@@ -221,12 +226,13 @@ class DesignsCategoriesPanel(QWidget):
     # ── تحميل التصنيفات ───────────────────────────────────
 
     def _load(self, query=""):
+        from ui.theme import _C
         for item in self._items:
             self._list_lay.removeWidget(item)
             item.deleteLater()
         self._items = []
 
-        all_row = _CatRow(None, tr("design_cats_all"), _ACCENT, depth=0)
+        all_row = _CatRow(None, tr("design_cats_all"), _C["accent"], depth=0)
         all_row.clicked.connect(self._on_clicked)
         all_row.set_selected(self._active_id == "ALL")
         self._list_lay.insertWidget(self._list_lay.count() - 1, all_row)
@@ -234,8 +240,8 @@ class DesignsCategoriesPanel(QWidget):
 
         sep = QFrame()
         sep.setFrameShape(QFrame.HLine)
-        sep.setFixedHeight(1)
-        sep.setStyleSheet(f"background:{_BORDER}; margin:3px 12px;")
+        sep.setFixedHeight(DESIGN_CATS_SEP_H)
+        sep.setStyleSheet(f"background:{_C['border']}; margin:3px 12px;")
         self._list_lay.insertWidget(self._list_lay.count() - 1, sep)
 
         rows   = fetch_all_item_categories(self.conn)
@@ -248,6 +254,7 @@ class DesignsCategoriesPanel(QWidget):
         self.btn_del.setEnabled(has_selection)
 
     def _add_tree(self, nodes, depth, counts, query):
+        from ui.theme import _C
         for node in nodes:
             name_lower = node["name"].lower()
             if query and query not in name_lower and not node["children"]:

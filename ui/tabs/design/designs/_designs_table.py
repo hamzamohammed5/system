@@ -25,34 +25,46 @@ from ._design_detail_panel import _DesignDetailPanel
 
 from .designs_table._design_card import _fetch_designs_filtered, _DesignCard, _ThumbWorker
 
-from ui.theme import _C
 from ui.widgets.core.i18n import tr
+from ui.widgets.core.widget_mixin import WidgetMixin
 from ui.font import get_font_size, fs
-from ui.widgets.core.events import bus
+from ui.constants import (
+    INPUT_BORDER_W,
+    INPUT_BORDER_RADIUS,
+    INPUT_PAD_H,
+    DESIGN_CARD_W,
+    DESIGN_CARD_THUMB,
+    DESIGNS_TABLE_TB_MARGIN_H,
+    DESIGNS_TABLE_TB_MARGIN_V,
+    DESIGNS_TABLE_TB_SPACING,
+    DESIGNS_TABLE_ROW_SPACING,
+    DESIGNS_TABLE_INP_MIN_H,
+    DESIGNS_TABLE_CMB_MIN_H,
+    DESIGNS_TABLE_CMB_DROP_W,
+    DESIGNS_TABLE_GRID_MARGIN,
+    DESIGNS_TABLE_GRID_SPACING,
+    DESIGNS_TABLE_SCROLL_W,
+    DESIGNS_TABLE_SCROLL_RADIUS,
+    DESIGNS_TABLE_SCROLL_MIN_H,
+    DESIGNS_TABLE_INP_PAD_H,
+    DESIGNS_TABLE_REFLOW_DELAY,
+    DESIGNS_TABLE_SEARCH_DELAY,
+    DESIGNS_TABLE_COLS_SIDE_PAD,
+    DESIGNS_TABLE_EMPTY_SPACING,
+)
 
 import os
 
-# ── Palette من _C ──────────────────────────────────────
-_BG          = _C["bg_input"]
-_BG_SURFACE  = _C["bg_surface"]
-_BORDER      = _C["border"]
-_BORDER_MED  = _C["border_med"]
-_TEXT_PRI    = _C["text_primary"]
-_TEXT_SEC    = _C["text_sec"]
-_TEXT_MUT    = _C["text_muted"]
-
-_ACCENT      = _C["accent"]
-_CARD_W      = 172
-_CARD_THUMB  = 128
-_RADIUS_SM   = "6px"
+_RADIUS_SM = f"{INPUT_BORDER_RADIUS}px"
 
 
 def _btn_ss(bg, fg, bdr, hover_bg, radius=_RADIUS_SM, height=32):
+    from ui.theme import _C
     base = get_font_size()
     return (
         f"QPushButton{{"
         f"  background:{bg}; color:{fg};"
-        f"  border:1px solid {bdr}; border-radius:{radius};"
+        f"  border:{INPUT_BORDER_W}px solid {bdr}; border-radius:{radius};"
         f"  padding:0 14px; font-size:{fs(base,0)}pt; min-height:{height}px;"
         f"}}"
         f"QPushButton:hover{{background:{hover_bg};}}"
@@ -65,7 +77,7 @@ def _btn_ss(bg, fg, bdr, hover_bg, radius=_RADIUS_SM, height=32):
 # Panel الرئيسي
 # ════════════════════════════════════════════════════════
 
-class _DesignsTable(QWidget):
+class _DesignsTable(QWidget, WidgetMixin):
     design_selected    = pyqtSignal(int)
     design_deleted     = pyqtSignal()
     set_filter_changed = pyqtSignal(object)
@@ -82,20 +94,73 @@ class _DesignsTable(QWidget):
         self._set_filter   = None
         self._search_timer = QTimer()
         self._search_timer.setSingleShot(True)
-        self._search_timer.setInterval(280)
+        self._search_timer.setInterval(DESIGNS_TABLE_SEARCH_DELAY)
         self._search_timer.timeout.connect(self._apply_filter)
 
         get_watcher().file_changed.connect(self._on_xcf_changed)
 
         self._build()
         self._load()
-        bus.font_changed.connect(self._on_font_changed)
+        self._init_widget_mixin(lang=False, data=False)
 
-    def _on_font_changed(self, size: int = None):
-        """إعادة تطبيق الـ stylesheets المعتمدة على حجم الخط عند تغييره من الإعدادات."""
-        self._apply_dynamic_styles()
+    def _refresh_style(self, *_):
+        from ui.theme import _C
+        base = get_font_size()
+
+        self.inp_search.setStyleSheet(f"""
+            QLineEdit {{
+                background: {_C['bg_surface']};
+                border: {INPUT_BORDER_W}px solid {_C['border']};
+                border-radius: {_RADIUS_SM};
+                padding: 0 {DESIGNS_TABLE_INP_PAD_H}px;
+                font-size: {fs(base,0)}pt;
+                color: {_C['text_primary']};
+            }}
+            QLineEdit:focus {{
+                border-color: {_C['accent']};
+                background: {_C['bg_input']};
+            }}
+        """)
+
+        self.btn_new.setStyleSheet(
+            _btn_ss(_C["accent"], _C["accent_text"], _C["accent"], _C["accent_hover"], height=DESIGNS_TABLE_INP_MIN_H)
+        )
+
+        self._lbl_set.setStyleSheet(
+            f"font-size:{fs(base,-1)}pt; color:{_C['text_sec']}; background:transparent;"
+        )
+
+        self.cmb_set.setStyleSheet(f"""
+            QComboBox {{
+                background: {_C['bg_surface']};
+                border: {INPUT_BORDER_W}px solid {_C['border']};
+                border-radius: {_RADIUS_SM};
+                padding: 0 {INPUT_PAD_H}px;
+                font-size: {fs(base,-1)}pt;
+                color: {_C['text_primary']};
+            }}
+            QComboBox:focus {{ border-color: {_C['accent']}; }}
+            QComboBox::drop-down {{ border: none; width: {DESIGNS_TABLE_CMB_DROP_W}px; }}
+        """)
+
+        self.lbl_count.setStyleSheet(
+            f"font-size:{fs(base,-1)}pt; color:{_C['text_muted']}; background:transparent;"
+        )
+
+        self._btn_rst.setStyleSheet(
+            _btn_ss(_C["bg_surface"], _C["text_sec"], _C["border"], _C["bg_input"], height=DESIGNS_TABLE_CMB_MIN_H)
+        )
+
+        self._ef_icon.setStyleSheet(f"font-size:{fs(base,+18)}pt; background:transparent;")
+        self._empty_msg.setStyleSheet(
+            f"color:{_C['text_sec']}; font-size:{fs(base,+2)}pt; font-weight:600; background:transparent;"
+        )
+        self._empty_sub.setStyleSheet(
+            f"color:{_C['text_muted']}; font-size:{fs(base,0)}pt; background:transparent;"
+        )
 
     def _build(self):
+        from ui.theme import _C
         root = QVBoxLayout(self)
         root.setContentsMargins(0, 0, 0, 0)
         root.setSpacing(0)
@@ -104,25 +169,26 @@ class _DesignsTable(QWidget):
         toolbar = QFrame()
         toolbar.setStyleSheet(f"""
             QFrame {{
-                background: {_BG};
-                border-bottom: 1px solid {_BORDER};
+                background: {_C['bg_input']};
+                border-bottom: {INPUT_BORDER_W}px solid {_C['border']};
             }}
         """)
         tb_lay = QVBoxLayout(toolbar)
-        tb_lay.setContentsMargins(14, 10, 14, 10)
-        tb_lay.setSpacing(8)
+        tb_lay.setContentsMargins(DESIGNS_TABLE_TB_MARGIN_H, DESIGNS_TABLE_TB_MARGIN_V,
+                                  DESIGNS_TABLE_TB_MARGIN_H, DESIGNS_TABLE_TB_MARGIN_V)
+        tb_lay.setSpacing(DESIGNS_TABLE_TB_SPACING)
 
         # صف 1: بحث + زر جديد
         row1 = QHBoxLayout()
-        row1.setSpacing(8)
+        row1.setSpacing(DESIGNS_TABLE_ROW_SPACING)
 
         self.inp_search = QLineEdit()
         self.inp_search.setPlaceholderText(tr("design_table_search_placeholder"))
-        self.inp_search.setMinimumHeight(34)
+        self.inp_search.setMinimumHeight(DESIGNS_TABLE_INP_MIN_H)
         self.inp_search.textChanged.connect(lambda: self._search_timer.start())
 
         self.btn_new = QPushButton(f"  {tr('design_table_new_btn')}")
-        self.btn_new.setMinimumHeight(34)
+        self.btn_new.setMinimumHeight(DESIGNS_TABLE_INP_MIN_H)
         self.btn_new.clicked.connect(self._new_design)
 
         row1.addWidget(self.inp_search, stretch=1)
@@ -131,18 +197,18 @@ class _DesignsTable(QWidget):
 
         # صف 2: فلتر مجموعة المقاسات + عداد + reset
         row2 = QHBoxLayout()
-        row2.setSpacing(8)
+        row2.setSpacing(DESIGNS_TABLE_ROW_SPACING)
 
         self._lbl_set = QLabel(tr("design_table_set_filter_label"))
 
         self.cmb_set = QComboBox()
-        self.cmb_set.setMinimumHeight(28)
+        self.cmb_set.setMinimumHeight(DESIGNS_TABLE_CMB_MIN_H)
         self.cmb_set.currentIndexChanged.connect(self._on_set_changed)
 
         self.lbl_count = QLabel("")
 
         self._btn_rst = QPushButton(tr("design_table_reset_filters_btn"))
-        self._btn_rst.setMinimumHeight(28)
+        self._btn_rst.setMinimumHeight(DESIGNS_TABLE_CMB_MIN_H)
         self._btn_rst.clicked.connect(self._reset_filters)
 
         row2.addWidget(self._lbl_set)
@@ -158,21 +224,22 @@ class _DesignsTable(QWidget):
         self._scroll.setWidgetResizable(True)
         self._scroll.setHorizontalScrollBarPolicy(Qt.ScrollBarAlwaysOff)
         self._scroll.setStyleSheet(f"""
-            QScrollArea {{ border: none; background: {_BG_SURFACE}; }}
+            QScrollArea {{ border: none; background: {_C['bg_surface']}; }}
             QScrollBar:vertical {{
-                background: {_BG_SURFACE}; width: 6px; border-radius: 3px;
+                background: {_C['bg_surface']}; width: {DESIGNS_TABLE_SCROLL_W}px; border-radius: {DESIGNS_TABLE_SCROLL_RADIUS}px;
             }}
             QScrollBar::handle:vertical {{
-                background: {_BORDER_MED}; border-radius: 3px; min-height: 20px;
+                background: {_C['border_med']}; border-radius: {DESIGNS_TABLE_SCROLL_RADIUS}px; min-height: {DESIGNS_TABLE_SCROLL_MIN_H}px;
             }}
             QScrollBar::add-line:vertical, QScrollBar::sub-line:vertical {{ height: 0; }}
         """)
 
         self._grid_widget = QWidget()
-        self._grid_widget.setStyleSheet(f"background:{_BG_SURFACE};")
+        self._grid_widget.setStyleSheet(f"background:{_C['bg_surface']};")
         self._grid_layout = QGridLayout(self._grid_widget)
-        self._grid_layout.setContentsMargins(14, 14, 14, 14)
-        self._grid_layout.setSpacing(12)
+        self._grid_layout.setContentsMargins(DESIGNS_TABLE_GRID_MARGIN, DESIGNS_TABLE_GRID_MARGIN,
+                                             DESIGNS_TABLE_GRID_MARGIN, DESIGNS_TABLE_GRID_MARGIN)
+        self._grid_layout.setSpacing(DESIGNS_TABLE_GRID_SPACING)
         self._grid_layout.setAlignment(Qt.AlignTop | Qt.AlignRight)
 
         self._scroll.setWidget(self._grid_widget)
@@ -180,12 +247,12 @@ class _DesignsTable(QWidget):
 
         # ── حالة فارغة ────────────────────────────────────
         self._empty_frame = QFrame()
-        self._empty_frame.setStyleSheet(f"background:{_BG_SURFACE}; border:none;")
+        self._empty_frame.setStyleSheet(f"background:{_C['bg_surface']}; border:none;")
         ef_lay = QVBoxLayout(self._empty_frame)
         ef_lay.setAlignment(Qt.AlignCenter)
-        ef_lay.setSpacing(12)
+        ef_lay.setSpacing(DESIGNS_TABLE_EMPTY_SPACING)
 
-        self._ef_icon = QLabel("🎨")
+        self._ef_icon = QLabel(tr("design_table_empty_icon"))
         self._ef_icon.setAlignment(Qt.AlignCenter)
 
         self._empty_msg = QLabel(tr("design_table_empty_no_designs"))
@@ -199,64 +266,8 @@ class _DesignsTable(QWidget):
         root.addWidget(self._empty_frame)
         self._empty_frame.setVisible(False)
 
-        self._apply_dynamic_styles()
+        self._refresh_style()
         self._reload_set_combo()
-
-    def _apply_dynamic_styles(self):
-        """يطبّق كل الـ stylesheets المعتمدة على حجم الخط — يُستدعى عند البناء وعند تغيير الخط."""
-        base = get_font_size()
-
-        self.inp_search.setStyleSheet(f"""
-            QLineEdit {{
-                background: {_BG_SURFACE};
-                border: 1px solid {_BORDER};
-                border-radius: {_RADIUS_SM};
-                padding: 0 12px;
-                font-size: {fs(base,0)}pt;
-                color: {_TEXT_PRI};
-            }}
-            QLineEdit:focus {{
-                border-color: {_ACCENT};
-                background: {_BG};
-            }}
-        """)
-
-        self.btn_new.setStyleSheet(
-            _btn_ss(_ACCENT, _C["accent_text"], _ACCENT, _C["accent_hover"], height=34)
-        )
-
-        self._lbl_set.setStyleSheet(
-            f"font-size:{fs(base,-1)}pt; color:{_TEXT_SEC}; background:transparent;"
-        )
-
-        self.cmb_set.setStyleSheet(f"""
-            QComboBox {{
-                background: {_BG_SURFACE};
-                border: 1px solid {_BORDER};
-                border-radius: {_RADIUS_SM};
-                padding: 0 8px;
-                font-size: {fs(base,-1)}pt;
-                color: {_TEXT_PRI};
-            }}
-            QComboBox:focus {{ border-color: {_ACCENT}; }}
-            QComboBox::drop-down {{ border: none; width: 16px; }}
-        """)
-
-        self.lbl_count.setStyleSheet(
-            f"font-size:{fs(base,-1)}pt; color:{_TEXT_MUT}; background:transparent;"
-        )
-
-        self._btn_rst.setStyleSheet(
-            _btn_ss(_BG_SURFACE, _TEXT_SEC, _BORDER, _BG, height=28)
-        )
-
-        self._ef_icon.setStyleSheet(f"font-size:{fs(base,+18)}pt; background:transparent;")
-        self._empty_msg.setStyleSheet(
-            f"color:{_TEXT_SEC}; font-size:{fs(base,+2)}pt; font-weight:600; background:transparent;"
-        )
-        self._empty_sub.setStyleSheet(
-            f"color:{_TEXT_MUT}; font-size:{fs(base,0)}pt; background:transparent;"
-        )
 
     # ── تحميل combo المجموعات ──────────────────────────────
 
@@ -335,7 +346,7 @@ class _DesignsTable(QWidget):
         self._empty_frame.setVisible(False)
         self._scroll.setVisible(True)
 
-        cols = max(2, (self.width() - 28) // (_CARD_W + 12))
+        cols = max(2, (self.width() - DESIGNS_TABLE_COLS_SIDE_PAD) // (DESIGN_CARD_W + DESIGNS_TABLE_GRID_SPACING))
 
         for idx, d in enumerate(rows):
             row_i = idx // cols
@@ -356,7 +367,7 @@ class _DesignsTable(QWidget):
                 norm = os.path.normpath(xcf)
                 watcher.watch(norm)
                 self._xcf_card_map[norm] = d["id"]
-                worker = _ThumbWorker(norm, _CARD_THUMB)
+                worker = _ThumbWorker(norm, DESIGN_CARD_THUMB)
                 worker.done.connect(self._on_thumb_ready)
                 worker.start()
                 self._workers.append(worker)
@@ -377,7 +388,7 @@ class _DesignsTable(QWidget):
         did  = self._xcf_card_map.get(norm)
         if did and did in self._cards:
             clear_cache(path)
-            worker = _ThumbWorker(path, _CARD_THUMB)
+            worker = _ThumbWorker(path, DESIGN_CARD_THUMB)
             worker.done.connect(self._on_thumb_ready)
             worker.start()
             self._workers.append(worker)
@@ -410,12 +421,12 @@ class _DesignsTable(QWidget):
 
     def resizeEvent(self, event):
         super().resizeEvent(event)
-        QTimer.singleShot(60, self._reflow_grid)
+        QTimer.singleShot(DESIGNS_TABLE_REFLOW_DELAY, self._reflow_grid)
 
     def _reflow_grid(self):
         if not self._cards:
             return
-        cols = max(2, (self.width() - 28) // (_CARD_W + 12))
+        cols = max(2, (self.width() - DESIGNS_TABLE_COLS_SIDE_PAD) // (DESIGN_CARD_W + DESIGNS_TABLE_GRID_SPACING))
         cards_list = list(self._cards.items())
         for idx, (did, card) in enumerate(cards_list):
             self._grid_layout.removeWidget(card)
