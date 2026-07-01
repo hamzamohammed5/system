@@ -65,7 +65,7 @@ class _BomScenariosPanel(QFrame, MemoryScenariosMixin, DbScenariosMixin, WidgetM
                                SCENARIOS_PANEL_MARGIN_H, SCENARIOS_PANEL_MARGIN_V)
         lay.setSpacing(SCENARIOS_PANEL_SPACING)
 
-        lbl_icon = QLabel("🎯")
+        lbl_icon = QLabel(tr("scenarios_panel_target_icon"))
         lbl_icon.setStyleSheet(f"background:transparent; border:none; font-size:{FS_LG}px;")
         lay.addWidget(lbl_icon)
 
@@ -83,7 +83,7 @@ class _BomScenariosPanel(QFrame, MemoryScenariosMixin, DbScenariosMixin, WidgetM
         self.cmb_scenarios.currentIndexChanged.connect(self._on_scenario_changed)
         lay.addWidget(self.cmb_scenarios)
 
-        self.lbl_default_badge = QLabel(f"⭐ {tr('default_scenario')}")
+        self.lbl_default_badge = QLabel(f"{tr('scenarios_panel_star_badge')}{tr('default_scenario')}")
         self.lbl_default_badge.setStyleSheet(
             f"color:{_C['warning']}; font-weight:bold; font-size:{FS_XS}px;"
             "border:none; background:transparent;"
@@ -94,7 +94,7 @@ class _BomScenariosPanel(QFrame, MemoryScenariosMixin, DbScenariosMixin, WidgetM
         lay.addStretch()
 
         self.btn_set_default = self._make_btn(
-            f"⭐ {tr('default_scenario')}", SCENARIOS_PANEL_BTN_DEFAULT_W,
+            f"{tr('scenarios_panel_btn_star_icon')}{tr('default_scenario')}", SCENARIOS_PANEL_BTN_DEFAULT_W,
             _C['warning_bg'], _C['warning'], _C['warning_border'], _C['warning_bg'],
         )
         self.btn_set_default.setToolTip(tr("set_as_default"))
@@ -102,7 +102,7 @@ class _BomScenariosPanel(QFrame, MemoryScenariosMixin, DbScenariosMixin, WidgetM
         lay.addWidget(self.btn_set_default)
 
         btn_rename = self._make_btn(
-            f"✏️ {tr('edit')}", SCENARIOS_PANEL_BTN_RENAME_W,
+            f"{tr('scenarios_panel_btn_edit_icon')}{tr('edit')}", SCENARIOS_PANEL_BTN_RENAME_W,
             _C['orange_bg'], _C['orange'], _C['orange_border'], _C['orange_bg'],
         )
         btn_rename.setToolTip(tr("rename_scenario"))
@@ -110,7 +110,7 @@ class _BomScenariosPanel(QFrame, MemoryScenariosMixin, DbScenariosMixin, WidgetM
         lay.addWidget(btn_rename)
 
         btn_clone = self._make_btn(
-            f"📋 {tr('clone')}", SCENARIOS_PANEL_BTN_CLONE_W,
+            f"{tr('scenarios_panel_btn_clone_icon')}{tr('clone')}", SCENARIOS_PANEL_BTN_CLONE_W,
             _C['info_bg'], _C['info'], _C['info_border'], _C['info_bg'],
         )
         btn_clone.setToolTip(tr("clone_scenario"))
@@ -118,7 +118,7 @@ class _BomScenariosPanel(QFrame, MemoryScenariosMixin, DbScenariosMixin, WidgetM
         lay.addWidget(btn_clone)
 
         btn_add = self._make_btn(
-            f"➕ {tr('new')}", SCENARIOS_PANEL_BTN_ADD_W,
+            f"{tr('scenarios_panel_btn_add_icon')}{tr('new')}", SCENARIOS_PANEL_BTN_ADD_W,
             _C['success_bg'], _C['success'], _C['success_border'], _C['success_bg'],
         )
         btn_add.setToolTip(tr("add_scenario"))
@@ -126,7 +126,7 @@ class _BomScenariosPanel(QFrame, MemoryScenariosMixin, DbScenariosMixin, WidgetM
         lay.addWidget(btn_add)
 
         btn_del = self._make_btn(
-            "🗑", SCENARIOS_PANEL_BTN_DEL_W,
+            tr("scenarios_panel_btn_del_icon"), SCENARIOS_PANEL_BTN_DEL_W,
             _C['danger_bg'], _C['danger'], _C['danger_border'], _C['danger_bg'],
         )
         btn_del.setToolTip(tr("delete"))
@@ -209,7 +209,7 @@ class _BomScenariosPanel(QFrame, MemoryScenariosMixin, DbScenariosMixin, WidgetM
         self.cmb_scenarios.blockSignals(True)
         self.cmb_scenarios.clear()
         for sc in self._scenarios:
-            star = "⭐ " if sc["is_default"] else ""
+            star = tr("bom_scenario_star_icon") if sc["is_default"] else ""
             self.cmb_scenarios.addItem(f"{star}{sc['name']}", sc["id"])
         for i, sc in enumerate(self._scenarios):
             if sc["id"] == self._current_id:

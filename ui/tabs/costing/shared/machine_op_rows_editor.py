@@ -34,6 +34,8 @@ from ui.constants import (
     OP_ROWS_GRP_MARGIN_TOP, OP_ROWS_GRP_PAD_TOP, OP_ROWS_INNER_BORDER_RADIUS,
     OP_ROWS_INFO_PAD_V, OP_ROWS_INFO_PAD_H, OP_ROWS_INP_PAD_V,
     OP_ROWS_INP_PAD_H, OP_ROWS_TOTAL_PAD_V, OP_ROWS_TOTAL_PAD_H,
+    OP_ROWS_FORM_SPACING, OP_ROWS_GRP_TITLE_PAD_H,
+    OP_ROWS_SP_VALUE_MAX, OP_ROWS_SP_COUNT_MIN, OP_ROWS_SP_COUNT_MAX,
 )
 
 
@@ -48,7 +50,7 @@ class _OpRowsEditor(QGroupBox, WidgetMixin):
     """
 
     def __init__(self, conn, parent=None):
-        super().__init__(f"📋  {tr('op_rows_editor')}", parent)
+        super().__init__(f"{tr('op_rows_editor_icon')}{tr('op_rows_editor')}", parent)
         self.conn            = conn
         self._op_id          = None
         self._mode           = "time"
@@ -72,13 +74,13 @@ class _OpRowsEditor(QGroupBox, WidgetMixin):
                                 OP_ROWS_ROOT_MARGIN_H, OP_ROWS_ROOT_MARGIN_B)
 
         # ── شرح الوضع الحالي ──
-        self.lbl_mode_info = QLabel(f"⏱ {tr('calc_mode')}: {tr('by_time')}")
+        self.lbl_mode_info = QLabel(f"{tr('op_rows_time_icon')} {tr('calc_mode')}: {tr('by_time')}")
         self._apply_info_style()
         root.addWidget(self.lbl_mode_info)
 
         # ── فورم إضافة/تعديل صف ──
         form_row = QHBoxLayout()
-        form_row.setSpacing(8)
+        form_row.setSpacing(OP_ROWS_FORM_SPACING)
 
         lbl_label = QLabel(f"{tr('description')}:")
         self._lbl_label = lbl_label
@@ -88,7 +90,7 @@ class _OpRowsEditor(QGroupBox, WidgetMixin):
 
         self.lbl_value = QLabel(f"{tr('value_minutes')}:")
         self.sp_value = QDoubleSpinBox()
-        self.sp_value.setRange(0, 999999)
+        self.sp_value.setRange(0, OP_ROWS_SP_VALUE_MAX)
         self.sp_value.setDecimals(4)
         self.sp_value.setMinimumHeight(OP_ROWS_INP_MIN_H)
         self.sp_value.setFixedWidth(OP_ROWS_SP_VALUE_W)
@@ -97,19 +99,19 @@ class _OpRowsEditor(QGroupBox, WidgetMixin):
         lbl_count = QLabel(f"{tr('count')}:")
         self._lbl_count = lbl_count
         self.sp_count = QDoubleSpinBox()
-        self.sp_count.setRange(0.0001, 999999)
+        self.sp_count.setRange(OP_ROWS_SP_COUNT_MIN, OP_ROWS_SP_COUNT_MAX)
         self.sp_count.setDecimals(4)
         self.sp_count.setValue(1.0)
         self.sp_count.setMinimumHeight(OP_ROWS_INP_MIN_H)
         self.sp_count.setFixedWidth(OP_ROWS_SP_COUNT_W)
         self.sp_count.valueChanged.connect(self._update_preview)
 
-        self.lbl_preview = QLabel("= ─")
+        self.lbl_preview = QLabel(tr("preview_eq_dash"))
         self.lbl_preview.setMinimumWidth(OP_ROWS_PREVIEW_MIN_W)
 
-        self.btn_add    = QPushButton(f"➕ {tr('add_row')}")
-        self.btn_save   = QPushButton(f"💾 {tr('save')}")
-        self.btn_cancel = QPushButton("✖")
+        self.btn_add    = QPushButton(f"{tr('op_rows_add_icon')}{tr('add_row')}")
+        self.btn_save   = QPushButton(f"{tr('op_rows_save_icon')}{tr('save')}")
+        self.btn_cancel = QPushButton(tr("dismiss_icon"))
         self.btn_save.setVisible(False)
         self.btn_cancel.setVisible(False)
         self.btn_cancel.setFixedWidth(OP_ROWS_BTN_CANCEL_W)
@@ -136,7 +138,7 @@ class _OpRowsEditor(QGroupBox, WidgetMixin):
         self.table = QTableWidget()
         self.table.setColumnCount(5)
         self.table.setHorizontalHeaderLabels([
-            "ID",
+            tr("id_col"),
             tr("description"),
             tr("value"),
             tr("count"),
@@ -175,8 +177,8 @@ class _OpRowsEditor(QGroupBox, WidgetMixin):
 
         # ── أزرار تعديل/حذف ──
         btn_row = QHBoxLayout()
-        self.btn_edit_row = QPushButton(f"✏️ {tr('edit_row')}")
-        self.btn_del_row  = QPushButton(f"🗑️ {tr('delete_row')}")
+        self.btn_edit_row = QPushButton(f"{tr('op_rows_edit_icon')}{tr('edit_row')}")
+        self.btn_del_row  = QPushButton(f"{tr('op_rows_del_icon')}{tr('delete_row')}")
         for btn in (self.btn_edit_row, self.btn_del_row):
             btn.setMinimumHeight(OP_ROWS_BTN_EDIT_MIN_H)
         self.btn_edit_row.clicked.connect(self._edit_row)
@@ -201,7 +203,7 @@ class _OpRowsEditor(QGroupBox, WidgetMixin):
             }}
             QGroupBox::title {{
                 subcontrol-origin: margin;
-                padding: 0 6px;
+                padding: 0 {OP_ROWS_GRP_TITLE_PAD_H}px;
             }}
         """)
 
@@ -293,13 +295,13 @@ class _OpRowsEditor(QGroupBox, WidgetMixin):
     def _update_mode_ui(self):
         if self._mode == "time":
             self.lbl_mode_info.setText(
-                f"⏱ {tr('calc_mode')}: {tr('by_time')}  │  "
+                f"{tr('op_rows_time_icon')} {tr('calc_mode')}: {tr('by_time')}  {tr('vertical_separator')}  "
                 f"{tr('rate')}: {self._rate_hour:.2f} {tr('currency_per_hour')}"
             )
             self.lbl_value.setText(f"{tr('time_minutes')}:")
         else:
             self.lbl_mode_info.setText(
-                f"📦 {tr('calc_mode')}: {tr('by_unit')}  │  "
+                f"{tr('op_rows_unit_icon')} {tr('calc_mode')}: {tr('by_unit')}  {tr('vertical_separator')}  "
                 f"{tr('rate')}: {self._rate_unit:.2f} {tr('currency_per_unit')}"
             )
             self.lbl_value.setText(f"{tr('units')}:")
@@ -354,7 +356,7 @@ class _OpRowsEditor(QGroupBox, WidgetMixin):
 
         total = svc.calc_total_cost(self._op_id)
         self.lbl_total.setText(
-            f"{total:.4f} {tr('currency')} / {tr('piece')}"
+            f"{total:.4f} {tr('currency')} {tr('slash_separator')} {tr('piece')}"
         )
 
     # ══════════════════════════════════════════════════════

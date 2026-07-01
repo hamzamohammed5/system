@@ -20,6 +20,13 @@ from ui.widgets.core.i18n         import tr
 from ui.widgets.components.stat_card import stat_card_pair
 from ui.widgets.core.widget_mixin import WidgetMixin
 from ui.font import FS_XS, FS_SM, FS_BASE, FS_MD, FS_LG
+from ui.constants import (
+    SCENARIO_CMP_ROOT_MARGIN, SCENARIO_CMP_ROOT_SPACING,
+    SCENARIO_CMP_CMB_MIN_H, SCENARIO_CMP_CMB_MIN_W,
+    SCENARIO_CMP_COST_ROW_SPACING, SCENARIO_CMP_PROFIT_ROW_SPACING,
+    SCENARIO_CMP_FRAME_RADIUS, SCENARIO_CMP_CMB_RADIUS,
+    SCENARIO_CMP_CMB_PAD_V, SCENARIO_CMP_CMB_PAD_H,
+)
 
 
 class ScenarioComparisonWidget(QFrame, WidgetMixin):
@@ -47,12 +54,13 @@ class ScenarioComparisonWidget(QFrame, WidgetMixin):
     def _build(self):
         self._apply_frame_style()
 
-        root = QVBoxLayout(self)        root.setContentsMargins(12, 10, 12, 12)
-        root.setSpacing(8)
+        root = QVBoxLayout(self)
+        root.setContentsMargins(*SCENARIO_CMP_ROOT_MARGIN)
+        root.setSpacing(SCENARIO_CMP_ROOT_SPACING)
 
         # ── رأس ──
         header_row = QHBoxLayout()
-        lbl_icon = QLabel("📊")
+        lbl_icon = QLabel(tr("scenario_comparison_icon"))
         lbl_icon.setStyleSheet(
             f"font-size:{FS_LG}px; background:transparent; border:none;"
         )
@@ -63,8 +71,8 @@ class ScenarioComparisonWidget(QFrame, WidgetMixin):
         self._lbl_sc = lbl_sc
 
         self.cmb_scenario = QComboBox()
-        self.cmb_scenario.setMinimumHeight(28)
-        self.cmb_scenario.setMinimumWidth(180)
+        self.cmb_scenario.setMinimumHeight(SCENARIO_CMP_CMB_MIN_H)
+        self.cmb_scenario.setMinimumWidth(SCENARIO_CMP_CMB_MIN_W)
         self.cmb_scenario.currentIndexChanged.connect(self._on_scenario_changed)
 
         header_row.addWidget(lbl_icon)
@@ -76,7 +84,7 @@ class ScenarioComparisonWidget(QFrame, WidgetMixin):
 
         # ── صف التكاليف ──
         cost_row = QHBoxLayout()
-        cost_row.setSpacing(6)
+        cost_row.setSpacing(SCENARIO_CMP_COST_ROW_SPACING)
         f1, self.lbl_default_cost = stat_card_pair(
             tr("default_scenario_cost"), _C['accent']
         )
@@ -92,7 +100,7 @@ class ScenarioComparisonWidget(QFrame, WidgetMixin):
 
         # ── صف الربح ──
         profit_row = QHBoxLayout()
-        profit_row.setSpacing(6)
+        profit_row.setSpacing(SCENARIO_CMP_PROFIT_ROW_SPACING)
         f4, self.lbl_fixed_price    = stat_card_pair(tr("fixed_price"),              _C['text_sec'])
         f5, self.lbl_default_profit = stat_card_pair(tr("default_scenario_profit"),  _C['success'])
         f6, self.lbl_compare_profit = stat_card_pair(tr("compare_scenario_profit"),  _C['purple'])
@@ -114,7 +122,7 @@ class ScenarioComparisonWidget(QFrame, WidgetMixin):
             QFrame {{
                 background: {_C['purple_bg']};
                 border: 1px solid {_C['purple_border']};
-                border-radius: 8px;
+                border-radius: {SCENARIO_CMP_FRAME_RADIUS}px;
             }}
         """)
 
@@ -135,8 +143,8 @@ class ScenarioComparisonWidget(QFrame, WidgetMixin):
                 QComboBox {{
                     background: {_C['bg_input']};
                     border: 1px solid {_C['purple_border']};
-                    border-radius: 4px;
-                    padding: 2px 8px;
+                    border-radius: {SCENARIO_CMP_CMB_RADIUS}px;
+                    padding: {SCENARIO_CMP_CMB_PAD_V}px {SCENARIO_CMP_CMB_PAD_H}px;
                     font-size: {FS_SM}px;
                     color: {_C['purple']};
                 }}
@@ -178,7 +186,7 @@ class ScenarioComparisonWidget(QFrame, WidgetMixin):
     def _reload_scenarios(self):
         self.cmb_scenario.blockSignals(True)
         self.cmb_scenario.clear()
-        self.cmb_scenario.addItem(f"─ {tr('select_scenario')} ─", None)
+        self.cmb_scenario.addItem(tr("scenario_combo_placeholder").format(label=tr("select_scenario")), None)
 
         if self._item_id is None:
             self.cmb_scenario.blockSignals(False)
@@ -191,7 +199,7 @@ class ScenarioComparisonWidget(QFrame, WidgetMixin):
             rows = []
 
         for sc in rows:
-            star = "⭐ " if sc.is_default else "📋 "
+            star = tr("bom_scenario_star_icon") if sc.is_default else tr("bom_scenario_normal_icon")
             self.cmb_scenario.addItem(f"{star}{sc.name}", sc.id)
 
         self.cmb_scenario.blockSignals(False)
@@ -230,7 +238,7 @@ class ScenarioComparisonWidget(QFrame, WidgetMixin):
             for lbl in (self.lbl_compare_cost, self.lbl_cost_diff,
                         self.lbl_compare_profit, self.lbl_profit_diff,
                         self.lbl_compare_margin):
-                lbl.setText("─")
+                lbl.setText(tr("amount_dash_placeholder"))
             self.lbl_note.setText(tr("select_scenario_to_compare"))
             return
 
@@ -240,7 +248,7 @@ class ScenarioComparisonWidget(QFrame, WidgetMixin):
         )
 
         cost_diff = compare_cost - self._default_cost
-        sign      = "+" if cost_diff > 0 else ""
+        sign      = tr("positive_sign") if cost_diff > 0 else ""
         self.lbl_cost_diff.setText(
             f"{sign}{cost_diff:.4f} {tr('currency_abbr')}"
         )
@@ -253,7 +261,7 @@ class ScenarioComparisonWidget(QFrame, WidgetMixin):
         self._color_label(self.lbl_compare_profit, compare_profit)
 
         profit_diff = compare_profit - default_profit
-        sign2       = "+" if profit_diff > 0 else ""
+        sign2       = tr("positive_sign") if profit_diff > 0 else ""
         self.lbl_profit_diff.setText(
             f"{sign2}{profit_diff:.2f} {tr('currency_abbr')}"
         )
@@ -261,22 +269,22 @@ class ScenarioComparisonWidget(QFrame, WidgetMixin):
 
         if compare_cost > 0 and self._fixed_price > 0:
             margin = (self._fixed_price - compare_cost) / compare_cost * 100
-            self.lbl_compare_margin.setText(f"{margin:.1f} %")
+            self.lbl_compare_margin.setText(f"{margin:.1f} {tr('percent_sign')}")
             self._color_label(self.lbl_compare_margin, margin)
         else:
-            self.lbl_compare_margin.setText("─")
+            self.lbl_compare_margin.setText(tr("amount_dash_placeholder"))
 
         if cost_diff > 0:
             self.lbl_note.setText(
-                f"⬆ {tr('compare_higher_cost')} {cost_diff:.4f} "
-                f"{tr('currency_per_piece')} — "
+                f"{tr('scenario_comparison_higher_icon')} {tr('compare_higher_cost')} {cost_diff:.4f} "
+                f"{tr('currency_per_piece')} {tr('dash')} "
                 f"{tr('profit_decreases')} {abs(profit_diff):.2f} "
                 f"{tr('currency_abbr')}"
             )
         elif cost_diff < 0:
             self.lbl_note.setText(
-                f"⬇ {tr('compare_lower_cost')} {abs(cost_diff):.4f} "
-                f"{tr('currency_per_piece')} — "
+                f"{tr('scenario_comparison_lower_icon')} {tr('compare_lower_cost')} {abs(cost_diff):.4f} "
+                f"{tr('currency_per_piece')} {tr('dash')} "
                 f"{tr('profit_increases')} {abs(profit_diff):.2f} "
                 f"{tr('currency_abbr')}"
             )
@@ -303,7 +311,7 @@ class ScenarioComparisonWidget(QFrame, WidgetMixin):
                     self.lbl_fixed_price, self.lbl_default_profit,
                     self.lbl_compare_profit, self.lbl_profit_diff,
                     self.lbl_compare_margin):
-            lbl.setText("─")
+            lbl.setText(tr("amount_dash_placeholder"))
         self.lbl_note.setText(tr("select_product_to_compare"))
 
     def _on_scenario_changed(self, _):

@@ -55,15 +55,15 @@ class BomTree(QWidget, WidgetMixin):
 
         header = QHBoxLayout()
 
-        lbl = QLabel(f"🔩 {tr('bom_tree')}")
+        lbl = QLabel(f"{tr('bom_tree_header_icon')}{tr('bom_tree')}")
         lbl.setStyleSheet(
             f"font-weight:bold; font-size:{FS_MD}px; color:{_C['text_primary']};"
         )
 
         lbl_legend = QLabel(
-            f"⚠️ = {tr('waste_pct')}   |   "
-            f"{tr('effective_qty')} = {tr('qty')} × (1 + {tr('waste_pct')}%)   |   "
-            f"⭐ = {tr('default_scenario')}"
+            f"{tr('bom_tree_warning_icon')} = {tr('waste_pct')}   |   "
+            f"{tr('effective_qty')} = {tr('qty')} {tr('bom_tree_multiply_sign')} (1 + {tr('waste_pct')}{tr('percent_sign')})   |   "
+            f"{tr('bom_tree_star_icon')} = {tr('default_scenario')}"
         )
         lbl_legend.setStyleSheet(
             f"font-size:{FS_XS}px; color:{_C['orange']}; background:{_C['warning_bg']};"
@@ -71,9 +71,9 @@ class BomTree(QWidget, WidgetMixin):
             f"padding:{BOM_TREE_LEGEND_PAD_V}px {BOM_TREE_LEGEND_PAD_H}px;"
         )
 
-        self.btn_expand   = QPushButton(f"⊞ {tr('expand_all')}")
-        self.btn_collapse = QPushButton(f"⊟ {tr('collapse_all')}")
-        self.btn_del_node = self._make_danger_btn(f"🗑 {tr('delete_selected')}")
+        self.btn_expand   = QPushButton(f"{tr('bom_tree_expand_icon')}{tr('expand_all')}")
+        self.btn_collapse = QPushButton(f"{tr('bom_tree_collapse_icon')}{tr('collapse_all')}")
+        self.btn_del_node = self._make_danger_btn(f"{tr('bom_tree_del_icon')}{tr('delete_selected')}")
 
         for btn in (self.btn_expand, self.btn_collapse, self.btn_del_node):
             btn.setEnabled(False)

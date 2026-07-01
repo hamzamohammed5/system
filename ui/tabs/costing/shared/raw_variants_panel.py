@@ -28,8 +28,16 @@ from ui.constants import (
     RAW_VARIANTS_SPIN_MAX, RAW_VARIANTS_SPIN_MIN, RAW_VARIANTS_SPIN_DEC,
     RAW_VARIANTS_SPIN_H, RAW_VARIANTS_SPIN_W, RAW_VARIANTS_INP_H,
     RAW_VARIANTS_PREVIEW_MIN_W, RAW_VARIANTS_CANCEL_BTN_W, RAW_VARIANTS_BTN_H,
-    RAW_VARIANTS_TABLE_MAX_H, RAW_VARIANTS_COL2_W, RAW_VARIANTS_COL3_W,
+    RAW_VARIANTS_TABLE_MAX_H, RAW_VARIANTS_COL_COUNT,
+    RAW_VARIANTS_COL2_W, RAW_VARIANTS_COL3_W,
     RAW_VARIANTS_EDIT_BTN_H,
+    RAW_VARIANTS_ROOT_SPACING, RAW_VARIANTS_ROOT_MARGIN_H,
+    RAW_VARIANTS_ROOT_MARGIN_T, RAW_VARIANTS_ROOT_MARGIN_B,
+    RAW_VARIANTS_FORM_SPACING,
+    RAW_VARIANTS_GRP_BORDER_RADIUS, RAW_VARIANTS_GRP_MARGIN_TOP,
+    RAW_VARIANTS_GRP_PADDING_TOP, RAW_VARIANTS_GRP_TITLE_PAD_H,
+    RAW_VARIANTS_INFO_RADIUS, RAW_VARIANTS_INFO_PAD_V, RAW_VARIANTS_INFO_PAD_H,
+    RAW_VARIANTS_INP_RADIUS, RAW_VARIANTS_INP_PAD_V, RAW_VARIANTS_INP_PAD_H,
 )
 
 
@@ -52,7 +60,7 @@ class _RawVariantsPanel(QGroupBox, WidgetMixin):
     """
 
     def __init__(self, conn, parent=None):
-        super().__init__(f"📐  {tr('raw_variants')}", parent)
+        super().__init__(f"{tr('raw_variants_icon')}{tr('raw_variants')}", parent)
         self.conn        = conn
         self._item_id    = None
         self._item_price = 0.0
@@ -66,12 +74,13 @@ class _RawVariantsPanel(QGroupBox, WidgetMixin):
         self._apply_group_style()
 
         root = QVBoxLayout(self)
-        root.setSpacing(8)
-        root.setContentsMargins(10, 12, 10, 10)
+        root.setSpacing(RAW_VARIANTS_ROOT_SPACING)
+        root.setContentsMargins(RAW_VARIANTS_ROOT_MARGIN_H, RAW_VARIANTS_ROOT_MARGIN_T,
+                                RAW_VARIANTS_ROOT_MARGIN_H, RAW_VARIANTS_ROOT_MARGIN_B)
 
         # ── شرح ──
         self.lbl_info = QLabel(
-            f"💡 {tr('variant_description_line1')}\n"
+            f"{tr('raw_variants_info_icon')}{tr('variant_description_line1')}\n"
             f"   {tr('variant_unit_cost_formula')}"
         )
         self.lbl_info.setWordWrap(True)
@@ -79,7 +88,7 @@ class _RawVariantsPanel(QGroupBox, WidgetMixin):
 
         # ── فورم إضافة/تعديل ──
         form_row = QHBoxLayout()
-        form_row.setSpacing(8)
+        form_row.setSpacing(RAW_VARIANTS_FORM_SPACING)
 
         self.inp_name = QLineEdit()
         self.inp_name.setPlaceholderText(tr("variant_name_placeholder"))
@@ -94,13 +103,13 @@ class _RawVariantsPanel(QGroupBox, WidgetMixin):
             f"{tr('pieces_tooltip_line1')}\n{tr('variant_unit_cost_formula')}"
         )
 
-        self.lbl_preview = QLabel("─")
+        self.lbl_preview = QLabel(tr("amount_dash_placeholder"))
         self.lbl_preview.setMinimumWidth(RAW_VARIANTS_PREVIEW_MIN_W)
         self.sp_pieces.valueChanged.connect(self._update_preview)
 
-        self.btn_add    = QPushButton(f"➕ {tr('add')}")
-        self.btn_save   = QPushButton(f"💾 {tr('save')}")
-        self.btn_cancel = QPushButton("✖")
+        self.btn_add    = QPushButton(f"{tr('raw_variants_add_icon')}{tr('add')}")
+        self.btn_save   = QPushButton(f"{tr('raw_variants_save_icon')}{tr('save')}")
+        self.btn_cancel = QPushButton(tr("dismiss_icon"))
         self.btn_save.setVisible(False)
         self.btn_cancel.setVisible(False)
         self.btn_cancel.setFixedWidth(RAW_VARIANTS_CANCEL_BTN_W)
@@ -123,9 +132,9 @@ class _RawVariantsPanel(QGroupBox, WidgetMixin):
 
         # ── جدول الـ variants ──
         self.table = QTableWidget()
-        self.table.setColumnCount(4)
+        self.table.setColumnCount(RAW_VARIANTS_COL_COUNT)
         self.table.setHorizontalHeaderLabels([
-            "ID",
+            tr("id_col"),
             tr("name"),
             tr("pieces_count"),
             tr("cost_per_unit"),
@@ -149,8 +158,8 @@ class _RawVariantsPanel(QGroupBox, WidgetMixin):
 
         # ── أزرار التعديل والحذف ──
         btn_row = QHBoxLayout()
-        self.btn_edit = QPushButton(f"✏️ {tr('edit')}")
-        self.btn_del  = QPushButton(f"🗑️ {tr('delete')}")
+        self.btn_edit = QPushButton(f"{tr('raw_variants_edit_icon')}{tr('edit')}")
+        self.btn_del  = QPushButton(f"{tr('raw_variants_del_icon')}{tr('delete')}")
         for btn in (self.btn_edit, self.btn_del):
             btn.setMinimumHeight(RAW_VARIANTS_EDIT_BTN_H)
         self.btn_edit.clicked.connect(self._edit)
@@ -160,22 +169,20 @@ class _RawVariantsPanel(QGroupBox, WidgetMixin):
         btn_row.addStretch()
         root.addLayout(btn_row)
 
-        self._apply_theme()
-
     def _apply_group_style(self):
         self.setStyleSheet(f"""
             QGroupBox {{
                 font-weight: bold;
                 color: {_C['accent']};
                 border: 1px solid {_C['info_border']};
-                border-radius: 8px;
-                margin-top: 8px;
-                padding-top: 8px;
+                border-radius: {RAW_VARIANTS_GRP_BORDER_RADIUS}px;
+                margin-top: {RAW_VARIANTS_GRP_MARGIN_TOP}px;
+                padding-top: {RAW_VARIANTS_GRP_PADDING_TOP}px;
                 background: {_C['bg_surface']};
             }}
             QGroupBox::title {{
                 subcontrol-origin: margin;
-                padding: 0 6px;
+                padding: 0 {RAW_VARIANTS_GRP_TITLE_PAD_H}px;
             }}
         """)
 
@@ -185,13 +192,16 @@ class _RawVariantsPanel(QGroupBox, WidgetMixin):
         if hasattr(self, "lbl_info"):
             self.lbl_info.setStyleSheet(
                 f"font-size:{FS_XS}px; color:{_C['text_sec']}; font-weight:normal;"
-                f"background:{_C['info_bg']}; border-radius:4px; padding:5px 8px;"
+                f"background:{_C['info_bg']}; border-radius:{RAW_VARIANTS_INFO_RADIUS}px;"
+                f"padding:{RAW_VARIANTS_INFO_PAD_V}px {RAW_VARIANTS_INFO_PAD_H}px;"
                 f"border:1px solid {_C['info_border']};"
             )
         if hasattr(self, "inp_name"):
             self.inp_name.setStyleSheet(
                 f"background:{_C['bg_input']}; border:1px solid {_C['border']};"
-                f"border-radius:4px; padding:2px 6px; color:{_C['text_primary']};"
+                f"border-radius:{RAW_VARIANTS_INP_RADIUS}px;"
+                f"padding:{RAW_VARIANTS_INP_PAD_V}px {RAW_VARIANTS_INP_PAD_H}px;"
+                f"color:{_C['text_primary']};"
             )
         if hasattr(self, "_lbl_pieces"):
             self._lbl_pieces.setStyleSheet(
@@ -229,7 +239,7 @@ class _RawVariantsPanel(QGroupBox, WidgetMixin):
         self.table.setRowCount(0)
         self.inp_name.clear()
         self.sp_pieces.setValue(1.0)
-        self.lbl_preview.setText("─")
+        self.lbl_preview.setText(tr("amount_dash_placeholder"))
         self.setEnabled(False)
 
     def refresh_price(self, new_price: float):
@@ -265,7 +275,7 @@ class _RawVariantsPanel(QGroupBox, WidgetMixin):
                 unit_cost = self._item_price / pieces
                 cost_text = f"{unit_cost:.4f}  {tr('currency_abbr')}"
             else:
-                cost_text = "─"
+                cost_text = tr("amount_dash_placeholder")
             cost_item = QTableWidgetItem(cost_text)
             cost_item.setForeground(QColor(_C['accent']))
             cost_item.setTextAlignment(Qt.AlignCenter)
@@ -280,10 +290,10 @@ class _RawVariantsPanel(QGroupBox, WidgetMixin):
         if pieces > 0 and self._item_price > 0:
             unit_cost = self._item_price / pieces
             self.lbl_preview.setText(
-                f"= {unit_cost:.4f}  {tr('currency_per_piece')}"
+                f"{tr('raw_variants_equals_sign')}{unit_cost:.4f}  {tr('currency_per_piece')}"
             )
         else:
-            self.lbl_preview.setText("─")
+            self.lbl_preview.setText(tr("amount_dash_placeholder"))
 
     # ══════════════════════════════════════════════════════
     # CRUD — [Refactor] كل العمليات عبر VariantService
