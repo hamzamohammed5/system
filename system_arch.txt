@@ -1,5 +1,5 @@
 File Tree Snapshot
-Generated : 2026-07-01 21:17:34
+Generated : 2026-07-02 10:02:40
 Source    : D:\My Workspace\Hg\Alhabaar\accountant\system
 Extensions: .md, .py
 ────────────────────────────────────────────────────────────
@@ -97,6 +97,7 @@ system/
 │   │   ├── scenario_service.py
 │   │   └── variant_service.py
 │   ├── design/
+│   │   ├── __init__.py
 │   │   ├── design_service.py
 │   │   ├── design_size_service.py
 │   │   └── dimension_set_service.py

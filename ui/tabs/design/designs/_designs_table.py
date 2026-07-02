@@ -19,7 +19,7 @@ from PyQt5.QtWidgets import (
 from PyQt5.QtCore  import Qt, pyqtSignal, QThread, pyqtSignal as Signal, QTimer
 
 
-from db.designs.dimension_sets_repo import fetch_all_dimension_sets
+from services.design import get_design_size_service
 from ._xcf_thumbnail import get_watcher, clear_cache
 from ._design_detail_panel import _DesignDetailPanel
 
@@ -32,6 +32,8 @@ from ui.constants import (
     INPUT_BORDER_W,
     INPUT_BORDER_RADIUS,
     INPUT_PAD_H,
+    BTN_PAD_H,
+    INPUT_HEIGHT,
     DESIGN_CARD_W,
     DESIGN_CARD_THUMB,
     DESIGNS_TABLE_TB_MARGIN_H,
@@ -50,6 +52,7 @@ from ui.constants import (
     DESIGNS_TABLE_REFLOW_DELAY,
     DESIGNS_TABLE_SEARCH_DELAY,
     DESIGNS_TABLE_COLS_SIDE_PAD,
+    DESIGNS_TABLE_MIN_COLS,
     DESIGNS_TABLE_EMPTY_SPACING,
 )
 
@@ -58,14 +61,14 @@ import os
 _RADIUS_SM = f"{INPUT_BORDER_RADIUS}px"
 
 
-def _btn_ss(bg, fg, bdr, hover_bg, radius=_RADIUS_SM, height=32):
+def _btn_ss(bg, fg, bdr, hover_bg, radius=_RADIUS_SM, height=INPUT_HEIGHT):
     from ui.theme import _C
     base = get_font_size()
     return (
         f"QPushButton{{"
         f"  background:{bg}; color:{fg};"
         f"  border:{INPUT_BORDER_W}px solid {bdr}; border-radius:{radius};"
-        f"  padding:0 14px; font-size:{fs(base,0)}pt; min-height:{height}px;"
+        f"  padding:0 {BTN_PAD_H}px; font-size:{fs(base,0)}pt; min-height:{height}px;"
         f"}}"
         f"QPushButton:hover{{background:{hover_bg};}}"
         f"QPushButton:pressed{{opacity:0.85;}}"
@@ -85,6 +88,7 @@ class _DesignsTable(QWidget, WidgetMixin):
     def __init__(self, conn, detail_panel: _DesignDetailPanel, parent=None):
         super().__init__(parent)
         self.conn          = conn
+        self._size_svc     = get_design_size_service(conn)
         self._panel        = detail_panel
         self._cards        = {}           # did → _DesignCard
         self._workers      = []
@@ -102,6 +106,7 @@ class _DesignsTable(QWidget, WidgetMixin):
         self._build()
         self._load()
         self._init_widget_mixin(lang=False, data=False)
+        self._refresh_style()
 
     def _refresh_style(self, *_):
         from ui.theme import _C
@@ -276,7 +281,7 @@ class _DesignsTable(QWidget, WidgetMixin):
         self.cmb_set.blockSignals(True)
         self.cmb_set.clear()
         self.cmb_set.addItem(tr("design_table_all_sets"), None)
-        for ds in fetch_all_dimension_sets(self.conn):
+        for ds in self._size_svc.list_all_sets():
             self.cmb_set.addItem(ds["name"], ds["id"])
         for i in range(self.cmb_set.count()):
             if self.cmb_set.itemData(i) == prev:
@@ -346,7 +351,7 @@ class _DesignsTable(QWidget, WidgetMixin):
         self._empty_frame.setVisible(False)
         self._scroll.setVisible(True)
 
-        cols = max(2, (self.width() - DESIGNS_TABLE_COLS_SIDE_PAD) // (DESIGN_CARD_W + DESIGNS_TABLE_GRID_SPACING))
+        cols = max(DESIGNS_TABLE_MIN_COLS, (self.width() - DESIGNS_TABLE_COLS_SIDE_PAD) // (DESIGN_CARD_W + DESIGNS_TABLE_GRID_SPACING))
 
         for idx, d in enumerate(rows):
             row_i = idx // cols
@@ -426,7 +431,7 @@ class _DesignsTable(QWidget, WidgetMixin):
     def _reflow_grid(self):
         if not self._cards:
             return
-        cols = max(2, (self.width() - DESIGNS_TABLE_COLS_SIDE_PAD) // (DESIGN_CARD_W + DESIGNS_TABLE_GRID_SPACING))
+        cols = max(DESIGNS_TABLE_MIN_COLS, (self.width() - DESIGNS_TABLE_COLS_SIDE_PAD) // (DESIGN_CARD_W + DESIGNS_TABLE_GRID_SPACING))
         cards_list = list(self._cards.items())
         for idx, (did, card) in enumerate(cards_list):
             self._grid_layout.removeWidget(card)

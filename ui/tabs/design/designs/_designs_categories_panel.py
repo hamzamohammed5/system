@@ -12,14 +12,7 @@ from PyQt5.QtWidgets import (
 )
 from PyQt5.QtCore import Qt, pyqtSignal
 
-from db.designs.design_item_categories_repo import (
-    fetch_all_item_categories,
-    fetch_item_category,
-    delete_item_category,
-    build_item_category_tree,
-    fetch_item_category_descendants,
-    count_designs_per_category,
-)
+from services.design import get_design_service
 from ui.tabs.design.design_styles import get_styles
 from ui.widgets.core.i18n import tr
 from ui.widgets.core.widget_mixin import WidgetMixin
@@ -45,6 +38,10 @@ from ui.constants import (
     DESIGN_CATS_SCROLL_W,
     DESIGN_CATS_SCROLL_RADIUS,
     DESIGN_CATS_SCROLL_MIN_H,
+    DESIGN_CATS_SEARCH_FRAME_PAD_V,
+    DESIGN_CATS_SEARCH_FRAME_PAD_H,
+    DESIGN_CATS_SEP_MARGIN_V,
+    DESIGN_CATS_SEP_MARGIN_H,
     INPUT_BORDER_W,
 )
 
@@ -57,6 +54,7 @@ class DesignsCategoriesPanel(QWidget, WidgetMixin):
     def __init__(self, conn, parent=None):
         super().__init__(parent)
         self.conn       = conn
+        self._svc       = get_design_service(conn)
         self._active_id = "ALL"
         self._items     = []
         self._build()
@@ -116,7 +114,7 @@ class DesignsCategoriesPanel(QWidget, WidgetMixin):
             "background:transparent; border:none;"
         )
 
-        self._btn_add = QPushButton("+")
+        self._btn_add = QPushButton(tr("design_cats_add_icon"))
         self._btn_add.setFixedSize(DESIGN_CATS_BTN_ADD_SIZE, DESIGN_CATS_BTN_ADD_SIZE)
         self._btn_add.setToolTip(tr("design_cats_add_tooltip"))
         self._btn_add.setStyleSheet(
@@ -136,7 +134,7 @@ class DesignsCategoriesPanel(QWidget, WidgetMixin):
         # ── شريط البحث ──────────────────────────────
         search_frame = QFrame()
         search_frame.setStyleSheet(
-            f"QFrame{{ background:{_C['bg_input']}; border-bottom:{INPUT_BORDER_W}px solid {_C['border']}; padding:8px 12px; }}"
+            f"QFrame{{ background:{_C['bg_input']}; border-bottom:{INPUT_BORDER_W}px solid {_C['border']}; padding:{DESIGN_CATS_SEARCH_FRAME_PAD_V}px {DESIGN_CATS_SEARCH_FRAME_PAD_H}px; }}"
         )
         sf_lay = QHBoxLayout(search_frame)
         sf_lay.setContentsMargins(0, DESIGN_CATS_SEARCH_MARGIN_V, 0, DESIGN_CATS_SEARCH_MARGIN_V)
@@ -241,12 +239,12 @@ class DesignsCategoriesPanel(QWidget, WidgetMixin):
         sep = QFrame()
         sep.setFrameShape(QFrame.HLine)
         sep.setFixedHeight(DESIGN_CATS_SEP_H)
-        sep.setStyleSheet(f"background:{_C['border']}; margin:3px 12px;")
+        sep.setStyleSheet(f"background:{_C['border']}; margin:{DESIGN_CATS_SEP_MARGIN_V}px {DESIGN_CATS_SEP_MARGIN_H}px;")
         self._list_lay.insertWidget(self._list_lay.count() - 1, sep)
 
-        rows   = fetch_all_item_categories(self.conn)
-        tree   = build_item_category_tree(rows)
-        counts = count_designs_per_category(self.conn)
+        rows   = self._svc.list_item_categories()
+        tree   = self._svc.build_tree(rows)
+        counts = self._svc.count_designs_per_category()
         self._add_tree(tree, 0, counts, query.lower())
 
         has_selection = self._active_id not in ("ALL", None)
@@ -260,7 +258,7 @@ class DesignsCategoriesPanel(QWidget, WidgetMixin):
             if query and query not in name_lower and not node["children"]:
                 continue
 
-            desc = fetch_item_category_descendants(self.conn, node["id"])
+            desc = self._svc.get_descendants(node["id"])
             cnt  = sum(counts.get(d, 0) for d in desc)
 
             row = _CatRow(node["id"], node["name"], node["color"],
@@ -312,12 +310,12 @@ class DesignsCategoriesPanel(QWidget, WidgetMixin):
     def _delete(self):
         if self._active_id in ("ALL", None):
             return
-        cat = fetch_item_category(self.conn, self._active_id)
+        cat = self._svc.get_item_category(self._active_id)
         if not cat:
             return
 
-        desc   = fetch_item_category_descendants(self.conn, self._active_id)
-        counts = count_designs_per_category(self.conn)
+        desc   = self._svc.get_descendants(self._active_id)
+        counts = self._svc.count_designs_per_category()
         total  = sum(counts.get(d, 0) for d in desc)
 
         msg = tr("delete_confirm_msg").format(name=cat['name'])
@@ -331,7 +329,7 @@ class DesignsCategoriesPanel(QWidget, WidgetMixin):
             self, tr("confirm_delete"), msg, QMessageBox.Yes | QMessageBox.No
         ) == QMessageBox.Yes:
             for d in sorted(desc, reverse=True):
-                delete_item_category(self.conn, d)
+                self._svc.delete_item_category(d)
             self._active_id = "ALL"
             self._load()
             self.category_changed.emit(None)

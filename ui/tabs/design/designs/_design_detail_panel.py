@@ -14,16 +14,7 @@ from PyQt5.QtWidgets import (
 from PyQt5.QtCore import Qt, pyqtSignal
 from PyQt5.QtGui import QFont
 
-from db.designs.designs_repo import (
-    fetch_design, insert_design, update_design,
-)
-from db.designs.designs_sizes_repo import (
-    fetch_design_sizes, delete_design_size,
-)
-from db.designs.design_item_categories_repo import (
-    fetch_all_item_categories,
-    build_item_category_tree,
-)
+from services.design import get_design_service, get_design_size_service
 from ._size_card   import _SizeCard
 from ._size_dialog import _SizeDialog
 from ui.tabs.design.design_styles import get_styles
@@ -64,12 +55,15 @@ class _DesignDetailPanel(QWidget, WidgetMixin):
     def __init__(self, conn, parent=None):
         super().__init__(parent)
         self.conn        = conn
+        self._svc        = get_design_service(conn)
+        self._size_svc   = get_design_size_service(conn)
         self._design_id  = None
         self._set_filter = None
         self._size_cards = []
         self._build()
         self._reload_categories()
         self._init_widget_mixin(lang=False, data=False)
+        self._refresh_style()
 
     def _refresh_style(self, *_):
         s = get_styles()
@@ -283,7 +277,7 @@ class _DesignDetailPanel(QWidget, WidgetMixin):
 
     def load_design(self, design_id: int):
         self._design_id = design_id
-        design = fetch_design(self.conn, design_id)
+        design = self._svc.get_design(design_id)
         if not design:
             return
 
@@ -322,8 +316,8 @@ class _DesignDetailPanel(QWidget, WidgetMixin):
         self.cmb_cat.clear()
         self.cmb_cat.addItem(tr("design_detail_no_category"), None)
 
-        rows = fetch_all_item_categories(self.conn)
-        tree = build_item_category_tree(rows)
+        rows = self._svc.list_item_categories()
+        tree = self._svc.build_tree(rows)
         self._add_cat_nodes(tree, 0)
 
         for i in range(self.cmb_cat.count()):
@@ -361,9 +355,9 @@ class _DesignDetailPanel(QWidget, WidgetMixin):
         notes  = self.inp_notes.text().strip()
 
         if self._design_id:
-            update_design(self.conn, self._design_id, name, cat_id, notes)
+            self._svc.update_design(self._design_id, name, cat_id, notes)
         else:
-            self._design_id = insert_design(self.conn, name, cat_id, notes)
+            self._design_id = self._svc.create_design(name, cat_id, notes)
 
         self._lbl_title.setText(name)
         self._lbl_badge.setText(tr("design_detail_saved_badge"))
@@ -379,7 +373,7 @@ class _DesignDetailPanel(QWidget, WidgetMixin):
         if not self._design_id:
             return
 
-        sizes = fetch_design_sizes(self.conn, self._design_id)
+        sizes = self._size_svc.list_sizes(self._design_id)
 
         if self._set_filter is not None:
             sizes = [s for s in sizes if s["set_id"] == self._set_filter]
@@ -426,7 +420,7 @@ class _DesignDetailPanel(QWidget, WidgetMixin):
             self._load_sizes()
 
     def _edit_size(self, size_id: int):
-        sizes = fetch_design_sizes(self.conn, self._design_id)
+        sizes = self._size_svc.list_sizes(self._design_id)
         size_data = next((s for s in sizes if s["id"] == size_id), None)
         if not size_data:
             return
@@ -441,5 +435,5 @@ class _DesignDetailPanel(QWidget, WidgetMixin):
             tr("design_detail_delete_size_confirm"),
             QMessageBox.Yes | QMessageBox.No
         ) == QMessageBox.Yes:
-            delete_design_size(self.conn, size_id)
+            self._size_svc.delete_size(size_id)
             self._load_sizes()
