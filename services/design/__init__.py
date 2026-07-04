@@ -29,42 +29,42 @@ from .dimension_set_service import DimensionSetService
 
 
 # ══════════════════════════════════════════════════════════
-# Cache داخلي — key بـ id(conn) عشان نربط كل service بالـ connection بتاعه
+# Cache داخلي — instance واحد نشط فقط لكل نوع service
 # ══════════════════════════════════════════════════════════
-_design_services: dict = {}
-_design_size_services: dict = {}
-_dimension_set_services: dict = {}
+# [ملاحظة] استخدمنا متغير مفرد بدل dict مفتوح بـ id(conn):
+#   - في أي لحظة فيه شركة نشطة واحدة بس (company_state.company_id)
+#   - dict بمفتاح id(conn) كان هيتراكم فيه مرجع دائم لكل conn قديم
+#     (حتى بعد إغلاق الشركة) ← memory leak طول عمر التطبيق
+#   - المتغير المفرد بيستبدل نفسه تلقائياً عند تغيّر الـ conn،
+#     فمفيش أي مرجع قديم فاضل يمنع الـ garbage collector
+_design_service_instance:       "DesignService | None" = None
+_design_size_service_instance:  "DesignSizeService | None" = None
+_dimension_set_service_instance: "DimensionSetService | None" = None
 
 
 def get_design_service(conn) -> DesignService:
     """
-    يرجع DesignService واحد لكل conn.
+    يرجع DesignService واحد للـ conn الحالي.
     نفس الـ conn → نفس الـ instance (بدون إعادة بناء).
-    conn مختلف (شركة جديدة) → instance جديد تلقائياً.
+    conn مختلف (شركة جديدة) → instance جديد يستبدل القديم تلقائياً.
     """
-    key = id(conn)
-    svc = _design_services.get(key)
-    if svc is None or svc.conn is not conn:
-        svc = DesignService(conn)
-        _design_services[key] = svc
-    return svc
+    global _design_service_instance
+    if _design_service_instance is None or _design_service_instance.conn is not conn:
+        _design_service_instance = DesignService(conn)
+    return _design_service_instance
 
 
 def get_design_size_service(conn) -> DesignSizeService:
-    """يرجع DesignSizeService واحد لكل conn."""
-    key = id(conn)
-    svc = _design_size_services.get(key)
-    if svc is None or svc.conn is not conn:
-        svc = DesignSizeService(conn)
-        _design_size_services[key] = svc
-    return svc
+    """يرجع DesignSizeService واحد للـ conn الحالي."""
+    global _design_size_service_instance
+    if _design_size_service_instance is None or _design_size_service_instance.conn is not conn:
+        _design_size_service_instance = DesignSizeService(conn)
+    return _design_size_service_instance
 
 
 def get_dimension_set_service(conn) -> DimensionSetService:
-    """يرجع DimensionSetService واحد لكل conn."""
-    key = id(conn)
-    svc = _dimension_set_services.get(key)
-    if svc is None or svc.conn is not conn:
-        svc = DimensionSetService(conn)
-        _dimension_set_services[key] = svc
-    return svc
+    """يرجع DimensionSetService واحد للـ conn الحالي."""
+    global _dimension_set_service_instance
+    if _dimension_set_service_instance is None or _dimension_set_service_instance.conn is not conn:
+        _dimension_set_service_instance = DimensionSetService(conn)
+    return _dimension_set_service_instance

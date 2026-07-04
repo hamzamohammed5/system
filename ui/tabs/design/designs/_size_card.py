@@ -21,24 +21,30 @@ from PyQt5.QtWidgets import (
 from PyQt5.QtCore import Qt, pyqtSignal, QThread, pyqtSignal as Signal
 from PyQt5.QtGui  import QPixmap, QFont
 
-from db.designs.designs_sizes_repo import (
-    update_design_size_path,
-    fetch_canvas_size,
-    fetch_canvas_dpi,
-)
+from services.design import get_design_size_service
 from ._xcf_thumbnail import get_watcher
 from .size_card.helper import _ThumbnailWidget, _to_px, _unit_for_set, _btn_ss, _open_gimp
 from ui.theme import _C
 from ui.widgets.core.i18n import tr
 from ui.font import get_font_size, fs, FS_SM
-from ui.widgets.core.events import bus
+from ui.widgets.core.widget_mixin import WidgetMixin
+from ui.constants import (
+    SIZE_CARD_RADIUS, SIZE_CARD_RADIUS_XS, SIZE_CARD_THUMB_W, SIZE_CARD_MIN_H,
+    SIZE_CARD_MAIN_MARGIN, SIZE_CARD_MAIN_SPACING, SIZE_CARD_INFO_SPACING,
+    SIZE_CARD_BTNS_SPACING, SIZE_CARD_ACT_SPACING, SIZE_CARD_ICON_BTN_W,
+    SIZE_CARD_ICON_BTN_H, SIZE_CARD_STATUS_MARGIN_H, SIZE_CARD_STATUS_MARGIN_V,
+    SIZE_CARD_STATUS_SPACING, SIZE_CARD_CHIPS_SPACING, SIZE_CARD_CHIP_RADIUS,
+    SIZE_CARD_CHIP_PAD_V, SIZE_CARD_CHIP_PAD_H, SIZE_CARD_BORDER_W,
+    SIZE_CARD_MAIN_BTN_W, SIZE_CARD_MAIN_BTN_H, SIZE_CARD_DEFAULT_DPI,
+    SIZE_CARD_SCREEN_DPI, SIZE_CARD_BTN_HEIGHT,
+)
 
 # ── Layout Constants ──────────────────────────
-_RADIUS      = "10px"
-_RADIUS_XS   = "4px"
+_RADIUS      = SIZE_CARD_RADIUS
+_RADIUS_XS   = SIZE_CARD_RADIUS_XS
 
-_DEFAULT_DPI = 300.0
-_THUMB_SIZE  = 72
+_DEFAULT_DPI = float(SIZE_CARD_DEFAULT_DPI)
+_THUMB_SIZE  = SIZE_CARD_THUMB_W
 
 # ── Palette من _C ──────────────────────────────────────
 _BG          = _C["bg_input"]
@@ -65,7 +71,7 @@ _WARNING_BDR = _C["warning_border"]
 # بطاقة مقاس — v3
 # ════════════════════════════════════════════════════════
 
-class _SizeCard(QFrame):
+class _SizeCard(QFrame, WidgetMixin):
     edit_requested   = pyqtSignal(int)
     delete_requested = pyqtSignal(int)
     path_changed     = pyqtSignal()
@@ -73,20 +79,20 @@ class _SizeCard(QFrame):
     def __init__(self, conn, size_data, parent=None):
         super().__init__(parent)
         self.conn     = conn
+        self._svc     = get_design_size_service(conn)
         self._data    = dict(size_data)
         self._size_id = self._data["id"]
         self._build()
+        self._init_widget_mixin(theme=False, font=True, lang=False, data=False)
 
         xcf = self._data.get("xcf_path") or ""
         if xcf and os.path.exists(xcf):
             get_watcher().watch(xcf)
             get_watcher().file_changed.connect(self._on_xcf_changed)
 
-        bus.font_changed.connect(self._apply_name_font)
-
-    def _apply_name_font(self, size: int = None):
+    def _refresh_style(self, *_):
         """يحدّث خط اسم المقاس ديناميكياً عند تغيير حجم الخط من الإعدادات."""
-        size = size or get_font_size()
+        size = get_font_size()
         font_n = QFont()
         font_n.setPointSize(fs(size, -1))
         font_n.setWeight(QFont.Medium)
@@ -121,11 +127,11 @@ class _SizeCard(QFrame):
         self.setStyleSheet(f"""
             QFrame {{
                 background: {_BG};
-                border: 1px solid {_BORDER};
+                border: {SIZE_CARD_BORDER_W}px solid {_BORDER};
                 border-radius: {_RADIUS};
             }}
         """)
-        self.setMinimumHeight(90)
+        self.setMinimumHeight(SIZE_CARD_MIN_H)
 
         root = QVBoxLayout(self)
         root.setContentsMargins(0, 0, 0, 0)
@@ -135,8 +141,9 @@ class _SizeCard(QFrame):
         main = QFrame()
         main.setStyleSheet("QFrame{background:transparent;border:none;}")
         m_lay = QHBoxLayout(main)
-        m_lay.setContentsMargins(12, 12, 12, 12)
-        m_lay.setSpacing(12)
+        m_lay.setContentsMargins(SIZE_CARD_MAIN_MARGIN, SIZE_CARD_MAIN_MARGIN,
+                                  SIZE_CARD_MAIN_MARGIN, SIZE_CARD_MAIN_MARGIN)
+        m_lay.setSpacing(SIZE_CARD_MAIN_SPACING)
 
         # Thumbnail
         self._thumb = _ThumbnailWidget(xcf_path, size=_THUMB_SIZE)
@@ -144,7 +151,7 @@ class _SizeCard(QFrame):
 
         # معلومات
         info = QVBoxLayout()
-        info.setSpacing(3)
+        info.setSpacing(SIZE_CARD_INFO_SPACING)
         info.setContentsMargins(0, 0, 0, 0)
 
         # اسم المقاس + مجموعته
@@ -154,16 +161,16 @@ class _SizeCard(QFrame):
         set_name  = self._data.get("set_name", "")
 
         self._lbl_name = QLabel(inst_name)
-        self._apply_name_font()
+        self._refresh_style()
         self._lbl_name.setStyleSheet(f"color:{_C['text_primary']}; background:transparent;")
 
         lbl_set = QLabel(set_name)
         lbl_set.setStyleSheet(f"color:{_C['text_muted']}; font-size:{FS_SM}px; background:transparent;")
 
         # الأبعاد
-        w, h = fetch_canvas_size(self.conn, self._size_id)
+        w, h = self._svc.get_canvas_size(self._size_id)
         unit = _unit_for_set(self.conn, self._data.get("set_id", 0))
-        dpi  = fetch_canvas_dpi(self.conn, self._size_id)
+        dpi  = self._svc.get_canvas_dpi(self._size_id)
 
         if w is not None and h is not None:
             if dpi:
@@ -192,51 +199,51 @@ class _SizeCard(QFrame):
 
         # أزرار
         btns = QVBoxLayout()
-        btns.setSpacing(5)
+        btns.setSpacing(SIZE_CARD_BTNS_SPACING)
         btns.setContentsMargins(0, 0, 0, 0)
 
         # الزر الرئيسي (GIMP)
         if file_exists:
             btn_main = QPushButton(tr("design_size_card_open_gimp_btn"))
             btn_main.setStyleSheet(
-                _btn_ss(_ACCENT, _C["accent_text"], _ACCENT, _ACCENT_DARK, height=30)
+                _btn_ss(_ACCENT, _C["accent_text"], _ACCENT, _ACCENT_DARK, height=SIZE_CARD_MAIN_BTN_H)
             )
             btn_main.clicked.connect(self._open_in_gimp)
         else:
             btn_main = QPushButton(tr("design_size_card_create_gimp_btn"))
             btn_main.setStyleSheet(
-                _btn_ss(_SUCCESS_LT, _SUCCESS, _SUCCESS_BDR, _SUCCESS_LT, height=30)
+                _btn_ss(_SUCCESS_LT, _SUCCESS, _SUCCESS_BDR, _SUCCESS_LT, height=SIZE_CARD_MAIN_BTN_H)
             )
             btn_main.clicked.connect(self._create_in_gimp)
 
-        btn_main.setMinimumWidth(120)
+        btn_main.setMinimumWidth(SIZE_CARD_MAIN_BTN_W)
         btns.addWidget(btn_main)
 
         # صف أزرار الإجراءات
         act = QHBoxLayout()
-        act.setSpacing(4)
+        act.setSpacing(SIZE_CARD_ACT_SPACING)
 
         if not file_exists:
             btn_link = QPushButton(tr("design_size_card_link_file_btn"))
             btn_link.setStyleSheet(
-                _btn_ss(_BG_SURFACE, _TEXT_SEC, _BORDER, _BG, height=26)
+                _btn_ss(_BG_SURFACE, _TEXT_SEC, _BORDER, _BG, height=SIZE_CARD_BTN_HEIGHT)
             )
             btn_link.clicked.connect(self._set_path)
             act.addWidget(btn_link)
 
-        btn_edit = QPushButton("✏")
-        btn_edit.setFixedSize(28, 26)
+        btn_edit = QPushButton(tr("design_size_card_edit_icon"))
+        btn_edit.setFixedSize(SIZE_CARD_ICON_BTN_W, SIZE_CARD_ICON_BTN_H)
         btn_edit.setToolTip(tr("edit"))
         btn_edit.setStyleSheet(
-            _btn_ss(_BG_SURFACE, _TEXT_SEC, _BORDER, _BG, height=26, radius=_RADIUS_XS)
+            _btn_ss(_BG_SURFACE, _TEXT_SEC, _BORDER, _BG, height=SIZE_CARD_ICON_BTN_H, radius=_RADIUS_XS)
         )
         btn_edit.clicked.connect(lambda: self.edit_requested.emit(self._size_id))
 
-        btn_del = QPushButton("🗑")
-        btn_del.setFixedSize(28, 26)
+        btn_del = QPushButton(tr("design_size_card_delete_icon"))
+        btn_del.setFixedSize(SIZE_CARD_ICON_BTN_W, SIZE_CARD_ICON_BTN_H)
         btn_del.setToolTip(tr("delete"))
         btn_del.setStyleSheet(
-            _btn_ss(_DANGER_LT, _DANGER, _DANGER_BDR, _DANGER_LT, height=26, radius=_RADIUS_XS)
+            _btn_ss(_DANGER_LT, _DANGER, _DANGER_BDR, _DANGER_LT, height=SIZE_CARD_ICON_BTN_H, radius=_RADIUS_XS)
         )
         btn_del.clicked.connect(lambda: self.delete_requested.emit(self._size_id))
 
@@ -275,15 +282,16 @@ class _SizeCard(QFrame):
         bar.setStyleSheet(f"""
             QFrame {{
                 background: {bg};
-                border-top: 1px solid {border};
+                border-top: {SIZE_CARD_BORDER_W}px solid {border};
                 border-bottom-left-radius: {_RADIUS};
                 border-bottom-right-radius: {_RADIUS};
             }}
         """)
 
         bl = QHBoxLayout(bar)
-        bl.setContentsMargins(12, 5, 12, 5)
-        bl.setSpacing(8)
+        bl.setContentsMargins(SIZE_CARD_STATUS_MARGIN_H, SIZE_CARD_STATUS_MARGIN_V,
+                               SIZE_CARD_STATUS_MARGIN_H, SIZE_CARD_STATUS_MARGIN_V)
+        bl.setSpacing(SIZE_CARD_STATUS_SPACING)
 
         lbl_s = QLabel(txt)
         lbl_s.setStyleSheet(
@@ -291,16 +299,16 @@ class _SizeCard(QFrame):
         )
 
         chips = QHBoxLayout()
-        chips.setSpacing(4)
-        for chip_txt in [unit, (f"{int(dpi)} DPI" if dpi else "—")]:
+        chips.setSpacing(SIZE_CARD_CHIPS_SPACING)
+        for chip_txt in [unit, (tr("design_size_card_dpi_chip").format(dpi=int(dpi)) if dpi else tr("dash"))]:
             chip = QLabel(chip_txt)
             chip.setStyleSheet(f"""
                 QLabel {{
                     background: {_BG};
                     color: {_TEXT_SEC};
-                    border: 1px solid {_BORDER_MED};
-                    border-radius: 3px;
-                    padding: 1px 6px;
+                    border: {SIZE_CARD_BORDER_W}px solid {_BORDER_MED};
+                    border-radius: {SIZE_CARD_CHIP_RADIUS}px;
+                    padding: {SIZE_CARD_CHIP_PAD_V}px {SIZE_CARD_CHIP_PAD_H}px;
                     font-size: {fs(FS_SM, -2)}px;
                 }}
             """)
@@ -326,9 +334,9 @@ class _SizeCard(QFrame):
             )
 
     def _create_in_gimp(self):
-        w, h  = fetch_canvas_size(self.conn, self._size_id)
+        w, h  = self._svc.get_canvas_size(self._size_id)
         unit  = _unit_for_set(self.conn, self._data["set_id"])
-        dpi   = fetch_canvas_dpi(self.conn, self._size_id) or _DEFAULT_DPI
+        dpi   = self._svc.get_canvas_dpi(self._size_id) or _DEFAULT_DPI
 
         inst_name    = (self._data.get("instance_name") or "design").replace(" ", "_")
         default_name = f"{inst_name}.xcf"
@@ -349,13 +357,13 @@ class _SizeCard(QFrame):
         if not save_path.lower().endswith(".xcf"):
             save_path += ".xcf"
 
-        update_design_size_path(self.conn, self._size_id, save_path)
+        self._svc.update_path(self._size_id, save_path)
         self._data["xcf_path"] = save_path
         get_watcher().watch(save_path)
 
         if w and h:
             u = unit.strip().lower()
-            actual_dpi = 96.0 if u == "px" else float(dpi)
+            actual_dpi = float(SIZE_CARD_SCREEN_DPI) if u == "px" else float(dpi)
             w_px = _to_px(w, unit, actual_dpi)
             h_px = _to_px(h, unit, actual_dpi)
             QMessageBox.information(
@@ -388,7 +396,7 @@ class _SizeCard(QFrame):
             old = self._data.get("xcf_path") or ""
             if old:
                 get_watcher().unwatch(old)
-            update_design_size_path(self.conn, self._size_id, path)
+            self._svc.update_path(self._size_id, path)
             self._data["xcf_path"] = path
             get_watcher().watch(path)
             self._thumb.refresh(path)

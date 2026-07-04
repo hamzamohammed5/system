@@ -25,6 +25,8 @@ from PyQt5.QtGui  import QPixmap, QImage, QPainter, QColor
 from PyQt5.QtCore import Qt, QRect, QObject, pyqtSignal, QTimer, QFileSystemWatcher
 
 from ui.theme import _C
+from ui.widgets.core.i18n import tr
+from ui.constants import XCF_WATCHER_DEBOUNCE_MS, XCF_THUMB_MIN_SIZE
 
 # ── Cache: xcf_path → (mtime, QPixmap) ─────────────────
 _CACHE: dict[str, tuple[float, QPixmap]] = {}
@@ -49,7 +51,7 @@ class XcfWatcher(QObject):
     """
 
     file_changed = pyqtSignal(str)
-    _DEBOUNCE_MS = 1500
+    _DEBOUNCE_MS = XCF_WATCHER_DEBOUNCE_MS
 
     def __init__(self, parent=None):
         super().__init__(parent)
@@ -381,7 +383,7 @@ def _decode_thumbnail(f, payload_len: int) -> "QPixmap | None":
 # ════════════════════════════════════════════════════════
 
 def _make_placeholder(xcf_path: str, size: int = 80) -> QPixmap:
-    s    = max(size, 64)
+    s    = max(size, XCF_THUMB_MIN_SIZE)
     name = os.path.splitext(os.path.basename(xcf_path))[0]
     if len(name) > 10:
         name = name[:9] + "…"
@@ -404,7 +406,7 @@ def _make_placeholder(xcf_path: str, size: int = 80) -> QPixmap:
     font.setPointSize(s // 3)
     painter.setFont(font)
     painter.setPen(QColor(_C["design_thumb_icon"]))
-    painter.drawText(QRect(0, s//8, s, s//2), Qt.AlignCenter, "🎨")
+    painter.drawText(QRect(0, s//8, s, s//2), Qt.AlignCenter, tr("design_card_thumb_placeholder_icon"))
 
     font.setPointSize(max(6, s // 10))
     painter.setFont(font)
