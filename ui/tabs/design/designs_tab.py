@@ -1,3 +1,7 @@
+# """
+# ui/tabs/design/designs_tab.py  — v2
+# ======================================
+
 """
 ui/tabs/design/designs_tab.py  — v2
 ======================================
@@ -18,26 +22,23 @@ from .designs._designs_table            import _DesignsTable
 from .designs._design_detail_panel      import _DesignDetailPanel
 from .designs._designs_categories_panel import DesignsCategoriesPanel
 from ui.theme import _C
+from ui.widgets.core.widget_mixin import WidgetMixin
+from ui.constants import (
+    MARGIN_ZERO, SPACING_ZERO, SMART_SPLITTER_HANDLE_W,
+    DESIGNS_TAB_SPLITTER_LIST_W, DESIGNS_TAB_SPLITTER_DETAIL_W,
+)
 
 
-class DesignsTab(QWidget):
+class DesignsTab(QWidget, WidgetMixin):
     def __init__(self, conn, parent=None):
         super().__init__(parent)
         self.conn = conn
         self._build()
+        self._init_widget_mixin(lang=False, data=False)
+        self._refresh_style()
 
-    def _build(self):
-        root = QHBoxLayout(self)
-        root.setContentsMargins(0, 0, 0, 0)
-        root.setSpacing(0)
-
-        # ══ 1. Sidebar التصنيفات ══════════════════════
-        self._cats_panel = DesignsCategoriesPanel(self.conn)
-
-        # ══ 2. Splitter: قائمة + تفاصيل ══════════════
-        splitter = QSplitter(Qt.Horizontal)
-        splitter.setHandleWidth(4)
-        splitter.setStyleSheet(f"""
+    def _refresh_style(self, *_):
+        self._splitter.setStyleSheet(f"""
             QSplitter::handle {{
                 background: {_C['border']};
             }}
@@ -45,6 +46,20 @@ class DesignsTab(QWidget):
                 background: {_C['accent_mid']};
             }}
         """)
+        self._sep.setStyleSheet(f"color: {_C['border']};")
+
+    def _build(self):
+        root = QHBoxLayout(self)
+        root.setContentsMargins(*MARGIN_ZERO)
+        root.setSpacing(SPACING_ZERO)
+
+        # ══ 1. Sidebar التصنيفات ══════════════════════
+        self._cats_panel = DesignsCategoriesPanel(self.conn)
+
+        # ══ 2. Splitter: قائمة + تفاصيل ══════════════
+        splitter = QSplitter(Qt.Horizontal)
+        self._splitter = splitter
+        splitter.setHandleWidth(SMART_SPLITTER_HANDLE_W)
 
         # لوحة التفاصيل (تُنشأ أولاً لأن _DesignsTable تحتاجها)
         self._detail = _DesignDetailPanel(self.conn)
@@ -68,16 +83,16 @@ class DesignsTab(QWidget):
 
         splitter.addWidget(self._table)
         splitter.addWidget(self._detail)
-        splitter.setSizes([360, 640])
+        splitter.setSizes([DESIGNS_TAB_SPLITTER_LIST_W, DESIGNS_TAB_SPLITTER_DETAIL_W])
         splitter.setCollapsible(0, False)
         splitter.setCollapsible(1, False)
 
         # ترتيب: sidebar | splitter
         root.addWidget(self._cats_panel)
 
-        sep = QFrame()
+        self._sep = QFrame()
+        sep = self._sep
         sep.setFrameShape(QFrame.VLine)
-        sep.setStyleSheet(f"color: {_C['border']};")
         root.addWidget(sep)
 
         root.addWidget(splitter, stretch=1)

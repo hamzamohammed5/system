@@ -19,19 +19,30 @@ from PyQt5.QtCore import Qt
 from .dimension_sets._values_panel import _ValuesPanel
 from .dimension_sets._groups_panel import _GroupsPanel
 from ui.widgets.core.i18n import tr
+from ui.widgets.core.widget_mixin import WidgetMixin
+from ui.constants import MARGIN_ZERO
 
 
-class DimensionSetsTab(QWidget):
+class DimensionSetsTab(QWidget, WidgetMixin):
     def __init__(self, conn, parent=None):
         super().__init__(parent)
         self.conn = conn
         self._build()
+        self._init_widget_mixin(theme=False, font=False, data=False)
+        self._refresh_lang()
+
+    def _refresh_lang(self, *_):
+        idx_values = self._inner_tabs.indexOf(self._values_panel)
+        idx_groups = self._inner_tabs.indexOf(self._groups_panel)
+        self._inner_tabs.setTabText(idx_values, tr("dimension_sets_tab_values"))
+        self._inner_tabs.setTabText(idx_groups, tr("dimension_sets_tab_groups"))
 
     def _build(self):
         root = QVBoxLayout(self)
-        root.setContentsMargins(0, 0, 0, 0)
+        root.setContentsMargins(*MARGIN_ZERO)
 
-        inner_tabs = QTabWidget()
+        self._inner_tabs = QTabWidget()
+        inner_tabs = self._inner_tabs
 
         # ══ تبويب 1: إدخال المقاسات ══
         self._values_panel = _ValuesPanel(self.conn)

@@ -1,16 +1,28 @@
 """
 services/inventory/inventory_service.py
 =========================================
-InventoryService — طبقة الخدمة للمخزون.
+InventoryService — طبقة الخدمة لمخزن الشركة (inventory_items + inventory_moves).
 
-يوفر:
-  - جلب العناصر مع الرصيد الحالي (SQL مباشر)
-  - تسجيل حركات الوارد والصادر
-  - تقرير المخزون
-  - فحص المخزون المنخفض
+يغطي:
+  - تصنيفات المخزن (inventory_categories)
+  - أصناف المخزن (inventory_items): CRUD + الرصيد والقيمة
+  - حركات المخزن (inventory_moves): وارد / صادر / تسوية، بمنطق WACC
+  - تقرير مخزون شامل (إجمالي، قيمة، أصناف منخفضة/منتهية)
 
-يستدعي db/inventory/inventory_repo.py مباشرةً مع fallback لـ SQL مضمّن
-لضمان عمل الـ service حتى لو الـ repo لم يُنشأ بعد.
+مبدأ العزل المعماري:
+  - هذا الملف هو الوحيد المسموح له باستدعاء db.inventory.inventory_repo.
+  - أي ربط بدومين آخر (الأصناف من costing عبر items، أو الحسابات
+    المحاسبية) يمر عبر service ذلك الدومين — لا نكلم repo تابع
+    لدومين آخر من هنا مباشرة:
+      * الأصناف (items.id, name, type)  → services.shared.item_service.ItemService
+      * الحسابات (accounts.code, name)  → db.accounting.accounting_accounts_repo
+        (لا يوجد accounting service عام بعد؛ هذه الدوال قراءة فقط
+        وتُستخدم فقط لتوفير قوائم اختيار — عند إنشاء AccountService
+        مستقبلاً تُستبدل هذه الاستدعاءات بنداء إليه دون تغيير في UI).
+
+هذا الـ service هو نقطة الدخول الوحيدة لطبقة الـ UI لكل ما يخص المخزون:
+  from services.inventory.inventory_service import InventoryService
+  svc = InventoryService(inv_conn, acc_conn=acc_conn)
 """
 from __future__ import annotations
 
@@ -19,321 +31,206 @@ import datetime
 from dataclasses import dataclass, field
 from typing import Optional
 
+from db.inventory.inventory_repo import (
+    fetch_all_inv_categories, insert_inv_category, delete_inv_category,
+    fetch_all_inventory, fetch_inventory_item,
+    insert_inventory_item, update_inventory_item, delete_inventory_item,
+    fetch_inventory_moves, fetch_recent_moves, record_inventory_move,
+)
+from db.accounting.accounting_accounts_repo import (
+    fetch_leaf_accounts, fetch_account_by_code,
+)
+from services.shared.item_service import ItemService
+
 logger = logging.getLogger(__name__)
 
 
+# ══════════════════════════════════════════════════════════
+# Dataclasses
+# ══════════════════════════════════════════════════════════
+
 @dataclass
 class InventoryReport:
-    items           : list = field(default_factory=list)
-    total_items     : int  = 0
+    items           : list  = field(default_factory=list)
+    total_items     : int   = 0
     total_value     : float = 0.0
-    low_stock_count : int  = 0
-    low_stock_items : list = field(default_factory=list)
+    low_stock_count : int   = 0
+    zero_stock_count: int   = 0
+    low_stock_items : list  = field(default_factory=list)
 
 
-_SQL_ITEMS_WITH_STOCK = """
-    SELECT
-        i.id,
-        i.name,
-        i.type         AS item_type,
-        i.unit,
-        i.price,
-        i.category_id,
-        c.name         AS category_name,
-        COALESCE(i.min_stock, 0) AS min_stock,
-        COALESCE(
-            (SELECT SUM(CASE WHEN m.movement_type='in'  THEN m.quantity
-                             WHEN m.movement_type='out' THEN -m.quantity
-                             ELSE 0 END)
-               FROM inventory_movements m
-              WHERE m.item_id = i.id), 0
-        ) AS current_stock,
-        COALESCE(
-            (SELECT AVG(m.unit_cost)
-               FROM inventory_movements m
-              WHERE m.item_id = i.id AND m.movement_type = 'in'
-                AND m.unit_cost > 0), 0
-        ) AS avg_unit_cost
-    FROM items i
-    LEFT JOIN categories c ON c.id = i.category_id
-    WHERE 1=1
-"""
-
-_SQL_MOVEMENTS = """
-    SELECT
-        m.id,
-        m.item_id,
-        i.name    AS item_name,
-        m.movement_type,
-        m.quantity,
-        m.unit_cost,
-        (m.quantity * m.unit_cost) AS total_cost,
-        m.date,
-        m.reference,
-        m.notes
-    FROM inventory_movements m
-    JOIN items i ON i.id = m.item_id
-    WHERE 1=1
-"""
-
+# ══════════════════════════════════════════════════════════
+# InventoryService
+# ══════════════════════════════════════════════════════════
 
 class InventoryService:
     """
-    طبقة خدمة المخزون.
+    طبقة خدمة المخزون — نقطة الدخول الوحيدة لطبقة الـ UI.
 
-    يحاول أولاً استدعاء inventory_repo مباشرة.
-    إذا لم تكن الدالة موجودة في الـ repo، ينفذ SQL مباشرة.
+    المعاملات:
+        inv_conn : اتصال قاعدة بيانات المخزون (نفس قاعدة الشركة)
+        acc_conn : اتصال قاعدة بيانات المحاسبة (اختياري — لازم فقط
+                   للدوال اللي بتجيب قوائم حسابات)
     """
 
-    def __init__(self, conn):
-        self.conn = conn
+    def __init__(self, inv_conn, acc_conn=None):
+        self.conn     = inv_conn
+        self._acc_conn = acc_conn
+        self._item_svc = ItemService(inv_conn)
 
-    def list_items(self, category_id: int = None,
-                   item_type: str = None,
-                   search: str = "") -> list[dict]:
-        try:
-            from db.inventory.inventory_repo import fetch_items_with_stock
-            return fetch_items_with_stock(
-                self.conn, category_id=category_id,
-                item_type=item_type, search=search,
-            )
-        except (ImportError, AttributeError):
-            return self._list_items_sql(category_id, item_type, search)
-        except Exception as e:
-            logger.error("InventoryService.list_items: %s", e)
-            return []
+    # ────────────────────────────────────────────────────
+    # تصنيفات المخزن
+    # ────────────────────────────────────────────────────
 
-    def _list_items_sql(self, category_id, item_type, search) -> list[dict]:
-        try:
-            sql, params = _SQL_ITEMS_WITH_STOCK, []
-            if category_id is not None:
-                sql += " AND i.category_id = ?"
-                params.append(category_id)
-            if item_type:
-                sql += " AND i.type = ?"
-                params.append(item_type)
-            if search:
-                sql += " AND i.name LIKE ?"
-                params.append(f"%{search}%")
-            sql += " ORDER BY i.name"
-            return [dict(r) for r in self.conn.execute(sql, params).fetchall()]
-        except Exception as e:
-            logger.error("InventoryService._list_items_sql: %s", e)
-            return []
+    def list_categories(self) -> list:
+        return fetch_all_inv_categories(self.conn)
 
-    def get_item(self, item_id: int) -> Optional[dict]:
-        try:
-            from db.inventory.inventory_repo import fetch_item_with_stock
-            return fetch_item_with_stock(self.conn, item_id)
-        except (ImportError, AttributeError):
-            for r in self._list_items_sql(None, None, ""):
-                if r.get("id") == item_id:
-                    return r
-            return None
-        except Exception as e:
-            logger.error("InventoryService.get_item: %s", e)
-            return None
+    def add_category(self, name: str, color: str = "#607d8b",
+                      notes: str = None) -> int:
+        return insert_inv_category(self.conn, name, color, notes)
 
-    def get_current_stock(self, item_id: int) -> float:
-        try:
-            row = self.conn.execute(
-                """SELECT COALESCE(
-                       SUM(CASE WHEN movement_type='in'  THEN quantity
-                                WHEN movement_type='out' THEN -quantity
-                                ELSE 0 END), 0)
-                   FROM inventory_movements WHERE item_id = ?""",
-                (item_id,)
-            ).fetchone()
-            return float(row[0]) if row else 0.0
-        except Exception as e:
-            logger.error("InventoryService.get_current_stock: %s", e)
-            return 0.0
+    def delete_category(self, category_id: int) -> None:
+        delete_inv_category(self.conn, category_id)
 
-    def list_movements(self, item_id: int = None,
-                       movement_type: str = None,
-                       date_from: str = None,
-                       date_to: str = None,
-                       limit: int = 500) -> list[dict]:
-        try:
-            from db.inventory.inventory_repo import fetch_movements
-            return fetch_movements(
-                self.conn, item_id=item_id, movement_type=movement_type,
-                date_from=date_from, date_to=date_to, limit=limit,
-            )
-        except (ImportError, AttributeError):
-            return self._list_movements_sql(item_id, movement_type, date_from, date_to, limit)
-        except Exception as e:
-            logger.error("InventoryService.list_movements: %s", e)
-            return []
+    # ────────────────────────────────────────────────────
+    # أصناف المخزن — قراءة
+    # ────────────────────────────────────────────────────
 
-    def _list_movements_sql(self, item_id, movement_type,
-                             date_from, date_to, limit) -> list[dict]:
-        try:
-            sql, params = _SQL_MOVEMENTS, []
-            if item_id is not None:
-                sql += " AND m.item_id = ?"
-                params.append(item_id)
-            if movement_type:
-                sql += " AND m.movement_type = ?"
-                params.append(movement_type)
-            if date_from:
-                sql += " AND m.date >= ?"
-                params.append(date_from)
-            if date_to:
-                sql += " AND m.date <= ?"
-                params.append(date_to)
-            sql += " ORDER BY m.date DESC, m.id DESC LIMIT ?"
-            params.append(limit)
-            return [dict(r) for r in self.conn.execute(sql, params).fetchall()]
-        except Exception as e:
-            logger.error("InventoryService._list_movements_sql: %s", e)
-            return []
+    def list_items(self) -> list:
+        """كل أصناف المخزن مع الرصيد والقيمة الإجمالية."""
+        return fetch_all_inventory(self.conn)
 
-    def record_inbound(self, item_id: int, quantity: float,
-                       unit_cost: float = 0.0, date: str = None,
-                       reference: str = "", notes: str = "") -> int:
-        if quantity <= 0:
-            raise ValueError("الكمية يجب أن تكون أكبر من صفر")
-        return self._record_movement(item_id, "in", quantity, unit_cost, date, reference, notes)
+    def get_item(self, inv_id: int) -> Optional[dict]:
+        return fetch_inventory_item(self.conn, inv_id)
 
-    def record_outbound(self, item_id: int, quantity: float,
-                        unit_cost: float = 0.0, date: str = None,
-                        reference: str = "", notes: str = "") -> int:
-        if quantity <= 0:
-            raise ValueError("الكمية يجب أن تكون أكبر من صفر")
-        current = self.get_current_stock(item_id)
-        if current < quantity:
-            raise ValueError(
-                f"الكمية المطلوبة ({quantity:.4g}) تتجاوز الرصيد الحالي ({current:.4g})"
-            )
-        return self._record_movement(item_id, "out", quantity, unit_cost, date, reference, notes)
+    # ────────────────────────────────────────────────────
+    # أصناف المخزن — كتابة
+    # ────────────────────────────────────────────────────
 
-    def _record_movement(self, item_id, movement_type, quantity,
-                          unit_cost, date, reference, notes) -> int:
-        _date = date or datetime.date.today().isoformat()
-        try:
-            from db.inventory.inventory_repo import insert_movement
-            return insert_movement(
-                self.conn, item_id=item_id, movement_type=movement_type,
-                quantity=quantity, unit_cost=unit_cost,
-                date=_date, reference=reference, notes=notes,
-            )
-        except (ImportError, AttributeError):
-            try:
-                self.conn.execute(
-                    """INSERT INTO inventory_movements
-                       (item_id, movement_type, quantity, unit_cost, date, reference, notes)
-                       VALUES (?, ?, ?, ?, ?, ?, ?)""",
-                    (item_id, movement_type, quantity, unit_cost, _date, reference, notes)
-                )
-                self.conn.commit()
-                row = self.conn.execute("SELECT last_insert_rowid()").fetchone()
-                return row[0] if row else 0
-            except Exception as e:
-                logger.error("InventoryService._insert_movement_sql: %s", e)
-                raise
-        except Exception as e:
-            logger.error("InventoryService._record_movement: %s", e)
-            raise
-
-    def delete_movement(self, movement_id: int) -> bool:
-        try:
-            from db.inventory.inventory_repo import delete_movement
-            delete_movement(self.conn, movement_id)
-            return True
-        except (ImportError, AttributeError):
-            try:
-                self.conn.execute(
-                    "DELETE FROM inventory_movements WHERE id = ?", (movement_id,)
-                )
-                self.conn.commit()
-                return True
-            except Exception as e:
-                logger.error("InventoryService.delete_movement SQL: %s", e)
-                return False
-        except Exception as e:
-            logger.error("InventoryService.delete_movement: %s", e)
-            return False
-
-    def get_report(self, category_id: int = None, item_type: str = None) -> InventoryReport:
-        items = self.list_items(category_id=category_id, item_type=item_type)
-        total_value, low_stock_list = 0.0, []
-        for item in items:
-            stock    = float(item.get("current_stock", 0) or 0)
-            avg_cost = float(item.get("avg_unit_cost", 0) or 0)
-            total_value += stock * avg_cost
-            min_s = float(item.get("min_stock", 0) or 0)
-            if min_s > 0 and stock <= min_s:
-                low_stock_list.append(item)
-        return InventoryReport(
-            items=items, total_items=len(items), total_value=total_value,
-            low_stock_count=len(low_stock_list), low_stock_items=low_stock_list,
+    def add_item(self, name: str, unit: str = "قطعة",
+                 qty_min: float = 0,
+                 account_code: str = "114",
+                 category_id: int = None,
+                 costing_item_id: int = None,
+                 notes: str = None) -> int:
+        if not name.strip():
+            raise ValueError("اسم الصنف مطلوب")
+        return insert_inventory_item(
+            self.conn, name.strip(), unit, qty_min,
+            account_code, category_id, costing_item_id, notes,
         )
 
-    def get_item_summary(self, item_id: int) -> dict:
-        try:
-            from db.inventory.inventory_repo import fetch_item_summary
-            return fetch_item_summary(self.conn, item_id)
-        except (ImportError, AttributeError):
-            try:
-                row = self.conn.execute(
-                    """SELECT
-                           COALESCE(SUM(CASE WHEN movement_type='in'  THEN quantity ELSE 0 END), 0),
-                           COALESCE(SUM(CASE WHEN movement_type='out' THEN quantity ELSE 0 END), 0),
-                           COALESCE(SUM(CASE WHEN movement_type='in'  THEN quantity
-                                             WHEN movement_type='out' THEN -quantity
-                                             ELSE 0 END), 0),
-                           COALESCE(AVG(CASE WHEN movement_type='in' AND unit_cost>0
-                                             THEN unit_cost END), 0)
-                       FROM inventory_movements WHERE item_id = ?""",
-                    (item_id,)
-                ).fetchone()
-                return {
-                    "total_in": float(row[0]), "total_out": float(row[1]),
-                    "current_stock": float(row[2]), "avg_unit_cost": float(row[3]),
-                    "movements": self.list_movements(item_id=item_id),
-                }
-            except Exception as e:
-                logger.error("InventoryService.get_item_summary SQL: %s", e)
-                return {"total_in": 0.0, "total_out": 0.0,
-                        "current_stock": 0.0, "avg_unit_cost": 0.0, "movements": []}
-        except Exception as e:
-            logger.error("InventoryService.get_item_summary: %s", e)
-            return {"total_in": 0.0, "total_out": 0.0,
-                    "current_stock": 0.0, "avg_unit_cost": 0.0, "movements": []}
+    def update_item(self, inv_id: int, name: str, unit: str,
+                     qty_min: float,
+                     account_code: str = "114",
+                     category_id: int = None,
+                     notes: str = None) -> None:
+        if not name.strip():
+            raise ValueError("اسم الصنف مطلوب")
+        update_inventory_item(
+            self.conn, inv_id, name.strip(), unit, qty_min,
+            account_code, category_id, notes,
+        )
 
-    def update_min_stock(self, item_id: int, min_stock: float) -> bool:
-        try:
-            from db.inventory.inventory_repo import update_item_min_stock
-            update_item_min_stock(self.conn, item_id, min_stock)
-            return True
-        except (ImportError, AttributeError):
-            try:
-                self.conn.execute(
-                    "UPDATE items SET min_stock = ? WHERE id = ?",
-                    (min_stock, item_id)
-                )
-                self.conn.commit()
-                return True
-            except Exception as e:
-                logger.error("InventoryService.update_min_stock SQL: %s", e)
-                return False
-        except Exception as e:
-            logger.error("InventoryService.update_min_stock: %s", e)
-            return False
+    def delete_item(self, inv_id: int) -> None:
+        delete_inventory_item(self.conn, inv_id)
 
-    def get_low_stock_items(self) -> list[dict]:
-        try:
-            from db.inventory.inventory_repo import fetch_low_stock_items
-            return fetch_low_stock_items(self.conn)
-        except (ImportError, AttributeError):
-            items = self._list_items_sql(None, None, "")
+    # ────────────────────────────────────────────────────
+    # حركات المخزن
+    # ────────────────────────────────────────────────────
+
+    def list_moves_for_item(self, inv_id: int) -> list:
+        return fetch_inventory_moves(self.conn, inv_id)
+
+    def list_recent_moves(self, move_type: str = None, limit: int = 100) -> list:
+        return fetch_recent_moves(self.conn, move_type=move_type, limit=limit)
+
+    def record_move(self, inv_id: int, move_type: str,
+                     qty: float, unit_cost: float, date: str,
+                     notes: str = None,
+                     ref_entry_id: int = None,
+                     ref_entry_no: str = None) -> int:
+        """
+        يسجل حركة مخزن (in / out / adjust) ويحدث الرصيد والتكلفة
+        المتوسطة (WACC) عبر inventory_repo.record_inventory_move.
+        """
+        return record_inventory_move(
+            self.conn, inv_id, move_type, qty, unit_cost, date,
+            notes=notes, ref_entry_id=ref_entry_id, ref_entry_no=ref_entry_no,
+        )
+
+    def record_inbound(self, inv_id: int, qty: float, unit_cost: float,
+                        date: str, notes: str = None,
+                        ref_entry_id: int = None, ref_entry_no: str = None) -> int:
+        if qty <= 0:
+            raise ValueError("الكمية يجب أن تكون أكبر من صفر")
+        return self.record_move(
+            inv_id, "in", qty, unit_cost, date,
+            notes=notes, ref_entry_id=ref_entry_id, ref_entry_no=ref_entry_no,
+        )
+
+    def record_outbound(self, inv_id: int, qty: float, date: str,
+                         notes: str = None) -> int:
+        if qty <= 0:
+            raise ValueError("الكمية يجب أن تكون أكبر من صفر")
+        return self.record_move(inv_id, "out", qty, 0.0, date, notes=notes)
+
+    # ────────────────────────────────────────────────────
+    # تقرير المخزون
+    # ────────────────────────────────────────────────────
+
+    def get_report(self) -> InventoryReport:
+        items = self.list_items()
+        total_value, low_items = 0.0, []
+        low_count = zero_count = 0
+
+        for inv in items:
+            qty      = float(inv["qty_on_hand"])
+            qty_min  = float(inv["qty_min"])
+            total_value += float(inv["total_value"])
+            if qty == 0:
+                zero_count += 1
+            elif qty_min > 0 and qty <= qty_min:
+                low_count += 1
+                low_items.append(inv)
+
+        return InventoryReport(
+            items=items, total_items=len(items), total_value=total_value,
+            low_stock_count=low_count, zero_stock_count=zero_count,
+            low_stock_items=low_items,
+        )
+
+    # ────────────────────────────────────────────────────
+    # تكامل مع دومينات أخرى (facade)
+    # ────────────────────────────────────────────────────
+
+    def list_costing_items(self, item_type: str = None) -> list:
+        """
+        أصناف نظام التكلفة (costing) القابلة للربط بصنف مخزون
+        عبر costing_item_id — تُجلب من ItemService وليس مباشرة من repo.
+        """
+        if item_type:
             return [
-                i for i in items
-                if float(i.get("min_stock", 0) or 0) > 0
-                and float(i.get("current_stock", 0) or 0)
-                <= float(i.get("min_stock", 0) or 0)
+                {"id": r.id, "name": r.name}
+                for r in self._item_svc.list_by_type(item_type)
             ]
-        except Exception as e:
-            logger.error("InventoryService.get_low_stock_items: %s", e)
-            return []
+        # لا يوجد list_all في ItemService حالياً — نجمع الأنواع الشائعة
+        all_items = []
+        for t in ("raw", "semi", "final"):
+            all_items.extend(self._item_svc.list_by_type(t))
+        return [{"id": r.id, "name": r.name, "item_type": r.item_type} for r in all_items]
+
+    def list_payment_accounts(self, acc_type: str) -> list:
+        """
+        قوائم حسابات للاختيار (دفع/أصول) — قراءة فقط عبر
+        accounting_accounts_repo. للكتابة على الحسابات استخدم
+        الـ accounting service المخصص وقت توفره.
+        """
+        if self._acc_conn is None:
+            raise RuntimeError("acc_conn غير متاح لهذا الـ InventoryService")
+        return fetch_leaf_accounts(self._acc_conn, acc_type)
+
+    def get_account_by_code(self, code: str) -> Optional[dict]:
+        if self._acc_conn is None:
+            raise RuntimeError("acc_conn غير متاح لهذا الـ InventoryService")
+        return fetch_account_by_code(self._acc_conn, code)
