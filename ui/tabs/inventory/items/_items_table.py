@@ -9,9 +9,7 @@ from PyQt5.QtWidgets import (
 )
 from PyQt5.QtGui import QColor
 
-from db.inventory.inventory_repo import (
-    fetch_all_inventory, fetch_inventory_item, delete_inventory_item,
-)
+from services.inventory.inventory_service import InventoryService
 
 from ui.widgets.tables.tables       import auto_fit_columns
 from ui.widgets.panels.form_labels   import section_title
@@ -23,12 +21,15 @@ from ui.widgets.tables.tables       import make_table
 from ui.widgets.core.widget_mixin import WidgetMixin
 from ui.widgets.core.events import emit_company_data_changed
 from ui.widgets.core.i18n import tr
-from ui.constants import COL_MIN_WIDTH, INVENTORY_COL_MAX_W, INVENTORY_INPUT_MIN_H
+from ui.constants import (
+    COL_MIN_WIDTH, INVENTORY_COL_MAX_W, INVENTORY_INPUT_MIN_H,
+    INVENTORY_ITEMS_TABLE_ROOT_MARGIN, SPACING_SM,
+)
 
 def buttons_row(*buttons) -> QHBoxLayout:
     """صف أزرار أفقي."""
     row = QHBoxLayout()
-    row.setSpacing(6)
+    row.setSpacing(SPACING_SM)
     for btn in buttons:
         row.addWidget(btn)
     row.addStretch()
@@ -38,6 +39,7 @@ class _ItemsTable(QWidget, WidgetMixin):
     def __init__(self, inv_conn, form, on_select, parent=None):
         super().__init__(parent)
         self.inv_conn   = inv_conn
+        self._svc       = InventoryService(inv_conn)
         self._form      = form
         self._on_select = on_select
         self._init_widget_mixin(theme=False, font=False, lang=True, data=True)
@@ -55,8 +57,8 @@ class _ItemsTable(QWidget, WidgetMixin):
 
     def _build(self):
         root = QVBoxLayout(self)
-        root.setContentsMargins(12, 8, 12, 12)
-        root.setSpacing(6)
+        root.setContentsMargins(*INVENTORY_ITEMS_TABLE_ROOT_MARGIN)
+        root.setSpacing(SPACING_SM)
         root.addWidget(section_title(tr("inventory_items_header")))
 
         self.table = make_table(
@@ -87,7 +89,7 @@ class _ItemsTable(QWidget, WidgetMixin):
 
     def _load(self):
         from ui.theme import _C
-        rows = fetch_all_inventory(self.inv_conn)
+        rows = self._svc.list_items()
         self.table.setRowCount(0)
         for inv in rows:
             r = self.table.rowCount()
@@ -127,7 +129,7 @@ class _ItemsTable(QWidget, WidgetMixin):
         if not inv_id:
             QMessageBox.information(self, tr("warning"), tr("inventory_select_item"))
             return
-        inv = fetch_inventory_item(self.inv_conn, inv_id)
+        inv = self._svc.get_item(inv_id)
         if confirm_delete(self, inv["name"]):
-            delete_inventory_item(self.inv_conn, inv_id)
+            self._svc.delete_item(inv_id)
             emit_company_data_changed()

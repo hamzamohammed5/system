@@ -15,11 +15,8 @@ from PyQt5.QtWidgets import (
 )
 from PyQt5.QtCore import Qt, QDate
 
-from db.inventory.inventory_repo import (
-    fetch_all_inventory, fetch_inventory_item,
-)
-from db.accounting.accounting_accounts_repo import fetch_leaf_accounts
 from db.accounting.accounting_inventory_repo import purchase_inventory
+from services.inventory.inventory_service import InventoryService
 
 from ui.widgets.tables.tables import auto_fit_columns
 from ui.widgets.panels.form_labels   import section_title
@@ -37,6 +34,7 @@ from ui.constants import (
     INVENTORY_GRP_PAD_TOP, INVENTORY_GRP_TITLE_PAD_H,
     INVENTORY_SAVE_BTN_RADIUS, INVENTORY_SAVE_BTN_PAD_H,
     COL_MIN_WIDTH, INVENTORY_COL_MAX_W,
+    FORM_LAYOUT_MARGIN, SPACING_MD_LG,
 )
 
 
@@ -66,6 +64,7 @@ class _InboundTab(QWidget, WidgetMixin):
         super().__init__(parent)
         self.inv_conn = inv_conn
         self.acc_conn = acc_conn
+        self._svc = InventoryService(inv_conn, acc_conn=acc_conn)
         self._init_widget_mixin(data=True)
         self._build()
         self._refresh_style()
@@ -92,12 +91,12 @@ class _InboundTab(QWidget, WidgetMixin):
 
     def _build(self):
         root = QVBoxLayout(self)
-        root.setContentsMargins(12, 10, 12, 10)
-        root.setSpacing(10)
+        root.setContentsMargins(*FORM_LAYOUT_MARGIN)
+        root.setSpacing(SPACING_MD_LG)
 
         self.grp = QGroupBox(tr("inventory_inbound_title"))
         form = QFormLayout(self.grp)
-        form.setSpacing(10)
+        form.setSpacing(SPACING_MD_LG)
         form.setLabelAlignment(Qt.AlignRight)
 
         self.cmb_item = QComboBox()
@@ -123,13 +122,13 @@ class _InboundTab(QWidget, WidgetMixin):
         self.cmb_payment = QComboBox()
         self.cmb_payment.setMinimumHeight(INVENTORY_CMB_MIN_H)
 
-        for acc in fetch_leaf_accounts(self.acc_conn, "liability"):
-            self.cmb_payment.addItem(f"{acc['code']} — {acc['name']}", acc["id"])
+        for acc in self._svc.list_payment_accounts("liability"):
+            self.cmb_payment.addItem(f"{acc['code']}{tr('account_code_name_sep')}{acc['name']}", acc["id"])
 
-        for acc in fetch_leaf_accounts(self.acc_conn, "asset"):
+        for acc in self._svc.list_payment_accounts("asset"):
             subtype = _safe_subtype(acc)
             if subtype in ("cash", "bank"):
-                self.cmb_payment.addItem(f"{acc['code']} — {acc['name']}", acc["id"])
+                self.cmb_payment.addItem(f"{acc['code']}{tr('account_code_name_sep')}{acc['name']}", acc["id"])
 
         # اختيار الموردين افتراضياً
         supplier_kw = tr("inventory_supplier_keyword").lower()
@@ -174,7 +173,7 @@ class _InboundTab(QWidget, WidgetMixin):
         self.cmb_item.blockSignals(True)
         self.cmb_item.clear()
         self.cmb_item.addItem(tr("inventory_select_item_placeholder"), None)
-        for inv in fetch_all_inventory(self.inv_conn):
+        for inv in self._svc.list_items():
             self.cmb_item.addItem(
                 f"{inv['name']}  ({inv['qty_on_hand']:,.4g} {inv['unit']})",
                 inv["id"]
@@ -189,7 +188,7 @@ class _InboundTab(QWidget, WidgetMixin):
     def _on_item_changed(self):
         inv_id = self.cmb_item.currentData()
         if inv_id:
-            inv = fetch_inventory_item(self.inv_conn, inv_id)
+            inv = self._svc.get_item(inv_id)
             if inv and inv["avg_cost"] > 0:
                 self.sp_unit_cost.setValue(inv["avg_cost"])
         self._update_total()
@@ -228,18 +227,7 @@ class _InboundTab(QWidget, WidgetMixin):
             QMessageBox.critical(self, tr("error"), str(e))
 
     def _load_moves(self):
-        try:
-            rows = self.inv_conn.execute("""
-                SELECT im.date, inv.name, im.qty, im.unit_cost, im.total_cost,
-                       im.ref_entry_no
-                FROM inventory_moves im
-                JOIN inventory_items inv ON inv.id = im.inventory_id
-                WHERE im.move_type = 'in'
-                ORDER BY im.date DESC, im.id DESC
-                LIMIT 100
-            """).fetchall()
-        except Exception:
-            rows = []
+        rows = self._svc.list_recent_moves_with_names("in", limit=100)
         
         self.table.setRowCount(0)
         for r in rows:

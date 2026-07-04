@@ -135,6 +135,35 @@ class InventoryService:
     def delete_item(self, inv_id: int) -> None:
         delete_inventory_item(self.conn, inv_id)
 
+    def add_item_by_account_id(self, name: str, unit: str, qty_min: float,
+                                account_id: int = None, item_id: int = None,
+                                notes: str = None) -> int:
+        """
+        نسخة من add_item تستخدم account_id/item_id مباشرة بدل
+        account_code/costing_item_id — مطابقة لتوقيع
+        insert_inventory_item الفعلي المستخدم في _ItemForm.
+        """
+        if not name.strip():
+            raise ValueError("اسم الصنف مطلوب")
+        return insert_inventory_item(
+            self.conn, name=name.strip(), unit=unit, qty_min=qty_min,
+            account_id=account_id, item_id=item_id, notes=notes,
+        )
+
+    def update_item_by_account_id(self, inv_id: int, name: str, unit: str,
+                                   qty_min: float, account_id: int = None,
+                                   notes: str = None) -> None:
+        """
+        نسخة من update_item تستخدم account_id مباشرة بدل account_code —
+        مطابقة لتوقيع update_inventory_item الفعلي المستخدم في _ItemForm.
+        """
+        if not name.strip():
+            raise ValueError("اسم الصنف مطلوب")
+        update_inventory_item(
+            self.conn, inv_id, name.strip(), unit, qty_min,
+            account_id, notes,
+        )
+
     # ────────────────────────────────────────────────────
     # حركات المخزن
     # ────────────────────────────────────────────────────
@@ -144,6 +173,26 @@ class InventoryService:
 
     def list_recent_moves(self, move_type: str = None, limit: int = 100) -> list:
         return fetch_recent_moves(self.conn, move_type=move_type, limit=limit)
+
+    def list_recent_moves_with_names(self, move_type: str, limit: int = 100) -> list:
+        """
+        حركات المخزون (وارد/صادر) مع اسم الصنف — تُستخدم في جداول
+        'آخر الحركات' بتبويبات الوارد والصادر. ينفّذ الاستعلام هنا
+        وليس في UI حفاظاً على مبدأ العزل المعماري (لا SQL خام في UI).
+        """
+        try:
+            rows = self.conn.execute("""
+                SELECT im.date, inv.name, im.qty, im.unit_cost, im.total_cost,
+                       im.ref_entry_no, im.notes
+                FROM inventory_moves im
+                JOIN inventory_items inv ON inv.id = im.inventory_id
+                WHERE im.move_type = ?
+                ORDER BY im.date DESC, im.id DESC
+                LIMIT ?
+            """, (move_type, limit)).fetchall()
+        except Exception:
+            rows = []
+        return rows
 
     def record_move(self, inv_id: int, move_type: str,
                      qty: float, unit_cost: float, date: str,

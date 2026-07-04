@@ -14,10 +14,7 @@ from PyQt5.QtWidgets import (
 )
 from PyQt5.QtCore import Qt, QDate
 
-from db.inventory.inventory_repo import (
-    fetch_all_inventory, fetch_inventory_item,
-    record_inventory_move,
-)
+from services.inventory.inventory_service import InventoryService
 
 from ui.widgets.tables.tables import auto_fit_columns
 from ui.widgets.panels.form_labels   import section_title
@@ -34,6 +31,7 @@ from ui.constants import (
     INVENTORY_GRP_PAD_TOP, INVENTORY_GRP_TITLE_PAD_H,
     INVENTORY_SAVE_BTN_RADIUS, INVENTORY_SAVE_BTN_PAD_H,
     COL_MIN_WIDTH, INVENTORY_COL_MAX_W,
+    FORM_LAYOUT_MARGIN, SPACING_MD_LG,
 )
 
 
@@ -53,6 +51,7 @@ class _OutboundTab(QWidget, WidgetMixin):
     def __init__(self, inv_conn, parent=None):
         super().__init__(parent)
         self.inv_conn = inv_conn
+        self._svc = InventoryService(inv_conn)
         self._init_widget_mixin(data=True)
         self._build()
         self._refresh_style()
@@ -79,12 +78,12 @@ class _OutboundTab(QWidget, WidgetMixin):
 
     def _build(self):
         root = QVBoxLayout(self)
-        root.setContentsMargins(12, 10, 12, 10)
-        root.setSpacing(10)
+        root.setContentsMargins(*FORM_LAYOUT_MARGIN)
+        root.setSpacing(SPACING_MD_LG)
 
         self.grp = QGroupBox(tr("inventory_outbound_title"))
         form = QFormLayout(self.grp)
-        form.setSpacing(10)
+        form.setSpacing(SPACING_MD_LG)
         form.setLabelAlignment(Qt.AlignRight)
 
         self.cmb_item = QComboBox()
@@ -136,7 +135,7 @@ class _OutboundTab(QWidget, WidgetMixin):
         self.cmb_item.blockSignals(True)
         self.cmb_item.clear()
         self.cmb_item.addItem(tr("inventory_select_item_placeholder"), None)
-        for inv in fetch_all_inventory(self.inv_conn):
+        for inv in self._svc.list_items():
             self.cmb_item.addItem(
                 f"{inv['name']}  ({inv['qty_on_hand']:,.4g} {inv['unit']})",
                 inv["id"]
@@ -151,7 +150,7 @@ class _OutboundTab(QWidget, WidgetMixin):
     def _on_item_changed(self):
         inv_id = self.cmb_item.currentData()
         if inv_id:
-            inv = fetch_inventory_item(self.inv_conn, inv_id)
+            inv = self._svc.get_item(inv_id)
             if inv:
                 self.lbl_available.setText(
                     tr("inventory_available_qty").format(qty=f"{inv['qty_on_hand']:,.4g}", unit=inv["unit"])
@@ -168,27 +167,14 @@ class _OutboundTab(QWidget, WidgetMixin):
         date  = self.dt_date.date().toString("yyyy-MM-dd")
         notes = self.inp_notes.text().strip() or None
         try:
-            record_inventory_move(
-                self.inv_conn, inv_id, "out", qty, 0, date, notes
-            )
+            self._svc.record_outbound(inv_id, qty, date, notes)
             self.inp_notes.clear()
             emit_company_data_changed()
         except ValueError as e:
             QMessageBox.critical(self, tr("error"), str(e))
 
     def _load_moves(self):
-        try:
-            rows = self.inv_conn.execute("""
-                SELECT im.date, inv.name, im.qty, im.unit_cost,
-                       im.total_cost, im.notes
-                FROM inventory_moves im
-                JOIN inventory_items inv ON inv.id = im.inventory_id
-                WHERE im.move_type = 'out'
-                ORDER BY im.date DESC, im.id DESC
-                LIMIT 100
-            """).fetchall()
-        except Exception:
-            rows = []
+        rows = self._svc.list_recent_moves_with_names("out", limit=100)
 
         self.table.setRowCount(0)
         for r in rows:

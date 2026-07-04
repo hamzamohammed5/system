@@ -15,10 +15,7 @@ from PyQt5.QtWidgets import (
 from PyQt5.QtCore import Qt
 from PyQt5.QtGui  import QColor
 
-from db.inventory.inventory_repo import (
-    fetch_all_inventory, fetch_inventory_item,
-    fetch_inventory_moves,
-)
+from services.inventory.inventory_service import InventoryService
 from ui.widgets.panels.form_labels   import section_title
 from ui.widgets.tables.tables       import make_table, auto_fit_columns
 from ui.widgets.core.widget_mixin import WidgetMixin
@@ -29,6 +26,9 @@ from ui.constants import (
     COL_MIN_WIDTH, INVENTORY_COL_MAX_W,
     STYLES_RADIUS_LG, SPACING_XS,
     INVENTORY_CARD_BORDER_L,
+    SCENARIO_CMP_ROOT_MARGIN, SPACING_MD_LG,
+    STATUS_CHIP_MARGIN_NORMAL,
+    INVENTORY_ITEMS_TABLE_ROOT_MARGIN, SPACING_SM,
 )
 
 
@@ -40,6 +40,7 @@ class _ReportTab(QWidget, WidgetMixin):
     def __init__(self, inv_conn, parent=None):
         super().__init__(parent)
         self.inv_conn = inv_conn
+        self._svc = InventoryService(inv_conn)
         self._init_widget_mixin(data=True)
         self._build()
         self._load()
@@ -62,11 +63,11 @@ class _ReportTab(QWidget, WidgetMixin):
 
     def _build(self):
         root = QVBoxLayout(self)
-        root.setContentsMargins(12, 10, 12, 12)
-        root.setSpacing(10)
+        root.setContentsMargins(*SCENARIO_CMP_ROOT_MARGIN)
+        root.setSpacing(SPACING_MD_LG)
 
         cards_row = QHBoxLayout()
-        cards_row.setSpacing(10)
+        cards_row.setSpacing(SPACING_MD_LG)
 
         self._card_frames = []
 
@@ -83,7 +84,7 @@ class _ReportTab(QWidget, WidgetMixin):
             """)
             self._card_frames.append((f, color))
             lay = QVBoxLayout(f)
-            lay.setContentsMargins(12, 8, 12, 8)
+            lay.setContentsMargins(*STATUS_CHIP_MARGIN_NORMAL)
             lbl_t = QLabel(label)
             lbl_t.setStyleSheet(
                 f"font-size:{FS_XS}px; color:{_C['text_muted']};"
@@ -119,7 +120,7 @@ class _ReportTab(QWidget, WidgetMixin):
 
     def _load(self):
         from ui.theme import _C
-        rows = fetch_all_inventory(self.inv_conn)
+        rows = self._svc.list_items()
         self.table.setRowCount(0)
         total_val = 0.0
         low_count = zero_count = 0
@@ -170,6 +171,7 @@ class _MovesPanel(QWidget, WidgetMixin):
     def __init__(self, inv_conn, parent=None):
         super().__init__(parent)
         self.inv_conn = inv_conn
+        self._svc     = InventoryService(inv_conn)
         self._inv_id  = None
         self._init_widget_mixin(data=False)
         self._build()
@@ -183,8 +185,8 @@ class _MovesPanel(QWidget, WidgetMixin):
 
     def _build(self):
         root = QVBoxLayout(self)
-        root.setContentsMargins(12, 8, 12, 12)
-        root.setSpacing(6)
+        root.setContentsMargins(*INVENTORY_ITEMS_TABLE_ROOT_MARGIN)
+        root.setSpacing(SPACING_SM)
 
         self.lbl_title = QLabel(tr("inventory_select_item_for_moves"))
         root.addWidget(self.lbl_title)
@@ -201,7 +203,7 @@ class _MovesPanel(QWidget, WidgetMixin):
     def load(self, inv_id: int):
         from ui.theme import _C
         self._inv_id = inv_id
-        inv = fetch_inventory_item(self.inv_conn, inv_id)
+        inv = self._svc.get_item(inv_id)
         if not inv:
             return
         self.lbl_title.setText(
@@ -209,7 +211,7 @@ class _MovesPanel(QWidget, WidgetMixin):
                 name=inv["name"], qty=f"{inv['qty_on_hand']:,.4g}", unit=inv["unit"]
             )
         )
-        moves = fetch_inventory_moves(self.inv_conn, inv_id)
+        moves = self._svc.list_moves_for_item(inv_id)
         self.table.setRowCount(0)
 
         type_ar    = {

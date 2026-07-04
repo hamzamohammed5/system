@@ -11,12 +11,7 @@ from PyQt5.QtWidgets import (
 )
 from PyQt5.QtCore import Qt
 
-from db.inventory.inventory_repo import (
-    fetch_inventory_item, insert_inventory_item, update_inventory_item,
-)
-from db.accounting.accounting_accounts_repo import fetch_leaf_accounts
-from db.shared.items_repo import fetch_items_by_type
-from db.companies.company_state import company_state
+from services.inventory.inventory_service import InventoryService
 from ui.widgets.mixins.form_mixins import EditModeMixin
 from ui.widgets.core.events import emit_company_data_changed
 from ui.widgets.core.i18n import tr
@@ -26,7 +21,7 @@ from ui.constants import (
     INVENTORY_INPUT_MIN_H, INVENTORY_CMB_MIN_H, INVENTORY_UNIT_W,
     INVENTORY_GRP_BORDER_RADIUS, INVENTORY_GRP_MARGIN_TOP,
     INVENTORY_GRP_PAD_TOP, INVENTORY_GRP_TITLE_PAD_H,
-    FORM_LAYOUT_SPACING,
+    FORM_LAYOUT_SPACING, FORM_LAYOUT_MARGIN, SPACING_MD, MARGIN_ZERO,
 )
 
 
@@ -43,6 +38,7 @@ class _ItemForm(QWidget, EditModeMixin, WidgetMixin):
         super().__init__(parent)
         self.inv_conn = inv_conn
         self.acc_conn = acc_conn
+        self._svc = InventoryService(inv_conn, acc_conn=acc_conn)
         self._init_widget_mixin(data=False)
         self._build()
         self._refresh_style()
@@ -70,8 +66,8 @@ class _ItemForm(QWidget, EditModeMixin, WidgetMixin):
 
     def _build(self):
         root = QVBoxLayout(self)
-        root.setContentsMargins(12, 10, 12, 10)
-        root.setSpacing(8)
+        root.setContentsMargins(*FORM_LAYOUT_MARGIN)
+        root.setSpacing(SPACING_MD)
 
         self.grp = QGroupBox(tr("inventory_item_data_group"))
         form = QFormLayout(self.grp)
@@ -99,15 +95,15 @@ class _ItemForm(QWidget, EditModeMixin, WidgetMixin):
         self.cmb_item = QComboBox()
         self.cmb_item.setMinimumHeight(INVENTORY_CMB_MIN_H)
         self.cmb_item.addItem(tr("investor_no_link"), None)
-        for item in fetch_items_by_type(company_state.get_erp_conn(), "raw"):
+        for item in self._svc.list_costing_items("raw"):
             self.cmb_item.addItem(tr("inventory_raw_item_fmt").format(name=item["name"]), item["id"])
 
         # ربط بحساب محاسبي
         self.cmb_account = QComboBox()
         self.cmb_account.setMinimumHeight(INVENTORY_CMB_MIN_H)
         self.cmb_account.addItem(tr("inventory_default_account_placeholder"), None)
-        for acc in fetch_leaf_accounts(self.acc_conn, "asset"):
-            self.cmb_account.addItem(f"{acc['code']} — {acc['name']}", acc["id"])
+        for acc in self._svc.list_payment_accounts("asset"):
+            self.cmb_account.addItem(f"{acc['code']}{tr('account_code_name_sep')}{acc['name']}", acc["id"])
 
         self.inp_notes = QLineEdit()
         self.inp_notes.setPlaceholderText(tr("notes_placeholder"))
@@ -136,7 +132,7 @@ class _ItemForm(QWidget, EditModeMixin, WidgetMixin):
     def _make_btn_widget(self):
         w = QWidget()
         lay = QHBoxLayout(w)
-        lay.setContentsMargins(0, 0, 0, 0)
+        lay.setContentsMargins(*MARGIN_ZERO)
         lay.addWidget(self.btn_add)
         lay.addWidget(self.btn_save)
         lay.addWidget(self.btn_cancel)
@@ -161,7 +157,7 @@ class _ItemForm(QWidget, EditModeMixin, WidgetMixin):
         data = self._collect()
         if not data:
             return
-        insert_inventory_item(self.inv_conn, **data)
+        self._svc.add_item_by_account_id(**data)
         self._reset()
         emit_company_data_changed()
 
@@ -169,10 +165,10 @@ class _ItemForm(QWidget, EditModeMixin, WidgetMixin):
         data = self._collect()
         if not data:
             return
-        update_inventory_item(self.inv_conn, self._editing_id,
-                              data["name"], data["unit"],
-                              data["qty_min"], data["account_id"],
-                              data["notes"])
+        self._svc.update_item_by_account_id(
+            self._editing_id, data["name"], data["unit"],
+            data["qty_min"], data["account_id"], data["notes"],
+        )
         self._reset()
         emit_company_data_changed()
 
@@ -180,7 +176,7 @@ class _ItemForm(QWidget, EditModeMixin, WidgetMixin):
         self._reset()
 
     def load_for_edit(self, inv_id: int):
-        inv = fetch_inventory_item(self.inv_conn, inv_id)
+        inv = self._svc.get_item(inv_id)
         if not inv:
             return
         self.inp_name.setText(inv["name"])
