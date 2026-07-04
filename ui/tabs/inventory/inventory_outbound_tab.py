@@ -23,17 +23,25 @@ from ui.widgets.tables.tables import auto_fit_columns
 from ui.widgets.panels.form_labels   import section_title
 from ui.widgets.tables.tables       import make_table
 
-from ui.widgets.mixins.bus import BusConnectedMixin
+from ui.widgets.core.widget_mixin import WidgetMixin
 from ui.widgets.core.events import emit_company_data_changed
 from ui.widgets.core.i18n import tr
-from ui.theme import _C
+from ui.constants import (
+    INVENTORY_SPIN_MAX, INVENTORY_SPIN_DEC,
+    INVENTORY_INPUT_MIN_H, INVENTORY_CMB_MIN_H,
+    INVENTORY_DATE_W, INVENTORY_SAVE_BTN_H,
+    INVENTORY_GRP_BORDER_RADIUS, INVENTORY_GRP_MARGIN_TOP,
+    INVENTORY_GRP_PAD_TOP, INVENTORY_GRP_TITLE_PAD_H,
+    INVENTORY_SAVE_BTN_RADIUS, INVENTORY_SAVE_BTN_PAD_H,
+    COL_MIN_WIDTH, INVENTORY_COL_MAX_W,
+)
 
 
-def _spin(max_=999999999, dec=4):
+def _spin(max_=INVENTORY_SPIN_MAX, dec=INVENTORY_SPIN_DEC):
     s = QDoubleSpinBox()
     s.setRange(0, max_)
     s.setDecimals(dec)
-    s.setMinimumHeight(30)
+    s.setMinimumHeight(INVENTORY_INPUT_MIN_H)
     return s
 
 
@@ -41,34 +49,46 @@ def _spin(max_=999999999, dec=4):
 # تبويب الصادر (صرف)
 # ══════════════════════════════════════════════════════════
 
-class _OutboundTab(QWidget, BusConnectedMixin):
+class _OutboundTab(QWidget, WidgetMixin):
     def __init__(self, inv_conn, parent=None):
         super().__init__(parent)
         self.inv_conn = inv_conn
+        self._init_widget_mixin(data=True)
         self._build()
-        self._connect_bus(data=True)
+        self._refresh_style()
 
-    def _on_data_changed(self):
+    def _refresh_data(self, company_id=None):
         self._reload_items()
         self._load_moves()
+
+    def _refresh_style(self, *_):
+        from ui.theme import _C
+        self.grp.setStyleSheet(f"""
+            QGroupBox {{ font-weight:bold; color:{_C['orange']}; border:1px solid {_C['orange_border']};
+                        border-radius:{INVENTORY_GRP_BORDER_RADIUS}px; margin-top:{INVENTORY_GRP_MARGIN_TOP}px; padding-top:{INVENTORY_GRP_PAD_TOP}px; }}
+            QGroupBox::title {{ subcontrol-origin:margin; padding:0 {INVENTORY_GRP_TITLE_PAD_H}px; }}
+        """)
+        self.lbl_available.setStyleSheet(
+            f"color:{_C['accent']}; font-weight:bold;"
+        )
+        self.btn_save.setStyleSheet(f"""
+            QPushButton {{ background:{_C['orange']}; color:{_C['bg_input']}; font-weight:bold;
+                border-radius:{INVENTORY_SAVE_BTN_RADIUS}px; padding:0 {INVENTORY_SAVE_BTN_PAD_H}px; }}
+            QPushButton:hover {{ background:{_C['orange_hover']}; }}
+        """)
 
     def _build(self):
         root = QVBoxLayout(self)
         root.setContentsMargins(12, 10, 12, 10)
         root.setSpacing(10)
 
-        grp = QGroupBox(tr("inventory_outbound_title"))
-        grp.setStyleSheet(f"""
-            QGroupBox {{ font-weight:bold; color:{_C['orange']}; border:1px solid {_C['orange_border']};
-                        border-radius:8px; margin-top:8px; padding-top:8px; }}
-            QGroupBox::title {{ subcontrol-origin:margin; padding:0 6px; }}
-        """)
-        form = QFormLayout(grp)
+        self.grp = QGroupBox(tr("inventory_outbound_title"))
+        form = QFormLayout(self.grp)
         form.setSpacing(10)
         form.setLabelAlignment(Qt.AlignRight)
 
         self.cmb_item = QComboBox()
-        self.cmb_item.setMinimumHeight(30)
+        self.cmb_item.setMinimumHeight(INVENTORY_INPUT_MIN_H)
         self._reload_items()
         self.cmb_item.currentIndexChanged.connect(self._on_item_changed)
 
@@ -76,18 +96,15 @@ class _OutboundTab(QWidget, BusConnectedMixin):
         self.sp_qty.setValue(1)
 
         self.lbl_available = QLabel(tr("inventory_available_none"))
-        self.lbl_available.setStyleSheet(
-            f"color:{_C['accent']}; font-weight:bold;"
-        )
 
         self.dt_date = QDateEdit(QDate.currentDate())
         self.dt_date.setCalendarPopup(True)
         self.dt_date.setDisplayFormat("yyyy-MM-dd")
-        self.dt_date.setFixedWidth(130)
+        self.dt_date.setFixedWidth(INVENTORY_DATE_W)
 
         self.inp_notes = QLineEdit()
         self.inp_notes.setPlaceholderText(tr("inventory_purpose"))
-        self.inp_notes.setMinimumHeight(28)
+        self.inp_notes.setMinimumHeight(INVENTORY_CMB_MIN_H)
 
         form.addRow(f"{tr('item')}:", self.cmb_item)
         form.addRow(f"{tr('quantity')}:", self.sp_qty)
@@ -95,17 +112,12 @@ class _OutboundTab(QWidget, BusConnectedMixin):
         form.addRow(f"{tr('date')}:", self.dt_date)
         form.addRow(f"{tr('statement_col')}:", self.inp_notes)
 
-        btn_save = QPushButton(f"📤  {tr('inventory_outbound_save')}")
-        btn_save.setMinimumHeight(36)
-        btn_save.setStyleSheet(f"""
-            QPushButton {{ background:{_C['orange']}; color:{_C['bg_input']}; font-weight:bold;
-                border-radius:6px; padding:0 18px; }}
-            QPushButton:hover {{ background:{_C['orange_hover']}; }}
-        """)
-        btn_save.clicked.connect(self._save)
-        form.addRow(btn_save)
+        self.btn_save = QPushButton(tr("inventory_outbound_save"))
+        self.btn_save.setMinimumHeight(INVENTORY_SAVE_BTN_H)
+        self.btn_save.clicked.connect(self._save)
+        form.addRow(self.btn_save)
 
-        root.addWidget(grp)
+        root.addWidget(self.grp)
 
         root.addWidget(section_title(tr("inventory_recent_outbound")))
         self.table = make_table(
@@ -196,10 +208,6 @@ class _OutboundTab(QWidget, BusConnectedMixin):
             self.table,
             fixed_cols=[0, 2, 3, 4],
             stretch_col=1,
-            min_width=40,
-            max_width=150,
+            min_width=COL_MIN_WIDTH,
+            max_width=INVENTORY_COL_MAX_W,
         )
-        
-    def closeEvent(self, event):
-        self._disconnect_bus()
-        super().closeEvent(event)

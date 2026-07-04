@@ -21,27 +21,44 @@ from db.inventory.inventory_repo import (
 )
 from ui.widgets.panels.form_labels   import section_title
 from ui.widgets.tables.tables       import make_table, auto_fit_columns
-from ui.widgets.mixins.bus import BusConnectedMixin
+from ui.widgets.core.widget_mixin import WidgetMixin
 from ui.widgets.core.events import emit_company_data_changed
 from ui.widgets.core.i18n import tr
-from ui.theme import _C
 from ui.font import FS_XS, FS_XL, FS_MD
+from ui.constants import (
+    COL_MIN_WIDTH, INVENTORY_COL_MAX_W,
+    STYLES_RADIUS_LG, SPACING_XS,
+    INVENTORY_CARD_BORDER_L,
+)
 
 
 # ══════════════════════════════════════════════════════════
 # تقرير المخزن
 # ══════════════════════════════════════════════════════════
 
-class _ReportTab(QWidget, BusConnectedMixin):
+class _ReportTab(QWidget, WidgetMixin):
     def __init__(self, inv_conn, parent=None):
         super().__init__(parent)
         self.inv_conn = inv_conn
+        self._init_widget_mixin(data=True)
         self._build()
         self._load()
-        self._connect_bus(data=True)
+        self._refresh_style()
 
-    def _on_data_changed(self):
+    def _refresh_data(self, company_id=None):
         self._load()
+
+    def _refresh_style(self, *_):
+        from ui.theme import _C
+        for frame, color in self._card_frames:
+            frame.setStyleSheet(f"""
+                QFrame {{
+                    background: {_C['bg_surface']};
+                    border-left: {INVENTORY_CARD_BORDER_L}px solid {color};
+                    border-radius: {STYLES_RADIUS_LG}px;
+                    padding: {SPACING_XS}px;
+                }}
+            """)
 
     def _build(self):
         root = QVBoxLayout(self)
@@ -51,16 +68,20 @@ class _ReportTab(QWidget, BusConnectedMixin):
         cards_row = QHBoxLayout()
         cards_row.setSpacing(10)
 
+        self._card_frames = []
+
         def _card(label, color):
+            from ui.theme import _C
             f = QFrame()
             f.setStyleSheet(f"""
                 QFrame {{
                     background: {_C['bg_surface']};
-                    border-left: 4px solid {color};
-                    border-radius: 6px;
-                    padding: 4px;
+                    border-left: {INVENTORY_CARD_BORDER_L}px solid {color};
+                    border-radius: {STYLES_RADIUS_LG}px;
+                    padding: {SPACING_XS}px;
                 }}
             """)
+            self._card_frames.append((f, color))
             lay = QVBoxLayout(f)
             lay.setContentsMargins(12, 8, 12, 8)
             lbl_t = QLabel(label)
@@ -78,6 +99,7 @@ class _ReportTab(QWidget, BusConnectedMixin):
             cards_row.addWidget(f, stretch=1)
             return lbl_v
 
+        from ui.theme import _C
         self.lbl_total_items = _card(tr("inventory_total_items_card"), _C["info"])
         self.lbl_total_value = _card(tr("inventory_total_value_card"), _C["success"])
         self.lbl_low_stock   = _card(tr("inventory_low_stock_card"),   _C["stock_critical_fg"])
@@ -96,6 +118,7 @@ class _ReportTab(QWidget, BusConnectedMixin):
         root.addWidget(self.table, stretch=1)
 
     def _load(self):
+        from ui.theme import _C
         rows = fetch_all_inventory(self.inv_conn)
         self.table.setRowCount(0)
         total_val = 0.0
@@ -135,7 +158,7 @@ class _ReportTab(QWidget, BusConnectedMixin):
         self.lbl_total_value.setText(f"{total_val:,.2f}  {tr('currency_abbr')}")
         self.lbl_low_stock.setText(str(low_count))
         self.lbl_zero_stock.setText(str(zero_count))
-        auto_fit_columns(self.table, fixed_cols=[1, 2, 3, 4, 5, 6], stretch_col=0, min_width=40, max_width=150)
+        auto_fit_columns(self.table, fixed_cols=[1, 2, 3, 4, 5, 6], stretch_col=0, min_width=COL_MIN_WIDTH, max_width=INVENTORY_COL_MAX_W)
 
 
 
@@ -143,12 +166,20 @@ class _ReportTab(QWidget, BusConnectedMixin):
 # لوحة حركات صنف محدد
 # ══════════════════════════════════════════════════════════
 
-class _MovesPanel(QWidget):
+class _MovesPanel(QWidget, WidgetMixin):
     def __init__(self, inv_conn, parent=None):
         super().__init__(parent)
         self.inv_conn = inv_conn
         self._inv_id  = None
+        self._init_widget_mixin(data=False)
         self._build()
+        self._refresh_style()
+
+    def _refresh_style(self, *_):
+        from ui.theme import _C
+        self.lbl_title.setStyleSheet(
+            f"font-weight:bold; color:{_C['accent']}; font-size:{FS_MD}px;"
+        )
 
     def _build(self):
         root = QVBoxLayout(self)
@@ -156,9 +187,6 @@ class _MovesPanel(QWidget):
         root.setSpacing(6)
 
         self.lbl_title = QLabel(tr("inventory_select_item_for_moves"))
-        self.lbl_title.setStyleSheet(
-            f"font-weight:bold; color:{_C['accent']}; font-size:{FS_MD}px;"
-        )
         root.addWidget(self.lbl_title)
 
         self.table = make_table(
@@ -171,6 +199,7 @@ class _MovesPanel(QWidget):
         root.addWidget(self.table, stretch=1)
 
     def load(self, inv_id: int):
+        from ui.theme import _C
         self._inv_id = inv_id
         inv = fetch_inventory_item(self.inv_conn, inv_id)
         if not inv:
@@ -213,7 +242,7 @@ class _MovesPanel(QWidget):
             notes_item = QTableWidgetItem(m["notes"] or tr("dash"))
             notes_item.setToolTip(m["notes"] or "")
             self.table.setItem(r, 6, notes_item)
-        auto_fit_columns(self.table, fixed_cols=[0, 1, 2, 3, 4, 5], stretch_col=6, min_width=40, max_width=150)
+        auto_fit_columns(self.table, fixed_cols=[0, 1, 2, 3, 4, 5], stretch_col=6, min_width=COL_MIN_WIDTH, max_width=INVENTORY_COL_MAX_W)
 
     def clear(self):
         self.table.setRowCount(0)
