@@ -7,11 +7,7 @@ ui/tabs/orders/customers/customer_detail_panel.py
 from PyQt5.QtWidgets import QMessageBox, QVBoxLayout
 from PyQt5.QtCore    import Qt, pyqtSignal
 
-from db.orders.customers_repo import (
-    fetch_customer, delete_customer, toggle_customer_active,
-    fetch_customer_stats, fetch_contacts,
-)
-from db.orders.orders_repo import fetch_customer_orders
+from services.orders.customer_service import CustomerService
 
 from ui.tabs.orders._customer_form import _CustomerForm
 from ui.widgets.base.detail_panel import BaseDetailPanel
@@ -38,6 +34,7 @@ class CustomerDetailPanel(BaseDetailPanel):
 
     def __init__(self, conn, parent=None):
         super().__init__(conn=conn, parent=parent)
+        self._svc = CustomerService(conn)
 
     def _build_header_cards(self):
         self._card_total_orders  = self._hdr.add_stat_card("📋", tr("customer_total_orders"),  color=_C['accent'])
@@ -86,7 +83,7 @@ class CustomerDetailPanel(BaseDetailPanel):
         lay.addWidget(self.orders_table)
 
     def _load_data(self, item_id: int):
-        return fetch_customer(self.conn, item_id)
+        return self._svc.get_customer(item_id)
 
     def _fill_data(self, data: dict):
         c = data
@@ -106,7 +103,7 @@ class CustomerDetailPanel(BaseDetailPanel):
         if c.get("email"):  parts.append(f"✉️ {c['email']}")
         self._hdr.set_info(parts)
 
-        stats = fetch_customer_stats(self.conn, self._item_id)
+        stats = self._svc.get_stats(self._item_id)
         self._card_total_orders.set_value(str(stats.get("total_orders") or 0))
         self._card_active_orders.set_value(str(stats.get("active") or 0))
         self._card_total_value.set_value(f"{(stats.get('total_value') or 0):,.0f} {tr('currency_sym')}")
@@ -119,7 +116,7 @@ class CustomerDetailPanel(BaseDetailPanel):
         )
 
         # ── جهات الاتصال ──
-        contacts = [dict(ct) for ct in fetch_contacts(self.conn, self._item_id)]
+        contacts = [dict(ct) for ct in self._svc.list_contacts(self._item_id)]
         self.contacts_table.setRowCount(0)
         for ct in contacts:
             r = insert_row(self.contacts_table, ROW_HEIGHT_COMPACT)
@@ -134,7 +131,7 @@ class CustomerDetailPanel(BaseDetailPanel):
         # ── آخر الطلبات ──
         STATUS_LABELS   = get_status_labels()
         PRIORITY_LABELS = get_priority_labels()
-        orders = fetch_customer_orders(self.conn, self._item_id)
+        orders = self._svc.list_orders(self._item_id)
         table  = self.orders_table
         table.setRowCount(0)
 
@@ -182,7 +179,7 @@ class CustomerDetailPanel(BaseDetailPanel):
             tr("customer_delete_confirm").format(name=c['name']),
             QMessageBox.Yes | QMessageBox.No
         ) == QMessageBox.Yes:
-            if delete_customer(self.conn, self._item_id):
+            if self._svc.delete(self._item_id):
                 self._item_id = None
                 self._show_empty()
                 self.deleted.emit()
@@ -192,6 +189,6 @@ class CustomerDetailPanel(BaseDetailPanel):
     def _toggle_active(self):
         if not self._item_id:
             return
-        toggle_customer_active(self.conn, self._item_id)
+        self._svc.toggle_active(self._item_id)
         self.load_customer(self._item_id)
         self.edited.emit(self._item_id)

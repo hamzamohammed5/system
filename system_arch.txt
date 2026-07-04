@@ -1,5 +1,5 @@
 File Tree Snapshot
-Generated : 2026-07-04 23:12:07
+Generated : 2026-07-04 23:27:47
 Source    : D:\My Workspace\Hg\Alhabaar\accountant\system
 Extensions: .md, .py
 ────────────────────────────────────────────────────────────
@@ -104,6 +104,7 @@ system/
 │   ├── inventory/
 │   │   └── inventory_service.py
 │   ├── orders/
+│   │   ├── customer_service.py
 │   │   └── order_service.py
 │   └── shared/
 │       ├── category_service.py

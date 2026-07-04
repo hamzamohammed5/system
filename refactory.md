@@ -1,7 +1,7 @@
 ## السياق
 `WidgetMixin` في `ui/widgets/core/widget_mixin.py` يوفر ربطاً موحداً بـ bus events عبر weakref، ويحل مشكلة `Could not parse stylesheet` بالتحقق من `sip.isdeleted()` قبل أي `setStyleSheet`.
 
-هذه التعليمات تنطبق على **كل ملف Python مرفق في الرسالة الحالية فقط**.
+هذه التعليمات تنطبق على **كل ملف Python مرفق في الرسالة الحالية فقط عدى الملفات المشتركة مثل font.py و ar.py... etc**.
 
 ---
 

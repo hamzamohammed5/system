@@ -13,7 +13,7 @@ from PyQt5.QtWidgets import (
 )
 from PyQt5.QtCore import Qt, pyqtSignal
 
-from db.orders.customers_repo import fetch_all_customers
+from services.orders.customer_service import CustomerService
 
 from ui.widgets.base.list_panel import BaseListPanel
 from ui.widgets.tables.tables import make_item, colored_item, bold_item, muted_item
@@ -47,6 +47,7 @@ class CustomersListPanel(BaseListPanel):
     EMPTY_TITLE = "no_customers"
 
     def __init__(self, conn, parent=None):
+        self._svc = CustomerService(conn)
         self.COLUMNS = [
             tr("customer_col_code"), tr("customer_col_name"),
             tr("customer_col_phone"), tr("customer_col_city"),
@@ -129,7 +130,7 @@ class CustomersListPanel(BaseListPanel):
     # ══════════════════════════════════════════════════════
 
     def _load_rows(self) -> list:
-        return fetch_all_customers(self.conn)
+        return self._svc.list_customers()
 
     def _match_filter(self, row, q: str) -> bool:
         typ    = getattr(self, '_type_filter',   None)
