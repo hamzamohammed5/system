@@ -20,8 +20,14 @@ from ui.widgets.components.button   import make_btn
 from ui.widgets.tables.tables       import make_table
 
 from ui.widgets.dialogs.confirm      import confirm_delete
+from ui.widgets.core.widget_mixin import WidgetMixin
+from ui.constants import (
+    DIM_FIELD_PANEL_ROOT_SPACING, DIM_FIELD_PANEL_COL_ORDER_W, DIM_FIELD_PANEL_COL_NAME_W,
+    DIM_FIELD_PANEL_COL_UNIT_W, DIM_FIELD_PANEL_COL_TYPE_W, DIM_FIELD_PANEL_COL_REQ_W,
+    DIM_FIELD_PANEL_COL_DEP_W, DIM_FIELD_PANEL_BTN_H,
+)
 
-class _FieldsPanel(QWidget):
+class _FieldsPanel(QWidget, WidgetMixin):
     """محرر حقول مجموعة مقاسات — إضافة / تعديل / حذف / ترتيب."""
 
     fields_changed = pyqtSignal()
@@ -33,14 +39,18 @@ class _FieldsPanel(QWidget):
         self._svc    = DimensionSetService(conn)
         self._set_id = None
         self._build()
+        self._init_widget_mixin(lang=False, data=False)
+        self._refresh_style()
+
+    def _refresh_style(self, *_):
+        self._hdr.setStyleSheet(f"font-weight: bold; color: {_C['accent']}; font-size: {FS_BASE}pt;")
 
     def _build(self):
         root = QVBoxLayout(self)
         root.setContentsMargins(0, 0, 0, 0)
-        root.setSpacing(6)
+        root.setSpacing(DIM_FIELD_PANEL_ROOT_SPACING)
 
-        hdr = QLabel(tr("dim_field_panel_title"))
-        hdr.setStyleSheet(f"font-weight: bold; color: {_C['accent']}; font-size: {FS_BASE}pt;")
+        hdr = self._hdr = QLabel(tr("dim_field_panel_title"))
         root.addWidget(hdr)
 
         self.table = make_table(
@@ -49,12 +59,12 @@ class _FieldsPanel(QWidget):
              tr("dim_field_col_depends")],
             stretch_col=2
         )
-        self.table.setColumnWidth(0, 60)
-        self.table.setColumnWidth(1, 90)
-        self.table.setColumnWidth(3, 60)
-        self.table.setColumnWidth(4, 55)
-        self.table.setColumnWidth(5, 55)
-        self.table.setColumnWidth(6, 180)
+        self.table.setColumnWidth(0, DIM_FIELD_PANEL_COL_ORDER_W)
+        self.table.setColumnWidth(1, DIM_FIELD_PANEL_COL_NAME_W)
+        self.table.setColumnWidth(3, DIM_FIELD_PANEL_COL_UNIT_W)
+        self.table.setColumnWidth(4, DIM_FIELD_PANEL_COL_TYPE_W)
+        self.table.setColumnWidth(5, DIM_FIELD_PANEL_COL_REQ_W)
+        self.table.setColumnWidth(6, DIM_FIELD_PANEL_COL_DEP_W)
         root.addWidget(self.table)
 
         btn_add  = make_btn(tr("dim_field_add_btn"),       style="success")
@@ -64,7 +74,7 @@ class _FieldsPanel(QWidget):
         btn_dn   = make_btn(tr("dim_field_move_down_btn"), style="ghost", fixed_size=False)
         
         for btn in (btn_add, btn_edit, btn_del, btn_up, btn_dn):
-            btn.setMinimumHeight(28)
+            btn.setMinimumHeight(DIM_FIELD_PANEL_BTN_H)
 
 
         btn_add.clicked.connect(self._add_field)
@@ -103,7 +113,7 @@ class _FieldsPanel(QWidget):
             self.table.setItem(r, 0, QTableWidgetItem(str(f["sort_order"] + 1)))
             self.table.setItem(r, 1, QTableWidgetItem(f["name"]))
             self.table.setItem(r, 2, QTableWidgetItem(f["label"]))
-            self.table.setItem(r, 3, QTableWidgetItem(f["unit"] or "cm"))
+            self.table.setItem(r, 3, QTableWidgetItem(f["unit"] or tr("dim_sets_list_default_unit")))
             self.table.setItem(r, 4, QTableWidgetItem(
                 tr("dim_field_type_number") if f["field_type"] == "number" else tr("dim_field_type_text")
             ))

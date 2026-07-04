@@ -24,7 +24,17 @@ from db.designs.dimension_sets_repo import (
 from ._instance_popup import _InstancePopup
 from ui.font import get_font_size, fs, FS_XL
 from ui.widgets.core.i18n import tr
+from ui.widgets.core.widget_mixin import WidgetMixin
 from ui.theme import _C
+from ui.constants import (
+    DIM_INST_TBL_BTN_BORDER_W, DIM_INST_TBL_BTN_RADIUS, DIM_INST_TBL_BTN_PAD_V,
+    DIM_INST_TBL_BTN_PAD_H, DIM_INST_TBL_PRIMARY_PAD_V, DIM_INST_TBL_PRIMARY_PAD_H,
+    DIM_INST_TBL_TOOLBAR_MARGIN_H, DIM_INST_TBL_TOOLBAR_MARGIN_V, DIM_INST_TBL_TOOLBAR_SPACING,
+    DIM_INST_TBL_BTN_H, DIM_INST_TBL_CELL_PAD, DIM_INST_TBL_CELL_PAD_H, DIM_INST_TBL_HDR_BORDER_W,
+    DIM_INST_TBL_STATUS_PAD, DIM_INST_TBL_NAME_COL_W, DIM_INST_TBL_VALUE_COL_W,
+    DIM_INST_TBL_MIN_SECTION_W, DIM_INST_TBL_ROW_H_PAD, DIM_INST_TBL_EMPTY_SPACING,
+    DIM_INST_TBL_HAIRLINE_W,
+)
 
 _BLUE       = _C["acc_type_asset"]
 _BLUE_LIGHT = _C["accent_light"]
@@ -40,8 +50,8 @@ def _btn_danger_ss(base: int) -> str:
     return (
         f"QPushButton {{"
         f"  background: {_C['danger_bg']}; color: {_C['danger']};"
-        f"  border: 1.5px solid {_C['danger_border']}; border-radius: 7px;"
-        f"  padding: 5px 14px; font-size: {fs(base,0)}pt;"
+        f"  border: {DIM_INST_TBL_BTN_BORDER_W}px solid {_C['danger_border']}; border-radius: {DIM_INST_TBL_BTN_RADIUS}px;"
+        f"  padding: {DIM_INST_TBL_BTN_PAD_V}px {DIM_INST_TBL_BTN_PAD_H}px; font-size: {fs(base,0)}pt;"
         f"}}"
         f"QPushButton:hover {{ background: {_C['danger_bg']}; border-color: {_C['danger']}; }}"
     )
@@ -51,8 +61,8 @@ def _btn_ghost_ss(base: int) -> str:
     return (
         f"QPushButton {{"
         f"  background: {_C['bg_input']}; color: {_C['accent']};"
-        f"  border: 1.5px solid {_C['accent_light']}; border-radius: 7px;"
-        f"  padding: 5px 14px; font-size: {fs(base,0)}pt;"
+        f"  border: {DIM_INST_TBL_BTN_BORDER_W}px solid {_C['accent_light']}; border-radius: {DIM_INST_TBL_BTN_RADIUS}px;"
+        f"  padding: {DIM_INST_TBL_BTN_PAD_V}px {DIM_INST_TBL_BTN_PAD_H}px; font-size: {fs(base,0)}pt;"
         f"}}"
         f"QPushButton:hover {{ background: {_C['accent_light']}; }}"
     )
@@ -62,25 +72,26 @@ def _btn_primary_ss(base: int) -> str:
     return (
         f"QPushButton {{"
         f"  background: {_C['accent']}; color: {_C['accent_text']};"
-        f"  border: none; border-radius: 7px;"
-        f"  padding: 6px 18px; font-weight: bold; font-size: {fs(base,0)}pt;"
+        f"  border: none; border-radius: {DIM_INST_TBL_BTN_RADIUS}px;"
+        f"  padding: {DIM_INST_TBL_PRIMARY_PAD_V}px {DIM_INST_TBL_PRIMARY_PAD_H}px; font-weight: bold; font-size: {fs(base,0)}pt;"
         f"}}"
         f"QPushButton:hover  {{ background: {_C['accent_hover']}; }}"
         f"QPushButton:disabled {{ background: {_C['border_med']}; }}"
     )
 
 
-class _InstancesTable(QWidget):
+class _InstancesTable(QWidget, WidgetMixin):
     def __init__(self, conn, parent=None):
         super().__init__(parent)
         self.conn    = conn
         self._set_id = None
         self._fields = []
         self._build()
+        self._init_widget_mixin(lang=False, data=False)
+        self._refresh_style()
 
-    def _on_font_changed(self, size: int):
-        """يُستدعى من _ValuesPanel عند تغيير حجم الخط."""
-        base = size
+    def _refresh_style(self, *_):
+        base = get_font_size()
 
         # تحديث الـ toolbar label
         self._lbl_set_name.setStyleSheet(f"""
@@ -104,9 +115,13 @@ class _InstancesTable(QWidget):
             background: {_GRAY_BG};
             color: {_TEXT_MUTED};
             font-size: {fs(base,-1)}pt;
-            padding: 6px;
-            border-top: 1px solid {_BORDER};
+            padding: {DIM_INST_TBL_STATUS_PAD}px;
+            border-top: {DIM_INST_TBL_HAIRLINE_W}px solid {_BORDER};
         """)
+
+    def _on_font_changed(self, size: int = None):
+        """يُبقيها متوافقة مع أي نداء خارجي قديم من _ValuesPanel."""
+        self._refresh_style()
 
     def _table_ss(self) -> str:
         base = get_font_size()
@@ -121,7 +136,7 @@ class _InstancesTable(QWidget):
                 outline: none;
             }}
             QTableWidget::item {{
-                padding: 8px 12px;
+                padding: {DIM_INST_TBL_CELL_PAD}px {DIM_INST_TBL_CELL_PAD_H}px;
             }}
             QTableWidget::item:selected {{
                 background: {_C['accent_light']};
@@ -132,10 +147,10 @@ class _InstancesTable(QWidget):
                 color: {_C['text_muted']};
                 font-weight: bold;
                 font-size: {fs(base,-1)}pt;
-                padding: 8px 12px;
+                padding: {DIM_INST_TBL_CELL_PAD}px {DIM_INST_TBL_CELL_PAD_H}px;
                 border: none;
-                border-bottom: 2px solid {_C['border']};
-                border-right: 1px solid {_C['border']};
+                border-bottom: {DIM_INST_TBL_HDR_BORDER_W}px solid {_C['border']};
+                border-right: {DIM_INST_TBL_HAIRLINE_W}px solid {_C['border']};
             }}
         """
 
@@ -150,12 +165,13 @@ class _InstancesTable(QWidget):
         toolbar.setStyleSheet(f"""
             QFrame {{
                 background: {_C['bg_input']};
-                border-bottom: 1px solid {_C['border']};
+                border-bottom: {DIM_INST_TBL_HAIRLINE_W}px solid {_C['border']};
             }}
         """)
         t_lay = QHBoxLayout(toolbar)
-        t_lay.setContentsMargins(14, 10, 14, 10)
-        t_lay.setSpacing(10)
+        t_lay.setContentsMargins(DIM_INST_TBL_TOOLBAR_MARGIN_H, DIM_INST_TBL_TOOLBAR_MARGIN_V,
+                                  DIM_INST_TBL_TOOLBAR_MARGIN_H, DIM_INST_TBL_TOOLBAR_MARGIN_V)
+        t_lay.setSpacing(DIM_INST_TBL_TOOLBAR_SPACING)
 
         self._lbl_set_name = QLabel(tr("dim_inst_table_placeholder"))
         self._lbl_set_name.setStyleSheet(f"""
@@ -168,25 +184,25 @@ class _InstancesTable(QWidget):
 
         self.btn_add = QPushButton(tr("dim_inst_add_btn"))
         self.btn_add.setStyleSheet(_btn_primary_ss(base))
-        self.btn_add.setMinimumHeight(34)
+        self.btn_add.setMinimumHeight(DIM_INST_TBL_BTN_H)
         self.btn_add.setEnabled(False)
         self.btn_add.clicked.connect(self._add_instance)
 
         self.btn_edit = QPushButton(tr("dim_inst_edit_btn"))
         self.btn_edit.setStyleSheet(_btn_ghost_ss(base))
-        self.btn_edit.setMinimumHeight(34)
+        self.btn_edit.setMinimumHeight(DIM_INST_TBL_BTN_H)
         self.btn_edit.setEnabled(False)
         self.btn_edit.clicked.connect(self._edit_instance)
 
         self.btn_copy = QPushButton(tr("dim_inst_copy_btn"))
         self.btn_copy.setStyleSheet(_btn_ghost_ss(base))
-        self.btn_copy.setMinimumHeight(34)
+        self.btn_copy.setMinimumHeight(DIM_INST_TBL_BTN_H)
         self.btn_copy.setEnabled(False)
         self.btn_copy.clicked.connect(self._copy_instance)
 
         self.btn_del = QPushButton(tr("btn_delete"))
         self.btn_del.setStyleSheet(_btn_danger_ss(base))
-        self.btn_del.setMinimumHeight(34)
+        self.btn_del.setMinimumHeight(DIM_INST_TBL_BTN_H)
         self.btn_del.setEnabled(False)
         self.btn_del.clicked.connect(self._delete_instance)
 
@@ -208,7 +224,7 @@ class _InstancesTable(QWidget):
         self.table.setGridStyle(Qt.SolidLine)
         self.table.setStyleSheet(self._table_ss())
         self.table.horizontalHeader().setDefaultAlignment(Qt.AlignRight | Qt.AlignVCenter)
-        self.table.horizontalHeader().setMinimumSectionSize(60)
+        self.table.horizontalHeader().setMinimumSectionSize(DIM_INST_TBL_MIN_SECTION_W)
         self.table.horizontalHeader().setStretchLastSection(True)
         self.table.itemSelectionChanged.connect(self._on_select)
         self.table.doubleClicked.connect(lambda: self._edit_instance())
@@ -221,8 +237,8 @@ class _InstancesTable(QWidget):
             background: {_GRAY_BG};
             color: {_TEXT_MUTED};
             font-size: {fs(base,-1)}pt;
-            padding: 6px;
-            border-top: 1px solid {_BORDER};
+            padding: {DIM_INST_TBL_STATUS_PAD}px;
+            border-top: {DIM_INST_TBL_HAIRLINE_W}px solid {_BORDER};
         """)
         root.addWidget(self._status_bar)
 
@@ -241,7 +257,7 @@ class _InstancesTable(QWidget):
         e_hint.setAlignment(Qt.AlignCenter)
         e_hint.setStyleSheet(f"color: {_C['border_med']}; font-size: {fs(base,-1)}pt; background: transparent;")
         e_lay.addWidget(e_lbl)
-        e_lay.addSpacing(8)
+        e_lay.addSpacing(DIM_INST_TBL_EMPTY_SPACING)
         e_lay.addWidget(e_msg)
         e_lay.addWidget(e_hint)
 
@@ -286,10 +302,10 @@ class _InstancesTable(QWidget):
 
         hh = self.table.horizontalHeader()
         hh.setSectionResizeMode(0, QHeaderView.Interactive)
-        self.table.setColumnWidth(0, 160)
+        self.table.setColumnWidth(0, DIM_INST_TBL_NAME_COL_W)
         for i in range(1, len(col_labels)):
             hh.setSectionResizeMode(i, QHeaderView.Interactive)
-            self.table.setColumnWidth(i, 110)
+            self.table.setColumnWidth(i, DIM_INST_TBL_VALUE_COL_W)
         if len(col_labels) > 1:
             hh.setSectionResizeMode(len(col_labels) - 1, QHeaderView.Stretch)
 
@@ -298,7 +314,7 @@ class _InstancesTable(QWidget):
         for inst in instances:
             r = self.table.rowCount()
             self.table.insertRow(r)
-            self.table.setRowHeight(r, fs(base, 0) * 3 + 6)
+            self.table.setRowHeight(r, fs(base, 0) * 3 + DIM_INST_TBL_ROW_H_PAD)
 
             name = inst["name"].strip() if inst["name"].strip() else tr("dim_unnamed_set_fallback").format(id=inst['id'])
             name_item = QTableWidgetItem(name)

@@ -20,12 +20,21 @@ from ui.widgets.core.i18n import tr
 from ui.font import FS_MD
 from services.design.dimension_set_service import DimensionSetService
 from ui.widgets.components.button   import make_btn
+from ui.widgets.core.widget_mixin import WidgetMixin
+from ui.constants import (
+    DIM_CAT_PANEL_BTN_ROW_SPACING, DIM_CAT_PANEL_ROOT_MARGIN, DIM_CAT_PANEL_ROOT_SPACING,
+    DIM_CAT_PANEL_HDR_RADIUS, DIM_CAT_PANEL_HDR_PAD_V, DIM_CAT_PANEL_HDR_PAD_H,
+    DIM_CAT_PANEL_TREE_COL_NAME_W, DIM_CAT_PANEL_TREE_COL_COUNT_W, DIM_CAT_PANEL_TREE_BTN_H,
+    DIM_CAT_PANEL_FORM_SPACING, DIM_CAT_PANEL_INPUT_H, DIM_CAT_PANEL_COMBO_H,
+    DIM_CAT_PANEL_COLOR_SWATCH_SIZE, DIM_CAT_PANEL_COLOR_BTN_H, DIM_CAT_PANEL_ACTION_BTN_H,
+    DIM_CAT_PANEL_COLOR_SWATCH_RADIUS, DIM_CAT_PANEL_COLOR_SWATCH_BORDER_W,
+)
 
 
 def buttons_row(*buttons) -> QHBoxLayout:
     """صف أزرار أفقي."""
     row = QHBoxLayout()
-    row.setSpacing(6)
+    row.setSpacing(DIM_CAT_PANEL_BTN_ROW_SPACING)
     for btn in buttons:
         row.addWidget(btn)
     row.addStretch()
@@ -35,7 +44,7 @@ def buttons_row(*buttons) -> QHBoxLayout:
 # لوحة إدارة التصنيفات — تُستخدم داخل _GroupsPanel
 # ══════════════════════════════════════════════════════════
 
-class _CategoriesPanel(QWidget):
+class _CategoriesPanel(QWidget, WidgetMixin):
     """
     إدارة كاملة لتصنيفات التصميمات:
       - شجرة عرض التصنيفات الهرمية
@@ -53,24 +62,31 @@ class _CategoriesPanel(QWidget):
         self._color      = _C["accent"]
         self._build()
         self._load_tree()
+        self._init_widget_mixin(lang=False, data=False)
+        self._refresh_style()
+
+    def _refresh_style(self, *_):
+        self._hdr.setStyleSheet(f"""
+            font-weight: bold; font-size: {FS_MD}pt; color: {_C['accent']};
+            background: {_C['accent_light']}; border-radius: {DIM_CAT_PANEL_HDR_RADIUS}px; padding: {DIM_CAT_PANEL_HDR_PAD_V}px {DIM_CAT_PANEL_HDR_PAD_H}px;
+        """)
+        self.lbl_mode.setStyleSheet(f"font-weight: bold; color: {_C['accent']};")
+        self._update_color_preview()
 
     def _build(self):
         root = QVBoxLayout(self)
-        root.setContentsMargins(8, 8, 8, 8)
-        root.setSpacing(8)
+        root.setContentsMargins(DIM_CAT_PANEL_ROOT_MARGIN, DIM_CAT_PANEL_ROOT_MARGIN,
+                                 DIM_CAT_PANEL_ROOT_MARGIN, DIM_CAT_PANEL_ROOT_MARGIN)
+        root.setSpacing(DIM_CAT_PANEL_ROOT_SPACING)
 
-        hdr = QLabel(tr("dim_cat_panel_title"))
-        hdr.setStyleSheet(f"""
-            font-weight: bold; font-size: {FS_MD}pt; color: {_C['accent']};
-            background: {_C['accent_light']}; border-radius: 6px; padding: 6px 12px;
-        """)
+        hdr = self._hdr = QLabel(tr("dim_cat_panel_title"))
         root.addWidget(hdr)
 
         # ── الشجرة ──
         self.tree = QTreeWidget()
         self.tree.setHeaderLabels([tr("dim_cat_col_name"), tr("dim_cat_col_count")])
-        self.tree.setColumnWidth(0, 200)
-        self.tree.setColumnWidth(1, 80)
+        self.tree.setColumnWidth(0, DIM_CAT_PANEL_TREE_COL_NAME_W)
+        self.tree.setColumnWidth(1, DIM_CAT_PANEL_TREE_COL_COUNT_W)
         self.tree.setAlternatingRowColors(True)
         self.tree.setAnimated(True)
         root.addWidget(self.tree, stretch=1)
@@ -79,7 +95,7 @@ class _CategoriesPanel(QWidget):
         btn_edit_cat = QPushButton(tr("category_edit"))
         btn_del_cat  = make_btn(tr("category_delete"), style="danger")
         for b in (btn_edit_cat, btn_del_cat):
-            b.setMinimumHeight(28)
+            b.setMinimumHeight(DIM_CAT_PANEL_TREE_BTN_H)
         btn_edit_cat.clicked.connect(self._edit_category)
         btn_del_cat.clicked.connect(self._delete_category)
         root.addLayout(buttons_row(btn_edit_cat, btn_del_cat))
@@ -87,29 +103,28 @@ class _CategoriesPanel(QWidget):
         # ── فورم إضافة / تعديل ──
         grp  = QGroupBox(tr("category_data"))
         form = QFormLayout(grp)
-        form.setSpacing(8)
+        form.setSpacing(DIM_CAT_PANEL_FORM_SPACING)
         form.setLabelAlignment(Qt.AlignRight)
 
         self.lbl_mode = QLabel(tr("dim_cat_new_mode"))
-        self.lbl_mode.setStyleSheet(f"font-weight: bold; color: {_C['accent']};")
         form.addRow(self.lbl_mode)
 
         self.inp_cat_name = QLineEdit()
         self.inp_cat_name.setPlaceholderText(tr("category_name") + "...")
-        self.inp_cat_name.setMinimumHeight(30)
+        self.inp_cat_name.setMinimumHeight(DIM_CAT_PANEL_INPUT_H)
         form.addRow(tr("category_name") + " :", self.inp_cat_name)
 
         self.cmb_parent = QComboBox()
-        self.cmb_parent.setMinimumHeight(28)
+        self.cmb_parent.setMinimumHeight(DIM_CAT_PANEL_COMBO_H)
         form.addRow(tr("category_parent") + " :", self.cmb_parent)
 
         # اللون
         color_row = QHBoxLayout()
         self.lbl_color = QLabel()
-        self.lbl_color.setFixedSize(28, 28)
+        self.lbl_color.setFixedSize(DIM_CAT_PANEL_COLOR_SWATCH_SIZE, DIM_CAT_PANEL_COLOR_SWATCH_SIZE)
         self._update_color_preview()
         btn_color = QPushButton(tr("dim_cat_pick_color"))
-        btn_color.setMinimumHeight(28)
+        btn_color.setMinimumHeight(DIM_CAT_PANEL_COLOR_BTN_H)
         btn_color.clicked.connect(self._pick_color)
         color_row.addWidget(self.lbl_color)
         color_row.addWidget(btn_color)
@@ -122,7 +137,7 @@ class _CategoriesPanel(QWidget):
         self.btn_cat_save.setVisible(False)
         self.btn_cat_cancel.setVisible(False)
         for b in (self.btn_cat_add, self.btn_cat_save, self.btn_cat_cancel):
-            b.setMinimumHeight(30)
+            b.setMinimumHeight(DIM_CAT_PANEL_ACTION_BTN_H)
         self.btn_cat_add.clicked.connect(self._add_category)
         self.btn_cat_save.clicked.connect(self._save_category)
         self.btn_cat_cancel.clicked.connect(self._reset_form)
@@ -197,7 +212,7 @@ class _CategoriesPanel(QWidget):
 
     def _add_parent_nodes(self, nodes, depth, excluded):
         indent = "    " * depth
-        arrow  = "↳ " if depth > 0 else ""
+        arrow  = tr("category_tree_arrow") if depth > 0 else ""
         for node in nodes:
             if node["id"] in excluded:
                 continue
@@ -213,7 +228,8 @@ class _CategoriesPanel(QWidget):
 
     def _update_color_preview(self):
         self.lbl_color.setStyleSheet(
-            f"background:{self._color}; border-radius:4px; border:1px solid {_C['border_med']};"
+            f"background:{self._color}; border-radius:{DIM_CAT_PANEL_COLOR_SWATCH_RADIUS}px; "
+            f"border:{DIM_CAT_PANEL_COLOR_SWATCH_BORDER_W}px solid {_C['border_med']};"
         )
 
     def _add_category(self):

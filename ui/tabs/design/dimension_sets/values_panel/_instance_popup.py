@@ -15,8 +15,21 @@ from PyQt5.QtCore import Qt, pyqtSignal
 from ui.theme import _C
 from ui.widgets.core.i18n import tr
 from ui.font import FS_XS, FS_SM, FS_BASE, FS_MD, FS_LG, get_font_size, fs
+from ui.widgets.core.widget_mixin import WidgetMixin
 from services.design.dimension_set_service import DimensionSetService
 from ui.tabs.design.dimension_sets._source_picker_dialog import _SourcePickerDialog
+from ui.constants import (
+    DIM_INST_DLG_MIN_W, DIM_INST_DLG_MIN_H, DIM_INST_ROOT_MARGIN_H, DIM_INST_ROOT_MARGIN_V,
+    DIM_INST_ROOT_SPACING, DIM_INST_HDR_RADIUS, DIM_INST_HDR_PAD_V, DIM_INST_HDR_PAD_H,
+    DIM_INST_NAME_LBL_W, DIM_INST_FIELD_H, DIM_INST_FIELD_RADIUS, DIM_INST_FIELD_PAD_V,
+    DIM_INST_FIELD_PAD_H, DIM_INST_FIELD_BORDER_W, DIM_INST_SCROLL_W, DIM_INST_SCROLL_RADIUS,
+    DIM_INST_SCROLL_MIN_H, DIM_INST_GRID_SPACING, DIM_INST_GRID_MARGIN_V, DIM_INST_FIELD_LBL_W,
+    DIM_INST_UNIT_LBL_W, DIM_INST_AUTO_BTN_SIZE, DIM_INST_AUTO_BTN_RADIUS, DIM_INST_AUTO_BTN_PAD_V,
+    DIM_INST_AUTO_BTN_PAD_H, DIM_INST_EMPTY_PAD, DIM_INST_ACT_BTN_H, DIM_INST_ACT_BTN_RADIUS,
+    DIM_INST_GHOST_BTN_PAD_V, DIM_INST_GHOST_BTN_PAD_H, DIM_INST_SAVE_BTN_PAD_V,
+    DIM_INST_SAVE_BTN_PAD_H, DIM_INST_SAVE_BTN_MIN_W,
+    DIM_INST_VALUE_SPIN_MIN, DIM_INST_VALUE_SPIN_MAX, DIM_INST_VALUE_SPIN_DECIMALS,
+)
 
 
 def _row_val(row, key, default=None):
@@ -30,7 +43,7 @@ def _row_val(row, key, default=None):
 # Popup — تعديل / إضافة Instance
 # ══════════════════════════════════════════════════════════
 
-class _InstancePopup(QDialog):
+class _InstancePopup(QDialog, WidgetMixin):
     """
     نافذة popup لإدخال / تعديل قيم instance واحد.
     """
@@ -48,9 +61,16 @@ class _InstancePopup(QDialog):
 
         title = tr("dim_inst_dlg_edit_title") if instance_id else tr("dim_inst_dlg_new_title")
         self.setWindowTitle(title)
-        self.setMinimumWidth(520)
-        self.setMinimumHeight(400)
+        self.setMinimumWidth(DIM_INST_DLG_MIN_W)
+        self.setMinimumHeight(DIM_INST_DLG_MIN_H)
         self.setModal(True)
+        self._build()
+        self._init_widget_mixin(lang=False, data=False)
+        self._refresh_style()
+        if instance_id:
+            self._load_values()
+
+    def _refresh_style(self, *_):
         self.setStyleSheet(f"""
             QDialog {{
                 background: {_C['bg_surface']};
@@ -59,14 +79,12 @@ class _InstancePopup(QDialog):
                 color: {_C['text_primary']};
             }}
         """)
-        self._build()
-        if instance_id:
-            self._load_values()
 
     def _build(self):
         root = QVBoxLayout(self)
-        root.setContentsMargins(24, 20, 24, 20)
-        root.setSpacing(16)
+        root.setContentsMargins(DIM_INST_ROOT_MARGIN_H, DIM_INST_ROOT_MARGIN_V,
+                                 DIM_INST_ROOT_MARGIN_H, DIM_INST_ROOT_MARGIN_V)
+        root.setSpacing(DIM_INST_ROOT_SPACING)
 
         # ── رأس ──
         hdr = QLabel(
@@ -78,26 +96,26 @@ class _InstancePopup(QDialog):
             font-weight: bold;
             color: {_C['accent']};
             background: {_C['accent_light']};
-            border-radius: 8px;
-            padding: 8px 14px;
+            border-radius: {DIM_INST_HDR_RADIUS}px;
+            padding: {DIM_INST_HDR_PAD_V}px {DIM_INST_HDR_PAD_H}px;
         """)
         root.addWidget(hdr)
 
         # ── اسم المجموعة ──
         name_row = QHBoxLayout()
         lbl_name = QLabel(tr("dim_inst_name_label") + ":")
-        lbl_name.setFixedWidth(90)
+        lbl_name.setFixedWidth(DIM_INST_NAME_LBL_W)
         lbl_name.setAlignment(Qt.AlignRight | Qt.AlignVCenter)
         lbl_name.setStyleSheet("font-weight: bold;")
 
         self.inp_name = QLineEdit()
         self.inp_name.setPlaceholderText(tr("dim_inst_name_placeholder"))
-        self.inp_name.setMinimumHeight(36)
+        self.inp_name.setMinimumHeight(DIM_INST_FIELD_H)
         self.inp_name.setStyleSheet(f"""
             QLineEdit {{
-                border: 1.5px solid {_C['border']};
-                border-radius: 8px;
-                padding: 4px 12px;
+                border: {DIM_INST_FIELD_BORDER_W}px solid {_C['border']};
+                border-radius: {DIM_INST_FIELD_RADIUS}px;
+                padding: {DIM_INST_FIELD_PAD_V}px {DIM_INST_FIELD_PAD_H}px;
                 font-size: {FS_BASE}pt;
                 background: {_C['bg_input']};
             }}
@@ -129,10 +147,10 @@ class _InstancePopup(QDialog):
         scroll.setStyleSheet(f"""
             QScrollArea {{ border: none; background: transparent; }}
             QScrollBar:vertical {{
-                background: {_C['bg_surface']}; width: 6px; border-radius: 3px;
+                background: {_C['bg_surface']}; width: {DIM_INST_SCROLL_W}px; border-radius: {DIM_INST_SCROLL_RADIUS}px;
             }}
             QScrollBar::handle:vertical {{
-                background: {_C['border']}; border-radius: 3px; min-height: 24px;
+                background: {_C['border']}; border-radius: {DIM_INST_SCROLL_RADIUS}px; min-height: {DIM_INST_SCROLL_MIN_H}px;
             }}
             QScrollBar::add-line:vertical,
             QScrollBar::sub-line:vertical {{ height: 0; }}
@@ -141,8 +159,8 @@ class _InstancePopup(QDialog):
         fields_w = QWidget()
         fields_w.setStyleSheet("background: transparent;")
         grid = QGridLayout(fields_w)
-        grid.setSpacing(10)
-        grid.setContentsMargins(0, 4, 0, 4)
+        grid.setSpacing(DIM_INST_GRID_SPACING)
+        grid.setContentsMargins(0, DIM_INST_GRID_MARGIN_V, 0, DIM_INST_GRID_MARGIN_V)
 
         fields = self._svc.list_fields(self.set_id)
         num_fields = [f for f in fields if f["field_type"] == "number"]
@@ -151,17 +169,17 @@ class _InstancePopup(QDialog):
             lbl = QLabel(f["label"])
             lbl.setAlignment(Qt.AlignRight | Qt.AlignVCenter)
             lbl.setStyleSheet(f"font-weight: 500; color: {_C['text_primary']};")
-            lbl.setFixedWidth(130)
+            lbl.setFixedWidth(DIM_INST_FIELD_LBL_W)
 
             spin = QDoubleSpinBox()
-            spin.setRange(-99999, 99999)
-            spin.setDecimals(4)
-            spin.setMinimumHeight(36)
+            spin.setRange(DIM_INST_VALUE_SPIN_MIN, DIM_INST_VALUE_SPIN_MAX)
+            spin.setDecimals(DIM_INST_VALUE_SPIN_DECIMALS)
+            spin.setMinimumHeight(DIM_INST_FIELD_H)
             spin.setStyleSheet(f"""
                 QDoubleSpinBox {{
-                    border: 1.5px solid {_C['border']};
-                    border-radius: 8px;
-                    padding: 4px 10px;
+                    border: {DIM_INST_FIELD_BORDER_W}px solid {_C['border']};
+                    border-radius: {DIM_INST_FIELD_RADIUS}px;
+                    padding: {DIM_INST_FIELD_PAD_V}px {DIM_INST_FIELD_PAD_H}px;
                     font-size: {FS_BASE}pt;
                     background: {_C['bg_input']};
                 }}
@@ -169,7 +187,7 @@ class _InstancePopup(QDialog):
             """)
 
             unit_lbl = QLabel(f["unit"] or "")
-            unit_lbl.setFixedWidth(38)
+            unit_lbl.setFixedWidth(DIM_INST_UNIT_LBL_W)
             unit_lbl.setStyleSheet(f"color: {_C['text_muted']}; font-size: {FS_SM}pt;")
             unit_lbl.setAlignment(Qt.AlignVCenter)
 
@@ -178,15 +196,15 @@ class _InstancePopup(QDialog):
             if has_dep:
                 btn_auto = QToolButton()
                 btn_auto.setText(tr("dim_inst_auto_icon"))
-                btn_auto.setFixedSize(32, 32)
+                btn_auto.setFixedSize(DIM_INST_AUTO_BTN_SIZE, DIM_INST_AUTO_BTN_SIZE)
                 btn_auto.setStyleSheet(f"""
                     QToolButton {{
                         background: transparent;
                         border: none;
                         color: {_C['text_muted']};
                         font-size: {FS_MD}pt;
-                        border-radius: 5px;
-                        padding: 3px 6px;
+                        border-radius: {DIM_INST_AUTO_BTN_RADIUS}px;
+                        padding: {DIM_INST_AUTO_BTN_PAD_V}px {DIM_INST_AUTO_BTN_PAD_H}px;
                     }}
                     QToolButton:hover {{ background: {_C['accent_light']}; color: {_C['accent']}; }}
                 """)
@@ -208,7 +226,7 @@ class _InstancePopup(QDialog):
 
         if not num_fields:
             empty = QLabel(tr("dim_inst_no_numeric_fields"))
-            empty.setStyleSheet(f"color: {_C['text_muted']}; padding: 12px;")
+            empty.setStyleSheet(f"color: {_C['text_muted']}; padding: {DIM_INST_EMPTY_PAD}px;")
             empty.setAlignment(Qt.AlignCenter)
             grid.addWidget(empty, 0, 0, 1, 3)
 
@@ -226,14 +244,14 @@ class _InstancePopup(QDialog):
                 QPushButton {{
                     background: {_C['bg_input']};
                     color: {_C['accent']};
-                    border: 1.5px solid {_C['accent_mid']};
-                    border-radius: 7px;
-                    padding: 5px 14px;
+                    border: {DIM_INST_FIELD_BORDER_W}px solid {_C['accent_mid']};
+                    border-radius: {DIM_INST_ACT_BTN_RADIUS}px;
+                    padding: {DIM_INST_GHOST_BTN_PAD_V}px {DIM_INST_GHOST_BTN_PAD_H}px;
                     font-size: {FS_BASE}pt;
                 }}
                 QPushButton:hover {{ background: {_C['accent_light']}; }}
             """)
-            btn_calc_all.setMinimumHeight(36)
+            btn_calc_all.setMinimumHeight(DIM_INST_ACT_BTN_H)
             btn_calc_all.clicked.connect(self._calc_all_auto)
             btn_row.addWidget(btn_calc_all)
 
@@ -244,14 +262,14 @@ class _InstancePopup(QDialog):
             QPushButton {{
                 background: {_C['bg_input']};
                 color: {_C['accent']};
-                border: 1.5px solid {_C['accent_mid']};
-                border-radius: 7px;
-                padding: 5px 14px;
+                border: {DIM_INST_FIELD_BORDER_W}px solid {_C['accent_mid']};
+                border-radius: {DIM_INST_ACT_BTN_RADIUS}px;
+                padding: {DIM_INST_GHOST_BTN_PAD_V}px {DIM_INST_GHOST_BTN_PAD_H}px;
                 font-size: {FS_BASE}pt;
             }}
             QPushButton:hover {{ background: {_C['accent_light']}; }}
         """)
-        btn_cancel.setMinimumHeight(36)
+        btn_cancel.setMinimumHeight(DIM_INST_ACT_BTN_H)
         btn_cancel.clicked.connect(self.reject)
 
         btn_save = QPushButton(tr("dim_inst_save_btn"))
@@ -260,16 +278,16 @@ class _InstancePopup(QDialog):
                 background: {_C['accent']};
                 color: {_C['btn_primary_text']};
                 border: none;
-                border-radius: 7px;
-                padding: 6px 18px;
+                border-radius: {DIM_INST_ACT_BTN_RADIUS}px;
+                padding: {DIM_INST_SAVE_BTN_PAD_V}px {DIM_INST_SAVE_BTN_PAD_H}px;
                 font-weight: bold;
                 font-size: {FS_BASE}pt;
             }}
             QPushButton:hover  {{ background: {_C['accent_hover']}; }}
             QPushButton:disabled {{ background: {_C['text_muted']}; }}
         """)
-        btn_save.setMinimumHeight(36)
-        btn_save.setMinimumWidth(100)
+        btn_save.setMinimumHeight(DIM_INST_ACT_BTN_H)
+        btn_save.setMinimumWidth(DIM_INST_SAVE_BTN_MIN_W)
         btn_save.clicked.connect(self._save)
 
         btn_row.addWidget(btn_cancel)

@@ -17,7 +17,21 @@ from db.designs.dimension_sets_repo import (
 )
 from ui.font import get_font_size, fs
 from ui.widgets.core.i18n import tr
+from ui.widgets.core.widget_mixin import WidgetMixin
 from ui.theme import _C
+from ui.constants import (
+    DIM_SETS_LIST_CARD_MIN_H, DIM_SETS_LIST_CARD_BORDER_W, DIM_SETS_LIST_CARD_SELECTED_BORDER_W,
+    DIM_SETS_LIST_CARD_RADIUS, DIM_SETS_LIST_CARD_MARGIN_H, DIM_SETS_LIST_CARD_MARGIN_V,
+    DIM_SETS_LIST_CARD_SPACING, DIM_SETS_LIST_ICON_LBL_W, DIM_SETS_LIST_TEXT_COL_SPACING,
+    DIM_SETS_LIST_BADGE_W, DIM_SETS_LIST_BADGE_H, DIM_SETS_LIST_BADGE_RADIUS,
+    DIM_SETS_LIST_HDR_PAD_V, DIM_SETS_LIST_HDR_PAD_H, DIM_SETS_LIST_HAIRLINE_W,
+    DIM_SETS_LIST_SEARCH_FRAME_MARGIN_H, DIM_SETS_LIST_SEARCH_FRAME_MARGIN_V,
+    DIM_SETS_LIST_SEARCH_SPACING, DIM_SETS_LIST_SEARCH_FIELD_H, DIM_SETS_LIST_CMB_CAT_MAX_W,
+    DIM_SETS_LIST_INP_BORDER_W, DIM_SETS_LIST_INP_RADIUS, DIM_SETS_LIST_INP_PAD_V,
+    DIM_SETS_LIST_INP_PAD_H, DIM_SETS_LIST_CMB_PAD_H, DIM_SETS_LIST_SCROLL_W,
+    DIM_SETS_LIST_SCROLL_RADIUS, DIM_SETS_LIST_SCROLL_MIN_H, DIM_SETS_LIST_CARDS_SPACING,
+    DIM_SETS_LIST_CARDS_MARGIN, DIM_SETS_LIST_COUNT_PAD,
+)
 
 _BLUE       = _C["acc_type_asset"]
 _BLUE_LIGHT = _C["accent_light"]
@@ -30,8 +44,8 @@ _TEXT_MUTED = _C["text_muted"]
 _CARD_NORMAL = f"""
     QFrame {{
         background: {_C["bg_input"]};
-        border: 1.5px solid {_C["border"]};
-        border-radius: 10px;
+        border: {DIM_SETS_LIST_CARD_BORDER_W}px solid {_C["border"]};
+        border-radius: {DIM_SETS_LIST_CARD_RADIUS}px;
     }}
     QFrame:hover {{
         border-color: {_C["accent_mid"]};
@@ -42,8 +56,8 @@ _CARD_NORMAL = f"""
 _CARD_SELECTED = f"""
     QFrame {{
         background: {_C["accent_light"]};
-        border: 2px solid {_C["accent"]};
-        border-radius: 10px;
+        border: {DIM_SETS_LIST_CARD_SELECTED_BORDER_W}px solid {_C["accent"]};
+        border-radius: {DIM_SETS_LIST_CARD_RADIUS}px;
     }}
 """
 
@@ -63,23 +77,24 @@ class _SetCard(QFrame):
         self._selected = False
         self.setCursor(Qt.PointingHandCursor)
         self.setStyleSheet(_CARD_NORMAL)
-        self.setMinimumHeight(72)
+        self.setMinimumHeight(DIM_SETS_LIST_CARD_MIN_H)
         self._build(name, category, unit, fields_cnt, instances_cnt)
 
     def _build(self, name, category, unit, fields_cnt, instances_cnt):
         lay = QHBoxLayout(self)
-        lay.setContentsMargins(14, 10, 14, 10)
-        lay.setSpacing(10)
+        lay.setContentsMargins(DIM_SETS_LIST_CARD_MARGIN_H, DIM_SETS_LIST_CARD_MARGIN_V,
+                                DIM_SETS_LIST_CARD_MARGIN_H, DIM_SETS_LIST_CARD_MARGIN_V)
+        lay.setSpacing(DIM_SETS_LIST_CARD_SPACING)
 
         base = get_font_size()
 
         icon_lbl = QLabel(tr("dim_sets_set_icon"))
         icon_lbl.setStyleSheet(f"font-size: {fs(base,+4)}pt; background: transparent; border: none;")
-        icon_lbl.setFixedWidth(34)
+        icon_lbl.setFixedWidth(DIM_SETS_LIST_ICON_LBL_W)
         icon_lbl.setAlignment(Qt.AlignCenter)
 
         text_col = QVBoxLayout()
-        text_col.setSpacing(2)
+        text_col.setSpacing(DIM_SETS_LIST_TEXT_COL_SPACING)
 
         self._name_lbl = QLabel(name)
         self._name_lbl.setStyleSheet(f"""
@@ -90,8 +105,9 @@ class _SetCard(QFrame):
             border: none;
         """)
 
+        sep = tr("dim_sets_meta_separator")
         self._meta_lbl = QLabel(
-            f"{category or tr('dim_sets_card_no_category')}  ·  {unit}  ·  "
+            f"{category or tr('dim_sets_card_no_category')}{sep}{unit}{sep}"
             + tr("dim_sets_card_field_suffix").format(count=fields_cnt)
         )
         self._meta_lbl.setStyleSheet(f"""
@@ -106,11 +122,11 @@ class _SetCard(QFrame):
 
         self._badge = QLabel(tr("dim_sets_badge_values").format(count=instances_cnt))
         self._badge.setAlignment(Qt.AlignCenter)
-        self._badge.setFixedSize(58, 22)
+        self._badge.setFixedSize(DIM_SETS_LIST_BADGE_W, DIM_SETS_LIST_BADGE_H)
         self._badge.setStyleSheet(f"""
             background: {_BLUE_LIGHT};
             color: {_BLUE};
-            border-radius: 11px;
+            border-radius: {DIM_SETS_LIST_BADGE_RADIUS}px;
             font-size: {fs(base,-1)}pt;
             font-weight: bold;
             border: none;
@@ -139,7 +155,7 @@ class _SetCard(QFrame):
         self._badge.setStyleSheet(f"""
             background: {_BLUE_LIGHT};
             color: {_BLUE};
-            border-radius: 11px;
+            border-radius: {DIM_SETS_LIST_BADGE_RADIUS}px;
             font-size: {fs(base,-1)}pt;
             font-weight: bold;
             border: none;
@@ -158,7 +174,7 @@ class _SetCard(QFrame):
 # قائمة مجموعات المقاسات
 # ══════════════════════════════════════════════════════════
 
-class _SetsListPanel(QWidget):
+class _SetsListPanel(QWidget, WidgetMixin):
     set_selected = pyqtSignal(int)
 
     def __init__(self, conn, parent=None):
@@ -169,25 +185,26 @@ class _SetsListPanel(QWidget):
         self._all_rows  = []
         self._build()
         self._load()
+        self._init_widget_mixin(lang=False, data=False)
+        self._refresh_style()
 
-    def _on_font_changed(self, size: int):
-        """يُستدعى من _ValuesPanel عند تغيير حجم الخط."""
-        base = size
+    def _refresh_style(self, *_):
+        base = get_font_size()
         # تحديث الـ header
         self._hdr_lbl.setStyleSheet(f"""
             font-weight: bold;
             font-size: {fs(base,+1)}pt;
             color: {_C['accent']};
             background: {_C['accent_light']};
-            padding: 10px 16px;
-            border-bottom: 1px solid {_BORDER};
+            padding: {DIM_SETS_LIST_HDR_PAD_V}px {DIM_SETS_LIST_HDR_PAD_H}px;
+            border-bottom: {DIM_SETS_LIST_HAIRLINE_W}px solid {_BORDER};
         """)
         # تحديث حقل البحث
         self._search_inp.setStyleSheet(f"""
             QLineEdit {{
-                border: 1.5px solid {_BORDER};
-                border-radius: 8px;
-                padding: 3px 10px;
+                border: {DIM_SETS_LIST_INP_BORDER_W}px solid {_BORDER};
+                border-radius: {DIM_SETS_LIST_INP_RADIUS}px;
+                padding: {DIM_SETS_LIST_INP_PAD_V}px {DIM_SETS_LIST_INP_PAD_H}px;
                 font-size: {fs(base,0)}pt;
                 background: {_GRAY_BG};
             }}
@@ -197,13 +214,17 @@ class _SetsListPanel(QWidget):
         self._count_lbl.setStyleSheet(f"""
             color: {_TEXT_MUTED};
             font-size: {fs(base,-1)}pt;
-            padding: 6px;
+            padding: {DIM_SETS_LIST_COUNT_PAD}px;
             background: {_C['bg_input']};
-            border-top: 1px solid {_BORDER};
+            border-top: {DIM_SETS_LIST_HAIRLINE_W}px solid {_BORDER};
         """)
         # تحديث كل الكروت
         for card in self._cards.values():
             card.refresh_font()
+
+    def _on_font_changed(self, size: int = None):
+        """يُبقيها متوافقة مع أي نداء خارجي قديم من _ValuesPanel."""
+        self._refresh_style()
 
     def _build(self):
         base = get_font_size()
@@ -217,8 +238,8 @@ class _SetsListPanel(QWidget):
             font-size: {fs(base,+1)}pt;
             color: {_C['accent']};
             background: {_C['accent_light']};
-            padding: 10px 16px;
-            border-bottom: 1px solid {_BORDER};
+            padding: {DIM_SETS_LIST_HDR_PAD_V}px {DIM_SETS_LIST_HDR_PAD_H}px;
+            border-bottom: {DIM_SETS_LIST_HAIRLINE_W}px solid {_BORDER};
         """)
         root.addWidget(self._hdr_lbl)
 
@@ -226,21 +247,22 @@ class _SetsListPanel(QWidget):
         search_frame.setStyleSheet(f"""
             QFrame {{
                 background: {_C['bg_input']};
-                border-bottom: 1px solid {_BORDER};
+                border-bottom: {DIM_SETS_LIST_HAIRLINE_W}px solid {_BORDER};
             }}
         """)
         s_lay = QHBoxLayout(search_frame)
-        s_lay.setContentsMargins(10, 8, 10, 8)
-        s_lay.setSpacing(6)
+        s_lay.setContentsMargins(DIM_SETS_LIST_SEARCH_FRAME_MARGIN_H, DIM_SETS_LIST_SEARCH_FRAME_MARGIN_V,
+                                  DIM_SETS_LIST_SEARCH_FRAME_MARGIN_H, DIM_SETS_LIST_SEARCH_FRAME_MARGIN_V)
+        s_lay.setSpacing(DIM_SETS_LIST_SEARCH_SPACING)
 
         self._search_inp = QLineEdit()
         self._search_inp.setPlaceholderText(tr("dim_sets_list_search"))
-        self._search_inp.setMinimumHeight(32)
+        self._search_inp.setMinimumHeight(DIM_SETS_LIST_SEARCH_FIELD_H)
         self._search_inp.setStyleSheet(f"""
             QLineEdit {{
-                border: 1.5px solid {_BORDER};
-                border-radius: 8px;
-                padding: 3px 10px;
+                border: {DIM_SETS_LIST_INP_BORDER_W}px solid {_BORDER};
+                border-radius: {DIM_SETS_LIST_INP_RADIUS}px;
+                padding: {DIM_SETS_LIST_INP_PAD_V}px {DIM_SETS_LIST_INP_PAD_H}px;
                 font-size: {fs(base,0)}pt;
                 background: {_GRAY_BG};
             }}
@@ -249,13 +271,13 @@ class _SetsListPanel(QWidget):
         self._search_inp.textChanged.connect(self._apply_filter)
 
         self._cmb_cat = QComboBox()
-        self._cmb_cat.setMinimumHeight(32)
-        self._cmb_cat.setMaximumWidth(130)
+        self._cmb_cat.setMinimumHeight(DIM_SETS_LIST_SEARCH_FIELD_H)
+        self._cmb_cat.setMaximumWidth(DIM_SETS_LIST_CMB_CAT_MAX_W)
         self._cmb_cat.setStyleSheet(f"""
             QComboBox {{
-                border: 1.5px solid {_BORDER};
-                border-radius: 8px;
-                padding: 3px 8px;
+                border: {DIM_SETS_LIST_INP_BORDER_W}px solid {_BORDER};
+                border-radius: {DIM_SETS_LIST_INP_RADIUS}px;
+                padding: {DIM_SETS_LIST_INP_PAD_V}px {DIM_SETS_LIST_CMB_PAD_H}px;
                 font-size: {fs(base,-1)}pt;
                 background: {_GRAY_BG};
             }}
@@ -274,10 +296,10 @@ class _SetsListPanel(QWidget):
         scroll.setStyleSheet(f"""
             QScrollArea {{ border: none; background: {_GRAY_BG}; }}
             QScrollBar:vertical {{
-                background: {_C['bg_surface']}; width: 6px; border-radius: 3px;
+                background: {_C['bg_surface']}; width: {DIM_SETS_LIST_SCROLL_W}px; border-radius: {DIM_SETS_LIST_SCROLL_RADIUS}px;
             }}
             QScrollBar::handle:vertical {{
-                background: {_C['border_med']}; border-radius: 3px; min-height: 24px;
+                background: {_C['border_med']}; border-radius: {DIM_SETS_LIST_SCROLL_RADIUS}px; min-height: {DIM_SETS_LIST_SCROLL_MIN_H}px;
             }}
             QScrollBar::add-line:vertical,
             QScrollBar::sub-line:vertical {{ height: 0; }}
@@ -286,8 +308,9 @@ class _SetsListPanel(QWidget):
         self._cards_widget = QWidget()
         self._cards_widget.setStyleSheet(f"background: {_GRAY_BG};")
         self._cards_layout = QVBoxLayout(self._cards_widget)
-        self._cards_layout.setSpacing(8)
-        self._cards_layout.setContentsMargins(10, 10, 10, 10)
+        self._cards_layout.setSpacing(DIM_SETS_LIST_CARDS_SPACING)
+        self._cards_layout.setContentsMargins(DIM_SETS_LIST_CARDS_MARGIN, DIM_SETS_LIST_CARDS_MARGIN,
+                                               DIM_SETS_LIST_CARDS_MARGIN, DIM_SETS_LIST_CARDS_MARGIN)
         self._cards_layout.addStretch()
 
         scroll.setWidget(self._cards_widget)
@@ -298,9 +321,9 @@ class _SetsListPanel(QWidget):
         self._count_lbl.setStyleSheet(f"""
             color: {_TEXT_MUTED};
             font-size: {fs(base,-1)}pt;
-            padding: 6px;
+            padding: {DIM_SETS_LIST_COUNT_PAD}px;
             background: {_C['bg_input']};
-            border-top: 1px solid {_BORDER};
+            border-top: {DIM_SETS_LIST_HAIRLINE_W}px solid {_BORDER};
         """)
         root.addWidget(self._count_lbl)
 
@@ -320,7 +343,7 @@ class _SetsListPanel(QWidget):
 
     def _add_cat_nodes(self, nodes, depth):
         indent = "  " * depth
-        arrow  = "↳ " if depth > 0 else ""
+        arrow  = tr("category_tree_arrow") if depth > 0 else ""
         for node in nodes:
             self._cmb_cat.addItem(f"{indent}{arrow}{node['name']}", node["id"])
             if node["children"]:
@@ -360,7 +383,7 @@ class _SetsListPanel(QWidget):
             card = _SetCard(
                 ds["id"], ds["name"],
                 ds["category_name"] or "",
-                ds["default_unit"] or "cm",
+                ds["default_unit"] or tr("dim_sets_list_default_unit"),
                 fields_cnt, instances_cnt
             )
             card.clicked.connect(self._on_card_click)

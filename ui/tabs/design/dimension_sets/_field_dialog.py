@@ -19,13 +19,23 @@ from ui.widgets.core.i18n import tr
 from ui.font import FS_XS, FS_SM
 from services.design.dimension_set_service import DimensionSetService
 from ui.widgets.combo.unit import UnitCombo
+from ui.widgets.core.widget_mixin import WidgetMixin
+from ui.constants import (
+    DIM_FIELD_DLG_MIN_W, DIM_FIELD_DLG_ROOT_SPACING, DIM_FIELD_DLG_ROOT_MARGIN,
+    DIM_FIELD_DLG_FORM_SPACING, DIM_FIELD_DLG_INPUT_H, DIM_FIELD_DLG_GRP_RADIUS,
+    DIM_FIELD_DLG_GRP_MARGIN_TOP, DIM_FIELD_DLG_GRP_PAD_TOP, DIM_FIELD_DLG_GRP_TITLE_RIGHT,
+    DIM_FIELD_DLG_GRP_TITLE_PAD, DIM_FIELD_DLG_SOURCE_CMB_MIN_W, DIM_FIELD_DLG_PREVIEW_RADIUS,
+    DIM_FIELD_DLG_PREVIEW_PAD_V, DIM_FIELD_DLG_PREVIEW_PAD_H, DIM_FIELD_DLG_SPIN_DEFAULT_MIN,
+    DIM_FIELD_DLG_SPIN_DEFAULT_MAX, DIM_FIELD_DLG_SPIN_DEFAULT_DEC, DIM_FIELD_DLG_OFFSET_MIN,
+    DIM_FIELD_DLG_OFFSET_MAX, DIM_FIELD_DLG_OFFSET_DEC,
+)
 
 
-def _spin(min_=None, max_=9999, dec=2):
+def _spin(min_=None, max_=DIM_FIELD_DLG_SPIN_DEFAULT_MAX, dec=DIM_FIELD_DLG_SPIN_DEFAULT_DEC):
     s = QDoubleSpinBox()
-    s.setRange(min_ if min_ is not None else -99999, max_)
+    s.setRange(min_ if min_ is not None else DIM_FIELD_DLG_SPIN_DEFAULT_MIN, max_)
     s.setDecimals(dec)
-    s.setMinimumHeight(30)
+    s.setMinimumHeight(DIM_FIELD_DLG_INPUT_H)
     return s
 
 
@@ -33,7 +43,7 @@ def _spin(min_=None, max_=9999, dec=2):
 # محرر حقل واحد — Dialog (cross-set deps)
 # ══════════════════════════════════════════════════════════
 
-class _FieldDialog(QDialog):
+class _FieldDialog(QDialog, WidgetMixin):
     """
     نافذة إضافة/تعديل حقل مقاسات.
     الاعتمادية تختار مجموعة مقاسات + حقل منها.
@@ -46,41 +56,70 @@ class _FieldDialog(QDialog):
         self.field_id  = field_data["id"] if field_data else None
         self._svc = DimensionSetService(conn)
         self.setWindowTitle(tr("dim_field_dlg_edit_title") if field_data else tr("dim_field_dlg_new_title"))
-        self.setMinimumWidth(500)
+        self.setMinimumWidth(DIM_FIELD_DLG_MIN_W)
         self.setModal(True)
         self._build()
+        self._init_widget_mixin(lang=False, data=False)
+        self._refresh_style()
         if field_data:
             self._load(field_data)
 
+    def _refresh_style(self, *_):
+        self._dep_grp.setStyleSheet(f"""
+            QGroupBox {{
+                font-weight: bold;
+                color: {_C['accent']};
+                border: 1px solid {_C['accent_mid']};
+                border-radius: {DIM_FIELD_DLG_GRP_RADIUS}px;
+                margin-top: {DIM_FIELD_DLG_GRP_MARGIN_TOP}px;
+                padding-top: {DIM_FIELD_DLG_GRP_PAD_TOP}px;
+            }}
+            QGroupBox::title {{
+                subcontrol-origin: margin;
+                right: {DIM_FIELD_DLG_GRP_TITLE_RIGHT}px;
+                padding: 0 {DIM_FIELD_DLG_GRP_TITLE_PAD}px;
+            }}
+        """)
+        self._source_preview.setStyleSheet(f"""
+            color: {_C['accent']}; font-size: {FS_SM}pt;
+            background: {_C['accent_light']}; border: 1px solid {_C['accent_mid']};
+            border-radius: {DIM_FIELD_DLG_PREVIEW_RADIUS}px; padding: {DIM_FIELD_DLG_PREVIEW_PAD_V}px {DIM_FIELD_DLG_PREVIEW_PAD_H}px;
+        """)
+        self._hint.setStyleSheet(
+            f"color: {_C['accent']}; font-size: {FS_XS}pt;"
+            f"background: {_C['accent_light']}; border-radius: {DIM_FIELD_DLG_PREVIEW_RADIUS}px; padding: {DIM_FIELD_DLG_PREVIEW_PAD_V}px {DIM_FIELD_DLG_PREVIEW_PAD_H}px;"
+        )
+
     def _build(self):
         root = QVBoxLayout(self)
-        root.setSpacing(12)
-        root.setContentsMargins(16, 16, 16, 16)
+        root.setSpacing(DIM_FIELD_DLG_ROOT_SPACING)
+        root.setContentsMargins(DIM_FIELD_DLG_ROOT_MARGIN, DIM_FIELD_DLG_ROOT_MARGIN,
+                                 DIM_FIELD_DLG_ROOT_MARGIN, DIM_FIELD_DLG_ROOT_MARGIN)
 
         form = QFormLayout()
-        form.setSpacing(10)
+        form.setSpacing(DIM_FIELD_DLG_FORM_SPACING)
         form.setLabelAlignment(Qt.AlignRight)
 
         self.inp_name  = QLineEdit()
         self.inp_name.setPlaceholderText(tr("dim_field_name_en_placeholder"))
-        self.inp_name.setMinimumHeight(30)
+        self.inp_name.setMinimumHeight(DIM_FIELD_DLG_INPUT_H)
 
         self.inp_label = QLineEdit()
         self.inp_label.setPlaceholderText(tr("dim_field_label_ar_placeholder"))
-        self.inp_label.setMinimumHeight(30)
+        self.inp_label.setMinimumHeight(DIM_FIELD_DLG_INPUT_H)
 
         # ── وحدة الحقل — UnitCombo مع حفظ آخر اختيار ──
         self.cmb_unit = UnitCombo(
             conn     = self.conn,
             last_key = "field_dialog_unit",
-            current  = "cm",
+            current  = tr("dim_sets_list_default_unit"),
         )
-        self.cmb_unit.setMinimumHeight(30)
+        self.cmb_unit.setMinimumHeight(DIM_FIELD_DLG_INPUT_H)
 
         self.cmb_type = QComboBox()
         self.cmb_type.addItem(tr("dim_field_type_number"), "number")
         self.cmb_type.addItem(tr("dim_field_type_text"),  "text")
-        self.cmb_type.setMinimumHeight(30)
+        self.cmb_type.setMinimumHeight(DIM_FIELD_DLG_INPUT_H)
         self.cmb_type.currentIndexChanged.connect(self._on_type_changed)
 
         self.chk_required = QCheckBox(tr("dim_field_required_check"))
@@ -97,27 +136,12 @@ class _FieldDialog(QDialog):
         self._dep_grp = QGroupBox(tr("dim_field_dep_group_title"))
         self._dep_grp.setCheckable(True)
         self._dep_grp.setChecked(False)
-        self._dep_grp.setStyleSheet(f"""
-            QGroupBox {{
-                font-weight: bold;
-                color: {_C['accent']};
-                border: 1px solid {_C['accent_mid']};
-                border-radius: 6px;
-                margin-top: 8px;
-                padding-top: 8px;
-            }}
-            QGroupBox::title {{
-                subcontrol-origin: margin;
-                right: 12px;
-                padding: 0 4px;
-            }}
-        """)
         dep_lay = QFormLayout(self._dep_grp)
-        dep_lay.setSpacing(10)
+        dep_lay.setSpacing(DIM_FIELD_DLG_FORM_SPACING)
         dep_lay.setLabelAlignment(Qt.AlignRight)
 
         self.cmb_source_set = QComboBox()
-        self.cmb_source_set.setMinimumHeight(30)
+        self.cmb_source_set.setMinimumHeight(DIM_FIELD_DLG_INPUT_H)
         self.cmb_source_set.addItem(tr("dim_field_select_source_set"), None)
 
         all_sets = self._svc.list_sets()
@@ -132,34 +156,25 @@ class _FieldDialog(QDialog):
         self.cmb_source_set.currentIndexChanged.connect(self._reload_source_fields)
 
         self.cmb_source = QComboBox()
-        self.cmb_source.setMinimumHeight(30)
-        self.cmb_source.setMinimumWidth(220)
+        self.cmb_source.setMinimumHeight(DIM_FIELD_DLG_INPUT_H)
+        self.cmb_source.setMinimumWidth(DIM_FIELD_DLG_SOURCE_CMB_MIN_W)
 
         self._source_preview = QLabel("")
-        self._source_preview.setStyleSheet(f"""
-            color: {_C['accent']}; font-size: {FS_SM}pt;
-            background: {_C['accent_light']}; border: 1px solid {_C['accent_mid']};
-            border-radius: 4px; padding: 4px 8px;
-        """)
         self._source_preview.setVisible(False)
         self._source_preview.setWordWrap(True)
 
-        self.sp_offset = _spin(min_=-9999, max_=9999, dec=4)
+        self.sp_offset = _spin(min_=DIM_FIELD_DLG_OFFSET_MIN, max_=DIM_FIELD_DLG_OFFSET_MAX, dec=DIM_FIELD_DLG_OFFSET_DEC)
         self.sp_offset.setValue(0)
         self.sp_offset.valueChanged.connect(self._update_preview)
         self.cmb_source.currentIndexChanged.connect(self._update_preview)
 
-        hint = QLabel(tr("dim_field_dep_hint"))
-        hint.setStyleSheet(
-            f"color: {_C['accent']}; font-size: {FS_XS}pt;"
-            f"background: {_C['accent_light']}; border-radius: 4px; padding: 4px 8px;"
-        )
+        self._hint = QLabel(tr("dim_field_dep_hint"))
 
         dep_lay.addRow(tr("dim_field_source_set_label") + " :", self.cmb_source_set)
         dep_lay.addRow(tr("dim_field_source_field_label") + " :",    self.cmb_source)
         dep_lay.addRow(tr("dim_field_offset_label") + " :",     self.sp_offset)
         dep_lay.addRow(tr("dim_field_preview_label") + " :",         self._source_preview)
-        dep_lay.addRow(hint)
+        dep_lay.addRow(self._hint)
         root.addWidget(self._dep_grp)
 
         btns = QDialogButtonBox(QDialogButtonBox.Ok | QDialogButtonBox.Cancel)
@@ -242,7 +257,7 @@ class _FieldDialog(QDialog):
         self.inp_label.setText(field_data["label"])
 
         # اختيار الوحدة في UnitCombo
-        unit = field_data["unit"] or "cm"
+        unit = field_data["unit"] or tr("dim_sets_list_default_unit")
         self.cmb_unit.set_unit(unit)
 
         idx = self.cmb_type.findData(field_data["field_type"])
