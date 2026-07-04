@@ -137,7 +137,7 @@ class _SetsPanel(QWidget, WidgetMixin):
 
     def _add_cat_nodes(self, nodes, depth):
         indent = "    " * depth
-        arrow  = "↳ " if depth > 0 else ""
+        arrow  = tr("category_tree_arrow") if depth > 0 else ""
         for node in nodes:
             self.cmb_cat_filter.addItem(f"{indent}{arrow}{node['name']}", node["id"])
             if node["children"]:

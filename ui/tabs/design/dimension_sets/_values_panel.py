@@ -25,6 +25,7 @@ class _ValuesPanel(QWidget, WidgetMixin):
         self._set_id = None
         self._build()
         self._init_widget_mixin(lang=False, data=False)
+        self._refresh_style()
 
     def _refresh_style(self, *_):
         from ui.font import get_font_size
