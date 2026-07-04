@@ -24,7 +24,26 @@ from PyQt5.QtGui import QColor
 
 from ui.theme import _C
 from ui.widgets.core.i18n import tr
+from ui.widgets.core.widget_mixin import WidgetMixin
 from ui.font import FS_SM, FS_BASE, FS_MD
+from ui.constants import (
+    DIALOG_BTN_MIN_H,
+    SRC_PICKER_DLG_MIN_W, SRC_PICKER_DLG_MIN_H,
+    SRC_PICKER_ROOT_MARGIN_H, SRC_PICKER_ROOT_MARGIN_V, SRC_PICKER_ROOT_SPACING,
+    SRC_PICKER_HDR_MARGIN_H, SRC_PICKER_HDR_MARGIN_V, SRC_PICKER_HDR_SPACING,
+    SRC_PICKER_LIST_SPACING, SRC_PICKER_LIST_MARGIN,
+    SRC_PICKER_PREVIEW_MARGIN_H, SRC_PICKER_PREVIEW_MARGIN_V,
+    SRC_PICKER_BTN_OK_MIN_W,
+    SRC_PICKER_ROW_MARGIN_H, SRC_PICKER_ROW_MARGIN_V, SRC_PICKER_ROW_SPACING,
+    SRC_PICKER_BTN_RADIUS, SRC_PICKER_BTN_PRIMARY_PAD_V, SRC_PICKER_BTN_PRIMARY_PAD_H,
+    SRC_PICKER_BTN_GHOST_PAD_V, SRC_PICKER_BTN_GHOST_PAD_H,
+    SRC_PICKER_HDR_FRAME_RADIUS, SRC_PICKER_EMPTY_PAD,
+    SRC_PICKER_SCROLL_RADIUS, SRC_PICKER_FRAME_RADIUS,
+    SRC_PICKER_RADIO_SIZE, SRC_PICKER_RADIO_RADIUS, SRC_PICKER_RADIO_BORDER_W,
+    SRC_PICKER_RESULT_BADGE_RADIUS, SRC_PICKER_RESULT_BADGE_PAD_V, SRC_PICKER_RESULT_BADGE_PAD_H,
+    SRC_PICKER_BORDER_W, SRC_PICKER_HDR_BORDER_W,
+    SCROLL_BAR_WIDTH, DIM_INST_SCROLL_RADIUS, DIM_INST_SCROLL_MIN_H,
+)
 from services.design.dimension_set_service import DimensionSetService
 
 
@@ -34,8 +53,8 @@ def _btn_primary_ss():
             background: {_C['accent']};
             color: {_C['accent_text']};
             border: none;
-            border-radius: 7px;
-            padding: 6px 20px;
+            border-radius: {SRC_PICKER_BTN_RADIUS}px;
+            padding: {SRC_PICKER_BTN_PRIMARY_PAD_V}px {SRC_PICKER_BTN_PRIMARY_PAD_H}px;
             font-weight: bold;
             font-size: {FS_BASE}px;
         }}
@@ -49,16 +68,16 @@ def _btn_ghost_ss():
         QPushButton {{
             background: {_C['bg_input']};
             color: {_C['accent']};
-            border: 1.5px solid {_C['accent_mid']};
-            border-radius: 7px;
-            padding: 5px 16px;
+            border: {SRC_PICKER_BORDER_W}px solid {_C['accent_mid']};
+            border-radius: {SRC_PICKER_BTN_RADIUS}px;
+            padding: {SRC_PICKER_BTN_GHOST_PAD_V}px {SRC_PICKER_BTN_GHOST_PAD_H}px;
             font-size: {FS_BASE}px;
         }}
         QPushButton:hover {{ background: {_C['accent_light']}; }}
     """
 
 
-class _SourcePickerDialog(QDialog):
+class _SourcePickerDialog(QDialog, WidgetMixin):
     """
     Dialog اختيار الـ instance المصدر للحساب التلقائي.
 
@@ -92,31 +111,37 @@ class _SourcePickerDialog(QDialog):
         self._instance_names: dict[int, str] = {}
 
         self.setWindowTitle(tr("dim_src_picker_title"))
-        self.setMinimumWidth(480)
-        self.setMinimumHeight(360)
+        self.setMinimumWidth(SRC_PICKER_DLG_MIN_W)
+        self.setMinimumHeight(SRC_PICKER_DLG_MIN_H)
         self.setModal(True)
-        self.setStyleSheet(f"QDialog {{ background: {_C['bg_surface']}; }}")
         self._build()
+        self._init_widget_mixin(data=False)
+        self._refresh_style()
+
+    def _refresh_style(self, *_):
+        self.setStyleSheet(f"QDialog {{ background: {_C['bg_surface']}; }}")
 
     def _build(self):
         root = QVBoxLayout(self)
-        root.setContentsMargins(20, 18, 20, 18)
-        root.setSpacing(14)
+        root.setContentsMargins(SRC_PICKER_ROOT_MARGIN_H, SRC_PICKER_ROOT_MARGIN_V,
+                                 SRC_PICKER_ROOT_MARGIN_H, SRC_PICKER_ROOT_MARGIN_V)
+        root.setSpacing(SRC_PICKER_ROOT_SPACING)
 
         # ── رأس ──
         hdr_frame = QFrame()
         hdr_frame.setStyleSheet(f"""
             QFrame {{
                 background: {_C['accent_light']};
-                border-radius: 10px;
-                border: 1px solid {_C['accent_mid']};
+                border-radius: {SRC_PICKER_HDR_FRAME_RADIUS}px;
+                border: {SRC_PICKER_HDR_BORDER_W}px solid {_C['accent_mid']};
             }}
         """)
         hdr_lay = QVBoxLayout(hdr_frame)
-        hdr_lay.setContentsMargins(14, 12, 14, 12)
-        hdr_lay.setSpacing(4)
+        hdr_lay.setContentsMargins(SRC_PICKER_HDR_MARGIN_H, SRC_PICKER_HDR_MARGIN_V,
+                                    SRC_PICKER_HDR_MARGIN_H, SRC_PICKER_HDR_MARGIN_V)
+        hdr_lay.setSpacing(SRC_PICKER_HDR_SPACING)
 
-        title = QLabel(f"⟳  {tr('dim_src_picker_header')}")
+        title = QLabel(f"{tr('dim_inst_auto_icon')}  {tr('dim_src_picker_header')}")
         title.setStyleSheet(f"""
             font-weight: bold;
             font-size: {FS_MD}px;
@@ -135,16 +160,17 @@ class _SourcePickerDialog(QDialog):
         self._src_field_label = src_field_label
         self._src_field_unit  = src_field_unit
 
-        sign = f"+{self.offset:g}" if self.offset >= 0 else f"{self.offset:g}"
+        sign  = f"+{self.offset:g}" if self.offset >= 0 else f"{self.offset:g}"
+        arrow = tr("arrow_right_icon")
         formula = (
-            f"{src_field_label}  {sign}  →  {self.target_label}"
+            f"{src_field_label}  {sign}  {arrow}  {self.target_label}"
             if self.offset != 0
-            else f"{src_field_label}  →  {self.target_label}"
+            else f"{src_field_label}  {arrow}  {self.target_label}"
         )
 
         subtitle = QLabel(
-            f"{tr('dim_src_picker_from_group')}:  <b>{src_set_name}</b>   ·   "
-            f"{tr('dim_src_picker_field')}:  <b>{src_field_label}</b>"
+            f"{tr('dim_src_picker_from_group')}{tr('field_colon')}  <b>{src_set_name}</b>{tr('dim_sets_meta_separator')}"
+            f"{tr('dim_src_picker_field')}{tr('field_colon')}  <b>{src_field_label}</b>"
         )
         subtitle.setStyleSheet(f"""
             font-size: {FS_SM}px;
@@ -153,7 +179,7 @@ class _SourcePickerDialog(QDialog):
             border: none;
         """)
 
-        formula_lbl = QLabel(f"📐  {formula}")
+        formula_lbl = QLabel(f"{tr('dim_sets_set_icon')}  {formula}")
         formula_lbl.setStyleSheet(f"""
             font-size: {FS_SM}px;
             color: {_C['text_muted']};
@@ -167,7 +193,7 @@ class _SourcePickerDialog(QDialog):
         root.addWidget(hdr_frame)
 
         # ── تعليمات ──
-        hint = QLabel(tr("dim_src_picker_hint") + ":")
+        hint = QLabel(tr("dim_src_picker_hint") + tr("field_colon"))
         hint.setStyleSheet(f"""
             font-size: {FS_SM}px;
             font-weight: bold;
@@ -182,15 +208,15 @@ class _SourcePickerDialog(QDialog):
         scroll.setHorizontalScrollBarPolicy(Qt.ScrollBarAlwaysOff)
         scroll.setStyleSheet(f"""
             QScrollArea {{
-                border: 1.5px solid {_C['border']};
-                border-radius: 8px;
+                border: {SRC_PICKER_BORDER_W}px solid {_C['border']};
+                border-radius: {SRC_PICKER_SCROLL_RADIUS}px;
                 background: {_C['bg_input']};
             }}
             QScrollBar:vertical {{
-                background: {_C['bg_surface']}; width: 6px; border-radius: 3px;
+                background: {_C['bg_surface']}; width: {SCROLL_BAR_WIDTH}px; border-radius: {DIM_INST_SCROLL_RADIUS}px;
             }}
             QScrollBar::handle:vertical {{
-                background: {_C['border_med']}; border-radius: 3px; min-height: 24px;
+                background: {_C['border_med']}; border-radius: {DIM_INST_SCROLL_RADIUS}px; min-height: {DIM_INST_SCROLL_MIN_H}px;
             }}
             QScrollBar::add-line:vertical,
             QScrollBar::sub-line:vertical {{ height: 0; }}
@@ -199,8 +225,9 @@ class _SourcePickerDialog(QDialog):
         container = QWidget()
         container.setStyleSheet(f"background: {_C['bg_input']};")
         self._list_lay = QVBoxLayout(container)
-        self._list_lay.setSpacing(4)
-        self._list_lay.setContentsMargins(10, 10, 10, 10)
+        self._list_lay.setSpacing(SRC_PICKER_LIST_SPACING)
+        self._list_lay.setContentsMargins(SRC_PICKER_LIST_MARGIN, SRC_PICKER_LIST_MARGIN,
+                                           SRC_PICKER_LIST_MARGIN, SRC_PICKER_LIST_MARGIN)
 
         self._btn_group = QButtonGroup(self)
         self._btn_group.buttonClicked.connect(self._on_instance_selected)
@@ -210,7 +237,7 @@ class _SourcePickerDialog(QDialog):
         if not instances:
             empty = QLabel(tr("dim_src_picker_no_values"))
             empty.setAlignment(Qt.AlignCenter)
-            empty.setStyleSheet(f"color: {_C['text_muted']}; padding: 20px;")
+            empty.setStyleSheet(f"color: {_C['text_muted']}; padding: {SRC_PICKER_EMPTY_PAD}px;")
             self._list_lay.addWidget(empty)
         else:
             for inst in instances:
@@ -232,13 +259,14 @@ class _SourcePickerDialog(QDialog):
         self._preview_frame.setStyleSheet(f"""
             QFrame {{
                 background: {_C['success_bg']};
-                border: 1.5px solid {_C['success_border']};
-                border-radius: 8px;
+                border: {SRC_PICKER_BORDER_W}px solid {_C['success_border']};
+                border-radius: {SRC_PICKER_FRAME_RADIUS}px;
             }}
         """)
         self._preview_frame.setVisible(False)
         p_lay = QHBoxLayout(self._preview_frame)
-        p_lay.setContentsMargins(14, 10, 14, 10)
+        p_lay.setContentsMargins(SRC_PICKER_PREVIEW_MARGIN_H, SRC_PICKER_PREVIEW_MARGIN_V,
+                                   SRC_PICKER_PREVIEW_MARGIN_H, SRC_PICKER_PREVIEW_MARGIN_V)
 
         self._preview_lbl = QLabel("")
         self._preview_lbl.setStyleSheet(f"""
@@ -257,13 +285,13 @@ class _SourcePickerDialog(QDialog):
 
         self.btn_cancel = QPushButton(tr("cancel"))
         self.btn_cancel.setStyleSheet(_btn_ghost_ss())
-        self.btn_cancel.setMinimumHeight(36)
+        self.btn_cancel.setMinimumHeight(DIALOG_BTN_MIN_H)
         self.btn_cancel.clicked.connect(self.reject)
 
         self.btn_ok = QPushButton(tr("dim_src_picker_apply"))
         self.btn_ok.setStyleSheet(_btn_primary_ss())
-        self.btn_ok.setMinimumHeight(36)
-        self.btn_ok.setMinimumWidth(140)
+        self.btn_ok.setMinimumHeight(DIALOG_BTN_MIN_H)
+        self.btn_ok.setMinimumWidth(SRC_PICKER_BTN_OK_MIN_W)
         self.btn_ok.setEnabled(False)
         self.btn_ok.clicked.connect(self.accept)
 
@@ -289,8 +317,8 @@ class _SourcePickerDialog(QDialog):
         row_frame.setStyleSheet(f"""
             QFrame {{
                 background: {_C['bg_input']};
-                border: 1.5px solid {_C['border']};
-                border-radius: 8px;
+                border: {SRC_PICKER_BORDER_W}px solid {_C['border']};
+                border-radius: {SRC_PICKER_FRAME_RADIUS}px;
             }}
             QFrame:hover {{
                 border-color: {_C['accent_mid']};
@@ -298,8 +326,9 @@ class _SourcePickerDialog(QDialog):
             }}
         """)
         row_lay = QHBoxLayout(row_frame)
-        row_lay.setContentsMargins(12, 8, 12, 8)
-        row_lay.setSpacing(12)
+        row_lay.setContentsMargins(SRC_PICKER_ROW_MARGIN_H, SRC_PICKER_ROW_MARGIN_V,
+                                    SRC_PICKER_ROW_MARGIN_H, SRC_PICKER_ROW_MARGIN_V)
+        row_lay.setSpacing(SRC_PICKER_ROW_SPACING)
 
         # Radio button
         radio = QRadioButton()
@@ -309,10 +338,10 @@ class _SourcePickerDialog(QDialog):
                 background: transparent;
             }}
             QRadioButton::indicator {{
-                width: 18px;
-                height: 18px;
-                border-radius: 9px;
-                border: 2px solid {_C['accent_mid']};
+                width: {SRC_PICKER_RADIO_SIZE}px;
+                height: {SRC_PICKER_RADIO_SIZE}px;
+                border-radius: {SRC_PICKER_RADIO_RADIUS}px;
+                border: {SRC_PICKER_RADIO_BORDER_W}px solid {_C['accent_mid']};
                 background: {_C['bg_input']};
             }}
             QRadioButton::indicator:checked {{
@@ -362,9 +391,9 @@ class _SourcePickerDialog(QDialog):
                 font-weight: bold;
                 color: {_C['success']};
                 background: {_C['success_bg']};
-                border: 1px solid {_C['success_border']};
-                border-radius: 5px;
-                padding: 1px 8px;
+                border: {SRC_PICKER_HDR_BORDER_W}px solid {_C['success_border']};
+                border-radius: {SRC_PICKER_RESULT_BADGE_RADIUS}px;
+                padding: {SRC_PICKER_RESULT_BADGE_PAD_V}px {SRC_PICKER_RESULT_BADGE_PAD_H}px;
             """)
         else:
             val_lbl = QLabel(tr("dim_src_picker_no_value_short"))
@@ -411,9 +440,12 @@ class _SourcePickerDialog(QDialog):
         sign   = f"+{self.offset:g}" if self.offset >= 0 else f"{self.offset:g}"
 
         if self.offset != 0:
-            txt = f"✓  {inst_name}:  {src_val:g}  {sign}  =  {result:g}  {self._src_field_unit}".strip()
+            txt = tr("dim_src_preview_fmt").format(
+                name=inst_name, val=f"{src_val:g}", sign=sign,
+                result=f"{result:g}", unit=self._src_field_unit
+            ).strip()
         else:
-            txt = f"✓  {inst_name}:  {result:g}  {self._src_field_unit}".strip()
+            txt = f"{tr('spinner_done_check')}  {inst_name}:  {result:g}  {self._src_field_unit}".strip()
 
         self._preview_lbl.setText(txt)
         self._preview_frame.setVisible(True)

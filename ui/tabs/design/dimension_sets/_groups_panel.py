@@ -18,7 +18,21 @@ from PyQt5.QtCore import Qt, pyqtSignal
 
 from ui.theme import _C
 from ui.widgets.core.i18n import tr
+from ui.widgets.core.widget_mixin import WidgetMixin
 from ui.font import FS_BASE, FS_MD
+from ui.constants import (
+    SPLITTER_HANDLE_W, COL_MIN_WIDTH, DIM_SETS_LIST_CMB_CAT_MAX_W,
+    DETAIL_LABEL_MIN_W, COMPONENT_ROW_WASTE_MIN_W,
+    DIALOG_MIN_WIDTH, DETAIL_MIN_W, LIST_PANEL_MIN_W, DIM_VALUES_SPLITTER_R,
+    FILTER_SEARCH_H, FILTER_COMBO_MIN_H,
+    SPACING_SM, SPACING_MD, SPACING_ZERO, MARGIN_FORM, MARGIN_ZERO,
+    BTN_MIN_HEIGHT, DIM_CAT_PANEL_COMBO_H, DIM_CAT_PANEL_TREE_BTN_H,
+    DIM_CAT_PANEL_INPUT_H, DIM_CAT_PANEL_ACTION_BTN_H,
+    DIM_GROUPS_BTN_ROW_SPACING, DIM_GROUPS_MGR_HDR_RADIUS,
+    DIM_GROUPS_MGR_HDR_PAD_V, DIM_GROUPS_MGR_HDR_PAD_H,
+    DIM_GROUPS_FIELDS_HDR_RADIUS, DIM_GROUPS_FIELDS_HDR_PAD_V, DIM_GROUPS_FIELDS_HDR_PAD_H,
+    DIM_GROUPS_MGR_ROOT_SPACING, DIM_GROUPS_TOP_SPACING, DIM_GROUPS_MINI_BTN_H,
+)
 from services.design.dimension_set_service import DimensionSetService
 
 from ._categories_panel import _CategoriesPanel
@@ -31,7 +45,7 @@ from ui.widgets.combo.unit import UnitCombo
 def buttons_row(*buttons) -> QHBoxLayout:
     """صف أزرار أفقي."""
     row = QHBoxLayout()
-    row.setSpacing(6)
+    row.setSpacing(DIM_GROUPS_BTN_ROW_SPACING)
     for btn in buttons:
         row.addWidget(btn)
     row.addStretch()
@@ -40,7 +54,7 @@ def buttons_row(*buttons) -> QHBoxLayout:
 # لوحة إدارة المجموعات + حقولها (يمين)
 # ══════════════════════════════════════════════════════════
 
-class _SetsManagerPanel(QWidget):
+class _SetsManagerPanel(QWidget, WidgetMixin):
     sets_changed = pyqtSignal()
 
     def __init__(self, conn, parent=None):
@@ -51,66 +65,75 @@ class _SetsManagerPanel(QWidget):
         self._all_rows   = []
         self._build()
         self._load()
+        self._init_widget_mixin(lang=False, data=False)
+        self._refresh_style()
+
+    def _refresh_style(self, *_):
+        self._hdr.setStyleSheet(f"""
+            font-weight: bold; font-size: {FS_MD}px; color: {_C['accent']};
+            background: {_C['accent_light']}; border-radius: {DIM_GROUPS_MGR_HDR_RADIUS}px; padding: {DIM_GROUPS_MGR_HDR_PAD_V}px {DIM_GROUPS_MGR_HDR_PAD_H}px;
+        """)
+        self._v_splitter.setStyleSheet(f"""
+            QSplitter::handle {{ background: {_C['border']}; }}
+            QSplitter::handle:hover {{ background: {_C['accent_mid']}; }}
+        """)
+        self._fields_hdr.setStyleSheet(f"""
+            font-weight: bold; font-size: {FS_BASE}px; color: {_C['purple']};
+            background: {_C['purple_bg']}; border-radius: {DIM_GROUPS_FIELDS_HDR_RADIUS}px; padding: {DIM_GROUPS_FIELDS_HDR_PAD_V}px {DIM_GROUPS_FIELDS_HDR_PAD_H}px;
+        """)
 
     def _build(self):
         root = QVBoxLayout(self)
-        root.setContentsMargins(8, 8, 8, 8)
-        root.setSpacing(8)
+        root.setContentsMargins(*MARGIN_FORM)
+        root.setSpacing(DIM_GROUPS_MGR_ROOT_SPACING)
 
-        hdr = QLabel(tr("dim_sets_panel_title"))
-        hdr.setStyleSheet(f"""
-            font-weight: bold; font-size: {FS_MD}px; color: {_C['accent']};
-            background: {_C['accent_light']}; border-radius: 6px; padding: 6px 12px;
-        """)
-        root.addWidget(hdr)
+        self._hdr = QLabel(tr("dim_sets_panel_title"))
+        root.addWidget(self._hdr)
 
         # ── فلتر ──
         filter_row = QHBoxLayout()
         self.inp_search = QLineEdit()
         self.inp_search.setPlaceholderText(tr("dim_sets_search_placeholder"))
-        self.inp_search.setMinimumHeight(28)
+        self.inp_search.setMinimumHeight(FILTER_SEARCH_H)
         self.inp_search.textChanged.connect(self._apply_filter)
 
         self.cmb_cat_filter = QComboBox()
-        self.cmb_cat_filter.setMinimumHeight(28)
-        self.cmb_cat_filter.setMinimumWidth(130)
+        self.cmb_cat_filter.setMinimumHeight(FILTER_COMBO_MIN_H)
+        self.cmb_cat_filter.setMinimumWidth(DIM_SETS_LIST_CMB_CAT_MAX_W)
         self.cmb_cat_filter.currentIndexChanged.connect(self._apply_filter)
 
-        filter_row.addWidget(QLabel("🔍"))
+        filter_row.addWidget(QLabel(tr("empty_icon_search")))
         filter_row.addWidget(self.inp_search, stretch=1)
-        filter_row.addWidget(QLabel("📁"))
+        filter_row.addWidget(QLabel(tr("account_tree_default_icon")))
         filter_row.addWidget(self.cmb_cat_filter)
         root.addLayout(filter_row)
 
         # ══ Splitter رأسي ══
         v_splitter = QSplitter(Qt.Vertical)
-        v_splitter.setHandleWidth(5)
-        v_splitter.setStyleSheet(f"""
-            QSplitter::handle {{ background: {_C['border']}; }}
-            QSplitter::handle:hover {{ background: {_C['accent_mid']}; }}
-        """)
+        self._v_splitter = v_splitter
+        v_splitter.setHandleWidth(SPLITTER_HANDLE_W)
 
         # ── الجزء العلوي: جدول + فورم ──
         top_w = QWidget()
         top_lay = QVBoxLayout(top_w)
-        top_lay.setContentsMargins(0, 0, 0, 0)
-        top_lay.setSpacing(6)
+        top_lay.setContentsMargins(*MARGIN_ZERO)
+        top_lay.setSpacing(DIM_GROUPS_TOP_SPACING)
 
         self.table = make_table(
             [tr("dim_sets_col_id"), tr("dim_sets_col_name"), tr("dim_sets_col_category"), tr("dim_sets_col_unit"), tr("dim_sets_col_fields")],
             stretch_col=1
         )
-        self.table.setColumnWidth(0, 40)
-        self.table.setColumnWidth(2, 130)
-        self.table.setColumnWidth(3, 80)
-        self.table.setColumnWidth(4, 75)
+        self.table.setColumnWidth(0, COL_MIN_WIDTH)
+        self.table.setColumnWidth(2, DIM_SETS_LIST_CMB_CAT_MAX_W)
+        self.table.setColumnWidth(3, DETAIL_LABEL_MIN_W)
+        self.table.setColumnWidth(4, COMPONENT_ROW_WASTE_MIN_W)
         self.table.itemSelectionChanged.connect(self._on_set_select)
         top_lay.addWidget(self.table)
 
-        btn_edit_set = QPushButton("✏️  " + tr("edit"))
-        btn_del_set  = make_btn("🗑️  " + tr("delete"), style="danger")
+        btn_edit_set = QPushButton(tr("btn_edit"))
+        btn_del_set  = make_btn(tr("btn_delete"), style="danger")
         for b in (btn_edit_set, btn_del_set):
-            b.setMinimumHeight(28)
+            b.setMinimumHeight(DIM_GROUPS_MINI_BTN_H)
         btn_edit_set.clicked.connect(self._edit_set)
         btn_del_set.clicked.connect(self._delete_set)
         top_lay.addLayout(buttons_row(btn_edit_set, btn_del_set))
@@ -118,7 +141,7 @@ class _SetsManagerPanel(QWidget):
         # فورم إضافة / تعديل المجموعة
         self._form_grp = QGroupBox(tr("dim_sets_form_title"))
         form = QFormLayout(self._form_grp)
-        form.setSpacing(8)
+        form.setSpacing(SPACING_MD)
         form.setLabelAlignment(Qt.AlignRight)
 
         self.lbl_mode = QLabel(tr("dim_sets_new_mode"))
@@ -127,12 +150,12 @@ class _SetsManagerPanel(QWidget):
 
         self.inp_name = QLineEdit()
         self.inp_name.setPlaceholderText(tr("dim_sets_name_placeholder"))
-        self.inp_name.setMinimumHeight(30)
-        form.addRow(tr("name") + " :", self.inp_name)
+        self.inp_name.setMinimumHeight(DIM_CAT_PANEL_INPUT_H)
+        form.addRow(tr("name") + tr("field_colon"), self.inp_name)
 
         self.cmb_category = QComboBox()
-        self.cmb_category.setMinimumHeight(28)
-        form.addRow(tr("category") + " :", self.cmb_category)
+        self.cmb_category.setMinimumHeight(DIM_CAT_PANEL_COMBO_H)
+        form.addRow(tr("category") + tr("field_colon"), self.cmb_category)
 
         # ── الوحدة الافتراضية — UnitCombo مع حفظ آخر اختيار ──
         self.cmb_unit = UnitCombo(
@@ -140,22 +163,22 @@ class _SetsManagerPanel(QWidget):
             last_key = "dim_sets_default_unit",
             current  = "cm",
         )
-        self.cmb_unit.setMinimumHeight(28)
-        form.addRow(tr("dim_sets_default_unit_label") + " :", self.cmb_unit)
+        self.cmb_unit.setMinimumHeight(DIM_CAT_PANEL_COMBO_H)
+        form.addRow(tr("dim_sets_default_unit_label") + tr("field_colon"), self.cmb_unit)
 
         self.inp_notes = QLineEdit()
         self.inp_notes.setPlaceholderText(tr("notes"))
-        self.inp_notes.setMinimumHeight(28)
-        form.addRow(tr("notes") + " :", self.inp_notes)
+        self.inp_notes.setMinimumHeight(DIM_CAT_PANEL_COMBO_H)
+        form.addRow(tr("notes") + tr("field_colon"), self.inp_notes)
 
         btn_form_row = QHBoxLayout()
         self.btn_add    = QPushButton(tr("dim_sets_add_btn"))
-        self.btn_save   = QPushButton("💾  " + tr("save"))
-        self.btn_cancel = QPushButton("✖  " + tr("cancel"))
+        self.btn_save   = QPushButton(tr("btn_save"))
+        self.btn_cancel = QPushButton(tr("btn_cancel"))
         self.btn_save.setVisible(False)
         self.btn_cancel.setVisible(False)
         for b in (self.btn_add, self.btn_save, self.btn_cancel):
-            b.setMinimumHeight(30)
+            b.setMinimumHeight(DIM_CAT_PANEL_ACTION_BTN_H)
         self.btn_add.clicked.connect(self._add_set)
         self.btn_save.clicked.connect(self._save_set)
         self.btn_cancel.clicked.connect(self._reset_form)
@@ -170,21 +193,17 @@ class _SetsManagerPanel(QWidget):
         # ── الجزء السفلي: _FieldsPanel ──
         bot_w = QWidget()
         bot_lay = QVBoxLayout(bot_w)
-        bot_lay.setContentsMargins(0, 0, 0, 0)
-        bot_lay.setSpacing(0)
+        bot_lay.setContentsMargins(*MARGIN_ZERO)
+        bot_lay.setSpacing(SPACING_ZERO)
 
-        fields_hdr = QLabel(tr("dim_sets_fields_header"))
-        fields_hdr.setStyleSheet(f"""
-            font-weight: bold; font-size: {FS_BASE}px; color: {_C['purple']};
-            background: {_C['purple_bg']}; border-radius: 4px; padding: 5px 10px;
-        """)
-        bot_lay.addWidget(fields_hdr)
+        self._fields_hdr = QLabel(tr("dim_sets_fields_header"))
+        bot_lay.addWidget(self._fields_hdr)
 
         self._fields_panel = _FieldsPanel(self.conn)
         bot_lay.addWidget(self._fields_panel)
 
         v_splitter.addWidget(bot_w)
-        v_splitter.setSizes([380, 300])
+        v_splitter.setSizes([DIALOG_MIN_WIDTH, DETAIL_MIN_W])
 
         root.addWidget(v_splitter, stretch=1)
 
@@ -220,7 +239,7 @@ class _SetsManagerPanel(QWidget):
 
     def _add_cat_nodes(self, combo, nodes, depth):
         indent = "    " * depth
-        arrow  = "↳ " if depth > 0 else ""
+        arrow  = tr("category_tree_arrow") if depth > 0 else ""
         for node in nodes:
             combo.addItem(f"{indent}{arrow}{node['name']}", node["id"])
             if node["children"]:
@@ -253,7 +272,7 @@ class _SetsManagerPanel(QWidget):
             self.table.setItem(r, 0, QTableWidgetItem(str(ds["id"])))
             self.table.setItem(r, 1, QTableWidgetItem(ds["name"]))
             self.table.setItem(r, 2, QTableWidgetItem(ds["category_name"] or tr("dash")))
-            self.table.setItem(r, 3, QTableWidgetItem(ds["default_unit"] or "cm"))
+            self.table.setItem(r, 3, QTableWidgetItem(ds["default_unit"] or tr("dim_sets_list_default_unit")))
             self.table.setItem(r, 4, QTableWidgetItem(str(cnt)))
             self.table.item(r, 0).setData(Qt.UserRole, ds["id"])
 
@@ -397,25 +416,30 @@ class _SetsManagerPanel(QWidget):
 # لوحة المجموعات الرئيسية
 # ══════════════════════════════════════════════════════════
 
-class _GroupsPanel(QWidget):
+class _GroupsPanel(QWidget, WidgetMixin):
     sets_changed = pyqtSignal()
 
     def __init__(self, conn, parent=None):
         super().__init__(parent)
         self.conn = conn
         self._build()
+        self._init_widget_mixin(lang=False, data=False)
+        self._refresh_style()
 
-    def _build(self):
-        root = QVBoxLayout(self)
-        root.setContentsMargins(0, 0, 0, 0)
-        root.setSpacing(0)
-
-        splitter = QSplitter(Qt.Horizontal)
-        splitter.setHandleWidth(5)
-        splitter.setStyleSheet(f"""
+    def _refresh_style(self, *_):
+        self._splitter.setStyleSheet(f"""
             QSplitter::handle {{ background: {_C['border']}; }}
             QSplitter::handle:hover {{ background: {_C['accent_light']}; }}
         """)
+
+    def _build(self):
+        root = QVBoxLayout(self)
+        root.setContentsMargins(*MARGIN_ZERO)
+        root.setSpacing(SPACING_ZERO)
+
+        splitter = QSplitter(Qt.Horizontal)
+        self._splitter = splitter
+        splitter.setHandleWidth(SPLITTER_HANDLE_W)
 
         self._cats_panel = _CategoriesPanel(self.conn)
         self._cats_panel.changed.connect(self._on_categories_changed)
@@ -425,7 +449,7 @@ class _GroupsPanel(QWidget):
         self._sets_manager.sets_changed.connect(self.sets_changed.emit)
         splitter.addWidget(self._sets_manager)
 
-        splitter.setSizes([280, 720])
+        splitter.setSizes([LIST_PANEL_MIN_W, DIM_VALUES_SPLITTER_R])
         root.addWidget(splitter)
 
     def _on_categories_changed(self):

@@ -9,38 +9,45 @@ from PyQt5.QtCore import Qt
 
 from .values_panel._sets_list_panel  import _SetsListPanel
 from .values_panel._instances_table import _InstancesTable
-from ui.widgets.core.events import bus
+from ui.widgets.core.widget_mixin import WidgetMixin
 from ui.theme import _C
+from ui.constants import (
+    SMART_SPLITTER_HANDLE_W, LIST_PANEL_MIN_W,
+    DIM_VALUES_LIST_MIN_W, DIM_VALUES_LIST_MAX_W, DIM_VALUES_SPLITTER_R,
+    DIM_SETS_LIST_HAIRLINE_W, SPACING_ZERO, MARGIN_ZERO,
+)
 
 
-class _ValuesPanel(QWidget):
+class _ValuesPanel(QWidget, WidgetMixin):
     def __init__(self, conn, parent=None):
         super().__init__(parent)
         self.conn    = conn
         self._set_id = None
         self._build()
-        bus.font_changed.connect(self._on_font_changed)
+        self._init_widget_mixin(lang=False, data=False)
 
-    def _on_font_changed(self, size: int):
+    def _refresh_style(self, *_):
+        from ui.font import get_font_size
+        size = get_font_size()
         self._sets_list._on_font_changed(size)
         self._table._on_font_changed(size)
 
     def _build(self):
         root = QVBoxLayout(self)
-        root.setContentsMargins(0, 0, 0, 0)
-        root.setSpacing(0)
+        root.setContentsMargins(*MARGIN_ZERO)
+        root.setSpacing(SPACING_ZERO)
 
         splitter = QSplitter(Qt.Horizontal)
-        splitter.setHandleWidth(4)
+        splitter.setHandleWidth(SMART_SPLITTER_HANDLE_W)
         splitter.setStyleSheet(f"""
             QSplitter::handle {{ background: {_C['border']}; }}
             QSplitter::handle:hover {{ background: {_C['accent_mid']}; }}
         """)
 
         self._sets_list = _SetsListPanel(self.conn)
-        self._sets_list.setMinimumWidth(240)
-        self._sets_list.setMaximumWidth(360)
-        self._sets_list.setStyleSheet(f"background: {_C['bg_surface']}; border-right: 1px solid {_C['border']};")
+        self._sets_list.setMinimumWidth(DIM_VALUES_LIST_MIN_W)
+        self._sets_list.setMaximumWidth(DIM_VALUES_LIST_MAX_W)
+        self._sets_list.setStyleSheet(f"background: {_C['bg_surface']}; border-right: {DIM_SETS_LIST_HAIRLINE_W}px solid {_C['border']};")
 
         self._table = _InstancesTable(self.conn)
         self._table.setStyleSheet(f"background: {_C['bg_input']};")
@@ -49,7 +56,7 @@ class _ValuesPanel(QWidget):
 
         splitter.addWidget(self._sets_list)
         splitter.addWidget(self._table)
-        splitter.setSizes([280, 720])
+        splitter.setSizes([LIST_PANEL_MIN_W, DIM_VALUES_SPLITTER_R])
         splitter.setCollapsible(0, False)
         splitter.setCollapsible(1, False)
 
