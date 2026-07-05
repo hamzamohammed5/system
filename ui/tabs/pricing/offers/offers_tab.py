@@ -9,22 +9,29 @@ from PyQt5.QtWidgets import (
 )
 from PyQt5.QtCore import Qt
 
-from db.pricing.offers_repo import fetch_offer, delete_offer
+from services.pricing.offers_service import get_offer, remove_offer
 from ui.widgets.dialogs.confirm      import confirm_delete
 from ui.widgets.managers.category import CategoryManager
 from ui.widgets.core.i18n import tr
 from ui.widgets.core.events import emit_company_data_changed
+from ui.widgets.core.widget_mixin import WidgetMixin
 from ui.theme import _C
+from ui.constants import (
+    OFFERS_TAB_SPLITTER_HANDLE_W,
+    OFFERS_TAB_FORM_SIZE, OFFERS_TAB_BOTTOM_SIZE,
+    OFFERS_TAB_TABLE_SIZE, OFFERS_TAB_DETAILS_SIZE,
+)
 
 from .offer_form    import _OfferForm
 from .offer_details import _OfferDetails
 from .offers_table  import _OffersTable
 
 
-class OffersTab(QWidget):
+class OffersTab(QWidget, WidgetMixin):
 
     def __init__(self, parent=None):
         super().__init__(parent)
+        self._init_widget_mixin(theme=False, font=False, lang=False, data=False)
         self._build()
 
     # ── connection صالح دايماً ────────────────────────────
@@ -58,14 +65,14 @@ class OffersTab(QWidget):
         """
 
         splitter = QSplitter(Qt.Vertical)
-        splitter.setHandleWidth(6)
+        splitter.setHandleWidth(OFFERS_TAB_SPLITTER_HANDLE_W)
         splitter.setStyleSheet(_splitter_style)
 
         self._form = _OfferForm(self._live_conn())
         splitter.addWidget(self._form)
 
         bottom = QSplitter(Qt.Horizontal)
-        bottom.setHandleWidth(6)
+        bottom.setHandleWidth(OFFERS_TAB_SPLITTER_HANDLE_W)
         bottom.setStyleSheet(_splitter_style)
 
         self._offers_table = _OffersTable(
@@ -77,10 +84,10 @@ class OffersTab(QWidget):
         self._details = _OfferDetails(self._live_conn())
         bottom.addWidget(self._offers_table)
         bottom.addWidget(self._details)
-        bottom.setSizes([480, 420])
+        bottom.setSizes([OFFERS_TAB_TABLE_SIZE, OFFERS_TAB_DETAILS_SIZE])
 
         splitter.addWidget(bottom)
-        splitter.setSizes([320, 480])
+        splitter.setSizes([OFFERS_TAB_FORM_SIZE, OFFERS_TAB_BOTTOM_SIZE])
         splitter.setCollapsible(0, True)
 
         main_lay.addWidget(splitter)
@@ -105,7 +112,7 @@ class OffersTab(QWidget):
             return
         try:
             conn = self._live_conn()
-            offer = fetch_offer(conn, offer_id)
+            offer = get_offer(conn, offer_id)
         except Exception:
             return
         if not offer:
@@ -113,7 +120,7 @@ class OffersTab(QWidget):
         if confirm_delete(self, offer["name"]):
             if self._form._editing_id == offer_id:
                 self._form.reset()
-            delete_offer(conn, offer_id)
+            remove_offer(conn, offer_id)
             self._details.clear()
             emit_company_data_changed()
 

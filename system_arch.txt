@@ -1,5 +1,5 @@
 File Tree Snapshot
-Generated : 2026-07-05 16:18:07
+Generated : 2026-07-05 16:53:02
 Source    : D:\My Workspace\Hg\Alhabaar\accountant\system
 Extensions: .md, .py
 ────────────────────────────────────────────────────────────
@@ -109,6 +109,7 @@ system/
 │   │   ├── customer_service.py
 │   │   └── order_service.py
 │   ├── pricing/
+│   │   ├── offers_service.py
 │   │   └── pricing_service.py
 │   └── shared/
 │       ├── category_service.py
@@ -308,7 +309,6 @@ system/
 │   │   │   └── orders_tab.py
 │   │   ├── pricing/
 │   │   │   ├── offers/
-│   │   │   │   ├── __init__.py
 │   │   │   │   ├── offer_details.py
 │   │   │   │   ├── offer_form.py
 │   │   │   │   ├── offer_item_row.py

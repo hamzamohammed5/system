@@ -11,7 +11,7 @@ from PyQt5.QtWidgets import (
 )
 from PyQt5.QtGui import QColor
 
-from db.pricing.offers_repo import fetch_all_offers, calc_offer_summary
+from services.pricing.offers_service import get_all_offers, get_offer_summary
 
 from ui.widgets.components.button   import make_btn
 
@@ -19,22 +19,29 @@ from ui.widgets.panels.form_labels   import section_title
 from ui.widgets.tables.tables       import make_table
 
 from ui.widgets.panels.filter import FilterToolbar
-from ui.widgets.mixins.bus import BusConnectedMixin
+from ui.widgets.core.widget_mixin import WidgetMixin
 from ui.widgets.core.i18n import tr
 from ui.theme import _C
+from ui.constants import (
+    SPACING_SM, BTN_MIN_HEIGHT, OFFERS_TABLE_ROOT_MARGIN,
+    OFFERS_TABLE_COL0_ID_W, OFFERS_TABLE_COL1_NAME_W, OFFERS_TABLE_COL2_CAT_W,
+    OFFERS_TABLE_COL3_COUNT_W, OFFERS_TABLE_COL4_DISC_W, OFFERS_TABLE_COL5_LISTED_W,
+    OFFERS_TABLE_COL6_SELL_W, OFFERS_TABLE_COL7_COST_W, OFFERS_TABLE_COL8_PROFIT_W,
+    OFFERS_TABLE_COL9_DATE_W,
+)
 
 
 def buttons_row(*buttons) -> QHBoxLayout:
     """صف أزرار أفقي."""
     row = QHBoxLayout()
-    row.setSpacing(6)
+    row.setSpacing(SPACING_SM)
     for btn in buttons:
         row.addWidget(btn)
     row.addStretch()
     return row
 
 
-class _OffersTable(QWidget, BusConnectedMixin):
+class _OffersTable(QWidget, WidgetMixin):
     """جدول العروض المحفوظة مع فلتر وأزرار."""
 
     def __init__(self, conn, on_edit, on_delete, on_select, parent=None):
@@ -44,9 +51,9 @@ class _OffersTable(QWidget, BusConnectedMixin):
         self._on_delete = on_delete
         self._on_select = on_select
         self._all_rows  = []
+        self._init_widget_mixin(theme=False, font=False, lang=False, data=True)
         self._build()
         self._load()
-        self._connect_bus(data=True)
 
     # ── connection صالح دايماً ────────────────────────────
 
@@ -60,12 +67,8 @@ class _OffersTable(QWidget, BusConnectedMixin):
         from db.companies.company_state import company_state
         return company_state.get_erp_conn()
 
-    def _on_data_changed(self):
+    def _refresh_data(self, company_id=None):
         self._load()
-
-    def closeEvent(self, event):
-        self._disconnect_bus()
-        super().closeEvent(event)
 
     # ══════════════════════════════════════════════════════
     # بناء الواجهة
@@ -73,8 +76,9 @@ class _OffersTable(QWidget, BusConnectedMixin):
 
     def _build(self):
         root = QVBoxLayout(self)
-        root.setContentsMargins(12, 8, 12, 10)
-        root.setSpacing(6)
+        m = OFFERS_TABLE_ROOT_MARGIN
+        root.setContentsMargins(m[0], m[1], m[2], m[3])
+        root.setSpacing(SPACING_SM)
 
         root.addWidget(section_title(tr("offer_saved_list")))
 
@@ -84,7 +88,7 @@ class _OffersTable(QWidget, BusConnectedMixin):
 
         self.table = make_table(
             [
-                "ID",
+                tr("id_col"),
                 tr("offer_col_product"),       tr("offer_col_category"),
                 tr("offer_col_count"),          tr("offer_col_discount_pct"),
                 tr("offer_col_total_listed"),   tr("offer_col_sell_price"),
@@ -93,24 +97,24 @@ class _OffersTable(QWidget, BusConnectedMixin):
             ],
             stretch_col=1,
         )
-        self.table.setColumnWidth(0, 35)
-        self.table.setColumnWidth(1, 140)
-        self.table.setColumnWidth(2, 90)
-        self.table.setColumnWidth(3, 80)
-        self.table.setColumnWidth(4, 55)
-        self.table.setColumnWidth(5, 85)
-        self.table.setColumnWidth(6, 80)
-        self.table.setColumnWidth(7, 75)
-        self.table.setColumnWidth(8, 75)
-        self.table.setColumnWidth(9, 120)
+        self.table.setColumnWidth(0, OFFERS_TABLE_COL0_ID_W)
+        self.table.setColumnWidth(1, OFFERS_TABLE_COL1_NAME_W)
+        self.table.setColumnWidth(2, OFFERS_TABLE_COL2_CAT_W)
+        self.table.setColumnWidth(3, OFFERS_TABLE_COL3_COUNT_W)
+        self.table.setColumnWidth(4, OFFERS_TABLE_COL4_DISC_W)
+        self.table.setColumnWidth(5, OFFERS_TABLE_COL5_LISTED_W)
+        self.table.setColumnWidth(6, OFFERS_TABLE_COL6_SELL_W)
+        self.table.setColumnWidth(7, OFFERS_TABLE_COL7_COST_W)
+        self.table.setColumnWidth(8, OFFERS_TABLE_COL8_PROFIT_W)
+        self.table.setColumnWidth(9, OFFERS_TABLE_COL9_DATE_W)
         self.table.setAlternatingRowColors(True)
         self.table.itemSelectionChanged.connect(self._on_selection)
         root.addWidget(self.table, stretch=1)
 
-        btn_edit = make_btn(f"✏️  {tr('btn_edit')}", style="normal")
-        btn_del  = make_btn("🗑️  " + tr("btn_delete"), style="danger")
+        btn_edit = make_btn(tr('btn_edit'), style="normal")
+        btn_del  = make_btn(tr("btn_delete"), style="danger")
         for btn in (btn_edit, btn_del):
-            btn.setMinimumHeight(30)
+            btn.setMinimumHeight(BTN_MIN_HEIGHT)
         btn_edit.clicked.connect(lambda: self._on_edit(self.selected_id()))
         btn_del.clicked.connect(lambda: self._on_delete(self.selected_id()))
         root.addLayout(buttons_row(btn_edit, btn_del))
@@ -131,7 +135,7 @@ class _OffersTable(QWidget, BusConnectedMixin):
     def _load(self):
         try:
             conn = self._live_conn()
-            self._all_rows = list(fetch_all_offers(conn))
+            self._all_rows = list(get_all_offers(conn))
         except Exception:
             self._all_rows = []
         self._apply_filter()
@@ -149,7 +153,7 @@ class _OffersTable(QWidget, BusConnectedMixin):
             if not self._filter.match(offer["name"], offer["category_id"]):
                 continue
             try:
-                s = calc_offer_summary(conn, offer["id"])
+                s = get_offer_summary(conn, offer["id"])
             except Exception:
                 s = {}
             r = self.table.rowCount()

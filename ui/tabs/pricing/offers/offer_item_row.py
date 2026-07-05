@@ -10,23 +10,34 @@ from PyQt5.QtWidgets import (
 )
 from PyQt5.QtCore import Qt
 
-from db.shared.items_repo import fetch_items_by_type
-from models.costing import calc_cost
-from ui.widgets.mixins.bus import BusConnectedMixin
+from services.pricing.offers_service import (
+    get_offer_candidate_items, get_priced_ids,
+    get_item_price, get_item_cost,
+    has_pricing as has_pricing_fn,
+)
+from ui.widgets.core.widget_mixin import WidgetMixin
 from ui.widgets.core.i18n import tr
 from ui.theme import _C
 from ui.font import FS_SM, FS_MD
+from ui.constants import (
+    BTN_MIN_HEIGHT, SPACING_MD, SPACING_SM,
+    FILTER_SEARCH_H, FILTER_COMBO_MIN_H,
+    OFFER_FORM_HDR_ICON_W, OFFER_FORM_HDR_DEL_W,
+    OFFER_FORM_HDR_SEARCH_W, OFFER_FORM_HDR_COST_W,
+    OFFER_FORM_HDR_PRICE_W, OFFER_FORM_HDR_QTY_W, OFFER_FORM_HDR_TOTAL_W,
+    OFFER_ROW_PRODUCT_COMBO_W,
+)
 
 
 def _spin(max_=999999, dec=2):
     s = QDoubleSpinBox()
     s.setRange(0, max_)
     s.setDecimals(dec)
-    s.setMinimumHeight(30)
+    s.setMinimumHeight(BTN_MIN_HEIGHT)
     return s
 
 
-class _OfferItemRow(QFrame, BusConnectedMixin):
+class _OfferItemRow(QFrame, WidgetMixin):
     """صف منتج واحد داخل فورم العرض."""
 
     def __init__(self, conn, on_remove, on_change, parent=None):
@@ -34,9 +45,9 @@ class _OfferItemRow(QFrame, BusConnectedMixin):
         self._conn      = conn
         self._on_remove = on_remove
         self._on_change = on_change
+        self._init_widget_mixin(theme=False, font=False, lang=False, data=True)
         self._build()
         self._load_products()
-        self._connect_bus(data=True)
 
     # ── connection صالح دايماً ────────────────────────────
     def _live_conn(self):
@@ -49,12 +60,8 @@ class _OfferItemRow(QFrame, BusConnectedMixin):
         from db.companies.company_state import company_state
         return company_state.get_erp_conn()
 
-    def _on_data_changed(self):
+    def _refresh_data(self, company_id=None):
         self._reload_products()
-
-    def closeEvent(self, event):
-        self._disconnect_bus()
-        super().closeEvent(event)
 
     def _build(self):
         self.setStyleSheet(f"""
@@ -65,13 +72,13 @@ class _OfferItemRow(QFrame, BusConnectedMixin):
             }}
         """)
         lay = QHBoxLayout(self)
-        lay.setContentsMargins(8, 6, 8, 6)
-        lay.setSpacing(8)
+        lay.setContentsMargins(SPACING_MD, SPACING_SM, SPACING_MD, SPACING_SM)
+        lay.setSpacing(SPACING_MD)
 
         self.inp_search = QLineEdit()
         self.inp_search.setPlaceholderText(tr("offer_select_product_search"))
-        self.inp_search.setFixedWidth(120)
-        self.inp_search.setMinimumHeight(28)
+        self.inp_search.setFixedWidth(OFFER_FORM_HDR_SEARCH_W)
+        self.inp_search.setMinimumHeight(FILTER_SEARCH_H)
         self.inp_search.setStyleSheet(f"""
             QLineEdit {{
                 background: {_C['bg_input']};
@@ -87,12 +94,12 @@ class _OfferItemRow(QFrame, BusConnectedMixin):
         )
 
         self.cmb_product = QComboBox()
-        self.cmb_product.setMinimumWidth(180)
-        self.cmb_product.setMinimumHeight(28)
+        self.cmb_product.setMinimumWidth(OFFER_ROW_PRODUCT_COMBO_W)
+        self.cmb_product.setMinimumHeight(FILTER_COMBO_MIN_H)
         self.cmb_product.currentIndexChanged.connect(self._on_product_changed)
 
-        self.lbl_cost = QLabel("─")
-        self.lbl_cost.setFixedWidth(72)
+        self.lbl_cost = QLabel(tr("empty_placeholder"))
+        self.lbl_cost.setFixedWidth(OFFER_FORM_HDR_COST_W)
         self.lbl_cost.setStyleSheet(
             f"color:{_C['journal_dr_accent']}; font-size:{FS_SM}px;"
             "background:transparent; border:none;"
@@ -100,8 +107,8 @@ class _OfferItemRow(QFrame, BusConnectedMixin):
         self.lbl_cost.setAlignment(Qt.AlignCenter)
         self.lbl_cost.setToolTip(tr("offer_col_unit_cost"))
 
-        self.lbl_listed = QLabel("─")
-        self.lbl_listed.setFixedWidth(72)
+        self.lbl_listed = QLabel(tr("empty_placeholder"))
+        self.lbl_listed.setFixedWidth(OFFER_FORM_HDR_PRICE_W)
         self.lbl_listed.setStyleSheet(
             f"color:{_C['success']}; font-size:{FS_SM}px; background:transparent; border:none;"
         )
@@ -110,11 +117,11 @@ class _OfferItemRow(QFrame, BusConnectedMixin):
 
         self.sp_qty = _spin(99999, 4)
         self.sp_qty.setValue(1.0)
-        self.sp_qty.setFixedWidth(85)
+        self.sp_qty.setFixedWidth(OFFER_FORM_HDR_QTY_W)
         self.sp_qty.valueChanged.connect(self._on_product_changed)
 
-        self.lbl_line = QLabel("─")
-        self.lbl_line.setFixedWidth(80)
+        self.lbl_line = QLabel(tr("empty_placeholder"))
+        self.lbl_line.setFixedWidth(OFFER_FORM_HDR_TOTAL_W)
         self.lbl_line.setStyleSheet(
             f"color:{_C['orange']}; font-weight:bold; font-size:{FS_SM}px;"
             "background:transparent; border:none;"
@@ -122,16 +129,16 @@ class _OfferItemRow(QFrame, BusConnectedMixin):
         self.lbl_line.setAlignment(Qt.AlignCenter)
         self.lbl_line.setToolTip(tr("offer_col_line_total"))
 
-        self.lbl_warn = QLabel("⚠️")
+        self.lbl_warn = QLabel(tr("offer_row_warn_icon"))
         self.lbl_warn.setStyleSheet(
             f"color:{_C['orange']}; font-size:{FS_SM}px; background:transparent; border:none;"
         )
-        self.lbl_warn.setFixedWidth(20)
+        self.lbl_warn.setFixedWidth(OFFER_FORM_HDR_ICON_W)
         self.lbl_warn.setToolTip(tr("offer_no_price_tooltip"))
         self.lbl_warn.setVisible(False)
 
         btn_del = QPushButton(tr("offer_row_remove_btn"))
-        btn_del.setFixedSize(28, 28)
+        btn_del.setFixedSize(OFFER_FORM_HDR_DEL_W, OFFER_FORM_HDR_DEL_W)
         btn_del.setStyleSheet(
             f"QPushButton {{ background:transparent; border:none; font-size:{FS_MD}px; }}"
             f"QPushButton:hover {{ color:{_C['danger']}; }}"
@@ -163,12 +170,9 @@ class _OfferItemRow(QFrame, BusConnectedMixin):
         q = filter_text.lower()
 
         try:
-            priced_ids = {
-                r["item_id"]
-                for r in conn.execute("SELECT item_id FROM pricing").fetchall()
-            }
+            priced_ids = get_priced_ids(conn)
             for item_type in ("final", "semi"):
-                rows = fetch_items_by_type(conn, item_type)
+                rows = get_offer_candidate_items(conn, item_type)
                 icon_key = "offer_item_final_icon" if item_type == "final" else "offer_item_semi_icon"
                 for row in rows:
                     if row["id"] not in priced_ids:
@@ -196,9 +200,9 @@ class _OfferItemRow(QFrame, BusConnectedMixin):
     def _on_product_changed(self):
         item_id = self.get_item_id()
         if item_id is None:
-            self.lbl_cost.setText("─")
-            self.lbl_listed.setText("─")
-            self.lbl_line.setText("─")
+            self.lbl_cost.setText(tr("empty_placeholder"))
+            self.lbl_listed.setText(tr("empty_placeholder"))
+            self.lbl_line.setText(tr("empty_placeholder"))
             self.lbl_warn.setVisible(False)
             if self._on_change:
                 self._on_change()
@@ -206,22 +210,18 @@ class _OfferItemRow(QFrame, BusConnectedMixin):
 
         try:
             conn = self._live_conn()
-            unit_cost   = calc_cost(conn, item_id)
-            pricing_row = conn.execute(
-                "SELECT price FROM pricing WHERE item_id=?", (item_id,)
-            ).fetchone()
+            unit_cost   = get_item_cost(conn, item_id)
+            has_pricing = has_pricing_fn(conn, item_id)
+            unit_price  = get_item_price(conn, item_id) if has_pricing else 0.0
         except Exception:
             return
 
-        unit_price  = pricing_row["price"] if pricing_row else 0.0
-        has_pricing = pricing_row is not None
-
         self.lbl_cost.setText(f"{unit_cost:.2f}")
-        self.lbl_listed.setText(f"{unit_price:.2f}" if has_pricing else "─")
+        self.lbl_listed.setText(f"{unit_price:.2f}" if has_pricing else tr("empty_placeholder"))
         self.lbl_warn.setVisible(not has_pricing)
 
         line_total = unit_price * self.sp_qty.value()
-        self.lbl_line.setText(f"{line_total:.2f}" if has_pricing else "─")
+        self.lbl_line.setText(f"{line_total:.2f}" if has_pricing else tr("empty_placeholder"))
 
         if self._on_change:
             self._on_change()

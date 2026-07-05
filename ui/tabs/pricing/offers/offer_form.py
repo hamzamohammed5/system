@@ -16,20 +16,24 @@ from services.pricing.offers_service import (
     get_offer, get_offer_items,
     create_offer, modify_offer,
     save_offer_items,
+    get_item_price, get_item_cost,
 )
-from models.costing import calc_cost
 from ui.widgets.combo.category import CategoryCombo
 from ui.widgets.core.i18n import tr
 from ui.widgets.core.events import emit_company_data_changed
+from ui.widgets.core.widget_mixin import WidgetMixin
 from ui.theme import _C
 from ui.font import FS_XS, FS_BASE, FS_LG
 from ui.constants import (
-    FORM_LAYOUT_MARGIN, SPACING_MD, SPACING_SM, BTN_MIN_HEIGHT,
+    FORM_LAYOUT_MARGIN, SPACING_MD, SPACING_SM, SPACING_LG, SPACING_XS,
+    BTN_MIN_HEIGHT,
     TABLE_BORDER_RADIUS, STAT_BOX_BORDER_RADIUS, FILTER_COMBO_BORDER_RADIUS,
     STAT_CARD_MARGIN_NORMAL,
     OFFER_FORM_SCROLL_MIN_H, OFFER_FORM_SCROLL_MAX_H,
     OFFER_FORM_DISC_W, OFFER_FORM_CAT_W,
     OFFER_FORM_HDR_ICON_W, OFFER_FORM_HDR_DEL_W,
+    OFFER_FORM_HDR_SEARCH_W, OFFER_FORM_HDR_COST_W,
+    OFFER_FORM_HDR_PRICE_W, OFFER_FORM_HDR_QTY_W, OFFER_FORM_HDR_TOTAL_W,
 )
 
 from .offer_item_row import _OfferItemRow
@@ -52,13 +56,15 @@ def _spin(max_=999999, dec=2):
     return s
 
 
-class _OfferForm(QWidget):
+class _OfferForm(QWidget, WidgetMixin):
 
     def __init__(self, conn, parent=None):
         super().__init__(parent)
-        self._conn       = conn
-        self._editing_id = None
+        self._conn         = conn
+        self._editing_id   = None
+        self._editing_name = None
         self._item_rows: list[_OfferItemRow] = []
+        self._init_widget_mixin(theme=False, font=False, lang=True, data=False)
         self._build()
 
     # ── connection صالح دايماً ────────────────────────────
@@ -98,7 +104,7 @@ class _OfferForm(QWidget):
         h_lay.addWidget(self.lbl_mode)
 
         info_row = QHBoxLayout()
-        info_row.setSpacing(12)
+        info_row.setSpacing(SPACING_LG)
 
         lbl_name = QLabel(tr("offer_name_field"))
         lbl_name.setStyleSheet("font-weight:bold;")
@@ -139,7 +145,7 @@ class _OfferForm(QWidget):
         self.sp_discount.valueChanged.connect(self._update_totals)
 
         stats_row = QHBoxLayout()
-        stats_row.setSpacing(6)
+        stats_row.setSpacing(SPACING_SM)
         f1, self.lbl_total_listed = stat_box(tr("offer_total_before_disc"), "journal_dr_accent")
         f2, self.lbl_discount_amt = stat_box(tr("offer_discount_value"),    "danger_strong")
         f3, self.lbl_sell_price   = stat_box(tr("offer_sell_price"),        "success")
@@ -168,12 +174,12 @@ class _OfferForm(QWidget):
                 lbl.setFixedWidth(w)
             ch_lay.addWidget(lbl, stretch=stretch)
 
-        _hdr(tr("offer_header_search"), 120)
+        _hdr(tr("offer_header_search"), OFFER_FORM_HDR_SEARCH_W)
         _hdr(tr("offer_col_product"), stretch=1)
-        _hdr(tr("offer_col_unit_cost"), 72)
-        _hdr(tr("offer_col_unit_price"), 72)
-        _hdr(tr("offer_col_qty"), 85)
-        _hdr(tr("offer_header_total_col"), 80)
+        _hdr(tr("offer_col_unit_cost"), OFFER_FORM_HDR_COST_W)
+        _hdr(tr("offer_col_unit_price"), OFFER_FORM_HDR_PRICE_W)
+        _hdr(tr("offer_col_qty"), OFFER_FORM_HDR_QTY_W)
+        _hdr(tr("offer_header_total_col"), OFFER_FORM_HDR_TOTAL_W)
         _hdr("", OFFER_FORM_HDR_ICON_W)
         _hdr("", OFFER_FORM_HDR_DEL_W)
         root.addWidget(ch)
@@ -181,8 +187,8 @@ class _OfferForm(QWidget):
         self._rows_container = QWidget()
         self._rows_container.setStyleSheet("background:transparent;")
         self._rows_layout = QVBoxLayout(self._rows_container)
-        self._rows_layout.setSpacing(4)
-        self._rows_layout.setContentsMargins(0, 0, 4, 0)
+        self._rows_layout.setSpacing(SPACING_XS)
+        self._rows_layout.setContentsMargins(0, 0, SPACING_XS, 0)
         self._rows_layout.addStretch()
 
         scroll = QScrollArea()
@@ -237,6 +243,17 @@ class _OfferForm(QWidget):
 
         self._add_item_row()
 
+    def _refresh_lang(self, *_):
+        self.lbl_mode.setText(
+            tr("offer_edit_mode").format(name=self._editing_name)
+            if self._editing_id is not None and getattr(self, "_editing_name", None)
+            else tr("offer_new_mode")
+        )
+        self.inp_name.setPlaceholderText(tr("offer_name_placeholder"))
+        self.inp_notes.setPlaceholderText(tr("offer_notes_placeholder"))
+        self.btn_save.setText(tr("offer_save_btn"))
+        self.btn_cancel.setText(tr("offer_cancel_btn"))
+
     # ── إدارة الصفوف ─────────────────────────────────────
     def _add_item_row(self, item_id=None, qty=1.0):
         row = _OfferItemRow(
@@ -279,12 +296,8 @@ class _OfferForm(QWidget):
                 continue
             qty = row.get_qty()
             try:
-                pr = conn.execute(
-                    "SELECT price FROM pricing WHERE item_id=?", (item_id,)
-                ).fetchone()
-                if pr:
-                    total_listed += pr["price"] * qty
-                total_cost += calc_cost(conn, item_id) * qty
+                total_listed += get_item_price(conn, item_id) * qty
+                total_cost   += get_item_cost(conn, item_id) * qty
             except Exception:
                 pass
 
@@ -341,16 +354,17 @@ class _OfferForm(QWidget):
             conn = self._live_conn()
         except Exception:
             return
-        offer = fetch_offer(conn, offer_id)
+        offer = get_offer(conn, offer_id)
         if not offer:
             return
-        self._editing_id = offer_id
+        self._editing_id   = offer_id
+        self._editing_name = offer["name"]
         self.inp_name.setText(offer["name"])
         self.sp_discount.setValue(offer["discount"])
         self.inp_notes.setText(offer["notes"] or "")
         self.cmb_category.set_category(offer["category_id"])
         self._clear_rows()
-        for row in fetch_offer_items(conn, offer_id):
+        for row in get_offer_items(conn, offer_id):
             self._add_item_row(item_id=row["item_id"], qty=row["qty"])
         self.lbl_mode.setText(
             tr("offer_edit_mode").format(name=offer["name"])
@@ -359,7 +373,8 @@ class _OfferForm(QWidget):
         self._update_totals()
 
     def reset(self):
-        self._editing_id = None
+        self._editing_id   = None
+        self._editing_name = None
         self.inp_name.clear()
         self.sp_discount.setValue(0)
         self.inp_notes.clear()
@@ -370,4 +385,4 @@ class _OfferForm(QWidget):
         self.btn_cancel.setVisible(False)
         for lbl in (self.lbl_total_listed, self.lbl_discount_amt,
                     self.lbl_sell_price, self.lbl_total_cost, self.lbl_profit):
-            lbl.setText("─")
+            lbl.setText(tr("empty_placeholder"))
