@@ -7,11 +7,12 @@ ui/tabs/orders/orders_tab.py
 from ui.tabs.orders._order_detail                    import _OrderDetail
 from ui.tabs.orders.orders._orders_list_panel        import _OrdersListPanel
 from ui.widgets.base.section                         import BaseSection
+from ui.constants import ORDERS_LIST_MIN_W
 
 
 class OrdersTab(BaseSection):
 
-    LIST_MIN_W = 280
+    LIST_MIN_W = ORDERS_LIST_MIN_W
 
     def __init__(self, conn, parent=None):
         self._conn = conn

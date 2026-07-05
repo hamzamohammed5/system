@@ -8,11 +8,12 @@ from ui.tabs.orders._customer_form                   import _CustomerForm
 from ui.tabs.orders.customers.customers_list_panel   import CustomersListPanel
 from ui.tabs.orders.customers.customer_detail_panel  import CustomerDetailPanel
 from ui.widgets.base.section                         import BaseSection
+from ui.constants import CUSTOMERS_LIST_MIN_W
 
 
 class CustomersTab(BaseSection):
 
-    LIST_MIN_W = 300
+    LIST_MIN_W = CUSTOMERS_LIST_MIN_W
 
     def __init__(self, conn, parent=None):
         self._conn = conn

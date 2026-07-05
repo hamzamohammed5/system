@@ -35,7 +35,7 @@ from db.orders.orders_repo import (
     fetch_order, fetch_order_basic, delete_order_items_by_order,
     fetch_order_items, fetch_status_log,
     fetch_orders_summary_for_customer, fetch_orders_summary_all,
-    fetch_all_orders,
+    fetch_all_orders, cancel_order, fetch_orders_summary,
 )
 from db.orders.customers_repo import fetch_customer
 from db.costing.catalog_repo import fetch_priced_product_by_id
@@ -448,6 +448,48 @@ class OrderService:
         متخطّيةً طبقة الـ service — تم سد المخالفة هنا.
         """
         return fetch_all_orders(self._conn)
+
+    def get_order(self, order_id: int) -> "dict | None":
+        """
+        [مضاف] يرجع بيانات الطلب كاملة (مع بيانات العميل عبر JOIN)
+        — facade لـ UI بدل استدعاء fetch_order من
+        db.orders.orders_repo مباشرة. كانت ui/tabs/orders/_order_detail.py
+        تستورد من الـ repo مباشرة، متخطّيةً طبقة الـ service —
+        تم سد المخالفة هنا.
+        """
+        return fetch_order(self._conn, order_id)
+
+    def cancel(self, order_id: int, reason: str = "") -> bool:
+        """
+        [مضاف] يلغي الطلب — facade لـ UI بدل استدعاء cancel_order
+        من db.orders.orders_repo مباشرة. كانت
+        ui/tabs/orders/_order_detail.py تستورد من الـ repo مباشرة،
+        متخطّيةً طبقة الـ service — تم سد المخالفة هنا.
+        """
+        return cancel_order(self._conn, order_id, reason=reason)
+
+    def do_reorder(self, order_id: int) -> "int | None":
+        """
+        [مضاف] ينشئ طلباً جديداً بناءً على طلب سابق — facade لـ UI
+        بدل استدعاء reorder من db.orders.orders_repo مباشرة. كانت
+        ui/tabs/orders/_order_detail.py تستورد من الـ repo مباشرة،
+        متخطّيةً طبقة الـ service — تم سد المخالفة هنا.
+        """
+        return reorder(self._conn, order_id)
+
+    def get_dashboard_summary(self) -> dict:
+        """
+        [مضاف] يرجع إحصائيات لوحة المتابعة (dict خام بمفاتيح
+        الحالات والأولوية) — facade لـ UI بدل استدعاء
+        fetch_orders_summary من db.orders.orders_repo مباشرة. كانت
+        ui/tabs/orders/dashboard_tab.py تستورد من الـ repo مباشرة،
+        متخطّيةً طبقة الـ service — تم سد المخالفة هنا.
+
+        ملاحظة: تختلف عن get_summary() التي تُرجع OrderSummary
+        (dataclass مبسّط)؛ هذه الدالة تُبقي على شكل الـ dict الخام
+        المطلوب لملء بطاقات وشرائح لوحة المتابعة كما هي.
+        """
+        return fetch_orders_summary(self._conn)
 
     # ── Order Items (facade للـ UI) ───────────────────────
     # [مضاف] هذه الدوال أُضيفت لسد مخالفة هيكلية كانت موجودة في

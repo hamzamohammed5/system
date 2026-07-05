@@ -7,7 +7,7 @@ from PyQt5.QtWidgets import (
 )
 from PyQt5.QtCore import Qt
 
-from db.orders.orders_repo import fetch_order_items, insert_order_item, update_order_item
+from services.orders.order_service import OrderService
 from ui.widgets.components.button import make_btn
 from ui.widgets.theme.input_styles import input_style
 from ui.widgets.core.widget_mixin import WidgetMixin
@@ -17,10 +17,10 @@ from ui.font import FS_BASE, fs
 from ui.constants import (
     ITEM_FORM_MIN_W, ITEM_FORM_ROOT_MARGIN, ITEM_FORM_ROOT_SPACING,
     ITEM_FORM_FORM_SPACING, ITEM_FORM_HDR_RADIUS, ITEM_FORM_HDR_PAD,
-    ITEM_FORM_SPIN_H, ITEM_FORM_SPIN_MAX, ITEM_FORM_PRICE_MAX,
-    ITEM_FORM_QTY_MAX, ITEM_FORM_QTY_DEC, ITEM_FORM_DISCOUNT_MAX,
-    ITEM_FORM_TOTAL_RADIUS, ITEM_FORM_TOTAL_PAD_V, ITEM_FORM_TOTAL_PAD_H,
-    ITEM_FORM_SAVE_BTN_H,
+    ITEM_FORM_SPIN_MIN_H, ITEM_FORM_SPIN_MAX, ITEM_FORM_PRICE_MAX,
+    ITEM_FORM_QTY_MAX, ITEM_FORM_QTY_DECIMALS, ITEM_FORM_DISCOUNT_MAX,
+    ITEM_FORM_TOTAL_RADIUS, ITEM_FORM_TOTAL_PAD,
+    ITEM_FORM_SAVE_BTN_MIN_H,
 )
 
 
@@ -28,7 +28,7 @@ def _spin(min_=0, max_=ITEM_FORM_SPIN_MAX, dec=2, suffix=""):
     s = QDoubleSpinBox()
     s.setRange(min_, max_)
     s.setDecimals(dec)
-    s.setMinimumHeight(ITEM_FORM_SPIN_H)
+    s.setMinimumHeight(ITEM_FORM_SPIN_MIN_H)
     if suffix:
         s.setSuffix(f" {suffix}")
     return s
@@ -40,6 +40,7 @@ class _ItemForm(QDialog, WidgetMixin):
         self.conn     = conn
         self.order_id = order_id
         self.item_id  = item_id
+        self._svc     = OrderService(conn)
 
         self.setWindowTitle(tr("item_edit_title") if item_id else tr("item_add_title"))
         self.setMinimumWidth(ITEM_FORM_MIN_W)
@@ -62,7 +63,7 @@ class _ItemForm(QDialog, WidgetMixin):
             self._hdr_lbl.setStyleSheet(f"""
                 font-size: {fs(BASE, +1)}px; font-weight: bold; color: {C['accent_text']};
                 background: {C['accent_light']};
-                border-radius: {ITEM_FORM_HDR_RADIUS}px; padding: {ITEM_FORM_HDR_PAD}px;
+                border-radius: {ITEM_FORM_HDR_RADIUS}px; padding: {ITEM_FORM_HDR_PAD};
             """)
         if hasattr(self, 'lbl_total'):
             self.lbl_total.setStyleSheet(f"""
@@ -70,7 +71,7 @@ class _ItemForm(QDialog, WidgetMixin):
                 background: {C['accent_light']};
                 border: 1px solid {C['accent_mid']};
                 border-radius: {ITEM_FORM_TOTAL_RADIUS}px;
-                padding: {ITEM_FORM_TOTAL_PAD_V}px {ITEM_FORM_TOTAL_PAD_H}px;
+                padding: {ITEM_FORM_TOTAL_PAD};
             """)
 
     def _build(self):
@@ -93,7 +94,7 @@ class _ItemForm(QDialog, WidgetMixin):
         self.inp_desc.setPlaceholderText(tr("description"))
         form.addRow(tr("item_desc_lbl"), self.inp_desc)
 
-        self.sp_qty = _spin(min_=0.001, max_=ITEM_FORM_QTY_MAX, dec=ITEM_FORM_QTY_DEC)
+        self.sp_qty = _spin(min_=0.001, max_=ITEM_FORM_QTY_MAX, dec=ITEM_FORM_QTY_DECIMALS)
         self.sp_qty.setValue(1)
         form.addRow(tr("item_qty_lbl"), self.sp_qty)
 
@@ -125,7 +126,7 @@ class _ItemForm(QDialog, WidgetMixin):
         btn_cancel = make_btn(tr("cancel"), "ghost")
         btn_cancel.clicked.connect(self.reject)
         btn_save = make_btn(tr("item_save_btn"), "primary")
-        btn_save.setMinimumHeight(ITEM_FORM_SAVE_BTN_H)
+        btn_save.setMinimumHeight(ITEM_FORM_SAVE_BTN_MIN_H)
         btn_save.clicked.connect(self._save)
         btn_row.addWidget(btn_cancel)
         btn_row.addWidget(btn_save, stretch=1)
@@ -139,7 +140,7 @@ class _ItemForm(QDialog, WidgetMixin):
         self.lbl_total.setText(f"{total:,.2f} {tr('currency_sym')}")
 
     def _load(self):
-        items = fetch_order_items(self.conn, self.order_id)
+        items = self._svc.get_order_items(self.order_id)
         item  = next((i for i in items if i["id"] == self.item_id), None)
         if not item:
             return
@@ -169,16 +170,16 @@ class _ItemForm(QDialog, WidgetMixin):
         notes    = self.inp_notes.text().strip()
 
         if self.item_id:
-            update_order_item(
-                self.conn, self.item_id,
+            self._svc.update_item(
+                self.item_id,
                 item_name=name, description=desc,
                 quantity=qty, unit=unit,
                 unit_price=price, discount_pct=discount,
                 design_ref=ref, notes=notes,
             )
         else:
-            insert_order_item(
-                self.conn, self.order_id,
+            self._svc.add_item(
+                self.order_id,
                 item_name=name, description=desc,
                 quantity=qty, unit=unit,
                 unit_price=price, discount_pct=discount,

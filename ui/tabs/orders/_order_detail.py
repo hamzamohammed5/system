@@ -4,11 +4,7 @@ ui/tabs/orders/_order_detail.py
 from PyQt5.QtWidgets import QWidget, QVBoxLayout, QMessageBox, QDialog
 from PyQt5.QtCore import pyqtSignal
 
-from db.orders.orders_repo import (
-    fetch_order, fetch_order_items,
-    change_order_status, cancel_order, delete_order,
-    reorder as do_reorder, delete_order_item,
-)
+from services.orders.order_service import OrderService
 from ui.tabs.orders._order_form import _OrderForm
 from ui.tabs.orders._item_form  import _ItemForm
 from ui.widgets.base.detail_panel import BaseDetailPanel
@@ -38,6 +34,7 @@ class _OrderDetail(BaseDetailPanel, WidgetMixin):
     def __init__(self, conn, parent=None):
         self._order_id   = None
         self._order_data = None
+        self._svc        = OrderService(conn)
         super().__init__(conn=conn, parent=parent)
         self._init_widget_mixin(font=False, lang=False, data=False)
         self._refresh_style()
@@ -73,7 +70,7 @@ class _OrderDetail(BaseDetailPanel, WidgetMixin):
         _build_log_section(self)
 
     def _load_data(self, item_id: int):
-        return fetch_order(self.conn, item_id)
+        return self._svc.get_order(item_id)
 
     def _fill_data(self, data: dict):
         self._order_id   = self._item_id
@@ -118,7 +115,7 @@ class _OrderDetail(BaseDetailPanel, WidgetMixin):
         dlg = _StatusDialog(current, next_statuses, parent=self)
         if dlg.exec_() == QDialog.Accepted:
             new_status, note = dlg.get_result()
-            change_order_status(self.conn, self._order_id, new_status, note)
+            self._svc.change_status(self._order_id, new_status, note)
             self.status_changed.emit(self._order_id)
 
     def _cancel_order(self):
@@ -133,7 +130,7 @@ class _OrderDetail(BaseDetailPanel, WidgetMixin):
             tr("order_cancel_reason").format(number=d['order_number'])
         )
         if ok:
-            cancel_order(self.conn, self._order_id, reason)
+            self._svc.cancel(self._order_id, reason)
             self.status_changed.emit(self._order_id)
 
     def _delete_order(self):
@@ -145,7 +142,7 @@ class _OrderDetail(BaseDetailPanel, WidgetMixin):
             tr("order_delete_confirm").format(number=d['order_number']),
             QMessageBox.Yes | QMessageBox.No
         ) == QMessageBox.Yes:
-            if delete_order(self.conn, self._order_id):
+            if self._svc.delete(self._order_id):
                 self.deleted.emit()
             else:
                 QMessageBox.warning(self, tr("warning"), tr("order_delete_failed"))
@@ -159,7 +156,7 @@ class _OrderDetail(BaseDetailPanel, WidgetMixin):
             tr("order_reorder_confirm").format(number=d['order_number']),
             QMessageBox.Yes | QMessageBox.No
         ) == QMessageBox.Yes:
-            new_id = do_reorder(self.conn, self._order_id)
+            new_id = self._svc.do_reorder(self._order_id)
             if new_id:
                 self.load_order(new_id)
                 self.saved.emit(new_id)
@@ -200,14 +197,14 @@ class _OrderDetail(BaseDetailPanel, WidgetMixin):
             tr("delete_confirm_msg").format(name=name),
             QMessageBox.Yes | QMessageBox.No
         ) == QMessageBox.Yes:
-            delete_order_item(self.conn, item_id)
+            self._svc.remove_item(item_id)
             _fill_items(self)
             self._fill_header_amounts()
 
     def _fill_header_amounts(self):
         if not self._order_id:
             return
-        row = fetch_order(self.conn, self._order_id)
+        row = self._svc.get_order(self._order_id)
         self._order_data = dict(row) if row else None
         if self._order_data:
             from ui.theme import _C as C

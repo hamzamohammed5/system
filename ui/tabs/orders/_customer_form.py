@@ -8,10 +8,7 @@ from PyQt5.QtWidgets import (
 )
 from PyQt5.QtCore import Qt, pyqtSignal
 
-from db.orders.customers_repo import (
-    fetch_customer, insert_customer, update_customer,
-    fetch_contacts, insert_contact, update_contact, delete_contact,
-)
+from services.orders.customer_service import CustomerService
 from ui.widgets.tables.tables import (
     make_compact_table, make_item, insert_row, ROW_HEIGHT_COMPACT,
 )
@@ -65,6 +62,8 @@ class _CustomerForm(QDialog, WidgetMixin):
         self.conn        = conn
         self.customer_id = customer_id
         self._contacts   = []
+        self._deleted_contact_ids = []
+        self._svc        = CustomerService(conn)
 
         self.setWindowTitle(tr("customer_edit_title") if customer_id else tr("customer_new_title"))
         self.setMinimumWidth(CUSTOMER_FORM_MIN_W)
@@ -193,7 +192,7 @@ class _CustomerForm(QDialog, WidgetMixin):
         root.addLayout(btn_row)
 
     def _load(self):
-        c = fetch_customer(self.conn, self.customer_id)
+        c = self._svc.get_customer(self.customer_id)
         if not c:
             return
         self.inp_name.setText(c["name"])
@@ -207,7 +206,7 @@ class _CustomerForm(QDialog, WidgetMixin):
             if self.cmb_type.itemData(i) == c["customer_type"]:
                 self.cmb_type.setCurrentIndex(i)
                 break
-        self._contacts = list(fetch_contacts(self.conn, self.customer_id))
+        self._contacts = list(self._svc.list_contacts(self.customer_id))
         self._refresh_contacts_table()
 
     def _refresh_contacts_table(self):
@@ -236,7 +235,10 @@ class _CustomerForm(QDialog, WidgetMixin):
         row = self.contacts_table.currentRow()
         if row < 0:
             return
-        self._contacts.pop(row)
+        removed = self._contacts.pop(row)
+        cid = removed.get("id") if isinstance(removed, dict) else removed["id"]
+        if cid:
+            self._deleted_contact_ids.append(cid)
         self._refresh_contacts_table()
 
     def _save(self):
@@ -255,20 +257,35 @@ class _CustomerForm(QDialog, WidgetMixin):
         notes   = self.inp_notes.toPlainText().strip()
 
         if self.customer_id:
-            update_customer(self.conn, self.customer_id, name=name, customer_type=ctype,
+            self._svc.update(self.customer_id, name=name, customer_type=ctype,
                             phone=phone, phone2=phone2, email=email,
                             address=address, city=city, notes=notes)
             cid = self.customer_id
         else:
-            cid = insert_customer(self.conn, name=name, customer_type=ctype,
+            cid = self._svc.add(name=name, customer_type=ctype,
                                   phone=phone, phone2=phone2, email=email,
                                   address=address, city=city, notes=notes)
 
+        # [مفعّل] CustomerService أصبح يوفر الآن
+        # add_contact/update_contact/delete_contact — لذا لم يعد هناك
+        # حاجة لاستدعاء db.orders.customers_repo مباشرة من الـ UI؛
+        # الحفظ يمر بالكامل عبر طبقة الـ service.
+        for cid_to_del in self._deleted_contact_ids:
+            self._svc.delete_contact(cid_to_del)
+
         for ct in self._contacts:
-            if not ct.get("id"):
-                insert_contact(self.conn, cid, name=ct.get("name", ""),
-                               role=ct.get("role", ""), phone=ct.get("phone", ""),
-                               email=ct.get("email", ""), notes=ct.get("notes", ""))
+            if ct.get("id"):
+                self._svc.update_contact(
+                    ct["id"], name=ct.get("name", ""),
+                    role=ct.get("role", ""), phone=ct.get("phone", ""),
+                    email=ct.get("email", ""), notes=ct.get("notes", ""),
+                )
+            else:
+                self._svc.add_contact(
+                    cid, name=ct.get("name", ""),
+                    role=ct.get("role", ""), phone=ct.get("phone", ""),
+                    email=ct.get("email", ""), notes=ct.get("notes", ""),
+                )
 
         self.saved.emit(cid)
         self.accept()
