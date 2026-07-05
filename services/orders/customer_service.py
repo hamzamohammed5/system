@@ -41,6 +41,9 @@ from db.orders.customers_repo import (
     delete_customer, toggle_customer_active,
     fetch_customer_stats, fetch_contacts,
     insert_customer, update_customer,
+    insert_contact as _insert_contact,
+    update_contact as _update_contact,
+    delete_contact as _delete_contact,
 )
 from db.orders.orders_repo import fetch_customer_orders
 
@@ -145,3 +148,50 @@ class CustomerService:
         لتوفير نقطة دخول واحدة من UI بدل استدعاء orders_repo مباشرة.
         """
         return fetch_customer_orders(self.conn, customer_id)
+
+    # ────────────────────────────────────────────────────
+    # جهات الاتصال — كتابة
+    # ────────────────────────────────────────────────────
+
+    def add_contact(self, customer_id: int,
+                    name: str,
+                    role: str = "",
+                    phone: str = "",
+                    email: str = "",
+                    notes: str = "") -> int:
+        """
+        [مضاف] إضافة جهة اتصال لعميل موجود.
+
+        كانت insert_contact موجودة فعلاً في db.orders.customers_repo
+        لكن بدون غلاف في CustomerService، مما اضطر _customer_form.py
+        لتعطيل حفظ جهات الاتصال بالكامل (انظر التعليق القديم هناك)
+        التزاماً بمبدأ الطبقات وعدم استدعاء الـ repo مباشرة من UI.
+        """
+        name = name.strip()
+        if not name:
+            raise ValueError("اسم جهة الاتصال مطلوب")
+        return _insert_contact(
+            self.conn, customer_id,
+            name=name, role=role.strip(), phone=phone.strip(),
+            email=email.strip(), notes=notes.strip(),
+        )
+
+    def update_contact(self, contact_id: int,
+                       name: str,
+                       role: str = "",
+                       phone: str = "",
+                       email: str = "",
+                       notes: str = "") -> None:
+        """[مضاف] تعديل جهة اتصال موجودة."""
+        name = name.strip()
+        if not name:
+            raise ValueError("اسم جهة الاتصال مطلوب")
+        _update_contact(
+            self.conn, contact_id,
+            name=name, role=role.strip(), phone=phone.strip(),
+            email=email.strip(), notes=notes.strip(),
+        )
+
+    def delete_contact(self, contact_id: int) -> None:
+        """[مضاف] حذف جهة اتصال."""
+        _delete_contact(self.conn, contact_id)
