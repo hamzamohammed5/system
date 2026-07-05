@@ -13,10 +13,33 @@ Business Logic للطلبات والعملاء.
 
 إصلاح 34 محفوظ: كل الـ imports مزامَنة مع الدوال الفعلية في orders_repo.
 إصلاح 8 محفوظ:  item_name يُمرَّر من الـ caller — erp_conn اختياري فقط.
+
+[تعديل هيكلي]: أُزيل كل استدعاء SQL خام (conn.execute) من هذا الملف.
+  كل عملية قراءة/كتابة أصبحت تمر عبر db.orders.orders_repo أو
+  db.orders.customers_repo، حفاظاً على مبدأ الطبقات:
+      widgets -> tabs/UI -> services -> repos (db) -> schema
+  الدوال المتأثرة: _get_order_or_raise, _assert_customer_exists,
+  get_summary, get_delete_preview.
+  كذلك نُقلت كل imports من db.* إلى أعلى الملف بدل الاستيراد
+  الموضعي داخل كل دالة.
 """
 
 from dataclasses import dataclass, field
 import logging
+from datetime import datetime
+
+from db.orders.orders_repo import (
+    insert_order, update_order, insert_order_item,
+    update_order_item, delete_order_item,
+    change_order_status, delete_order, reorder,
+    fetch_order, fetch_order_basic, delete_order_items_by_order,
+    fetch_order_items, fetch_status_log,
+    fetch_orders_summary_for_customer, fetch_orders_summary_all,
+    fetch_all_orders,
+)
+from db.orders.customers_repo import fetch_customer
+from db.costing.catalog_repo import fetch_priced_product_by_id
+from services.orders.customer_service import CustomerService
 
 logger = logging.getLogger(__name__)
 
@@ -118,13 +141,17 @@ def resolve_product_info(erp_conn,
       1. التحقق من وجود المنتج.
       2. ملء item_name تلقائياً لو كان فارغاً.
       3. اقتراح unit_price من سعر المنتج لو كان صفراً.
+
+    [تعديل هيكلي] كان ينفذ SQL خام مباشرة على erp_conn
+    (erp_conn.execute("SELECT name, price FROM items WHERE id=?")),
+    متخطّياً طبقة الـ repo بالكامل. استُبدل بـ
+    fetch_priced_product_by_id من db.costing.catalog_repo، حفاظاً
+    على مبدأ الطبقات: widgets -> tabs/UI -> services -> repos -> schema.
     """
     if erp_conn is None or product_id is None:
         return None
     try:
-        row = erp_conn.execute(
-            "SELECT name, price FROM items WHERE id=?", (product_id,)
-        ).fetchone()
+        row = fetch_priced_product_by_id(erp_conn, product_id)
         if row:
             return {"name": row["name"] or "", "price": float(row["price"] or 0)}
     except Exception as e:
@@ -232,7 +259,6 @@ class OrderService:
 
         total = sum(i.total() for i in items)
 
-        from db.orders.orders_repo import insert_order, insert_order_item
         order_id = insert_order(
             self._conn,
             customer_id  = customer_id,
@@ -275,7 +301,6 @@ class OrderService:
 
         total = sum(i.total() for i in items)
 
-        from db.orders.orders_repo import update_order, insert_order_item
         update_order(
             self._conn,
             order_id     = order_id,
@@ -309,8 +334,6 @@ class OrderService:
                 f"لا يمكن الانتقال من «{old_status}» إلى «{new_status}»"
             )
 
-        from db.orders.orders_repo import change_order_status
-        from datetime import datetime
         timestamp = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
 
         change_order_status(
@@ -336,10 +359,7 @@ class OrderService:
     # ── Delete ────────────────────────────────────────────
 
     def get_delete_preview(self, order_id: int) -> "DeletePreview | None":
-        order = self._conn.execute(
-            "SELECT id, status, order_number FROM orders WHERE id=?",
-            (order_id,)
-        ).fetchone()
+        order = fetch_order_basic(self._conn, order_id)
         if not order:
             return None
 
@@ -366,25 +386,20 @@ class OrderService:
         preview = self.get_delete_preview(order_id)
         if not preview or not preview.can_delete:
             return False
-        from db.orders.orders_repo import delete_order
         return delete_order(self._conn, order_id)
 
     # ── Summary ───────────────────────────────────────────
 
     def get_summary(self, customer_id: int = None) -> OrderSummary:
-        where  = "WHERE customer_id=?" if customer_id else ""
-        params = (customer_id,) if customer_id else ()
-
-        row = self._conn.execute(f"""
-            SELECT
-                COUNT(*)                                              AS total,
-                COALESCE(SUM(net_amount), 0)                         AS amount,
-                SUM(CASE WHEN status='pending'     THEN 1 ELSE 0 END) AS pending,
-                SUM(CASE WHEN status='in_progress' THEN 1 ELSE 0 END) AS in_prog,
-                SUM(CASE WHEN status='delivered'   THEN 1 ELSE 0 END) AS done,
-                SUM(CASE WHEN status='cancelled'   THEN 1 ELSE 0 END) AS cancelled
-            FROM orders {where}
-        """, params).fetchone()
+        """
+        [تعديل هيكلي] كان ينفذ SQL خام مع WHERE ديناميكي.
+        استُبدل بدالتين ثابتتين في orders_repo:
+          fetch_orders_summary_for_customer / fetch_orders_summary_all
+        """
+        if customer_id:
+            row = fetch_orders_summary_for_customer(self._conn, customer_id)
+        else:
+            row = fetch_orders_summary_all(self._conn)
 
         if not row:
             return OrderSummary(0, 0.0, 0, 0, 0, 0)
@@ -398,55 +413,112 @@ class OrderService:
             cancelled     = row["cancelled"] or 0,
         )
 
-    # ── Customer ──────────────────────────────────────────
+    # ── Customer (facade على CustomerService) ─────────────
+    # [تعديل هيكلي] لم تعد هذه الدوال تنادي customers_repo مباشرة.
+    # CustomerService أصبح المالك الحصري لمنطق كتابة العميل؛
+    # هذه الدوال أُبقيت هنا فقط للتوافق مع أي كود قديم يستدعي
+    # OrderService.add_customer/update_customer، وهي الآن
+    # pass-through حقيقي (composition) بدل تكرار المنطق.
 
     def add_customer(self, name: str,
                      phone: str = "",
                      notes: str = "") -> int:
-        name = name.strip()
-        if not name:
-            raise ValueError("اسم العميل مطلوب")
-        from db.orders.customers_repo import insert_customer
-        return insert_customer(
-            self._conn,
-            name  = name,
-            phone = phone.strip(),
-            notes = notes.strip(),
+        return CustomerService(self._conn).add(
+            name=name, phone=phone, notes=notes,
         )
 
     def update_customer(self, customer_id: int,
                         name: str,
                         phone: str = "",
                         notes: str = "") -> None:
-        name = name.strip()
-        if not name:
-            raise ValueError("اسم العميل مطلوب")
-        from db.orders.customers_repo import update_customer
-        update_customer(
-            self._conn,
-            customer_id = customer_id,
-            name        = name,
-            phone       = phone.strip(),
-            notes       = notes.strip(),
+        CustomerService(self._conn).update(
+            customer_id=customer_id, name=name, phone=phone, notes=notes,
         )
 
     def get_customer_summary(self, customer_id: int) -> OrderSummary:
         return self.get_summary(customer_id=customer_id)
 
+    # ── Orders List (facade للـ UI) ───────────────────────
+
+    def list_orders(self) -> list:
+        """
+        [مضاف] يرجع كل الطلبات — facade لـ UI بدل استدعاء
+        fetch_all_orders من db.orders.orders_repo مباشرة.
+        كانت _orders_list_panel.py تستورد من الـ repo مباشرة،
+        متخطّيةً طبقة الـ service — تم سد المخالفة هنا.
+        """
+        return fetch_all_orders(self._conn)
+
+    # ── Order Items (facade للـ UI) ───────────────────────
+    # [مضاف] هذه الدوال أُضيفت لسد مخالفة هيكلية كانت موجودة في
+    # ui/tabs/orders/order_detail/_items_section.py و _log_section.py:
+    # الملفان كانا يستوردان من db.orders.orders_repo مباشرة،
+    # متخطّيَين طبقة الـ service بالكامل. الآن الـ UI يستدعي
+    # OrderService فقط، والـ service هو من يكلم الـ repo.
+
+    def get_order_items(self, order_id: int) -> list:
+        return fetch_order_items(self._conn, order_id)
+
+    def add_item(self, order_id: int,
+                item_name: str,
+                description: str = "",
+                quantity: float = 1,
+                unit: str = "قطعة",
+                unit_price: float = 0,
+                discount_pct: float = 0,
+                design_ref: str = "",
+                notes: str = "") -> int:
+        return insert_order_item(
+            self._conn, order_id,
+            item_name=item_name, description=description,
+            quantity=quantity, unit=unit, unit_price=unit_price,
+            discount_pct=discount_pct, design_ref=design_ref, notes=notes,
+        )
+
+    def update_item(self, item_id: int,
+                    item_name: str,
+                    description: str = "",
+                    quantity: float = 1,
+                    unit: str = "قطعة",
+                    unit_price: float = 0,
+                    discount_pct: float = 0,
+                    design_ref: str = "",
+                    notes: str = "") -> None:
+        update_order_item(
+            self._conn, item_id,
+            item_name=item_name, description=description,
+            quantity=quantity, unit=unit, unit_price=unit_price,
+            discount_pct=discount_pct, design_ref=design_ref, notes=notes,
+        )
+
+    def remove_item(self, item_id: int) -> None:
+        delete_order_item(self._conn, item_id)
+
+    # ── Status Log (facade للـ UI) ────────────────────────
+
+    def get_status_log(self, order_id: int) -> list:
+        return fetch_status_log(self._conn, order_id)
+
     # ── Helpers ───────────────────────────────────────────
 
     def _get_order_or_raise(self, order_id: int) -> dict:
-        row = self._conn.execute(
-            "SELECT * FROM orders WHERE id=?", (order_id,)
-        ).fetchone()
+        """
+        [تعديل هيكلي] كان ينفذ "SELECT * FROM orders" مباشرة.
+        استُبدل بـ fetch_order_basic من orders_repo — تكفي لكل
+        استخدامات هذه الدالة الداخلية (status/customer_id/إلخ)
+        دون حمل JOIN بيانات العميل الكاملة.
+        """
+        row = fetch_order_basic(self._conn, order_id)
         if not row:
             raise ValueError(f"الطلب {order_id} غير موجود")
         return row
 
     def _assert_customer_exists(self, customer_id: int) -> None:
-        row = self._conn.execute(
-            "SELECT id, is_active FROM customers WHERE id=?", (customer_id,)
-        ).fetchone()
+        """
+        [تعديل هيكلي] كان ينفذ SQL خام على جدول customers مباشرة.
+        استُبدل بـ fetch_customer من customers_repo.
+        """
+        row = fetch_customer(self._conn, customer_id)
         if not row:
             raise ValueError(f"العميل {customer_id} غير موجود")
         if not row["is_active"]:
@@ -455,7 +527,8 @@ class OrderService:
             )
 
     def _delete_order_items(self, order_id: int) -> None:
-        self._conn.execute(
-            "DELETE FROM order_items WHERE order_id=?", (order_id,)
-        )
-        self._conn.commit()
+        """
+        [تعديل هيكلي] كان ينفذ DELETE مباشرة على order_items.
+        استُبدل بـ delete_order_items_by_order من orders_repo.
+        """
+        delete_order_items_by_order(self._conn, order_id)

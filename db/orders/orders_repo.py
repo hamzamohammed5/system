@@ -131,6 +131,20 @@ def fetch_customer_orders(conn, customer_id: int) -> list:
     """, (customer_id,)).fetchall()
 
 
+def fetch_order_basic(conn, order_id: int):
+    """
+    نسخة خفيفة من fetch_order — بدون JOIN على customers/orders.
+    مخصصة لاستخدامات الـ service الداخلية التي تحتاج فقط
+    id/status/order_number/paid_amount/customer_id (تحقق، حذف، انتقال حالة)
+    دون تحميل بيانات العميل الكاملة.
+    """
+    return conn.execute("""
+        SELECT id, order_number, status, customer_id,
+               paid_amount, net_amount
+        FROM   orders WHERE id=?
+    """, (order_id,)).fetchone()
+
+
 # ══════════════════════════════════════════════════════════
 # إضافة / تعديل / إلغاء الطلبات
 # ══════════════════════════════════════════════════════════
@@ -431,6 +445,20 @@ def update_order_item(conn, item_id: int,
         _recalc_order_total(conn, row["order_id"])
 
 
+def delete_order_items_by_order(conn, order_id: int) -> None:
+    """
+    [مضاف] يحذف كل بنود طلب معيّن دفعة واحدة.
+    أُضيفت لدعم OrderService.update() الذي كان ينفذ
+    "DELETE FROM order_items WHERE order_id=?" مباشرة قبل إعادة
+    إدراج البنود المحدَّثة — نقلاً لهذا المنطق إلى طبقة الـ repo.
+    ملاحظة: لا تستدعي _recalc_order_total هنا عمداً، لأن الـ caller
+    (OrderService.update) يعيد إدراج البنود الجديدة بعدها مباشرة،
+    وinsert_order_item يعيد الحساب تلقائياً بنفسه.
+    """
+    conn.execute("DELETE FROM order_items WHERE order_id=?", (order_id,))
+    conn.commit()
+
+
 def delete_order_item(conn, item_id: int):
     row = conn.execute(
         "SELECT order_id FROM order_items WHERE id=?", (item_id,)
@@ -507,6 +535,39 @@ def fetch_orders_summary(conn) -> dict:
             SUM(CASE WHEN priority='urgent'    THEN 1 ELSE 0 END)     AS urgent,
             SUM(net_amount)                                            AS total_value,
             SUM(paid_amount)                                           AS total_paid
+        FROM orders
+    """).fetchone()
+    return dict(row) if row else {}
+
+
+def fetch_orders_summary_for_customer(conn, customer_id: int) -> dict:
+    """
+    [مضاف] فلترة بعميل، لنقل منطق get_summary(customer_id=...) من
+    OrderService (كان SQL خام) إلى الـ repo — UI -> services -> repos.
+    """
+    row = conn.execute("""
+        SELECT
+            COUNT(*)                                              AS total,
+            COALESCE(SUM(net_amount), 0)                         AS amount,
+            SUM(CASE WHEN status='pending'     THEN 1 ELSE 0 END) AS pending,
+            SUM(CASE WHEN status='in_progress' THEN 1 ELSE 0 END) AS in_prog,
+            SUM(CASE WHEN status='delivered'   THEN 1 ELSE 0 END) AS done,
+            SUM(CASE WHEN status='cancelled'   THEN 1 ELSE 0 END) AS cancelled
+        FROM orders WHERE customer_id=?
+    """, (customer_id,)).fetchone()
+    return dict(row) if row else {}
+
+
+def fetch_orders_summary_all(conn) -> dict:
+    """[مضاف] نفس أعمدة fetch_orders_summary_for_customer بدون فلترة."""
+    row = conn.execute("""
+        SELECT
+            COUNT(*)                                              AS total,
+            COALESCE(SUM(net_amount), 0)                         AS amount,
+            SUM(CASE WHEN status='pending'     THEN 1 ELSE 0 END) AS pending,
+            SUM(CASE WHEN status='in_progress' THEN 1 ELSE 0 END) AS in_prog,
+            SUM(CASE WHEN status='delivered'   THEN 1 ELSE 0 END) AS done,
+            SUM(CASE WHEN status='cancelled'   THEN 1 ELSE 0 END) AS cancelled
         FROM orders
     """).fetchone()
     return dict(row) if row else {}

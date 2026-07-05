@@ -13,11 +13,14 @@ CustomerService — طبقة الخدمة لعملاء نظام الطلبات (
 
 مبدأ العزل المعماري:
   - هذا الملف هو الوحيد المسموح له باستدعاء db.orders.customers_repo
-    من أجل قراءة/تعديل بيانات العميل نفسه.
-  - إنشاء/تعديل العميل (add_customer/update_customer) موجودان بالفعل
-    في services.orders.order_service.OrderService — لم يُكرَّرا هنا
-    تجنباً لتشتت منطق الكتابة بين ملفين؛ هذا الملف يوفرهما كـ
-    pass-through لراحة الاستخدام من نفس الواجهة.
+    من أجل قراءة/تعديل/إنشاء بيانات العميل نفسه.
+  - [تعديل هيكلي] add_customer/update_customer نُقلا فعلياً إلى هذا
+    الملف (لم يعودا pass-through على OrderService). كانت النسخة
+    القديمة تعتمد على أن يذهب أي مستخدم لـ CustomerService لإنشاء
+    عميل جديد إلى OrderService بدلاً منه، رغم أن CustomerService
+    يدّعي أنه "نقطة الدخول الوحيدة" — تناقض تم حله بجعل هذا الملف
+    المالك الحصري لعمليات الكتابة الخاصة بالعميل، بينما OrderService
+    أصبح يستدعي CustomerService (composition) بدل تكرار المنطق.
   - طلبات العميل (fetch_customer_orders) تنتمي لدومين الطلبات
     (db.orders.orders_repo) لا دومين العملاء — تُغطى هنا بدالة facade
     فقط لتجنّب استدعاء db.orders.orders_repo مباشرة من UI؛ المنطق
@@ -37,6 +40,7 @@ from db.orders.customers_repo import (
     fetch_customer, fetch_all_customers,
     delete_customer, toggle_customer_active,
     fetch_customer_stats, fetch_contacts,
+    insert_customer, update_customer,
 )
 from db.orders.orders_repo import fetch_customer_orders
 
@@ -73,6 +77,56 @@ class CustomerService:
     # ────────────────────────────────────────────────────
     # كتابة
     # ────────────────────────────────────────────────────
+
+    def add(self, name: str,
+           customer_type: str = "individual",
+           phone: str = "",
+           phone2: str = "",
+           email: str = "",
+           address: str = "",
+           city: str = "",
+           notes: str = "") -> int:
+        """
+        [مضاف] إنشاء عميل جديد.
+        نُقلت هنا من OrderService.add_customer — هذا الملف هو
+        المالك الحصري لعمليات الكتابة الخاصة بالعميل الآن.
+        """
+        name = name.strip()
+        if not name:
+            raise ValueError("اسم العميل مطلوب")
+        return insert_customer(
+            self.conn,
+            name=name, customer_type=customer_type,
+            phone=phone.strip(), phone2=phone2.strip(),
+            email=email.strip(), address=address.strip(),
+            city=city.strip(), notes=notes.strip(),
+        )
+
+    def update(self, customer_id: int,
+              name: str,
+              customer_type: str = "individual",
+              phone: str = "",
+              phone2: str = "",
+              email: str = "",
+              address: str = "",
+              city: str = "",
+              notes: str = "",
+              is_active: int = 1) -> None:
+        """
+        [مضاف] تعديل بيانات عميل موجود.
+        نُقلت هنا من OrderService.update_customer لنفس السبب أعلاه.
+        """
+        name = name.strip()
+        if not name:
+            raise ValueError("اسم العميل مطلوب")
+        update_customer(
+            self.conn, customer_id,
+            name=name, customer_type=customer_type,
+            phone=phone.strip(), phone2=phone2.strip(),
+            email=email.strip(), address=address.strip(),
+            city=city.strip(), notes=notes.strip(),
+            is_active=is_active,
+        )
 
     def delete(self, customer_id: int) -> bool:
         return delete_customer(self.conn, customer_id)

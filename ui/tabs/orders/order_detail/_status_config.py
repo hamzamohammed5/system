@@ -7,13 +7,13 @@ from ui.widgets.core.i18n import tr
 
 def get_status_labels() -> dict:
     return {
-        "pending":     (f"⏳ {tr('status_pending')}",     _C['warning'],  _C['warning_bg'],  _C['warning_border']),
-        "confirmed":   (f"✅ {tr('status_confirmed')}",   _C['accent'],   _C['accent_light'],_C['accent_mid']),
-        "in_progress": (f"🔧 {tr('status_in_progress')}", _C['purple'],   _C['purple_bg'],   _C['purple_border']),
-        "ready":       (f"📦 {tr('status_ready')}",       _C['success'],  _C['success_bg'],  _C['success_border']),
-        "delivered":   (f"🚚 {tr('status_delivered')}",   _C['text_sec'], _C['bg_surface_2'],_C['border']),
-        "cancelled":   (f"❌ {tr('status_cancelled')}",   _C['danger'],   _C['danger_bg'],   _C['danger_border']),
-        "on_hold":     (f"⏸ {tr('status_on_hold')}",     _C['orange'],   _C['orange_bg'],   _C['orange_border']),
+        "pending":     (f"{tr('status_pending_icon')} {tr('status_pending')}",     _C['warning'],  _C['warning_bg'],  _C['warning_border']),
+        "confirmed":   (f"{tr('status_confirmed_icon')} {tr('status_confirmed')}",   _C['accent'],   _C['accent_light'],_C['accent_mid']),
+        "in_progress": (f"{tr('status_in_progress_icon')} {tr('status_in_progress')}", _C['purple'],   _C['purple_bg'],   _C['purple_border']),
+        "ready":       (f"{tr('status_ready_icon')} {tr('status_ready')}",       _C['success'],  _C['success_bg'],  _C['success_border']),
+        "delivered":   (f"{tr('status_delivered_icon')} {tr('status_delivered')}",   _C['text_sec'], _C['bg_surface_2'],_C['border']),
+        "cancelled":   (f"{tr('status_cancelled_icon')} {tr('status_cancelled')}",   _C['danger'],   _C['danger_bg'],   _C['danger_border']),
+        "on_hold":     (f"{tr('status_on_hold_icon')} {tr('status_on_hold')}",     _C['orange'],   _C['orange_bg'],   _C['orange_border']),
     }
 
 

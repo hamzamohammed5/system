@@ -12,6 +12,7 @@ from db.orders.orders_repo import (
 from ui.tabs.orders._order_form import _OrderForm
 from ui.tabs.orders._item_form  import _ItemForm
 from ui.widgets.base.detail_panel import BaseDetailPanel
+from ui.widgets.core.widget_mixin import WidgetMixin
 from ui.widgets.core.i18n import tr
 from ui.theme import _C
 
@@ -22,25 +23,37 @@ from ui.tabs.orders.order_detail._status_config import STATUS_TRANSITIONS
 from ui.tabs.orders.order_detail._status_dialog import _StatusDialog
 
 
-class _OrderDetail(BaseDetailPanel):
+class _OrderDetail(BaseDetailPanel, WidgetMixin):
     saved          = pyqtSignal(int)
     deleted        = pyqtSignal()
     status_changed = pyqtSignal(int)
 
-    EMPTY_ICON     = "📋"
     EMPTY_TITLE    = "order_select_first"      # مفتاح tr
     EMPTY_SUBTITLE = "order_select_subtitle"   # مفتاح tr
+
+    @property
+    def EMPTY_ICON(self) -> str:
+        return tr("empty_icon_table")
 
     def __init__(self, conn, parent=None):
         self._order_id   = None
         self._order_data = None
         super().__init__(conn=conn, parent=parent)
+        self._init_widget_mixin(font=False, lang=False, data=False)
+        self._refresh_style()
+
+    def _refresh_style(self, *_):
+        from ui.theme import _C as C
+        if self._order_data:
+            remain = (self._order_data.get("net_amount") or 0) - (self._order_data.get("paid_amount") or 0)
+            if hasattr(self, "_card_balance"):
+                self._card_balance.set_color(C['danger'] if remain > 0 else C['success'])
 
     def _build_header_cards(self):
-        self._card_total   = self._hdr.add_stat_card("💰", tr("order_header_total"),  color=_C['accent'])
-        self._card_paid    = self._hdr.add_stat_card("✅", tr("order_header_paid"),   color=_C['success'])
-        self._card_balance = self._hdr.add_stat_card("⚖️", tr("order_header_balance"),color=_C['danger'])
-        self._card_due     = self._hdr.add_stat_card("📅", tr("order_header_due"),    color=_C['warning'])
+        self._card_total   = self._hdr.add_stat_card(tr("order_icon_total"),   tr("order_header_total"),   color=_C['accent'])
+        self._card_paid    = self._hdr.add_stat_card(tr("order_icon_paid"),    tr("order_header_paid"),    color=_C['success'])
+        self._card_balance = self._hdr.add_stat_card(tr("order_icon_balance"), tr("order_header_balance"), color=_C['danger'])
+        self._card_due     = self._hdr.add_stat_card(tr("order_icon_due"),     tr("order_header_due"),     color=_C['warning'])
 
     def _build_header_buttons(self):
         self.btn_edit    = self._hdr.toolbar.add_action(tr("order_edit_btn"),          "primary")
@@ -197,13 +210,14 @@ class _OrderDetail(BaseDetailPanel):
         row = fetch_order(self.conn, self._order_id)
         self._order_data = dict(row) if row else None
         if self._order_data:
+            from ui.theme import _C as C
             net    = self._order_data.get("net_amount")  or 0
             paid   = self._order_data.get("paid_amount") or 0
             remain = net - paid
             self._card_total.set_value(f"{net:,.2f} {tr('currency_sym')}")
             self._card_paid.set_value(f"{paid:,.2f} {tr('currency_sym')}")
             self._card_balance.set_value(f"{remain:,.2f} {tr('currency_sym')}")
-            self._card_balance.set_color(_C['danger'] if remain > 0 else _C['success'])
+            self._card_balance.set_color(C['danger'] if remain > 0 else C['success'])
 
 
 def _get_text_input(parent, title, prompt):

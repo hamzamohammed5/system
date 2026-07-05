@@ -24,10 +24,10 @@ def _fill_header(detail):
     pri_lbl, pri_color = PRIORITY_LABELS.get(d["priority"], ("", _C['text_muted']))
     detail._hdr.set_priority_badge(pri_lbl, pri_color)
 
-    customer_line = f"👤  {d['customer_name']}  ({d['customer_code']})"
+    customer_line = f"{tr('order_customer_icon')}  {d['customer_name']}  ({d['customer_code']})"
     info_parts = []
-    if d.get("customer_phone"): info_parts.append(f"📞 {d['customer_phone']}")
-    if d.get("customer_city"):  info_parts.append(f"📍 {d['customer_city']}")
+    if d.get("customer_phone"): info_parts.append(f"{tr('order_phone_icon')} {d['customer_phone']}")
+    if d.get("customer_city"):  info_parts.append(f"{tr('order_city_icon')} {d['customer_city']}")
 
     detail._hdr.set_customer_name(customer_line)
     detail._hdr.set_info(info_parts)

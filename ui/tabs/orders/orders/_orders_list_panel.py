@@ -4,13 +4,17 @@ ui/tabs/orders/orders/_orders_list_panel.py
 from PyQt5.QtWidgets import QSizePolicy, QVBoxLayout
 from PyQt5.QtCore    import Qt, pyqtSignal
 
-from db.orders.orders_repo import fetch_all_orders
+from services.orders.order_service import OrderService
 from ui.widgets.base.list_panel import BaseListPanel
 from ui.widgets.tables.tables import (
     make_item, colored_item, bold_item, muted_item, auto_fit_columns,
 )
 from ui.widgets.core.i18n import tr
 from ui.theme import _C
+from ui.constants import (
+    ORDERS_LIST_COL_WIDTHS, ORDERS_LIST_MIN_W, ORDERS_LIST_MAX_W,
+    ORDERS_LIST_AUTOFIT_MIN_W, ORDERS_LIST_AUTOFIT_MAX_W,
+)
 
 from ._filter_toolbar  import _FilterToolbar
 from ._status_delegate import _StatusDelegate
@@ -23,11 +27,20 @@ class _OrdersListPanel(BaseListPanel):
 
     COLUMNS     = []   # تُبنى ديناميكياً في __init__
     STRETCH_COL = -1
-    COL_WIDTHS  = {0: 130, 1: 150, 2: 100, 3: 32, 4: 90}
-    MIN_W       = 280
-    MAX_W       = 560
-    EMPTY_ICON  = "📋"
+    COL_WIDTHS  = ORDERS_LIST_COL_WIDTHS
+    MIN_W       = ORDERS_LIST_MIN_W
+    MAX_W       = ORDERS_LIST_MAX_W
     EMPTY_TITLE = "no_orders"   # مفتاح tr
+
+    @property
+    def EMPTY_ICON(self) -> str:
+        """
+        [تعديل هيكلي] كانت class attribute ثابتة (\"📋\") تُقرأ وقت
+        الـ import. أصبحت الآن property تستدعي tr() في كل مرة تُقرأ
+        فيها — اتساقاً مع بقية الملف رغم أن قيمة الأيقونة نفسها
+        متطابقة حالياً في ar.py وen.py (empty_icon_table).
+        """
+        return tr("empty_icon_table")
 
     def __init__(self, conn, parent=None):
         self.COLUMNS = [
@@ -46,7 +59,7 @@ class _OrdersListPanel(BaseListPanel):
         lay.addWidget(self._filter_bar)
 
     def _load_rows(self) -> list:
-        return fetch_all_orders(self.conn)
+        return OrderService(self.conn).list_orders()
 
     def _match_filter(self, row, q: str) -> bool:
         if not hasattr(self, '_filter_bar'):
@@ -66,7 +79,7 @@ class _OrdersListPanel(BaseListPanel):
 
         num_item = make_item(row["order_number"], user_data=row["id"])
         bold_item(num_item)
-        colored_item(row["order_number"], _C['accent'])
+        colored_item(num_item, _C['accent'])
         table.setItem(r, 0, num_item)
 
         table.setItem(r, 1, make_item(row["customer_name"], tooltip=row["customer_name"]))
@@ -92,8 +105,8 @@ class _OrdersListPanel(BaseListPanel):
             self.table,
             fixed_cols=list(self.COL_WIDTHS.keys()),
             stretch_col=self.STRETCH_COL,
-            min_width=30,
-            max_width=300,
+            min_width=ORDERS_LIST_AUTOFIT_MIN_W,
+            max_width=ORDERS_LIST_AUTOFIT_MAX_W,
         )
 
     def select_order(self, order_id: int):

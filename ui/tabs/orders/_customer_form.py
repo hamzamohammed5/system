@@ -17,9 +17,24 @@ from ui.widgets.tables.tables import (
 )
 from ui.widgets.components.button import make_btn
 from ui.widgets.theme.input_styles import input_style
+from ui.widgets.core.widget_mixin import WidgetMixin
 from ui.widgets.core.i18n import tr
 from ui.theme import _C
-from ui.font import FS_BASE, FS_SM
+from ui.font import FS_BASE, FS_SM, fs
+from ui.constants import (
+    CUSTOMER_FORM_MIN_W, CUSTOMER_FORM_MIN_H,
+    CUSTOMER_FORM_ROOT_MARGIN, CUSTOMER_FORM_ROOT_SPACING,
+    CUSTOMER_FORM_FORM_SPACING, CUSTOMER_FORM_GRP_RADIUS,
+    CUSTOMER_FORM_GRP_MARGIN_T, CUSTOMER_FORM_GRP_PAD_TOP,
+    CUSTOMER_FORM_GRP_TITLE_PAD, CUSTOMER_FORM_GRP_TITLE_R,
+    CUSTOMER_FORM_NOTES_MAX_H, CUSTOMER_FORM_CONTACTS_MAX_H,
+    CUSTOMER_FORM_CONTACTS_SPACING, CUSTOMER_FORM_SAVE_BTN_MIN_H,
+    CUSTOMER_FORM_HDR_RADIUS, CUSTOMER_FORM_HDR_PAD,
+    CONTACT_DLG_MIN_W, CONTACT_DLG_ROOT_MARGIN,
+    CONTACT_DLG_ROOT_SPACING, CONTACT_DLG_FORM_SPACING,
+    CUSTOMER_FORM_CONTACTS_COL1_W, CUSTOMER_FORM_CONTACTS_COL2_W,
+    CUSTOMER_FORM_CONTACTS_COL3_W, CUSTOMER_FORM_CONTACTS_COL4_W,
+)
 
 
 def _group_ss() -> str:
@@ -28,21 +43,21 @@ def _group_ss() -> str:
             font-weight: bold;
             color: {_C['text_sec']};
             border: 1px solid {_C['border']};
-            border-radius: 8px;
-            margin-top: 8px;
-            padding-top: 8px;
+            border-radius: {CUSTOMER_FORM_GRP_RADIUS}px;
+            margin-top: {CUSTOMER_FORM_GRP_MARGIN_T}px;
+            padding-top: {CUSTOMER_FORM_GRP_PAD_TOP}px;
             background: {_C['bg_surface']};
         }}
         QGroupBox::title {{
             subcontrol-origin: margin;
-            right: 12px; padding: 0 4px;
+            right: {CUSTOMER_FORM_GRP_TITLE_R}px; padding: 0 {CUSTOMER_FORM_GRP_TITLE_PAD}px;
             font-size: {FS_SM}px;
             color: {_C['accent']};
         }}
     """
 
 
-class _CustomerForm(QDialog):
+class _CustomerForm(QDialog, WidgetMixin):
     saved = pyqtSignal(int)
 
     def __init__(self, conn, customer_id: int = None, parent=None):
@@ -52,31 +67,58 @@ class _CustomerForm(QDialog):
         self._contacts   = []
 
         self.setWindowTitle(tr("customer_edit_title") if customer_id else tr("customer_new_title"))
-        self.setMinimumWidth(580)
-        self.setMinimumHeight(620)
+        self.setMinimumWidth(CUSTOMER_FORM_MIN_W)
+        self.setMinimumHeight(CUSTOMER_FORM_MIN_H)
         self.setModal(True)
+        self._init_widget_mixin(font=False, lang=False, data=False)
         self._build()
+        self._refresh_style()
         if customer_id:
             self._load()
 
-    def _build(self):
-        root = QVBoxLayout(self)
-        root.setContentsMargins(20, 18, 20, 18)
-        root.setSpacing(14)
-
-        hdr = QLabel(tr("customer_edit_title") if self.customer_id else tr("customer_new_title"))
-        hdr.setStyleSheet(f"""
-            font-size: {FS_BASE + 2}px; font-weight: bold; color: {_C['accent_text']};
-            background: {_C['accent_light']};
-            border-radius: 8px; padding: 8px 14px;
-        """)
-        root.addWidget(hdr)
+    def _refresh_style(self, *_):
+        from ui.theme import _C as C
+        from ui.font import FS_BASE as BASE, FS_SM as SM
+        self._grp_ss_cache = f"""
+            QGroupBox {{
+                font-weight: bold;
+                color: {C['text_sec']};
+                border: 1px solid {C['border']};
+                border-radius: {CUSTOMER_FORM_GRP_RADIUS}px;
+                margin-top: {CUSTOMER_FORM_GRP_MARGIN_T}px;
+                padding-top: {CUSTOMER_FORM_GRP_PAD_TOP}px;
+                background: {C['bg_surface']};
+            }}
+            QGroupBox::title {{
+                subcontrol-origin: margin;
+                right: {CUSTOMER_FORM_GRP_TITLE_R}px; padding: 0 {CUSTOMER_FORM_GRP_TITLE_PAD}px;
+                font-size: {SM}px;
+                color: {C['accent']};
+            }}
+        """
+        if hasattr(self, '_basic_grp'):
+            self._basic_grp.setStyleSheet(self._grp_ss_cache)
+        if hasattr(self, '_contacts_grp'):
+            self._contacts_grp.setStyleSheet(self._grp_ss_cache)
+        if hasattr(self, '_hdr_lbl'):
+            self._hdr_lbl.setStyleSheet(f"""
+                font-size: {fs(BASE, +2)}px; font-weight: bold; color: {C['accent_text']};
+                background: {C['accent_light']};
+                border-radius: {CUSTOMER_FORM_HDR_RADIUS}px; padding: {CUSTOMER_FORM_HDR_PAD}px;
+            """)
         self.setStyleSheet(input_style())
 
-        basic_grp = QGroupBox(tr("customer_basic_section"))
-        basic_grp.setStyleSheet(_group_ss())
-        form = QFormLayout(basic_grp)
-        form.setSpacing(10)
+    def _build(self):
+        root = QVBoxLayout(self)
+        root.setContentsMargins(*CUSTOMER_FORM_ROOT_MARGIN)
+        root.setSpacing(CUSTOMER_FORM_ROOT_SPACING)
+
+        self._hdr_lbl = QLabel(tr("customer_edit_title") if self.customer_id else tr("customer_new_title"))
+        root.addWidget(self._hdr_lbl)
+
+        self._basic_grp = QGroupBox(tr("customer_basic_section"))
+        form = QFormLayout(self._basic_grp)
+        form.setSpacing(CUSTOMER_FORM_FORM_SPACING)
         form.setLabelAlignment(Qt.AlignRight)
 
         self.inp_name = QLineEdit()
@@ -104,15 +146,14 @@ class _CustomerForm(QDialog):
         form.addRow(tr("customer_address_lbl"), self.inp_address)
 
         self.inp_notes = QTextEdit()
-        self.inp_notes.setMaximumHeight(70)
+        self.inp_notes.setMaximumHeight(CUSTOMER_FORM_NOTES_MAX_H)
         form.addRow(tr("customer_notes_lbl"), self.inp_notes)
 
-        root.addWidget(basic_grp)
+        root.addWidget(self._basic_grp)
 
-        contacts_grp = QGroupBox(tr("customer_contacts_section"))
-        contacts_grp.setStyleSheet(_group_ss())
-        c_lay = QVBoxLayout(contacts_grp)
-        c_lay.setSpacing(8)
+        self._contacts_grp = QGroupBox(tr("customer_contacts_section"))
+        c_lay = QVBoxLayout(self._contacts_grp)
+        c_lay.setSpacing(CUSTOMER_FORM_CONTACTS_SPACING)
 
         self.contacts_table = make_compact_table(
             columns=[
@@ -120,8 +161,13 @@ class _CustomerForm(QDialog):
                 tr("contact_phone_lbl"), tr("contact_email_lbl"), tr("contact_notes_lbl"),
             ],
             stretch_col=0,
-            col_widths={1: 80, 2: 100, 3: 120, 4: 120},
-            max_height=150,
+            col_widths={
+                1: CUSTOMER_FORM_CONTACTS_COL1_W,
+                2: CUSTOMER_FORM_CONTACTS_COL2_W,
+                3: CUSTOMER_FORM_CONTACTS_COL3_W,
+                4: CUSTOMER_FORM_CONTACTS_COL4_W,
+            },
+            max_height=CUSTOMER_FORM_CONTACTS_MAX_H,
         )
         c_lay.addWidget(self.contacts_table)
 
@@ -134,13 +180,13 @@ class _CustomerForm(QDialog):
         c_btn_row.addWidget(btn_del_c)
         c_btn_row.addStretch()
         c_lay.addLayout(c_btn_row)
-        root.addWidget(contacts_grp)
+        root.addWidget(self._contacts_grp)
 
         btn_row = QHBoxLayout()
         btn_cancel = make_btn(tr("cancel"), "ghost")
         btn_cancel.clicked.connect(self.reject)
         btn_save = make_btn(tr("customer_save_btn"), "primary")
-        btn_save.setMinimumHeight(38)
+        btn_save.setMinimumHeight(CUSTOMER_FORM_SAVE_BTN_MIN_H)
         btn_save.clicked.connect(self._save)
         btn_row.addWidget(btn_cancel)
         btn_row.addWidget(btn_save, stretch=1)
@@ -228,24 +274,28 @@ class _CustomerForm(QDialog):
         self.accept()
 
 
-class _ContactDialog(QDialog):
+class _ContactDialog(QDialog, WidgetMixin):
     def __init__(self, data: dict = None, parent=None):
         super().__init__(parent)
         self.setWindowTitle(tr("contact_title"))
-        self.setMinimumWidth(400)
+        self.setMinimumWidth(CONTACT_DLG_MIN_W)
         self.setModal(True)
+        self._init_widget_mixin(font=False, lang=False, data=False)
         self._build()
+        self._refresh_style()
         if data:
             self._load(data)
 
-    def _build(self):
-        root = QVBoxLayout(self)
-        root.setContentsMargins(16, 16, 16, 16)
-        root.setSpacing(10)
+    def _refresh_style(self, *_):
         self.setStyleSheet(input_style())
 
+    def _build(self):
+        root = QVBoxLayout(self)
+        root.setContentsMargins(*CONTACT_DLG_ROOT_MARGIN)
+        root.setSpacing(CONTACT_DLG_ROOT_SPACING)
+
         form = QFormLayout()
-        form.setSpacing(8)
+        form.setSpacing(CONTACT_DLG_FORM_SPACING)
         form.setLabelAlignment(Qt.AlignRight)
 
         self.inp_name  = QLineEdit(); form.addRow(tr("contact_name_lbl"),  self.inp_name)

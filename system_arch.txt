@@ -1,5 +1,5 @@
 File Tree Snapshot
-Generated : 2026-07-05 10:22:00
+Generated : 2026-07-05 13:44:16
 Source    : D:\My Workspace\Hg\Alhabaar\accountant\system
 Extensions: .md, .py
 ────────────────────────────────────────────────────────────
@@ -40,6 +40,7 @@ system/
 │   │   ├── inventory_repo.py
 │   │   └── inventory_schema.py
 │   ├── orders/
+│   │   ├── catalog_repo.py
 │   │   ├── customers_repo.py
 │   │   ├── orders_repo.py
 │   │   └── orders_schema.py
@@ -104,6 +105,7 @@ system/
 │   ├── inventory/
 │   │   └── inventory_service.py
 │   ├── orders/
+│   │   ├── catalog_service.py
 │   │   ├── customer_service.py
 │   │   └── order_service.py
 │   └── shared/
@@ -290,8 +292,7 @@ system/
 │   │   │   │   ├── _status_config.py
 │   │   │   │   └── _status_dialog.py
 │   │   │   ├── order_form/
-│   │   │   │   ├── _item_row_widget.py
-│   │   │   │   └── _products_fetcher.py
+│   │   │   │   └── _item_row_widget.py
 │   │   │   ├── orders/
 │   │   │   │   ├── _filter_toolbar.py
 │   │   │   │   ├── _orders_list_panel.py

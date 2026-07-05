@@ -3,7 +3,6 @@ ui/tabs/orders/order_detail/_log_section.py
 """
 from PyQt5.QtCore import Qt
 
-from db.orders.orders_repo import fetch_status_log
 from ui.widgets.panels.layout_widgets import CollapsibleCard
 from ui.widgets.tables.tables import (
     make_table, insert_row, auto_fit_columns,
@@ -12,6 +11,7 @@ from ui.widgets.tables.tables import (
 )
 from ui.widgets.core.i18n import tr
 from ui.theme import _C
+from ui.constants import ORDER_LOG_TABLE_COL_WIDTHS, ORDER_LOG_TABLE_MAX_H
 from ._status_config import get_status_labels
 
 
@@ -24,15 +24,15 @@ def _build_log_section(detail):
             tr("log_col_notes"), tr("log_col_time"),
         ],
         stretch_col=2,
-        col_widths={0: 100, 1: 100, 3: 120},
+        col_widths=ORDER_LOG_TABLE_COL_WIDTHS,
     )
-    detail.log_table.setMaximumHeight(160)
+    detail.log_table.setMaximumHeight(ORDER_LOG_TABLE_MAX_H)
     detail._log_card.content_layout.addWidget(detail.log_table)
     detail._content_lay.addWidget(detail._log_card)
 
 
 def _fill_log(detail):
-    logs   = [dict(r) for r in fetch_status_log(detail.conn, detail._order_id)]
+    logs   = [dict(r) for r in detail._service.get_status_log(detail._order_id)]
     table  = detail.log_table
     STATUS_LABELS = get_status_labels()
     table.setRowCount(0)
@@ -40,7 +40,7 @@ def _fill_log(detail):
     for log in logs:
         r = insert_row(table, ROW_HEIGHT_COMPACT)
 
-        old_lbl  = STATUS_LABELS.get(log.get("old_status") or "", ("—",))[0]
+        old_lbl  = STATUS_LABELS.get(log.get("old_status") or "", (tr("dash"),))[0]
         new_info = STATUS_LABELS.get(log.get("new_status", ""),
                                      (log.get("new_status", ""), _C['text_neutral'], _C['card_fallback_bg'], _C['card_fallback_border']))
         new_lbl, new_color = new_info[0], new_info[1]

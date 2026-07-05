@@ -25,6 +25,19 @@ from ui.widgets.components.button import make_btn
 from ui.widgets.theme.input_styles import input_style
 from ui.widgets.core.i18n import tr
 from ui.font import FS_BASE, FS_SM
+from ui.constants import (
+    ORDER_FORM_MIN_W, ORDER_FORM_MIN_H,
+    ORDER_FORM_ROOT_MARGIN, ORDER_FORM_ROOT_SPACING,
+    ORDER_FORM_GRP_SPACING, ORDER_FORM_GRP_MARGIN_TOP, ORDER_FORM_GRP_PAD_TOP,
+    ORDER_FORM_GRP_TITLE_PAD_H, ORDER_FORM_DETAILS_SPACING,
+    ORDER_FORM_TOOLBAR_SPACING, ORDER_FORM_OFFERS_MIN_H, ORDER_FORM_OFFERS_MIN_W,
+    ORDER_FORM_ROWS_SPACING, ORDER_FORM_ROWS_MARGIN,
+    ORDER_FORM_TOTAL_BAR_RADIUS, ORDER_FORM_TOTAL_BAR_MARGIN,
+    ORDER_FORM_NOTES_MAX_H, ORDER_FORM_NOTES_SPACING,
+    ORDER_FORM_SAVE_BTN_MIN_H, ORDER_FORM_CUST_INFO_RADIUS, ORDER_FORM_CUST_INFO_PAD,
+    ORDER_FORM_DUE_DATE_DEFAULT, ORDER_FORM_DISCOUNT_MAX, ORDER_FORM_PAID_MAX,
+    ORDER_FORM_HDR_RADIUS, ORDER_FORM_HDR_PAD,
+)
 
 
 def _group_ss(accent=None) -> str:
@@ -35,14 +48,14 @@ def _group_ss(accent=None) -> str:
             color: {_C['text_sec']};
             border: 1px solid {_C['border']};
             border-radius: 8px;
-            margin-top: 10px;
-            padding-top: 10px;
+            margin-top: {ORDER_FORM_GRP_MARGIN_TOP}px;
+            padding-top: {ORDER_FORM_GRP_PAD_TOP}px;
             background: {_C['bg_surface']};
         }}
         QGroupBox::title {{
             subcontrol-origin: margin;
             right: 12px;
-            padding: 0 6px;
+            padding: 0 {ORDER_FORM_GRP_TITLE_PAD_H}px;
             font-size: {FS_SM}px;
             color: {c};
         }}
@@ -85,8 +98,8 @@ class _OrderForm(QDialog):
         _ItemRowWidget.invalidate_cache()
 
         self.setWindowTitle(tr("order_edit_title") if order_id else tr("order_new_title"))
-        self.setMinimumWidth(880)
-        self.setMinimumHeight(760)
+        self.setMinimumWidth(ORDER_FORM_MIN_W)
+        self.setMinimumHeight(ORDER_FORM_MIN_H)
         self.setModal(True)
         self._build()
         if order_id:
@@ -103,8 +116,8 @@ class _OrderForm(QDialog):
 
         content = QWidget()
         root = QVBoxLayout(content)
-        root.setContentsMargins(20, 18, 20, 18)
-        root.setSpacing(14)
+        root.setContentsMargins(*ORDER_FORM_ROOT_MARGIN)
+        root.setSpacing(ORDER_FORM_ROOT_SPACING)
         scroll.setWidget(content)
         outer.addWidget(scroll)
 
@@ -114,7 +127,7 @@ class _OrderForm(QDialog):
         hdr.setStyleSheet(f"""
             font-size: {FS_BASE + 3}px; font-weight: bold; color: {_C['accent_text']};
             background: {_C['accent_light']};
-            border-radius: 8px; padding: 10px 16px;
+            border-radius: {ORDER_FORM_HDR_RADIUS}px; padding: {ORDER_FORM_HDR_PAD};
         """)
         root.addWidget(hdr)
 
@@ -130,7 +143,7 @@ class _OrderForm(QDialog):
         cust_grp = QGroupBox(tr("order_customer_section"))
         cust_grp.setStyleSheet(_group_ss(_C['accent']))
         c_lay = QVBoxLayout(cust_grp)
-        c_lay.setSpacing(8)
+        c_lay.setSpacing(ORDER_FORM_GRP_SPACING)
 
         search_row = QHBoxLayout()
         self.inp_cust_search = QLineEdit()
@@ -145,10 +158,10 @@ class _OrderForm(QDialog):
         c_lay.addLayout(search_row)
 
         self.cmb_customer = QComboBox()
-        self.cmb_customer.setPlaceholderText(f"─ {tr('select_field').format(label=tr('customer_name'))} ─")
+        self.cmb_customer.setPlaceholderText(tr("select_field").format(label=tr("customer_name")))
         self._all_customers = fetch_all_customers(self.conn, active_only=True)
         for c in self._all_customers:
-            label = f"{c['code']}  —  {c['name']}  ({c['phone'] or tr('no_data')})"
+            label = f"{c['code']}  {c['name']}  ({c['phone'] or tr('no_data')})"
             self.cmb_customer.addItem(label, c["id"])
         self.cmb_customer.currentIndexChanged.connect(self._on_customer_changed)
         c_lay.addWidget(self.cmb_customer)
@@ -157,7 +170,8 @@ class _OrderForm(QDialog):
         self._lbl_cust_info.setStyleSheet(
             f"font-size:{FS_SM}px; color:{_C['text_muted']};"
             f"background:{_C['bg_surface_2']};"
-            f"border:1px solid {_C['border']}; border-radius:6px; padding:6px 10px;"
+            f"border:1px solid {_C['border']}; border-radius:{ORDER_FORM_CUST_INFO_RADIUS}px;"
+            f"padding:{ORDER_FORM_CUST_INFO_PAD[0]}px {ORDER_FORM_CUST_INFO_PAD[1]}px;"
         )
         self._lbl_cust_info.setVisible(False)
         c_lay.addWidget(self._lbl_cust_info)
@@ -167,54 +181,54 @@ class _OrderForm(QDialog):
         order_grp = QGroupBox(tr("order_details_section"))
         order_grp.setStyleSheet(_group_ss(_C['accent']))
         form = QFormLayout(order_grp)
-        form.setSpacing(10)
+        form.setSpacing(ORDER_FORM_DETAILS_SPACING)
         form.setLabelAlignment(Qt.AlignRight)
 
         self.cmb_type = QComboBox()
         for k, v in _get_type_options():
             self.cmb_type.addItem(v, k)
-        form.addRow(f"{tr('order_type_label')} :", self.cmb_type)
+        form.addRow(tr("order_type_label"), self.cmb_type)
 
         self.cmb_status = QComboBox()
         for k, v in _get_status_options():
             self.cmb_status.addItem(v, k)
         if not self.order_id:
             self.cmb_status.setVisible(False)
-        form.addRow(f"{tr('order_status_label')} :", self.cmb_status)
+        form.addRow(tr("order_status_label"), self.cmb_status)
 
         self.cmb_priority = QComboBox()
         for k, v in _get_priority_options():
             self.cmb_priority.addItem(v, k)
         self.cmb_priority.setCurrentIndex(1)
-        form.addRow(f"{tr('order_priority_label')} :", self.cmb_priority)
+        form.addRow(tr("order_priority_label"), self.cmb_priority)
 
         self.inp_due_date = QDateEdit()
         self.inp_due_date.setCalendarPopup(True)
-        self.inp_due_date.setDate(QDate.currentDate().addDays(7))
+        self.inp_due_date.setDate(QDate.currentDate().addDays(ORDER_FORM_DUE_DATE_DEFAULT))
         self.inp_due_date.setDisplayFormat("yyyy-MM-dd")
-        form.addRow(f"{tr('order_due_date_label')} :", self.inp_due_date)
+        form.addRow(tr("order_due_date_label"), self.inp_due_date)
 
         self.sp_discount = QDoubleSpinBox()
-        self.sp_discount.setRange(0, 99_999)
+        self.sp_discount.setRange(0, ORDER_FORM_DISCOUNT_MAX)
         self.sp_discount.setDecimals(2)
         self.sp_discount.setSuffix(f" {tr('currency_sym')}")
-        form.addRow(f"{tr('order_discount_total')} :", self.sp_discount)
+        form.addRow(tr("order_discount_total"), self.sp_discount)
 
         self.sp_paid = QDoubleSpinBox()
-        self.sp_paid.setRange(0, 9_999_999)
+        self.sp_paid.setRange(0, ORDER_FORM_PAID_MAX)
         self.sp_paid.setDecimals(2)
         self.sp_paid.setSuffix(f" {tr('currency_sym')}")
-        form.addRow(f"{tr('order_paid_amount')} :", self.sp_paid)
+        form.addRow(tr("order_paid_amount"), self.sp_paid)
         root.addWidget(order_grp)
 
     def _build_items_section(self, root):
         items_grp = QGroupBox(tr("order_items_section"))
         items_grp.setStyleSheet(_group_ss(_C['warning']))
         items_lay = QVBoxLayout(items_grp)
-        items_lay.setSpacing(8)
+        items_lay.setSpacing(ORDER_FORM_GRP_SPACING)
 
         toolbar = QHBoxLayout()
-        toolbar.setSpacing(8)
+        toolbar.setSpacing(ORDER_FORM_TOOLBAR_SPACING)
 
         btn_add_item = make_btn(tr("order_add_item_btn"), "success")
         btn_add_item.clicked.connect(self._add_item_row)
@@ -223,8 +237,8 @@ class _OrderForm(QDialog):
         lbl_offer.setStyleSheet(f"color:{_C['text_muted']}; font-size:{FS_SM}px;")
 
         self.cmb_offers = QComboBox()
-        self.cmb_offers.setMinimumHeight(34)
-        self.cmb_offers.setMinimumWidth(200)
+        self.cmb_offers.setMinimumHeight(ORDER_FORM_OFFERS_MIN_H)
+        self.cmb_offers.setMinimumWidth(ORDER_FORM_OFFERS_MIN_W)
         self._load_offers_combo()
 
         btn_import_offer = make_btn(tr("order_import_offer_btn"), "ghost")
@@ -240,8 +254,8 @@ class _OrderForm(QDialog):
         self._rows_container = QWidget()
         self._rows_container.setStyleSheet("background: transparent;")
         self._rows_layout = QVBoxLayout(self._rows_container)
-        self._rows_layout.setSpacing(6)
-        self._rows_layout.setContentsMargins(0, 0, 4, 0)
+        self._rows_layout.setSpacing(ORDER_FORM_ROWS_SPACING)
+        self._rows_layout.setContentsMargins(*ORDER_FORM_ROWS_MARGIN)
         items_lay.addWidget(self._rows_container)
 
         total_bar = QFrame()
@@ -249,11 +263,11 @@ class _OrderForm(QDialog):
             QFrame {{
                 background: {_C['accent_light']};
                 border: 1px solid {_C['accent_mid']};
-                border-radius: 6px;
+                border-radius: {ORDER_FORM_TOTAL_BAR_RADIUS}px;
             }}
         """)
         total_row = QHBoxLayout(total_bar)
-        total_row.setContentsMargins(14, 8, 14, 8)
+        total_row.setContentsMargins(*ORDER_FORM_TOTAL_BAR_MARGIN)
 
         lbl_items_count = QLabel(tr("order_items_count_lbl"))
         lbl_items_count.setStyleSheet(
@@ -284,17 +298,17 @@ class _OrderForm(QDialog):
         notes_grp = QGroupBox(tr("order_notes_section"))
         notes_grp.setStyleSheet(_group_ss(_C['text_muted']))
         n_lay = QVBoxLayout(notes_grp)
-        n_lay.setSpacing(8)
+        n_lay.setSpacing(ORDER_FORM_NOTES_SPACING)
 
         self.inp_notes = QTextEdit()
         self.inp_notes.setPlaceholderText(tr("order_customer_notes"))
-        self.inp_notes.setMaximumHeight(65)
+        self.inp_notes.setMaximumHeight(ORDER_FORM_NOTES_MAX_H)
         n_lay.addWidget(QLabel(tr("order_customer_notes")))
         n_lay.addWidget(self.inp_notes)
 
         self.inp_internal = QTextEdit()
         self.inp_internal.setPlaceholderText(tr("order_internal_notes"))
-        self.inp_internal.setMaximumHeight(65)
+        self.inp_internal.setMaximumHeight(ORDER_FORM_NOTES_MAX_H)
         n_lay.addWidget(QLabel(tr("order_internal_notes_lbl")))
         n_lay.addWidget(self.inp_internal)
         root.addWidget(notes_grp)
@@ -304,7 +318,7 @@ class _OrderForm(QDialog):
         btn_cancel = make_btn(tr("cancel"), "ghost")
         btn_cancel.clicked.connect(self.reject)
         btn_save = make_btn(tr("order_save_btn"), "primary")
-        btn_save.setMinimumHeight(40)
+        btn_save.setMinimumHeight(ORDER_FORM_SAVE_BTN_MIN_H)
         btn_save.clicked.connect(self._save)
         btns.addWidget(btn_cancel)
         btns.addWidget(btn_save, stretch=1)
@@ -339,7 +353,7 @@ class _OrderForm(QDialog):
         self.cmb_offers.addItem(tr("offer_select_label"), None)
         for o in fetch_offers():
             cat = f" [{o['category_name']}]" if o.get("category_name") else ""
-            label = f"🎁 {o['name']}  —  {tr('discount')} {o['discount']:.0f}%{cat}"
+            label = f"{tr('order_offer_icon')} {o['name']}  {tr('discount')} {o['discount']:.0f}%{cat}"
             self.cmb_offers.addItem(label, o["id"])
 
     def _import_offer(self):
@@ -392,7 +406,7 @@ class _OrderForm(QDialog):
         self.cmb_customer.blockSignals(True)
         self.cmb_customer.clear()
         for c in results:
-            label = f"{c['code']}  —  {c['name']}  ({c['phone'] or tr('no_data')})"
+            label = f"{c['code']}  {c['name']}  ({c['phone'] or tr('no_data')})"
             self.cmb_customer.addItem(label, c["id"])
         self.cmb_customer.blockSignals(False)
         if results:
@@ -407,9 +421,9 @@ class _OrderForm(QDialog):
             c = fetch_customer(self.conn, cid)
             if c:
                 parts = []
-                if c["phone"]:  parts.append(f"📞 {c['phone']}")
-                if c["city"]:   parts.append(f"📍 {c['city']}")
-                if c["email"]:  parts.append(f"✉️ {c['email']}")
+                if c["phone"]:  parts.append(f"{tr('order_phone_icon')} {c['phone']}")
+                if c["city"]:   parts.append(f"{tr('order_city_icon')} {c['city']}")
+                if c["email"]:  parts.append(f"{tr('order_email_icon')} {c['email']}")
                 self._lbl_cust_info.setText("  |  ".join(parts) if parts else "")
                 self._lbl_cust_info.setVisible(bool(parts))
         else:
@@ -425,7 +439,7 @@ class _OrderForm(QDialog):
         from db.orders.customers_repo import fetch_customer
         c = fetch_customer(self.conn, customer_id)
         if c:
-            label = f"{c['code']}  —  {c['name']}  ({c['phone'] or tr('no_data')})"
+            label = f"{c['code']}  {c['name']}  ({c['phone'] or tr('no_data')})"
             self.cmb_customer.insertItem(0, label, customer_id)
             self.cmb_customer.setCurrentIndex(0)
             self._customer_id = customer_id

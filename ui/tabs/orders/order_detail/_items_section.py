@@ -4,7 +4,6 @@ ui/tabs/orders/order_detail/_items_section.py
 from PyQt5.QtWidgets import QFrame, QHBoxLayout
 from PyQt5.QtCore    import Qt
 
-from db.orders.orders_repo import fetch_order_items
 from ui.widgets.components.headers_page import SectionHeader
 from ui.widgets.panels.state import EmptyState
 from ui.widgets.components.button import make_btn
@@ -15,6 +14,10 @@ from ui.widgets.tables.tables import (
 )
 from ui.widgets.core.i18n import tr
 from ui.theme import _C
+from ui.constants import (
+    ORDER_ITEMS_TABLE_COL_WIDTHS, ORDER_ITEMS_TABLE_MAX_H, ORDER_ITEMS_TABLE_MIN_H,
+    ORDER_ITEMS_EMPTY_MIN_H, ORDER_ITEMS_TOOLBAR_SPACING, ORDER_ITEMS_BTN_MIN_H,
+)
 
 
 def _build_items_section(detail):
@@ -29,19 +32,19 @@ def _build_items_section(detail):
             tr("items_col_discount"), tr("items_col_total"),
         ],
         stretch_col=0,
-        col_widths={2: 65, 3: 65, 4: 90, 5: 60, 6: 95},
+        col_widths=ORDER_ITEMS_TABLE_COL_WIDTHS,
     )
-    detail.items_table.setMaximumHeight(280)
-    detail.items_table.setMinimumHeight(60)
+    detail.items_table.setMaximumHeight(ORDER_ITEMS_TABLE_MAX_H)
+    detail.items_table.setMinimumHeight(ORDER_ITEMS_TABLE_MIN_H)
     detail._content_lay.addWidget(detail.items_table)
 
     detail._empty_items = EmptyState(
-        icon="📦",
+        icon=tr("order_no_items_icon"),
         title=tr("order_no_items_title"),
         subtitle=tr("order_no_items_hint"),
         style="dashed",
         color=_C['success'],
-        min_height=90,
+        min_height=ORDER_ITEMS_EMPTY_MIN_H,
     )
     detail._empty_items.action_clicked.connect(detail._add_item)
     detail._content_lay.addWidget(detail._empty_items)
@@ -50,14 +53,14 @@ def _build_items_section(detail):
     item_toolbar.setStyleSheet("background:transparent;")
     itb_lay = QHBoxLayout(item_toolbar)
     itb_lay.setContentsMargins(0, 0, 0, 0)
-    itb_lay.setSpacing(6)
+    itb_lay.setSpacing(ORDER_ITEMS_TOOLBAR_SPACING)
 
     detail.btn_edit_item = make_btn(tr("order_edit_item_btn"), "ghost")
-    detail.btn_edit_item.setMinimumHeight(28)
+    detail.btn_edit_item.setMinimumHeight(ORDER_ITEMS_BTN_MIN_H)
     detail.btn_edit_item.clicked.connect(detail._edit_item)
 
     detail.btn_del_item = make_btn(tr("order_del_item_btn"), "danger")
-    detail.btn_del_item.setMinimumHeight(28)
+    detail.btn_del_item.setMinimumHeight(ORDER_ITEMS_BTN_MIN_H)
     detail.btn_del_item.clicked.connect(detail._del_item)
 
     itb_lay.addWidget(detail.btn_edit_item)
@@ -69,7 +72,7 @@ def _build_items_section(detail):
 
 
 def _fill_items(detail):
-    items = fetch_order_items(detail.conn, detail._order_id)
+    items = detail._service.get_order_items(detail._order_id)
     table = detail.items_table
     table.setRowCount(0)
 
