@@ -10,22 +10,31 @@ from PyQt5.QtCore import Qt
 from db.orders.orders_repo import fetch_order_items, insert_order_item, update_order_item
 from ui.widgets.components.button import make_btn
 from ui.widgets.theme.input_styles import input_style
+from ui.widgets.core.widget_mixin import WidgetMixin
 from ui.widgets.core.i18n import tr
 from ui.theme import _C
-from ui.font import FS_BASE
+from ui.font import FS_BASE, fs
+from ui.constants import (
+    ITEM_FORM_MIN_W, ITEM_FORM_ROOT_MARGIN, ITEM_FORM_ROOT_SPACING,
+    ITEM_FORM_FORM_SPACING, ITEM_FORM_HDR_RADIUS, ITEM_FORM_HDR_PAD,
+    ITEM_FORM_SPIN_H, ITEM_FORM_SPIN_MAX, ITEM_FORM_PRICE_MAX,
+    ITEM_FORM_QTY_MAX, ITEM_FORM_QTY_DEC, ITEM_FORM_DISCOUNT_MAX,
+    ITEM_FORM_TOTAL_RADIUS, ITEM_FORM_TOTAL_PAD_V, ITEM_FORM_TOTAL_PAD_H,
+    ITEM_FORM_SAVE_BTN_H,
+)
 
 
-def _spin(min_=0, max_=9999999, dec=2, suffix=""):
+def _spin(min_=0, max_=ITEM_FORM_SPIN_MAX, dec=2, suffix=""):
     s = QDoubleSpinBox()
     s.setRange(min_, max_)
     s.setDecimals(dec)
-    s.setMinimumHeight(34)
+    s.setMinimumHeight(ITEM_FORM_SPIN_H)
     if suffix:
         s.setSuffix(f" {suffix}")
     return s
 
 
-class _ItemForm(QDialog):
+class _ItemForm(QDialog, WidgetMixin):
     def __init__(self, conn, order_id: int, item_id: int = None, parent=None):
         super().__init__(parent)
         self.conn     = conn
@@ -33,10 +42,11 @@ class _ItemForm(QDialog):
         self.item_id  = item_id
 
         self.setWindowTitle(tr("item_edit_title") if item_id else tr("item_add_title"))
-        self.setMinimumWidth(480)
+        self.setMinimumWidth(ITEM_FORM_MIN_W)
         self.setModal(True)
-        self.setStyleSheet(input_style())
+        self._init_widget_mixin(font=False, lang=False, data=False)
         self._build()
+        self._refresh_style()
         if item_id:
             self._load()
 
@@ -44,21 +54,35 @@ class _ItemForm(QDialog):
         self.sp_price.valueChanged.connect(self._update_total)
         self.sp_discount.valueChanged.connect(self._update_total)
 
+    def _refresh_style(self, *_):
+        from ui.theme import _C as C
+        from ui.font import FS_BASE as BASE
+        self.setStyleSheet(input_style())
+        if hasattr(self, '_hdr_lbl'):
+            self._hdr_lbl.setStyleSheet(f"""
+                font-size: {fs(BASE, +1)}px; font-weight: bold; color: {C['accent_text']};
+                background: {C['accent_light']};
+                border-radius: {ITEM_FORM_HDR_RADIUS}px; padding: {ITEM_FORM_HDR_PAD}px;
+            """)
+        if hasattr(self, 'lbl_total'):
+            self.lbl_total.setStyleSheet(f"""
+                font-size: {fs(BASE, +2)}px; font-weight: bold; color: {C['accent_text']};
+                background: {C['accent_light']};
+                border: 1px solid {C['accent_mid']};
+                border-radius: {ITEM_FORM_TOTAL_RADIUS}px;
+                padding: {ITEM_FORM_TOTAL_PAD_V}px {ITEM_FORM_TOTAL_PAD_H}px;
+            """)
+
     def _build(self):
         root = QVBoxLayout(self)
-        root.setContentsMargins(20, 18, 20, 18)
-        root.setSpacing(12)
+        root.setContentsMargins(*ITEM_FORM_ROOT_MARGIN)
+        root.setSpacing(ITEM_FORM_ROOT_SPACING)
 
-        hdr = QLabel(tr("item_add_title") if not self.item_id else tr("item_edit_title"))
-        hdr.setStyleSheet(f"""
-            font-size: {FS_BASE + 1}px; font-weight: bold; color: {_C['accent_text']};
-            background: {_C['accent_light']};
-            border-radius: 8px; padding: 8px 14px;
-        """)
-        root.addWidget(hdr)
+        self._hdr_lbl = QLabel(tr("item_add_title") if not self.item_id else tr("item_edit_title"))
+        root.addWidget(self._hdr_lbl)
 
         form = QFormLayout()
-        form.setSpacing(10)
+        form.setSpacing(ITEM_FORM_FORM_SPACING)
         form.setLabelAlignment(Qt.AlignRight)
 
         self.inp_name = QLineEdit()
@@ -69,7 +93,7 @@ class _ItemForm(QDialog):
         self.inp_desc.setPlaceholderText(tr("description"))
         form.addRow(tr("item_desc_lbl"), self.inp_desc)
 
-        self.sp_qty = _spin(min_=0.001, max_=99999, dec=3)
+        self.sp_qty = _spin(min_=0.001, max_=ITEM_FORM_QTY_MAX, dec=ITEM_FORM_QTY_DEC)
         self.sp_qty.setValue(1)
         form.addRow(tr("item_qty_lbl"), self.sp_qty)
 
@@ -78,19 +102,13 @@ class _ItemForm(QDialog):
         self.inp_unit.setPlaceholderText(tr("order_unit_default"))
         form.addRow(tr("order_unit_label"), self.inp_unit)
 
-        self.sp_price = _spin(max_=9999999, dec=2, suffix=tr("currency_sym"))
+        self.sp_price = _spin(max_=ITEM_FORM_PRICE_MAX, dec=2, suffix=tr("currency_sym"))
         form.addRow(tr("item_unit_price"), self.sp_price)
 
-        self.sp_discount = _spin(max_=100, dec=2, suffix="%")
+        self.sp_discount = _spin(max_=ITEM_FORM_DISCOUNT_MAX, dec=2, suffix="%")
         form.addRow(tr("item_discount_lbl"), self.sp_discount)
 
         self.lbl_total = QLabel(f"0.00 {tr('currency_sym')}")
-        self.lbl_total.setStyleSheet(f"""
-            font-size: {FS_BASE + 2}px; font-weight: bold; color: {_C['accent_text']};
-            background: {_C['accent_light']};
-            border: 1px solid {_C['accent_mid']};
-            border-radius: 6px; padding: 6px 12px;
-        """)
         form.addRow(tr("item_total_lbl"), self.lbl_total)
 
         self.inp_design_ref = QLineEdit()
@@ -107,7 +125,7 @@ class _ItemForm(QDialog):
         btn_cancel = make_btn(tr("cancel"), "ghost")
         btn_cancel.clicked.connect(self.reject)
         btn_save = make_btn(tr("item_save_btn"), "primary")
-        btn_save.setMinimumHeight(36)
+        btn_save.setMinimumHeight(ITEM_FORM_SAVE_BTN_H)
         btn_save.clicked.connect(self._save)
         btn_row.addWidget(btn_cancel)
         btn_row.addWidget(btn_save, stretch=1)
