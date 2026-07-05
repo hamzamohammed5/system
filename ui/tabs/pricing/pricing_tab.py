@@ -14,6 +14,7 @@ from PyQt5.QtWidgets import QWidget, QVBoxLayout, QTabWidget
 from db.companies.company_state import company_state
 from ui.widgets.core.i18n import tr
 from ui.widgets.managers.category import CategoryManager
+from ui.constants import MARGIN_ZERO
 
 from .pricing._pricing_panel import _PricingPanel
 
@@ -28,7 +29,7 @@ class PricingTab(QWidget):
 
     def _build(self):
         root = QVBoxLayout(self)
-        root.setContentsMargins(0, 0, 0, 0)
+        root.setContentsMargins(*MARGIN_ZERO)
         tabs = QTabWidget()
         tabs.addTab(_PricingPanel(self._live_conn()),                  tr("pricing_prices_tab"))
         tabs.addTab(CategoryManager(self._live_conn(), scope="final"), tr("pricing_categories_tab"))

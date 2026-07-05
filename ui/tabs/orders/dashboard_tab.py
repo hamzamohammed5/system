@@ -13,7 +13,7 @@ from ui.widgets.core.i18n import tr
 from ui.constants import (
     DASHBOARD_SCROLL_MAX_H, DASHBOARD_TOP_MARGIN, DASHBOARD_TOP_SPACING,
     DASHBOARD_RECENT_HDR_MARGIN, DASHBOARD_TABLE_CONTAINER_MARGIN,
-    DASHBOARD_REFRESH_BTN_MIN_H,
+    DASHBOARD_REFRESH_BTN_MIN_H, DASHBOARD_RECENT_LIMIT,
 )
 
 from .dashboard._top_cards    import build_top_cards
@@ -99,4 +99,4 @@ class OrdersDashboardTab(QWidget, WidgetMixin):
         for status, lbl in self._status_chips.items():
             lbl.setText(str(summary.get(status) or 0))
 
-        fill_recent_table(self, self._svc.list_orders()[:20])
+        fill_recent_table(self, self._svc.list_orders()[:DASHBOARD_RECENT_LIMIT])

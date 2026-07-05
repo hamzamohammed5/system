@@ -12,10 +12,10 @@ from PyQt5.QtWidgets import (
 )
 from PyQt5.QtCore import Qt
 
-from db.pricing.offers_repo import (
-    fetch_offer, fetch_offer_items,
-    insert_offer, update_offer,
-    replace_offer_items,
+from services.pricing.offers_service import (
+    get_offer, get_offer_items,
+    create_offer, modify_offer,
+    save_offer_items,
 )
 from models.costing import calc_cost
 from ui.widgets.combo.category import CategoryCombo
@@ -23,6 +23,14 @@ from ui.widgets.core.i18n import tr
 from ui.widgets.core.events import emit_company_data_changed
 from ui.theme import _C
 from ui.font import FS_XS, FS_BASE, FS_LG
+from ui.constants import (
+    FORM_LAYOUT_MARGIN, SPACING_MD, SPACING_SM, BTN_MIN_HEIGHT,
+    TABLE_BORDER_RADIUS, STAT_BOX_BORDER_RADIUS, FILTER_COMBO_BORDER_RADIUS,
+    STAT_CARD_MARGIN_NORMAL,
+    OFFER_FORM_SCROLL_MIN_H, OFFER_FORM_SCROLL_MAX_H,
+    OFFER_FORM_DISC_W, OFFER_FORM_CAT_W,
+    OFFER_FORM_HDR_ICON_W, OFFER_FORM_HDR_DEL_W,
+)
 
 from .offer_item_row import _OfferItemRow
 from ..pricing._stat_box import stat_box
@@ -30,7 +38,7 @@ from ..pricing._stat_box import stat_box
 def buttons_row(*buttons) -> QHBoxLayout:
     """صف أزرار أفقي."""
     row = QHBoxLayout()
-    row.setSpacing(6)
+    row.setSpacing(SPACING_SM)
     for btn in buttons:
         row.addWidget(btn)
     row.addStretch()
@@ -40,7 +48,7 @@ def _spin(max_=999999, dec=2):
     s = QDoubleSpinBox()
     s.setRange(0, max_)
     s.setDecimals(dec)
-    s.setMinimumHeight(30)
+    s.setMinimumHeight(BTN_MIN_HEIGHT)
     return s
 
 
@@ -66,20 +74,22 @@ class _OfferForm(QWidget):
 
     def _build(self):
         root = QVBoxLayout(self)
-        root.setContentsMargins(12, 10, 12, 10)
-        root.setSpacing(8)
+        m = FORM_LAYOUT_MARGIN
+        root.setContentsMargins(m[0], m[1], m[2], m[3])
+        root.setSpacing(SPACING_MD)
 
         header = QFrame()
         header.setStyleSheet(f"""
             QFrame {{
                 background: {_C['bg_surface']};
                 border: 1px solid {_C['orange_border']};
-                border-radius: 8px;
+                border-radius: {TABLE_BORDER_RADIUS}px;
             }}
         """)
         h_lay = QVBoxLayout(header)
-        h_lay.setContentsMargins(14, 12, 14, 12)
-        h_lay.setSpacing(8)
+        mn = STAT_CARD_MARGIN_NORMAL
+        h_lay.setContentsMargins(mn[0], mn[1], mn[2], mn[3])
+        h_lay.setSpacing(SPACING_MD)
 
         self.lbl_mode = QLabel(tr("offer_new_mode"))
         self.lbl_mode.setStyleSheet(
@@ -94,26 +104,26 @@ class _OfferForm(QWidget):
         lbl_name.setStyleSheet("font-weight:bold;")
         self.inp_name = QLineEdit()
         self.inp_name.setPlaceholderText(tr("offer_name_placeholder"))
-        self.inp_name.setMinimumHeight(30)
+        self.inp_name.setMinimumHeight(BTN_MIN_HEIGHT)
 
         lbl_disc = QLabel(tr("offer_discount_field"))
         lbl_disc.setStyleSheet("font-weight:bold;")
         self.sp_discount = _spin(100, 2)
         self.sp_discount.setValue(0)
-        self.sp_discount.setFixedWidth(90)
+        self.sp_discount.setFixedWidth(OFFER_FORM_DISC_W)
         lbl_disc_pct = QLabel(tr("offer_discount_pct_sym"))
         lbl_disc_pct.setStyleSheet(f"font-weight:bold; color:{_C['orange']};")
 
         lbl_cat = QLabel(tr("offer_category_field"))
         lbl_cat.setStyleSheet("font-weight:bold;")
         self.cmb_category = CategoryCombo(self._live_conn(), scope="all")
-        self.cmb_category.setMinimumHeight(30)
-        self.cmb_category.setFixedWidth(150)
+        self.cmb_category.setMinimumHeight(BTN_MIN_HEIGHT)
+        self.cmb_category.setFixedWidth(OFFER_FORM_CAT_W)
 
         lbl_notes = QLabel(tr("offer_notes_field"))
         self.inp_notes = QLineEdit()
         self.inp_notes.setPlaceholderText(tr("offer_notes_placeholder"))
-        self.inp_notes.setMinimumHeight(30)
+        self.inp_notes.setMinimumHeight(BTN_MIN_HEIGHT)
 
         info_row.addWidget(lbl_name)
         info_row.addWidget(self.inp_name, stretch=2)
@@ -145,8 +155,8 @@ class _OfferForm(QWidget):
         ch = QWidget()
         ch.setStyleSheet("background:transparent;")
         ch_lay = QHBoxLayout(ch)
-        ch_lay.setContentsMargins(8, 0, 8, 0)
-        ch_lay.setSpacing(8)
+        ch_lay.setContentsMargins(SPACING_MD, 0, SPACING_MD, 0)
+        ch_lay.setSpacing(SPACING_MD)
 
         def _hdr(text, w=None, stretch=0):
             lbl = QLabel(text)
@@ -164,8 +174,8 @@ class _OfferForm(QWidget):
         _hdr(tr("offer_col_unit_price"), 72)
         _hdr(tr("offer_col_qty"), 85)
         _hdr(tr("offer_header_total_col"), 80)
-        _hdr("", 20)
-        _hdr("", 28)
+        _hdr("", OFFER_FORM_HDR_ICON_W)
+        _hdr("", OFFER_FORM_HDR_DEL_W)
         root.addWidget(ch)
 
         self._rows_container = QWidget()
@@ -178,24 +188,24 @@ class _OfferForm(QWidget):
         scroll = QScrollArea()
         scroll.setWidgetResizable(True)
         scroll.setWidget(self._rows_container)
-        scroll.setMinimumHeight(110)
-        scroll.setMaximumHeight(260)
+        scroll.setMinimumHeight(OFFER_FORM_SCROLL_MIN_H)
+        scroll.setMaximumHeight(OFFER_FORM_SCROLL_MAX_H)
         scroll.setStyleSheet(f"""
             QScrollArea {{
                 border: 1px solid {_C['orange_border']};
-                border-radius: 6px;
+                border-radius: {STAT_BOX_BORDER_RADIUS}px;
                 background: {_C['scroll_warm_bg']};
             }}
         """)
         root.addWidget(scroll, stretch=1)
 
         btn_add_row = QPushButton(tr("offer_add_product_btn"))
-        btn_add_row.setMinimumHeight(30)
+        btn_add_row.setMinimumHeight(BTN_MIN_HEIGHT)
         btn_add_row.setStyleSheet(f"""
             QPushButton {{
                 background: {_C['orange_bg']};
                 border: 1px solid {_C['orange_border']};
-                border-radius: 4px;
+                border-radius: {FILTER_COMBO_BORDER_RADIUS}px;
                 color: {_C['orange']};
                 font-weight: bold;
                 padding: 4px 12px;
@@ -205,13 +215,13 @@ class _OfferForm(QWidget):
         btn_add_row.clicked.connect(lambda: self._add_item_row())
 
         self.btn_save = QPushButton(tr("offer_save_btn"))
-        self.btn_save.setMinimumHeight(32)
+        self.btn_save.setMinimumHeight(BTN_MIN_HEIGHT)
         self.btn_save.setStyleSheet(f"""
             QPushButton {{
                 background: {_C['orange']};
                 color: {_C['bg_input']};
                 font-weight: bold;
-                border-radius: 6px;
+                border-radius: {STAT_BOX_BORDER_RADIUS}px;
                 padding: 0 18px;
             }}
             QPushButton:hover {{ background: {_C['orange_hover']}; }}
@@ -219,7 +229,7 @@ class _OfferForm(QWidget):
         self.btn_save.clicked.connect(self._save)
 
         self.btn_cancel = QPushButton(tr("offer_cancel_btn"))
-        self.btn_cancel.setMinimumHeight(32)
+        self.btn_cancel.setMinimumHeight(BTN_MIN_HEIGHT)
         self.btn_cancel.setVisible(False)
         self.btn_cancel.clicked.connect(self.reset)
 
@@ -317,11 +327,11 @@ class _OfferForm(QWidget):
         category_id = self.cmb_category.get_category()
 
         if self._editing_id is not None:
-            update_offer(conn, self._editing_id, name, discount, notes, category_id)
-            replace_offer_items(conn, self._editing_id, items)
+            modify_offer(conn, self._editing_id, name, discount, notes, category_id)
+            save_offer_items(conn, self._editing_id, items)
         else:
-            oid = insert_offer(conn, name, discount, notes, category_id)
-            replace_offer_items(conn, oid, items)
+            oid = create_offer(conn, name, discount, notes, category_id)
+            save_offer_items(conn, oid, items)
 
         self.reset()
         emit_company_data_changed()

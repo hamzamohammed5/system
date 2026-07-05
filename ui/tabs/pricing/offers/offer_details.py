@@ -12,27 +12,37 @@ from PyQt5.QtWidgets import (
 from PyQt5.QtCore import Qt
 from PyQt5.QtGui  import QColor
 
-from db.pricing.offers_repo import calc_offer_summary
+from services.pricing.offers_service import get_offer_summary
 from ui.widgets.core.i18n import tr
+from ui.widgets.core.widget_mixin import WidgetMixin
 from ui.theme import _C
 from ui.font import FS_XS, FS_MD, FS_LG
+from ui.constants import (
+    TABLE_BORDER_RADIUS, FORM_LAYOUT_MARGIN, SPACING_MD, SPACING_SM,
+    TABLE_MIN_HEIGHT_DEFAULT,
+)
 
 from ..pricing._stat_box import stat_box
 
 
-class _OfferDetails(QFrame):
+class _OfferDetails(QFrame, WidgetMixin):
 
     def __init__(self, conn, parent=None):
         super().__init__(parent)
         self.conn = conn
+        self._init_widget_mixin(lang=True, data=False)
+        self._build()
+        self._refresh_style()
+
+    def _refresh_style(self, *_):
+        from ui.theme import _C
         self.setStyleSheet(f"""
             QFrame {{
                 background: {_C['bg_surface']};
                 border: 1px solid {_C['orange_border']};
-                border-radius: 8px;
+                border-radius: {TABLE_BORDER_RADIUS}px;
             }}
         """)
-        self._build()
 
     # ── connection صالح دايماً ────────────────────────────
 
@@ -48,8 +58,9 @@ class _OfferDetails(QFrame):
 
     def _build(self):
         root = QVBoxLayout(self)
-        root.setContentsMargins(12, 10, 12, 10)
-        root.setSpacing(8)
+        m = FORM_LAYOUT_MARGIN
+        root.setContentsMargins(m[0], m[1], m[2], m[3])
+        root.setSpacing(SPACING_MD)
 
         self.lbl_title = QLabel(tr("offer_details_placeholder"))
         self.lbl_title.setStyleSheet(
@@ -60,7 +71,7 @@ class _OfferDetails(QFrame):
         root.addWidget(self.lbl_title)
 
         stats_row = QHBoxLayout()
-        stats_row.setSpacing(6)
+        stats_row.setSpacing(SPACING_SM)
         f1, self.sl_listed = stat_box(tr("offer_total_before_disc"), "journal_dr_accent")
         f2, self.sl_disc   = stat_box(tr("offer_discount_value"),    "danger_strong")
         f3, self.sl_sell   = stat_box(tr("offer_sell_price"),        "success")
@@ -88,7 +99,7 @@ class _OfferDetails(QFrame):
         for col, w in col_widths.items():
             hh.setSectionResizeMode(col, QHeaderView.Interactive)
             self.table.setColumnWidth(col, w)
-        self.table.setMinimumHeight(120)
+        self.table.setMinimumHeight(TABLE_MIN_HEIGHT_DEFAULT)
         root.addWidget(self.table, stretch=1)
 
         self.lbl_notes = QLabel("")
@@ -101,7 +112,7 @@ class _OfferDetails(QFrame):
     def load(self, offer_id: int):
         try:
             conn = self._live_conn()
-            s = calc_offer_summary(conn, offer_id)
+            s = get_offer_summary(conn, offer_id)
         except Exception:
             return
         if not s:
@@ -140,7 +151,7 @@ class _OfferDetails(QFrame):
                 price_item = QTableWidgetItem(f"{line['unit_price']:.2f}")
                 price_item.setForeground(QColor(_C["success"]))
             else:
-                price_item = QTableWidgetItem("─ ⚠️")
+                price_item = QTableWidgetItem(tr("empty_placeholder") + " ⚠️")
                 price_item.setForeground(QColor(_C["orange"]))
             self.table.setItem(r, 4, price_item)
 
@@ -187,5 +198,5 @@ class _OfferDetails(QFrame):
         self.table.setRowCount(0)
         for lbl in (self.sl_listed, self.sl_disc, self.sl_sell,
                     self.sl_cost, self.sl_profit):
-            lbl.setText("─")
+            lbl.setText(tr("empty_placeholder"))
         self.lbl_notes.setText("")

@@ -18,7 +18,8 @@ from ui.constants import (
     ITEM_FORM_MIN_W, ITEM_FORM_ROOT_MARGIN, ITEM_FORM_ROOT_SPACING,
     ITEM_FORM_FORM_SPACING, ITEM_FORM_HDR_RADIUS, ITEM_FORM_HDR_PAD,
     ITEM_FORM_SPIN_MIN_H, ITEM_FORM_SPIN_MAX, ITEM_FORM_PRICE_MAX,
-    ITEM_FORM_QTY_MAX, ITEM_FORM_QTY_DECIMALS, ITEM_FORM_DISCOUNT_MAX,
+    ITEM_FORM_QTY_MIN, ITEM_FORM_QTY_MAX, ITEM_FORM_QTY_DECIMALS,
+    ITEM_FORM_DISCOUNT_MAX,
     ITEM_FORM_TOTAL_RADIUS, ITEM_FORM_TOTAL_PAD,
     ITEM_FORM_SAVE_BTN_MIN_H,
 )
@@ -94,7 +95,7 @@ class _ItemForm(QDialog, WidgetMixin):
         self.inp_desc.setPlaceholderText(tr("description"))
         form.addRow(tr("item_desc_lbl"), self.inp_desc)
 
-        self.sp_qty = _spin(min_=0.001, max_=ITEM_FORM_QTY_MAX, dec=ITEM_FORM_QTY_DECIMALS)
+        self.sp_qty = _spin(min_=ITEM_FORM_QTY_MIN, max_=ITEM_FORM_QTY_MAX, dec=ITEM_FORM_QTY_DECIMALS)
         self.sp_qty.setValue(1)
         form.addRow(tr("item_qty_lbl"), self.sp_qty)
 
@@ -106,7 +107,7 @@ class _ItemForm(QDialog, WidgetMixin):
         self.sp_price = _spin(max_=ITEM_FORM_PRICE_MAX, dec=2, suffix=tr("currency_sym"))
         form.addRow(tr("item_unit_price"), self.sp_price)
 
-        self.sp_discount = _spin(max_=ITEM_FORM_DISCOUNT_MAX, dec=2, suffix="%")
+        self.sp_discount = _spin(max_=ITEM_FORM_DISCOUNT_MAX, dec=2, suffix=tr("percent_sign"))
         form.addRow(tr("item_discount_lbl"), self.sp_discount)
 
         self.lbl_total = QLabel(f"0.00 {tr('currency_sym')}")

@@ -8,7 +8,7 @@ from ui.tabs.orders._customer_form                   import _CustomerForm
 from ui.tabs.orders.customers.customers_list_panel   import CustomersListPanel
 from ui.tabs.orders.customers.customer_detail_panel  import CustomerDetailPanel
 from ui.widgets.base.section                         import BaseSection
-from ui.constants import CUSTOMERS_LIST_MIN_W
+from ui.constants import CUSTOMERS_LIST_MIN_W, ORDERS_SPLITTER_FIT_DELAY_MS
 
 
 class CustomersTab(BaseSection):
@@ -37,7 +37,7 @@ class CustomersTab(BaseSection):
 
     def _on_edited(self, cid: int):
         self._list.refresh()
-        self._fit_splitter_delayed(50)
+        self._fit_splitter_delayed(ORDERS_SPLITTER_FIT_DELAY_MS)
 
     def _new_customer(self):
         dlg = _CustomerForm(self._conn, parent=self)
@@ -48,4 +48,4 @@ class CustomersTab(BaseSection):
         self._list.refresh()
         self._list.select_customer(cid)
         self._detail.load_customer(cid)
-        self._fit_splitter_delayed(50)
+        self._fit_splitter_delayed(ORDERS_SPLITTER_FIT_DELAY_MS)
