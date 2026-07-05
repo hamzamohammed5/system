@@ -18,7 +18,6 @@ from services.pricing.pricing_service import (
 )
 from models.costing            import calc_cost
 from ui.theme import _C
-from ui.font import FS_BASE, FS_MD, FS_LG
 from ui.constants import (
     PRICING_PANEL_SPIN_MIN_H, PRICING_PANEL_ROOT_MARGIN, PRICING_PANEL_ROOT_SPACING,
     PRICING_PANEL_BTN_ROW_SPACING, PRICING_PANEL_FORM_FRAME_RADIUS, PRICING_PANEL_FORM_FRAME_BORDER_W,
@@ -68,14 +67,46 @@ class _PricingPanel(QWidget, WidgetMixin):
         self.conn        = conn
         self._all_rows   = []
         self._editing_id = None
+        self._last_profit = 0.0
         self._build()
         self._load_products_combo()
         self._load()
-        self._init_widget_mixin(theme=False, font=False, lang=False, data=True)
+        self._init_widget_mixin(theme=True, font=True, lang=False, data=True)
+        self._refresh_style()
 
     def _refresh_data(self, company_id=None):
         self._load_products_combo()
         self._load()
+
+    def _refresh_style(self, *_):
+        from ui.font import get_font_size, fs
+        base = get_font_size()
+
+        self.form_frame.setStyleSheet(
+            f"QFrame {{ background: {_C['bg_surface']}; "
+            f"border: {PRICING_PANEL_FORM_FRAME_BORDER_W}px solid {_C['border']}; "
+            f"border-radius: {PRICING_PANEL_FORM_FRAME_RADIUS}px; }}"
+        )
+        self.lbl_mode.setStyleSheet(
+            f"font-weight:bold; color:{_C['orange']}; font-size:{base}px;"
+        )
+        self.lbl_prod.setStyleSheet(f"font-weight:bold; font-size:{base}px;")
+        self.lbl_margin.setStyleSheet(f"font-weight:bold; font-size:{base}px;")
+        self.lbl_pct.setStyleSheet(
+            f"font-weight:bold; color:{_C['orange']}; font-size:{fs(base, 1)}px;"
+        )
+        self.lbl_price.setStyleSheet(f"font-weight:bold; font-size:{base}px;")
+        self._refresh_manual_stats_style()
+
+    def _refresh_manual_stats_style(self):
+        """يعيد رسم لون/حجم خط lbl_stat_profit طبقاً للثيم الحالي وآخر قيمة ربح محسوبة."""
+        from ui.font import get_font_size, fs
+        profit = getattr(self, "_last_profit", 0.0)
+        color_profit = _C["success"] if profit >= 0 else _C["danger"]
+        self.lbl_stat_profit.setStyleSheet(
+            f"font-size:{fs(get_font_size(), 2)}px; font-weight:bold; color:{color_profit};"
+            "background:transparent; border:none;"
+        )
 
     # ══════════════════════════════════════════════════════
     # بناء الواجهة
@@ -87,55 +118,47 @@ class _PricingPanel(QWidget, WidgetMixin):
         root.setContentsMargins(m[0], m[1], m[2], m[3])
         root.setSpacing(PRICING_PANEL_ROOT_SPACING)
 
-        form_frame = QFrame()
-        form_frame.setStyleSheet(f"""
-            QFrame {{ background: {_C['bg_surface']}; border: {PRICING_PANEL_FORM_FRAME_BORDER_W}px solid {_C['border']}; border-radius: {PRICING_PANEL_FORM_FRAME_RADIUS}px; }}
-        """)
-        form_lay = QVBoxLayout(form_frame)
+        self.form_frame = QFrame()
+        form_lay = QVBoxLayout(self.form_frame)
         fm = PRICING_PANEL_FORM_MARGIN
         form_lay.setContentsMargins(fm[0], fm[1], fm[2], fm[3])
         form_lay.setSpacing(PRICING_PANEL_FORM_SPACING)
 
         self.lbl_mode = QLabel(tr("pricing_new_mode"))
-        self.lbl_mode.setStyleSheet(f"font-weight:bold; color:{_C['orange']}; font-size:{FS_BASE}px;")
         form_lay.addWidget(self.lbl_mode)
 
         row1 = QHBoxLayout()
         row1.setSpacing(PRICING_PANEL_ROW1_SPACING)
 
-        lbl_prod = QLabel(tr("pricing_product_label") + ":")
-        lbl_prod.setStyleSheet(f"font-weight:bold; font-size:{FS_BASE}px;")
+        self.lbl_prod = QLabel(tr("pricing_product_label") + ":")
 
         self.cmb_product = QComboBox()
         self.cmb_product.setMinimumHeight(PRICING_PANEL_CMB_PRODUCT_MIN_H)
         self.cmb_product.setMinimumWidth(PRICING_PANEL_CMB_PRODUCT_MIN_W)
         self.cmb_product.currentIndexChanged.connect(self._on_product_selected)
 
-        lbl_margin = QLabel(tr("pricing_margin_label") + ":")
-        lbl_margin.setStyleSheet(f"font-weight:bold; font-size:{FS_BASE}px;")
+        self.lbl_margin = QLabel(tr("pricing_margin_label") + ":")
 
         self.sp_margin = _spin(1000, 2)
         self.sp_margin.setValue(30)
         self.sp_margin.setFixedWidth(PRICING_PANEL_SP_MARGIN_W)
         self.sp_margin.valueChanged.connect(self._update_preview)
 
-        lbl_pct = QLabel(tr("pricing_margin_pct_sign"))
-        lbl_pct.setStyleSheet(f"font-weight:bold; color:{_C['orange']}; font-size:{FS_MD}px;")
+        self.lbl_pct = QLabel(tr("pricing_margin_pct_sign"))
 
-        lbl_price = QLabel(tr("pricing_final_price_label") + ":")
-        lbl_price.setStyleSheet(f"font-weight:bold; font-size:{FS_BASE}px;")
+        self.lbl_price = QLabel(tr("pricing_final_price_label") + ":")
         self.sp_price = _spin()
         self.sp_price.setFixedWidth(PRICING_PANEL_SP_PRICE_W)
         self.sp_price.valueChanged.connect(self._update_profit_from_price)
 
-        row1.addWidget(lbl_prod)
+        row1.addWidget(self.lbl_prod)
         row1.addWidget(self.cmb_product, stretch=2)
         row1.addSpacing(PRICING_PANEL_ROW1_INNER_SPACING)
-        row1.addWidget(lbl_margin)
+        row1.addWidget(self.lbl_margin)
         row1.addWidget(self.sp_margin)
-        row1.addWidget(lbl_pct)
+        row1.addWidget(self.lbl_pct)
         row1.addSpacing(PRICING_PANEL_ROW1_INNER_SPACING)
-        row1.addWidget(lbl_price)
+        row1.addWidget(self.lbl_price)
         row1.addWidget(self.sp_price)
         row1.addStretch()
         form_lay.addLayout(row1)
@@ -165,7 +188,7 @@ class _PricingPanel(QWidget, WidgetMixin):
         self.btn_del.clicked.connect(self._delete)
         form_lay.addLayout(buttons_row(self.btn_save, self.btn_cancel, self.btn_del))
 
-        root.addWidget(form_frame)
+        root.addWidget(self.form_frame)
 
         root.addWidget(section_title(tr("pricing_saved_prices")))
         # [إصلاح] FilterBar → FilterToolbar
@@ -254,14 +277,11 @@ class _PricingPanel(QWidget, WidgetMixin):
         manual = self.sp_price.value()
         profit = manual - cost
         margin_pct = ((manual - cost) / cost * 100) if cost > 0 else 0.0
+        self._last_profit = profit
         self.lbl_stat_manual.setText(tr("pricing_amount_currency_fmt", amount=manual))
-        color_profit = _C["success"] if profit >= 0 else _C["danger"]
         self.lbl_stat_profit.setText(tr("pricing_amount_currency_fmt", amount=profit))
-        self.lbl_stat_profit.setStyleSheet(
-            f"font-size:{FS_LG}px; font-weight:bold; color:{color_profit};"
-            "background:transparent; border:none;"
-        )
-        self.lbl_stat_margin_pct.setText(f"{margin_pct:.1f} %")
+        self._refresh_manual_stats_style()
+        self.lbl_stat_margin_pct.setText(f"{margin_pct:.1f} {tr('pricing_margin_pct_sign')}")
 
     def _refresh_scenario_comparison(self):
         prod_id = self.cmb_product.currentData()
@@ -381,7 +401,7 @@ class _PricingPanel(QWidget, WidgetMixin):
             self.table.setItem(r, 2, QTableWidgetItem(row["category_name"] or tr("dash")))
             self.table.setItem(r, 3, QTableWidgetItem(f"{cost:.2f}"))
             self.table.setItem(r, 4, QTableWidgetItem(
-                f"{margin:.1f} %" if margin is not None else tr("empty_placeholder")
+                f"{margin:.1f} {tr('pricing_margin_pct_sign')}" if margin is not None else tr("empty_placeholder")
             ))
             self.table.setItem(r, 5, QTableWidgetItem(
                 f"{price:.2f}" if price is not None else tr("empty_placeholder")
@@ -396,7 +416,7 @@ class _PricingPanel(QWidget, WidgetMixin):
                 )
             self.table.setItem(r, 6, profit_item)
             self.table.setItem(r, 7, QTableWidgetItem(
-                f"{margin_actual:.1f} %" if margin_actual is not None else tr("empty_placeholder")
+                f"{margin_actual:.1f} {tr('pricing_margin_pct_sign')}" if margin_actual is not None else tr("empty_placeholder")
             ))
             shown += 1
         self._filter.set_count(shown, len(self._all_rows))
