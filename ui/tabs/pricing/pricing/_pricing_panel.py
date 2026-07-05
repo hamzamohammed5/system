@@ -12,8 +12,10 @@ from PyQt5.QtWidgets import (
 from PyQt5.QtCore import Qt
 from PyQt5.QtGui  import QColor
 
-from db.shared.items_repo     import fetch_items_by_type, fetch_item
-from db.pricing.pricing_repo  import fetch_all_pricing, upsert_pricing, delete_pricing, fetch_pricing
+from services.pricing.pricing_service import (
+    get_all_pricing, get_pricing, save_pricing, remove_pricing,
+    get_final_products, get_item,
+)
 from models.costing            import calc_cost
 from ui.theme import _C
 from ui.font import FS_BASE, FS_MD, FS_LG
@@ -201,7 +203,7 @@ class _PricingPanel(QWidget, WidgetMixin):
         self.cmb_product.blockSignals(True)
         self.cmb_product.clear()
         self.cmb_product.addItem(tr("pricing_select_product_placeholder"), None)
-        for row in fetch_items_by_type(self.conn, "final"):
+        for row in get_final_products(self.conn):
             self.cmb_product.addItem(row["name"], row["id"])
         restored = False
         for i in range(self.cmb_product.count()):
@@ -282,20 +284,20 @@ class _PricingPanel(QWidget, WidgetMixin):
         if price <= 0:
             QMessageBox.warning(self, tr("warning"), tr("pricing_price_positive"))
             return
-        upsert_pricing(self.conn, prod_id, self.sp_margin.value(), price)
+        save_pricing(self.conn, prod_id, self.sp_margin.value(), price)
         self._reset_form()
         emit_company_data_changed()   # [إصلاح] بدل bus.data_changed.emit()
 
     def _delete(self):
         if self._editing_id is None:
             return
-        item = fetch_item(self.conn, self._editing_id)
+        item = get_item(self.conn, self._editing_id)
         name = item["name"] if item else f"ID:{self._editing_id}"
         if QMessageBox.question(
             self, tr("confirm_delete"), tr("pricing_delete_confirm", name=name),
             QMessageBox.Yes | QMessageBox.No
         ) == QMessageBox.Yes:
-            delete_pricing(self.conn, self._editing_id)
+            remove_pricing(self.conn, self._editing_id)
             self._reset_form()
             emit_company_data_changed()   # [إصلاح]
 
@@ -329,8 +331,8 @@ class _PricingPanel(QWidget, WidgetMixin):
         self.lbl_stat_cost.setText(tr("pricing_cost_suffix", cost=cost))
 
     def _load_for_edit(self, prod_id: int):
-        pricing = fetch_pricing(self.conn, prod_id)
-        item    = fetch_item(self.conn, prod_id)
+        pricing = get_pricing(self.conn, prod_id)
+        item    = get_item(self.conn, prod_id)
         if not item:
             return
         self._editing_id = prod_id
@@ -356,7 +358,7 @@ class _PricingPanel(QWidget, WidgetMixin):
     # ══════════════════════════════════════════════════════
 
     def _load(self):
-        self._all_rows = list(fetch_all_pricing(self.conn))
+        self._all_rows = list(get_all_pricing(self.conn))
         self._apply_filter()
 
     def _apply_filter(self):
