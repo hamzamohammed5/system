@@ -21,7 +21,6 @@ from ui.widgets.tables.tables       import make_table
 from ui.widgets.panels.filter import FilterToolbar
 from ui.widgets.core.widget_mixin import WidgetMixin
 from ui.widgets.core.i18n import tr
-from ui.theme import _C
 from ui.constants import (
     SPACING_SM, BTN_MIN_HEIGHT, OFFERS_TABLE_ROOT_MARGIN,
     OFFERS_TABLE_COL0_ID_W, OFFERS_TABLE_COL1_NAME_W, OFFERS_TABLE_COL2_CAT_W,
@@ -51,7 +50,7 @@ class _OffersTable(QWidget, WidgetMixin):
         self._on_delete = on_delete
         self._on_select = on_select
         self._all_rows  = []
-        self._init_widget_mixin(theme=False, font=False, lang=False, data=True)
+        self._init_widget_mixin(theme=True, font=False, lang=False, data=True)
         self._build()
         self._load()
 
@@ -66,6 +65,9 @@ class _OffersTable(QWidget, WidgetMixin):
                 pass
         from db.companies.company_state import company_state
         return company_state.get_erp_conn()
+
+    def _refresh_style(self, *_):
+        self._apply_filter()
 
     def _refresh_data(self, company_id=None):
         self._load()
@@ -169,6 +171,7 @@ class _OffersTable(QWidget, WidgetMixin):
 
             profit = s.get("profit", 0)
             pi = QTableWidgetItem(f"{profit:.2f}")
+            from ui.theme import _C
             pi.setForeground(QColor(_C["success"]) if profit >= 0 else QColor(_C["danger"]))
             self.table.setItem(r, 8, pi)
             self.table.setItem(r, 9, QTableWidgetItem(offer["created_at"]))

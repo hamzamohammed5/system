@@ -10,7 +10,6 @@ from PyQt5.QtWidgets import (
     QLineEdit, QPushButton, QDoubleSpinBox,
     QMessageBox,
 )
-from PyQt5.QtCore import Qt
 
 from services.pricing.offers_service import (
     get_offer, get_offer_items,
@@ -22,8 +21,7 @@ from ui.widgets.combo.category import CategoryCombo
 from ui.widgets.core.i18n import tr
 from ui.widgets.core.events import emit_company_data_changed
 from ui.widgets.core.widget_mixin import WidgetMixin
-from ui.theme import _C
-from ui.font import FS_XS, FS_BASE, FS_LG
+
 from ui.constants import (
     FORM_LAYOUT_MARGIN, SPACING_MD, SPACING_SM, SPACING_LG, SPACING_XS,
     BTN_MIN_HEIGHT,
@@ -34,6 +32,7 @@ from ui.constants import (
     OFFER_FORM_HDR_ICON_W, OFFER_FORM_HDR_DEL_W,
     OFFER_FORM_HDR_SEARCH_W, OFFER_FORM_HDR_COST_W,
     OFFER_FORM_HDR_PRICE_W, OFFER_FORM_HDR_QTY_W, OFFER_FORM_HDR_TOTAL_W,
+    OFFER_ADD_ROW_BTN_PAD_V, OFFER_ADD_ROW_BTN_PAD_H, OFFER_SAVE_BTN_PAD_H,
 )
 
 from .offer_item_row import _OfferItemRow
@@ -64,8 +63,9 @@ class _OfferForm(QWidget, WidgetMixin):
         self._editing_id   = None
         self._editing_name = None
         self._item_rows: list[_OfferItemRow] = []
-        self._init_widget_mixin(theme=False, font=False, lang=True, data=False)
+        self._init_widget_mixin(theme=True, font=True, lang=True, data=False)
         self._build()
+        self._refresh_style()
 
     # ── connection صالح دايماً ────────────────────────────
     def _live_conn(self):
@@ -78,6 +78,54 @@ class _OfferForm(QWidget, WidgetMixin):
         from db.companies.company_state import company_state
         return company_state.get_erp_conn()
 
+    def _refresh_style(self, *_):
+        from ui.theme import _C
+        from ui.font import FS_XS, FS_BASE, FS_LG
+        self._header_frame.setStyleSheet(f"""
+            QFrame {{
+                background: {_C['bg_surface']};
+                border: 1px solid {_C['orange_border']};
+                border-radius: {TABLE_BORDER_RADIUS}px;
+            }}
+        """)
+        self.lbl_mode.setStyleSheet(
+            f"font-weight:bold; color:{_C['orange']}; font-size:{FS_BASE}px;"
+        )
+        self._lbl_disc_pct.setStyleSheet(f"font-weight:bold; color:{_C['orange']};")
+        for lbl in self._hdr_labels:
+            lbl.setStyleSheet(
+                f"font-size:{FS_XS}px; font-weight:bold; color:{_C['text_muted']};"
+                f"border-bottom:1px solid {_C['border']}; background:transparent;"
+            )
+        self._scroll.setStyleSheet(f"""
+            QScrollArea {{
+                border: 1px solid {_C['orange_border']};
+                border-radius: {STAT_BOX_BORDER_RADIUS}px;
+                background: {_C['scroll_warm_bg']};
+            }}
+        """)
+        self._btn_add_row.setStyleSheet(f"""
+            QPushButton {{
+                background: {_C['orange_bg']};
+                border: 1px solid {_C['orange_border']};
+                border-radius: {FILTER_COMBO_BORDER_RADIUS}px;
+                color: {_C['orange']};
+                font-weight: bold;
+                padding: {OFFER_ADD_ROW_BTN_PAD_V}px {OFFER_ADD_ROW_BTN_PAD_H}px;
+            }}
+            QPushButton:hover {{ background: {_C['orange_border']}; }}
+        """)
+        self.btn_save.setStyleSheet(f"""
+            QPushButton {{
+                background: {_C['orange']};
+                color: {_C['bg_input']};
+                font-weight: bold;
+                border-radius: {STAT_BOX_BORDER_RADIUS}px;
+                padding: 0 {OFFER_SAVE_BTN_PAD_H}px;
+            }}
+            QPushButton:hover {{ background: {_C['orange_hover']}; }}
+        """)
+
     def _build(self):
         root = QVBoxLayout(self)
         m = FORM_LAYOUT_MARGIN
@@ -85,22 +133,13 @@ class _OfferForm(QWidget, WidgetMixin):
         root.setSpacing(SPACING_MD)
 
         header = QFrame()
-        header.setStyleSheet(f"""
-            QFrame {{
-                background: {_C['bg_surface']};
-                border: 1px solid {_C['orange_border']};
-                border-radius: {TABLE_BORDER_RADIUS}px;
-            }}
-        """)
+        self._header_frame = header
         h_lay = QVBoxLayout(header)
         mn = STAT_CARD_MARGIN_NORMAL
         h_lay.setContentsMargins(mn[0], mn[1], mn[2], mn[3])
         h_lay.setSpacing(SPACING_MD)
 
         self.lbl_mode = QLabel(tr("offer_new_mode"))
-        self.lbl_mode.setStyleSheet(
-            f"font-weight:bold; color:{_C['orange']}; font-size:{FS_BASE}px;"
-        )
         h_lay.addWidget(self.lbl_mode)
 
         info_row = QHBoxLayout()
@@ -118,7 +157,7 @@ class _OfferForm(QWidget, WidgetMixin):
         self.sp_discount.setValue(0)
         self.sp_discount.setFixedWidth(OFFER_FORM_DISC_W)
         lbl_disc_pct = QLabel(tr("offer_discount_pct_sym"))
-        lbl_disc_pct.setStyleSheet(f"font-weight:bold; color:{_C['orange']};")
+        self._lbl_disc_pct = lbl_disc_pct
 
         lbl_cat = QLabel(tr("offer_category_field"))
         lbl_cat.setStyleSheet("font-weight:bold;")
@@ -164,15 +203,14 @@ class _OfferForm(QWidget, WidgetMixin):
         ch_lay.setContentsMargins(SPACING_MD, 0, SPACING_MD, 0)
         ch_lay.setSpacing(SPACING_MD)
 
+        self._hdr_labels = []
+
         def _hdr(text, w=None, stretch=0):
             lbl = QLabel(text)
-            lbl.setStyleSheet(
-                f"font-size:{FS_XS}px; font-weight:bold; color:{_C['text_muted']};"
-                f"border-bottom:1px solid {_C['border']}; background:transparent;"
-            )
             if w:
                 lbl.setFixedWidth(w)
             ch_lay.addWidget(lbl, stretch=stretch)
+            self._hdr_labels.append(lbl)
 
         _hdr(tr("offer_header_search"), OFFER_FORM_HDR_SEARCH_W)
         _hdr(tr("offer_col_product"), stretch=1)
@@ -192,46 +230,20 @@ class _OfferForm(QWidget, WidgetMixin):
         self._rows_layout.addStretch()
 
         scroll = QScrollArea()
+        self._scroll = scroll
         scroll.setWidgetResizable(True)
         scroll.setWidget(self._rows_container)
         scroll.setMinimumHeight(OFFER_FORM_SCROLL_MIN_H)
         scroll.setMaximumHeight(OFFER_FORM_SCROLL_MAX_H)
-        scroll.setStyleSheet(f"""
-            QScrollArea {{
-                border: 1px solid {_C['orange_border']};
-                border-radius: {STAT_BOX_BORDER_RADIUS}px;
-                background: {_C['scroll_warm_bg']};
-            }}
-        """)
         root.addWidget(scroll, stretch=1)
 
         btn_add_row = QPushButton(tr("offer_add_product_btn"))
+        self._btn_add_row = btn_add_row
         btn_add_row.setMinimumHeight(BTN_MIN_HEIGHT)
-        btn_add_row.setStyleSheet(f"""
-            QPushButton {{
-                background: {_C['orange_bg']};
-                border: 1px solid {_C['orange_border']};
-                border-radius: {FILTER_COMBO_BORDER_RADIUS}px;
-                color: {_C['orange']};
-                font-weight: bold;
-                padding: 4px 12px;
-            }}
-            QPushButton:hover {{ background: {_C['orange_border']}; }}
-        """)
         btn_add_row.clicked.connect(lambda: self._add_item_row())
 
         self.btn_save = QPushButton(tr("offer_save_btn"))
         self.btn_save.setMinimumHeight(BTN_MIN_HEIGHT)
-        self.btn_save.setStyleSheet(f"""
-            QPushButton {{
-                background: {_C['orange']};
-                color: {_C['bg_input']};
-                font-weight: bold;
-                border-radius: {STAT_BOX_BORDER_RADIUS}px;
-                padding: 0 18px;
-            }}
-            QPushButton:hover {{ background: {_C['orange_hover']}; }}
-        """)
         self.btn_save.clicked.connect(self._save)
 
         self.btn_cancel = QPushButton(tr("offer_cancel_btn"))
@@ -313,6 +325,8 @@ class _OfferForm(QWidget, WidgetMixin):
 
         profit_key = "success" if profit >= 0 else "danger"
         self.lbl_profit.setText(tr("amount_fmt").format(amount=profit))
+        from ui.theme import _C
+        from ui.font import FS_LG
         self.lbl_profit.setStyleSheet(
             f"font-size:{FS_LG}px; font-weight:bold; color:{_C[profit_key]};"
             "background:transparent; border:none;"

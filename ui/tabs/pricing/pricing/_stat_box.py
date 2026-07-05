@@ -7,9 +7,7 @@ ui/tabs/pricing/pricing/_stat_box.py
 from PyQt5.QtWidgets import QFrame, QVBoxLayout, QLabel
 from PyQt5.QtCore import Qt
 
-from ui.theme import _C
-from ui.font import FS_XS, FS_LG
-from ui.constants import STAT_BOX_BORDER_RADIUS, STAT_BOX_PADDING, STAT_INNER_MARGIN_COMPACT, STAT_CARD_SPACING_COMPACT
+from ui.constants import STAT_BOX_BORDER_RADIUS, STAT_BOX_BORDER_W, STAT_BOX_PADDING, STAT_INNER_MARGIN_COMPACT, STAT_CARD_SPACING_COMPACT
 from ui.widgets.core.i18n import tr
 
 
@@ -20,12 +18,14 @@ def stat_box(label: str, color_key: str = "accent") -> tuple:
         label:     النص المعروض كعنوان البطاقة (يأتي من tr() خارجياً).
         color_key: مفتاح اللون في _C (افتراضي: "accent").
     """
+    from ui.theme import _C
+    from ui.font import FS_XS, FS_LG
     color = _C[color_key]
     frame = QFrame()
     frame.setStyleSheet(f"""
         QFrame {{
             background: {_C['bg_surface']};
-            border: 1px solid {_C['border']};
+            border: {STAT_BOX_BORDER_W}px solid {_C['border']};
             border-radius: {STAT_BOX_BORDER_RADIUS}px;
             padding: {STAT_BOX_PADDING}px;
         }}

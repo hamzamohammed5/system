@@ -15,11 +15,12 @@ from ui.widgets.managers.category import CategoryManager
 from ui.widgets.core.i18n import tr
 from ui.widgets.core.events import emit_company_data_changed
 from ui.widgets.core.widget_mixin import WidgetMixin
-from ui.theme import _C
 from ui.constants import (
     OFFERS_TAB_SPLITTER_HANDLE_W,
     OFFERS_TAB_FORM_SIZE, OFFERS_TAB_BOTTOM_SIZE,
     OFFERS_TAB_TABLE_SIZE, OFFERS_TAB_DETAILS_SIZE,
+    TAB_INDICATOR_BORDER_W,
+    SPLITTER_HANDLE_BORDER_W,
 )
 
 from .offer_form    import _OfferForm
@@ -31,8 +32,9 @@ class OffersTab(QWidget, WidgetMixin):
 
     def __init__(self, parent=None):
         super().__init__(parent)
-        self._init_widget_mixin(theme=False, font=False, lang=False, data=False)
+        self._init_widget_mixin(theme=True, font=False, lang=False, data=False)
         self._build()
+        self._refresh_style()
 
     # ── connection صالح دايماً ────────────────────────────
 
@@ -40,40 +42,47 @@ class OffersTab(QWidget, WidgetMixin):
         from db.companies.company_state import company_state
         return company_state.get_erp_conn()
 
+    def _refresh_style(self, *_):
+        from ui.theme import _C
+        self._tabs_widget.setStyleSheet(f"""
+            QTabBar::tab:selected {{
+                color: {_C['orange']};
+                border-top: {TAB_INDICATOR_BORDER_W}px solid {_C['orange']};
+            }}
+        """)
+        _splitter_style = f"""
+            QSplitter::handle {{
+                background: {_C['border']};
+                border-top: {SPLITTER_HANDLE_BORDER_W}px solid {_C['border_light']};
+            }}
+            QSplitter::handle:hover {{ background: {_C['orange_bg']}; }}
+        """
+        self._splitter.setStyleSheet(_splitter_style)
+        self._bottom_splitter.setStyleSheet(_splitter_style)
+
     def _build(self):
         root = QVBoxLayout(self)
         root.setContentsMargins(0, 0, 0, 0)
 
         tabs = QTabWidget()
-        tabs.setStyleSheet(f"""
-            QTabBar::tab:selected {{
-                color: {_C['orange']};
-                border-top: 2px solid {_C['orange']};
-            }}
-        """)
+        self._tabs_widget = tabs
 
         main_widget = QWidget()
         main_lay = QVBoxLayout(main_widget)
         main_lay.setContentsMargins(0, 0, 0, 0)
 
-        _splitter_style = f"""
-            QSplitter::handle {{
-                background: {_C['border']};
-                border-top: 1px solid {_C['border_light']};
-            }}
-            QSplitter::handle:hover {{ background: {_C['orange_bg']}; }}
-        """
+        _splitter_style = ""
 
         splitter = QSplitter(Qt.Vertical)
+        self._splitter = splitter
         splitter.setHandleWidth(OFFERS_TAB_SPLITTER_HANDLE_W)
-        splitter.setStyleSheet(_splitter_style)
 
         self._form = _OfferForm(self._live_conn())
         splitter.addWidget(self._form)
 
         bottom = QSplitter(Qt.Horizontal)
+        self._bottom_splitter = bottom
         bottom.setHandleWidth(OFFERS_TAB_SPLITTER_HANDLE_W)
-        bottom.setStyleSheet(_splitter_style)
 
         self._offers_table = _OffersTable(
             self._live_conn(),

@@ -15,11 +15,11 @@ from PyQt5.QtGui  import QColor
 from services.pricing.offers_service import get_offer_summary
 from ui.widgets.core.i18n import tr
 from ui.widgets.core.widget_mixin import WidgetMixin
-from ui.theme import _C
-from ui.font import FS_XS, FS_MD, FS_LG
 from ui.constants import (
     TABLE_BORDER_RADIUS, FORM_LAYOUT_MARGIN, SPACING_MD, SPACING_SM,
     TABLE_MIN_HEIGHT_DEFAULT,
+    OFFER_DET_COL1_CAT_W, OFFER_DET_COL2_QTY_W, OFFER_DET_COL3_COST_W,
+    OFFER_DET_COL4_PRICE_W, OFFER_DET_COL5_TOTAL_W, OFFER_DET_COL6_PROFIT_W,
 )
 
 from ..pricing._stat_box import stat_box
@@ -36,6 +36,7 @@ class _OfferDetails(QFrame, WidgetMixin):
 
     def _refresh_style(self, *_):
         from ui.theme import _C
+        from ui.font import FS_XS, FS_MD
         self.setStyleSheet(f"""
             QFrame {{
                 background: {_C['bg_surface']};
@@ -43,6 +44,13 @@ class _OfferDetails(QFrame, WidgetMixin):
                 border-radius: {TABLE_BORDER_RADIUS}px;
             }}
         """)
+        self.lbl_title.setStyleSheet(
+            f"font-weight:bold; color:{_C['orange']}; font-size:{FS_MD}px;"
+            "background:transparent; border:none;"
+        )
+        self.lbl_notes.setStyleSheet(
+            f"font-size:{FS_XS}px; color:{_C['text_muted']}; background:transparent; border:none;"
+        )
 
     # ── connection صالح دايماً ────────────────────────────
 
@@ -63,10 +71,6 @@ class _OfferDetails(QFrame, WidgetMixin):
         root.setSpacing(SPACING_MD)
 
         self.lbl_title = QLabel(tr("offer_details_placeholder"))
-        self.lbl_title.setStyleSheet(
-            f"font-weight:bold; color:{_C['orange']}; font-size:{FS_MD}px;"
-            "background:transparent; border:none;"
-        )
         self.lbl_title.setAlignment(Qt.AlignCenter)
         root.addWidget(self.lbl_title)
 
@@ -95,7 +99,11 @@ class _OfferDetails(QFrame, WidgetMixin):
 
         hh = self.table.horizontalHeader()
         hh.setSectionResizeMode(0, QHeaderView.Stretch)
-        col_widths = {1: 90, 2: 55, 3: 80, 4: 75, 5: 90, 6: 80}
+        col_widths = {
+            1: OFFER_DET_COL1_CAT_W, 2: OFFER_DET_COL2_QTY_W,
+            3: OFFER_DET_COL3_COST_W, 4: OFFER_DET_COL4_PRICE_W,
+            5: OFFER_DET_COL5_TOTAL_W, 6: OFFER_DET_COL6_PROFIT_W,
+        }
         for col, w in col_widths.items():
             hh.setSectionResizeMode(col, QHeaderView.Interactive)
             self.table.setColumnWidth(col, w)
@@ -103,9 +111,6 @@ class _OfferDetails(QFrame, WidgetMixin):
         root.addWidget(self.table, stretch=1)
 
         self.lbl_notes = QLabel("")
-        self.lbl_notes.setStyleSheet(
-            f"font-size:{FS_XS}px; color:{_C['text_muted']}; background:transparent; border:none;"
-        )
         self.lbl_notes.setWordWrap(True)
         root.addWidget(self.lbl_notes)
 
@@ -132,6 +137,8 @@ class _OfferDetails(QFrame, WidgetMixin):
         )
 
         self.table.setRowCount(0)
+        from ui.theme import _C
+        from ui.font import FS_LG
         for line in s["lines"]:
             r = self.table.rowCount()
             self.table.insertRow(r)
@@ -151,7 +158,7 @@ class _OfferDetails(QFrame, WidgetMixin):
                 price_item = QTableWidgetItem(f"{line['unit_price']:.2f}")
                 price_item.setForeground(QColor(_C["success"]))
             else:
-                price_item = QTableWidgetItem(tr("empty_placeholder") + " ⚠️")
+                price_item = QTableWidgetItem(tr("offer_no_pricing_cell"))
                 price_item.setForeground(QColor(_C["orange"]))
             self.table.setItem(r, 4, price_item)
 

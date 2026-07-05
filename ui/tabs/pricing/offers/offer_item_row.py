@@ -17,8 +17,6 @@ from services.pricing.offers_service import (
 )
 from ui.widgets.core.widget_mixin import WidgetMixin
 from ui.widgets.core.i18n import tr
-from ui.theme import _C
-from ui.font import FS_SM, FS_MD
 from ui.constants import (
     BTN_MIN_HEIGHT, SPACING_MD, SPACING_SM,
     FILTER_SEARCH_H, FILTER_COMBO_MIN_H,
@@ -26,6 +24,8 @@ from ui.constants import (
     OFFER_FORM_HDR_SEARCH_W, OFFER_FORM_HDR_COST_W,
     OFFER_FORM_HDR_PRICE_W, OFFER_FORM_HDR_QTY_W, OFFER_FORM_HDR_TOTAL_W,
     OFFER_ROW_PRODUCT_COMBO_W,
+    OFFER_ROW_SEARCH_PAD_V, OFFER_ROW_SEARCH_PAD_H,
+    STAT_BOX_BORDER_RADIUS,
 )
 
 
@@ -45,8 +45,9 @@ class _OfferItemRow(QFrame, WidgetMixin):
         self._conn      = conn
         self._on_remove = on_remove
         self._on_change = on_change
-        self._init_widget_mixin(theme=False, font=False, lang=False, data=True)
+        self._init_widget_mixin(theme=True, font=True, lang=False, data=True)
         self._build()
+        self._refresh_style()
         self._load_products()
 
     # ── connection صالح دايماً ────────────────────────────
@@ -63,14 +64,46 @@ class _OfferItemRow(QFrame, WidgetMixin):
     def _refresh_data(self, company_id=None):
         self._reload_products()
 
-    def _build(self):
+    def _refresh_style(self, *_):
+        from ui.theme import _C
+        from ui.font import FS_SM, FS_MD
         self.setStyleSheet(f"""
             QFrame {{
                 background: {_C['row_alt_bg']};
                 border: 1px solid {_C['row_alt_border']};
-                border-radius: 6px;
+                border-radius: {STAT_BOX_BORDER_RADIUS}px;
             }}
         """)
+        self.inp_search.setStyleSheet(f"""
+            QLineEdit {{
+                background: {_C['bg_input']};
+                border: 1px solid {_C['input_accent_border']};
+                border-radius: {STAT_BOX_BORDER_RADIUS}px;
+                padding: {OFFER_ROW_SEARCH_PAD_V}px {OFFER_ROW_SEARCH_PAD_H}px;
+                font-size: {FS_SM}px;
+            }}
+            QLineEdit:focus {{ border-color: {_C['orange']}; }}
+        """)
+        self.lbl_cost.setStyleSheet(
+            f"color:{_C['journal_dr_accent']}; font-size:{FS_SM}px;"
+            "background:transparent; border:none;"
+        )
+        self.lbl_listed.setStyleSheet(
+            f"color:{_C['success']}; font-size:{FS_SM}px; background:transparent; border:none;"
+        )
+        self.lbl_line.setStyleSheet(
+            f"color:{_C['orange']}; font-weight:bold; font-size:{FS_SM}px;"
+            "background:transparent; border:none;"
+        )
+        self.lbl_warn.setStyleSheet(
+            f"color:{_C['orange']}; font-size:{FS_SM}px; background:transparent; border:none;"
+        )
+        self._btn_del.setStyleSheet(
+            f"QPushButton {{ background:transparent; border:none; font-size:{FS_MD}px; }}"
+            f"QPushButton:hover {{ color:{_C['danger']}; }}"
+        )
+
+    def _build(self):
         lay = QHBoxLayout(self)
         lay.setContentsMargins(SPACING_MD, SPACING_SM, SPACING_MD, SPACING_SM)
         lay.setSpacing(SPACING_MD)
@@ -79,16 +112,6 @@ class _OfferItemRow(QFrame, WidgetMixin):
         self.inp_search.setPlaceholderText(tr("offer_select_product_search"))
         self.inp_search.setFixedWidth(OFFER_FORM_HDR_SEARCH_W)
         self.inp_search.setMinimumHeight(FILTER_SEARCH_H)
-        self.inp_search.setStyleSheet(f"""
-            QLineEdit {{
-                background: {_C['bg_input']};
-                border: 1px solid {_C['input_accent_border']};
-                border-radius: 4px;
-                padding: 2px 6px;
-                font-size: {FS_SM}px;
-            }}
-            QLineEdit:focus {{ border-color: {_C['orange']}; }}
-        """)
         self.inp_search.textChanged.connect(
             lambda t: self._load_products(filter_text=t.strip())
         )
@@ -100,18 +123,11 @@ class _OfferItemRow(QFrame, WidgetMixin):
 
         self.lbl_cost = QLabel(tr("empty_placeholder"))
         self.lbl_cost.setFixedWidth(OFFER_FORM_HDR_COST_W)
-        self.lbl_cost.setStyleSheet(
-            f"color:{_C['journal_dr_accent']}; font-size:{FS_SM}px;"
-            "background:transparent; border:none;"
-        )
         self.lbl_cost.setAlignment(Qt.AlignCenter)
         self.lbl_cost.setToolTip(tr("offer_col_unit_cost"))
 
         self.lbl_listed = QLabel(tr("empty_placeholder"))
         self.lbl_listed.setFixedWidth(OFFER_FORM_HDR_PRICE_W)
-        self.lbl_listed.setStyleSheet(
-            f"color:{_C['success']}; font-size:{FS_SM}px; background:transparent; border:none;"
-        )
         self.lbl_listed.setAlignment(Qt.AlignCenter)
         self.lbl_listed.setToolTip(tr("offer_col_unit_price"))
 
@@ -122,28 +138,18 @@ class _OfferItemRow(QFrame, WidgetMixin):
 
         self.lbl_line = QLabel(tr("empty_placeholder"))
         self.lbl_line.setFixedWidth(OFFER_FORM_HDR_TOTAL_W)
-        self.lbl_line.setStyleSheet(
-            f"color:{_C['orange']}; font-weight:bold; font-size:{FS_SM}px;"
-            "background:transparent; border:none;"
-        )
         self.lbl_line.setAlignment(Qt.AlignCenter)
         self.lbl_line.setToolTip(tr("offer_col_line_total"))
 
         self.lbl_warn = QLabel(tr("offer_row_warn_icon"))
-        self.lbl_warn.setStyleSheet(
-            f"color:{_C['orange']}; font-size:{FS_SM}px; background:transparent; border:none;"
-        )
         self.lbl_warn.setFixedWidth(OFFER_FORM_HDR_ICON_W)
         self.lbl_warn.setToolTip(tr("offer_no_price_tooltip"))
         self.lbl_warn.setVisible(False)
 
         btn_del = QPushButton(tr("offer_row_remove_btn"))
         btn_del.setFixedSize(OFFER_FORM_HDR_DEL_W, OFFER_FORM_HDR_DEL_W)
-        btn_del.setStyleSheet(
-            f"QPushButton {{ background:transparent; border:none; font-size:{FS_MD}px; }}"
-            f"QPushButton:hover {{ color:{_C['danger']}; }}"
-        )
         btn_del.clicked.connect(lambda: self._on_remove(self))
+        self._btn_del = btn_del
 
         lay.addWidget(self.inp_search)
         lay.addWidget(self.cmb_product, stretch=1)

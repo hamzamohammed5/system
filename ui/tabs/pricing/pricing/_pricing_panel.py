@@ -17,16 +17,27 @@ from db.pricing.pricing_repo  import fetch_all_pricing, upsert_pricing, delete_p
 from models.costing            import calc_cost
 from ui.theme import _C
 from ui.font import FS_BASE, FS_MD, FS_LG
+from ui.constants import (
+    PRICING_PANEL_SPIN_MIN_H, PRICING_PANEL_ROOT_MARGIN, PRICING_PANEL_ROOT_SPACING,
+    PRICING_PANEL_BTN_ROW_SPACING, PRICING_PANEL_FORM_FRAME_RADIUS, PRICING_PANEL_FORM_FRAME_BORDER_W,
+    PRICING_PANEL_FORM_MARGIN, PRICING_PANEL_FORM_SPACING, PRICING_PANEL_ROW1_SPACING,
+    PRICING_PANEL_CMB_PRODUCT_MIN_H, PRICING_PANEL_CMB_PRODUCT_MIN_W, PRICING_PANEL_SP_MARGIN_W,
+    PRICING_PANEL_SP_PRICE_W, PRICING_PANEL_ROW1_INNER_SPACING, PRICING_PANEL_STATS_ROW_SPACING,
+    PRICING_PANEL_TABLE_COL0_ID_W, PRICING_PANEL_TABLE_COL1_NAME_W, PRICING_PANEL_TABLE_COL2_CAT_W,
+    PRICING_PANEL_TABLE_COL3_COST_W, PRICING_PANEL_TABLE_COL4_MARGIN_W, PRICING_PANEL_TABLE_COL5_PRICE_W,
+    PRICING_PANEL_TABLE_COL6_PROFIT_W, PRICING_PANEL_TABLE_COL7_MARGIN_ACTUAL_W,
+)
 
 # ── الاستدعاءات المُصحَّحة ──────────────────────────────
 from ui.widgets.tables.tables       import make_table
 from ui.widgets.components.button   import make_btn
 from ui.widgets.panels.form_labels  import section_title
 from ui.widgets.panels.filter       import FilterToolbar
-from ui.widgets.core.events         import bus, emit_company_data_changed
+from ui.widgets.core.events         import emit_company_data_changed
 from ui.widgets.core.i18n           import tr
 
 from ui.tabs.costing.shared.scenario_comparison_widget import ScenarioComparisonWidget
+from ui.widgets.core.widget_mixin import WidgetMixin
 
 from ._stat_box import stat_box
 
@@ -35,21 +46,21 @@ def _spin(max_=9999999, dec=2):
     s = QDoubleSpinBox()
     s.setRange(0, max_)
     s.setDecimals(dec)
-    s.setMinimumHeight(30)
+    s.setMinimumHeight(PRICING_PANEL_SPIN_MIN_H)
     return s
 
 
 def buttons_row(*widgets):
     """بديل buttons_row القديمة — صف أزرار بسيط."""
     lay = QHBoxLayout()
-    lay.setSpacing(8)
+    lay.setSpacing(PRICING_PANEL_BTN_ROW_SPACING)
     for w in widgets:
         lay.addWidget(w)
     lay.addStretch()
     return lay
 
 
-class _PricingPanel(QWidget):
+class _PricingPanel(QWidget, WidgetMixin):
     def __init__(self, conn, parent=None):
         super().__init__(parent)
         self.conn        = conn
@@ -58,9 +69,11 @@ class _PricingPanel(QWidget):
         self._build()
         self._load_products_combo()
         self._load()
-        # [إصلاح] data_changed محذوف — استخدم company_data_changed
-        bus.company_data_changed.connect(lambda _cid: self._load_products_combo())
-        bus.company_data_changed.connect(lambda _cid: self._load())
+        self._init_widget_mixin(theme=False, font=False, lang=False, data=True)
+
+    def _refresh_data(self, company_id=None):
+        self._load_products_combo()
+        self._load()
 
     # ══════════════════════════════════════════════════════
     # بناء الواجهة
@@ -68,30 +81,32 @@ class _PricingPanel(QWidget):
 
     def _build(self):
         root = QVBoxLayout(self)
-        root.setContentsMargins(12, 10, 12, 12)
-        root.setSpacing(8)
+        m = PRICING_PANEL_ROOT_MARGIN
+        root.setContentsMargins(m[0], m[1], m[2], m[3])
+        root.setSpacing(PRICING_PANEL_ROOT_SPACING)
 
         form_frame = QFrame()
         form_frame.setStyleSheet(f"""
-            QFrame {{ background: {_C['bg_surface']}; border: 1px solid {_C['border']}; border-radius: 8px; }}
+            QFrame {{ background: {_C['bg_surface']}; border: {PRICING_PANEL_FORM_FRAME_BORDER_W}px solid {_C['border']}; border-radius: {PRICING_PANEL_FORM_FRAME_RADIUS}px; }}
         """)
         form_lay = QVBoxLayout(form_frame)
-        form_lay.setContentsMargins(14, 12, 14, 12)
-        form_lay.setSpacing(10)
+        fm = PRICING_PANEL_FORM_MARGIN
+        form_lay.setContentsMargins(fm[0], fm[1], fm[2], fm[3])
+        form_lay.setSpacing(PRICING_PANEL_FORM_SPACING)
 
         self.lbl_mode = QLabel(tr("pricing_new_mode"))
         self.lbl_mode.setStyleSheet(f"font-weight:bold; color:{_C['orange']}; font-size:{FS_BASE}px;")
         form_lay.addWidget(self.lbl_mode)
 
         row1 = QHBoxLayout()
-        row1.setSpacing(12)
+        row1.setSpacing(PRICING_PANEL_ROW1_SPACING)
 
         lbl_prod = QLabel(tr("pricing_product_label") + ":")
         lbl_prod.setStyleSheet(f"font-weight:bold; font-size:{FS_BASE}px;")
 
         self.cmb_product = QComboBox()
-        self.cmb_product.setMinimumHeight(32)
-        self.cmb_product.setMinimumWidth(200)
+        self.cmb_product.setMinimumHeight(PRICING_PANEL_CMB_PRODUCT_MIN_H)
+        self.cmb_product.setMinimumWidth(PRICING_PANEL_CMB_PRODUCT_MIN_W)
         self.cmb_product.currentIndexChanged.connect(self._on_product_selected)
 
         lbl_margin = QLabel(tr("pricing_margin_label") + ":")
@@ -99,7 +114,7 @@ class _PricingPanel(QWidget):
 
         self.sp_margin = _spin(1000, 2)
         self.sp_margin.setValue(30)
-        self.sp_margin.setFixedWidth(110)
+        self.sp_margin.setFixedWidth(PRICING_PANEL_SP_MARGIN_W)
         self.sp_margin.valueChanged.connect(self._update_preview)
 
         lbl_pct = QLabel(tr("pricing_margin_pct_sign"))
@@ -108,23 +123,23 @@ class _PricingPanel(QWidget):
         lbl_price = QLabel(tr("pricing_final_price_label") + ":")
         lbl_price.setStyleSheet(f"font-weight:bold; font-size:{FS_BASE}px;")
         self.sp_price = _spin()
-        self.sp_price.setFixedWidth(130)
+        self.sp_price.setFixedWidth(PRICING_PANEL_SP_PRICE_W)
         self.sp_price.valueChanged.connect(self._update_profit_from_price)
 
         row1.addWidget(lbl_prod)
         row1.addWidget(self.cmb_product, stretch=2)
-        row1.addSpacing(8)
+        row1.addSpacing(PRICING_PANEL_ROW1_INNER_SPACING)
         row1.addWidget(lbl_margin)
         row1.addWidget(self.sp_margin)
         row1.addWidget(lbl_pct)
-        row1.addSpacing(8)
+        row1.addSpacing(PRICING_PANEL_ROW1_INNER_SPACING)
         row1.addWidget(lbl_price)
         row1.addWidget(self.sp_price)
         row1.addStretch()
         form_lay.addLayout(row1)
 
         stats_row = QHBoxLayout()
-        stats_row.setSpacing(8)
+        stats_row.setSpacing(PRICING_PANEL_STATS_ROW_SPACING)
         f1, self.lbl_stat_cost       = stat_box(tr("pricing_cost_stat"),              "info")
         f2, self.lbl_stat_price      = stat_box(tr("pricing_suggested_stat"),    "success")
         f3, self.lbl_stat_manual     = stat_box(tr("pricing_manual_stat"),         "orange")
@@ -161,14 +176,14 @@ class _PricingPanel(QWidget):
              tr("pricing_col_price"), tr("pricing_col_profit"), tr("pricing_col_margin_actual_pct")],
             stretch_col=1
         )
-        self.table.setColumnWidth(0, 40)
-        self.table.setColumnWidth(1, 160)
-        self.table.setColumnWidth(2, 100)
-        self.table.setColumnWidth(3, 80)
-        self.table.setColumnWidth(4, 70)
-        self.table.setColumnWidth(5, 80)
-        self.table.setColumnWidth(6, 80)
-        self.table.setColumnWidth(7, 90)
+        self.table.setColumnWidth(0, PRICING_PANEL_TABLE_COL0_ID_W)
+        self.table.setColumnWidth(1, PRICING_PANEL_TABLE_COL1_NAME_W)
+        self.table.setColumnWidth(2, PRICING_PANEL_TABLE_COL2_CAT_W)
+        self.table.setColumnWidth(3, PRICING_PANEL_TABLE_COL3_COST_W)
+        self.table.setColumnWidth(4, PRICING_PANEL_TABLE_COL4_MARGIN_W)
+        self.table.setColumnWidth(5, PRICING_PANEL_TABLE_COL5_PRICE_W)
+        self.table.setColumnWidth(6, PRICING_PANEL_TABLE_COL6_PROFIT_W)
+        self.table.setColumnWidth(7, PRICING_PANEL_TABLE_COL7_MARGIN_ACTUAL_W)
         self.table.setAlternatingRowColors(True)
         self.table.itemSelectionChanged.connect(self._on_table_select)
         root.addWidget(self.table, stretch=1)
@@ -212,7 +227,7 @@ class _PricingPanel(QWidget):
             for lbl in (self.lbl_stat_cost, self.lbl_stat_price,
                         self.lbl_stat_manual, self.lbl_stat_profit,
                         self.lbl_stat_margin_pct):
-                lbl.setText("─")
+                lbl.setText(tr("empty_placeholder"))
             return
         cost   = calc_cost(self.conn, prod_id)
         margin = self.sp_margin.value() / 100.0
@@ -292,7 +307,7 @@ class _PricingPanel(QWidget):
         for lbl in (self.lbl_stat_cost, self.lbl_stat_price,
                     self.lbl_stat_manual, self.lbl_stat_profit,
                     self.lbl_stat_margin_pct):
-            lbl.setText("─")
+            lbl.setText(tr("empty_placeholder"))
         self.lbl_mode.setText(tr("pricing_new_mode"))
         self.btn_cancel.setVisible(False)
         self.btn_del.setVisible(False)
@@ -361,16 +376,16 @@ class _PricingPanel(QWidget):
             self.table.insertRow(r)
             self.table.setItem(r, 0, QTableWidgetItem(str(row["id"])))
             self.table.setItem(r, 1, QTableWidgetItem(row["name"]))
-            self.table.setItem(r, 2, QTableWidgetItem(row["category_name"] or "—"))
+            self.table.setItem(r, 2, QTableWidgetItem(row["category_name"] or tr("dash")))
             self.table.setItem(r, 3, QTableWidgetItem(f"{cost:.2f}"))
             self.table.setItem(r, 4, QTableWidgetItem(
-                f"{margin:.1f} %" if margin is not None else "─"
+                f"{margin:.1f} %" if margin is not None else tr("empty_placeholder")
             ))
             self.table.setItem(r, 5, QTableWidgetItem(
-                f"{price:.2f}" if price is not None else "─"
+                f"{price:.2f}" if price is not None else tr("empty_placeholder")
             ))
             profit_item = QTableWidgetItem(
-                f"{profit:.2f}" if profit is not None else "─"
+                f"{profit:.2f}" if profit is not None else tr("empty_placeholder")
             )
             if profit is not None:
                 profit_item.setForeground(
@@ -379,7 +394,7 @@ class _PricingPanel(QWidget):
                 )
             self.table.setItem(r, 6, profit_item)
             self.table.setItem(r, 7, QTableWidgetItem(
-                f"{margin_actual:.1f} %" if margin_actual is not None else "─"
+                f"{margin_actual:.1f} %" if margin_actual is not None else tr("empty_placeholder")
             ))
             shown += 1
         self._filter.set_count(shown, len(self._all_rows))
