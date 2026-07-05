@@ -18,7 +18,10 @@ from ui.widgets.theme.layout_styles import tab_style
 from ui.theme                        import _C
 from ui.widgets.core.i18n           import tr
 from ui.font                        import FS_MD, FS_LG
-from ui.constants                    import SECTION_HEADER_HEIGHT
+from ui.constants                    import (
+    SECTION_HEADER_HEIGHT, SECTION_HEADER_BORDER_W, SECTION_HEADER_PAD_RIGHT,
+    COSTING_ERR_TAB_BORDER_W, COSTING_ERR_TAB_RADIUS, COSTING_ERR_TAB_PAD,
+)
 from ui.widgets.core.widget_mixin   import WidgetMixin
 
 from .costing.raw_tab     import RawTab
@@ -33,8 +36,8 @@ def _make_error_tab(msg: str) -> QLabel:
     lbl.setAlignment(Qt.AlignCenter)
     lbl.setStyleSheet(
         f"color:{_C['danger']}; font-size:{FS_MD}px;"
-        f"background:{_C['danger_bg']}; border:1px solid {_C['danger_border']};"
-        "border-radius:6px; padding:12px;"
+        f"background:{_C['danger_bg']}; border:{COSTING_ERR_TAB_BORDER_W}px solid {_C['danger_border']};"
+        f"border-radius:{COSTING_ERR_TAB_RADIUS}px; padding:{COSTING_ERR_TAB_PAD}px;"
     )
     return lbl
 
@@ -90,11 +93,11 @@ class CostingSection(QWidget, WidgetMixin):
         self._header.setStyleSheet(f"""
             QLabel {{
                 background: {_C['bg_surface']};
-                border-bottom: 1px solid {_C['border']};
+                border-bottom: {SECTION_HEADER_BORDER_W}px solid {_C['border']};
                 font-size: {FS_LG}px;
                 font-weight: bold;
                 color: {_C['accent']};
-                padding-right: 16px;
+                padding-right: {SECTION_HEADER_PAD_RIGHT}px;
             }}
         """)
         if hasattr(self, "_tabs"):

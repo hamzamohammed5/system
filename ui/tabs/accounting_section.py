@@ -43,6 +43,9 @@ from ui.widgets.theme.layout_styles import tab_style
 from ui.theme                        import _C
 from ui.widgets.core.i18n           import tr
 from ui.font                        import FS_BASE, FS_MD
+from ui.constants                    import (
+    ACCOUNTING_TAB_MSG_PAD, ACCOUNTING_TAB_ERR_RADIUS, ACCOUNTING_TAB_ERR_MARGIN,
+)
 from ui.widgets.core.widget_mixin   import WidgetMixin
 
 from .accounting.journal_tab   import JournalTab
@@ -87,7 +90,7 @@ class AccountingTab(QWidget, WidgetMixin):
         if not company_state.is_ready:
             lbl = QLabel(tr("accounting_no_company_msg"))
             lbl.setAlignment(Qt.AlignCenter)
-            lbl.setStyleSheet(f"font-size:{FS_MD}px; color:{_C['text_muted']}; padding:40px;")
+            lbl.setStyleSheet(f"font-size:{FS_MD}px; color:{_C['text_muted']}; padding:{ACCOUNTING_TAB_MSG_PAD}px;")
             root.addWidget(lbl)
             return
 
@@ -99,8 +102,8 @@ class AccountingTab(QWidget, WidgetMixin):
             lbl.setAlignment(Qt.AlignCenter)
             lbl.setWordWrap(True)
             lbl.setStyleSheet(
-                f"font-size:{FS_BASE}px; color:{_C['danger']}; padding:40px;"
-                f"background:{_C['danger_bg']}; border-radius:8px; margin:20px;"
+                f"font-size:{FS_BASE}px; color:{_C['danger']}; padding:{ACCOUNTING_TAB_MSG_PAD}px;"
+                f"background:{_C['danger_bg']}; border-radius:{ACCOUNTING_TAB_ERR_RADIUS}px; margin:{ACCOUNTING_TAB_ERR_MARGIN}px;"
             )
             root.addWidget(lbl)
             return

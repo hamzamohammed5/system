@@ -14,13 +14,13 @@ ui/tabs/design_section.py
 
 from PyQt5.QtWidgets import QWidget, QVBoxLayout, QTabWidget, QLabel
 
-from db.designs.design_schema import get_designs_connection, create_designs_tables
+from services.design import get_designs_conn_and_init
 
 from ui.widgets.theme.layout_styles import tab_style
 from ui.theme                        import _C
 from ui.widgets.core.i18n           import tr
 from ui.font                        import FS_MD
-from ui.constants                    import SECTION_HEADER_HEIGHT
+from ui.constants                    import SECTION_HEADER_HEIGHT, SECTION_HEADER_BORDER_W, SECTION_HEADER_PAD_RIGHT
 from ui.widgets.core.widget_mixin   import WidgetMixin
 
 from .design.dimension_sets_tab import DimensionSetsTab
@@ -31,8 +31,7 @@ class DesignSection(QWidget, WidgetMixin):
     def __init__(self, parent=None):
         super().__init__(parent)
         # إنشاء قاعدة بيانات التصميمات
-        self.conn = get_designs_connection()
-        create_designs_tables(self.conn)
+        self.conn = get_designs_conn_and_init()
         self._build()
         self._init_widget_mixin(theme=True, font=True, lang=False, data=False)
 
@@ -71,11 +70,11 @@ class DesignSection(QWidget, WidgetMixin):
         self._header.setStyleSheet(f"""
             QLabel {{
                 background: {_C['bg_surface']};
-                border-bottom: 1px solid {_C['border']};
+                border-bottom: {SECTION_HEADER_BORDER_W}px solid {_C['border']};
                 font-size: {FS_MD}px;
                 font-weight: bold;
                 color: {_C['purple']};
-                padding-right: 16px;
+                padding-right: {SECTION_HEADER_PAD_RIGHT}px;
             }}
         """)
         if hasattr(self, "_tabs"):
