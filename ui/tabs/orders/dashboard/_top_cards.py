@@ -5,6 +5,7 @@ from PyQt5.QtWidgets import QHBoxLayout
 from ui.widgets.components.stat_card import make_stat_card_simple
 from ui.widgets.core.i18n import tr
 from ui.theme import _C
+from ui.constants import DASHBOARD_TOP_CARDS_SPACING
 
 
 def build_top_cards(dashboard) -> QHBoxLayout:
@@ -13,7 +14,7 @@ def build_top_cards(dashboard) -> QHBoxLayout:
     يرجع QHBoxLayout جاهز للإضافة.
     """
     row = QHBoxLayout()
-    row.setSpacing(12)
+    row.setSpacing(DASHBOARD_TOP_CARDS_SPACING)
 
     card1 = make_stat_card_simple(tr("order_total_count"),  color=_C['accent'], icon="📋")
     card2 = make_stat_card_simple(tr("order_urgent_count"), color=_C['danger'], icon="🔴")

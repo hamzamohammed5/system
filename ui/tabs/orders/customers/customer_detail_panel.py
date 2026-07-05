@@ -7,6 +7,18 @@ ui/tabs/orders/customers/customer_detail_panel.py
 from PyQt5.QtWidgets import QMessageBox, QVBoxLayout
 from PyQt5.QtCore    import Qt, pyqtSignal
 
+from ui.constants import (
+    CUSTOMER_CONTACTS_MAX_H,
+    CUSTOMER_ORDERS_MAX_H,
+    CUSTOMER_CONTACT_COL_ROLE_W,
+    CUSTOMER_CONTACT_COL_PHONE_W,
+    CUSTOMER_CONTACT_COL_EMAIL_W,
+    CUSTOMER_ORDERS_COL_STATUS_W,
+    CUSTOMER_ORDERS_COL_PRI_W,
+    CUSTOMER_ORDERS_COL_TOTAL_W,
+    CUSTOMER_ORDERS_COL_DATE_W,
+)
+
 from services.orders.customer_service import CustomerService
 
 from ui.tabs.orders._customer_form import _CustomerForm
@@ -62,8 +74,8 @@ class CustomerDetailPanel(BaseDetailPanel):
                 tr("contact_phone_lbl"), tr("contact_email_lbl"),
             ],
             stretch_col=0,
-            col_widths={1: 80, 2: 100, 3: 120},
-            max_height=140,
+            col_widths={1: CUSTOMER_CONTACT_COL_ROLE_W, 2: CUSTOMER_CONTACT_COL_PHONE_W, 3: CUSTOMER_CONTACT_COL_EMAIL_W},
+            max_height=CUSTOMER_CONTACTS_MAX_H,
         )
         lay.addWidget(self.contacts_table)
 
@@ -77,9 +89,9 @@ class CustomerDetailPanel(BaseDetailPanel):
                 tr("order_col_priority"), tr("order_header_total"), tr("order_date"),
             ],
             stretch_col=0,
-            col_widths={1: 90, 2: 70, 3: 80, 4: 90},
+            col_widths={1: CUSTOMER_ORDERS_COL_STATUS_W, 2: CUSTOMER_ORDERS_COL_PRI_W, 3: CUSTOMER_ORDERS_COL_TOTAL_W, 4: CUSTOMER_ORDERS_COL_DATE_W},
         )
-        self.orders_table.setMaximumHeight(220)
+        self.orders_table.setMaximumHeight(CUSTOMER_ORDERS_MAX_H)
         lay.addWidget(self.orders_table)
 
     def _load_data(self, item_id: int):

@@ -3,6 +3,7 @@ ui/tabs/orders/dashboard/_config.py
 """
 from ui.theme import _C
 from ui.widgets.core.i18n import tr
+from ui.constants import DASHBOARD_RECENT_TABLE_COL_WIDTHS, DASHBOARD_TABLE_BORDER_PAD
 
 
 def get_status_config() -> dict:
@@ -66,5 +67,5 @@ def get_table_cols() -> list:
     ]]
 
 
-COL_WIDTHS    = {0: 130, 1: 160, 2: 80, 3: 100, 4: 75, 5: 100, 6: 90}
-TABLE_TOTAL_W = sum(COL_WIDTHS.values()) + 4  # +4 للـ border
+COL_WIDTHS    = DASHBOARD_RECENT_TABLE_COL_WIDTHS
+TABLE_TOTAL_W = sum(COL_WIDTHS.values()) + DASHBOARD_TABLE_BORDER_PAD  # +4 للـ border
