@@ -16,7 +16,7 @@ from ui.theme import _C
 from ui.font import FS_SM, FS_BASE, FS_MD, FS_LG, FS_XL
 from ui.widgets.core.i18n import tr
 from ui.widgets.core.widget_mixin import WidgetMixin
-from ui.widgets.shared.message_box import msg_question, msg_info, msg_warning, msg_critical
+from ui.widgets.dialogs.message import msg_question, msg_info, msg_warning, msg_critical
 from ui.constants import (
     SEPARATOR_LINE_H,
     COMPANIES_DLG_MIN_W, COMPANIES_DLG_MIN_H,

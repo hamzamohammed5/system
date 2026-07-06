@@ -24,6 +24,7 @@ from services.companies.shared_items_service import SharedItemsService
 from services.companies.company_service import CompanyService
 from ui.widgets.core.events import emit_company_data_changed
 from ui.widgets.core.i18n import tr
+from ui.widgets.core.widget_mixin import WidgetMixin
 from ui.font import FS_SM, FS_LG
 from ui.constants import (
     SHARED_DLG_MIN_W, SHARED_DLG_MIN_H,
@@ -51,7 +52,7 @@ def _spin(max_=SHARED_DLG_SPIN_MAX_DEFAULT, dec=SHARED_DLG_SPIN_DEC_DEFAULT):
     return s
 
 
-class SharedItemsDialog(QDialog):
+class SharedItemsDialog(QDialog, WidgetMixin):
     """
     نافذة تعديل عنصر مشترك.
 
@@ -77,6 +78,7 @@ class SharedItemsDialog(QDialog):
         self.setMinimumSize(SHARED_DLG_MIN_W, SHARED_DLG_MIN_H)
         self.setModal(True)
         self.setLayoutDirection(Qt.RightToLeft)
+        self._init_widget_mixin(theme=False, font=False, lang=False, data=False)
 
         self._load_item()
         self._build()

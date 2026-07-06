@@ -22,10 +22,8 @@ from PyQt5.QtWidgets import (
 from PyQt5.QtCore import Qt, pyqtSignal
 from PyQt5.QtGui  import QColor, QFont, QBrush
 
-from db.companies.shared_items_repo import (
-    fetch_all_shared_items, delete_shared_item,
-    fetch_linked_companies,
-)
+from services.companies.shared_items_service import SharedItemsService
+from services.companies.company_service import CompanyService
 from ui.widgets.core.events import emit_company_data_changed
 from ui.widgets.core.i18n import tr
 from ui.font import FS_SM, FS_LG
@@ -79,6 +77,7 @@ class SharedItemsManagerDialog(QDialog):
     def __init__(self, central_conn, parent=None):
         super().__init__(parent)
         self._conn = central_conn
+        self._svc  = SharedItemsService(central_conn)
         self.setWindowTitle(tr("shared_item_header"))
         self.setMinimumSize(SHARED_MGR_MIN_W, SHARED_MGR_MIN_H)
         self.setModal(True)
@@ -225,12 +224,12 @@ class SharedItemsManagerDialog(QDialog):
     def _load(self):
         from ui.theme import _C
         self.tree.clear()
-        items = fetch_all_shared_items(self._conn)
+        items = self._svc.list_items()
 
         # تجميع بالنوع
         by_type: dict = {}
         for item in items:
-            t = item["shared_type"]
+            t = item.shared_type
             by_type.setdefault(t, []).append(item)
 
         for shared_type, type_items in sorted(by_type.items()):
@@ -249,27 +248,23 @@ class SharedItemsManagerDialog(QDialog):
             type_node.setData(0, Qt.UserRole, ("__type__", shared_type))
 
             for item in type_items:
-                linked_cos = fetch_linked_companies(self._conn, item["id"])
+                linked_cos = self._svc.list_linked_companies(item.id)
                 co_names   = ", ".join(c["name"] for c in linked_cos) or tr("dash")
 
-                try:
-                    import json
-                    data = json.loads(item["data"]) if item["data"] else {}
-                except Exception:
-                    data = {}
+                data = item.data or {}
 
                 data_summary = self._data_summary(shared_type, data)
                 type_short = _type_label(shared_type).split("  ", 1)[-1] if "  " in _type_label(shared_type) else shared_type
 
                 child = QTreeWidgetItem([
-                    item["name"],
+                    item.name,
                     type_short,
                     data_summary,
                     f"{tr('shared_company_prefix')}{co_names}  ({len(linked_cos)} {tr('companies')})",
-                    item["updated_at"][:16] if item["updated_at"] else tr("dash"),
+                    item.updated_at[:16] if item.updated_at else tr("dash"),
                 ])
-                child.setData(0, Qt.UserRole, ("item", item["id"]))
-                child.setToolTip(0, item["name"])
+                child.setData(0, Qt.UserRole, ("item", item.id))
+                child.setToolTip(0, item.name)
                 child.setToolTip(3, co_names)
                 type_node.addChild(child)
 
