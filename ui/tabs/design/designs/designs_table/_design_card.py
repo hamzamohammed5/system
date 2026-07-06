@@ -218,6 +218,10 @@ class _DesignCard(QFrame, WidgetMixin):
         self._update_style()
         if hasattr(self, '_lbl_name'):
             self._apply_name_font()
+        if hasattr(self, '_thumb_frame'):
+            self._apply_thumb_style()
+        if hasattr(self, '_thumb_lbl'):
+            self._apply_thumb_lbl_style()
 
     def _apply_name_font(self, size: int = None):
         """يحدّث خط اسم التصميم ديناميكياً عند تغيير حجم الخط من الإعدادات."""
@@ -227,6 +231,41 @@ class _DesignCard(QFrame, WidgetMixin):
         font_n.setPointSize(fs(size, -2))
         font_n.setWeight(QFont.Medium)
         self._lbl_name.setFont(font_n)
+
+    def _apply_thumb_style(self):
+        """يُنسّق إطار الـ thumbnail (الخلفية + الحواف العلوية المدوّرة)."""
+        self._thumb_frame.setStyleSheet(f"""
+            QFrame {{
+                background: {_C['bg_surface']};
+                border: none;
+                border-top-left-radius: {_RADIUS};
+                border-top-right-radius: {_RADIUS};
+            }}
+        """)
+
+    def _apply_thumb_lbl_style(self):
+        """يُنسّق الـ label اللي بيعرض الصورة أو الأيقونة البديلة."""
+        self._thumb_lbl.setStyleSheet(f"""
+            QLabel {{
+                background: transparent;
+                border: none;
+                color: {_C['text_muted']};
+                font-size: {fs(FS_XS, 6)}px;
+            }}
+        """)
+
+    def _apply_badge_style(self, badge: QLabel):
+        """يُنسّق شارة عدد المقاسات فوق الـ thumbnail."""
+        badge.setStyleSheet(f"""
+            QLabel {{
+                background: {_C['accent']};
+                color: {_C['bg_input']};
+                border: none;
+                border-radius: {DESIGN_CARD_BADGE_RADIUS}px;
+                font-weight: bold;
+                font-size: {FS_XS}px;
+            }}
+        """)
 
     def _build(self):
         self._update_style()

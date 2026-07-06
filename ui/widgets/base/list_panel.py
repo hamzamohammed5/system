@@ -256,7 +256,8 @@ class BaseListPanel(QWidget, WidgetMixin):
         self._empty_state.setStyleSheet(
             f"QFrame {{ background:{_C['bg_input']}; border:none; }}"
         )
-        self._empty_state.set_color(_C['text_muted'])
+        if hasattr(self._empty_state, "set_color"):
+            self._empty_state.set_color(_C['text_muted'])
         self._rebuild_pagination_styles()
         self._rebuild_status_style()
 

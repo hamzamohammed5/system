@@ -18,8 +18,7 @@ from ui.widgets.core.widget_mixin import WidgetMixin
 class OrdersSection(QWidget, WidgetMixin):
     def __init__(self, parent=None):
         super().__init__(parent)
-        self.conn = get_orders_connection()
-        create_orders_tables(self.conn)
+        self.conn = get_orders_conn_and_init()
         self._build()
         self._init_widget_mixin(theme=False, font=False, lang=True, data=False)
 

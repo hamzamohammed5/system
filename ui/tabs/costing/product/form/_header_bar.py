@@ -142,7 +142,7 @@ class _FormHeaderBar(QWidget, WidgetMixin):
         header_lay.addWidget(headers)
 
         outer.addWidget(header_scroll)
-        self._apply_theme()
+        self._refresh_style()
 
     def _refresh_style(self, _=None):
         """يُطبق الـ stylesheet الحالي عند تغيير الثيم."""

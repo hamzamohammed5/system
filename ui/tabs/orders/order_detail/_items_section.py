@@ -72,7 +72,7 @@ def _build_items_section(detail):
 
 
 def _fill_items(detail):
-    items = detail._service.get_order_items(detail._order_id)
+    items = detail._svc.get_order_items(detail._order_id)
     table = detail.items_table
     table.setRowCount(0)
 

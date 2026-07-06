@@ -22,7 +22,7 @@ from ui.constants                    import SECTION_HEADER_HEIGHT, SECTION_HEADE
 from ui.widgets.core.widget_mixin   import WidgetMixin
 
 from .pricing.pricing_tab import PricingTab
-from .pricing.offers import OffersTab
+from .pricing.offers.offers_tab  import OffersTab
 
 
 class PricingSection(QWidget, WidgetMixin):

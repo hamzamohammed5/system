@@ -4,10 +4,12 @@ ui/tabs/orders/orders_tab.py
 تبويب الطلبات — يستخدم BaseSection.
 """
 
+from PyQt5.QtCore import QTimer
+
 from ui.tabs.orders._order_detail                    import _OrderDetail
 from ui.tabs.orders.orders._orders_list_panel        import _OrdersListPanel
 from ui.widgets.base.section                         import BaseSection
-from ui.constants import ORDERS_LIST_MIN_W
+from ui.constants import ORDERS_LIST_MIN_W, ORDERS_SPLITTER_FIT_DELAY_MS
 
 
 class OrdersTab(BaseSection):
@@ -59,5 +61,14 @@ class OrdersTab(BaseSection):
         self._detail.load_order(order_id)
 
     def _fit_splitter_delayed(self, *args):
-        """wrapper يتجاهل أي arguments من الـ signals."""
-        super()._fit_splitter_delayed()
+        """
+        wrapper يتجاهل أي arguments من الـ signals.
+
+        [إصلاح] BaseSection لا توفر _fit_splitter_delayed أصلاً — كانت
+        هذه الدالة تستدعي super()._fit_splitter_delayed() على افتراض
+        وجودها في الأب، مما يسبب AttributeError عند أي حفظ/حذف/تغيير
+        حالة طلب. الأب يوفر فقط _apply_sizes() (بدون تأخير قابل
+        للتخصيص)، لذا نستدعيها هنا مباشرة عبر QTimer بنفس مبدأ
+        BaseSection._apply_sizes الأصلية.
+        """
+        QTimer.singleShot(ORDERS_SPLITTER_FIT_DELAY_MS, self._apply_sizes)

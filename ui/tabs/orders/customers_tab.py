@@ -4,6 +4,8 @@ ui/tabs/orders/customers_tab.py
 تبويب العملاء — يستخدم BaseSection.
 """
 
+from PyQt5.QtCore import QTimer
+
 from ui.tabs.orders._customer_form                   import _CustomerForm
 from ui.tabs.orders.customers.customers_list_panel   import CustomersListPanel
 from ui.tabs.orders.customers.customer_detail_panel  import CustomerDetailPanel
@@ -18,6 +20,17 @@ class CustomersTab(BaseSection):
     def __init__(self, conn, parent=None):
         self._conn = conn
         super().__init__(conn=conn, parent=parent)
+        self._list.refresh()  # [إصلاح] القائمة كانت فاضية عند فتح التاب لأول مرة
+
+    # [إصلاح] BaseSection لا توفر _fit_splitter_delayed رغم أن هذا
+    # الملف كان يستدعيها في _on_edited/_on_saved، مما كان يسبب
+    # AttributeError عند أي حفظ أو تعديل لعميل. BaseSection توفر
+    # فقط _apply_sizes() (بدون تأخير قابل للتخصيص) لضبط أحجام
+    # الـ splitter لأول مرة عبر QTimer.singleShot. أُضيفت هنا نسخة
+    # محلية تعيد استخدام self._apply_sizes الموروثة فعليًا، بدل تكرار
+    # منطق ضبط الأحجام من الصفر.
+    def _fit_splitter_delayed(self, delay_ms: int):
+        QTimer.singleShot(delay_ms, self._apply_sizes)
 
     def _create_list(self):
         return CustomersListPanel(self._conn)

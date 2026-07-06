@@ -32,7 +32,7 @@ def _build_log_section(detail):
 
 
 def _fill_log(detail):
-    logs   = [dict(r) for r in detail._service.get_status_log(detail._order_id)]
+    logs   = [dict(r) for r in detail._svc.get_status_log(detail._order_id)]
     table  = detail.log_table
     STATUS_LABELS = get_status_labels()
     table.setRowCount(0)

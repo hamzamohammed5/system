@@ -50,6 +50,17 @@ class CustomersListPanel(BaseListPanel, WidgetMixin):
         self._svc = CustomerService(conn)
         self._type_filter   = None
         self._active_filter = None
+        # [إصلاح] لازم نملأ COLUMNS قبل استدعاء super().__init__()،
+        # لأن BaseListPanel.__init__ بينادي self._build() فوراً، وهي
+        # بتبني الجدول باستخدام self.COLUMNS في نفس اللحظة. لو استنينا
+        # نملأها في _refresh_lang() (اللي بتتنفذ بعد ما super().__init__()
+        # ترجع)، هيبقى الجدول اتبنى بالفعل بصفر أعمدة، فمفيش صفوف تظهر
+        # حتى لو الداتا اترجعت صح من refresh().
+        self.COLUMNS = [
+            tr("customer_col_code"), tr("customer_col_name"),
+            tr("customer_col_phone"), tr("customer_col_city"),
+            tr("customer_col_orders"),
+        ]
         super().__init__(conn=conn, parent=parent)
         self._init_widget_mixin(data=False)
         self._refresh_lang()

@@ -222,6 +222,27 @@ class SafeConnMixin:
             setattr(self, stored_attr, company_id)
         return should
 
+    def _on_company_event_safe(self, company_id: int) -> bool:
+        """
+        [إصلاح موحّد] نقطة الدخول الموحدة التي تستدعيها كل الـ widgets
+        (_SmartLine, _JournalFilterBar, _JournalTreeTable, ...) عند
+        bus.company_data_changed. كانت مفقودة من الـ mixin رغم أن عدة
+        ملفات تعتمد عليها؛ الآن تُعرَّف مرة واحدة هنا وتُورَّث تلقائياً
+        عبر SafeConnMixin و DualConnMixin.
+
+        تتجاهل الحدث إذا كانت الـ widget قد حُذفت من Qt (RuntimeError عند
+        الوصول لأي method عليها)، ثم تفوّض لمنطق _should_respond_to_company.
+        """
+        try:
+            self.isVisible()
+        except RuntimeError:
+            return False
+        except AttributeError:
+            # الـ widget قد لا يكون QWidget فعلي (نادر) — نتابع بدون فحص isVisible
+            pass
+
+        return self._should_respond_to_company(company_id)
+
 
 class DualConnMixin(SafeConnMixin):
     """

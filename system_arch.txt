@@ -1,5 +1,5 @@
 File Tree Snapshot
-Generated : 2026-07-06 15:02:46
+Generated : 2026-07-06 16:22:02
 Source    : D:\My Workspace\Hg\Alhabaar\accountant\system
 Extensions: .md, .py
 ────────────────────────────────────────────────────────────
@@ -122,7 +122,35 @@ system/
 │       ├── font_service.py
 │       └── item_service.py
 ├── ui/
+│   ├── constants_data/
+│   │   ├── constants_accounting.py
+│   │   ├── constants_companies.py
+│   │   ├── constants_costing.py
+│   │   ├── constants_design.py
+│   │   ├── constants_general.py
+│   │   ├── constants_inventory.py
+│   │   └── constants_orders.py
 │   ├── i18n/
+│   │   ├── ar_data/
+│   │   │   ├── ar_accounting.py
+│   │   │   ├── ar_companies.py
+│   │   │   ├── ar_costing.py
+│   │   │   ├── ar_design.py
+│   │   │   ├── ar_general.py
+│   │   │   ├── ar_inventory.py
+│   │   │   ├── ar_orders.py
+│   │   │   ├── ar_pricing.py
+│   │   │   └── ar_shared_items.py
+│   │   ├── en_data/
+│   │   │   ├── en_accounting.py
+│   │   │   ├── en_companies.py
+│   │   │   ├── en_costing.py
+│   │   │   ├── en_design.py
+│   │   │   ├── en_general.py
+│   │   │   ├── en_inventory.py
+│   │   │   ├── en_orders.py
+│   │   │   ├── en_pricing.py
+│   │   │   └── en_shared_items.py
 │   │   ├── ar.py
 │   │   └── en.py
 │   ├── main_window_helper/
@@ -330,6 +358,12 @@ system/
 │   │   ├── inventory_section.py
 │   │   ├── orders_section.py
 │   │   └── pricing_section.py
+│   ├── theme_manager_data/
+│   │   ├── _card_palettes.py
+│   │   ├── _dark_theme.py
+│   │   ├── _light_theme.py
+│   │   ├── _manager.py
+│   │   └── _registry.py
 │   ├── widgets/
 │   │   ├── base/
 │   │   │   ├── crud_form.py

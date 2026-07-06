@@ -73,10 +73,16 @@ class InventoryService:
                    للدوال اللي بتجيب قوائم حسابات)
     """
 
-    def __init__(self, inv_conn, acc_conn=None):
+    def __init__(self, inv_conn, acc_conn=None, erp_conn=None):
         self.conn     = inv_conn
         self._acc_conn = acc_conn
-        self._item_svc = ItemService(inv_conn)
+        if erp_conn is None:
+            # جدول items موجود في قاعدة الـ erp وليس قاعدة المخزون —
+            # لازم اتصال منفصل حتى لو لم يُمرَّر صراحة من الـ UI.
+            from db.companies.company_state import company_state
+            erp_conn = company_state.get_erp_conn()
+        self._erp_conn = erp_conn
+        self._item_svc = ItemService(erp_conn)
 
     # ────────────────────────────────────────────────────
     # تصنيفات المخزن

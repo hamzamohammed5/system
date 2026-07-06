@@ -38,7 +38,7 @@ from db.orders.orders_repo import (
     fetch_all_orders, cancel_order, fetch_orders_summary,
 )
 from db.orders.customers_repo import fetch_customer
-from db.costing.catalog_repo import fetch_priced_product_by_id
+from db.shared.items_repo import fetch_item
 from db.orders.orders_schema import get_orders_connection, create_orders_tables
 from services.orders.customer_service import CustomerService
 
@@ -146,13 +146,13 @@ def resolve_product_info(erp_conn,
     [تعديل هيكلي] كان ينفذ SQL خام مباشرة على erp_conn
     (erp_conn.execute("SELECT name, price FROM items WHERE id=?")),
     متخطّياً طبقة الـ repo بالكامل. استُبدل بـ
-    fetch_priced_product_by_id من db.costing.catalog_repo، حفاظاً
+    fetch_item من db.shared.items_repo، حفاظاً
     على مبدأ الطبقات: widgets -> tabs/UI -> services -> repos -> schema.
     """
     if erp_conn is None or product_id is None:
         return None
     try:
-        row = fetch_priced_product_by_id(erp_conn, product_id)
+        row = fetch_item(erp_conn, product_id)
         if row:
             return {"name": row["name"] or "", "price": float(row["price"] or 0)}
     except Exception as e:

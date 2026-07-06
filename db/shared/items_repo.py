@@ -163,7 +163,7 @@ def fetch_all_items(conn):
 
 def fetch_items_by_type(conn, item_type: str):
     return conn.execute("""
-        SELECT i.id, i.name, i.price, i.total_qty,
+        SELECT i.id, i.name, i.type, i.price, i.total_qty,
                i.category_id,
                c.name AS category_name
         FROM   items i

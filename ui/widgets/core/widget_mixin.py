@@ -81,26 +81,36 @@ class WidgetMixin:
         يربط الـ widget بالـ bus events المطلوبة.
         استدعيه في __init__ بعد super().__init__() مباشرة.
 
+        آمن للاستدعاء أكتر من مرة — في حالة Base class تستدعيه بـ defaults
+        والـ subclass يستدعيه بـ params مختلفة، الاستدعاء التاني بيربط
+        الـ events الجديدة فقط (اللي مش اترتبطت قبل كده).
+
         مثال:
             self._init_widget_mixin()                      # كل حاجة theme + font + lang + data
             self._init_widget_mixin(lang=False)             # theme + font + data
             self._init_widget_mixin(theme=False)           # font + lang + data
             self._init_widget_mixin(font=False)            # theme + lang + data
         """
-        # ── حماية من double init (instance-level) ─────────────────────────
-        # [إصلاح] القيم دي بتتحط على الـ instance مش الـ class عشان
-        # كل widget عنده state منفصل تماماً
-        if getattr(self, '_widget_mixin_init', False):
-            logger.warning(
-                f"{self.__class__.__name__}: "
-                f"_init_widget_mixin اتنادت أكتر من مرة — متجاهلة"
-            )
-            return
-        self._widget_mixin_init = True
+        # ── أول استدعاء: نحضّر الـ state ─────────────────────────────────
+        first_call = not getattr(self, '_widget_mixin_init', False)
+        if first_call:
+            self._widget_mixin_init = True
+            # نحفظ كل الـ slots في list على الـ instance
+            # عشان نضمن إن الـ GC مش هيحذفهم طول عمر الـ widget
+            self._widget_mixin_slots = []
+            # نتتبع الـ events اللي اترتبطت عشان نتجنب ربط مضاعف
+            self._widget_mixin_bound: "set[str]" = set()
 
-        # نحفظ كل الـ slots في list على الـ instance
-        # عشان نضمن إن الـ GC مش هيحذفهم طول عمر الـ widget
-        self._widget_mixin_slots = []
+        # ── تصفية: بس الـ events الجديدة اللي ملتش اترتبطت ─────────────
+        _bound = self._widget_mixin_bound  # type: ignore[attr-defined]
+        _register_theme = theme and "theme" not in _bound
+        _register_font  = font  and "font"  not in _bound
+        _register_lang  = lang  and "lang"  not in _bound
+        _register_data  = data  and "data"  not in _bound
+
+        if not any([_register_theme, _register_font, _register_lang, _register_data]):
+            # مفيش events جديدة — مفيش حاجة نعملها
+            return
 
         # lazy import عشان نتجنب circular imports عند load الـ module
         try:
@@ -128,7 +138,7 @@ class WidgetMixin:
             return obj
 
         # ── theme ─────────────────────────────────────────────────────────
-        if theme:
+        if _register_theme:
             def _on_theme_change(_=None):
                 obj = _safe_obj()
                 if obj is None:
@@ -141,10 +151,11 @@ class WidgetMixin:
 
             self._widget_mixin_slots.append(_on_theme_change)
             bus.theme_changed.connect(_on_theme_change, Qt.UniqueConnection)
+            _bound.add("theme")
 
         # ── font ──────────────────────────────────────────────────────────
         # slot منفصل عن theme عشان لو الـ subclass عاوز يفرق بينهم مستقبلاً
-        if font:
+        if _register_font:
             def _on_font_change(_=None):
                 obj = _safe_obj()
                 if obj is None:
@@ -156,9 +167,10 @@ class WidgetMixin:
 
             self._widget_mixin_slots.append(_on_font_change)
             bus.font_changed.connect(_on_font_change, Qt.UniqueConnection)
+            _bound.add("font")
 
         # ── language ──────────────────────────────────────────────────────
-        if lang:
+        if _register_lang:
             def _on_lang_change(_=None):
                 obj = _safe_obj()
                 if obj is None:
@@ -170,9 +182,10 @@ class WidgetMixin:
 
             self._widget_mixin_slots.append(_on_lang_change)
             bus.language_changed.connect(_on_lang_change, Qt.UniqueConnection)
+            _bound.add("lang")
 
         # ── company data ──────────────────────────────────────────────────
-        if data:
+        if _register_data:
             # نحاول نجيب الـ company_id الحالي
             # لو فشل (مفيش شركة نشطة) نحطه None ونعمل lazy init في أول إشعار
             try:
@@ -208,6 +221,7 @@ class WidgetMixin:
 
             self._widget_mixin_slots.append(_on_data_change)
             bus.company_data_changed.connect(_on_data_change, Qt.UniqueConnection)
+            _bound.add("data")
 
     # ── default implementations ───────────────────────────────────────────
     # موجودة عشان الـ subclass ميضطرش يعرّف كل الدوال —

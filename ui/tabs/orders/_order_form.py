@@ -16,9 +16,8 @@ from db.orders.orders_repo import (
     fetch_order_items, insert_order_item,
     update_order_item, delete_order_item,
 )
-from db.shared.connection import get_connection
-from .order_form._item_row_widget  import _ItemRowWidget
-from .order_form._products_fetcher import fetch_offers, fetch_offer_lines
+from .order_form._item_row_widget import _ItemRowWidget
+from services.costing.catalog_service import CatalogService
 
 from ui.theme import _C
 from ui.widgets.components.button import make_btn
@@ -88,14 +87,14 @@ def _get_type_options() -> list:
 class _OrderForm(QDialog):
     saved = pyqtSignal(int)
 
-    def __init__(self, conn, order_id: int = None, parent=None):
+    def __init__(self, conn, order_id: int = None, parent=None,
+                 erp_conn=None):
         super().__init__(parent)
-        self.conn       = conn
-        self.order_id   = order_id
+        self.conn         = conn
+        self.order_id     = order_id
         self._customer_id = None
         self._item_rows: list[_ItemRowWidget] = []
-
-        _ItemRowWidget.invalidate_cache()
+        self._catalog     = CatalogService(erp_conn) if erp_conn else None
 
         self.setWindowTitle(tr("order_edit_title") if order_id else tr("order_new_title"))
         self.setMinimumWidth(ORDER_FORM_MIN_W)
@@ -325,7 +324,7 @@ class _OrderForm(QDialog):
         root.addLayout(btns)
 
     def _add_item_row(self, prefill: dict = None) -> _ItemRowWidget:
-        row = _ItemRowWidget()
+        row = _ItemRowWidget(self.conn)
         row.changed.connect(self._update_totals)
         row.removed.connect(self._remove_item_row)
         self._item_rows.append(row)
@@ -351,7 +350,9 @@ class _OrderForm(QDialog):
     def _load_offers_combo(self):
         self.cmb_offers.clear()
         self.cmb_offers.addItem(tr("offer_select_label"), None)
-        for o in fetch_offers():
+        if not self._catalog:
+            return
+        for o in self._catalog.get_offers():
             cat = f" [{o['category_name']}]" if o.get("category_name") else ""
             label = f"{tr('order_offer_icon')} {o['name']}  {tr('discount')} {o['discount']:.0f}%{cat}"
             self.cmb_offers.addItem(label, o["id"])
