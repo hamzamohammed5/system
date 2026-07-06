@@ -14,7 +14,7 @@ FilterToolbar — شريط فلاتر موحد (بحث + تصنيف + تاريخ
         بـ absolute imports مباشرة.
 """
 from PyQt5.QtWidgets import (
-    QWidget, QHBoxLayout, QLabel, QPushButton, QComboBox,
+    QWidget, QHBoxLayout, QLabel, QComboBox,
 )
 from PyQt5.QtCore import QDate, pyqtSignal
 
@@ -24,11 +24,12 @@ from ui.theme import _C
 from ui.widgets.core.i18n import tr
 from ui.constants import (
     FILTER_TOOLBAR_MARGIN_H, FILTER_TOOLBAR_MARGIN_V, FILTER_TOOLBAR_SPACING,
-    FILTER_COMBO_MIN_H, FILTER_COMBO_MIN_W, FILTER_RESET_BTN_W, FILTER_SEARCH_H,
+    FILTER_COMBO_MIN_H, FILTER_COMBO_MIN_W, FILTER_SEARCH_H,
     SPACING_SM, FILTER_COUNT_LABEL_MIN_W, FILTER_DEBOUNCE_MS,
 )
 
 from ..utils.signals          import blocked_signals
+from ..components.button      import make_btn
 from ui.widgets.core.widget_mixin import WidgetMixin
 
 
@@ -43,18 +44,6 @@ def _combo_style() -> str:
         }}
         QComboBox:focus {{ border-color:{_C['accent']}; }}
         QComboBox::drop-down {{ border:none; }}
-    """
-
-
-def _reset_btn_style() -> str:
-    from ui.font import FS_MD
-    from ui.constants import FILTER_COMBO_BORDER_RADIUS
-    return f"""
-        QPushButton {{
-            background:{_C['bg_hover']}; border:1px solid {_C['border_med']};
-            border-radius:{FILTER_COMBO_BORDER_RADIUS}px; font-size:{FS_MD}pt; color:{_C['accent']};
-        }}
-        QPushButton:hover {{ background:{_C['border_med']}; }}
     """
 
 
@@ -76,7 +65,7 @@ class FilterToolbar(QWidget, WidgetMixin):
         self._show_date    = show_date
         self._show_presets = show_presets
         self._build(placeholder or tr('search'))
-        self._init_widget_mixin(theme=True, font=False, data=True)
+        self._init_widget_mixin(theme=True, font=True, lang=True, data=True)
         self._refresh_style()
 
     # ── بناء ──────────────────────────────────────────────
@@ -132,13 +121,10 @@ class FilterToolbar(QWidget, WidgetMixin):
             self.dt_to   = self._date_filter.dt_to
             lay.addWidget(self._date_filter)
 
-        btn_reset = QPushButton(tr('filter_reset_btn'))
-        btn_reset.setToolTip(tr('filter_reset_tooltip'))
-        btn_reset.setMinimumHeight(FILTER_COMBO_MIN_H)
-        btn_reset.setFixedWidth(FILTER_RESET_BTN_W)
-        btn_reset.setStyleSheet(_reset_btn_style())
-        btn_reset.clicked.connect(self.reset)
-        lay.addWidget(btn_reset)
+        self.btn_reset = make_btn(style="ghost", icon="reset")
+        self.btn_reset.setToolTip(tr('filter_reset_tooltip'))
+        self.btn_reset.clicked.connect(self.reset)
+        lay.addWidget(self.btn_reset)
 
         self.lbl_count = QLabel("")
         lay.addWidget(self.lbl_count)
@@ -159,6 +145,17 @@ class FilterToolbar(QWidget, WidgetMixin):
         )
         if self.cmb_cat is not None:
             self.cmb_cat.setStyleSheet(_combo_style())
+        # [make_btn] إعادة تطبيق ستايل الثيم/حجم الخط على زر الـ reset
+        from ..components.button import refresh_visible_buttons
+        refresh_visible_buttons(self)
+
+    def _refresh_lang(self, *_):
+        """
+        [i18n] زر الـ reset دلوقتي أيقونة فقط (مش نص)، فمش محتاج
+        إعادة بناء عند تغيير اللغة — بس الـ tooltip بيتحدث.
+        """
+        if hasattr(self, "btn_reset"):
+            self.btn_reset.setToolTip(tr('filter_reset_tooltip'))
 
     def _refresh_data(self, company_id=None):
         try:

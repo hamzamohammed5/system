@@ -62,10 +62,10 @@ class _StatusDialog(QDialog, WidgetMixin):
         lay.addWidget(self._note)
 
         btns = QHBoxLayout()
-        self._btn_cancel = make_btn("", "ghost")
+        self._btn_cancel = make_btn("", "ghost", fixed_size=False)
         self._btn_cancel.clicked.connect(self.reject)
 
-        self._btn_ok = make_btn("", "primary")
+        self._btn_ok = make_btn("", "primary", fixed_size=False)
         self._btn_ok.setMinimumHeight(STATUS_DLG_BTN_OK_MIN_H)
         self._btn_ok.clicked.connect(self._save)
 
@@ -74,7 +74,11 @@ class _StatusDialog(QDialog, WidgetMixin):
         lay.addLayout(btns)
 
     def _refresh_style(self, *_):
-        self.setStyleSheet(input_style())
+        # ❌ لا تستخدم self.setStyleSheet() هنا — بيـoverride الأزرار ويخليها مش باينة.
+        # ✅ طبّق input_style مباشرة على الـ widgets اللي تحتاجه فقط.
+        _inp = input_style()
+        self._cmb.setStyleSheet(_inp)
+        self._note.setStyleSheet(_inp)
 
         STATUS_COLORS = get_status_colors()
         cur_info = STATUS_COLORS.get(
@@ -118,6 +122,13 @@ class _StatusDialog(QDialog, WidgetMixin):
 
         self._btn_cancel.setText(tr("cancel"))
         self._btn_ok.setText(tr("status_change_btn"))
+
+        # إعادة حساب الحد الأدنى للعرض بعد تحديث النص
+        from ui.widgets.components.button import calc_btn_width
+        from ui.font import get_font_size
+        base = get_font_size()
+        self._btn_cancel.setMinimumWidth(calc_btn_width(tr("cancel"), base))
+        self._btn_ok.setMinimumWidth(calc_btn_width(tr("status_change_btn"), base))
 
     def _save(self):
         self._result = (self._cmb.currentData(), self._note.text().strip())

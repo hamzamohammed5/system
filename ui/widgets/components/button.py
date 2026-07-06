@@ -15,8 +15,10 @@ make_btn — المصنع الموحد لإنشاء أزرار التطبيق.
   - [Refactor V3] إصلاح imports: ui.app_settings → ui.theme + ui.font
 """
 from PyQt5.QtWidgets import QPushButton, QSizePolicy
-from PyQt5.QtCore    import Qt
-from PyQt5.QtGui     import QFont, QFontMetrics
+from PyQt5.QtCore    import Qt, QSize, QByteArray
+from PyQt5.QtGui     import QFont, QFontMetrics, QIcon
+from PyQt5.QtSvg     import QSvgRenderer
+from PyQt5.QtGui     import QPixmap, QPainter
 
 from ui.font  import fs, get_font_size
 from ui.theme import _C
@@ -24,6 +26,55 @@ from ui.constants import BTN_HEIGHT_PAD, BTN_PAD_H, BTN_BORDER_RADIUS, BTN_TEXT_
 
 # cache: (style_name, font_size) → stylesheet string
 _stylesheet_cache: dict[tuple[str, int], str] = {}
+
+# cache: (svg_source, size, color) → QIcon
+_icon_cache: dict[tuple[str, int, str], QIcon] = {}
+
+
+# [أيقونات SVG] رموز مرسومة بالكود بدل الاعتماد على دعم الفونت لرموز
+# يونيكود زي ↺ (اللي بتظهر متكسرة في بعض الفونتات/الأنظمة).
+# كل قيمة عبارة عن SVG path بسيط بمقاس viewBox="0 0 24 24"، واللون
+# بيتحقن وقت التوليد عشان يتماشى مع الثيم الحالي.
+ICON_PATHS: dict[str, str] = {
+    "reset": (
+        "M17.65 6.35A7.95 7.95 0 0 0 12 4a8 8 0 1 0 7.75 10h-2.08"
+        "A6 6 0 1 1 12 6c1.66 0 3.14.69 4.22 1.78L13 11h7V4l-2.35 2.35Z"
+    ),
+}
+
+
+def _make_svg_icon(icon_key: str, color: str, size: int = 18) -> QIcon:
+    """
+    يبني QIcon من path مرسوم بالكود (ICON_PATHS)، بلون ثابت
+    مش معتمد على الفونت — بيحل مشكلة الرموز اليونيكودية المتقطعة.
+    """
+    cache_key = (icon_key, size, color)
+    if cache_key in _icon_cache:
+        return _icon_cache[cache_key]
+
+    path_d = ICON_PATHS.get(icon_key)
+    if not path_d:
+        return QIcon()
+
+    svg = f'''<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" width="{size}" height="{size}">
+        <path fill="{color}" d="{path_d}"/>
+    </svg>'''
+
+    renderer = QSvgRenderer(QByteArray(svg.encode("utf-8")))
+    pixmap = QPixmap(size, size)
+    pixmap.fill(Qt.transparent)
+    painter = QPainter(pixmap)
+    renderer.render(painter)
+    painter.end()
+
+    icon = QIcon(pixmap)
+    _icon_cache[cache_key] = icon
+    return icon
+
+
+def invalidate_icon_cache():
+    """يمسح الـ icon cache عند تغيير الثيم (الألوان بتتغير)."""
+    _icon_cache.clear()
 
 
 def _styles() -> dict[str, dict]:
@@ -102,12 +153,16 @@ def invalidate_stylesheet_cache():
     _stylesheet_cache.clear()
 
 
-def make_btn(text: str, style: str = "normal",
-             fixed_size: bool = True) -> QPushButton:
+def make_btn(text: str = "", style: str = "normal",
+             fixed_size: bool = True, icon: str = None) -> QPushButton:
     """
     ينشئ QPushButton بالنمط المحدد.
     style: "primary" | "success" | "danger" | "ghost" | "normal"
     fixed_size: True = عرض ثابت، False = عرض أدنى قابل للتمدد
+    icon: مفتاح من ICON_PATHS (زي "reset") — لو موجود وتم بدون text،
+          الزرار بيتحول لأيقونة فقط بشكل مربع (عرض = ارتفاع)، مرسومة
+          بالكود بدل الاعتماد على رمز يونيكود من الفونت (مش دايمًا
+          مدعوم بشكل كامل في كل الفونتات/الأنظمة).
     """
     base = get_font_size()
     h    = base * 2 + BTN_HEIGHT_PAD
@@ -120,7 +175,22 @@ def make_btn(text: str, style: str = "normal",
 
     btn.setProperty("_btn_style", style)
 
-    f = QFont()
+    if icon and not text:
+        # [أيقونة فقط] زرار مربع — العرض = الارتفاع، والأيقونة بلون
+        # النص المحدد في نفس الـ style عشان تتماشى مع الثيم/الـ hover.
+        btn.setProperty("_btn_icon", icon)
+        all_styles = _styles()
+        s = all_styles.get(style, all_styles["normal"])
+        icon_size = max(14, h - BTN_PAD_H)
+        btn.setIcon(_make_svg_icon(icon, s["fg"], size=icon_size))
+        btn.setIconSize(QSize(icon_size, icon_size))
+        btn.setFixedWidth(h)
+        btn.setSizePolicy(QSizePolicy.Fixed, QSizePolicy.Fixed)
+        return btn
+
+    # [FIX] استخدام فونت الزرار الفعلي (اللي اتطبق من الـ stylesheet)
+    # بدل QFont() افتراضي — عشان أي نص عادي بيتقاس صح.
+    f = btn.font()
     f.setPointSize(fsz)
     w = QFontMetrics(f).horizontalAdvance(text) + BTN_TEXT_PAD
     if fixed_size:
@@ -139,6 +209,7 @@ def refresh_visible_buttons(root_widget) -> int:
     يُستدعى بعد تغيير الثيم.
     """
     invalidate_stylesheet_cache()
+    invalidate_icon_cache()  # الألوان بتتغير مع الثيم، لازم نعيد رسم الأيقونات
     base = get_font_size()
     count = 0
 
@@ -151,6 +222,16 @@ def refresh_visible_buttons(root_widget) -> int:
                     h = base * 2 + BTN_HEIGHT_PAD
                     if btn.minimumHeight() > 0:
                         btn.setFixedHeight(h)
+
+                    icon_key = btn.property("_btn_icon")
+                    if icon_key:
+                        all_styles = _styles()
+                        s = all_styles.get(style, all_styles["normal"])
+                        icon_size = max(14, h - BTN_PAD_H)
+                        btn.setIcon(_make_svg_icon(icon_key, s["fg"], size=icon_size))
+                        btn.setIconSize(QSize(icon_size, icon_size))
+                        btn.setFixedWidth(h)
+
                     count += 1
                 except RuntimeError:
                     pass

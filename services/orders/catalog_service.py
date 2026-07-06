@@ -34,7 +34,7 @@ from __future__ import annotations
 import logging
 from typing import Optional
 
-from db.costing.catalog_repo import (
+from db.orders.catalog_repo import (
     fetch_priced_products, fetch_offers, fetch_offer_lines,
 )
 
