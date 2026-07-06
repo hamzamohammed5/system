@@ -21,12 +21,13 @@ from ui.constants import (
     LINK_PICKER_CANCEL_BTN_H, LINK_PICKER_CANCEL_BTN_RADIUS, LINK_PICKER_CANCEL_BTN_PAD_H,
 )
 
-_TYPE_AR = {
-    "raw":        tr("shared_type_raw"),
-    "machine":    tr("shared_type_machine"),
-    "labor_op":   tr("shared_type_labor_op"),
-    "machine_op": tr("shared_type_machine_op"),
-}
+def _type_ar_map() -> dict:
+    return {
+        "raw":        tr("shared_type_raw"),
+        "machine":    tr("shared_type_machine"),
+        "labor_op":   tr("shared_type_labor_op"),
+        "machine_op": tr("shared_type_machine_op"),
+    }
 
 
 class LinkItemPicker(QDialog, WidgetMixin):
@@ -47,13 +48,15 @@ class LinkItemPicker(QDialog, WidgetMixin):
         lay.setSpacing(LINK_PICKER_SPACING)
         lay.setContentsMargins(*LINK_PICKER_MARGIN)
 
-        lay.addWidget(QLabel(tr("link_item_prompt")))
+        self._prompt_lbl = QLabel(tr("link_item_prompt"))
+        lay.addWidget(self._prompt_lbl)
 
         self._list = QListWidget()
         self._list.itemDoubleClicked.connect(self._accept)
 
+        type_ar_map = _type_ar_map()
         for item in self._items:
-            type_ar = _TYPE_AR.get(item["shared_type"], item["shared_type"])
+            type_ar = type_ar_map.get(item["shared_type"], item["shared_type"])
             source  = item["source_company_name"] or tr("dash")
             text    = f"{item['name']}  [{type_ar}]  {tr('link_item_from').format(company=source)}"
             wi = QListWidgetItem(text)
@@ -107,6 +110,21 @@ class LinkItemPicker(QDialog, WidgetMixin):
             }}
             QPushButton:hover {{ background: {_C['bg_hover']}; }}
         """)
+
+    def _refresh_lang(self, *_):
+        self.setWindowTitle(tr("link_item_title"))
+        self._prompt_lbl.setText(tr("link_item_prompt"))
+        self._ok_btn.setText(tr("link_item_btn"))
+        self._cancel_btn.setText(tr("btn_cancel"))
+
+        type_ar_map = _type_ar_map()
+        for i in range(self._list.count()):
+            wi = self._list.item(i)
+            item = self._items[i]
+            type_ar = type_ar_map.get(item["shared_type"], item["shared_type"])
+            source  = item["source_company_name"] or tr("dash")
+            text    = f"{item['name']}  [{type_ar}]  {tr('link_item_from').format(company=source)}"
+            wi.setText(text)
 
     def _accept(self):
         item = self._list.currentItem()

@@ -1,5 +1,5 @@
 """
-ui/widgets/shared/company_selector.py
+ui/tabs/companies/company_selector.py
 =======================================
 Dropdown اختيار الشركة النشطة — يظهر في header النافذة الرئيسية.
 
@@ -13,9 +13,7 @@ from PyQt5.QtWidgets import (
 )
 from PyQt5.QtCore import pyqtSignal
 
-from db.companies.companies_schema import get_central_connection, create_central_tables
-from db.companies.companies_repo   import fetch_all_companies
-from db.companies.company_state    import company_state
+from services.companies.company_service import CompanyService
 from ui.font                import FS_BASE, FS_LG
 from ui.widgets.core.i18n          import tr
 from ui.widgets.core.widget_mixin  import WidgetMixin
@@ -128,8 +126,7 @@ class CompanySelector(QWidget, WidgetMixin):
 
     def _get_central(self):
         if not self._central_conn:
-            self._central_conn = get_central_connection()
-            create_central_tables(self._central_conn)
+            self._central_conn = CompanyService.get_central_conn_and_init()
         return self._central_conn
 
     def _load(self):
@@ -139,7 +136,11 @@ class CompanySelector(QWidget, WidgetMixin):
 
         try:
             conn = self._get_central()
-            self._companies = list(fetch_all_companies(conn, active_only=True))
+            svc  = CompanyService(conn)
+            self._companies = [
+                {"id": c.id, "name": c.name, "color": c.color}
+                for c in svc.list_companies(active_only=True)
+            ]
         except Exception as e:
             print(f"[CompanySelector] load error: {e}")
             self._companies = []
@@ -153,9 +154,10 @@ class CompanySelector(QWidget, WidgetMixin):
                 self._combo.addItem(f"  {c['name']}", userData=c["id"])
 
             # استعادة الشركة النشطة لو موجودة
-            if company_state.is_ready:
+            if CompanyService.is_company_ready():
+                current_id = CompanyService.get_current_company_id()
                 for i, c in enumerate(self._companies):
-                    if c["id"] == company_state.company_id:
+                    if c["id"] == current_id:
                         self._combo.setCurrentIndex(i)
                         break
             else:
@@ -181,7 +183,7 @@ class CompanySelector(QWidget, WidgetMixin):
         name    = company["name"]
         color   = company["color"] or _C["accent"]
 
-        company_state.set_active(cid, name, color)
+        CompanyService.set_active_company(cid, name, color)
         self.company_changed.emit(cid)
 
     # ── فتح نافذة إدارة الشركات ───────────────────────────
@@ -191,7 +193,7 @@ class CompanySelector(QWidget, WidgetMixin):
         dlg = CompaniesDialog(self._get_central(), parent=self)
         dlg.exec_()
         # إعادة تحميل بعد أي تغيير
-        current_id = company_state.company_id
+        current_id = CompanyService.get_current_company_id()
         self._load()
         # استعد الشركة القديمة لو ما زالت موجودة
         if current_id:

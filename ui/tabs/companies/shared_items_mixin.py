@@ -13,8 +13,6 @@ ui/tabs/companies/shared_items_mixin.py
   - _fetch_shared(): نفس الإصلاح — try/finally حول central.execute().
 """
 
-import json
-
 
 # ══════════════════════════════════════════════════════════
 # مساعدات أساسية
@@ -132,19 +130,17 @@ def get_published_local_names(shared_type: str) -> set:
         if company_id is None:
             return set()
 
-        from db.companies.companies_schema import get_central_connection
-        central = get_central_connection()
+        from services.companies.company_service import CompanyService
+        from services.companies.shared_items_service import SharedItemsService
+
+        central = CompanyService.get_central_conn_and_init()
         try:
-            rows = central.execute("""
-                SELECT s.name
-                FROM company_shared_links lnk
-                JOIN shared_items s ON s.id = lnk.shared_item_id
-                WHERE lnk.company_id = ? AND s.shared_type = ?
-            """, (company_id, shared_type)).fetchall()
+            svc = SharedItemsService(central)
+            items = svc.list_for_company(company_id, shared_type)
         finally:
             central.close()
 
-        return {r["name"].strip().lower() for r in rows}
+        return {item.name.strip().lower() for item in items}
     except Exception as e:
         print(f"[shared_items_mixin] get_published_local_names error: {e}")
         return set()
@@ -169,40 +165,34 @@ def _fetch_shared(shared_type: str) -> list:
         if company_id is None:
             return []
 
-        from db.companies.companies_schema import get_central_connection
-        central = get_central_connection()
+        from services.companies.company_service import CompanyService
+        from services.companies.shared_items_service import SharedItemsService
+
+        central = CompanyService.get_central_conn_and_init()
         try:
-            rows = central.execute("""
-                SELECT s.id, s.name, s.shared_type, s.data, s.updated_at
-                FROM company_shared_links lnk
-                JOIN shared_items s ON s.id = lnk.shared_item_id
-                WHERE lnk.company_id = ? AND s.shared_type = ?
-                ORDER BY s.name
-            """, (company_id, shared_type)).fetchall()
+            svc   = SharedItemsService(central)
+            items = svc.list_for_company(company_id, shared_type)
         finally:
             central.close()
 
         result = []
-        for row in rows:
-            try:
-                data = json.loads(row["data"]) if row["data"] else {}
-            except Exception:
-                data = {}
+        for it in items:
+            data = it.data or {}
 
             # category_name: من data أولاً، ثم من erp.db المحلي كـ fallback
             cat_name = data.get("category_name") or None
             if not cat_name:
-                cat_name = _resolve_category_name_from_local(row["name"], shared_type)
+                cat_name = _resolve_category_name_from_local(it.name, shared_type)
 
             item = {
-                "id":             f"shared:{row['id']}",
-                "shared_item_id": row["id"],
-                "name":           row["name"],
+                "id":             f"shared:{it.id}",
+                "shared_item_id": it.id,
+                "name":           it.name,
                 "shared_type":    shared_type,
                 "category_id":    None,
                 "category_name":  cat_name,
                 "is_shared":      True,
-                "updated_at":     row["updated_at"],
+                "updated_at":     it.updated_at,
             }
             item.update(data)
             # نعيد تعيين بعد update عشان data مش تطغى

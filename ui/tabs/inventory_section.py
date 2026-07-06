@@ -18,7 +18,7 @@ ui/tabs/inventory_tab.py
 
 from PyQt5.QtWidgets import QWidget, QVBoxLayout, QTabWidget
 
-from db.shared.connection import get_accounting_connection, get_inventory_connection
+from db.companies.company_state import company_state
 
 from ui.widgets.theme.layout_styles import tab_style
 from ui.theme                        import _C
@@ -35,8 +35,8 @@ from .inventory.inventory_report_tab   import _ReportTab, _MovesPanel
 class InventoryTab(QWidget, WidgetMixin):
     def __init__(self, parent=None):
         super().__init__(parent)
-        self.inv_conn     = get_inventory_connection()
-        self.acc_conn     = get_accounting_connection()
+        self.inv_conn     = company_state.get_inventory_conn()
+        self.acc_conn     = company_state.get_accounting_conn()
         self._moves_panel = None
         self._tabs         = None
         self._build()

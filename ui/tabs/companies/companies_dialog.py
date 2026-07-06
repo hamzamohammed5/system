@@ -11,14 +11,11 @@ from PyQt5.QtWidgets import (
 from PyQt5.QtCore import Qt
 from PyQt5.QtGui  import QColor
 
-from db.companies.companies_repo import (
-    fetch_all_companies, fetch_company,
-    insert_company, update_company,
-    delete_company, toggle_company_active,
-)
+from services.companies.company_service import CompanyService
 from ui.theme import _C
 from ui.font import FS_SM, FS_BASE, FS_MD, FS_LG, FS_XL
 from ui.widgets.core.i18n import tr
+from ui.widgets.core.widget_mixin import WidgetMixin
 from ui.widgets.shared.message_box import msg_question, msg_info, msg_warning, msg_critical
 from ui.constants import (
     SEPARATOR_LINE_H,
@@ -48,16 +45,18 @@ from ui.constants import (
 )
 
 
-class CompaniesDialog(QDialog):
+class CompaniesDialog(QDialog, WidgetMixin):
     def __init__(self, central_conn, parent=None):
         super().__init__(parent)
         self._conn       = central_conn
+        self._svc        = CompanyService(central_conn)
         self._editing_id = None
         self._color      = _C['accent']
 
         self.setWindowTitle(tr("companies_manage_title"))
         self.setMinimumSize(COMPANIES_DLG_MIN_W, COMPANIES_DLG_MIN_H)
         self.setModal(True)
+        self._init_widget_mixin(theme=False, font=False, lang=False, data=False)
         self._build()
         self._load()
 
@@ -290,29 +289,29 @@ class CompaniesDialog(QDialog):
         """
 
     def _load(self):
-        rows = fetch_all_companies(self._conn)
+        rows = self._svc.list_companies()
         self._table.setRowCount(0)
         for r in rows:
             ri = self._table.rowCount()
             self._table.insertRow(ri)
 
-            name_lbl = QLabel(f"  {r['name']}")
+            name_lbl = QLabel(f"  {r.name}")
             name_lbl.setStyleSheet(f"""
-                background: {r['color'] or _C['accent']};
+                background: {r.color or _C['accent']};
                 color: {_C['bg_input']}; font-weight: 600;
                 border-radius: {COMPANIES_DLG_NAME_BADGE_RADIUS}px; padding: {COMPANIES_DLG_NAME_BADGE_PAD_V}px {COMPANIES_DLG_NAME_BADGE_PAD_H}px;
             """)
             self._table.setCellWidget(ri, 0, name_lbl)
 
-            short = QTableWidgetItem(r["short_name"] or tr("dash"))
+            short = QTableWidgetItem(r.short_name or tr("dash"))
             short.setTextAlignment(Qt.AlignCenter)
             self._table.setItem(ri, 1, short)
 
-            status_text = tr("company_status_active") if r["is_active"] else tr("company_status_paused")
+            status_text = tr("company_status_active") if r.is_active else tr("company_status_paused")
             status = QTableWidgetItem(status_text)
             status.setTextAlignment(Qt.AlignCenter)
             status.setForeground(
-                QColor(_C["success"]) if r["is_active"] else QColor(_C["text_muted"])
+                QColor(_C["success"]) if r.is_active else QColor(_C["text_muted"])
             )
             self._table.setItem(ri, 2, status)
 
@@ -338,21 +337,21 @@ class CompaniesDialog(QDialog):
             edit_btn.setToolTip(tr("company_tooltip_edit"))
             edit_btn.setStyleSheet(_btn_ss(_C["t_account_dr_bg"], _C["accent_mid"]))
             edit_btn.clicked.connect(
-                lambda _, rid=r["id"]: self._edit_company(rid)
+                lambda _, rid=r.id: self._edit_company(rid)
             )
 
-            toggle_btn = QPushButton(tr("company_toggle_pause") if r["is_active"] else tr("company_toggle_play"))
+            toggle_btn = QPushButton(tr("company_toggle_pause") if r.is_active else tr("company_toggle_play"))
             toggle_btn.setToolTip(tr("company_tooltip_toggle"))
             toggle_btn.setStyleSheet(_btn_ss(_C["warning_bg"], _C["warning_border"]))
             toggle_btn.clicked.connect(
-                lambda _, rid=r["id"]: self._toggle(rid)
+                lambda _, rid=r.id: self._toggle(rid)
             )
 
             del_btn = QPushButton(tr("company_delete_icon"))
             del_btn.setToolTip(tr("company_tooltip_delete"))
             del_btn.setStyleSheet(_btn_ss(_C["danger_bg"], _C["danger_hover"]))
             del_btn.clicked.connect(
-                lambda _, rid=r["id"], nm=r["name"]: self._delete(rid, nm)
+                lambda _, rid=r.id, nm=r.name: self._delete(rid, nm)
             )
 
             btns_lay.addWidget(edit_btn)
@@ -375,15 +374,15 @@ class CompaniesDialog(QDialog):
         self._inp_name.setFocus()
 
     def _edit_company(self, company_id: int):
-        row = fetch_company(self._conn, company_id)
+        row = self._svc.get_company(company_id)
         if not row:
             return
         self._editing_id = company_id
-        self._form_title.setText(tr("company_edit_title").format(name=row["name"]))
-        self._inp_name.setText(row["name"])
-        self._inp_short.setText(row["short_name"] or "")
-        self._inp_notes.setPlainText(row["notes"] or "")
-        self._color = row["color"] or _C["accent"]
+        self._form_title.setText(tr("company_edit_title").format(name=row.name))
+        self._inp_name.setText(row.name)
+        self._inp_short.setText(row.short_name or "")
+        self._inp_notes.setPlainText(row.notes or "")
+        self._color = row.color or _C["accent"]
         self._color_preview.setStyleSheet(
             f"background: {self._color}; border-radius: {COMPANIES_DLG_COLOR_PREVIEW_RADIUS}px;"
             f"border: 1px solid {_C['border_med']};"
@@ -394,7 +393,7 @@ class CompaniesDialog(QDialog):
         if c.isValid():
             self._color = c.name()
             self._color_preview.setStyleSheet(
-                f"background: {self._color}; border-radius: 5px;"
+                f"background: {self._color}; border-radius: {COMPANIES_DLG_COLOR_PREVIEW_RADIUS}px;"
                 f"border: 1px solid {_C['border_med']};"
             )
 
@@ -409,15 +408,14 @@ class CompaniesDialog(QDialog):
 
         try:
             if self._editing_id:
-                update_company(
-                    self._conn, self._editing_id,
+                self._svc.update_company(
+                    self._editing_id,
                     name=name, short_name=short,
                     color=self._color, notes=notes
                 )
                 msg_info(self, tr("done"), tr("company_updated_msg").format(name=name))
             else:
-                insert_company(
-                    self._conn,
+                self._svc.add_company(
                     name=name, short_name=short,
                     color=self._color, notes=notes
                 )
@@ -440,7 +438,7 @@ class CompaniesDialog(QDialog):
         )
 
     def _toggle(self, company_id: int):
-        toggle_company_active(self._conn, company_id)
+        self._svc.toggle_active(company_id)
         self._load()
 
     def _delete(self, company_id: int, name: str):
@@ -449,7 +447,7 @@ class CompaniesDialog(QDialog):
             tr("company_delete_confirm").format(name=name)
         ):
             try:
-                delete_company(self._conn, company_id)
+                self._svc.delete_company(company_id)
                 self._load()
             except Exception as e:
                 msg_critical(self, tr("error"), str(e))
