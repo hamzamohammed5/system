@@ -23,6 +23,7 @@ from db.shared.connection import get_accounting_connection, get_inventory_connec
 from ui.widgets.theme.layout_styles import tab_style
 from ui.theme                        import _C
 from ui.widgets.core.i18n           import tr
+from ui.constants                    import TAB_INDICATOR_BORDER_W
 from ui.widgets.core.widget_mixin   import WidgetMixin
 
 from .inventory.inventory_items_tab    import _ItemsTab
@@ -72,7 +73,7 @@ class InventoryTab(QWidget, WidgetMixin):
             tab_style() + f"""
             QTabBar::tab:selected {{
                 color: {_C['stock_ok_fg']};
-                border-top: 2px solid {_C['stock_ok_fg']};
+                border-top: {TAB_INDICATOR_BORDER_W}px solid {_C['stock_ok_fg']};
             }}
             """
         )

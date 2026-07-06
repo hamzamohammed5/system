@@ -39,6 +39,7 @@ from db.orders.orders_repo import (
 )
 from db.orders.customers_repo import fetch_customer
 from db.costing.catalog_repo import fetch_priced_product_by_id
+from db.orders.orders_schema import get_orders_connection, create_orders_tables
 from services.orders.customer_service import CustomerService
 
 logger = logging.getLogger(__name__)
@@ -574,3 +575,35 @@ class OrderService:
         استُبدل بـ delete_order_items_by_order من orders_repo.
         """
         delete_order_items_by_order(self._conn, order_id)
+
+
+# ══════════════════════════════════════════════════════════
+# Bootstrapping — فتح اتصال orders.db وتهيئة الـ schema
+# ══════════════════════════════════════════════════════════
+# [إضافة] تغليف get_orders_connection + create_orders_tables هنا
+# عشان tabs/orders_section.py ميستدعيش db.orders.orders_schema
+# مباشرة (كسر هيكلي: tabs → repos/db بتجاوز services).
+#
+# قاعدة الـ Layering تبقى محفوظة:
+#   tabs/  →  services/orders.get_orders_conn_and_init()  →  db.orders.orders_schema
+#
+# نفس النمط المستخدم في services/design/__init__.py
+# (get_designs_conn_and_init) — دالة bootstrapping بحتة (فتح اتصال
+# + تهيئة جداول)، وليست عملية بيانات، لذلك مكانها الطبيعي في نقطة
+# الدخول الموحّدة لـ services/orders بدل تكرارها داخل الـ UI.
+
+def get_orders_conn_and_init():
+    """
+    يفتح اتصال orders.db وينشئ/يهيّئ جداوله إن لم تكن موجودة، ثم يُرجع الاتصال.
+
+    يُستخدم من tabs/orders_section.py بدلاً من استدعاء
+    db.orders.orders_schema مباشرة، حفاظاً على القاعدة المعمارية:
+        tabs/  →  services/  →  repos (db.*)
+
+    مثال:
+        from services.orders.order_service import get_orders_conn_and_init
+        self.conn = get_orders_conn_and_init()
+    """
+    conn = get_orders_connection()
+    create_orders_tables(conn)
+    return conn

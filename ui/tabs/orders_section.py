@@ -6,7 +6,7 @@ ui/tabs/orders_section.py
 
 from PyQt5.QtWidgets import QWidget, QVBoxLayout, QTabWidget
 
-from db.orders.orders_schema import get_orders_connection, create_orders_tables
+from services.orders.order_service import get_orders_conn_and_init
 from ui.tabs.orders.orders_tab    import OrdersTab
 from ui.tabs.orders.customers_tab import CustomersTab
 from ui.tabs.orders.dashboard_tab import OrdersDashboardTab

@@ -18,7 +18,7 @@ from ui.widgets.theme.layout_styles import tab_style
 from ui.theme                        import _C
 from ui.widgets.core.i18n           import tr
 from ui.font                        import FS_MD
-from ui.constants                    import SECTION_HEADER_HEIGHT, SPACING_XL
+from ui.constants                    import SECTION_HEADER_HEIGHT, SECTION_HEADER_BORDER_W, SPACING_XL
 from ui.widgets.core.widget_mixin   import WidgetMixin
 
 from .pricing.pricing_tab import PricingTab
@@ -56,7 +56,7 @@ class PricingSection(QWidget, WidgetMixin):
         self._header.setStyleSheet(f"""
             QLabel {{
                 background: {_C['bg_surface']};
-                border-bottom: 1px solid {_C['border']};
+                border-bottom: {SECTION_HEADER_BORDER_W}px solid {_C['border']};
                 font-size: {FS_MD}px;
                 font-weight: bold;
                 color: {_C['orange']};
