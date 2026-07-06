@@ -75,15 +75,16 @@ class SharedItemsDialog(QDialog, WidgetMixin):
         self._item    = None
         self._data    = {}
 
-        self.setWindowTitle(tr("shared_item_header"))
         self.setMinimumSize(SHARED_DLG_MIN_W, SHARED_DLG_MIN_H)
         self.setModal(True)
         self.setLayoutDirection(Qt.RightToLeft)
-        self._init_widget_mixin(theme=False, font=False, lang=False, data=False)
+        self._init_widget_mixin(theme=True, font=True, lang=True, data=False)
 
         self._load_item()
         self._build()
         self._populate()
+        self._refresh_style()
+        self._refresh_lang()
 
     # ══════════════════════════════════════════════════════
     # تحميل البيانات
@@ -101,7 +102,9 @@ class SharedItemsDialog(QDialog, WidgetMixin):
 
     def _build(self):
         if not self._item:
-            QLabel(tr("shared_item_not_found")).setParent(self)
+            lbl_missing = QLabel()
+            lbl_missing.setParent(self)
+            self._lbl_missing = lbl_missing
             return
 
         root = QVBoxLayout(self)
@@ -109,51 +112,73 @@ class SharedItemsDialog(QDialog, WidgetMixin):
         root.setContentsMargins(*SHARED_DLG_ROOT_MARGIN)
 
         # ── Header ──
-        from ui.theme import _C
-        header = QLabel(
-            f"{tr('shared_item_linked_icon')}  {self._item.name}  —  "
-            f"<span style='color:{_C['text_muted']};'>{self._type_ar()}</span>"
-        )
-        header.setTextFormat(Qt.RichText)
-        header.setStyleSheet(
-            f"font-size:{FS_LG}px; font-weight:bold; color:{_C['acc_type_asset']};"
-            f"background:{_C['t_account_dr_bg']}; border:{SHARED_DLG_HDR_BORDER_W}px solid {_C['accent_mid']};"
-            f"border-radius:{SHARED_DLG_HDR_RADIUS}px;"
-            f"padding:{SHARED_DLG_HDR_PAD_V}px {SHARED_DLG_HDR_PAD_H}px;"
-        )
-        root.addWidget(header)
+        self.header = QLabel()
+        self.header.setTextFormat(Qt.RichText)
+        root.addWidget(self.header)
 
         # ── بيانات العنصر ──
-        data_grp = QGroupBox(tr("shared_item_data_section"))
-        data_grp.setStyleSheet(f"""
-            QGroupBox {{
-                font-weight:bold; color:{_C['text_primary']};
-                border:{SHARED_DLG_GRP_BORDER_W}px solid {_C['border']}; border-radius:{SHARED_DLG_GRP_RADIUS}px;
-                padding-top:{SHARED_DLG_GRP_PAD_TOP}px; margin-top:{SHARED_DLG_GRP_MARGIN_TOP}px;
-            }}
-            QGroupBox::title {{
-                subcontrol-origin:margin; padding:0 {SHARED_DLG_GRP_TITLE_PAD_H}px;
-                subcontrol-position:top right;
-            }}
-        """)
-        data_lay = QFormLayout(data_grp)
+        self.data_grp = QGroupBox()
+        data_lay = QFormLayout(self.data_grp)
         data_lay.setSpacing(SHARED_DLG_DATA_SPACING)
         data_lay.setLabelAlignment(Qt.AlignRight)
 
         # اسم العنصر
         self.inp_name = QLineEdit(self._item.name)
         self.inp_name.setMinimumHeight(SHARED_DLG_INPUT_MIN_H)
-        data_lay.addRow(tr("shared_name_colon"), self.inp_name)
+        self._row_name_lbl = QLabel()
+        data_lay.addRow(self._row_name_lbl, self.inp_name)
 
         # حقول حسب النوع
         self._field_widgets = {}
         self._build_type_fields(data_lay)
 
-        root.addWidget(data_grp)
+        root.addWidget(self.data_grp)
 
         # ── الشركات المرتبطة ──
-        companies_grp = QGroupBox(tr("shared_companies_section"))
-        companies_grp.setStyleSheet(f"""
+        self.companies_grp = QGroupBox()
+        c_lay = QVBoxLayout(self.companies_grp)
+
+        self.lst_companies = QListWidget()
+        self.lst_companies.setMaximumHeight(SHARED_DLG_LIST_MAX_H)
+        c_lay.addWidget(self.lst_companies)
+
+        c_btn_row = QHBoxLayout()
+        self.btn_link   = QPushButton()
+        self.btn_unlink = QPushButton()
+        for btn in (self.btn_link, self.btn_unlink):
+            btn.setMinimumHeight(SHARED_DLG_LINK_BTN_MIN_H)
+        self.btn_link.clicked.connect(self._link_company)
+        self.btn_unlink.clicked.connect(self._unlink_company)
+        c_btn_row.addWidget(self.btn_link)
+        c_btn_row.addWidget(self.btn_unlink)
+        c_btn_row.addStretch()
+        c_lay.addLayout(c_btn_row)
+
+        root.addWidget(self.companies_grp)
+
+        # ── أزرار الحفظ ──
+        btns = QDialogButtonBox()
+        self.btn_save   = btns.addButton("", QDialogButtonBox.AcceptRole)
+        self.btn_cancel = btns.addButton("", QDialogButtonBox.RejectRole)
+        self.btn_save.setMinimumHeight(SHARED_DLG_SAVE_BTN_MIN_H)
+        self.btn_cancel.setMinimumHeight(SHARED_DLG_SAVE_BTN_MIN_H)
+        self.btn_save.clicked.connect(self._save)
+        self.btn_cancel.clicked.connect(self.reject)
+        root.addWidget(btns)
+
+    def _refresh_style(self, *_):
+        if not self._item:
+            return
+        from ui.theme import _C
+
+        self.header.setStyleSheet(
+            f"font-size:{FS_LG}px; font-weight:bold; color:{_C['acc_type_asset']};"
+            f"background:{_C['t_account_dr_bg']}; border:{SHARED_DLG_HDR_BORDER_W}px solid {_C['accent_mid']};"
+            f"border-radius:{SHARED_DLG_HDR_RADIUS}px;"
+            f"padding:{SHARED_DLG_HDR_PAD_V}px {SHARED_DLG_HDR_PAD_H}px;"
+        )
+
+        grp_style = f"""
             QGroupBox {{
                 font-weight:bold; color:{_C['text_primary']};
                 border:{SHARED_DLG_GRP_BORDER_W}px solid {_C['border']}; border-radius:{SHARED_DLG_GRP_RADIUS}px;
@@ -163,11 +188,10 @@ class SharedItemsDialog(QDialog, WidgetMixin):
                 subcontrol-origin:margin; padding:0 {SHARED_DLG_GRP_TITLE_PAD_H}px;
                 subcontrol-position:top right;
             }}
-        """)
-        c_lay = QVBoxLayout(companies_grp)
+        """
+        self.data_grp.setStyleSheet(grp_style)
+        self.companies_grp.setStyleSheet(grp_style)
 
-        self.lst_companies = QListWidget()
-        self.lst_companies.setMaximumHeight(SHARED_DLG_LIST_MAX_H)
         self.lst_companies.setStyleSheet(f"""
             QListWidget {{
                 border:{SHARED_DLG_LIST_BORDER_W}px solid {_C['border']}; border-radius:{SHARED_DLG_LIST_RADIUS}px;
@@ -178,11 +202,7 @@ class SharedItemsDialog(QDialog, WidgetMixin):
                 background:{_C['accent_light']}; color:{_C['accent_text']};
             }}
         """)
-        c_lay.addWidget(self.lst_companies)
 
-        c_btn_row = QHBoxLayout()
-        self.btn_link   = QPushButton(tr("shared_link_btn"))
-        self.btn_unlink = QPushButton(tr("shared_unlink_btn"))
         self.btn_link.setStyleSheet(
             f"background:{_C['success_bg']}; color:{_C['success']};"
             f"border:{SHARED_DLG_LINK_BTN_BORDER_W}px solid {_C['success_border']};"
@@ -197,90 +217,143 @@ class SharedItemsDialog(QDialog, WidgetMixin):
             f"padding:{SHARED_DLG_LINK_BTN_PAD_V}px {SHARED_DLG_LINK_BTN_PAD_H}px;"
             "font-weight:bold;"
         )
-        for btn in (self.btn_link, self.btn_unlink):
-            btn.setMinimumHeight(SHARED_DLG_LINK_BTN_MIN_H)
-        self.btn_link.clicked.connect(self._link_company)
-        self.btn_unlink.clicked.connect(self._unlink_company)
-        c_btn_row.addWidget(self.btn_link)
-        c_btn_row.addWidget(self.btn_unlink)
-        c_btn_row.addStretch()
-        c_lay.addLayout(c_btn_row)
 
-        root.addWidget(companies_grp)
-
-        # ── أزرار الحفظ ──
-        btns = QDialogButtonBox()
-        btn_save   = btns.addButton(tr("shared_save_btn"), QDialogButtonBox.AcceptRole)
-        btn_cancel = btns.addButton(tr("shared_close_btn"), QDialogButtonBox.RejectRole)
-        btn_save.setMinimumHeight(SHARED_DLG_SAVE_BTN_MIN_H)
-        btn_cancel.setMinimumHeight(SHARED_DLG_SAVE_BTN_MIN_H)
-        btn_save.setStyleSheet(
+        self.btn_save.setStyleSheet(
             f"background:{_C['accent']}; color:{_C['bg_surface']}; font-weight:bold;"
             f"border-radius:{SHARED_DLG_SAVE_BTN_RADIUS}px;"
             f"padding:0 {SHARED_DLG_SAVE_BTN_PAD_H}px;"
         )
-        btn_save.clicked.connect(self._save)
-        btn_cancel.clicked.connect(self.reject)
-        root.addWidget(btns)
+
+        self._refresh_type_fields_style()
+        if hasattr(self, "lst_companies"):
+            self._load_companies_list()
+
+    def _refresh_lang(self, *_):
+        if not self._item:
+            if hasattr(self, "_lbl_missing"):
+                self._lbl_missing.setText(tr("shared_item_not_found"))
+            return
+
+        self.setWindowTitle(tr("shared_item_header"))
+
+        from ui.theme import _C
+        self.header.setText(
+            f"{tr('shared_item_linked_icon')}  {self._item.name}  —  "
+            f"<span style='color:{_C['text_muted']};'>{self._type_ar()}</span>"
+        )
+
+        self.data_grp.setTitle(tr("shared_item_data_section"))
+        self.companies_grp.setTitle(tr("shared_companies_section"))
+        self._row_name_lbl.setText(tr("shared_name_colon"))
+
+        self.btn_link.setText(tr("shared_link_btn"))
+        self.btn_unlink.setText(tr("shared_unlink_btn"))
+        self.btn_save.setText(tr("shared_save_btn"))
+        self.btn_cancel.setText(tr("shared_close_btn"))
+
+        self._refresh_type_fields_lang()
+        self._load_companies_list()
 
     def _build_type_fields(self, form_lay: QFormLayout):
-        """يبني حقول الإدخال حسب نوع العنصر المشترك."""
-        from ui.theme import _C
+        """يبني حقول الإدخال حسب نوع العنصر المشترك (بدون نص/ستايل — تُملأ في _refresh_lang/_refresh_style)."""
         t = self._item.shared_type
+        self._type_row_labels = {}
 
         if t == "raw":
             sp = _spin()
             sp.setValue(float(self._data.get("price", 0.0)))
             self._field_widgets["price"] = sp
-            form_lay.addRow(tr("raw_price_lbl"), sp)
+            lbl1 = QLabel()
+            form_lay.addRow(lbl1, sp)
+            self._type_row_labels["raw_price_lbl"] = lbl1
 
             sp2 = _spin()
             tq = self._data.get("total_qty")
             sp2.setValue(float(tq) if tq else 0.0)
-            sp2.setSpecialValueText(tr("without_value"))
             self._field_widgets["total_qty"] = sp2
-            form_lay.addRow(tr("raw_total_qty_lbl"), sp2)
+            lbl2 = QLabel()
+            form_lay.addRow(lbl2, sp2)
+            self._type_row_labels["raw_total_qty_lbl"] = lbl2
 
             # معاينة سعر الوحدة
-            self.lbl_unit = QLabel(tr("dash"))
+            self.lbl_unit = QLabel()
+            sp.valueChanged.connect(self._update_raw_preview)
+            sp2.valueChanged.connect(self._update_raw_preview)
+            lbl3 = QLabel()
+            form_lay.addRow(lbl3, self.lbl_unit)
+            self._type_row_labels["raw_unit_preview_lbl"] = lbl3
+
+        elif t == "machine":
+            sp_h = _spin()
+            sp_h.setValue(float(self._data.get("rate_per_hour", 0.0)))
+            self._field_widgets["rate_per_hour"] = sp_h
+            lbl1 = QLabel()
+            form_lay.addRow(lbl1, sp_h)
+            self._type_row_labels["machine_rate_hour_lbl"] = lbl1
+
+            sp_u = _spin()
+            sp_u.setValue(float(self._data.get("rate_per_unit", 0.0)))
+            self._field_widgets["rate_per_unit"] = sp_u
+            lbl2 = QLabel()
+            form_lay.addRow(lbl2, sp_u)
+            self._type_row_labels["machine_rate_unit_lbl"] = lbl2
+
+        elif t == "labor_op":
+            sp = _spin(SHARED_DLG_SPIN_MAX_MINUTES, SHARED_DLG_SPIN_DEC_MINUTES)
+            sp.setValue(float(self._data.get("minutes", 0.0)))
+            self._field_widgets["minutes"] = sp
+            lbl1 = QLabel()
+            form_lay.addRow(lbl1, sp)
+            self._type_row_labels["labor_time_lbl"] = lbl1
+
+        elif t == "machine_op":
+            sp = _spin()
+            sp.setValue(float(self._data.get("value", 0.0)))
+            self._field_widgets["value"] = sp
+            lbl1 = QLabel()
+            form_lay.addRow(lbl1, sp)
+            self._type_row_labels["machine_op_value_lbl"] = lbl1
+
+            self.lbl_machine = QLabel()
+            lbl2 = QLabel()
+            form_lay.addRow(lbl2, self.lbl_machine)
+            self._type_row_labels["machine_name_col"] = lbl2
+
+    def _refresh_type_fields_lang(self):
+        """يحدّث نصوص حقول النوع — تُستدعى من _refresh_lang."""
+        if not hasattr(self, "_type_row_labels"):
+            return
+        t = self._item.shared_type
+
+        for key, lbl in self._type_row_labels.items():
+            if key == "machine_op_value_lbl":
+                mode = self._data.get("mode", "time")
+                lbl.setText(tr("labor_time_lbl") if mode == "time" else tr("quantity"))
+            else:
+                lbl.setText(tr(key))
+
+        if t == "raw":
+            self._field_widgets["total_qty"].setSpecialValueText(tr("without_value"))
+            self._update_raw_preview()
+
+        elif t == "machine_op":
+            self.lbl_machine.setText(self._data.get("machine_name", tr("dash")))
+
+    def _refresh_type_fields_style(self):
+        """يحدّث ستايل حقول النوع — تُستدعى من _refresh_style."""
+        from ui.theme import _C
+        t = self._item.shared_type
+
+        if t == "raw" and hasattr(self, "lbl_unit"):
             self.lbl_unit.setStyleSheet(
                 f"color:{_C['acc_type_asset']}; font-weight:bold; font-size:{FS_SM}px;"
                 f"background:{_C['t_account_dr_bg']};"
                 f"border-radius:{SHARED_DLG_PREVIEW_RADIUS}px;"
                 f"padding:{SHARED_DLG_PREVIEW_PAD_V}px {SHARED_DLG_PREVIEW_PAD_H}px;"
             )
-            sp.valueChanged.connect(self._update_raw_preview)
-            sp2.valueChanged.connect(self._update_raw_preview)
-            form_lay.addRow(tr("raw_unit_preview_lbl"), self.lbl_unit)
 
-        elif t == "machine":
-            sp_h = _spin()
-            sp_h.setValue(float(self._data.get("rate_per_hour", 0.0)))
-            self._field_widgets["rate_per_hour"] = sp_h
-            form_lay.addRow(tr("machine_rate_hour_lbl"), sp_h)
-
-            sp_u = _spin()
-            sp_u.setValue(float(self._data.get("rate_per_unit", 0.0)))
-            self._field_widgets["rate_per_unit"] = sp_u
-            form_lay.addRow(tr("machine_rate_unit_lbl"), sp_u)
-
-        elif t == "labor_op":
-            sp = _spin(SHARED_DLG_SPIN_MAX_MINUTES, SHARED_DLG_SPIN_DEC_MINUTES)
-            sp.setValue(float(self._data.get("minutes", 0.0)))
-            self._field_widgets["minutes"] = sp
-            form_lay.addRow(tr("labor_time_lbl"), sp)
-
-        elif t == "machine_op":
-            sp = _spin()
-            sp.setValue(float(self._data.get("value", 0.0)))
-            self._field_widgets["value"] = sp
-            mode = self._data.get("mode", "time")
-            lbl  = tr("labor_time_lbl") if mode == "time" else tr("quantity")
-            form_lay.addRow(lbl, sp)
-
-            lbl_machine = QLabel(self._data.get("machine_name", tr("dash")))
-            lbl_machine.setStyleSheet(f"color:{_C['text_muted']}; font-size:{FS_SM}px;")
-            form_lay.addRow(tr("machine_name_col"), lbl_machine)
+        elif t == "machine_op" and hasattr(self, "lbl_machine"):
+            self.lbl_machine.setStyleSheet(f"color:{_C['text_muted']}; font-size:{FS_SM}px;")
 
     def _update_raw_preview(self):
         """تحديث معاينة سعر الوحدة للخامات."""
@@ -296,11 +369,12 @@ class SharedItemsDialog(QDialog, WidgetMixin):
     # ══════════════════════════════════════════════════════
 
     def _populate(self):
-        if not self._item:
-            return
-        self._load_companies_list()
-        if self._item.shared_type == "raw":
-            self._update_raw_preview()
+        """
+        كان يملأ قائمة الشركات ومعاينة سعر الوحدة مباشرة بعد _build.
+        نُقل التنفيذ إلى _refresh_lang (عبر _load_companies_list و
+        _refresh_type_fields_lang) عشان يتوافق مع تحديث اللغة الديناميكي.
+        """
+        pass
 
     def _load_companies_list(self):
         from PyQt5.QtGui import QColor

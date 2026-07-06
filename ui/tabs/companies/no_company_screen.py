@@ -10,7 +10,7 @@ from ui.widgets.core.widget_mixin import WidgetMixin
 from ui.font import FS_BASE, FS_XL, fs
 from ui.widgets.core.i18n import tr
 from ui.constants import (
-    NO_COMPANY_ICON_SIZE, NO_COMPANY_BTN_H, NO_COMPANY_BTN_W,
+    NO_COMPANY_BTN_H, NO_COMPANY_BTN_W,
     NO_COMPANY_BTN_RADIUS, NO_COMPANY_SPACING,
 )
 
@@ -54,7 +54,7 @@ class NoCompanyScreen(QWidget, WidgetMixin):
     def _refresh_style(self, *_):
         from ui.theme import _C
         self._ico.setStyleSheet(
-            f"font-size: {NO_COMPANY_ICON_SIZE}px; background: transparent;"
+            f"font-size: {fs(FS_XL, 16)}px; background: transparent;"
         )
         self._title.setStyleSheet(
             f"font-size: {fs(FS_XL, 2)}px; font-weight: bold; color: {_C['text_primary']};"

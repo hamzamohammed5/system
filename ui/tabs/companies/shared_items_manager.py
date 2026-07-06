@@ -79,13 +79,13 @@ class SharedItemsManagerDialog(QDialog, WidgetMixin):
         super().__init__(parent)
         self._conn = central_conn
         self._svc  = SharedItemsService(central_conn)
-        self.setWindowTitle(tr("shared_item_header"))
         self.setMinimumSize(SHARED_MGR_MIN_W, SHARED_MGR_MIN_H)
         self.setModal(True)
         self.setLayoutDirection(Qt.RightToLeft)
-        self._init_widget_mixin(theme=False, font=False, lang=False, data=False)
+        self._init_widget_mixin(theme=True, font=True, lang=True, data=False)
         self._build()
-        self._load()
+        self._refresh_style()
+        self._refresh_lang()
 
     # ══════════════════════════════════════════════════════
     # بناء الواجهة
@@ -98,47 +98,32 @@ class SharedItemsManagerDialog(QDialog, WidgetMixin):
 
         root.addWidget(self._build_header())
 
-        from ui.theme import _C
-        body = QWidget()
-        body.setStyleSheet(f"background:{_C['bg_page']};")
-        body_lay = QVBoxLayout(body)
+        self.body = QWidget()
+        body_lay = QVBoxLayout(self.body)
         body_lay.setContentsMargins(*SHARED_MGR_BODY_MARGIN)
         body_lay.setSpacing(SHARED_MGR_BODY_SPACING)
 
         # ── شرح ──
-        lbl_hint = QLabel(tr("shared_item_hint"))
-        lbl_hint.setWordWrap(True)
-        lbl_hint.setStyleSheet(
-            f"background:{_C['success_bg']}; border:{SHARED_MGR_HINT_BORDER_W}px solid {_C['success_border']};"
-            f"border-radius:{SHARED_MGR_HINT_RADIUS}px; padding:{SHARED_MGR_HINT_PAD_V}px {SHARED_MGR_HINT_PAD_H}px; color:{_C['success']}; font-size:{FS_SM}px;"
-        )
-        body_lay.addWidget(lbl_hint)
+        self.lbl_hint = QLabel()
+        self.lbl_hint.setWordWrap(True)
+        body_lay.addWidget(self.lbl_hint)
 
         # ── أزرار ──
         btn_row = QHBoxLayout()
 
-        self.btn_add = QPushButton(tr("shared_add_btn"))
+        self.btn_add = QPushButton()
         self.btn_add.setMinimumHeight(SHARED_MGR_BTN_MIN_H)
-        self.btn_add.setStyleSheet(
-            f"background:{_C['accent']}; color:{_C['bg_surface']}; font-weight:bold;"
-            f"border-radius:{SHARED_MGR_BTN_ADD_RADIUS}px; padding:0 {SHARED_MGR_BTN_ADD_PAD_H}px;"
-        )
         self.btn_add.clicked.connect(self._add_item)
 
-        self.btn_edit = QPushButton(tr("shared_edit_btn"))
+        self.btn_edit = QPushButton()
         self.btn_edit.setMinimumHeight(SHARED_MGR_BTN_MIN_H)
         self.btn_edit.clicked.connect(self._edit_item)
 
-        self.btn_delete = QPushButton(tr("shared_delete_btn"))
+        self.btn_delete = QPushButton()
         self.btn_delete.setMinimumHeight(SHARED_MGR_BTN_MIN_H)
-        self.btn_delete.setStyleSheet(
-            f"background:{_C['danger_bg']}; color:{_C['danger']};"
-            f"border:{SHARED_MGR_BTN_DEL_BORDER_W}px solid {_C['danger_border']};"
-            f"border-radius:{SHARED_MGR_BTN_DEL_RADIUS}px; padding:0 {SHARED_MGR_BTN_DEL_PAD_H}px; font-weight:bold;"
-        )
         self.btn_delete.clicked.connect(self._delete_item)
 
-        self.btn_refresh = QPushButton(tr("shared_refresh_btn"))
+        self.btn_refresh = QPushButton()
         self.btn_refresh.setMinimumHeight(SHARED_MGR_BTN_MIN_H)
         self.btn_refresh.clicked.connect(self._load)
 
@@ -152,28 +137,10 @@ class SharedItemsManagerDialog(QDialog, WidgetMixin):
         # ── الشجرة ──
         self.tree = QTreeWidget()
         self.tree.setColumnCount(5)
-        self.tree.setHeaderLabels([
-            tr("name"),
-            tr("type"),
-            tr("shared_main_data_col"),
-            tr("shared_companies_col"),
-            tr("shared_last_update_col"),
-        ])
         self.tree.setSelectionMode(QAbstractItemView.SingleSelection)
         self.tree.setEditTriggers(QAbstractItemView.NoEditTriggers)
         self.tree.setAlternatingRowColors(True)
         self.tree.itemDoubleClicked.connect(self._on_double_click)
-        self.tree.setStyleSheet(f"""
-            QTreeWidget {{
-                border:{SHARED_MGR_TREE_BORDER_W}px solid {_C['border']}; border-radius:{SHARED_MGR_TREE_RADIUS}px;
-                background:{_C['bg_input']};
-                alternate-background-color:{_C['bg_surface']};
-            }}
-            QTreeWidget::item {{ padding:{SHARED_MGR_TREE_ITEM_PAD_V}px {SHARED_MGR_TREE_ITEM_PAD_H}px; }}
-            QTreeWidget::item:selected {{
-                background:{_C['accent_light']}; color:{_C['accent_text']};
-            }}
-        """)
 
         hh = self.tree.header()
         hh.setSectionResizeMode(0, QHeaderView.Stretch)
@@ -188,36 +155,92 @@ class SharedItemsManagerDialog(QDialog, WidgetMixin):
 
         body_lay.addWidget(self.tree, stretch=1)
 
-        btn_close = QPushButton(tr("shared_close_btn"))
-        btn_close.setMinimumHeight(SHARED_MGR_CLOSE_BTN_H)
-        btn_close.clicked.connect(self.accept)
+        self.btn_close = QPushButton()
+        self.btn_close.setMinimumHeight(SHARED_MGR_CLOSE_BTN_H)
+        self.btn_close.clicked.connect(self.accept)
         close_row = QHBoxLayout()
         close_row.addStretch()
-        close_row.addWidget(btn_close)
+        close_row.addWidget(self.btn_close)
         body_lay.addLayout(close_row)
 
-        root.addWidget(body, stretch=1)
+        root.addWidget(self.body, stretch=1)
 
     def _build_header(self) -> QFrame:
+        self.header_frame = QFrame()
+        self.header_frame.setFixedHeight(SHARED_MGR_HDR_H)
+        h_lay = QHBoxLayout(self.header_frame)
+        h_lay.setContentsMargins(SHARED_MGR_HDR_MARGIN_H, 0, SHARED_MGR_HDR_MARGIN_H, 0)
+        self.lbl_header = QLabel()
+        h_lay.addWidget(self.lbl_header)
+        h_lay.addStretch()
+        return self.header_frame
+
+    def _refresh_style(self, *_):
         from ui.theme import _C
-        header = QFrame()
-        header.setStyleSheet(f"""
+
+        self.body.setStyleSheet(f"background:{_C['bg_page']};")
+
+        self.lbl_hint.setStyleSheet(
+            f"background:{_C['success_bg']}; border:{SHARED_MGR_HINT_BORDER_W}px solid {_C['success_border']};"
+            f"border-radius:{SHARED_MGR_HINT_RADIUS}px; padding:{SHARED_MGR_HINT_PAD_V}px {SHARED_MGR_HINT_PAD_H}px; color:{_C['success']}; font-size:{FS_SM}px;"
+        )
+
+        self.btn_add.setStyleSheet(
+            f"background:{_C['accent']}; color:{_C['bg_surface']}; font-weight:bold;"
+            f"border-radius:{SHARED_MGR_BTN_ADD_RADIUS}px; padding:0 {SHARED_MGR_BTN_ADD_PAD_H}px;"
+        )
+        self.btn_delete.setStyleSheet(
+            f"background:{_C['danger_bg']}; color:{_C['danger']};"
+            f"border:{SHARED_MGR_BTN_DEL_BORDER_W}px solid {_C['danger_border']};"
+            f"border-radius:{SHARED_MGR_BTN_DEL_RADIUS}px; padding:0 {SHARED_MGR_BTN_DEL_PAD_H}px; font-weight:bold;"
+        )
+
+        self.tree.setStyleSheet(f"""
+            QTreeWidget {{
+                border:{SHARED_MGR_TREE_BORDER_W}px solid {_C['border']}; border-radius:{SHARED_MGR_TREE_RADIUS}px;
+                background:{_C['bg_input']};
+                alternate-background-color:{_C['bg_surface']};
+            }}
+            QTreeWidget::item {{ padding:{SHARED_MGR_TREE_ITEM_PAD_V}px {SHARED_MGR_TREE_ITEM_PAD_H}px; }}
+            QTreeWidget::item:selected {{
+                background:{_C['accent_light']}; color:{_C['accent_text']};
+            }}
+        """)
+
+        self.header_frame.setStyleSheet(f"""
             QFrame {{
                 background: {_C['accent']};
                 border-bottom: {SHARED_MGR_HDR_BORDER_W}px solid {_C['accent_hover']};
             }}
         """)
-        header.setFixedHeight(SHARED_MGR_HDR_H)
-        h_lay = QHBoxLayout(header)
-        h_lay.setContentsMargins(SHARED_MGR_HDR_MARGIN_H, 0, SHARED_MGR_HDR_MARGIN_H, 0)
-        lbl = QLabel(tr("shared_item_header"))
-        lbl.setStyleSheet(
+        self.lbl_header.setStyleSheet(
             f"font-size:{FS_LG}px; font-weight:bold; color:{_C['bg_surface']};"
             "background:transparent; border:none;"
         )
-        h_lay.addWidget(lbl)
-        h_lay.addStretch()
-        return header
+
+        if hasattr(self, "tree"):
+            self._load()
+
+    def _refresh_lang(self, *_):
+        self.setWindowTitle(tr("shared_item_header"))
+        self.lbl_header.setText(tr("shared_item_header"))
+        self.lbl_hint.setText(tr("shared_item_hint"))
+
+        self.btn_add.setText(tr("shared_add_btn"))
+        self.btn_edit.setText(tr("shared_edit_btn"))
+        self.btn_delete.setText(tr("shared_delete_btn"))
+        self.btn_refresh.setText(tr("shared_refresh_btn"))
+        self.btn_close.setText(tr("shared_close_btn"))
+
+        self.tree.setHeaderLabels([
+            tr("name"),
+            tr("type"),
+            tr("shared_main_data_col"),
+            tr("shared_companies_col"),
+            tr("shared_last_update_col"),
+        ])
+
+        self._load()
 
     # ══════════════════════════════════════════════════════
     # تحميل البيانات

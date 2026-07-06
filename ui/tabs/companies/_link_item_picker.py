@@ -14,7 +14,7 @@ from ui.widgets.core.widget_mixin import WidgetMixin
 from ui.constants import (
     LINK_PICKER_MIN_W, LINK_PICKER_MIN_H,
     LINK_PICKER_SPACING, LINK_PICKER_MARGIN,
-    LINK_PICKER_LIST_RADIUS,
+    LINK_PICKER_BORDER_W, LINK_PICKER_LIST_RADIUS,
     LINK_PICKER_LIST_ITEM_PAD_V, LINK_PICKER_LIST_ITEM_PAD_H,
     LINK_PICKER_OK_BTN_H, LINK_PICKER_OK_BTN_RADIUS, LINK_PICKER_OK_BTN_PAD_H,
     LINK_PICKER_BTN_PAD_V,
@@ -83,7 +83,7 @@ class LinkItemPicker(QDialog, WidgetMixin):
         from ui.theme import _C
         self._list.setStyleSheet(f"""
             QListWidget {{
-                border: 1px solid {_C['border']};
+                border: {LINK_PICKER_BORDER_W}px solid {_C['border']};
                 border-radius: {LINK_PICKER_LIST_RADIUS}px;
             }}
             QListWidget::item {{ padding: {LINK_PICKER_LIST_ITEM_PAD_V}px {LINK_PICKER_LIST_ITEM_PAD_H}px; }}
@@ -104,7 +104,7 @@ class LinkItemPicker(QDialog, WidgetMixin):
         self._cancel_btn.setStyleSheet(f"""
             QPushButton {{
                 background: {_C['bg_surface_2']};
-                border: 1px solid {_C['border_med']};
+                border: {LINK_PICKER_BORDER_W}px solid {_C['border_med']};
                 border-radius: {LINK_PICKER_CANCEL_BTN_RADIUS}px;
                 padding: {LINK_PICKER_BTN_PAD_V}px {LINK_PICKER_CANCEL_BTN_PAD_H}px;
             }}

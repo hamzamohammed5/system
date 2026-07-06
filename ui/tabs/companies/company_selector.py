@@ -19,7 +19,7 @@ from ui.widgets.core.i18n          import tr
 from ui.widgets.core.widget_mixin  import WidgetMixin
 from ui.constants import (
     COMPANY_SELECTOR_MARGIN_H, COMPANY_SELECTOR_MARGIN_V, COMPANY_SELECTOR_SPACING,
-    COMPANY_SELECTOR_ICO_W,
+    COMPANY_SELECTOR_ICO_W, COMPANY_SELECTOR_BORDER_W,
     COMPANY_SELECTOR_COMBO_MIN_W, COMPANY_SELECTOR_COMBO_H,
     COMPANY_SELECTOR_COMBO_RADIUS, COMPANY_SELECTOR_COMBO_PAD_V, COMPANY_SELECTOR_COMBO_PAD_H,
     COMPANY_SELECTOR_DROP_W,
@@ -80,7 +80,7 @@ class CompanySelector(QWidget, WidgetMixin):
                 font-weight: 600;
                 color: {_C['sidebar_text']};
                 background: {_C['sidebar_hover']};
-                border: 1px solid {_C['sidebar_border']};
+                border: {COMPANY_SELECTOR_BORDER_W}px solid {_C['sidebar_border']};
                 border-radius: {COMPANY_SELECTOR_COMBO_RADIUS}px;
                 padding: {COMPANY_SELECTOR_COMBO_PAD_V}px {COMPANY_SELECTOR_COMBO_PAD_H}px;
             }}
@@ -95,7 +95,7 @@ class CompanySelector(QWidget, WidgetMixin):
             QComboBox QAbstractItemView {{
                 background: {_C['sidebar_bg']};
                 color: {_C['sidebar_text']};
-                border: 1px solid {_C['sidebar_border']};
+                border: {COMPANY_SELECTOR_BORDER_W}px solid {_C['sidebar_border']};
                 selection-background-color: {_C['sidebar_active']};
             }}
             QComboBox QAbstractItemView::item {{
@@ -106,7 +106,7 @@ class CompanySelector(QWidget, WidgetMixin):
         self._manage_btn.setStyleSheet(f"""
             QPushButton {{
                 background: transparent;
-                border: 1px solid {_C['sidebar_border']};
+                border: {COMPANY_SELECTOR_BORDER_W}px solid {_C['sidebar_border']};
                 border-radius: {COMPANY_SELECTOR_MANAGE_BTN_RADIUS}px;
                 color: {_C['sidebar_muted']};
                 font-size: {FS_LG}px;
