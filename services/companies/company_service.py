@@ -128,6 +128,22 @@ class CompanyService:
         except Exception:
             pass
 
+    @classmethod
+    def get_active_erp_conn(cls):
+        """
+        يرجع اتصال erp.db الخاص بالشركة النشطة حالياً.
+        بديل لاستدعاء company_state.get_erp_conn() مباشرة من UI —
+        يحافظ على الهيكلة: tabs/ لا تعرف شيئاً عن db.companies مباشرة.
+        يرجع None لو مفيش شركة نشطة أو حصل خطأ.
+        """
+        try:
+            from db.companies.company_state import company_state
+            if company_state.is_ready:
+                return company_state.get_erp_conn()
+        except Exception:
+            pass
+        return None
+
     # ────────────────────────────────────────────────────
     # Validation
     # ────────────────────────────────────────────────────

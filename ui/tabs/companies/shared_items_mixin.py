@@ -32,22 +32,16 @@ def extract_shared_id(item_id) -> int | None:
 
 
 def _get_company_id() -> int | None:
-    try:
-        from db.companies.company_state import company_state
-        return company_state.company_id if company_state.is_ready else None
-    except Exception:
-        return None
+    from services.companies.company_service import CompanyService
+    if CompanyService.is_company_ready():
+        return CompanyService.get_current_company_id()
+    return None
 
 
 def _get_erp_conn():
     """يرجع erp connection للشركة النشطة (shared — لا تُغلقه)."""
-    try:
-        from db.companies.company_state import company_state
-        if company_state.is_ready:
-            return company_state.get_erp_conn()
-    except Exception:
-        pass
-    return None
+    from services.companies.company_service import CompanyService
+    return CompanyService.get_active_erp_conn()
 
 
 def remove_local_duplicates(local_rows: list, shared_rows: list) -> list:
@@ -72,46 +66,10 @@ def _resolve_category_name_from_local(item_name: str, shared_type: str) -> str |
         if not conn:
             return None
 
-        if shared_type == "raw":
-            row = conn.execute("""
-                SELECT c.name as cat_name
-                FROM items i
-                LEFT JOIN categories c ON c.id = i.category_id
-                WHERE i.name = ? AND i.type = 'raw'
-                LIMIT 1
-            """, (item_name,)).fetchone()
-        elif shared_type == "machine":
-            row = conn.execute("""
-                SELECT c.name as cat_name
-                FROM machines m
-                LEFT JOIN categories c ON c.id = m.category_id
-                WHERE m.name = ?
-                LIMIT 1
-            """, (item_name,)).fetchone()
-        elif shared_type == "labor_op":
-            row = conn.execute("""
-                SELECT c.name as cat_name
-                FROM labor_ops lo
-                LEFT JOIN categories c ON c.id = lo.category_id
-                WHERE lo.name = ?
-                LIMIT 1
-            """, (item_name,)).fetchone()
-        elif shared_type == "machine_op":
-            row = conn.execute("""
-                SELECT c.name as cat_name
-                FROM machine_ops mo
-                LEFT JOIN categories c ON c.id = mo.category_id
-                WHERE mo.name = ?
-                LIMIT 1
-            """, (item_name,)).fetchone()
-        else:
-            return None
-
-        if row and row["cat_name"]:
-            return row["cat_name"]
+        from services.shared.item_service import ItemService
+        return ItemService.get_category_name_by_item_name(conn, item_name, shared_type)
     except Exception:
-        pass
-    return None
+        return None
 
 
 # ══════════════════════════════════════════════════════════

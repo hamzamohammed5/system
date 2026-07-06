@@ -557,3 +557,56 @@ def update_item_category(conn, item_id: int, category_id: "int | None"):
         (category_id, item_id)
     )
     conn.commit()
+
+
+# ══════════════════════════════════════════════════════════
+# Category lookup بالاسم — لعناصر منشورة كمشتركة بدون category_id محفوظ
+# ══════════════════════════════════════════════════════════
+
+def get_category_name_by_item_name(conn, item_name: str, shared_type: str) -> "str | None":
+    """
+    يرجع category_name لعنصر (raw/machine/labor_op/machine_op) بالاسم،
+    من erp.db الخاص بالشركة النشطة.
+
+    يُستخدم كـ fallback عندما لا يكون category_name محفوظاً بالفعل
+    ضمن بيانات العنصر المشترك (data JSON في companies.db) —
+    مثلاً من ui/tabs/companies/shared_items_mixin.py.
+    """
+    if shared_type == "raw":
+        row = conn.execute("""
+            SELECT c.name as cat_name
+            FROM items i
+            LEFT JOIN categories c ON c.id = i.category_id
+            WHERE i.name = ? AND i.type = 'raw'
+            LIMIT 1
+        """, (item_name,)).fetchone()
+    elif shared_type == "machine":
+        row = conn.execute("""
+            SELECT c.name as cat_name
+            FROM machines m
+            LEFT JOIN categories c ON c.id = m.category_id
+            WHERE m.name = ?
+            LIMIT 1
+        """, (item_name,)).fetchone()
+    elif shared_type == "labor_op":
+        row = conn.execute("""
+            SELECT c.name as cat_name
+            FROM labor_ops lo
+            LEFT JOIN categories c ON c.id = lo.category_id
+            WHERE lo.name = ?
+            LIMIT 1
+        """, (item_name,)).fetchone()
+    elif shared_type == "machine_op":
+        row = conn.execute("""
+            SELECT c.name as cat_name
+            FROM machine_ops mo
+            LEFT JOIN categories c ON c.id = mo.category_id
+            WHERE mo.name = ?
+            LIMIT 1
+        """, (item_name,)).fetchone()
+    else:
+        return None
+
+    if row and row["cat_name"]:
+        return row["cat_name"]
+    return None

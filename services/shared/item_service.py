@@ -23,6 +23,7 @@ from db.shared.items_repo import (
     insert_item,
     update_item,
     delete_item,
+    get_category_name_by_item_name,
 )
 
 
@@ -188,3 +189,15 @@ class ItemService:
     def force_delete(self, item_id: int) -> None:
         """يحذف العنصر حتى لو مستخدم في BOM — للحالات الاستثنائية."""
         delete_item(self._conn, item_id)
+
+    # ── Lookup (نقطة دخول لـ tabs/ — تحافظ على الهيكلة) ────
+
+    @classmethod
+    def get_category_name_by_item_name(cls, conn, item_name: str,
+                                        item_type: str) -> "str | None":
+        """
+        يجيب category_name لعنصر عن طريق اسمه ونوعه.
+        نقطة الدخول الوحيدة الموصى بها من tabs/ لهذا الاستعلام —
+        بدلاً من استدعاء db.shared.items_repo مباشرة من UI.
+        """
+        return get_category_name_by_item_name(conn, item_name, item_type)
