@@ -26,6 +26,7 @@ from services.companies.shared_items_service import SharedItemsService
 from services.companies.company_service import CompanyService
 from ui.widgets.core.events import emit_company_data_changed
 from ui.widgets.core.i18n import tr
+from ui.widgets.core.widget_mixin import WidgetMixin
 from ui.font import FS_SM, FS_LG
 from ui.constants import (
     SHARED_MGR_MIN_W, SHARED_MGR_MIN_H,
@@ -33,7 +34,7 @@ from ui.constants import (
     SHARED_MGR_HINT_RADIUS, SHARED_MGR_HINT_PAD_V, SHARED_MGR_HINT_PAD_H,
     SHARED_MGR_BTN_MIN_H, SHARED_MGR_BTN_ADD_RADIUS, SHARED_MGR_BTN_ADD_PAD_H,
     SHARED_MGR_BTN_DEL_RADIUS, SHARED_MGR_BTN_DEL_PAD_H,
-    SHARED_MGR_TREE_RADIUS, SHARED_MGR_TREE_ITEM_PAD_V, SHARED_MGR_TREE_ITEM_PAD_H,
+    SHARED_MGR_TREE_BORDER_W, SHARED_MGR_TREE_RADIUS, SHARED_MGR_TREE_ITEM_PAD_V, SHARED_MGR_TREE_ITEM_PAD_H,
     SHARED_MGR_COL1_W, SHARED_MGR_COL2_W, SHARED_MGR_COL3_W, SHARED_MGR_COL4_W,
     SHARED_MGR_HDR_H, SHARED_MGR_HDR_MARGIN_H, SHARED_MGR_CLOSE_BTN_H,
     MARGIN_ZERO, SPACING_ZERO, SHARED_MGR_TREE_TYPE_FONT_DELTA,
@@ -60,7 +61,7 @@ def _type_color(t: str) -> str:
     }.get(t, _C["text_primary"])
 
 
-class SharedItemsManagerDialog(QDialog):
+class SharedItemsManagerDialog(QDialog, WidgetMixin):
     """
     نافذة إدارة العناصر المشتركة بين الشركات.
 
@@ -82,6 +83,7 @@ class SharedItemsManagerDialog(QDialog):
         self.setMinimumSize(SHARED_MGR_MIN_W, SHARED_MGR_MIN_H)
         self.setModal(True)
         self.setLayoutDirection(Qt.RightToLeft)
+        self._init_widget_mixin(theme=False, font=False, lang=False, data=False)
         self._build()
         self._load()
 
@@ -163,7 +165,7 @@ class SharedItemsManagerDialog(QDialog):
         self.tree.itemDoubleClicked.connect(self._on_double_click)
         self.tree.setStyleSheet(f"""
             QTreeWidget {{
-                border:1px solid {_C['border']}; border-radius:{SHARED_MGR_TREE_RADIUS}px;
+                border:{SHARED_MGR_TREE_BORDER_W}px solid {_C['border']}; border-radius:{SHARED_MGR_TREE_RADIUS}px;
                 background:{_C['bg_input']};
                 alternate-background-color:{_C['bg_surface']};
             }}
@@ -356,8 +358,7 @@ class SharedItemsManagerDialog(QDialog):
         if not ok or not name.strip():
             return
 
-        from db.companies.shared_items_repo import insert_shared_item
-        new_id = insert_shared_item(self._conn, name.strip(), shared_type)
+        new_id = self._svc.add_item(name.strip(), shared_type)
         self._load()
         emit_company_data_changed()
         self._open_edit_dialog(new_id)
@@ -383,7 +384,7 @@ class SharedItemsManagerDialog(QDialog):
             return
 
         # تحقق من وجود شركات مرتبطة
-        linked = fetch_linked_companies(self._conn, item_id)
+        linked = self._svc.list_linked_companies(item_id)
         if linked:
             co_names = ", ".join(c["name"] for c in linked)
             reply = QMessageBox.question(
@@ -401,7 +402,7 @@ class SharedItemsManagerDialog(QDialog):
             if reply != QMessageBox.Yes:
                 return
 
-        delete_shared_item(self._conn, item_id)
+        self._svc.delete_item(item_id)
         self._load()
         self.items_changed.emit()
         emit_company_data_changed()

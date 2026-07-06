@@ -39,6 +39,7 @@ from ui.constants import (
     SHARED_DLG_SAVE_BTN_RADIUS, SHARED_DLG_SAVE_BTN_PAD_H,
     SHARED_DLG_PREVIEW_RADIUS, SHARED_DLG_PREVIEW_PAD_V, SHARED_DLG_PREVIEW_PAD_H,
     SHARED_DLG_HDR_BORDER_W, SHARED_DLG_LINK_BTN_BORDER_W,
+    SHARED_DLG_GRP_BORDER_W, SHARED_DLG_LIST_BORDER_W,
     SHARED_DLG_SPIN_MAX_DEFAULT, SHARED_DLG_SPIN_DEC_DEFAULT,
     SHARED_DLG_SPIN_MAX_MINUTES, SHARED_DLG_SPIN_DEC_MINUTES,
 )
@@ -127,7 +128,7 @@ class SharedItemsDialog(QDialog, WidgetMixin):
         data_grp.setStyleSheet(f"""
             QGroupBox {{
                 font-weight:bold; color:{_C['text_primary']};
-                border:1px solid {_C['border']}; border-radius:{SHARED_DLG_GRP_RADIUS}px;
+                border:{SHARED_DLG_GRP_BORDER_W}px solid {_C['border']}; border-radius:{SHARED_DLG_GRP_RADIUS}px;
                 padding-top:{SHARED_DLG_GRP_PAD_TOP}px; margin-top:{SHARED_DLG_GRP_MARGIN_TOP}px;
             }}
             QGroupBox::title {{
@@ -155,7 +156,7 @@ class SharedItemsDialog(QDialog, WidgetMixin):
         companies_grp.setStyleSheet(f"""
             QGroupBox {{
                 font-weight:bold; color:{_C['text_primary']};
-                border:1px solid {_C['border']}; border-radius:{SHARED_DLG_GRP_RADIUS}px;
+                border:{SHARED_DLG_GRP_BORDER_W}px solid {_C['border']}; border-radius:{SHARED_DLG_GRP_RADIUS}px;
                 padding-top:{SHARED_DLG_GRP_PAD_TOP}px; margin-top:{SHARED_DLG_GRP_MARGIN_TOP}px;
             }}
             QGroupBox::title {{
@@ -169,7 +170,7 @@ class SharedItemsDialog(QDialog, WidgetMixin):
         self.lst_companies.setMaximumHeight(SHARED_DLG_LIST_MAX_H)
         self.lst_companies.setStyleSheet(f"""
             QListWidget {{
-                border:1px solid {_C['border']}; border-radius:{SHARED_DLG_LIST_RADIUS}px;
+                border:{SHARED_DLG_LIST_BORDER_W}px solid {_C['border']}; border-radius:{SHARED_DLG_LIST_RADIUS}px;
                 font-size:{FS_SM}px;
             }}
             QListWidget::item {{ padding:{SHARED_DLG_LIST_ITEM_PAD_V}px {SHARED_DLG_LIST_ITEM_PAD_H}px; }}
