@@ -1,5 +1,5 @@
 File Tree Snapshot
-Generated : 2026-07-06 12:54:35
+Generated : 2026-07-06 15:02:46
 Source    : D:\My Workspace\Hg\Alhabaar\accountant\system
 Extensions: .md, .py
 ────────────────────────────────────────────────────────────
@@ -86,6 +86,9 @@ system/
 │   └── costing_ops.py
 ├── services/
 │   ├── accounting/
+│   │   ├── accounts_service.py
+│   │   ├── audit_service.py
+│   │   ├── investors_service.py
 │   │   └── journal_service.py
 │   ├── companies/
 │   │   ├── company_service.py
