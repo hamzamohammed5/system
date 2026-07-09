@@ -17,7 +17,8 @@ from PyQt5.QtWidgets import (
 )
 from PyQt5.QtCore import Qt
 
-from db.accounting.investors_repo import fetch_all_investors, link_investor_to_line
+from services.accounting.investors_service import InvestorsService
+from services.accounting.journal_service import JournalService
 from ui.widgets.core.events import bus
 from ui.widgets.core.conn import DualConnMixin
 from ui.widgets.core.widget_mixin import WidgetMixin
@@ -104,7 +105,8 @@ class _LinkToEntryPanel(DualConnMixin, WidgetMixin, QWidget):
         self.cmb_investor.blockSignals(True)
         self.cmb_investor.clear()
         try:
-            for inv in fetch_all_investors(self._get_erp_conn()):
+            svc = InvestorsService(self._get_erp_conn())
+            for inv in svc.list_investors():
                 self.cmb_investor.addItem(inv["name"], inv["id"])
         except Exception:
             pass
@@ -133,31 +135,22 @@ class _LinkToEntryPanel(DualConnMixin, WidgetMixin, QWidget):
 
         acc = self._get_safe_conn()
         erp = self._get_erp_conn()
+        svc_journal = JournalService(acc)
 
-        entry_row = acc.execute(
-            "SELECT id FROM journal_entries WHERE ref_no=?", (ref_no,)
-        ).fetchone()
+        entry_row = svc_journal.get_entry_by_ref(ref_no)
         if not entry_row:
             msg_warning(self, tr("warning"), tr("entry_not_found").format(ref=ref_no))
             return
 
         entry_id = entry_row["id"]
-        if move_type == "capital":
-            line_row = acc.execute(
-                "SELECT id FROM journal_lines WHERE entry_id=? AND credit>0 LIMIT 1",
-                (entry_id,)
-            ).fetchone()
-        else:
-            line_row = acc.execute(
-                "SELECT id FROM journal_lines WHERE entry_id=? AND debit>0 LIMIT 1",
-                (entry_id,)
-            ).fetchone()
+        side     = "credit" if move_type == "capital" else "debit"
+        line_id  = svc_journal.get_line_id(entry_id, side)
 
-        line_id = line_row["id"] if line_row else 0
         notes   = self.inp_notes.text().strip() or None
         try:
-            link_investor_to_line(erp, inv_id, entry_id, line_id,
-                                  move_type, amount, notes)
+            svc = InvestorsService(erp, acc_conn=acc)
+            svc.link_to_line(inv_id, entry_id, line_id,
+                             move_type, amount, notes)
             self.inp_entry_ref.clear()
             self.sp_amount.setValue(0)
             self.inp_notes.clear()

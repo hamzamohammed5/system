@@ -16,10 +16,7 @@ from PyQt5.QtWidgets import (
 )
 from PyQt5.QtGui  import QColor, QFont
 
-from db.accounting.investors_repo import (
-    fetch_investor, delete_investor,
-    calc_all_investors_summary,
-)
+from services.accounting.investors_service import InvestorsService
 from ui.widgets.tables.tables import make_list_table, auto_fit_columns, ROW_HEIGHT_LARGE
 from ui.widgets.components.button import make_btn as _make_btn
 from ui.widgets.dialogs.confirm import confirm_delete
@@ -127,7 +124,8 @@ class _InvestorsTable(DualConnMixin, WidgetMixin, QWidget):
         return int(item.text()) if item else None
 
     def _load(self):
-        summaries = calc_all_investors_summary(self._get_erp_conn())
+        svc = InvestorsService(self._get_erp_conn(), acc_conn=self._get_safe_conn())
+        summaries = svc.get_all_investors_summary()
         self.table.setRowCount(0)
         for s in summaries:
             r = self.table.rowCount()
@@ -176,10 +174,10 @@ class _InvestorsTable(DualConnMixin, WidgetMixin, QWidget):
         if not inv_id:
             msg_info(self, tr("warning"), tr("select_investor_first"))
             return
-        erp = self._get_erp_conn()
-        inv = fetch_investor(erp, inv_id)
+        svc = InvestorsService(self._get_erp_conn())
+        inv = svc.get_investor(inv_id)
         if confirm_delete(self, inv["name"]):
-            delete_investor(erp, inv_id)
+            svc.delete_investor(inv_id)
             bus.company_data_changed.emit(self._company_id or 0)
 
     def _open_movement(self, move_type: str):
@@ -189,7 +187,7 @@ class _InvestorsTable(DualConnMixin, WidgetMixin, QWidget):
             return
         erp = self._get_erp_conn()
         acc = self._get_safe_conn()
-        inv = fetch_investor(erp, inv_id)
+        inv = InvestorsService(erp).get_investor(inv_id)
         dlg = _MovementDialog(
             acc, erp,
             inv_id, inv["name"], move_type, parent=self

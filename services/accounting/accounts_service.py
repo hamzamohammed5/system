@@ -199,6 +199,24 @@ class AccountsService:
         from db.accounting.accounting_accounts_repo import get_normal_balance
         return get_normal_balance(acc_type)
 
+    def get_type_labels_map(self) -> dict:
+        """
+        يرجع dict كامل لتسميات أنواع الحسابات (asset/liability/capital/...).
+        بديل لاستيراد TYPE_AR من accounting_schema مباشرة في tabs/ —
+        ثابت عرض وليس بيانات، بنفس منطق get_type_label في statements_service.py.
+        """
+        from db.accounting.accounting_schema_constants import TYPE_AR
+        return dict(TYPE_AR)
+
+    def get_equity_types(self) -> set:
+        """
+        يرجع مجموعة أنواع الحسابات التي تنتمي لحقوق الملكية
+        (capital, drawings, revenue, expense).
+        بديل لاستيراد EQUITY_TYPES من accounting_schema مباشرة في tabs/.
+        """
+        from db.accounting.accounting_schema_constants import EQUITY_TYPES
+        return set(EQUITY_TYPES)
+
     def calc_signed_amount(self, acc_type: str, increase: bool, amount: float) -> tuple:
         from db.accounting.accounting_accounts_repo import calc_signed_amount
         return calc_signed_amount(acc_type, increase, amount)

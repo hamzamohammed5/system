@@ -15,7 +15,7 @@ from PyQt5.QtWidgets import (
 from PyQt5.QtCore import Qt
 from PyQt5.QtGui  import QColor
 
-from db.accounting.accounting_repo import balance_sheet
+from services.accounting.statements_service import StatementsService
 from ui.widgets.tables.tables import make_table
 from ui.widgets.core.events import bus
 from ui.widgets.components.headers_page import PageHeader
@@ -125,7 +125,7 @@ class BalanceSheetTab(SafeConnMixin, QWidget, WidgetMixin):
 
     def _load(self):
         try:
-            data = balance_sheet(self._get_safe_conn())
+            data = StatementsService(self._get_safe_conn()).get_balance_sheet()
         except Exception as e:
             print(f"[BalanceSheetTab] _load error: {e}")
             return

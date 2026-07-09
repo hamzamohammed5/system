@@ -205,6 +205,26 @@ class JournalService:
             total_cr     = float(row["total_cr"]),
         )
 
+    def get_entry_by_ref(self, ref_no: str):
+        """يجلب قيداً برقمه المرجعي — يعيد استخدام repo helper الجاهزة."""
+        from db.accounting.accounting_repo_ui_helpers import fetch_entry_by_ref
+        return fetch_entry_by_ref(self._conn, ref_no)
+
+    def get_line_id(self, entry_id: int, side: str) -> int:
+        """
+        يرجع id أول سطر من الجانب المطلوب في قيد معيّن.
+        side: 'credit' → أول سطر دائن (لقيود رأس المال)
+              'debit'  → أول سطر مدين (لقيود المسحوبات)
+        """
+        from db.accounting.accounting_repo_ui_helpers import (
+            fetch_capital_line_for_entry, fetch_drawings_line_for_entry,
+        )
+        if side == "credit":
+            return fetch_capital_line_for_entry(self._conn, entry_id)
+        if side == "debit":
+            return fetch_drawings_line_for_entry(self._conn, entry_id)
+        raise ValueError("side يجب أن يكون 'credit' أو 'debit'")
+
     # ── Post Entry ────────────────────────────────────────
 
     def post_entry(self, entry_data: dict,

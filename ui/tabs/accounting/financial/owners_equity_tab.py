@@ -16,7 +16,7 @@ from PyQt5.QtWidgets import (
 from PyQt5.QtCore import Qt
 from PyQt5.QtGui  import QColor
 
-from db.accounting.accounting_repo import owners_equity_statement
+from services.accounting.statements_service import StatementsService
 from ui.widgets.tables.tables import make_table
 from ui.widgets.core.events import bus
 from ui.widgets.components.headers_page import PageHeader
@@ -136,7 +136,7 @@ class OwnersEquityTab(SafeConnMixin, QWidget, WidgetMixin):
 
     def _load(self):
         try:
-            data = owners_equity_statement(self._get_safe_conn())
+            data = StatementsService(self._get_safe_conn()).get_owners_equity_statement()
         except Exception as e:
             print(f"[OwnersEquityTab] _load error: {e}")
             return

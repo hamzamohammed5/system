@@ -107,6 +107,11 @@ class InvestorsService:
         except Exception:
             return 0
 
+    def get_entry_id_for_link(self, link_id: int):
+        """يرجع entry_id المرتبط بـ link_id — يُستخدم قبل حذف القيد عند حذف حركة مستثمر."""
+        from db.accounting.accounting_repo_ui_helpers import fetch_investor_entry_id
+        return fetch_investor_entry_id(self._conn, link_id)
+
     # ── ربط المستثمر بالقيود ──────────────────────────────
 
     def link_to_line(self, investor_id: int, entry_id: int, line_id: int,

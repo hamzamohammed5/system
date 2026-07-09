@@ -17,9 +17,7 @@ from PyQt5.QtWidgets import (
 )
 from PyQt5.QtCore import Qt, QDate
 
-from db.accounting.investors_repo import (
-    fetch_investor, insert_investor, update_investor,
-)
+from services.accounting.investors_service import InvestorsService
 from ui.widgets.mixins.form_mixins import EditModeMixin
 from ui.widgets.core.events import bus
 from ui.widgets.core.conn import DualConnMixin
@@ -167,7 +165,8 @@ class _InvestorForm(DualConnMixin, QWidget, WidgetMixin, EditModeMixin):
             return
         erp    = self._get_erp_conn()
         acc    = self._get_safe_conn()
-        inv_id = insert_investor(erp, **data)
+        svc    = InvestorsService(erp, acc_conn=acc)
+        inv_id = svc.add_investor(**data).investor_id
         amount = self.sp_initial.value()
         if amount > 0:
             cap_acc   = self.cmb_capital_acc.currentData()
@@ -192,8 +191,9 @@ class _InvestorForm(DualConnMixin, QWidget, WidgetMixin, EditModeMixin):
         data = self._collect()
         if not data:
             return
-        update_investor(self._get_erp_conn(), self._editing_id,
-                        data["name"], data["notes"], data["joined_at"])
+        InvestorsService(self._get_erp_conn()).update_investor(
+            self._editing_id, data["name"],
+            notes=data["notes"], joined_at=data["joined_at"])
         self._reset()
         bus.company_data_changed.emit(self._company_id or 0)
 
@@ -201,7 +201,7 @@ class _InvestorForm(DualConnMixin, QWidget, WidgetMixin, EditModeMixin):
         self._reset()
 
     def load_for_edit(self, inv_id: int):
-        inv = fetch_investor(self._get_erp_conn(), inv_id)
+        inv = InvestorsService(self._get_erp_conn()).get_investor(inv_id)
         if not inv:
             return
         self.inp_name.setText(inv["name"])

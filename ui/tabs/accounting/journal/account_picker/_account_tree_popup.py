@@ -17,12 +17,7 @@ from PyQt5.QtWidgets import (
 from PyQt5.QtCore import Qt
 from PyQt5.QtGui  import QColor, QFont
 
-from db.accounting.accounting_repo import (
-    fetch_all_accounts, fetch_account,
-    fetch_all_groups, build_group_tree,
-    get_normal_balance,
-)
-from db.accounting.accounting_schema import TYPE_AR, EQUITY_TYPES
+from services.accounting.accounts_service import AccountsService
 from ...helpers import TYPE_COLORS
 from ui.font import FS_XS, FS_BASE
 from ui.widgets.core.i18n import tr
@@ -68,6 +63,9 @@ class _AccountTreePopup(QDialog, WidgetMixin):
             self._expanded.add(f"type:{t}")
         self._all_accounts = []
         self._filter_text  = ""
+        _acc_svc = AccountsService(None)
+        self._type_ar       = _acc_svc.get_type_labels_map()
+        self._equity_types  = _acc_svc.get_equity_types()
         self._init_widget_mixin(lang=False, data=False)
         self._build()
         self._refresh_style()
@@ -117,9 +115,10 @@ class _AccountTreePopup(QDialog, WidgetMixin):
     def _load_accounts(self, conn):
         """يُستدعى مرة واحدة في __init__ بـ conn حي من المستدعي."""
         self._all_accounts = []
+        svc = AccountsService(conn)
         for acc_type in self.acc_types:
             try:
-                rows = fetch_all_accounts(conn, acc_type)
+                rows = svc.list_all_accounts(acc_type)
                 for r in rows:
                     if r["is_leaf"]:
                         self._all_accounts.append({
@@ -159,8 +158,8 @@ class _AccountTreePopup(QDialog, WidgetMixin):
                 by_type[t][grp_full] = []
             by_type[t][grp_full].append(acc)
 
-        standalone_types = [t for t in self.acc_types if t not in EQUITY_TYPES]
-        equity_types     = [t for t in self.acc_types if t in EQUITY_TYPES]
+        standalone_types = [t for t in self.acc_types if t not in self._equity_types]
+        equity_types     = [t for t in self.acc_types if t in self._equity_types]
 
         for acc_type in standalone_types:
             if acc_type not in by_type:
@@ -226,7 +225,7 @@ class _AccountTreePopup(QDialog, WidgetMixin):
         type_key   = f"type:{acc_type}"
         expanded   = type_key in self._expanded
         icon       = tr(_TYPE_ORDER.get(acc_type, "account_tree_default_icon"))
-        type_label = TYPE_AR.get(acc_type, acc_type)
+        type_label = self._type_ar.get(acc_type, acc_type)
         toggle     = tr("tree_toggle_expanded") if expanded else tr("tree_toggle_collapsed")
         color      = TYPE_COLORS.get(acc_type, _C['text_muted'])
         pad        = "    " * indent
@@ -268,7 +267,7 @@ class _AccountTreePopup(QDialog, WidgetMixin):
 
             acc_pad = "    " * (indent + 2)
             for acc in sorted(matched_accs, key=lambda a: a["code"]):
-                nb = get_normal_balance(acc["type"])
+                nb = AccountsService(None).get_normal_balance(acc["type"])
                 nb_text = tr("dr_badge") if nb == "dr" else tr("cr_badge")
                 label = f"{acc_pad}{acc['code']}{tr('account_code_name_sep')}{acc['name']}  [{nb_text}]"
                 acc_item = QListWidgetItem(label)
@@ -323,5 +322,5 @@ class _AccountTreePopup(QDialog, WidgetMixin):
         """
         if not self._selected_id:
             return None
-        acc = fetch_account(conn, self._selected_id)
+        acc = AccountsService(conn).get_account(self._selected_id)
         return acc["type"] if acc else None

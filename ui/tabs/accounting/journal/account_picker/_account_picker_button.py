@@ -15,7 +15,7 @@ from PyQt5.QtWidgets import (
 )
 from PyQt5.QtCore import Qt, QPoint, QTimer
 
-from db.accounting.accounting_repo import fetch_account, get_normal_balance
+from services.accounting.accounts_service import AccountsService
 from ui.widgets.core.conn import SafeConnMixin
 from ui.widgets.core.widget_mixin import WidgetMixin
 from ui.theme import _C
@@ -94,7 +94,7 @@ class _AccountPickerButton(SafeConnMixin, WidgetMixin, QWidget):
             if acc_id:
                 # [إصلاح v3] نمرر conn صريح لـ get_selected_type
                 # بدل الاعتماد على conn محفوظ في الـ popup
-                acc = fetch_account(conn, acc_id)
+                acc = AccountsService(conn).get_account(acc_id)
                 self._account_id   = acc_id
                 self._account_name = acc_name
                 self._account_type = acc["type"] if acc else None
@@ -114,10 +114,11 @@ class _AccountPickerButton(SafeConnMixin, WidgetMixin, QWidget):
             self.lbl_nb.setText("")
             self._refresh_style()
             return
-        acc = fetch_account(self._get_safe_conn(), self._account_id)
+        svc = AccountsService(self._get_safe_conn())
+        acc = svc.get_account(self._account_id)
         if not acc:
             return
-        nb = get_normal_balance(acc["type"])
+        nb = svc.get_normal_balance(acc["type"])
         if nb == "dr":
             self.lbl_nb.setText(tr("dr_badge"))
             from ui.theme import _C
@@ -145,7 +146,7 @@ class _AccountPickerButton(SafeConnMixin, WidgetMixin, QWidget):
 
     def set_account(self, acc_id: int, acc_name: str = None):
         self._account_id = acc_id
-        acc = fetch_account(self._get_safe_conn(), acc_id)
+        acc = AccountsService(self._get_safe_conn()).get_account(acc_id)
         self._account_type = acc["type"] if acc else None
         if acc_name:
             self._account_name = acc_name

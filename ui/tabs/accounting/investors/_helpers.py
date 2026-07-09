@@ -14,8 +14,9 @@ from PyQt5.QtWidgets import QComboBox
 from ui.widgets.panels.form_fields import spin_field as _spin          # noqa: F401
 from ui.widgets.components.stat_card import stat_card_pair as _stat_card  # noqa: F401
 
-from db.accounting.accounting_repo import fetch_leaf_accounts, insert_entry, add_entry_lines
-from db.accounting.investors_repo  import link_investor_to_line
+from services.accounting.journal_service import JournalService, JournalLine
+from services.accounting.accounts_service import AccountsService
+from services.accounting.investors_service import InvestorsService
 from ui.widgets.core.i18n import tr
 
 
@@ -25,30 +26,21 @@ from ui.widgets.core.i18n import tr
 
 def _fetch_capital_accounts(acc_conn):
     try:
-        return acc_conn.execute("""
-            SELECT id, code, name FROM accounts
-            WHERE type='capital' AND is_leaf=1 ORDER BY code
-        """).fetchall()
+        return AccountsService(acc_conn).list_leaf_accounts(acc_types=["capital"])
     except Exception:
         return []
 
 
 def _fetch_drawings_accounts(acc_conn):
     try:
-        return acc_conn.execute("""
-            SELECT id, code, name FROM accounts
-            WHERE type='drawings' AND is_leaf=1 ORDER BY code
-        """).fetchall()
+        return AccountsService(acc_conn).list_leaf_accounts(acc_types=["drawings"])
     except Exception:
         return []
 
 
 def _fetch_asset_accounts(acc_conn):
     try:
-        return acc_conn.execute("""
-            SELECT id, code, name, COALESCE(subtype,'') AS subtype
-            FROM accounts WHERE type='asset' AND is_leaf=1 ORDER BY code
-        """).fetchall()
+        return AccountsService(acc_conn).list_leaf_accounts(acc_types=["asset"])
     except Exception:
         return []
 
@@ -115,35 +107,33 @@ def _fill_drawings_combo(cmb: QComboBox, acc_conn, prev_id=None):
 
 def _post_capital_entry(acc_conn, erp_conn, investor_id, investor_name,
                         capital_acc_id, asset_acc_id, amount, date, notes=None):
-    desc     = tr("capital_entry_desc").format(name=investor_name, amount=f"{amount:,.2f}", currency=tr("currency_abbr"))
-    entry_id = insert_entry(acc_conn, date, desc, entry_type="manual", notes=notes)
-    lines = [
-        {"account_id": asset_acc_id,   "debit": amount, "credit": 0,      "description": desc},
-        {"account_id": capital_acc_id, "debit": 0,      "credit": amount,  "description": desc},
-    ]
-    add_entry_lines(acc_conn, entry_id, lines)
-    line_row = acc_conn.execute(
-        "SELECT id FROM journal_lines WHERE entry_id=? AND credit>0", (entry_id,)
-    ).fetchone()
-    line_id = line_row["id"] if line_row else 0
-    link_investor_to_line(erp_conn, investor_id, entry_id, line_id,
-                          "capital", amount, notes)
+    desc   = tr("capital_entry_desc").format(name=investor_name, amount=f"{amount:,.2f}", currency=tr("currency_abbr"))
+    result = JournalService(acc_conn).post_entry(
+        entry_data={"date": date, "description": desc, "entry_type": "manual", "notes": notes},
+        lines=[
+            JournalLine(account_id=asset_acc_id,   dr=amount, cr=0,      note=desc),
+            JournalLine(account_id=capital_acc_id, dr=0,      cr=amount, note=desc),
+        ],
+    )
+    entry_id = result.entry_id
+    line_id  = JournalService(acc_conn).get_line_id(entry_id, "credit")
+    InvestorsService(erp_conn, acc_conn=acc_conn).link_to_line(
+        investor_id, entry_id, line_id, "capital", amount, notes)
     return entry_id
 
 
 def _post_drawings_entry(acc_conn, erp_conn, investor_id, investor_name,
                          drawings_acc_id, asset_acc_id, amount, date, notes=None):
-    desc     = tr("drawings_entry_desc").format(name=investor_name, amount=f"{amount:,.2f}", currency=tr("currency_abbr"))
-    entry_id = insert_entry(acc_conn, date, desc, entry_type="manual", notes=notes)
-    lines = [
-        {"account_id": drawings_acc_id, "debit": amount, "credit": 0,      "description": desc},
-        {"account_id": asset_acc_id,    "debit": 0,      "credit": amount,  "description": desc},
-    ]
-    add_entry_lines(acc_conn, entry_id, lines)
-    line_row = acc_conn.execute(
-        "SELECT id FROM journal_lines WHERE entry_id=? AND debit>0", (entry_id,)
-    ).fetchone()
-    line_id = line_row["id"] if line_row else 0
-    link_investor_to_line(erp_conn, investor_id, entry_id, line_id,
-                          "drawings", amount, notes)
+    desc   = tr("drawings_entry_desc").format(name=investor_name, amount=f"{amount:,.2f}", currency=tr("currency_abbr"))
+    result = JournalService(acc_conn).post_entry(
+        entry_data={"date": date, "description": desc, "entry_type": "manual", "notes": notes},
+        lines=[
+            JournalLine(account_id=drawings_acc_id, dr=amount, cr=0,      note=desc),
+            JournalLine(account_id=asset_acc_id,    dr=0,      cr=amount, note=desc),
+        ],
+    )
+    entry_id = result.entry_id
+    line_id  = JournalService(acc_conn).get_line_id(entry_id, "debit")
+    InvestorsService(erp_conn, acc_conn=acc_conn).link_to_line(
+        investor_id, entry_id, line_id, "drawings", amount, notes)
     return entry_id

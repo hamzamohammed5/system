@@ -14,7 +14,7 @@ from PyQt5.QtWidgets import (
     QLabel, QTableWidgetItem,
 )
 
-from db.accounting.accounting_repo import trial_balance, get_normal_balance
+from services.accounting.statements_service import StatementsService
 from ui.widgets.core.events import bus
 from ui.widgets.core.conn import SafeConnMixin
 from ui.widgets.core.widget_mixin import WidgetMixin
@@ -115,7 +115,8 @@ class TrialBalanceTab(SafeConnMixin, QWidget, WidgetMixin):
 
     def _load(self):
         try:
-            rows = trial_balance(self._get_safe_conn())
+            svc  = StatementsService(self._get_safe_conn())
+            rows = svc.get_trial_balance()
         except Exception as e:
             print(f"[TrialBalanceTab] _load error: {e}")
             return
@@ -123,7 +124,6 @@ class TrialBalanceTab(SafeConnMixin, QWidget, WidgetMixin):
         self.table.setRowCount(0)
         sd = sc = 0.0
 
-        from db.accounting.accounting_schema import TYPE_AR
         for row in rows:
             r = self.table.rowCount()
             self.table.insertRow(r)
@@ -133,14 +133,14 @@ class TrialBalanceTab(SafeConnMixin, QWidget, WidgetMixin):
             ni.setToolTip(row["name"])
             self.table.setItem(r, 1, ni)
             self.table.setItem(r, 2, QTableWidgetItem(
-                TYPE_AR.get(row["type"], row["type"])
+                svc.get_type_label(row["type"])
             ))
             self.table.setItem(r, 3, QTableWidgetItem(f"{row['total_debit']:,.2f}"))
             self.table.setItem(r, 4, QTableWidgetItem(f"{row['total_credit']:,.2f}"))
 
             bal     = row["balance"]
             abs_bal = abs(bal)
-            nb      = get_normal_balance(row["type"])
+            nb      = svc.get_normal_balance(row["type"])
             color   = (_C["journal_dr_accent"] if bal >= 0 else _C["orange"]) if nb == "dr" \
                       else (_C["journal_cr_accent"] if bal <= 0 else _C["orange"])
 

@@ -14,10 +14,8 @@ from PyQt5.QtWidgets import (
 )
 from PyQt5.QtCore import Qt
 
-from db.accounting.investors_repo import (
-    calc_investor_summary, delete_investor_link,
-)
-from db.accounting.accounting_repo import delete_entry
+from services.accounting.investors_service import InvestorsService
+from services.accounting.journal_service import JournalService
 from ui.widgets.core.events import bus
 from ui.widgets.core.conn import DualConnMixin
 from ui.widgets.core.widget_mixin import WidgetMixin
@@ -107,7 +105,8 @@ class _InvestorDetails(DualConnMixin, WidgetMixin, QWidget):
         from ui.theme import _C
         erp = self._get_erp_conn()
         acc = self._get_safe_conn()
-        s   = calc_investor_summary(erp, self._inv_id, acc)
+        svc = InvestorsService(erp, acc_conn=acc)
+        s   = svc.get_investor_summary(self._inv_id)
         if not s:
             return
 
@@ -152,15 +151,14 @@ class _InvestorDetails(DualConnMixin, WidgetMixin, QWidget):
         try:
             erp = self._get_erp_conn()
             acc = self._get_safe_conn()
-            link_row = erp.execute(
-                "SELECT entry_id FROM investor_entries WHERE id=?", (link_id,)
-            ).fetchone()
-            if link_row:
+            svc_inv  = InvestorsService(erp)
+            entry_id = svc_inv.get_entry_id_for_link(link_id)
+            if entry_id:
                 try:
-                    delete_entry(acc, link_row["entry_id"])
+                    JournalService(acc).delete(entry_id)
                 except Exception as e:
                     print(f"[InvestorDetails] could not delete acc entry: {e}")
-            delete_investor_link(erp, link_id)
+            svc_inv.unlink(link_id)
             bus.company_data_changed.emit(self._company_id or 0)
         except Exception as e:
             from PyQt5.QtWidgets import QMessageBox
