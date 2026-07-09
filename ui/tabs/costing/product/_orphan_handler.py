@@ -15,9 +15,7 @@ _OrphanHandler — منطق معالجة المكونات الناقصة (Orphan
   من: db.shared.items_repo → fetch_item, fetch_orphan_bom_rows,
       delete_orphan_bom_rows, cleanup_empty_products_after_orphan_fix
   إلى: ProductService.get_orphan_components() + ProductService.fix_orphans()
-       + ItemService.get()
-  ملاحظة: cleanup_empty_products_after_orphan_fix غير موجود في ProductService API
-  يُبقى استدعاؤه المباشر مؤقتاً حتى إضافته للـ service.
+       + ProductService.cleanup_empty_products_after_orphan_fix() + ItemService.get()
 """
 
 from PyQt5.QtWidgets import QMessageBox
@@ -26,9 +24,6 @@ from services.costing.product_service import ProductService
 from services.shared.item_service     import ItemService
 from ui.widgets.core.events           import emit_company_data_changed
 from ui.widgets.core.i18n             import tr
-
-# TODO: نقل cleanup_empty_products_after_orphan_fix إلى ProductService
-from db.shared.items_repo import cleanup_empty_products_after_orphan_fix
 
 
 class _OrphanHandler:
@@ -78,8 +73,7 @@ class _OrphanHandler:
         # الحذف عبر ProductService
         n = prod_svc.fix_orphans(pid)
 
-        # TODO: نقل هذا المنطق لـ ProductService.fix_orphans()
-        auto_deleted = cleanup_empty_products_after_orphan_fix(conn, [pid])
+        auto_deleted = prod_svc.cleanup_empty_products_after_orphan_fix([pid])
 
         warning_bar.setVisible(False)
         bom_tree.load(conn, pid)

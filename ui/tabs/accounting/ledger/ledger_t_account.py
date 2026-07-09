@@ -17,8 +17,8 @@ from PyQt5.QtWidgets import (
 from PyQt5.QtCore import Qt
 from PyQt5.QtGui  import QColor, QFont
 
-from db.accounting.accounting_repo import fetch_t_account
-from db.accounting.accounting_schema import TYPE_AR
+from services.accounting.journal_service import JournalService
+from services.accounting.accounts_service import AccountsService
 from ui.tabs.accounting.helpers import TYPE_COLORS
 from ui.widgets.components.headers_page import PageHeader
 from ui.widgets.components.amount_label  import BalanceDisplay
@@ -223,7 +223,8 @@ class _TAccountPanel(QWidget, WidgetMixin):
 
     def load(self, conn, account_id: int):
         from ui.theme import _C
-        data = fetch_t_account(conn, account_id)
+        self._conn = conn
+        data = JournalService(conn).get_t_account(account_id)
         if not data:
             return
         self._all_data = data
@@ -231,7 +232,7 @@ class _TAccountPanel(QWidget, WidgetMixin):
         acc = data["account"]
         nb  = data["normal_balance"]
 
-        type_ar  = TYPE_AR.get(acc["type"], "")
+        type_ar  = AccountsService(conn).get_type_labels_map().get(acc["type"], "")
         color    = TYPE_COLORS.get(acc["type"], _C["acc_type_asset"])
         nb_ar    = tr("ledger_nb_short_dr") if nb == "dr" else tr("ledger_nb_short_cr")
 
@@ -281,7 +282,7 @@ class _TAccountPanel(QWidget, WidgetMixin):
         filt_count  = len(filtered)
         filt_bal    = filt_dr - filt_cr
         self._stats.update(
-            filt_dr, filt_cr, filt_bal,
+            self._conn, filt_dr, filt_cr, filt_bal,
             filt_count, nb, acc["type"]
         )
         self._filter.set_count(filt_count, total_count)

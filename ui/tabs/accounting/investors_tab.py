@@ -11,8 +11,7 @@ InvestorsTab — تبويب المستثمرين.
 from PyQt5.QtWidgets import QWidget, QVBoxLayout, QTabWidget
 from PyQt5.QtCore import Qt, QTimer
 
-from db.accounting.investors_repo import _migrate_investors
-from db.companies.company_state import company_state
+from services.accounting.investors_service import InvestorsService
 
 from .investors._investors_layout import build_investors_tabs
 from .investors._investor_details import _InvestorDetails
@@ -36,7 +35,7 @@ class InvestorsTab(DualConnMixin, QWidget):
 
     def _migrate(self):
         try:
-            _migrate_investors(self._get_erp_conn())
+            InvestorsService(self._get_erp_conn()).migrate()
         except Exception as e:
             print(f"[InvestorsTab] migrate error: {e}")
 

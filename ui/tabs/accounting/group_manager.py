@@ -17,12 +17,7 @@ from PyQt5.QtWidgets import (
 from PyQt5.QtCore import Qt
 from PyQt5.QtGui  import QColor
 
-from db.accounting.accounting_repo import (
-    fetch_all_groups, fetch_group,
-    insert_group, update_group, delete_group,
-    build_group_tree,
-)
-from db.accounting.accounting_schema import TYPE_AR
+from services.accounting.accounts_service import AccountsService
 from ui.widgets.core.events import bus
 from ui.widgets.core.conn import SafeConnMixin
 from ui.widgets.helpers.color_picker import ColorPickerWidget
@@ -62,7 +57,8 @@ class _GroupManagerPanel(SafeConnMixin, QWidget):
         root.setSpacing(GROUP_MGR_ROOT_SPACING)
 
         # ── هيدر القسم ──
-        hdr = SectionHeader(tr("group_categories_header", type_name=TYPE_AR.get(self.acc_type, '')))
+        type_label = AccountsService(self._get_safe_conn()).get_type_labels_map().get(self.acc_type, '')
+        hdr = SectionHeader(tr("group_categories_header", type_name=type_label))
         root.addWidget(hdr)
 
         # ── الشجرة ──
@@ -91,7 +87,7 @@ class _GroupManagerPanel(SafeConnMixin, QWidget):
         root.addWidget(self._status)
 
         # ── فورم الإضافة/التعديل (FormGroup الموحد) ──
-        grp = FormGroup(tr("group_add_edit_header", type_name=TYPE_AR.get(self.acc_type, '')))
+        grp = FormGroup(tr("group_add_edit_header", type_name=type_label))
 
         self._lbl_mode = ModeLabel(add_text=tr("group_new_placeholder"))
         grp.add_label_row(self._lbl_mode)
@@ -133,8 +129,9 @@ class _GroupManagerPanel(SafeConnMixin, QWidget):
     def _load(self):
         conn = self._get_safe_conn()
         self.tree.clear()
-        rows = fetch_all_groups(conn, self.acc_type)
-        tree = build_group_tree(rows)
+        svc  = AccountsService(conn)
+        rows = svc.list_groups(self.acc_type)
+        tree = svc.build_group_tree(rows)
         self._add_tree_nodes(tree, None)
         self.tree.expandAll()
         self._refresh_parent_combo()
@@ -143,15 +140,9 @@ class _GroupManagerPanel(SafeConnMixin, QWidget):
         self._status.set_count(total, total)
 
     def _add_tree_nodes(self, nodes, parent):
-        conn = self._get_safe_conn()
+        svc = AccountsService(self._get_safe_conn())
         for node in nodes:
-            try:
-                count = conn.execute(
-                    "SELECT COUNT(*) as c FROM accounts WHERE group_id=? AND is_leaf=1",
-                    (node["id"],)
-                ).fetchone()["c"]
-            except Exception:
-                count = 0
+            count = svc.count_accounts_in_group(node["id"])
             item = QTreeWidgetItem()
             item.setText(0, node["name"])
             item.setText(1, str(count) if count else tr("dash"))
@@ -169,8 +160,9 @@ class _GroupManagerPanel(SafeConnMixin, QWidget):
         self.cmb_parent.blockSignals(True)
         self.cmb_parent.clear()
         self.cmb_parent.addItem(tr("group_without_parent"), None)
-        rows = fetch_all_groups(conn, self.acc_type)
-        tree = build_group_tree(rows)
+        svc  = AccountsService(conn)
+        rows = svc.list_groups(self.acc_type)
+        tree = svc.build_group_tree(rows)
         self._add_parent_nodes(tree, 0, exclude_id)
         self.cmb_parent.blockSignals(False)
 
@@ -193,9 +185,11 @@ class _GroupManagerPanel(SafeConnMixin, QWidget):
         if not name:
             msg_warning(self, tr("warning"), tr("category_name_required"))
             return
-        insert_group(self._get_safe_conn(), name, self.acc_type,
-                     self.cmb_parent.currentData(),
-                     self._color_picker.current_color())
+        AccountsService(self._get_safe_conn()).add_group(
+            name, self.acc_type,
+            parent_id=self.cmb_parent.currentData(),
+            color=self._color_picker.current_color(),
+        )
         self._reset()
         bus.company_data_changed.emit(self._company_id or 0)
 
@@ -204,7 +198,7 @@ class _GroupManagerPanel(SafeConnMixin, QWidget):
         if not gid:
             msg_info(self, tr("warning"), tr("select_category_first"))
             return
-        grp = fetch_group(self._get_safe_conn(), gid)
+        grp = AccountsService(self._get_safe_conn()).get_group(gid)
         if not grp:
             return
         self._editing_id = gid
@@ -224,9 +218,11 @@ class _GroupManagerPanel(SafeConnMixin, QWidget):
         name = self.inp_name.text().strip()
         if not name or not self._editing_id:
             return
-        update_group(self._get_safe_conn(), self._editing_id, name,
-                     self.cmb_parent.currentData(),
-                     self._color_picker.current_color())
+        AccountsService(self._get_safe_conn()).update_group(
+            self._editing_id, name,
+            parent_id=self.cmb_parent.currentData(),
+            color=self._color_picker.current_color(),
+        )
         self._reset()
         bus.company_data_changed.emit(self._company_id or 0)
 
@@ -234,18 +230,13 @@ class _GroupManagerPanel(SafeConnMixin, QWidget):
         gid  = self._selected_id()
         if not gid:
             return
-        conn = self._get_safe_conn()
-        grp  = fetch_group(conn, gid)
-        try:
-            count = conn.execute(
-                "SELECT COUNT(*) as c FROM accounts WHERE group_id=?", (gid,)
-            ).fetchone()["c"]
-        except Exception:
-            count = 0
+        svc = AccountsService(self._get_safe_conn())
+        grp = svc.get_group(gid)
+        count = svc.count_all_accounts_in_group(gid)
 
         extra = tr("group_delete_accounts_warn", count=count) if count else ""
         if confirm_delete(self, grp["name"], extra_msg=extra):
-            delete_group(conn, gid)
+            svc.delete_group(gid)
             bus.company_data_changed.emit(self._company_id or 0)
 
     def _reset(self):

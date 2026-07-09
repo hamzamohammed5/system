@@ -31,6 +31,7 @@ from db.shared.items_repo import (
     fetch_bom,
     fetch_orphan_bom_rows,
     delete_orphan_bom_rows,
+    cleanup_empty_products_after_orphan_fix,
 )
 from db.costing.bom_scenarios_repo import (
     fetch_scenarios,
@@ -229,6 +230,17 @@ class ProductService:
     def fix_orphans(self, product_id: int) -> int:
         """يحذف المكونات الـ orphan ويرجع عددها."""
         return delete_orphan_bom_rows(self._conn, product_id)
+
+    def cleanup_empty_products_after_orphan_fix(self,
+                                                 product_ids: list[int]) -> list[int]:
+        """
+        يحذف المنتجات (semi/final) اللي أصبحت بدون أي مكون BOM
+        بعد إصلاح الـ orphans، ويرجع قائمة IDs المنتجات المحذوفة.
+
+        [إضافة] غلاف service حول cleanup_empty_products_after_orphan_fix
+        من db.shared.items_repo — كان يُستدعى مباشرة من tabs/ (كسر هيكلي).
+        """
+        return cleanup_empty_products_after_orphan_fix(self._conn, product_ids)
 
     # ── Cost Calculation ──────────────────────────────────
 

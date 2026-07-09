@@ -210,6 +210,15 @@ class JournalService:
         from db.accounting.accounting_repo_ui_helpers import fetch_entry_by_ref
         return fetch_entry_by_ref(self._conn, ref_no)
 
+    def get_t_account(self, account_id: int):
+        """
+        يرجع بيانات حساب T كاملة (account, normal_balance, lines) —
+        بديل لاستدعاء fetch_t_account من db.accounting.accounting_repo
+        مباشرة في tabs/ (منقولة من ledger_t_account.py.load).
+        """
+        from db.accounting.accounting_repo import fetch_t_account
+        return fetch_t_account(self._conn, account_id)
+
     def get_line_id(self, entry_id: int, side: str) -> int:
         """
         يرجع id أول سطر من الجانب المطلوب في قيد معيّن.

@@ -10,8 +10,7 @@ from PyQt5.QtWidgets import (
 from PyQt5.QtCore import Qt
 from PyQt5.QtGui  import QColor
 
-from db.accounting.accounting_repo    import fetch_all_accounts
-from db.accounting.accounting_schema  import TYPE_AR
+from services.accounting.accounts_service import AccountsService
 from ui.widgets.core.conn import SafeConnMixin
 from ui.widgets.core.i18n import tr
 from ui.widgets.core.widget_mixin import WidgetMixin
@@ -19,7 +18,6 @@ from ui.constants import ACCOUNTS_PANEL_COL_CODE_W, ACCOUNTS_PANEL_COL_BAL_W, AC
 
 from ui.widgets.components.headers_list import ListHeader, StatusBar
 from ui.widgets.theme.layout_styles      import tree_style
-# انتقل لمجلد الحسابات — مخصص لـ TYPE_AR
 from ui.tabs.accounting.accounts_combo_widget import AccountTypeFilter
 from ui.tabs.accounting.helpers import TYPE_COLORS
 
@@ -47,7 +45,10 @@ class _AccountsPanel(SafeConnMixin, QWidget, WidgetMixin):
         self._header.search_changed.connect(self._filter_accounts)
         root.addWidget(self._header)
 
-        self._type_filter = AccountTypeFilter(TYPE_AR, include_all=True)
+        self._type_filter = AccountTypeFilter(
+            AccountsService(self._get_safe_conn()).get_type_labels_map(),
+            include_all=True,
+        )
         self._type_filter.setContentsMargins(*ACCOUNTS_PANEL_TYPE_FILTER_MARGIN)
         self._type_filter.type_changed.connect(self._filter_accounts)
         root.addWidget(self._type_filter)
@@ -70,7 +71,7 @@ class _AccountsPanel(SafeConnMixin, QWidget, WidgetMixin):
 
     def _refresh_accounts(self):
         try:
-            self._all = fetch_all_accounts(self._get_safe_conn())
+            self._all = AccountsService(self._get_safe_conn()).list_all_accounts()
         except Exception as e:
             print(f"[_AccountsPanel] _refresh_accounts error: {e}")
             self._all = []
@@ -82,7 +83,6 @@ class _AccountsPanel(SafeConnMixin, QWidget, WidgetMixin):
         type_filt = self._type_filter.current_type()
 
         self.lst.clear()
-        conn  = self._get_safe_conn()
         count = 0
 
         for acc in self._all:
@@ -93,14 +93,7 @@ class _AccountsPanel(SafeConnMixin, QWidget, WidgetMixin):
             if q and q not in acc["name"].lower() and q not in acc["code"].lower():
                 continue
 
-            try:
-                bal_row = conn.execute("""
-                    SELECT COALESCE(SUM(debit)-SUM(credit), 0) AS bal
-                    FROM journal_lines WHERE account_id=?
-                """, (acc["id"],)).fetchone()
-                bal = bal_row["bal"] if bal_row else 0.0
-            except Exception:
-                bal = 0.0
+            bal = acc["balance"] if acc["balance"] is not None else 0.0
 
             item = QTreeWidgetItem()
             item.setText(0, acc["code"])

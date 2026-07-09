@@ -9,7 +9,6 @@ ui/tabs/accounting/helpers.py
              TYPE_COLORS يُحدَّث عند كل استدعاء _get_type_colors().
 """
 
-from db.accounting.accounting_schema import TYPE_AR, NORMAL_BALANCE
 from ui.widgets.components.stat_card import stat_card_pair
 from ui.widgets.panels.form_fields import spin_field
 from ui.theme import _C

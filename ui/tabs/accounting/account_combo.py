@@ -22,12 +22,7 @@ from PyQt5.QtWidgets import (
 from PyQt5.QtCore import Qt, QTimer
 from PyQt5.QtGui  import QColor, QFont
 
-from db.accounting.accounting_repo import (
-    fetch_leaf_accounts, fetch_account,
-    fetch_all_groups, build_group_tree,
-    get_normal_balance, _get_group_descendants,
-)
-from db.accounting.accounting_schema import TYPE_AR
+from services.accounting.accounts_service import AccountsService
 from ui.widgets.core.conn import SafeConnMixin
 from ui.widgets.core.i18n import tr
 from ui.widgets.core.widget_mixin import WidgetMixin
@@ -118,10 +113,11 @@ class _AccountCombo(SafeConnMixin, QWidget, WidgetMixin):
         self.cmb_group.clear()
         self.cmb_group.addItem(tr("all_types_combo"), None)
         try:
-            all_groups = fetch_all_groups(conn)
-            seen_types = set(self.acc_types) if self.acc_types else set(TYPE_AR.keys())
+            svc = AccountsService(conn)
+            all_groups = svc.list_groups()
+            seen_types = set(self.acc_types) if self.acc_types else set(svc.get_type_labels_map().keys())
             groups     = [g for g in all_groups if g["acc_type"] in seen_types]
-            tree       = build_group_tree(groups)
+            tree       = svc.build_group_tree(groups)
             self._add_group_nodes(tree, depth=0)
         except Exception:
             pass
@@ -144,9 +140,7 @@ class _AccountCombo(SafeConnMixin, QWidget, WidgetMixin):
     def _load_accounts(self):
         conn = self._get_safe_conn()
         try:
-            self._all_accs = list(fetch_leaf_accounts(conn))
-            if self.acc_types:
-                self._all_accs = [a for a in self._all_accs if a["type"] in self.acc_types]
+            self._all_accs = list(AccountsService(conn).list_leaf_accounts(acc_types=self.acc_types))
         except Exception:
             self._all_accs = []
         self._apply_filter()
@@ -154,6 +148,7 @@ class _AccountCombo(SafeConnMixin, QWidget, WidgetMixin):
     def _apply_filter(self):
         from ui.theme import _C
         conn    = self._get_safe_conn()
+        svc     = AccountsService(conn)
         prev_id = self.current_account_id()
         q       = self.inp_search.text().strip().lower()
         gid     = self.cmb_group.currentData()
@@ -166,7 +161,7 @@ class _AccountCombo(SafeConnMixin, QWidget, WidgetMixin):
         for acc in self._all_accs:
             if gid is not None:
                 try:
-                    desc = _get_group_descendants(conn, gid)
+                    desc = svc.get_group_descendants(gid)
                     if acc["group_id"] not in desc:
                         continue
                 except Exception:
@@ -175,14 +170,14 @@ class _AccountCombo(SafeConnMixin, QWidget, WidgetMixin):
                 continue
 
             if acc["type"] != last_type:
-                sep_text = tr("account_tree_type_header", type=TYPE_AR.get(acc["type"], acc["type"]))
+                sep_text = tr("account_tree_type_header", type=svc.get_type_labels_map().get(acc["type"], acc["type"]))
                 self.cmb_account.addItem(sep_text, "__sep__")
                 sep_index = self.cmb_account.count() - 1
                 self._disable_item(sep_index)
                 last_type = acc["type"]
 
             color   = _get_type_colors().get(acc["type"], _C["text_primary"])
-            nb      = get_normal_balance(acc["type"])
+            nb      = svc.get_normal_balance(acc["type"])
             nb_text = tr("dr_badge") if nb == "dr" else tr("cr_badge")
             label   = f"{acc['code']} {tr('dash')} {acc['name']}  [{nb_text}]"
             self.cmb_account.addItem(label, acc["id"])
@@ -246,10 +241,11 @@ class _AccountCombo(SafeConnMixin, QWidget, WidgetMixin):
             self.lbl_nb.setStyleSheet(_badge_style())
             return
         try:
-            acc = fetch_account(self._get_safe_conn(), acc_id)
+            svc = AccountsService(self._get_safe_conn())
+            acc = svc.get_account(acc_id)
             if not acc:
                 return
-            nb = get_normal_balance(acc["type"])
+            nb = svc.get_normal_balance(acc["type"])
             if nb == "dr":
                 self.lbl_nb.setText(tr("dr_badge"))
                 self.lbl_nb.setStyleSheet(_badge_style("dr"))

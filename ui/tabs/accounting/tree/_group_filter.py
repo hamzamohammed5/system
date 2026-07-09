@@ -12,7 +12,7 @@ from PyQt5.QtWidgets import QComboBox
 from PyQt5.QtCore import Qt
 from PyQt5.QtGui  import QColor
 
-from db.accounting.accounting_repo import fetch_all_groups, build_group_tree
+from services.accounting.accounts_service import AccountsService
 from ui.widgets.core.conn import SafeConnMixin
 from ui.widgets.core.i18n import tr
 from ui.widgets.core.widget_mixin import WidgetMixin
@@ -43,10 +43,11 @@ class _GroupFilterCombo(SafeConnMixin, QComboBox, WidgetMixin):
         prev = restore_id if restore_id is not None else self.currentData()
         self.clear()
         self.addItem(tr("all_groups"), None)
+        svc = AccountsService(effective_conn)
         for t in self.acc_types:
             try:
-                rows = fetch_all_groups(effective_conn, t)
-                tree = build_group_tree(rows)
+                rows = svc.list_groups(t)
+                tree = svc.build_group_tree(rows)
                 self._add_nodes(tree, 0)
             except Exception as e:
                 print(f"[_GroupFilterCombo] error for {t}: {e}")

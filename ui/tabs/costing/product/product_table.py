@@ -16,7 +16,7 @@ _ProductTable  — جدول المنتجات المحفوظة مع FilterBar.
 [Fix #7] إضافة style="normal" صريح لزر التعديل لتوحيد المظهر
 """
 
-from db.shared.items_repo  import fetch_items_by_type
+from services.shared.item_service import ItemService
 from models.costing        import calc_cost
 from ui.widgets.base.list_panel  import BaseListPanel
 from ui.widgets.tables.tables     import make_item, colored_item
@@ -73,20 +73,20 @@ class _ProductTable(BaseListPanel):
 
     def _load_rows(self) -> list:
         try:
-            return list(fetch_items_by_type(self.conn, self.product_type))
+            return ItemService(self.conn).list_by_type(self.product_type)
         except Exception:
             return []
 
     def _fill_row(self, table, r: int, row):
         """ملء صف واحد في الجدول."""
         try:
-            cost = calc_cost(self.conn, row["id"])
+            cost = calc_cost(self.conn, row.id)
         except Exception:
             cost = 0.0
 
-        table.setItem(r, 0, make_item(str(row["id"]), user_data=row["id"]))
-        table.setItem(r, 1, make_item(row["name"]))
-        table.setItem(r, 2, make_item(row["category_name"] if row["category_name"] else tr("dash")))
+        table.setItem(r, 0, make_item(str(row.id), user_data=row.id))
+        table.setItem(r, 1, make_item(row.name))
+        table.setItem(r, 2, make_item(str(row.category_id) if row.category_id else tr("dash")))
         table.setItem(r, 3, make_item(f"{cost:.4f}"))
 
     # ══════════════════════════════════════════════════════
@@ -94,8 +94,8 @@ class _ProductTable(BaseListPanel):
     # ══════════════════════════════════════════════════════
 
     def _match_filter(self, row, query: str) -> bool:
-        name   = row["name"] if hasattr(row, "__getitem__") else ""
-        cat_id = row["category_id"] if hasattr(row, "__getitem__") else None
+        name   = getattr(row, "name", "")
+        cat_id = getattr(row, "category_id", None)
         if hasattr(self, "_filter"):
             return self._filter.match(name, cat_id)
         return query.lower() in name.lower()

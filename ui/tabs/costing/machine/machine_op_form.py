@@ -23,7 +23,7 @@ from PyQt5.QtWidgets import (
 )
 
 from services.costing.machine_service   import MachineService, MachineOpService
-from db.costing.machine_op_rows_repo    import calc_op_total_cost
+from services.costing.machine_op_rows_service import MachineOpRowsService
 from ui.widgets.mixins.form_mixins      import EditModeMixin
 from ui.widgets.core.conn               import LiveConnMixin
 from ui.widgets.core.widget_mixin       import WidgetMixin
@@ -194,7 +194,7 @@ class _MachineOpForm(QWidget, EditModeMixin, LiveConnMixin, WidgetMixin):
         editing_id = getattr(self, '_editing_id', None)
         if editing_id is not None and editing_id > 0:
             try:
-                total = calc_op_total_cost(self._live_conn(), editing_id)
+                total = MachineOpRowsService(self._live_conn()).calc_total_cost(editing_id)
                 self.lbl_cost.set_value(f"{total:.4f} {tr('currency_per_piece')}")
             except Exception:
                 self.lbl_cost.reset()

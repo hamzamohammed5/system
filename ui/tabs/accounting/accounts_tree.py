@@ -19,11 +19,7 @@ from PyQt5.QtWidgets import (
 from PyQt5.QtCore import Qt
 from PyQt5.QtGui  import QColor, QFont
 
-from db.accounting.accounting_repo import (
-    fetch_all_accounts, fetch_account, delete_account,
-    fetch_all_groups, build_group_tree,
-)
-from db.accounting.accounting_schema import TYPE_AR, EQUITY_TYPES
+from services.accounting.accounts_service import AccountsService
 from ui.widgets.core.conn import SafeConnMixin
 from ui.widgets.core.widget_mixin import WidgetMixin
 from ui.widgets.components.headers_page import SectionHeader
@@ -153,9 +149,10 @@ class AccountsTreePanel(SafeConnMixin, QWidget, WidgetMixin):
         gid_filter = self.cmb_group_filter.currentData()
 
         all_nodes_by_type: dict[str, list] = {}
+        svc = AccountsService(conn)
         for acc_type in self.acc_types:
             try:
-                rows = fetch_all_accounts(conn, acc_type)
+                rows = svc.list_all_accounts(acc_type)
             except Exception as e:
                 print(f"[AccountsTreePanel] fetch error ({acc_type}): {e}")
                 rows = []
@@ -174,10 +171,10 @@ class AccountsTreePanel(SafeConnMixin, QWidget, WidgetMixin):
             self.tree.addTopLevelItem(empty)
             return
 
-        non_equity    = [t for t in self.acc_types if t not in EQUITY_TYPES]
+        non_equity    = [t for t in self.acc_types if t not in svc.get_equity_types()]
         equity_present = [
             t for t in self.acc_types
-            if t in EQUITY_TYPES and t in all_nodes_by_type
+            if t in svc.get_equity_types() and t in all_nodes_by_type
         ]
 
         for acc_type in non_equity:
@@ -208,7 +205,7 @@ class AccountsTreePanel(SafeConnMixin, QWidget, WidgetMixin):
                 from ui.tabs.accounting.helpers import TYPE_COLORS
                 sub_item = QTreeWidgetItem()
                 sub_item.setText(0, "")
-                sub_item.setText(1, tr("accounts_tree_sub_type_wrap", name=TYPE_AR.get(acc_type, acc_type)))
+                sub_item.setText(1, tr("accounts_tree_sub_type_wrap", name=svc.get_type_labels_map().get(acc_type, acc_type)))
                 sub_item.setFlags(sub_item.flags() & ~Qt.ItemIsSelectable)
                 sf = sub_item.font(1)
                 sf.setBold(True)
@@ -240,45 +237,23 @@ class AccountsTreePanel(SafeConnMixin, QWidget, WidgetMixin):
         if not aid:
             return
         conn = self._get_safe_conn()
-        acc  = fetch_account(conn, aid)
-        if not acc:
+        svc  = AccountsService(conn)
+        preview = svc.get_delete_preview(aid)
+        if not preview:
             return
 
-        def get_all_descendants(account_id: int) -> list:
-            result = [account_id]
-            children = conn.execute(
-                "SELECT id FROM accounts WHERE parent_id=?", (account_id,)
-            ).fetchall()
-            for child in children:
-                result.extend(get_all_descendants(child["id"]))
-            return result
-
-        all_ids      = get_all_descendants(aid)
-        placeholders = ",".join("?" * len(all_ids))
-
-        try:
-            has_lines = conn.execute(
-                f"SELECT COUNT(*) as c FROM journal_lines "
-                f"WHERE account_id IN ({placeholders})",
-                all_ids
-            ).fetchone()["c"]
-        except Exception:
-            has_lines = 0
-
-        if has_lines:
+        if preview.has_lines:
             msg_warning(
                 self, tr("warning"),
-                tr("account_has_lines_msg", name=acc["name"], count=has_lines)
+                tr("account_has_lines_msg", name=preview.account_name, count=preview.lines_count)
             )
             return
 
-        child_count = len(all_ids) - 1
-        extra = tr("sub_accounts_delete_warning", count=child_count) if child_count else ""
+        extra = tr("sub_accounts_delete_warning", count=preview.child_count) if preview.child_count else ""
 
-        if confirm_delete(self, acc["name"], extra_msg=extra):
+        if confirm_delete(self, preview.account_name, extra_msg=extra):
             try:
-                for del_id in reversed(all_ids):
-                    conn.execute("DELETE FROM accounts WHERE id=?", (del_id,))
+                svc.delete_account_cascade(aid)
                 from ui.widgets.core.events import bus
                 bus.company_data_changed.emit(self._company_id or 0)
             except Exception as e:

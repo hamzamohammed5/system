@@ -8,7 +8,7 @@ _StatCards — بطاقات الإحصائيات في دفتر الأستاذ.
 
 from PyQt5.QtWidgets import QFrame, QVBoxLayout
 
-from db.accounting.accounting_schema import TYPE_AR
+from services.accounting.accounts_service import AccountsService
 from ui.widgets.components.stat_card import StatRow, StatItem
 from ui.widgets.core.i18n import tr
 from ui.widgets.core.widget_mixin import WidgetMixin
@@ -54,7 +54,7 @@ class _StatCards(QFrame, WidgetMixin):
         self.lbl_cnt = self._row.value_label(3)
         self.lbl_nb  = self._row.value_label(4)
 
-    def update(self, total_dr: float, total_cr: float,
+    def update(self, conn, total_dr: float, total_cr: float,
                balance: float, count: int, normal_balance: str, acc_type: str):
         from ui.theme import _C
         currency = tr("currency_sym")
@@ -67,7 +67,7 @@ class _StatCards(QFrame, WidgetMixin):
         self.lbl_cnt.setText(str(count))
 
         nb_ar    = tr("ledger_card_nb_dr") if normal_balance == "dr" else tr("ledger_card_nb_cr")
-        type_ar  = TYPE_AR.get(acc_type, "")
+        type_ar  = AccountsService(conn).get_type_labels_map().get(acc_type, "")
         nb_color = _C["acc_type_asset"] if normal_balance == "dr" else _C["acc_type_liability"]
         self._row.set_value(4, f"{nb_ar} — {type_ar}", nb_color)
 

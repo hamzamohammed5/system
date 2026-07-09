@@ -32,6 +32,7 @@ from PyQt5.QtWidgets import (
 from PyQt5.QtCore import Qt, QTimer
 from PyQt5.QtGui  import QColor, QFont
 
+from services.accounting.audit_service import AuditService
 from ui.font               import get_font_size, fs, FS_SM, FS_BASE, FS_MD
 from ui.widgets.theme.table_styles  import table_style, splitter_style
 from ui.widgets.components.headers_list import StatusBar
@@ -472,31 +473,20 @@ class AuditLogTab(SafeConnMixin, QWidget, WidgetMixin):
         table_filter  = self._cmb_table.currentData()
         action_filter = self._cmb_action.currentData()
 
-        # جلب الإجمالي عند أول تحميل
-        if self._offset == 0:
-            try:
-                from db.accounting.accounting_audit_repo import fetch_audit_log_count
-                self._total_count = fetch_audit_log_count(
-                    conn,
-                    table_name = table_filter,
-                    action     = action_filter,
-                )
-            except Exception:
-                self._total_count = 0
-
-        # جلب البيانات
         try:
-            from db.accounting.accounting_audit_repo import fetch_audit_log
-            rows = fetch_audit_log(
-                conn,
+            page = AuditService(conn).get_page(
                 table_name = table_filter,
                 action     = action_filter,
                 limit      = _PAGE_SIZE,
                 offset     = self._offset,
             )
+            rows = page.rows
+            if self._offset == 0:
+                self._total_count = page.total_count if page.total_count != -1 else 0
         except Exception:
             rows = []
-
+            if self._offset == 0:
+                self._total_count = 0
         self._all_records.extend(rows)
         self._offset += len(rows)
 

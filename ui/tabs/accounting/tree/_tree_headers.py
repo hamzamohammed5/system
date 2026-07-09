@@ -13,7 +13,7 @@ from PyQt5.QtWidgets import QTreeWidget, QTreeWidgetItem
 from PyQt5.QtCore import Qt
 from PyQt5.QtGui  import QColor
 
-from db.accounting.accounting_schema import TYPE_AR
+from services.accounting.accounts_service import AccountsService
 from ui.tabs.accounting.helpers import TYPE_COLORS
 from ui.widgets.core.i18n import tr
 from ._tree_nodes import add_acc_nodes
@@ -24,7 +24,8 @@ def add_type_header(tree_widget: QTreeWidget, acc_type: str, nodes: list,
     """يضيف عقدة رأسية لنوع حساب مستقل."""
     from ui.theme import _C
     type_item = QTreeWidgetItem()
-    type_item.setText(1, tr("account_tree_type_header", type=TYPE_AR.get(acc_type, acc_type)))
+    type_ar = AccountsService(conn).get_type_labels_map().get(acc_type, acc_type)
+    type_item.setText(1, tr("account_tree_type_header", type=type_ar))
     type_item.setForeground(1, QColor(TYPE_COLORS.get(acc_type, _C["text_primary"])))
     f = type_item.font(1)
     f.setBold(True)

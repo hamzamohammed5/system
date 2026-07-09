@@ -13,7 +13,7 @@ from PyQt5.QtWidgets import (
     QWidget, QVBoxLayout, QPushButton, QMessageBox,
 )
 
-from db.shared.settings_repo import get_setting, set_setting
+from services.shared.settings_service import SettingsService
 from ui.widgets.panels.form_fields import (labeled_widget, spin_field)
 from ui.widgets.panels.form_badges import ResultBadge
 
@@ -108,19 +108,21 @@ class _LaborSettingsPanel(QWidget):
         self.lbl_rate.set_value(f"{self._calc_rate():.2f}  {tr('currency_per_hour')}")
 
     def _load(self):
-        self.sp_salary.setValue(  get_setting(self.conn, "monthly_salary",    3000))
-        self.sp_days.setValue(    get_setting(self.conn, "working_days",         25))
-        self.sp_holidays.setValue(get_setting(self.conn, "holiday_days",          4))
-        self.sp_hours.setValue(   get_setting(self.conn, "working_hours_day",     8))
-        self.sp_overhead.setValue(get_setting(self.conn, "overhead_factor",    1.10))
+        svc = SettingsService(self.conn)
+        self.sp_salary.setValue(  svc.get("monthly_salary",    3000))
+        self.sp_days.setValue(    svc.get("working_days",         25))
+        self.sp_holidays.setValue(svc.get("holiday_days",          4))
+        self.sp_hours.setValue(   svc.get("working_hours_day",     8))
+        self.sp_overhead.setValue(svc.get("overhead_factor",    1.10))
         self._update_preview()
 
     def _save(self):
-        set_setting(self.conn, "monthly_salary",    self.sp_salary.value())
-        set_setting(self.conn, "working_days",      self.sp_days.value())
-        set_setting(self.conn, "holiday_days",      self.sp_holidays.value())
-        set_setting(self.conn, "working_hours_day", self.sp_hours.value())
-        set_setting(self.conn, "overhead_factor",   self.sp_overhead.value())
+        svc = SettingsService(self.conn)
+        svc.set("monthly_salary",    self.sp_salary.value())
+        svc.set("working_days",      self.sp_days.value())
+        svc.set("holiday_days",      self.sp_holidays.value())
+        svc.set("working_hours_day", self.sp_hours.value())
+        svc.set("overhead_factor",   self.sp_overhead.value())
         QMessageBox.information(
             self, tr("done"),
             f"✅  {tr('labor_settings_saved')}"

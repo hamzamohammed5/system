@@ -290,3 +290,17 @@ class AccountsService:
             ).fetchone()["c"]
         except Exception:
             return 0
+
+    def count_all_accounts_in_group(self, group_id: int) -> int:
+        """
+        يُستخدم في group_manager.py._delete لعرض تحذير قبل حذف تصنيف —
+        بدون فلتر is_leaf (يحسب كل الحسابات المرتبطة، فروع وأوراق).
+        منقولة حرفياً من استعلام SQL الأصلي في الـ UI.
+        """
+        try:
+            return self._conn.execute(
+                "SELECT COUNT(*) as c FROM accounts WHERE group_id=?",
+                (group_id,)
+            ).fetchone()["c"]
+        except Exception:
+            return 0

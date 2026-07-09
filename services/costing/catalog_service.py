@@ -4,7 +4,8 @@ services/costing/catalog_service.py
 CatalogService — ينقل منطق catalog_builder.py إلى services layer.
 
 يبني الـ catalog المستخدم في ComponentRow ويدمج العناصر المحلية
-مع المشتركة من companies.db.
+مع المشتركة (عبر CompanyService و SharedItemsService — لا يلمس
+db.companies مباشرة، لأن هذا الـ service مسؤول فقط عن db costing/shared).
 
 يُستخدم من:
   - ui/tabs/costing/product/_catalog_provider.py
@@ -30,21 +31,16 @@ class CatalogService:
     """
     Service لبناء الـ catalog الكامل للـ ComponentRow.
 
-    يدمج العناصر المحلية مع المشتركة لكل نوع.
-    يُعيد استخدام اتصال central_conn إذا مُرِّر لتحسين الأداء.
+    يدمج العناصر المحلية مع المشتركة لكل نوع، عبر CompanyService
+    و SharedItemsService (بدل التواصل المباشر مع db.companies).
 
     الاستخدام:
         svc = CatalogService(conn)
         catalog = svc.build()
-
-        # أو مع central_conn جاهز:
-        svc = CatalogService(conn, central_conn=central)
-        catalog = svc.build()
     """
 
-    def __init__(self, conn, central_conn=None):
-        self.conn         = conn
-        self._central_conn = central_conn  # اختياري — يُحسّن الأداء
+    def __init__(self, conn):
+        self.conn = conn
 
     # ── API رئيسي ─────────────────────────────────────────
 
@@ -131,47 +127,29 @@ class CatalogService:
 
     def _fetch_shared(self, shared_type: str) -> List[dict]:
         """
-        يجيب العناصر المشتركة من companies.db للشركة النشطة.
+        يجيب العناصر المشتركة للشركة النشطة عبر CompanyService
+        و SharedItemsService — بدون لمس db.companies مباشرة.
 
-        يستخدم self._central_conn لو كان متاحاً،
-        وإلا يفتح اتصالاً جديداً ويُغلقه.
-        يرجع list of dicts مع id = "shared:{n}".
+        يرجع list of dicts مع id = "shared:{n}" (نفس شكل الإخراج السابق).
         """
         try:
-            from db.companies.company_state import company_state
-            if not company_state.is_ready:
+            from services.companies.company_service import CompanyService
+            if not CompanyService.is_company_ready():
                 return []
-            company_id = company_state.company_id
+            company_id = CompanyService.get_current_company_id()
+            if company_id is None:
+                return []
 
-            import json
+            from services.companies.shared_items_service import SharedItemsService
+            conn = CompanyService.get_central_conn_and_init()
+            svc  = SharedItemsService(conn)
 
-            own_conn = False
-            central  = self._central_conn
-            if central is None:
-                from db.companies.companies_schema import get_central_connection
-                central  = get_central_connection()
-                own_conn = True
-
-            try:
-                rows = central.execute("""
-                    SELECT s.id, s.name, s.data
-                    FROM company_shared_links lnk
-                    JOIN shared_items s ON s.id = lnk.shared_item_id
-                    WHERE lnk.company_id = ? AND s.shared_type = ?
-                    ORDER BY s.name
-                """, (company_id, shared_type)).fetchall()
-            finally:
-                if own_conn:
-                    central.close()
+            items = svc.list_for_company(company_id, shared_type)
 
             result = []
-            for row in rows:
-                try:
-                    data = json.loads(row["data"]) if row["data"] else {}
-                except Exception:
-                    data = {}
-                item = {"id": f"shared:{row['id']}", "name": row["name"]}
-                item.update(data)
+            for it in items:
+                item = {"id": f"shared:{it.id}", "name": it.name}
+                item.update(it.data or {})
                 result.append(item)
             return result
 

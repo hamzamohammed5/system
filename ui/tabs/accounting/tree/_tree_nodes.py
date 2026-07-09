@@ -13,8 +13,7 @@ from PyQt5.QtWidgets import QTreeWidget, QTreeWidgetItem
 from PyQt5.QtCore import Qt
 from PyQt5.QtGui  import QColor
 
-from db.accounting.accounting_repo import get_account_balance
-from db.accounting.accounting_accounts_repo import _get_group_descendants
+from services.accounting.accounts_service import AccountsService
 from ui.tabs.accounting.helpers import TYPE_COLORS
 from ui.widgets.core.i18n import tr
 
@@ -52,7 +51,7 @@ def rows_to_tree(rows) -> list:
 
 def filter_by_group(conn, nodes: list, gid: int) -> list:
     try:
-        desc = _get_group_descendants(conn, gid)
+        desc = AccountsService(conn).get_group_descendants(gid)
     except Exception:
         desc = {gid}
     result = []
@@ -73,7 +72,7 @@ def add_acc_nodes(conn, tree_widget: QTreeWidget, nodes: list, parent):
     from ui.theme import _C
     for node in sorted(nodes, key=lambda n: n.get("code", "")):
         try:
-            bal = get_account_balance(conn, node["id"])
+            bal = AccountsService(conn).get_account_balance(node["id"])
         except Exception:
             bal = 0.0
 

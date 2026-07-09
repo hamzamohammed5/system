@@ -16,12 +16,7 @@ from PyQt5.QtWidgets import (
 from PyQt5.QtCore import Qt
 from PyQt5.QtGui  import QColor
 
-from db.accounting.accounting_repo import (
-    fetch_account, insert_account, update_account,
-    fetch_all_groups, build_group_tree,
-)
-from db.accounting.accounting_repo_ui_helpers import fetch_account_by_code
-from db.accounting.accounting_schema import TYPE_AR
+from services.accounting.accounts_service import AccountsService
 from ui.widgets.core.events import emit_company_data_changed
 from ui.widgets.core.conn import SafeConnMixin
 from ui.widgets.core.i18n import tr
@@ -83,8 +78,9 @@ class _AccountForm(SafeConnMixin, QWidget, WidgetMixin):
 
         self.cmb_type = QComboBox()
         self.cmb_type.setMinimumHeight(ACCOUNT_FORM_INPUT_MIN_H)
+        type_labels = AccountsService(self._get_safe_conn()).get_type_labels_map()
         for t in self.acc_types:
-            self.cmb_type.addItem(TYPE_AR.get(t, t), t)
+            self.cmb_type.addItem(type_labels.get(t, t), t)
         fl.addRow(f"{tr('account_type')}:", self.cmb_type)
 
         self.cmb_group = QComboBox()
@@ -135,8 +131,9 @@ class _AccountForm(SafeConnMixin, QWidget, WidgetMixin):
         self.cmb_group.clear()
         self.cmb_group.addItem(tr("account_group_unassigned"), None)
         try:
-            rows = fetch_all_groups(conn, acc_type)
-            tree = build_group_tree(rows)
+            svc = AccountsService(conn)
+            rows = svc.list_groups(acc_type)
+            tree = svc.build_group_tree(rows)
             self._add_group_nodes(tree, 0)
         except Exception as e:
             print(f"[_AccountForm] refresh error: {e}")
@@ -169,12 +166,13 @@ class _AccountForm(SafeConnMixin, QWidget, WidgetMixin):
         group_id    = self.cmb_group.currentData()
         parent_id   = None
         parent_code = code[:-1] if len(code) > 1 else None
+        svc = AccountsService(conn)
         if parent_code:
-            # [إصلاح v4] fetch_account_by_code بدل SQL مباشر
-            parent_row = fetch_account_by_code(conn, parent_code)
+            # [إصلاح v4] get_account_by_code بدل SQL مباشر
+            parent_row = svc.get_account_by_code(parent_code)
             parent_id  = parent_row["id"] if parent_row else None
         try:
-            insert_account(conn, code, name, acc_type, parent_id, group_id)
+            svc.add_account(code, name, acc_type, parent_id=parent_id, group_id=group_id)
             self.inp_code.clear()
             self.inp_name.clear()
             emit_company_data_changed()
@@ -183,7 +181,7 @@ class _AccountForm(SafeConnMixin, QWidget, WidgetMixin):
 
     def load_for_edit(self, acc_id: int):
         conn = self._get_safe_conn()
-        acc  = fetch_account(conn, acc_id)
+        acc  = AccountsService(conn).get_account(acc_id)
         if not acc:
             return
         self._editing_id = acc_id
@@ -207,8 +205,9 @@ class _AccountForm(SafeConnMixin, QWidget, WidgetMixin):
         name = self.inp_name.text().strip()
         if not name or not self._editing_id:
             return
-        update_account(self._get_safe_conn(), self._editing_id, name,
-                       self.cmb_group.currentData())
+        AccountsService(self._get_safe_conn()).update_account(
+            self._editing_id, name, group_id=self.cmb_group.currentData()
+        )
         self._cancel_edit()
         emit_company_data_changed()
 
