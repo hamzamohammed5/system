@@ -16,13 +16,7 @@ from PyQt5.QtWidgets import (
     QWidget, QVBoxLayout, QHBoxLayout, QLabel, QPushButton,
 )
 
-from db.accounting.accounting_repo import (
-    insert_entry, add_entry_lines, validate_entry_balance,
-)
-from db.accounting.accounting_repo_ui_helpers import (
-    fetch_capital_line_for_entry,
-    fetch_drawings_line_for_entry,
-)
+from services.accounting.journal_service import JournalService, JournalLine
 from ui.widgets.core.conn import DualConnMixin
 from ui.widgets.core.events import emit_company_data_changed
 from ui.widgets.core.i18n import tr
@@ -143,15 +137,25 @@ class _JournalForm(DualConnMixin, QWidget, WidgetMixin):
             msg_warning(self, tr("warning"), tr("no_cr_line"))
             return
 
-        if not validate_entry_balance(all_lines):
+        svc_journal = JournalService(conn)
+        journal_lines = [
+            JournalLine(account_id=l["account_id"], dr=l["debit"], cr=l["credit"],
+                       note=l.get("description", ""))
+            for l in all_lines
+        ]
+
+        if not svc_journal.check_balance(journal_lines).is_balanced:
             td = sum(l["debit"]  for l in all_lines)
             tc = sum(l["credit"] for l in all_lines)
             msg_warning(self, tr("balance_error_title"), tr("balance_error_msg", dr=f"{td:,.2f}", cr=f"{tc:,.2f}"))
             return
 
-        date     = self._hdr.date_str()
-        entry_id = insert_entry(conn, date, desc, "manual")
-        add_entry_lines(conn, entry_id, all_lines)
+        date   = self._hdr.date_str()
+        result = svc_journal.post_entry(
+            entry_data={"date": date, "description": desc, "entry_type": "manual"},
+            lines=journal_lines,
+        )
+        entry_id = result.entry_id
 
         # [إصلاح v7] منطق ربط المستثمر في دالة منفصلة
         investor_links = self._lines_panel.get_all_investor_links()
@@ -169,7 +173,9 @@ class _JournalForm(DualConnMixin, QWidget, WidgetMixin):
         مستخرج من _save() لتقليل حجمه وتسهيل الاختبار.
         يستخدم repo helpers بدل SQL مباشر.
         """
-        from db.accounting.investors_repo import link_investor_to_line
+        from services.accounting.investors_service import InvestorsService
+        svc_journal   = JournalService(conn)
+        svc_investors = InvestorsService(erp, acc_conn=conn)
 
         for link in investor_links:
             inv_id    = link["investor_id"]
@@ -177,15 +183,12 @@ class _JournalForm(DualConnMixin, QWidget, WidgetMixin):
             amount    = link["amount"]
             move_type = "capital" if acc_type == "capital" else "drawings"
 
-            # [إصلاح v7] repo helpers بدل conn.execute() مباشر
-            if move_type == "capital":
-                line_id = fetch_capital_line_for_entry(conn, entry_id)
-            else:
-                line_id = fetch_drawings_line_for_entry(conn, entry_id)
+            side    = "credit" if move_type == "capital" else "debit"
+            line_id = svc_journal.get_line_id(entry_id, side)
 
             try:
-                link_investor_to_line(
-                    erp, inv_id, entry_id, line_id,
+                svc_investors.link_to_line(
+                    inv_id, entry_id, line_id,
                     move_type, amount, desc
                 )
             except Exception as e:

@@ -225,6 +225,31 @@ class JournalService:
             return fetch_drawings_line_for_entry(self._conn, entry_id)
         raise ValueError("side يجب أن يكون 'credit' أو 'debit'")
 
+    def list_entries_with_lines(self, limit: int = 200) -> list:
+        """
+        يرجع كل القيود مع سطورها المتداخلة، بنفس الشكل المستخدم في جدول اليومية:
+        [{"id", "ref_no", "date", "type", "description",
+          "total_debit", "total_credit", "lines": [...]}, ...]
+        منقولة من journal_tree_table.py._load (كانت تستدعي fetch_all_entries/
+        fetch_entry_lines مباشرة من tabs/).
+        """
+        from db.accounting.accounting_repo import fetch_all_entries, fetch_entry_lines
+        entries = fetch_all_entries(self._conn, limit=limit)
+        result = []
+        for e in entries:
+            lines = fetch_entry_lines(self._conn, e["id"])
+            result.append({
+                "id":           e["id"],
+                "ref_no":       e["ref_no"],
+                "date":         e["date"],
+                "type":         e["type"],
+                "description":  e["description"],
+                "total_debit":  e["total_debit"],
+                "total_credit": e["total_credit"],
+                "lines":        [dict(l) for l in lines],
+            })
+        return result
+
     def get_entry_ids_for_groups(self, group_ids) -> set:
         """
         يرجع مجموعة entry_id لكل القيود التي تحتوي سطراً على حساب

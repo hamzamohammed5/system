@@ -16,10 +16,7 @@ from PyQt5.QtWidgets import (
 )
 from PyQt5.QtCore import Qt, QTimer
 
-from db.accounting.accounting_repo import (
-    fetch_all_entries, fetch_entry_lines,
-    delete_entry,
-)
+from services.accounting.journal_service import JournalService
 from ui.widgets.core.events import bus, get_active_company_id, emit_company_data_changed
 from ui.widgets.core.conn import SafeConnMixin
 from ui.widgets.core.widget_mixin import WidgetMixin
@@ -160,21 +157,8 @@ class _JournalTreeTable(SafeConnMixin, QWidget, WidgetMixin):
             print(f"[_JournalTreeTable] _reconnect_group_signal error: {e}")
 
     def _load(self):
-        conn    = self._get_safe_conn()
-        entries = fetch_all_entries(conn)
-        self._entries_data = []
-        for e in entries:
-            lines = fetch_entry_lines(conn, e["id"])
-            self._entries_data.append({
-                "id":           e["id"],
-                "ref_no":       e["ref_no"],
-                "date":         e["date"],
-                "type":         e["type"],
-                "description":  e["description"],
-                "total_debit":  e["total_debit"],
-                "total_credit": e["total_credit"],
-                "lines":        [dict(l) for l in lines],
-            })
+        conn = self._get_safe_conn()
+        self._entries_data = JournalService(conn).list_entries_with_lines()
         self._apply_filter()
 
     def _apply_filter(self):
@@ -295,6 +279,6 @@ class _JournalTreeTable(SafeConnMixin, QWidget, WidgetMixin):
         )
         desc = entry_data["description"] if entry_data else f"ID:{eid}"
         if confirm_delete(self, desc):
-            delete_entry(self._get_safe_conn(), eid)
+            JournalService(self._get_safe_conn()).delete(eid)
             self._expanded.discard(eid)
             emit_company_data_changed()

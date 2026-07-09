@@ -13,6 +13,7 @@ from PyQt5.QtCore import Qt, QTimer
 from ui.widgets.core.conn import SafeConnMixin
 from ui.widgets.core.events import bus
 from ui.widgets.core.widget_mixin import WidgetMixin
+from services.companies.company_service import CompanyService
 from ui.constants import (
     MARGIN_ZERO,
     JOURNAL_TAB_SPLITTER_HANDLE_W,
@@ -49,19 +50,12 @@ class JournalTab(SafeConnMixin, QWidget, WidgetMixin):
             QTimer.singleShot(0, self._rebuild_children)
 
     def _get_erp_conn(self):
-        try:
-            if self._erp_conn is not None:
-                self._erp_conn.execute("SELECT 1")
-                return self._erp_conn
-        except Exception:
-            pass
-        try:
-            from db.companies.company_state import company_state
-            new = company_state.get_erp_conn()
-            self._erp_conn = new
-            return new
-        except Exception:
+        if CompanyService.is_conn_alive(self._erp_conn):
             return self._erp_conn
+        new = CompanyService.get_active_erp_conn()
+        if new is not None:
+            self._erp_conn = new
+        return self._erp_conn
 
     def _refresh_style(self, *_):
         from ui.theme import _C

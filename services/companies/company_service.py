@@ -129,6 +129,21 @@ class CompanyService:
             pass
 
     @classmethod
+    def is_conn_alive(cls, conn) -> bool:
+        """
+        فحص بسيط لحيوية اتصال قاعدة بيانات (health-check).
+        بديل لاستدعاء conn.execute("SELECT 1") مباشرة من UI.
+        يرجع False لو conn هو None أو الاتصال مقطوع.
+        """
+        if conn is None:
+            return False
+        try:
+            conn.execute("SELECT 1")
+            return True
+        except Exception:
+            return False
+
+    @classmethod
     def get_active_erp_conn(cls):
         """
         يرجع اتصال erp.db الخاص بالشركة النشطة حالياً.
