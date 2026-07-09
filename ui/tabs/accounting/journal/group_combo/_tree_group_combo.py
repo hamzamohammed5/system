@@ -13,8 +13,8 @@ from PyQt5.QtWidgets import QComboBox, QTreeView
 from PyQt5.QtCore import Qt, QModelIndex
 from PyQt5.QtGui  import QColor, QFont, QStandardItemModel, QStandardItem
 
-from db.accounting.accounting_repo import fetch_all_groups, build_group_tree
-from db.accounting.accounting_schema import TYPE_AR, EQUITY_TYPES
+from services.accounting.accounts_service import AccountsService
+from services.accounting.journal_service import JournalService
 from ui.widgets.core.events import bus, get_active_company_id
 from ui.widgets.core.conn import SafeConnMixin
 from ui.widgets.core.widget_mixin import WidgetMixin
@@ -120,8 +120,9 @@ class _TreeGroupCombo(SafeConnMixin, QComboBox, WidgetMixin):
         all_item.setForeground(QColor(_C['text_sec']))
         self._model.appendRow(all_item)
 
+        svc = AccountsService(conn)
         try:
-            all_groups = fetch_all_groups(conn)
+            all_groups = svc.list_groups()
         except Exception:
             all_groups = []
 
@@ -133,13 +134,13 @@ class _TreeGroupCombo(SafeConnMixin, QComboBox, WidgetMixin):
             if acc_type not in groups_by_type:
                 continue
             type_rows = groups_by_type[acc_type]
-            tree = build_group_tree(type_rows)
+            tree = svc.build_group_tree(type_rows)
             if not tree:
                 continue
 
             icon_key = _TYPE_ICON_KEYS.get(acc_type)
             icon = tr(icon_key) if icon_key else tr("account_tree_default_icon")
-            type_label = f"{icon}  {TYPE_AR.get(acc_type, acc_type)}"
+            type_label = f"{icon}  {svc.get_type_labels_map().get(acc_type, acc_type)}"
             header_item = QStandardItem(type_label)
             header_item.setData(None, _ROLE_GROUP_ID)
             header_item.setData(True, _ROLE_IS_HEADER)
@@ -147,7 +148,7 @@ class _TreeGroupCombo(SafeConnMixin, QComboBox, WidgetMixin):
             hf = QFont(); hf.setBold(True); hf.setPointSize(hf.pointSize() + TREE_GROUP_COMBO_HEADER_FONT_DELTA)
             header_item.setFont(hf)
             header_item.setForeground(QColor(TYPE_COLORS.get(acc_type, _C['text_primary'])))
-            bg = _C["investor_capital_bg"] if acc_type in EQUITY_TYPES else _C["journal_header_bg"]
+            bg = _C["investor_capital_bg"] if acc_type in svc.get_equity_types() else _C["journal_header_bg"]
             header_item.setBackground(QColor(bg))
             self._model.appendRow(header_item)
             self._add_group_items(header_item, tree, acc_type)
@@ -203,6 +204,7 @@ class _TreeGroupCombo(SafeConnMixin, QComboBox, WidgetMixin):
 
     def _update_selection(self, item: QStandardItem, gid):
         conn = self._get_safe_conn()
+        svc  = AccountsService(conn)
 
         if gid is None:
             self.setCurrentText(tr("all_groups"))
@@ -210,19 +212,11 @@ class _TreeGroupCombo(SafeConnMixin, QComboBox, WidgetMixin):
         else:
             self.setCurrentText(item.text().strip())
             try:
-                from db.accounting.accounting_repo import _get_group_descendants
-                desc_ids = _get_group_descendants(conn, gid)
+                desc_ids = svc.get_group_descendants(gid)
                 if not desc_ids:
                     self._group_entry_ids = set()
                 else:
-                    placeholders = ",".join("?" * len(desc_ids))
-                    rows = conn.execute(f"""
-                        SELECT DISTINCT jl.entry_id
-                        FROM journal_lines jl
-                        JOIN accounts a ON a.id = jl.account_id
-                        WHERE a.group_id IN ({placeholders})
-                    """, list(desc_ids)).fetchall()
-                    self._group_entry_ids = {r["entry_id"] for r in rows}
+                    self._group_entry_ids = JournalService(conn).get_entry_ids_for_groups(desc_ids)
             except Exception:
                 self._group_entry_ids = None
 

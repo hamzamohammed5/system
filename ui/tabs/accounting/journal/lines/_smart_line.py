@@ -20,8 +20,7 @@ from PyQt5.QtWidgets import (
 )
 from PyQt5.QtCore import Qt
 
-from db.accounting.accounting_repo import fetch_account, get_normal_balance
-from db.accounting.accounting_schema import NORMAL_BALANCE
+from services.accounting.accounts_service import AccountsService
 from ui.widgets.core.events import bus, get_active_company_id
 from ui.widgets.core.conn import DualConnMixin
 from ui.widgets.core.widget_mixin import WidgetMixin
@@ -60,7 +59,7 @@ _INVESTOR_TYPES = {"capital", "drawings"}
 
 
 def _resolve_side(acc_type: str, is_increase: bool) -> str:
-    nb = NORMAL_BALANCE.get(acc_type, "dr")
+    nb = AccountsService(None).get_normal_balance(acc_type)
     return nb if is_increase else ("cr" if nb == "dr" else "dr")
 
 
@@ -209,12 +208,12 @@ class _SmartLine(DualConnMixin, QFrame, WidgetMixin):
         if erp is None:
             return
         try:
-            from db.accounting.investors_repo import fetch_all_investors
+            from services.accounting.investors_service import InvestorsService
             prev = self.cmb_investor.currentData()
             self.cmb_investor.blockSignals(True)
             self.cmb_investor.clear()
             self.cmb_investor.addItem(tr("filter_all"), None)
-            for inv in fetch_all_investors(erp):
+            for inv in InvestorsService(erp).list_investors():
                 self.cmb_investor.addItem(f"{tr('investor_icon')} {inv['name']}", inv["id"])
             self.cmb_investor.blockSignals(False)
             if prev:
@@ -283,7 +282,7 @@ class _SmartLine(DualConnMixin, QFrame, WidgetMixin):
         """
         acc_id = self._acc.current_account_id()
         if acc_id:
-            acc = fetch_account(self._get_safe_conn(), acc_id)
+            acc = AccountsService(self._get_safe_conn()).get_account(acc_id)
             self._cached_acc_type = acc["type"] if acc else None
         else:
             self._cached_acc_type = None

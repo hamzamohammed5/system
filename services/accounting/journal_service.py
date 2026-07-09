@@ -225,6 +225,24 @@ class JournalService:
             return fetch_drawings_line_for_entry(self._conn, entry_id)
         raise ValueError("side يجب أن يكون 'credit' أو 'debit'")
 
+    def get_entry_ids_for_groups(self, group_ids) -> set:
+        """
+        يرجع مجموعة entry_id لكل القيود التي تحتوي سطراً على حساب
+        منتمٍ لأي من group_ids المُعطاة.
+        منقولة من _tree_group_combo.py._update_selection (كانت SQL خام في tabs/).
+        """
+        group_ids = list(group_ids)
+        if not group_ids:
+            return set()
+        placeholders = ",".join("?" * len(group_ids))
+        rows = self._conn.execute(f"""
+            SELECT DISTINCT jl.entry_id
+            FROM journal_lines jl
+            JOIN accounts a ON a.id = jl.account_id
+            WHERE a.group_id IN ({placeholders})
+        """, group_ids).fetchall()
+        return {r["entry_id"] for r in rows}
+
     # ── Post Entry ────────────────────────────────────────
 
     def post_entry(self, entry_data: dict,
