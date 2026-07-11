@@ -11,7 +11,6 @@ PricingTab — التبويب الرئيسي للتسعير.
 
 from PyQt5.QtWidgets import QWidget, QVBoxLayout, QTabWidget
 
-from db.companies.company_state import company_state
 from ui.widgets.core.i18n import tr
 from ui.widgets.managers.category import CategoryManager
 from ui.constants import MARGIN_ZERO
@@ -35,7 +34,8 @@ class PricingTab(QWidget, WidgetMixin):
             self._tabs.setTabText(idx_categories, tr("pricing_categories_tab"))
 
     def _live_conn(self):
-        return company_state.get_erp_conn()
+        from services.companies.company_service import CompanyService
+        return CompanyService.get_active_erp_conn()
 
     def _build(self):
         root = QVBoxLayout(self)

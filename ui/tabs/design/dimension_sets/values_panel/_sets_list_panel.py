@@ -11,10 +11,7 @@ from PyQt5.QtWidgets import (
 )
 from PyQt5.QtCore import Qt, pyqtSignal
 
-from db.designs.dimension_sets_repo import (
-    fetch_all_dimension_sets,
-    fetch_all_design_categories, build_category_tree,
-)
+from services.design import get_dimension_set_service
 from ui.font import get_font_size, fs
 from ui.widgets.core.i18n import tr
 from ui.widgets.core.widget_mixin import WidgetMixin
@@ -180,6 +177,7 @@ class _SetsListPanel(QWidget, WidgetMixin):
     def __init__(self, conn, parent=None):
         super().__init__(parent)
         self.conn       = conn
+        self._svc       = get_dimension_set_service(conn)
         self._cards     = {}
         self._active_id = None
         self._all_rows  = []
@@ -332,8 +330,8 @@ class _SetsListPanel(QWidget, WidgetMixin):
         self._cmb_cat.blockSignals(True)
         self._cmb_cat.clear()
         self._cmb_cat.addItem(tr("dim_sets_list_all_cats"), None)
-        rows = fetch_all_design_categories(self.conn)
-        tree = build_category_tree(rows)
+        rows = self._svc.list_categories()
+        tree = self._svc.build_tree(rows)
         self._add_cat_nodes(tree, 0)
         for i in range(self._cmb_cat.count()):
             if self._cmb_cat.itemData(i) == prev:
@@ -350,7 +348,7 @@ class _SetsListPanel(QWidget, WidgetMixin):
                 self._add_cat_nodes(node["children"], depth + 1)
 
     def _load(self):
-        self._all_rows = list(fetch_all_dimension_sets(self.conn))
+        self._all_rows = list(self._svc.list_sets())
         self._reload_cat_filter()
         self._apply_filter()
 
@@ -370,15 +368,9 @@ class _SetsListPanel(QWidget, WidgetMixin):
             if cat_id is not None and ds["category_id"] != cat_id:
                 continue
 
-            fields_cnt = self.conn.execute(
-                "SELECT COUNT(*) as c FROM dimension_fields WHERE set_id=?",
-                (ds["id"],)
-            ).fetchone()["c"]
+            fields_cnt = self._svc.count_fields_for_set(ds["id"])
 
-            instances_cnt = self.conn.execute(
-                "SELECT COUNT(*) as c FROM dimension_set_instances WHERE set_id=?",
-                (ds["id"],)
-            ).fetchone()["c"]
+            instances_cnt = self._svc.count_instances_for_set(ds["id"])
 
             card = _SetCard(
                 ds["id"], ds["name"],

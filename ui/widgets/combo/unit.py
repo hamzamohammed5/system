@@ -15,7 +15,7 @@ from PyQt5.QtWidgets import QComboBox
 from PyQt5.QtCore    import pyqtSignal
 
 from ..utils.signals import blocked_signals
-from .unit_service   import (
+from ....services.shared.unit_service   import (
     load_units, invalidate_units_cache,
     get_last_unit, set_last_unit,
     _default_units,

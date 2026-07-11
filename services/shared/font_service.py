@@ -121,12 +121,4 @@ class FontService:
             logger.debug("FontService.save: write error — %s", e)
             return False
 
-    # ──────────────────────────────────────────────────────
-    # Internal
-    # ──────────────────────────────────────────────────────
 
-    @classmethod
-    def _get_conn(cls):
-        """يرجع اتصال DB — يُرمي Exception لو فشل."""
-        from db.shared.connection import get_connection
-        return get_connection()

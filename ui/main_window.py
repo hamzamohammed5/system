@@ -205,8 +205,8 @@ class MainWindow(QMainWindow):
             btn.clicked.connect(lambda checked, b=btn: self._on_nav(b))
 
         # بناء التبويبات لو الشركة جاهزة
-        from db.companies.company_state import company_state
-        if company_state.is_ready:
+        from services.companies.company_service import CompanyService
+        if CompanyService.is_company_ready():
             self._build_tabs()
 
     # ── بناء وتدمير التبويبات ────────────────────────────────────────────────
@@ -322,8 +322,8 @@ class MainWindow(QMainWindow):
         bus.blockSignals(False)
 
         try:
-            from db.companies.company_state import company_state
-            company_state.refresh_connections()
+            from services.companies.company_service import CompanyService
+            CompanyService.refresh_connections()
         except Exception as e:
             logger.warning("_destroy_tabs: refresh_connections فشل: %s", e)
 
@@ -344,9 +344,9 @@ class MainWindow(QMainWindow):
         AppState.invalidate()
 
         try:
-            from db.companies.company_state import company_state
+            from services.companies.company_service import CompanyService
             self.setWindowTitle(
-                tr("app_title_company", name=company_state.company_name)
+                tr("app_title_company", name=CompanyService.get_current_company_name())
             )
             self._refresh_tabs()
         except Exception as e:
@@ -400,13 +400,12 @@ class MainWindow(QMainWindow):
         يفتح نافذة إدارة العناصر المشتركة من companies.db.
         يُطلق emit_company_data_changed بعد أي تغيير.
         """
-        from db.companies.companies_schema   import get_central_connection, create_central_tables
-        from db.companies.shared_items_repo  import create_shared_items_tables
+        from services.companies.company_service import CompanyService
+        from services.companies.shared_items_service import SharedItemsService
         from ui.tabs.companies.shared_items_manager import SharedItemsManagerDialog
 
-        central = get_central_connection()
-        create_central_tables(central)
-        create_shared_items_tables(central)
+        central = CompanyService.get_central_conn_and_init()
+        SharedItemsService(central)  # يهيّئ جداول shared_items عند الإنشاء
 
         dlg = SharedItemsManagerDialog(central, parent=self)
         dlg.items_changed.connect(emit_company_data_changed)

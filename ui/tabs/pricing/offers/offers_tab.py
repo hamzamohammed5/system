@@ -39,8 +39,8 @@ class OffersTab(QWidget, WidgetMixin):
     # ── connection صالح دايماً ────────────────────────────
 
     def _live_conn(self):
-        from db.companies.company_state import company_state
-        return company_state.get_erp_conn()
+        from services.companies.company_service import CompanyService
+        return CompanyService.get_active_erp_conn()
 
     def _refresh_style(self, *_):
         from ui.theme import _C

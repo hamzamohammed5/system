@@ -219,73 +219,20 @@ class BomTree(QWidget, WidgetMixin):
                          machine_op_row_id: int | None) -> BomNodeRawData | None:
         """
         يجلب بيانات المكوّن اللازمة لبناء الـ node.
-        هذه الدالة تملك الـ conn وتتعامل مع repos/models مباشرة.
-        تُمرَّر لـ build_component_node كـ data_fetcher.
+
+        [إصلاح هيكلي] انتقل الاستدعاء المباشر لـ db/ و models/ إلى
+        BomTreeService.get_node_data — هذا الملف (tabs/) لا يستدعي
+        repos/ أو models/ مباشرة بعد الآن، فقط services/.
         """
-        try:
-            if child_type == "raw":
-                from db.shared.items_repo  import fetch_item
-                from models.costing_base   import raw_unit_price
-                row = fetch_item(self._conn, child_id)
-                if not row:
-                    return None
-                return BomNodeRawData(
-                    name=row["name"],
-                    unit_cost=raw_unit_price(row),
-                )
-
-            elif child_type == "semi":
-                from db.shared.items_repo import fetch_item
-                from models.costing       import calc_cost
-                row = fetch_item(self._conn, child_id)
-                if not row:
-                    return None
-                return BomNodeRawData(
-                    name=row["name"],
-                    unit_cost=calc_cost(self._conn, child_id),
-                )
-
-            elif child_type == "labor_op":
-                from db.costing.operations_repo import fetch_labor_op
-                from models.costing_ops         import calc_labor_op_cost
-                op = fetch_labor_op(self._conn, child_id)
-                if not op:
-                    return None
-                return BomNodeRawData(
-                    name=op["name"],
-                    unit_cost=calc_labor_op_cost(self._conn, child_id),
-                )
-
-            elif child_type == "machine_op":
-                from db.costing.operations_repo import fetch_machine_op
-                from models.costing_ops         import calc_machine_op_cost
-                op = fetch_machine_op(self._conn, child_id)
-                if not op:
-                    return None
-                # جلب label الصف لو محدد
-                op_row_label = None
-                if machine_op_row_id is not None:
-                    try:
-                        row_info = self._conn.execute(
-                            "SELECT label FROM machine_op_rows WHERE id=?",
-                            (machine_op_row_id,)
-                        ).fetchone()
-                        if row_info and row_info["label"]:
-                            op_row_label = row_info["label"]
-                    except Exception:
-                        pass
-                return BomNodeRawData(
-                    name=op["name"],
-                    unit_cost=calc_machine_op_cost(
-                        self._conn, child_id, row_id=machine_op_row_id
-                    ),
-                    op_row_label=op_row_label,
-                )
-
-        except Exception:
+        svc  = BomTreeService(self._conn)
+        data = svc.get_node_data(child_type, child_id, machine_op_row_id)
+        if data is None:
             return None
-
-        return None
+        return BomNodeRawData(
+            name=data.name,
+            unit_cost=data.unit_cost,
+            op_row_label=data.op_row_label,
+        )
 
     # ══════════════════════════════════════════════════════
     # _refresh — يستخدم BomTreeService + data_fetcher

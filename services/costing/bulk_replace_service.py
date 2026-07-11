@@ -80,24 +80,16 @@ class BulkReplaceService:
         return updated, errors
 
     # ── مساعدات ──────────────────────────────────────────────
+    #
+    # [إصلاح هيكلي] كانت هذه الدوال تستورد من ui/tabs/... (كسر هيكلي:
+    # service بيستدعي ui). الآن تستخدم db/costing/operations_repo.py
+    # فقط، كما يجب لأي service داخل مجال costing.
 
     def get_element_name(self, child_type: str, child_id: int) -> str:
         """يرجع اسم عنصر BOM حسب نوعه."""
-        if child_type in ("raw", "semi"):
-            row = self.conn.execute(
-                "SELECT name FROM items WHERE id=?", (child_id,)
-            ).fetchone()
-        elif child_type == "labor_op":
-            row = self.conn.execute(
-                "SELECT name FROM labor_ops WHERE id=?", (child_id,)
-            ).fetchone()
-        elif child_type == "machine_op":
-            row = self.conn.execute(
-                "SELECT name FROM machine_ops WHERE id=?", (child_id,)
-            ).fetchone()
-        else:
-            row = None
-        return row["name"] if row else f"ID:{child_id}"
+        from db.costing.operations_repo import fetch_element_name
+        name = fetch_element_name(self.conn, child_type, child_id)
+        return name if name else f"ID:{child_id}"
 
     def fetch_candidates(self, child_type: str,
                          exclude_id: int) -> list[tuple[int, str, str]]:
@@ -105,8 +97,24 @@ class BulkReplaceService:
         يرجع عناصر بديلة من نفس النوع بدون العنصر الحالي.
         list of (id, name, category_name)
         """
-        from ui.tabs.costing.shared.bulk_replace.bulk_replace_helpers import fetch_candidates
-        return fetch_candidates(self.conn, child_type, exclude_id)
+        from db.shared.items_repo import fetch_items_by_type
+        from db.costing.operations_repo import (
+            fetch_all_labor_ops, fetch_all_machine_ops,
+        )
+
+        if child_type == "raw":
+            rows = fetch_items_by_type(self.conn, "raw")
+        elif child_type == "labor_op":
+            rows = fetch_all_labor_ops(self.conn)
+        elif child_type == "machine_op":
+            rows = fetch_all_machine_ops(self.conn)
+        else:
+            return []
+
+        return [
+            (r["id"], r["name"], r["category_name"] or "")
+            for r in rows if r["id"] != exclude_id
+        ]
 
     def fetch_affected_products(self, child_type: str,
                                 child_id: int) -> list[dict]:
@@ -114,5 +122,20 @@ class BulkReplaceService:
         يرجع المنتجات المتأثرة.
         list of dicts: {id, name, type, qty, category_id, category_name, cost}
         """
-        from ui.tabs.costing.shared.bulk_replace.bulk_replace_helpers import fetch_affected_products
-        return fetch_affected_products(self.conn, child_type, child_id)
+        from db.costing.operations_repo import fetch_products_using_child
+        from models.costing import calc_cost
+
+        rows = fetch_products_using_child(self.conn, child_type, child_id)
+
+        return [
+            {
+                "id":            r["parent_id"],
+                "name":          r["name"],
+                "type":          r["type"],
+                "qty":           r["qty"],
+                "category_id":   r["category_id"],
+                "category_name": r["category_name"] or "—",
+                "cost":          calc_cost(self.conn, r["parent_id"]),
+            }
+            for r in rows
+        ]

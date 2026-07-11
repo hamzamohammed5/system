@@ -187,13 +187,19 @@ class ComponentRow(QWidget, OpRowsMixin, VariantsMixin, WidgetMixin):
         الـ SELECT 1 كان بيتنفذ في كل استدعاء حتى لو الـ connection سليم،
         وده overhead غير ضروري لأن ComponentRow بيتستدعى كتير جداً.
         الحل: ثق في الـ cache مباشرة — لو الـ connection مات،
-        أول query حقيقية هتفشل وبيعمل retry تلقائي عن طريق get_connection().
+        أول query حقيقية هتفشل وبيعمل retry تلقائي عن طريق get_active_erp_conn().
+
+        [إصلاح هيكلة] widgets/ ممنوعة تستدعي db/ مباشرة. استبدال
+        db.shared.connection.get_connection() بـ
+        CompanyService.get_active_erp_conn() — بنفس نمط _fetch_op_rows/
+        _fetch_variants في OpRowsMixin/VariantsMixin اللي بالفعل
+        بتمر عبر services/.
         """
         if self._conn_cache is not None:
             return self._conn_cache
         try:
-            from db.shared.connection import get_connection
-            self._conn_cache = get_connection()
+            from services.companies.company_service import CompanyService
+            self._conn_cache = CompanyService.get_active_erp_conn()
             return self._conn_cache
         except Exception:
             return None

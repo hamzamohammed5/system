@@ -10,12 +10,8 @@ from PyQt5.QtWidgets import (
 )
 from PyQt5.QtCore import Qt, pyqtSignal, QDate
 
-from db.orders.customers_repo import fetch_all_customers, search_customers
-from db.orders.orders_repo import (
-    fetch_order, insert_order, update_order,
-    fetch_order_items, insert_order_item,
-    update_order_item, delete_order_item,
-)
+from services.orders.customer_service import CustomerService
+from services.orders.order_service import OrderService
 from .order_form._item_row_widget import _ItemRowWidget
 from services.costing.catalog_service import CatalogService
 
@@ -95,6 +91,8 @@ class _OrderForm(QDialog):
         self._customer_id = None
         self._item_rows: list[_ItemRowWidget] = []
         self._catalog     = CatalogService(erp_conn) if erp_conn else None
+        self._order_svc   = OrderService(conn)
+        self._cust_svc    = CustomerService(conn)
 
         self.setWindowTitle(tr("order_edit_title") if order_id else tr("order_new_title"))
         self.setMinimumWidth(ORDER_FORM_MIN_W)
@@ -158,7 +156,7 @@ class _OrderForm(QDialog):
 
         self.cmb_customer = QComboBox()
         self.cmb_customer.setPlaceholderText(tr("select_field").format(label=tr("customer_name")))
-        self._all_customers = fetch_all_customers(self.conn, active_only=True)
+        self._all_customers = self._cust_svc.list_customers()
         for c in self._all_customers:
             label = f"{c['code']}  {c['name']}  ({c['phone'] or tr('no_data')})"
             self.cmb_customer.addItem(label, c["id"])
@@ -362,15 +360,13 @@ class _OrderForm(QDialog):
         if not oid:
             return
         offer_discount = 0.0
-        try:
-            conn_erp = get_connection("erp")
-            o = conn_erp.execute("SELECT discount FROM offers WHERE id=?", (oid,)).fetchone()
-            if o:
-                offer_discount = float(o["discount"])
-        except Exception:
-            pass
+        if self._catalog:
+            for o in self._catalog.get_offers():
+                if o["id"] == oid:
+                    offer_discount = float(o["discount"] or 0)
+                    break
 
-        lines = fetch_offer_lines(oid)
+        lines = self._catalog.get_offer_lines(oid) if self._catalog else []
         if not lines:
             QMessageBox.information(self, tr("info"), tr("no_data"))
             return
@@ -403,7 +399,7 @@ class _OrderForm(QDialog):
     def _search_customers(self, text: str):
         if len(text) < 2:
             return
-        results = search_customers(self.conn, text)
+        results = self._cust_svc.search(text)
         self.cmb_customer.blockSignals(True)
         self.cmb_customer.clear()
         for c in results:
@@ -418,8 +414,7 @@ class _OrderForm(QDialog):
         cid = self.cmb_customer.currentData()
         self._customer_id = cid
         if cid:
-            from db.orders.customers_repo import fetch_customer
-            c = fetch_customer(self.conn, cid)
+            c = self._cust_svc.get_customer(cid)
             if c:
                 parts = []
                 if c["phone"]:  parts.append(f"{tr('order_phone_icon')} {c['phone']}")
@@ -437,8 +432,7 @@ class _OrderForm(QDialog):
         dlg.exec_()
 
     def _on_customer_created(self, customer_id: int):
-        from db.orders.customers_repo import fetch_customer
-        c = fetch_customer(self.conn, customer_id)
+        c = self._cust_svc.get_customer(customer_id)
         if c:
             label = f"{c['code']}  {c['name']}  ({c['phone'] or tr('no_data')})"
             self.cmb_customer.insertItem(0, label, customer_id)
@@ -446,7 +440,7 @@ class _OrderForm(QDialog):
             self._customer_id = customer_id
 
     def _load(self):
-        d = fetch_order(self.conn, self.order_id)
+        d = self._order_svc.get_order(self.order_id)
         if not d:
             return
 
@@ -473,7 +467,7 @@ class _OrderForm(QDialog):
         for r in list(self._item_rows):
             self._remove_item_row(r)
 
-        items = fetch_order_items(self.conn, self.order_id)
+        items = self._order_svc.get_order_items(self.order_id)
         for item in items:
             self._add_item_row(prefill=dict(item))
 
@@ -496,32 +490,21 @@ class _OrderForm(QDialog):
         internal   = self.inp_internal.toPlainText().strip()
 
         if self.order_id:
-            update_order(self.conn, self.order_id, priority=priority,
-                         due_date=due_date, discount=discount,
-                         paid_amount=paid, notes=notes, internal_notes=internal)
-            existing = fetch_order_items(self.conn, self.order_id)
-            for eid in {i["id"] for i in existing}:
-                delete_order_item(self.conn, eid)
-            for idx, row in enumerate(valid_rows):
-                d = row.get_data()
-                insert_order_item(self.conn, self.order_id,
-                                  item_name=d["item_name"], description=d["description"],
-                                  quantity=d["quantity"], unit=d["unit"],
-                                  unit_price=d["unit_price"], discount_pct=d["discount_pct"],
-                                  design_ref=d["design_ref"], notes=d["notes"], sort_order=idx)
+            self._order_svc.update_order_header(
+                self.order_id, priority=priority,
+                due_date=due_date, discount=discount,
+                paid_amount=paid, notes=notes, internal_notes=internal)
+            items_data = [row.get_data() for row in valid_rows]
+            self._order_svc.replace_order_items(self.order_id, items_data)
             self.saved.emit(self.order_id)
         else:
-            oid = insert_order(self.conn, customer_id=self._customer_id,
-                               order_type=order_type, priority=priority,
-                               due_date=due_date, discount=discount,
-                               paid_amount=paid, notes=notes, internal_notes=internal)
-            for idx, row in enumerate(valid_rows):
-                d = row.get_data()
-                insert_order_item(self.conn, oid,
-                                  item_name=d["item_name"], description=d["description"],
-                                  quantity=d["quantity"], unit=d["unit"],
-                                  unit_price=d["unit_price"], discount_pct=d["discount_pct"],
-                                  design_ref=d["design_ref"], notes=d["notes"], sort_order=idx)
+            oid = self._order_svc.create_order_header(
+                customer_id=self._customer_id,
+                order_type=order_type, priority=priority,
+                due_date=due_date, discount=discount,
+                paid_amount=paid, notes=notes, internal_notes=internal)
+            items_data = [row.get_data() for row in valid_rows]
+            self._order_svc.replace_order_items(oid, items_data)
             self.saved.emit(oid)
 
         self.accept()

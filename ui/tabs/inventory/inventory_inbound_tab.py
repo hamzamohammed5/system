@@ -15,7 +15,7 @@ from PyQt5.QtWidgets import (
 )
 from PyQt5.QtCore import Qt, QDate
 
-from db.accounting.accounting_inventory_repo import purchase_inventory
+from services.accounting.inventory_posting_service import InventoryPostingService
 from services.inventory.inventory_service import InventoryService
 
 from ui.widgets.tables.tables import auto_fit_columns
@@ -65,6 +65,7 @@ class _InboundTab(QWidget, WidgetMixin):
         self.inv_conn = inv_conn
         self.acc_conn = acc_conn
         self._svc = InventoryService(inv_conn, acc_conn=acc_conn)
+        self._posting_svc = InventoryPostingService(inv_conn, acc_conn)
         self._init_widget_mixin(data=True)
         self._build()
         self._refresh_style()
@@ -214,8 +215,7 @@ class _InboundTab(QWidget, WidgetMixin):
         date  = self.dt_date.date().toString("yyyy-MM-dd")
         notes = self.inp_notes.text().strip() or None
         try:
-            purchase_inventory(
-                self.inv_conn, self.acc_conn,
+            self._posting_svc.purchase(
                 inv_id, qty, unit_cost, date, pay_acc, notes
             )
             self.inp_notes.clear()

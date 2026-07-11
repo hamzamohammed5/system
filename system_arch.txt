@@ -1,5 +1,5 @@
 File Tree Snapshot
-Generated : 2026-07-09 11:53:13
+Generated : 2026-07-11 09:07:10
 Source    : D:\My Workspace\Hg\Alhabaar\accountant\system
 Extensions: .md, .py
 ────────────────────────────────────────────────────────────
@@ -89,6 +89,7 @@ system/
 │   ├── accounting/
 │   │   ├── accounts_service.py
 │   │   ├── audit_service.py
+│   │   ├── inventory_posting_service.py
 │   │   ├── investors_service.py
 │   │   ├── journal_service.py
 │   │   └── statements_service.py
@@ -122,7 +123,8 @@ system/
 │   └── shared/
 │       ├── category_service.py
 │       ├── font_service.py
-│       └── item_service.py
+│       ├── item_service.py
+│       └── unit_service.py
 ├── ui/
 │   ├── constants_data/
 │   │   ├── constants_accounting.py
@@ -308,7 +310,6 @@ system/
 │   │   │   │   ├── _items_tab.py
 │   │   │   │   └── _items_table.py
 │   │   │   ├── inventory_inbound_tab.py
-│   │   │   ├── inventory_items_tab.py
 │   │   │   ├── inventory_outbound_tab.py
 │   │   │   └── inventory_report_tab.py
 │   │   ├── orders/
@@ -371,8 +372,7 @@ system/
 │   │   │   └── tab_section.py
 │   │   ├── combo/
 │   │   │   ├── category.py
-│   │   │   ├── unit.py
-│   │   │   └── unit_service.py
+│   │   │   └── unit.py
 │   │   ├── components/
 │   │   │   ├── component_row/
 │   │   │   │   ├── op_rows.py

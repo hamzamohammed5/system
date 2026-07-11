@@ -3,55 +3,22 @@ ui/widgets/base/tab_section.py
 ==========================================
 TabSectionBase — قاعدة مشتركة للأقسام التي تحتوي على QTabWidget.
 
-التغيير: closeEvent لم يعد يستدعي conn.close() بشكل أعمى.
-get_connection() ترجع shared connection من company_state،
-إغلاقها هنا يكسر كل الـ widgets الأخرى.
-الإغلاق الصحيح يحدث فقط في company_state عند تغيير الشركة.
-
-[إصلاح 18] توضيح سلوك _is_owned_connection:
-  - دالة آمنة تماماً: عند أي exception ترجع False (لا تُغلق).
-  - السلوك المقصود: الشركة لم تتحمل بعد → company_state.get_erp_conn يرمي → False → لا إغلاق.
-  - هذا مقصود لأن الأمان أهم من إغلاق connection ربما لا يحتاج إغلاقاً.
-
-[FIX] استبدال company_state._get_conn("erp") (private API) بـ
-      company_state.get_erp_conn() (public API).
+[إصلاح هيكلة] widgets/ (base classes) ممنوعة تستدعي db/ أو services/
+مباشرة حسب الهيكلة المعمارية للمشروع. لذلك:
+  - conn_fn أصبح معامل إلزامي (لا default) — يُمرَّر من tabs/ فقط،
+    التي تفتح الاتصال عبر الطبقة الصحيحة (services/).
+  - _is_owned_connection حُذفت بالكامل: كانت تستدعي
+    db.companies.company_state مباشرة من widgets/ لتحديد ملكية
+    الـ connection — وهذا كسر هيكلي بحد ذاته.
+  - closeEvent لم يعد يغلق self.conn إطلاقاً. الـ widget لا يعرف
+    ولا يقرر ملكية الاتصال؛ هذا قرار tabs/ عند اختيار conn_fn.
+    الإغلاق الفعلي يحدث في company_state عند تغيير الشركة، أو
+    في tabs/ صراحة لو كان الاتصال مملوكاً فعلاً لها.
 """
 from PyQt5.QtWidgets import QWidget, QVBoxLayout, QTabWidget
 
-from db.shared.connection            import get_connection
 from ..theme.layout_styles           import tab_style
 from ui.widgets.core.widget_mixin    import WidgetMixin
-
-
-def _is_owned_connection(conn) -> bool:
-    """
-    يتحقق إذا كان الـ connection ملك هذا الـ widget
-    (يعني مش shared من company_state).
-
-    الاتصالات المشتركة لا يجب إغلاقها من الـ widgets.
-
-    السلوك المقصود عند الفشل:
-    - لو company_state لم يُحمَّل بعد → get_erp_conn يرمي → except → False
-    - لو conn is None → False
-    - لو conn هو نفس الـ shared connection → False (shared → لا تُغلق)
-    - لو conn مختلف (مُنشأ يدوياً) → True (owned → يُغلق)
-
-    الإرجاع بـ False عند الشك هو الاختيار الآمن:
-    أفضل من إغلاق connection لا يجب إغلاقه وكسر widgets أخرى.
-
-    [FIX] استخدام get_erp_conn() (public) بدل _get_conn("erp") (private).
-    """
-    if conn is None:
-        return False
-    try:
-        from db.companies.company_state import company_state
-        # [FIX] get_erp_conn() بدل _get_conn("erp") — استخدام الـ public API
-        shared = company_state.get_erp_conn()
-        return conn is not shared
-    except Exception:
-        # لو مش قادر يتحقق (شركة غير محملة، company_state غير جاهز)
-        # → الأأمن هو عدم الإغلاق
-        return False
 
 
 class TabSectionBase(QWidget, WidgetMixin):
@@ -65,9 +32,9 @@ class TabSectionBase(QWidget, WidgetMixin):
                 tabs.addTab(CategoryManager(self.conn, scope="raw"), "🏷️  التصنيفات")
     """
 
-    def __init__(self, conn_fn=None, parent=None):
+    def __init__(self, conn_fn, parent=None):
         super().__init__(parent)
-        self.conn  = (conn_fn or get_connection)()
+        self.conn  = conn_fn()
         self._tabs: "QTabWidget | None" = None
         self._setup()
         self._init_widget_mixin(theme=True, font=False, lang=False)
@@ -92,20 +59,11 @@ class TabSectionBase(QWidget, WidgetMixin):
 
     def closeEvent(self, event):
         """
-        لا يُغلق الـ connection إلا لو كان مملوكاً فعلاً لهذا الـ widget
-        (أي مش shared من company_state).
-
-        في الغالب الـ connection مشترك، لذا لا شيء يُغلق هنا —
-        الإغلاق يحدث في company_state عند تغيير الشركة.
-
-        [إصلاح 18] _is_owned_connection ترجع False عند أي شك،
-        وهو السلوك الآمن المقصود. راجع docstring الدالة للتفاصيل.
+        لا يُغلق self.conn إطلاقاً — الـ widget لا يعرف ولا يقرر
+        ملكية الاتصال (كان ذلك يتطلب استدعاء company_state مباشرة
+        من widgets/، وهو كسر هيكلي). الإغلاق يحدث في company_state
+        عند تغيير الشركة، أو في tabs/ صراحة عند الحاجة.
         """
-        if _is_owned_connection(self.conn):
-            try:
-                self.conn.close()
-            except Exception:
-                pass
         super().closeEvent(event)
 
     @property

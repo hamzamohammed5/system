@@ -119,6 +119,32 @@ def fetch_recent_moves(conn, move_type: str = None, limit: int = 100):
     """, (limit,)).fetchall()
 
 
+def fetch_recent_moves_with_item_names(conn, move_type: str, limit: int = 100) -> list:
+    """
+    يرجع حركات المخزون (وارد/صادر) مع اسم الصنف فقط (شكل أضيق من
+    fetch_recent_moves) — تُستخدم في جداول 'آخر الحركات' بتبويبات
+    الوارد والصادر.
+
+    كل صف يحتوي: date, name, qty, unit_cost, total_cost, ref_entry_no, notes
+
+    [إصلاح هيكلي] كان هذا الاستعلام SQL خام داخل
+    services/inventory/inventory_service.py مباشرة (self.conn.execute)
+    — انتقل إلى هنا لأن كل SQL يجب أن يعيش في db/ فقط.
+    """
+    try:
+        return conn.execute("""
+            SELECT im.date, inv.name, im.qty, im.unit_cost, im.total_cost,
+                   im.ref_entry_no, im.notes
+            FROM inventory_moves im
+            JOIN inventory_items inv ON inv.id = im.inventory_id
+            WHERE im.move_type = ?
+            ORDER BY im.date DESC, im.id DESC
+            LIMIT ?
+        """, (move_type, limit)).fetchall()
+    except Exception:
+        return []
+
+
 def record_inventory_move(conn, inv_id: int, move_type: str,
                            qty: float, unit_cost: float, date: str,
                            notes: str = None,

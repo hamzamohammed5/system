@@ -13,11 +13,7 @@ from PyQt5.QtWidgets import (
 )
 from PyQt5.QtCore import Qt, pyqtSignal
 
-from db.designs.dimension_sets_repo import (
-    fetch_all_design_categories,
-    build_category_tree,
-    fetch_all_dimension_sets,
-)
+from services.design import get_dimension_set_service
 from ui.widgets.tables.tables       import make_table
 from ui.theme import _C
 from ui.widgets.core.i18n import tr
@@ -44,6 +40,7 @@ class _SetsPanel(QWidget, WidgetMixin):
     def __init__(self, conn, parent=None):
         super().__init__(parent)
         self.conn      = conn
+        self._svc      = get_dimension_set_service(conn)
         self._all_rows = []
         self._build()
         self._load()
@@ -126,8 +123,8 @@ class _SetsPanel(QWidget, WidgetMixin):
         self.cmb_cat_filter.blockSignals(True)
         self.cmb_cat_filter.clear()
         self.cmb_cat_filter.addItem(tr("dim_sets_all_categories"), None)
-        rows = fetch_all_design_categories(self.conn)
-        tree = build_category_tree(rows)
+        rows = self._svc.list_categories()
+        tree = self._svc.build_tree(rows)
         self._add_cat_nodes(tree, 0)
         for i in range(self.cmb_cat_filter.count()):
             if self.cmb_cat_filter.itemData(i) == prev:
@@ -144,7 +141,7 @@ class _SetsPanel(QWidget, WidgetMixin):
                 self._add_cat_nodes(node["children"], depth + 1)
 
     def _load(self):
-        self._all_rows = list(fetch_all_dimension_sets(self.conn))
+        self._all_rows = list(self._svc.list_sets())
         self._reload_cat_filter()
         self._apply_filter()
 
@@ -159,10 +156,7 @@ class _SetsPanel(QWidget, WidgetMixin):
                 continue
             if cat_id is not None and ds["category_id"] != cat_id:
                 continue
-            cnt = self.conn.execute(
-                "SELECT COUNT(*) as c FROM dimension_fields WHERE set_id=?",
-                (ds["id"],)
-            ).fetchone()["c"]
+            cnt = self._svc.count_fields_for_set(ds["id"])
             r = self.table.rowCount()
             self.table.insertRow(r)
             self.table.setItem(r, 0, QTableWidgetItem(str(ds["id"])))

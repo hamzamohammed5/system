@@ -11,14 +11,13 @@ InventoryService — طبقة الخدمة لمخزن الشركة (inventory_it
 
 مبدأ العزل المعماري:
   - هذا الملف هو الوحيد المسموح له باستدعاء db.inventory.inventory_repo.
-  - أي ربط بدومين آخر (الأصناف من costing عبر items، أو الحسابات
-    المحاسبية) يمر عبر service ذلك الدومين — لا نكلم repo تابع
+  - أي ربط بدومين آخر يمر عبر service ذلك الدومين — لا نكلم repo تابع
     لدومين آخر من هنا مباشرة:
       * الأصناف (items.id, name, type)  → services.shared.item_service.ItemService
-      * الحسابات (accounts.code, name)  → db.accounting.accounting_accounts_repo
-        (لا يوجد accounting service عام بعد؛ هذه الدوال قراءة فقط
-        وتُستخدم فقط لتوفير قوائم اختيار — عند إنشاء AccountService
-        مستقبلاً تُستبدل هذه الاستدعاءات بنداء إليه دون تغيير في UI).
+      * الحسابات (accounts.code, name)  → services.accounting.accounts_service.AccountsService
+      * اتصال erp.db للشركة النشطة      → services.companies.company_service.CompanyService
+  - أي حركة مخزون (وارد/صادر) تحتاج بيانات إضافية (اسم الصنف مثلاً)
+    تُنفَّذ عبر دالة مخصصة في db.inventory.inventory_repo، لا SQL خام هنا.
 
 هذا الـ service هو نقطة الدخول الوحيدة لطبقة الـ UI لكل ما يخص المخزون:
   from services.inventory.inventory_service import InventoryService
@@ -36,11 +35,10 @@ from db.inventory.inventory_repo import (
     fetch_all_inventory, fetch_inventory_item,
     insert_inventory_item, update_inventory_item, delete_inventory_item,
     fetch_inventory_moves, fetch_recent_moves, record_inventory_move,
-)
-from db.accounting.accounting_accounts_repo import (
-    fetch_leaf_accounts, fetch_account_by_code,
+    fetch_recent_moves_with_item_names,
 )
 from services.shared.item_service import ItemService
+from services.accounting.accounts_service import AccountsService
 
 logger = logging.getLogger(__name__)
 
@@ -76,11 +74,17 @@ class InventoryService:
     def __init__(self, inv_conn, acc_conn=None, erp_conn=None):
         self.conn     = inv_conn
         self._acc_conn = acc_conn
+        self._acc_svc  = AccountsService(acc_conn) if acc_conn is not None else None
         if erp_conn is None:
             # جدول items موجود في قاعدة الـ erp وليس قاعدة المخزون —
             # لازم اتصال منفصل حتى لو لم يُمرَّر صراحة من الـ UI.
-            from db.companies.company_state import company_state
-            erp_conn = company_state.get_erp_conn()
+            #
+            # [إصلاح هيكلي] كان الاستدعاء db.companies.company_state
+            # مباشرة (كسر مبدأ العزل — inventory_service من حقه
+            # يستدعي db.inventory فقط). CompanyService.get_active_erp_conn()
+            # هو نقطة الدخول الرسمية لهذا الغرض من أي service آخر.
+            from services.companies.company_service import CompanyService
+            erp_conn = CompanyService.get_active_erp_conn()
         self._erp_conn = erp_conn
         self._item_svc = ItemService(erp_conn)
 
@@ -183,22 +187,13 @@ class InventoryService:
     def list_recent_moves_with_names(self, move_type: str, limit: int = 100) -> list:
         """
         حركات المخزون (وارد/صادر) مع اسم الصنف — تُستخدم في جداول
-        'آخر الحركات' بتبويبات الوارد والصادر. ينفّذ الاستعلام هنا
-        وليس في UI حفاظاً على مبدأ العزل المعماري (لا SQL خام في UI).
+        'آخر الحركات' بتبويبات الوارد والصادر.
+
+        [إصلاح هيكلي] كان الاستعلام SQL خام هنا (self.conn.execute مباشرة)
+        بدلاً من دالة في db.inventory.inventory_repo. انتقل إلى
+        fetch_recent_moves_with_item_names — كل SQL يجب أن يعيش في db/ فقط.
         """
-        try:
-            rows = self.conn.execute("""
-                SELECT im.date, inv.name, im.qty, im.unit_cost, im.total_cost,
-                       im.ref_entry_no, im.notes
-                FROM inventory_moves im
-                JOIN inventory_items inv ON inv.id = im.inventory_id
-                WHERE im.move_type = ?
-                ORDER BY im.date DESC, im.id DESC
-                LIMIT ?
-            """, (move_type, limit)).fetchall()
-        except Exception:
-            rows = []
-        return rows
+        return fetch_recent_moves_with_item_names(self.conn, move_type, limit)
 
     def record_move(self, inv_id: int, move_type: str,
                      qty: float, unit_cost: float, date: str,
@@ -277,15 +272,14 @@ class InventoryService:
 
     def list_payment_accounts(self, acc_type: str) -> list:
         """
-        قوائم حسابات للاختيار (دفع/أصول) — قراءة فقط عبر
-        accounting_accounts_repo. للكتابة على الحسابات استخدم
-        الـ accounting service المخصص وقت توفره.
+        قوائم حسابات للاختيار (دفع/أصول) — عبر AccountsService
+        (services.accounting) بدل استدعاء db.accounting مباشرة.
         """
-        if self._acc_conn is None:
+        if self._acc_svc is None:
             raise RuntimeError("acc_conn غير متاح لهذا الـ InventoryService")
-        return fetch_leaf_accounts(self._acc_conn, acc_type)
+        return self._acc_svc.list_leaf_accounts(acc_types=[acc_type])
 
     def get_account_by_code(self, code: str) -> Optional[dict]:
-        if self._acc_conn is None:
+        if self._acc_svc is None:
             raise RuntimeError("acc_conn غير متاح لهذا الـ InventoryService")
-        return fetch_account_by_code(self._acc_conn, code)
+        return self._acc_svc.get_account_by_code(code)

@@ -15,12 +15,7 @@ from PyQt5.QtWidgets import (
 from PyQt5.QtCore import Qt
 from PyQt5.QtGui import QFont, QColor
 
-from db.designs.dimension_sets_repo import (
-    fetch_fields_for_set,
-    fetch_instances_for_set, fetch_instance,
-    delete_instance, duplicate_instance,
-    fetch_instance_values,
-)
+from services.design import get_dimension_set_service
 from ._instance_popup import _InstancePopup
 from ui.font import get_font_size, fs, FS_XL
 from ui.widgets.core.i18n import tr
@@ -84,6 +79,7 @@ class _InstancesTable(QWidget, WidgetMixin):
     def __init__(self, conn, parent=None):
         super().__init__(parent)
         self.conn    = conn
+        self._svc    = get_dimension_set_service(conn)
         self._set_id = None
         self._fields = []
         self._build()
@@ -270,16 +266,13 @@ class _InstancesTable(QWidget, WidgetMixin):
         self.btn_add.setEnabled(True)
 
         try:
-            ds = self.conn.execute(
-                "SELECT name FROM dimension_sets WHERE id=?", (set_id,)
-            ).fetchone()
-            set_name = ds["name"] if ds else tr("dim_unnamed_set_fallback").format(id=set_id)
+            set_name = self._svc.get_set_name(set_id)
         except Exception:
             set_name = tr("dim_unnamed_set_fallback").format(id=set_id)
         self._lbl_set_name.setText(f"{tr('dim_sets_set_icon')}  {set_name}")
 
         self._fields = [
-            f for f in fetch_fields_for_set(self.conn, set_id)
+            f for f in self._svc.list_fields(set_id)
             if f["field_type"] == "number"
         ]
         self._empty_state.setVisible(False)
@@ -309,7 +302,7 @@ class _InstancesTable(QWidget, WidgetMixin):
         if len(col_labels) > 1:
             hh.setSectionResizeMode(len(col_labels) - 1, QHeaderView.Stretch)
 
-        instances = fetch_instances_for_set(self.conn, self._set_id)
+        instances = self._svc.list_instances(self._set_id)
         base = get_font_size()
         for inst in instances:
             r = self.table.rowCount()
@@ -323,7 +316,7 @@ class _InstancesTable(QWidget, WidgetMixin):
             name_item.setForeground(QColor(_BLUE))
             self.table.setItem(r, 0, name_item)
 
-            values = fetch_instance_values(self.conn, inst["id"])
+            values = self._svc.get_instance_values(inst["id"])
             for ci, f in enumerate(self._fields, start=1):
                 val_info = values.get(f["id"], {})
                 val = val_info.get("value_num")
@@ -381,7 +374,7 @@ class _InstancesTable(QWidget, WidgetMixin):
         iid = self._selected_instance_id()
         if not iid:
             return
-        inst = fetch_instance(self.conn, iid)
+        inst = self._svc.get_instance(iid)
         src_name = inst["name"] if inst else ""
         name, ok = QInputDialog.getText(
             self, tr("dim_inst_copy_title"),
@@ -389,21 +382,21 @@ class _InstancesTable(QWidget, WidgetMixin):
             text=tr("dim_inst_copy_default").format(name=src_name) if src_name else ""
         )
         if ok:
-            duplicate_instance(self.conn, iid, name.strip())
+            self._svc.duplicate_instance(iid, name.strip())
             self._refresh_table()
 
     def _delete_instance(self):
         iid = self._selected_instance_id()
         if not iid:
             return
-        inst = fetch_instance(self.conn, iid)
+        inst = self._svc.get_instance(iid)
         name = inst["name"] if inst and inst["name"] else f"#{iid}"
         if QMessageBox.question(
             self, tr("confirm_delete"),
             tr("dim_inst_delete_confirm").format(name=name),
             QMessageBox.Yes | QMessageBox.No
         ) == QMessageBox.Yes:
-            delete_instance(self.conn, iid)
+            self._svc.delete_instance(iid)
             self._refresh_table()
 
     def _on_saved(self, instance_id: int):

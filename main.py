@@ -9,10 +9,8 @@ import sys
 
 def main():
     # 1. تهيئة companies.db المركزية فقط
-    from db.shared.connection import get_central_connection
-    from db.companies.companies_schema import create_central_tables
-    conn = get_central_connection()
-    create_central_tables(conn)
+    from services.companies.company_service import CompanyService
+    conn = CompanyService.get_central_conn_and_init()
     conn.close()
 
     # 2. تشغيل Qt

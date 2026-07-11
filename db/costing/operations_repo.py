@@ -202,3 +202,59 @@ def update_machine_op(conn, op_id: int, machine_id: int,
 def delete_machine_op(conn, op_id: int):
     conn.execute("DELETE FROM machine_ops WHERE id=?", (op_id,))
     conn.commit()
+
+
+# ══════════════════════════════════════════════════════════
+# مساعدات BOM (Bulk Replace)
+# ══════════════════════════════════════════════════════════
+#
+# [إصلاح هيكلي] الدالتان التاليتان كانتا داخل:
+#   ui/tabs/costing/shared/bulk_replace/bulk_replace_helpers.py
+# وهو مكان خاطئ — استعلامات SQL يجب أن تكون في db/ فقط.
+# انتقلتا هنا حتى يستدعيهما services/costing/bulk_replace_service.py
+# من db/costing مباشرة، بدون المرور عبر ui/.
+
+def fetch_element_name(conn, child_type: str, child_id: int) -> "str | None":
+    """
+    يرجع اسم عنصر BOM حسب نوعه:
+      - raw / semi   → من جدول items
+      - labor_op     → من جدول labor_ops
+      - machine_op   → من جدول machine_ops
+    يرجع None لو غير موجود (المستدعي مسؤول عن fallback مثل f"ID:{id}").
+    """
+    if child_type in ("raw", "semi"):
+        row = conn.execute(
+            "SELECT name FROM items WHERE id=?", (child_id,)
+        ).fetchone()
+    elif child_type == "labor_op":
+        row = conn.execute(
+            "SELECT name FROM labor_ops WHERE id=?", (child_id,)
+        ).fetchone()
+    elif child_type == "machine_op":
+        row = conn.execute(
+            "SELECT name FROM machine_ops WHERE id=?", (child_id,)
+        ).fetchone()
+    else:
+        row = None
+    return row["name"] if row else None
+
+
+def fetch_products_using_child(conn, child_type: str, child_id: int) -> list:
+    """
+    يرجع كل المنتجات (semi + final) التي تحتوي على child_id/child_type
+    مباشرةً في جدول bom الرئيسي.
+
+    كل صف يحتوي: parent_id, qty, name, type, category_id, category_name
+    """
+    return conn.execute("""
+        SELECT b.parent_id, b.qty,
+               i.name, i.type, i.category_id,
+               c.name AS category_name
+        FROM   bom b
+        JOIN   items i ON i.id = b.parent_id
+        LEFT JOIN categories c ON c.id = i.category_id
+        WHERE  b.child_type = ?
+          AND  b.child_id   = ?
+          AND  i.type IN ('semi','final')
+        ORDER  BY i.name
+    """, (child_type, child_id)).fetchall()

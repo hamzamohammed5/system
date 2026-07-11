@@ -66,6 +66,10 @@ class LaborTab(TabSectionBase):
     التبويب الرئيسي للعمالة — يرث من TabSectionBase للتوحيد البصري.
     """
 
+    def __init__(self, parent=None):
+        from services.companies.company_service import CompanyService
+        super().__init__(conn_fn=CompanyService.get_active_erp_conn, parent=parent)
+
     def _build_tabs(self, tabs: QTabWidget):
         self._settings = _LaborSettingsPanel(self.conn)
 

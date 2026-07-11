@@ -24,7 +24,10 @@ from db.shared.items_repo import (
     update_item,
     delete_item,
     get_category_name_by_item_name,
+    count_bom_usage,
 )
+from db.shared.connection import get_connection
+from db.shared.settings_repo import get_setting
 
 
 # ══════════════════════════════════════════════════════════
@@ -163,15 +166,13 @@ class ItemService:
 
         القديم كان يبحث فقط في ('raw','semi') مما يُهمل
         استخدام العنصر كـ operation ويُعطي عدد ناقص.
+
+        [إصلاح هيكلي] الاستعلام انتقل إلى db/shared/items_repo.py
+        (count_bom_usage) بدل SQL خام هنا — الـ service يجب أن
+        يستدعي دوال الـ repo فقط، لا ينفّذ SQL بنفسه.
         """
         try:
-            row = self._conn.execute(
-                "SELECT COUNT(DISTINCT parent_id) AS cnt "
-                "FROM bom WHERE child_id=? "
-                "AND child_type IN ('raw','semi','labor_op','machine_op')",
-                (item_id,)
-            ).fetchone()
-            return row["cnt"] if row else 0
+            return count_bom_usage(self._conn, item_id)
         except Exception:
             return 0
 
@@ -201,3 +202,24 @@ class ItemService:
         بدلاً من استدعاء db.shared.items_repo مباشرة من UI.
         """
         return get_category_name_by_item_name(conn, item_name, item_type)
+
+    @classmethod
+    def get_gimp_path(cls) -> "str | None":
+        """
+        يجيب مسار GIMP المحفوظ في الإعدادات المشتركة.
+        نقطة الدخول الوحيدة الموصى بها من tabs/ لهذا الاستعلام —
+        بدلاً من استدعاء db.shared.connection / db.shared.settings_repo
+        مباشرة من UI.
+
+        يفتح اتصاله الخاص (الإعدادات مشتركة وليست مرتبطة بـ conn
+        الشركة النشطة الممرر لـ ItemService)، ويغلقه فور الانتهاء.
+        يرجع None لو الإعداد غير محفوظ أو حدث خطأ.
+        """
+        try:
+            conn = get_connection()
+            try:
+                return get_setting(conn, "gimp_path", "") or None
+            finally:
+                conn.close()
+        except Exception:
+            return None

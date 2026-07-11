@@ -41,7 +41,8 @@ class ProductTab(TabSectionBase):
 
     def __init__(self, product_type: str, parent=None):
         self.product_type = product_type  # ← قبل super()
-        super().__init__(parent=parent)
+        from services.companies.company_service import CompanyService
+        super().__init__(conn_fn=CompanyService.get_active_erp_conn, parent=parent)
 
     def _build_tabs(self, tabs: QTabWidget):
         scope = _SCOPE_MAP.get(self.product_type, self.product_type)

@@ -37,7 +37,7 @@ import logging
 from typing import Optional
 
 from db.orders.customers_repo import (
-    fetch_customer, fetch_all_customers,
+    fetch_customer, fetch_all_customers, search_customers,
     delete_customer, toggle_customer_active,
     fetch_customer_stats, fetch_contacts,
     insert_customer, update_customer,
@@ -70,6 +70,14 @@ class CustomerService:
 
     def list_customers(self) -> list:
         return fetch_all_customers(self.conn)
+
+    def search(self, query: str) -> list:
+        """
+        بحث عن عملاء بالاسم/الكود/الهاتف — يُستخدم في حقل البحث
+        السريع بنموذج الطلب (_order_form.py) بدل استدعاء
+        search_customers من db.orders.customers_repo مباشرة.
+        """
+        return search_customers(self.conn, query)
 
     def get_stats(self, customer_id: int) -> dict:
         return fetch_customer_stats(self.conn, customer_id)

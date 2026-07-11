@@ -100,11 +100,8 @@ def _unit_for_set(conn, set_id: int) -> str:
 def _find_gimp() -> str | None:
     import shutil, glob
     try:
-        from db.shared.connection import get_connection
-        from db.shared.settings_repo import get_setting
-        conn  = get_connection()
-        saved = get_setting(conn, "gimp_path", "")
-        conn.close()
+        from services.shared.item_service import ItemService
+        saved = ItemService.get_gimp_path()
         if saved and os.path.exists(saved):
             return saved
     except Exception:

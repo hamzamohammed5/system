@@ -37,8 +37,6 @@ from PyQt5.QtWidgets import (
 )
 from PyQt5.QtCore import Qt
 
-from db.companies.company_state     import company_state
-
 from ui.widgets.theme.layout_styles import tab_style
 from ui.theme                        import _C
 from ui.widgets.core.i18n           import tr
@@ -87,7 +85,9 @@ class AccountingTab(QWidget, WidgetMixin):
         root = QVBoxLayout(self)
         root.setContentsMargins(0, 0, 0, 0)
 
-        if not company_state.is_ready:
+        from services.companies.company_service import CompanyService
+
+        if not CompanyService.is_company_ready():
             lbl = QLabel(tr("accounting_no_company_msg"))
             lbl.setAlignment(Qt.AlignCenter)
             lbl.setStyleSheet(f"font-size:{FS_MD}px; color:{_C['text_muted']}; padding:{ACCOUNTING_TAB_MSG_PAD}px;")
@@ -95,8 +95,10 @@ class AccountingTab(QWidget, WidgetMixin):
             return
 
         try:
-            acc = company_state.get_accounting_conn()
-            erp = company_state.get_erp_conn()
+            acc = CompanyService.get_active_accounting_conn()
+            erp = CompanyService.get_active_erp_conn()
+            if acc is None or erp is None:
+                raise RuntimeError(tr("conn_error_msg", error=""))
         except Exception as e:
             lbl = QLabel(tr("conn_error_msg", error=e))
             lbl.setAlignment(Qt.AlignCenter)

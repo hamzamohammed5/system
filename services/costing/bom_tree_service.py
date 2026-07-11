@@ -63,6 +63,18 @@ class BomComponentRow:
         )
 
 
+@dataclass
+class NodeData:
+    """
+    بيانات مكوّن BOM اللازمة لبناء node في الشجرة.
+    تُبنى داخل BomTreeService.get_node_data — الـ UI لا يستدعي
+    db/ أو models/ مباشرة، فقط يستهلك هذا الـ dataclass.
+    """
+    name: str
+    unit_cost: float
+    op_row_label: Optional[str] = None
+
+
 # ──────────────────────────────────────────────────────────
 # BomTreeService
 # ──────────────────────────────────────────────────────────
@@ -165,6 +177,80 @@ class BomTreeService:
     def get_default_scenario_id(self, item_id: int) -> Optional[int]:
         """يرجع id الـ default scenario للمنتج."""
         return self._get_default_scenario_id(item_id)
+
+    def get_node_data(self, child_type: str, child_id: int,
+                      machine_op_row_id: Optional[int] = None) -> Optional["NodeData"]:
+        """
+        يجيب بيانات المكوّن (name + unit_cost) اللازمة لبناء node في الشجرة.
+
+        [إصلاح هيكلي] انتقل من bom_tree.py (_fetch_node_data) — كان يستدعي
+        db.shared.items_repo و db.costing.operations_repo و models/* مباشرة
+        من tabs/، متجاوزاً services/. الاستدعاءات نفسها (نفس التوقيعات)
+        نُقلت هنا بدون تغيير في المنطق.
+        """
+        try:
+            if child_type == "raw":
+                from db.shared.items_repo import fetch_item
+                from models.costing_base  import raw_unit_price
+                row = fetch_item(self.conn, child_id)
+                if not row:
+                    return None
+                return NodeData(
+                    name=row["name"],
+                    unit_cost=raw_unit_price(row),
+                )
+
+            elif child_type == "semi":
+                from db.shared.items_repo import fetch_item
+                from models.costing       import calc_cost
+                row = fetch_item(self.conn, child_id)
+                if not row:
+                    return None
+                return NodeData(
+                    name=row["name"],
+                    unit_cost=calc_cost(self.conn, child_id),
+                )
+
+            elif child_type == "labor_op":
+                from db.costing.operations_repo import fetch_labor_op
+                from models.costing_ops         import calc_labor_op_cost
+                op = fetch_labor_op(self.conn, child_id)
+                if not op:
+                    return None
+                return NodeData(
+                    name=op["name"],
+                    unit_cost=calc_labor_op_cost(self.conn, child_id),
+                )
+
+            elif child_type == "machine_op":
+                from db.costing.operations_repo import fetch_machine_op
+                from models.costing_ops         import calc_machine_op_cost
+                op = fetch_machine_op(self.conn, child_id)
+                if not op:
+                    return None
+                op_row_label = None
+                if machine_op_row_id is not None:
+                    try:
+                        row_info = self.conn.execute(
+                            "SELECT label FROM machine_op_rows WHERE id=?",
+                            (machine_op_row_id,)
+                        ).fetchone()
+                        if row_info and row_info["label"]:
+                            op_row_label = row_info["label"]
+                    except Exception:
+                        pass
+                return NodeData(
+                    name=op["name"],
+                    unit_cost=calc_machine_op_cost(
+                        self.conn, child_id, row_id=machine_op_row_id
+                    ),
+                    op_row_label=op_row_label,
+                )
+
+        except Exception:
+            return None
+
+        return None
 
     # ── حذف ───────────────────────────────────────────────
 

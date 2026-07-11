@@ -537,6 +537,73 @@ class OrderService:
     def remove_item(self, item_id: int) -> None:
         delete_order_item(self._conn, item_id)
 
+    # ── Order Header (facade للـ UI — نموذج طلب كامل) ─────
+    # [مضاف] create()/update() أعلاه مبنيتان على OrderItem dataclass
+    # (product_id/qty/unit_price/notes/item_name) وتفترض استبدال كل
+    # البنود دفعة واحدة — لا تغطي حقول رأس الطلب الفعلية المستخدمة في
+    # نموذج الطلب الكامل (order_type, priority, due_date, discount,
+    # paid_amount, internal_notes) ولا التعديل بند-بند القائم على
+    # get_order_items/add_item/update_item/remove_item أعلاه.
+    # هاتان الدالتان تغلّفان insert_order/update_order بنفس توقيعهما
+    # الفعلي في db.orders.orders_repo، ليستخدمهما _order_form.py بدل
+    # استدعاء orders_repo مباشرة.
+
+    def create_order_header(self, customer_id: int,
+                            order_type: str,
+                            priority: str,
+                            due_date: str,
+                            discount: float = 0,
+                            paid_amount: float = 0,
+                            notes: str = "",
+                            internal_notes: str = "") -> int:
+        """ينشئ رأس طلب جديد (بدون بنود) ويرجع الـ order_id."""
+        self._assert_customer_exists(customer_id)
+        return insert_order(
+            self._conn, customer_id=customer_id,
+            order_type=order_type, priority=priority,
+            due_date=due_date, discount=discount,
+            paid_amount=paid_amount, notes=notes,
+            internal_notes=internal_notes,
+        )
+
+    def update_order_header(self, order_id: int,
+                            priority: str,
+                            due_date: str,
+                            discount: float = 0,
+                            paid_amount: float = 0,
+                            notes: str = "",
+                            internal_notes: str = "") -> None:
+        """يحدث بيانات رأس طلب موجود (بدون لمس البنود)."""
+        update_order(
+            self._conn, order_id, priority=priority,
+            due_date=due_date, discount=discount,
+            paid_amount=paid_amount, notes=notes,
+            internal_notes=internal_notes,
+        )
+
+    def replace_order_items(self, order_id: int, items_data: list[dict]) -> None:
+        """
+        يمسح كل بنود الطلب الحالية ويعيد إدراجها من قائمة dicts.
+        يُستخدم من _order_form.py._save بدل استدعاء
+        delete_order_item/insert_order_item مباشرة على orders_repo.
+
+        items_data: كل عنصر dict بمفاتيح item_name, description,
+                    quantity, unit, unit_price, discount_pct,
+                    design_ref, notes (مطابقة لـ row.get_data() في
+                    _ItemRowWidget).
+        """
+        existing = fetch_order_items(self._conn, order_id)
+        for eid in {i["id"] for i in existing}:
+            delete_order_item(self._conn, eid)
+        for idx, d in enumerate(items_data):
+            insert_order_item(
+                self._conn, order_id,
+                item_name=d["item_name"], description=d["description"],
+                quantity=d["quantity"], unit=d["unit"],
+                unit_price=d["unit_price"], discount_pct=d["discount_pct"],
+                design_ref=d["design_ref"], notes=d["notes"], sort_order=idx,
+            )
+
     # ── Status Log (facade للـ UI) ────────────────────────
 
     def get_status_log(self, order_id: int) -> list:

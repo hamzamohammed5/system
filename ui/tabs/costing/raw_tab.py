@@ -24,6 +24,10 @@ class RawTab(TabSectionBase):
       🏷️ التصنيفات → CategoryManager
     """
 
+    def __init__(self, parent=None):
+        from services.companies.company_service import CompanyService
+        super().__init__(conn_fn=CompanyService.get_active_erp_conn, parent=parent)
+
     def _build_tabs(self, tabs: QTabWidget):
         tabs.addTab(RawSection(self.conn),
                     f"{tr('tab_icon_raw')}  {tr('raw_tab')}")

@@ -133,9 +133,11 @@ class I18nManager(QObject):
 
     def load_from_db(self):
         try:
-            from db.shared.connection import get_connection
+            from services.companies.company_service import CompanyService
             from db.shared.settings_repo import get_setting
-            conn = get_connection()
+            conn = CompanyService.get_active_erp_conn()
+            if conn is None:
+                return
             lang = get_setting(conn, "ui_language", "ar")
             if lang in _TRANSLATIONS:
                 self._language = lang

@@ -13,14 +13,7 @@ from PyQt5.QtWidgets import (
 from PyQt5.QtCore import Qt, pyqtSignal
 from PyQt5.QtGui import QColor, QFont
 
-from db.designs.design_item_categories_repo import (
-    fetch_all_item_categories,
-    fetch_item_category,
-    insert_item_category,
-    update_item_category,
-    build_item_category_tree,
-    fetch_item_category_descendants,
-)
+from services.design import get_design_service
 from ui.widgets.core.widget_mixin import WidgetMixin
 from ui.font import FS_XS, FS_SM, FS_BASE, fs
 from ui.constants import (
@@ -185,6 +178,7 @@ class _CatForm(QWidget, WidgetMixin):
         self._init_widget_mixin(data=False)
 
         self.conn        = conn
+        self._svc        = get_design_service(conn)
         self._editing_id = None
         self._color      = None  # يُحدَّث في _refresh_style
         self._build()
@@ -378,11 +372,11 @@ class _CatForm(QWidget, WidgetMixin):
         self.cmb_parent.blockSignals(True)
         self.cmb_parent.clear()
         self.cmb_parent.addItem(tr("design_cats_no_parent"), None)
-        rows = fetch_all_item_categories(self.conn)
-        tree = build_item_category_tree(rows)
+        rows = self._svc.list_item_categories()
+        tree = self._svc.build_tree(rows)
         excl = set()
         if exclude_id:
-            excl = set(fetch_item_category_descendants(self.conn, exclude_id))
+            excl = set(self._svc.get_descendants(exclude_id))
         self._add_nodes(tree, 0, excl)
         self.cmb_parent.blockSignals(False)
 
@@ -417,7 +411,7 @@ class _CatForm(QWidget, WidgetMixin):
     def load_edit(self, cat_id):
         from ui.theme import _C
         from ui.widgets.core.i18n import tr
-        cat = fetch_item_category(self.conn, cat_id)
+        cat = self._svc.get_item_category(cat_id)
         if not cat:
             return
         self._editing_id = cat_id
@@ -440,9 +434,9 @@ class _CatForm(QWidget, WidgetMixin):
         pid = self.cmb_parent.currentData()
         try:
             if self._editing_id:
-                update_item_category(self.conn, self._editing_id, name, self._color, pid)
+                self._svc.update_item_category(self._editing_id, name, self._color, pid)
             else:
-                insert_item_category(self.conn, name, self._color, pid)
+                self._svc.create_item_category(name, self._color, pid)
             self.saved.emit()
         except ValueError as e:
             QMessageBox.warning(self, tr("error"), str(e))

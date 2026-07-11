@@ -60,8 +60,9 @@ class RawTablePanel(BaseListPanel, SharedOpsMixin):
     # ══════════════════════════════════════════════════════
 
     def _load_rows(self) -> list:
-        from db.shared.items_repo import fetch_items_by_type
-        local_rows = [to_dict(r) for r in fetch_items_by_type(self.conn, "raw")]
+        from dataclasses import asdict
+        from services.shared.item_service import ItemService
+        local_rows = [asdict(r) for r in ItemService(self.conn).list_by_type("raw")]
         self._published_names = get_published_local_names("raw")
         shared_rows = get_shared_raws(local_rows)
         return local_rows + shared_rows
@@ -198,7 +199,7 @@ class RawTablePanel(BaseListPanel, SharedOpsMixin):
 
     def _on_delete_item(self, item_id, item_name: str):
         from PyQt5.QtWidgets import QMessageBox
-        from db.shared.items_repo import delete_item
+        from services.shared.item_service import ItemService
 
         if is_shared_id(item_id):
             QMessageBox.warning(
@@ -213,9 +214,11 @@ class RawTablePanel(BaseListPanel, SharedOpsMixin):
             self._input_panel._reset()
         if confirm_delete(self, item_name):
             try:
-                delete_item(self.conn, item_id_int)
+                deleted = ItemService(self.conn).delete(item_id_int)
             except Exception as e:
                 QMessageBox.warning(self, tr("error"), str(e))
+                return
+            if not deleted:
                 return
             emit_company_data_changed()
 

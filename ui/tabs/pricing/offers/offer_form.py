@@ -69,14 +69,10 @@ class _OfferForm(QWidget, WidgetMixin):
 
     # ── connection صالح دايماً ────────────────────────────
     def _live_conn(self):
-        if self._conn is not None:
-            try:
-                self._conn.execute("SELECT 1")
-                return self._conn
-            except Exception:
-                pass
-        from db.companies.company_state import company_state
-        return company_state.get_erp_conn()
+        from services.companies.company_service import CompanyService
+        if CompanyService.is_conn_alive(self._conn):
+            return self._conn
+        return CompanyService.get_active_erp_conn()
 
     def _refresh_style(self, *_):
         from ui.theme import _C

@@ -1,9 +1,16 @@
 """
-ui/widgets/combo/unit_service.py
+services/shared/unit_service.py
 ==================================
 Business logic لوحدات القياس — مفصول عن الـ widget.
 
-مستخرج من combo/unit.py:
+[إصلاح هيكلة] نُقل من ui/widgets/combo/unit_service.py إلى هنا:
+  widgets/ (base classes) ممنوعة تستدعي repos/ (db/) مباشرة حسب
+  الهيكلة المعمارية للمشروع. هذا الملف كان يستدعي
+  db.shared.settings_repo مباشرة من داخل widgets/ — كسر هيكلي.
+  النقل لـ services/shared/ يحل المشكلة لأن services/ هي الطبقة
+  الوحيدة المسموح لها تستدعي repos/ (بنفس نمط font_service.py).
+
+مستخرج أصلاً من combo/unit.py:
   - _cache_key
   - invalidate_units_cache
   - load_units / save_units

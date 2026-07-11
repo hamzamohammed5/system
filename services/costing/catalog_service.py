@@ -1,15 +1,36 @@
 """
 services/costing/catalog_service.py
 ======================================
-CatalogService — ينقل منطق catalog_builder.py إلى services layer.
+CatalogService — يبني الـ catalog الكامل المستخدم في ComponentRow.
 
 يبني الـ catalog المستخدم في ComponentRow ويدمج العناصر المحلية
-مع المشتركة (عبر CompanyService و SharedItemsService — لا يلمس
-db.companies مباشرة، لأن هذا الـ service مسؤول فقط عن db costing/shared).
+مع المشتركة (عبر services.companies.CompanyService و SharedItemsService).
+
+[قرار هيكلي 1] db.shared و db.costing يُستوردان مباشرة وبدون
+try/except. db.shared طبقة بيانات مشتركة مصممة عمداً ليستخدمها كل
+domain (items تُستخدم في costing/inventory/orders) — هذا ليس كسراً
+هيكلياً، بعكس استيراد service من ui/ (كان الخطأ في bulk_replace
+قبل الإصلاح). أي خطأ في db.shared أو db.costing هنا هو خطأ برمجي
+يجب أن يظهر لا أن يُبلع بصمت.
+
+[قرار هيكلي 2] الاعتماد على services.companies متعمد أيضاً:
+  - العناصر المشتركة بين الشركات مصدرها central db، ومنطق الوصول
+    له (company_id النشط، caching، إلخ) موجود بالفعل في
+    services/companies. تكراره هنا يعني ازدواجية منطق خطيرة.
+  - البديل الوحيد الأنظف هو استدعاء db.companies مباشرة من هنا،
+    وهذا أسوأ لأنه يكسر عزل company_state عن باقي الدومينز.
+  - لذلك: service → service عبر domain boundary مقبول هنا، بشرط
+    أن يكون الاعتماد صريحاً (imports واضحة، لا SQL مباشر لـ db آخر).
+
+[i18n] هذا الملف لا يحتوي على أي نص عرض مباشر. بدل النص، الـ
+service يرجع مفتاحاً رمزياً ثابتاً SHARED_CATEGORY_KEY = "shared"
+في مكان category_name للعناصر المشتركة. طبقة الـ ui (مثل
+_catalog_provider.py) هي المسؤولة عن استدعاء tr("shared") وتحويل
+المفتاح لنص معروض — الـ service لا يجب أن يعرف شيئاً عن نظام
+الترجمة أو النصوص المعروضة.
 
 يُستخدم من:
   - ui/tabs/costing/product/_catalog_provider.py
-  - ui/tabs/costing/shared/catalog_builder.py  (يصبح thin wrapper)
 
 الـ catalog شكله:
   {
@@ -19,12 +40,19 @@ db.companies مباشرة، لأن هذا الـ service مسؤول فقط عن 
     "labor_op":   [(id, name, category_name, minutes), ...],
     "machine_op": [(id, name, category_name, mode, machine_name), ...],
   }
+
+  category_name للعناصر المشتركة = SHARED_CATEGORY_KEY ("shared")
+  وليس نصاً عربياً جاهزاً — راجع الـ ui لترجمته عبر tr().
 """
 
 from __future__ import annotations
 from typing import Dict, List, Any
 
-SHARED_CATEGORY = "🔗 مشترك"
+from db.shared.items_repo import fetch_items_by_type
+from db.costing.operations_repo import fetch_all_labor_ops, fetch_all_machine_ops
+
+# [i18n] مفتاح رمزي فقط — ليس نصاً معروضاً. الـ ui يترجمه عبر tr("shared").
+SHARED_CATEGORY_KEY = "shared"
 
 
 class CatalogService:
@@ -56,14 +84,13 @@ class CatalogService:
 
     def build_raw(self) -> List:
         """خامات محلية + مشتركة."""
-        from db.shared.items_repo import fetch_items_by_type
         local = [
             (r["id"], r["name"], r.get("category_name") or "",
              r["price"], r.get("total_qty"))
             for r in fetch_items_by_type(self.conn, "raw")
         ]
         shared = [
-            (item["id"], item["name"], SHARED_CATEGORY,
+            (item["id"], item["name"], SHARED_CATEGORY_KEY,
              float(item.get("price", 0.0)), item.get("total_qty"))
             for item in self._fetch_shared("raw")
         ]
@@ -71,7 +98,6 @@ class CatalogService:
 
     def build_semi(self) -> List:
         """نصف مصنع محلي فقط."""
-        from db.shared.items_repo import fetch_items_by_type
         return [
             (r["id"], r["name"], r.get("category_name") or "", 0.0, None)
             for r in fetch_items_by_type(self.conn, "semi")
@@ -79,7 +105,6 @@ class CatalogService:
 
     def build_final(self) -> List:
         """منتج نهائي محلي فقط."""
-        from db.shared.items_repo import fetch_items_by_type
         return [
             (r["id"], r["name"], r.get("category_name") or "", 0.0, None)
             for r in fetch_items_by_type(self.conn, "final")
@@ -87,18 +112,14 @@ class CatalogService:
 
     def build_labor_ops(self) -> List:
         """عمليات عمالة محلية + مشتركة."""
-        try:
-            from db.costing.operations_repo import fetch_all_labor_ops
-            local = [
-                (r["id"], r["name"], r.get("category_name") or "",
-                 r.get("minutes", 0.0))
-                for r in fetch_all_labor_ops(self.conn)
-            ]
-        except Exception:
-            local = []
+        local = [
+            (r["id"], r["name"], r.get("category_name") or "",
+             r.get("minutes", 0.0))
+            for r in fetch_all_labor_ops(self.conn)
+        ]
 
         shared = [
-            (item["id"], item["name"], SHARED_CATEGORY,
+            (item["id"], item["name"], SHARED_CATEGORY_KEY,
              float(item.get("minutes", 0.0)))
             for item in self._fetch_shared("labor_op")
         ]
@@ -106,18 +127,14 @@ class CatalogService:
 
     def build_machine_ops(self) -> List:
         """عمليات تشغيل محلية + مشتركة."""
-        try:
-            from db.costing.operations_repo import fetch_all_machine_ops
-            local = [
-                (r["id"], r["name"], r.get("category_name") or "",
-                 r.get("mode", "time"), r.get("machine_name", ""))
-                for r in fetch_all_machine_ops(self.conn)
-            ]
-        except Exception:
-            local = []
+        local = [
+            (r["id"], r["name"], r.get("category_name") or "",
+             r.get("mode", "time"), r.get("machine_name", ""))
+            for r in fetch_all_machine_ops(self.conn)
+        ]
 
         shared = [
-            (item["id"], item["name"], SHARED_CATEGORY,
+            (item["id"], item["name"], SHARED_CATEGORY_KEY,
              item.get("mode", "time"), item.get("machine_name", ""))
             for item in self._fetch_shared("machine_op")
         ]
@@ -131,6 +148,11 @@ class CatalogService:
         و SharedItemsService — بدون لمس db.companies مباشرة.
 
         يرجع list of dicts مع id = "shared:{n}" (نفس شكل الإخراج السابق).
+
+        ملاحظة: الـ try/except هنا مقصود ومختلف عن استيرادات db.costing
+        أعلى الملف — هذه الدالة تعبر إلى domain آخر (companies) قد لا
+        يكون جاهزاً بعد (لا توجد شركة نشطة، central db غير مهيأ، ...)،
+        وهي حالة تشغيل طبيعية وليست خطأ برمجي يجب إخفاؤه.
         """
         try:
             from services.companies.company_service import CompanyService

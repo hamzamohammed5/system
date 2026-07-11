@@ -36,7 +36,7 @@ from ui.font  import get_font_size, set_font_size, apply_font, fs
 from ui.theme import _C
 from ui.constants import DIALOG_BTN_MIN_H, MIN_FONT_SIZE, MAX_FONT_SIZE, BTN_MIN_HEIGHT
 
-from ui.widgets.combo.unit_service import (
+from services.shared.unit_service import (
     load_units, add_unit, remove_unit,
     reset_units_to_default, _default_units, _DEFAULT_UNIT_KEYS,
 )

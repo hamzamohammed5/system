@@ -384,6 +384,26 @@ def delete_item(conn, item_id: int):
     conn.commit()
 
 
+def count_bom_usage(conn, item_id: int) -> int:
+    """
+    يرجع عدد المنتجات (parent_id مختلفة) التي تستخدم item_id
+    كأي نوع مكوّن في BOM: raw / semi / labor_op / machine_op.
+
+    [تحسين 18] يشمل كل child_types (وليس فقط raw/semi) لأن العنصر
+    قد يُستخدم كـ operation في BOM أيضاً.
+
+    [إصلاح هيكلي] انتقل من services/shared/item_service.py (كان SQL
+    خام داخل الـ service) إلى هنا — كل SQL يجب أن يكون داخل db/ فقط.
+    """
+    row = conn.execute(
+        "SELECT COUNT(DISTINCT parent_id) AS cnt "
+        "FROM bom WHERE child_id=? "
+        "AND child_type IN ('raw','semi','labor_op','machine_op')",
+        (item_id,)
+    ).fetchone()
+    return row["cnt"] if row else 0
+
+
 # ══════════════════════════════════════════════════════════
 # BOM
 # ══════════════════════════════════════════════════════════

@@ -105,6 +105,20 @@ class CompanyService:
             return None
 
     @classmethod
+    def get_current_company_name(cls) -> str:
+        """
+        يرجع اسم الشركة النشطة حالياً.
+        نقطة الدخول من tabs/ لمعرفة اسم الشركة الحالية —
+        بدلاً من قراءة company_state.company_name مباشرة من UI.
+        يرجع سلسلة فارغة لو مفيش شركة نشطة أو حصل خطأ.
+        """
+        try:
+            from db.companies.company_state import company_state
+            return company_state.company_name
+        except Exception:
+            return ""
+
+    @classmethod
     def is_company_ready(cls) -> bool:
         """
         يرجع True لو فيه شركة نشطة محددة حالياً.
@@ -125,6 +139,18 @@ class CompanyService:
         try:
             from db.companies.company_state import company_state
             company_state.set_active(company_id, name, color)
+        except Exception:
+            pass
+
+    @classmethod
+    def refresh_connections(cls) -> None:
+        """
+        يُعيد ضبط اتصالات قواعد بيانات الشركة النشطة حالياً.
+        بديل لاستدعاء company_state.refresh_connections() مباشرة من UI.
+        """
+        try:
+            from db.companies.company_state import company_state
+            company_state.refresh_connections()
         except Exception:
             pass
 
@@ -155,6 +181,38 @@ class CompanyService:
             from db.companies.company_state import company_state
             if company_state.is_ready:
                 return company_state.get_erp_conn()
+        except Exception:
+            pass
+        return None
+
+    @classmethod
+    def get_active_accounting_conn(cls):
+        """
+        يرجع اتصال accounting.db الخاص بالشركة النشطة حالياً.
+        بديل لاستدعاء company_state.get_accounting_conn() مباشرة من UI —
+        يحافظ على الهيكلة: tabs/ لا تعرف شيئاً عن db.companies مباشرة.
+        يرجع None لو مفيش شركة نشطة أو حصل خطأ.
+        """
+        try:
+            from db.companies.company_state import company_state
+            if company_state.is_ready:
+                return company_state.get_accounting_conn()
+        except Exception:
+            pass
+        return None
+
+    @classmethod
+    def get_active_inventory_conn(cls):
+        """
+        يرجع اتصال inventory.db الخاص بالشركة النشطة حالياً.
+        بديل لاستدعاء company_state.get_inventory_conn() مباشرة من UI —
+        يحافظ على الهيكلة: tabs/ لا تعرف شيئاً عن db.companies مباشرة.
+        يرجع None لو مفيش شركة نشطة أو حصل خطأ.
+        """
+        try:
+            from db.companies.company_state import company_state
+            if company_state.is_ready:
+                return company_state.get_inventory_conn()
         except Exception:
             pass
         return None
@@ -227,7 +285,7 @@ class CompanyService:
         يحذف الشركة من companies.db.
         ملفات DB الخاصة بها تبقى على الديسك (سلوك موثّق في الـ repo).
         """
-        return delete_company(self._conn, company_id)
+        return _repo_delete_company(self._conn, company_id)
 
     def toggle_active(self, company_id: int) -> None:
-        toggle_company_active(self._conn, company_id)
+        _repo_toggle_company_active(self._conn, company_id)

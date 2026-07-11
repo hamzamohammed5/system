@@ -18,9 +18,7 @@ from PyQt5.QtWidgets import (
 from PyQt5.QtCore  import Qt, pyqtSignal, QThread, pyqtSignal as Signal, QTimer
 from PyQt5.QtGui   import QPixmap, QFont
 
-from db.designs.design_item_categories_repo import (
-    fetch_item_category_descendants,
-)
+from services.design import get_design_service
 from .._xcf_thumbnail import get_xcf_thumbnail
 from ui.widgets.core.widget_mixin import WidgetMixin
 from ui.widgets.core.i18n import tr
@@ -65,134 +63,6 @@ class _ThumbWorker(QThread):
 
 
 # ════════════════════════════════════════════════════════
-# دالة مساعدة: أول xcf حسب المجموعة
-# ════════════════════════════════════════════════════════
-
-def _get_xcf_for_set(conn, design_id: int, set_id=None) -> "str | None":
-    """
-    يجيب مسار الـ xcf المناسب للتصميم:
-      - لو set_id محدد → أول ملف ينتمي لهذه المجموعة
-      - fallback      → أول ملف موجود عموماً بغض النظر عن المجموعة
-    يرجع None لو مفيش ملف.
-    """
-    if set_id is not None:
-        row = conn.execute(
-            """
-            SELECT xcf_path FROM design_sizes
-            WHERE  design_id = ?
-              AND  set_id    = ?
-              AND  xcf_path IS NOT NULL
-              AND  xcf_path != ''
-            ORDER  BY sort_order, id
-            LIMIT  1
-            """,
-            (design_id, set_id),
-        ).fetchone()
-        if row and row["xcf_path"]:
-            return row["xcf_path"]
-
-    # fallback: أول ملف موجود بغض النظر عن المجموعة
-    row = conn.execute(
-        """
-        SELECT xcf_path FROM design_sizes
-        WHERE  design_id = ?
-          AND  xcf_path IS NOT NULL
-          AND  xcf_path != ''
-        ORDER  BY sort_order, id
-        LIMIT  1
-        """,
-        (design_id,),
-    ).fetchone()
-    return row["xcf_path"] if row and row["xcf_path"] else None
-
-
-# ════════════════════════════════════════════════════════
-# جلب التصميمات مع فلترة
-# ════════════════════════════════════════════════════════
-
-def _fetch_designs_filtered(conn, name_q="", category_id=None, set_id=None):
-    """
-    جلب التصميمات مع فلترة بالاسم والتصنيف والمجموعة.
-
-    first_xcf: يأخذ أولوية المجموعة المفلترة لو محددة (مع fallback لأول ملف عموماً).
-    set_id يُدمج في الـ SQL بشكل آمن بعد int() cast.
-    """
-    if set_id is not None:
-        set_id_int = int(set_id)
-        first_xcf_sql = f"""
-            COALESCE(
-                (SELECT ds2.xcf_path
-                 FROM   design_sizes ds2
-                 WHERE  ds2.design_id = d.id
-                   AND  ds2.set_id    = {set_id_int}
-                   AND  ds2.xcf_path IS NOT NULL
-                   AND  ds2.xcf_path != ''
-                 ORDER  BY ds2.sort_order, ds2.id
-                 LIMIT  1),
-                (SELECT ds3.xcf_path
-                 FROM   design_sizes ds3
-                 WHERE  ds3.design_id = d.id
-                   AND  ds3.xcf_path IS NOT NULL
-                   AND  ds3.xcf_path != ''
-                 ORDER  BY ds3.sort_order, ds3.id
-                 LIMIT  1)
-            )
-        """
-    else:
-        first_xcf_sql = """
-            (SELECT ds2.xcf_path
-             FROM   design_sizes ds2
-             WHERE  ds2.design_id = d.id
-               AND  ds2.xcf_path IS NOT NULL
-               AND  ds2.xcf_path != ''
-             ORDER  BY ds2.sort_order, ds2.id
-             LIMIT  1)
-        """
-
-    sql = f"""
-        SELECT d.id, d.name, d.item_category_id, d.notes,
-               d.created_at, d.updated_at,
-               ic.name                              AS category_name,
-               ic.color                             AS category_color,
-               COUNT(DISTINCT ds.id)                AS sizes_count,
-               SUM(CASE WHEN ds.xcf_path IS NOT NULL
-                             AND ds.xcf_path != ''
-                        THEN 1 ELSE 0 END)          AS files_count,
-               {first_xcf_sql}                      AS first_xcf
-        FROM   designs d
-        LEFT JOIN design_item_categories ic ON ic.id = d.item_category_id
-        LEFT JOIN design_sizes ds           ON ds.design_id = d.id
-    """
-    conditions, params = [], []
-
-    if name_q:
-        conditions.append("d.name LIKE ?")
-        params.append(f"%{name_q}%")
-
-    if category_id is not None:
-        try:
-            desc = fetch_item_category_descendants(conn, category_id)
-            ph   = ",".join("?" * len(desc))
-            conditions.append(f"d.item_category_id IN ({ph})")
-            params.extend(desc)
-        except Exception:
-            conditions.append("d.item_category_id = ?")
-            params.append(category_id)
-
-    if set_id is not None:
-        conditions.append(
-            "EXISTS (SELECT 1 FROM design_sizes ds2 "
-            "WHERE ds2.design_id = d.id AND ds2.set_id = ?)"
-        )
-        params.append(set_id)
-
-    if conditions:
-        sql += " WHERE " + " AND ".join(conditions)
-    sql += " GROUP BY d.id ORDER BY d.updated_at DESC, d.name"
-    return conn.execute(sql, params).fetchall()
-
-
-# ════════════════════════════════════════════════════════
 # بطاقة تصميم واحد
 # ════════════════════════════════════════════════════════
 
@@ -204,6 +74,7 @@ class _DesignCard(QFrame, WidgetMixin):
         super().__init__(parent)
         self._init_widget_mixin(lang=False, data=False)
         self.conn      = conn
+        self._svc      = get_design_service(conn)
         self._data     = dict(design_data)
         self._did      = self._data["id"]
         self._set_id   = set_id
@@ -377,7 +248,7 @@ class _DesignCard(QFrame, WidgetMixin):
         لو xcf_path مش ممرر → يحسبه من DB حسب _set_id.
         """
         if xcf_path is None:
-            xcf_path = _get_xcf_for_set(self.conn, self._did, self._set_id)
+            xcf_path = self._svc.get_first_xcf_for_design(self._did, self._set_id)
 
         if not xcf_path or not os.path.exists(xcf_path):
             self.set_thumbnail(None)

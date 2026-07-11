@@ -57,14 +57,10 @@ class _OffersTable(QWidget, WidgetMixin):
     # ── connection صالح دايماً ────────────────────────────
 
     def _live_conn(self):
-        if self.conn is not None:
-            try:
-                self.conn.execute("SELECT 1")
-                return self.conn
-            except Exception:
-                pass
-        from db.companies.company_state import company_state
-        return company_state.get_erp_conn()
+        from services.companies.company_service import CompanyService
+        if CompanyService.is_conn_alive(self.conn):
+            return self.conn
+        return CompanyService.get_active_erp_conn()
 
     def _refresh_style(self, *_):
         self._apply_filter()
