@@ -12,6 +12,10 @@ FilterToolbar — شريط فلاتر موحد (بحث + تصنيف + تاريخ
 
   [FIX] استبدال from ...font و from ...theme (ثلاث نقاط خاطئة تُسبب ImportError)
         بـ absolute imports مباشرة.
+
+  [إصلاح هيكلة] _refresh_data: استبدال from db.companies.company_state import company_state
+        بـ CompanyService.is_company_ready() / CompanyService.get_active_erp_conn().
+        المسار الصحيح: widget → service → repo (db/)
 """
 from PyQt5.QtWidgets import (
     QWidget, QHBoxLayout, QLabel, QComboBox,
@@ -26,6 +30,7 @@ from ui.constants import (
     FILTER_TOOLBAR_MARGIN_H, FILTER_TOOLBAR_MARGIN_V, FILTER_TOOLBAR_SPACING,
     FILTER_COMBO_MIN_H, FILTER_COMBO_MIN_W, FILTER_SEARCH_H,
     SPACING_SM, FILTER_COUNT_LABEL_MIN_W, FILTER_DEBOUNCE_MS,
+    FILTER_COMBO_PAD_V, FILTER_DATE_DEFAULT_FROM,
 )
 
 from ..utils.signals          import blocked_signals
@@ -39,7 +44,7 @@ def _combo_style() -> str:
     return f"""
         QComboBox {{
             background:{_C['bg_input']}; border:1px solid {_C['border_med']};
-            border-radius:{FILTER_COMBO_BORDER_RADIUS}px; padding:2px {FILTER_COMBO_PAD_H}px; font-size:{fs(base,-1)}pt;
+            border-radius:{FILTER_COMBO_BORDER_RADIUS}px; padding:{FILTER_COMBO_PAD_V}px {FILTER_COMBO_PAD_H}px; font-size:{fs(base,-1)}pt;
             color:{_C['text_primary']};
         }}
         QComboBox:focus {{ border-color:{_C['accent']}; }}
@@ -112,7 +117,7 @@ class FilterToolbar(QWidget, WidgetMixin):
             lay.addWidget(self._sep())
             from ..utils.date_range import DateRangeFilter
             self._date_filter = DateRangeFilter(
-                default_from=QDate(2000, 1, 1),
+                default_from=QDate(*FILTER_DATE_DEFAULT_FROM),
                 default_to=QDate.currentDate(),
                 show_presets=self._show_presets,
             )
@@ -159,9 +164,9 @@ class FilterToolbar(QWidget, WidgetMixin):
 
     def _refresh_data(self, company_id=None):
         try:
-            from db.companies.company_state import company_state
-            if company_state.is_ready:
-                new_conn = company_state.get_erp_conn()
+            from services.companies.company_service import CompanyService
+            if CompanyService.is_company_ready():
+                new_conn = CompanyService.get_active_erp_conn()
                 if new_conn is not None:
                     self._conn = new_conn
         except Exception:

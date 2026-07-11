@@ -7,7 +7,14 @@ Stylesheet generators للجداول والـ splitters.
 """
 from ui.theme import _C
 from ui.font  import fs, get_font_size
-from ui.constants import ROW_HEIGHT_COMPACT, ROW_HEIGHT_NORMAL, ROW_HEIGHT_LARGE, TABLE_BORDER_RADIUS
+from ui.constants import (
+    ROW_HEIGHT_COMPACT, ROW_HEIGHT_NORMAL, ROW_HEIGHT_LARGE, TABLE_BORDER_RADIUS,
+    TABLE_STYLE_COMPACT_ITEM_PAD_V, TABLE_STYLE_COMPACT_ITEM_PAD_H,
+    TABLE_STYLE_LARGE_ITEM_PAD_V, TABLE_STYLE_LARGE_ITEM_PAD_H,
+    TABLE_STYLE_NORMAL_ITEM_PAD_V, TABLE_STYLE_NORMAL_ITEM_PAD_H,
+    TABLE_STYLE_NORMAL_HEADER_PAD_V, TABLE_STYLE_NORMAL_HEADER_PAD_H,
+    SPLITTER_HANDLE_RADIUS,
+)
 
 
 def table_style(variant: str = "normal") -> str:
@@ -16,11 +23,18 @@ def table_style(variant: str = "normal") -> str:
     c    = _C
 
     padding_map = {
-        "compact": ("4px 6px",  "4px 6px",  fs(base, -1)),
-        "large":   ("8px 12px", "8px 12px", fs(base,  0)),
+        "compact": (f"{TABLE_STYLE_COMPACT_ITEM_PAD_V}px {TABLE_STYLE_COMPACT_ITEM_PAD_H}px",
+                    f"{TABLE_STYLE_COMPACT_ITEM_PAD_V}px {TABLE_STYLE_COMPACT_ITEM_PAD_H}px",
+                    fs(base, -1)),
+        "large":   (f"{TABLE_STYLE_LARGE_ITEM_PAD_V}px {TABLE_STYLE_LARGE_ITEM_PAD_H}px",
+                    f"{TABLE_STYLE_LARGE_ITEM_PAD_V}px {TABLE_STYLE_LARGE_ITEM_PAD_H}px",
+                    fs(base,  0)),
     }
     item_pad, header_pad, font_sz = padding_map.get(
-        variant, ("5px 10px", "6px 10px", fs(base, 0))
+        variant,
+        (f"{TABLE_STYLE_NORMAL_ITEM_PAD_V}px {TABLE_STYLE_NORMAL_ITEM_PAD_H}px",
+         f"{TABLE_STYLE_NORMAL_HEADER_PAD_V}px {TABLE_STYLE_NORMAL_HEADER_PAD_H}px",
+         fs(base, 0))
     )
 
     return f"""
@@ -53,7 +67,7 @@ def table_style(variant: str = "normal") -> str:
 
 def splitter_style() -> str:
     return f"""
-        QSplitter::handle {{ background:{_C['border_med']}; border-radius:3px; }}
+        QSplitter::handle {{ background:{_C['border_med']}; border-radius:{SPLITTER_HANDLE_RADIUS}px; }}
         QSplitter::handle:hover {{ background:{_C['accent_mid']}; }}
         QSplitter::handle:pressed {{ background:{_C['accent']}; }}
     """

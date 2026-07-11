@@ -18,7 +18,7 @@ def h_divider(color: str = None, height: int = SEPARATOR_LINE_H) -> QFrame:
     sep = QFrame()
     sep.setFrameShape(QFrame.HLine)
     sep.setFixedHeight(height)
-    sep.setStyleSheet(f"background:{color or _C.get('border','#e0e0e0')}; border:none;")
+    sep.setStyleSheet(f"background:{color or _C['border']}; border:none;")
     return sep
 
 
@@ -28,7 +28,7 @@ def v_divider(color: str = None, width: int = V_DIVIDER_WIDTH, margin_v: int = V
     sep.setFrameShape(QFrame.VLine)
     sep.setFixedWidth(width)
     sep.setStyleSheet(
-        f"background:{color or _C.get('border_med','#bdbdbd')};"
+        f"background:{color or _C['border_med']};"
         f"border:none; margin:{margin_v}px {V_DIVIDER_INNER_MARGIN_H}px;"
     )
     return sep

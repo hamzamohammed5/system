@@ -8,6 +8,17 @@ SharedOpsMixin — منطق النشر والتعديل المشترك.
         القديم: كانت _edit_shared_item و _edit_published_item تُطلقان الإشعار
                 لكن _publish_item كانت تنتهي صامتةً → الـ UI لا يتحدث بعد النشر.
         الجديد: emit_company_data_changed() تُستدعى في نهاية _publish_item أيضاً.
+
+  [إصلاح هيكلة] استبدال imports مباشرة من db.companies.* بـ
+        CompanyService و SharedItemsService.
+        القديم: from db.companies.companies_schema import get_central_connection, create_central_tables
+                from db.companies.shared_items_repo import create_shared_items_tables
+                central.execute("SELECT id FROM shared_items WHERE ...")  # SQL خام
+        الجديد: كل الاستدعاءات عبر CompanyService / SharedItemsService — المسار الصحيح:
+                widget → service → repo (db/)
+        - CompanyService.get_central_conn_and_init() بدل get_central_connection + create_central_tables
+        - SharedItemsService(central) ينشئ جداول shared_items تلقائياً في __init__
+        - SharedItemsService.list_items(shared_type) بدل استعلام SQL خام للبحث بالاسم
 """
 import logging
 
@@ -67,12 +78,9 @@ class SharedOpsMixin:
             return
 
         try:
-            from db.companies.companies_schema import (
-                get_central_connection, create_central_tables
-            )
+            from services.companies.company_service import CompanyService
             from ui.tabs.companies.shared_items_dialog import SharedItemsDialog
-            central = get_central_connection()
-            create_central_tables(central)
+            central = CompanyService.get_central_conn_and_init()
             SharedItemsDialog(central, shared_id, parent=parent).exec_()
             central.close()
             emit_company_data_changed()
@@ -83,18 +91,19 @@ class SharedOpsMixin:
         from ..dialogs.message import msg_warning
         parent = parent or self
         try:
-            from db.companies.companies_schema import (
-                get_central_connection, create_central_tables
-            )
+            from services.companies.company_service import CompanyService
+            from services.companies.shared_items_service import SharedItemsService
             from ui.tabs.companies.shared_items_dialog import SharedItemsDialog
-            central = get_central_connection()
-            create_central_tables(central)
-            shared_row = central.execute(
-                "SELECT id FROM shared_items WHERE name=? AND shared_type=? LIMIT 1",
-                (row.get("name", ""), shared_type)
-            ).fetchone()
+            central = CompanyService.get_central_conn_and_init()
+            svc = SharedItemsService(central)
+            match_name = str(row.get("name", "")).strip().lower()
+            shared_row = next(
+                (it for it in svc.list_items(shared_type)
+                 if it.name.strip().lower() == match_name),
+                None,
+            )
             if shared_row:
-                SharedItemsDialog(central, shared_row["id"], parent=parent).exec_()
+                SharedItemsDialog(central, shared_row.id, parent=parent).exec_()
             central.close()
             emit_company_data_changed()
         except Exception as e:
@@ -110,16 +119,14 @@ class SharedOpsMixin:
             return
 
         try:
-            from db.companies.companies_schema import (
-                get_central_connection, create_central_tables
-            )
-            from db.companies.shared_items_repo import create_shared_items_tables
+            from services.companies.company_service import CompanyService
+            from services.companies.shared_items_service import SharedItemsService
             from ui.tabs.companies.shared_items_manager_helper._add_shared_item_dialog import (
                 PublishAsSharedDialog
             )
-            central = get_central_connection()
-            create_central_tables(central)
-            create_shared_items_tables(central)
+            central = CompanyService.get_central_conn_and_init()
+            # [FIX] SharedItemsService.__init__ ينشئ جداول shared_items تلقائياً
+            SharedItemsService(central)
             PublishAsSharedDialog(
                 central_conn=central,
                 shared_type=shared_type,

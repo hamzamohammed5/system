@@ -27,7 +27,10 @@ from ui.font  import fs, get_font_size
 from ..theme.input_styles import input_style as _input_style, spinbox_style as _spinbox_style
 from ui.widgets.core.widget_mixin import WidgetMixin
 from ui.widgets.core.i18n import tr
-from ui.constants import BTN_BORDER_RADIUS, SPACING_MD, DROPDOWN_ARROW_W, LABELED_INPUT_SPACING
+from ui.constants import (
+    BTN_BORDER_RADIUS, SPACING_MD, DROPDOWN_ARROW_W, LABELED_INPUT_SPACING,
+    INPUT_HEIGHT, AMOUNT_SPINBOX_MAX, NOTES_LINE_EDIT_HEIGHT,
+)
 # [إصلاح 2] السطر المحذوف: from ..core import get_font_size as _get_font_size
 
 
@@ -36,8 +39,8 @@ from ui.constants import BTN_BORDER_RADIUS, SPACING_MD, DROPDOWN_ARROW_W, LABELE
 class AmountSpinBox(QDoubleSpinBox, WidgetMixin):
     """QDoubleSpinBox للمبالغ المالية."""
 
-    def __init__(self, max_: float = 999_999_999, dec: int = 2,
-                 min_: float = 0, height: int = 32,
+    def __init__(self, max_: float = AMOUNT_SPINBOX_MAX, dec: int = 2,
+                 min_: float = 0, height: int = INPUT_HEIGHT,
                  currency: str = "", parent=None):
         super().__init__(parent)
         self.setRange(min_, max_)
@@ -59,7 +62,7 @@ class AmountSpinBox(QDoubleSpinBox, WidgetMixin):
 class DateField(QDateEdit, WidgetMixin):
     """QDateEdit موحد."""
 
-    def __init__(self, date: QDate = None, height: int = 32,
+    def __init__(self, date: QDate = None, height: int = INPUT_HEIGHT,
                  width: int = None, parent=None):
         super().__init__(date or QDate.currentDate(), parent)
         self.setCalendarPopup(True)
@@ -92,7 +95,7 @@ class DateField(QDateEdit, WidgetMixin):
 class StyledComboBox(QComboBox, WidgetMixin):
     """QComboBox بستايل موحد."""
 
-    def __init__(self, height: int = 32, parent=None):
+    def __init__(self, height: int = INPUT_HEIGHT, parent=None):
         super().__init__(parent)
         self.setMinimumHeight(height)
         self._h = height
@@ -162,7 +165,7 @@ class LabeledInput(QWidget, WidgetMixin):
 class RequiredLineEdit(QLineEdit, WidgetMixin):
     """QLineEdit مع تحقق بصري من الفراغ."""
 
-    def __init__(self, placeholder: str = "", height: int = 32, parent=None):
+    def __init__(self, placeholder: str = "", height: int = INPUT_HEIGHT, parent=None):
         super().__init__(parent)
         self.setPlaceholderText(placeholder)
         self.setMinimumHeight(height)
@@ -202,7 +205,7 @@ class NotesLineEdit(QLineEdit, WidgetMixin):
     """حقل ملاحظات بستايل مخصص يتزامن مع الثيم."""
 
     def __init__(self, placeholder: str = "",
-                 height: int = 30, parent=None):
+                 height: int = NOTES_LINE_EDIT_HEIGHT, parent=None):
         super().__init__(parent)
         self._custom_placeholder = placeholder
         self.setMinimumHeight(height)
