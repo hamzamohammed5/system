@@ -1,5 +1,5 @@
 File Tree Snapshot
-Generated : 2026-07-11 09:07:10
+Generated : 2026-07-11 09:33:25
 Source    : D:\My Workspace\Hg\Alhabaar\accountant\system
 Extensions: .md, .py
 ────────────────────────────────────────────────────────────
@@ -383,6 +383,7 @@ system/
 │   │   │   ├── amount_label.py
 │   │   │   ├── badge.py
 │   │   │   ├── button.py
+│   │   │   ├── constants_general.py
 │   │   │   ├── headers_list.py
 │   │   │   ├── headers_page.py
 │   │   │   ├── label.py

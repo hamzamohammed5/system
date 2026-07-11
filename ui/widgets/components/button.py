@@ -22,7 +22,7 @@ from PyQt5.QtGui     import QPixmap, QPainter
 
 from ui.font  import fs, get_font_size
 from ui.theme import _C
-from ui.constants import BTN_HEIGHT_PAD, BTN_PAD_H, BTN_BORDER_RADIUS, BTN_TEXT_PAD
+from ui.constants import BTN_HEIGHT_PAD, BTN_PAD_H, BTN_BORDER_RADIUS, BTN_TEXT_PAD, BTN_BORDER_W
 
 # cache: (style_name, font_size) → stylesheet string
 _stylesheet_cache: dict[tuple[str, int], str] = {}
@@ -121,7 +121,7 @@ def _build_stylesheet(style: str, base: int) -> str:
     return f"""
         QPushButton {{
             background:{s['bg']}; color:{s['fg']};
-            border:1.5px solid {s['border']};
+            border:{BTN_BORDER_W}px solid {s['border']};
             font-size:{fsz}pt; border-radius:{BTN_BORDER_RADIUS}px;
             padding:0 {BTN_PAD_H}px; min-height:{h}px;
             {bold}

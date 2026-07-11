@@ -53,6 +53,13 @@ from ui.constants import (
     COMPONENT_ROW_SUB_MARGIN_V,
     COMPONENT_ROW_SUB_SPACING,
     COMPONENT_ROW_BORDER_RADIUS,
+    COMPONENT_ROW_BORDER_W,
+    COMPONENT_ROW_ORPHAN_BORDER_W,
+    COMPONENT_ROW_PAD_V,
+    COMPONENT_ROW_PAD_H,
+    COMPONENT_ROW_COST_PAD_H,
+    COMPONENT_ROW_WASTE_PAD_H,
+    COMPONENT_ROW_TYPE_CMB_MIN_LEN,
 )
 from ui.widgets.utils.searchable_combo import SearchableCombo
 from ui.widgets.core.colors import (
@@ -96,7 +103,7 @@ def _orphan_style() -> str:
         QWidget {{ background-color: {s['bg']}; border-radius: {COMPONENT_ROW_BORDER_RADIUS}px; }}
         QComboBox, QLineEdit {{
             background-color: {s['bg']};
-            border: 1.5px solid {s['border']};
+            border: {COMPONENT_ROW_ORPHAN_BORDER_W}px solid {s['border']};
             border-radius: {COMPONENT_ROW_BORDER_RADIUS}px;
         }}
     """
@@ -126,8 +133,8 @@ def _variant_combo_style() -> str:
     return f"""
         QComboBox {{
             background: {_C['input_positive_bg']};
-            border: 1px solid {_C['input_positive_border']};
-            border-radius: {COMPONENT_ROW_BORDER_RADIUS}px; padding: 1px 6px;
+            border: {COMPONENT_ROW_BORDER_W}px solid {_C['input_positive_border']};
+            border-radius: {COMPONENT_ROW_BORDER_RADIUS}px; padding: {COMPONENT_ROW_PAD_V}px {COMPONENT_ROW_PAD_H}px;
             font-size: {fs(base, -1)}pt;
             color: {_C['input_positive_color']};
         }}
@@ -145,8 +152,8 @@ def _variant_cost_style() -> str:
     bg, border = _card_colors(fg)
     return (
         f"font-size:{fs(base, -1)}pt; color:{fg}; font-weight:bold;"
-        f"background:{bg}; border:1px solid {border};"
-        f"border-radius:{COMPONENT_ROW_BORDER_RADIUS}px; padding:1px 5px;"
+        f"background:{bg}; border:{COMPONENT_ROW_BORDER_W}px solid {border};"
+        f"border-radius:{COMPONENT_ROW_BORDER_RADIUS}px; padding:{COMPONENT_ROW_PAD_V}px {COMPONENT_ROW_COST_PAD_H}px;"
     )
 
 
@@ -154,7 +161,7 @@ def _sub_row_style() -> str:
     s = _status_colors("danger")
     return f"""
         QFrame {{
-            background: {s['bg']}; border: 1px solid {s['border']};
+            background: {s['bg']}; border: {COMPONENT_ROW_BORDER_W}px solid {s['border']};
             border-radius: {COMPONENT_ROW_BORDER_RADIUS}px; margin-right: {COMPONENT_ROW_BORDER_RADIUS}px;
         }}
     """
@@ -165,8 +172,8 @@ def _op_row_combo_style() -> str:
     s = _status_colors("purple")
     return f"""
         QComboBox {{
-            background: {_C['bg_input']}; border: 1px solid {s['border']};
-            border-radius: {COMPONENT_ROW_BORDER_RADIUS}px; padding: 1px 6px;
+            background: {_C['bg_input']}; border: {COMPONENT_ROW_BORDER_W}px solid {s['border']};
+            border-radius: {COMPONENT_ROW_BORDER_RADIUS}px; padding: {COMPONENT_ROW_PAD_V}px {COMPONENT_ROW_PAD_H}px;
             font-size: {fs(base, -1)}pt; color: {s['fg']};
         }}
         QComboBox:focus {{ border-color: {s['fg']}; }}
@@ -183,8 +190,8 @@ def _waste_zero_style() -> str:
     return f"""
         QDoubleSpinBox {{
             background: {_waste_zero_bg()};
-            border: 1px solid {_waste_zero_border()};
-            border-radius: {COMPONENT_ROW_BORDER_RADIUS}px; padding: 1px 4px;
+            border: {COMPONENT_ROW_BORDER_W}px solid {_waste_zero_border()};
+            border-radius: {COMPONENT_ROW_BORDER_RADIUS}px; padding: {COMPONENT_ROW_PAD_V}px {COMPONENT_ROW_WASTE_PAD_H}px;
             font-size: {fs(base, -1)}pt;
             color: {_waste_zero_color()};
         }}
@@ -231,7 +238,7 @@ def build_row_ui(widget, child_type: str, child_id,
 def _build_type_combo(widget, child_type: str, layout: QHBoxLayout):
     widget.cmb_type = QComboBox()
     widget.cmb_type.setSizePolicy(QSizePolicy.Preferred, QSizePolicy.Fixed)
-    widget.cmb_type.setMinimumContentsLength(10)
+    widget.cmb_type.setMinimumContentsLength(COMPONENT_ROW_TYPE_CMB_MIN_LEN)
     widget.cmb_type.setSizeAdjustPolicy(QComboBox.AdjustToContents)
     for key, label in COMPONENT_TYPES:
         widget.cmb_type.addItem(label, key)
@@ -394,8 +401,8 @@ def update_waste_style(widget, val: float):
         bg, border = _waste_colors(val)
         widget.waste_spin.setStyleSheet(f"""
             QDoubleSpinBox {{
-                background: {bg}; border: 1px solid {border};
-                border-radius: {COMPONENT_ROW_BORDER_RADIUS}px; padding: 1px 4px;
+                background: {bg}; border: {COMPONENT_ROW_BORDER_W}px solid {border};
+                border-radius: {COMPONENT_ROW_BORDER_RADIUS}px; padding: {COMPONENT_ROW_PAD_V}px {COMPONENT_ROW_WASTE_PAD_H}px;
                 font-size: {fs(base, -1)}pt;
                 color: {_waste_text_color()}; font-weight: bold;
             }}

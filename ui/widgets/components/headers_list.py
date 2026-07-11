@@ -21,6 +21,8 @@ from ui.constants import (
     SPACING_XS, SPACING_SM, SPACING_MD, SPACING_LG,
     SEARCH_BAR_H, STATUS_BAR_H, SECTION_BAR_W, SECTION_BAR_H,
     LIST_HEADER_MARGIN_H, LIST_HEADER_MARGIN_T, LIST_HEADER_MARGIN_B,
+    SEARCH_BAR_BORDER_W, SEARCH_BAR_BORDER_RADIUS, SEARCH_BAR_PAD_H,
+    STATUS_BAR_PAD_H, STATUS_BAR_BORDER_W, LIST_HEADER_BORDER_W,
 )
 
 
@@ -67,8 +69,8 @@ class SearchBar(QWidget, WidgetMixin):
         self.inp.setStyleSheet(f"""
             QLineEdit {{
                 background:{_C['bg_input']};
-                border:1.5px solid {_C['border_med']};
-                border-radius:6px; padding:0 10px;
+                border:{SEARCH_BAR_BORDER_W}px solid {_C['border_med']};
+                border-radius:{SEARCH_BAR_BORDER_RADIUS}px; padding:0 {SEARCH_BAR_PAD_H}px;
                 font-size:{fs(base,0)}pt; color:{_C['text_primary']};
             }}
             QLineEdit:focus {{ border-color:{_C['accent']}; background:{_C['bg_input_focus']}; }}
@@ -120,10 +122,10 @@ class StatusBar(QLabel, WidgetMixin):
         self.setStyleSheet(f"""
             background:{_C['bg_surface_2']};
             color:{_C['text_muted']};
-            padding:0 10px;
+            padding:0 {STATUS_BAR_PAD_H}px;
             font-size:{fs(base,-1)}pt;
             font-weight:600;
-            border-top:1px solid {_C['border']};
+            border-top:{STATUS_BAR_BORDER_W}px solid {_C['border']};
         """)
 
     def _refresh_lang(self, *_):
@@ -218,7 +220,7 @@ class ListHeader(QFrame, WidgetMixin):
         self.setStyleSheet(f"""
             QFrame {{
                 background:{_C['bg_input']};
-                border-bottom:1px solid {_C['border']};
+                border-bottom:{LIST_HEADER_BORDER_W}px solid {_C['border']};
             }}
         """)
         if self._lbl_title:

@@ -9,7 +9,7 @@ from PyQt5.QtWidgets import QWidget, QFrame, QPushButton, QSizePolicy
 from .button            import make_btn
 from ..theme.builders   import v_divider
 from ..utils.flow_layout import FlowLayout
-from ui.constants import SPACING_XS, ACTION_TOOLBAR_FLOW_V_SPACING, ACTION_TOOLBAR_MARGIN_V
+from ui.constants import SPACING_XS, ACTION_TOOLBAR_FLOW_V_SPACING, ACTION_TOOLBAR_MARGIN_V, ACTION_TOOLBAR_DEFAULT_SPACING
 
 
 class ActionToolbar(QWidget):
@@ -23,7 +23,7 @@ class ActionToolbar(QWidget):
         toolbar.add_danger("🗑️ حذف", callback=self._delete)
     """
 
-    def __init__(self, spacing: int = 6, parent=None):
+    def __init__(self, spacing: int = ACTION_TOOLBAR_DEFAULT_SPACING, parent=None):
         super().__init__(parent)
         self._spacing     = spacing
         self._normal_btns : list = []

@@ -17,7 +17,7 @@ from ..core.i18n import tr
 from ..core.widget_mixin import WidgetMixin
 from ui.constants import (
     MARGIN_ZERO, SPACING_MD,
-    OVERLAY_MARGIN, OVERLAY_BORDER_RADIUS,
+    OVERLAY_MARGIN, OVERLAY_BORDER_RADIUS, SPINNER_FRAME_INTERVAL_MS,
 )
 
 
@@ -37,7 +37,7 @@ class LoadingSpinner(QWidget, WidgetMixin):
         self._compact = compact
         self._frame   = 0
         self._timer   = QTimer(self)
-        self._timer.setInterval(100)
+        self._timer.setInterval(SPINNER_FRAME_INTERVAL_MS)
         self._timer.timeout.connect(self._tick)
         self._build(self._text)
         self._init_widget_mixin(theme=True, font=True, lang=True)
@@ -146,7 +146,7 @@ class LoadingButton(QPushButton, WidgetMixin):
         self._original_text = text
         self._frame  = 0
         self._timer  = QTimer(self)
-        self._timer.setInterval(100)
+        self._timer.setInterval(SPINNER_FRAME_INTERVAL_MS)
         self._timer.timeout.connect(self._tick)
         self._init_widget_mixin(theme=False, font=False, lang=True)
 

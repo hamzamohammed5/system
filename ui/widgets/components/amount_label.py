@@ -17,6 +17,12 @@ from ui.font  import fs, get_font_size
 from ..core.colors import status_colors
 from ..core.i18n import tr
 from ..core.widget_mixin import WidgetMixin
+from ui.constants import (
+    DR_CR_DISPLAY_SPACING, DR_CR_CHIP_BORDER_RADIUS,
+    DR_CR_CHIP_PAD_V, DR_CR_CHIP_PAD_H,
+    BALANCE_DISPLAY_BORDER_W, BALANCE_DISPLAY_RADIUS,
+    BALANCE_DISPLAY_PAD_V, BALANCE_DISPLAY_PAD_H,
+)
 
 
 # ── helpers ───────────────────────────────────────────────
@@ -137,7 +143,7 @@ class DebitCreditDisplay(QWidget, WidgetMixin):
     def _build(self):
         lay = QHBoxLayout(self)
         lay.setContentsMargins(0, 0, 0, 0)
-        lay.setSpacing(12)
+        lay.setSpacing(DR_CR_DISPLAY_SPACING)
 
         for attr, attr_t, key in [
             ("_lbl_dr", "_lbl_dr_t", "dr_total_label"),
@@ -169,7 +175,7 @@ class DebitCreditDisplay(QWidget, WidgetMixin):
         )
         self._lbl_dr.setStyleSheet(
             f"font-size:{fs(base, +1)}pt; font-weight:bold; color:{dr_s['fg']};"
-            f"background:{dr_s['bg']}; border-radius:4px; padding:3px 10px;"
+            f"background:{dr_s['bg']}; border-radius:{DR_CR_CHIP_BORDER_RADIUS}px; padding:{DR_CR_CHIP_PAD_V}px {DR_CR_CHIP_PAD_H}px;"
         )
         self._lbl_cr_t.setStyleSheet(
             f"font-weight:bold; color:{cr_s['fg']};"
@@ -177,7 +183,7 @@ class DebitCreditDisplay(QWidget, WidgetMixin):
         )
         self._lbl_cr.setStyleSheet(
             f"font-size:{fs(base, +1)}pt; font-weight:bold; color:{cr_s['fg']};"
-            f"background:{cr_s['bg']}; border-radius:4px; padding:3px 10px;"
+            f"background:{cr_s['bg']}; border-radius:{DR_CR_CHIP_BORDER_RADIUS}px; padding:{DR_CR_CHIP_PAD_V}px {DR_CR_CHIP_PAD_H}px;"
         )
         self._sep.setStyleSheet(
             f"color:{_C['border_med']}; font-size:{fs(base, +4)}pt;"
@@ -236,8 +242,8 @@ class BalanceDisplay(QLabel, WidgetMixin):
 
         self.setStyleSheet(
             f"font-size:{fs(base, +1)}pt; font-weight:bold; color:{_color};"
-            f"background:{s['bg']}; border:1px solid {s['border']};"
-            "border-radius:6px; padding:6px 16px;"
+            f"background:{s['bg']}; border:{BALANCE_DISPLAY_BORDER_W}px solid {s['border']};"
+            f"border-radius:{BALANCE_DISPLAY_RADIUS}px; padding:{BALANCE_DISPLAY_PAD_V}px {BALANCE_DISPLAY_PAD_H}px;"
         )
 
     def set_debit_credit_balance(self, dr: float, cr: float):
@@ -253,8 +259,8 @@ class BalanceDisplay(QLabel, WidgetMixin):
         base = get_font_size()
         self.setStyleSheet(
             f"font-size:{fs(base, +1)}pt; font-weight:bold; color:{_C['text_muted']};"
-            f"background:{_C['bg_surface_2']}; border:1px solid {_C['border']};"
-            "border-radius:6px; padding:6px 16px;"
+            f"background:{_C['bg_surface_2']}; border:{BALANCE_DISPLAY_BORDER_W}px solid {_C['border']};"
+            f"border-radius:{BALANCE_DISPLAY_RADIUS}px; padding:{BALANCE_DISPLAY_PAD_V}px {BALANCE_DISPLAY_PAD_H}px;"
         )
 
     def _refresh_style(self, *_):

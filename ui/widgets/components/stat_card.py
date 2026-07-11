@@ -22,14 +22,15 @@ from ui.theme import _C
 from ui.font  import fs, get_font_size
 from ..core.colors   import card_colors
 from ..theme.builders import v_divider
+from ..core.i18n import tr
 from ..core.widget_mixin import WidgetMixin
 from ui.constants import (
     MARGIN_ZERO,
     STAT_CARD_MARGIN_COMPACT, STAT_CARD_MARGIN_NORMAL,
     STAT_CARD_SPACING_COMPACT, STAT_CARD_SPACING_NORMAL,
-    STAT_CARD_BORDER_RADIUS,
+    STAT_CARD_BORDER_RADIUS, STAT_CARD_BORDER_W,
     STAT_INNER_MARGIN_COMPACT, STAT_INNER_MARGIN_NORMAL,
-    STAT_INNER_TOP_SPACING, STAT_INNER_BORDER_RADIUS,
+    STAT_INNER_TOP_SPACING, STAT_INNER_BORDER_RADIUS, STAT_INNER_BORDER_W,
 )
 
 # ══════════════════════════════════════════════════════════
@@ -40,7 +41,7 @@ class StatCard(QFrame, WidgetMixin):
     """بطاقة إحصائية مستقلة — للـ detail headers."""
 
     def __init__(self, icon: str = "", title: str = "",
-                 value: str = "─", color: str = None,
+                 value: str = None, color: str = None,
                  bg: str = None, border: str = None,
                  compact: bool = False, parent=None):
         super().__init__(parent)
@@ -51,8 +52,9 @@ class StatCard(QFrame, WidgetMixin):
         self._compact = compact
         self._title   = title
         self._icon    = icon
-        self._build(icon, title, value)
-        self._init_widget_mixin(theme=True, font=True)
+        self._custom_value = value
+        self._build(icon, title, value if value is not None else tr('dash'))
+        self._init_widget_mixin(theme=True, font=True, lang=True)
         self._refresh_style()
 
     def _build(self, icon, title, value):
@@ -93,7 +95,7 @@ class StatCard(QFrame, WidgetMixin):
 
         self.setStyleSheet(f"""
             QFrame {{
-                background:{_bg}; border:1px solid {_bdr};
+                background:{_bg}; border:{STAT_CARD_BORDER_W}px solid {_bdr};
                 border-radius:{STAT_CARD_BORDER_RADIUS}px;
             }}
         """)
@@ -114,6 +116,7 @@ class StatCard(QFrame, WidgetMixin):
         )
 
     def set_value(self, text: str):
+        self._custom_value = text
         self._lbl_value.setText(text)
 
     def set_color(self, color: str):
@@ -123,6 +126,10 @@ class StatCard(QFrame, WidgetMixin):
 
     def value_label(self) -> QLabel:
         return self._lbl_value
+
+    def _refresh_lang(self, *_):
+        if self._custom_value is None:
+            self._lbl_value.setText(tr('dash'))
 
 
 # ══════════════════════════════════════════════════════════
@@ -135,7 +142,7 @@ class StatItem:
     label      : str
     color      : str           = field(default_factory=lambda: _C["blue"])
     icon       : str           = ""
-    value      : str           = "─"
+    value      : str           = field(default_factory=lambda: tr('dash'))
     bg         : Optional[str] = None
     border     : Optional[str] = None
     bold_value : bool          = True
@@ -192,7 +199,7 @@ class _StatCard(QFrame, WidgetMixin):
         self.setStyleSheet(f"""
             QFrame {{
                 background:{bg};
-                border:1px solid {border};
+                border:{STAT_INNER_BORDER_W}px solid {border};
                 border-radius:{STAT_INNER_BORDER_RADIUS}px;
             }}
         """)
@@ -269,7 +276,7 @@ class StatRow(QWidget):
 
     def reset_all(self):
         for card in self._cards:
-            card.set_value("─")
+            card.set_value(tr('dash'))
 
     def update_all(self, values: dict):
         for label, text in values.items():
@@ -295,7 +302,7 @@ def stat_card_pair(label: str, color: str = None,
     return card, card.value_label()
 
 
-def make_stat_card_simple(label: str, value: str = "─",
+def make_stat_card_simple(label: str, value: str = None,
                            color: str = None,
                            icon: str = "") -> StatCard:
-    return StatCard(icon=icon, title=label, value=value, color=color or _C["blue"])
+    return StatCard(icon=icon, title=label, value=value if value is not None else tr('dash'), color=color or _C["blue"])

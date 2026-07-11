@@ -15,7 +15,7 @@ from ..core.colors import status_colors
 from ..core.i18n import tr
 from ..core.widget_mixin import WidgetMixin
 from ui.constants import (
-    NOTIF_MARGIN_H, NOTIF_MARGIN_V, NOTIF_SPACING,
+    NOTIF_MARGIN_H, NOTIF_MARGIN_V, NOTIF_SPACING, NOTIF_BORDER_W,
     DISMISS_BTN_SIZE, SPACING_MD, BTN_BORDER_RADIUS,
 )
 
@@ -78,7 +78,7 @@ class NotificationBar(QFrame, WidgetMixin):
 
         self.setStyleSheet(f"""
             #notifBar {{
-                background:{cfg['bg']}; border:1px solid {cfg['border']};
+                background:{cfg['bg']}; border:{NOTIF_BORDER_W}px solid {cfg['border']};
                 border-radius:{BTN_BORDER_RADIUS}px;
             }}
         """)
@@ -191,7 +191,7 @@ class BaseWarningBar(QFrame, WidgetMixin):
 
         self.setStyleSheet(f"""
             #warningBar {{
-                background:{s['bg']}; border:1px solid {s['border']};
+                background:{s['bg']}; border:{NOTIF_BORDER_W}px solid {s['border']};
                 border-radius:{BTN_BORDER_RADIUS}px;
             }}
         """)

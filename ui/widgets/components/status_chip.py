@@ -15,11 +15,12 @@ from PyQt5.QtGui  import QFont
 from ui.theme import _C
 from ui.font  import fs, get_font_size
 from ..core.colors import card_colors
+from ..core.i18n import tr
 from ..core.widget_mixin import WidgetMixin
 from ui.constants import (
     SPACING_MD, SPACING_XS,
-    STATUS_CHIP_MARGIN_COMPACT, STATUS_CHIP_MARGIN_NORMAL, STATUS_CHIP_BORDER_RADIUS,
-    STATUS_CARD_MARGIN, STATUS_CARD_SPACING, STATUS_CARD_BORDER_RADIUS,
+    STATUS_CHIP_MARGIN_COMPACT, STATUS_CHIP_MARGIN_NORMAL, STATUS_CHIP_BORDER_RADIUS, STATUS_CHIP_BORDER_W,
+    STATUS_CARD_MARGIN, STATUS_CARD_SPACING, STATUS_CARD_BORDER_RADIUS, STATUS_CARD_BORDER_W,
 )
 
 
@@ -67,7 +68,7 @@ class StatusChip(QFrame, WidgetMixin):
 
         self.setStyleSheet(f"""
             QFrame {{
-                background:{_bg}; border:1px solid {_bdr};
+                background:{_bg}; border:{STATUS_CHIP_BORDER_W}px solid {_bdr};
                 border-radius:{STATUS_CHIP_BORDER_RADIUS}px;
             }}
         """)
@@ -101,14 +102,15 @@ class StatusCard(QFrame, WidgetMixin):
     """بطاقة حالة بسيطة — أيقونة + label + عدد كبير."""
 
     def __init__(self, icon: str = "", label: str = "",
-                 value: str = "─", color: str = None,
+                 value: str = None, color: str = None,
                  sub: str = "", parent=None):
         super().__init__(parent)
         self._custom_color = color
         self._color = color or _C["blue"]
         self._sub   = sub
-        self._build(icon, label, value, sub)
-        self._init_widget_mixin(theme=True, font=True)
+        self._custom_value = value
+        self._build(icon, label, value if value is not None else tr('dash'), sub)
+        self._init_widget_mixin(theme=True, font=True, lang=True)
         self._refresh_style()
 
     def _build(self, icon, label, value, sub):
@@ -144,7 +146,7 @@ class StatusCard(QFrame, WidgetMixin):
         _bg, _bdr = card_colors(self._color)
         self.setStyleSheet(f"""
             QFrame {{
-                background:{_bg}; border:1px solid {_bdr};
+                background:{_bg}; border:{STATUS_CARD_BORDER_W}px solid {_bdr};
                 border-radius:{STATUS_CARD_BORDER_RADIUS}px;
             }}
         """)
@@ -171,10 +173,15 @@ class StatusCard(QFrame, WidgetMixin):
             )
 
     def set_value(self, text: str):
+        self._custom_value = text
         self._lbl_value.setText(text)
 
     def value_label(self) -> QLabel:
         return self._lbl_value
+
+    def _refresh_lang(self, *_):
+        if self._custom_value is None:
+            self._lbl_value.setText(tr('dash'))
 
 
 def make_status_chip(icon: str, label: str, count: int = 0,

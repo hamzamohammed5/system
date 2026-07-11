@@ -24,8 +24,11 @@ from ..core.i18n import tr
 from ..core.widget_mixin import WidgetMixin
 from ui.constants import (
     SPACING_XS, SPACING_SM, SPACING_MD, SPACING_LG,
-    SECTION_BAR_W, SECTION_BAR_H,
-    DETAIL_HEADER_MARGIN_H, DETAIL_HEADER_MARGIN_T,
+    SECTION_BAR_W, SECTION_BAR_H, SECTION_BAR_RADIUS,
+    DETAIL_HEADER_MARGIN_H, DETAIL_HEADER_MARGIN_T, DETAIL_HEADER_BORDER_W,
+    PAGE_HEADER_MARGIN_H, PAGE_HEADER_MARGIN_V,
+    PAGE_HEADER_MARGIN_H_COMPACT, PAGE_HEADER_MARGIN_V_COMPACT, PAGE_HEADER_BORDER_W,
+    DETAIL_HEADER_TOOLBAR_SPACING,
 )
 
 
@@ -62,7 +65,7 @@ class SectionHeader(QWidget, WidgetMixin):
         self._refresh_style()
 
     def _refresh_style(self, *_):
-        self._bar.setStyleSheet(f"background:{_C['accent']}; border-radius:2px; border:none;")
+        self._bar.setStyleSheet(f"background:{_C['accent']}; border-radius:{SECTION_BAR_RADIUS}px; border:none;")
         base = get_font_size()
         self._lbl.setStyleSheet(
             f"font-weight:700; font-size:{fs(base,+1)}pt;"
@@ -105,8 +108,8 @@ class PageHeader(QFrame, WidgetMixin):
     def _build(self, title: str, subtitle: str, icon: str):
         self.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Fixed)
 
-        h_pad = 12 if self._compact else 20
-        v_pad = 8  if self._compact else 14
+        h_pad = PAGE_HEADER_MARGIN_H_COMPACT if self._compact else PAGE_HEADER_MARGIN_H
+        v_pad = PAGE_HEADER_MARGIN_V_COMPACT if self._compact else PAGE_HEADER_MARGIN_V
 
         lay = QHBoxLayout(self)
         lay.setContentsMargins(h_pad, v_pad, h_pad, v_pad)
@@ -141,7 +144,7 @@ class PageHeader(QFrame, WidgetMixin):
         self.setStyleSheet(f"""
             QFrame {{
                 background:{_C['bg_surface']};
-                border-bottom:1px solid {_C['border']};
+                border-bottom:{PAGE_HEADER_BORDER_W}px solid {_C['border']};
             }}
         """)
         base = get_font_size()
@@ -273,7 +276,7 @@ class DetailHeader(QFrame, WidgetMixin):
             QFrame {{
                 background:{bg};
                 border:none;
-                border-bottom:1px solid {_C['border']};
+                border-bottom:{DETAIL_HEADER_BORDER_W}px solid {_C['border']};
             }}
         """)
 
@@ -313,7 +316,7 @@ class DetailHeader(QFrame, WidgetMixin):
     def _ensure_toolbar(self) -> "ActionToolbar":
         if self._toolbar is None:
             from .action_toolbar import ActionToolbar
-            self._toolbar = ActionToolbar(spacing=8)
+            self._toolbar = ActionToolbar(spacing=DETAIL_HEADER_TOOLBAR_SPACING)
             self._tb_lay.addWidget(self._toolbar)
             self._tb_section.setVisible(True)
         return self._toolbar
