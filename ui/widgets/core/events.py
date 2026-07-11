@@ -22,8 +22,8 @@ bus = _EventBus()
 def get_active_company_id() -> int | None:
     """يرجع company_id النشط أو None."""
     try:
-        from db.companies.company_state import company_state
-        return company_state.company_id if company_state.is_ready else None
+        from services.companies.company_service import CompanyService
+        return CompanyService.get_current_company_id()
     except Exception as e:
         logger.debug("get_active_company_id: %s", e)
         return None

@@ -133,12 +133,8 @@ class I18nManager(QObject):
 
     def load_from_db(self):
         try:
-            from services.companies.company_service import CompanyService
-            from db.shared.settings_repo import get_setting
-            conn = CompanyService.get_active_erp_conn()
-            if conn is None:
-                return
-            lang = get_setting(conn, "ui_language", "ar")
+            from services.shared.language_service import LanguageService
+            lang = LanguageService.load()
             if lang in _TRANSLATIONS:
                 self._language = lang
             self._apply_direction()
@@ -175,10 +171,8 @@ class I18nManager(QObject):
 
     def _save_to_db(self):
         try:
-            from db.shared.connection import get_connection
-            from db.shared.settings_repo import set_setting
-            conn = get_connection()
-            set_setting(conn, "ui_language", self._language)
+            from services.shared.language_service import LanguageService
+            LanguageService.save(self._language)
         except Exception:
             pass
 

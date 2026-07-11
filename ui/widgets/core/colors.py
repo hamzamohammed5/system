@@ -96,8 +96,9 @@ def status_colors(level: str) -> dict:
 
 def waste_level(pct: float) -> str:
     """يرجع مستوى الهادر: 'high' | 'medium' | 'low' | 'zero'."""
-    if pct >= 20: return "high"
-    if pct >= 10: return "medium"
+    from ui.constants import WASTE_LEVEL_HIGH_THRESHOLD_PCT, WASTE_LEVEL_MEDIUM_THRESHOLD_PCT
+    if pct >= WASTE_LEVEL_HIGH_THRESHOLD_PCT: return "high"
+    if pct >= WASTE_LEVEL_MEDIUM_THRESHOLD_PCT: return "medium"
     if pct > 0:   return "low"
     return "zero"
 

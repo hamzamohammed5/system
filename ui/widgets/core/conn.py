@@ -95,8 +95,8 @@ class LiveConnMixin:
         logger.debug("%s._live_conn: stored conn failed, trying fallback",
                      type(self).__name__)
         try:
-            from db.companies.company_state import company_state
-            new_conn = company_state.get_erp_conn()
+            from services.companies.company_service import CompanyService
+            new_conn = CompanyService.get_active_erp_conn()
             if _test_conn(new_conn):
                 object.__setattr__(self, "_conn_cache", new_conn)
                 setattr(self, self._conn_attr, new_conn)
@@ -120,8 +120,8 @@ class LiveConnMixin:
         logger.debug("%s._live_acc_conn: failed, trying fallback",
                      type(self).__name__)
         try:
-            from db.shared.connection import get_accounting_connection
-            new_conn = get_accounting_connection()
+            from services.companies.company_service import CompanyService
+            new_conn = CompanyService.get_active_accounting_conn()
             if _test_conn(new_conn):
                 return new_conn
         except Exception as e:
@@ -165,34 +165,36 @@ class SafeConnMixin:
         logger.debug("%s._get_safe_conn: reconnecting to '%s'",
                      type(self).__name__, self.__safe_db_name)
         try:
-            from db.companies.company_state import company_state
+            from services.companies.company_service import CompanyService
 
-            if self.__safe_db_name == "erp":
-                # public API مباشرة — الحالة الواضحة
-                new_conn = company_state.get_erp_conn()
+            # نفس الأنواع المتاحة عبر CompanyService فقط (public API):
+            #   erp / accounting / inventory
+            _getters = {
+                "erp":        CompanyService.get_active_erp_conn,
+                "accounting": CompanyService.get_active_accounting_conn,
+                "inventory":  CompanyService.get_active_inventory_conn,
+            }
+            _getter = _getters.get(self.__safe_db_name)
+
+            if _getter is not None:
+                new_conn = _getter()
             else:
-                # لأنواع DB الأخرى (accounting, etc.) — نحاول _get_conn كـ fallback
-                # لأن public API غير متاح لكل أنواع DB
-                _get = getattr(company_state, "_get_conn", None)
-                if _get is not None:
-                    new_conn = _get(self.__safe_db_name)
-                else:
-                    # لا يوجد طريقة للوصول لهذه الـ DB عبر public API
-                    logger.warning(
-                        "%s._get_safe_conn: no _get_conn on company_state for db '%s', "
-                        "trying erp fallback",
-                        type(self).__name__, self.__safe_db_name
-                    )
-                    new_conn = company_state.get_erp_conn()
+                # نوع db غير معروف لدى CompanyService — نحاول erp كـ last resort
+                logger.warning(
+                    "%s._get_safe_conn: no CompanyService getter for db '%s', "
+                    "trying erp fallback",
+                    type(self).__name__, self.__safe_db_name
+                )
+                new_conn = CompanyService.get_active_erp_conn()
 
-                # لو _get_conn لم يُعطِ نتيجة سليمة، نحاول erp كـ last resort
-                if not _test_conn(new_conn):
-                    logger.warning(
-                        "%s._get_safe_conn: no valid conn for db '%s', "
-                        "falling back to erp",
-                        type(self).__name__, self.__safe_db_name
-                    )
-                    new_conn = company_state.get_erp_conn()
+            # لو الـ getter لم يُعطِ نتيجة سليمة، نحاول erp كـ last resort
+            if not _test_conn(new_conn) and self.__safe_db_name != "erp":
+                logger.warning(
+                    "%s._get_safe_conn: no valid conn for db '%s', "
+                    "falling back to erp",
+                    type(self).__name__, self.__safe_db_name
+                )
+                new_conn = CompanyService.get_active_erp_conn()
 
             if _test_conn(new_conn):
                 self.__safe_conn = new_conn
@@ -209,8 +211,10 @@ class SafeConnMixin:
     @staticmethod
     def _get_company_id() -> "int | None":
         try:
-            from db.companies.company_state import company_state
-            return company_state.company_id if company_state.is_ready else None
+            from services.companies.company_service import CompanyService
+            if CompanyService.is_company_ready():
+                return CompanyService.get_current_company_id()
+            return None
         except Exception:
             return None
 
@@ -261,9 +265,9 @@ class DualConnMixin(SafeConnMixin):
 
         logger.debug("%s._get_erp_conn: reconnecting", type(self).__name__)
         try:
-            from db.companies.company_state import company_state
-            # [إصلاح private API] get_erp_conn() (public) بدل _get_conn("erp")
-            new = company_state.get_erp_conn()
+            from services.companies.company_service import CompanyService
+            # [إصلاح private API] عبر CompanyService بدل company_state مباشرة
+            new = CompanyService.get_active_erp_conn()
             if _test_conn(new):
                 self._erp_conn_ref = new
                 return new

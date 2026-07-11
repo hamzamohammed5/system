@@ -189,8 +189,8 @@ class WidgetMixin:
             # نحاول نجيب الـ company_id الحالي
             # لو فشل (مفيش شركة نشطة) نحطه None ونعمل lazy init في أول إشعار
             try:
-                from db.companies.company_state import company_state
-                self._cached_company_id = company_state.company_id
+                from services.companies.company_service import CompanyService
+                self._cached_company_id = CompanyService.get_current_company_id()
             except Exception:
                 self._cached_company_id = None
 

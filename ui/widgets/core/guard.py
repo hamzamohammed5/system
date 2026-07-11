@@ -33,11 +33,8 @@ _SENTINEL = object()
 
 def _default_msg() -> str:
     """رسالة افتراضية قابلة للترجمة."""
-    try:
-        from ui.widgets.core.i18n import tr
-        return tr("select_company")
-    except Exception:
-        return "اختر شركة نشطة أولاً"
+    from ui.widgets.core.i18n import tr
+    return tr("select_company")
 
 
 def requires_company(method=None, *,
@@ -92,10 +89,10 @@ def _wrap(fn, message: str, return_value, return_value_factory):
 
 
 def _is_company_ready() -> bool:
-    """يتحقق من جاهزية company_state."""
+    """يتحقق من جاهزية الشركة النشطة عبر CompanyService."""
     try:
-        from db.companies.company_state import company_state
-        return company_state.is_ready
+        from services.companies.company_service import CompanyService
+        return CompanyService.is_company_ready()
     except Exception:
         return False
 
