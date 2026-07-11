@@ -38,6 +38,12 @@ def main():
     install_no_wheel_filter(qt_app)
     install_shift_wheel_filter(qt_app)
 
+    # 6.5. [إصلاح tooltip أبيض على Windows] استبدال الـ QToolTip الافتراضي
+    # (اللي بيتجاهل QSS/Palette مع بعض أنماط Windows native) بـ tooltip
+    # مخصص مرسوم بالكامل بمحرك Qt نفسه.
+    from ui.widgets.utils.tooltip import install_custom_tooltip_filter
+    install_custom_tooltip_filter(qt_app)
+
     # 7. النافذة الرئيسية
     from ui.main_window import MainWindow
     window = MainWindow(qt_app)

@@ -480,7 +480,8 @@ QSplitter::handle:hover {{ background: {c['accent_mid']}; }}
 /* ══ ToolTip ══ */
 QToolTip {{
     font-size: {small}pt; color: {c['bg_surface']};
-    background: {c['text_primary']}; border: none;
+    background-color: {c['text_primary']};
+    border: 1px solid {c['text_primary']};
     border-radius: {radius_sm}; padding: 5px 10px;
 }}
 
