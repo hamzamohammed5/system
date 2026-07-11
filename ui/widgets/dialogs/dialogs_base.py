@@ -23,12 +23,14 @@ from PyQt5.QtCore import Qt
 from ui.theme import _C
 from ui.font  import get_font_size, fs
 from ..components.button import make_btn
+from ..core.i18n import tr
 from ui.widgets.core.widget_mixin import WidgetMixin
 from ui.constants import (
     DIALOG_HDR_H_WITH_SUB, DIALOG_HDR_H,
     DIALOG_BTN_BAR_H, DIALOG_BTN_MIN_H, DIALOG_MIN_WIDTH,
     DIALOG_BODY_MARGINS, DIALOG_HDR_MARGIN_H, DIALOG_HDR_COL_SPACING,
     DIALOG_BTN_PAD_H, BTN_BORDER_RADIUS, SPACING_MD,
+    BASE_DIALOG_DEFAULT_SIZE,
 )
 
 
@@ -47,13 +49,14 @@ class DialogShell(QDialog, WidgetMixin):
     [تحسين 21] _make_header: استبدال `{a}dd` بـ `accent_transparent` واضح الاسم.
     """
 
-    def __init__(self, parent=None, title: str = "", icon: str = "📋",
+    def __init__(self, parent=None, title: str = "", icon: str = None,
                  subtitle: str = "", accent: str = None,
                  min_width: int = DIALOG_MIN_WIDTH, min_height: int = 0):
         super().__init__(
             parent,
             Qt.Dialog | Qt.WindowTitleHint | Qt.WindowCloseButtonHint,
         )
+        icon = icon or tr("icon_dialog_default")
         self.setWindowTitle(title)
         self.setModal(True)
         self.setMinimumWidth(min_width)
@@ -180,10 +183,11 @@ class BaseDialog(DialogShell):
         _on_accept()        → منطق الحفظ
     """
 
-    def __init__(self, parent=None, title: str = "", icon: str = "📋",
-                 subtitle: str = "", min_size: tuple = (500, 400),
+    def __init__(self, parent=None, title: str = "", icon: str = None,
+                 subtitle: str = "", min_size: tuple = BASE_DIALOG_DEFAULT_SIZE,
                  accent: str = None, show_btns: bool = True):
         self._btn_ok = None
+        icon = icon or tr("icon_dialog_default")
         super().__init__(
             parent, title=title, icon=icon, subtitle=subtitle,
             accent=accent, min_width=min_size[0], min_height=min_size[1],
@@ -198,7 +202,6 @@ class BaseDialog(DialogShell):
         self._refresh_style()
 
     def _add_default_buttons(self):
-        from ui.widgets.core.i18n import tr
         btn_cancel = make_btn(tr("btn_cancel"), "ghost")
         btn_cancel.setMinimumHeight(DIALOG_BTN_MIN_H)
         btn_cancel.clicked.connect(self.reject)

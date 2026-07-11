@@ -47,13 +47,14 @@ class ConfirmDialog(DialogShell):
     """نافذة تأكيد قابلة لإعادة الاستخدام."""
 
     def __init__(self, parent=None, title: str = "",
-                 message: str = "", icon: str = "❓",
+                 message: str = "", icon: str = None,
                  confirm_text: str = "", cancel_text: str = "",
                  danger: bool = False, accent: str = None):
         self._danger      = danger
         self._explicit_accent = accent
         _accent = self._resolve_accent()
         _title = title or tr("confirm_action")
+        icon = icon or tr("icon_question")
         super().__init__(parent, title=_title, icon=icon,
                          accent=_accent, min_width=DIALOG_MIN_WIDTH)
         self.setMaximumWidth(CONFIRM_MAX_WIDTH)
@@ -117,7 +118,7 @@ def confirm_delete(parent, item_name: str, extra_msg: str = "") -> bool:
         parent,
         title=tr("confirm_delete"),
         message=msg,
-        icon="🗑️",
+        icon=tr("icon_delete_trash"),
         confirm_text=tr("delete"),
         cancel_text=tr("cancel"),
         danger=True,
@@ -126,14 +127,14 @@ def confirm_delete(parent, item_name: str, extra_msg: str = "") -> bool:
     return dlg.result_confirmed()
 
 
-def confirm_action(parent, title: str, message: str, icon: str = "❓",
+def confirm_action(parent, title: str, message: str, icon: str = None,
                    confirm_text: str = "", cancel_text: str = "",
                    danger: bool = False, accent: str = None) -> bool:
     dlg = ConfirmDialog(
         parent,
         title=title,
         message=message,
-        icon=icon,
+        icon=icon or tr("icon_question"),
         confirm_text=confirm_text or tr("confirm"),
         cancel_text=cancel_text  or tr("cancel"),
         danger=danger,
@@ -154,7 +155,7 @@ def confirm_save(parent, item_name: str = "", extra_msg: str = "") -> bool:
         parent,
         title=tr("confirm_save"),
         message=msg,
-        icon="💾",
+        icon=tr("icon_save_disk"),
         confirm_text=tr("save"),
         accent=_C.get("success"),
     )

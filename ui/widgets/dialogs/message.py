@@ -24,12 +24,12 @@ from ui.constants import DIALOG_MIN_WIDTH, MSG_BTN_MIN_H
 
 def _icon_for(kind: str) -> tuple:
     icons = {
-        "question": ("❓", _C["accent"]),
-        "info":     ("ℹ️",  _C["accent"]),
-        "warning":  ("⚠️",  _C["warning"]),
-        "critical": ("❌",  _C["danger"]),
+        "question": (tr("icon_question"), _C["accent"]),
+        "info":     (tr("icon_info"),     _C["accent"]),
+        "warning":  (tr("icon_warning"),  _C["warning"]),
+        "critical": (tr("icon_critical"), _C["danger"]),
     }
-    return icons.get(kind, ("ℹ️", _C["accent"]))
+    return icons.get(kind, (tr("icon_info"), _C["accent"]))
 
 
 class MessageDialog(DialogShell):

@@ -34,12 +34,26 @@ from PyQt5.QtWidgets import (
 
 from ui.font  import get_font_size, set_font_size, apply_font, fs
 from ui.theme import _C
-from ui.constants import DIALOG_BTN_MIN_H, MIN_FONT_SIZE, MAX_FONT_SIZE, BTN_MIN_HEIGHT
+from ui.constants import (
+    DIALOG_BTN_MIN_H, MIN_FONT_SIZE, MAX_FONT_SIZE, BTN_MIN_HEIGHT,
+    SETTINGS_DLG_MIN_W, SETTINGS_DLG_MIN_H, SETTINGS_SWATCH_SIZE,
+    SETTINGS_GIMP_DEFAULT_DIR, SETTINGS_TAB_MARGINS, SETTINGS_CARD_MARGINS,
+    SETTINGS_BTN_BAR_MARGINS, DIALOG_HDR_COL_SPACING,
+    SETTINGS_UNITS_LIST_MIN_H, SETTINGS_VAL_LBL_MIN_W, SETTINGS_CLEAR_BTN_W,
+    SETTINGS_PREVIEW_RADIUS, SETTINGS_PREVIEW_PAD, SETTINGS_CARD_RADIUS,
+    SETTINGS_SWATCH_RADIUS, SETTINGS_CARD_INNER_PAD, SETTINGS_GIMP_INPUT_RADIUS,
+    SETTINGS_GIMP_INPUT_PAD_H, SETTINGS_NOTICE_RADIUS, SETTINGS_NOTICE_PAD_V,
+    SETTINGS_NOTICE_PAD_H, SETTINGS_TAB_PAD_V, SETTINGS_TAB_PAD_H, SETTINGS_TAB_MIN_W,
+    SPACING_ZERO, SPACING_SM, SPACING_MD, SPACING_MD_LG, SPACING_LG,
+    MARGIN_ZERO,
+)
 
 from services.shared.unit_service import (
     load_units, add_unit, remove_unit,
     reset_units_to_default, _default_units, _DEFAULT_UNIT_KEYS,
 )
+from services.shared.settings_service import SettingsService
+from services.companies.company_service import CompanyService
 from ui.widgets.dialogs.message  import msg_info, msg_warning
 from ui.widgets.dialogs.confirm  import confirm_action
 from ui.widgets.components.button import make_btn
@@ -52,11 +66,10 @@ def _get_settings_conn_and_status() -> "tuple":
     [A-05] يرجع (conn, has_active_company) في استدعاء واحد.
     """
     try:
-        from db.companies.company_state import company_state
-        if not company_state.is_ready:
+        if not CompanyService.is_company_ready():
             return None, False
-        conn = company_state.get_erp_conn()
-        return conn, True
+        conn = CompanyService.get_active_erp_conn()
+        return conn, conn is not None
     except Exception:
         return None, False
 
@@ -81,8 +94,8 @@ class SettingsDialog(QDialog, WidgetMixin):
         self._notice_labels = []  # لافتات "اختر شركة نشطة" — تتبنى ديناميكياً
 
         self.setWindowTitle(tr("settings_title"))
-        self.setMinimumWidth(560)
-        self.setMinimumHeight(480)
+        self.setMinimumWidth(SETTINGS_DLG_MIN_W)
+        self.setMinimumHeight(SETTINGS_DLG_MIN_H)
         self.setModal(True)
         self._build()
         self._slider.setValue(self._original_size)
@@ -93,8 +106,8 @@ class SettingsDialog(QDialog, WidgetMixin):
 
     def _build(self):
         outer = QVBoxLayout(self)
-        outer.setContentsMargins(0, 0, 0, 0)
-        outer.setSpacing(0)
+        outer.setContentsMargins(*MARGIN_ZERO)
+        outer.setSpacing(SPACING_ZERO)
 
         self._tabs = QTabWidget()
 
@@ -107,7 +120,7 @@ class SettingsDialog(QDialog, WidgetMixin):
 
         self._btn_bar = QWidget()
         btn_bar_lay = QHBoxLayout(self._btn_bar)
-        btn_bar_lay.setContentsMargins(20, 8, 20, 8)
+        btn_bar_lay.setContentsMargins(*SETTINGS_BTN_BAR_MARGINS)
 
         btns       = QDialogButtonBox()
         self._btn_ok_bar     = btns.addButton(tr("settings_btn_save"),   QDialogButtonBox.AcceptRole)
@@ -135,7 +148,7 @@ class SettingsDialog(QDialog, WidgetMixin):
                 background: {_C['bg_surface_2']};
                 border: none;
                 border-bottom: 2px solid transparent;
-                padding: 8px 18px; min-width: 80px;
+                padding: {SETTINGS_TAB_PAD_V}px {SETTINGS_TAB_PAD_H}px; min-width: {SETTINGS_TAB_MIN_W}px;
             }}
             QTabBar::tab:selected {{
                 color: {_C['accent']};
@@ -168,16 +181,16 @@ class SettingsDialog(QDialog, WidgetMixin):
         base   = get_font_size()
         widget = QWidget()
         lay    = QVBoxLayout(widget)
-        lay.setContentsMargins(20, 16, 20, 16)
-        lay.setSpacing(12)
+        lay.setContentsMargins(*SETTINGS_TAB_MARGINS)
+        lay.setSpacing(SPACING_LG)
 
         grp = QGroupBox(tr("settings_grp_font"))
         grp_lay = QVBoxLayout(grp)
 
         row = QHBoxLayout()
-        row.setSpacing(8)
+        row.setSpacing(SPACING_MD)
 
-        self._lbl_small = QLabel("أ")
+        self._lbl_small = QLabel(tr("settings_font_sample_small"))
 
         self._slider = QSlider(Qt.Horizontal)
         self._slider.setRange(MIN_FONT_SIZE, MAX_FONT_SIZE)
@@ -185,16 +198,16 @@ class SettingsDialog(QDialog, WidgetMixin):
         self._slider.setTickPosition(QSlider.TicksBelow)
         self._slider.valueChanged.connect(self._on_font_change)
 
-        self._lbl_big = QLabel("أ")
+        self._lbl_big = QLabel(tr("settings_font_sample_big"))
 
-        self._lbl_val = QLabel(f"{base} pt")
-        self._lbl_val.setMinimumWidth(44)
+        self._lbl_val = QLabel(tr("font_pt_suffix", size=base))
+        self._lbl_val.setMinimumWidth(SETTINGS_VAL_LBL_MIN_W)
         self._lbl_val.setAlignment(Qt.AlignCenter)
 
         row.addWidget(self._lbl_small)
         row.addWidget(self._slider, stretch=1)
         row.addWidget(self._lbl_big)
-        row.addSpacing(8)
+        row.addSpacing(SPACING_MD)
         row.addWidget(self._lbl_val)
         grp_lay.addLayout(row)
 
@@ -219,8 +232,8 @@ class SettingsDialog(QDialog, WidgetMixin):
         preview_size = self._slider.value() if hasattr(self, "_slider") else base
         self._preview.setStyleSheet(
             f"font-size: {preview_size}pt;"
-            f"border: 1px solid {_C['border']}; border-radius: 6px;"
-            f"padding: 12px; background:{_C['bg_surface']}; color:{_C['text_primary']};"
+            f"border: 1px solid {_C['border']}; border-radius: {SETTINGS_PREVIEW_RADIUS}px;"
+            f"padding: {SETTINGS_PREVIEW_PAD}px; background:{_C['bg_surface']}; color:{_C['text_primary']};"
         )
         self._lbl_font_hint.setStyleSheet(
             f"color:{_C['text_muted']}; font-size: {fs(base, -2)}pt; background: transparent;"
@@ -233,12 +246,12 @@ class SettingsDialog(QDialog, WidgetMixin):
     def _build_theme_tab(self) -> QWidget:
         widget = QWidget()
         lay    = QVBoxLayout(widget)
-        lay.setContentsMargins(20, 16, 20, 16)
-        lay.setSpacing(12)
+        lay.setContentsMargins(*SETTINGS_TAB_MARGINS)
+        lay.setSpacing(SPACING_LG)
 
         grp     = QGroupBox(tr("settings_grp_theme"))
         grp_lay = QVBoxLayout(grp)
-        grp_lay.setSpacing(10)
+        grp_lay.setSpacing(SPACING_MD_LG)
 
         from ui.theme_manager import theme_manager, THEMES
 
@@ -248,8 +261,8 @@ class SettingsDialog(QDialog, WidgetMixin):
         current = theme_manager.current_theme
 
         themes_info = {
-            "light": ("☀️", tr("settings_theme_light_name"), tr("settings_theme_light_desc")),
-            "dark":  ("🌙", tr("settings_theme_dark_name"),  tr("settings_theme_dark_desc")),
+            "light": (tr("icon_theme_light"), tr("settings_theme_light_name"), tr("settings_theme_light_desc")),
+            "dark":  (tr("icon_theme_dark"),  tr("settings_theme_dark_name"),  tr("settings_theme_dark_desc")),
         }
 
         for key, (icon, name, desc) in themes_info.items():
@@ -264,20 +277,20 @@ class SettingsDialog(QDialog, WidgetMixin):
 
         preview_grp     = QGroupBox(tr("settings_grp_theme_preview"))
         preview_grp_lay = QHBoxLayout(preview_grp)
-        preview_grp_lay.setSpacing(6)
+        preview_grp_lay.setSpacing(SPACING_SM)
 
         self._color_swatches = []
         swatch_info = [
-            ("accent",       "accent"),
-            ("success",      "success"),
-            ("warning",      "warning"),
-            ("danger",       "danger"),
-            ("bg_surface",   "surface"),
-            ("text_primary", "text"),
+            ("accent",       tr("swatch_label_accent")),
+            ("success",      tr("swatch_label_success")),
+            ("warning",      tr("swatch_label_warning")),
+            ("danger",       tr("swatch_label_danger")),
+            ("bg_surface",   tr("swatch_label_surface")),
+            ("text_primary", tr("swatch_label_text")),
         ]
         for key, display_label in swatch_info:
             swatch = QFrame()
-            swatch.setFixedSize(36, 36)
+            swatch.setFixedSize(SETTINGS_SWATCH_SIZE, SETTINGS_SWATCH_SIZE)
             self._color_swatches.append((swatch, key, display_label))
             preview_grp_lay.addWidget(swatch)
 
@@ -290,8 +303,8 @@ class SettingsDialog(QDialog, WidgetMixin):
                           desc: str, is_selected: bool) -> QWidget:
         card  = QFrame()
         lay   = QHBoxLayout(card)
-        lay.setContentsMargins(12, 8, 12, 8)
-        lay.setSpacing(12)
+        lay.setContentsMargins(*SETTINGS_CARD_MARGINS)
+        lay.setSpacing(SPACING_LG)
 
         radio = QRadioButton()
         radio.setChecked(is_selected)
@@ -301,7 +314,7 @@ class SettingsDialog(QDialog, WidgetMixin):
         lay.addWidget(lbl_icon)
 
         text_col = QVBoxLayout()
-        text_col.setSpacing(2)
+        text_col.setSpacing(DIALOG_HDR_COL_SPACING)
         lbl_name = QLabel(name)
         lbl_desc = QLabel(desc)
         text_col.addWidget(lbl_name)
@@ -316,8 +329,8 @@ class SettingsDialog(QDialog, WidgetMixin):
         base = get_font_size()
         for card, lbl_icon, lbl_name, lbl_desc in self._theme_cards:
             card.setStyleSheet(
-                f"QFrame {{ background:{_C['bg_surface_2']}; border-radius:8px;"
-                f"border:1px solid {_C['border']}; padding:4px; }}"
+                f"QFrame {{ background:{_C['bg_surface_2']}; border-radius:{SETTINGS_CARD_RADIUS}px;"
+                f"border:1px solid {_C["border"]}; padding:{SETTINGS_CARD_INNER_PAD}px; }}"
             )
             lbl_icon.setStyleSheet(f"font-size:{fs(base, +4)}pt; background:transparent;")
             lbl_name.setStyleSheet(
@@ -330,7 +343,7 @@ class SettingsDialog(QDialog, WidgetMixin):
         for swatch, key, display_label in self._color_swatches:
             color = _C[key]
             swatch.setStyleSheet(
-                f"background:{color}; border-radius:6px; "
+                f"background:{color}; border-radius:{SETTINGS_SWATCH_RADIUS}px; "
                 f"border:1px solid {_C['border']};"
             )
             swatch.setToolTip(f"{display_label}: {color}")
@@ -348,12 +361,12 @@ class SettingsDialog(QDialog, WidgetMixin):
     def _build_lang_tab(self) -> QWidget:
         widget = QWidget()
         lay    = QVBoxLayout(widget)
-        lay.setContentsMargins(20, 16, 20, 16)
-        lay.setSpacing(12)
+        lay.setContentsMargins(*SETTINGS_TAB_MARGINS)
+        lay.setSpacing(SPACING_LG)
 
         grp     = QGroupBox(tr("settings_grp_lang"))
         grp_lay = QVBoxLayout(grp)
-        grp_lay.setSpacing(10)
+        grp_lay.setSpacing(SPACING_MD_LG)
 
         try:
             from ui.widgets.core.i18n import i18n_manager
@@ -366,15 +379,15 @@ class SettingsDialog(QDialog, WidgetMixin):
         self._lang_cards     = []
 
         langs_info = {
-            "ar": ("🇸🇦", tr("settings_lang_ar_name"), tr("settings_lang_ar_desc")),
-            "en": ("🇬🇧", tr("settings_lang_en_name"), tr("settings_lang_en_desc")),
+            "ar": (tr("icon_flag_ar"), tr("settings_lang_ar_name"), tr("settings_lang_ar_desc")),
+            "en": (tr("icon_flag_en"), tr("settings_lang_en_name"), tr("settings_lang_en_desc")),
         }
 
         for key, (flag, name, desc) in langs_info.items():
             card  = QFrame()
             cLay  = QHBoxLayout(card)
-            cLay.setContentsMargins(12, 8, 12, 8)
-            cLay.setSpacing(12)
+            cLay.setContentsMargins(*SETTINGS_CARD_MARGINS)
+            cLay.setSpacing(SPACING_LG)
 
             radio = QRadioButton()
             radio.setChecked(key == current_lang)
@@ -386,7 +399,7 @@ class SettingsDialog(QDialog, WidgetMixin):
             cLay.addWidget(lbl_flag)
 
             text_col = QVBoxLayout()
-            text_col.setSpacing(2)
+            text_col.setSpacing(DIALOG_HDR_COL_SPACING)
             lbl_name = QLabel(name)
             lbl_desc = QLabel(desc)
             text_col.addWidget(lbl_name)
@@ -409,8 +422,8 @@ class SettingsDialog(QDialog, WidgetMixin):
         base = get_font_size()
         for card, lbl_flag, lbl_name, lbl_desc in self._lang_cards:
             card.setStyleSheet(
-                f"QFrame {{ background:{_C['bg_surface_2']}; border-radius:8px;"
-                f"border:1px solid {_C['border']}; padding:4px; }}"
+                f"QFrame {{ background:{_C['bg_surface_2']}; border-radius:{SETTINGS_CARD_RADIUS}px;"
+                f"border:1px solid {_C["border"]}; padding:{SETTINGS_CARD_INNER_PAD}px; }}"
             )
             lbl_flag.setStyleSheet(
                 f"font-size:{fs(base, +4)}pt; background:transparent;"
@@ -438,15 +451,15 @@ class SettingsDialog(QDialog, WidgetMixin):
     def _build_units_tab(self) -> QWidget:
         widget = QWidget()
         lay    = QVBoxLayout(widget)
-        lay.setContentsMargins(20, 16, 20, 16)
-        lay.setSpacing(12)
+        lay.setContentsMargins(*SETTINGS_TAB_MARGINS)
+        lay.setSpacing(SPACING_LG)
 
         grp     = QGroupBox(tr("settings_grp_units"))
         grp_lay = QVBoxLayout(grp)
 
         self._units_list = QListWidget()
         self._units_list.setAlternatingRowColors(True)
-        self._units_list.setMinimumHeight(140)
+        self._units_list.setMinimumHeight(SETTINGS_UNITS_LIST_MIN_H)
         grp_lay.addWidget(self._units_list)
 
         btn_row = QHBoxLayout()
@@ -482,8 +495,8 @@ class SettingsDialog(QDialog, WidgetMixin):
     def _build_gimp_tab(self) -> QWidget:
         widget = QWidget()
         lay    = QVBoxLayout(widget)
-        lay.setContentsMargins(20, 16, 20, 16)
-        lay.setSpacing(12)
+        lay.setContentsMargins(*SETTINGS_TAB_MARGINS)
+        lay.setSpacing(SPACING_LG)
 
         grp     = QGroupBox(tr("settings_grp_gimp"))
         grp_lay = QVBoxLayout(grp)
@@ -495,7 +508,7 @@ class SettingsDialog(QDialog, WidgetMixin):
         gimp_row = QHBoxLayout()
         btn_browse = make_btn(tr("settings_btn_browse"), "normal")
         btn_clear  = make_btn(tr("clear"),               "ghost")
-        btn_clear.setFixedWidth(28)
+        btn_clear.setFixedWidth(SETTINGS_CLEAR_BTN_W)
         btn_browse.clicked.connect(self._browse_gimp)
         btn_clear.clicked.connect(lambda: self._inp_gimp.clear())
 
@@ -519,7 +532,7 @@ class SettingsDialog(QDialog, WidgetMixin):
         self._inp_gimp.setStyleSheet(
             f"font-size:{fs(base, -1)}pt; color:{_C['text_primary']};"
             f"background:{_C['bg_input']}; border:1px solid {_C['border_med']};"
-            "border-radius:4px; padding:4px 8px;"
+            f"border-radius:{SETTINGS_GIMP_INPUT_RADIUS}px; padding:{SETTINGS_GIMP_INPUT_RADIUS}px {SETTINGS_GIMP_INPUT_PAD_H}px;"
         )
 
     def _refresh_notice_labels_style(self):
@@ -531,7 +544,7 @@ class SettingsDialog(QDialog, WidgetMixin):
         notice_style = (
             f"color: {s['fg']}; font-size: {fs(base, -1)}pt;"
             f"background: {s['bg']}; border: 1px solid {s['border']};"
-            "border-radius: 6px; padding: 6px 10px;"
+            f"border-radius: {SETTINGS_NOTICE_RADIUS}px; padding: {SETTINGS_NOTICE_PAD_V}px {SETTINGS_NOTICE_PAD_H}px;"
         )
         for lbl in self._notice_labels:
             lbl.setStyleSheet(notice_style)
@@ -549,8 +562,7 @@ class SettingsDialog(QDialog, WidgetMixin):
                 self._show_no_company_notice()
         else:
             try:
-                from db.shared.settings_repo import get_setting
-                path = get_setting(conn, "gimp_path", "")
+                path = SettingsService.get("gimp_path", "")
                 self._inp_gimp.setText(path)
             except Exception:
                 pass
@@ -565,7 +577,7 @@ class SettingsDialog(QDialog, WidgetMixin):
         notice_style = (
             f"color: {s['fg']}; font-size: {fs(base, -1)}pt;"
             f"background: {s['bg']}; border: 1px solid {s['border']};"
-            "border-radius: 6px; padding: 6px 10px;"
+            f"border-radius: {SETTINGS_NOTICE_RADIUS}px; padding: {SETTINGS_NOTICE_PAD_V}px {SETTINGS_NOTICE_PAD_H}px;"
         )
         notice_text = tr("settings_no_company_notice")
 
@@ -661,7 +673,7 @@ class SettingsDialog(QDialog, WidgetMixin):
 
         if confirm_action(self, tr("settings_del_unit_title"),
                           tr("settings_del_unit_msg", label=item.text()),
-                          icon="🗑️", confirm_text=tr("settings_del_unit_btn"), danger=True):
+                          icon=tr("icon_delete_trash"), confirm_text=tr("settings_del_unit_btn"), danger=True):
             try:
                 remove_unit(conn, val)
             except Exception as e:
@@ -677,7 +689,7 @@ class SettingsDialog(QDialog, WidgetMixin):
 
         if confirm_action(self, tr("settings_reset_units_title"),
                           tr("settings_reset_units_msg"),
-                          icon="↺", confirm_text=tr("settings_reset_units_btn")):
+                          icon=tr("icon_reset"), confirm_text=tr("settings_reset_units_btn")):
             try:
                 reset_units_to_default(conn)
             except Exception as e:
@@ -694,7 +706,7 @@ class SettingsDialog(QDialog, WidgetMixin):
         if start and os.path.exists(os.path.dirname(start)):
             start_dir = os.path.dirname(start)
         else:
-            start_dir = r"C:\Program Files"
+            start_dir = SETTINGS_GIMP_DEFAULT_DIR
         path, _ = QFileDialog.getOpenFileName(
             self, tr("settings_browse_gimp"), start_dir,
             tr("settings_gimp_filter")
@@ -707,11 +719,11 @@ class SettingsDialog(QDialog, WidgetMixin):
     # ══════════════════════════════════════════════════════
 
     def _on_font_change(self, val: int):
-        self._lbl_val.setText(f"{val} pt")
+        self._lbl_val.setText(tr("font_pt_suffix", size=val))
         self._preview.setStyleSheet(
             f"font-size: {val}pt;"
-            f"border: 1px solid {_C['border']}; border-radius: 6px;"
-            f"padding: 12px; background:{_C['bg_surface']}; color:{_C['text_primary']};"
+            f"border: 1px solid {_C['border']}; border-radius: {SETTINGS_PREVIEW_RADIUS}px;"
+            f"padding: {SETTINGS_PREVIEW_PAD}px; background:{_C['bg_surface']}; color:{_C['text_primary']};"
         )
 
     # ══════════════════════════════════════════════════════
@@ -738,11 +750,9 @@ class SettingsDialog(QDialog, WidgetMixin):
             self._app.setLayoutDirection(i18n_manager.qt_direction)
             bus.language_changed.emit(selected_lang)
 
-        conn = _get_settings_conn()
-        if conn:
+        if CompanyService.is_company_ready():
             try:
-                from db.shared.settings_repo import set_setting
-                set_setting(conn, "gimp_path", self._inp_gimp.text().strip())
+                SettingsService.set("gimp_path", self._inp_gimp.text().strip())
             except Exception:
                 pass
 
@@ -761,6 +771,8 @@ class SettingsDialog(QDialog, WidgetMixin):
         self._btn_ok_bar.setText(tr("settings_btn_save"))
         self._btn_cancel_bar.setText(tr("settings_btn_cancel"))
         self._lbl_font_hint.setText(tr("settings_font_hint"))
+        self._lbl_small.setText(tr("settings_font_sample_small"))
+        self._lbl_big.setText(tr("settings_font_sample_big"))
         self._lbl_lang_hint.setText(tr("settings_lang_hint"))
         self._lbl_units_hint.setText(tr("settings_units_hint"))
         self._lbl_gimp_hint.setText(tr("settings_gimp_hint"))

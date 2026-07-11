@@ -1,5 +1,5 @@
 File Tree Snapshot
-Generated : 2026-07-11 09:52:43
+Generated : 2026-07-11 14:40:07
 Source    : D:\My Workspace\Hg\Alhabaar\accountant\system
 Extensions: .md, .py
 ────────────────────────────────────────────────────────────
@@ -125,6 +125,7 @@ system/
 │       ├── font_service.py
 │       ├── item_service.py
 │       ├── language_service.py
+│       ├── settings_service.py
 │       └── unit_service.py
 ├── ui/
 │   ├── constants_data/
@@ -412,12 +413,7 @@ system/
 │   │   ├── managers/
 │   │   │   └── category.py
 │   │   ├── mixins/
-│   │   │   ├── bus.py
 │   │   │   ├── form_mixins.py
-│   │   │   ├── rebuild_mixin.py
-│   │   │   ├── refresh_mixin.py
-│   │   │   ├── selection_mixin.py
-│   │   │   ├── service.py
 │   │   │   └── shared_ops.py
 │   │   ├── panels/
 │   │   │   ├── data_table.py
