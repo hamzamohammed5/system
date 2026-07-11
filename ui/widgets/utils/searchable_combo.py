@@ -82,15 +82,15 @@ def build_grouped_items(items: list) -> list:
     for cat_name, members in groups.items():
         if cat_name == NO_CAT:
             continue
-        result.append((f"─── {cat_name} ───", _SEP, True))
+        result.append((tr('mode_label_wrap').format(content=cat_name), _SEP, True))
         for item_id, name in members:
-            result.append((f"{item_id} — {name}", (None, item_id), False))
+            result.append((tr('combo_id_name_fmt').format(id=item_id, name=name), (None, item_id), False))
 
     if NO_CAT in groups:
         if result:
             result.append((tr('combo_sep_no_category'), _SEP, True))
         for item_id, name in groups[NO_CAT]:
-            result.append((f"{item_id} — {name}", (None, item_id), False))
+            result.append((tr('combo_id_name_fmt').format(id=item_id, name=name), (None, item_id), False))
 
     return result
 

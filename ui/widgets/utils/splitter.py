@@ -9,7 +9,11 @@ from PyQt5.QtCore    import Qt, QTimer, QObject, QEvent
 
 from ..theme.table_styles import splitter_style  # المصدر الوحيد — لا تكرار
 from ..tables.tables      import calc_width       # [إصلاح 2.1] من tables.tables بدل tables.items
-from ui.constants import SPLITTER_LIST_MIN_W, SPLITTER_LIST_MAX_W, SMART_SPLITTER_HANDLE_W, SPLITTER_PANEL_MIN_W
+from ui.constants import (
+    SPLITTER_LIST_MIN_W, SPLITTER_LIST_MAX_W, SMART_SPLITTER_HANDLE_W, SPLITTER_PANEL_MIN_W,
+    TABLE_SPLITTER_EXTRA_PAD, SPLITTER_APPLY_DELAY,
+    SPLITTER_SCROLL_GUARD_EXTRA_PAD, SMART_SPLITTER_FIT_DELAY_MS,
+)
 
 logger = logging.getLogger(__name__)
 
@@ -19,7 +23,7 @@ _MAX_LIST_W = SPLITTER_LIST_MAX_W
 
 def fit_list_panel(splitter: QSplitter, list_index: int,
                    table: QTableWidget, min_w: int = _MIN_LIST_W,
-                   max_w: int = _MAX_LIST_W, extra_pad: int = 24) -> int:
+                   max_w: int = _MAX_LIST_W, extra_pad: int = TABLE_SPLITTER_EXTRA_PAD) -> int:
     sizes = splitter.sizes()
     if not sizes or len(sizes) <= list_index:
         return min_w
@@ -92,7 +96,7 @@ class SmartSplitter(QSplitter):
         return fit_list_panel(self, self._list_index, self._table,
                               self._min_w, self._max_w)
 
-    def fit_delayed(self, delay_ms: int = 50):
+    def fit_delayed(self, delay_ms: int = SMART_SPLITTER_FIT_DELAY_MS):
         if self._table is None:
             return
         fit_list_panel_delayed(self, self._list_index, self._table,
@@ -106,7 +110,7 @@ class SplitterScrollGuard(QObject):
     """
 
     def __init__(self, splitter: QSplitter, table: QTableWidget,
-                 table_index: int = 0, extra_pad: int = 20,
+                 table_index: int = 0, extra_pad: int = SPLITTER_SCROLL_GUARD_EXTRA_PAD,
                  parent: QObject = None):
         super().__init__(parent)
         self._splitter    = splitter
@@ -119,7 +123,7 @@ class SplitterScrollGuard(QObject):
 
         self._timer = QTimer(self)
         self._timer.setSingleShot(True)
-        self._timer.setInterval(50)
+        self._timer.setInterval(SPLITTER_APPLY_DELAY)
         self._timer.timeout.connect(self._check_scroll)
 
         if table.viewport():

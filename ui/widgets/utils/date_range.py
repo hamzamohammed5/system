@@ -9,7 +9,8 @@ from PyQt5.QtCore    import QDate, pyqtSignal
 from ui.constants import (
     DATE_RANGE_EDIT_W, DATE_RANGE_EDIT_H,
     DATE_RANGE_EDIT_RADIUS, DATE_RANGE_EDIT_PAD_H, DATE_RANGE_EDIT_PAD_V,
-    DATE_RANGE_DROPDOWN_W,
+    DATE_RANGE_DROPDOWN_W, DATE_RANGE_LAYOUT_SPACING,
+    FILTER_DATE_DEFAULT_FROM,
 )
 from ..utils.signals     import blocked_signals
 from ..components.button import make_btn
@@ -25,7 +26,7 @@ class DateRangeFilter(QWidget, WidgetMixin):
                  width: int = DATE_RANGE_EDIT_W, height: int = DATE_RANGE_EDIT_H,
                  show_presets: bool = False, parent=None):
         super().__init__(parent)
-        self._default_from = default_from or QDate(2000, 1, 1)
+        self._default_from = default_from or QDate(*FILTER_DATE_DEFAULT_FROM)
         self._default_to   = default_to   or QDate.currentDate()
         self._edit_width   = width
         self._edit_height  = height
@@ -38,7 +39,7 @@ class DateRangeFilter(QWidget, WidgetMixin):
     def _build(self, width, height, show_presets):
         lay = QHBoxLayout(self)
         lay.setContentsMargins(0, 0, 0, 0)
-        lay.setSpacing(6)
+        lay.setSpacing(DATE_RANGE_LAYOUT_SPACING)
 
         self.dt_from = self._make_date_edit(self._default_from, width, height)
         self.dt_from.dateChanged.connect(self.range_changed.emit)
