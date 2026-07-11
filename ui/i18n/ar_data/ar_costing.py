@@ -75,6 +75,7 @@ AR_STRINGS_COSTING: dict[str, str] = {
     "orphans_deleted_with_product_title": "تم — وتم حذف المنتج",
     "orphans_deleted_msg":            "✅ تم حذف {count} مكوّن ناقص:\n{names}",
     "orphans_deleted_product_removed_msg": "✅ تم حذف {count} مكوّن ناقص:\n{names}\n\nبما أن «{product_name}» لم يعد يحتوي على أي مكونات،\nتم حذفه تلقائياً.",
+    'component_row_no_items_placeholder': 'لا توجد {type_label} مسجلة',
 
     # ══════════════════════════════════════════════
     # المكونات / BOM
@@ -298,6 +299,11 @@ AR_STRINGS_COSTING: dict[str, str] = {
     "raw_col_total_price":           "السعر الكلي",
     "raw_col_qty":                   "الكمية",
     "raw_col_unit_price":            "سعر الوحدة",
+    'raw_col_actions':   'الإجراءات',      # en: 'Actions'
+    'btn_edit_short':    'تعديل',        # en: 'Edit'
+    'btn_delete_short':  'حذف',          # en: 'Delete'
+    'btn_edit':          'تعديل الخامة', # tooltip
+    'btn_delete':        'حذف الخامة',   # tooltip
 
     # ══════════════════════════════════════════════
     # العمالة

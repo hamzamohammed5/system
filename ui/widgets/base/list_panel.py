@@ -43,13 +43,7 @@ from ..panels.filter      import FilterToolbar
 from ui.widgets.core.widget_mixin import WidgetMixin
 
 
-def _tr_safe(key: str, **kwargs) -> str:
-    try:
-        from ui.widgets.core.i18n import tr
-        text = tr(key)
-        return text.format(**kwargs) if kwargs else text
-    except Exception:
-        return key
+from ui.widgets.core.i18n import tr
 
 
 class BaseListPanel(QWidget, WidgetMixin):
@@ -207,7 +201,7 @@ class BaseListPanel(QWidget, WidgetMixin):
         root.addWidget(self._splitter, stretch=1)
 
         self._empty_state = EmptyState(
-            icon=_tr_safe(self.EMPTY_ICON), title=_tr_safe(self.EMPTY_TITLE),
+            icon=tr(self.EMPTY_ICON), title=tr(self.EMPTY_TITLE),
             style="plain", color=None, min_height=LIST_EMPTY_MIN_H,
         )
         self._empty_state.setVisible(False)
@@ -225,7 +219,7 @@ class BaseListPanel(QWidget, WidgetMixin):
             title              = self.LIST_TITLE,
             add_text           = self.ADD_TEXT,
             show_search        = use_search,
-            search_placeholder = _tr_safe(self.SEARCH_PLACEHOLDER),
+            search_placeholder = tr(self.SEARCH_PLACEHOLDER),
         )
         if use_search:
             header.search_changed.connect(lambda _: self._timer.start())
@@ -242,7 +236,7 @@ class BaseListPanel(QWidget, WidgetMixin):
             scope         = self.FILTER_SCOPE,
             show_category = self.SHOW_CATEGORY,
             show_date     = self.SHOW_DATE,
-            placeholder   = _tr_safe(self.SEARCH_PLACEHOLDER),
+            placeholder   = self.SEARCH_PLACEHOLDER,
         )
         toolbar.filter_changed.connect(lambda: self._timer.start())
         self.inp_search = toolbar.inp_search
@@ -263,7 +257,7 @@ class BaseListPanel(QWidget, WidgetMixin):
 
     def _refresh_lang(self, *_):
         if self._header.search_bar:
-            placeholder = _tr_safe(self.SEARCH_PLACEHOLDER)
+            placeholder = tr(self.SEARCH_PLACEHOLDER)
             self._header.search_bar.set_placeholder(placeholder)
         self._update_empty_state_title()
         self._update_pagination_texts()
@@ -320,7 +314,7 @@ class BaseListPanel(QWidget, WidgetMixin):
         """)
 
     def _update_empty_state_title(self):
-        translated = _tr_safe(self.EMPTY_TITLE)
+        translated = tr(self.EMPTY_TITLE)
         try:
             self._empty_state.set_title(translated)
         except Exception:
@@ -354,7 +348,7 @@ class BaseListPanel(QWidget, WidgetMixin):
         self._btn_load_more.clicked.connect(self._on_load_more)
         lay.addWidget(self._btn_load_more)
 
-        self._btn_show_all = QPushButton(_tr_safe("show_all_records"))
+        self._btn_show_all = QPushButton(tr("show_all_records"))
         self._btn_show_all.setCursor(Qt.PointingHandCursor)
         self._btn_show_all.setFixedHeight(BTN_MIN_HEIGHT)
         self._btn_show_all.clicked.connect(self._on_show_all)
@@ -369,9 +363,9 @@ class BaseListPanel(QWidget, WidgetMixin):
             self._pagination_bar.setVisible(False)
             return
 
-        self._lbl_page_info.setText(_tr_safe("showing_records", shown=shown, total=total))
+        self._lbl_page_info.setText(tr("showing_records").format(shown=shown, total=total))
         self._btn_load_more.setText(
-            _tr_safe("load_more", count=min(remaining, self.PAGE_SIZE))
+            tr("load_more").format(count=min(remaining, self.PAGE_SIZE))
         )
         self._pagination_bar.setVisible(True)
 

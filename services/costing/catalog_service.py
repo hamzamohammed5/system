@@ -82,12 +82,17 @@ class CatalogService:
             "machine_op": self.build_machine_ops(),
         }
 
+    @staticmethod
+    def _row(r) -> dict:
+        """يحوّل sqlite3.Row أو dict لـ dict موحد."""
+        return dict(r) if not isinstance(r, dict) else r
+
     def build_raw(self) -> List:
         """خامات محلية + مشتركة."""
         local = [
-            (r["id"], r["name"], r.get("category_name") or "",
-             r["price"], r.get("total_qty"))
-            for r in fetch_items_by_type(self.conn, "raw")
+            (d["id"], d["name"], d.get("category_name") or "",
+             d["price"], d.get("total_qty"))
+            for d in (self._row(r) for r in fetch_items_by_type(self.conn, "raw"))
         ]
         shared = [
             (item["id"], item["name"], SHARED_CATEGORY_KEY,
@@ -99,25 +104,24 @@ class CatalogService:
     def build_semi(self) -> List:
         """نصف مصنع محلي فقط."""
         return [
-            (r["id"], r["name"], r.get("category_name") or "", 0.0, None)
-            for r in fetch_items_by_type(self.conn, "semi")
+            (d["id"], d["name"], d.get("category_name") or "", 0.0, None)
+            for d in (self._row(r) for r in fetch_items_by_type(self.conn, "semi"))
         ]
 
     def build_final(self) -> List:
         """منتج نهائي محلي فقط."""
         return [
-            (r["id"], r["name"], r.get("category_name") or "", 0.0, None)
-            for r in fetch_items_by_type(self.conn, "final")
+            (d["id"], d["name"], d.get("category_name") or "", 0.0, None)
+            for d in (self._row(r) for r in fetch_items_by_type(self.conn, "final"))
         ]
 
     def build_labor_ops(self) -> List:
         """عمليات عمالة محلية + مشتركة."""
         local = [
-            (r["id"], r["name"], r.get("category_name") or "",
-             r.get("minutes", 0.0))
-            for r in fetch_all_labor_ops(self.conn)
+            (d["id"], d["name"], d.get("category_name") or "",
+             d.get("minutes", 0.0))
+            for d in (self._row(r) for r in fetch_all_labor_ops(self.conn))
         ]
-
         shared = [
             (item["id"], item["name"], SHARED_CATEGORY_KEY,
              float(item.get("minutes", 0.0)))
@@ -128,11 +132,10 @@ class CatalogService:
     def build_machine_ops(self) -> List:
         """عمليات تشغيل محلية + مشتركة."""
         local = [
-            (r["id"], r["name"], r.get("category_name") or "",
-             r.get("mode", "time"), r.get("machine_name", ""))
-            for r in fetch_all_machine_ops(self.conn)
+            (d["id"], d["name"], d.get("category_name") or "",
+             d.get("mode", "time"), d.get("machine_name", ""))
+            for d in (self._row(r) for r in fetch_all_machine_ops(self.conn))
         ]
-
         shared = [
             (item["id"], item["name"], SHARED_CATEGORY_KEY,
              item.get("mode", "time"), item.get("machine_name", ""))
@@ -148,6 +151,17 @@ class CatalogService:
         و SharedItemsService — بدون لمس db.companies مباشرة.
 
         يرجع list of dicts مع id = "shared:{n}" (نفس شكل الإخراج السابق).
+
+        [إصلاح] category_name: العناصر المشتركة كانت تظهر دائماً تحت
+        تصنيف وهمي ثابت (SHARED_CATEGORY_KEY)، بدل تصنيفها الحقيقي.
+        نفس المشكلة كانت موجودة سابقاً في shared_items_mixin.py وتم
+        حلها هناك — هذا نفس الحل منقولاً هنا:
+          1. category_name من data["category_name"] لو محفوظ مباشرة.
+          2. وإلا fallback: بحث بالاسم في erp.db المحلي عبر
+             get_category_name_by_item_name (نفس الدالة المستخدمة في
+             shared_items_mixin._resolve_category_name_from_local).
+          3. وإلا SHARED_CATEGORY_KEY كحل أخير (لا تصنيف معروف إطلاقاً)
+             — الـ ui تترجمه إلى "مشترك" كما كان يحدث سابقاً.
 
         ملاحظة: الـ try/except هنا مقصود ومختلف عن استيرادات db.costing
         أعلى الملف — هذه الدالة تعبر إلى domain آخر (companies) قد لا
@@ -172,6 +186,9 @@ class CatalogService:
             for it in items:
                 item = {"id": f"shared:{it.id}", "name": it.name}
                 item.update(it.data or {})
+                item["category_name"] = self._resolve_shared_category_name(
+                    it.name, shared_type, it.data or {}
+                )
                 result.append(item)
             return result
 
@@ -180,3 +197,26 @@ class CatalogService:
             print(f"[CatalogService] _fetch_shared({shared_type}) error: {e}",
                   file=sys.stderr)
             return []
+
+    def _resolve_shared_category_name(self, item_name: str, shared_type: str,
+                                       data: dict) -> str:
+        """
+        يحدد category_name الحقيقي لعنصر مشترك، بنفس منطق
+        shared_items_mixin._resolve_category_name_from_local:
+          1. data["category_name"] لو محفوظ مباشرة وقت النشر.
+          2. وإلا: lookup بالاسم في erp.db المحلي للشركة النشطة.
+          3. وإلا: SHARED_CATEGORY_KEY كحل أخير (الـ ui تترجمه "مشترك").
+        """
+        cat_name = data.get("category_name") or None
+        if cat_name:
+            return cat_name
+
+        try:
+            from db.shared.items_repo import get_category_name_by_item_name
+            resolved = get_category_name_by_item_name(self.conn, item_name, shared_type)
+            if resolved:
+                return resolved
+        except Exception:
+            pass
+
+        return SHARED_CATEGORY_KEY

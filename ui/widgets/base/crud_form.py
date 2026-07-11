@@ -31,13 +31,7 @@ from ui.constants                   import (
 )
 
 
-def _tr_safe(key: str, **kwargs) -> str:
-    try:
-        from ui.widgets.core.i18n import tr
-        text = tr(key)
-        return text.format(**kwargs) if kwargs else text
-    except Exception:
-        return key
+from ui.widgets.core.i18n import tr
 
 
 class BaseCrudForm(QWidget, EditModeMixin, LiveConnMixin, WidgetMixin):
@@ -87,7 +81,7 @@ class BaseCrudForm(QWidget, EditModeMixin, LiveConnMixin, WidgetMixin):
         outer.addWidget(wrap_in_scroll(inner))
 
         # ── FormGroup ──
-        self._grp = FormGroup(_tr_safe(self.FORM_TITLE))
+        self._grp = FormGroup(tr(self.FORM_TITLE))
 
         self.lbl_mode = QLabel()
         self._grp.add_label_row(self.lbl_mode)
@@ -100,9 +94,9 @@ class BaseCrudForm(QWidget, EditModeMixin, LiveConnMixin, WidgetMixin):
         self._build_extra(root)
 
         # ── أزرار ──
-        self.btn_add    = QPushButton(_tr_safe(self.ADD_TEXT))
-        self.btn_save   = QPushButton(_tr_safe(self.SAVE_TEXT))
-        self.btn_cancel = QPushButton(_tr_safe("btn_cancel"))
+        self.btn_add    = QPushButton(tr(self.ADD_TEXT))
+        self.btn_save   = QPushButton(tr(self.SAVE_TEXT))
+        self.btn_cancel = QPushButton(tr("btn_cancel"))
         for btn in (self.btn_add, self.btn_save, self.btn_cancel):
             btn.setMinimumHeight(BTN_MIN_HEIGHT)
 
@@ -127,15 +121,15 @@ class BaseCrudForm(QWidget, EditModeMixin, LiveConnMixin, WidgetMixin):
     # ── [i18n] Language handler ────────────────────────────
 
     def _refresh_lang(self, *_):
-        self._grp.setTitle(_tr_safe(self.FORM_TITLE))
-        self.btn_add.setText(_tr_safe(self.ADD_TEXT))
-        self.btn_save.setText(_tr_safe(self.SAVE_TEXT))
-        self.btn_cancel.setText(_tr_safe("btn_cancel"))
+        self._grp.setTitle(tr(self.FORM_TITLE))
+        self.btn_add.setText(tr(self.ADD_TEXT))
+        self.btn_save.setText(tr(self.SAVE_TEXT))
+        self.btn_cancel.setText(tr("btn_cancel"))
         # إعادة رسم نص وضع التعديل/العرض الحالي بترجمة محدثة
         if getattr(self, "_editing_id", None) and self._editing_name is not None:
-            self.enter_edit_mode(self._editing_id, _tr_safe("edit_mode_fmt", name=self._editing_name))
+            self.enter_edit_mode(self._editing_id, tr("edit_mode_fmt").format(name=self._editing_name))
         else:
-            self.exit_edit_mode(_tr_safe("form_title_wrapped_fmt", title=_tr_safe(self.FORM_TITLE)))
+            self.exit_edit_mode(tr("form_title_wrapped_fmt").format(title=tr(self.FORM_TITLE)))
 
     # ══════════════════════════════════════════════════════
     # Hooks — المطلوب override في الـ subclass
@@ -176,7 +170,7 @@ class BaseCrudForm(QWidget, EditModeMixin, LiveConnMixin, WidgetMixin):
         try:
             new_id = self._do_insert(data)
         except Exception as e:
-            QMessageBox.warning(self, _tr_safe("error"), str(e))
+            QMessageBox.warning(self, tr("error"), str(e))
             return
         self._reset()
         # [FIX] emit_company_data_changed بدل bus.data_changed.emit()
@@ -191,7 +185,7 @@ class BaseCrudForm(QWidget, EditModeMixin, LiveConnMixin, WidgetMixin):
         try:
             self._do_update(self._editing_id, data)
         except Exception as e:
-            QMessageBox.warning(self, _tr_safe("error"), str(e))
+            QMessageBox.warning(self, tr("error"), str(e))
             return
         self._reset()
         # [FIX] emit_company_data_changed بدل bus.data_changed.emit()
@@ -215,9 +209,9 @@ class BaseCrudForm(QWidget, EditModeMixin, LiveConnMixin, WidgetMixin):
         self._fill_fields(data)
         name = data.get("name", f"ID:{item_id}")
         self._editing_name = name
-        self.enter_edit_mode(item_id, _tr_safe("edit_mode_fmt", name=name))
+        self.enter_edit_mode(item_id, tr("edit_mode_fmt").format(name=name))
 
     def _reset(self):
         self._editing_name = None
         self._reset_fields()
-        self.exit_edit_mode(_tr_safe("form_title_wrapped_fmt", title=_tr_safe(self.FORM_TITLE)))
+        self.exit_edit_mode(tr("form_title_wrapped_fmt").format(title=tr(self.FORM_TITLE)))

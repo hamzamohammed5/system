@@ -305,6 +305,18 @@ class ComponentRow(QWidget, OpRowsMixin, VariantsMixin, WidgetMixin):
             self._clear_orphan()
 
         grouped += build_grouped_items(items)
+
+        # [إضافة] لو مفيش عناصر خالص من هذا النوع، أضف placeholder توضيحي
+        # بدل ما يظهر الـ combo فاضي تماماً (بدون نص ولا سهم واضح المعنى).
+        is_orphan_case = selected_id is not None and selected_id not in item_ids
+        if not items and not is_orphan_case:
+            type_label = dict(COMPONENT_TYPES).get(child_type, child_type)
+            grouped.append((
+                tr('component_row_no_items_placeholder').format(type_label=type_label),
+                ("__placeholder__", None),
+                False,
+            ))
+
         self._item_combo.populate(grouped)
 
         if selected_id is not None:
@@ -404,7 +416,7 @@ class ComponentRow(QWidget, OpRowsMixin, VariantsMixin, WidgetMixin):
     # ── Signal handlers ────────────────────────────────────
 
     def _on_item_selected(self, data):
-        if not (data and data[0] not in ("__sep__", "__orphan__") and data[1] is not None):
+        if not (data and data[0] not in ("__sep__", "__orphan__", "__placeholder__") and data[1] is not None):
             return
 
         self._pinned_id = data[1]
@@ -486,7 +498,7 @@ class ComponentRow(QWidget, OpRowsMixin, VariantsMixin, WidgetMixin):
             if data is None:
                 return None
             kind, child_id = data
-            if kind in ("__orphan__", "__sep__") or child_id is None:
+            if kind in ("__orphan__", "__sep__", "__placeholder__") or child_id is None:
                 return None
 
             child_type        = self.cmb_type.currentData()

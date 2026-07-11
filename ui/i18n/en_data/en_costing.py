@@ -75,6 +75,7 @@ EN_STRINGS_COSTING: dict[str, str] = {
     "orphans_deleted_with_product_title": "Done — Product Deleted",
     "orphans_deleted_msg":            "✅ Deleted {count} missing component(s):\n{names}",
     "orphans_deleted_product_removed_msg": "✅ Deleted {count} missing component(s):\n{names}\n\nSince «{product_name}» no longer has any components,\nit was deleted automatically.",
+    'component_row_no_items_placeholder': 'No {type_label} registered',
 
     # ══════════════════════════════════════════════
     # Components / BOM
@@ -298,7 +299,12 @@ EN_STRINGS_COSTING: dict[str, str] = {
     "raw_col_total_price":           "Total Price",
     "raw_col_qty":                   "Quantity",
     "raw_col_unit_price":            "Unit Price",
-
+    'raw_col_actions':   'Actions',      # en: ''
+    'btn_edit_short':    'Edit',        # en: ''
+    'btn_delete_short':  'Delete',          # en: ''
+    'btn_edit':          'Edit Material', # tooltip
+    'btn_delete':        'Delete Material',   # tooltip
+    
     # ══════════════════════════════════════════════
     # Labor
     # ══════════════════════════════════════════════

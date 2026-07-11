@@ -40,23 +40,23 @@ class SearchBar(QWidget, WidgetMixin):
                  height: int = SEARCH_BAR_H,
                  parent=None):
         super().__init__(parent)
-        self._placeholder = placeholder or tr("list_search_placeholder")
+        self._placeholder = placeholder
         self._height = height
         self._delay = delay_ms
         self._timer = QTimer(self)
         self._timer.setSingleShot(True)
         self._timer.setInterval(delay_ms)
         self._timer.timeout.connect(self._emit)
-        self._build(self._placeholder, height)
+        self._build(height)
         self._init_widget_mixin(theme=True, font=True, lang=True)
         self._refresh_style()
+        self._refresh_lang()
 
-    def _build(self, placeholder: str, height: int):
+    def _build(self, height: int):
         lay = QHBoxLayout(self)
         lay.setContentsMargins(0, 0, 0, 0)
 
         self.inp = QLineEdit()
-        self.inp.setPlaceholderText(placeholder)
         self.inp.setFixedHeight(height)
         self.inp.setClearButtonEnabled(True)
         self.inp.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Fixed)
@@ -77,8 +77,7 @@ class SearchBar(QWidget, WidgetMixin):
         """)
 
     def _refresh_lang(self, *_):
-        if not self.inp.text():
-            self.inp.setPlaceholderText(tr("list_search_placeholder"))
+        self.inp.setPlaceholderText(self._placeholder or tr("list_search_placeholder"))
 
     def _on_change(self):
         if self._delay > 0:
@@ -179,8 +178,7 @@ class ListHeader(QFrame, WidgetMixin):
         self._search_bar  = None
         self._btn_row     = None
         self._lbl_title   = None
-        _placeholder = search_placeholder or tr("list_search_placeholder")
-        self._build(_placeholder, search_delay)
+        self._build(search_placeholder, search_delay)
         self._init_widget_mixin(theme=True, font=True, lang=True)
         self._refresh_style()
 
@@ -272,4 +270,4 @@ def make_list_header(title: str = "", add_text: str = "",
                      placeholder: str = "") -> ListHeader:
     return ListHeader(title=title, add_text=add_text,
                       show_search=show_search,
-                      search_placeholder=placeholder or tr("list_search_placeholder"))
+                      search_placeholder=placeholder)

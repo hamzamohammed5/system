@@ -64,18 +64,20 @@ class FilterToolbar(QWidget, WidgetMixin):
                  show_presets: bool = False,
                  parent=None):
         super().__init__(parent)
-        self._conn         = conn
-        self._scope        = scope
-        self._show_cat     = show_category
-        self._show_date    = show_date
-        self._show_presets = show_presets
-        self._build(placeholder or tr('search'))
+        self._conn             = conn
+        self._scope            = scope
+        self._show_cat         = show_category
+        self._show_date        = show_date
+        self._show_presets     = show_presets
+        self._placeholder_key  = placeholder or 'list_search_placeholder'
+        self._build()
         self._init_widget_mixin(theme=True, font=True, lang=True, data=True)
         self._refresh_style()
+        self._refresh_lang()
 
     # ── بناء ──────────────────────────────────────────────
 
-    def _build(self, placeholder: str):
+    def _build(self):
         from ui.constants import FILTER_TOOLBAR_BORDER_RADIUS
         self.setStyleSheet(f"""
             QWidget {{
@@ -90,7 +92,7 @@ class FilterToolbar(QWidget, WidgetMixin):
         lay.setSpacing(FILTER_TOOLBAR_SPACING)
 
         from ..components.headers_list import SearchBar
-        self._search = SearchBar(placeholder=placeholder, delay_ms=FILTER_DEBOUNCE_MS, height=FILTER_SEARCH_H)
+        self._search = SearchBar(placeholder="", delay_ms=FILTER_DEBOUNCE_MS, height=FILTER_SEARCH_H)
         self._search.search_changed.connect(lambda _: self.filter_changed.emit())
         self.inp_search = self._search.inp
         lay.addWidget(self._search, stretch=2)
@@ -161,6 +163,8 @@ class FilterToolbar(QWidget, WidgetMixin):
         """
         if hasattr(self, "btn_reset"):
             self.btn_reset.setToolTip(tr('filter_reset_tooltip'))
+        if hasattr(self, "_search"):
+            self._search.set_placeholder(tr(self._placeholder_key))
 
     def _refresh_data(self, company_id=None):
         try:

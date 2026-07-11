@@ -31,6 +31,17 @@ SearchableCombo — QComboBox مع حقل بحث مدمج.
         3. حارس التغيير يمنع أي invalidation لو النص لم يتغير.
 
     النتيجة: أقل invalidations بـ ~40% في حالة البحث الشائعة (مسح النص).
+
+  [FIX عرض الـ combo]:
+    المشكلة: self.cmb كان بـ setSizeAdjustPolicy(QComboBox.AdjustToContents).
+    وقت أول بناء للـ widget، الـ source model فاضي (populate() بتتنفذ لاحقاً
+    عبر QTimer.singleShot من _RowsManager.add_row)، فـ AdjustToContents كان
+    بيدّي الـ combo عرض شبه صفري وقت أول layout pass. النتيجة: العمود بيظهر
+    فاضي تماماً — لا نص "اختر" ولا سهم — لأن الـ combo نفسه بعرض شبه صفر،
+    رغم إنه مضاف فعلياً بـ stretch=1.
+    الحل: AdjustToMinimumContentsLengthWithIcon مع minimumContentsLength
+    ثابت، بحيث الـ combo ياخد عرض معقول من أول لحظة بغض النظر عن حالة
+    الـ model وقت البناء، ويكبر مع الـ stretch أو مع محتواه لو أكبر من الحد الأدنى.
 """
 from PyQt5.QtWidgets import (
     QWidget, QHBoxLayout, QComboBox, QLineEdit, QPushButton, QSizePolicy,
@@ -59,11 +70,26 @@ def build_grouped_items(items: list) -> list:
     تحوّل قائمة عناصر إلى قائمة مجمّعة جاهزة لـ SearchableCombo.populate().
 
     [Q-06] البنية المتوقعة لكل عنصر في items:
-        items[i][0] = item_id   (int | str)    — معرف العنصر
-        items[i][1] = name      (str)           — اسم العنصر
-        items[i][2] = cat_id    (int | None)    — معرف التصنيف (مُتجاهَل)
-        items[i][3] = cat_name  (str | None)    — اسم التصنيف للتجميع
-        items[i][4+]= ...       (any)           — أعمدة إضافية (مُتجاهَلة)
+        items[i][0] = item_id      (int | str)    — معرف العنصر
+        items[i][1] = name         (str)           — اسم العنصر
+        items[i][2] = cat_name     (str | None)    — اسم التصنيف للتجميع
+        items[i][3+]= ...          (any)           — أعمدة إضافية (مُتجاهَلة:
+                                                      price/total_qty أو
+                                                      minutes أو mode/machine_name
+                                                      حسب النوع)
+
+    [إصلاح باج] كان الكود يقرأ entry[3] كـ cat_name، بينما شكل الكتالوج
+    الفعلي القادم من CatalogService هو:
+        raw/semi/final → (id, name, category_name, price, total_qty)
+        labor_op       → (id, name, category_name, minutes)
+        machine_op     → (id, name, category_name, mode, machine_name)
+    أي أن category_name دائماً عند index=2 وليس 3. القراءة الخاطئة من
+    index=3 كانت تُرجع price (رقم) بدل اسم التصنيف — وهو سبب ظهور
+    أرقام بدل أسماء التصنيفات في الـ dropdown.
+
+    [إصلاح عرض] النص المعروض لكل عنصر أصبح اسم العنصر فقط (بدون الـ id)
+    لأن الـ id لا يعني شيئاً للمستخدم ويُقرأ بالغلط كأنه رقم تصنيف.
+    التصنيف نفسه يظهر كعنوان/separator فوق كل مجموعة.
 
     Returns:
         list of (display_text, user_data, is_separator)
@@ -75,7 +101,7 @@ def build_grouped_items(items: list) -> list:
     for entry in items:
         item_id  = entry[0]
         name     = entry[1]
-        cat_name = entry[3] if len(entry) > 3 and entry[3] else NO_CAT
+        cat_name = entry[2] if len(entry) > 2 and entry[2] else NO_CAT
         groups.setdefault(cat_name, []).append((item_id, name))
 
     result = []
@@ -84,13 +110,13 @@ def build_grouped_items(items: list) -> list:
             continue
         result.append((tr('mode_label_wrap').format(content=cat_name), _SEP, True))
         for item_id, name in members:
-            result.append((tr('combo_id_name_fmt').format(id=item_id, name=name), (None, item_id), False))
+            result.append((name, (None, item_id), False))
 
     if NO_CAT in groups:
         if result:
             result.append((tr('combo_sep_no_category'), _SEP, True))
         for item_id, name in groups[NO_CAT]:
-            result.append((tr('combo_id_name_fmt').format(id=item_id, name=name), (None, item_id), False))
+            result.append((name, (None, item_id), False))
 
     return result
 
@@ -160,6 +186,10 @@ class _ComboFilterProxy(QSortFilterProxyModel):
 
         # الـ orphans: دائماً مرئية
         if user_data and isinstance(user_data, tuple) and user_data[0] == "__orphan__":
+            return True
+
+        # الـ placeholder ("لا توجد عناصر"): دائماً مرئي
+        if user_data and isinstance(user_data, tuple) and user_data[0] == "__placeholder__":
             return True
 
         # لو مفيش فلتر → كل شيء ظاهر
@@ -245,7 +275,12 @@ class SearchableCombo(QWidget, WidgetMixin):
         self.cmb = QComboBox()
         self.cmb.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Fixed)
         self.cmb.setMinimumWidth(SEARCHABLE_COMBO_CMB_MIN_W)
-        self.cmb.setSizeAdjustPolicy(QComboBox.AdjustToContents)
+        # [FIX] AdjustToContents كان بيدّي عرض شبه صفري وقت أول بناء
+        # (الـ model فاضي قبل populate() المؤجلة بـ QTimer.singleShot).
+        # AdjustToMinimumContentsLengthWithIcon + minimumContentsLength ثابت
+        # يضمن عرض معقول من أول لحظة بغض النظر عن حالة الـ model.
+        self.cmb.setSizeAdjustPolicy(QComboBox.AdjustToMinimumContentsLengthWithIcon)
+        self.cmb.setMinimumContentsLength(1)
         self.cmb.setModel(self._proxy_model)
         self.cmb.currentIndexChanged.connect(self._on_combo_changed)
 
@@ -361,6 +396,10 @@ class SearchableCombo(QWidget, WidgetMixin):
         elif (user_data and isinstance(user_data, tuple) and
               user_data[0] == "__orphan__"):
             item.setForeground(QColor(_C['danger']))
+        elif (user_data and isinstance(user_data, tuple) and
+              user_data[0] == "__placeholder__"):
+            item.setFlags(item.flags() & ~Qt.ItemIsEnabled & ~Qt.ItemIsSelectable)
+            item.setForeground(QColor(_C['text_muted']))
 
         self._source_model.appendRow(item)
 

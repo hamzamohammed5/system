@@ -25,13 +25,7 @@ from ui.widgets.core.widget_mixin    import WidgetMixin
 from ..theme.layout_styles           import scroll_style   # [إصلاح 2.2]
 
 
-def _tr_safe(key: str, **kwargs) -> str:
-    try:
-        from ui.widgets.core.i18n import tr
-        text = tr(key)
-        return text.format(**kwargs) if kwargs else text
-    except Exception:
-        return key
+from ui.widgets.core.i18n import tr
 
 
 class BaseDetailPanel(QWidget, WidgetMixin):
@@ -96,7 +90,7 @@ class BaseDetailPanel(QWidget, WidgetMixin):
         pass
 
     def _fill_header(self, data: dict):
-        self._hdr.set_title(data.get("name", _tr_safe("value_dash")))
+        self._hdr.set_title(data.get("name", tr("value_dash")))
 
     def _refresh_data(self, company_id=None):
         if self._item_id is not None:
@@ -145,7 +139,7 @@ class BaseDetailPanel(QWidget, WidgetMixin):
         root.addWidget(scroll, stretch=1)
 
         self._empty = EmptyState(
-            icon=_tr_safe(self.EMPTY_ICON), title=_tr_safe(self.EMPTY_TITLE),
+            icon=tr(self.EMPTY_ICON), title=tr(self.EMPTY_TITLE),
             subtitle=self.EMPTY_SUBTITLE,
             style="plain", color=_C['text_muted'], min_height=DETAIL_EMPTY_MIN_H,
         )
@@ -171,7 +165,7 @@ class BaseDetailPanel(QWidget, WidgetMixin):
         # تحديث لون نص EmptyState — يُعاد بناؤها عند تغيير اللغة فقط
 
     def _refresh_lang(self, *_):
-        translated = _tr_safe(self.EMPTY_TITLE)
+        translated = tr(self.EMPTY_TITLE)
         try:
             self._empty.set_title(translated)
         except Exception:
@@ -184,7 +178,7 @@ class BaseDetailPanel(QWidget, WidgetMixin):
         try:
             data = self._load_data(item_id)
         except Exception as e:
-            self.show_error(_tr_safe("detail_load_error", error=e))
+            self.show_error(tr("detail_load_error").format(error=e))
             return
 
         self._item_data = dict(data) if data else None
