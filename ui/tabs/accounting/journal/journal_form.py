@@ -33,7 +33,7 @@ from ui.constants import (
     JOURNAL_FORM_BTN_CANCEL_PAD_H,
     JOURNAL_FORM_BORDER_W,
 )
-from .journal_lines import _LinesPanel
+from .lines._lines_panel import _LinesPanel
 from .form._balance_bar    import _BalanceBar
 from .form._journal_header import _JournalHeader
 

@@ -14,6 +14,8 @@ COMPONENT_ROW_OUTER_SPACING    = 2    # spacing الـ outer VBoxLayout
 COMPONENT_ROW_WASTE_MAX_PCT    = 100  # الحد الأقصى لنسبة الهادر (%)
 COMPONENT_ROW_WASTE_MIN_PCT    = 0    # الحد الأدنى لنسبة الهادر (%)
 COMPONENT_ROW_WASTE_DECIMALS   = 1    # عدد الخانات العشرية لـ waste_spin
+WASTE_LEVEL_HIGH_THRESHOLD_PCT   = 20   # عتبة نسبة الهادر "مرتفع" (waste_level)
+WASTE_LEVEL_MEDIUM_THRESHOLD_PCT = 10   # عتبة نسبة الهادر "متوسط" (waste_level)
 COMPONENT_ROW_MAIN_SPACING     = 6    # spacing الصف الرئيسي
 COMPONENT_ROW_VARIANT_MIN_W    = 130  # عرض أدنى لـ cmb_variant
 COMPONENT_ROW_VARIANT_MAX_W    = 180  # عرض أقصى لـ cmb_variant
@@ -30,6 +32,13 @@ COMPONENT_ROW_SUB_MARGIN_H     = 8    # left/right margin لصف العملية 
 COMPONENT_ROW_SUB_MARGIN_V     = 3    # top/bottom margin لصف العملية الفرعي
 COMPONENT_ROW_SUB_SPACING      = 8    # spacing صف العملية الفرعي
 COMPONENT_ROW_BORDER_RADIUS    = 4    # border-radius للـ widgets داخل ComponentRow
+COMPONENT_ROW_BORDER_W         = 1    # عرض الحد العادي للـ widgets داخل ComponentRow (variant/op_row/sub_row combos)
+COMPONENT_ROW_ORPHAN_BORDER_W  = 1.5  # عرض حد الـ orphan style (QComboBox/QLineEdit) في ComponentRow
+COMPONENT_ROW_PAD_V            = 1    # padding عمودي لكومبوهات/labels التكلفة داخل ComponentRow
+COMPONENT_ROW_PAD_H            = 6    # padding أفقي لـ cmb_variant وcmb_op_row
+COMPONENT_ROW_COST_PAD_H       = 5    # padding أفقي لـ lbl_variant_cost
+COMPONENT_ROW_WASTE_PAD_H      = 4    # padding أفقي لـ waste_spin (zero وnon-zero)
+COMPONENT_ROW_TYPE_CMB_MIN_LEN = 10   # الحد الأدنى لطول محتوى cmb_type (setMinimumContentsLength)
 
 # ── LaborSettingsPanel ─────────────────────────────────────
 LABOR_SETTINGS_MIN_W           = 260   # setMinimumWidth لـ inner widget

@@ -27,7 +27,8 @@ from ui.constants import (
     SPACING_LG, SPACING_MD, SPACING_ZERO,
 )
 from ui.font import FS_SM
-from .bulk_replace_helpers  import fetch_affected_products, ProductRow
+from services.costing.bulk_replace_service import BulkReplaceService
+from .bulk_replace_helpers  import ProductRow
 
 
 class _ProductsPanel(QWidget, WidgetMixin):
@@ -43,6 +44,7 @@ class _ProductsPanel(QWidget, WidgetMixin):
         self.conn       = conn
         self.child_type = child_type
         self.child_id   = child_id
+        self._svc       = BulkReplaceService(conn)
 
         self._all_products: list = []
         self._product_rows: list = []
@@ -186,15 +188,15 @@ class _ProductsPanel(QWidget, WidgetMixin):
     # ══════════════════════════════════════════════════════
 
     def load(self):
-        self._all_products = fetch_affected_products(
-            self.conn, self.child_type, self.child_id
+        self._all_products = self._svc.fetch_affected_products(
+            self.child_type, self.child_id
         )
         self._fill_category_filter()
         self._rebuild_rows(self._all_products)
 
     def reload(self):
-        self._all_products = fetch_affected_products(
-            self.conn, self.child_type, self.child_id
+        self._all_products = self._svc.fetch_affected_products(
+            self.child_type, self.child_id
         )
         self._apply_filter()
 

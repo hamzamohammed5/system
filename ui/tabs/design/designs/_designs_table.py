@@ -19,11 +19,11 @@ from PyQt5.QtWidgets import (
 from PyQt5.QtCore  import Qt, pyqtSignal, QThread, pyqtSignal as Signal, QTimer
 
 
-from services.design import get_design_size_service
+from services.design import get_design_size_service, get_design_service
 from ._xcf_thumbnail import get_watcher, clear_cache
 from ._design_detail_panel import _DesignDetailPanel
 
-from .designs_table._design_card import _fetch_designs_filtered, _DesignCard, _ThumbWorker
+from .designs_table._design_card import _DesignCard, _ThumbWorker
 
 from ui.widgets.core.i18n import tr
 from ui.widgets.core.widget_mixin import WidgetMixin
@@ -89,6 +89,7 @@ class _DesignsTable(QWidget, WidgetMixin):
         super().__init__(parent)
         self.conn          = conn
         self._size_svc     = get_design_size_service(conn)
+        self._design_svc   = get_design_service(conn)
         self._panel        = detail_panel
         self._cards        = {}           # did → _DesignCard
         self._workers      = []
@@ -326,8 +327,8 @@ class _DesignsTable(QWidget, WidgetMixin):
         self._xcf_card_map.clear()
 
         name_q = self.inp_search.text().strip()
-        rows   = _fetch_designs_filtered(
-            self.conn, name_q, self._cat_filter, self._set_filter
+        rows   = self._design_svc.list_designs_filtered(
+            name_q, self._cat_filter, self._set_filter
         )
 
         # حذف الكروت القديمة

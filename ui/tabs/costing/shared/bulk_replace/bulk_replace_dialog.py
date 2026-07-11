@@ -49,7 +49,6 @@ from ui.constants import (
 )
 from ui.font import FS_MD, FS_LG, FS_SM
 
-from .bulk_replace_helpers        import get_element_name, fetch_candidates
 from .bulk_replace_products_panel import _ProductsPanel
 from ._operation_section          import _OperationSection
 
@@ -63,7 +62,8 @@ class BulkReplaceDialog(QDialog, WidgetMixin):
         self.conn       = conn
         self.child_type = child_type
         self.child_id   = child_id
-        self.child_name = child_name or get_element_name(conn, child_type, child_id)
+        self._svc       = BulkReplaceService(conn)
+        self.child_name = child_name or self._svc.get_element_name(child_type, child_id)
 
         self.setWindowTitle(tr("bulk_replace_window_title"))
         self.setMinimumSize(BULK_REPLACE_MIN_W, BULK_REPLACE_MIN_H)
@@ -196,7 +196,7 @@ class BulkReplaceDialog(QDialog, WidgetMixin):
     # ── تحميل البيانات ────────────────────────────────────
 
     def _load_candidates(self):
-        candidates = fetch_candidates(self.conn, self.child_type, self.child_id)
+        candidates = self._svc.fetch_candidates(self.child_type, self.child_id)
         self._op_section.load_candidates(candidates)
 
     def _update_apply_btn_state(self):
@@ -223,11 +223,7 @@ class BulkReplaceDialog(QDialog, WidgetMixin):
 
         op_desc = []
         if do_replace:
-            try:
-                svc      = BulkReplaceService(self.conn)
-                new_name = svc.get_element_name(self.child_type, new_child_id)
-            except Exception:
-                new_name = get_element_name(self.conn, self.child_type, new_child_id)
+            new_name = self._svc.get_element_name(self.child_type, new_child_id)
             op_desc.append(
                 tr("bulk_replace_desc_line").format(old=self.child_name, new=new_name)
             )

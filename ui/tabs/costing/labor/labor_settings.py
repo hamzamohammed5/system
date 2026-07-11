@@ -108,21 +108,19 @@ class _LaborSettingsPanel(QWidget):
         self.lbl_rate.set_value(f"{self._calc_rate():.2f}  {tr('currency_per_hour')}")
 
     def _load(self):
-        svc = SettingsService(self.conn)
-        self.sp_salary.setValue(  svc.get("monthly_salary",    3000))
-        self.sp_days.setValue(    svc.get("working_days",         25))
-        self.sp_holidays.setValue(svc.get("holiday_days",          4))
-        self.sp_hours.setValue(   svc.get("working_hours_day",     8))
-        self.sp_overhead.setValue(svc.get("overhead_factor",    1.10))
+        self.sp_salary.setValue(  SettingsService.get("monthly_salary",    3000))
+        self.sp_days.setValue(    SettingsService.get("working_days",         25))
+        self.sp_holidays.setValue(SettingsService.get("holiday_days",          4))
+        self.sp_hours.setValue(   SettingsService.get("working_hours_day",     8))
+        self.sp_overhead.setValue(SettingsService.get("overhead_factor",    1.10))
         self._update_preview()
 
     def _save(self):
-        svc = SettingsService(self.conn)
-        svc.set("monthly_salary",    self.sp_salary.value())
-        svc.set("working_days",      self.sp_days.value())
-        svc.set("holiday_days",      self.sp_holidays.value())
-        svc.set("working_hours_day", self.sp_hours.value())
-        svc.set("overhead_factor",   self.sp_overhead.value())
+        SettingsService.set("monthly_salary",    self.sp_salary.value())
+        SettingsService.set("working_days",      self.sp_days.value())
+        SettingsService.set("holiday_days",      self.sp_holidays.value())
+        SettingsService.set("working_hours_day", self.sp_hours.value())
+        SettingsService.set("overhead_factor",   self.sp_overhead.value())
         QMessageBox.information(
             self, tr("done"),
             f"✅  {tr('labor_settings_saved')}"

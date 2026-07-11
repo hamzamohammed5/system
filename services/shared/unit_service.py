@@ -21,7 +21,6 @@ Business logic لوحدات القياس — مفصول عن الـ widget.
 import json
 import logging
 
-from ui.widgets.core.i18n import tr
 
 logger = logging.getLogger(__name__)
 
@@ -39,11 +38,11 @@ def _default_units() -> list:
     بعد ذلك أبداً عند تغيير اللغة.
     """
     return [
-        ("px",   tr('unit_label_px')),
-        ("mm",   tr('unit_label_mm')),
-        ("cm",   tr('unit_label_cm')),
-        ("m",    tr('unit_label_m')),
-        ("inch", tr('unit_label_inch')),
+        ("px",   "px"),
+        ("mm",   "mm"),
+        ("cm",   "cm"),
+        ("m",    "m"),
+        ("inch", "inch"),
     ]
 
 # cache: db_path → list[tuple[str, str]]

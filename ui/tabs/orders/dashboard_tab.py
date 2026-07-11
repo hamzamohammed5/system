@@ -96,7 +96,7 @@ class OrdersDashboardTab(QWidget, WidgetMixin):
         self._lbl_total_value.setText(f"{(summary.get('total_value') or 0):,.0f} {tr('currency_sym')}")
         self._lbl_total_paid.setText(f"{(summary.get('total_paid') or 0):,.0f} {tr('currency_sym')}")
 
-        for status, lbl in self._status_chips.items():
-            lbl.setText(str(summary.get(status) or 0))
+        for status, chip in self._status_chips.items():
+            chip.set_count(summary.get(status) or 0)
 
         fill_recent_table(self, self._svc.list_orders()[:DASHBOARD_RECENT_LIMIT])

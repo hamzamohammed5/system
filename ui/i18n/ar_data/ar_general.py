@@ -60,6 +60,9 @@ AR_STRINGS_GENERAL: dict[str, str] = {
     "table_published_icon":   "📤",
     "table_published_prefix": "📤 ",
 
+    # ── Catalog: شارة الفئة المشتركة (CatalogService.SHARED_CATEGORY_KEY) ──
+    "shared":                 "🔗 مشترك",
+
     # ══════════════════════════════════════════════
     # تنقل
     # ══════════════════════════════════════════════
@@ -121,6 +124,8 @@ AR_STRINGS_GENERAL: dict[str, str] = {
     "settings_grp_font":         "حجم الخط",
     "settings_font_preview":     "معاينة النص — Preview 123\nأبجد هوز حطي كلمن — The quick brown fox\n١٢٣٤٥٦٧٨٩٠ — ABCDEFG abcdefg",
     "settings_font_hint":        "💡  اضغط حفظ لتطبيق حجم الخط الجديد على كامل الواجهة",
+    "settings_font_sample_small": "أ",
+    "settings_font_sample_big":   "أ",
     "settings_grp_theme":        "اختر مظهر التطبيق",
     "settings_grp_theme_preview":"معاينة الألوان",
     "settings_grp_lang":         "اختر لغة الواجهة",
@@ -176,6 +181,23 @@ AR_STRINGS_GENERAL: dict[str, str] = {
     "list_search_placeholder": "🔍  بحث...",
     "detail_select_item":      "اختر عنصراً من القائمة",
     "empty_icon_default":      "📭",
+    "icon_question":           "❓",
+    "icon_info":               "ℹ️",
+    "icon_warning":            "⚠️",
+    "icon_critical":           "❌",
+    "icon_dialog_default":     "📋",
+    "icon_reset":              "↺",
+    "font_pt_suffix":          "{size} نقطة",
+    "icon_theme_light":        "☀️",
+    "icon_theme_dark":         "🌙",
+    "icon_flag_ar":            "🇸🇦",
+    "icon_flag_en":            "🇬🇧",
+    "swatch_label_accent":     "التمييز",
+    "swatch_label_success":    "النجاح",
+    "swatch_label_warning":    "التحذير",
+    "swatch_label_danger":     "الخطر",
+    "swatch_label_surface":    "السطح",
+    "swatch_label_text":       "النص",
     "value_dash":              "—",
     "empty_placeholder":       "─",
 
@@ -274,6 +296,7 @@ AR_STRINGS_GENERAL: dict[str, str] = {
     "no_category":            "بدون تصنيف",
     "combo_clear_search":     "✖",
     "combo_sep_no_category":  "─── بدون تصنيف ───",
+    "combo_id_name_fmt":      "{id} — {name}",
 
     # ══════════════════════════════════════════════
     # عمليات عامة

@@ -60,6 +60,9 @@ EN_STRINGS_GENERAL: dict[str, str] = {
     "table_published_icon":   "📤",
     "table_published_prefix": "📤 ",
 
+    # ── Catalog: shared category badge (CatalogService.SHARED_CATEGORY_KEY) ──
+    "shared":                 "🔗 Shared",
+
     # ══════════════════════════════════════════════
     # Navigation
     # ══════════════════════════════════════════════
@@ -121,6 +124,8 @@ EN_STRINGS_GENERAL: dict[str, str] = {
     "settings_grp_font":         "Font Size",
     "settings_font_preview":     "Preview Text — Preview 123\nArabic Text — The quick brown fox\n1234567890 — ABCDEFG abcdefg",
     "settings_font_hint":        "💡  Press Save to apply the new font size across the entire interface",
+    "settings_font_sample_small": "A",
+    "settings_font_sample_big":   "A",
     "settings_grp_theme":        "Choose Application Appearance",
     "settings_grp_theme_preview":"Color Preview",
     "settings_grp_lang":         "Choose Interface Language",
@@ -176,6 +181,23 @@ EN_STRINGS_GENERAL: dict[str, str] = {
     "list_search_placeholder": "🔍  Search...",
     "detail_select_item":      "Select an item from the list",
     "empty_icon_default":      "📭",
+    "icon_question":           "❓",
+    "icon_info":               "ℹ️",
+    "icon_warning":            "⚠️",
+    "icon_critical":           "❌",
+    "icon_dialog_default":     "📋",
+    "icon_reset":              "↺",
+    "font_pt_suffix":          "{size} pt",
+    "icon_theme_light":        "☀️",
+    "icon_theme_dark":         "🌙",
+    "icon_flag_ar":            "🇸🇦",
+    "icon_flag_en":            "🇬🇧",
+    "swatch_label_accent":     "accent",
+    "swatch_label_success":    "success",
+    "swatch_label_warning":    "warning",
+    "swatch_label_danger":     "danger",
+    "swatch_label_surface":    "surface",
+    "swatch_label_text":       "text",
     "value_dash":              "—",
     "empty_placeholder":       "─",
 
@@ -274,6 +296,7 @@ EN_STRINGS_GENERAL: dict[str, str] = {
     "no_category":            "No Category",
     "combo_clear_search":     "✖",
     "combo_sep_no_category":  "─── No Category ───",
+    "combo_id_name_fmt":      "{id} — {name}",
 
     # ══════════════════════════════════════════════
     # Operations

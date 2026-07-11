@@ -53,7 +53,7 @@ from ui.constants import (
     SMART_LINE_ACCENT_BORDER_W,
     SMART_LINE_INV_ROW_MARGIN_T,
 )
-from ..journal_account_picker import _AccountPickerButton
+from ..account_picker._account_picker_button import _AccountPickerButton
 
 _INVESTOR_TYPES = {"capital", "drawings"}
 

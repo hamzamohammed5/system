@@ -31,9 +31,11 @@ from ui.widgets.dialogs.confirm import confirm_delete
 from ui.widgets.core.i18n import tr
 from ui.font import FS_MD
 from ui.widgets.dialogs.message import msg_info, msg_warning, msg_critical
-from .tree._tree_builder import (
-    rows_to_tree, filter_by_group, add_acc_nodes, add_type_header,
+from .tree._tree_nodes import (
+    rows_to_tree, filter_by_group, add_acc_nodes
 )
+
+from .tree._tree_headers import add_type_header
 from .tree._account_form  import _AccountForm
 from .tree._group_filter  import _GroupFilterCombo
 from ui.constants import (

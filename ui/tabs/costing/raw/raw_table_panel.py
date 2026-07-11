@@ -68,6 +68,21 @@ class RawTablePanel(BaseListPanel, SharedOpsMixin):
         return local_rows + shared_rows
 
     # ══════════════════════════════════════════════════════
+    # تحديث تلقائي عند تغيّر بيانات الشركة
+    # ══════════════════════════════════════════════════════
+    # [FIX] WidgetMixin._on_data_change بينادي self._refresh_data(company_id)
+    # عند bus.company_data_changed — مش self.refresh().
+    # BaseListPanel معرّفش _refresh_data (الافتراضي في WidgetMixin no-op)،
+    # فكان الجدول مش بيتحدث بعد فك ربط عنصر مشترك (unlink_from_company) —
+    # علامة 🔗 كانت تفضل ظاهرة لحد ما حاجة تانية تعمل refresh() كامل بالصدفة
+    # (زي حذف العنصر من كل الشركات).
+    # الحل: تعريف _refresh_data هنا لينادي self.refresh() الموروثة من
+    # BaseListPanel، واللي بتعيد _load_rows() (وبالتالي get_published_local_names)
+    # وتطبّق الفلتر من جديد.
+    def _refresh_data(self, company_id=None):
+        self.refresh()
+
+    # ══════════════════════════════════════════════════════
     # ملء الجدول
     # ══════════════════════════════════════════════════════
 
@@ -230,7 +245,7 @@ class RawTablePanel(BaseListPanel, SharedOpsMixin):
         item_id = self.selected_id()
         if item_id is None:
             return None
-        for row in self._rows:
+        for row in self._all_rows:
             if str(row.get("id")) == str(item_id):
                 return row
         return None

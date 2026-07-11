@@ -45,7 +45,7 @@ from ui.constants import (
     JOURNAL_FILTER_DEFAULT_FROM_MONTH,
     JOURNAL_FILTER_DEFAULT_FROM_DAY,
 )
-from .journal_group_combo import _TreeGroupCombo
+from .group_combo._tree_group_combo import _TreeGroupCombo
 
 
 class _JournalFilterBar(SafeConnMixin, QFrame, WidgetMixin):
