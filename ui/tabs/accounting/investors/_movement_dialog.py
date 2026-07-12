@@ -80,6 +80,10 @@ class _MovementDialog(DualConnMixin, WidgetMixin, QDialog):
                 f"padding:{MOVEMENT_DIALOG_PREVIEW_PAD_V}px {MOVEMENT_DIALOG_PREVIEW_PAD_H}px;"
                 f"font-size:{FS_SM}px;"
             )
+        # [إصلاح dark-mode] btn_ok/btn_cancel و combos مبنية بستايل ثابت
+        # وقت الإنشاء. نفس نمط الإصلاح في باقي ملفات investors/.
+        from ui.widgets.components.button import refresh_visible_buttons
+        refresh_visible_buttons(self)
 
     def _build(self):
         from ui.theme import _C

@@ -53,6 +53,7 @@ from .accounting.investors_tab import InvestorsTab
 from .accounting.accounting_tabs_builder import (
     build_accounts_tabs,
     build_financial_tab,
+    ThemedTabWidget,
     _INNER_TAB_STYLE,
 )
 
@@ -110,8 +111,12 @@ class AccountingTab(QWidget, WidgetMixin):
             root.addWidget(lbl)
             return
 
-        main_tabs = QTabWidget()
-        main_tabs.setStyleSheet(tab_style())
+        # [إصلاح dark-mode] القديم: QTabWidget() + setStyleSheet(tab_style()) ثابت.
+        # ThemedTabWidget بيسجل نفسه على bus.theme_changed تلقائيًا عبر
+        # WidgetMixin، فمش محتاجين نعتمد بس على _refresh_style اليدوية هنا
+        # في الأب — ده بيضمن التلوين حتى لو AccountingTab._refresh_style
+        # اتأخرت أو الترتيب اختلف.
+        main_tabs = ThemedTabWidget(size="normal")
         self._main_tabs = main_tabs
 
         main_tabs.addTab(build_accounts_tabs(acc),  tr("accounts_tab"))
@@ -123,8 +128,12 @@ class AccountingTab(QWidget, WidgetMixin):
         root.addWidget(main_tabs)
 
     def _refresh_style(self, *_):
-        if self._main_tabs is not None:
-            self._main_tabs.setStyleSheet(tab_style())
+        # [حماية إضافية] main_tabs بقى ThemedTabWidget ومسجل لوحده على
+        # bus.theme_changed، فمن المفروض يتلوّن تلقائيًا. الاستدعاء هنا
+        # طبقة أمان إضافية بس (نفس فلسفة _AccountForm._refresh_style) —
+        # لا يضر لو اتنفذ مرتين.
+        if self._main_tabs is not None and hasattr(self._main_tabs, "_refresh_style"):
+            self._main_tabs._refresh_style()
 
     def refresh_for_company(self):
         self._build()

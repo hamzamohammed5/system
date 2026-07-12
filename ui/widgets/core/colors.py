@@ -27,15 +27,53 @@ def card_colors(color: str) -> tuple:
     """
     يرجع (bg, border) للون المعطى حسب الثيم الحالي.
     المصدر الوحيد: theme_manager.CARD_PALETTES
-    الـ fallback يجي من _C (card_fallback_bg/border) المعرَّف في theme_manager.
+
+    [إصلاح dark-mode] المشكلة الأصلية: CARD_PALETTES معرّفة بمفاتيح hex
+    ثابتة (زي "#1565c0") مأخوذة من الـ light theme فقط. لما الكود بينادي
+    card_colors(_C["blue"]) في dark mode، _C["blue"] بترجع "#5B8DB8"
+    (لون الـ dark theme الفعلي) — وده hex مختلف تمامًا عن "#1565c0"
+    ومش موجود خالص كمفتاح في CARD_PALETTES["dark"]. فكانت النتيجة إنها
+    ترجع card_fallback_bg/border الرمادي دايمًا لأي لون معياري
+    (blue/success/danger..) بدل اللون المقصود فعليًا.
+
+    الحل: بدل ما نعتمد على تطابق قيمة الـ hex الدقيقة، بنطابق أولاً على
+    مستوى الـ light hex الثابت (اللي هو مرجع الألوان "المعيارية" في
+    المشروع _C['blue'] في وضع light يساوي أحد مفاتيح CARD_PALETTES
+    فعليًا) وبعدين نجيب نفس اللون لكن من الـ palette بتاع الثيم الحالي
+    عبر _COLOR_KEY_ALIASES. لو حتى ده فشل، fallback رمادي.
     """
     from ui.theme import _C
     from ui.theme_manager import theme_manager, CARD_PALETTES
-    palette = CARD_PALETTES.get(theme_manager.current_theme, CARD_PALETTES["light"])
-    return palette.get(
-        color,
-        (_C["card_fallback_bg"], _C["card_fallback_border"])
-    )
+
+    if not color:
+        return (_C["card_fallback_bg"], _C["card_fallback_border"])
+
+    theme_name = theme_manager.current_theme
+    palette    = CARD_PALETTES.get(theme_name, CARD_PALETTES["light"])
+
+    if color in palette:
+        return palette[color]
+
+    # [إصلاح] اللون مش موجود بمفتاحه الحالي — على الأغلب لأنه جاي من
+    # _C بتاع الثيم الحالي (dark). نحول أي hex غير موجود لأقرب لون
+    # معياري معروف عن طريق مطابقته بألوان _C الحالية (blue/success/
+    # danger/warning/purple/orange..) ثم نستخدم النسخة المكافئة له من
+    # الـ light hex الثابت، اللي هو المفتاح الحقيقي في CARD_PALETTES.
+    _semantic_to_light_hex = {
+        _C.get("blue"):     "#1565c0",
+        _C.get("success"):  "#2e7d32",
+        _C.get("danger"):   "#c62828",
+        _C.get("warning"):  "#e65100",
+        _C.get("purple"):   "#6a1b9a",
+        _C.get("orange"):   "#e65100",
+        _C.get("info"):     "#0d47a1",
+        _C.get("accent"):   "#1565c0",
+    }
+    light_hex = _semantic_to_light_hex.get(color)
+    if light_hex and light_hex in palette:
+        return palette[light_hex]
+
+    return (_C["card_fallback_bg"], _C["card_fallback_border"])
 
 
 # ── status_colors — مبنية من _C ──────────────────────────────────────────────

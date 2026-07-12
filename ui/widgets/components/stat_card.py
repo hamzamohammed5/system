@@ -231,7 +231,7 @@ class _StatCard(QFrame, WidgetMixin):
         return self._lbl_value
 
 
-class StatRow(QWidget):
+class StatRow(QWidget, WidgetMixin):
     """صف أفقي من البطاقات الإحصائية مع فواصل عمودية اختيارية."""
 
     def __init__(self, items: list[StatItem],
@@ -242,7 +242,15 @@ class StatRow(QWidget):
         super().__init__(parent)
         self._cards: list[_StatCard] = []
         self._items = items
+        self._separator = separator
+        self._dividers: list[QFrame] = []
         self._build(separator, compact, bg)
+        # [إصلاح dark-mode] الفواصل العمودية (v_divider) بتتبنى بستايل
+        # ثابت وقت الإنشاء زي أي QFrame عادي، ومحدش كان بينده يعيد تلوينها.
+        # StatRow نفسها ماكانتش WidgetMixin أصلاً فمكانش فيه أي تسجيل
+        # على bus.theme_changed للصف ده كله.
+        self._init_widget_mixin(font=False, lang=False, data=False)
+        self._refresh_style()
 
     def _build(self, separator: bool, compact: bool, bg: str):
         self.setStyleSheet(f"background:{bg};" if bg else "background:transparent;")
@@ -257,7 +265,22 @@ class StatRow(QWidget):
             self._cards.append(card)
             lay.addWidget(card, stretch=1)
             if separator and i < len(self._items) - 1:
-                lay.addWidget(v_divider(margin_v=STAT_INNER_TOP_SPACING))
+                div = v_divider(margin_v=STAT_INNER_TOP_SPACING)
+                self._dividers.append(div)
+                lay.addWidget(div)
+
+    def _refresh_style(self, *_):
+        # يعيد بناء كل فاصل عمودي بلون الثيم الحالي (_C['border_med'] الجديد)
+        # بنفس صيغة v_divider() الأصلية بالظبط.
+        from ui.constants import V_DIVIDER_INNER_MARGIN_H
+        for div in self._dividers:
+            try:
+                div.setStyleSheet(
+                    f"background:{_C['border_med']};"
+                    f"border:none; margin:{STAT_INNER_TOP_SPACING}px {V_DIVIDER_INNER_MARGIN_H}px;"
+                )
+            except RuntimeError:
+                pass
 
     def set_value(self, index: int, text: str, color: str = None):
         if 0 <= index < len(self._cards):

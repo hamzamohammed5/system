@@ -60,6 +60,12 @@ class _InvestorForm(DualConnMixin, QWidget, WidgetMixin, EditModeMixin):
             f"color:{_C['investor_capital_text']}; font-size:{FS_XS}px;"
             "background:transparent; border:none;"
         )
+        # [إصلاح dark-mode] btn_add/btn_save/btn_cancel مبنية عبر make_btn()
+        # ومسجلة الـ style كـ property، لكن محدش كان بينده refresh_visible_buttons
+        # هنا — فكانت بتفضل بستايل الثيم اللي اتبنت فيه. نفس نمط الإصلاح
+        # في _investors_table.py / _investor_details.py.
+        from ui.widgets.components.button import refresh_visible_buttons
+        refresh_visible_buttons(self)
 
     def _build(self):
         root = QVBoxLayout(self)

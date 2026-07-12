@@ -61,10 +61,21 @@ class _InvestorDetails(DualConnMixin, WidgetMixin, QWidget):
         self.lbl_title.setAlignment(Qt.AlignCenter)
         root.addWidget(self.lbl_title)
 
+        # [إصلاح dark-mode] كان color=None صراحةً — ده بيتسبب في
+        # setStyleSheet(f"color:{self._current_color};") = "color:None;"
+        # وهي CSS غير صالحة فبترجع للون افتراضي غير متوقع من نظام التشغيل.
+        # كمان card_colors(None) كانت بترجع الـ fallback الرمادي دايمًا.
+        #
+        # استخدمنا _C["success"]/_C["danger"]/_C["blue"] (مش investor_*)
+        # عمدًا: دول موجودين في mapping _semantic_to_light_hex بتاعة
+        # card_colors()، فالكارت هيفضل يلاقي البالette الصح مهما اتغيّر
+        # الثيم لايف. investor_capital_text/investor_drawings_text
+        # مفيدين للنص العادي بس مش mapped في card_colors.
+        from ui.theme import _C
         self._stat_row = StatRow([
-            StatItem(label=tr("total_capital"),   color=None,  icon="💰"),
-            StatItem(label=tr("total_drawings"),  color=None, icon="💸"),
-            StatItem(label=tr("net_investment"),  color=None,                 icon="⚖️"),
+            StatItem(label=tr("total_capital"),   color=_C["success"], icon="💰"),
+            StatItem(label=tr("total_drawings"),  color=_C["danger"],  icon="💸"),
+            StatItem(label=tr("net_investment"),  color=_C["blue"],    icon="⚖️"),
         ])
         root.addWidget(self._stat_row)
 
@@ -98,6 +109,14 @@ class _InvestorDetails(DualConnMixin, WidgetMixin, QWidget):
             f"border-radius:{INVESTOR_TITLE_BORDER_RADIUS}px;"
             f"padding:{INVESTOR_TITLE_PAD_V}px {INVESTOR_TITLE_PAD_H}px;"
         )
+        # [إصلاح dark-mode] جدول الحركات المالية (self.table) بيتبنى مرة
+        # واحدة في _build() عبر build_movements_table() → make_table() بستايل
+        # ثابت وقت الإنشاء. لازم نعيد تطبيقه هنا صراحةً، ونفس الأمر لزرار
+        # "حذف الحركة المحددة" — نفس نمط الإصلاح في _investors_table.py.
+        from ui.widgets.tables.tables import refresh_table_styles
+        from ui.widgets.components.button import refresh_visible_buttons
+        refresh_table_styles(self)
+        refresh_visible_buttons(self)
 
     def _refresh(self):
         if self._inv_id is None:
