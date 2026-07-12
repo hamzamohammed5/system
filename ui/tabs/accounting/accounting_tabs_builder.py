@@ -15,18 +15,40 @@ from .financial.balance_sheet_tab    import BalanceSheetTab
 from ui.widgets.theme.layout_styles import tab_style
 from ui.widgets.theme.table_styles import splitter_style
 from ui.widgets.core.i18n import tr
+from ui.widgets.core.widget_mixin import WidgetMixin
 from ui.constants import SPLITTER_HANDLE_W, EQUITY_TAB_SPLITTER_SIZES
 
 
-# للتوافق مع accounting_section.py الذي يستورد _INNER_TAB_STYLE
+# [إصلاح dark-mode] القديم: _INNER_TAB_STYLE = tab_style(size="inner")
+# كان بياخد snapshot من _C وقت أول import بس ومبيتحدثش أبداً بعد كده.
+# لسه محتفظين بالاسم للتوافق مع أي كود قديم بيستورده، لكن دلوقتي
+# ThemedTabWidget هو المصدر الفعلي للستايل، وده بياخد القيمة الحالية
+# وقت الاستدعاء مش وقت الـ import.
 _INNER_TAB_STYLE = tab_style(size="inner")
 
 
+class ThemedTabWidget(QTabWidget, WidgetMixin):
+    """
+    QTabWidget بيتابع الثيم تلقائيًا — بديل مباشر لـ QTabWidget() + setStyleSheet ثابت.
+
+    المشكلة القديمة: _make_tab_widget() كانت بتحط setStyleSheet(tab_style(...))
+    مرة واحدة بس وقت الإنشاء، من غير أي تسجيل على bus.theme_changed، فالتبويبات
+    كانت بتفضل بلون الثيم اللي اتبنت فيه للأبد حتى لو الثيم اتبدّل بعد كده لايف.
+    """
+
+    def __init__(self, size: str = "inner", parent=None):
+        super().__init__(parent)
+        self._size = size
+        self.setLayoutDirection(Qt.RightToLeft)
+        self._init_widget_mixin(font=False, lang=False, data=False)
+        self._refresh_style()
+
+    def _refresh_style(self, *_):
+        self.setStyleSheet(tab_style(size=self._size))
+
+
 def _make_tab_widget(size: str = "inner") -> QTabWidget:
-    tabs = QTabWidget()
-    tabs.setLayoutDirection(Qt.RightToLeft)
-    tabs.setStyleSheet(tab_style(size=size))
-    return tabs
+    return ThemedTabWidget(size=size)
 
 
 def build_accounts_tabs(acc):

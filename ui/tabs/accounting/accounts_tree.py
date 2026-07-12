@@ -58,12 +58,25 @@ class AccountsTreePanel(SafeConnMixin, QWidget, WidgetMixin):
         self._loading    = False
         self._company_id = self._get_company_id()
         self._build()
-        self._init_widget_mixin(theme=False, font=False, lang=False, data=True)
+        self._init_widget_mixin(theme=True, font=False, lang=False, data=True)
         self._load()
 
     def _refresh_data(self, company_id=None):
         if self._on_company_event_safe(company_id):
             self._load()
+
+    def _refresh_style(self, *_):
+        # [Fix - dark theme tree] self.tree كان بياخد get_tree_style() مرة
+        # واحدة بس وقت الإنشاء، و theme=False في _init_widget_mixin كان
+        # معناه إن الـ widget ده أصلاً مش متسجل على bus.theme_changed
+        # خالص. نفس السبب إن العقدة الرأسية "الأصول" وأي جزء تاني من
+        # الشجرة كان بيفضل بستايل الثيم اللي كان موجود وقت البناء
+        # (غالبًا فاتح) حتى بعد التحويل لـ dark.
+        from ui.widgets.theme.layout_styles import tree_style as get_tree_style
+        if hasattr(self, "tree"):
+            self.tree.setStyleSheet(get_tree_style())
+        from ui.widgets.components.button import refresh_visible_buttons
+        refresh_visible_buttons(self)
 
     def _build(self):
         main_layout = QVBoxLayout(self)

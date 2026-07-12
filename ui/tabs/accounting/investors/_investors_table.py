@@ -65,6 +65,15 @@ class _InvestorsTable(DualConnMixin, WidgetMixin, QWidget):
             self._load()
 
     def _refresh_style(self, *_):
+        # [Fix - dark theme tables/buttons] self.table كان بياخد
+        # table_style() مرة واحدة بس وقت الإنشاء عبر make_list_table()،
+        # والأزرار (btn_edit/btn_del/btn_capital/btn_draw) بتاخد ستايلها
+        # عبر make_btn() بنفس المشكلة — محدش كان بينادي إعادة التطبيق هنا
+        # بعد تغيير الثيم. نفس نمط الإصلاح في _OffersTable و ListHeader.
+        from ui.widgets.tables.tables import refresh_table_styles
+        from ui.widgets.components.button import refresh_visible_buttons
+        refresh_table_styles(self)
+        refresh_visible_buttons(self)
         from ui.theme import _C
         if hasattr(self, 'lbl_title'):
             self.lbl_title.setStyleSheet(

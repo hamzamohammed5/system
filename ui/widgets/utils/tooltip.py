@@ -151,14 +151,30 @@ class CustomTooltipFilter(QObject):
     def eventFilter(self, obj, event) -> bool:
         if event.type() == QEvent.ToolTip:
             from PyQt5.QtGui import QHelpEvent
+
+            # [Fix] بعض الـ composite widgets (زي QDoubleSpinBox) عندها
+            # أجزاء داخلية (internal QLineEdit, up/down buttons) بتستقبل
+            # QEvent.ToolTip بدل الـ widget الأب نفسه. لو النص فاضي على
+            # obj المباشر، نطلع في سلسلة الآباء (parent chain) لحد ما
+            # نلاقي toolTip فعلي أو نوصل للسقف.
             widget = obj if isinstance(obj, QWidget) else None
-            text = widget.toolTip() if widget else ""
+            text = ""
+            probe = widget
+            while probe is not None and not text:
+                text = probe.toolTip()
+                probe = probe.parentWidget()
+
+
             if text and isinstance(event, QHelpEvent):
                 self._label.show_at(text, event.globalPos())
-                return True  # امنع Qt من عرض الـ QToolTip الافتراضي كمان
             else:
                 self._label.hide()
-                return True
+
+            # [Fix] event.ignore() + True: نمنع Qt من محاولة رسم الـ
+            # QToolTip الأصلي (اللي بيرجع أحيانًا لمحرك الثيم الأصلي
+            # لنظام Windows متجاهلاً QSS) حتى لو النص فاضي.
+            event.ignore()
+            return True
 
         if event.type() in (QEvent.Leave, QEvent.MouseButtonPress,
                             QEvent.HoverLeave, QEvent.Wheel):

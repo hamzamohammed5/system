@@ -73,49 +73,34 @@ class _LinesPanel(DualConnMixin, QFrame, WidgetMixin):
         root.setSpacing(0)
 
         # رأس
-        hdr = QFrame()
-        hdr.setStyleSheet(f"background:{_C['journal_header_bg']}; border-radius:{LINES_PANEL_HDR_BORDER_RADIUS};")
-        hdr.setFixedHeight(LINES_PANEL_HDR_H)
-        hl = QHBoxLayout(hdr)
+        self._hdr = QFrame()
+        self._hdr.setFixedHeight(LINES_PANEL_HDR_H)
+        hl = QHBoxLayout(self._hdr)
         hl.setContentsMargins(LINES_PANEL_HDR_MARGIN_H, LINES_PANEL_HDR_MARGIN_V,
                               LINES_PANEL_HDR_MARGIN_H, LINES_PANEL_HDR_MARGIN_V)
 
-        lbl = QLabel(tr("journal_lines_title"))
-        lbl.setStyleSheet(
-            f"font-weight:bold; font-size:{FS_BASE}px; color:{_C['accent']};"
-            "background:transparent; border:none;"
-        )
+        self._lbl_title = QLabel(tr("journal_lines_title"))
         self.lbl_dr = QLabel(tr("journal_dr_total", amount="0.00"))
-        self.lbl_dr.setStyleSheet(
-            f"font-weight:bold; color:{_C['journal_dr_accent']}; background:{_C['badge_dr_bg']};"
-            f"border-radius:{LINES_PANEL_BADGE_RADIUS}px; padding:{LINES_PANEL_BADGE_PAD_V}px {LINES_PANEL_BADGE_PAD_H}px; font-size:{FS_SM}px; border:none;"
-        )
         self.lbl_cr = QLabel(tr("journal_cr_total", amount="0.00"))
-        self.lbl_cr.setStyleSheet(
-            f"font-weight:bold; color:{_C['journal_cr_accent']}; background:{_C['badge_cr_bg']};"
-            f"border-radius:{LINES_PANEL_BADGE_RADIUS}px; padding:{LINES_PANEL_BADGE_PAD_V}px {LINES_PANEL_BADGE_PAD_H}px; font-size:{FS_SM}px; border:none;"
-        )
-        hl.addWidget(lbl)
+        hl.addWidget(self._lbl_title)
         hl.addStretch()
         hl.addWidget(self.lbl_dr)
         hl.addSpacing(LINES_PANEL_HDR_SPACING)
         hl.addWidget(self.lbl_cr)
-        root.addWidget(hdr)
+        root.addWidget(self._hdr)
 
         # رؤوس الأعمدة
-        col_hdr = QFrame()
-        col_hdr.setStyleSheet(f"background:{_C['bg_surface_2']};")
-        ch_lay = QHBoxLayout(col_hdr)
+        self._col_hdr = QFrame()
+        ch_lay = QHBoxLayout(self._col_hdr)
         ch_lay.setContentsMargins(LINES_PANEL_COL_HDR_MARGIN_L, LINES_PANEL_COL_HDR_MARGIN_V,
                                   LINES_PANEL_COL_HDR_MARGIN_R, LINES_PANEL_COL_HDR_MARGIN_V)
         ch_lay.setSpacing(LINES_PANEL_COL_HDR_SPACING)
 
+        self._col_hdr_labels = []
+
         def _ch(text, w=None, stretch=0):
             lbl2 = QLabel(text)
-            lbl2.setStyleSheet(
-                f"font-size:{FS_XS}px; color:{_C['text_sec']}; font-weight:bold;"
-                "background:transparent; border:none;"
-            )
+            self._col_hdr_labels.append(lbl2)
             if w:
                 lbl2.setFixedWidth(w)
             ch_lay.addWidget(lbl2, stretch=stretch)
@@ -125,40 +110,44 @@ class _LinesPanel(DualConnMixin, QFrame, WidgetMixin):
         _ch(tr("lines_col_amount"),   w=110)
         _ch(tr("lines_col_desc"),     stretch=2)
         _ch("",        w=22)
-        root.addWidget(col_hdr)
+        root.addWidget(self._col_hdr)
 
         # منطقة الصفوف
         self._rows_w   = QFrame()
-        self._rows_w.setStyleSheet("background:transparent;")
         self._rows_lay = QVBoxLayout(self._rows_w)
         self._rows_lay.setSpacing(LINES_PANEL_ROWS_SPACING)
         self._rows_lay.setContentsMargins(LINES_PANEL_ROWS_MARGIN, LINES_PANEL_ROWS_MARGIN,
                                           LINES_PANEL_ROWS_MARGIN, LINES_PANEL_ROWS_MARGIN)
         self._rows_lay.addStretch()
 
-        scroll = QScrollArea()
-        scroll.setWidgetResizable(True)
-        scroll.setWidget(self._rows_w)
-        scroll.setMinimumHeight(LINES_PANEL_SCROLL_MIN_H)
-        scroll.setMaximumHeight(LINES_PANEL_SCROLL_MAX_H)
-        scroll.setStyleSheet(f"QScrollArea {{ border:none; background:{_C['bg_surface']}; }}")
-        root.addWidget(scroll)
+        self._scroll = QScrollArea()
+        self._scroll.setWidgetResizable(True)
+        self._scroll.setWidget(self._rows_w)
+        self._scroll.setMinimumHeight(LINES_PANEL_SCROLL_MIN_H)
+        self._scroll.setMaximumHeight(LINES_PANEL_SCROLL_MAX_H)
+        root.addWidget(self._scroll)
 
-        btn_add = QPushButton(tr("add_journal_line"))
-        btn_add.setMinimumHeight(LINES_PANEL_BTN_ADD_MIN_H)
-        btn_add.setStyleSheet(f"""
-            QPushButton {{
-                background: {_C['journal_header_bg']}; color: {_C['accent']};
-                border: {LINES_PANEL_BTN_ADD_BORDER_W}px solid {_C['journal_header_border']}; border-radius: {LINES_PANEL_BTN_ADD_RADIUS}px;
-                font-weight: bold; padding: {LINES_PANEL_BTN_ADD_PAD_V}px {LINES_PANEL_BTN_ADD_PAD_H}px; margin: {LINES_PANEL_BTN_ADD_MARGIN_V}px {LINES_PANEL_BTN_ADD_MARGIN_H}px;
-            }}
-            QPushButton:hover {{ background: {_C['accent']}; color: {_C['accent_text']}; }}
-        """)
-        btn_add.clicked.connect(self.add_line)
-        root.addWidget(btn_add)
+        self._btn_add = QPushButton(tr("add_journal_line"))
+        self._btn_add.setMinimumHeight(LINES_PANEL_BTN_ADD_MIN_H)
+        self._btn_add.clicked.connect(self.add_line)
+        root.addWidget(self._btn_add)
 
-    def _refresh_style(self, *_):
+        self._apply_inner_styles()
+
+    def _apply_inner_styles(self):
+        """
+        [Fix - dark theme] كل العناصر الداخلية (hdr, col_hdr, labels,
+        scroll, btn_add) كانت بتاخد ستايلها مرة واحدة بس جوه _build()
+        باستخدام _C وقت الإنشاء. _refresh_style() القديمة كانت بتحدّث
+        self (الإطار الخارجي) بس، فباقي العناصر كانت تفضل بلون الثيم
+        الأول (غالبًا فاتح) حتى بعد التحويل لـ dark — نفس نمط المشكلة
+        في bom_tree.lbl_legend و _OffersTable و accounts_tree.
+
+        الدالة دي بتتنادى من _build() (أول رسم) ومن _refresh_style()
+        (بعد كل تغيير ثيم) عشان تضمن قراءة _C الحالية دايمًا.
+        """
         from ui.theme import _C
+
         self.setStyleSheet(f"""
             QFrame {{
                 background: {_C['bg_surface']};
@@ -166,6 +155,44 @@ class _LinesPanel(DualConnMixin, QFrame, WidgetMixin):
                 border-radius: {LINES_PANEL_BORDER_RADIUS}px;
             }}
         """)
+
+        self._hdr.setStyleSheet(
+            f"background:{_C['journal_header_bg']}; border-radius:{LINES_PANEL_HDR_BORDER_RADIUS};"
+        )
+        self._lbl_title.setStyleSheet(
+            f"font-weight:bold; font-size:{FS_BASE}px; color:{_C['accent']};"
+            "background:transparent; border:none;"
+        )
+        self.lbl_dr.setStyleSheet(
+            f"font-weight:bold; color:{_C['journal_dr_accent']}; background:{_C['badge_dr_bg']};"
+            f"border-radius:{LINES_PANEL_BADGE_RADIUS}px; padding:{LINES_PANEL_BADGE_PAD_V}px {LINES_PANEL_BADGE_PAD_H}px; font-size:{FS_SM}px; border:none;"
+        )
+        self.lbl_cr.setStyleSheet(
+            f"font-weight:bold; color:{_C['journal_cr_accent']}; background:{_C['badge_cr_bg']};"
+            f"border-radius:{LINES_PANEL_BADGE_RADIUS}px; padding:{LINES_PANEL_BADGE_PAD_V}px {LINES_PANEL_BADGE_PAD_H}px; font-size:{FS_SM}px; border:none;"
+        )
+
+        self._col_hdr.setStyleSheet(f"background:{_C['bg_surface_2']};")
+        for lbl2 in self._col_hdr_labels:
+            lbl2.setStyleSheet(
+                f"font-size:{FS_XS}px; color:{_C['text_sec']}; font-weight:bold;"
+                "background:transparent; border:none;"
+            )
+
+        self._rows_w.setStyleSheet("background:transparent;")
+        self._scroll.setStyleSheet(f"QScrollArea {{ border:none; background:{_C['bg_surface']}; }}")
+
+        self._btn_add.setStyleSheet(f"""
+            QPushButton {{
+                background: {_C['journal_header_bg']}; color: {_C['accent']};
+                border: {LINES_PANEL_BTN_ADD_BORDER_W}px solid {_C['journal_header_border']}; border-radius: {LINES_PANEL_BTN_ADD_RADIUS}px;
+                font-weight: bold; padding: {LINES_PANEL_BTN_ADD_PAD_V}px {LINES_PANEL_BTN_ADD_PAD_H}px; margin: {LINES_PANEL_BTN_ADD_MARGIN_V}px {LINES_PANEL_BTN_ADD_MARGIN_H}px;
+            }}
+            QPushButton:hover {{ background: {_C['accent']}; color: {_C['accent_text']}; }}
+        """)
+
+    def _refresh_style(self, *_):
+        self._apply_inner_styles()
 
     def add_line(self) -> _SmartLine:
         line = _SmartLine(

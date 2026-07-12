@@ -94,6 +94,12 @@ class IncomeStatementTab(SafeConnMixin, QWidget, WidgetMixin):
         root.addWidget(splitter, stretch=1)
 
     def _refresh_style(self, *_):
+        # [Fix - dark theme tables] table_rev / table_exp كانت بتاخد
+        # table_style() مرة واحدة بس وقت الإنشاء داخل make_table()، ومحدش
+        # كان بينادي إعادة تطبيقه هنا بعد تغيير الثيم — نفس نمط الإصلاح
+        # في _OffersTable._refresh_style و BomTree._refresh_style.
+        from ui.widgets.tables.tables import refresh_table_styles
+        refresh_table_styles(self)
         if not hasattr(self, "_section_labels"):
             return
         for lbl, color_key in self._section_labels:

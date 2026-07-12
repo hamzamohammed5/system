@@ -158,6 +158,7 @@ def _build_table(columns: list, stretch_col: int = -1,
     table.verticalHeader().setVisible(False)
     table.setShowGrid(False)
     table.setStyleSheet(table_style(variant))
+    table.setProperty("_table_variant", variant)
 
     hh = table.horizontalHeader()
     vh = table.verticalHeader()
@@ -226,9 +227,8 @@ def make_list_table(columns: list, stretch_col: int = -1,
                     col_widths: dict = None) -> QTableWidget:
     table = _build_table(columns, stretch_col, col_widths,
                          row_height=ROW_HEIGHT_LARGE)
-    table.setStyleSheet(table.styleSheet() + """
-        QTableWidget { border:none; border-radius:0; }
-    """)
+    table.setProperty("_table_extra_qss", "QTableWidget { border:none; border-radius:0; }")
+    table.setStyleSheet(table.styleSheet() + table.property("_table_extra_qss"))
     return table
 
 
@@ -305,3 +305,54 @@ def fit_splitter_table(splitter: QSplitter, table: QTableWidget,
         QTimer.singleShot(delay_ms, _fit)
     else:
         _fit()
+
+
+# ══════════════════════════════════════════════════════════
+# [Fix - dark theme tables] إعادة تطبيق ستايل الجداول عند تغيير الثيم
+# ══════════════════════════════════════════════════════════
+#
+# المشكلة: _build_table() كانت بتطبق table_style(variant) مرة واحدة بس
+# وقت الإنشاء. أي widget بيبني جدول عبر make_table/make_list_table/
+# make_fixed_table/make_splitter_table وميعملش setStyleSheet(table_style())
+# بنفسه داخل _refresh_style() الخاصة بيه، كان الجدول بيفضل بستايل الثيم
+# اللي كان موجود وقت الإنشاء (غالبًا فاتح) حتى بعد التحويل لـ dark.
+# هذا بالظبط سبب الجداول الفاتحة في income_statement_tab, _investors_table،
+# وأي جدول تاني مبني بنفس الطريقة من غير override يدوي لـ _refresh_style.
+#
+# الحل: نفس نمط refresh_visible_buttons() في button.py — بنحفظ الـ variant
+# (وأي QSS إضافي زي في make_list_table) كـ Qt property وقت البناء،
+# وبنوفر دالة عامة تدور على كل QTableWidget في شجرة الـ widgets وتعيد
+# تطبيق الستايل الصحيح للثيم الحالي.
+
+def refresh_table_styles(root_widget) -> int:
+    """
+    يُعيد تطبيق table_style() على كل QTableWidget في شجرة الـ widget
+    اللي اتبنت عبر make_table/make_list_table/make_fixed_table/
+    make_splitter_table (أي جدول عليه property "_table_variant").
+
+    يُستدعى من _refresh_style() الخاصة بأي widget أب بدل ما كل widget
+    يكتب self.table.setStyleSheet(table_style()) يدويًا.
+
+    مثال:
+        def _refresh_style(self, *_):
+            from ui.widgets.tables.tables import refresh_table_styles
+            refresh_table_styles(self)
+    """
+    count = 0
+    try:
+        for tbl in root_widget.findChildren(QTableWidget):
+            variant = tbl.property("_table_variant")
+            if variant is None:
+                continue
+            try:
+                ss = table_style(variant)
+                extra = tbl.property("_table_extra_qss")
+                if extra:
+                    ss += extra
+                tbl.setStyleSheet(ss)
+                count += 1
+            except RuntimeError:
+                pass
+    except RuntimeError:
+        pass
+    return count

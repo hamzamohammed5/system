@@ -54,6 +54,22 @@ class _AccountForm(SafeConnMixin, QWidget, WidgetMixin):
         """)
         self.lbl_form_mode.setStyleSheet(f"font-weight:bold; color:{_C['accent']};")
 
+        # [إصلاح dark-mode] إجبار كل الـ Themed inputs الفرعية إنها تعيد
+        # تلوين نفسها صراحةً. السبب: كل ThemedLineEdit/ThemedComboBox مسجلة
+        # لوحدها في bus.theme_changed عبر WidgetMixin الخاص بيها، ومفروض
+        # تتلوّن تلقائيًا — لكن كإجراء دفاعي (في حال أي race condition في
+        # ترتيب الإنشاء/الاتصال بالـ bus، أو استدعاء _refresh_style قبل
+        # ما الـ mixin يخلص التسجيل) بننده عليها هنا صراحةً برضو، عشان
+        # نضمن 100% إن كل حقول الفورم بتتلون مع الثيم مهما كان توقيت
+        # التسجيل على الـ signal.
+        for widget_name in ("inp_code", "inp_name", "cmb_type", "cmb_group"):
+            w = getattr(self, widget_name, None)
+            if w is not None and hasattr(w, "_refresh_style"):
+                try:
+                    w._refresh_style()
+                except RuntimeError:
+                    pass
+
     def _build(self):
         root = QVBoxLayout(self)
         root.setContentsMargins(*ACCOUNT_FORM_ROOT_MARGIN)

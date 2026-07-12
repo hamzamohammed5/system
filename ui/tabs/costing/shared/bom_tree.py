@@ -60,16 +60,12 @@ class BomTree(QWidget, WidgetMixin):
             f"font-weight:bold; font-size:{FS_MD}px; color:{_C['text_primary']};"
         )
 
-        lbl_legend = QLabel(
+        self.lbl_legend = QLabel(
             f"{tr('bom_tree_warning_icon')} = {tr('waste_pct')}   |   "
             f"{tr('effective_qty')} = {tr('qty')} {tr('bom_tree_multiply_sign')} (1 + {tr('waste_pct')}{tr('percent_sign')})   |   "
             f"{tr('bom_tree_star_icon')} = {tr('default_scenario')}"
         )
-        lbl_legend.setStyleSheet(
-            f"font-size:{FS_XS}px; color:{_C['orange']}; background:{_C['warning_bg']};"
-            f"border:1px solid {_C['warning_border']}; border-radius:{BOM_TREE_LEGEND_RADIUS}px;"
-            f"padding:{BOM_TREE_LEGEND_PAD_V}px {BOM_TREE_LEGEND_PAD_H}px;"
-        )
+        # [Fix] الستايل بينتقل لـ _refresh_style عشان يتحدث مع تغيير الثيم
 
         self.btn_expand   = QPushButton(f"{tr('bom_tree_expand_icon')}{tr('expand_all')}")
         self.btn_collapse = QPushButton(f"{tr('bom_tree_collapse_icon')}{tr('collapse_all')}")
@@ -84,7 +80,7 @@ class BomTree(QWidget, WidgetMixin):
         self.btn_del_node.clicked.connect(self._delete_node)
 
         header.addWidget(lbl)
-        header.addWidget(lbl_legend)
+        header.addWidget(self.lbl_legend)
         header.addStretch()
         for btn in (self.btn_expand, self.btn_collapse, self.btn_del_node):
             header.addWidget(btn)
@@ -150,6 +146,12 @@ class BomTree(QWidget, WidgetMixin):
     # [Fix #10] دالة تطبيق الـ theme — تُستدعى عند البناء وعند تغيير الثيم
     def _refresh_style(self, _=None):
         """يُطبق الـ stylesheet عند تغيير الثيم."""
+        if hasattr(self, "lbl_legend"):
+            self.lbl_legend.setStyleSheet(
+                f"font-size:{FS_XS}px; color:{_C['orange']}; background:{_C['warning_bg']};"
+                f"border:1px solid {_C['warning_border']}; border-radius:{BOM_TREE_LEGEND_RADIUS}px;"
+                f"padding:{BOM_TREE_LEGEND_PAD_V}px {BOM_TREE_LEGEND_PAD_H}px;"
+            )
         if hasattr(self, "tree"):
             self.tree.setStyleSheet(f"""
                 QTreeWidget {{

@@ -70,6 +70,14 @@ class _OffersTable(QWidget, WidgetMixin):
         from ui.widgets.tables.tables import table_style
         self.table.setStyleSheet(table_style())
         self._apply_filter()
+        # [Fix - dark theme buttons] btn_edit / btn_del كانت بتتبنى بـ
+        # make_btn() اللي بتحفظ الستايل property صح، لكن محدش كان
+        # بينادي refresh_visible_buttons() هنا بعد تغيير الثيم، فالأزرار
+        # كانت تفضل بستايل الثيم اللي كانت موجودة وقت الإنشاء (غالبًا
+        # فاتح) حتى بعد التحويل لـ dark — نفس نمط الإصلاح في
+        # _FormHeaderBar._refresh_style و ListHeader._refresh_style.
+        from ui.widgets.components.button import refresh_visible_buttons
+        refresh_visible_buttons(self)
 
     def _refresh_data(self, company_id=None):
         self._load()
