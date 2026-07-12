@@ -8,9 +8,9 @@ _GroupFilterCombo — Combo فلتر التصنيفات في شجرة الحسا
   - refresh(conn=None) تقبل conn خارجي (من AccountsTreePanel عند تغيير الشركة).
 """
 
-from PyQt5.QtWidgets import QComboBox
 from PyQt5.QtCore import Qt
 from PyQt5.QtGui  import QColor
+from ui.widgets.panels.themed_inputs import ThemedComboBox
 
 from services.accounting.accounts_service import AccountsService
 from ui.widgets.core.conn import SafeConnMixin
@@ -18,7 +18,7 @@ from ui.widgets.core.i18n import tr
 from ui.widgets.core.widget_mixin import WidgetMixin
 
 
-class _GroupFilterCombo(SafeConnMixin, QComboBox, WidgetMixin):
+class _GroupFilterCombo(SafeConnMixin, ThemedComboBox, WidgetMixin):
     """Combo لفلترة الحسابات بالتصنيف."""
 
     def __init__(self, conn, acc_types: list, parent=None):

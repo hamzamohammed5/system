@@ -6,14 +6,14 @@ ui/tabs/design/dimension_sets/_categories_panel.py
 
 from PyQt5.QtWidgets import (
     QWidget, QVBoxLayout, QHBoxLayout,
-    QPushButton, QLabel, QLineEdit,
-    QComboBox, QGroupBox,
+    QPushButton, QLabel, QGroupBox,
     QFormLayout, QMessageBox, QColorDialog,
     QTreeWidget, QTreeWidgetItem,
 
 )
 from PyQt5.QtCore import Qt, pyqtSignal
 from PyQt5.QtGui  import QColor
+from ui.widgets.panels.themed_inputs import ThemedLineEdit, ThemedComboBox
 
 from ui.theme import _C
 from ui.widgets.core.i18n import tr
@@ -109,12 +109,12 @@ class _CategoriesPanel(QWidget, WidgetMixin):
         self.lbl_mode = QLabel(tr("dim_cat_new_mode"))
         form.addRow(self.lbl_mode)
 
-        self.inp_cat_name = QLineEdit()
+        self.inp_cat_name = ThemedLineEdit()
         self.inp_cat_name.setPlaceholderText(tr("category_name") + "...")
         self.inp_cat_name.setMinimumHeight(DIM_CAT_PANEL_INPUT_H)
         form.addRow(tr("category_name") + " :", self.inp_cat_name)
 
-        self.cmb_parent = QComboBox()
+        self.cmb_parent = ThemedComboBox()
         self.cmb_parent.setMinimumHeight(DIM_CAT_PANEL_COMBO_H)
         form.addRow(tr("category_parent") + " :", self.cmb_parent)
 

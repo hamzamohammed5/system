@@ -3,12 +3,13 @@ ui/tabs/orders/_order_form.py
 """
 from PyQt5.QtWidgets import (
     QDialog, QVBoxLayout, QHBoxLayout, QFormLayout,
-    QLabel, QLineEdit, QPushButton,
-    QComboBox, QTextEdit, QDateEdit,
+    QLabel, QPushButton,
+    QTextEdit, QDateEdit,
     QMessageBox, QGroupBox,
     QDoubleSpinBox, QScrollArea, QWidget, QFrame,
 )
 from PyQt5.QtCore import Qt, pyqtSignal, QDate
+from ui.widgets.panels.themed_inputs import ThemedLineEdit, ThemedComboBox
 
 from services.orders.customer_service import CustomerService
 from services.orders.order_service import OrderService
@@ -143,7 +144,7 @@ class _OrderForm(QDialog):
         c_lay.setSpacing(ORDER_FORM_GRP_SPACING)
 
         search_row = QHBoxLayout()
-        self.inp_cust_search = QLineEdit()
+        self.inp_cust_search = ThemedLineEdit()
         self.inp_cust_search.setPlaceholderText(tr("order_customer_search"))
         self.inp_cust_search.textChanged.connect(self._search_customers)
 
@@ -154,7 +155,7 @@ class _OrderForm(QDialog):
         search_row.addWidget(btn_new_cust)
         c_lay.addLayout(search_row)
 
-        self.cmb_customer = QComboBox()
+        self.cmb_customer = ThemedComboBox()
         self.cmb_customer.setPlaceholderText(tr("select_field").format(label=tr("customer_name")))
         self._all_customers = self._cust_svc.list_customers()
         for c in self._all_customers:
@@ -181,19 +182,19 @@ class _OrderForm(QDialog):
         form.setSpacing(ORDER_FORM_DETAILS_SPACING)
         form.setLabelAlignment(Qt.AlignRight)
 
-        self.cmb_type = QComboBox()
+        self.cmb_type = ThemedComboBox()
         for k, v in _get_type_options():
             self.cmb_type.addItem(v, k)
         form.addRow(tr("order_type_label"), self.cmb_type)
 
-        self.cmb_status = QComboBox()
+        self.cmb_status = ThemedComboBox()
         for k, v in _get_status_options():
             self.cmb_status.addItem(v, k)
         if not self.order_id:
             self.cmb_status.setVisible(False)
         form.addRow(tr("order_status_label"), self.cmb_status)
 
-        self.cmb_priority = QComboBox()
+        self.cmb_priority = ThemedComboBox()
         for k, v in _get_priority_options():
             self.cmb_priority.addItem(v, k)
         self.cmb_priority.setCurrentIndex(1)
@@ -233,7 +234,7 @@ class _OrderForm(QDialog):
         lbl_offer = QLabel(tr("order_select_offer_lbl"))
         lbl_offer.setStyleSheet(f"color:{_C['text_muted']}; font-size:{FS_SM}px;")
 
-        self.cmb_offers = QComboBox()
+        self.cmb_offers = ThemedComboBox()
         self.cmb_offers.setMinimumHeight(ORDER_FORM_OFFERS_MIN_H)
         self.cmb_offers.setMinimumWidth(ORDER_FORM_OFFERS_MIN_W)
         self._load_offers_combo()

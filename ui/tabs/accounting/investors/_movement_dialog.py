@@ -13,9 +13,10 @@ _MovementDialog — نافذة إضافة حركة (capital / drawings) لمست
 
 from PyQt5.QtWidgets import (
     QDialog, QVBoxLayout, QHBoxLayout,
-    QLabel, QComboBox,
+    QLabel,
 )
 from PyQt5.QtCore import Qt
+from ui.widgets.panels.themed_inputs import ThemedComboBox
 
 from ui.widgets.core.events import bus, emit_company_data_changed
 from ui.widgets.core.conn import DualConnMixin
@@ -103,7 +104,7 @@ class _MovementDialog(DualConnMixin, WidgetMixin, QDialog):
         self.dt_date = DateField(height=30, width=140)
         grp.add_row(tr("date") + ":", self.dt_date)
 
-        self.cmb_equity_acc = QComboBox()
+        self.cmb_equity_acc = ThemedComboBox()
         self.cmb_equity_acc.setMinimumHeight(BTN_MIN_HEIGHT)
         if is_cap:
             _fill_capital_combo(self.cmb_equity_acc, acc)
@@ -112,7 +113,7 @@ class _MovementDialog(DualConnMixin, WidgetMixin, QDialog):
             _fill_drawings_combo(self.cmb_equity_acc, acc)
             grp.add_row(tr("drawings_account_row"), self.cmb_equity_acc)
 
-        self.cmb_asset_acc = QComboBox()
+        self.cmb_asset_acc = ThemedComboBox()
         self.cmb_asset_acc.setMinimumHeight(BTN_MIN_HEIGHT)
         _fill_asset_combo(self.cmb_asset_acc, acc)
         asset_lbl = tr("deposit_account_row") if is_cap else tr("payment_account_label")

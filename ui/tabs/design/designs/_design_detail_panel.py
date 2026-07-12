@@ -7,12 +7,13 @@ ui/tabs/design/designs/_design_detail_panel.py
 
 from PyQt5.QtWidgets import (
     QWidget, QVBoxLayout, QHBoxLayout,
-    QPushButton, QLabel, QLineEdit,
-    QComboBox, QMessageBox, QFrame,
+    QPushButton, QLabel,
+    QMessageBox, QFrame,
     QScrollArea, QDialog,
 )
 from PyQt5.QtCore import Qt, pyqtSignal
 from PyQt5.QtGui import QFont
+from ui.widgets.panels.themed_inputs import ThemedLineEdit, ThemedComboBox
 
 from services.design import get_design_service, get_design_size_service
 from ._size_card   import _SizeCard
@@ -153,7 +154,7 @@ class _DesignDetailPanel(QWidget, WidgetMixin):
         lbl_name.setStyleSheet(s.label_field())
         self._field_labels.append(lbl_name)
         name_col.addWidget(lbl_name)
-        self.inp_name = QLineEdit()
+        self.inp_name = ThemedLineEdit()
         self.inp_name.setPlaceholderText(tr("design_detail_name_placeholder"))
         self.inp_name.setStyleSheet(s.input_field())
         name_col.addWidget(self.inp_name)
@@ -169,7 +170,7 @@ class _DesignDetailPanel(QWidget, WidgetMixin):
         lbl_cat.setStyleSheet(s.label_field())
         self._field_labels.append(lbl_cat)
         cat_col.addWidget(lbl_cat)
-        self.cmb_cat = QComboBox()
+        self.cmb_cat = ThemedComboBox()
         self.cmb_cat.setStyleSheet(s.combo_field())
         self.cmb_cat.setMinimumWidth(DESIGN_DETAIL_CMB_MIN_W)
         cat_col.addWidget(self.cmb_cat)
@@ -180,7 +181,7 @@ class _DesignDetailPanel(QWidget, WidgetMixin):
         lbl_notes.setStyleSheet(s.label_field())
         self._field_labels.append(lbl_notes)
         notes_col.addWidget(lbl_notes)
-        self.inp_notes = QLineEdit()
+        self.inp_notes = ThemedLineEdit()
         self.inp_notes.setPlaceholderText(tr("design_detail_notes_placeholder"))
         self.inp_notes.setStyleSheet(s.input_field())
         notes_col.addWidget(self.inp_notes)

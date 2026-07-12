@@ -3,10 +3,11 @@ ui/tabs/orders/orders/_filter_toolbar.py
 """
 from PyQt5.QtWidgets import (
     QVBoxLayout, QHBoxLayout, QFrame,
-    QLineEdit, QPushButton, QComboBox, QSizePolicy,
+    QPushButton, QSizePolicy,
 )
 from PyQt5.QtCore import Qt, pyqtSignal, QTimer
 from PyQt5.QtGui  import QFontMetrics, QFont
+from ui.widgets.panels.themed_inputs import ThemedLineEdit, ThemedComboBox
 
 from ui.theme import _C
 from ui.widgets.components.button import make_btn
@@ -104,7 +105,7 @@ class _FilterToolbar(QFrame, WidgetMixin):
         row0.addStretch(1)
         root.addLayout(row0)
 
-        self.inp_search = QLineEdit()
+        self.inp_search = ThemedLineEdit()
         self.inp_search.setPlaceholderText(tr("order_search_placeholder"))
         self.inp_search.setFixedHeight(FILTER_TB_SEARCH_H)
         self.inp_search.setClearButtonEnabled(True)
@@ -118,7 +119,7 @@ class _FilterToolbar(QFrame, WidgetMixin):
         STATUS_LABELS   = get_status_labels()
         PRIORITY_LABELS = get_priority_labels()
 
-        self.cmb_status = QComboBox()
+        self.cmb_status = ThemedComboBox()
         self.cmb_status.setFixedHeight(FILTER_TB_COMBO_MIN_H)
         self.cmb_status.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Fixed)
         self.cmb_status.setStyleSheet(_combo_ss())
@@ -127,7 +128,7 @@ class _FilterToolbar(QFrame, WidgetMixin):
             self.cmb_status.addItem(lbl, k)
         self.cmb_status.currentIndexChanged.connect(self.changed.emit)
 
-        self.cmb_priority = QComboBox()
+        self.cmb_priority = ThemedComboBox()
         self.cmb_priority.setFixedHeight(FILTER_TB_COMBO_MIN_H)
         self.cmb_priority.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Fixed)
         self.cmb_priority.setStyleSheet(_combo_ss())

@@ -6,11 +6,12 @@ Sidebar تصنيفات التصميمات — مع دعم كامل لتغيير 
 
 from PyQt5.QtWidgets import (
     QWidget, QVBoxLayout, QHBoxLayout,
-    QPushButton, QLabel, QLineEdit,
+    QPushButton, QLabel,
     QMessageBox, QFrame,
     QScrollArea
 )
 from PyQt5.QtCore import Qt, pyqtSignal
+from ui.widgets.panels.themed_inputs import ThemedLineEdit
 
 from services.design import get_design_service
 from ui.tabs.design.design_styles import get_styles
@@ -140,7 +141,7 @@ class DesignsCategoriesPanel(QWidget, WidgetMixin):
         sf_lay.setContentsMargins(0, DESIGN_CATS_SEARCH_MARGIN_V, 0, DESIGN_CATS_SEARCH_MARGIN_V)
         sf_lay.setSpacing(DESIGN_CATS_SEARCH_SPACING)
 
-        self._inp_search = QLineEdit()
+        self._inp_search = ThemedLineEdit()
         self._inp_search.setPlaceholderText(tr("design_cats_search_placeholder"))
         self._inp_search.setMinimumHeight(DESIGN_CATS_INP_MIN_H)
         self._inp_search.setStyleSheet(s.input_search())

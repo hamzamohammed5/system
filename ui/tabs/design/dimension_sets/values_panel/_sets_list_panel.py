@@ -6,10 +6,11 @@ ui/tabs/design/dimension_sets/values_panel/_sets_list_panel.py
 
 from PyQt5.QtWidgets import (
     QWidget, QVBoxLayout, QHBoxLayout,
-    QLabel, QLineEdit,
-    QScrollArea, QFrame, QComboBox,
+    QLabel,
+    QScrollArea, QFrame,
 )
 from PyQt5.QtCore import Qt, pyqtSignal
+from ui.widgets.panels.themed_inputs import ThemedLineEdit, ThemedComboBox
 
 from services.design import get_dimension_set_service
 from ui.font import get_font_size, fs
@@ -253,7 +254,7 @@ class _SetsListPanel(QWidget, WidgetMixin):
                                   DIM_SETS_LIST_SEARCH_FRAME_MARGIN_H, DIM_SETS_LIST_SEARCH_FRAME_MARGIN_V)
         s_lay.setSpacing(DIM_SETS_LIST_SEARCH_SPACING)
 
-        self._search_inp = QLineEdit()
+        self._search_inp = ThemedLineEdit()
         self._search_inp.setPlaceholderText(tr("dim_sets_list_search"))
         self._search_inp.setMinimumHeight(DIM_SETS_LIST_SEARCH_FIELD_H)
         self._search_inp.setStyleSheet(f"""
@@ -268,7 +269,7 @@ class _SetsListPanel(QWidget, WidgetMixin):
         """)
         self._search_inp.textChanged.connect(self._apply_filter)
 
-        self._cmb_cat = QComboBox()
+        self._cmb_cat = ThemedComboBox()
         self._cmb_cat.setMinimumHeight(DIM_SETS_LIST_SEARCH_FIELD_H)
         self._cmb_cat.setMaximumWidth(DIM_SETS_LIST_CMB_CAT_MAX_W)
         self._cmb_cat.setStyleSheet(f"""

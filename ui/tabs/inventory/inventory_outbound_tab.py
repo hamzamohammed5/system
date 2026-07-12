@@ -9,10 +9,11 @@ ui/tabs/inventory/inventory_outbound_tab.py
 
 from PyQt5.QtWidgets import (
     QWidget, QVBoxLayout, QFormLayout, QGroupBox,
-    QLabel, QLineEdit, QPushButton, QDoubleSpinBox,
-    QComboBox, QDateEdit, QTableWidgetItem, QMessageBox,
+    QLabel, QPushButton, QDoubleSpinBox,
+    QDateEdit, QTableWidgetItem, QMessageBox,
 )
 from PyQt5.QtCore import Qt, QDate
+from ui.widgets.panels.themed_inputs import ThemedLineEdit, ThemedComboBox
 
 from services.inventory.inventory_service import InventoryService
 
@@ -86,7 +87,7 @@ class _OutboundTab(QWidget, WidgetMixin):
         form.setSpacing(SPACING_MD_LG)
         form.setLabelAlignment(Qt.AlignRight)
 
-        self.cmb_item = QComboBox()
+        self.cmb_item = ThemedComboBox()
         self.cmb_item.setMinimumHeight(INVENTORY_INPUT_MIN_H)
         self._reload_items()
         self.cmb_item.currentIndexChanged.connect(self._on_item_changed)
@@ -101,7 +102,7 @@ class _OutboundTab(QWidget, WidgetMixin):
         self.dt_date.setDisplayFormat("yyyy-MM-dd")
         self.dt_date.setFixedWidth(INVENTORY_DATE_W)
 
-        self.inp_notes = QLineEdit()
+        self.inp_notes = ThemedLineEdit()
         self.inp_notes.setPlaceholderText(tr("inventory_purpose"))
         self.inp_notes.setMinimumHeight(INVENTORY_CMB_MIN_H)
 

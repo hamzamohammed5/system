@@ -7,10 +7,11 @@ _PricingPanel — لوحة إدارة أسعار المنتجات النهائي
 from PyQt5.QtWidgets import (
     QWidget, QVBoxLayout, QHBoxLayout,
     QPushButton, QTableWidgetItem, QLabel,
-    QDoubleSpinBox, QMessageBox, QFrame, QComboBox,
+    QDoubleSpinBox, QMessageBox, QFrame,
 )
 from PyQt5.QtCore import Qt
 from PyQt5.QtGui  import QColor
+from ui.widgets.panels.themed_inputs import ThemedComboBox
 
 from services.pricing.pricing_service import (
     get_all_pricing, get_pricing, save_pricing, remove_pricing,
@@ -96,6 +97,13 @@ class _PricingPanel(QWidget, WidgetMixin):
             f"font-weight:bold; color:{_C['orange']}; font-size:{fs(base, 1)}px;"
         )
         self.lbl_price.setStyleSheet(f"font-weight:bold; font-size:{base}px;")
+        # [إصلاح ثيم] self.table كانت بتاخد table_style() مرة واحدة بس
+        # وقت الإنشاء داخل make_table() في _build(). محدش كان بينادي
+        # setStyleSheet(table_style()) تاني بعد كده، فلما الثيم يتغير
+        # (خصوصاً والجدول فاضي/0 صف) كان يفضل ظاهر بالستايل القديم —
+        # خلفية بيضاء واضحة فوق باقي اللوحة الداكنة.
+        from ui.widgets.tables.tables import table_style
+        self.table.setStyleSheet(table_style())
         self._refresh_manual_stats_style()
 
     def _refresh_manual_stats_style(self):
@@ -132,7 +140,7 @@ class _PricingPanel(QWidget, WidgetMixin):
 
         self.lbl_prod = QLabel(tr("pricing_product_label") + ":")
 
-        self.cmb_product = QComboBox()
+        self.cmb_product = ThemedComboBox()
         self.cmb_product.setMinimumHeight(PRICING_PANEL_CMB_PRODUCT_MIN_H)
         self.cmb_product.setMinimumWidth(PRICING_PANEL_CMB_PRODUCT_MIN_W)
         self.cmb_product.currentIndexChanged.connect(self._on_product_selected)

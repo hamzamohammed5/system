@@ -9,7 +9,7 @@ ui/tabs/accounting/investors/_helpers.py
   - لا يوجد كود مكرر هنا
 """
 
-from PyQt5.QtWidgets import QComboBox
+from ui.widgets.panels.themed_inputs import ThemedComboBox
 
 from ui.widgets.panels.form_fields import spin_field as _spin          # noqa: F401
 from ui.widgets.components.stat_card import stat_card_pair as _stat_card  # noqa: F401
@@ -49,7 +49,7 @@ def _fetch_asset_accounts(acc_conn):
 # ملء القوائم
 # ══════════════════════════════════════════════════════════
 
-def _fill_asset_combo(cmb: QComboBox, acc_conn, prev_id=None):
+def _fill_asset_combo(cmb: ThemedComboBox, acc_conn, prev_id=None):
     cmb.blockSignals(True)
     cmb.clear()
     for acc in _fetch_asset_accounts(acc_conn):
@@ -75,7 +75,7 @@ def _fill_asset_combo(cmb: QComboBox, acc_conn, prev_id=None):
     cmb.blockSignals(False)
 
 
-def _fill_capital_combo(cmb: QComboBox, acc_conn, prev_id=None):
+def _fill_capital_combo(cmb: ThemedComboBox, acc_conn, prev_id=None):
     cmb.blockSignals(True)
     cmb.clear()
     for acc in _fetch_capital_accounts(acc_conn):
@@ -88,7 +88,7 @@ def _fill_capital_combo(cmb: QComboBox, acc_conn, prev_id=None):
     cmb.blockSignals(False)
 
 
-def _fill_drawings_combo(cmb: QComboBox, acc_conn, prev_id=None):
+def _fill_drawings_combo(cmb: ThemedComboBox, acc_conn, prev_id=None):
     cmb.blockSignals(True)
     cmb.clear()
     for acc in _fetch_drawings_accounts(acc_conn):

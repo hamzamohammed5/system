@@ -16,10 +16,11 @@ Input widgets الموحدة للتطبيق.
           بـ bus.theme_changed، ويعيد بناء الـ stylesheet بقيم _C المحدثة.
 """
 from PyQt5.QtWidgets import (
-    QWidget, QHBoxLayout, QLineEdit, QLabel,
-    QDoubleSpinBox, QSpinBox, QDateEdit, QComboBox, QSizePolicy,
+    QWidget, QHBoxLayout, QLabel,
+    QDoubleSpinBox, QSpinBox, QDateEdit, QSizePolicy,
 )
 from PyQt5.QtCore import Qt, QDate
+from ui.widgets.panels.themed_inputs import ThemedLineEdit, ThemedComboBox
 
 from ui.theme import _C
 from ui.font  import fs, get_font_size
@@ -92,7 +93,7 @@ class DateField(QDateEdit, WidgetMixin):
 
 # ── StyledComboBox ────────────────────────────────────────
 
-class StyledComboBox(QComboBox, WidgetMixin):
+class StyledComboBox(ThemedComboBox, WidgetMixin):
     """QComboBox بستايل موحد."""
 
     def __init__(self, height: int = INPUT_HEIGHT, parent=None):
@@ -162,7 +163,7 @@ class LabeledInput(QWidget, WidgetMixin):
 
 # ── RequiredLineEdit ──────────────────────────────────────
 
-class RequiredLineEdit(QLineEdit, WidgetMixin):
+class RequiredLineEdit(ThemedLineEdit, WidgetMixin):
     """QLineEdit مع تحقق بصري من الفراغ."""
 
     def __init__(self, placeholder: str = "", height: int = INPUT_HEIGHT, parent=None):
@@ -201,7 +202,7 @@ class RequiredLineEdit(QLineEdit, WidgetMixin):
 
 # ── NotesLineEdit ─────────────────────────────────────────
 
-class NotesLineEdit(QLineEdit, WidgetMixin):
+class NotesLineEdit(ThemedLineEdit, WidgetMixin):
     """حقل ملاحظات بستايل مخصص يتزامن مع الثيم."""
 
     def __init__(self, placeholder: str = "",

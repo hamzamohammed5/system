@@ -1,5 +1,5 @@
 File Tree Snapshot
-Generated : 2026-07-11 20:24:52
+Generated : 2026-07-12 07:15:34
 Source    : D:\My Workspace\Hg\Alhabaar\accountant\system
 Extensions: .md, .py
 ────────────────────────────────────────────────────────────
@@ -425,7 +425,8 @@ system/
 │   │   │   ├── form_group.py
 │   │   │   ├── form_labels.py
 │   │   │   ├── layout_widgets.py
-│   │   │   └── state.py
+│   │   │   ├── state.py
+│   │   │   └── themed_inputs.py
 │   │   ├── shared/
 │   │   │   └── list_panel_with_shared.py
 │   │   ├── tables/
@@ -456,4 +457,3 @@ system/
 ├── main.py
 ├── README.md
 ├── refactory.md
-└── test.py

@@ -8,9 +8,10 @@ SearchBar + StatusBar + ListHeader — هيدرات لوحات القوائم.
 
 from PyQt5.QtWidgets import (
     QWidget, QFrame, QHBoxLayout, QVBoxLayout,
-    QLabel, QPushButton, QLineEdit, QSizePolicy,
+    QLabel, QPushButton, QSizePolicy,
 )
 from PyQt5.QtCore import Qt, QTimer, pyqtSignal
+from ui.widgets.panels.themed_inputs import ThemedLineEdit
 
 from ui.theme import _C
 from ui.font  import fs, get_font_size
@@ -56,7 +57,7 @@ class SearchBar(QWidget, WidgetMixin):
         lay = QHBoxLayout(self)
         lay.setContentsMargins(0, 0, 0, 0)
 
-        self.inp = QLineEdit()
+        self.inp = ThemedLineEdit()
         self.inp.setFixedHeight(height)
         self.inp.setClearButtonEnabled(True)
         self.inp.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Fixed)

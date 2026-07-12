@@ -24,9 +24,10 @@ ui/widgets/components/component_row/ui.py
 """
 
 from PyQt5.QtWidgets import (
-    QWidget, QVBoxLayout, QHBoxLayout, QComboBox, QLineEdit,
+    QWidget, QVBoxLayout, QHBoxLayout,
     QPushButton, QSizePolicy, QLabel, QDoubleSpinBox, QFrame,
 )
+from ui.widgets.panels.themed_inputs import ThemedLineEdit, ThemedComboBox
 
 from ui.theme import _C
 from ui.font  import fs, get_font_size
@@ -236,10 +237,10 @@ def build_row_ui(widget, child_type: str, child_id,
 # ── بناء المكونات الفردية ──────────────────────────────────
 
 def _build_type_combo(widget, child_type: str, layout: QHBoxLayout):
-    widget.cmb_type = QComboBox()
+    widget.cmb_type = ThemedComboBox()
     widget.cmb_type.setSizePolicy(QSizePolicy.Preferred, QSizePolicy.Fixed)
     widget.cmb_type.setMinimumContentsLength(COMPONENT_ROW_TYPE_CMB_MIN_LEN)
-    widget.cmb_type.setSizeAdjustPolicy(QComboBox.AdjustToContents)
+    widget.cmb_type.setSizeAdjustPolicy(ThemedComboBox.AdjustToContents)
     for key, label in COMPONENT_TYPES:
         widget.cmb_type.addItem(label, key)
 
@@ -258,7 +259,7 @@ def _build_item_combo(widget, layout: QHBoxLayout):
 
 
 def _build_variant_widgets(widget, layout: QHBoxLayout):
-    widget.cmb_variant = QComboBox()
+    widget.cmb_variant = ThemedComboBox()
     widget.cmb_variant.setMinimumHeight(COMPONENT_ROW_WIDGET_MIN_H)
     widget.cmb_variant.setMinimumWidth(COMPONENT_ROW_VARIANT_MIN_W)
     widget.cmb_variant.setMaximumWidth(COMPONENT_ROW_VARIANT_MAX_W)
@@ -276,7 +277,7 @@ def _build_variant_widgets(widget, layout: QHBoxLayout):
 
 
 def _build_qty_widget(widget, qty: float, layout: QHBoxLayout):
-    widget.qty_edit = QLineEdit()
+    widget.qty_edit = ThemedLineEdit()
     widget.qty_edit.setPlaceholderText(tr('quantity'))
     widget.qty_edit.setSizePolicy(QSizePolicy.Preferred, QSizePolicy.Fixed)
     widget.qty_edit.setMinimumWidth(COMPONENT_ROW_QTY_MIN_W)
@@ -316,7 +317,7 @@ def _build_waste_widget(widget, waste_pct: float, layout: QHBoxLayout):
 def _build_total_qty_widget(widget, raw_total_qty,
                              show_total_qty: bool, layout: QHBoxLayout):
     base = get_font_size()
-    widget.total_qty_edit = QLineEdit()
+    widget.total_qty_edit = ThemedLineEdit()
     widget.total_qty_edit.setPlaceholderText(tr('total_qty_placeholder'))
     widget.total_qty_edit.setSizePolicy(QSizePolicy.Preferred, QSizePolicy.Fixed)
     widget.total_qty_edit.setMinimumWidth(COMPONENT_ROW_QTY_MIN_W)
@@ -367,7 +368,7 @@ def _build_sub_row(widget, outer: QVBoxLayout):
     )
     sub_layout.addWidget(lbl_icon)
 
-    widget.cmb_op_row = QComboBox()
+    widget.cmb_op_row = ThemedComboBox()
     widget.cmb_op_row.setMinimumHeight(COMPONENT_ROW_WIDGET_MIN_H)
     widget.cmb_op_row.setMinimumWidth(COMPONENT_ROW_OP_CMB_MIN_W)
     widget.cmb_op_row.setStyleSheet(_op_row_combo_style())

@@ -9,11 +9,12 @@ ui/tabs/companies/shared_items_manager_helper/_add_shared_item_dialog.py
 
 from PyQt5.QtWidgets import (
     QDialog, QVBoxLayout, QHBoxLayout, QFormLayout,
-    QLabel, QLineEdit, QPushButton, QDoubleSpinBox,
+    QLabel, QPushButton, QDoubleSpinBox,
     QGroupBox, QListWidget, QListWidgetItem,
-    QMessageBox, QDialogButtonBox, QCheckBox,
+    QMessageBox, QDialogButtonBox
 )
 from PyQt5.QtCore import Qt
+from ui.widgets.panels.themed_inputs import ThemedLineEdit
 
 from services.companies.shared_items_service import SharedItemsService
 from services.companies.company_service import CompanyService
@@ -78,7 +79,7 @@ class PublishAsSharedDialog(QDialog, WidgetMixin):
         data_lay.setSpacing(PUBLISH_DLG_DATA_SPACING)
         data_lay.setLabelAlignment(Qt.AlignRight)
 
-        self.inp_name = QLineEdit(self._item_name)
+        self.inp_name = ThemedLineEdit(self._item_name)
         self.inp_name.setMinimumHeight(PUBLISH_DLG_INPUT_MIN_H)
         data_lay.addRow(tr("shared_name_colon"), self.inp_name)
 

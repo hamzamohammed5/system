@@ -12,11 +12,12 @@ ui/tabs/design/designs/_designs_table.py  — v3
 
 from PyQt5.QtWidgets import (
     QWidget, QVBoxLayout, QHBoxLayout, QGridLayout,
-    QPushButton, QLabel, QLineEdit,
-    QFrame, QComboBox,
+    QPushButton, QLabel,
+    QFrame,
     QScrollArea
 )
 from PyQt5.QtCore  import Qt, pyqtSignal, QThread, pyqtSignal as Signal, QTimer
+from ui.widgets.panels.themed_inputs import ThemedLineEdit, ThemedComboBox
 
 
 from services.design import get_design_size_service, get_design_service
@@ -188,7 +189,7 @@ class _DesignsTable(QWidget, WidgetMixin):
         row1 = QHBoxLayout()
         row1.setSpacing(DESIGNS_TABLE_ROW_SPACING)
 
-        self.inp_search = QLineEdit()
+        self.inp_search = ThemedLineEdit()
         self.inp_search.setPlaceholderText(tr("design_table_search_placeholder"))
         self.inp_search.setMinimumHeight(DESIGNS_TABLE_INP_MIN_H)
         self.inp_search.textChanged.connect(lambda: self._search_timer.start())
@@ -207,7 +208,7 @@ class _DesignsTable(QWidget, WidgetMixin):
 
         self._lbl_set = QLabel(tr("design_table_set_filter_label"))
 
-        self.cmb_set = QComboBox()
+        self.cmb_set = ThemedComboBox()
         self.cmb_set.setMinimumHeight(DESIGNS_TABLE_CMB_MIN_H)
         self.cmb_set.currentIndexChanged.connect(self._on_set_changed)
 

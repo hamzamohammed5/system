@@ -6,12 +6,13 @@ ui/widgets/utils/no_wheel.py
 """
 from PyQt5.QtCore    import QEvent, QObject, Qt
 from PyQt5.QtWidgets import (
-    QApplication, QComboBox, QSpinBox, QDoubleSpinBox,
+    QApplication, QSpinBox, QDoubleSpinBox,
     QDateEdit, QTimeEdit, QSlider, QAbstractSpinBox,
     QAbstractScrollArea,
 )
+from ui.widgets.panels.themed_inputs import ThemedComboBox
 
-_BLOCKED = (QComboBox, QAbstractSpinBox, QSlider)
+_BLOCKED = (ThemedComboBox, QAbstractSpinBox, QSlider)
 
 
 def _find_scrollable_parent(widget, horizontal: bool = False):
@@ -66,7 +67,7 @@ def install_no_wheel_filter(app: QApplication):
 install_shift_wheel_filter = install_no_wheel_filter
 
 
-class NoWheelCombo(QComboBox):
+class NoWheelCombo(ThemedComboBox):
     def wheelEvent(self, e): e.ignore()
 
 

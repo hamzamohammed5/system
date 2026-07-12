@@ -10,9 +10,11 @@ ui/tabs/inventory/inventory_inbound_tab.py
 
 from PyQt5.QtWidgets import (
     QWidget, QVBoxLayout, QFormLayout, QGroupBox,
-    QLabel, QLineEdit, QPushButton, QDoubleSpinBox,
-    QComboBox, QDateEdit, QTableWidgetItem, QMessageBox,
+    QLabel, QPushButton, QDoubleSpinBox,
+    QDateEdit, QTableWidgetItem, QMessageBox,
 )
+from ui.widgets.panels.themed_inputs import ThemedLineEdit, ThemedComboBox
+
 from PyQt5.QtCore import Qt, QDate
 
 from services.accounting.inventory_posting_service import InventoryPostingService
@@ -100,7 +102,7 @@ class _InboundTab(QWidget, WidgetMixin):
         form.setSpacing(SPACING_MD_LG)
         form.setLabelAlignment(Qt.AlignRight)
 
-        self.cmb_item = QComboBox()
+        self.cmb_item = ThemedComboBox()
         self.cmb_item.setMinimumHeight(INVENTORY_INPUT_MIN_H)
         self.cmb_item.setMinimumWidth(INVENTORY_ITEM_MIN_W)
         self._reload_items()
@@ -120,7 +122,7 @@ class _InboundTab(QWidget, WidgetMixin):
         self.dt_date.setFixedWidth(INVENTORY_DATE_W)
 
         # حساب الدفع — الخصوم + الأصول النقدية/البنكية
-        self.cmb_payment = QComboBox()
+        self.cmb_payment = ThemedComboBox()
         self.cmb_payment.setMinimumHeight(INVENTORY_CMB_MIN_H)
 
         for acc in self._svc.list_payment_accounts("liability"):
@@ -139,7 +141,7 @@ class _InboundTab(QWidget, WidgetMixin):
                 self.cmb_payment.setCurrentIndex(i)
                 break
 
-        self.inp_notes = QLineEdit()
+        self.inp_notes = ThemedLineEdit()
         self.inp_notes.setPlaceholderText(tr("notes_placeholder"))
         self.inp_notes.setMinimumHeight(INVENTORY_CMB_MIN_H)
 

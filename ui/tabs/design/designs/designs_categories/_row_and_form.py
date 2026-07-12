@@ -6,12 +6,12 @@ ui/tabs/design/designs/designs_categories/_row_and_form.py
 
 from PyQt5.QtWidgets import (
     QWidget, QVBoxLayout, QHBoxLayout,
-    QPushButton, QLabel, QLineEdit,
+    QPushButton, QLabel,
     QColorDialog, QMessageBox, QFrame,
-    QComboBox,
 )
 from PyQt5.QtCore import Qt, pyqtSignal
 from PyQt5.QtGui import QColor, QFont
+from ui.widgets.panels.themed_inputs import ThemedLineEdit, ThemedComboBox
 
 from services.design import get_design_service
 from ui.widgets.core.widget_mixin import WidgetMixin
@@ -197,7 +197,7 @@ class _CatForm(QWidget, WidgetMixin):
         lay.addWidget(self._mode_lbl)
 
         # حقل الاسم
-        self.inp_name = QLineEdit()
+        self.inp_name = ThemedLineEdit()
         self.inp_name.setPlaceholderText(tr("design_cats_name_placeholder"))
         self.inp_name.setMinimumHeight(CAT_FORM_INP_H)
         lay.addWidget(self.inp_name)
@@ -206,7 +206,7 @@ class _CatForm(QWidget, WidgetMixin):
         self._lbl_p = QLabel(tr("design_cats_parent_label"))
         lay.addWidget(self._lbl_p)
 
-        self.cmb_parent = QComboBox()
+        self.cmb_parent = ThemedComboBox()
         self.cmb_parent.setMinimumHeight(CAT_FORM_CMB_H)
         lay.addWidget(self.cmb_parent)
 

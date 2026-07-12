@@ -11,10 +11,11 @@ ui/tabs/design/dimension_sets/_groups_panel.py
 from PyQt5.QtWidgets import (
     QWidget, QVBoxLayout, QHBoxLayout, QSplitter,
     QTableWidgetItem,
-    QLabel, QLineEdit, QComboBox, QGroupBox, QFormLayout,
+    QLabel, QGroupBox, QFormLayout,
     QPushButton, QMessageBox, QDialog,
 )
 from PyQt5.QtCore import Qt, pyqtSignal
+from ui.widgets.panels.themed_inputs import ThemedLineEdit, ThemedComboBox
 
 from ui.theme import _C
 from ui.widgets.core.i18n import tr
@@ -92,12 +93,12 @@ class _SetsManagerPanel(QWidget, WidgetMixin):
 
         # ── فلتر ──
         filter_row = QHBoxLayout()
-        self.inp_search = QLineEdit()
+        self.inp_search = ThemedLineEdit()
         self.inp_search.setPlaceholderText(tr("dim_sets_search_placeholder"))
         self.inp_search.setMinimumHeight(FILTER_SEARCH_H)
         self.inp_search.textChanged.connect(self._apply_filter)
 
-        self.cmb_cat_filter = QComboBox()
+        self.cmb_cat_filter = ThemedComboBox()
         self.cmb_cat_filter.setMinimumHeight(FILTER_COMBO_MIN_H)
         self.cmb_cat_filter.setMinimumWidth(DIM_SETS_LIST_CMB_CAT_MAX_W)
         self.cmb_cat_filter.currentIndexChanged.connect(self._apply_filter)
@@ -148,12 +149,12 @@ class _SetsManagerPanel(QWidget, WidgetMixin):
         self.lbl_mode.setStyleSheet(f"font-weight: bold; color: {_C['accent']};")
         form.addRow(self.lbl_mode)
 
-        self.inp_name = QLineEdit()
+        self.inp_name = ThemedLineEdit()
         self.inp_name.setPlaceholderText(tr("dim_sets_name_placeholder"))
         self.inp_name.setMinimumHeight(DIM_CAT_PANEL_INPUT_H)
         form.addRow(tr("name") + tr("field_colon"), self.inp_name)
 
-        self.cmb_category = QComboBox()
+        self.cmb_category = ThemedComboBox()
         self.cmb_category.setMinimumHeight(DIM_CAT_PANEL_COMBO_H)
         form.addRow(tr("category") + tr("field_colon"), self.cmb_category)
 
@@ -166,7 +167,7 @@ class _SetsManagerPanel(QWidget, WidgetMixin):
         self.cmb_unit.setMinimumHeight(DIM_CAT_PANEL_COMBO_H)
         form.addRow(tr("dim_sets_default_unit_label") + tr("field_colon"), self.cmb_unit)
 
-        self.inp_notes = QLineEdit()
+        self.inp_notes = ThemedLineEdit()
         self.inp_notes.setPlaceholderText(tr("notes"))
         self.inp_notes.setMinimumHeight(DIM_CAT_PANEL_COMBO_H)
         form.addRow(tr("notes") + tr("field_colon"), self.inp_notes)

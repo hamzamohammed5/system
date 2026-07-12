@@ -6,11 +6,12 @@ ui/tabs/design/dimension_sets/values_panel/_instance_popup.py
 
 from PyQt5.QtWidgets import (
     QWidget, QVBoxLayout, QHBoxLayout,
-    QPushButton, QLabel, QLineEdit, QDoubleSpinBox,
+    QPushButton, QLabel, QDoubleSpinBox,
     QMessageBox, QScrollArea, QFrame, QDialog,
     QToolButton, QGridLayout,
 )
 from PyQt5.QtCore import Qt, pyqtSignal
+from ui.widgets.panels.themed_inputs import ThemedLineEdit, ThemedComboBox
 
 from ui.theme import _C
 from ui.widgets.core.i18n import tr
@@ -108,7 +109,7 @@ class _InstancePopup(QDialog, WidgetMixin):
         lbl_name.setAlignment(Qt.AlignRight | Qt.AlignVCenter)
         lbl_name.setStyleSheet("font-weight: bold;")
 
-        self.inp_name = QLineEdit()
+        self.inp_name = ThemedLineEdit()
         self.inp_name.setPlaceholderText(tr("dim_inst_name_placeholder"))
         self.inp_name.setMinimumHeight(DIM_INST_FIELD_H)
         self.inp_name.setStyleSheet(f"""

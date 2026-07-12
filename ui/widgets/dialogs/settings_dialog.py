@@ -25,12 +25,13 @@ from PyQt5.QtCore    import Qt
 from PyQt5.QtWidgets import (
     QDialog, QVBoxLayout, QHBoxLayout,
     QLabel, QSlider, QDialogButtonBox,
-    QLineEdit, QFileDialog, QGroupBox,
+    QFileDialog, QGroupBox,
     QListWidget, QListWidgetItem,
     QInputDialog, QScrollArea, QWidget,
     QTabWidget, QButtonGroup, QRadioButton,
     QPushButton, QFrame,
 )
+from ui.widgets.panels.themed_inputs import ThemedLineEdit
 
 from ui.font  import get_font_size, set_font_size, apply_font, fs
 from ui.theme import _C
@@ -484,6 +485,11 @@ class SettingsDialog(QDialog, WidgetMixin):
 
     def _refresh_units_tab_style(self):
         base = get_font_size()
+        # [إصلاح ثيم] self._units_list كانت من غير setStyleSheet خالص —
+        # كانت بتاخد default Qt palette، وبما إنها setAlternatingRowColors(True)
+        # كان بيطلع نمط zebra عشوائي (صف أبيض/صف داكن) مهما كان الثيم الحالي.
+        from ..theme.layout_styles import list_style
+        self._units_list.setStyleSheet(list_style())
         self._lbl_units_hint.setStyleSheet(
             f"color:{_C['text_muted']}; font-size:{fs(base, -2)}pt; background:transparent;"
         )
@@ -501,7 +507,7 @@ class SettingsDialog(QDialog, WidgetMixin):
         grp     = QGroupBox(tr("settings_grp_gimp"))
         grp_lay = QVBoxLayout(grp)
 
-        self._inp_gimp = QLineEdit()
+        self._inp_gimp = ThemedLineEdit()
         self._inp_gimp.setMinimumHeight(BTN_MIN_HEIGHT)
         self._inp_gimp.setPlaceholderText(tr("settings_gimp_placeholder"))
 

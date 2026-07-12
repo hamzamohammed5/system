@@ -3,9 +3,10 @@ ui/tabs/orders/order_detail/_status_dialog.py
 """
 from PyQt5.QtWidgets import (
     QDialog, QVBoxLayout, QHBoxLayout,
-    QLabel, QComboBox, QLineEdit,
+    QLabel,
 )
 from PyQt5.QtCore import Qt
+from ui.widgets.panels.themed_inputs import ThemedLineEdit, ThemedComboBox
 
 from ui.theme import _C
 from ui.font import FS_MD, FS_BASE
@@ -49,7 +50,7 @@ class _StatusDialog(QDialog, WidgetMixin):
         self._lbl_new_hint = QLabel()
         lay.addWidget(self._lbl_new_hint)
 
-        self._cmb = QComboBox()
+        self._cmb = ThemedComboBox()
         self._cmb.setMinimumHeight(STATUS_DLG_CMB_MIN_H)
         for s in nexts:
             self._cmb.addItem(s, s)
@@ -58,7 +59,7 @@ class _StatusDialog(QDialog, WidgetMixin):
         self._lbl_note_hint = QLabel()
         lay.addWidget(self._lbl_note_hint)
 
-        self._note = QLineEdit()
+        self._note = ThemedLineEdit()
         lay.addWidget(self._note)
 
         btns = QHBoxLayout()

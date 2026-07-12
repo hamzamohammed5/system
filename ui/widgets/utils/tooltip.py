@@ -113,9 +113,9 @@ class _TooltipLabel(QLabel):
         self.setText(text)
         self.setStyleSheet(f"""
             QLabel {{
-                background-color: {_C['text_primary']};
-                color: {_C['bg_surface']};
-                border: 1px solid {_C['text_primary']};
+                background-color: {_C['bg_surface']};
+                color: {_C['text_primary']};
+                border: 1px solid {_C['border_med']};
                 border-radius: 4px;
                 padding: 5px 10px;
                 font-size: {size}pt;

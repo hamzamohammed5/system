@@ -6,9 +6,10 @@ _BomScenariosPanel — لوحة إدارة سيناريوهات BOM.
 
 from PyQt5.QtWidgets import (
     QFrame, QHBoxLayout, QLabel, QPushButton,
-    QComboBox, QMessageBox, QInputDialog,
+    QMessageBox, QInputDialog,
 )
 from PyQt5.QtCore import Qt, pyqtSignal
+from ui.widgets.panels.themed_inputs import ThemedComboBox
 
 from ui.theme import _C
 from ui.widgets.core.i18n import tr
@@ -76,7 +77,7 @@ class _BomScenariosPanel(QFrame, MemoryScenariosMixin, DbScenariosMixin, WidgetM
         )
         lay.addWidget(lbl)
 
-        self.cmb_scenarios = QComboBox()
+        self.cmb_scenarios = ThemedComboBox()
         self.cmb_scenarios.setMinimumWidth(SCENARIOS_PANEL_CMB_MIN_W)
         self.cmb_scenarios.setMinimumHeight(SCENARIOS_PANEL_CMB_MIN_H)
         self._apply_combo_style()

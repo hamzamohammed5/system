@@ -3,10 +3,11 @@ ui/tabs/orders/_customer_form.py
 """
 from PyQt5.QtWidgets import (
     QDialog, QVBoxLayout, QHBoxLayout, QFormLayout,
-    QLabel, QLineEdit, QPushButton,
-    QComboBox, QTextEdit, QGroupBox, QMessageBox,
+    QLabel, QPushButton,
+    QTextEdit, QGroupBox, QMessageBox,
 )
 from PyQt5.QtCore import Qt, pyqtSignal
+from ui.widgets.panels.themed_inputs import ThemedLineEdit, ThemedComboBox
 
 from services.orders.customer_service import CustomerService
 from ui.widgets.tables.tables import (
@@ -120,28 +121,28 @@ class _CustomerForm(QDialog, WidgetMixin):
         form.setSpacing(CUSTOMER_FORM_FORM_SPACING)
         form.setLabelAlignment(Qt.AlignRight)
 
-        self.inp_name = QLineEdit()
+        self.inp_name = ThemedLineEdit()
         self.inp_name.setPlaceholderText(tr("customer_name_lbl"))
         form.addRow(tr("customer_name_lbl"), self.inp_name)
 
-        self.cmb_type = QComboBox()
+        self.cmb_type = ThemedComboBox()
         self.cmb_type.addItem(tr("customer_type_individual"), "individual")
         self.cmb_type.addItem(tr("customer_type_company"),    "company")
         form.addRow(tr("customer_type_lbl"), self.cmb_type)
 
-        self.inp_phone = QLineEdit()
+        self.inp_phone = ThemedLineEdit()
         form.addRow(tr("customer_phone_lbl"), self.inp_phone)
 
-        self.inp_phone2 = QLineEdit()
+        self.inp_phone2 = ThemedLineEdit()
         form.addRow(tr("customer_phone2_lbl"), self.inp_phone2)
 
-        self.inp_email = QLineEdit()
+        self.inp_email = ThemedLineEdit()
         form.addRow(tr("customer_email_lbl"), self.inp_email)
 
-        self.inp_city = QLineEdit()
+        self.inp_city = ThemedLineEdit()
         form.addRow(tr("customer_city_lbl"), self.inp_city)
 
-        self.inp_address = QLineEdit()
+        self.inp_address = ThemedLineEdit()
         form.addRow(tr("customer_address_lbl"), self.inp_address)
 
         self.inp_notes = QTextEdit()
@@ -315,11 +316,11 @@ class _ContactDialog(QDialog, WidgetMixin):
         form.setSpacing(CONTACT_DLG_FORM_SPACING)
         form.setLabelAlignment(Qt.AlignRight)
 
-        self.inp_name  = QLineEdit(); form.addRow(tr("contact_name_lbl"),  self.inp_name)
-        self.inp_role  = QLineEdit(); form.addRow(tr("contact_role_lbl"),  self.inp_role)
-        self.inp_phone = QLineEdit(); form.addRow(tr("contact_phone_lbl"), self.inp_phone)
-        self.inp_email = QLineEdit(); form.addRow(tr("contact_email_lbl"), self.inp_email)
-        self.inp_notes = QLineEdit(); form.addRow(tr("contact_notes_lbl"), self.inp_notes)
+        self.inp_name  = ThemedLineEdit(); form.addRow(tr("contact_name_lbl"),  self.inp_name)
+        self.inp_role  = ThemedLineEdit(); form.addRow(tr("contact_role_lbl"),  self.inp_role)
+        self.inp_phone = ThemedLineEdit(); form.addRow(tr("contact_phone_lbl"), self.inp_phone)
+        self.inp_email = ThemedLineEdit(); form.addRow(tr("contact_email_lbl"), self.inp_email)
+        self.inp_notes = ThemedLineEdit(); form.addRow(tr("contact_notes_lbl"), self.inp_notes)
         root.addLayout(form)
 
         btn_row = QHBoxLayout()

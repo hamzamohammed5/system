@@ -188,12 +188,12 @@ _LIGHT_THEME: Dict[str, str] = {
     "orange_hover":        "#bf360c",
 
     # ── Design Module ───────────────────────────────────────────
-    "design_thumb_bg":          "#1E1B4B",   # خلفية الـ thumbnail في بطاقات التصميم
-    "design_thumb_bg_start":    "#2d2d5e",   # بداية تدرج placeholder الـ XCF
-    "design_thumb_bg_end":      "#1a1a2e",   # نهاية تدرج placeholder الـ XCF
-    "design_thumb_border":      "#5c6bc0",   # حد إطار placeholder الـ XCF
-    "design_thumb_icon":        "#7986cb",   # أيقونة 🎨 في placeholder
-    "design_thumb_text":        "#9fa8da",   # اسم الملف في placeholder
+    "design_thumb_bg":          "#E9ECF7",   # خلفية الـ thumbnail في بطاقات التصميم
+    "design_thumb_bg_start":    "#F0F1FA",   # بداية تدرج placeholder الـ XCF
+    "design_thumb_bg_end":      "#E3E6F5",   # نهاية تدرج placeholder الـ XCF
+    "design_thumb_border":      "#B8C0E8",   # حد إطار placeholder الـ XCF
+    "design_thumb_icon":        "#6C7BC4",   # أيقونة 🎨 في placeholder
+    "design_thumb_text":        "#7178A0",   # اسم الملف في placeholder
     "card_badge_text":          "#FFFFFF",   # نص badge العدد فوق الـ thumbnail الداكن
     "card_badge_bg":            "rgba(0,0,0,0.55)",      # خلفية badge العدد فوق الـ thumbnail
     "card_badge_border":        "rgba(255,255,255,0.2)", # حد badge العدد فوق الـ thumbnail

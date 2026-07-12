@@ -42,7 +42,7 @@ class _ItemsTable(QWidget, WidgetMixin):
         self._svc       = InventoryService(inv_conn)
         self._form      = form
         self._on_select = on_select
-        self._init_widget_mixin(theme=False, font=False, lang=True, data=True)
+        self._init_widget_mixin(theme=True, font=False, lang=True, data=True)
         self._build()
         self._load()
 
@@ -51,6 +51,13 @@ class _ItemsTable(QWidget, WidgetMixin):
 
     def _refresh_data(self, company_id=None):
         self._load()
+
+    def _refresh_style(self, *_):
+        # [إصلاح ثيم] كانت theme=False خالص — الجدول ماكانش بياخد ستايل
+        # تاني بعد الإنشاء الأول، فلما يتحول لـ dark وهو فاضي (0 صف) كان
+        # يفضل ظاهر بخلفية بيضاء (الستايل القديم المتجمد وقت الإنشاء).
+        from ui.widgets.tables.tables import table_style
+        self.table.setStyleSheet(table_style())
 
     def _refresh_lang(self, *_):
         pass  # الأعمدة تُبنى مرة واحدة في _build

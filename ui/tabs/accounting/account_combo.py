@@ -17,8 +17,10 @@ SafeConnMixin (v4): _get_safe_conn() بدل self.conn في كل query.
 """
 
 from PyQt5.QtWidgets import (
-    QWidget, QHBoxLayout, QComboBox, QLineEdit, QLabel,
+    QWidget, QHBoxLayout, QLabel,
 )
+from ui.widgets.panels.themed_inputs import ThemedLineEdit, ThemedComboBox
+
 from PyQt5.QtCore import Qt, QTimer
 from PyQt5.QtGui  import QColor, QFont
 
@@ -77,18 +79,18 @@ class _AccountCombo(SafeConnMixin, QWidget, WidgetMixin):
         lay.setContentsMargins(0, 0, 0, 0)
         lay.setSpacing(ACCOUNT_COMBO_LAYOUT_SPACING)
 
-        self.cmb_group = QComboBox()
+        self.cmb_group = ThemedComboBox()
         self.cmb_group.setFixedWidth(ACCOUNT_COMBO_GROUP_W)
         self.cmb_group.setToolTip(tr("group_filter_tooltip"))
         self.cmb_group.currentIndexChanged.connect(self._apply_filter)
 
-        self.inp_search = QLineEdit()
+        self.inp_search = ThemedLineEdit()
         self.inp_search.setPlaceholderText(tr("search_placeholder"))
         self.inp_search.setFixedWidth(ACCOUNT_COMBO_SEARCH_W)
         self.inp_search.textChanged.connect(self._apply_filter)
 
-        self.cmb_account = QComboBox()
-        self.cmb_account.setSizeAdjustPolicy(QComboBox.AdjustToMinimumContentsLength)
+        self.cmb_account = ThemedComboBox()
+        self.cmb_account.setSizeAdjustPolicy(ThemedComboBox.AdjustToMinimumContentsLength)
         self.cmb_account.setMinimumWidth(ACCOUNT_COMBO_ACCOUNT_MIN_W)
 
         self.lbl_nb = QLabel("")

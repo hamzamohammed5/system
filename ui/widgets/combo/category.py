@@ -17,9 +17,9 @@ CategoryCombo — QComboBox للتصنيفات الهرمية.
     الجديد: bus.company_data_changed فقط
   - [WidgetMixin] استبدال weakref وربط bus يدوي بـ WidgetMixin._init_widget_mixin.
 """
-from PyQt5.QtWidgets import QComboBox
 from PyQt5.QtCore    import Qt
 from PyQt5.QtGui     import QColor
+from ui.widgets.panels.themed_inputs import ThemedComboBox
 
 from ..core.conn              import LiveConnMixin
 from ..utils.signals          import blocked_signals
@@ -27,7 +27,7 @@ from ui.widgets.core.widget_mixin import WidgetMixin
 from ui.widgets.core.i18n     import tr
 
 
-def populate_category_combo(combo: QComboBox, conn,
+def populate_category_combo(combo: ThemedComboBox, conn,
                              scope: str = "all",
                              all_label: str = None) -> None:
     """
@@ -41,6 +41,8 @@ def populate_category_combo(combo: QComboBox, conn,
         all_label = tr('filter_all')
     if all_label:
         combo.addItem(all_label, None)
+        from ui.theme import _C
+        combo.setItemData(0, QColor(_C['bg_input']), Qt.BackgroundRole)
 
     try:
         from services.shared.category_service import CategoryService
@@ -53,17 +55,26 @@ def populate_category_combo(combo: QComboBox, conn,
     _add_nodes(combo, nodes, depth=0)
 
 
-def _add_nodes(combo: QComboBox, nodes: list, depth: int) -> None:
+def _add_nodes(combo: ThemedComboBox, nodes: list, depth: int) -> None:
+    from ui.theme import _C
     indent = "    " * depth
     arrow  = tr('tree_node_arrow') if depth > 0 else ""
     for node in nodes:
         combo.addItem(f"{indent}{arrow}{node['name']}", node["id"])
-        combo.setItemData(combo.count() - 1, QColor(node["color"]), Qt.ForegroundRole)
+        idx = combo.count() - 1
+        combo.setItemData(idx, QColor(node["color"]), Qt.ForegroundRole)
+        # [إصلاح خلفية سوداء عند الاختيار] بدون تحديد BackgroundRole صراحة،
+        # بعض توليفات Qt/Windows بترسم خلفية التحديد بمحرك الرسم الأصلي
+        # للنظام بدل الـ QSS (selection-background-color)، وده بيتعارض
+        # مع الـ ForegroundRole المخصص فوق فبيطلع تباين غامق/أسود تقريباً.
+        # تحديد خلفية فاتحة ثابتة من الثيم هنا يمنع الاعتماد على أي رسم
+        # افتراضي غير متوقع.
+        combo.setItemData(idx, QColor(_C['bg_input']), Qt.BackgroundRole)
         if node["children"]:
             _add_nodes(combo, node["children"], depth + 1)
 
 
-class CategoryCombo(QComboBox, LiveConnMixin, WidgetMixin):
+class CategoryCombo(ThemedComboBox, LiveConnMixin, WidgetMixin):
     """
     QComboBox للتصنيفات الهرمية مع تحديث تلقائي.
 

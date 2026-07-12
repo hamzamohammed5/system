@@ -13,9 +13,10 @@ _InvestorForm — فورم إضافة / تعديل مستثمر مع رأس ال
 
 from PyQt5.QtWidgets import (
     QWidget, QVBoxLayout, QHBoxLayout,
-    QLabel, QComboBox, QLineEdit,
+    QLabel
 )
 from PyQt5.QtCore import Qt, QDate
+from ui.widgets.panels.themed_inputs import ThemedLineEdit, ThemedComboBox
 
 from services.accounting.investors_service import InvestorsService
 from ui.widgets.mixins.form_mixins import EditModeMixin
@@ -70,7 +71,7 @@ class _InvestorForm(DualConnMixin, QWidget, WidgetMixin, EditModeMixin):
         self.lbl_mode = ModeLabel(add_text=tr("investor_new"), icon="👤")
         grp.add_label_row(self.lbl_mode)
 
-        self.inp_name = QLineEdit()
+        self.inp_name = ThemedLineEdit()
         self.inp_name.setPlaceholderText(tr("investor_name_placeholder"))
         self.inp_name.setMinimumHeight(BTN_MIN_HEIGHT)
         grp.add_row(tr("name") + ":", self.inp_name)
@@ -89,12 +90,12 @@ class _InvestorForm(DualConnMixin, QWidget, WidgetMixin, EditModeMixin):
         self.sp_initial = AmountSpinBox(max_=999_999_999, dec=2, height=BTN_MIN_HEIGHT)
         self._initial_grp.add_row(tr("amount_label"), self.sp_initial)
 
-        self.cmb_capital_acc = QComboBox()
+        self.cmb_capital_acc = ThemedComboBox()
         self.cmb_capital_acc.setMinimumHeight(FILTER_COMBO_MIN_H)
         _fill_capital_combo(self.cmb_capital_acc, self._get_safe_conn())
         self._initial_grp.add_row(tr("capital_account_label"), self.cmb_capital_acc)
 
-        self.cmb_asset_acc = QComboBox()
+        self.cmb_asset_acc = ThemedComboBox()
         self.cmb_asset_acc.setMinimumHeight(FILTER_COMBO_MIN_H)
         _fill_asset_combo(self.cmb_asset_acc, self._get_safe_conn())
         self._initial_grp.add_row(tr("deposit_account_label"), self.cmb_asset_acc)

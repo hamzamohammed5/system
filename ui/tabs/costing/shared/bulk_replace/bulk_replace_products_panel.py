@@ -8,10 +8,11 @@ _ProductsPanel — لوحة عرض المنتجات المتأثرة في ناف
 
 from PyQt5.QtWidgets import (
     QWidget, QVBoxLayout, QHBoxLayout,
-    QLabel, QComboBox, QPushButton,
+    QLabel, QPushButton,
     QScrollArea, QFrame,
 )
 from PyQt5.QtCore import Qt
+from ui.widgets.panels.themed_inputs import ThemedComboBox
 
 from ui.theme import _C
 from ui.widgets.core.i18n   import tr
@@ -68,7 +69,7 @@ class _ProductsPanel(QWidget, WidgetMixin):
         self._lbl_filter = QLabel(f"🏷  {tr('filter_by_category')}:")
         filter_row.addWidget(self._lbl_filter)
 
-        self.cmb_cat_filter = QComboBox()
+        self.cmb_cat_filter = ThemedComboBox()
         self.cmb_cat_filter.setMinimumHeight(PRODUCTS_PANEL_CMB_H)
         self.cmb_cat_filter.setFixedWidth(PRODUCTS_PANEL_CMB_W)
         self.cmb_cat_filter.addItem(f"— {tr('all')} —", None)

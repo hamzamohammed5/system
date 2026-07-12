@@ -479,9 +479,9 @@ QSplitter::handle:hover {{ background: {c['accent_mid']}; }}
 
 /* ══ ToolTip ══ */
 QToolTip {{
-    font-size: {small}pt; color: {c['bg_surface']};
-    background-color: {c['text_primary']};
-    border: 1px solid {c['text_primary']};
+    font-size: {small}pt; color: {c['text_primary']};
+    background-color: {c['bg_surface']};
+    border: 1px solid {c['border_med']};
     border-radius: {radius_sm}; padding: 5px 10px;
 }}
 

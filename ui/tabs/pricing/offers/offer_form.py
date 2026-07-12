@@ -7,9 +7,10 @@ _OfferForm — فورم إنشاء / تعديل العرض الكامل.
 from PyQt5.QtWidgets import (
     QWidget, QVBoxLayout, QHBoxLayout,
     QFrame, QScrollArea, QLabel,
-    QLineEdit, QPushButton, QDoubleSpinBox,
+    QPushButton, QDoubleSpinBox,
     QMessageBox,
 )
+from ui.widgets.panels.themed_inputs import ThemedLineEdit
 
 from services.pricing.offers_service import (
     get_offer, get_offer_items,
@@ -143,7 +144,7 @@ class _OfferForm(QWidget, WidgetMixin):
 
         lbl_name = QLabel(tr("offer_name_field"))
         lbl_name.setStyleSheet("font-weight:bold;")
-        self.inp_name = QLineEdit()
+        self.inp_name = ThemedLineEdit()
         self.inp_name.setPlaceholderText(tr("offer_name_placeholder"))
         self.inp_name.setMinimumHeight(BTN_MIN_HEIGHT)
 
@@ -162,7 +163,7 @@ class _OfferForm(QWidget, WidgetMixin):
         self.cmb_category.setFixedWidth(OFFER_FORM_CAT_W)
 
         lbl_notes = QLabel(tr("offer_notes_field"))
-        self.inp_notes = QLineEdit()
+        self.inp_notes = ThemedLineEdit()
         self.inp_notes.setPlaceholderText(tr("offer_notes_placeholder"))
         self.inp_notes.setMinimumHeight(BTN_MIN_HEIGHT)
 

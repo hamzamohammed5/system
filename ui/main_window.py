@@ -27,6 +27,7 @@ from ui.theme                   import _C
 from ui.widgets.core.events     import bus, emit_company_data_changed
 from ui.widgets.core.i18n       import tr
 from .main_window_helper._sidebar import _Sidebar
+from ui.widgets.core.widget_mixin import WidgetMixin
 from ui.constants import (
     WINDOW_DEFAULT_W,
     SIDEBAR_COLLAPSED_WIDTH,
@@ -116,7 +117,7 @@ def _try_build_section(builder_fn, section_name: str) -> QWidget:
 
 # ── MainWindow ────────────────────────────────────────────────────────────────
 
-class MainWindow(QMainWindow):
+class MainWindow(QMainWindow, WidgetMixin):
     def __init__(self, app):
         super().__init__()
         self._app        = app
@@ -129,6 +130,57 @@ class MainWindow(QMainWindow):
         self.setMinimumSize(SIDEBAR_COLLAPSED_WIDTH + WINDOW_MIN_CONTENT_W, WINDOW_MIN_H)
 
         self._build()
+
+        # [إصلاح خلفية فاتحة بعد تبديل الثيم]
+        # MainWindow كانت QMainWindow عادية بدون WidgetMixin، وكل الـ stylesheet
+        # المبني في _build() (bg_page للـ stack، ألوان الفاصل العمودي وscrollbar
+        # منطقة المحتوى) كان يُقرأ من _C مرة واحدة فقط وقت الإنشاء. أي تبديل
+        # ثيم لاحق لم يكن يصل لهذه العناصر أبداً، رغم أنه يصل لكل شيء آخر
+        # مبني بـ WidgetMixin (كالـ Sidebar وأزراره).
+        # الحل: نفس نمط _Sidebar/_NavButton بالضبط — وراثة WidgetMixin
+        # واستدعاء _init_widget_mixin. font/lang/data معطّلة هنا لأن اللغة
+        # والبيانات متعالجين بطرق مستقلة أصلاً في هذا الكلاس (_on_company_changed
+        # وما شابه)، ومفيش نص يحتاج تحديث عند تغيير الفونت هنا.
+        self._init_widget_mixin(theme=True, font=False, lang=False, data=False)
+
+    # ── إعادة تطبيق الثيم على العناصر المبنية مباشرة هنا ──────────────────────
+
+    def _refresh_style(self, *_):
+        """
+        Override قياسي من WidgetMixin — يُستدعى تلقائياً عند bus.theme_changed.
+        يعيد تطبيق كل الـ stylesheets المعتمدة على _C والمبنية مباشرة في
+        MainWindow._build() (خارج نطاق أي widget فرعي عنده WidgetMixin خاص به).
+        """
+        if hasattr(self, "_stack"):
+            self._stack.setStyleSheet(f"background:{_C['bg_page']};")
+
+        if hasattr(self, "_v_sep"):
+            self._v_sep.setStyleSheet(f"background:{_C['border']};border:none;")
+
+        if hasattr(self, "_content_scroll"):
+            self._content_scroll.setStyleSheet(f"""
+                QScrollArea {{
+                    border: none;
+                    background: transparent;
+                }}
+                QScrollBar:horizontal {{
+                    background: transparent;
+                    height: 6px;
+                    border-radius: 3px;
+                }}
+                QScrollBar::handle:horizontal {{
+                    background: {_C['border_med']};
+                    border-radius: 3px;
+                    min-width: 30px;
+                }}
+                QScrollBar::handle:horizontal:hover {{
+                    background: {_C['border_strong']};
+                }}
+                QScrollBar::add-line:horizontal,
+                QScrollBar::sub-line:horizontal {{
+                    width: 0px;
+                }}
+            """)
 
     # ── بناء الهيكل الأساسي ──────────────────────────────────────────────────
 
@@ -152,6 +204,7 @@ class MainWindow(QMainWindow):
         sep.setStyleSheet(f"background:{_C['border']};border:none;")
         sep.setSizePolicy(QSizePolicy.Fixed, QSizePolicy.Expanding)
         main_layout.addWidget(sep)
+        self._v_sep = sep
 
         # ── منطقة المحتوى مع scroll أفقي ──
         self._content_scroll = QScrollArea()

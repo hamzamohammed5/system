@@ -23,10 +23,11 @@ CategoryForm    — فورم إضافة/تعديل التصنيف.
 
 from PyQt5.QtWidgets import (
     QWidget, QGroupBox, QVBoxLayout, QHBoxLayout, QFormLayout,
-    QTreeWidget, QTreeWidgetItem, QLineEdit, QComboBox,
+    QTreeWidget, QTreeWidgetItem,
 )
 from PyQt5.QtCore import Qt
 from PyQt5.QtGui  import QColor
+from ui.widgets.panels.themed_inputs import ThemedLineEdit, ThemedComboBox
 
 from ..core.conn          import LiveConnMixin
 from ..core.i18n          import tr
@@ -55,7 +56,7 @@ class CategoryForm(QGroupBox, LiveConnMixin, WidgetMixin):
         self.scope       = scope
         self._tree       = tree_widget
         self._editing_id = None
-        self._init_widget_mixin(theme=False, font=False, data=False)
+        self._init_widget_mixin(theme=True, font=False, data=False)
         self._build()
 
     def _refresh_lang(self, *_):
@@ -75,12 +76,12 @@ class CategoryForm(QGroupBox, LiveConnMixin, WidgetMixin):
         self.lbl_mode = ModeLabel(add_text=tr("category_add"))
         form.addRow(self.lbl_mode)
 
-        self.inp_name = QLineEdit()
+        self.inp_name = ThemedLineEdit()
         self.inp_name.setMinimumHeight(BTN_MIN_HEIGHT)
         self.inp_name.setPlaceholderText(tr("category_name"))
         form.addRow(f"{tr('category_name')} :", self.inp_name)
 
-        self.cmb_parent = QComboBox()
+        self.cmb_parent = ThemedComboBox()
         self.cmb_parent.setMinimumHeight(BTN_MIN_HEIGHT)
         form.addRow(f"{tr('category_parent')} :", self.cmb_parent)
 
@@ -250,9 +251,17 @@ class CategoryManager(QWidget, LiveConnMixin, WidgetMixin):
         super().__init__(parent)
         self.conn  = conn
         self.scope = scope
-        self._init_widget_mixin(theme=False, font=False)
+        self._init_widget_mixin(theme=True, font=False)
         self._build()
         self._load()
+
+    def _refresh_style(self, *_):
+        # [إصلاح ثيم] الكلاس ده كان theme=False خالص، ومفيش _refresh_style
+        # معرّفة أصلاً. self.tree كانت بتاخد tree_style() مرة واحدة بس
+        # وقت الإنشاء في _build()، فلما الثيم يتغير كانت تفضل ظاهرة
+        # بالستايل القديم (خلفية بيضاء) — وده اللي ظاهر في تبويب
+        # "تصنيفات العروض" وأي شاشة تانية تستخدم CategoryManager.
+        self.tree.setStyleSheet(tree_style())
 
     def _refresh_lang(self, *_):
         """[i18n] يُحدّث عناوين الأعمدة ونصوص الأزرار."""

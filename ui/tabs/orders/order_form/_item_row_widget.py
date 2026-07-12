@@ -14,11 +14,12 @@ ui/tabs/orders/order_form/_item_row_widget.py
 """
 from PyQt5.QtWidgets import (
     QFrame, QVBoxLayout, QHBoxLayout,
-    QLabel, QLineEdit, QPushButton,
-    QComboBox, QDoubleSpinBox, QSizePolicy,
+    QLabel, QPushButton,
+    QDoubleSpinBox, QSizePolicy,
 )
 from PyQt5.QtCore import Qt, pyqtSignal
 from PyQt5.QtGui  import QColor, QBrush
+from ui.widgets.panels.themed_inputs import ThemedLineEdit, ThemedComboBox
 
 from ui.theme import _C
 from ui.widgets.core.i18n import tr
@@ -89,7 +90,7 @@ class _ItemRowWidget(QFrame, WidgetMixin):
         row1 = QHBoxLayout()
         row1.setSpacing(ITEM_ROW_ROW_SPACING)
 
-        self.inp_search = QLineEdit()
+        self.inp_search = ThemedLineEdit()
         self.inp_search.setPlaceholderText(tr("order_item_search"))
         self.inp_search.setFixedWidth(ITEM_ROW_SEARCH_W)
         self.inp_search.setMinimumHeight(ITEM_ROW_INPUT_MIN_H)
@@ -101,7 +102,7 @@ class _ItemRowWidget(QFrame, WidgetMixin):
         self.btn_clr.setVisible(False)
         self.inp_search.textChanged.connect(lambda t: self.btn_clr.setVisible(bool(t)))
 
-        self.cmb_product = QComboBox()
+        self.cmb_product = ThemedComboBox()
         self.cmb_product.setMinimumHeight(ITEM_ROW_INPUT_MIN_H)
         self.cmb_product.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Fixed)
         self.cmb_product.currentIndexChanged.connect(self._on_product_changed)
@@ -134,7 +135,7 @@ class _ItemRowWidget(QFrame, WidgetMixin):
         self.sp_qty.setFixedWidth(ITEM_ROW_QTY_W)
         self.sp_qty.valueChanged.connect(self._recalc)
 
-        self.inp_unit = QLineEdit(tr("order_unit_default"))
+        self.inp_unit = ThemedLineEdit(tr("order_unit_default"))
         self.inp_unit.setFixedWidth(ITEM_ROW_UNIT_W)
         self.inp_unit.setMinimumHeight(ITEM_ROW_INPUT_MIN_H)
 
@@ -143,7 +144,7 @@ class _ItemRowWidget(QFrame, WidgetMixin):
         self.lbl_total.setAlignment(Qt.AlignCenter)
 
         self.lbl_note = QLabel(tr("item_notes_lbl"))
-        self.inp_notes = QLineEdit()
+        self.inp_notes = ThemedLineEdit()
         self.inp_notes.setPlaceholderText(tr("notes_placeholder"))
         self.inp_notes.setMinimumHeight(ITEM_ROW_INPUT_MIN_H)
 

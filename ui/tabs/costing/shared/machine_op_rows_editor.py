@@ -10,13 +10,14 @@ _OpRowsEditor — محرر صفوف عملية التشغيل.
 """
 
 from PyQt5.QtWidgets import (
-    QWidget, QVBoxLayout, QHBoxLayout,
-    QLabel, QLineEdit, QPushButton, QDoubleSpinBox,
+    QVBoxLayout, QHBoxLayout,
+    QLabel, QPushButton, QDoubleSpinBox,
     QTableWidget, QTableWidgetItem, QHeaderView,
     QAbstractItemView, QGroupBox, QMessageBox,
 )
 from PyQt5.QtCore import Qt
 from PyQt5.QtGui  import QColor
+from ui.widgets.panels.themed_inputs import ThemedLineEdit
 
 from services.costing.machine_op_rows_service import MachineOpRowsService
 from ui.theme          import _C
@@ -84,7 +85,7 @@ class _OpRowsEditor(QGroupBox, WidgetMixin):
 
         lbl_label = QLabel(f"{tr('description')}:")
         self._lbl_label = lbl_label
-        self.inp_label = QLineEdit()
+        self.inp_label = ThemedLineEdit()
         self.inp_label.setPlaceholderText(tr("row_description_placeholder"))
         self.inp_label.setMinimumHeight(OP_ROWS_INP_MIN_H)
 

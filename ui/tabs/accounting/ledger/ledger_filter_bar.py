@@ -10,8 +10,9 @@ _LedgerFilterBar — شريط فلاتر دفتر الأستاذ.
   - لا يحتاج conn — فلترة محلية بالكامل.
 """
 
-from PyQt5.QtWidgets import QComboBox, QLabel
+from PyQt5.QtWidgets import QLabel
 from PyQt5.QtCore import QDate
+from ui.widgets.panels.themed_inputs import ThemedComboBox
 
 from ui.widgets.panels.filter       import FilterToolbar
 from ui.widgets.theme.builders import v_divider
@@ -51,7 +52,7 @@ class _LedgerFilterBar(FilterToolbar):
         # أضف separator + combo قبل زر المسح (index -2)
         insert_pos = max(1, count - 2)
 
-        self.cmb_move_type = QComboBox()
+        self.cmb_move_type = ThemedComboBox()
         self.cmb_move_type.setMinimumHeight(LEDGER_MOVE_CMB_MIN_H)
         self.cmb_move_type.setFixedWidth(LEDGER_MOVE_CMB_W)
         self.cmb_move_type.addItem(tr("move_type_all"), None)

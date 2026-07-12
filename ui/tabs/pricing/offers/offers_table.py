@@ -63,6 +63,12 @@ class _OffersTable(QWidget, WidgetMixin):
         return CompanyService.get_active_erp_conn()
 
     def _refresh_style(self, *_):
+        # [إصلاح ثيم] كانت بتعيد الفلترة بس (_apply_filter) اللي بتعيد
+        # بناء الصفوف، لكن مفيش استدعاء لـ setStyleSheet(table_style())
+        # تاني على self.table. لو الجدول فاضي (0 صف) أو أعمدة الهيدر
+        # فاضلة بالستايل القديم، الفلترة وحدها مش كافية لتحديث المظهر.
+        from ui.widgets.tables.tables import table_style
+        self.table.setStyleSheet(table_style())
         self._apply_filter()
 
     def _refresh_data(self, company_id=None):

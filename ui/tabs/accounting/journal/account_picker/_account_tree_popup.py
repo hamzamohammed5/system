@@ -11,11 +11,12 @@ _AccountTreePopup — نافذة popup شجرية لاختيار حساب.
 
 from PyQt5.QtWidgets import (
     QWidget, QVBoxLayout,
-    QLabel, QLineEdit,
+    QLabel,
     QListWidget, QListWidgetItem, QDialog,
 )
 from PyQt5.QtCore import Qt
 from PyQt5.QtGui  import QColor, QFont
+from ui.widgets.panels.themed_inputs import ThemedLineEdit
 
 from services.accounting.accounts_service import AccountsService
 from ...helpers import TYPE_COLORS
@@ -78,7 +79,7 @@ class _AccountTreePopup(QDialog, WidgetMixin):
         root.setContentsMargins(*ACCOUNT_TREE_POPUP_MARGINS)
         root.setSpacing(SPACING_XS)
 
-        self.inp_search = QLineEdit()
+        self.inp_search = ThemedLineEdit()
         self.inp_search.setPlaceholderText(tr("account_search_placeholder"))
         self.inp_search.setMinimumHeight(BTN_MIN_HEIGHT)
         self.inp_search.textChanged.connect(self._on_search)

@@ -11,8 +11,8 @@ UnitCombo — QComboBox موحد لاختيار وحدة القياس.
 """
 
 import logging
-from PyQt5.QtWidgets import QComboBox
 from PyQt5.QtCore    import pyqtSignal
+from ui.widgets.panels.themed_inputs import ThemedComboBox
 
 from ..utils.signals import blocked_signals
 from services.shared.unit_service   import (
@@ -26,7 +26,7 @@ logger = logging.getLogger(__name__)
 
 # ── UnitCombo ─────────────────────────────────────────────
 
-class UnitCombo(QComboBox):
+class UnitCombo(ThemedComboBox):
     """
     QComboBox للوحدات مع:
       - تحميل من settings
@@ -87,11 +87,11 @@ class UnitCombo(QComboBox):
 # ── دالة سريعة ────────────────────────────────────────────
 
 def make_unit_combo(conn=None, current: str = "cm",
-                    last_key: str = None) -> QComboBox:
+                    last_key: str = None) -> ThemedComboBox:
     if conn is not None:
         combo = UnitCombo(conn, last_key=last_key, current=current)
     else:
-        combo = QComboBox()
+        combo = ThemedComboBox()
         for val, label in _default_units():
             combo.addItem(label, val)
 

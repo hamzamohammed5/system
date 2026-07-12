@@ -44,13 +44,14 @@ SearchableCombo — QComboBox مع حقل بحث مدمج.
     الـ model وقت البناء، ويكبر مع الـ stretch أو مع محتواه لو أكبر من الحد الأدنى.
 """
 from PyQt5.QtWidgets import (
-    QWidget, QHBoxLayout, QComboBox, QLineEdit, QPushButton, QSizePolicy,
+    QWidget, QHBoxLayout, QPushButton, QSizePolicy,
 )
 from PyQt5.QtCore import (
     pyqtSignal, Qt, QTimer,
     QSortFilterProxyModel,
 )
 from PyQt5.QtGui  import QColor, QFont, QStandardItemModel, QStandardItem
+from ui.widgets.panels.themed_inputs import ThemedLineEdit, ThemedComboBox
 
 from ui.constants import (
     SEARCHABLE_COMBO_SEARCH_W, SEARCHABLE_COMBO_SEARCH_H,
@@ -262,7 +263,7 @@ class SearchableCombo(QWidget, WidgetMixin):
         lay.setContentsMargins(0, 0, 0, 0)
         lay.setSpacing(SPACING_XS)
 
-        self.inp_search = QLineEdit()
+        self.inp_search = ThemedLineEdit()
         self.inp_search.setFixedWidth(SEARCHABLE_COMBO_SEARCH_W)
         self.inp_search.setMinimumHeight(SEARCHABLE_COMBO_SEARCH_H)
         self.inp_search.textChanged.connect(self._on_search)
@@ -272,14 +273,14 @@ class SearchableCombo(QWidget, WidgetMixin):
         self.btn_clear.clicked.connect(self._clear_search)
         self.btn_clear.setVisible(False)
 
-        self.cmb = QComboBox()
+        self.cmb = ThemedComboBox()
         self.cmb.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Fixed)
         self.cmb.setMinimumWidth(SEARCHABLE_COMBO_CMB_MIN_W)
         # [FIX] AdjustToContents كان بيدّي عرض شبه صفري وقت أول بناء
         # (الـ model فاضي قبل populate() المؤجلة بـ QTimer.singleShot).
         # AdjustToMinimumContentsLengthWithIcon + minimumContentsLength ثابت
         # يضمن عرض معقول من أول لحظة بغض النظر عن حالة الـ model.
-        self.cmb.setSizeAdjustPolicy(QComboBox.AdjustToMinimumContentsLengthWithIcon)
+        self.cmb.setSizeAdjustPolicy(ThemedComboBox.AdjustToMinimumContentsLengthWithIcon)
         self.cmb.setMinimumContentsLength(1)
         self.cmb.setModel(self._proxy_model)
         self.cmb.currentIndexChanged.connect(self._on_combo_changed)

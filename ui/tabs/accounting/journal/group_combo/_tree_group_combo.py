@@ -9,9 +9,10 @@ _TreeGroupCombo — QComboBox مع QTreeView شجري لعرض تصنيفات ا
   - إزالة التكرار مع journal_group_combo.py.
 """
 
-from PyQt5.QtWidgets import QComboBox, QTreeView
+from PyQt5.QtWidgets import QTreeView
 from PyQt5.QtCore import Qt, QModelIndex
 from PyQt5.QtGui  import QColor, QFont, QStandardItemModel, QStandardItem
+from ui.widgets.panels.themed_inputs import ThemedComboBox
 
 from services.accounting.accounts_service import AccountsService
 from services.accounting.journal_service import JournalService
@@ -50,7 +51,7 @@ def _equity_color() -> str:
     return _C["investor_capital_text"]
 
 
-class _TreeGroupCombo(SafeConnMixin, QComboBox, WidgetMixin):
+class _TreeGroupCombo(SafeConnMixin, ThemedComboBox, WidgetMixin):
     """
     QComboBox يعرض التصنيفات في شجرة هرمية.
     عناصر الرأس (أنواع الحسابات) غير قابلة للاختيار.
@@ -58,7 +59,10 @@ class _TreeGroupCombo(SafeConnMixin, QComboBox, WidgetMixin):
     """
 
     def __init__(self, conn, parent=None):
-        super().__init__(parent)
+        # [إصلاح] auto_style=False: منع ThemedComboBox من استدعاء
+        # _refresh_style() (نسخة _TreeGroupCombo) قبل ما self._tree_view
+        # يتبني، لأن الـ override هنا بيستخدم self._tree_view مباشرة.
+        super().__init__(parent, auto_style=False)
         self._init_safe_conn(conn, "accounting")
         self._group_entry_ids = None
         self._company_id      = get_active_company_id()
@@ -76,6 +80,8 @@ class _TreeGroupCombo(SafeConnMixin, QComboBox, WidgetMixin):
         self.setView(self._tree_view)
         self._tree_view.clicked.connect(self._on_tree_clicked)
 
+        # الآن كل الأجزاء جاهزة (self._tree_view موجود) — آمن نستدعي الستايل
+        # ونسجّل الاستماع لتغيير الثيم.
         self._init_widget_mixin(lang=False)
         self._refresh_style()
         self._populate()

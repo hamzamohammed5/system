@@ -11,9 +11,10 @@ _JournalFilterBar — شريط فلاتر القيود المحاسبية.
 
 from PyQt5.QtWidgets import (
     QFrame, QVBoxLayout, QHBoxLayout,
-    QLabel, QLineEdit, QComboBox, QPushButton,
+    QLabel, QPushButton,
 )
 from PyQt5.QtCore import Qt, QDate, QTimer, pyqtSignal
+from ui.widgets.panels.themed_inputs import ThemedLineEdit, ThemedComboBox
 
 from ui.widgets.core.conn import SafeConnMixin
 from ui.widgets.utils.date_range import DateRangeFilter
@@ -175,7 +176,7 @@ class _JournalFilterBar(SafeConnMixin, QFrame, WidgetMixin):
         lbl_s = QLabel(tr("empty_icon_search"))
         lbl_s.setFixedWidth(JOURNAL_FILTER_ICON_W)
 
-        self.inp_search = QLineEdit()
+        self.inp_search = ThemedLineEdit()
         self.inp_search.setPlaceholderText(tr("journal_search_placeholder"))
         self.inp_search.setMinimumHeight(JOURNAL_FILTER_INPUT_MIN_H)
 
@@ -188,7 +189,7 @@ class _JournalFilterBar(SafeConnMixin, QFrame, WidgetMixin):
 
         self.lbl_bal = QLabel(tr("balance_status_filter"))
 
-        self.cmb_balance = QComboBox()
+        self.cmb_balance = ThemedComboBox()
         self.cmb_balance.setMinimumHeight(JOURNAL_FILTER_INPUT_MIN_H)
         self.cmb_balance.setFixedWidth(JOURNAL_FILTER_BAL_CMB_W)
         self.cmb_balance.addItem(tr("all"),            None)

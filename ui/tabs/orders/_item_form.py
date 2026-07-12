@@ -3,9 +3,10 @@ ui/tabs/orders/_item_form.py
 """
 from PyQt5.QtWidgets import (
     QDialog, QVBoxLayout, QHBoxLayout, QFormLayout,
-    QLabel, QLineEdit, QDoubleSpinBox, QMessageBox,
+    QLabel, QDoubleSpinBox, QMessageBox,
 )
 from PyQt5.QtCore import Qt
+from ui.widgets.panels.themed_inputs import ThemedLineEdit
 
 from services.orders.order_service import OrderService
 from ui.widgets.components.button import make_btn
@@ -87,11 +88,11 @@ class _ItemForm(QDialog, WidgetMixin):
         form.setSpacing(ITEM_FORM_FORM_SPACING)
         form.setLabelAlignment(Qt.AlignRight)
 
-        self.inp_name = QLineEdit()
+        self.inp_name = ThemedLineEdit()
         self.inp_name.setPlaceholderText(tr("product_name_placeholder"))
         form.addRow(tr("item_name_lbl"), self.inp_name)
 
-        self.inp_desc = QLineEdit()
+        self.inp_desc = ThemedLineEdit()
         self.inp_desc.setPlaceholderText(tr("description"))
         form.addRow(tr("item_desc_lbl"), self.inp_desc)
 
@@ -99,7 +100,7 @@ class _ItemForm(QDialog, WidgetMixin):
         self.sp_qty.setValue(1)
         form.addRow(tr("item_qty_lbl"), self.sp_qty)
 
-        self.inp_unit = QLineEdit()
+        self.inp_unit = ThemedLineEdit()
         self.inp_unit.setText(tr("order_unit_default"))
         self.inp_unit.setPlaceholderText(tr("order_unit_default"))
         form.addRow(tr("order_unit_label"), self.inp_unit)
@@ -113,11 +114,11 @@ class _ItemForm(QDialog, WidgetMixin):
         self.lbl_total = QLabel(f"0.00 {tr('currency_sym')}")
         form.addRow(tr("item_total_lbl"), self.lbl_total)
 
-        self.inp_design_ref = QLineEdit()
+        self.inp_design_ref = ThemedLineEdit()
         self.inp_design_ref.setPlaceholderText(tr("item_design_ref_lbl"))
         form.addRow(tr("item_design_ref_lbl"), self.inp_design_ref)
 
-        self.inp_notes = QLineEdit()
+        self.inp_notes = ThemedLineEdit()
         self.inp_notes.setPlaceholderText(tr("notes"))
         form.addRow(tr("item_notes_lbl"), self.inp_notes)
 

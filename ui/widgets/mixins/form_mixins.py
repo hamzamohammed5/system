@@ -8,7 +8,7 @@ ui/widgets/mixins/form_mixins.py
 الملفات المحذوفة: edit.py, validate.py
 """
 
-from PyQt5.QtWidgets import QLineEdit, QComboBox
+from ui.widgets.panels.themed_inputs import ThemedLineEdit, ThemedComboBox
 
 from ..core.i18n import tr
 
@@ -84,12 +84,12 @@ class FormValidationMixin:
 
     def validate_required(self, fields: list, parent=None) -> bool:
         for widget, label in fields:
-            if isinstance(widget, QLineEdit):
+            if isinstance(widget, ThemedLineEdit):
                 if not widget.text().strip():
                     self._warn(tr("enter_field", label=label))
                     widget.setFocus()
                     return False
-            elif isinstance(widget, QComboBox):
+            elif isinstance(widget, ThemedComboBox):
                 if widget.currentData() is None:
                     self._warn(tr("select_field", label=label))
                     return False

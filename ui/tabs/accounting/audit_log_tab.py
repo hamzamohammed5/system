@@ -25,12 +25,13 @@ ui/tabs/accounting/audit_log_tab.py
 import json
 from PyQt5.QtWidgets import (
     QWidget, QVBoxLayout, QHBoxLayout, QLabel,
-    QComboBox, QPushButton, QTableWidget, QTableWidgetItem,
+    QPushButton, QTableWidget, QTableWidgetItem,
     QDialog, QTextEdit, QHeaderView, QAbstractItemView,
     QSizePolicy, QFrame,
 )
 from PyQt5.QtCore import Qt, QTimer
 from PyQt5.QtGui  import QColor, QFont
+from ui.widgets.panels.themed_inputs import ThemedComboBox
 
 from services.accounting.audit_service import AuditService
 from ui.font               import get_font_size, fs, FS_SM, FS_BASE, FS_MD
@@ -341,7 +342,7 @@ class AuditLogTab(SafeConnMixin, QWidget, WidgetMixin):
         lbl_table = QLabel(tr("audit_table_filter_label"))
         self._lbl_table = lbl_table
 
-        self._cmb_table = QComboBox()
+        self._cmb_table = ThemedComboBox()
         self._cmb_table.setMinimumWidth(AUDIT_FILTER_CMB_TABLE_W)
         self._cmb_table.addItem(tr("audit_all_tables"), None)
         for key, label in _table_labels().items():
@@ -352,7 +353,7 @@ class AuditLogTab(SafeConnMixin, QWidget, WidgetMixin):
         lbl_action = QLabel(tr("audit_col_type") + ":")
         self._lbl_action = lbl_action
 
-        self._cmb_action = QComboBox()
+        self._cmb_action = ThemedComboBox()
         self._cmb_action.setMinimumWidth(AUDIT_FILTER_CMB_ACTION_W)
         self._cmb_action.addItem(tr("audit_all_types"), None)
         for action, icon in _ACTION_ICONS.items():

@@ -6,10 +6,11 @@ _ItemForm — فورم إضافة / تعديل صنف مخزن.
 
 from PyQt5.QtWidgets import (
     QWidget, QVBoxLayout, QHBoxLayout, QFormLayout, QGroupBox,
-    QLineEdit, QPushButton, QDoubleSpinBox, QComboBox, QMessageBox,
+    QPushButton, QDoubleSpinBox, QMessageBox,
     QLabel,
 )
 from PyQt5.QtCore import Qt
+from ui.widgets.panels.themed_inputs import ThemedLineEdit, ThemedComboBox
 
 from services.inventory.inventory_service import InventoryService
 from ui.widgets.mixins.form_mixins import EditModeMixin
@@ -77,11 +78,11 @@ class _ItemForm(QWidget, EditModeMixin, WidgetMixin):
         self.lbl_mode = QLabel(tr("inventory_item_new_mode"))
         form.addRow(self.lbl_mode)
 
-        self.inp_name = QLineEdit()
+        self.inp_name = ThemedLineEdit()
         self.inp_name.setPlaceholderText(tr("inventory_item_name_placeholder"))
         self.inp_name.setMinimumHeight(INVENTORY_INPUT_MIN_H)
 
-        self.inp_unit = QLineEdit()
+        self.inp_unit = ThemedLineEdit()
         self.inp_unit.setPlaceholderText(tr("inventory_unit_placeholder"))
         self.inp_unit.setMinimumHeight(INVENTORY_INPUT_MIN_H)
         self.inp_unit.setText(tr("piece"))
@@ -92,20 +93,20 @@ class _ItemForm(QWidget, EditModeMixin, WidgetMixin):
         self.sp_qty_min.setToolTip(tr("inventory_qty_min_tooltip"))
 
         # ربط بصنف من items (اختياري)
-        self.cmb_item = QComboBox()
+        self.cmb_item = ThemedComboBox()
         self.cmb_item.setMinimumHeight(INVENTORY_CMB_MIN_H)
         self.cmb_item.addItem(tr("investor_no_link"), None)
         for item in self._svc.list_costing_items("raw"):
             self.cmb_item.addItem(tr("inventory_raw_item_fmt").format(name=item["name"]), item["id"])
 
         # ربط بحساب محاسبي
-        self.cmb_account = QComboBox()
+        self.cmb_account = ThemedComboBox()
         self.cmb_account.setMinimumHeight(INVENTORY_CMB_MIN_H)
         self.cmb_account.addItem(tr("inventory_default_account_placeholder"), None)
         for acc in self._svc.list_payment_accounts("asset"):
             self.cmb_account.addItem(f"{acc['code']}{tr('account_code_name_sep')}{acc['name']}", acc["id"])
 
-        self.inp_notes = QLineEdit()
+        self.inp_notes = ThemedLineEdit()
         self.inp_notes.setPlaceholderText(tr("notes_placeholder"))
         self.inp_notes.setMinimumHeight(INVENTORY_CMB_MIN_H)
 

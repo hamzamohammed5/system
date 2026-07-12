@@ -5,13 +5,14 @@ ui/tabs/design/dimension_sets/_field_dialog.py
 
 from PyQt5.QtWidgets import (
     QVBoxLayout, QDoubleSpinBox,
-    QLabel, QLineEdit,
-    QComboBox, QCheckBox, QGroupBox,
+    QLabel,
+    QCheckBox, QGroupBox,
     QFormLayout, QMessageBox, QDialog,
     QDialogButtonBox
     )
 
 from PyQt5.QtCore import Qt
+from ui.widgets.panels.themed_inputs import ThemedLineEdit, ThemedComboBox
 
 
 from ui.theme import _C
@@ -100,11 +101,11 @@ class _FieldDialog(QDialog, WidgetMixin):
         form.setSpacing(DIM_FIELD_DLG_FORM_SPACING)
         form.setLabelAlignment(Qt.AlignRight)
 
-        self.inp_name  = QLineEdit()
+        self.inp_name  = ThemedLineEdit()
         self.inp_name.setPlaceholderText(tr("dim_field_name_en_placeholder"))
         self.inp_name.setMinimumHeight(DIM_FIELD_DLG_INPUT_H)
 
-        self.inp_label = QLineEdit()
+        self.inp_label = ThemedLineEdit()
         self.inp_label.setPlaceholderText(tr("dim_field_label_ar_placeholder"))
         self.inp_label.setMinimumHeight(DIM_FIELD_DLG_INPUT_H)
 
@@ -116,7 +117,7 @@ class _FieldDialog(QDialog, WidgetMixin):
         )
         self.cmb_unit.setMinimumHeight(DIM_FIELD_DLG_INPUT_H)
 
-        self.cmb_type = QComboBox()
+        self.cmb_type = ThemedComboBox()
         self.cmb_type.addItem(tr("dim_field_type_number"), "number")
         self.cmb_type.addItem(tr("dim_field_type_text"),  "text")
         self.cmb_type.setMinimumHeight(DIM_FIELD_DLG_INPUT_H)
@@ -140,7 +141,7 @@ class _FieldDialog(QDialog, WidgetMixin):
         dep_lay.setSpacing(DIM_FIELD_DLG_FORM_SPACING)
         dep_lay.setLabelAlignment(Qt.AlignRight)
 
-        self.cmb_source_set = QComboBox()
+        self.cmb_source_set = ThemedComboBox()
         self.cmb_source_set.setMinimumHeight(DIM_FIELD_DLG_INPUT_H)
         self.cmb_source_set.addItem(tr("dim_field_select_source_set"), None)
 
@@ -155,7 +156,7 @@ class _FieldDialog(QDialog, WidgetMixin):
 
         self.cmb_source_set.currentIndexChanged.connect(self._reload_source_fields)
 
-        self.cmb_source = QComboBox()
+        self.cmb_source = ThemedComboBox()
         self.cmb_source.setMinimumHeight(DIM_FIELD_DLG_INPUT_H)
         self.cmb_source.setMinimumWidth(DIM_FIELD_DLG_SOURCE_CMB_MIN_W)
 

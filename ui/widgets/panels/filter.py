@@ -18,9 +18,10 @@ FilterToolbar — شريط فلاتر موحد (بحث + تصنيف + تاريخ
         المسار الصحيح: widget → service → repo (db/)
 """
 from PyQt5.QtWidgets import (
-    QWidget, QHBoxLayout, QLabel, QComboBox,
+    QWidget, QHBoxLayout, QLabel,
 )
 from PyQt5.QtCore import QDate, pyqtSignal
+from ui.widgets.panels.themed_inputs import ThemedComboBox
 
 # [FIX] absolute imports — ثلاث نقاط كانت خاطئة تُسبب ImportError
 from ui.font  import fs, get_font_size, FS_SM
@@ -105,7 +106,7 @@ class FilterToolbar(QWidget, WidgetMixin):
             from ui.constants import FILTER_CAT_ICON_W
             lbl.setFixedWidth(FILTER_CAT_ICON_W)
             lay.addWidget(lbl)
-            self.cmb_cat = QComboBox()
+            self.cmb_cat = ThemedComboBox()
             self.cmb_cat.setMinimumHeight(FILTER_COMBO_MIN_H)
             self.cmb_cat.setMinimumWidth(FILTER_COMBO_MIN_W)
             self.cmb_cat.setStyleSheet(_combo_style())

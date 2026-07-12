@@ -8,10 +8,11 @@ ui/tabs/orders/customers/customers_list_panel.py
 """
 
 from PyQt5.QtWidgets import (
-    QHBoxLayout, QComboBox, QPushButton, QSizePolicy, QLineEdit,
+    QHBoxLayout, QPushButton, QSizePolicy,
     QVBoxLayout,
 )
 from PyQt5.QtCore import Qt, pyqtSignal
+from ui.widgets.panels.themed_inputs import ThemedLineEdit, ThemedComboBox
 
 from services.orders.customer_service import CustomerService
 
@@ -132,7 +133,7 @@ class CustomersListPanel(BaseListPanel, WidgetMixin):
         # ── صف 1: بحث + زر جديد ──
         row1 = QHBoxLayout()
 
-        self.inp_search = QLineEdit()
+        self.inp_search = ThemedLineEdit()
         self.inp_search.setPlaceholderText(tr("order_customer_search"))
         self.inp_search.setFixedHeight(SEARCH_BAR_H)
         self.inp_search.setClearButtonEnabled(True)
@@ -176,7 +177,7 @@ class CustomersListPanel(BaseListPanel, WidgetMixin):
             QComboBox::drop-down {{ border: none; width: 16px; }}
         """
 
-        self.cmb_type = QComboBox()
+        self.cmb_type = ThemedComboBox()
         self.cmb_type.setFixedHeight(FILTER_SEARCH_H)
         self.cmb_type.addItem(tr("filter_all"), None)
         self.cmb_type.addItem(tr("customer_type_individual"), "individual")
@@ -184,7 +185,7 @@ class CustomersListPanel(BaseListPanel, WidgetMixin):
         self.cmb_type.setStyleSheet(_combo_ss)
         self.cmb_type.currentIndexChanged.connect(self._on_combo_changed)
 
-        self.cmb_active = QComboBox()
+        self.cmb_active = ThemedComboBox()
         self.cmb_active.setFixedHeight(FILTER_SEARCH_H)
         self.cmb_active.addItem(tr("all"), None)
         self.cmb_active.addItem(tr("customer_toggle_active"), 1)

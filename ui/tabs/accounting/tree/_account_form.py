@@ -10,11 +10,12 @@ SafeConnMixin (v3): _get_safe_conn() بدل self.conn.
 
 from PyQt5.QtWidgets import (
     QWidget, QVBoxLayout, QHBoxLayout, QFormLayout,
-    QGroupBox, QLineEdit, QPushButton, QLabel,
-    QComboBox, QMessageBox,
+    QGroupBox, QPushButton, QLabel,
+    QMessageBox,
 )
 from PyQt5.QtCore import Qt
 from PyQt5.QtGui  import QColor
+from ui.widgets.panels.themed_inputs import ThemedLineEdit, ThemedComboBox
 
 from services.accounting.accounts_service import AccountsService
 from ui.widgets.core.events import emit_company_data_changed
@@ -66,24 +67,24 @@ class _AccountForm(SafeConnMixin, QWidget, WidgetMixin):
         self.lbl_form_mode = QLabel(tr("account_form_new"))
         fl.addRow(self.lbl_form_mode)
 
-        self.inp_code = QLineEdit()
+        self.inp_code = ThemedLineEdit()
         self.inp_code.setPlaceholderText(tr("account_code_placeholder"))
         self.inp_code.setMinimumHeight(ACCOUNT_FORM_INPUT_MIN_H)
         fl.addRow(f"{tr('account_code')}:", self.inp_code)
 
-        self.inp_name = QLineEdit()
+        self.inp_name = ThemedLineEdit()
         self.inp_name.setPlaceholderText(tr("account_name_placeholder"))
         self.inp_name.setMinimumHeight(ACCOUNT_FORM_INPUT_MIN_H)
         fl.addRow(f"{tr('name')}:", self.inp_name)
 
-        self.cmb_type = QComboBox()
+        self.cmb_type = ThemedComboBox()
         self.cmb_type.setMinimumHeight(ACCOUNT_FORM_INPUT_MIN_H)
         type_labels = AccountsService(self._get_safe_conn()).get_type_labels_map()
         for t in self.acc_types:
             self.cmb_type.addItem(type_labels.get(t, t), t)
         fl.addRow(f"{tr('account_type')}:", self.cmb_type)
 
-        self.cmb_group = QComboBox()
+        self.cmb_group = ThemedComboBox()
         self.cmb_group.setMinimumHeight(ACCOUNT_FORM_INPUT_MIN_H)
         fl.addRow(f"{tr('account_group')}:", self.cmb_group)
 

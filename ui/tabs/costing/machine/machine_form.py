@@ -12,8 +12,9 @@ _MachineForm — فورم إضافة / تعديل الماكينة.
 
 from PyQt5.QtWidgets import (
     QWidget, QVBoxLayout, QHBoxLayout,
-    QLineEdit, QPushButton, QLabel, QMessageBox,
+    QPushButton, QLabel, QMessageBox,
 )
+from ui.widgets.panels.themed_inputs import ThemedLineEdit
 
 from services.costing.machine_service   import MachineService
 from ui.widgets.mixins.form_mixins      import EditModeMixin
@@ -78,7 +79,7 @@ class _MachineForm(QWidget, EditModeMixin, LiveConnMixin, WidgetMixin):
         self.lbl_mode = QLabel(tr("mode_label_wrap").format(content=tr("add_machine_new")))
         grp.add_label_row(self.lbl_mode)
 
-        self.inp_name = QLineEdit()
+        self.inp_name = ThemedLineEdit()
         self.inp_name.setPlaceholderText(tr("machine_name_placeholder"))
         self.inp_name.setMinimumHeight(MACHINE_FORM_INP_MIN_H)
 

@@ -4,12 +4,13 @@ ui/tabs/companies/companies_dialog.py
 
 from PyQt5.QtWidgets import (
     QDialog, QVBoxLayout, QHBoxLayout, QSplitter,
-    QLabel, QPushButton, QLineEdit, QTextEdit,
+    QLabel, QPushButton, QTextEdit,
     QTableWidget, QTableWidgetItem, QHeaderView,
     QColorDialog, QWidget, QFrame,
 )
 from PyQt5.QtCore import Qt
 from PyQt5.QtGui  import QColor
+from ui.widgets.panels.themed_inputs import ThemedLineEdit
 
 from services.companies.company_service import CompanyService
 from ui.theme import _C
@@ -140,14 +141,14 @@ class CompaniesDialog(QDialog, WidgetMixin):
 
         self._name_lbl = QLabel(tr("company_name_label"))
         lay.addWidget(self._name_lbl)
-        self._inp_name = QLineEdit()
+        self._inp_name = ThemedLineEdit()
         self._inp_name.setPlaceholderText(tr("company_name_placeholder"))
         self._inp_name.setFixedHeight(COMPANIES_DLG_INP_H)
         lay.addWidget(self._inp_name)
 
         self._short_lbl = QLabel(tr("company_short_name_label"))
         lay.addWidget(self._short_lbl)
-        self._inp_short = QLineEdit()
+        self._inp_short = ThemedLineEdit()
         self._inp_short.setPlaceholderText(tr("company_short_placeholder"))
         self._inp_short.setFixedHeight(COMPANIES_DLG_INP_H)
         lay.addWidget(self._inp_short)

@@ -8,10 +8,10 @@ ui/tabs/design/dimension_sets/_sets_panel.py
 from PyQt5.QtWidgets import (
     QWidget, QVBoxLayout, QHBoxLayout,
     QTableWidgetItem,
-    QLabel, QLineEdit,
-    QComboBox,
+    QLabel
 )
 from PyQt5.QtCore import Qt, pyqtSignal
+from ui.widgets.panels.themed_inputs import ThemedLineEdit, ThemedComboBox
 
 from services.design import get_dimension_set_service
 from ui.widgets.tables.tables       import make_table
@@ -82,12 +82,12 @@ class _SetsPanel(QWidget, WidgetMixin):
 
         # ── فلتر ──
         filter_row = QHBoxLayout()
-        self.inp_search = QLineEdit()
+        self.inp_search = ThemedLineEdit()
         self.inp_search.setPlaceholderText(tr("dim_sets_list_search"))
         self.inp_search.setMinimumHeight(FILTER_SEARCH_H)
         self.inp_search.textChanged.connect(self._apply_filter)
 
-        self.cmb_cat_filter = QComboBox()
+        self.cmb_cat_filter = ThemedComboBox()
         self.cmb_cat_filter.setMinimumHeight(FILTER_COMBO_MIN_H)
         self.cmb_cat_filter.setMinimumWidth(LEDGER_MOVE_CMB_W)
         self.cmb_cat_filter.currentIndexChanged.connect(self._apply_filter)

@@ -247,6 +247,15 @@ class BaseListPanel(QWidget, WidgetMixin):
     def _refresh_style(self, *_):
         from ui.theme import _C
         self.setStyleSheet(f"background:{_C['bg_input']};")
+        # [إصلاح ثيم — مركزي] self.table كانت بتاخد table_style() مرة واحدة
+        # بس وقت الإنشاء داخل make_splitter_table_guarded() في _build().
+        # محدش كان بينادي setStyleSheet(table_style()) تاني بعد كده، فلما
+        # الثيم يتغير (وخصوصاً لو الجدول فاضي/مفيهوش صفوف) كان يفضل ظاهر
+        # بالستايل القديم — خلفية بيضاء بارزة فوق باقي الواجهة الداكنة.
+        # بما إن كل جداول التطبيق (RawTablePanel وغيرها) بترث من الكلاس
+        # ده، الإصلاح هنا مركزي وبيغطي كل الأماكن دفعة واحدة.
+        from ..tables.tables import table_style
+        self.table.setStyleSheet(table_style())
         self._empty_state.setStyleSheet(
             f"QFrame {{ background:{_C['bg_input']}; border:none; }}"
         )

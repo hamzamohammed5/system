@@ -5,10 +5,11 @@ _OfferItemRow — صف منتج واحد داخل فورم العرض.
 """
 
 from PyQt5.QtWidgets import (
-    QFrame, QHBoxLayout, QLabel, QLineEdit,
-    QPushButton, QDoubleSpinBox, QComboBox,
+    QFrame, QHBoxLayout, QLabel,
+    QPushButton, QDoubleSpinBox,
 )
 from PyQt5.QtCore import Qt
+from ui.widgets.panels.themed_inputs import ThemedLineEdit, ThemedComboBox
 
 from services.pricing.offers_service import (
     get_offer_candidate_items, get_priced_ids,
@@ -104,7 +105,7 @@ class _OfferItemRow(QFrame, WidgetMixin):
         lay.setContentsMargins(SPACING_MD, SPACING_SM, SPACING_MD, SPACING_SM)
         lay.setSpacing(SPACING_MD)
 
-        self.inp_search = QLineEdit()
+        self.inp_search = ThemedLineEdit()
         self.inp_search.setPlaceholderText(tr("offer_select_product_search"))
         self.inp_search.setFixedWidth(OFFER_FORM_HDR_SEARCH_W)
         self.inp_search.setMinimumHeight(FILTER_SEARCH_H)
@@ -112,7 +113,7 @@ class _OfferItemRow(QFrame, WidgetMixin):
             lambda t: self._load_products(filter_text=t.strip())
         )
 
-        self.cmb_product = QComboBox()
+        self.cmb_product = ThemedComboBox()
         self.cmb_product.setMinimumWidth(OFFER_ROW_PRODUCT_COMBO_W)
         self.cmb_product.setMinimumHeight(FILTER_COMBO_MIN_H)
         self.cmb_product.currentIndexChanged.connect(self._on_product_changed)

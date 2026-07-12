@@ -19,8 +19,9 @@ _MachineOpForm — فورم إضافة / تعديل عملية تشغيل.
 
 from PyQt5.QtWidgets import (
     QWidget, QVBoxLayout, QHBoxLayout,
-    QLineEdit, QPushButton, QLabel, QComboBox, QMessageBox,
+    QPushButton, QLabel, QMessageBox,
 )
+from ui.widgets.panels.themed_inputs import ThemedLineEdit, ThemedComboBox
 
 from services.costing.machine_service   import MachineService, MachineOpService
 from services.costing.machine_op_rows_service import MachineOpRowsService
@@ -96,11 +97,11 @@ class _MachineOpForm(QWidget, EditModeMixin, LiveConnMixin, WidgetMixin):
         self.lbl_mode = QLabel(tr("mode_label_wrap").format(content=tr("add_machine_op_new")))
         grp.add_label_row(self.lbl_mode)
 
-        self.inp_name = QLineEdit()
+        self.inp_name = ThemedLineEdit()
         self.inp_name.setPlaceholderText(tr("machine_op_name_placeholder"))
         self.inp_name.setMinimumHeight(MACHINE_FORM_INP_MIN_H)
 
-        self.cmb_machine = QComboBox()
+        self.cmb_machine = ThemedComboBox()
         self.cmb_machine.setMinimumHeight(MACHINE_FORM_INP_MIN_H)
 
         self.lbl_machine_mode = ModeBadge(color="orange")

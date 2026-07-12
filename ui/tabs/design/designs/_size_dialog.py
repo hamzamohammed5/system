@@ -7,11 +7,12 @@ import os
 
 from PyQt5.QtWidgets import (
     QVBoxLayout, QHBoxLayout,
-    QPushButton, QLabel, QLineEdit,
-    QComboBox, QMessageBox, QDialog, QDialogButtonBox,
+    QPushButton, QLabel,
+    QMessageBox, QDialog, QDialogButtonBox,
     QFileDialog, QFormLayout,
 )
 from PyQt5.QtCore import Qt
+from ui.widgets.panels.themed_inputs import ThemedLineEdit, ThemedComboBox
 
 from ui.theme import _C
 from ui.widgets.core.i18n import tr
@@ -75,32 +76,32 @@ class _SizeDialog(QDialog, WidgetMixin):
         form.setLabelAlignment(Qt.AlignRight)
 
         # ── مجموعة المقاسات ──
-        self.cmb_set = QComboBox()
+        self.cmb_set = ThemedComboBox()
         self.cmb_set.setMinimumHeight(SIZE_DLG_FIELD_H)
         self.cmb_set.currentIndexChanged.connect(self._on_set_changed)
         self._load_sets_combo()
         form.addRow(tr("design_size_set_label") + tr("field_colon"), self.cmb_set)
 
         # ── المقاس (instance) ──
-        self.cmb_instance = QComboBox()
+        self.cmb_instance = ThemedComboBox()
         self.cmb_instance.setMinimumHeight(SIZE_DLG_FIELD_H)
         self.cmb_instance.currentIndexChanged.connect(self._on_instance_changed)
         form.addRow(tr("design_size_instance_label") + tr("field_colon"), self.cmb_instance)
 
         # ── حقل العرض ──
-        self.cmb_width = QComboBox()
+        self.cmb_width = ThemedComboBox()
         self.cmb_width.setMinimumHeight(SIZE_DLG_FIELD_H)
         self.cmb_width.currentIndexChanged.connect(self._update_canvas_preview)
         form.addRow(tr("design_size_width_label") + tr("field_colon"), self.cmb_width)
 
         # ── حقل الطول ──
-        self.cmb_height = QComboBox()
+        self.cmb_height = ThemedComboBox()
         self.cmb_height.setMinimumHeight(SIZE_DLG_FIELD_H)
         self.cmb_height.currentIndexChanged.connect(self._update_canvas_preview)
         form.addRow(tr("design_size_height_label") + tr("field_colon"), self.cmb_height)
 
         # ── حقل الـ DPI ──
-        self.cmb_dpi = QComboBox()
+        self.cmb_dpi = ThemedComboBox()
         self.cmb_dpi.setMinimumHeight(SIZE_DLG_FIELD_H)
         self.cmb_dpi.currentIndexChanged.connect(self._update_canvas_preview)
         form.addRow(tr("design_size_dpi_label") + tr("field_colon"), self.cmb_dpi)
@@ -116,7 +117,7 @@ class _SizeDialog(QDialog, WidgetMixin):
 
         # ── مسار ملف GIMP ──
         path_row = QHBoxLayout()
-        self.inp_path = QLineEdit()
+        self.inp_path = ThemedLineEdit()
         self.inp_path.setPlaceholderText(tr("design_size_gimp_placeholder"))
         self.inp_path.setMinimumHeight(SIZE_DLG_FIELD_H)
         btn_browse = QPushButton(tr("design_size_gimp_browse_icon"))
@@ -135,7 +136,7 @@ class _SizeDialog(QDialog, WidgetMixin):
         form.addRow(tr("design_size_gimp_path_label") + tr("field_colon"), path_row)
 
         # ── ملاحظات ──
-        self.inp_notes = QLineEdit()
+        self.inp_notes = ThemedLineEdit()
         self.inp_notes.setPlaceholderText(tr("notes"))
         self.inp_notes.setMinimumHeight(SIZE_DLG_FIELD_H)
         form.addRow(tr("notes") + tr("field_colon"), self.inp_notes)

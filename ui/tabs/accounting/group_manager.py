@@ -10,12 +10,11 @@ _GroupManagerPanel — إدارة تصنيفات الحسابات.
 
 from PyQt5.QtWidgets import (
     QWidget, QVBoxLayout, QHBoxLayout,
-    QTreeWidget, QTreeWidgetItem,
-    QLineEdit, QMessageBox,
-    QComboBox, QHeaderView,
+    QTreeWidget, QTreeWidgetItem, QHeaderView,
 )
 from PyQt5.QtCore import Qt
 from PyQt5.QtGui  import QColor
+from ui.widgets.panels.themed_inputs import ThemedLineEdit, ThemedComboBox
 
 from services.accounting.accounts_service import AccountsService
 from ui.widgets.core.events import bus
@@ -92,12 +91,12 @@ class _GroupManagerPanel(SafeConnMixin, QWidget):
         self._lbl_mode = ModeLabel(add_text=tr("group_new_placeholder"))
         grp.add_label_row(self._lbl_mode)
 
-        self.inp_name = QLineEdit()
+        self.inp_name = ThemedLineEdit()
         self.inp_name.setMinimumHeight(GROUP_MGR_INPUT_MIN_H)
         self.inp_name.setPlaceholderText(tr("group_name_placeholder"))
         grp.add_row(tr("name") + ":", self.inp_name)
 
-        self.cmb_parent = QComboBox()
+        self.cmb_parent = ThemedComboBox()
         self.cmb_parent.setMinimumHeight(GROUP_MGR_INPUT_MIN_H)
         grp.add_row(tr("group_parent_label"), self.cmb_parent)
 

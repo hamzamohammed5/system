@@ -9,9 +9,10 @@ ScenarioComparisonWidget — يقارن تكلفة السيناريو الافت
 
 from PyQt5.QtWidgets import (
     QWidget, QVBoxLayout, QHBoxLayout,
-    QLabel, QComboBox, QFrame,
+    QLabel, QFrame,
 )
 from PyQt5.QtCore import Qt
+from ui.widgets.panels.themed_inputs import ThemedComboBox
 
 from models.costing               import calc_cost
 from services.costing.scenario_service import ScenarioService
@@ -70,7 +71,7 @@ class ScenarioComparisonWidget(QFrame, WidgetMixin):
         lbl_sc = QLabel(f"{tr('compare_scenario')}:")
         self._lbl_sc = lbl_sc
 
-        self.cmb_scenario = QComboBox()
+        self.cmb_scenario = ThemedComboBox()
         self.cmb_scenario.setMinimumHeight(SCENARIO_CMP_CMB_MIN_H)
         self.cmb_scenario.setMinimumWidth(SCENARIO_CMP_CMB_MIN_W)
         self.cmb_scenario.currentIndexChanged.connect(self._on_scenario_changed)

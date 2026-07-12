@@ -11,10 +11,12 @@ _RawVariantsPanel — لوحة إدارة variants الخامة (صفوف الإ
 
 from PyQt5.QtWidgets import (
     QWidget, QVBoxLayout, QHBoxLayout,
-    QLabel, QLineEdit, QPushButton, QDoubleSpinBox,
+    QLabel, QPushButton, QDoubleSpinBox,
     QTableWidget, QTableWidgetItem, QHeaderView,
     QAbstractItemView, QGroupBox, QMessageBox,
 )
+from ui.widgets.panels.themed_inputs import ThemedLineEdit
+
 from PyQt5.QtCore import Qt
 from PyQt5.QtGui  import QColor
 
@@ -90,7 +92,7 @@ class _RawVariantsPanel(QGroupBox, WidgetMixin):
         form_row = QHBoxLayout()
         form_row.setSpacing(RAW_VARIANTS_FORM_SPACING)
 
-        self.inp_name = QLineEdit()
+        self.inp_name = ThemedLineEdit()
         self.inp_name.setPlaceholderText(tr("variant_name_placeholder"))
         self.inp_name.setMinimumHeight(RAW_VARIANTS_INP_H)
 
