@@ -129,9 +129,15 @@ class ComponentRow(QWidget, OpRowsMixin, VariantsMixin, WidgetMixin):
 
         # ── QTimers للتحميل المؤجل ──────────────────────────
         self._schedule_deferred_loads(child_type, child_id, variant_id, machine_op_row_id)
+        # [Fix - dark theme waste_spin] كانت theme=False, font=False هنا
+        # عمدًا، لكن ده كان بيخلي waste_spin (QDoubleSpinBox عادي بستايل
+        # مبني وقت الإنشاء فقط عبر update_waste_style في ui.py) يفضل
+        # بألوان الثيم اللي كانت شغالة وقت إنشاء الصف، حتى لو الثيم اتغير
+        # بعد كده بالكامل. الحل: نستمع لـ theme_changed كمان، ونضيف
+        # _refresh_style() تعيد بناء ستايل waste_spin من الألوان الحالية.
         QTimer.singleShot(
             0,
-            lambda: self._init_widget_mixin(theme=False, font=False, lang=True, data=True),
+            lambda: self._init_widget_mixin(theme=True, font=False, lang=True, data=True),
         )
 
     # ── Shared deleted-check ───────────────────────────────
@@ -147,6 +153,73 @@ class ComponentRow(QWidget, OpRowsMixin, VariantsMixin, WidgetMixin):
             return any(sip.isdeleted(w) for w in widgets)
         except Exception:
             return True
+
+    # ── Theme refresh ───────────────────────────────────────
+
+    def _refresh_style(self, *_):
+        """
+        [Fix - dark theme] يعيد بناء ستايل كل العناصر اللي كانت مبنية
+        بستايل ثابت وقت الإنشاء بس (waste_spin, cmb_variant,
+        lbl_variant_cost, cmb_op_row, lbl_op_row_cost, lbl_waste,
+        lbl_total_qty, sub_row) — دي كلها ماكانتش بتتحدث عند تغيير الثيم
+        لأن ComponentRow كانت مسجلة بـ theme=False.
+        """
+        if self._is_widget_deleted():
+            return
+
+        from .ui import (
+            update_waste_style, _variant_combo_style, _variant_cost_style,
+            _op_row_combo_style, _sub_row_style,
+        )
+        from ui.widgets.core.colors import status_colors as _status_colors
+        from ui.font import fs, get_font_size
+        from ui.theme import _C
+
+        try:
+            update_waste_style(self, self.waste_spin.value())
+        except Exception:
+            pass
+
+        try:
+            if hasattr(self, "cmb_variant"):
+                self.cmb_variant.setStyleSheet(_variant_combo_style())
+            if hasattr(self, "lbl_variant_cost"):
+                self.lbl_variant_cost.setStyleSheet(_variant_cost_style())
+        except Exception:
+            pass
+
+        try:
+            if hasattr(self, "cmb_op_row"):
+                self.cmb_op_row.setStyleSheet(_op_row_combo_style())
+        except Exception:
+            pass
+
+        try:
+            if hasattr(self, "_sub_row_widget"):
+                self._sub_row_widget.setStyleSheet(_sub_row_style())
+        except Exception:
+            pass
+
+        base = get_font_size()
+        try:
+            if hasattr(self, "lbl_waste"):
+                s_warning = _status_colors("warning")
+                self.lbl_waste.setStyleSheet(
+                    f"color:{s_warning['fg']}; font-size:{fs(base, -1)}pt;"
+                    "background:transparent; border:none;"
+                )
+            if hasattr(self, "lbl_op_row_cost"):
+                s_purple = _status_colors("purple")
+                self.lbl_op_row_cost.setStyleSheet(
+                    f"font-size:{fs(base, -1)}pt; color:{s_purple['fg']}; font-weight:bold;"
+                    "background:transparent; border:none;"
+                )
+            if hasattr(self, "lbl_total_qty"):
+                self.lbl_total_qty.setStyleSheet(
+                    f"color:{_C['text_muted']}; font-size:{fs(base, -1)}pt;"
+                )
+        except Exception:
+            pass
 
     # ── Language refresh ────────────────────────────────────
 

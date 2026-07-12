@@ -187,6 +187,7 @@ class _OfferForm(QWidget, WidgetMixin):
         f3, self.lbl_sell_price   = stat_box(tr("offer_sell_price"),        "success")
         f4, self.lbl_total_cost   = stat_box(tr("offer_total_cost"),        "text_neutral")
         f5, self.lbl_profit       = stat_box(tr("offer_profit"),            "success")
+        self.lbl_profit_frame = f5   # [إصلاح ثيم] مرجع الـ frame لاستخدام set_value_color
         for f in (f1, f2, f3, f4, f5):
             stats_row.addWidget(f, stretch=1)
         h_lay.addLayout(stats_row)
@@ -320,14 +321,11 @@ class _OfferForm(QWidget, WidgetMixin):
         self.lbl_sell_price.setText(tr("amount_fmt").format(amount=sell_price))
         self.lbl_total_cost.setText(tr("amount_fmt").format(amount=total_cost))
 
+        # [إصلاح ثيم] set_value_color بدل setStyleSheet مباشر — بتحفظ
+        # اللون وتطبقه تلقائيًا مع كل تغيير ثيم كمان.
         profit_key = "success" if profit >= 0 else "danger"
         self.lbl_profit.setText(tr("amount_fmt").format(amount=profit))
-        from ui.theme import _C
-        from ui.font import FS_LG
-        self.lbl_profit.setStyleSheet(
-            f"font-size:{FS_LG}px; font-weight:bold; color:{_C[profit_key]};"
-            "background:transparent; border:none;"
-        )
+        self.lbl_profit_frame.set_value_color(profit_key)
 
     # ── حفظ / تحميل / إعادة تعيين ────────────────────────
     def _save(self):

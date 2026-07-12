@@ -104,17 +104,19 @@ class _PricingPanel(QWidget, WidgetMixin):
         # خلفية بيضاء واضحة فوق باقي اللوحة الداكنة.
         from ui.widgets.tables.tables import table_style
         self.table.setStyleSheet(table_style())
+        # [إصلاح ثيم] btn_save/btn_cancel/btn_del/btn_edit مبنيين بـ
+        # make_btn() — لازم refresh_visible_buttons عشان يتابعوا الثيم.
+        from ui.widgets.components.button import refresh_visible_buttons
+        refresh_visible_buttons(self)
         self._refresh_manual_stats_style()
 
     def _refresh_manual_stats_style(self):
-        """يعيد رسم لون/حجم خط lbl_stat_profit طبقاً للثيم الحالي وآخر قيمة ربح محسوبة."""
-        from ui.font import get_font_size, fs
+        """يحدد لون قيمة lbl_stat_profit (success/danger) طبقاً لآخر ربح محسوب.
+        set_value_color بتخزن اللون وتطبقه تلقائياً مع كل تغيير ثيم كمان،
+        فمفيش فقدان للتلوين عند تبديل الثيم."""
         profit = getattr(self, "_last_profit", 0.0)
-        color_profit = _C["success"] if profit >= 0 else _C["danger"]
-        self.lbl_stat_profit.setStyleSheet(
-            f"font-size:{fs(get_font_size(), 2)}px; font-weight:bold; color:{color_profit};"
-            "background:transparent; border:none;"
-        )
+        color_key = "success" if profit >= 0 else "danger"
+        self.lbl_stat_profit_frame.set_value_color(color_key)
 
     # ══════════════════════════════════════════════════════
     # بناء الواجهة
@@ -177,6 +179,7 @@ class _PricingPanel(QWidget, WidgetMixin):
         f2, self.lbl_stat_price      = stat_box(tr("pricing_suggested_stat"),    "success")
         f3, self.lbl_stat_manual     = stat_box(tr("pricing_manual_stat"),         "orange")
         f4, self.lbl_stat_profit     = stat_box(tr("pricing_profit_stat"),                "success")
+        self.lbl_stat_profit_frame = f4
         f5, self.lbl_stat_margin_pct = stat_box(tr("pricing_margin_actual_stat"), "purple")
         for f in (f1, f2, f3, f4, f5):
             stats_row.addWidget(f, stretch=1)

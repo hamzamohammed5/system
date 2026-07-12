@@ -58,6 +58,10 @@ class _ItemsTable(QWidget, WidgetMixin):
         # يفضل ظاهر بخلفية بيضاء (الستايل القديم المتجمد وقت الإنشاء).
         from ui.widgets.tables.tables import table_style
         self.table.setStyleSheet(table_style())
+        # [إصلاح ثيم] btn_del مبني بـ make_btn() — لازم refresh_visible_buttons
+        # عشان يتابع الثيم (btn_edit عادي مبني QPushButton خام فمش محتاج).
+        from ui.widgets.components.button import refresh_visible_buttons
+        refresh_visible_buttons(self)
 
     def _refresh_lang(self, *_):
         pass  # الأعمدة تُبنى مرة واحدة في _build

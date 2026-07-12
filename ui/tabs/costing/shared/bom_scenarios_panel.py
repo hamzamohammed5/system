@@ -97,6 +97,7 @@ class _BomScenariosPanel(QFrame, MemoryScenariosMixin, DbScenariosMixin, WidgetM
         self.btn_set_default = self._make_btn(
             f"{tr('scenarios_panel_btn_star_icon')}{tr('default_scenario')}", SCENARIOS_PANEL_BTN_DEFAULT_W,
             _C['warning_bg'], _C['warning'], _C['warning_border'], _C['warning_bg'],
+            color_name="warning",
         )
         self.btn_set_default.setToolTip(tr("set_as_default"))
         self.btn_set_default.clicked.connect(self._set_default)
@@ -105,40 +106,55 @@ class _BomScenariosPanel(QFrame, MemoryScenariosMixin, DbScenariosMixin, WidgetM
         btn_rename = self._make_btn(
             f"{tr('scenarios_panel_btn_edit_icon')}{tr('edit')}", SCENARIOS_PANEL_BTN_RENAME_W,
             _C['orange_bg'], _C['orange'], _C['orange_border'], _C['orange_bg'],
+            color_name="orange",
         )
         btn_rename.setToolTip(tr("rename_scenario"))
         btn_rename.clicked.connect(self._rename)
         lay.addWidget(btn_rename)
+        self._btn_rename = btn_rename
 
         btn_clone = self._make_btn(
             f"{tr('scenarios_panel_btn_clone_icon')}{tr('clone')}", SCENARIOS_PANEL_BTN_CLONE_W,
             _C['info_bg'], _C['info'], _C['info_border'], _C['info_bg'],
+            color_name="info",
         )
         btn_clone.setToolTip(tr("clone_scenario"))
         btn_clone.clicked.connect(self._clone)
         lay.addWidget(btn_clone)
+        self._btn_clone = btn_clone
 
         btn_add = self._make_btn(
             f"{tr('scenarios_panel_btn_add_icon')}{tr('new')}", SCENARIOS_PANEL_BTN_ADD_W,
             _C['success_bg'], _C['success'], _C['success_border'], _C['success_bg'],
+            color_name="success",
         )
         btn_add.setToolTip(tr("add_scenario"))
         btn_add.clicked.connect(self._add_new)
         lay.addWidget(btn_add)
+        self._btn_add = btn_add
 
         btn_del = self._make_btn(
             tr("scenarios_panel_btn_del_icon"), SCENARIOS_PANEL_BTN_DEL_W,
             _C['danger_bg'], _C['danger'], _C['danger_border'], _C['danger_bg'],
+            color_name="danger",
         )
         btn_del.setToolTip(tr("delete"))
         btn_del.clicked.connect(self._delete)
         lay.addWidget(btn_del)
+        self._btn_del = btn_del
 
     def _refresh_style(self, *_):
         """يُطبق الـ stylesheet عند تغيير الثيم أو حجم الخط."""
         self._apply_frame_style()
         if hasattr(self, "cmb_scenarios"):
             self._apply_combo_style()
+        # [Fix - dark theme buttons] الأزرار (تعيين افتراضي/تعديل/استنساخ/
+        # جديد/حذف) كانت مبنية بألوان hardcoded وقت الإنشاء فقط عبر
+        # _make_btn، بدون أي إعادة رسم عند تغيير الثيم. النتيجة: تفضل
+        # بالستايل الفاتح حتى بعد التحويل لـ dark. الحل: نحفظ ألوان كل
+        # زرار كـ Qt properties وقت إنشائه، ونعيد بناء الـ stylesheet من
+        # _C المحدثة في كل مرة يتغير فيها الثيم.
+        self._refresh_buttons()
 
     def _apply_frame_style(self):
         self.setStyleSheet(f"""
@@ -150,6 +166,11 @@ class _BomScenariosPanel(QFrame, MemoryScenariosMixin, DbScenariosMixin, WidgetM
         """)
 
     def _apply_combo_style(self):
+        # [Fix] بدل استبدال الـ stylesheet بالكامل (اللي كان بيتعارض مع
+        # ThemedComboBox._refresh_style حسب ترتيب استدعاء bus.theme_changed)
+        # بنبني على نفس ألوان input_style الأساسية ونضيف فوقها التخصيص
+        # البنفسجي بتاع اللوحة، عشان نضمن دايمًا إن آخر حاجة بتتطبق فيها
+        # ألوان _C المحدثة، مهما كان ترتيب الاشتراك في الـ signal.
         self.cmb_scenarios.setStyleSheet(f"""
             QComboBox {{
                 background: {_C['bg_input']};
@@ -161,15 +182,42 @@ class _BomScenariosPanel(QFrame, MemoryScenariosMixin, DbScenariosMixin, WidgetM
             }}
             QComboBox:focus {{ border-color: {_C['purple']}; }}
             QComboBox::drop-down {{ border: none; }}
+            QComboBox QAbstractItemView {{
+                background: {_C['bg_input']};
+                color: {_C['text_primary']};
+                border: 1px solid {_C['purple_border']};
+                selection-background-color: {_C['purple_bg']};
+                selection-color: {_C['purple']};
+                outline: none;
+            }}
         """)
 
-    @staticmethod
-    def _make_btn(text: str, width: int,
-                  bg: str, fg: str, border: str, hover: str) -> QPushButton:
+    # [Fix] mapping من اسم اللون المخزّن كـ property → مفتاح _C الفعلي.
+    # بنخزن اسم اللون (زي "warning") مش القيمة الست نفسها، عشان لما الثيم
+    # يتغير نرجع نجيب القيمة الجديدة من _C[...] بدل القيمة القديمة المجمدة.
+    _BTN_COLOR_KEYS = ("bg", "fg", "border", "hover")
+
+    def _make_btn(self, text: str, width: int,
+                  bg: str, fg: str, border: str, hover: str,
+                  color_name: str = None) -> QPushButton:
+        """
+        بيبني زرار ملوّن. لو color_name اتمرر (مثلاً "warning", "orange",
+        "info", "success", "danger") — بيتحفظ كـ property على الزرار عشان
+        _refresh_buttons() تقدر تعيد بناء الـ stylesheet من _C المحدثة
+        بعد تغيير الثيم، بدل الألوان الجامدة اللي كانت بتتحقن وقت الإنشاء
+        بس ومتفضلش تتحدث بعد كده.
+        """
         btn = QPushButton(text)
         btn.setMinimumHeight(SCENARIOS_PANEL_BTN_MIN_H)
         btn.setFixedWidth(width)
-        btn.setStyleSheet(f"""
+        if color_name:
+            btn.setProperty("_scenario_btn_color", color_name)
+        btn.setStyleSheet(self._btn_stylesheet(bg, fg, border, hover))
+        return btn
+
+    @staticmethod
+    def _btn_stylesheet(bg: str, fg: str, border: str, hover: str) -> str:
+        return f"""
             QPushButton {{
                 background: {bg};
                 color: {fg};
@@ -185,8 +233,46 @@ class _BomScenariosPanel(QFrame, MemoryScenariosMixin, DbScenariosMixin, WidgetM
                 color: {_C['text_disabled']};
                 border-color: {_C['border']};
             }}
-        """)
-        return btn
+        """
+
+    # [Fix] color_name → (bg_key, fg_key, border_key, hover_key) في _C
+    _COLOR_NAME_TO_KEYS = {
+        "warning": ("warning_bg", "warning", "warning_border", "warning_bg"),
+        "orange":  ("orange_bg",  "orange",  "orange_border",  "orange_bg"),
+        "info":    ("info_bg",    "info",    "info_border",    "info_bg"),
+        "success": ("success_bg", "success", "success_border", "success_bg"),
+        "danger":  ("danger_bg",  "danger",  "danger_border",  "danger_bg"),
+    }
+
+    def _refresh_buttons(self):
+        """
+        [Fix - dark theme buttons] يعيد رسم كل أزرار اللوحة (تعيين
+        افتراضي / تعديل / استنساخ / جديد / حذف) بألوان الثيم الحالية.
+        بيتنادى من _refresh_style عند كل تغيير ثيم أو حجم خط.
+
+        [Fix إضافي] بنعيد تطبيق نفس الـ stylesheet حتى لو الزرار حاليًا
+        disabled (زي btn_set_default لما يكون السيناريو الحالي هو
+        الافتراضي أصلاً) — عشان قسم QPushButton:disabled جوا الـ
+        stylesheet يستخدم ألوان الثيم الحالية (_C['bg_surface'] إلخ) مش
+        قيمة قديمة متجمدة من ثيم سابق.
+        """
+        all_buttons = self.findChildren(QPushButton)
+        matched = 0
+        for btn in all_buttons:
+            color_name = btn.property("_scenario_btn_color")
+            if not color_name:
+                continue
+            keys = self._COLOR_NAME_TO_KEYS.get(color_name)
+            if not keys:
+                continue
+            bg_k, fg_k, border_k, hover_k = keys
+            try:
+                btn.setStyleSheet(self._btn_stylesheet(
+                    _C[bg_k], _C[fg_k], _C[border_k], _C[hover_k]
+                ))
+                matched += 1
+            except (KeyError, RuntimeError):
+                pass
 
     # ══════════════════════════════════════════════════════
     # API خارجي

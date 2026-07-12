@@ -228,6 +228,14 @@ class ListHeader(QFrame, WidgetMixin):
                 f"font-weight:700; font-size:{fs(base,0)}pt;"
                 f"color:{_C['text_primary']}; background:transparent; border:none;"
             )
+        # [إصلاح ثيم] self._btn_add وكل الأزرار المضافة عن طريق add_action()
+        # (زي "نشر كمشترك"، "تعديل المشترك"، "استبدال شامل") مبنية بـ
+        # make_btn() اللي بتحفظ property "_btn_style" على الزر خصيصًا
+        # عشان تتابع الثيم — لكن محدش كان بينادي refresh_visible_buttons()
+        # فعليًا، فالأزرار كانت تفضل بالستايل القديم (الفاتح) بعد تغيير
+        # الثيم لـ dark.
+        from .button import refresh_visible_buttons
+        refresh_visible_buttons(self)
 
     def _refresh_lang(self, *_):
         if self._search_bar:
@@ -244,6 +252,15 @@ class ListHeader(QFrame, WidgetMixin):
                 self._btn_row.insertWidget(idx, btn)
             else:
                 self._btn_row.addWidget(btn)
+        # [Fix - dark theme buttons] الأزرار المضافة عبر add_action() (زي
+        # "حذف المحدد" / "تعديل المحدد") بتتضاف بعد أول _refresh_style
+        # بتاعة الـ ListHeader، فكانت بتاخد الستايل بس من make_btn() وقت
+        # الإنشاء. الزرار بياخد الستايل الصحيح للثيم الحالي فورًا هنا،
+        # بدل ما يستنى أول bus.theme_changed لاحق عشان يتزبط.
+        from .button import _get_stylesheet
+        from ui.font  import get_font_size
+        btn.setStyleSheet(_get_stylesheet(style, get_font_size()))
+        btn.setProperty("_btn_style", style)  # يضمن دخوله في refresh_visible_buttons لاحقًا
         return btn
 
     def search_text(self) -> str:

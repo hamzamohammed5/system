@@ -59,6 +59,13 @@ class CategoryForm(QGroupBox, LiveConnMixin, WidgetMixin):
         self._init_widget_mixin(theme=True, font=False, data=False)
         self._build()
 
+    def _refresh_style(self, *_):
+        # [إصلاح ثيم] theme=True اتفعلت لكن مكانش فيه _refresh_style
+        # أصلاً — الأزرار (btn_add/btn_save/btn_cancel) مبنية بـ
+        # make_btn() ومحتاجة refresh_visible_buttons عشان تتابع الثيم.
+        from ..components.button import refresh_visible_buttons
+        refresh_visible_buttons(self)
+
     def _refresh_lang(self, *_):
         """[i18n] يُحدّث نصوص الـ groupbox والأزرار."""
         self.setTitle(tr("category_data"))
@@ -262,6 +269,10 @@ class CategoryManager(QWidget, LiveConnMixin, WidgetMixin):
         # بالستايل القديم (خلفية بيضاء) — وده اللي ظاهر في تبويب
         # "تصنيفات العروض" وأي شاشة تانية تستخدم CategoryManager.
         self.tree.setStyleSheet(tree_style())
+        # [إصلاح ثيم] btn_edit/btn_del مبنيين بـ make_btn() — لازم
+        # refresh_visible_buttons عشان يتابعوا الثيم.
+        from ..components.button import refresh_visible_buttons
+        refresh_visible_buttons(self)
 
     def _refresh_lang(self, *_):
         """[i18n] يُحدّث عناوين الأعمدة ونصوص الأزرار."""

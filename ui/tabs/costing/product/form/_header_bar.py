@@ -167,6 +167,13 @@ class _FormHeaderBar(QWidget, WidgetMixin):
                     f"font-size:{FS_SM}px; font-weight:bold; color:{_C['text_sec']};"
                     f"border-bottom:1px solid {_C['border']}; padding-bottom:2px;"
                 )
+        # [Fix - dark theme buttons] btn_add_row / btn_save / btn_cancel كانت
+        # بتتبنى بـ make_btn() اللي بتحفظ الستايل property صح، لكن محدش كان
+        # بينادي refresh_visible_buttons() هنا بعد تغيير الثيم، فالأزرار دي
+        # كانت تفضل بستايل الثيم اللي كانت موجودة وقت الإنشاء (غالبًا فاتح)
+        # حتى بعد التحويل لـ dark.
+        from ui.widgets.components.button import refresh_visible_buttons
+        refresh_visible_buttons(self)
 
     # ── API خارجي ─────────────────────────────────────────
 

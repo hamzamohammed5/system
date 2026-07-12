@@ -77,6 +77,7 @@ class _OfferDetails(QFrame, WidgetMixin):
         f3, self.sl_sell   = stat_box(tr("offer_sell_price"),        "success")
         f4, self.sl_cost   = stat_box(tr("offer_total_cost"),        "text_neutral")
         f5, self.sl_profit = stat_box(tr("offer_profit"),            "success")
+        self.sl_profit_frame = f5   # [إصلاح ثيم] مرجع الـ frame لاستخدام set_value_color
         for f in (f1, f2, f3, f4, f5):
             stats_row.addWidget(f, stretch=1)
         root.addLayout(stats_row)
@@ -186,10 +187,9 @@ class _OfferDetails(QFrame, WidgetMixin):
         profit = s["profit"]
         profit_key = "success" if profit >= 0 else "danger"
         self.sl_profit.setText(tr("amount_fmt").format(amount=profit))
-        self.sl_profit.setStyleSheet(
-            f"font-size:{FS_LG}px; font-weight:bold; color:{_C[profit_key]};"
-            "background:transparent; border:none;"
-        )
+        # [إصلاح ثيم] set_value_color بدل setStyleSheet مباشر — بتحفظ
+        # اللون وتطبقه تلقائيًا مع كل تغيير ثيم كمان.
+        self.sl_profit_frame.set_value_color(profit_key)
 
         notes = s.get("notes", "")
         self.lbl_notes.setText(

@@ -263,6 +263,13 @@ class BaseListPanel(QWidget, WidgetMixin):
             self._empty_state.set_color(_C['text_muted'])
         self._rebuild_pagination_styles()
         self._rebuild_status_style()
+        # [إصلاح ثيم] أزرار الأكشن جوه خلايا الجدول (زي تعديل/حذف في
+        # RawTablePanel._fill_actions_cell) وأزرار الـ pagination بتُبنى
+        # بـ make_btn() اللي بتحفظ "_btn_style" property للمتابعة —
+        # لكن محدش كان بينادي refresh_visible_buttons() عليها فعليًا،
+        # فكانت تفضل بالستايل القديم (الفاتح) بعد تغيير الثيم.
+        from ..components.button import refresh_visible_buttons
+        refresh_visible_buttons(self)
 
     def _refresh_lang(self, *_):
         if self._header.search_bar:

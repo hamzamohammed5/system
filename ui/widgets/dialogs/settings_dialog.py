@@ -173,6 +173,11 @@ class SettingsDialog(QDialog, WidgetMixin):
         self._refresh_units_tab_style()
         self._refresh_gimp_tab_style()
         self._refresh_notice_labels_style()
+        # [إصلاح ثيم] كل أزرار الوحدات وGIMP (btn_add, btn_del, btn_reset,
+        # btn_browse, btn_clear) مبنية بـ make_btn() — لازم
+        # refresh_visible_buttons عشان تتابع الثيم.
+        from ui.widgets.components.button import refresh_visible_buttons
+        refresh_visible_buttons(self)
 
     # ══════════════════════════════════════════════════════
     # تبويب الخط
