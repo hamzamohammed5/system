@@ -91,6 +91,13 @@ class _InboundTab(QWidget, WidgetMixin):
                 border-radius:{INVENTORY_SAVE_BTN_RADIUS}px; padding:0 {INVENTORY_SAVE_BTN_PAD_H}px; }}
             QPushButton:hover {{ background:{_C['success_hover']}; }}
         """)
+        # [إصلاح dark-mode] self.table (آخر حركات الوارد) و
+        # inp_notes/cmb_item/cmb_payment (ThemedLineEdit/ThemedComboBox)
+        # بيتابعوا نفسهم تلقائيًا عبر WidgetMixin، لكن self.table
+        # مبني عبر make_table() بستايل ثابت ومحتاج نداء صريح هنا.
+        from ui.widgets.tables.tables import refresh_table_styles
+        if hasattr(self, "table"):
+            refresh_table_styles(self)
 
     def _build(self):
         root = QVBoxLayout(self)

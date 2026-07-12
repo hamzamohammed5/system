@@ -65,6 +65,13 @@ class _SetsPanel(QWidget, WidgetMixin):
             f"border-radius: {DIM_SETS_PANEL_HINT_RADIUS}px; "
             f"padding: {DIM_SETS_PANEL_HINT_PAD_V}px {DIM_SETS_PANEL_HINT_PAD_H}px;"
         )
+        # [إصلاح dark-theme] make_table() بتطبق table_style() وقت الإنشاء
+        # بس، فالجدول كان بيفضل بلون الثيم القديم بعد التحويل لـ dark.
+        # refresh_table_styles() بتعيد تطبيق الستايل الصحيح على أي جدول
+        # مبني عبر make_table/make_list_table/... (نفس الحل المستخدم في
+        # باقي الملفات المُصلحة سابقًا في هذه المحادثة).
+        from ui.widgets.tables.tables import refresh_table_styles
+        refresh_table_styles(self)
 
     def _build(self):
         root = QVBoxLayout(self)

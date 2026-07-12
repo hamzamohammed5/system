@@ -82,6 +82,16 @@ class _SetsManagerPanel(QWidget, WidgetMixin):
             font-weight: bold; font-size: {FS_BASE}px; color: {_C['purple']};
             background: {_C['purple_bg']}; border-radius: {DIM_GROUPS_FIELDS_HDR_RADIUS}px; padding: {DIM_GROUPS_FIELDS_HDR_PAD_V}px {DIM_GROUPS_FIELDS_HDR_PAD_H}px;
         """)
+        # [إصلاح dark-theme] هذا هو الجدول الفعلي في الصورة (تبويب
+        # "المجموعات"). كان بيفضل فاتح لأن make_table() بتلوّن وقت
+        # الإنشاء بس، ومفيش استدعاء لـ refresh_table_styles() هنا —
+        # نفس المشكلة المُصلحة سابقًا في _sets_panel.py و_fields_panel.py.
+        from ui.widgets.tables.tables import refresh_table_styles
+        refresh_table_styles(self)
+        # [إصلاح dark-theme] زرار "حذف" (btn_del_set) مبني بـ make_btn()
+        # وبياخد الستايل وقت الإنشاء بس — لازم إعادة التطبيق هنا.
+        from ui.widgets.components.button import refresh_visible_buttons
+        refresh_visible_buttons(self)
 
     def _build(self):
         root = QVBoxLayout(self)

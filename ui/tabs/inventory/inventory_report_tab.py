@@ -60,6 +60,12 @@ class _ReportTab(QWidget, WidgetMixin):
                     padding: {SPACING_XS}px;
                 }}
             """)
+        # [إصلاح dark-mode] self.table (تقرير المخزن التفصيلي) مبني عبر
+        # make_table() بستايل ثابت وقت الإنشاء، ومحدش كان بينده يعيد
+        # تطبيقه هنا. نفس نمط الإصلاح في _investors_table.py.
+        from ui.widgets.tables.tables import refresh_table_styles
+        if hasattr(self, "table"):
+            refresh_table_styles(self)
 
     def _build(self):
         root = QVBoxLayout(self)
@@ -182,6 +188,10 @@ class _MovesPanel(QWidget, WidgetMixin):
         self.lbl_title.setStyleSheet(
             f"font-weight:bold; color:{_C['accent']}; font-size:{FS_MD}px;"
         )
+        # [إصلاح dark-mode] نفس مشكلة _ReportTab.table.
+        from ui.widgets.tables.tables import refresh_table_styles
+        if hasattr(self, "table"):
+            refresh_table_styles(self)
 
     def _build(self):
         root = QVBoxLayout(self)

@@ -33,12 +33,28 @@ class _ValuesPanel(QWidget, WidgetMixin):
         self._sets_list._on_font_changed(size)
         self._table._on_font_changed(size)
 
+        # [إصلاح dark-theme] الودجتس دي كانت بتاخد لون الخلفية وقت
+        # البناء بس (setStyleSheet في _build) ومفيهاش تحديث هنا، فكانت
+        # بتفضل بلون الثيم القديم بعد التحويل لـ dark.
+        if hasattr(self, '_splitter'):
+            self._splitter.setStyleSheet(f"""
+                QSplitter::handle {{ background: {_C['border']}; }}
+                QSplitter::handle:hover {{ background: {_C['accent_mid']}; }}
+            """)
+        if hasattr(self, '_sets_list'):
+            self._sets_list.setStyleSheet(
+                f"background: {_C['bg_surface']}; border-right: {DIM_SETS_LIST_HAIRLINE_W}px solid {_C['border']};"
+            )
+        if hasattr(self, '_table'):
+            self._table.setStyleSheet(f"background: {_C['bg_input']};")
+
     def _build(self):
         root = QVBoxLayout(self)
         root.setContentsMargins(*MARGIN_ZERO)
         root.setSpacing(SPACING_ZERO)
 
         splitter = QSplitter(Qt.Horizontal)
+        self._splitter = splitter   # [إصلاح dark-theme]
         splitter.setHandleWidth(SMART_SPLITTER_HANDLE_W)
         splitter.setStyleSheet(f"""
             QSplitter::handle {{ background: {_C['border']}; }}

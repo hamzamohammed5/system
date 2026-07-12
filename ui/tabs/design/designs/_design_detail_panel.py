@@ -99,6 +99,32 @@ class _DesignDetailPanel(QWidget, WidgetMixin):
         self._es_lbl.setStyleSheet(s.label_secondary())
         self._es_sub.setStyleSheet(s.label_muted())
 
+        # [إصلاح dark-theme] الودجتس دي كانت بتاخد لون الخلفية وقت البناء
+        # بس (_build) ومفيهاش أي تحديث هنا، فكانت بتفضل بلون الثيم القديم
+        # حتى بعد التحويل لـ dark. ده بالظبط سبب المنطقة الفاتحة يسار
+        # تبويب التصميمات وجدول "حقول المجموعة" في الصور.
+        if hasattr(self, '_hdr'):
+            self._hdr.setStyleSheet(
+                f"QFrame {{ background:{_C['bg_input']}; border-bottom:{INPUT_BORDER_W}px solid {_C['border']}; }}"
+            )
+        if hasattr(self, '_sizes_hdr'):
+            self._sizes_hdr.setStyleSheet(
+                f"QFrame {{ background:{_C['bg_surface']}; border-bottom:{INPUT_BORDER_W}px solid {_C['border']}; }}"
+            )
+        if hasattr(self, '_sizes_scroll'):
+            self._sizes_scroll.setStyleSheet(f"""
+                QScrollArea {{ border:none; background:{_C['bg_surface']}; }}
+                QScrollBar:vertical {{
+                    background:{_C['bg_surface']}; width:{DESIGN_DETAIL_SCROLL_W}px; border-radius:{DESIGN_DETAIL_SCROLL_RADIUS}px;
+                }}
+                QScrollBar::handle:vertical {{
+                    background:{_C['border_med']}; border-radius:{DESIGN_DETAIL_SCROLL_RADIUS}px; min-height:{DESIGN_DETAIL_SCROLL_MIN_H}px;
+                }}
+                QScrollBar::add-line:vertical, QScrollBar::sub-line:vertical {{ height:0; }}
+            """)
+        if hasattr(self, '_sizes_widget'):
+            self._sizes_widget.setStyleSheet(f"background:{_C['bg_surface']};")
+
     def _build(self):
         from ui.theme import _C
         s = get_styles()
@@ -110,6 +136,7 @@ class _DesignDetailPanel(QWidget, WidgetMixin):
 
         # ── Header ──────────────────────────────────────
         hdr = QFrame()
+        self._hdr = hdr   # [إصلاح dark-theme]
         hdr.setStyleSheet(f"QFrame {{ background:{_C['bg_input']}; border-bottom:{INPUT_BORDER_W}px solid {_C['border']}; }}")
         hdr_lay = QVBoxLayout(hdr)
         hdr_lay.setContentsMargins(DESIGN_DETAIL_HDR_MARGIN_H, DESIGN_DETAIL_HDR_MARGIN_T,
@@ -194,6 +221,7 @@ class _DesignDetailPanel(QWidget, WidgetMixin):
 
         # ── قسم المقاسات ────────────────────────────────
         sizes_hdr = QFrame()
+        self._sizes_hdr = sizes_hdr   # [إصلاح dark-theme]
         sizes_hdr.setStyleSheet(
             f"QFrame {{ background:{_C['bg_surface']}; border-bottom:{INPUT_BORDER_W}px solid {_C['border']}; }}"
         )

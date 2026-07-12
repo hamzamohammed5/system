@@ -62,12 +62,21 @@ class _AccountsPanel(SafeConnMixin, QWidget, WidgetMixin):
         self.lst.setColumnWidth(0, ACCOUNTS_PANEL_COL_CODE_W)
         self.lst.setColumnWidth(2, ACCOUNTS_PANEL_COL_BAL_W)
         self.lst.setAlternatingRowColors(True)
-        self.lst.setStyleSheet(tree_style())
         self.lst.itemSelectionChanged.connect(self._on_selected)
         root.addWidget(self.lst, stretch=1)
 
         self._status = StatusBar()
         root.addWidget(self._status)
+
+        # [إصلاح dark-mode] القديم: self.lst.setStyleSheet(tree_style())
+        # كانت بتتنفذ مرة واحدة بس هنا وقت البناء، بدون أي إعادة تطبيق
+        # عند تغيير الثيم — نفس نمط مشكلة الجداول والتبويبات في باقي
+        # المشروع. الاستدعاء الفعلي دلوقتي في _refresh_style() بالأسفل.
+        self._refresh_style()
+
+    def _refresh_style(self, *_):
+        if hasattr(self, "lst"):
+            self.lst.setStyleSheet(tree_style())
 
     def _refresh_accounts(self):
         try:

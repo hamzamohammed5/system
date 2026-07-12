@@ -76,6 +76,10 @@ class _OutboundTab(QWidget, WidgetMixin):
                 border-radius:{INVENTORY_SAVE_BTN_RADIUS}px; padding:0 {INVENTORY_SAVE_BTN_PAD_H}px; }}
             QPushButton:hover {{ background:{_C['orange_hover']}; }}
         """)
+        # [إصلاح dark-mode] نفس مشكلة self.table في _InboundTab/_ReportTab.
+        from ui.widgets.tables.tables import refresh_table_styles
+        if hasattr(self, "table"):
+            refresh_table_styles(self)
 
     def _build(self):
         root = QVBoxLayout(self)

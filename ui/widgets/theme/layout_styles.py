@@ -94,6 +94,8 @@ def tree_style() -> str:
         QTreeWidget {{
             border:1px solid {_C['border']}; border-radius:{TREE_BORDER_RADIUS}px;
             background:{_C['bg_surface']}; outline:none;
+            alternate-background-color:{_C['bg_surface_2']};
+            color:{_C['text_primary']};
         }}
         QTreeWidget::item {{ padding:{TREE_ITEM_PAD_V}px {TREE_ITEM_PAD_H}px; }}
         QTreeWidget::item:selected {{

@@ -44,6 +44,14 @@ class _FieldsPanel(QWidget, WidgetMixin):
 
     def _refresh_style(self, *_):
         self._hdr.setStyleSheet(f"font-weight: bold; color: {_C['accent']}; font-size: {FS_BASE}pt;")
+        # [إصلاح dark-theme] الجدول (نفس مشكلة _sets_panel.py)
+        from ui.widgets.tables.tables import refresh_table_styles
+        refresh_table_styles(self)
+        # [إصلاح dark-theme] الأزرار المبنية عبر make_btn() بتاخد الستايل
+        # وقت الإنشاء بس — refresh_visible_buttons() موجودة في button.py
+        # بالظبط لهذا الغرض لكن محدش كان بينادیها من هنا.
+        from ui.widgets.components.button import refresh_visible_buttons
+        refresh_visible_buttons(self)
 
     def _build(self):
         root = QVBoxLayout(self)

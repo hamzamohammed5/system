@@ -88,6 +88,45 @@ class DesignsCategoriesPanel(QWidget, WidgetMixin):
             s.btn(_C["danger_bg"], _C["danger"], _C["danger_border"], _C["danger_bg"])
         )
 
+        # [إصلاح dark-theme] الودجتس دي كانت بتاخد لون الخلفية وقت البناء
+        # بس (_build) ومفيهاش أي تحديث هنا، فكانت بتفضل بلون الثيم القديم
+        # حتى بعد التحويل لـ dark — بالظبط زي مشكلة toolbar/_grid_widget
+        # في _designs_table.py.
+        if hasattr(self, '_hdr'):
+            self._hdr.setStyleSheet(
+                f"QFrame{{ background:{_C['bg_input']}; border-bottom:{INPUT_BORDER_W}px solid {_C['border']}; }}"
+            )
+        self.setStyleSheet(
+            f"QWidget{{ background:{_C['bg_input']}; border-left:{INPUT_BORDER_W}px solid {_C['border']}; }}"
+        )
+        if hasattr(self, '_search_frame'):
+            self._search_frame.setStyleSheet(
+                f"QFrame{{ background:{_C['bg_input']}; border-bottom:{INPUT_BORDER_W}px solid {_C['border']}; "
+                f"padding:{DESIGN_CATS_SEARCH_FRAME_PAD_V}px {DESIGN_CATS_SEARCH_FRAME_PAD_H}px; }}"
+            )
+        if hasattr(self, '_scroll'):
+            self._scroll.setStyleSheet(
+                f"QScrollArea{{border:none; background:{_C['bg_input']};}}"
+                f"QScrollBar:vertical{{"
+                f"  background:{_C['bg_surface']}; width:{DESIGN_CATS_SCROLL_W}px; border-radius:{DESIGN_CATS_SCROLL_RADIUS}px;"
+                f"}}"
+                f"QScrollBar::handle:vertical{{"
+                f"  background:{_C['border_med']}; border-radius:{DESIGN_CATS_SCROLL_RADIUS}px; min-height:{DESIGN_CATS_SCROLL_MIN_H}px;"
+                f"}}"
+                "QScrollBar::add-line:vertical, QScrollBar::sub-line:vertical{height:0;}"
+            )
+        if hasattr(self, '_list_w'):
+            self._list_w.setStyleSheet(f"background:{_C['bg_input']};")
+        if hasattr(self, '_act'):
+            self._act.setStyleSheet(
+                f"QFrame{{ background:{_C['bg_surface']}; border-top:{INPUT_BORDER_W}px solid {_C['border']}; }}"
+            )
+
+        # الصفوف (_CatRow) والفاصل (sep) بتتلون وقت _load() بس — لازم
+        # نعيد التحميل عشان تاخد ألوان الثيم الجديد بدل ما تفضل بالقديمة.
+        if hasattr(self, '_items'):
+            self._load(query=self._inp_search.text().strip() if hasattr(self, '_inp_search') else "")
+
     def _build(self):
         from ui.theme import _C
         s = get_styles()
@@ -101,6 +140,7 @@ class DesignsCategoriesPanel(QWidget, WidgetMixin):
 
         # ── رأس ──────────────────────────────────────
         hdr = QFrame()
+        self._hdr = hdr   # [إصلاح dark-theme] مرجع لتحديث اللون في _refresh_style
         hdr.setFixedHeight(DESIGN_CATS_HDR_H)
         hdr.setStyleSheet(
             f"QFrame{{ background:{_C['bg_input']}; border-bottom:{INPUT_BORDER_W}px solid {_C['border']}; }}"
@@ -134,6 +174,7 @@ class DesignsCategoriesPanel(QWidget, WidgetMixin):
 
         # ── شريط البحث ──────────────────────────────
         search_frame = QFrame()
+        self._search_frame = search_frame   # [إصلاح dark-theme]
         search_frame.setStyleSheet(
             f"QFrame{{ background:{_C['bg_input']}; border-bottom:{INPUT_BORDER_W}px solid {_C['border']}; padding:{DESIGN_CATS_SEARCH_FRAME_PAD_V}px {DESIGN_CATS_SEARCH_FRAME_PAD_H}px; }}"
         )
@@ -166,6 +207,7 @@ class DesignsCategoriesPanel(QWidget, WidgetMixin):
 
         # ── قائمة التصنيفات ──────────────────────────
         scroll = QScrollArea()
+        self._scroll = scroll   # [إصلاح dark-theme]
         scroll.setWidgetResizable(True)
         scroll.setHorizontalScrollBarPolicy(Qt.ScrollBarAlwaysOff)
         scroll.setStyleSheet(
@@ -191,6 +233,7 @@ class DesignsCategoriesPanel(QWidget, WidgetMixin):
 
         # ── شريط الإجراءات ──────────────────────────
         act = QFrame()
+        self._act = act   # [إصلاح dark-theme]
         act.setStyleSheet(
             f"QFrame{{ background:{_C['bg_surface']}; border-top:{INPUT_BORDER_W}px solid {_C['border']}; }}"
         )

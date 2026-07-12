@@ -31,33 +31,34 @@ from ui.constants import (
     DIM_SETS_LIST_CARDS_MARGIN, DIM_SETS_LIST_COUNT_PAD,
 )
 
-_BLUE       = _C["acc_type_asset"]
-_BLUE_LIGHT = _C["accent_light"]
-_BLUE_MID   = _C["accent_mid"]
-_GRAY_BG    = _C["bg_surface"]
-_BORDER     = _C["border"]
-_TEXT       = _C["text_primary"]
-_TEXT_MUTED = _C["text_muted"]
+# [إصلاح dark-theme] المتغيرات والـ stylesheets دي كانت كلها module-level
+# بتتحسب مرة واحدة وقت الـ import وتتجمد على ألوان الثيم الحالي وقتها
+# (غالبًا Light الافتراضي) — أي تغيير ثيم لاحق ما كانش بيأثر عليها خالص.
+# ده كان السبب الرئيسي في خلفية الكروت والـ scroll والخلفية العامة
+# الفاضلة فاتحة رغم التحويل لـ dark. الحل: تحويلها لدوال تُستدعى في كل
+# مرة (وقت البناء + وقت _refresh_style) بدل قيم ثابتة.
 
-_CARD_NORMAL = f"""
-    QFrame {{
-        background: {_C["bg_input"]};
-        border: {DIM_SETS_LIST_CARD_BORDER_W}px solid {_C["border"]};
-        border-radius: {DIM_SETS_LIST_CARD_RADIUS}px;
-    }}
-    QFrame:hover {{
-        border-color: {_C["accent_mid"]};
-        background: {_C["accent_light"]};
-    }}
-"""
+def _card_normal_ss() -> str:
+    return f"""
+        QFrame {{
+            background: {_C["bg_input"]};
+            border: {DIM_SETS_LIST_CARD_BORDER_W}px solid {_C["border"]};
+            border-radius: {DIM_SETS_LIST_CARD_RADIUS}px;
+        }}
+        QFrame:hover {{
+            border-color: {_C["accent_mid"]};
+            background: {_C["accent_light"]};
+        }}
+    """
 
-_CARD_SELECTED = f"""
-    QFrame {{
-        background: {_C["accent_light"]};
-        border: {DIM_SETS_LIST_CARD_SELECTED_BORDER_W}px solid {_C["accent"]};
-        border-radius: {DIM_SETS_LIST_CARD_RADIUS}px;
-    }}
-"""
+def _card_selected_ss() -> str:
+    return f"""
+        QFrame {{
+            background: {_C["accent_light"]};
+            border: {DIM_SETS_LIST_CARD_SELECTED_BORDER_W}px solid {_C["accent"]};
+            border-radius: {DIM_SETS_LIST_CARD_RADIUS}px;
+        }}
+    """
 
 
 # ══════════════════════════════════════════════════════════
@@ -74,7 +75,7 @@ class _SetCard(QFrame):
         self.set_id    = set_id
         self._selected = False
         self.setCursor(Qt.PointingHandCursor)
-        self.setStyleSheet(_CARD_NORMAL)
+        self.setStyleSheet(_card_normal_ss())
         self.setMinimumHeight(DIM_SETS_LIST_CARD_MIN_H)
         self._build(name, category, unit, fields_cnt, instances_cnt)
 
@@ -98,7 +99,7 @@ class _SetCard(QFrame):
         self._name_lbl.setStyleSheet(f"""
             font-weight: bold;
             font-size: {fs(base,+1)}pt;
-            color: {_TEXT};
+            color: {_C['text_primary']};
             background: transparent;
             border: none;
         """)
@@ -110,7 +111,7 @@ class _SetCard(QFrame):
         )
         self._meta_lbl.setStyleSheet(f"""
             font-size: {fs(base,-1)}pt;
-            color: {_TEXT_MUTED};
+            color: {_C['text_muted']};
             background: transparent;
             border: none;
         """)
@@ -122,8 +123,8 @@ class _SetCard(QFrame):
         self._badge.setAlignment(Qt.AlignCenter)
         self._badge.setFixedSize(DIM_SETS_LIST_BADGE_W, DIM_SETS_LIST_BADGE_H)
         self._badge.setStyleSheet(f"""
-            background: {_BLUE_LIGHT};
-            color: {_BLUE};
+            background: {_C['accent_light']};
+            color: {_C['acc_type_asset']};
             border-radius: {DIM_SETS_LIST_BADGE_RADIUS}px;
             font-size: {fs(base,-1)}pt;
             font-weight: bold;
@@ -135,33 +136,37 @@ class _SetCard(QFrame):
         lay.addWidget(self._badge)
 
     def refresh_font(self):
-        """يُستدعى عند تغيير حجم الخط."""
+        """يُستدعى عند تغيير حجم الخط أو الثيم."""
         base = get_font_size()
         self._name_lbl.setStyleSheet(f"""
             font-weight: bold;
             font-size: {fs(base,+1)}pt;
-            color: {_TEXT};
+            color: {_C['text_primary']};
             background: transparent;
             border: none;
         """)
         self._meta_lbl.setStyleSheet(f"""
             font-size: {fs(base,-1)}pt;
-            color: {_TEXT_MUTED};
+            color: {_C['text_muted']};
             background: transparent;
             border: none;
         """)
         self._badge.setStyleSheet(f"""
-            background: {_BLUE_LIGHT};
-            color: {_BLUE};
+            background: {_C['accent_light']};
+            color: {_C['acc_type_asset']};
             border-radius: {DIM_SETS_LIST_BADGE_RADIUS}px;
             font-size: {fs(base,-1)}pt;
             font-weight: bold;
             border: none;
         """)
+        # [إصلاح dark-theme] إعادة تطبيق ستايل الكارت نفسه (خلفية/حدود)
+        # حسب حالة الاختيار الحالية — كان بيفضل بلون الثيم القديم لأن
+        # الكارت بيتلون وقت الإنشاء بس (setStyleSheet في __init__).
+        self.setStyleSheet(_card_selected_ss() if self._selected else _card_normal_ss())
 
     def set_selected(self, sel: bool):
         self._selected = sel
-        self.setStyleSheet(_CARD_SELECTED if sel else _CARD_NORMAL)
+        self.setStyleSheet(_card_selected_ss() if sel else _card_normal_ss())
 
     def mousePressEvent(self, event):
         self.clicked.emit(self.set_id)
@@ -196,30 +201,66 @@ class _SetsListPanel(QWidget, WidgetMixin):
             color: {_C['accent']};
             background: {_C['accent_light']};
             padding: {DIM_SETS_LIST_HDR_PAD_V}px {DIM_SETS_LIST_HDR_PAD_H}px;
-            border-bottom: {DIM_SETS_LIST_HAIRLINE_W}px solid {_BORDER};
+            border-bottom: {DIM_SETS_LIST_HAIRLINE_W}px solid {_C['border']};
         """)
         # تحديث حقل البحث
         self._search_inp.setStyleSheet(f"""
             QLineEdit {{
-                border: {DIM_SETS_LIST_INP_BORDER_W}px solid {_BORDER};
+                border: {DIM_SETS_LIST_INP_BORDER_W}px solid {_C['border']};
                 border-radius: {DIM_SETS_LIST_INP_RADIUS}px;
                 padding: {DIM_SETS_LIST_INP_PAD_V}px {DIM_SETS_LIST_INP_PAD_H}px;
                 font-size: {fs(base,0)}pt;
-                background: {_GRAY_BG};
+                background: {_C['bg_surface']};
             }}
             QLineEdit:focus {{ border-color: {_C['accent']}; background: {_C['bg_input']}; }}
         """)
         # تحديث عداد النتائج
         self._count_lbl.setStyleSheet(f"""
-            color: {_TEXT_MUTED};
+            color: {_C['text_muted']};
             font-size: {fs(base,-1)}pt;
             padding: {DIM_SETS_LIST_COUNT_PAD}px;
             background: {_C['bg_input']};
-            border-top: {DIM_SETS_LIST_HAIRLINE_W}px solid {_BORDER};
+            border-top: {DIM_SETS_LIST_HAIRLINE_W}px solid {_C['border']};
         """)
         # تحديث كل الكروت
         for card in self._cards.values():
             card.refresh_font()
+
+        # [إصلاح dark-theme] الودجتس دي كانت بتاخد لون الخلفية وقت
+        # البناء بس فكانت بتفضل بلون الثيم القديم بعد التحويل لـ dark.
+        if hasattr(self, '_search_frame'):
+            self._search_frame.setStyleSheet(f"""
+                QFrame {{
+                    background: {_C['bg_input']};
+                    border-bottom: {DIM_SETS_LIST_HAIRLINE_W}px solid {_C['border']};
+                }}
+            """)
+        if hasattr(self, '_cmb_cat'):
+            self._cmb_cat.setStyleSheet(f"""
+                QComboBox {{
+                    border: {DIM_SETS_LIST_INP_BORDER_W}px solid {_C['border']};
+                    border-radius: {DIM_SETS_LIST_INP_RADIUS}px;
+                    padding: {DIM_SETS_LIST_INP_PAD_V}px {DIM_SETS_LIST_CMB_PAD_H}px;
+                    font-size: {fs(base,-1)}pt;
+                    background: {_C['bg_surface']};
+                }}
+                QComboBox:focus {{ border-color: {_C['accent']}; }}
+                QComboBox::drop-down {{ border: none; }}
+            """)
+        if hasattr(self, '_scroll'):
+            self._scroll.setStyleSheet(f"""
+                QScrollArea {{ border: none; background: {_C['bg_surface']}; }}
+                QScrollBar:vertical {{
+                    background: {_C['bg_surface']}; width: {DIM_SETS_LIST_SCROLL_W}px; border-radius: {DIM_SETS_LIST_SCROLL_RADIUS}px;
+                }}
+                QScrollBar::handle:vertical {{
+                    background: {_C['border_med']}; border-radius: {DIM_SETS_LIST_SCROLL_RADIUS}px; min-height: {DIM_SETS_LIST_SCROLL_MIN_H}px;
+                }}
+                QScrollBar::add-line:vertical,
+                QScrollBar::sub-line:vertical {{ height: 0; }}
+            """)
+        if hasattr(self, '_cards_widget'):
+            self._cards_widget.setStyleSheet(f"background: {_C['bg_surface']};")
 
     def _on_font_changed(self, size: int = None):
         """يُبقيها متوافقة مع أي نداء خارجي قديم من _ValuesPanel."""
@@ -238,15 +279,16 @@ class _SetsListPanel(QWidget, WidgetMixin):
             color: {_C['accent']};
             background: {_C['accent_light']};
             padding: {DIM_SETS_LIST_HDR_PAD_V}px {DIM_SETS_LIST_HDR_PAD_H}px;
-            border-bottom: {DIM_SETS_LIST_HAIRLINE_W}px solid {_BORDER};
+            border-bottom: {DIM_SETS_LIST_HAIRLINE_W}px solid {_C['border']};
         """)
         root.addWidget(self._hdr_lbl)
 
         search_frame = QFrame()
+        self._search_frame = search_frame   # [إصلاح dark-theme]
         search_frame.setStyleSheet(f"""
             QFrame {{
                 background: {_C['bg_input']};
-                border-bottom: {DIM_SETS_LIST_HAIRLINE_W}px solid {_BORDER};
+                border-bottom: {DIM_SETS_LIST_HAIRLINE_W}px solid {_C['border']};
             }}
         """)
         s_lay = QHBoxLayout(search_frame)
@@ -259,11 +301,11 @@ class _SetsListPanel(QWidget, WidgetMixin):
         self._search_inp.setMinimumHeight(DIM_SETS_LIST_SEARCH_FIELD_H)
         self._search_inp.setStyleSheet(f"""
             QLineEdit {{
-                border: {DIM_SETS_LIST_INP_BORDER_W}px solid {_BORDER};
+                border: {DIM_SETS_LIST_INP_BORDER_W}px solid {_C['border']};
                 border-radius: {DIM_SETS_LIST_INP_RADIUS}px;
                 padding: {DIM_SETS_LIST_INP_PAD_V}px {DIM_SETS_LIST_INP_PAD_H}px;
                 font-size: {fs(base,0)}pt;
-                background: {_GRAY_BG};
+                background: {_C['bg_surface']};
             }}
             QLineEdit:focus {{ border-color: {_C['accent']}; background: {_C['bg_input']}; }}
         """)
@@ -274,11 +316,11 @@ class _SetsListPanel(QWidget, WidgetMixin):
         self._cmb_cat.setMaximumWidth(DIM_SETS_LIST_CMB_CAT_MAX_W)
         self._cmb_cat.setStyleSheet(f"""
             QComboBox {{
-                border: {DIM_SETS_LIST_INP_BORDER_W}px solid {_BORDER};
+                border: {DIM_SETS_LIST_INP_BORDER_W}px solid {_C['border']};
                 border-radius: {DIM_SETS_LIST_INP_RADIUS}px;
                 padding: {DIM_SETS_LIST_INP_PAD_V}px {DIM_SETS_LIST_CMB_PAD_H}px;
                 font-size: {fs(base,-1)}pt;
-                background: {_GRAY_BG};
+                background: {_C['bg_surface']};
             }}
             QComboBox:focus {{ border-color: {_C['accent']}; }}
             QComboBox::drop-down {{ border: none; }}
@@ -290,10 +332,11 @@ class _SetsListPanel(QWidget, WidgetMixin):
         root.addWidget(search_frame)
 
         scroll = QScrollArea()
+        self._scroll = scroll   # [إصلاح dark-theme]
         scroll.setWidgetResizable(True)
         scroll.setHorizontalScrollBarPolicy(Qt.ScrollBarAlwaysOff)
         scroll.setStyleSheet(f"""
-            QScrollArea {{ border: none; background: {_GRAY_BG}; }}
+            QScrollArea {{ border: none; background: {_C['bg_surface']}; }}
             QScrollBar:vertical {{
                 background: {_C['bg_surface']}; width: {DIM_SETS_LIST_SCROLL_W}px; border-radius: {DIM_SETS_LIST_SCROLL_RADIUS}px;
             }}
@@ -305,7 +348,7 @@ class _SetsListPanel(QWidget, WidgetMixin):
         """)
 
         self._cards_widget = QWidget()
-        self._cards_widget.setStyleSheet(f"background: {_GRAY_BG};")
+        self._cards_widget.setStyleSheet(f"background: {_C['bg_surface']};")
         self._cards_layout = QVBoxLayout(self._cards_widget)
         self._cards_layout.setSpacing(DIM_SETS_LIST_CARDS_SPACING)
         self._cards_layout.setContentsMargins(DIM_SETS_LIST_CARDS_MARGIN, DIM_SETS_LIST_CARDS_MARGIN,
@@ -318,11 +361,11 @@ class _SetsListPanel(QWidget, WidgetMixin):
         self._count_lbl = QLabel("")
         self._count_lbl.setAlignment(Qt.AlignCenter)
         self._count_lbl.setStyleSheet(f"""
-            color: {_TEXT_MUTED};
+            color: {_C['text_muted']};
             font-size: {fs(base,-1)}pt;
             padding: {DIM_SETS_LIST_COUNT_PAD}px;
             background: {_C['bg_input']};
-            border-top: {DIM_SETS_LIST_HAIRLINE_W}px solid {_BORDER};
+            border-top: {DIM_SETS_LIST_HAIRLINE_W}px solid {_C['border']};
         """)
         root.addWidget(self._count_lbl)
 

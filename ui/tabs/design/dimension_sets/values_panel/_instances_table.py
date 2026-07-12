@@ -31,14 +31,13 @@ from ui.constants import (
     DIM_INST_TBL_HAIRLINE_W,
 )
 
-_BLUE       = _C["acc_type_asset"]
-_BLUE_LIGHT = _C["accent_light"]
-_RED        = _C["danger"]
-_RED_LT     = _C["danger_bg"]
-_GRAY_BG    = _C["bg_surface"]
-_BORDER     = _C["border"]
-_TEXT       = _C["text_primary"]
-_TEXT_MUTED = _C["text_muted"]
+# [إصلاح dark-theme] المتغيرات دي كانت بتتحسب مرة واحدة وقت الـ import
+# (وقت ما بايثون يحمّل الموديول لأول مرة) وبتحفظ القيمة الـ hex الثابتة
+# بتاعة الثيم الحالي وقتها فقط — غالبًا Light (الثيم الافتراضي في
+# _init_default_theme). أي تغيير لاحق للثيم عبر theme_manager.set_theme()
+# مبيأثرش على المتغيرات دي خالص لأنها مش بتتقرأ من _C تاني، فكانت
+# تفضل بلون الثيم الأول (فاتح) للأبد. الحل: قراءة _C[...] مباشرة وقت
+# الاستخدام (جوه الدوال) بدل تجميد القيمة كمتغير module-level.
 
 
 def _btn_danger_ss(base: int) -> str:
@@ -93,7 +92,7 @@ class _InstancesTable(QWidget, WidgetMixin):
         self._lbl_set_name.setStyleSheet(f"""
             font-weight: bold;
             font-size: {fs(base,+1)}pt;
-            color: {_TEXT};
+            color: {_C['text_primary']};
             background: transparent;
         """)
 
@@ -108,11 +107,11 @@ class _InstancesTable(QWidget, WidgetMixin):
 
         # تحديث الـ status bar
         self._status_bar.setStyleSheet(f"""
-            background: {_GRAY_BG};
-            color: {_TEXT_MUTED};
+            background: {_C['bg_surface']};
+            color: {_C['text_muted']};
             font-size: {fs(base,-1)}pt;
             padding: {DIM_INST_TBL_STATUS_PAD}px;
-            border-top: {DIM_INST_TBL_HAIRLINE_W}px solid {_BORDER};
+            border-top: {DIM_INST_TBL_HAIRLINE_W}px solid {_C['border']};
         """)
 
     def _on_font_changed(self, size: int = None):
@@ -173,7 +172,7 @@ class _InstancesTable(QWidget, WidgetMixin):
         self._lbl_set_name.setStyleSheet(f"""
             font-weight: bold;
             font-size: {fs(base,+1)}pt;
-            color: {_TEXT};
+            color: {_C['text_primary']};
             background: transparent;
         """)
         t_lay.addWidget(self._lbl_set_name, stretch=1)
@@ -230,11 +229,11 @@ class _InstancesTable(QWidget, WidgetMixin):
         self._status_bar = QLabel("")
         self._status_bar.setAlignment(Qt.AlignCenter)
         self._status_bar.setStyleSheet(f"""
-            background: {_GRAY_BG};
-            color: {_TEXT_MUTED};
+            background: {_C['bg_surface']};
+            color: {_C['text_muted']};
             font-size: {fs(base,-1)}pt;
             padding: {DIM_INST_TBL_STATUS_PAD}px;
-            border-top: {DIM_INST_TBL_HAIRLINE_W}px solid {_BORDER};
+            border-top: {DIM_INST_TBL_HAIRLINE_W}px solid {_C['border']};
         """)
         root.addWidget(self._status_bar)
 
@@ -313,7 +312,7 @@ class _InstancesTable(QWidget, WidgetMixin):
             name_item = QTableWidgetItem(name)
             name_item.setData(Qt.UserRole, inst["id"])
             name_item.setFont(QFont("", -1, QFont.Bold))
-            name_item.setForeground(QColor(_BLUE))
+            name_item.setForeground(QColor(_C['acc_type_asset']))
             self.table.setItem(r, 0, name_item)
 
             values = self._svc.get_instance_values(inst["id"])
@@ -325,7 +324,7 @@ class _InstancesTable(QWidget, WidgetMixin):
                 item = QTableWidgetItem(txt)
                 item.setTextAlignment(Qt.AlignRight | Qt.AlignVCenter)
                 if val is None:
-                    item.setForeground(QColor(_TEXT_MUTED))
+                    item.setForeground(QColor(_C['text_muted']))
                 self.table.setItem(r, ci, item)
 
         self.table.blockSignals(False)

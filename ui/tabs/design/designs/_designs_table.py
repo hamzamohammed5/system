@@ -166,6 +166,36 @@ class _DesignsTable(QWidget, WidgetMixin):
             f"color:{_C['text_muted']}; font-size:{fs(base,0)}pt; background:transparent;"
         )
 
+        # [إصلاح dark-theme] الودجتس دي كانت بتاخد لون الخلفية وقت البناء
+        # بس (_build) ومفيهاش أي تحديث هنا، فكانت بتفضل بلون الثيم القديم
+        # (غالبًا فاتح) حتى بعد التحويل لـ dark. لازم تتحدث مع كل تغيير ثيم
+        # بنفس طريقة باقي عناصر الصفحة.
+        if hasattr(self, '_toolbar'):
+            self._toolbar.setStyleSheet(f"""
+                QFrame {{
+                    background: {_C['bg_input']};
+                    border-bottom: {INPUT_BORDER_W}px solid {_C['border']};
+                }}
+            """)
+
+        if hasattr(self, '_scroll'):
+            self._scroll.setStyleSheet(f"""
+                QScrollArea {{ border: none; background: {_C['bg_surface']}; }}
+                QScrollBar:vertical {{
+                    background: {_C['bg_surface']}; width: {DESIGNS_TABLE_SCROLL_W}px; border-radius: {DESIGNS_TABLE_SCROLL_RADIUS}px;
+                }}
+                QScrollBar::handle:vertical {{
+                    background: {_C['border_med']}; border-radius: {DESIGNS_TABLE_SCROLL_RADIUS}px; min-height: {DESIGNS_TABLE_SCROLL_MIN_H}px;
+                }}
+                QScrollBar::add-line:vertical, QScrollBar::sub-line:vertical {{ height: 0; }}
+            """)
+
+        if hasattr(self, '_grid_widget'):
+            self._grid_widget.setStyleSheet(f"background:{_C['bg_surface']};")
+
+        if hasattr(self, '_empty_frame'):
+            self._empty_frame.setStyleSheet(f"background:{_C['bg_surface']}; border:none;")
+
     def _build(self):
         from ui.theme import _C
         root = QVBoxLayout(self)
@@ -174,6 +204,7 @@ class _DesignsTable(QWidget, WidgetMixin):
 
         # ── Toolbar ──────────────────────────────────────
         toolbar = QFrame()
+        self._toolbar = toolbar   # [إصلاح dark-theme] لازم مرجع عشان _refresh_style تحدّثه
         toolbar.setStyleSheet(f"""
             QFrame {{
                 background: {_C['bg_input']};
