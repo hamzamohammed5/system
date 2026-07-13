@@ -7,11 +7,11 @@ Sidebar تصنيفات التصميمات — مع دعم كامل لتغيير 
 from PyQt5.QtWidgets import (
     QWidget, QVBoxLayout, QHBoxLayout,
     QPushButton, QLabel,
-    QMessageBox, QFrame,
+    QMessageBox,
     QScrollArea
 )
 from PyQt5.QtCore import Qt, pyqtSignal
-from ui.widgets.panels.themed_inputs import ThemedLineEdit
+from ui.widgets.panels.themed_inputs import ThemedLineEdit, ThemedFrame
 
 from services.design import get_design_service
 from ui.tabs.design.design_styles import get_styles
@@ -139,7 +139,7 @@ class DesignsCategoriesPanel(QWidget, WidgetMixin):
         root.setSpacing(0)
 
         # ── رأس ──────────────────────────────────────
-        hdr = QFrame()
+        hdr = ThemedFrame()
         self._hdr = hdr   # [إصلاح dark-theme] مرجع لتحديث اللون في _refresh_style
         hdr.setFixedHeight(DESIGN_CATS_HDR_H)
         hdr.setStyleSheet(
@@ -173,7 +173,7 @@ class DesignsCategoriesPanel(QWidget, WidgetMixin):
         root.addWidget(hdr)
 
         # ── شريط البحث ──────────────────────────────
-        search_frame = QFrame()
+        search_frame = ThemedFrame()
         self._search_frame = search_frame   # [إصلاح dark-theme]
         search_frame.setStyleSheet(
             f"QFrame{{ background:{_C['bg_input']}; border-bottom:{INPUT_BORDER_W}px solid {_C['border']}; padding:{DESIGN_CATS_SEARCH_FRAME_PAD_V}px {DESIGN_CATS_SEARCH_FRAME_PAD_H}px; }}"
@@ -232,7 +232,7 @@ class DesignsCategoriesPanel(QWidget, WidgetMixin):
         root.addWidget(scroll, stretch=1)
 
         # ── شريط الإجراءات ──────────────────────────
-        act = QFrame()
+        act = ThemedFrame()
         self._act = act   # [إصلاح dark-theme]
         act.setStyleSheet(
             f"QFrame{{ background:{_C['bg_surface']}; border-top:{INPUT_BORDER_W}px solid {_C['border']}; }}"
@@ -280,8 +280,8 @@ class DesignsCategoriesPanel(QWidget, WidgetMixin):
         self._list_lay.insertWidget(self._list_lay.count() - 1, all_row)
         self._items.append(all_row)
 
-        sep = QFrame()
-        sep.setFrameShape(QFrame.HLine)
+        sep = ThemedFrame()
+        sep.setFrameShape(ThemedFrame.HLine)
         sep.setFixedHeight(DESIGN_CATS_SEP_H)
         sep.setStyleSheet(f"background:{_C['border']}; margin:{DESIGN_CATS_SEP_MARGIN_V}px {DESIGN_CATS_SEP_MARGIN_H}px;")
         self._list_lay.insertWidget(self._list_lay.count() - 1, sep)

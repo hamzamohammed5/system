@@ -11,9 +11,9 @@ ui/tabs/inventory/inventory_inbound_tab.py
 from PyQt5.QtWidgets import (
     QWidget, QVBoxLayout, QFormLayout, QGroupBox,
     QLabel, QPushButton, QDoubleSpinBox,
-    QDateEdit, QTableWidgetItem, QMessageBox,
+    QTableWidgetItem, QMessageBox,
 )
-from ui.widgets.panels.themed_inputs import ThemedLineEdit, ThemedComboBox
+from ui.widgets.panels.themed_inputs import ThemedLineEdit, ThemedComboBox, ThemedDateEdit
 
 from PyQt5.QtCore import Qt, QDate
 
@@ -123,7 +123,7 @@ class _InboundTab(QWidget, WidgetMixin):
         self.sp_qty.valueChanged.connect(self._update_total)
         self.sp_unit_cost.valueChanged.connect(self._update_total)
 
-        self.dt_date = QDateEdit(QDate.currentDate())
+        self.dt_date = ThemedDateEdit(QDate.currentDate())
         self.dt_date.setCalendarPopup(True)
         self.dt_date.setDisplayFormat("yyyy-MM-dd")
         self.dt_date.setFixedWidth(INVENTORY_DATE_W)

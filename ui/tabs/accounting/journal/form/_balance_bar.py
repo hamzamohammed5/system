@@ -8,9 +8,11 @@ _BalanceBar — شريط عرض توازن القيد (DR / CR / الفرق / ا
 """
 
 from PyQt5.QtWidgets import (
-    QFrame, QHBoxLayout, QLabel,
+    QHBoxLayout, QLabel,
 )
 from PyQt5.QtCore import pyqtSignal
+from ui.widgets.panels.themed_inputs import ThemedFrame
+
 from ui.widgets.core.i18n import tr
 from ui.font import FS_BASE, FS_LG, FS_XL
 from ui.widgets.core.widget_mixin import WidgetMixin
@@ -22,7 +24,7 @@ from ui.constants import (
 )
 
 
-class _BalanceBar(QFrame, WidgetMixin):
+class _BalanceBar(ThemedFrame, WidgetMixin):
     """
     شريط يعرض:
       إجمالي DR | إجمالي CR | الفرق | حالة التوازن

@@ -6,7 +6,9 @@ _StatCards — بطاقات الإحصائيات في دفتر الأستاذ.
 [تحديث] يستخدم StatRow من widgets/shared بدل _card محلية.
 """
 
-from PyQt5.QtWidgets import QFrame, QVBoxLayout
+from PyQt5.QtWidgets import QVBoxLayout
+
+from ui.widgets.panels.themed_inputs import ThemedFrame
 
 from services.accounting.accounts_service import AccountsService
 from ui.widgets.components.stat_card import StatRow, StatItem
@@ -14,7 +16,7 @@ from ui.widgets.core.i18n import tr
 from ui.widgets.core.widget_mixin import WidgetMixin
 from ui.constants import LEDGER_STAT_BORDER_RADIUS, LEDGER_STAT_BORDER_W, MARGIN_ZERO, SPACING_ZERO
 
-class _StatCards(QFrame, WidgetMixin):
+class _StatCards(ThemedFrame, WidgetMixin):
     def __init__(self, parent=None):
         super().__init__(parent)
         self._init_widget_mixin(lang=False, data=False)

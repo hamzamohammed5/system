@@ -1,5 +1,5 @@
 """
-db/costing/catalog_repo.py
+db/orders/catalog_repo.py)
 ============================
 عمليات قراءة الكتالوج (منتجات مسعّرة + عروض) من قاعدة erp.
 

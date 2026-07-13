@@ -26,12 +26,12 @@ import json
 from PyQt5.QtWidgets import (
     QWidget, QVBoxLayout, QHBoxLayout, QLabel,
     QPushButton, QTableWidget, QTableWidgetItem,
-    QDialog, QTextEdit, QHeaderView, QAbstractItemView,
-    QSizePolicy, QFrame,
+    QDialog, QHeaderView, QAbstractItemView,
+    QSizePolicy,
 )
 from PyQt5.QtCore import Qt, QTimer
 from PyQt5.QtGui  import QColor, QFont
-from ui.widgets.panels.themed_inputs import ThemedComboBox
+from ui.widgets.panels.themed_inputs import ThemedComboBox, ThemedFrame, ThemedTextEdit
 
 from services.accounting.audit_service import AuditService
 from ui.font               import get_font_size, fs, FS_SM, FS_BASE, FS_MD
@@ -133,7 +133,7 @@ class _AuditDetailDialog(QDialog):
         fg, bg       = colors.get(action, (_C["text_primary"], _C["bg_surface_2"]))
         icon         = _ACTION_ICONS.get(action, "📋")
 
-        hdr = QFrame()
+        hdr = ThemedFrame()
         hdr.setStyleSheet(f"""
             QFrame {{
                 background:{bg}; border:1px solid {fg}44;
@@ -184,7 +184,7 @@ class _AuditDetailDialog(QDialog):
         )
         root.addWidget(lbl_data)
 
-        txt = QTextEdit()
+        txt = ThemedTextEdit()
         txt.setReadOnly(True)
         txt.setStyleSheet(f"""
             QTextEdit {{
@@ -312,7 +312,7 @@ class AuditLogTab(SafeConnMixin, QWidget, WidgetMixin):
 
     def _build_header(self) -> QWidget:
         base = get_font_size()
-        hdr  = QFrame()
+        hdr  = ThemedFrame()
         self._hdr_frame = hdr
         lay = QHBoxLayout(hdr)
         lay.setContentsMargins(AUDIT_HDR_MARGIN_H, AUDIT_HDR_MARGIN_V,
@@ -331,7 +331,7 @@ class AuditLogTab(SafeConnMixin, QWidget, WidgetMixin):
 
     def _build_filter_bar(self) -> QWidget:
         base = get_font_size()
-        bar  = QFrame()
+        bar  = ThemedFrame()
         self._filter_bar_frame = bar
         lay = QHBoxLayout(bar)
         lay.setContentsMargins(AUDIT_FILTER_MARGIN_H, AUDIT_FILTER_MARGIN_V,
@@ -429,7 +429,7 @@ class AuditLogTab(SafeConnMixin, QWidget, WidgetMixin):
 
     def _build_pagination(self) -> QWidget:
         base = get_font_size()
-        bar  = QFrame()
+        bar  = ThemedFrame()
         bar.setFixedHeight(AUDIT_PAGIN_BAR_H)
         self._pagination_bar = bar
 

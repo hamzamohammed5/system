@@ -27,6 +27,11 @@ class _ValuesPanel(QWidget, WidgetMixin):
         self._init_widget_mixin(lang=False, data=False)
         self._refresh_style()
 
+    def showEvent(self, event):
+        """[إصلاح dark-theme] راجع نفس التعليق في _InstancesTable.showEvent."""
+        super().showEvent(event)
+        self._refresh_style()
+
     def _refresh_style(self, *_):
         from ui.font import get_font_size
         size = get_font_size()
@@ -45,8 +50,8 @@ class _ValuesPanel(QWidget, WidgetMixin):
             self._sets_list.setStyleSheet(
                 f"background: {_C['bg_surface']}; border-right: {DIM_SETS_LIST_HAIRLINE_W}px solid {_C['border']};"
             )
-        if hasattr(self, '_table'):
-            self._table.setStyleSheet(f"background: {_C['bg_input']};")
+        # [إصلاح dark-theme] أُزيل override الخارجي على self._table هنا —
+        # _InstancesTable تدير خلفيتها الداخلية بالكامل بنفسها.
 
     def _build(self):
         root = QVBoxLayout(self)
@@ -67,7 +72,12 @@ class _ValuesPanel(QWidget, WidgetMixin):
         self._sets_list.setStyleSheet(f"background: {_C['bg_surface']}; border-right: {DIM_SETS_LIST_HAIRLINE_W}px solid {_C['border']};")
 
         self._table = _InstancesTable(self.conn)
-        self._table.setStyleSheet(f"background: {_C['bg_input']};")
+        # [إصلاح dark-theme] أُزيل setStyleSheet الخارجي هنا — كان بيحط
+        # قاعدة background عامة على _InstancesTable من بره، وممكن يتعارض
+        # (بترتيب الـ cascade في Qt) مع الستايلات الداخلية التفصيلية اللي
+        # _InstancesTable بتدير نفسها بيها في _refresh_style/_build الخاصة
+        # بيها (toolbar, table, status_bar, _empty_state). _InstancesTable
+        # مسؤولة بالكامل عن مظهرها الداخلي.
 
         self._sets_list.set_selected.connect(self._on_set_selected)
 

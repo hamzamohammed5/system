@@ -16,12 +16,12 @@ ui/main_window.py  (نسخة multi-company — مُصلَحة v13)
 
 from PyQt5.QtWidgets import (
     QMainWindow, QWidget, QHBoxLayout,
-    QStackedWidget, QFrame, QLabel,
+    QStackedWidget, QLabel,
     QScrollArea, QSizePolicy, QApplication,
 )
 from PyQt5.QtCore import Qt
 import logging
-
+from ui.widgets.panels.themed_inputs import ThemedFrame
 from ui.font                    import get_font_size, fs
 from ui.theme                   import _C
 from ui.widgets.core.events     import bus, emit_company_data_changed
@@ -151,6 +151,9 @@ class MainWindow(QMainWindow, WidgetMixin):
         يعيد تطبيق كل الـ stylesheets المعتمدة على _C والمبنية مباشرة في
         MainWindow._build() (خارج نطاق أي widget فرعي عنده WidgetMixin خاص به).
         """
+        if hasattr(self, "_central"):
+            self._central.setStyleSheet(f"background:{_C['bg_page']};")
+
         if hasattr(self, "_stack"):
             self._stack.setStyleSheet(f"background:{_C['bg_page']};")
 
@@ -186,6 +189,16 @@ class MainWindow(QMainWindow, WidgetMixin):
 
     def _build(self):
         central = QWidget()
+        # [إصلاح خلفية بيضاء عامة] central (الـ centralWidget بتاع QMainWindow)
+        # كان بيتبني بـ QWidget() عادي من غير أي setStyleSheet خالص. QWidget
+        # من غير stylesheet بيرث لون الخلفية الافتراضي من النظام (أبيض غالبًا)
+        # بدل ما ياخد لون الثيم — وده كان بيظهر كخلفية بيضاء تحيط بكل حاجة
+        # في أي مساحة مش متغطية بالكامل بـ _stack/_content_scroll (هوامش،
+        # فروق تقريب، إلخ). بنضبطها هنا صراحة وبنربطها بـ _refresh_style
+        # عشان تتابع الثيم زي باقي عناصر MainWindow.
+        central.setAttribute(Qt.WA_StyledBackground, True)
+        central.setStyleSheet(f"background:{_C['bg_page']};")
+        self._central = central
         self.setCentralWidget(central)
 
         main_layout = QHBoxLayout(central)
@@ -198,8 +211,8 @@ class MainWindow(QMainWindow, WidgetMixin):
         main_layout.addWidget(self._sidebar)
 
         # ── فاصل عمودي ──
-        sep = QFrame()
-        sep.setFrameShape(QFrame.VLine)
+        sep = ThemedFrame()
+        sep.setFrameShape(ThemedFrame.VLine)
         sep.setFixedWidth(V_DIVIDER_WIDTH)
         sep.setStyleSheet(f"background:{_C['border']};border:none;")
         sep.setSizePolicy(QSizePolicy.Fixed, QSizePolicy.Expanding)

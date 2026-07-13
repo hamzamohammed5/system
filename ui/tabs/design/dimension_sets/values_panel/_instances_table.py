@@ -7,13 +7,15 @@ ui/tabs/design/dimension_sets/values_panel/_instances_table.py
 from PyQt5.QtWidgets import (
     QWidget, QVBoxLayout, QHBoxLayout,
     QPushButton, QLabel,
-    QMessageBox, QFrame,
+    QMessageBox,
     QInputDialog,
     QTableWidget, QTableWidgetItem, QHeaderView,
     QAbstractItemView,
 )
 from PyQt5.QtCore import Qt
 from PyQt5.QtGui import QFont, QColor
+
+from ui.widgets.panels.themed_inputs import ThemedFrame
 
 from services.design import get_dimension_set_service
 from ._instance_popup import _InstancePopup
@@ -85,8 +87,25 @@ class _InstancesTable(QWidget, WidgetMixin):
         self._init_widget_mixin(lang=False, data=False)
         self._refresh_style()
 
+    def showEvent(self, event):
+        """
+        [إصلاح dark-theme] Qt بيخزّن أي تغيير stylesheet وقت ما الـ widget
+        مخفية (isVisible == False)، لكن مبيعيدش رسمها فعليًا إلا لما تظهر
+        تاني على الشاشة — وأحيانًا بيرسمها بحالة قديمة (cached) بدل الستايل
+        الجديد المخزّن. لو الثيم اتغيّر وإحنا في تاب تاني (يعني الودجت دي
+        كانت مخفية وقتها)، الألوان بتتحدث في الذاكرة صح لكن الرسم الفعلي
+        بيفضل قديم لحد أول مرة تظهر فيها الودجت. الحل: نجبر إعادة تطبيق
+        الستايل بالكامل في اللحظة اللي الودجت بتظهر فيها فعليًا.
+        """
+        super().showEvent(event)
+        self._refresh_style()
+
     def _refresh_style(self, *_):
         base = get_font_size()
+
+        # [إصلاح dark-theme الجذري] self (_InstancesTable) نفسها — راجع
+        # التعليق في _build لتفاصيل السبب.
+        self.setStyleSheet(f"background: {_C['bg_input']};")
 
         # تحديث الـ toolbar label
         self._lbl_set_name.setStyleSheet(f"""
@@ -113,6 +132,32 @@ class _InstancesTable(QWidget, WidgetMixin):
             padding: {DIM_INST_TBL_STATUS_PAD}px;
             border-top: {DIM_INST_TBL_HAIRLINE_W}px solid {_C['border']};
         """)
+
+        # [إصلاح dark-theme] _empty_state كانت بتاخد خلفيتها وقت البناء
+        # بس (_build) ومفيهاش تحديث هنا، فكانت تفضل بلون الثيم القديم
+        # بعد التحويل لـ dark. هذا بالظبط سبب المنطقة البيضاء الكبيرة
+        # اللي فيها أزرار إضافة/تعديل/نسخ/حذف فوقها.
+        if hasattr(self, '_empty_state'):
+            self._empty_state.setStyleSheet(f"background: {_C['bg_input']}; border: none;")
+            # [إصلاح repaint] القيمة بتتغير فعليًا (تأكدنا بالـ debug) لكن
+            # Qt أحيانًا مش بيعيد رسم الـ widget تلقائيًا لو الـ stylesheet
+            # اتغير وهو already visible على الشاشة، خصوصًا لو الأب (QSplitter)
+            # مش بيبعت resize event. unpolish/polish بيجبر Qt يعيد تقييم
+            # الـ stylesheet بالكامل، و update() بيجبر إعادة الرسم الفعلي.
+            self._empty_state.style().unpolish(self._empty_state)
+            self._empty_state.style().polish(self._empty_state)
+            self._empty_state.update()
+
+        # [إصلاح repaint شامل] إجبار إعادة رسم الـ widget بالكامل كحماية
+        # إضافية — يغطي أي child تاني ممكن يكون واقع في نفس مشكلة الـ
+        # stale repaint رغم إن الـ stylesheet اتحدث فعليًا في الذاكرة.
+        self.style().unpolish(self)
+        self.style().polish(self)
+        self.update()
+
+        if hasattr(self, '_empty_state'):
+            es = self._empty_state
+
 
     def _on_font_changed(self, size: int = None):
         """يُبقيها متوافقة مع أي نداء خارجي قديم من _ValuesPanel."""
@@ -155,8 +200,18 @@ class _InstancesTable(QWidget, WidgetMixin):
         root.setContentsMargins(0, 0, 0, 0)
         root.setSpacing(0)
 
+        # [إصلاح dark-theme الجذري] _InstancesTable (self) نفسها — الـ
+        # QWidget الأب اللي فيه root layout — ماكانش عندها setStyleSheet
+        # خالص، لا هنا ولا في _refresh_style. أي QWidget بدون stylesheet
+        # خاص بياخد الخلفية الافتراضية من نظام التشغيل (رمادي فاتح/أبيض
+        # على Windows)، مش من _C. وبما إن _empty_state (QFrame داخلي)
+        # بياخد بس حجم محتواه (AlignCenter، مش بيتمدد)، فالمساحة الفاضية
+        # حواليه كانت بتفضل بلون الخلفية الافتراضي الأبيض ده — مش لون
+        # الثيم. هذا هو السبب الحقيقي للمربع الأبيض في كل الصور.
+        self.setStyleSheet(f"background: {_C['bg_input']};")
+
         # ── Toolbar ──
-        toolbar = QFrame()
+        toolbar = ThemedFrame()
         toolbar.setStyleSheet(f"""
             QFrame {{
                 background: {_C['bg_input']};
@@ -238,7 +293,7 @@ class _InstancesTable(QWidget, WidgetMixin):
         root.addWidget(self._status_bar)
 
         # ── Empty State ──
-        self._empty_state = QFrame()
+        self._empty_state = ThemedFrame()
         self._empty_state.setStyleSheet(f"background: {_C['bg_input']}; border: none;")
         e_lay = QVBoxLayout(self._empty_state)
         e_lay.setAlignment(Qt.AlignCenter)

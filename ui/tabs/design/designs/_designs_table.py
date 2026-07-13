@@ -13,11 +13,10 @@ ui/tabs/design/designs/_designs_table.py  — v3
 from PyQt5.QtWidgets import (
     QWidget, QVBoxLayout, QHBoxLayout, QGridLayout,
     QPushButton, QLabel,
-    QFrame,
     QScrollArea
 )
 from PyQt5.QtCore  import Qt, pyqtSignal, QThread, pyqtSignal as Signal, QTimer
-from ui.widgets.panels.themed_inputs import ThemedLineEdit, ThemedComboBox
+from ui.widgets.panels.themed_inputs import ThemedLineEdit, ThemedComboBox, ThemedFrame
 
 
 from services.design import get_design_size_service, get_design_service
@@ -203,7 +202,7 @@ class _DesignsTable(QWidget, WidgetMixin):
         root.setSpacing(0)
 
         # ── Toolbar ──────────────────────────────────────
-        toolbar = QFrame()
+        toolbar = ThemedFrame()
         self._toolbar = toolbar   # [إصلاح dark-theme] لازم مرجع عشان _refresh_style تحدّثه
         toolbar.setStyleSheet(f"""
             QFrame {{
@@ -284,7 +283,7 @@ class _DesignsTable(QWidget, WidgetMixin):
         root.addWidget(self._scroll, stretch=1)
 
         # ── حالة فارغة ────────────────────────────────────
-        self._empty_frame = QFrame()
+        self._empty_frame = ThemedFrame()
         self._empty_frame.setStyleSheet(f"background:{_C['bg_surface']}; border:none;")
         ef_lay = QVBoxLayout(self._empty_frame)
         ef_lay.setAlignment(Qt.AlignCenter)

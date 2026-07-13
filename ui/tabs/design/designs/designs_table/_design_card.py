@@ -13,10 +13,12 @@ ui/tabs/design/designs/designs_table/_design_card.py  — v3
 
 from PyQt5.QtWidgets import (
     QVBoxLayout,
-    QLabel, QFrame
+    QLabel
 )
 from PyQt5.QtCore  import Qt, pyqtSignal, QThread, pyqtSignal as Signal, QTimer
 from PyQt5.QtGui   import QPixmap, QFont
+
+from ui.widgets.panels.themed_inputs import ThemedFrame
 
 from services.design import get_design_service
 from .._xcf_thumbnail import get_xcf_thumbnail
@@ -66,7 +68,7 @@ class _ThumbWorker(QThread):
 # بطاقة تصميم واحد
 # ════════════════════════════════════════════════════════
 
-class _DesignCard(QFrame, WidgetMixin):
+class _DesignCard(ThemedFrame, WidgetMixin):
     selected = pyqtSignal(int)
     deleted  = pyqtSignal(int)
 
@@ -145,7 +147,7 @@ class _DesignCard(QFrame, WidgetMixin):
         root.setSpacing(0)
 
         # ── منطقة الـ Thumbnail ──
-        thumb_frame = QFrame()
+        thumb_frame = ThemedFrame()
         thumb_frame.setFixedSize(_CARD_W, _CARD_THUMB)
         self._thumb_frame = thumb_frame
         self._apply_thumb_style()
@@ -172,7 +174,7 @@ class _DesignCard(QFrame, WidgetMixin):
         root.addWidget(thumb_frame)
 
         # ── معلومات التصميم ──
-        info = QFrame()
+        info = ThemedFrame()
         info.setStyleSheet("QFrame{background:transparent; border:none;}")
         info_lay = QVBoxLayout(info)
         info_lay.setContentsMargins(

@@ -13,10 +13,13 @@ ui/tabs/design/designs_tab.py  — v2
 """
 
 from PyQt5.QtWidgets import (
-    QWidget, QVBoxLayout, QHBoxLayout,
-    QSplitter, QFrame, QLabel,
+    QWidget, QHBoxLayout,
+    QSplitter,
 )
 from PyQt5.QtCore import Qt
+
+from ui.widgets.panels.themed_inputs import ThemedFrame
+
 
 from .designs._designs_table            import _DesignsTable
 from .designs._design_detail_panel      import _DesignDetailPanel
@@ -90,9 +93,9 @@ class DesignsTab(QWidget, WidgetMixin):
         # ترتيب: sidebar | splitter
         root.addWidget(self._cats_panel)
 
-        self._sep = QFrame()
+        self._sep = ThemedFrame()
         sep = self._sep
-        sep.setFrameShape(QFrame.VLine)
+        sep.setFrameShape(ThemedFrame.VLine)
         root.addWidget(sep)
 
         root.addWidget(splitter, stretch=1)

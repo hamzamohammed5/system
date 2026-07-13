@@ -9,10 +9,10 @@ _ProductsPanel — لوحة عرض المنتجات المتأثرة في ناف
 from PyQt5.QtWidgets import (
     QWidget, QVBoxLayout, QHBoxLayout,
     QLabel, QPushButton,
-    QScrollArea, QFrame,
+    QScrollArea,
 )
 from PyQt5.QtCore import Qt
-from ui.widgets.panels.themed_inputs import ThemedComboBox
+from ui.widgets.panels.themed_inputs import ThemedComboBox, ThemedFrame
 
 from ui.theme import _C
 from ui.widgets.core.i18n   import tr
@@ -102,8 +102,8 @@ class _ProductsPanel(QWidget, WidgetMixin):
 
         self._refresh_style()
 
-    def _build_quick_bar(self) -> QFrame:
-        bar = QFrame()
+    def _build_quick_bar(self) -> ThemedFrame:
+        bar = ThemedFrame()
         self._bar_ref = bar
         lay = QHBoxLayout(bar)
         lay.setContentsMargins(SPACING_MD, PRODUCTS_PANEL_BAR_PAD,

@@ -16,10 +16,13 @@ import os
 from PyQt5.QtWidgets import (
     QVBoxLayout, QHBoxLayout,
     QPushButton, QLabel, QMessageBox,
-    QFrame, QFileDialog,
+    QFileDialog,
 )
 from PyQt5.QtCore import Qt, pyqtSignal, QThread, pyqtSignal as Signal
 from PyQt5.QtGui  import QPixmap, QFont
+
+from ui.widgets.panels.themed_inputs import ThemedFrame
+
 
 from services.design import get_design_size_service
 from ._xcf_thumbnail import get_watcher
@@ -71,7 +74,7 @@ _WARNING_BDR = _C["warning_border"]
 # بطاقة مقاس — v3
 # ════════════════════════════════════════════════════════
 
-class _SizeCard(QFrame, WidgetMixin):
+class _SizeCard(ThemedFrame, WidgetMixin):
     edit_requested   = pyqtSignal(int)
     delete_requested = pyqtSignal(int)
     path_changed     = pyqtSignal()
@@ -138,7 +141,7 @@ class _SizeCard(QFrame, WidgetMixin):
         root.setSpacing(0)
 
         # ── الجزء الرئيسي ──────────────────────────
-        main = QFrame()
+        main = ThemedFrame()
         main.setStyleSheet("QFrame{background:transparent;border:none;}")
         m_lay = QHBoxLayout(main)
         m_lay.setContentsMargins(SIZE_CARD_MAIN_MARGIN, SIZE_CARD_MAIN_MARGIN,
@@ -261,7 +264,7 @@ class _SizeCard(QFrame, WidgetMixin):
         self._build_status_bar(root, file_exists, has_file, unit, dpi)
 
     def _build_status_bar(self, root, file_exists, has_file, unit, dpi):
-        bar = QFrame()
+        bar = ThemedFrame()
 
         if file_exists:
             bg     = _SUCCESS_LT

@@ -104,7 +104,6 @@ def seed_default_accounts(conn):
     """يُدرج الحسابات الافتراضية لو كانت قاعدة البيانات فارغة."""
 
     if not _verify_conn_is_accounting(conn):
-        print("[accounting_schema_seed] تحذير: conn ليس لـ accounting.db — تم تخطي الـ seed")
         return
 
     if _account_exists(conn):

@@ -8,13 +8,14 @@ ui/main_window_helper/_sidebar.py
 """
 
 from PyQt5.QtWidgets import (
-    QWidget, QVBoxLayout, QFrame,
+    QWidget, QVBoxLayout,
     QScrollArea, QSizePolicy,
 )
 from PyQt5.QtCore import Qt, QPropertyAnimation, QEasingCurve
 
 from ui.widgets.core.i18n import tr
 from ui.widgets.core.widget_mixin import WidgetMixin
+from ui.widgets.panels.themed_inputs import ThemedFrame
 
 from ._section_label import _SectionLabel
 from ._nav_button import _NavButton
@@ -37,7 +38,7 @@ from ui.constants import (
 # _Sidebar
 # ══════════════════════════════════════════════════════════
 
-class _Sidebar(QFrame, WidgetMixin):
+class _Sidebar(ThemedFrame, WidgetMixin):
     def __init__(self, on_company_changed, parent=None):
         super().__init__(parent)
         self._on_company_changed = on_company_changed
@@ -142,8 +143,8 @@ class _Sidebar(QFrame, WidgetMixin):
         f_lay.setContentsMargins(SIDEBAR_FOOTER_MARGIN_H, SIDEBAR_FOOTER_MARGIN_V, SIDEBAR_FOOTER_MARGIN_H, SIDEBAR_FOOTER_MARGIN_V)
         f_lay.setSpacing(SIDEBAR_FOOTER_SPACING)
 
-        self._div = QFrame()
-        self._div.setFrameShape(QFrame.HLine)
+        self._div = ThemedFrame()
+        self._div.setFrameShape(ThemedFrame.HLine)
         self._div.setFixedHeight(SIDEBAR_DIVIDER_H)
         f_lay.addWidget(self._div)
 

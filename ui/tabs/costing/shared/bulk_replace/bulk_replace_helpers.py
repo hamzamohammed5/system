@@ -17,10 +17,12 @@ ProductRow — عنصر واجهة (widget) لنافذة الاستبدال ال
 """
 
 from PyQt5.QtWidgets import (
-    QFrame, QHBoxLayout, QLabel, QCheckBox,
+    QHBoxLayout, QLabel, QCheckBox,
     QDoubleSpinBox,
 )
 from PyQt5.QtCore import Qt
+
+from ui.widgets.panels.themed_inputs import ThemedFrame
 
 from ui.theme import _C
 from ui.widgets.core.i18n       import tr
@@ -38,7 +40,7 @@ from ui.font import FS_BASE, FS_SM, FS_XS
 # ProductRow — صف منتج واحد في اللوحة
 # ══════════════════════════════════════════════════════════
 
-class ProductRow(QFrame, WidgetMixin):
+class ProductRow(ThemedFrame, WidgetMixin):
     """
     صف يعرض معلومات منتج واحد مع:
       - checkbox للاختيار
@@ -53,7 +55,7 @@ class ProductRow(QFrame, WidgetMixin):
         self._build()
 
     def _build(self):
-        self.setFrameShape(QFrame.StyledPanel)
+        self.setFrameShape(ThemedFrame.StyledPanel)
         self._apply_style(checked=True)
 
         lay = QHBoxLayout(self)

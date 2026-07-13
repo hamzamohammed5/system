@@ -27,7 +27,16 @@ class OrdersDashboardTab(QWidget, WidgetMixin):
         self.conn = conn
         self._svc = OrderService(conn)
         self._build()
-        self._init_widget_mixin(theme=False, font=False, lang=True, data=False)
+        self._init_widget_mixin(theme=True, font=False, lang=True, data=False)
+
+    def _refresh_style(self, *_):
+        # [إصلاح dark-theme] الجدول (recent_table) مبني عن طريق make_table()
+        # اللي بتطبق table_style() مرة واحدة بس وقت الإنشاء. من غير النداء
+        # ده، الجدول كان بيفضل بالستايل القديم (الفاتح) بعد تغيير الثيم
+        # لـ dark، لأن OrdersDashboardTab ماكانتش مشتركة في bus.theme_changed
+        # أصلًا (theme=False) ومكانش عندها _refresh_style() خالص.
+        from ui.widgets.tables.tables import refresh_table_styles
+        refresh_table_styles(self)
 
     def _refresh_lang(self, *_):
         self._lbl_status_hdr.setText(tr("dashboard_status_dist"))

@@ -7,10 +7,10 @@ ui/tabs/design/dimension_sets/values_panel/_sets_list_panel.py
 from PyQt5.QtWidgets import (
     QWidget, QVBoxLayout, QHBoxLayout,
     QLabel,
-    QScrollArea, QFrame,
+    QScrollArea,
 )
 from PyQt5.QtCore import Qt, pyqtSignal
-from ui.widgets.panels.themed_inputs import ThemedLineEdit, ThemedComboBox
+from ui.widgets.panels.themed_inputs import ThemedLineEdit, ThemedComboBox, ThemedFrame
 
 from services.design import get_dimension_set_service
 from ui.font import get_font_size, fs
@@ -65,7 +65,7 @@ def _card_selected_ss() -> str:
 # بطاقة مجموعة مقاسات
 # ══════════════════════════════════════════════════════════
 
-class _SetCard(QFrame):
+class _SetCard(ThemedFrame):
     clicked = pyqtSignal(int)
 
     def __init__(self, set_id: int, name: str,
@@ -192,6 +192,11 @@ class _SetsListPanel(QWidget, WidgetMixin):
         self._init_widget_mixin(lang=False, data=False)
         self._refresh_style()
 
+    def showEvent(self, event):
+        """[إصلاح dark-theme] راجع نفس التعليق في _InstancesTable.showEvent."""
+        super().showEvent(event)
+        self._refresh_style()
+
     def _refresh_style(self, *_):
         base = get_font_size()
         # تحديث الـ header
@@ -283,7 +288,7 @@ class _SetsListPanel(QWidget, WidgetMixin):
         """)
         root.addWidget(self._hdr_lbl)
 
-        search_frame = QFrame()
+        search_frame = ThemedFrame()
         self._search_frame = search_frame   # [إصلاح dark-theme]
         search_frame.setStyleSheet(f"""
             QFrame {{

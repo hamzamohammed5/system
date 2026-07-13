@@ -11,10 +11,11 @@ OwnersEquityTab — تبويب قائمة حقوق الملكية.
 
 from PyQt5.QtWidgets import (
     QWidget, QVBoxLayout, QHBoxLayout, QSplitter,
-    QFrame, QLabel, QTableWidgetItem,
+    QLabel, QTableWidgetItem,
 )
 from PyQt5.QtCore import Qt
 from PyQt5.QtGui  import QColor
+from ui.widgets.panels.themed_inputs import ThemedFrame
 
 from services.accounting.statements_service import StatementsService
 from ui.widgets.tables.tables import make_table
@@ -119,7 +120,7 @@ class OwnersEquityTab(SafeConnMixin, QWidget, WidgetMixin):
 
         root.addWidget(splitter, stretch=1)
 
-        eq_frame = QFrame()
+        eq_frame = ThemedFrame()
         eq_frame.setStyleSheet(
             f"QFrame {{ background:{_C['info_bg']}; border:{INPUT_BORDER_W}px solid {_C['info_border']};"
             f" border-radius:{FINANCIAL_FRAME_BORDER_RADIUS}px; }}"

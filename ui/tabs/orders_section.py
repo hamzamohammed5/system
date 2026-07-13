@@ -20,7 +20,17 @@ class OrdersSection(QWidget, WidgetMixin):
         super().__init__(parent)
         self.conn = get_orders_conn_and_init()
         self._build()
-        self._init_widget_mixin(theme=False, font=False, lang=True, data=False)
+        self._init_widget_mixin(theme=True, font=False, lang=True, data=False)
+        self._refresh_style()
+
+    def _refresh_style(self, *_):
+        # [إصلاح dark-theme] tab_style() كانت بتتطبق مرة واحدة بس وقت
+        # الإنشاء في _build(). OrdersSection ماكانتش مشتركة في
+        # bus.theme_changed أصلًا (theme=False) ومكانش عندها _refresh_style()
+        # خالص، فالتاب بار (لوحة المتابعة / الطلبات / العملاء) كان يفضل
+        # بالستايل القديم (الفاتح) بعد التحويل لـ dark.
+        if hasattr(self, "_tabs"):
+            self._tabs.setStyleSheet(tab_style())
 
     def _build(self):
         layout = QVBoxLayout(self)

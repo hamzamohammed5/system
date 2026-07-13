@@ -132,10 +132,10 @@ class CustomerDetailPanel(BaseDetailPanel):
         self.contacts_table.setRowCount(0)
         for ct in contacts:
             r = insert_row(self.contacts_table, ROW_HEIGHT_COMPACT)
-            self.contacts_table.setItem(r, 0, bold_item(make_item(ct["name"])))
-            self.contacts_table.setItem(r, 1, muted_item(make_item(ct.get("role") or "")))
+            self.contacts_table.setItem(r, 0, bold_item(ct["name"]))
+            self.contacts_table.setItem(r, 1, muted_item(ct.get("role") or ""))
             self.contacts_table.setItem(r, 2, make_item(ct.get("phone") or ""))
-            self.contacts_table.setItem(r, 3, muted_item(make_item(ct.get("email") or "")))
+            self.contacts_table.setItem(r, 3, muted_item(ct.get("email") or ""))
 
         self._contacts_hdr.setVisible(bool(contacts))
         self.contacts_table.setVisible(bool(contacts))
@@ -149,8 +149,7 @@ class CustomerDetailPanel(BaseDetailPanel):
 
         for o in orders[:20]:
             r = insert_row(table, ROW_HEIGHT_COMPACT)
-            num_item = make_item(o["order_number"])
-            bold_item(num_item)
+            num_item = bold_item(o["order_number"])
             from PyQt5.QtGui import QColor
             num_item.setForeground(QColor(_C['accent']))
             table.setItem(r, 0, num_item)
@@ -159,16 +158,36 @@ class CustomerDetailPanel(BaseDetailPanel):
             table.setItem(r, 1, make_item(status_lbl))
 
             pri_lbl, _ = PRIORITY_LABELS.get(o["priority"], ("", ""))
-            table.setItem(r, 2, muted_item(make_item(pri_lbl)))
+            table.setItem(r, 2, muted_item(pri_lbl))
 
             val_item = make_item(f"{(o['net_amount'] or 0):,.2f} {tr('currency_sym')}",
                                  align=Qt.AlignCenter)
             val_item.setForeground(QColor(_C['accent']))
             table.setItem(r, 3, val_item)
-            table.setItem(r, 4, muted_item(make_item(o["order_date"] or "")))
+            table.setItem(r, 4, muted_item(o["order_date"] or ""))
 
         if orders:
             auto_fit_columns(table, fixed_cols=[1, 2, 3, 4], stretch_col=0)
+
+    def _refresh_style(self, *_):
+        """
+        [إصلاح ثيم] الألوان اللي بتتحط بـ setForeground(QColor(_C[...]))
+        وقت _fill_data (رقم الطلب، قيمة الطلب) بتتحدد مرة واحدة وقت
+        التعبئة، مش جزء من الـ stylesheet، فبتفضل بلون الثيم القديم بعد
+        تبديل الثيم. هنا بنعيد رسم الصفوف الموجودة فعلياً في جدول الطلبات.
+        """
+        super()._refresh_style(*_)
+        from PyQt5.QtGui import QColor
+        table = getattr(self, "orders_table", None)
+        if table is None:
+            return
+        for r in range(table.rowCount()):
+            num_item = table.item(r, 0)
+            if num_item is not None:
+                num_item.setForeground(QColor(_C['accent']))
+            val_item = table.item(r, 3)
+            if val_item is not None:
+                val_item.setForeground(QColor(_C['accent']))
 
     def load_customer(self, cid: int):
         self.load_item(cid)

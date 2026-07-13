@@ -2,12 +2,12 @@
 ui/tabs/orders/_customer_form.py
 """
 from PyQt5.QtWidgets import (
-    QDialog, QVBoxLayout, QHBoxLayout, QFormLayout,
-    QLabel, QPushButton,
-    QTextEdit, QGroupBox, QMessageBox,
+    QDialog, QVBoxLayout, QHBoxLayout,
+    QLabel,
+    QGroupBox, QMessageBox, QScrollArea, QWidget, QApplication,
 )
 from PyQt5.QtCore import Qt, pyqtSignal
-from ui.widgets.panels.themed_inputs import ThemedLineEdit, ThemedComboBox
+from ui.widgets.panels.themed_inputs import ThemedLineEdit, ThemedComboBox, ThemedTextEdit
 
 from services.orders.customer_service import CustomerService
 from ui.widgets.tables.tables import (
@@ -33,6 +33,9 @@ from ui.constants import (
     CUSTOMER_FORM_CONTACTS_COL1_W, CUSTOMER_FORM_CONTACTS_COL2_W,
     CUSTOMER_FORM_CONTACTS_COL3_W, CUSTOMER_FORM_CONTACTS_COL4_W,
 )
+
+
+CUSTOMER_FORM_LBL_W = 110  # عرض ثابت لتسمية صفوف البيانات الأساسية (px) — يحل مشكلة QFormLayout+RTL
 
 
 def _group_ss() -> str:
@@ -67,8 +70,16 @@ class _CustomerForm(QDialog, WidgetMixin):
         self._svc        = CustomerService(conn)
 
         self.setWindowTitle(tr("customer_edit_title") if customer_id else tr("customer_new_title"))
-        self.setMinimumWidth(CUSTOMER_FORM_MIN_W)
-        self.setMinimumHeight(CUSTOMER_FORM_MIN_H)
+
+        screen = self.screen() or QApplication.primaryScreen()
+        avail = screen.availableGeometry() if screen else None
+        if avail:
+            target_w = min(CUSTOMER_FORM_MIN_W, int(avail.width() * 0.92))
+            target_h = min(CUSTOMER_FORM_MIN_H, int(avail.height() * 0.90))
+        else:
+            target_w, target_h = CUSTOMER_FORM_MIN_W, CUSTOMER_FORM_MIN_H
+        self.setMinimumWidth(min(target_w, 500))
+        self.resize(target_w, target_h)
         self.setModal(True)
         self._init_widget_mixin(font=False, lang=False, data=False)
         self._build()
@@ -109,45 +120,75 @@ class _CustomerForm(QDialog, WidgetMixin):
         self.setStyleSheet(input_style())
 
     def _build(self):
-        root = QVBoxLayout(self)
+        outer = QVBoxLayout(self)
+        outer.setContentsMargins(0, 0, 0, 0)
+        outer.setSpacing(0)
+
+        scroll = QScrollArea()
+        scroll.setWidgetResizable(False)
+        scroll.setHorizontalScrollBarPolicy(Qt.ScrollBarAsNeeded)
+        scroll.setVerticalScrollBarPolicy(Qt.ScrollBarAsNeeded)
+
+        content = QWidget()
+        content.setFixedWidth(CUSTOMER_FORM_MIN_W - 40)  # عرض ثابت حقيقي — لا يتقلص أبداً
+        root = QVBoxLayout(content)
         root.setContentsMargins(*CUSTOMER_FORM_ROOT_MARGIN)
         root.setSpacing(CUSTOMER_FORM_ROOT_SPACING)
+        scroll.setWidget(content)
+        outer.addWidget(scroll)
 
         self._hdr_lbl = QLabel(tr("customer_edit_title") if self.customer_id else tr("customer_new_title"))
         root.addWidget(self._hdr_lbl)
 
         self._basic_grp = QGroupBox(tr("customer_basic_section"))
-        form = QFormLayout(self._basic_grp)
+        form = QVBoxLayout(self._basic_grp)
         form.setSpacing(CUSTOMER_FORM_FORM_SPACING)
-        form.setLabelAlignment(Qt.AlignRight)
+
+        def _row(label_text: str, field_widget):
+            """
+            صف يدوي (label بعرض ثابت + حقل) بدل QFormLayout.
+            [إصلاح] نفس مشكلة _order_form.py: QFormLayout مع
+            Qt.AlignRight ونصوص عربية (RTL) بيسبب تراكب بين الـ
+            label والحقل. الحل: صف QHBoxLayout يدوي بعرض ثابت للـ label.
+            """
+            row_lay = QHBoxLayout()
+            row_lay.setSpacing(CUSTOMER_FORM_FORM_SPACING)
+            lbl = QLabel(label_text)
+            lbl.setMinimumWidth(CUSTOMER_FORM_LBL_W)
+            lbl.setAlignment(Qt.AlignRight | Qt.AlignVCenter)
+            lbl.setStyleSheet(f"color:{_C['text_sec']}; font-size:{FS_SM}px;")
+            row_lay.addWidget(lbl)
+            row_lay.addWidget(field_widget, stretch=1)
+            form.addLayout(row_lay)
+            return row_lay
 
         self.inp_name = ThemedLineEdit()
         self.inp_name.setPlaceholderText(tr("customer_name_lbl"))
-        form.addRow(tr("customer_name_lbl"), self.inp_name)
+        _row(tr("customer_name_lbl"), self.inp_name)
 
         self.cmb_type = ThemedComboBox()
         self.cmb_type.addItem(tr("customer_type_individual"), "individual")
         self.cmb_type.addItem(tr("customer_type_company"),    "company")
-        form.addRow(tr("customer_type_lbl"), self.cmb_type)
+        _row(tr("customer_type_lbl"), self.cmb_type)
 
         self.inp_phone = ThemedLineEdit()
-        form.addRow(tr("customer_phone_lbl"), self.inp_phone)
+        _row(tr("customer_phone_lbl"), self.inp_phone)
 
         self.inp_phone2 = ThemedLineEdit()
-        form.addRow(tr("customer_phone2_lbl"), self.inp_phone2)
+        _row(tr("customer_phone2_lbl"), self.inp_phone2)
 
         self.inp_email = ThemedLineEdit()
-        form.addRow(tr("customer_email_lbl"), self.inp_email)
+        _row(tr("customer_email_lbl"), self.inp_email)
 
         self.inp_city = ThemedLineEdit()
-        form.addRow(tr("customer_city_lbl"), self.inp_city)
+        _row(tr("customer_city_lbl"), self.inp_city)
 
         self.inp_address = ThemedLineEdit()
-        form.addRow(tr("customer_address_lbl"), self.inp_address)
+        _row(tr("customer_address_lbl"), self.inp_address)
 
-        self.inp_notes = QTextEdit()
+        self.inp_notes = ThemedTextEdit()
         self.inp_notes.setMaximumHeight(CUSTOMER_FORM_NOTES_MAX_H)
-        form.addRow(tr("customer_notes_lbl"), self.inp_notes)
+        _row(tr("customer_notes_lbl"), self.inp_notes)
 
         root.addWidget(self._basic_grp)
 
@@ -191,6 +232,8 @@ class _CustomerForm(QDialog, WidgetMixin):
         btn_row.addWidget(btn_cancel)
         btn_row.addWidget(btn_save, stretch=1)
         root.addLayout(btn_row)
+
+        content.adjustSize()
 
     def _load(self):
         c = self._svc.get_customer(self.customer_id)

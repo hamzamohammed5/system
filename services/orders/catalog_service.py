@@ -1,5 +1,5 @@
 """
-services/costing/catalog_service.py
+services/orders/catalog_service.py
 =====================================
 CatalogService — طبقة الخدمة لكتالوج المنتجات المسعّرة والعروض.
 

@@ -9,11 +9,13 @@ ui/tabs/inventory/inventory_report_tab.py
 """
 
 from PyQt5.QtWidgets import (
-    QWidget, QVBoxLayout, QHBoxLayout, QFrame,
+    QWidget, QVBoxLayout, QHBoxLayout,
     QLabel, QTableWidgetItem,
 )
 from PyQt5.QtCore import Qt
 from PyQt5.QtGui  import QColor
+
+from ui.widgets.panels.themed_inputs import ThemedFrame
 
 from services.inventory.inventory_service import InventoryService
 from ui.widgets.panels.form_labels   import section_title
@@ -79,7 +81,7 @@ class _ReportTab(QWidget, WidgetMixin):
 
         def _card(label, color):
             from ui.theme import _C
-            f = QFrame()
+            f = ThemedFrame()
             f.setStyleSheet(f"""
                 QFrame {{
                     background: {_C['bg_surface']};

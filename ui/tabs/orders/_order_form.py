@@ -2,19 +2,18 @@
 ui/tabs/orders/_order_form.py
 """
 from PyQt5.QtWidgets import (
-    QDialog, QVBoxLayout, QHBoxLayout, QFormLayout,
-    QLabel, QPushButton,
-    QTextEdit, QDateEdit,
+    QDialog, QVBoxLayout, QHBoxLayout,
+    QLabel,
     QMessageBox, QGroupBox,
-    QDoubleSpinBox, QScrollArea, QWidget, QFrame,
+    QDoubleSpinBox, QScrollArea, QWidget, QApplication,
 )
 from PyQt5.QtCore import Qt, pyqtSignal, QDate
-from ui.widgets.panels.themed_inputs import ThemedLineEdit, ThemedComboBox
+from ui.widgets.panels.themed_inputs import ThemedLineEdit, ThemedComboBox, ThemedFrame, ThemedDateEdit, ThemedTextEdit
 
 from services.orders.customer_service import CustomerService
 from services.orders.order_service import OrderService
 from .order_form._item_row_widget import _ItemRowWidget
-from services.costing.catalog_service import CatalogService
+from services.orders.catalog_service import CatalogService
 
 from ui.theme import _C
 from ui.widgets.components.button import make_btn
@@ -34,6 +33,9 @@ from ui.constants import (
     ORDER_FORM_DUE_DATE_DEFAULT, ORDER_FORM_DISCOUNT_MAX, ORDER_FORM_PAID_MAX,
     ORDER_FORM_HDR_RADIUS, ORDER_FORM_HDR_PAD,
 )
+
+
+ORDER_FORM_DETAILS_LBL_W = 110  # عرض ثابت لتسمية صف "تفاصيل الطلب" (px) — يحل مشكلة QFormLayout+RTL
 
 
 def _group_ss(accent=None) -> str:
@@ -96,8 +98,16 @@ class _OrderForm(QDialog):
         self._cust_svc    = CustomerService(conn)
 
         self.setWindowTitle(tr("order_edit_title") if order_id else tr("order_new_title"))
-        self.setMinimumWidth(ORDER_FORM_MIN_W)
-        self.setMinimumHeight(ORDER_FORM_MIN_H)
+
+        screen = self.screen() or QApplication.primaryScreen()
+        avail = screen.availableGeometry() if screen else None
+        if avail:
+            target_w = min(ORDER_FORM_MIN_W, int(avail.width() * 0.92))
+            target_h = min(ORDER_FORM_MIN_H, int(avail.height() * 0.90))
+        else:
+            target_w, target_h = ORDER_FORM_MIN_W, ORDER_FORM_MIN_H
+        self.setMinimumWidth(min(target_w, 620))
+        self.resize(target_w, target_h)
         self.setModal(True)
         self._build()
         if order_id:
@@ -109,10 +119,12 @@ class _OrderForm(QDialog):
         outer.setSpacing(0)
 
         scroll = QScrollArea()
-        scroll.setWidgetResizable(True)
-        scroll.setHorizontalScrollBarPolicy(Qt.ScrollBarAlwaysOff)
+        scroll.setWidgetResizable(False)
+        scroll.setHorizontalScrollBarPolicy(Qt.ScrollBarAsNeeded)
+        scroll.setVerticalScrollBarPolicy(Qt.ScrollBarAsNeeded)
 
         content = QWidget()
+        content.setFixedWidth(ORDER_FORM_MIN_W - 40)  # عرض ثابت حقيقي — لا يتقلص أبداً
         root = QVBoxLayout(content)
         root.setContentsMargins(*ORDER_FORM_ROOT_MARGIN)
         root.setSpacing(ORDER_FORM_ROOT_SPACING)
@@ -136,6 +148,8 @@ class _OrderForm(QDialog):
         self._build_save_buttons(root)
 
         self._add_item_row()
+
+        content.adjustSize()
 
     def _build_customer_section(self, root):
         cust_grp = QGroupBox(tr("order_customer_section"))
@@ -178,45 +192,65 @@ class _OrderForm(QDialog):
     def _build_order_details(self, root):
         order_grp = QGroupBox(tr("order_details_section"))
         order_grp.setStyleSheet(_group_ss(_C['accent']))
-        form = QFormLayout(order_grp)
+        form = QVBoxLayout(order_grp)
         form.setSpacing(ORDER_FORM_DETAILS_SPACING)
-        form.setLabelAlignment(Qt.AlignRight)
+
+        def _row(label_text: str, field_widget) -> QHBoxLayout:
+            """
+            صف يدوي (label بعرض ثابت + حقل) بدل QFormLayout.
+            [إصلاح] QFormLayout مع Qt.AlignRight ونصوص عربية (RTL) كان
+            بيسبب تراكب بين الـ label والحقل — عرض الـ label بيُحسب
+            ديناميكيًا بواسطة Qt ومش بياخد مساحته صح مع اتجاه RTL.
+            الحل: صف QHBoxLayout يدوي بعرض ثابت للـ label، بنفس نمط
+            بقية أقسام الفورم (زي _build_customer_section).
+            """
+            row_lay = QHBoxLayout()
+            row_lay.setSpacing(ORDER_FORM_DETAILS_SPACING)
+            lbl = QLabel(label_text)
+            lbl.setMinimumWidth(ORDER_FORM_DETAILS_LBL_W)
+            lbl.setAlignment(Qt.AlignRight | Qt.AlignVCenter)
+            lbl.setStyleSheet(f"color:{_C['text_sec']}; font-size:{FS_SM}px;")
+            row_lay.addWidget(lbl)
+            row_lay.addWidget(field_widget, stretch=1)
+            form.addLayout(row_lay)
+            return row_lay
 
         self.cmb_type = ThemedComboBox()
         for k, v in _get_type_options():
             self.cmb_type.addItem(v, k)
-        form.addRow(tr("order_type_label"), self.cmb_type)
+        _row(tr("order_type_label"), self.cmb_type)
 
         self.cmb_status = ThemedComboBox()
         for k, v in _get_status_options():
             self.cmb_status.addItem(v, k)
+        status_row = _row(tr("order_status_label"), self.cmb_status)
         if not self.order_id:
             self.cmb_status.setVisible(False)
-        form.addRow(tr("order_status_label"), self.cmb_status)
+            status_row.itemAt(0).widget().setVisible(False)
 
         self.cmb_priority = ThemedComboBox()
         for k, v in _get_priority_options():
             self.cmb_priority.addItem(v, k)
         self.cmb_priority.setCurrentIndex(1)
-        form.addRow(tr("order_priority_label"), self.cmb_priority)
+        _row(tr("order_priority_label"), self.cmb_priority)
 
-        self.inp_due_date = QDateEdit()
+        self.inp_due_date = ThemedDateEdit()
         self.inp_due_date.setCalendarPopup(True)
         self.inp_due_date.setDate(QDate.currentDate().addDays(ORDER_FORM_DUE_DATE_DEFAULT))
         self.inp_due_date.setDisplayFormat("yyyy-MM-dd")
-        form.addRow(tr("order_due_date_label"), self.inp_due_date)
+        _row(tr("order_due_date_label"), self.inp_due_date)
 
         self.sp_discount = QDoubleSpinBox()
         self.sp_discount.setRange(0, ORDER_FORM_DISCOUNT_MAX)
         self.sp_discount.setDecimals(2)
         self.sp_discount.setSuffix(f" {tr('currency_sym')}")
-        form.addRow(tr("order_discount_total"), self.sp_discount)
+        _row(tr("order_discount_total"), self.sp_discount)
 
         self.sp_paid = QDoubleSpinBox()
         self.sp_paid.setRange(0, ORDER_FORM_PAID_MAX)
         self.sp_paid.setDecimals(2)
         self.sp_paid.setSuffix(f" {tr('currency_sym')}")
-        form.addRow(tr("order_paid_amount"), self.sp_paid)
+        _row(tr("order_paid_amount"), self.sp_paid)
         root.addWidget(order_grp)
 
     def _build_items_section(self, root):
@@ -256,7 +290,7 @@ class _OrderForm(QDialog):
         self._rows_layout.setContentsMargins(*ORDER_FORM_ROWS_MARGIN)
         items_lay.addWidget(self._rows_container)
 
-        total_bar = QFrame()
+        total_bar = ThemedFrame()
         total_bar.setStyleSheet(f"""
             QFrame {{
                 background: {_C['accent_light']};
@@ -298,13 +332,13 @@ class _OrderForm(QDialog):
         n_lay = QVBoxLayout(notes_grp)
         n_lay.setSpacing(ORDER_FORM_NOTES_SPACING)
 
-        self.inp_notes = QTextEdit()
+        self.inp_notes = ThemedTextEdit()
         self.inp_notes.setPlaceholderText(tr("order_customer_notes"))
         self.inp_notes.setMaximumHeight(ORDER_FORM_NOTES_MAX_H)
         n_lay.addWidget(QLabel(tr("order_customer_notes")))
         n_lay.addWidget(self.inp_notes)
 
-        self.inp_internal = QTextEdit()
+        self.inp_internal = ThemedTextEdit()
         self.inp_internal.setPlaceholderText(tr("order_internal_notes"))
         self.inp_internal.setMaximumHeight(ORDER_FORM_NOTES_MAX_H)
         n_lay.addWidget(QLabel(tr("order_internal_notes_lbl")))
@@ -386,7 +420,7 @@ class _OrderForm(QDialog):
                         cmb.blockSignals(True)
                         cmb.setCurrentIndex(i)
                         cmb.blockSignals(False)
-                        for p in _ItemRowWidget._get_products():
+                        for p in row._get_products():
                             if p["id"] == pid:
                                 row._unit_price = p.get("price") or 0.0
                                 row.lbl_price.setText(f"{row._unit_price:.2f} {tr('currency_sym')}")

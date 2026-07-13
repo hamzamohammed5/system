@@ -5,11 +5,11 @@ _BomScenariosPanel — لوحة إدارة سيناريوهات BOM.
 """
 
 from PyQt5.QtWidgets import (
-    QFrame, QHBoxLayout, QLabel, QPushButton,
+    QHBoxLayout, QLabel, QPushButton,
     QMessageBox, QInputDialog,
 )
 from PyQt5.QtCore import Qt, pyqtSignal
-from ui.widgets.panels.themed_inputs import ThemedComboBox
+from ui.widgets.panels.themed_inputs import ThemedComboBox, ThemedFrame
 
 from ui.theme import _C
 from ui.widgets.core.i18n import tr
@@ -30,7 +30,7 @@ from .bom_scenarios._memory_scenarios import MemoryScenariosMixin
 from .bom_scenarios._db_scenarios     import DbScenariosMixin
 
 
-class _BomScenariosPanel(QFrame, MemoryScenariosMixin, DbScenariosMixin, WidgetMixin):
+class _BomScenariosPanel(ThemedFrame, MemoryScenariosMixin, DbScenariosMixin, WidgetMixin):
     """
     لوحة أفقية تعرض السيناريوهات وتتيح التبديل بينها.
 
@@ -57,7 +57,7 @@ class _BomScenariosPanel(QFrame, MemoryScenariosMixin, DbScenariosMixin, WidgetM
     # ══════════════════════════════════════════════════════
 
     def _build(self):
-        self.setFrameShape(QFrame.StyledPanel)
+        self.setFrameShape(ThemedFrame.StyledPanel)
         self._apply_frame_style()
         self.setFixedHeight(SCENARIOS_PANEL_H)
 

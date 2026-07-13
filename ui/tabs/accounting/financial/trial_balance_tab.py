@@ -10,9 +10,10 @@ TrialBalanceTab — تبويب ميزان المراجعة.
 """
 
 from PyQt5.QtWidgets import (
-    QWidget, QVBoxLayout, QHBoxLayout, QFrame,
+    QWidget, QVBoxLayout, QHBoxLayout,
     QLabel, QTableWidgetItem,
 )
+from ui.widgets.panels.themed_inputs import ThemedFrame
 
 from services.accounting.statements_service import StatementsService
 from ui.widgets.core.events import bus
@@ -93,7 +94,7 @@ class TrialBalanceTab(SafeConnMixin, QWidget, WidgetMixin):
         self.table.setAlternatingRowColors(True)
         root.addWidget(self.table, stretch=1)
 
-        totals = QFrame()
+        totals = ThemedFrame()
         totals.setStyleSheet(
             f"QFrame {{ background:{_C['journal_header_bg']}; border:{INPUT_BORDER_W}px solid {_C['journal_header_border']};"
             f" border-radius:{FINANCIAL_FRAME_BORDER_RADIUS}px; }}"

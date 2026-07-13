@@ -9,10 +9,10 @@ ScenarioComparisonWidget — يقارن تكلفة السيناريو الافت
 
 from PyQt5.QtWidgets import (
     QWidget, QVBoxLayout, QHBoxLayout,
-    QLabel, QFrame,
+    QLabel,
 )
 from PyQt5.QtCore import Qt
-from ui.widgets.panels.themed_inputs import ThemedComboBox
+from ui.widgets.panels.themed_inputs import ThemedComboBox, ThemedFrame
 
 from models.costing               import calc_cost
 from services.costing.scenario_service import ScenarioService
@@ -30,7 +30,7 @@ from ui.constants import (
 )
 
 
-class ScenarioComparisonWidget(QFrame, WidgetMixin):
+class ScenarioComparisonWidget(ThemedFrame, WidgetMixin):
     """
     يقارن السيناريو الافتراضي بسيناريو مختار ويعرض:
       - التكلفة في كل سيناريو

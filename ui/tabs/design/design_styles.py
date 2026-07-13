@@ -21,36 +21,133 @@ class _Styles:
     """
     كائن يحمل أحجام الخطوط الحالية ويولّد stylesheet strings.
     الألوان مأخوذة من app_settings._C للتناسق الكامل.
-    """
 
-    # ── Palette من app_settings ──────────────────────────
-    BG          = APP_COLORS["bg_input"]
-    BG_SURFACE  = APP_COLORS["bg_surface"]
-    BG_HOVER    = APP_COLORS["bg_hover"]
-    BORDER      = APP_COLORS["border"]
-    BORDER_MED  = APP_COLORS["border_med"]
-    TEXT_PRI    = APP_COLORS["text_primary"]
-    TEXT_SEC    = APP_COLORS["text_sec"]
-    TEXT_MUT    = APP_COLORS["text_muted"]
-    ACCENT      = APP_COLORS["accent"]
-    ACCENT_LT   = APP_COLORS["accent_light"]
-    ACCENT_BDR  = APP_COLORS["accent_mid"]
-    ACCENT_DARK = APP_COLORS["accent_hover"]
-    ACCENT_TEXT = APP_COLORS["accent_text"]
-    BTN_PRIMARY_TEXT = APP_COLORS["btn_primary_text"]
-    SUCCESS     = APP_COLORS["success"]
-    SUCCESS_LT  = APP_COLORS["success_bg"]
-    SUCCESS_BDR = APP_COLORS["success_border"]
-    SUCCESS_HOVER_BG = APP_COLORS["success_hover_bg"]
-    DANGER      = APP_COLORS["danger"]
-    DANGER_LT   = APP_COLORS["danger_bg"]
-    DANGER_BDR  = APP_COLORS["danger_border"]
-    DANGER_HOVER_BG = APP_COLORS["danger_hover_bg"]
-    WARNING     = APP_COLORS["warning"]
+    [إصلاح dark-theme] كانت الألوان (BG, BORDER, ACCENT, ...) معرّفة
+    كـ class attributes بتتقيم مرة واحدة بس وقت تعريف الكلاس (وقت أول
+    import للملف) — يعني بتتجمد على قيمة الثيم اللي كان شغال وقتها
+    للأبد. أي theme_manager.set_theme() لاحق في نفس الجلسة كان بيتجاهل
+    الألوان دي تمامًا، لأنها مش property بتتقرأ من _C كل مرة. الحل:
+    تحويلها لـ @property تقرأ من ui.theme._C الحية في كل استدعاء.
+    """
 
     RADIUS    = f"{STYLES_RADIUS_LG}px"
     RADIUS_SM = f"{STYLES_RADIUS_SM}px"
     RADIUS_XS = f"{STYLES_RADIUS_XS}px"
+
+    @property
+    def BG(self):
+        from ui.theme import _C
+        return _C["bg_input"]
+
+    @property
+    def BG_SURFACE(self):
+        from ui.theme import _C
+        return _C["bg_surface"]
+
+    @property
+    def BG_HOVER(self):
+        from ui.theme import _C
+        return _C["bg_hover"]
+
+    @property
+    def BORDER(self):
+        from ui.theme import _C
+        return _C["border"]
+
+    @property
+    def BORDER_MED(self):
+        from ui.theme import _C
+        return _C["border_med"]
+
+    @property
+    def TEXT_PRI(self):
+        from ui.theme import _C
+        return _C["text_primary"]
+
+    @property
+    def TEXT_SEC(self):
+        from ui.theme import _C
+        return _C["text_sec"]
+
+    @property
+    def TEXT_MUT(self):
+        from ui.theme import _C
+        return _C["text_muted"]
+
+    @property
+    def ACCENT(self):
+        from ui.theme import _C
+        return _C["accent"]
+
+    @property
+    def ACCENT_LT(self):
+        from ui.theme import _C
+        return _C["accent_light"]
+
+    @property
+    def ACCENT_BDR(self):
+        from ui.theme import _C
+        return _C["accent_mid"]
+
+    @property
+    def ACCENT_DARK(self):
+        from ui.theme import _C
+        return _C["accent_hover"]
+
+    @property
+    def ACCENT_TEXT(self):
+        from ui.theme import _C
+        return _C["accent_text"]
+
+    @property
+    def BTN_PRIMARY_TEXT(self):
+        from ui.theme import _C
+        return _C["btn_primary_text"]
+
+    @property
+    def SUCCESS(self):
+        from ui.theme import _C
+        return _C["success"]
+
+    @property
+    def SUCCESS_LT(self):
+        from ui.theme import _C
+        return _C["success_bg"]
+
+    @property
+    def SUCCESS_BDR(self):
+        from ui.theme import _C
+        return _C["success_border"]
+
+    @property
+    def SUCCESS_HOVER_BG(self):
+        from ui.theme import _C
+        return _C["success_hover_bg"]
+
+    @property
+    def DANGER(self):
+        from ui.theme import _C
+        return _C["danger"]
+
+    @property
+    def DANGER_LT(self):
+        from ui.theme import _C
+        return _C["danger_bg"]
+
+    @property
+    def DANGER_BDR(self):
+        from ui.theme import _C
+        return _C["danger_border"]
+
+    @property
+    def DANGER_HOVER_BG(self):
+        from ui.theme import _C
+        return _C["danger_hover_bg"]
+
+    @property
+    def WARNING(self):
+        from ui.theme import _C
+        return _C["warning"]
 
     def __init__(self, base: int):
         self.base   = base

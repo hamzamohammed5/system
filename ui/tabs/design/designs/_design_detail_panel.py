@@ -8,12 +8,12 @@ ui/tabs/design/designs/_design_detail_panel.py
 from PyQt5.QtWidgets import (
     QWidget, QVBoxLayout, QHBoxLayout,
     QPushButton, QLabel,
-    QMessageBox, QFrame,
+    QMessageBox,
     QScrollArea, QDialog,
 )
 from PyQt5.QtCore import Qt, pyqtSignal
 from PyQt5.QtGui import QFont
-from ui.widgets.panels.themed_inputs import ThemedLineEdit, ThemedComboBox
+from ui.widgets.panels.themed_inputs import ThemedLineEdit, ThemedComboBox, ThemedFrame
 
 from services.design import get_design_service, get_design_size_service
 from ._size_card   import _SizeCard
@@ -135,7 +135,7 @@ class _DesignDetailPanel(QWidget, WidgetMixin):
         self._field_labels = []   # نحتفظ بمراجع لتحديثها لاحقاً
 
         # ── Header ──────────────────────────────────────
-        hdr = QFrame()
+        hdr = ThemedFrame()
         self._hdr = hdr   # [إصلاح dark-theme]
         hdr.setStyleSheet(f"QFrame {{ background:{_C['bg_input']}; border-bottom:{INPUT_BORDER_W}px solid {_C['border']}; }}")
         hdr_lay = QVBoxLayout(hdr)
@@ -220,7 +220,7 @@ class _DesignDetailPanel(QWidget, WidgetMixin):
         root.addWidget(hdr)
 
         # ── قسم المقاسات ────────────────────────────────
-        sizes_hdr = QFrame()
+        sizes_hdr = ThemedFrame()
         self._sizes_hdr = sizes_hdr   # [إصلاح dark-theme]
         sizes_hdr.setStyleSheet(
             f"QFrame {{ background:{_C['bg_surface']}; border-bottom:{INPUT_BORDER_W}px solid {_C['border']}; }}"
@@ -274,7 +274,7 @@ class _DesignDetailPanel(QWidget, WidgetMixin):
         root.addWidget(self._sizes_scroll, stretch=1)
 
         # Empty state
-        self._empty_sizes = QFrame()
+        self._empty_sizes = ThemedFrame()
         self._empty_sizes.setStyleSheet("background:transparent; border:none;")
         es_lay = QVBoxLayout(self._empty_sizes)
         es_lay.setAlignment(Qt.AlignCenter)

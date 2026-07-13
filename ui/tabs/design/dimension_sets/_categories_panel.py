@@ -72,6 +72,11 @@ class _CategoriesPanel(QWidget, WidgetMixin):
         """)
         self.lbl_mode.setStyleSheet(f"font-weight: bold; color: {_C['accent']};")
         self._update_color_preview()
+        # [إصلاح dark-theme] زرار "حذف" (btn_del_cat) مبني بـ make_btn()
+        # وبياخد الستايل وقت الإنشاء بس — نفس مشكلة btn_del_set في
+        # _groups_panel.py. لازم إعادة التطبيق هنا عشان يتحدث مع الثيم.
+        from ui.widgets.components.button import refresh_visible_buttons
+        refresh_visible_buttons(self)
 
     def _build(self):
         root = QVBoxLayout(self)

@@ -62,7 +62,6 @@ def fetch_all_accounts_basic(conn, acc_type: str = None):
             ORDER BY a.code
         """).fetchall()
     except Exception as e:
-        print(f"[accounting_accounts_repo] fetch_all_accounts_basic error: {e}")
         return []
 
 
@@ -115,7 +114,6 @@ def fetch_all_accounts_with_balance(conn, acc_type: str = None):
             ORDER BY a.code
         """).fetchall()
     except Exception as e:
-        print(f"[accounting_accounts_repo] fetch_all_accounts_with_balance error: {e}")
         return []
 
 
@@ -175,7 +173,6 @@ def fetch_leaf_accounts(conn, acc_type: str = None):
             ORDER BY code
         """).fetchall()
     except Exception as e:
-        print(f"[accounting_accounts_repo] fetch_leaf_accounts error: {e}")
         return []
 
 
@@ -293,7 +290,6 @@ def fetch_all_groups(conn, acc_type: str = None):
             """).fetchall()
         return _sort_groups_parents_first(rows)
     except Exception as e:
-        print(f"[accounting_accounts_repo] fetch_all_groups error: {e}")
         return []
 
 

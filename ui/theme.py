@@ -103,6 +103,32 @@ def apply_theme(theme_colors: dict, app: QApplication = None):
         from ui.font import get_font_size
         _app.setStyleSheet(build_stylesheet(get_font_size()))
 
+        # [إصلاح ثيم — مركزي] QApplication.setStyleSheet() فوق بيحدّث الـ
+        # stylesheet العام، لكن أي QTableWidget بُني بستايل محلي مباشر
+        # عليه (self.table.setStyleSheet(table_style())) — زي كل الجداول
+        # المبنية عبر make_table/make_splitter_table/... في tables.py —
+        # الستايل المحلي ده بياخد أولوية على الستايل العام في Qt ومش
+        # بيتحدّث تلقائياً مع QApplication.setStyleSheet().
+        #
+        # فبالتالي لو widget معيّن (زي أي panel فيه أكتر من جدول واحد،
+        # مثال: CustomerDetailPanel وفيها self.table + self.contacts_table
+        # + self.orders_table) مالوش _refresh_style() بيعيد ضبط *كل*
+        # الجداول بتاعته بنفسه، الجداول الإضافية دي بتفضل بستايل الثيم
+        # القديم — وده سبب "الصف الفاتح" اللي بيفضل ظاهر بعد التحويل لـ dark.
+        #
+        # الحل: بدل ما نعتمد إن كل widget يتذكر يعمل كده بنفسه، بعد كل
+        # apply_theme() ندور مركزياً على كل النوافذ المفتوحة فعلياً
+        # ونعيد تطبيق table_style() على كل جدول فيها دفعة واحدة.
+        try:
+            from ui.widgets.tables.tables import refresh_table_styles
+            for _win in _app.topLevelWidgets():
+                try:
+                    refresh_table_styles(_win)
+                except RuntimeError:
+                    pass
+        except Exception:
+            pass
+
 
 def get_theme_color(key: str, fallback: str = "#000000") -> str:
     """يرجع لون من _C بأمان مع fallback."""

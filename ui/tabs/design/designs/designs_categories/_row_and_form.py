@@ -7,11 +7,11 @@ ui/tabs/design/designs/designs_categories/_row_and_form.py
 from PyQt5.QtWidgets import (
     QWidget, QVBoxLayout, QHBoxLayout,
     QPushButton, QLabel,
-    QColorDialog, QMessageBox, QFrame,
+    QColorDialog, QMessageBox,
 )
 from PyQt5.QtCore import Qt, pyqtSignal
 from PyQt5.QtGui import QColor, QFont
-from ui.widgets.panels.themed_inputs import ThemedLineEdit, ThemedComboBox
+from ui.widgets.panels.themed_inputs import ThemedLineEdit, ThemedComboBox, ThemedFrame
 
 from services.design import get_design_service
 from ui.widgets.core.widget_mixin import WidgetMixin
@@ -46,7 +46,7 @@ def _btn_ss(bg, fg, bdr, hover_bg, height=CAT_FORM_BTN_DEFAULT_H):
 # عنصر تصنيف واحد
 # ══════════════════════════════════════════════════════════
 
-class _CatRow(QFrame, WidgetMixin):
+class _CatRow(ThemedFrame, WidgetMixin):
     clicked = pyqtSignal(object)
 
     def __init__(self, cat_id, name, color, count=0, depth=0, parent=None):
@@ -65,7 +65,7 @@ class _CatRow(QFrame, WidgetMixin):
 
         # خط ربط للعناصر الفرعية
         if depth > 0:
-            indent_line = QFrame()
+            indent_line = ThemedFrame()
             indent_line.setFixedWidth(CAT_ROW_INDENT_LINE_W)
             indent_line.setFixedHeight(CAT_ROW_INDENT_LINE_H)
             lay.addWidget(indent_line)
@@ -216,7 +216,7 @@ class _CatForm(QWidget, WidgetMixin):
 
         self._lbl_c = QLabel(tr("design_cats_color_label"))
 
-        self._color_preview = QFrame()
+        self._color_preview = ThemedFrame()
         self._color_preview.setFixedSize(CAT_FORM_COLOR_PREVIEW_SIZE, CAT_FORM_COLOR_PREVIEW_SIZE)
 
         self._btn_c = QPushButton(tr("design_cats_pick_color_btn"))
@@ -230,8 +230,8 @@ class _CatForm(QWidget, WidgetMixin):
         lay.addLayout(crow)
 
         # أزرار
-        sep = QFrame()
-        sep.setFrameShape(QFrame.HLine)
+        sep = ThemedFrame()
+        sep.setFrameShape(ThemedFrame.HLine)
         lay.addWidget(sep)
 
         brow = QHBoxLayout()

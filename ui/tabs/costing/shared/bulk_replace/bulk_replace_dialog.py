@@ -29,9 +29,11 @@ ui/tabs/costing/shared/bulk_replace/bulk_replace_dialog.py
 
 from PyQt5.QtWidgets import (
     QDialog, QVBoxLayout, QHBoxLayout,
-    QLabel, QPushButton, QFrame, QMessageBox,
+    QLabel, QPushButton, QMessageBox,
 )
 from PyQt5.QtCore import Qt
+
+from ui.widgets.panels.themed_inputs import ThemedFrame
 
 from services.costing.bulk_replace_service import BulkReplaceService
 from ui.widgets.core.events import bus, emit_company_data_changed
@@ -82,7 +84,7 @@ class BulkReplaceDialog(QDialog, WidgetMixin):
 
         root.addWidget(self._build_header())
 
-        body = QFrame()
+        body = ThemedFrame()
         body.setStyleSheet(f"background: {_C['bg_page']};")
         body_lay = QVBoxLayout(body)
         body_lay.setContentsMargins(
@@ -104,8 +106,8 @@ class BulkReplaceDialog(QDialog, WidgetMixin):
 
         self._update_apply_btn_state()
 
-    def _build_header(self) -> QFrame:
-        header = QFrame()
+    def _build_header(self) -> ThemedFrame:
+        header = ThemedFrame()
         header.setStyleSheet(f"""
             QFrame {{
                 background: qlineargradient(x1:0, y1:0, x2:1, y2:0,

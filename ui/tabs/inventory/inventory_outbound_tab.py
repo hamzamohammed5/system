@@ -10,10 +10,10 @@ ui/tabs/inventory/inventory_outbound_tab.py
 from PyQt5.QtWidgets import (
     QWidget, QVBoxLayout, QFormLayout, QGroupBox,
     QLabel, QPushButton, QDoubleSpinBox,
-    QDateEdit, QTableWidgetItem, QMessageBox,
+    QTableWidgetItem, QMessageBox,
 )
 from PyQt5.QtCore import Qt, QDate
-from ui.widgets.panels.themed_inputs import ThemedLineEdit, ThemedComboBox
+from ui.widgets.panels.themed_inputs import ThemedLineEdit, ThemedComboBox, ThemedDateEdit
 
 from services.inventory.inventory_service import InventoryService
 
@@ -101,7 +101,7 @@ class _OutboundTab(QWidget, WidgetMixin):
 
         self.lbl_available = QLabel(tr("inventory_available_none"))
 
-        self.dt_date = QDateEdit(QDate.currentDate())
+        self.dt_date = ThemedDateEdit(QDate.currentDate())
         self.dt_date.setCalendarPopup(True)
         self.dt_date.setDisplayFormat("yyyy-MM-dd")
         self.dt_date.setFixedWidth(INVENTORY_DATE_W)

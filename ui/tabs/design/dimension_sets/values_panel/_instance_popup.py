@@ -7,11 +7,11 @@ ui/tabs/design/dimension_sets/values_panel/_instance_popup.py
 from PyQt5.QtWidgets import (
     QWidget, QVBoxLayout, QHBoxLayout,
     QPushButton, QLabel, QDoubleSpinBox,
-    QMessageBox, QScrollArea, QFrame, QDialog,
+    QMessageBox, QScrollArea, QDialog,
     QToolButton, QGridLayout,
 )
 from PyQt5.QtCore import Qt, pyqtSignal
-from ui.widgets.panels.themed_inputs import ThemedLineEdit, ThemedComboBox
+from ui.widgets.panels.themed_inputs import ThemedLineEdit, ThemedComboBox, ThemedFrame
 
 from ui.theme import _C
 from ui.widgets.core.i18n import tr
@@ -133,8 +133,8 @@ class _InstancePopup(QDialog, WidgetMixin):
         root.addLayout(name_row)
 
         # ── فاصل ──
-        sep = QFrame()
-        sep.setFrameShape(QFrame.HLine)
+        sep = ThemedFrame()
+        sep.setFrameShape(ThemedFrame.HLine)
         sep.setStyleSheet(f"color: {_C['border']};")
         root.addWidget(sep)
 

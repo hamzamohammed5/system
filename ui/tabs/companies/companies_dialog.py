@@ -4,13 +4,13 @@ ui/tabs/companies/companies_dialog.py
 
 from PyQt5.QtWidgets import (
     QDialog, QVBoxLayout, QHBoxLayout, QSplitter,
-    QLabel, QPushButton, QTextEdit,
+    QLabel, QPushButton,
     QTableWidget, QTableWidgetItem, QHeaderView,
-    QColorDialog, QWidget, QFrame,
+    QColorDialog, QWidget,
 )
 from PyQt5.QtCore import Qt
 from PyQt5.QtGui  import QColor
-from ui.widgets.panels.themed_inputs import ThemedLineEdit
+from ui.widgets.panels.themed_inputs import ThemedLineEdit, ThemedFrame, ThemedTextEdit
 
 from services.companies.company_service import CompanyService
 from ui.theme import _C
@@ -134,8 +134,8 @@ class CompaniesDialog(QDialog, WidgetMixin):
         self._form_title = QLabel(tr("company_new_title"))
         lay.addWidget(self._form_title)
 
-        self._sep = QFrame()
-        self._sep.setFrameShape(QFrame.HLine)
+        self._sep = ThemedFrame()
+        self._sep.setFrameShape(ThemedFrame.HLine)
         self._sep.setFixedHeight(SEPARATOR_LINE_H)
         lay.addWidget(self._sep)
 
@@ -168,7 +168,7 @@ class CompaniesDialog(QDialog, WidgetMixin):
 
         self._notes_lbl = QLabel(tr("company_notes_label"))
         lay.addWidget(self._notes_lbl)
-        self._inp_notes = QTextEdit()
+        self._inp_notes = ThemedTextEdit()
         self._inp_notes.setMaximumHeight(COMPANIES_DLG_NOTES_MAX_H)
         lay.addWidget(self._inp_notes)
 

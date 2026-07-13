@@ -9,7 +9,7 @@ _StateWidgets — widgets حالة الانتظار والخطأ لـ Accounting
   - make_error_widget دالة واحدة بدل make_conn_error_widget + make_init_failed_widget.
 """
 
-from PyQt5.QtWidgets import QLabel, QFrame, QVBoxLayout
+from PyQt5.QtWidgets import QLabel
 from PyQt5.QtCore import Qt
 
 from ui.widgets.panels.state import EmptyState

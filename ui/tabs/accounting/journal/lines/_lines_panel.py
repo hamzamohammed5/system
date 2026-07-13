@@ -9,10 +9,11 @@ _LinesPanel — لوحة صفوف القيد كاملة مع scroll وإضافة
 """
 
 from PyQt5.QtWidgets import (
-    QFrame, QVBoxLayout, QHBoxLayout,
+    QVBoxLayout, QHBoxLayout,
     QLabel, QPushButton, QScrollArea,
     QMessageBox,
 )
+from ui.widgets.panels.themed_inputs import ThemedFrame
 
 from ui.widgets.core.conn import DualConnMixin
 from ui.widgets.core.widget_mixin import WidgetMixin
@@ -49,7 +50,7 @@ from ui.constants import (
 from ._smart_line import _SmartLine
 
 
-class _LinesPanel(DualConnMixin, QFrame, WidgetMixin):
+class _LinesPanel(DualConnMixin, ThemedFrame, WidgetMixin):
     """لوحة صفوف القيد: رأس DR/CR + scroll + زر إضافة."""
 
     def __init__(self, conn, erp_conn, on_balance_changed, parent=None):
@@ -73,7 +74,7 @@ class _LinesPanel(DualConnMixin, QFrame, WidgetMixin):
         root.setSpacing(0)
 
         # رأس
-        self._hdr = QFrame()
+        self._hdr = ThemedFrame()
         self._hdr.setFixedHeight(LINES_PANEL_HDR_H)
         hl = QHBoxLayout(self._hdr)
         hl.setContentsMargins(LINES_PANEL_HDR_MARGIN_H, LINES_PANEL_HDR_MARGIN_V,
@@ -90,7 +91,7 @@ class _LinesPanel(DualConnMixin, QFrame, WidgetMixin):
         root.addWidget(self._hdr)
 
         # رؤوس الأعمدة
-        self._col_hdr = QFrame()
+        self._col_hdr = ThemedFrame()
         ch_lay = QHBoxLayout(self._col_hdr)
         ch_lay.setContentsMargins(LINES_PANEL_COL_HDR_MARGIN_L, LINES_PANEL_COL_HDR_MARGIN_V,
                                   LINES_PANEL_COL_HDR_MARGIN_R, LINES_PANEL_COL_HDR_MARGIN_V)
@@ -113,7 +114,7 @@ class _LinesPanel(DualConnMixin, QFrame, WidgetMixin):
         root.addWidget(self._col_hdr)
 
         # منطقة الصفوف
-        self._rows_w   = QFrame()
+        self._rows_w   = ThemedFrame()
         self._rows_lay = QVBoxLayout(self._rows_w)
         self._rows_lay.setSpacing(LINES_PANEL_ROWS_SPACING)
         self._rows_lay.setContentsMargins(LINES_PANEL_ROWS_MARGIN, LINES_PANEL_ROWS_MARGIN,

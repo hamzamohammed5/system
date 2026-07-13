@@ -11,11 +11,13 @@ _TAccountPanel — لوحة حساب T في دفتر الأستاذ.
 
 from PyQt5.QtWidgets import (
     QWidget, QVBoxLayout, QHBoxLayout,
-    QFrame, QLabel, QTableWidget, QTableWidgetItem,
+    QLabel, QTableWidget, QTableWidgetItem,
     QHeaderView, QAbstractItemView,
 )
 from PyQt5.QtCore import Qt
 from PyQt5.QtGui  import QColor, QFont
+
+from ui.widgets.panels.themed_inputs import ThemedFrame
 
 from services.accounting.journal_service import JournalService
 from services.accounting.accounts_service import AccountsService
@@ -115,7 +117,7 @@ class _TAccountPanel(QWidget, WidgetMixin):
         self._filter.reset = _reset_and_apply
         root.addWidget(self._filter)
 
-        self._t_frame = QFrame()
+        self._t_frame = ThemedFrame()
         self._t_frame.setStyleSheet(f"""
             QFrame {{
                 background: {_C['bg_surface']};
@@ -152,8 +154,8 @@ class _TAccountPanel(QWidget, WidgetMixin):
         """)
         dr_lay.addWidget(self.lbl_dr_total)
 
-        self._sep = QFrame()
-        self._sep.setFrameShape(QFrame.VLine)
+        self._sep = ThemedFrame()
+        self._sep.setFrameShape(ThemedFrame.VLine)
         self._sep.setStyleSheet(f"color: {_C['acc_type_asset']}; background: {_C['t_account_frame']};")
         self._sep.setFixedWidth(T_ACCOUNT_SEP_W)
 

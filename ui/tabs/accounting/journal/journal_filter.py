@@ -10,11 +10,11 @@ _JournalFilterBar — شريط فلاتر القيود المحاسبية.
 """
 
 from PyQt5.QtWidgets import (
-    QFrame, QVBoxLayout, QHBoxLayout,
+    QVBoxLayout, QHBoxLayout,
     QLabel, QPushButton,
 )
 from PyQt5.QtCore import Qt, QDate, QTimer, pyqtSignal
-from ui.widgets.panels.themed_inputs import ThemedLineEdit, ThemedComboBox
+from ui.widgets.panels.themed_inputs import ThemedLineEdit, ThemedComboBox, ThemedFrame
 
 from ui.widgets.core.conn import SafeConnMixin
 from ui.widgets.utils.date_range import DateRangeFilter
@@ -49,7 +49,7 @@ from ui.constants import (
 from .group_combo._tree_group_combo import _TreeGroupCombo
 
 
-class _JournalFilterBar(SafeConnMixin, QFrame, WidgetMixin):
+class _JournalFilterBar(SafeConnMixin, ThemedFrame, WidgetMixin):
     """شريط فلاتر متكامل لجدول القيود — بفلتر تصنيفات شجري."""
 
     # signal يُطلق بعد إعادة بناء _TreeGroupCombo عند تغيير الشركة
