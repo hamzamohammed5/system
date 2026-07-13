@@ -5,11 +5,11 @@ _OfferItemRow — صف منتج واحد داخل فورم العرض.
 """
 
 from PyQt5.QtWidgets import (
-    QFrame, QHBoxLayout, QLabel,
+    QHBoxLayout, QLabel,
     QPushButton, QDoubleSpinBox,
 )
 from PyQt5.QtCore import Qt
-from ui.widgets.panels.themed_inputs import ThemedLineEdit, ThemedComboBox
+from ui.widgets.panels.themed_inputs import ThemedLineEdit, ThemedComboBox, ThemedFrame
 
 from services.pricing.offers_service import (
     get_offer_candidate_items, get_priced_ids,
@@ -38,7 +38,7 @@ def _spin(max_=999999, dec=2):
     return s
 
 
-class _OfferItemRow(QFrame, WidgetMixin):
+class _OfferItemRow(ThemedFrame, WidgetMixin):
     """صف منتج واحد داخل فورم العرض."""
 
     def __init__(self, conn, on_remove, on_change, parent=None):

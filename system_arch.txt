@@ -1,5 +1,5 @@
 File Tree Snapshot
-Generated : 2026-07-12 09:50:07
+Generated : 2026-07-13 11:23:54
 Source    : D:\My Workspace\Hg\Alhabaar\accountant\system
 Extensions: .md, .py
 ────────────────────────────────────────────────────────────
@@ -85,6 +85,10 @@ system/
 │   ├── costing.py
 │   ├── costing_base.py
 │   └── costing_ops.py
+├── prompts/
+│   ├── code_reference_sync.md
+│   ├── prompt_توحيد_الجداول.md
+│   └── widgit_mixin_tr_C_refactory.md
 ├── services/
 │   ├── accounting/
 │   │   ├── accounts_service.py
@@ -453,7 +457,5 @@ system/
 │   ├── main_window.py
 │   ├── theme.py
 │   └── theme_manager.py
-├── code_reference_sync.md
 ├── main.py
 ├── README.md
-├── refactory.md

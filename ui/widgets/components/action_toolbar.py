@@ -4,7 +4,10 @@ ui/widgets/components/action_toolbar.py
 ActionToolbar — شريط أزرار بـ FlowLayout.
 نسخة refactored من panles_helper/action_toolbar.py
 """
-from PyQt5.QtWidgets import QWidget, QFrame, QPushButton, QSizePolicy
+from PyQt5.QtWidgets import QWidget, QPushButton, QSizePolicy
+
+from ui.widgets.panels.themed_inputs import ThemedFrame
+from ui.widgets.core.widget_mixin import WidgetMixin
 
 from .button            import make_btn
 from ..theme.builders   import v_divider
@@ -12,9 +15,21 @@ from ..utils.flow_layout import FlowLayout
 from ui.constants import SPACING_XS, ACTION_TOOLBAR_FLOW_V_SPACING, ACTION_TOOLBAR_MARGIN_V, ACTION_TOOLBAR_DEFAULT_SPACING
 
 
-class ActionToolbar(QWidget):
+class ActionToolbar(QWidget, WidgetMixin):
     """
     شريط أزرار أفقي بـ FlowLayout — الأزرار تنزل لسطر تاني تلقائياً.
+
+    [إصلاح ثيم] الكلاس كان QWidget عادي من غير WidgetMixin — يعني مالوش
+    أي اشتراك في bus.theme_changed خالص. الخلفية "transparent" كانت
+    بتتحط مرة واحدة بس وقت _build() وتفضل كده، وده سليم من ناحية اللون
+    نفسه، لكن الأزرار المضافة عبر add_action()/add_danger() (make_btn)
+    كانت بتتبني *قبل* ما يبقى ليها parent فعلي جوه ActionToolbar، وكان
+    مفيش أي نداء refresh_visible_buttons() يضمن تحديثها بعد تغيير الثيم —
+    فكانت تفضل بستايل الثيم اللي كانت موجودة فيه وقت add_action().
+
+    الحل: نضيف WidgetMixin زي كل باقي widgets المشروع، مع _refresh_style()
+    بتعيد ضبط الخلفية الشفافة وتنادي refresh_visible_buttons() على كل
+    الأزرار الموجودة فعليًا جوه الـ toolbar.
 
     الاستخدام:
         toolbar = ActionToolbar(spacing=8)
@@ -28,15 +43,22 @@ class ActionToolbar(QWidget):
         self._spacing     = spacing
         self._normal_btns : list = []
         self._danger_btns : list[QPushButton] = []
-        self._group_seps  : list[QFrame] = []
-        self._inline_seps : list[QFrame] = []
+        self._group_seps  : list[ThemedFrame] = []
+        self._inline_seps : list[ThemedFrame] = []
         self._build()
+        self._init_widget_mixin(font=False, lang=False, data=False)
+        self._refresh_style()
 
     def _build(self):
         self.setStyleSheet("background:transparent;")
         self._flow = FlowLayout(self, h_spacing=self._spacing, v_spacing=ACTION_TOOLBAR_FLOW_V_SPACING)
         self._flow.setContentsMargins(0, ACTION_TOOLBAR_MARGIN_V, 0, ACTION_TOOLBAR_MARGIN_V)
         self.setLayout(self._flow)
+
+    def _refresh_style(self, *_):
+        self.setStyleSheet("background:transparent;")
+        from .button import refresh_visible_buttons
+        refresh_visible_buttons(self)
 
     # ── إضافة أزرار ───────────────────────────────────────
 
@@ -103,6 +125,13 @@ class ActionToolbar(QWidget):
             w.show()
 
         self.updateGeometry()
+        # [إصلاح ثيم] لو تم استدعاء add_action بعد تغيير الثيم مباشرة
+        # (مثلاً toolbar اتبنت lazy عبر DetailHeader._ensure_toolbar بعد
+        # أول theme_changed)، الأزرار الجديدة كانت بتاخد ستايل make_btn()
+        # وقت الإنشاء بس. هنا بنضمن كل الأزرار المرئية فعليًا متسقة مع
+        # الثيم الحالي فورًا.
+        from .button import refresh_visible_buttons
+        refresh_visible_buttons(self)
 
 
 class _SeparatorMarker:

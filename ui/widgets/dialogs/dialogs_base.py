@@ -16,9 +16,11 @@ ui/widgets/dialogs/dialogs_base.py
 
 from PyQt5.QtWidgets import (
     QDialog, QVBoxLayout, QHBoxLayout,
-    QLabel, QFrame, QWidget, QPushButton,
+    QLabel, QWidget, QPushButton,
 )
 from PyQt5.QtCore import Qt
+
+from ui.widgets.panels.themed_inputs import ThemedFrame
 
 from ui.theme import _C
 from ui.font  import get_font_size, fs
@@ -88,8 +90,8 @@ class DialogShell(QDialog, WidgetMixin):
         self._body_layout.setSpacing(SPACING_MD)
         root.addWidget(self._body, stretch=1)
 
-        self._sep = QFrame()
-        self._sep.setFrameShape(QFrame.HLine)
+        self._sep = ThemedFrame()
+        self._sep.setFrameShape(ThemedFrame.HLine)
         self._sep.setFixedHeight(1)
         root.addWidget(self._sep)
 
@@ -101,8 +103,8 @@ class DialogShell(QDialog, WidgetMixin):
         self._btn_layout.addStretch()
         root.addWidget(self._bar)
 
-    def _make_header(self, icon: str, title: str, subtitle: str) -> QFrame:
-        hdr = QFrame()
+    def _make_header(self, icon: str, title: str, subtitle: str) -> ThemedFrame:
+        hdr = ThemedFrame()
         hdr.setFixedHeight(DIALOG_HDR_H_WITH_SUB if subtitle else DIALOG_HDR_H)
 
         lay = QHBoxLayout(hdr)

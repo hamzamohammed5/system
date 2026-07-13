@@ -25,9 +25,9 @@ ui/widgets/components/component_row/ui.py
 
 from PyQt5.QtWidgets import (
     QWidget, QVBoxLayout, QHBoxLayout,
-    QPushButton, QSizePolicy, QLabel, QDoubleSpinBox, QFrame,
+    QPushButton, QSizePolicy, QLabel, QDoubleSpinBox,
 )
-from ui.widgets.panels.themed_inputs import ThemedLineEdit, ThemedComboBox
+from ui.widgets.panels.themed_inputs import ThemedLineEdit, ThemedComboBox, ThemedFrame
 
 from ui.theme import _C
 from ui.font  import fs, get_font_size
@@ -353,7 +353,7 @@ def _build_sub_row(widget, outer: QVBoxLayout):
     base = get_font_size()
     s_purple = _status_colors("purple")
 
-    widget._sub_row_widget = QFrame()
+    widget._sub_row_widget = ThemedFrame()
     widget._sub_row_widget.setStyleSheet(_sub_row_style())
 
     sub_layout = QHBoxLayout(widget._sub_row_widget)

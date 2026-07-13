@@ -8,11 +8,13 @@ SectionHeader + PageHeader + DetailHeader — هيدرات الصفحات وال
 """
 
 from PyQt5.QtWidgets import (
-    QWidget, QFrame, QHBoxLayout, QVBoxLayout,
+    QWidget, QHBoxLayout, QVBoxLayout,
     QLabel, QPushButton, QSizePolicy,
 )
 from PyQt5.QtCore import Qt
 from PyQt5.QtGui  import QFont
+
+from ui.widgets.panels.themed_inputs import ThemedFrame
 
 from ui.theme import _C
 from ui.font  import fs, get_font_size
@@ -88,7 +90,7 @@ class SectionHeader(QWidget, WidgetMixin):
 # PageHeader
 # ══════════════════════════════════════════════════════════
 
-class PageHeader(QFrame, WidgetMixin):
+class PageHeader(ThemedFrame, WidgetMixin):
     """هيدر صفحة رئيسية: أيقونة + عنوان + subtitle + أزرار."""
 
     def __init__(self, title: str = "", subtitle: str = "",
@@ -189,13 +191,26 @@ class PageHeader(QFrame, WidgetMixin):
 # DetailHeader
 # ══════════════════════════════════════════════════════════
 
-class DetailHeader(QFrame, WidgetMixin):
+class DetailHeader(ThemedFrame, WidgetMixin):
     """
     هيدر صفحة تفاصيل: عنوان + شارات + بطاقات إحصائية + toolbar أزرار.
     """
 
     def __init__(self, bg: str = None, parent=None):
         super().__init__(parent)
+        # [إصلاح ثيم — جذري] كان bg بيتحسب مرة واحدة في BaseDetailPanel._build()
+        # عبر (self.HEADER_BG or _C['bg_surface']) وقت الثيم الحالي وقتها،
+        # ثم يتبعت هنا كـ *قيمة نصية ثابتة* وتتخزن في self._custom_bg — فبتفضل
+        # جامدة (مثلاً "#FAFAF8") للأبد، حتى لو _C['bg_surface'] اتغيّر بعد
+        # كده. النتيجة: DetailHeader._refresh_style() كانت تُعاد استدعاؤها
+        # صح عند كل theme_changed، لكنها كانت تُعيد رسم *نفس* اللون القديم
+        # في كل مرة (تكتب فوق أي تصحيح خارجي كان BaseDetailPanel يحاول عمله).
+        #
+        # الحل الصحيح: DetailHeader نفسها تحتفظ فقط بلون *مخصص فعلي* (لو
+        # الـ subclass حدد HEADER_BG صراحة). لو مفيش تخصيص، بنسيب self._custom_bg
+        # = None وبنقرأ _C['bg_surface'] *وقت كل رسم* داخل _refresh_style —
+        # مش نسخة محسوبة مسبقًا. BaseDetailPanel._build() اتعدلت بالتوازي
+        # عشان تبعت bg=None (مش القيمة المحسوبة) لما HEADER_BG يكون None.
         self._custom_bg  = bg
         self._stat_cards = []
         self._toolbar    = None

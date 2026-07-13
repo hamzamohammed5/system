@@ -100,7 +100,19 @@ class BaseDetailPanel(QWidget, WidgetMixin):
 
     def _build(self):
         from ui.theme import _C
-        header_bg = self.HEADER_BG or _C['bg_surface']
+        # [إصلاح ثيم — جذري] كنا هنا بنحسب header_bg = self.HEADER_BG or
+        # _C['bg_surface'] ونبعتها كـ *قيمة نصية ثابتة* لـ DetailHeader —
+        # يعني لو HEADER_BG=None، DetailHeader كانت بتقفل على لون الثيم
+        # اللحظي وقت البناء (مثلاً "#FAFAF8" في الثيم الفاتح) للأبد، وكل
+        # تحديث لاحق لـ _C['bg_surface'] (بعد تبديل الثيم) ما كانش بيوصلها،
+        # لأن DetailHeader._refresh_style() كانت تُعيد رسم نفس القيمة
+        # الثابتة دي في كل مرة بدل قراءة _C الحيّة.
+        #
+        # الحل: لو مفيش HEADER_BG مخصص فعليًا من الـ subclass، نبعت bg=None
+        # صراحةً — وDetailHeader (بعد تعديلها في headers_page.py) بتتعامل
+        # مع None كـ "تابع لون الثيم دايمًا" وتقرأ _C['bg_surface'] وقت كل
+        # رسم فعلي، مش نسخة قديمة منه.
+        header_bg = self.HEADER_BG  # None لو مفيش تخصيص — يبقى ياخده DetailHeader كـ "تابع الثيم"
 
         root = QVBoxLayout(self)
         root.setContentsMargins(0, 0, 0, 0)
@@ -160,9 +172,40 @@ class BaseDetailPanel(QWidget, WidgetMixin):
                 if isinstance(child, QWidget) and child is not self._hdr:
                     child.setStyleSheet(f"background:{_bg};")
         # تحديث لون header عند تغيير الثيم (لو لم يُحدَّد HEADER_BG ثابت)
-        if self.HEADER_BG is None:
-            self._hdr.setStyleSheet(f"background:{_C['bg_surface']};")
-        # تحديث لون نص EmptyState — يُعاد بناؤها عند تغيير اللغة فقط
+        # [إصلاح ثيم] كان هنا كود بيكتب self._hdr.setStyleSheet(...) يدويًا
+        # كمحاولة تصحيح خارجي للون الهيدر — لكنه كان بيتضارب مع
+        # DetailHeader._refresh_style() الخاصة بيها (اللي بتتنفذ أيضًا عند
+        # نفس bus.theme_changed، بترتيب غير مضمون). بعد إصلاح DetailHeader
+        # نفسها لتقرأ _C['bg_surface'] الحيّة بدل نسخة ثابتة قديمة، التصحيح
+        # اليدوي هنا بقى غير لازم ومصدر تضارب — تمت إزالته.
+        # [إصلاح ثيم — dark bug] لوحظ إن DetailHeader (self._hdr) وأي
+        # QWidget شفاف جواه (زي top/cards_section/_tb_section اللي معمولة
+        # بـ setStyleSheet("background:transparent;") مرة واحدة وقت البناء)
+        # أحيانًا بتفضل بستايل الثيم القديم — تحديدًا لو الـ panel اتبنى
+        # وهو مش ظاهر فعليًا (تاب غير نشط)، فـ Qt بيأجل إعادة رسم بعض
+        # الـ QFrame المتداخلة (caching) لحد أول repaint كامل بعد الظهور.
+        # نفس المشكلة اللي وثّقناها في ThemedFrame.showEvent — لكن هنا
+        # عندنا شجرة widgets متداخلة مش frame واحدة.
+        #
+        # الحل: نجبر repolish فعلي (unpolish + polish) على self._hdr وكل
+        # أبناءه المباشرين المرئيين، عشان نضمن Qt يعيد تطبيق الـ QSS من
+        # الصفر بدل ما يعتمد على cache قديم.
+        self._force_repolish(self._hdr)
+
+    def _force_repolish(self, widget: QWidget):
+        """يجبر Qt يعيد تطبيق الـ stylesheet من الصفر (unpolish + polish)
+        على widget وكل أبناءه، بدل الاعتماد على إعادة رسم تلقائية قد
+        تستخدم نسخة قديمة (cached) من الستايل."""
+        if widget is None:
+            return
+        style = widget.style()
+        for w in [widget] + widget.findChildren(QWidget):
+            try:
+                style.unpolish(w)
+                style.polish(w)
+                w.update()
+            except RuntimeError:
+                pass
 
     def _refresh_lang(self, *_):
         translated = tr(self.EMPTY_TITLE)

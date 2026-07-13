@@ -3,8 +3,10 @@ ui/widgets/utils/date_range.py
 ================================
 DateRangeFilter — فلتر نطاق التاريخ الموحد.
 """
-from PyQt5.QtWidgets import QWidget, QHBoxLayout, QLabel, QDateEdit, QPushButton
+from PyQt5.QtWidgets import QWidget, QHBoxLayout, QLabel, QPushButton
 from PyQt5.QtCore    import QDate, pyqtSignal
+
+from ui.widgets.panels.themed_inputs import ThemedDateEdit
 
 from ui.constants import (
     DATE_RANGE_EDIT_W, DATE_RANGE_EDIT_H,
@@ -62,8 +64,8 @@ class DateRangeFilter(QWidget, WidgetMixin):
                 lay.addWidget(btn)
                 self._preset_btns.append(btn)
 
-    def _make_date_edit(self, default: QDate, width: int, height: int) -> QDateEdit:
-        d = QDateEdit()
+    def _make_date_edit(self, default: QDate, width: int, height: int) -> ThemedDateEdit:
+        d = ThemedDateEdit()
         d.setCalendarPopup(True)
         d.setDisplayFormat("yyyy-MM-dd")
         d.setDate(default)

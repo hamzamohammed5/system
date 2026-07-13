@@ -11,10 +11,12 @@ CardGrid + CollapsibleCard — Widgets تنظيم Layout.
         بـ absolute imports مباشرة.
 """
 from PyQt5.QtWidgets import (
-    QWidget, QFrame, QVBoxLayout, QGridLayout,
+    QWidget, QVBoxLayout, QGridLayout,
     QPushButton, QSizePolicy,
 )
 from PyQt5.QtCore import Qt, pyqtSignal
+
+from ui.widgets.panels.themed_inputs import ThemedFrame
 
 # [FIX] absolute imports — ثلاث نقاط كانت خاطئة تُسبب ImportError
 from ui.font  import fs, get_font_size
@@ -74,7 +76,7 @@ class CardGrid(QWidget):
 # CollapsibleCard
 # ══════════════════════════════════════════════════════════
 
-class CollapsibleCard(QFrame, WidgetMixin):
+class CollapsibleCard(ThemedFrame, WidgetMixin):
     """
     بطاقة قابلة للطي مع header زر ومحتوى قابل للإخفاء.
 

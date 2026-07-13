@@ -1,8 +1,10 @@
 """
 ui/tabs/orders/order_detail/_items_section.py
 """
-from PyQt5.QtWidgets import QFrame, QHBoxLayout
+from PyQt5.QtWidgets import QHBoxLayout
 from PyQt5.QtCore    import Qt
+
+from ui.widgets.panels.themed_inputs import ThemedFrame
 
 from ui.widgets.components.headers_page import SectionHeader
 from ui.widgets.panels.state import EmptyState
@@ -49,7 +51,7 @@ def _build_items_section(detail):
     detail._empty_items.action_clicked.connect(detail._add_item)
     detail._content_lay.addWidget(detail._empty_items)
 
-    item_toolbar = QFrame()
+    item_toolbar = ThemedFrame()
     item_toolbar.setStyleSheet("background:transparent;")
     itb_lay = QHBoxLayout(item_toolbar)
     itb_lay.setContentsMargins(0, 0, 0, 0)
@@ -89,7 +91,7 @@ def _fill_items(detail):
         name_item = make_item(item["item_name"], user_data=item["id"])
         bold_item(name_item)
         table.setItem(r, 0, name_item)
-        table.setItem(r, 1, make_item(item.get("description") or ""))
+        table.setItem(r, 1, make_item(item["description"] or ""))
         table.setItem(r, 2, make_item(f"{item['quantity']:g}", align=Qt.AlignCenter))
 
         unit_item = muted_item(make_item(item["unit"], align=Qt.AlignCenter))

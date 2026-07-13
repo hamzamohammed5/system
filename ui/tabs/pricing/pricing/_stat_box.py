@@ -18,15 +18,17 @@ ui/tabs/pricing/pricing/_stat_box.py
   offer_form.py, offer_details.py) شغالة من غير أي تعديل مطلوب فيها.
 """
 
-from PyQt5.QtWidgets import QFrame, QVBoxLayout, QLabel
+from PyQt5.QtWidgets import QVBoxLayout, QLabel
 from PyQt5.QtCore import Qt
+
+from ui.widgets.panels.themed_inputs import ThemedFrame
 
 from ui.constants import STAT_BOX_BORDER_RADIUS, STAT_BOX_BORDER_W, STAT_BOX_PADDING, STAT_INNER_MARGIN_COMPACT, STAT_CARD_SPACING_COMPACT
 from ui.widgets.core.i18n import tr
 from ui.widgets.core.widget_mixin import WidgetMixin
 
 
-class StatBoxFrame(QFrame, WidgetMixin):
+class StatBoxFrame(ThemedFrame, WidgetMixin):
     """
     بطاقة إحصائية بتتابع الثيم تلقائيًا.
 

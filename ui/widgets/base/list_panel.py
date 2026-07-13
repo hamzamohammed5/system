@@ -19,9 +19,11 @@ ui/widgets/base/list_panel.py — إصلاح refresh() double apply_filter
 """
 from PyQt5.QtWidgets import (
     QWidget, QVBoxLayout, QHBoxLayout, QLabel,
-    QPushButton, QSizePolicy, QFrame,
+    QPushButton, QSizePolicy,
 )
 from PyQt5.QtCore    import Qt, pyqtSignal, QTimer
+
+from ui.widgets.panels.themed_inputs import ThemedFrame
 
 from ui.constants    import (
     BTN_MIN_HEIGHT, SPACING_SM,
@@ -348,7 +350,7 @@ class BaseListPanel(QWidget, WidgetMixin):
     # ── [تحسين 51] Pagination bar ─────────────────────────
 
     def _build_pagination_bar(self) -> QWidget:
-        bar = QFrame()
+        bar = ThemedFrame()
         bar.setFixedHeight(PAGINATION_BAR_H)
 
         lay = QHBoxLayout(bar)

@@ -7,10 +7,10 @@ ui/widgets/utils/no_wheel.py
 from PyQt5.QtCore    import QEvent, QObject, Qt
 from PyQt5.QtWidgets import (
     QApplication, QSpinBox, QDoubleSpinBox,
-    QDateEdit, QTimeEdit, QSlider, QAbstractSpinBox,
+    QSlider, QAbstractSpinBox,
     QAbstractScrollArea,
 )
-from ui.widgets.panels.themed_inputs import ThemedComboBox
+from ui.widgets.panels.themed_inputs import ThemedComboBox, ThemedDateEdit
 
 _BLOCKED = (ThemedComboBox, QAbstractSpinBox, QSlider)
 
@@ -79,7 +79,7 @@ class NoWheelDouble(QDoubleSpinBox):
     def wheelEvent(self, e): e.ignore()
 
 
-class NoWheelDate(QDateEdit):
+class NoWheelDate(ThemedDateEdit):
     def wheelEvent(self, e): e.ignore()
 
 

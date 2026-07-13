@@ -7,7 +7,7 @@ from PyQt5.QtCore    import Qt, pyqtSignal
 from services.orders.order_service import OrderService
 from ui.widgets.base.list_panel import BaseListPanel
 from ui.widgets.tables.tables import (
-    make_item, colored_item, bold_item, muted_item, auto_fit_columns,
+    make_item, muted_item, auto_fit_columns,
 )
 from ui.widgets.core.i18n import tr
 from ui.theme import _C
@@ -49,9 +49,29 @@ class _OrdersListPanel(BaseListPanel):
         ]
         self._filter_bar = _FilterToolbar()
         super().__init__(conn=conn, parent=parent)
+        # [إصلاح] _build_toolbar() كانت معرّفة بس محدش كان بينادِيها —
+        # نفس الباج بالظبط اللي كان في CustomersListPanel: BaseListPanel._build()
+        # بتنادي _build_header()/_build_filter() بس، مفيش أي استدعاء لـ
+        # _build_toolbar() في أي مكان. النتيجة: self._filter_bar (وفيها
+        # btn_new — زرار "طلب جديد") كانت بتتبني في الذاكرة فعلاً وتتربط
+        # إشاراتها، لكن مفيش حد بيضيفها لأي layout ظاهر — فكانت غير مرئية
+        # تمامًا للمستخدم رغم إنها موجودة وشغالة برمجيًا.
+        #
+        # الحل: نفس نمط _insert_toolbar() في CustomersListPanel — نبني
+        # QWidget منفصل، ننده _build_toolbar() عليه، ونضيفه لـ layout
+        # الأساسي فوق الـ splitter مباشرة (بعد الـ header).
+        self._insert_toolbar()
         self.item_selected.connect(self.order_selected.emit)
         self._status_delegate = _StatusDelegate(self.table)
         self.table.setItemDelegateForColumn(2, self._status_delegate)
+
+    def _insert_toolbar(self):
+        from PyQt5.QtWidgets import QWidget
+        toolbar_widget = QWidget()
+        toolbar_lay = QVBoxLayout(toolbar_widget)
+        toolbar_lay.setContentsMargins(0, 0, 0, 0)
+        self._build_toolbar(toolbar_lay)
+        self.layout().insertWidget(1, toolbar_widget)
 
     def _build_toolbar(self, lay: QVBoxLayout):
         self._filter_bar.btn_new.clicked.connect(self.new_order.emit)
@@ -78,8 +98,11 @@ class _OrdersListPanel(BaseListPanel):
         PRIORITY_LABELS = get_priority_labels()
 
         num_item = make_item(row["order_number"], user_data=row["id"])
-        bold_item(num_item)
-        colored_item(num_item, _C['accent'])
+        f = num_item.font()
+        f.setBold(True)
+        num_item.setFont(f)
+        from PyQt5.QtGui import QColor
+        num_item.setForeground(QColor(_C['accent']))
         table.setItem(r, 0, num_item)
 
         table.setItem(r, 1, make_item(row["customer_name"], tooltip=row["customer_name"]))
@@ -92,13 +115,42 @@ class _OrdersListPanel(BaseListPanel):
         pri_lbl, pri_color = PRIORITY_LABELS.get(row["priority"], ("", _C['text_muted']))
         pri_text = pri_lbl.split()[0] if pri_lbl else ""
         pri_item = make_item(pri_text, align=Qt.AlignCenter)
-        from PyQt5.QtGui import QColor
+        # [إصلاح ثيم] بنخزن مفتاح الـ priority نفسه (مش اللون) في UserRole+1
+        # عشان _refresh_style تقدر تعيد حساب اللون الصحيح من get_priority_labels()
+        # الحالية (بعد تغيير الثيم) بدل ما يفضل حافظ لون الثيم القديم.
+        pri_item.setData(Qt.UserRole + 1, row["priority"])
         pri_item.setForeground(QColor(pri_color))
         if row["priority"] in ("high", "urgent"):
-            bold_item(pri_item)
+            f = pri_item.font()
+            f.setBold(True)
+            pri_item.setFont(f)
         table.setItem(r, 3, pri_item)
 
-        table.setItem(r, 4, muted_item(make_item((row["order_date"] or "")[:10])))
+        table.setItem(r, 4, muted_item((row["order_date"] or "")[:10]))
+
+    def _refresh_style(self, *_):
+        """
+        [إصلاح ثيم] الألوان اللي بتتحط جوه الخلايا عن طريق setForeground
+        وقت _fill_row بتتحدد مرة واحدة بس (وقت التعبئة)، ومش جزء من الـ
+        stylesheet العام، فلما الثيم يتغير مفيش حد بيعيد رسمها ⇒ بتفضل
+        بلون الثيم القديم (المشكلة اللي شايفينها في السكرين شوت).
+
+        الحل هنا: نعيد تلوين الصفوف الموجودة فعلياً في الجدول من غير
+        إعادة تحميل الداتا من DB (أرخص وأسرع من refresh() كاملة).
+        """
+        super()._refresh_style(*_)
+        from PyQt5.QtGui import QColor
+        PRIORITY_LABELS = get_priority_labels()
+        for r in range(self.table.rowCount()):
+            num_item = self.table.item(r, 0)
+            if num_item is not None:
+                num_item.setForeground(QColor(_C['accent']))
+
+            pri_item = self.table.item(r, 3)
+            if pri_item is not None:
+                pri_key = pri_item.data(Qt.UserRole + 1)
+                _, pri_color = PRIORITY_LABELS.get(pri_key, ("", _C['text_muted']))
+                pri_item.setForeground(QColor(pri_color))
 
     def _auto_resize(self):
         auto_fit_columns(

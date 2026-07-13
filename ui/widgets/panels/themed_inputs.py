@@ -33,7 +33,8 @@ Themed input widgets — الحل الجذري لمشكلة "خلفيات فات
 شغالة بنفس الشكل بالظبط لأنها QLineEdit/QComboBox عادي، بس بقى عنده ستايل
 ذاتي يتابع الثيم.
 """
-from PyQt5.QtWidgets import QLineEdit, QComboBox, QDateEdit, QTextEdit, QPlainTextEdit
+from PyQt5.QtWidgets import QLineEdit, QComboBox, QDateEdit, QTextEdit, QPlainTextEdit, QFrame
+from PyQt5.QtCore import Qt
 
 from ui.widgets.core.widget_mixin import WidgetMixin
 from ..theme.input_styles import input_style
@@ -62,7 +63,8 @@ class ThemedLineEdit(QLineEdit, WidgetMixin):
         self._h = min_height
         self._error = error
         self._init_widget_mixin(font=False, lang=False, data=False)
-        self._refresh_style()
+        if type(self) is ThemedLineEdit:
+            self._refresh_style()
 
     def _refresh_style(self, *_):
         self.setStyleSheet(input_style(self._h, error=self._error))
@@ -107,7 +109,8 @@ class ThemedDateEdit(QDateEdit, WidgetMixin):
         super().__init__(parent)
         self._h = min_height
         self._init_widget_mixin(font=False, lang=False, data=False)
-        self._refresh_style()
+        if type(self) is ThemedDateEdit:
+            self._refresh_style()
 
     def _refresh_style(self, *_):
         self.setStyleSheet(input_style(self._h))
@@ -120,7 +123,8 @@ class ThemedTextEdit(QTextEdit, WidgetMixin):
         super().__init__(parent)
         self._h = min_height
         self._init_widget_mixin(font=False, lang=False, data=False)
-        self._refresh_style()
+        if type(self) is ThemedTextEdit:
+            self._refresh_style()
 
     def _refresh_style(self, *_):
         self.setStyleSheet(input_style(self._h))
@@ -133,7 +137,83 @@ class ThemedPlainTextEdit(QPlainTextEdit, WidgetMixin):
         super().__init__(parent)
         self._h = min_height
         self._init_widget_mixin(font=False, lang=False, data=False)
+        if type(self) is ThemedPlainTextEdit:
+            self._refresh_style()
+
+
+class ThemedFrame(QFrame, WidgetMixin):
+    """
+    QFrame بيتابع الثيم تلقائيًا — بديل مباشر لـ QFrame() لأي frame
+    محتاج خلفية/حدود بتتغيّر مع الثيم (زي شاشات "لا يوجد بيانات" الفارغة).
+
+    [السبب في الحاجة للكلاس ده تحديدًا، مش نفس نمط ThemedLineEdit]
+    QFrame من غير QSS بيتصرف بشكل مختلف عن QLineEdit/QComboBox: خاصية
+    "background" في الـ stylesheet مش بتتطبّق فعليًا وقت الرسم إلا لو
+    WA_StyledBackground مفعّلة صراحةً (QLineEdit/QComboBox عندهم السلوك
+    ده افتراضيًا، QFrame لأ).
+
+    كمان اكتشفنا مشكلة تانية مرتبطة: لو الثيم اتغيّر والـ frame كانت
+    مخفية (widget في تاب مش نشط مثلاً)، الـ stylesheet بيتحدّث في الذاكرة
+    صح، لكن Qt مبيعيدش رسمها فعليًا إلا لما تظهر تاني — وأحيانًا بيرسمها
+    بحالة قديمة (cached) لحد أول إعادة رسم كاملة. الحل: showEvent بيجبر
+    _refresh_style() تاني في اللحظة اللي الـ frame بتظهر فيها فعليًا.
+
+    الاستخدام:
+        from ui.widgets.panels.themed_inputs import ThemedFrame
+
+        # بدل:
+        self._empty_state = QFrame()
+        self._empty_state.setStyleSheet(f"background: {_C['bg_input']}; border: none;")
+
+        # اكتب:
+        self._empty_state = ThemedFrame(bg_key="bg_input")
+        # لو محتاج حدود أو راديوس، مرّرهم كمان:
+        self._empty_state = ThemedFrame(bg_key="bg_input", border="none")
+    """
+
+    def __init__(self, parent=None, bg_key: str = "bg_surface",
+                 border: str = "none", border_radius: int = 0):
+        super().__init__(parent)
+        self._bg_key        = bg_key
+        self._border        = border
+        self._border_radius = border_radius
+        # [أساسي] من غيرها خاصية background في الـ stylesheet هتتخزن
+        # بس مش هتتطبّق فعليًا وقت الرسم — QFrame محتاجها صراحةً.
+        self.setAttribute(Qt.WA_StyledBackground, True)
+        self._init_widget_mixin(font=False, lang=False, data=False)
+        # [إصلاح جذري] لا تنادِ self._refresh_style() هنا إلا لو الكلاس
+        # الفعلي هو ThemedFrame نفسها (استخدام مباشر بدون وراثة).
+        #
+        # السبب: self._refresh_style() نداء polymorphic — لو فيه كلاس
+        # وارث (زي ListHeader, EmptyState, NotificationBar, StatCard,
+        # _OfferItemRow ...) عامل override لـ _refresh_style()، فالنداء
+        # هنا هيوجّه فورًا لنسخة الكلاس الوارث، رغم إن __init__ بتاعه
+        # لسه ما وصلش لسطر super().__init__() في الأغلب (لسه في نص
+        # تنفيذ super().__init__() نفسها دلوقتي!) — يعني _build() بتاعته
+        # لسه ما اتنفذتش، والـ attributes/widgets اللي _refresh_style
+        # الوارثة محتاجاها لسه مش موجودة → AttributeError متكرر.
+        #
+        # كل الكلاسات الوارثة من ThemedFrame في المشروع بتنادي بالفعل
+        # self._refresh_style() صراحةً في آخر سطر من __init__ بتاعها
+        # (بعد ما تخلص _build())، فمفيش داعي إن ThemedFrame تتحمل
+        # مسؤولية النداء الأول نيابة عنها — العكس هو اللي بيسبب الأعطال.
+        if type(self) is ThemedFrame:
+            self._refresh_style()
+
+    def showEvent(self, event):
+        """[إصلاح dark-theme] يجبر إعادة تطبيق الستايل وقت ظهور الـ frame
+        فعليًا — يغطي حالة إن الثيم اتغيّر وهي كانت مخفية."""
+        super().showEvent(event)
         self._refresh_style()
 
     def _refresh_style(self, *_):
-        self.setStyleSheet(input_style(self._h))
+        from ui.theme import _C
+        radius = f"border-radius:{self._border_radius}px; " if self._border_radius else ""
+        self.setStyleSheet(
+            f"background: {_C[self._bg_key]}; border: {self._border}; {radius}"
+        )
+
+    def set_bg_key(self, bg_key: str):
+        """يغيّر مفتاح لون الخلفية المستخدم من _C ويعيد الرسم فورًا."""
+        self._bg_key = bg_key
+        self._refresh_style()

@@ -9,11 +9,13 @@ EmptyState + EmptyPanelState + table empty state helpers.
   - [تحسين 6 محفوظ] get_font_size() تُستدعى مرة واحدة.
 """
 from PyQt5.QtWidgets import (
-    QFrame, QVBoxLayout, QLabel,
+    QVBoxLayout, QLabel,
     QTableWidget, QTableWidgetItem, QSizePolicy,
 )
 from PyQt5.QtCore import Qt, pyqtSignal
 from PyQt5.QtGui  import QColor, QFont
+
+from ui.widgets.panels.themed_inputs import ThemedFrame
 
 from ui.font  import fs, get_font_size
 from ui.theme import _C
@@ -26,7 +28,7 @@ from ui.widgets.core.widget_mixin import WidgetMixin
 # EmptyState
 # ══════════════════════════════════════════════════════════
 
-class EmptyState(QFrame, WidgetMixin):
+class EmptyState(ThemedFrame, WidgetMixin):
     """
     QFrame حالة فارغة مع أيقونة ونص وزر اختياري.
 

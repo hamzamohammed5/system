@@ -2,12 +2,12 @@
 ui/tabs/orders/orders/_filter_toolbar.py
 """
 from PyQt5.QtWidgets import (
-    QVBoxLayout, QHBoxLayout, QFrame,
+    QVBoxLayout, QHBoxLayout,
     QPushButton, QSizePolicy,
 )
 from PyQt5.QtCore import Qt, pyqtSignal, QTimer
 from PyQt5.QtGui  import QFontMetrics, QFont
-from ui.widgets.panels.themed_inputs import ThemedLineEdit, ThemedComboBox
+from ui.widgets.panels.themed_inputs import ThemedLineEdit, ThemedComboBox, ThemedFrame
 
 from ui.theme import _C
 from ui.widgets.components.button import make_btn
@@ -74,7 +74,7 @@ def _fixed_btn(text: str, h: int = FILTER_TB_NEW_BTN_H) -> QPushButton:
     return btn
 
 
-class _FilterToolbar(QFrame, WidgetMixin):
+class _FilterToolbar(ThemedFrame, WidgetMixin):
     changed = pyqtSignal()
 
     def __init__(self, parent=None):

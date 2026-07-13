@@ -13,10 +13,12 @@ from dataclasses import dataclass, field
 from typing import Optional
 
 from PyQt5.QtWidgets import (
-    QFrame, QHBoxLayout, QVBoxLayout, QLabel, QSizePolicy, QWidget,
+    QHBoxLayout, QVBoxLayout, QLabel, QSizePolicy, QWidget,
 )
 from PyQt5.QtCore import Qt
 from PyQt5.QtGui  import QFont
+
+from ui.widgets.panels.themed_inputs import ThemedFrame
 
 from ui.theme import _C
 from ui.font  import fs, get_font_size
@@ -37,7 +39,7 @@ from ui.constants import (
 # StatCard — بطاقة مستقلة كاملة
 # ══════════════════════════════════════════════════════════
 
-class StatCard(QFrame, WidgetMixin):
+class StatCard(ThemedFrame, WidgetMixin):
     """بطاقة إحصائية مستقلة — للـ detail headers."""
 
     def __init__(self, icon: str = "", title: str = "",
@@ -149,7 +151,7 @@ class StatItem:
     compact    : bool          = False
 
 
-class _StatCard(QFrame, WidgetMixin):
+class _StatCard(ThemedFrame, WidgetMixin):
     """بطاقة إحصائية خفيفة — تُستخدم داخل StatRow فقط."""
 
     def __init__(self, item: StatItem, parent=None):
@@ -243,7 +245,7 @@ class StatRow(QWidget, WidgetMixin):
         self._cards: list[_StatCard] = []
         self._items = items
         self._separator = separator
-        self._dividers: list[QFrame] = []
+        self._dividers: list[ThemedFrame] = []
         self._build(separator, compact, bg)
         # [إصلاح dark-mode] الفواصل العمودية (v_divider) بتتبنى بستايل
         # ثابت وقت الإنشاء زي أي QFrame عادي، ومحدش كان بينده يعيد تلوينها.
@@ -319,7 +321,7 @@ def make_stat_row(*items: StatItem,
 
 
 def stat_card_pair(label: str, color: str = None,
-                   icon: str = "") -> tuple[QFrame, QLabel]:
+                   icon: str = "") -> tuple[ThemedFrame, QLabel]:
     item = StatItem(label=label, color=color or _C["blue"], icon=icon)
     card = _StatCard(item)
     return card, card.value_label()

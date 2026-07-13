@@ -7,10 +7,12 @@ StatusChip + StatusCard.
 """
 
 from PyQt5.QtWidgets import (
-    QFrame, QHBoxLayout, QVBoxLayout, QLabel, QSizePolicy,
+    QHBoxLayout, QVBoxLayout, QLabel, QSizePolicy,
 )
 from PyQt5.QtCore import Qt
 from PyQt5.QtGui  import QFont
+
+from ui.widgets.panels.themed_inputs import ThemedFrame
 
 from ui.theme import _C
 from ui.font  import fs, get_font_size
@@ -24,7 +26,7 @@ from ui.constants import (
 )
 
 
-class StatusChip(QFrame, WidgetMixin):
+class StatusChip(ThemedFrame, WidgetMixin):
     """شريحة حالة: أيقونة + اسم + عدد."""
 
     def __init__(self, icon: str = "", label: str = "", count: int = 0,
@@ -98,7 +100,7 @@ class StatusChip(QFrame, WidgetMixin):
             return 0
 
 
-class StatusCard(QFrame, WidgetMixin):
+class StatusCard(ThemedFrame, WidgetMixin):
     """بطاقة حالة بسيطة — أيقونة + label + عدد كبير."""
 
     def __init__(self, icon: str = "", label: str = "",

@@ -7,11 +7,11 @@ _PricingPanel — لوحة إدارة أسعار المنتجات النهائي
 from PyQt5.QtWidgets import (
     QWidget, QVBoxLayout, QHBoxLayout,
     QPushButton, QTableWidgetItem, QLabel,
-    QDoubleSpinBox, QMessageBox, QFrame,
+    QDoubleSpinBox, QMessageBox,
 )
 from PyQt5.QtCore import Qt
 from PyQt5.QtGui  import QColor
-from ui.widgets.panels.themed_inputs import ThemedComboBox
+from ui.widgets.panels.themed_inputs import ThemedComboBox, ThemedFrame
 
 from services.pricing.pricing_service import (
     get_all_pricing, get_pricing, save_pricing, remove_pricing,
@@ -128,7 +128,7 @@ class _PricingPanel(QWidget, WidgetMixin):
         root.setContentsMargins(m[0], m[1], m[2], m[3])
         root.setSpacing(PRICING_PANEL_ROOT_SPACING)
 
-        self.form_frame = QFrame()
+        self.form_frame = ThemedFrame()
         form_lay = QVBoxLayout(self.form_frame)
         fm = PRICING_PANEL_FORM_MARGIN
         form_lay.setContentsMargins(fm[0], fm[1], fm[2], fm[3])

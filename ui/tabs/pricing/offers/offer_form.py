@@ -6,11 +6,11 @@ _OfferForm — فورم إنشاء / تعديل العرض الكامل.
 
 from PyQt5.QtWidgets import (
     QWidget, QVBoxLayout, QHBoxLayout,
-    QFrame, QScrollArea, QLabel,
+    QScrollArea, QLabel,
     QPushButton, QDoubleSpinBox,
     QMessageBox,
 )
-from ui.widgets.panels.themed_inputs import ThemedLineEdit
+from ui.widgets.panels.themed_inputs import ThemedLineEdit, ThemedFrame
 
 from services.pricing.offers_service import (
     get_offer, get_offer_items,
@@ -129,7 +129,7 @@ class _OfferForm(QWidget, WidgetMixin):
         root.setContentsMargins(m[0], m[1], m[2], m[3])
         root.setSpacing(SPACING_MD)
 
-        header = QFrame()
+        header = ThemedFrame()
         self._header_frame = header
         h_lay = QVBoxLayout(header)
         mn = STAT_CARD_MARGIN_NORMAL

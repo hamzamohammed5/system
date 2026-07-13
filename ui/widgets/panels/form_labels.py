@@ -1,8 +1,10 @@
 """
 ui/widgets/panels/form_labels.py
 """
-from PyQt5.QtWidgets import QLabel, QFrame
+from PyQt5.QtWidgets import QLabel
 from PyQt5.QtCore    import Qt
+
+from ui.widgets.panels.themed_inputs import ThemedFrame
 
 from ui.theme import _C
 from ui.font  import get_font_size, fs
@@ -102,10 +104,10 @@ def section_title(text: str, color: str = None, icon: str = "") -> QLabel:
 
 # ── SeparatorLine ─────────────────────────────────────────
 
-class _SeparatorLine(QFrame, WidgetMixin):
+class _SeparatorLine(ThemedFrame, WidgetMixin):
     def __init__(self):
         super().__init__()
-        self.setFrameShape(QFrame.HLine)
+        self.setFrameShape(ThemedFrame.HLine)
         self.setFixedHeight(SEPARATOR_LINE_H)
         self._init_widget_mixin(font=False, lang=False, data=False)
         self._refresh_style()
@@ -114,5 +116,5 @@ class _SeparatorLine(QFrame, WidgetMixin):
         self.setStyleSheet(f"background:{_C['border']}; border:none;")
 
 
-def separator_line() -> QFrame:
+def separator_line() -> ThemedFrame:
     return _SeparatorLine()

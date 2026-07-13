@@ -5,12 +5,14 @@ _OfferDetails — لوحة عرض تفاصيل العرض المختار.
 """
 
 from PyQt5.QtWidgets import (
-    QFrame, QVBoxLayout, QHBoxLayout,
+    QVBoxLayout, QHBoxLayout,
     QLabel, QTableWidget, QTableWidgetItem,
     QHeaderView, QAbstractItemView,
 )
 from PyQt5.QtCore import Qt
 from PyQt5.QtGui  import QColor
+
+from ui.widgets.panels.themed_inputs import ThemedFrame
 
 from services.pricing.offers_service import get_offer_summary
 from ui.widgets.core.i18n import tr
@@ -25,7 +27,7 @@ from ui.constants import (
 from ..pricing._stat_box import stat_box
 
 
-class _OfferDetails(QFrame, WidgetMixin):
+class _OfferDetails(ThemedFrame, WidgetMixin):
 
     def __init__(self, conn, parent=None):
         super().__init__(parent)

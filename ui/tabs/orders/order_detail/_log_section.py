@@ -45,17 +45,25 @@ def _fill_log(detail):
                                      (log.get("new_status", ""), _C['text_neutral'], _C['card_fallback_bg'], _C['card_fallback_border']))
         new_lbl, new_color = new_info[0], new_info[1]
 
-        table.setItem(r, 0, muted_item(make_item(old_lbl)))
+        # [إصلاح] muted_item()/bold_item()/colored_item() بتاخد *نص* (str)
+        # وبترجع QTableWidgetItem جاهز — مش بتاخد item جاهز كمدخل. الكود
+        # القديم كان بيعمل muted_item(make_item(old_lbl)): بيبني item فارغ
+        # الأول، ثم يبعته كـ "text" لـ muted_item، فـ QTableWidgetItem(str(item))
+        # كانت بتطبع repr الكائن نفسه ("<PyQt5.QtWidgets.QTableWidgetItem...>")
+        # بدل النص الفعلي. الحل: نبعت old_lbl (النص) مباشرة.
+        table.setItem(r, 0, muted_item(old_lbl))
 
-        new_item = make_item(new_lbl)
-        bold_item(new_item)
-        colored_item(new_lbl, new_color)
+        # [إصلاح] نفس الغلط هنا بشكل مختلف: bold_item(new_item) و
+        # colored_item(new_lbl, new_color) كل واحدة فيهم كانت بترجع
+        # QTableWidgetItem *جديد* منفصل ومحدش بياخده — القيمتين كانوا
+        # بيترموا فورًا، وكان بيتحط في الجدول فعليًا new_item الأصلي
+        # (plain، من غير bold ومن غير new_color خالص). الحل: نبني item
+        # واحد بالخط العريض واللون الصح مباشرة عبر bold_item(text, color).
+        new_item = bold_item(new_lbl, color=new_color)
         table.setItem(r, 1, new_item)
 
         table.setItem(r, 2, make_item(log.get("notes") or ""))
-        table.setItem(r, 3, muted_item(
-            make_item((log.get("changed_at") or "")[:16], align=Qt.AlignCenter)
-        ))
+        table.setItem(r, 3, muted_item((log.get("changed_at") or "")[:16]))
 
     if logs:
         auto_fit_columns(table, fixed_cols=[0, 1, 3], stretch_col=2)

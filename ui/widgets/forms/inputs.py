@@ -17,10 +17,10 @@ Input widgets الموحدة للتطبيق.
 """
 from PyQt5.QtWidgets import (
     QWidget, QHBoxLayout, QLabel,
-    QDoubleSpinBox, QSpinBox, QDateEdit, QSizePolicy,
+    QDoubleSpinBox,
 )
 from PyQt5.QtCore import Qt, QDate
-from ui.widgets.panels.themed_inputs import ThemedLineEdit, ThemedComboBox
+from ui.widgets.panels.themed_inputs import ThemedLineEdit, ThemedComboBox, ThemedDateEdit
 
 from ui.theme import _C
 from ui.font  import fs, get_font_size
@@ -60,7 +60,7 @@ class AmountSpinBox(QDoubleSpinBox, WidgetMixin):
 
 # ── DateField ─────────────────────────────────────────────
 
-class DateField(QDateEdit, WidgetMixin):
+class DateField(ThemedDateEdit, WidgetMixin):
     """QDateEdit موحد."""
 
     def __init__(self, date: QDate = None, height: int = INPUT_HEIGHT,

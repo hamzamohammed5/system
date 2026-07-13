@@ -5,21 +5,24 @@ ui/tabs/orders/order_form/_item_row_widget.py
 (fetch_priced_products) — كان هذا الملف يفتح اتصال DB وينفذ SQL
 خام بنفسه من داخل ui/tabs، وهذا يخالف مبدأ الطبقات:
     widgets -> tabs/UI -> services -> repos (db) -> schema
-المنطق بالكامل (SQL + caching) نُقل إلى:
-    db.costing.catalog_repo      (SQL خام)
-    services.costing.catalog_service.CatalogService  (caching + واجهة الخدمة)
-الـ widget الآن يستقبل conn في __init__ (نفس نمط باقي الـ services
-في المشروع مثل CustomerService(conn)) وينشئ CatalogService بنفسه،
-بدل الاعتماد على cache على مستوى الـ class داخل الـ widget.
+المنطق بالكامل (SQL + caching) موجود في:
+    db.orders.catalog_repo             (SQL خام)
+    services.orders.catalog_service.CatalogService  (caching + واجهة الخدمة)
+الـ widget يستقبل conn (اتصال orders.db) في __init__ لحفظ الأوردر،
+لكنه ينشئ CatalogService باتصال erp.db منفصل عبر CompanyService —
+راجع تعليق __init__ أدناه للتفاصيل. [تعديل هيكلي لاحق] كان هناك
+تصادم اسم بين services/costing/catalog_service.py (نسخة ComponentRow)
+و نسخة الأوردرز على نفس المسار — نُقلت نسخة الأوردرز إلى
+services/orders/catalog_service.py لفصل الـ domains.
 """
 from PyQt5.QtWidgets import (
-    QFrame, QVBoxLayout, QHBoxLayout,
+    QVBoxLayout, QHBoxLayout,
     QLabel, QPushButton,
     QDoubleSpinBox, QSizePolicy,
 )
 from PyQt5.QtCore import Qt, pyqtSignal
 from PyQt5.QtGui  import QColor, QBrush
-from ui.widgets.panels.themed_inputs import ThemedLineEdit, ThemedComboBox
+from ui.widgets.panels.themed_inputs import ThemedLineEdit, ThemedComboBox, ThemedFrame
 
 from ui.theme import _C
 from ui.widgets.core.i18n import tr
@@ -34,23 +37,36 @@ from ui.constants import (
     ITEM_ROW_DEL_BTN_SIZE, ITEM_ROW_QTY_MIN, ITEM_ROW_QTY_MAX,
     ITEM_ROW_QTY_DECIMALS, ITEM_ROW_QTY_DEFAULT,
 )
-from services.costing.catalog_service import CatalogService
+from services.companies.company_service import CompanyService
+from services.orders.catalog_service import CatalogService
 
 
-class _ItemRowWidget(QFrame, WidgetMixin):
+class _ItemRowWidget(ThemedFrame, WidgetMixin):
     changed = pyqtSignal()
     removed = pyqtSignal(object)
 
     def __init__(self, conn, parent=None):
         """
-        [تعديل هيكلي] conn أصبح إلزامياً — نفس نمط باقي الـ services
-        في المشروع (مثال: CustomerService(conn)). كان قبل ذلك
-        _get_products()/_products_cache يفتحان اتصال erp.db بأنفسهما
-        بدون تمرير أي conn، وهذا ما جرى إصلاحه بنقل كل من الاتصال
-        والـ caching إلى CatalogService.
+        [تعديل هيكلي] conn هنا هو اتصال orders.db (يُستخدم لحفظ
+        الأوردر نفسه من parent)، لكنه غير كافٍ لـ CatalogService:
+        جداول items/pricing/categories عايشة في erp.db، وهي قاعدة
+        منفصلة تماماً عن orders.db (راجع db/shared/connection.py —
+        كل شركة لها ملفات .db منفصلة لكل domain: erp/orders/...).
+
+        الحل: CatalogService ياخد اتصال erp.db الخاص بالشركة النشطة
+        عبر CompanyService.get_active_erp_conn() بدل تمرير نفس الـ
+        conn الوارد، حفاظاً على مبدأ الطبقات:
+            widgets -> tabs/UI -> services -> repos (db) -> schema
+        tabs/ لا يعرف db.companies مباشرة؛ CompanyService هو الوسيط
+        الرسمي المعتمد في المشروع لهذا الغرض.
         """
         super().__init__(parent)
-        self._catalog       = CatalogService(conn)
+        erp_conn = CompanyService.get_active_erp_conn()
+        if erp_conn is None:
+            raise RuntimeError(
+                "لا توجد شركة نشطة — لا يمكن تحميل كتالوج المنتجات."
+            )
+        self._catalog       = CatalogService(erp_conn)
         self._db_item_id    = None
         self._unit_price    = 0.0
         self._discount_pct  = 0.0
@@ -112,7 +128,7 @@ class _ItemRowWidget(QFrame, WidgetMixin):
         row1.addWidget(self.cmb_product, stretch=1)
         root.addLayout(row1)
 
-        # صف 2: السعر + الخصم + الكمية + الإجمالي + ملاحظات + حذف
+        # صف 2: السعر + الخصم + الكمية + الوحدة + الإجمالي
         row2 = QHBoxLayout()
         row2.setSpacing(ITEM_ROW_ROW2_SPACING)
 
@@ -143,6 +159,21 @@ class _ItemRowWidget(QFrame, WidgetMixin):
         self.lbl_total.setMinimumWidth(ITEM_ROW_TOTAL_LBL_MIN_W)
         self.lbl_total.setAlignment(Qt.AlignCenter)
 
+        row2.addWidget(self.lbl_price_t)
+        row2.addWidget(self.lbl_price)
+        row2.addWidget(self.lbl_disc_t)
+        row2.addWidget(self.lbl_disc)
+        row2.addWidget(self.lbl_qty)
+        row2.addWidget(self.sp_qty)
+        row2.addWidget(self.inp_unit)
+        row2.addStretch()
+        row2.addWidget(self.lbl_total)
+        root.addLayout(row2)
+
+        # صف 3: ملاحظات + حذف (منفصل عن صف الأسعار لتفادي التراكب)
+        row3 = QHBoxLayout()
+        row3.setSpacing(ITEM_ROW_ROW2_SPACING)
+
         self.lbl_note = QLabel(tr("item_notes_lbl"))
         self.inp_notes = ThemedLineEdit()
         self.inp_notes.setPlaceholderText(tr("notes_placeholder"))
@@ -152,18 +183,10 @@ class _ItemRowWidget(QFrame, WidgetMixin):
         self.btn_del.setFixedSize(ITEM_ROW_DEL_BTN_SIZE, ITEM_ROW_DEL_BTN_SIZE)
         self.btn_del.clicked.connect(lambda: self.removed.emit(self))
 
-        row2.addWidget(self.lbl_price_t)
-        row2.addWidget(self.lbl_price)
-        row2.addWidget(self.lbl_disc_t)
-        row2.addWidget(self.lbl_disc)
-        row2.addWidget(self.lbl_qty)
-        row2.addWidget(self.sp_qty)
-        row2.addWidget(self.inp_unit)
-        row2.addWidget(self.lbl_total)
-        row2.addWidget(self.lbl_note)
-        row2.addWidget(self.inp_notes, stretch=1)
-        row2.addWidget(self.btn_del)
-        root.addLayout(row2)
+        row3.addWidget(self.lbl_note)
+        row3.addWidget(self.inp_notes, stretch=1)
+        row3.addWidget(self.btn_del)
+        root.addLayout(row3)
 
         self._populate_combo()
 

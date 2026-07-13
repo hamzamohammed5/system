@@ -7,10 +7,12 @@ ProgressBar + MultiProgressBar.
 """
 
 from PyQt5.QtWidgets import (
-    QWidget, QFrame, QVBoxLayout, QHBoxLayout, QLabel, QSizePolicy,
+    QWidget, QVBoxLayout, QHBoxLayout, QLabel,
 )
 from PyQt5.QtCore import Qt
 from PyQt5.QtGui  import QFont
+
+from ui.widgets.panels.themed_inputs import ThemedFrame
 
 from ui.theme import _C
 from ui.font  import fs, get_font_size
@@ -62,14 +64,14 @@ class ProgressBar(QWidget, WidgetMixin):
 
         root.addLayout(top_row)
 
-        track = QFrame()
+        track = ThemedFrame()
         track.setFixedHeight(self._height)
 
         track_lay = QHBoxLayout(track)
         track_lay.setContentsMargins(0, 0, 0, 0)
         track_lay.setSpacing(0)
 
-        self._fill = QFrame()
+        self._fill = ThemedFrame()
         self._fill.setFixedHeight(self._height)
         self._fill.setFixedWidth(0)
         track_lay.addWidget(self._fill)

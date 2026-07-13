@@ -7,11 +7,11 @@ SearchBar + StatusBar + ListHeader — هيدرات لوحات القوائم.
 """
 
 from PyQt5.QtWidgets import (
-    QWidget, QFrame, QHBoxLayout, QVBoxLayout,
+    QWidget, QHBoxLayout, QVBoxLayout,
     QLabel, QPushButton, QSizePolicy,
 )
 from PyQt5.QtCore import Qt, QTimer, pyqtSignal
-from ui.widgets.panels.themed_inputs import ThemedLineEdit
+from ui.widgets.panels.themed_inputs import ThemedLineEdit, ThemedFrame
 
 from ui.theme import _C
 from ui.font  import fs, get_font_size
@@ -161,7 +161,7 @@ class StatusBar(QLabel, WidgetMixin):
 # ListHeader
 # ══════════════════════════════════════════════════════════
 
-class ListHeader(QFrame, WidgetMixin):
+class ListHeader(ThemedFrame, WidgetMixin):
     """هيدر لوحة قائمة: عنوان + بحث + زر إضافة + أزرار إضافية."""
 
     search_changed = pyqtSignal(str)

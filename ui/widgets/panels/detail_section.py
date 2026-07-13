@@ -9,10 +9,12 @@ make_detail_row — دالة سريعة.
          → from ..components.headers_page import SectionHeader
 """
 from PyQt5.QtWidgets import (
-    QFrame, QVBoxLayout, QHBoxLayout, QLabel, QWidget,
+    QVBoxLayout, QHBoxLayout, QLabel, QWidget,
     QGridLayout, QSizePolicy,
 )
 from PyQt5.QtCore import Qt
+
+from ui.widgets.panels.themed_inputs import ThemedFrame
 
 from ui.font  import fs, get_font_size
 from ui.theme import _C
@@ -27,7 +29,7 @@ from ui.constants import (
 from ..components.headers_page import SectionHeader   # [إصلاح 2.3]
 
 
-class DetailSection(QFrame, WidgetMixin):
+class DetailSection(ThemedFrame, WidgetMixin):
     """قسم تفاصيل موحد — يعرض أزواج (عنوان: قيمة) في grid منظم."""
 
     def __init__(self, title: str = "",
@@ -120,7 +122,7 @@ class DetailSection(QFrame, WidgetMixin):
         return lbl_val
 
     def add_separator(self):
-        from PyQt5.QtWidgets import QFrame as _F
+        from ui.widgets.panels.themed_inputs import ThemedFrame as _F
         from ui.constants import SEPARATOR_LINE_H
         sep = _F()
         sep.setFrameShape(_F.HLine)

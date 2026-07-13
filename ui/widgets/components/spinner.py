@@ -6,10 +6,12 @@ LoadingSpinner / LoadingOverlay / LoadingButton — مؤشرات تحميل مو
 [Refactor V3] إصلاح imports: ui.app_settings → ui.theme + ui.font
 """
 from PyQt5.QtWidgets import (
-    QWidget, QLabel, QVBoxLayout, QHBoxLayout, QFrame,
+    QWidget, QLabel, QVBoxLayout, QHBoxLayout,
     QSizePolicy, QPushButton,
 )
 from PyQt5.QtCore import Qt, QTimer
+
+from ui.widgets.panels.themed_inputs import ThemedFrame
 
 from ui.theme import _C
 from ui.font  import fs, get_font_size
@@ -101,7 +103,7 @@ class LoadingSpinner(QWidget, WidgetMixin):
         return self._timer.isActive()
 
 
-class LoadingOverlay(QFrame, WidgetMixin):
+class LoadingOverlay(ThemedFrame, WidgetMixin):
     """طبقة شفافة فوق أي widget تعرض رسالة تحميل."""
 
     def __init__(self, parent: QWidget = None):
