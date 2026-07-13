@@ -41,7 +41,9 @@ class _ProductTable(BaseListPanel):
     """
 
     COLUMNS       = [tr("id_col"), tr("name"), tr("category"), tr("cost")]
-    STRETCH_COL   = 1
+    # [توحيد الجداول] STRETCH_COL = -1 — نفس نمط raw_table_panel.py
+    # و_orders_list_panel.py الموحّد لكل جداول المشروع.
+    STRETCH_COL   = -1
     EMPTY_ICON    = "🏭"
     EMPTY_TITLE   = tr("no_products")
     LIST_TITLE    = tr("products_table_title")

@@ -76,8 +76,10 @@ def center_item(text: str, color: str = None, bold: bool = False,
     return item
 
 
-def muted_item(text: str) -> QTableWidgetItem:
-    return colored_item(text, _C['text_muted'])
+def muted_item(text: str, align: int = None, user_data=None,
+              tooltip: str = None) -> QTableWidgetItem:
+    return colored_item(text, _C['text_muted'], align=align,
+                        user_data=user_data, tooltip=tooltip)
 
 
 def insert_row(table: QTableWidget, height: int = ROW_HEIGHT_NORMAL) -> int:

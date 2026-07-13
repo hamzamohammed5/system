@@ -89,23 +89,27 @@ def _fill_items(detail):
         r = insert_row(table, ROW_HEIGHT_NORMAL)
 
         name_item = make_item(item["item_name"], user_data=item["id"])
-        bold_item(name_item)
+        f0 = name_item.font()
+        f0.setBold(True)
+        name_item.setFont(f0)
         table.setItem(r, 0, name_item)
         table.setItem(r, 1, make_item(item["description"] or ""))
         table.setItem(r, 2, make_item(f"{item['quantity']:g}", align=Qt.AlignCenter))
 
-        unit_item = muted_item(make_item(item["unit"], align=Qt.AlignCenter))
+        unit_item = muted_item(item["unit"], align=Qt.AlignCenter)
         table.setItem(r, 3, unit_item)
         table.setItem(r, 4, make_item(f"{item['unit_price']:,.2f}", align=Qt.AlignCenter))
 
-        disc_item = muted_item(make_item(f"{item['discount_pct']:g}%", align=Qt.AlignCenter))
+        disc_item = muted_item(f"{item['discount_pct']:g}%", align=Qt.AlignCenter)
         table.setItem(r, 5, disc_item)
 
         total_val  = item["quantity"] * item["unit_price"] * (1 - item["discount_pct"] / 100)
         total_item = colored_item(
             f"{total_val:,.2f}", _C['accent'], align=Qt.AlignCenter
         )
-        bold_item(total_item)
+        f = total_item.font()
+        f.setBold(True)
+        total_item.setFont(f)
         table.setItem(r, 6, total_item)
 
     if has_items:

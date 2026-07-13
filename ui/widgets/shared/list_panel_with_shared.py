@@ -96,7 +96,11 @@ class SharedItemsListPanel(BaseListPanel, SharedOpsMixin, LiveConnMixin):
         # تحويل TABLE_COLS → COLUMNS المطلوب من BaseListPanel
         self.COLUMNS    = self.TABLE_COLS
         self.LIST_TITLE = self.TABLE_TITLE
-        self.STRETCH_COL = 1
+        # [توحيد الجداول] STRETCH_COL = -1 بدل 1 — نفس تصحيح raw_table_panel.py.
+        # تعديل واحد هنا هنا يصلح كل الجداول الوارثة من SharedItemsListPanel
+        # (machine, machine_op, labor_op وأي جدول تاني مستقبلي) مرة واحدة،
+        # بدل تكرار الإصلاح في كل subclass لوحده.
+        self.STRETCH_COL = -1
         self._published_names: set = set()
         super().__init__(conn, parent)
         # ضبط عرض الأعمدة بعد بناء الجدول

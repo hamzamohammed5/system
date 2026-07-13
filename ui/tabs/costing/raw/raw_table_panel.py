@@ -43,7 +43,13 @@ class RawTablePanel(BaseListPanel, SharedOpsMixin):
     COLUMNS            = [tr("raw_col_id"), tr("raw_col_name"), tr("raw_col_category"),
                            tr("raw_col_total_price"), tr("raw_col_qty"), tr("raw_col_unit_price"),
                            tr("raw_col_actions")]
-    STRETCH_COL        = 1
+    # [توحيد الجداول] STRETCH_COL = -1 بدل 1 — الالتزام بالنمط الموحّد
+    # لكل الجداول في المشروع (نفس _orders_list_panel.py). لما STRETCH_COL
+    # بيتحدد بعمود معين مع باقي الأعمدة Interactive، الـ header بيتصرف
+    # بشكل معكوس بصريًا في RTL (سحب حد عمود بيحرك الأعمدة التانية بعكس
+    # الاتجاه). الحل الموحّد: -1 يخلي كل الأعمدة Interactive حرة +
+    # stretchLastSection=True ياخد الفراغ الباقي، وده السلوك السليم.
+    STRETCH_COL        = -1
     EMPTY_ICON         = tr("raw_empty_icon")
     EMPTY_TITLE        = tr("no_raws")
     LIST_TITLE         = tr("raw_table_list_title")
