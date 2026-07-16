@@ -1,5 +1,5 @@
 File Tree Snapshot
-Generated : 2026-07-16 16:34:01
+Generated : 2026-07-16 16:36:46
 Source    : D:\My Workspace\Hg\Alhabaar\accountant\system
 Extensions: .md, .py
 ────────────────────────────────────────────────────────────
@@ -56,31 +56,38 @@ system/
 │       ├── settings_service.py
 │       └── shared_items_bridge.py
 ├── files_reference/
-│   ├── db_01_companies.md
-│   ├── db_02_accounting.md
-│   ├── db_03_costing.md
-│   ├── db_04_designs.md
-│   ├── db_05_inventory.md
-│   ├── db_06_orders.md
-│   ├── db_07_pricing.md
-│   ├── db_08_shared.md
-│   ├── i18n_reference.md
-│   ├── models.md
-│   ├── services_1_shared.md
-│   ├── services_2_costing.md
-│   ├── services_3_orders_accounting.md
-│   ├── services_4_inventory.md
-│   ├── ui_main_window_helper.md
-│   ├── ui_root.md
-│   ├── ui_widgets_1_core.md
-│   ├── ui_widgets_2_base.md
-│   ├── ui_widgets_3_components.md
-│   ├── ui_widgets_4_theme.md
-│   ├── ui_widgets_5_panels_forms_combo.md
-│   ├── ui_widgets_6_tables_utils.md
-│   ├── ui_widgets_7_mixins.md
-│   ├── ui_widgets_8_dialogs.md
-│   └── ui_widgets_9_managers_shared.md
+│   ├── db/
+│   │   ├── db_01_companies.md
+│   │   ├── db_02_accounting.md
+│   │   ├── db_03_costing.md
+│   │   ├── db_04_designs.md
+│   │   ├── db_05_inventory.md
+│   │   ├── db_06_orders.md
+│   │   ├── db_07_pricing.md
+│   │   └── db_08_shared.md
+│   ├── models/
+│   │   └── models.md
+│   ├── services/
+│   │   ├── services_1_shared.md
+│   │   ├── services_2_costing.md
+│   │   ├── services_3_orders_accounting.md
+│   │   └── services_4_inventory.md
+│   └── ui/
+│       ├── i18n/
+│       │   └── i18n_reference.md
+│       ├── tabs/
+│       ├── widgets/
+│       │   ├── ui_widgets_1_core.md
+│       │   ├── ui_widgets_2_base.md
+│       │   ├── ui_widgets_3_components.md
+│       │   ├── ui_widgets_4_theme.md
+│       │   ├── ui_widgets_5_panels_forms_combo.md
+│       │   ├── ui_widgets_6_tables_utils.md
+│       │   ├── ui_widgets_7_mixins.md
+│       │   ├── ui_widgets_8_dialogs.md
+│       │   └── ui_widgets_9_managers_shared.md
+│       ├── ui_main_window_helper.md
+│       └── ui_root.md
 ├── models/
 │   ├── costing.py
 │   ├── costing_base.py
