@@ -12,7 +12,7 @@ from .financial.trial_balance_tab    import TrialBalanceTab
 from .financial.income_statement_tab import IncomeStatementTab
 from .financial.owners_equity_tab    import OwnersEquityTab
 from .financial.balance_sheet_tab    import BalanceSheetTab
-from ui.widgets.theme.layout_styles import tab_style, apply_tab_style
+from ui.widgets.theme.layout_styles import tab_style
 from ui.widgets.theme.table_styles import splitter_style
 from ui.widgets.core.i18n import tr
 from ui.widgets.core.widget_mixin import WidgetMixin
@@ -44,14 +44,7 @@ class ThemedTabWidget(QTabWidget, WidgetMixin):
         self._refresh_style()
 
     def _refresh_style(self, *_):
-        # [مركزي] apply_tab_style هي نقطة التطبيق الوحيدة في كل
-        # المشروع: بتحط الـ stylesheet + ElideNone + scroll buttons
-        # مع بعض. قبل كده كانت الخاصيتين دول متكررين يدويًا هنا في
-        # __init__ (ومش موجودين خالص في باقي الأقسام)، فالتبويبات
-        # كانت بتقص النص في كل مكان ما عدا costing. دلوقتي كل
-        # تبويبات المشروع (عادي أو ThemedTabWidget) بتاخدهم من نفس
-        # المصدر، فمينفعش تحصل نسيان زي ده تاني.
-        apply_tab_style(self, size=self._size)
+        self.setStyleSheet(tab_style(size=self._size))
 
 
 def _make_tab_widget(size: str = "inner") -> QTabWidget:

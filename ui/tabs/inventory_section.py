@@ -18,7 +18,7 @@ ui/tabs/inventory_tab.py
 
 from PyQt5.QtWidgets import QWidget, QVBoxLayout, QTabWidget
 
-from ui.widgets.theme.layout_styles import tab_style, apply_tab_style
+from ui.widgets.theme.layout_styles import tab_style
 from ui.theme                        import _C
 from ui.widgets.core.i18n           import tr
 from ui.constants                    import TAB_INDICATOR_BORDER_W
@@ -68,13 +68,8 @@ class InventoryTab(QWidget, WidgetMixin):
     def _refresh_style(self, *_):
         if not self._tabs:
             return
-        # [مركزي] apply_tab_style تضبط الـ stylesheet الأساسي + ElideNone +
-        # scroll buttons. بعدها بنلحق فوقها لون التمييز الخاص بالمخزون
-        # (stock_ok_fg) بنفس طريقة الدمج القديمة — القاعدة الملحوقة في
-        # QSS بتفوز على القاعدة المطابقة قبلها، فاللون الأخضر بيفضل شغال.
-        apply_tab_style(self._tabs)
         self._tabs.setStyleSheet(
-            self._tabs.styleSheet() + f"""
+            tab_style() + f"""
             QTabBar::tab:selected {{
                 color: {_C['stock_ok_fg']};
                 border-top: {TAB_INDICATOR_BORDER_W}px solid {_C['stock_ok_fg']};

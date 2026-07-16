@@ -14,7 +14,7 @@ ui/tabs/costing_section.py
 from PyQt5.QtWidgets import QWidget, QVBoxLayout, QTabWidget, QLabel
 from PyQt5.QtCore    import Qt
 
-from ui.widgets.theme.layout_styles import tab_style, apply_tab_style
+from ui.widgets.theme.layout_styles import tab_style
 from ui.theme                        import _C
 from ui.widgets.core.i18n           import tr
 from ui.font                        import FS_MD, FS_LG
@@ -62,8 +62,13 @@ class CostingSection(QWidget, WidgetMixin):
         # ── التبويبات ──
         self._tabs = QTabWidget()
         self._tabs.setTabPosition(QTabWidget.North)
-        apply_tab_style(self._tabs)
-        self._tabs.tabBar().setDrawBase(True)
+        self._tabs.setStyleSheet(tab_style())
+        self._tabs.setUsesScrollButtons(True)
+        self._tabs.setElideMode(Qt.ElideNone)
+
+        tab_bar = self._tabs.tabBar()
+        tab_bar.setExpanding(False)
+        tab_bar.setDrawBase(True)
 
         # [Fix #9] try/except حول كل tab على حدة لعزل الأخطاء
         _tab_defs = [
@@ -96,4 +101,4 @@ class CostingSection(QWidget, WidgetMixin):
             }}
         """)
         if hasattr(self, "_tabs"):
-            apply_tab_style(self._tabs)
+            self._tabs.setStyleSheet(tab_style())

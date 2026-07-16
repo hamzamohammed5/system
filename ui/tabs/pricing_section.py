@@ -14,7 +14,7 @@ ui/tabs/pricing_section.py
 
 from PyQt5.QtWidgets import QWidget, QVBoxLayout, QTabWidget, QLabel
 
-from ui.widgets.theme.layout_styles import tab_style, apply_tab_style
+from ui.widgets.theme.layout_styles import tab_style
 from ui.theme                        import _C
 from ui.widgets.core.i18n           import tr
 from ui.font                        import FS_MD
@@ -45,7 +45,7 @@ class PricingSection(QWidget, WidgetMixin):
         # ── التبويبات ──
         self._tabs = QTabWidget()
         self._tabs.setTabPosition(QTabWidget.North)
-        apply_tab_style(self._tabs)
+        self._tabs.setStyleSheet(tab_style())
 
         self._tabs.addTab(PricingTab(), tr("pricing_tab"))
         self._tabs.addTab(OffersTab(),  tr("offers_tab"))
@@ -64,7 +64,7 @@ class PricingSection(QWidget, WidgetMixin):
             }}
         """)
         if hasattr(self, "_tabs"):
-            apply_tab_style(self._tabs)
+            self._tabs.setStyleSheet(tab_style())
 
     def _refresh_lang(self, *_):
         if not hasattr(self, "_header"):
