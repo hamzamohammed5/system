@@ -1,5 +1,5 @@
 File Tree Snapshot
-Generated : 2026-07-16 16:41:47
+Generated : 2026-07-16 16:45:18
 Source    : D:\My Workspace\Hg\Alhabaar\accountant\system
 Extensions: .md, .py
 ────────────────────────────────────────────────────────────
@@ -53,7 +53,6 @@ system/
 │       ├── items_repo.py
 │       ├── json_utils.py
 │       ├── settings_repo.py
-│       ├── settings_service.py
 │       └── shared_items_bridge.py
 ├── files_reference/
 │   ├── db/
