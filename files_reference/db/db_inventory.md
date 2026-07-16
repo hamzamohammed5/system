@@ -114,6 +114,15 @@ fetch_recent_moves(conn, move_type: str = None, limit: int = 100) -> list
 # move_type=None → كل الأنواع | مع فلتر → WHERE im.move_type=?
 # ORDER BY date DESC, id DESC
 
+fetch_recent_moves_with_item_names(conn, move_type: str, limit: int = 100) -> list
+# [إصلاح هيكلي] نُقلت من services/inventory/inventory_service.py (كانت SQL خام
+# self.conn.execute مباشرة داخل الـ service) إلى هنا — كل SQL يجب أن يعيش في db/ فقط.
+# نسخة أضيق من fetch_recent_moves: تجلب فقط
+#   date, name (اسم الصنف), qty, unit_cost, total_cost, ref_entry_no, notes
+# JOIN inventory_items | WHERE move_type=? | ORDER BY date DESC, id DESC LIMIT ?
+# تُستخدم في جداول "آخر الحركات" بتبويبات الوارد والصادر
+# Try/except: يرجع [] بصمت عند أي خطأ
+
 record_inventory_move(conn, inv_id: int, move_type: str,
                        qty: float, unit_cost: float, date: str,
                        notes: str = None,

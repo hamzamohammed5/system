@@ -1,7 +1,8 @@
 # دليل الكود — DB: الطلبات (db/orders/) — نسخة محدَّثة
 
 > جداول `orders.db` — العملاء، الطلبات، بنود الطلبات، سجل الحالة.
-> **الملفات الفعلية:** `orders_schema.py`, `customers_repo.py`, `orders_repo.py`
+> كذلك `catalog_repo.py` الذي يقرأ من `erp.db` (المنتجات المسعّرة والعروض للكتالوج).
+> **الملفات الفعلية:** `orders_schema.py`, `customers_repo.py`, `orders_repo.py`, `catalog_repo.py`
 > **آخر تحديث:** يعكس الكود الفعلي في السياق.
 
 ---
@@ -13,6 +14,7 @@
 | [orders_schema.py](#orders_schemapy) | إنشاء جداول orders.db + Migration Framework |
 | [customers_repo.py](#customers_repopy) | CRUD العملاء وجهات الاتصال |
 | [orders_repo.py](#orders_repopy) | CRUD الطلبات وبنودها |
+| [catalog_repo.py](#catalog_repopy) | قراءة كتالوج المنتجات المسعّرة والعروض من erp.db |
 
 ---
 
@@ -232,6 +234,12 @@ fetch_customer_orders(conn, customer_id: int) -> list
 # id, order_number, order_type, status, priority,
 # order_date, due_date, net_amount, paid_amount
 # ORDER BY created_at DESC
+
+fetch_order_basic(conn, order_id: int) -> row
+# [مضاف] نسخة خفيفة من fetch_order — بدون JOIN على customers/orders
+# مخصصة لاستخدامات service الداخلية التي تحتاج فقط
+#   id, order_number, status, customer_id, paid_amount, net_amount
+# (تحقق، حذف، انتقال حالة) دون تحميل بيانات العميل الكاملة
 ```
 
 ### كتابة الطلبات
@@ -327,6 +335,14 @@ update_order_item(conn, item_id: int, item_name: str,
                   design_ref: str = '', notes: str = '')
 # يعيد حساب total_price | يستدعي _recalc_order_total()
 
+delete_order_items_by_order(conn, order_id: int) -> None
+# [مضاف] يحذف كل بنود طلب معيّن دفعة واحدة (DELETE WHERE order_id=?)
+# نُقلت من OrderService.update() الذي كان يُنفِّذ SQL خام مباشرة
+# قبل إعادة إدراج البنود المُحدَّثة
+# ملاحظة: لا تستدعي _recalc_order_total عمداً — الـ caller يُعيد
+# إدراج البنود الجديدة بعدها مباشرة، و insert_order_item يُعيد
+# الحساب تلقائياً بنفسه
+
 delete_order_item(conn, item_id: int)
 # يستدعي _recalc_order_total() بعد الحذف
 
@@ -352,6 +368,16 @@ fetch_orders_summary(conn) -> dict
 # {total, pending, confirmed, in_progress, ready,
 #  delivered, cancelled, on_hold, urgent,
 #  total_value (SUM net_amount), total_paid (SUM paid_amount)}
+
+fetch_orders_summary_for_customer(conn, customer_id: int) -> dict
+# [مضاف] فلترة بعميل — نُقلت من OrderService.get_summary(customer_id=...)
+# (كانت SQL خام) إلى الـ repo — يحافظ على مبدأ الطبقات
+# {total, amount (SUM net_amount), pending, in_prog, done, cancelled}
+# WHERE customer_id=?
+
+fetch_orders_summary_all(conn) -> dict
+# [مضاف] نفس أعمدة fetch_orders_summary_for_customer لكن بدون فلترة
+# {total, amount, pending, in_prog, done, cancelled}
 ```
 
 ---
@@ -375,6 +401,47 @@ on_hold → pending | confirmed | in_progress
 
 ---
 
+## catalog_repo.py
+
+**المسار الكامل:** `db/orders/catalog_repo.py`
+
+**الغرض:** يقرأ كتالوج المنتجات المسعّرة (نهائي/نصف مصنع) والعروض من `erp.db` (وليس `orders.db`) — لعرضها عند بناء طلب جديد.
+
+> **[مضاف حديثاً]** كان هذا الملف في الأصل `db_fetcher` منفصل داخل `ui/tabs/orders/order_form/_products_fetcher.py`، نُقل إلى `db/orders` لأنه ينفذ SQL خام (JOIN على `items/pricing/categories/offers`)، مما يخالف مبدأ الطبقات:
+> `widgets -> tabs/UI -> services -> repos (db) -> schema`
+> UI لا يجب أن يعرف SQL أو يفتح اتصال قاعدة بيانات بنفسه.
+
+**جداول erp المستخدمة (قراءة فقط):** `items(id, name, type, category_id)`, `pricing(item_id, price)`, `categories(id, name, color)`, `offers(id, name, discount, category_id)`, `offer_items(offer_id, item_id, qty)`.
+
+### المنتجات المسعّرة
+
+```python
+fetch_priced_products(conn) -> list[dict]
+# يجلب المنتجات (type IN ('final','semi')) JOIN pricing (INNER JOIN — فقط المسعّرة)
+# LEFT JOIN categories
+# ORDER BY COALESCE(category_name, 'ω') ASC, name ASC  (بلا تصنيف في الآخر)
+# كل عنصر: {id, name, type, category_id, category_name, category_color, price}
+
+fetch_priced_product_by_id(conn, product_id: int) -> dict | None
+# [مضاف] يجلب منتجاً واحداً بمعرفه: {id, name, price}
+# LEFT JOIN pricing (وليس INNER) — price قد يكون None لو غير مُسعَّر
+# [تعديل هيكلي] نُقلت من services/orders/order_service.py حيث كانت
+# resolve_product_info تنفذ SQL خام مباشرة على erp_conn، متخطّية طبقة الـ repo
+```
+
+### العروض
+
+```python
+fetch_offers(conn) -> list[dict]
+# id, name, discount, category_name (LEFT JOIN categories) | ORDER BY name
+
+fetch_offer_lines(conn, offer_id: int) -> list[dict]
+# item_id, qty, item_name, price (LEFT JOIN pricing)
+# JOIN items | WHERE offer_id=?
+```
+
+---
+
 ## ملاحظات مهمة
 
 - `delete_customer` يرفض الحذف لو العميل له طلبات — استخدم `toggle_customer_active` بدلاً منه.
@@ -385,3 +452,4 @@ on_hold → pending | confirmed | in_progress
 - `_next_order_number` يُعيد الترقيم من 0001 كل سنة جديدة.
 - كل الـ migrations يجب أن تكون idempotent [Q-02].
 - `customer_contacts.role` أُضيف عبر migration m005 — قد يكون NULL في قواعد بيانات قديمة.
+- `catalog_repo.py` مختلف عن باقي ملفات `db/orders/` — يقرأ من `erp.db` (كتالوج المنتجات) وليس `orders.db`، ولا يحتوي أي عمليات كتابة (قراءة فقط).

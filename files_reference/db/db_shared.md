@@ -508,3 +508,4 @@ __all__ = ["SharedItemsBridge", "get_bridge", "is_shared_id", "extract_shared_id
 - `fetch_descendants`: Recursive CTE = O(1) مع fallback تلقائي [تحسين 5].
 - `build_tree`: يستخدم `_row_to_dict()` الآمنة [إصلاح 5].
 - `apply_template_to_dimension_set` يحتاج connection-ين: `conn_erp` لـ erp.db و `conn_design` لـ designs.db.
+- `settings_repo.py` يُستخدم من `services/shared/settings_service.py` (خارج هذا المسار) — لا علاقة مباشرة مع باقي ملفات db/shared.
