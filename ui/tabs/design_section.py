@@ -16,7 +16,7 @@ from PyQt5.QtWidgets import QWidget, QVBoxLayout, QTabWidget, QLabel
 
 from services.design import get_designs_conn_and_init
 
-from ui.widgets.theme.layout_styles import tab_style
+from ui.widgets.theme.layout_styles import tab_style, apply_tab_widths, normalize_tab_widget
 from ui.theme                        import _C
 from ui.widgets.core.i18n           import tr
 from ui.font                        import FS_MD
@@ -48,7 +48,7 @@ class DesignSection(QWidget, WidgetMixin):
 
         # ── التبويبات ──
         self._tabs = QTabWidget()
-        self._tabs.setTabPosition(QTabWidget.North)
+        normalize_tab_widget(self._tabs)
         self._tabs.setStyleSheet(tab_style())
 
         self._dim_tab     = DimensionSetsTab(self.conn)
@@ -56,6 +56,7 @@ class DesignSection(QWidget, WidgetMixin):
 
         self._tabs.addTab(self._dim_tab,     tr("dimension_sets_tab"))
         self._tabs.addTab(self._designs_tab, tr("designs_tab"))
+        apply_tab_widths(self._tabs)
 
         # عند تغيير التبويب لـ "التصميمات"، نعمل refresh لتحميل أي مجموعات جديدة
         self._tabs.currentChanged.connect(self._on_tab_changed)
@@ -79,6 +80,7 @@ class DesignSection(QWidget, WidgetMixin):
         """)
         if hasattr(self, "_tabs"):
             self._tabs.setStyleSheet(tab_style())
+            apply_tab_widths(self._tabs)
 
     def closeEvent(self, event):
         try:

@@ -15,11 +15,11 @@ from ui.widgets.managers.category import CategoryManager
 from ui.widgets.core.i18n import tr
 from ui.widgets.core.events import emit_company_data_changed
 from ui.widgets.core.widget_mixin import WidgetMixin
+from ui.widgets.theme.layout_styles import tab_style, apply_tab_widths, normalize_tab_widget
 from ui.constants import (
     OFFERS_TAB_SPLITTER_HANDLE_W,
     OFFERS_TAB_FORM_SIZE, OFFERS_TAB_BOTTOM_SIZE,
     OFFERS_TAB_TABLE_SIZE, OFFERS_TAB_DETAILS_SIZE,
-    TAB_INDICATOR_BORDER_W,
     SPLITTER_HANDLE_BORDER_W,
 )
 
@@ -44,12 +44,8 @@ class OffersTab(QWidget, WidgetMixin):
 
     def _refresh_style(self, *_):
         from ui.theme import _C
-        self._tabs_widget.setStyleSheet(f"""
-            QTabBar::tab:selected {{
-                color: {_C['orange']};
-                border-top: {TAB_INDICATOR_BORDER_W}px solid {_C['orange']};
-            }}
-        """)
+        self._tabs_widget.setStyleSheet(tab_style())
+        apply_tab_widths(self._tabs_widget)
         _splitter_style = f"""
             QSplitter::handle {{
                 background: {_C['border']};
@@ -65,6 +61,7 @@ class OffersTab(QWidget, WidgetMixin):
         root.setContentsMargins(0, 0, 0, 0)
 
         tabs = QTabWidget()
+        normalize_tab_widget(tabs)
         self._tabs_widget = tabs
 
         main_widget = QWidget()

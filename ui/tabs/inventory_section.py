@@ -18,10 +18,8 @@ ui/tabs/inventory_tab.py
 
 from PyQt5.QtWidgets import QWidget, QVBoxLayout, QTabWidget
 
-from ui.widgets.theme.layout_styles import tab_style
-from ui.theme                        import _C
+from ui.widgets.theme.layout_styles import tab_style, apply_tab_widths, normalize_tab_widget
 from ui.widgets.core.i18n           import tr
-from ui.constants                    import TAB_INDICATOR_BORDER_W
 from ui.widgets.core.widget_mixin   import WidgetMixin
 
 from .inventory.items._items_tab    import _ItemsTab
@@ -48,6 +46,7 @@ class InventoryTab(QWidget, WidgetMixin):
         self._moves_panel = _MovesPanel(self.inv_conn)
 
         self._tabs = QTabWidget()
+        normalize_tab_widget(self._tabs)
         self._refresh_style()
 
         self._tabs.addTab(
@@ -58,6 +57,7 @@ class InventoryTab(QWidget, WidgetMixin):
         self._tabs.addTab(_OutboundTab(self.inv_conn),                tr("inventory_outbound_tab"))
         self._tabs.addTab(_ReportTab(self.inv_conn),                  tr("inventory_report_tab"))
         self._tabs.addTab(self._moves_panel,                          tr("inventory_section_tab_moves"))
+        apply_tab_widths(self._tabs)
 
         root.addWidget(self._tabs)
 
@@ -68,14 +68,8 @@ class InventoryTab(QWidget, WidgetMixin):
     def _refresh_style(self, *_):
         if not self._tabs:
             return
-        self._tabs.setStyleSheet(
-            tab_style() + f"""
-            QTabBar::tab:selected {{
-                color: {_C['stock_ok_fg']};
-                border-top: {TAB_INDICATOR_BORDER_W}px solid {_C['stock_ok_fg']};
-            }}
-            """
-        )
+        self._tabs.setStyleSheet(tab_style())
+        apply_tab_widths(self._tabs)
 
     def _refresh_lang(self, *_):
         if not self._tabs:
@@ -85,6 +79,9 @@ class InventoryTab(QWidget, WidgetMixin):
         self._tabs.setTabText(2, tr("inventory_outbound_tab"))
         self._tabs.setTabText(3, tr("inventory_report_tab"))
         self._tabs.setTabText(4, tr("inventory_section_tab_moves"))
+        # [حل مركزي] لازم يُعاد الحساب هنا كمان: النص العربي والإنجليزي
+        # مش نفس الطول، فتغيير اللغة لازم يعيد ضبط min-width.
+        apply_tab_widths(self._tabs)
 
     def closeEvent(self, event):
         self.inv_conn.close()

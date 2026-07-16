@@ -20,6 +20,7 @@ from .dimension_sets._values_panel import _ValuesPanel
 from .dimension_sets._groups_panel import _GroupsPanel
 from ui.widgets.core.i18n import tr
 from ui.widgets.core.widget_mixin import WidgetMixin
+from ui.widgets.theme.layout_styles import tab_style, apply_tab_widths, normalize_tab_widget
 from ui.constants import MARGIN_ZERO
 
 
@@ -28,20 +29,27 @@ class DimensionSetsTab(QWidget, WidgetMixin):
         super().__init__(parent)
         self.conn = conn
         self._build()
-        self._init_widget_mixin(theme=False, font=False, data=False)
+        self._init_widget_mixin(theme=True, font=False, data=False)
         self._refresh_lang()
+
+    def _refresh_style(self, *_):
+        if hasattr(self, "_inner_tabs"):
+            self._inner_tabs.setStyleSheet(tab_style())
+            apply_tab_widths(self._inner_tabs)
 
     def _refresh_lang(self, *_):
         idx_values = self._inner_tabs.indexOf(self._values_panel)
         idx_groups = self._inner_tabs.indexOf(self._groups_panel)
         self._inner_tabs.setTabText(idx_values, tr("dimension_sets_tab_values"))
         self._inner_tabs.setTabText(idx_groups, tr("dimension_sets_tab_groups"))
+        apply_tab_widths(self._inner_tabs)
 
     def _build(self):
         root = QVBoxLayout(self)
         root.setContentsMargins(*MARGIN_ZERO)
 
         self._inner_tabs = QTabWidget()
+        normalize_tab_widget(self._inner_tabs)
         inner_tabs = self._inner_tabs
 
         # ══ تبويب 1: إدخال المقاسات ══
@@ -62,6 +70,7 @@ class DimensionSetsTab(QWidget, WidgetMixin):
         inner_tabs.addTab(self._groups_panel, tr("dimension_sets_tab_groups"))
         inner_tabs.currentChanged.connect(self._on_tab_changed)
 
+        self._refresh_style()
         root.addWidget(inner_tabs)
 
     def _on_tab_changed(self, index):

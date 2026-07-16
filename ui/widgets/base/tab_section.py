@@ -17,7 +17,7 @@ TabSectionBase — قاعدة مشتركة للأقسام التي تحتوي ع
 """
 from PyQt5.QtWidgets import QWidget, QVBoxLayout, QTabWidget
 
-from ..theme.layout_styles           import tab_style
+from ..theme.layout_styles           import tab_style, apply_tab_widths, normalize_tab_widget
 from ui.widgets.core.widget_mixin    import WidgetMixin
 
 
@@ -46,12 +46,19 @@ class TabSectionBase(QWidget, WidgetMixin):
         root.setSpacing(0)
 
         self._tabs = QTabWidget()
+        normalize_tab_widget(self._tabs)
         self._build_tabs(self._tabs)
+        # [حل مركزي لقص نص التبويبات] بما إن كل الأقسام الوارثة من
+        # TabSectionBase بتضيف تبويباتها داخل _build_tabs()، نحسب
+        # العرض الفعلي مرة واحدة هنا بعد ما التبويبات كلها اتضافت —
+        # بدل ما كل قسم فرعي يستدعيها بنفسه.
+        apply_tab_widths(self._tabs)
         root.addWidget(self._tabs)
 
     def _refresh_style(self, *_):
         if self._tabs:
             self._tabs.setStyleSheet(tab_style())
+            apply_tab_widths(self._tabs)
 
     def _build_tabs(self, tabs: QTabWidget):
         """Override هنا لإضافة التبويبات."""

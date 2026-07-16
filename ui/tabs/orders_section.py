@@ -10,7 +10,7 @@ from services.orders.order_service import get_orders_conn_and_init
 from ui.tabs.orders.orders_tab    import OrdersTab
 from ui.tabs.orders.customers_tab import CustomersTab
 from ui.tabs.orders.dashboard_tab import OrdersDashboardTab
-from ui.widgets.theme.layout_styles import tab_style
+from ui.widgets.theme.layout_styles import tab_style, apply_tab_widths, normalize_tab_widget
 from ui.widgets.core.i18n import tr
 from ui.widgets.core.widget_mixin import WidgetMixin
 
@@ -31,6 +31,7 @@ class OrdersSection(QWidget, WidgetMixin):
         # بالستايل القديم (الفاتح) بعد التحويل لـ dark.
         if hasattr(self, "_tabs"):
             self._tabs.setStyleSheet(tab_style())
+            apply_tab_widths(self._tabs)
 
     def _build(self):
         layout = QVBoxLayout(self)
@@ -38,7 +39,7 @@ class OrdersSection(QWidget, WidgetMixin):
         layout.setSpacing(0)
 
         self._tabs = QTabWidget()
-        self._tabs.setTabPosition(QTabWidget.North)
+        normalize_tab_widget(self._tabs)
         self._tabs.setStyleSheet(tab_style())
 
         self._dashboard_tab = OrdersDashboardTab(self.conn)
@@ -48,6 +49,7 @@ class OrdersSection(QWidget, WidgetMixin):
         self._tabs.addTab(self._dashboard_tab, tr("orders_section_tab_dashboard"))
         self._tabs.addTab(self._orders_tab,    tr("orders_section_tab_orders"))
         self._tabs.addTab(self._customers_tab, tr("orders_section_tab_customers"))
+        apply_tab_widths(self._tabs)
 
         self._tabs.currentChanged.connect(self._on_tab_changed)
         layout.addWidget(self._tabs)
@@ -58,6 +60,7 @@ class OrdersSection(QWidget, WidgetMixin):
         self._tabs.setTabText(0, tr("orders_section_tab_dashboard"))
         self._tabs.setTabText(1, tr("orders_section_tab_orders"))
         self._tabs.setTabText(2, tr("orders_section_tab_customers"))
+        apply_tab_widths(self._tabs)
 
     def _on_tab_changed(self, index):
         if index == 0:

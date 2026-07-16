@@ -12,7 +12,7 @@ from .financial.trial_balance_tab    import TrialBalanceTab
 from .financial.income_statement_tab import IncomeStatementTab
 from .financial.owners_equity_tab    import OwnersEquityTab
 from .financial.balance_sheet_tab    import BalanceSheetTab
-from ui.widgets.theme.layout_styles import tab_style
+from ui.widgets.theme.layout_styles import tab_style, apply_tab_widths, normalize_tab_widget
 from ui.widgets.theme.table_styles import splitter_style
 from ui.widgets.core.i18n import tr
 from ui.widgets.core.widget_mixin import WidgetMixin
@@ -40,11 +40,28 @@ class ThemedTabWidget(QTabWidget, WidgetMixin):
         super().__init__(parent)
         self._size = size
         self.setLayoutDirection(Qt.RightToLeft)
+        normalize_tab_widget(self)
         self._init_widget_mixin(font=False, lang=False, data=False)
         self._refresh_style()
 
     def _refresh_style(self, *_):
         self.setStyleSheet(tab_style(size=self._size))
+        apply_tab_widths(self, size=self._size)
+
+    # [حل مركزي لقص نص التبويبات] ThemedTabWidget بيتم ملؤه من بره
+    # (addTab بتتنادى بعد الإنشاء في build_accounts_tabs/build_equity_tab/
+    # build_financial_tab وغيرها) — فبدل ما كل موضع استخدام يفتكر يستدعي
+    # apply_tab_widths() يدويًا، نعمل override هنا عشان العرض يتحسب
+    # تلقائيًا مع كل إضافة تاب مهما كان مصدرها.
+    def addTab(self, widget, *args, **kwargs):
+        index = super().addTab(widget, *args, **kwargs)
+        apply_tab_widths(self, size=self._size)
+        return index
+
+    def insertTab(self, index, widget, *args, **kwargs):
+        result = super().insertTab(index, widget, *args, **kwargs)
+        apply_tab_widths(self, size=self._size)
+        return result
 
 
 def _make_tab_widget(size: str = "inner") -> QTabWidget:

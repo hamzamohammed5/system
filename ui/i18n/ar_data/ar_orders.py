@@ -165,7 +165,7 @@ AR_STRINGS_ORDERS: dict[str, str] = {
     "priority_normal":         "➡ عادي",
     "priority_high":           "⬆ عالي",
     "priority_urgent":         "🔴 عاجل",
-    "status_on_hold":          "⏸ معلق",
+    "status_on_hold":          "معلق",
     "status_in_progress":      "🔧 تنفيذ",
     "status_pending_icon":     "⏳",
     "status_confirmed_icon":   "✅",

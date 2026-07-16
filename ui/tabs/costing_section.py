@@ -14,7 +14,7 @@ ui/tabs/costing_section.py
 from PyQt5.QtWidgets import QWidget, QVBoxLayout, QTabWidget, QLabel
 from PyQt5.QtCore    import Qt
 
-from ui.widgets.theme.layout_styles import tab_style
+from ui.widgets.theme.layout_styles import tab_style, apply_tab_widths, normalize_tab_widget
 from ui.theme                        import _C
 from ui.widgets.core.i18n           import tr
 from ui.font                        import FS_MD, FS_LG
@@ -61,14 +61,8 @@ class CostingSection(QWidget, WidgetMixin):
 
         # ── التبويبات ──
         self._tabs = QTabWidget()
-        self._tabs.setTabPosition(QTabWidget.North)
+        normalize_tab_widget(self._tabs)
         self._tabs.setStyleSheet(tab_style())
-        self._tabs.setUsesScrollButtons(True)
-        self._tabs.setElideMode(Qt.ElideNone)
-
-        tab_bar = self._tabs.tabBar()
-        tab_bar.setExpanding(False)
-        tab_bar.setDrawBase(True)
 
         # [Fix #9] try/except حول كل tab على حدة لعزل الأخطاء
         _tab_defs = [
@@ -87,6 +81,11 @@ class CostingSection(QWidget, WidgetMixin):
             #     widget = _make_error_tab(tr("tab_load_error", error=str(e)))
             self._tabs.addTab(widget, label)
 
+        # [حل مركزي لمشكلة قص نص التبويبات] يحسب min-width الفعلي حسب
+        # أطول نص تبويب موجود فعليًا (بدل TAB_MIN_W_NORMAL الثابت في
+        # constants.py). نفس منطق حساب عرض الأزرار في make_btn.
+        apply_tab_widths(self._tabs)
+
         layout.addWidget(self._tabs)
 
     def _refresh_style(self, *_):
@@ -102,3 +101,4 @@ class CostingSection(QWidget, WidgetMixin):
         """)
         if hasattr(self, "_tabs"):
             self._tabs.setStyleSheet(tab_style())
+            apply_tab_widths(self._tabs)

@@ -18,7 +18,7 @@ from .financial.balance_sheet_tab    import BalanceSheetTab
 from ui.widgets.core.conn import SafeConnMixin
 from ui.widgets.core.events import bus
 from PyQt5.QtCore import Qt
-from ui.widgets.theme.layout_styles import tab_style
+from ui.widgets.theme.layout_styles import tab_style, apply_tab_widths, normalize_tab_widget
 from ui.widgets.core.i18n import tr
 
 
@@ -41,12 +41,14 @@ class FinancialStatementsTab(SafeConnMixin, QWidget):
     def _build(self):
         conn = self._get_safe_conn()
         self._tabs = QTabWidget()
+        normalize_tab_widget(self._tabs)
         self._tabs.setLayoutDirection(Qt.RightToLeft)
         self._tabs.setStyleSheet(tab_style(size="small"))
         self._tabs.addTab(IncomeStatementTab(conn),  tr("income_statement_tab"))
         self._tabs.addTab(OwnersEquityTab(conn),     tr("owners_equity_tab"))
         self._tabs.addTab(BalanceSheetTab(conn),     tr("balance_sheet_tab"))
         self._tabs.addTab(TrialBalanceTab(conn),     tr("trial_balance_tab"))
+        apply_tab_widths(self._tabs, size="small")
         self._root_layout.addWidget(self._tabs)
 
     def _rebuild(self):
