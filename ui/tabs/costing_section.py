@@ -46,7 +46,7 @@ class CostingSection(QWidget, WidgetMixin):
     def __init__(self, parent=None):
         super().__init__(parent)
         self._build()
-        self._init_widget_mixin(theme=True, font=True, lang=False, data=False)
+        self._init_widget_mixin(theme=True, font=True, lang=True, data=False)
 
     def _build(self):
         layout = QVBoxLayout(self)
@@ -63,6 +63,17 @@ class CostingSection(QWidget, WidgetMixin):
         self._tabs = QTabWidget()
         normalize_tab_widget(self._tabs)
         self._tabs.setStyleSheet(tab_style())
+
+        # [إصلاح lang] بنحتفظ بمفاتيح i18n لكل تاب (آيقونة + مفتاح النص)
+        # عشان _refresh_lang() تقدر تعيد بناء النصوص عند تغيير اللغة لايف
+        # من غير ما تحتاج تعيد إنشاء الـ widgets نفسها.
+        self._tab_label_keys = [
+            ("tab_icon_raw",     "raw_materials"),
+            ("tab_icon_semi",    "semi_product"),
+            ("tab_icon_final",   "final_product"),
+            ("tab_icon_labor",   "labor"),
+            ("tab_icon_machine", "machine"),
+        ]
 
         # [Fix #9] try/except حول كل tab على حدة لعزل الأخطاء
         _tab_defs = [
@@ -101,4 +112,19 @@ class CostingSection(QWidget, WidgetMixin):
         """)
         if hasattr(self, "_tabs"):
             self._tabs.setStyleSheet(tab_style())
+            apply_tab_widths(self._tabs)
+
+    def _refresh_lang(self, *_):
+        # [إصلاح lang] كان القسم ده مش متسجل على bus.lang_changed خالص
+        # (lang=False) فهيدر وتابات "حساب التكلفة" كانوا بيفضلوا باللغة
+        # القديمة عند تبديل اللغة لايف، بعكس باقي الأقسام (التسعير/
+        # الطلبات/المخزن).
+        if not hasattr(self, "_header"):
+            return
+        self._header.setText(f"  {tr('nav_icon_costing')}  {tr('costing_section')}")
+        if hasattr(self, "_tabs") and hasattr(self, "_tab_label_keys"):
+            for i, (icon_key, text_key) in enumerate(self._tab_label_keys):
+                self._tabs.setTabText(i, f"{tr(icon_key)}  {tr(text_key)}")
+            # النص العربي والإنجليزي مش نفس الطول، فلازم يُعاد حساب
+            # min-width بعد تغيير اللغة زي ما بيحصل في باقي الأقسام.
             apply_tab_widths(self._tabs)

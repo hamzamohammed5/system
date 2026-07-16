@@ -56,3 +56,11 @@ class ProductTab(TabSectionBase):
             CategoryManager(self.conn, scope=scope),
             f"{tr('categories_tab_icon')}  {tr('categories_tab')}",
         )
+
+    def _tab_label(self, index: int):
+        # [إصلاح lang] hook TabSectionBase الجديدة.
+        icon = _icon_map().get(self.product_type, tr("tab_icon_final"))
+        return {
+            0: f"{icon}  {tr('product_tab')}",
+            1: f"{tr('categories_tab_icon')}  {tr('categories_tab')}",
+        }.get(index)

@@ -16,10 +16,13 @@ ui/tabs/inventory_tab.py
   - تحديث الثيم الديناميكي عبر bus.theme_changed.
 """
 
-from PyQt5.QtWidgets import QWidget, QVBoxLayout, QTabWidget
+from PyQt5.QtWidgets import QWidget, QVBoxLayout, QTabWidget, QLabel
 
 from ui.widgets.theme.layout_styles import tab_style, apply_tab_widths, normalize_tab_widget
+from ui.theme                        import _C
 from ui.widgets.core.i18n           import tr
+from ui.font                        import FS_MD
+from ui.constants                    import SECTION_HEADER_HEIGHT, SECTION_HEADER_BORDER_W, SECTION_HEADER_PAD_RIGHT
 from ui.widgets.core.widget_mixin   import WidgetMixin
 
 from .inventory.items._items_tab    import _ItemsTab
@@ -42,12 +45,18 @@ class InventoryTab(QWidget, WidgetMixin):
     def _build(self):
         root = QVBoxLayout(self)
         root.setContentsMargins(0, 0, 0, 0)
+        root.setSpacing(0)
+
+        # ── هيدر القسم ── (كان ناقص مقارنة بباقي الأقسام: التكلفة/الحسابات/التسعير/التصميمات)
+        self._header = QLabel(f"  {tr('nav_icon_inventory')}  {tr('nav_inventory')}")
+        self._header.setFixedHeight(SECTION_HEADER_HEIGHT)
+        root.addWidget(self._header)
 
         self._moves_panel = _MovesPanel(self.inv_conn)
 
         self._tabs = QTabWidget()
         normalize_tab_widget(self._tabs)
-        self._refresh_style()
+        self._tabs.setStyleSheet(tab_style())
 
         self._tabs.addTab(
             _ItemsTab(self.inv_conn, self.acc_conn, self._on_item_selected),
@@ -66,12 +75,25 @@ class InventoryTab(QWidget, WidgetMixin):
             self._moves_panel.load(inv_id)
 
     def _refresh_style(self, *_):
+        if hasattr(self, "_header"):
+            self._header.setStyleSheet(f"""
+                QLabel {{
+                    background: {_C['bg_surface']};
+                    border-bottom: {SECTION_HEADER_BORDER_W}px solid {_C['border']};
+                    font-size: {FS_MD}px;
+                    font-weight: bold;
+                    color: {_C['accent']};
+                    padding-right: {SECTION_HEADER_PAD_RIGHT}px;
+                }}
+            """)
         if not self._tabs:
             return
         self._tabs.setStyleSheet(tab_style())
         apply_tab_widths(self._tabs)
 
     def _refresh_lang(self, *_):
+        if hasattr(self, "_header"):
+            self._header.setText(f"  {tr('nav_icon_inventory')}  {tr('nav_inventory')}")
         if not self._tabs:
             return
         self._tabs.setTabText(0, tr("inventory_items_tab"))

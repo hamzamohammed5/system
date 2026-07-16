@@ -116,3 +116,11 @@ class MachineTab(TabSectionBase):
                     f"{tr('machine_operations_icon')}  {tr('machine_operations')}")
         tabs.addTab(CategoryManager(self.conn, scope="machine"),
                     f"{tr('categories_tab_icon')}  {tr('categories_tab')}")
+
+    def _tab_label(self, index: int):
+        # [إصلاح lang] hook TabSectionBase الجديدة.
+        return {
+            0: f"{tr('machines_icon')}  {tr('machines')}",
+            1: f"{tr('machine_operations_icon')}  {tr('machine_operations')}",
+            2: f"{tr('categories_tab_icon')}  {tr('categories_tab')}",
+        }.get(index)

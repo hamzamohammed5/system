@@ -33,7 +33,7 @@ class DesignSection(QWidget, WidgetMixin):
         # إنشاء قاعدة بيانات التصميمات
         self.conn = get_designs_conn_and_init()
         self._build()
-        self._init_widget_mixin(theme=True, font=True, lang=False, data=False)
+        self._init_widget_mixin(theme=True, font=True, lang=True, data=False)
 
     def _build(self):
         layout = QVBoxLayout(self)
@@ -80,6 +80,18 @@ class DesignSection(QWidget, WidgetMixin):
         """)
         if hasattr(self, "_tabs"):
             self._tabs.setStyleSheet(tab_style())
+            apply_tab_widths(self._tabs)
+
+    def _refresh_lang(self, *_):
+        # [إصلاح lang] كان القسم ده مش متسجل على bus.lang_changed خالص
+        # (lang=False) فهيدر وتابات "التصميمات" كانوا بيفضلوا باللغة
+        # القديمة عند تبديل اللغة لايف.
+        if not hasattr(self, "_header"):
+            return
+        self._header.setText(f"  {tr('nav_icon_design')}  {tr('nav_design')}")
+        if hasattr(self, "_tabs"):
+            self._tabs.setTabText(0, tr("dimension_sets_tab"))
+            self._tabs.setTabText(1, tr("designs_tab"))
             apply_tab_widths(self._tabs)
 
     def closeEvent(self, event):

@@ -63,7 +63,7 @@ class _JournalTreeTable(SafeConnMixin, QWidget, WidgetMixin):
 
         self._build()
         self._load()
-        self._init_widget_mixin(lang=False, data=False)
+        self._init_widget_mixin(lang=True, data=False)
         self._refresh_style()
         bus.company_data_changed.connect(self._on_company_data_changed)
 
@@ -77,6 +77,30 @@ class _JournalTreeTable(SafeConnMixin, QWidget, WidgetMixin):
             f"QTableWidget {{ gridline-color: {_C['border']}; }}"
         )
 
+    def _refresh_lang(self, *_):
+        # [إصلاح lang] كان lang=False خالص رغم إن الملف ده فيه 10+
+        # استخدامات لـ tr() (عنوان الهيدر، أزرار توسيع/طي/حذف، عناوين
+        # الأعمدة، ونصوص جوه الصفوف زي حالة الاتزان) — كل دول كانوا
+        # بيفضلوا باللغة القديمة عند تبديل اللغة لايف.
+        if not hasattr(self, "_header"):
+            return
+        if hasattr(self._header, "set_title"):
+            self._header.set_title(tr("journal_table_title"))
+        elif hasattr(self._header, "setTitle"):
+            self._header.setTitle(tr("journal_table_title"))
+        if hasattr(self, "_btn_expand"):
+            self._btn_expand.setText(tr("journal_expand_all"))
+        if hasattr(self, "_btn_collapse"):
+            self._btn_collapse.setText(tr("journal_collapse_all"))
+        if hasattr(self, "_btn_delete"):
+            self._btn_delete.setText(tr("journal_delete_selected"))
+        if hasattr(self, "table"):
+            self.table.setHorizontalHeaderLabels(self._cols())
+        # إعادة رسم الصفوف الحالية عشان النصوص جواها (حالة الاتزان،
+        # أيقونة الطي/التوسيع، الوصف التفصيلي) تتحدث فورًا مش لما
+        # البيانات تتغير تاني بالصدفة.
+        self._apply_filter()
+
     def _build(self):
         root = QVBoxLayout(self)
         root.setContentsMargins(*MARGIN_ZERO)
@@ -87,9 +111,9 @@ class _JournalTreeTable(SafeConnMixin, QWidget, WidgetMixin):
             title=tr("journal_table_title"),
             show_search=False,
         )
-        self._header.add_action(tr("journal_expand_all"),   self._expand_all,   "normal")
-        self._header.add_action(tr("journal_collapse_all"), self._collapse_all, "normal")
-        self._header.add_action(tr("journal_delete_selected"), self._delete_selected, "danger")
+        self._btn_expand   = self._header.add_action(tr("journal_expand_all"),   self._expand_all,   "normal")
+        self._btn_collapse = self._header.add_action(tr("journal_collapse_all"), self._collapse_all, "normal")
+        self._btn_delete   = self._header.add_action(tr("journal_delete_selected"), self._delete_selected, "danger")
         root.addWidget(self._header)
 
         # ── شريط الفلاتر ──

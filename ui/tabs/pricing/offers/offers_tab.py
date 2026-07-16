@@ -32,7 +32,7 @@ class OffersTab(QWidget, WidgetMixin):
 
     def __init__(self, parent=None):
         super().__init__(parent)
-        self._init_widget_mixin(theme=True, font=False, lang=False, data=False)
+        self._init_widget_mixin(theme=True, font=False, lang=True, data=False)
         self._build()
         self._refresh_style()
 
@@ -55,6 +55,16 @@ class OffersTab(QWidget, WidgetMixin):
         """
         self._splitter.setStyleSheet(_splitter_style)
         self._bottom_splitter.setStyleSheet(_splitter_style)
+
+    def _refresh_lang(self, *_):
+        # [إصلاح lang] كان القسم ده مش متسجل على bus.lang_changed خالص
+        # (lang=False) فتابات "المنتجات"/"التصنيفات" كانوا بيفضلوا
+        # باللغة القديمة عند تبديل اللغة لايف.
+        if not hasattr(self, "_tabs_widget"):
+            return
+        self._tabs_widget.setTabText(0, tr("offer_products_tab"))
+        self._tabs_widget.setTabText(1, tr("offer_categories_tab"))
+        apply_tab_widths(self._tabs_widget)
 
     def _build(self):
         root = QVBoxLayout(self)

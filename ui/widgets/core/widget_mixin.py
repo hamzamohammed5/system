@@ -21,8 +21,8 @@ WidgetMixin — mixin عام يربط أي widget بالـ bus events تلقائ
 الـ parameters:
     theme: bool = True  → يربط bus.theme_changed     → يستدعي _refresh_style
     font : bool = True  → يربط bus.font_changed      → يستدعي _refresh_style
-    lang : bool = False → يربط bus.language_changed  → يستدعي _refresh_lang
-    data : bool = False → يربط bus.company_data_changed → يستدعي _refresh_data
+    lang : bool = True  → يربط bus.language_changed  → يستدعي _refresh_lang
+    data : bool = True  → يربط bus.company_data_changed → يستدعي _refresh_data
                           مع تحقق من company_id
 
 الدوال اللي ممكن تعرّفها في الـ subclass:

@@ -33,3 +33,11 @@ class RawTab(TabSectionBase):
                     f"{tr('tab_icon_raw')}  {tr('raw_tab')}")
         tabs.addTab(CategoryManager(self.conn, scope="raw"),
                     f"{tr('categories_tab_icon')}  {tr('categories_tab')}")
+
+    def _tab_label(self, index: int):
+        # [إصلاح lang] hook TabSectionBase الجديدة — بتخلي عناوين
+        # التابين ("الخامات"/"التصنيفات") تتحدث لايف عند تغيير اللغة.
+        return {
+            0: f"{tr('tab_icon_raw')}  {tr('raw_tab')}",
+            1: f"{tr('categories_tab_icon')}  {tr('categories_tab')}",
+        }.get(index)

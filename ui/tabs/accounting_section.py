@@ -43,6 +43,7 @@ from ui.widgets.core.i18n           import tr
 from ui.font                        import FS_BASE, FS_MD
 from ui.constants                    import (
     ACCOUNTING_TAB_MSG_PAD, ACCOUNTING_TAB_ERR_RADIUS, ACCOUNTING_TAB_ERR_MARGIN,
+    SECTION_HEADER_HEIGHT, SECTION_HEADER_BORDER_W, SECTION_HEADER_PAD_RIGHT,
 )
 from ui.widgets.core.widget_mixin   import WidgetMixin
 
@@ -54,7 +55,6 @@ from .accounting.accounting_tabs_builder import (
     build_accounts_tabs,
     build_financial_tab,
     ThemedTabWidget,
-    _INNER_TAB_STYLE,
 )
 
 
@@ -62,8 +62,9 @@ class AccountingTab(QWidget, WidgetMixin):
     def __init__(self, parent=None):
         super().__init__(parent)
         self._main_tabs: QTabWidget | None = None
+        self._header = None
         self._build()
-        self._init_widget_mixin(theme=True, font=True, lang=False, data=False)
+        self._init_widget_mixin(theme=True, font=True, lang=True, data=False)
 
     def _cleanup_layout(self):
         old_layout = self.layout()
@@ -85,6 +86,15 @@ class AccountingTab(QWidget, WidgetMixin):
 
         root = QVBoxLayout(self)
         root.setContentsMargins(0, 0, 0, 0)
+        root.setSpacing(0)
+
+        # ── هيدر القسم ── (كان ناقص مقارنة بباقي الأقسام: التكلفة/التسعير/التصميمات)
+        # لازم يتضاف قبل أي return مبكر (حالة "مفيش شركة" أو خطأ اتصال)
+        # عشان يفضل ظاهر في كل الحالات.
+        self._header = QLabel(f"  {tr('nav_icon_accounting')}  {tr('nav_accounting')}")
+        self._header.setFixedHeight(SECTION_HEADER_HEIGHT)
+        self._refresh_header_style()
+        root.addWidget(self._header)
 
         from services.companies.company_service import CompanyService
 
@@ -127,13 +137,46 @@ class AccountingTab(QWidget, WidgetMixin):
 
         root.addWidget(main_tabs)
 
+    def _refresh_header_style(self, *_):
+        if self._header is None:
+            return
+        self._header.setStyleSheet(f"""
+            QLabel {{
+                background: {_C['bg_surface']};
+                border-bottom: {SECTION_HEADER_BORDER_W}px solid {_C['border']};
+                font-size: {FS_MD}px;
+                font-weight: bold;
+                color: {_C['accent']};
+                padding-right: {SECTION_HEADER_PAD_RIGHT}px;
+            }}
+        """)
+
     def _refresh_style(self, *_):
         # [حماية إضافية] main_tabs بقى ThemedTabWidget ومسجل لوحده على
         # bus.theme_changed، فمن المفروض يتلوّن تلقائيًا. الاستدعاء هنا
         # طبقة أمان إضافية بس (نفس فلسفة _AccountForm._refresh_style) —
         # لا يضر لو اتنفذ مرتين.
+        self._refresh_header_style()
         if self._main_tabs is not None and hasattr(self._main_tabs, "_refresh_style"):
             self._main_tabs._refresh_style()
+
+    def _refresh_lang(self, *_):
+        # [إصلاح lang] كان القسم ده مش متسجل على bus.lang_changed خالص
+        # (lang=False) فهيدر ونصوص التابات الرئيسية الخمس كانوا بيفضلوا
+        # باللغة القديمة عند تبديل اللغة لايف. التابات الفرعية جوه كل
+        # تاب (JournalTab, LedgerTab, ...) بتتحدث بنفسها لأنها مسجلة
+        # على bus.lang_changed بشكل مستقل — هنا بنحدث بس عناوين
+        # التابات الخمس الرئيسية على مستوى main_tabs.
+        if hasattr(self, "_header") and self._header is not None:
+            self._header.setText(f"  {tr('nav_icon_accounting')}  {tr('nav_accounting')}")
+        if self._main_tabs is not None and self._main_tabs.count() == 5:
+            self._main_tabs.setTabText(0, tr("accounts_tab"))
+            self._main_tabs.setTabText(1, tr("journal_tab"))
+            self._main_tabs.setTabText(2, tr("ledger_tab"))
+            self._main_tabs.setTabText(3, tr("financial_tab"))
+            self._main_tabs.setTabText(4, tr("investors_tab"))
+            from ui.widgets.theme.layout_styles import apply_tab_widths
+            apply_tab_widths(self._main_tabs, size="normal")
 
     def refresh_for_company(self):
         self._build()

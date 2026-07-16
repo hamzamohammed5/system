@@ -37,7 +37,16 @@ class TabSectionBase(QWidget, WidgetMixin):
         self.conn  = conn_fn()
         self._tabs: "QTabWidget | None" = None
         self._setup()
-        self._init_widget_mixin(theme=True, font=False, lang=False)
+        # [إصلاح lang] كان lang=False هنا يعني إن كل الأقسام الوارثة من
+        # TabSectionBase (RawTab/LaborTab/MachineTab/ProductTab وغيرهم)
+        # مش بتستجيب لتغيير اللغة لايف — عناوين تباتها الفرعية (📦 الخامات،
+        # 🏷️ التصنيفات...) كانت بتتبني مرة واحدة بس وقت _build_tabs()
+        # وتفضل زي ما هي حتى لو المستخدم بدّل اللغة من الإعدادات.
+        # بقى lang=True هنا؛ _refresh_lang() العامة تحت بتستخدم hook
+        # اختياري (_tab_label) كل وريث يقدر يوفره لو حابب يدعم إعادة
+        # بناء نص تاباته عند تغيير اللغة — من غير ما نجبر كل وريث حالي
+        # على تنفيذه فورًا (لو محدش وفّرها، السلوك زي الأول تمامًا).
+        self._init_widget_mixin(theme=True, font=False, lang=True)
         self._refresh_style()
 
     def _setup(self):
@@ -58,6 +67,41 @@ class TabSectionBase(QWidget, WidgetMixin):
     def _refresh_style(self, *_):
         if self._tabs:
             self._tabs.setStyleSheet(tab_style())
+            apply_tab_widths(self._tabs)
+
+    def _tab_label(self, index: int) -> "str | None":
+        """
+        Hook اختياري — Override هنا في الوريث لو عايز عنوان التاب رقم
+        `index` يتحدث تلقائيًا عند تغيير اللغة لايف. يرجع النص الجديد
+        (مبني بـ tr() الحالية) أو None لو مفيش تحديث لازم لهذا الـ index.
+
+        مثال في RawTab:
+            def _tab_label(self, index):
+                return {
+                    0: f"{tr('tab_icon_raw')}  {tr('raw_tab')}",
+                    1: f"{tr('categories_tab_icon')}  {tr('categories_tab')}",
+                }.get(index)
+
+        لو الوريث ملوش override، _refresh_lang() ماتعملش حاجة —
+        نفس السلوك القديم بالظبط (لا كسر لأي كود موجود).
+        """
+        return None
+
+    def _refresh_lang(self, *_):
+        """
+        [إصلاح lang] عامة لكل الورثة — بتنادي _tab_label() الاختيارية
+        لكل تاب وتحدث النص لو الوريث وفّرها، وتعيد حساب عرض التابات
+        بعد كده لأن النص العربي/الإنجليزي مش نفس الطول.
+        """
+        if not self._tabs:
+            return
+        updated = False
+        for i in range(self._tabs.count()):
+            label = self._tab_label(i)
+            if label is not None:
+                self._tabs.setTabText(i, label)
+                updated = True
+        if updated:
             apply_tab_widths(self._tabs)
 
     def _build_tabs(self, tabs: QTabWidget):

@@ -79,3 +79,11 @@ class LaborTab(TabSectionBase):
                     f"{tr('labor_operations_icon')}  {tr('labor_operations')}")
         tabs.addTab(CategoryManager(self.conn, scope="labor"),
                     f"{tr('categories_tab_icon')}  {tr('categories_tab')}")
+
+    def _tab_label(self, index: int):
+        # [إصلاح lang] hook TabSectionBase الجديدة.
+        return {
+            0: f"{tr('labor_settings_icon')}  {tr('labor_settings')}",
+            1: f"{tr('labor_operations_icon')}  {tr('labor_operations')}",
+            2: f"{tr('categories_tab_icon')}  {tr('categories_tab')}",
+        }.get(index)

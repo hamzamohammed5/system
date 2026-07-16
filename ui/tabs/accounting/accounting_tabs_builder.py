@@ -21,10 +21,12 @@ from ui.constants import SPLITTER_HANDLE_W, EQUITY_TAB_SPLITTER_SIZES
 
 # [إصلاح dark-mode] القديم: _INNER_TAB_STYLE = tab_style(size="inner")
 # كان بياخد snapshot من _C وقت أول import بس ومبيتحدثش أبداً بعد كده.
-# لسه محتفظين بالاسم للتوافق مع أي كود قديم بيستورده، لكن دلوقتي
-# ThemedTabWidget هو المصدر الفعلي للستايل، وده بياخد القيمة الحالية
-# وقت الاستدعاء مش وقت الـ import.
-_INNER_TAB_STYLE = tab_style(size="inner")
+# اتشال نهائيًا (مش بس اتسيب "للتوافق") لأنه كان بيفضل مستورد من
+# accounting_section.py من غير استخدام فعلي — أي استخدام مستقبلي ليه
+# كان هيرجّع نفس مشكلة الألوان الثابتة اللي الملف ده أصلاً بيحلها.
+# لو محتاج ستايل التابويدجت الداخلي، استخدم tab_style(size="inner")
+# مباشرة وقت الحاجة، أو الأفضل استخدم ThemedTabWidget اللي بيتابع
+# الثيم تلقائيًا.
 
 
 class ThemedTabWidget(QTabWidget, WidgetMixin):
@@ -53,14 +55,20 @@ class ThemedTabWidget(QTabWidget, WidgetMixin):
     # build_financial_tab وغيرها) — فبدل ما كل موضع استخدام يفتكر يستدعي
     # apply_tab_widths() يدويًا، نعمل override هنا عشان العرض يتحسب
     # تلقائيًا مع كل إضافة تاب مهما كان مصدرها.
+    # [إصلاح] بنعيد setStyleSheet(tab_style()) هنا كمان مش بس
+    # apply_tab_widths(): _refresh_style() الأصلية بتتنفذ في __init__
+    # قبل ما يتضاف أي تاب خالص، فلو اتحطت stylesheet إضافية بعد كده
+    # (زي min-width من apply_tab_widths) من غير إعادة تطبيق tab_style()
+    # الأساسية، بعض عناصر الـ QSS (زي الخلفية) ممكن تتفقد بصريًا حسب
+    # ترتيب إعادة الـ polish الداخلي في Qt.
     def addTab(self, widget, *args, **kwargs):
         index = super().addTab(widget, *args, **kwargs)
-        apply_tab_widths(self, size=self._size)
+        self._refresh_style()
         return index
 
     def insertTab(self, index, widget, *args, **kwargs):
         result = super().insertTab(index, widget, *args, **kwargs)
-        apply_tab_widths(self, size=self._size)
+        self._refresh_style()
         return result
 
 

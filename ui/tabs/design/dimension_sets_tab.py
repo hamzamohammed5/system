@@ -29,7 +29,12 @@ class DimensionSetsTab(QWidget, WidgetMixin):
         super().__init__(parent)
         self.conn = conn
         self._build()
-        self._init_widget_mixin(theme=True, font=False, data=False)
+        # [إصلاح lang] lang كان غير محدد صراحة هنا (بيعتمد على default
+        # الـ WidgetMixin) — بقى lang=True صراحة عشان نضمن التسجيل على
+        # bus.lang_changed مهما كان الـ default. الاستدعاء اليدوي هنا
+        # طبقة أمان إضافية بس (زي AccountingTab._refresh_style) — لا
+        # يضر لو اتنفذ مرتين.
+        self._init_widget_mixin(theme=True, font=False, lang=True, data=False)
         self._refresh_lang()
 
     def _refresh_style(self, *_):
