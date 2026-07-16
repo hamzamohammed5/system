@@ -8,7 +8,7 @@ LaborOpTable — جدول عمليات العمالة.
 [Refactor] استخدام confirm_delete من ui.widgets.dialogs.confirm (الموثق).
 """
 
-from PyQt5.QtWidgets import QTableWidgetItem, QMessageBox
+from PyQt5.QtWidgets import QMessageBox
 
 from ui.widgets.dialogs.confirm                            import confirm_delete
 from ui.widgets.shared.list_panel_with_shared              import SharedItemsListPanel
@@ -17,6 +17,7 @@ from ui.tabs.costing.shared._utils                         import to_dict
 from ui.tabs.costing.shared.bulk_replace.bulk_replace_dialog import BulkReplaceDialog
 from ui.widgets.core.events                                import emit_company_data_changed
 from ui.widgets.core.i18n                                  import tr
+from ui.widgets.tables.tables                              import make_item
 from ui.constants import (
     LABOR_TABLE_COL0_W, LABOR_TABLE_COL2_W,
     LABOR_TABLE_COL3_W, LABOR_TABLE_COL4_W,
@@ -67,22 +68,20 @@ class LaborOpTable(SharedItemsListPanel):
         cat_display  = item.get("category_name") or tr("dash")
 
         if is_shared:
-            prefix  = "🔗 "
-            id_text = "🔗"
+            prefix  = tr("table_shared_prefix")
+            id_text = tr("table_shared_icon")
         elif is_published:
-            prefix  = "📤 "
-            id_text = "📤"
+            prefix  = tr("table_published_prefix")
+            id_text = tr("table_published_icon")
         else:
             prefix  = ""
             id_text = str(item.get("id", ""))
 
-        id_item = QTableWidgetItem(id_text)
-        id_item.setData(0x0100, item.get("id"))
-        self.table.setItem(r, 0, id_item)
-        self.table.setItem(r, 1, QTableWidgetItem(prefix + item.get("name", "")))
-        self.table.setItem(r, 2, QTableWidgetItem(cat_display))
-        self.table.setItem(r, 3, QTableWidgetItem(f"{minutes:.2f}"))
-        self.table.setItem(r, 4, QTableWidgetItem(f"{cost:.2f} {tr('currency_abbr')}"))
+        self.table.setItem(r, 0, make_item(id_text, user_data=item.get("id")))
+        self.table.setItem(r, 1, make_item(prefix + item.get("name", "")))
+        self.table.setItem(r, 2, make_item(cat_display))
+        self.table.setItem(r, 3, make_item(f"{minutes:.2f}"))
+        self.table.setItem(r, 4, make_item(f"{cost:.2f} {tr('currency_abbr')}"))
 
     def _edit_item(self, item_id: int):
         self._form.load_for_edit(item_id)

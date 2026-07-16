@@ -116,17 +116,78 @@ def calc_width(table: QTableWidget, extra_pad: int = CALC_WIDTH_EXTRA_PAD) -> in
     return total
 
 
+def _col_ideal_width_from_rows(table: QTableWidget, col: int) -> int:
+    """
+    يحسب العرض المثالي لعمود معيّن بنفس القياس اللي بيحصل بالظبط لما
+    اليوزر يعمل دبل-كليك على حد العمود في الـ header — عن طريق نداء
+    table.resizeColumnToContents(col) نفسها (نفس الدالة اللي Qt
+    بينده داخليًا وقت الدبل-كليك)، بدل أي تقريب يدوي.
+
+    [Fix - محاولة سابقة فاشلة] كان فيه محاولة تستخدم delegate.sizeHint()
+    يدويًا (QStyleOptionViewItem مبني يدويًا) كبديل عن نداء Qt
+    المباشر — النتيجة كانت أسوأ من الأول (أعمدة بتتقص حتى مع نص قصير
+    زي "test")، لأن الـ option المبني يدويًا هنا مش نفس الـ option
+    الحقيقي اللي Qt بيبنيه ويمرره وقت القياس الفعلي (initStyleOption
+    بيضيف حقول تانية معتمدة على السياق الداخلي مش بس initFrom). الحل
+    الصحيح: نستخدم resizeColumnToContents() الأصلية زي ما هي — مفيش
+    داعي نعيد بناء منطقها يدويًا خالص، ده بالظبط اللي اليوزر طلبه:
+    "نفس التمديد اللي هيحصل لو ضغطت دبل-كليك على حرف العمود".
+
+    المشكلة الوحيدة: resizeColumnToContents() بتحسب على مستوى الجدول
+    كله من غير استثناء لصف معيّن — فلو العمود ده anchor لصف ممتد (زي
+    عمود الـ ID في RawTablePanel، اللي صف الـ variants الفرعي فيه
+    بيبدأ span منه — راجع _insert_variants_subrow)، هيتأثر بعرض الـ
+    widget الممتد بصريًا (مساحة كبيرة/مختلفة تمامًا) ويوسّع أو يقصّر
+    العمود بعيدًا عن محتواه الحقيقي.
+
+    الحل: أي صف بيستخدم العمود ده كـ anchor لـ span (columnSpan > 1)
+    بنخفيه مؤقتًا (setRowHidden) قبل القياس مباشرة — Qt بيستثني
+    الصفوف المخفية تلقائيًا من resizeColumnToContents (سلوك موثّق
+    وموثوق فيه، مش تخمين)، فبنضمن نفس نتيجة الدبل-كليك بالظبط لباقي
+    الصفوف. بعد القياس مباشرة بنرجّع الصفوف دي ظاهرة زي ما كانت —
+    كل ده بيحصل في نفس اللحظة (نداء واحد متزامن) من غير أي flicker
+    ظاهر لليوزر.
+    """
+    span_rows = [r for r in range(table.rowCount()) if table.columnSpan(r, col) > 1]
+    for r in span_rows:
+        table.setRowHidden(r, True)
+    try:
+        table.resizeColumnToContents(col)
+        return table.columnWidth(col)
+    finally:
+        for r in span_rows:
+            table.setRowHidden(r, False)
+
+
 def auto_fit_columns(table: QTableWidget, fixed_cols: list = None,
                      stretch_col: int = -1,
-                     min_width: int = COL_MIN_WIDTH, max_width: int = COL_MAX_WIDTH):
+                     min_width: int = COL_MIN_WIDTH, max_width: int = COL_MAX_WIDTH,
+                     col_max_widths: dict = None):
+    """
+    [Fix - عمود ID/الاسم بيتقص في RawTablePanel] أضيف col_max_widths —
+    dict اختياري {col_index: max_w} بيدّي سقف مختلف لعمود معيّن بدل
+    السقف العام max_width الموحّد لكل الأعمدة.
+
+    قبل الإصلاح: كل الأعمدة (فيما عدا stretch_col) كانت بتتحسب بنفس
+    السقف العام max_width (COL_MAX_WIDTH من constants) بغض النظر عن أي
+    حاجة تانية. أي subclass زي RawTablePanel كان بيعرّف COL_MAX_WIDTHS
+    (dict لكل عمود) لكنها كانت كود ميت فعليًا — محدش هنا كان بيقراها،
+    فعمود بمحتوى متغيّر الطول (اسم/ID) كان بيتقص عند السقف العام حتى
+    لو الـ subclass حدد سقف أعلى صراحة له.
+
+    الحل: عمود موجود في col_max_widths بياخد سقفه الخاص، وأي عمود
+    مش موجود فيها بيرجع لنفس السلوك القديم (max_width العام) — يعني
+    مفيش أي كسر لأي جدول تاني في المشروع مش بيمرر col_max_widths.
+    """
     hh   = table.horizontalHeader()
     n    = table.columnCount()
     cols = fixed_cols if fixed_cols is not None else list(range(n))
+    col_max_widths = col_max_widths or {}
     for col in cols:
         if col == stretch_col:
             continue
-        hh.setSectionResizeMode(col, QHeaderView.ResizeToContents)
-        ideal = max(min_width, min(table.columnWidth(col), max_width))
+        col_max = col_max_widths.get(col, max_width)
+        ideal = max(min_width, min(_col_ideal_width_from_rows(table, col), col_max))
         hh.setSectionResizeMode(col, QHeaderView.Interactive)
         table.setColumnWidth(col, ideal)
     if 0 <= stretch_col < n:

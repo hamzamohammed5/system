@@ -10,7 +10,7 @@ from services.orders.order_service import get_orders_conn_and_init
 from ui.tabs.orders.orders_tab    import OrdersTab
 from ui.tabs.orders.customers_tab import CustomersTab
 from ui.tabs.orders.dashboard_tab import OrdersDashboardTab
-from ui.widgets.theme.layout_styles import tab_style
+from ui.widgets.theme.layout_styles import tab_style, apply_tab_style
 from ui.widgets.core.i18n import tr
 from ui.widgets.core.widget_mixin import WidgetMixin
 
@@ -30,7 +30,7 @@ class OrdersSection(QWidget, WidgetMixin):
         # خالص، فالتاب بار (لوحة المتابعة / الطلبات / العملاء) كان يفضل
         # بالستايل القديم (الفاتح) بعد التحويل لـ dark.
         if hasattr(self, "_tabs"):
-            self._tabs.setStyleSheet(tab_style())
+            apply_tab_style(self._tabs)
 
     def _build(self):
         layout = QVBoxLayout(self)
@@ -39,7 +39,7 @@ class OrdersSection(QWidget, WidgetMixin):
 
         self._tabs = QTabWidget()
         self._tabs.setTabPosition(QTabWidget.North)
-        self._tabs.setStyleSheet(tab_style())
+        apply_tab_style(self._tabs)
 
         self._dashboard_tab = OrdersDashboardTab(self.conn)
         self._orders_tab    = OrdersTab(self.conn)

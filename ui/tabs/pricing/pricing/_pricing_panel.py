@@ -2,19 +2,30 @@
 ui/tabs/pricing/pricing/_pricing_panel.py
 ==========================================
 _PricingPanel — لوحة إدارة أسعار المنتجات النهائية.
+
+[توحيد الجداول] الجدول اتفصل بالكامل لكلاس مستقل _PricingTable
+(يرث BaseListPanel) في _pricing_table.py، بنفس نمط
+RawTablePanel/RawInputPanel: فورم وجدول منفصلين يجمعهم هذا الـ
+section الأب. _PricingPanel أصبحت مسؤولة فقط عن الفورم (اختيار
+منتج + margin + سعر + إحصائيات + مقارنة سيناريوهات) واستضافة
+_PricingTable تحتها، وربطهم عبر callback (_load_for_edit).
+
+الفوائد:
+  - الجدول بقى splitter قابل للسحب بدل الامتداد الكامل للعرض.
+  - STRETCH_COL = -1 (توحيد كل الجداول في المشروع).
+  - خلايا الجدول عبر make_item/colored_item بدل QTableWidgetItem خام.
+  - الستايل والثيم يتبعوا BaseListPanel المركزية بدل setStyleSheet
+    يدوي هنا.
 """
 
 from PyQt5.QtWidgets import (
     QWidget, QVBoxLayout, QHBoxLayout,
-    QPushButton, QTableWidgetItem, QLabel,
-    QDoubleSpinBox, QMessageBox,
+    QLabel, QDoubleSpinBox, QMessageBox,
 )
-from PyQt5.QtCore import Qt
-from PyQt5.QtGui  import QColor
 from ui.widgets.panels.themed_inputs import ThemedComboBox, ThemedFrame
 
 from services.pricing.pricing_service import (
-    get_all_pricing, get_pricing, save_pricing, remove_pricing,
+    get_pricing, save_pricing, remove_pricing,
     get_final_products, get_item,
 )
 from models.costing            import calc_cost
@@ -25,16 +36,11 @@ from ui.constants import (
     PRICING_PANEL_FORM_MARGIN, PRICING_PANEL_FORM_SPACING, PRICING_PANEL_ROW1_SPACING,
     PRICING_PANEL_CMB_PRODUCT_MIN_H, PRICING_PANEL_CMB_PRODUCT_MIN_W, PRICING_PANEL_SP_MARGIN_W,
     PRICING_PANEL_SP_PRICE_W, PRICING_PANEL_ROW1_INNER_SPACING, PRICING_PANEL_STATS_ROW_SPACING,
-    PRICING_PANEL_TABLE_COL0_ID_W, PRICING_PANEL_TABLE_COL1_NAME_W, PRICING_PANEL_TABLE_COL2_CAT_W,
-    PRICING_PANEL_TABLE_COL3_COST_W, PRICING_PANEL_TABLE_COL4_MARGIN_W, PRICING_PANEL_TABLE_COL5_PRICE_W,
-    PRICING_PANEL_TABLE_COL6_PROFIT_W, PRICING_PANEL_TABLE_COL7_MARGIN_ACTUAL_W,
 )
 
 # ── الاستدعاءات المُصحَّحة ──────────────────────────────
-from ui.widgets.tables.tables       import make_table
 from ui.widgets.components.button   import make_btn
 from ui.widgets.panels.form_labels  import section_title
-from ui.widgets.panels.filter       import FilterToolbar
 from ui.widgets.core.events         import emit_company_data_changed
 from ui.widgets.core.i18n           import tr
 
@@ -42,6 +48,7 @@ from ui.tabs.costing.shared.scenario_comparison_widget import ScenarioComparison
 from ui.widgets.core.widget_mixin import WidgetMixin
 
 from ._stat_box import stat_box
+from ._pricing_table import _PricingTable
 
 
 def _spin(max_=9999999, dec=2):
@@ -66,18 +73,16 @@ class _PricingPanel(QWidget, WidgetMixin):
     def __init__(self, conn, parent=None):
         super().__init__(parent)
         self.conn        = conn
-        self._all_rows   = []
         self._editing_id = None
         self._last_profit = 0.0
         self._build()
         self._load_products_combo()
-        self._load()
         self._init_widget_mixin(theme=True, font=True, lang=False, data=True)
         self._refresh_style()
 
     def _refresh_data(self, company_id=None):
         self._load_products_combo()
-        self._load()
+        self._table.refresh()
 
     def _refresh_style(self, *_):
         from ui.font import get_font_size, fs
@@ -97,13 +102,9 @@ class _PricingPanel(QWidget, WidgetMixin):
             f"font-weight:bold; color:{_C['orange']}; font-size:{fs(base, 1)}px;"
         )
         self.lbl_price.setStyleSheet(f"font-weight:bold; font-size:{base}px;")
-        # [إصلاح ثيم] self.table كانت بتاخد table_style() مرة واحدة بس
-        # وقت الإنشاء داخل make_table() في _build(). محدش كان بينادي
-        # setStyleSheet(table_style()) تاني بعد كده، فلما الثيم يتغير
-        # (خصوصاً والجدول فاضي/0 صف) كان يفضل ظاهر بالستايل القديم —
-        # خلفية بيضاء واضحة فوق باقي اللوحة الداكنة.
-        from ui.widgets.tables.tables import table_style
-        self.table.setStyleSheet(table_style())
+        # [توحيد الجداول] لا حاجة لـ setStyleSheet(table_style()) يدوي هنا
+        # بعد اليوم — self._table بقت _PricingTable (BaseListPanel) وبتاخد
+        # الستايل والثيم مركزيًا من تلقاء نفسها.
         # [إصلاح ثيم] btn_save/btn_cancel/btn_del/btn_edit مبنيين بـ
         # make_btn() — لازم refresh_visible_buttons عشان يتابعوا الثيم.
         from ui.widgets.components.button import refresh_visible_buttons
@@ -202,31 +203,16 @@ class _PricingPanel(QWidget, WidgetMixin):
         root.addWidget(self.form_frame)
 
         root.addWidget(section_title(tr("pricing_saved_prices")))
-        # [إصلاح] FilterBar → FilterToolbar
-        self._filter = FilterToolbar(self.conn, scope="final")
-        self._filter.filter_changed.connect(self._apply_filter)
-        root.addWidget(self._filter)
-
-        self.table = make_table(
-            [tr("pricing_col_id"), tr("pricing_col_product"), tr("pricing_col_category"), tr("pricing_col_cost"), tr("pricing_col_margin_pct"),
-             tr("pricing_col_price"), tr("pricing_col_profit"), tr("pricing_col_margin_actual_pct")],
-            stretch_col=1
+        # [توحيد الجداول] الجدول بقى _PricingTable مستقل (BaseListPanel)
+        # بدل make_table() + FilterToolbar + أعمدة يدوية هنا. الفلتر
+        # وعرض الأعمدة والـ splitter كلها بقت مسؤولية _PricingTable
+        # نفسها، اتساقًا مع نمط RawTablePanel/RawInputPanel.
+        self._table = _PricingTable(
+            self.conn,
+            on_edit_selected=self._load_for_edit,
+            on_select=self._on_table_select,
         )
-        self.table.setColumnWidth(0, PRICING_PANEL_TABLE_COL0_ID_W)
-        self.table.setColumnWidth(1, PRICING_PANEL_TABLE_COL1_NAME_W)
-        self.table.setColumnWidth(2, PRICING_PANEL_TABLE_COL2_CAT_W)
-        self.table.setColumnWidth(3, PRICING_PANEL_TABLE_COL3_COST_W)
-        self.table.setColumnWidth(4, PRICING_PANEL_TABLE_COL4_MARGIN_W)
-        self.table.setColumnWidth(5, PRICING_PANEL_TABLE_COL5_PRICE_W)
-        self.table.setColumnWidth(6, PRICING_PANEL_TABLE_COL6_PROFIT_W)
-        self.table.setColumnWidth(7, PRICING_PANEL_TABLE_COL7_MARGIN_ACTUAL_W)
-        self.table.setAlternatingRowColors(True)
-        self.table.itemSelectionChanged.connect(self._on_table_select)
-        root.addWidget(self.table, stretch=1)
-
-        btn_edit = make_btn(tr("pricing_edit_selected_btn"), "normal")
-        btn_edit.clicked.connect(self._edit_selected)
-        root.addLayout(buttons_row(btn_edit))
+        root.addWidget(self._table, stretch=1)
 
     # ══════════════════════════════════════════════════════
     # تحميل وتحديث Combo المنتجات
@@ -346,18 +332,12 @@ class _PricingPanel(QWidget, WidgetMixin):
         self.btn_del.setVisible(False)
         self._scenario_comparison.clear()
 
-    def _edit_selected(self):
-        row = self.table.currentRow()
-        if row == -1:
-            QMessageBox.information(self, tr("warning"), tr("pricing_select_product_table"))
-            return
-        self._load_for_edit(int(self.table.item(row, 0).text()))
-
-    def _on_table_select(self):
-        row = self.table.currentRow()
-        if row == -1:
-            return
-        prod_id = int(self.table.item(row, 0).text())
+    def _on_table_select(self, prod_id: int):
+        """
+        [توحيد الجداول] بقت تستقبل prod_id مباشرة كـ callback parameter
+        من _PricingTable.item_selected بدل قراءة self.table.currentRow()
+        يدويًا — الجدول أصبح widget مستقل عن _PricingPanel.
+        """
         cost = calc_cost(self.conn, prod_id)
         self.lbl_stat_cost.setText(tr("pricing_cost_suffix", cost=cost))
 
@@ -383,51 +363,3 @@ class _PricingPanel(QWidget, WidgetMixin):
         self.btn_del.setVisible(bool(pricing))
         self._refresh_manual_stats(cost)
         self._scenario_comparison.load_product(prod_id, self.sp_price.value())
-
-    # ══════════════════════════════════════════════════════
-    # تحميل الجدول
-    # ══════════════════════════════════════════════════════
-
-    def _load(self):
-        self._all_rows = list(get_all_pricing(self.conn))
-        self._apply_filter()
-
-    def _apply_filter(self):
-        self.table.setRowCount(0)
-        shown = 0
-        for row in self._all_rows:
-            if not self._filter.match(row["name"], row["category_id"]):
-                continue
-            cost   = calc_cost(self.conn, row["id"])
-            has_p  = row["pricing_id"] is not None
-            price  = row["price"]  if has_p else None
-            margin = row["margin"] if has_p else None
-            profit = (price - cost) if has_p else None
-            margin_actual = ((price - cost) / cost * 100) if (has_p and cost > 0) else None
-
-            r = self.table.rowCount()
-            self.table.insertRow(r)
-            self.table.setItem(r, 0, QTableWidgetItem(str(row["id"])))
-            self.table.setItem(r, 1, QTableWidgetItem(row["name"]))
-            self.table.setItem(r, 2, QTableWidgetItem(row["category_name"] or tr("dash")))
-            self.table.setItem(r, 3, QTableWidgetItem(f"{cost:.2f}"))
-            self.table.setItem(r, 4, QTableWidgetItem(
-                f"{margin:.1f} {tr('pricing_margin_pct_sign')}" if margin is not None else tr("empty_placeholder")
-            ))
-            self.table.setItem(r, 5, QTableWidgetItem(
-                f"{price:.2f}" if price is not None else tr("empty_placeholder")
-            ))
-            profit_item = QTableWidgetItem(
-                f"{profit:.2f}" if profit is not None else tr("empty_placeholder")
-            )
-            if profit is not None:
-                profit_item.setForeground(
-                    QColor(_C["success"]) if profit >= 0 else QColor(_C["danger"])
-
-                )
-            self.table.setItem(r, 6, profit_item)
-            self.table.setItem(r, 7, QTableWidgetItem(
-                f"{margin_actual:.1f} {tr('pricing_margin_pct_sign')}" if margin_actual is not None else tr("empty_placeholder")
-            ))
-            shown += 1
-        self._filter.set_count(shown, len(self._all_rows))

@@ -40,6 +40,13 @@ ICON_PATHS: dict[str, str] = {
         "M17.65 6.35A7.95 7.95 0 0 0 12 4a8 8 0 1 0 7.75 10h-2.08"
         "A6 6 0 1 1 12 6c1.66 0 3.14.69 4.22 1.78L13 11h7V4l-2.35 2.35Z"
     ),
+    # [إضافة] سهم expand/collapse — نفس سبب "reset": الرموز اليونيكودية
+    # ▶/▼ (U+25B6 / U+25BC) مش مضمونة الدعم في كل الفونتات، وبتظهر
+    # كمربع/حرف غريب (زي "I") في فونتات معينة بدل السهم الفعلي.
+    # مثلث بسيط للسهم المتجه ناحية اليمين (الحالة المقفولة).
+    "chevron_right": "M9 5.5 15.5 12 9 18.5V5.5Z",
+    # نفس المثلث لكن متجه لتحت (الحالة المفتوحة) — دوران 90 درجة.
+    "chevron_down": "M5.5 9 12 15.5 18.5 9H5.5Z",
 }
 
 
@@ -138,10 +145,54 @@ def _build_stylesheet(style: str, base: int) -> str:
     """
 
 
+def _build_square_stylesheet(style: str) -> str:
+    """
+    [Fix] نسخة مخصصة لزرارات الأيقونة/compact المربعة (icon-only أو
+    compact=True). المشكلة الأصلية: _build_stylesheet العادية بتحقن
+    `min-height:{h}px` جوه QSS، وقواعد QSS بتتطبّق بعد setFixedSize()
+    البرمجي — يعني حتى لو الكود عمل setFixedSize(side, side) بحجم
+    صغير مضبوط، الـ min-height الكبيرة (مبنية على ارتفاع زرار نص
+    عادي base*2+BTN_HEIGHT_PAD) كانت بتفوز وتفرض ارتفاع أكبر، فالزرار
+    كان بيبان مستطيل طويل بدل مربع صغير حوالين الأيقونة. نفس الشيء
+    بالنسبة لـ padding الأفقي الكبير (BTN_PAD_H) اللي مصمم لمسافة
+    حوالين نص، مش حوالين أيقونة وحيدة صغيرة.
+    الحل: stylesheet بدون min-height وبدون padding خالص — الحجم
+    بيتحدد بالكامل من setFixedSize() في الكود، وQSS بس بيدي اللون/
+    الحدود/الراديوس.
+    """
+    all_styles = _styles()
+    s    = all_styles.get(style, all_styles["normal"])
+
+    return f"""
+        QPushButton {{
+            background:{s['bg']}; color:{s['fg']};
+            border:{BTN_BORDER_W}px solid {s['border']};
+            border-radius:{BTN_BORDER_RADIUS}px;
+            padding:0;
+        }}
+        QPushButton:hover {{
+            background:{s['h_bg']}; color:{s['h_fg'] or s['fg']};
+            border-color:{s['h_bdr']};
+        }}
+        QPushButton:disabled {{
+            background:{_C['bg_surface_2']};
+            color:{_C['text_disabled']};
+            border-color:{_C['border']};
+        }}
+    """
+
+
 def _get_stylesheet(style: str, base: int) -> str:
     key = (style, base)
     if key not in _stylesheet_cache:
         _stylesheet_cache[key] = _build_stylesheet(style, base)
+    return _stylesheet_cache[key]
+
+
+def _get_square_stylesheet(style: str) -> str:
+    key = ("__square__", style)
+    if key not in _stylesheet_cache:
+        _stylesheet_cache[key] = _build_square_stylesheet(style)
     return _stylesheet_cache[key]
 
 
@@ -153,8 +204,38 @@ def invalidate_stylesheet_cache():
     _stylesheet_cache.clear()
 
 
+# [FIX عام] الحساب القديم w = horizontalAdvance(text) + BTN_TEXT_PAD كان
+# بيتجاهل حدود الزرار (border) اللي متعرفة في الـ stylesheet نفسه
+# (`border:{BTN_BORDER_W}px solid ...` على كل الجهات، يعني 2×BTN_BORDER_W
+# إجمالي) — فكان ممكن النص يتقص فعليًا في نصوص عربية طويلة أو نصوص
+# فيها حروف بمسافة فعلية أكبر شوية من horizontalAdvance (كباس/تشكيل).
+# الحل: نحسب من نفس القيم اللي الـ stylesheet شايفها فعلاً
+# (BTN_PAD_H من كل جهة + BTN_BORDER_W من كل جهة)، ونضيف هامش أمان بسيط
+# (safety_pad) بدل الاعتماد على BTN_TEXT_PAD وحده كرقم تقريبي منفصل.
+# دالة واحدة مركزية هنا يعني أي تعديل مستقبلي (خط أعرض، حدود أتخن)
+# بينعكس تلقائيًا على كل زرار في المشروع من غير ما حد يلمس نداءات make_btn.
+def _calc_btn_width_for_text(text: str, font: QFont, extra_pad: int = 0) -> int:
+    """
+    يحسب العرض الأدنى اللازم لزرار نصه `text` بالفونت `font`، بحيث
+    النص يبان كامل من غير قص — بياخد في الاعتبار padding الزرار
+    الأفقي (من الجهتين) وحدود الزرار (من الجهتين) زي ما هي متعرّفة
+    فعليًا في الـ stylesheet المُولّد من _build_stylesheet، بدل رقم
+    تقريبي منفصل.
+    """
+    text_w = QFontMetrics(font).horizontalAdvance(text)
+    chrome = 2 * BTN_PAD_H + 2 * BTN_BORDER_W
+    # هامش أمان صغير إضافي (extra_pad) — بيغطي فروق قياس دقيقة بين
+    # منصات/فونتات مختلفة (النصوص العربية أحيانًا بتاخد مسافة فعلية
+    # أكبر شوية من القيمة اللي horizontalAdvance بترجعها).
+    # [Fix] int() صريح — لو أي ثابت من دول (BTN_PAD_H/BTN_BORDER_W/
+    # extra_pad) متعرّف كـ float في constants.py، الجمع كله بيتحول
+    # float ضمنيًا، وQPushButton.setFixedWidth() بترفضه (بتاخد int بس).
+    return int(text_w + chrome + extra_pad)
+
+
 def make_btn(text: str = "", style: str = "normal",
-             fixed_size: bool = True, icon: str = None) -> QPushButton:
+             fixed_size: bool = True, icon: str = None,
+             compact: bool = False) -> QPushButton:
     """
     ينشئ QPushButton بالنمط المحدد.
     style: "primary" | "success" | "danger" | "ghost" | "normal"
@@ -163,10 +244,87 @@ def make_btn(text: str = "", style: str = "normal",
           الزرار بيتحول لأيقونة فقط بشكل مربع (عرض = ارتفاع)، مرسومة
           بالكود بدل الاعتماد على رمز يونيكود من الفونت (مش دايمًا
           مدعوم بشكل كامل في كل الفونتات/الأنظمة).
+    compact: [إضافة] True = زرار مربع يتحسب حجمه (عرض وارتفاع مع بعض)
+          تلقائيًا بالكامل من القياس الفعلي للرمز نفسه (عبر
+          QFontMetrics.boundingRect، أدق من horizontalAdvance للرموز
+          اللي مش نص عادي زي ▼/▶) + هامش صغير ثابت — بدل ما يرث ارتفاع
+          زرار النص العادي (base*2 + BTN_HEIGHT_PAD) اللي مصمم لصف نص
+          كامل مش لرمز واحد. مفيد لأي زرار expand/collapse/toggle في
+          أي جدول بالمشروع، مش بس جدول الخامات.
+          لو عايز رمز بلون مخصص عن طريق SVG (زي icon=) استخدم icon
+          بدل compact؛ compact هنا للنص القصير المباشر (يونيكود).
     """
     base = get_font_size()
-    h    = base * 2 + BTN_HEIGHT_PAD
+    # [Fix] int() صريح — لو BTN_HEIGHT_PAD متعرّفة كـ float في
+    # constants.py، h كانت بتتحول float ضمنيًا، وأي setFixedHeight(h)/
+    # setFixedSize(h, h) بعدها كانت بترمي TypeError (setFixedSize
+    # بتاخد int بس مش float). حماية واحدة هنا كفاية لكل استخدام تابع.
+    h    = int(base * 2 + BTN_HEIGHT_PAD)
     fsz  = fs(base, 0)
+
+    if compact and text and not icon:
+        # [compact] حجم الزرار بالكامل (عرض + ارتفاع) من قياس الرمز
+        # الفعلي، مش من ثوابت زرار النص العادي. boundingRect بيدّي
+        # صندوق الرمز الحقيقي (بما فيه أي زيادة فوق/تحت خط الأساس
+        # لرموز زي الأسهم اليونيكودية) بعكس horizontalAdvance اللي
+        # بيدّي بس "المسافة اللي الكيرسور هيتحرك بيها" وممكن تكون
+        # أضيق من الشكل الفعلي المرسوم.
+        f = QFont()
+        f.setPointSize(fsz)
+        rect = QFontMetrics(f).boundingRect(text)
+        # هامش صغير متساوي حوالين الرمز (مش padding زرار النص الكامل)
+        margin = max(BTN_BORDER_W * 2, 6)
+        side = int(max(rect.width(), rect.height()) + margin * 2)
+        btn = QPushButton(text)
+        btn.setCursor(Qt.PointingHandCursor)
+        # [Fix] stylesheet مربع مخصص (بدون min-height) بدل _get_stylesheet
+        # العادية — min-height:{h}px كانت بتفرض ارتفاع زرار نص عادي
+        # حتى بعد setFixedSize(side, side)، فالزرار كان يبان مستطيل
+        # طويل بدل مربع صغير حوالين الرمز.
+        btn.setStyleSheet(_get_square_stylesheet(style))
+        btn.setProperty("_btn_style", style)
+        btn.setProperty("_btn_square", True)
+        btn.setFixedSize(side, side)
+        btn.setSizePolicy(QSizePolicy.Fixed, QSizePolicy.Fixed)
+        return btn
+
+    if icon and not text:
+        # [أيقونة فقط] زرار مربع.
+        # [Fix] بُني من الصفر بـ stylesheet مربع مخصص (بدون min-height)
+        # بدل ما ياخد _get_stylesheet العادية (فيها min-height:{h}px
+        # مصمم لزرار نص كامل) ثم نحاول "نصلّحها" بـ setFixedSize بعد
+        # كده — القاعدة دي (min-height في QSS) كانت بتفوز دايمًا على
+        # setFixedWidth/setFixedHeight البرمجي، فالزرار كان يبان
+        # مستطيل طويل بدل مربع صغير حوالين السهم، بغض النظر عن
+        # compact=True/False.
+        btn = QPushButton()
+        btn.setCursor(Qt.PointingHandCursor)
+        btn.setStyleSheet(_get_square_stylesheet(style))
+        btn.setProperty("_btn_style", style)
+        btn.setProperty("_btn_square", True)
+        btn.setProperty("_btn_icon", icon)
+        all_styles = _styles()
+        s = all_styles.get(style, all_styles["normal"])
+        if compact:
+            # [Fix] margin كانت max(BTN_BORDER_W, 4) — بتفرض حد أدنى
+            # 4px هامش من كل جهة حتى لو BTN_BORDER_W أصغر، يعني الزرار
+            # كان دايمًا أكبر من الأيقونة بمقدار ثابت زيادة عن اللازم.
+            # المطلوب: الزرار يبقى بالظبط بحجم الأيقونة + سمك حدود
+            # الزرار نفسها بس (من غير أي padding إضافي)، عشان الارتفاع
+            # يكون بالظبط "كافي لعرض الأيقونة كاملة" مش أكبر من كده.
+            margin = BTN_BORDER_W
+            icon_size = max(12, int(fsz * 1.4))
+            side = int(icon_size + margin * 2)
+            btn.setIcon(_make_svg_icon(icon, s["fg"], size=icon_size))
+            btn.setIconSize(QSize(icon_size, icon_size))
+            btn.setFixedSize(side, side)
+        else:
+            icon_size = max(14, h - BTN_PAD_H)
+            btn.setIcon(_make_svg_icon(icon, s["fg"], size=icon_size))
+            btn.setIconSize(QSize(icon_size, icon_size))
+            btn.setFixedSize(h, h)
+        btn.setSizePolicy(QSizePolicy.Fixed, QSizePolicy.Fixed)
+        return btn
 
     btn = QPushButton(text)
     btn.setCursor(Qt.PointingHandCursor)
@@ -175,24 +333,11 @@ def make_btn(text: str = "", style: str = "normal",
 
     btn.setProperty("_btn_style", style)
 
-    if icon and not text:
-        # [أيقونة فقط] زرار مربع — العرض = الارتفاع، والأيقونة بلون
-        # النص المحدد في نفس الـ style عشان تتماشى مع الثيم/الـ hover.
-        btn.setProperty("_btn_icon", icon)
-        all_styles = _styles()
-        s = all_styles.get(style, all_styles["normal"])
-        icon_size = max(14, h - BTN_PAD_H)
-        btn.setIcon(_make_svg_icon(icon, s["fg"], size=icon_size))
-        btn.setIconSize(QSize(icon_size, icon_size))
-        btn.setFixedWidth(h)
-        btn.setSizePolicy(QSizePolicy.Fixed, QSizePolicy.Fixed)
-        return btn
-
     # [FIX] استخدام فونت الزرار الفعلي (اللي اتطبق من الـ stylesheet)
     # بدل QFont() افتراضي — عشان أي نص عادي بيتقاس صح.
     f = btn.font()
     f.setPointSize(fsz)
-    w = QFontMetrics(f).horizontalAdvance(text) + BTN_TEXT_PAD
+    w = _calc_btn_width_for_text(text, f, extra_pad=BTN_TEXT_PAD)
     if fixed_size:
         btn.setFixedWidth(w)
         btn.setSizePolicy(QSizePolicy.Fixed, QSizePolicy.Fixed)
@@ -218,19 +363,41 @@ def refresh_visible_buttons(root_widget) -> int:
             style = btn.property("_btn_style")
             if style:
                 try:
-                    btn.setStyleSheet(_get_stylesheet(style, base))
-                    h = base * 2 + BTN_HEIGHT_PAD
-                    if btn.minimumHeight() > 0:
-                        btn.setFixedHeight(h)
+                    is_square = bool(btn.property("_btn_square"))
+                    icon_key  = btn.property("_btn_icon")
 
-                    icon_key = btn.property("_btn_icon")
-                    if icon_key:
-                        all_styles = _styles()
-                        s = all_styles.get(style, all_styles["normal"])
-                        icon_size = max(14, h - BTN_PAD_H)
-                        btn.setIcon(_make_svg_icon(icon_key, s["fg"], size=icon_size))
-                        btn.setIconSize(QSize(icon_size, icon_size))
-                        btn.setFixedWidth(h)
+                    if is_square:
+                        # [Fix] الأزرار المربعة (compact أو icon-only)
+                        # لازم تاخد stylesheet بدون min-height. وبدل ما
+                        # نحافظ على حجمها الحالي (btn.width()) — اللي
+                        # ممكن يكون لسه متضخّم من نسخة قديمة للحساب —
+                        # بنعيد حساب الحجم من الصفر بنفس منطق make_btn
+                        # الجديد: icon_size أولًا، وside = icon_size +
+                        # BTN_BORDER_W*2 (بدون أي padding إضافي)، عشان
+                        # الزرار يفضل بالظبط بحجم الأيقونة + سمك الحدود
+                        # بس، حتى بعد أي تغيير ثيم.
+                        icon_size = max(12, int(fs(base, 0) * 1.4))
+                        side = int(icon_size + BTN_BORDER_W * 2)
+                        btn.setStyleSheet(_get_square_stylesheet(style))
+                        if icon_key:
+                            all_styles = _styles()
+                            s = all_styles.get(style, all_styles["normal"])
+                            btn.setIcon(_make_svg_icon(icon_key, s["fg"], size=icon_size))
+                            btn.setIconSize(QSize(icon_size, icon_size))
+                        btn.setFixedSize(side, side)
+                    else:
+                        btn.setStyleSheet(_get_stylesheet(style, base))
+                        h = int(base * 2 + BTN_HEIGHT_PAD)
+                        if btn.minimumHeight() > 0:
+                            btn.setFixedHeight(h)
+
+                        if icon_key:
+                            all_styles = _styles()
+                            s = all_styles.get(style, all_styles["normal"])
+                            icon_size = max(14, h - BTN_PAD_H)
+                            btn.setIcon(_make_svg_icon(icon_key, s["fg"], size=icon_size))
+                            btn.setIconSize(QSize(icon_size, icon_size))
+                            btn.setFixedSize(h, h)
 
                     count += 1
                 except RuntimeError:
@@ -242,6 +409,12 @@ def refresh_visible_buttons(root_widget) -> int:
 
 
 def calc_btn_width(text: str, font_size: int, padding: int = BTN_TEXT_PAD) -> int:
+    """
+    [FIX] بتستخدم دلوقتي _calc_btn_width_for_text نفسها اللي بيستخدمها
+    make_btn داخليًا — عشان أي كود بره button.py بيحسب عرض زرار يدويًا
+    (زي علشان يحجز مساحة قبل ما الزرار يتبني) ياخد نفس الرقم بالظبط
+    اللي make_btn هيطلعه فعليًا، بدل رقمين مختلفين لنفس النص.
+    """
     f = QFont()
     f.setPointSize(font_size)
-    return QFontMetrics(f).horizontalAdvance(text) + padding
+    return _calc_btn_width_for_text(text, f, extra_pad=padding)

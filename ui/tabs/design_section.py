@@ -16,7 +16,7 @@ from PyQt5.QtWidgets import QWidget, QVBoxLayout, QTabWidget, QLabel
 
 from services.design import get_designs_conn_and_init
 
-from ui.widgets.theme.layout_styles import tab_style
+from ui.widgets.theme.layout_styles import tab_style, apply_tab_style
 from ui.theme                        import _C
 from ui.widgets.core.i18n           import tr
 from ui.font                        import FS_MD
@@ -49,7 +49,7 @@ class DesignSection(QWidget, WidgetMixin):
         # ── التبويبات ──
         self._tabs = QTabWidget()
         self._tabs.setTabPosition(QTabWidget.North)
-        self._tabs.setStyleSheet(tab_style())
+        apply_tab_style(self._tabs)
 
         self._dim_tab     = DimensionSetsTab(self.conn)
         self._designs_tab = DesignsTab(self.conn)
@@ -78,7 +78,7 @@ class DesignSection(QWidget, WidgetMixin):
             }}
         """)
         if hasattr(self, "_tabs"):
-            self._tabs.setStyleSheet(tab_style())
+            apply_tab_style(self._tabs)
 
     def closeEvent(self, event):
         try:

@@ -1,5 +1,5 @@
 File Tree Snapshot
-Generated : 2026-07-13 16:02:34
+Generated : 2026-07-16 12:51:56
 Source    : D:\My Workspace\Hg\Alhabaar\accountant\system
 Extensions: .md, .py
 ────────────────────────────────────────────────────────────
@@ -355,6 +355,7 @@ system/
 │   │   │   │   └── offers_table.py
 │   │   │   ├── pricing/
 │   │   │   │   ├── _pricing_panel.py
+│   │   │   │   ├── _pricing_table.py
 │   │   │   │   └── _stat_box.py
 │   │   │   └── pricing_tab.py
 │   │   ├── accounting_section.py

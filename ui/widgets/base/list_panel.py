@@ -47,6 +47,13 @@ from ui.widgets.core.widget_mixin import WidgetMixin
 
 from ui.widgets.core.i18n import tr
 
+# [Fix] حد أقصى لعدد محاولات إعادة قياس عرض الجدول لو الـ widget لسه
+# مش ظاهر (جوه تاب مخفي). كل محاولة كل SPLITTER_RETRY_DELAY (100ms) —
+# 20 محاولة = ثانيتين كحد أقصى، بعدها نتوقف عشان مانستهلكش موارد على
+# تاب اليوزر ممكن ميفتحهوش خالص. لو اتفتح التاب بعد كده، showEvent
+# بتاعت BaseListPanel بتاخد المهمة تاني بشكل طبيعي.
+_MAX_FIT_RETRIES = 20
+
 
 class BaseListPanel(QWidget, WidgetMixin):
     """
@@ -64,7 +71,7 @@ class BaseListPanel(QWidget, WidgetMixin):
         _on_add_clicked()
         _refresh_data(company_id)
         _build_extra_header_actions(header)
-        COL_WIDTHS, LIST_TITLE, ADD_TEXT, SEARCH_PLACEHOLDER
+        COL_WIDTHS, COL_MAX_WIDTHS, LIST_TITLE, ADD_TEXT, SEARCH_PLACEHOLDER
         SHOW_CATEGORY, SHOW_DATE, FILTER_SCOPE
 
     [تحسين 45] Sort-related overrides:
@@ -84,6 +91,11 @@ class BaseListPanel(QWidget, WidgetMixin):
     COLUMNS            : list = []
     STRETCH_COL        : int  = -1
     COL_WIDTHS         : dict = None
+    # [Fix - عمود ID/الاسم بيتقص في RawTablePanel] سقف عرض مختلف لعمود
+    # معيّن (بدل السقف العام COL_MAX_WIDTH في constants.py) — اختياري،
+    # الأعمدة اللي مش موجودة فيه بترجع للسقف العام تلقائيًا. راجع
+    # _auto_resize() و auto_fit_columns() في tables.py للتفاصيل.
+    COL_MAX_WIDTHS     : dict = None
     MIN_W              : int  = LIST_PANEL_MIN_W_DEFAULT
     EMPTY_ICON         : str  = "empty_icon_default"
     EMPTY_TITLE        : str  = "no_data"
@@ -403,6 +415,7 @@ class BaseListPanel(QWidget, WidgetMixin):
         self._shown_count = end
         self._update_pagination_bar(len(self._page_rows), self._shown_count)
         self._auto_resize()
+        fit_splitter_table(self._splitter, self.table, extra_pad=TABLE_EXTRA_PAD)
         self._table_guard.refresh()
 
     def _on_show_all(self):
@@ -421,6 +434,7 @@ class BaseListPanel(QWidget, WidgetMixin):
         self._shown_count = len(self._page_rows)
         self._pagination_bar.setVisible(False)
         self._auto_resize()
+        fit_splitter_table(self._splitter, self.table, extra_pad=TABLE_EXTRA_PAD)
         self._table_guard.refresh()
 
     # ── [تحسين 45] Sort logic ─────────────────────────────
@@ -539,9 +553,21 @@ class BaseListPanel(QWidget, WidgetMixin):
         self._update_pagination_bar(len(rows), self._shown_count)
 
         if has_data:
+            self._auto_resize()
+            # [Fix] القياس هنا (وقت البناء الأول من جوه __init__، أو حتى
+            # refresh لاحق لو الـ widget جوه تاب مخفي وقتها) لسه مش
+            # موثوق فيه دايمًا — الـ widget ممكن يكون لسه ما اتحطش
+            # فعليًا بحجمه النهائي في شجرة العرض (splitter.width() ممكن
+            # يرجع صفر أو قيمة غلط). بننادي fit_splitter_table فورًا هنا
+            # عشان أي حالة عادية (الـ widget أصلاً ظاهر) تاخد نتيجة
+            # فورية، وكمان نجدول _schedule_fit() (QTimer.singleShot(0))
+            # كضمان إضافي يعيد نفس الحساب بعد ما كل أحداث الـ layout/
+            # geometry المعلّقة تتنفذ — وده اللي بيغطي حالة الـ widget
+            # جوه تاب مخفي وقت الإنشاء (راجع تعليق showEvent/_schedule_fit
+            # تحت لتفصيل كامل للمشكلة).
             fit_splitter_table(self._splitter, self.table, extra_pad=TABLE_EXTRA_PAD)
             self._table_guard.refresh()
-            self._auto_resize()
+            self._schedule_fit()
 
     def _update_status(self, shown: int):
         total = len(self._all_rows)
@@ -550,9 +576,17 @@ class BaseListPanel(QWidget, WidgetMixin):
             self._filter_toolbar.set_count(shown, total)
 
     def _auto_resize(self):
+        # [Fix - عمود ID/الاسم بيتقص في RawTablePanel] كانت بتستخدم
+        # سقف عرض عام واحد (COL_MAX_WIDTH) لكل الأعمدة دايمًا، وبتتجاهل
+        # COL_MAX_WIDTHS (dict لكل عمود) اللي subclasses زي RawTablePanel
+        # بتعرّفه — فكان كود ميت فعليًا. دلوقتي بنمرره لـ auto_fit_columns
+        # عشان أي عمود محدد فيه ياخد سقفه الخاص، وأي عمود مش محدد يرجع
+        # لنفس السلوك القديم (السقف العام). راجع تعليق auto_fit_columns
+        # في tables.py للتفاصيل الكاملة.
         fixed = [i for i in range(self.table.columnCount()) if i != self.STRETCH_COL]
         auto_fit_columns(self.table, fixed_cols=fixed,
-                         stretch_col=self.STRETCH_COL, min_width=COL_MIN_WIDTH, max_width=COL_MAX_WIDTH)
+                         stretch_col=self.STRETCH_COL, min_width=COL_MIN_WIDTH, max_width=COL_MAX_WIDTH,
+                         col_max_widths=getattr(self, "COL_MAX_WIDTHS", None))
 
     # ── selection ─────────────────────────────────────────
 
@@ -602,6 +636,7 @@ class BaseListPanel(QWidget, WidgetMixin):
                 self._shown_count = end_needed
                 self._update_pagination_bar(len(self._page_rows), self._shown_count)
                 self._auto_resize()
+                fit_splitter_table(self._splitter, self.table, extra_pad=TABLE_EXTRA_PAD)
                 self._table_guard.refresh()
 
         for r in range(self.table.rowCount()):
@@ -620,6 +655,77 @@ class BaseListPanel(QWidget, WidgetMixin):
             data = item.data(Qt.UserRole)
             return int(data) if data is not None else None
         return None
+
+    # ── [Fix] عرض الأعمدة عند الإنشاء الأول ────────────────
+    # المشكلة: _fill_table() كانت بتحط self._pending_fit_on_show = True
+    # بس محدش كان بيقرأها تاني — showEvent() ما كانتش متعرّفة في
+    # الكلاس أصلاً. القياس اللي بيحصل جوه _fill_table() وقت البناء
+    # الأول (من جوه __init__) مش موثوق فيه لأن الـ widget لسه ما
+    # اتضافش فعليًا لشجرة العرض بتاعة الأب في اللحظة دي، فـ
+    # splitter.width() بيرجع صفر أو قيمة مؤقتة غلط → auto_fit_columns/
+    # fit_splitter_table بتحسب عرض أعمدة غلط، وبيفضل كده لحد ما يحصل
+    # حدث resize يدوي أو تبديل تابات يصلحه بالصدفة.
+    #
+    # [Fix 2] النسخة الأولى من الحل كانت بتستهلك الـ flag مرة واحدة بس
+    # جوه showEvent (self._pending_fit_on_show = False فورًا). ده كان
+    # كافي لو الـ widget بيتبني وهو ظاهر فعلاً على الشاشة، لكن مش كافي
+    # للـ widgets اللي بتتبني جوه تاب/QStackedWidget مخفي وقت الإنشاء
+    # (زي RawTablePanel جوه costing_section — كل التابات بتتبني مقدمًا
+    # حتى لو مش كلها ظاهرة). في الحالة دي، showEvent بتاعت الـ widget
+    # بتتفعّل أول ما الأب الرئيسي (النافذة) يظهر — مش أول ما التاب نفسه
+    # يبقى مفعّل فعليًا — فالقياس وقتها لسه ممكن يكون غير دقيق (حجم
+    # افتراضي/جزئي بتاع تاب لسه مش مفعّل). ولما حد يفعّل التاب بعدين،
+    # مفيش حدث تاني بيعيد الحساب لأن الـ flag خلاص اتستهلكت.
+    #
+    # الحل: showEvent تعيد الحساب في كل مرة الـ widget يظهر (مش تستهلك
+    # الـ flag نهائيًا)، وكمان نجدول إعادة حساب إضافية بـ
+    # QTimer.singleShot(0, ...) بعد كل _fill_table — التأجيل لـ event
+    # loop iteration جاية (delay=0) بيضمن إن كل الـ layout/geometry
+    # events المعلّقة (بما فيها تفعيل التاب لو حصل في نفس اللحظة)
+    # تتنفذ الأول، فالحساب بيجي بحجم نهائي دقيق بغض النظر عن ترتيب
+    # ظهور الـ widget جوه تابات/stacked widgets.
+    def showEvent(self, event):
+        super().showEvent(event)
+        self._schedule_fit()
+
+    def _schedule_fit(self, delay_ms: int = 0, _retry: int = 0):
+        if not getattr(self, "_all_rows", None):
+            return
+        QTimer.singleShot(delay_ms, lambda: self._do_fit(_retry))
+
+    def _do_fit(self, _retry: int = 0):
+        # [Fix] السبب الحقيقي لبقاء القطع بعد أول محاولة إصلاح: لما
+        # _do_fit() كانت بتتنفذ (بعد QTimer.singleShot(0, ...)) والـ
+        # widget لسه مش ظاهر فعليًا (isVisible() == False — الحالة
+        # الشائعة لما RawTablePanel بيتبني جوه تاب/QStackedWidget مش
+        # مفعّل وقتها)، الدالة كانت بترجع فورًا من غير ما تعمل أي حاجة
+        # ومن غير أي إعادة محاولة لاحقة. القياس الغلط الأصلي (من داخل
+        # _fill_table وقت البناء الأول) كان يفضل زي ما هو للأبد، لحد ما
+        # حدث خارجي مستقل (resize يدوي، تبديل تاب يفعّل showEvent) يصلحه
+        # بالصدفة — مش بشكل مضمون في كل الحالات (بعض مسارات
+        # QStackedWidget.setCurrentIndex ما بتفعّلش showEvent موثوق).
+        #
+        # الحل: بدل ما نستسلم لو الـ widget مش ظاهر لسه، نعيد جدولة نفس
+        # المحاولة بعد SPLITTER_RETRY_DELAY (الثابت ده كان معرّف في
+        # constants_general.py من قبل بالظبط لنفس الغرض — "إعادة
+        # المحاولة لو width=0" — لكن محدش كان بيستخدمه فعليًا). عدد
+        # المحاولات محدود (_MAX_FIT_RETRIES) عشان تاب اليوزر ميفتحوش
+        # خالص ميفضلش بيعمل polling للأبد ويستهلك موارد بلا داعي — لو
+        # الـ widget اتفتح فعليًا بعد كده، showEvent هتاخد المهمة تاني.
+        try:
+            if not self.isVisible():
+                if _retry < _MAX_FIT_RETRIES:
+                    from ui.constants import SPLITTER_RETRY_DELAY
+                    self._schedule_fit(delay_ms=SPLITTER_RETRY_DELAY, _retry=_retry + 1)
+                return
+            if self.table.rowCount() == 0:
+                return
+            self._auto_resize()
+            fit_splitter_table(self._splitter, self.table, extra_pad=TABLE_EXTRA_PAD)
+            if hasattr(self, "_table_guard"):
+                self._table_guard.refresh()
+        except RuntimeError:
+            pass
 
     @property
     def current_id(self) -> "int | None":

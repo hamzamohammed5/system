@@ -6,11 +6,12 @@ RawInputPanel — فورم إضافة / تعديل الخامة مع لوحة Va
 يرث من BaseCrudForm ويستدعي ItemService بدل repos مباشرة.
 """
 
-from PyQt5.QtWidgets import QWidget, QHBoxLayout, QLabel, QSizePolicy
+from PyQt5.QtWidgets import QWidget, QHBoxLayout, QLabel, QSizePolicy, QMessageBox
 from PyQt5.QtCore import Qt
 
 from ui.widgets.base.crud_form         import BaseCrudForm
 from ui.widgets.core.widget_mixin      import WidgetMixin
+from ui.widgets.core.events            import emit_company_data_changed
 
 from ui.widgets.panels.form_fields import (labeled_widget, spin_field)
 from ui.widgets.panels.form_badges import ResultBadge
@@ -62,11 +63,37 @@ class RawInputPanel(BaseCrudForm, WidgetMixin):
         # ربط live preview بعد بناء الـ fields
         self.inp_price.textChanged.connect(self._on_price_changed)
         self.sp_total_qty.valueChanged.connect(self._update_hint)
+        # [Feature] الفورم بيفتح في وضع "إضافة خامة جديدة" افتراضيًا —
+        # نفعّل لوحة الـ variants فورًا في memory mode عشان المستخدم
+        # يقدر يضيف variants قبل ما يضغط "إضافة" أصلاً، بدل ما يحفظ
+        # الخامة الأول ويرجع يعدّلها.
+        self._variants.enter_memory_mode(0.0)
         self._refresh_style()
 
     # ══════════════════════════════════════════════════════
     # بناء الحقول
     # ══════════════════════════════════════════════════════
+
+    # ══════════════════════════════════════════════════════
+    # [Fix] override لـ _on_add
+    # ══════════════════════════════════════════════════════
+    # دلوقتي الـ variants بتتحفظ مع الخامة نفسها في _do_insert (عبر
+    # save_pending_to_db) — فمفيش داعي نسيب الفورم في "وضع تعديل
+    # variants" بعد الإضافة زي قبل كده. بعد نجاح الإضافة، نرجّع الفورم
+    # لحالة "إضافة جديدة" نضيفة (بما فيها تفعيل لوحة variants تانية في
+    # memory mode) عشان المستخدم يقدر يضيف خامة تانية فورًا.
+    def _on_add(self):
+        data = self._collect()
+        if data is None:
+            return
+        try:
+            new_id = self._do_insert(data)
+        except Exception as e:
+            QMessageBox.warning(self, tr("error"), str(e))
+            return
+        self._reset()
+        emit_company_data_changed()
+        self.saved.emit(new_id)
 
     def _build_fields(self, group: FormGroup):
         self.inp_name    = RequiredLineEdit(tr("raw_name_required"))
@@ -103,8 +130,11 @@ class RawInputPanel(BaseCrudForm, WidgetMixin):
 
     def _on_price_changed(self):
         self._update_hint()
-        if self._editing_id is not None:
-            self._variants.refresh_price(_live_price(self.inp_price))
+        # [Feature] نحدّث السعر جوه لوحة الـ variants سواء إحنا بنعدّل
+        # خامة موجودة (DB mode) أو لسه بنضيف خامة جديدة (memory mode) —
+        # عشان معاينة تكلفة الوحدة (unit cost) تفضل صح لحظيًا مع كل
+        # تغيير في السعر.
+        self._variants.refresh_price(_live_price(self.inp_price))
 
     def _update_hint(self):
         price = _live_price(self.inp_price)
@@ -144,12 +174,10 @@ class RawInputPanel(BaseCrudForm, WidgetMixin):
             category_id=data["category_id"],
             total_qty=data["total_qty"],
         )
-        self._variants.load_item(new_id, data["price"])
-        # إبقاء الفورم في وضع التعديل لإضافة variants
-        self.enter_edit_mode(new_id, tr("mode_label_wrap").format(content=tr("raw_add_variants_mode").format(name=data["name"])))
-        self.btn_add.setVisible(False)
-        self.btn_save.setVisible(True)
-        self.btn_cancel.setVisible(True)
+        # [Feature] الـ variants اتضافت في memory mode أثناء ملء الفورم —
+        # دلوقتي بعد ما الخامة اتحفظت وأخدت item_id حقيقي، نحفظهم فعليًا
+        # في الداتابيز دفعة واحدة.
+        self._variants.save_pending_to_db(new_id)
         return new_id
 
     def _do_update(self, item_id: int, data: dict) -> None:
@@ -196,3 +224,7 @@ class RawInputPanel(BaseCrudForm, WidgetMixin):
         self.cmb_category.setCurrentIndex(0)
         self._update_hint()
         self._variants.clear()
+        # [Feature] بعد أي reset (إضافة ناجحة / إلغاء)، الفورم بيرجع
+        # لوضع "إضافة خامة جديدة" — نفعّل لوحة الـ variants فورًا في
+        # memory mode تاني عشان تفضل جاهزة للخامة الجاية.
+        self._variants.enter_memory_mode(0.0)

@@ -68,6 +68,14 @@ class BaseSection(QWidget, WidgetMixin):
     CONNECT_BUS     : bool  = False
     LAYOUT_REVERSED : bool  = False
 
+    # يسمح بإخفاء أي من الجانبين (list/detail) بالكامل لو المستخدم سحب
+    # حافة الـ splitter لحد قريب جداً من النهاية. الرجوع بيتم بنفس
+    # السحب اليدوي من نفس الحافة (سلوك QSplitter الافتراضي).
+    # True = السلوك الافتراضي لأي قسم جديد. لو شاشة معينة محتاجة تمنع
+    # الانهيار (الجانبان لازم يفضلوا ظاهرين دايماً)، تعمل override محلي:
+    #     COLLAPSIBLE = False
+    COLLAPSIBLE     : bool  = True
+
     # [T-05] من CrudSection — موضع الفورم
     # "none"   → لا فورم
     # "bottom" → أسفل لوحة القائمة
@@ -158,7 +166,7 @@ class BaseSection(QWidget, WidgetMixin):
 
         for i, w in enumerate(widgets):
             self._splitter.addWidget(w)
-            self._splitter.setCollapsible(i, False)
+            self._splitter.setCollapsible(i, self.COLLAPSIBLE)
             self._splitter.setStretchFactor(i, stretches[i])
 
         root.addWidget(self._splitter)

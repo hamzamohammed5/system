@@ -63,6 +63,79 @@
    `table.setHorizontalScrollMode(QAbstractItemView.ScrollPerPixel)`
    `table.setVerticalScrollMode(QAbstractItemView.ScrollPerPixel)`
 
+## توحيد الـ Splitter
+
+كل شاشة عندي فيها قسمين جنب بعض (زي list + detail، أو فورم + جدول)
+لازم تتبع نفس النمط الموحّد الموجود في:
+- ui/widgets/base/section.py (BaseSection)
+
+### الخصائص المطلوبة في أي splitter بين قسمين:
+
+1. **البناء عن طريق `BaseSection` فقط — ممنوع `QSplitter` يدوي**
+   أي شاشة فيها list + detail (زي `OrdersTab`, `CustomersTab`,
+   `RawSection`) لازم ترث من `BaseSection` وتعمل override لـ:
+   `_create_list()` → القسم الأول (يمين/شمال حسب `LAYOUT_REVERSED`)
+   `_create_detail()` → القسم الثاني
+   بدل ما تبني `QSplitter(Qt.Horizontal)` بنفسها من الصفر.
+
+   السلوك المرجعي: **جدول الطلبات** (`orders_tab.py` +
+   `_orders_list_panel.py` + `_order_detail.py`) — splitter أفقي
+   بين قائمة الطلبات وتفاصيل الطلب، مبني بالكامل عن طريق
+   `_create_list`/`_create_detail` بدون أي `QSplitter` مباشر في
+   الملف نفسه.
+
+   **استثناء واحد فقط:** الشاشات اللي محتاجة عمود ثالث فرعي جوه نفس
+   القسم (زي `_MachinesTab`/`_MachineOpsTab` في `machine_tab.py`
+   اللي فيها splitter رأسي بين فورم وجدول داخل تبويب واحد) بتستخدم
+   `QSplitter` يدوي لأنها مش list+detail أساسًا — دي حالة مختلفة عن
+   نمط `BaseSection`، ولو اتلقى ملف زي كده لازم يتحول لنفس نمط
+   `BaseSection` (list=form, detail=table) بدل الـ splitter اليدوي،
+   إلا لو فيه أكتر من قسمين حقيقي.
+
+2. **ممنوع `FORM_POSITION` العمودي (top/bottom) لو المطلوب فعليًا
+   splitter أفقي بين قسمين**
+   `FORM_POSITION = "top"/"bottom"` بتحط الفورم والقائمة فوق بعض
+   *جوه نفس عمود الـ splitter*، ده تخطيط عمودي داخلي مش splitter
+   مستقل. لو الشاشة محتاجة فعلاً قسمين جنب بعض قابلين للسحب (زي
+   الفورم والجدول)، الطريقة الصحيحة إنهم يبقوا `_create_list()`
+   و`_create_detail()` مباشرة، بدون `FORM_POSITION` خالص.
+
+   مثال تصحيح مرجعي: `RawSection` (الخامات) كانت مبنية بـ
+   `FORM_POSITION = "top"` (فورم فوق، جدول تحت) مع `_create_detail()`
+   بترجّع widget فاضي مخفي — تم تصحيحها لتستخدم `_create_list()`
+   للفورم و`_create_detail()` للجدول، بنفس نمط `OrdersTab`.
+
+3. **قابلية الإخفاء الكامل بالسحب (collapse) مفعّلة افتراضيًا**
+   `BaseSection.COLLAPSIBLE = True` هي القيمة الافتراضية لأي قسم
+   جديد — يعني المستخدم يقدر يسحب حافة الـ splitter لحد قريب جدًا
+   من النهاية فيختفي القسم بالكامل، والرجوع بيتم بنفس السحب اليدوي
+   من نفس الحافة (سلوك `QSplitter` الافتراضي، بدون زرار).
+   لو شاشة معيّنة محتاجة تمنع الانهيار (الجانبان لازم يفضلوا ظاهرين
+   دايمًا)، تعمل override محلي صريح: `COLLAPSIBLE = False`.
+
+4. **الحدود الدنيا للعرض (`LIST_MIN_W`, `DETAIL_MIN_W`) بتفضل
+   موجودة حتى مع `COLLAPSIBLE = True`**
+   الغرض منها إنها تحدد الحجم الافتراضي الأولي (`_apply_sizes`)،
+   مش إنها تمنع الانهيار — `QSplitter` بيتجاهل `minimumWidth` وقت
+   السحب اليدوي لو `setCollapsible(i, True)` مفعّلة، فمفيش تعارض.
+
+5. **الستايل من دالة مركزية واحدة**
+   `self._splitter.setStyleSheet(splitter_style())` — نفس مبدأ
+   `table_style()` بالنسبة للجداول، مش ستايل inline مكرر في كل شاشة.
+
+### المطلوب منك بالظبط (بالإضافة لبند الجداول):
+
+- افحص كل ملف عندي فيه `QSplitter` مبني يدويًا لعمل تخطيط list+detail
+  أو فورم+جدول.
+- لو الملف مش وارث من `BaseSection` ومش بيستخدم
+  `_create_list()`/`_create_detail()`، حوّله ليتبع نفس النمط.
+- لو لقيت `FORM_POSITION = "top"` أو `"bottom"` مستخدمة في مكان
+  المفروض يكون فيه splitter أفقي حقيقي بين قسمين (مش تخطيط عمودي
+  داخل نفس القسم)، صحّحها لنفس نمط `RawSection` بعد التصحيح.
+- لو الشاشة فيها `setCollapsible(i, False)` مكتوبة صراحة بدون سبب
+  واضح ليه لازم الجانبان يفضلوا ظاهرين دايمًا، اسأل قبل ما تشيلها —
+  مش كل شاشة لازم تبقى قابلة للإخفاء بالضرورة.
+
 ## المطلوب منك بالظبط:
 
 1. افحص كل ملف عندي فيه QTableWidget مبني يدويًا (مش عن طريق دوال

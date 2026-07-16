@@ -6,20 +6,22 @@ _OfferDetails — لوحة عرض تفاصيل العرض المختار.
 
 from PyQt5.QtWidgets import (
     QVBoxLayout, QHBoxLayout,
-    QLabel, QTableWidget, QTableWidgetItem,
-    QHeaderView, QAbstractItemView,
+    QLabel, QSizePolicy,
 )
 from PyQt5.QtCore import Qt
-from PyQt5.QtGui  import QColor
 
 from ui.widgets.panels.themed_inputs import ThemedFrame
 
 from services.pricing.offers_service import get_offer_summary
 from ui.widgets.core.i18n import tr
 from ui.widgets.core.widget_mixin import WidgetMixin
+from ui.widgets.tables.tables import (
+    make_item, colored_item, make_splitter_table_guarded,
+    fit_splitter_table, refresh_table_styles, ROW_HEIGHT_NORMAL,
+)
 from ui.constants import (
     TABLE_BORDER_RADIUS, FORM_LAYOUT_MARGIN, SPACING_MD, SPACING_SM,
-    TABLE_MIN_HEIGHT_DEFAULT,
+    TABLE_MIN_HEIGHT_DEFAULT, TABLE_EXTRA_PAD,
     OFFER_DET_COL1_CAT_W, OFFER_DET_COL2_QTY_W, OFFER_DET_COL3_COST_W,
     OFFER_DET_COL4_PRICE_W, OFFER_DET_COL5_TOTAL_W, OFFER_DET_COL6_PROFIT_W,
 )
@@ -53,6 +55,11 @@ class _OfferDetails(ThemedFrame, WidgetMixin):
         self.lbl_notes.setStyleSheet(
             f"font-size:{FS_XS}px; color:{_C['text_muted']}; background:transparent; border:none;"
         )
+        # [توحيد الجداول] الجدول بقى مبني عبر make_splitter_table_guarded
+        # وعليه property "_table_variant"؛ refresh_table_styles هي المصدر
+        # الوحيد المركزي لإعادة تطبيق table_style() مع كل تغيير ثيم،
+        # بدل ما الجدول يفضل بستايل الثيم القديم وقت الإنشاء بس.
+        refresh_table_styles(self)
 
     # ── connection صالح دايماً ────────────────────────────
 
@@ -84,30 +91,31 @@ class _OfferDetails(ThemedFrame, WidgetMixin):
             stats_row.addWidget(f, stretch=1)
         root.addLayout(stats_row)
 
-        self.table = QTableWidget()
-        self.table.setColumnCount(7)
-        self.table.setHorizontalHeaderLabels([
-            tr("offer_col_product"),   tr("offer_col_category"),
-            tr("offer_col_qty"),       tr("offer_col_unit_cost"),
-            tr("offer_col_unit_price"),tr("offer_col_line_total"),
-            tr("offer_col_line_profit"),
-        ])
-        self.table.setEditTriggers(QAbstractItemView.NoEditTriggers)
-        self.table.setSelectionBehavior(QAbstractItemView.SelectRows)
-        self.table.setAlternatingRowColors(True)
-
-        hh = self.table.horizontalHeader()
-        hh.setSectionResizeMode(0, QHeaderView.Stretch)
+        # [توحيد الجداول] عمود 0 كان Stretch لوحده وسط أعمدة Interactive
+        # تانية — ده بالظبط السلوك المعكوس بصريًا في RTL المذكور في نمط
+        # الجداول الموحّد (زي raw_table_panel.py قبل التصحيح). STRETCH_COL
+        # لازم يبقى -1 دايمًا؛ الفراغ الباقي بياخده الـ spacer جوه الـ
+        # splitter (setStretchLastSection بيتفعل تلقائيًا جوه _build_table).
         col_widths = {
+            0: OFFER_DET_COL1_CAT_W,  # اسم المنتج — نفس عرض الفئة تقريبًا كبداية
             1: OFFER_DET_COL1_CAT_W, 2: OFFER_DET_COL2_QTY_W,
             3: OFFER_DET_COL3_COST_W, 4: OFFER_DET_COL4_PRICE_W,
             5: OFFER_DET_COL5_TOTAL_W, 6: OFFER_DET_COL6_PROFIT_W,
         }
-        for col, w in col_widths.items():
-            hh.setSectionResizeMode(col, QHeaderView.Interactive)
-            self.table.setColumnWidth(col, w)
-        self.table.setMinimumHeight(TABLE_MIN_HEIGHT_DEFAULT)
-        root.addWidget(self.table, stretch=1)
+        self._splitter, self.table, self._table_guard = make_splitter_table_guarded(
+            columns    = [
+                tr("offer_col_product"),   tr("offer_col_category"),
+                tr("offer_col_qty"),       tr("offer_col_unit_cost"),
+                tr("offer_col_unit_price"),tr("offer_col_line_total"),
+                tr("offer_col_line_profit"),
+            ],
+            stretch_col = -1,
+            col_widths  = col_widths,
+            min_height  = TABLE_MIN_HEIGHT_DEFAULT,
+            row_height  = ROW_HEIGHT_NORMAL,
+        )
+        self._splitter.setSizePolicy(QSizePolicy.Preferred, QSizePolicy.Expanding)
+        root.addWidget(self._splitter, stretch=1)
 
         self.lbl_notes = QLabel("")
         self.lbl_notes.setWordWrap(True)
@@ -137,46 +145,39 @@ class _OfferDetails(ThemedFrame, WidgetMixin):
 
         self.table.setRowCount(0)
         from ui.theme import _C
-        from ui.font import FS_LG
         for line in s["lines"]:
             r = self.table.rowCount()
             self.table.insertRow(r)
 
             icon_key = "offer_item_final_icon" if line["item_type"] == "final" else "offer_item_semi_icon"
-            self.table.setItem(r, 0, QTableWidgetItem(
-                tr(icon_key).format(name=line["item_name"])
-            ))
-            self.table.setItem(r, 1, QTableWidgetItem(line["category_name"] or tr("dash")))
-            self.table.setItem(r, 2, QTableWidgetItem(f"{line['qty']:.4g}"))
+            self.table.setItem(r, 0, make_item(tr(icon_key).format(name=line["item_name"])))
+            self.table.setItem(r, 1, make_item(line["category_name"] or tr("dash")))
+            self.table.setItem(r, 2, make_item(f"{line['qty']:.4g}"))
 
-            cost_item = QTableWidgetItem(f"{line['unit_cost']:.2f}")
-            cost_item.setForeground(QColor(_C["journal_dr_accent"]))
-            self.table.setItem(r, 3, cost_item)
+            self.table.setItem(
+                r, 3, colored_item(f"{line['unit_cost']:.2f}", color=_C["journal_dr_accent"])
+            )
 
             if line["has_pricing"]:
-                price_item = QTableWidgetItem(f"{line['unit_price']:.2f}")
-                price_item.setForeground(QColor(_C["success"]))
+                price_cell = colored_item(f"{line['unit_price']:.2f}", color=_C["success"])
             else:
-                price_item = QTableWidgetItem(tr("offer_no_pricing_cell"))
-                price_item.setForeground(QColor(_C["orange"]))
-            self.table.setItem(r, 4, price_item)
+                price_cell = colored_item(tr("offer_no_pricing_cell"), color=_C["orange"])
+            self.table.setItem(r, 4, price_cell)
 
             if line["has_pricing"]:
-                line_item = QTableWidgetItem(f"{line['line_listed']:.2f}")
-                line_item.setForeground(QColor(_C["orange"]))
+                line_cell = colored_item(f"{line['line_listed']:.2f}", color=_C["orange"])
             else:
-                line_item = QTableWidgetItem(tr("dash"))
-            self.table.setItem(r, 5, line_item)
+                line_cell = make_item(tr("dash"))
+            self.table.setItem(r, 5, line_cell)
 
             if line["has_pricing"]:
                 line_profit = (line["unit_price"] - line["unit_cost"]) * line["qty"]
-                lp_item = QTableWidgetItem(f"{line_profit:.2f}")
-                lp_item.setForeground(
-                    QColor(_C["success"]) if line_profit >= 0 else QColor(_C["danger"])
-                )
-                self.table.setItem(r, 6, lp_item)
+                profit_color = _C["success"] if line_profit >= 0 else _C["danger"]
+                self.table.setItem(r, 6, colored_item(f"{line_profit:.2f}", color=profit_color))
             else:
-                self.table.setItem(r, 6, QTableWidgetItem(tr("dash")))
+                self.table.setItem(r, 6, make_item(tr("dash")))
+
+        fit_splitter_table(self._splitter, self.table, extra_pad=TABLE_EXTRA_PAD)
 
         disc_pct = s["discount"]
         disc_amt = s["total_listed"] - s["sell_price"]
