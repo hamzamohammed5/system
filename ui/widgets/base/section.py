@@ -12,10 +12,23 @@ BaseSection — قاعدة مشتركة للأقسام اللي فيها list + 
   - CrudSection في panels/crud_section.py أصبحت alias لـ BaseSection
     للتوافق مع الكود القديم.
 
-  - السلوك الموحَّد:
-      FORM_POSITION = "none"   → لا فورم (السلوك الأصلي لـ BaseSection)
-      FORM_POSITION = "bottom" → فورم أسفل القائمة (السلوك الأصلي لـ CrudSection)
-      FORM_POSITION = "left"   → القائمة فقط (نفس "none" من ناحية الـ splitter)
+[توحيد الجداول/Splitters — إصلاح] حذف FORM_POSITION = "top"/"bottom":
+  المشكلة: القيمتين دول كانوا بيبنوا QVBoxLayout يدوي جوه left_widget
+  (فورم + قائمة فوق بعض عموديًا) *داخل نفس عمود الـ QSplitter الأفقي* —
+  ده تخطيط عمودي مدمج، مش splitter مستقل قابل للسحب بين الفورم والقائمة.
+  نفس المشكلة بالظبط اللي كانت في RawSection قبل تصحيحها (كانت
+  FORM_POSITION = "top" مع _create_detail() فاضية/مخفية).
+
+  الحل: أي قسم محتاج فورم + قائمة/جدول جنب بعض (قابلين للسحب) لازم
+  يستخدم _create_list() للفورم و_create_detail() للجدول مباشرة (أو
+  العكس حسب LAYOUT_REVERSED) — بالظبط زي نمط OrdersTab. FORM_POSITION
+  بقت تدعم قيمتين بس دلوقتي:
+      "none" → لا فورم منفصل (default)
+      "left" → فورم يُنشأ عبر _create_form() لكن بيُعرض جوه list panel
+               نفسها (مش splitter منفصل) — للحالات النادرة اللي مش
+               محتاجة فصل بصري قابل للسحب.
+  أي subclass كان بيستخدم "bottom" أو "top" لازم يتحول ليبني الفورم
+  والجدول كـ widgets منفصلة ويرجعهم من _create_list()/_create_detail().
 
   - override المطلوب:
       _create_list()   → QWidget
@@ -30,7 +43,7 @@ BaseSection — قاعدة مشتركة للأقسام اللي فيها list + 
       CONNECT_BUS, LAYOUT_REVERSED, FORM_POSITION, SPLITTER_RATIO
 """
 from PyQt5.QtWidgets import (
-    QWidget, QHBoxLayout, QVBoxLayout,
+    QWidget, QHBoxLayout,
     QSizePolicy, QSplitter,
 )
 from PyQt5.QtCore import Qt, QTimer
@@ -77,9 +90,12 @@ class BaseSection(QWidget, WidgetMixin):
     COLLAPSIBLE     : bool  = True
 
     # [T-05] من CrudSection — موضع الفورم
-    # "none"   → لا فورم
-    # "bottom" → أسفل لوحة القائمة
-    # "left"   → نفس list panel (لا يُضاف splitter منفصل)
+    # [توحيد الجداول/Splitters — إصلاح] حُذفت "top"/"bottom": كانوا بيبنوا
+    # QVBoxLayout يدوي (تخطيط عمودي مدمج) بدل splitter حقيقي بين قسمين —
+    # راجع تعليق أعلى الملف. أي قسم محتاج فورم+قائمة جنب بعض قابلين للسحب
+    # لازم يستخدم _create_list()/_create_detail() مباشرة بدل FORM_POSITION.
+    # "none" → لا فورم
+    # "left" → نفس list panel (لا يُضاف splitter منفصل)
     FORM_POSITION   : str   = "none"
 
     # [T-05] من CrudSection — نسبة الـ splitter
@@ -173,11 +189,19 @@ class BaseSection(QWidget, WidgetMixin):
 
     def _build_left_panel(self) -> QWidget:
         """
-        [T-05] يبني لوحة القائمة مع الفورم (لو FORM_POSITION != "none").
+        [T-05] يبني لوحة القائمة (لو FORM_POSITION != "none").
 
-        FORM_POSITION = "none"   → يرجع self._list مباشرة
-        FORM_POSITION = "bottom" → يرجع container(list + form)
-        FORM_POSITION = "left"   → يرجع self._list (الفورم خارج الـ splitter)
+        [توحيد الجداول/Splitters — إصلاح] حُذفت حالة "bottom"/"top":
+        كانوا بيبنوا QVBoxLayout يدوي (فورم+قائمة فوق بعض) داخل نفس
+        عمود الـ splitter — تخطيط عمودي مدمج مش splitter حقيقي بين
+        قسمين قابلين للسحب. أي قسم محتاج فورم وجدول جنب بعض قابلين
+        للسحب لازم يرجّعهم كـ widgets منفصلة من _create_list() و
+        _create_detail() (بالظبط زي OrdersTab)، مش عبر FORM_POSITION.
+
+        FORM_POSITION = "none" → يرجع self._list مباشرة
+        FORM_POSITION = "left" → يرجع self._list (الفورم خارج الـ splitter،
+                                  لو الـ subclass حابب يستخدمه بنفسه عبر
+                                  form_panel property)
         """
         form = self._create_form()
 
@@ -185,29 +209,8 @@ class BaseSection(QWidget, WidgetMixin):
             self._form = None
             return self._list
 
-        if self.FORM_POSITION == "bottom":
-            container = QWidget()
-            container.setStyleSheet("background:transparent;")
-            lay = QVBoxLayout(container)
-            lay.setContentsMargins(0, 0, 0, 0)
-            lay.setSpacing(0)
-            lay.addWidget(self._list, stretch=1)
-            lay.addWidget(form)
-            self._form = form
-            return container
-        
-        elif self.FORM_POSITION == "top":      
-            container = QWidget()
-            container.setStyleSheet("background:transparent;")
-            lay = QVBoxLayout(container)
-            lay.setContentsMargins(0, 0, 0, 0)
-            lay.setSpacing(0)
-            lay.addWidget(form)                # الفورم فوق
-            lay.addWidget(self._list, stretch=1)  # الجدول تحت
-            self._form = form
-            return container
-
         # FORM_POSITION = "left" أو أي قيمة أخرى → list فقط
+        # (الفورم موجود لكن خارج الـ splitter، متاح عبر form_panel property)
         self._form = form
         return self._list
 
