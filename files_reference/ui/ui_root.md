@@ -1,7 +1,7 @@
-# دليل الكود — UI / Root: Font, State, Theme, Main Window
+# دليل الكود — UI / Root: Font, State
 
 > الملفات الجذرية في `ui/` التي ليس لها مرجع مستقل خاص بها.
-> `ui/font.py`, `ui/app_state.py`, `ui/theme.py`, `ui/main_window.py`
+> `ui/font.py`, `ui/app_state.py`
 >
 > ⚠️ `ui/constants.py` و `ui/theme_manager.py` هما أيضاً ملفات جذرية في `ui/*.py`،
 > لكن كلاً منهما (بصفته مُجمِّعاً aggregator) له **مرجع مستقل خاص به** يغطيه هو
@@ -10,8 +10,15 @@
 > - `ui/constants.py` + كل `ui/constants_data/*.py` → **`ui_constants.md`**
 > - `ui/theme_manager.py` + كل `ui/theme_manager_data/*.py` → **`ui_theme_manager.md`**
 >
-> لذلك لا يُكرَّر محتواهما هنا — هذا الملف يغطي فقط الملفات الجذرية الأربعة
-> المتبقية التي لا تتبع أي مجلد بيانات فرعي مخصص لها.
+> ⚠️ **[نُقل]** `ui/theme.py` نُقل من هذا الملف إلى **`ui_theme_manager.md`** رغم
+> اختلاف مساره عن `ui/theme_manager.py` — بسبب التبعية المباشرة القوية بينهما
+> (`theme.py` يقرأ `_LIGHT_THEME`/`_DARK_THEME` من `theme_manager.py` مباشرة).
+>
+> ⚠️ **[نُقل]** `ui/main_window.py` نُقل بالكامل إلى **`ui_main_window.md`**
+> (كان مكرراً هنا وهناك) — راجعه هناك فقط.
+>
+> لذلك لا يُكرَّر محتواهما هنا — هذا الملف يغطي فقط الملفين الجذريين
+> المتبقيين اللذين لا يتبعان أي مجلد بيانات فرعي مخصص ولا مرجع آخر.
 
 ---
 
@@ -21,8 +28,6 @@
 |-------|---------|
 | [font](#font) | `ui/font.py` |
 | [app_state](#app_state) | `ui/app_state.py` |
-| [theme](#theme) | `ui/theme.py` |
-| [main_window](#main_window) | `ui/main_window.py` |
 
 ---
 
@@ -126,263 +131,15 @@ AppState._invalidate_button_cache()   # classmethod — داخلي
 # يستدعي invalidate_stylesheet_cache() من ui.widgets.components.button (داخل try/except، logger.debug لو فشل)
 ```
 
-**من يستدعي هذا الملف:** `ui/font.py` (عبر `get_font_size()`/`set_font_size()`)، `ui/main_window.py` (`_on_company_changed`).
-
----
-
-
-## theme
-
-### `ui/theme.py`
-
-```python
-_C: dict   # dict الألوان النشطة — يُملأ من _LIGHT_THEME عند الـ import الأول
-           # عبر _init_default_theme() التي تستورد من theme_manager
-
-_ss_cache: dict[tuple, str]   # cache key = (font_size, theme_hash)
-_current_theme_hash: str      # يُحسب lazy عند الحاجة
-
-_init_default_theme()
-# يُملّي _C بـ _LIGHT_THEME من theme_manager عند أول import
-# لا ألوان hardcoded في theme.py — كل الألوان من theme_manager.py
-
-apply_theme(theme_colors: dict, app: QApplication = None)
-# يُحدّث _C.update(theme_colors)
-# يستدعي invalidate_stylesheet_cache()
-# يستدعي invalidate_stylesheet_cache() من ui.widgets.components.button صراحةً (try/except)
-# يُطبّق stylesheet على app (أو QApplication.instance() لو app=None)
-# [إصلاح ثيم — مركزي] بعد setStyleSheet العام، يمر على كل topLevelWidgets()
-#   ويستدعي refresh_table_styles(win) من ui.widgets.tables.tables على كل واحدة
-#   لأن أي QTableWidget له stylesheet محلي مباشر (self.table.setStyleSheet(table_style()))
-#   لا يتحدث تلقائياً مع QApplication.setStyleSheet() — الحل المركزي يغطي كل الجداول
-#   دفعة واحدة بدل الاعتماد على كل widget يعمل refresh بنفسه
-# يُستدعى من ThemeManager.set_theme() — لا تستدعه مباشرة
-
-get_theme_color(key: str, fallback: str = "#000000") -> str
-# يرجع لون من _C بأمان مع fallback
-
-build_stylesheet(base: int) -> str
-# cache key = (font_size, theme_hash) عبر _ss_cache dict
-# يُقيّد base بـ [MIN_FONT_SIZE, MAX_FONT_SIZE] من ui.constants
-# يبني الـ stylesheet الكامل مقسّماً على دوال مساعدة
-# يُعيد النتيجة من الـ cache لو موجودة
-
-invalidate_stylesheet_cache()
-# يمسح _ss_cache.clear()
-# يُعيد ضبط _current_theme_hash = ""
-# يستدعي _set_module_font_cache(None) من ui.font
-```
-
-**`_compute_theme_hash()` / `_get_theme_hash()`:**
-```python
-# يحسب hash من tuple(sorted(_C.items()))
-# lazy — يُحسب فقط لو _current_theme_hash فارغ
-# يُستخدم كجزء من cache key في build_stylesheet
-```
-
-**أقسام الـ stylesheet (الدوال المساعدة):**
-```python
-_ss_base_reset      # QMainWindow، QWidget، * reset
-_ss_message_box     # QMessageBox كامل
-_ss_dialog          # QDialog كامل
-_ss_typography      # QLabel وكل roles (section, card-title, card-value, badge, mode)
-_ss_groupbox        # QGroupBox
-_ss_buttons         # QPushButton كل الحالات (hover, pressed, disabled, checked)
-_ss_inputs          # QLineEdit, QDoubleSpinBox, QSpinBox, QDateEdit, QTimeEdit
-_ss_combobox        # QComboBox + QAbstractItemView
-_ss_tables          # QTableWidget + QHeaderView
-_ss_tree            # QTreeWidget + QHeaderView
-_ss_tabs            # QTabWidget + QTabBar
-_ss_scrollbars      # QScrollBar vertical + horizontal (لا parameters غير c)
-_ss_misc            # QListWidget, QSplitter, QToolTip, QFrame, QScrollArea,
-                    # QProgressBar, QCheckBox, QRadioButton, Sidebar nav overrides
-```
-
-**مفاتيح `_C`:** العدد كبير جداً (أكثر من 130 مفتاح تغطي: خلفيات، حدود، نصوص، accent، sidebar، حالات success/danger/warning/info، محاسبة (journal/badge/t_account/acc_type)، مستثمرين، audit log، مخزون، تصميمات، BOM scenarios، إلخ). **القائمة الكاملة بقيمها لكل ثيم (light/dark)، بالإضافة لـ `ThemeManager` وكل الحزمة المُجمِّعة `ui/theme_manager.py` موجودة بالكامل في المرجع المستقل: `ui_theme_manager.md`** — `theme.py` نفسه لا يعرّف أي مفتاح لون؛ فقط يقرأها من `_LIGHT_THEME`/`_DARK_THEME` عبر `_C.update()` (راجع علاقات الملفات أدناه).
-
----
-
-## main_window
-
-### `ui/main_window.py`
-
-**الغرض:** النافذة الرئيسية للتطبيق (multi-company). يبني الـ sidebar + stack من الـ sections، ويدير التنقل والتبديل بين الشركات.
-
-**[تحديث جذري]** الإصدار الحالي (v13) يختلف جوهرياً عن الإصدار القديم:
-- **لا يوجد `conn_fn` ولا `company_state`** — كل section تفتح اتصال DB الخاص بها بنفسها من الداخل (لا تمرير closure).
-- `_try_build_section` أصبحت **بلا try/except فعلي** (معطّلة عمداً — الكود القديم بها موجود كـ تعليق commented-out)، فهي الآن مجرد استدعاء مباشر لـ `builder_fn()`. أي استثناء الآن **ينفجر فعلياً** ولا يتحول لـ placeholder.
-- `_make_placeholder_tab` ما زالت موجودة لكنها **لا تُستخدم فعلياً حالياً** لأن `_try_build_section` لا تستدعيها (الكود التعامل معها معطّل بـ comment).
-
-**الـ imports المهمة:**
-```python
-from ui.widgets.panels.themed_inputs import ThemedFrame
-from ui.font import get_font_size, fs
-from ui.theme import _C
-from ui.widgets.core.events import bus, emit_company_data_changed
-from ui.widgets.core.i18n import tr
-from .main_window_helper._sidebar import _Sidebar
-from ui.widgets.core.widget_mixin import WidgetMixin
-from ui.constants import (
-    WINDOW_DEFAULT_W, SIDEBAR_COLLAPSED_WIDTH, CONTENT_MIN_WIDTH,
-    WINDOW_DEFAULT_H, WINDOW_MIN_H, WINDOW_MIN_CONTENT_W, V_DIVIDER_WIDTH,
-)
-```
-
-### `_INDEX_MAP` (module-level dict)
-```python
-_INDEX_MAP: dict[str, int] = {
-    "costing": 1, "pricing": 2, "accounting": 3,
-    "inventory": 4, "design": 5, "orders": 6,
-}
-```
-عدد العناصر يجب أن يطابق عدد الـ `_builders` في `_build_tabs()` (index يبدأ من 1؛ index 0 دائماً `NoCompanyScreen`).
-
-### دوال top-level مستقلة
-
-**`_make_placeholder_tab(section_name: str, error: str = "") -> QWidget`**
-- ينشئ `QWidget` بخلفية `_C['bg_page']` وlayout عمودي مُوسَّط.
-- يعرض: label أيقونة (`tr('placeholder_icon')`) بحجم `fs(base, +8)`، ثم label عنوان (`section_name`) بحجم `fs(base, +2)` bold، ثم label فرعي (رسالة الخطأ أو `tr("under_development")`) بحجم `fs(base, -1)` مع `setWordWrap(True)`.
-- **[ملاحظة]** موجودة كـ fallback احتياطي فقط — لا تُستدعى فعلياً في التدفق الحالي لأن `_try_build_section` لا تستخدم try/except.
-
-**`_try_build_section(builder_fn, section_name: str) -> QWidget`**
-- **حالياً:** `return builder_fn()` مباشرة — بلا حماية.
-- الكود الأصلي (معطّل بـ triple-quote/comment) كان يلف الاستدعاء بـ try/except: `ImportError` → placeholder برسالة `f"ImportError: {e}"`، `Exception` عام → placeholder برسالة `f"خطأ: {e}"`. هذا السلوك القديم غير فعّال الآن.
-
-### `MainWindow(QMainWindow, WidgetMixin)`
-
-**`__init__(self, app)`**
-- يضبط `self._app`, `self._tabs_built = False`, `self._accounting = None`.
-- `setWindowTitle(tr("app_title"))`, `resize(WINDOW_DEFAULT_W, WINDOW_DEFAULT_H)`.
-- `setLayoutDirection(Qt.RightToLeft)`.
-- `setMinimumSize(SIDEBAR_COLLAPSED_WIDTH + WINDOW_MIN_CONTENT_W, WINDOW_MIN_H)`.
-- يستدعي `self._build()`.
-- **[إصلاح خلفية فاتحة بعد تبديل الثيم]** يستدعي `self._init_widget_mixin(theme=True, font=False, lang=False, data=False)` — بخلاف قبل، `MainWindow` أصبحت ترث `WidgetMixin` فعلياً حتى تستقبل `bus.theme_changed` وتُحدّث الـ stylesheets المبنية مباشرة داخلها (لأن هذه العناصر لا تتبع أي widget له `WidgetMixin` خاص بها).
-
-**`_refresh_style(self, *_)`** — override قياسي من `WidgetMixin`، يُستدعى تلقائياً عند `bus.theme_changed`:
-- يعيد `setStyleSheet` على: `self._central` (`bg_page`)، `self._stack` (`bg_page`)، `self._v_sep` (`border`)، و`self._content_scroll` (stylesheet كامل لـ QScrollArea + scrollbar أفقي).
-
-**`_build(self)`**
-- ينشئ `central = QWidget()` مع `setAttribute(Qt.WA_StyledBackground, True)` و`setStyleSheet(bg_page)` — **[إصلاح خلفية بيضاء عامة]** موثّق بالتعليق: بدون هذا، `QWidget` بلا stylesheet يرث خلفية النظام الافتراضية (أبيض) بدل لون الثيم.
-- `QHBoxLayout` بلا margins/spacing: `self._sidebar` (`_Sidebar(on_company_changed=self._on_company_changed)`) → فاصل عمودي `ThemedFrame` (VLine، عرض `V_DIVIDER_WIDTH`) → `self._content_scroll` (`QScrollArea`, stretch=1).
-- `self._stack = QStackedWidget()` بحد أدنى عرض `CONTENT_MIN_WIDTH`، يُضاف داخل `_content_scroll`.
-- index 0 من الـ stack = `NoCompanyScreen()` (من `.tabs.companies.no_company_screen`)، وإشارته `open_manager` مربوطة بفتح `company_selector._open_manager()`.
-- يربط كل زر sidebar بـ `self._on_nav(btn)`.
-- لو `CompanyService.is_company_ready()` (من `services.companies.company_service`) → يستدعي `self._build_tabs()` فوراً.
-
-### دورة حياة الـ Tabs
-
-**`_build_tabs(self)`**
-- لو `self._tabs_built` → يستدعي `self._destroy_tabs()` أولاً.
-- يعرّف 6 دوال builder داخلية (closures) بلا أي `conn_fn` — كل واحدة تستورد الـ section class وتبنيها **بدون تمرير أي اتصال DB**:
-  ```python
-  def _build_costing():    from ui.tabs.costing_section import CostingSection; return CostingSection()
-  def _build_pricing():    from ui.tabs.pricing_section import PricingSection; return PricingSection()
-  def _build_accounting(): from ui.tabs.accounting_section import AccountingTab; return AccountingTab()
-  def _build_inventory():  from ui.tabs.inventory_section import InventoryTab; return InventoryTab()
-  def _build_design():     from ui.tabs.design_section import DesignSection; return DesignSection()
-  def _build_orders():     from ui.tabs.orders_section import OrdersSection; return OrdersSection()
-  ```
-- الترتيب في `_builders` list يطابق `_INDEX_MAP` بالضبط (costing, pricing, accounting, inventory, design, orders).
-- لكل `(builder_fn, name)` يستدعي `_try_build_section(builder_fn, name)` ويضيف الناتج لـ `self._stack`.
-- يحفظ مرجع `AccountingTab` في `self._accounting` لو الـ widget عنده `refresh_for_company` (عبر `hasattr`).
-- لو `stack.count() > 1` → `setCurrentIndex(_INDEX_MAP["costing"])` ويُفعّل أول زر sidebar (`setChecked(True)`).
-- يستدعي `self._validate_index_map()`، ثم `self._tabs_built = True`.
-
-**`_validate_index_map(self)`**
-- لكل `key, idx` في `_INDEX_MAP`: `assert idx < self._stack.count()` — برسالة توضح المفتاح والقيمة المتوقعة لو فشل.
-
-**`_destroy_tabs(self)`**
-- `bus.blockSignals(True)` أثناء الإزالة.
-- حلقة `while self._stack.count() > 1`: يزيل كل widget من index 1 فصاعداً، `w.hide()` + `w.deleteLater()` داخل try/except.
-- `QApplication.processEvents()`، ثم `bus.blockSignals(False)`.
-- يستدعي `CompanyService.refresh_connections()` (من `services.companies.company_service`) داخل try/except — يُسجَّل تحذير `logger.warning` لو فشل.
-- يُعيد `self._accounting = None` و `self._tabs_built = False`.
-
-**`_refresh_tabs(self)`** — wrapper مباشر: `= self._build_tabs()`.
-
-### الأحداث (Events)
-
-**`_on_company_changed(self, company_id: int)`**
-1. `AppState.invalidate()` — مسح `font_size` cache (من `ui.app_state`).
-2. يستدعي `CompanyService.get_current_company_name()` ويضبط `setWindowTitle(tr("app_title_company", name=...))`، ثم `self._refresh_tabs()` — داخل try/except، لو فشل يُسجَّل `logger.error` ويتوقف (`return`) بدون إطلاق `emit_company_data_changed`.
-3. لو نجح كل شيء → يستدعي `emit_company_data_changed()` (دالة helper من `ui.widgets.core.events`، تتحقق من `is_ready` داخلياً بدل استدعاء `bus.emit` مباشرة).
-
-**`_on_nav(self, clicked_btn)`**
-- يُلغي تحديد كل الأزرار الأخرى، يُفعّل `clicked_btn`.
-- يقرأ `key = clicked_btn.property("nav_key")`.
-- **`key == "settings"`:** `setChecked(False)` على الزر → يفتح `SettingsDialog(self._app, parent=self).exec_()` → بعدها `self._sidebar.refresh_all_buttons()` (تحديث الأزرار + section labels لو تغيّر حجم الخط) → `return` (لا يُغيّر الـ stack).
-- **`key == "shared_items"`:** `setChecked(False)` → `self._open_shared_items()` → `return`.
-- لو `not self._tabs_built` → `self._stack.setCurrentIndex(0)` (شاشة "لا شركة") → `return`.
-- خلاف ذلك، لو `key in _INDEX_MAP` وكان `idx < stack.count()` → `setCurrentIndex(idx)`.
-
-**`_open_shared_items(self)`**
-- يستدعي `CompanyService.get_central_conn_and_init()` للحصول على اتصال DB المركزي.
-- ينشئ `SharedItemsService(central)` (يهيّئ جداول shared_items عند الإنشاء فقط — لا يُستخدم المرجع بعدها مباشرة).
-- ينشئ ويعرض `SharedItemsManagerDialog(central, parent=self)` كـ modal (`exec_()`)، بعد ربط إشارته `items_changed` بـ `emit_company_data_changed`.
-- يُغلق `central.close()` بعد إغلاق الـ dialog.
-
-### هيكل الـ Stack (بدون تغيير)
-```python
-index 0 → NoCompanyScreen
-index 1 → CostingSection    ("nav_costing")
-index 2 → PricingSection    ("nav_pricing")
-index 3 → AccountingTab     ("nav_accounting")
-index 4 → InventoryTab      ("nav_inventory")
-index 5 → DesignSection     ("nav_design")
-index 6 → OrdersSection     ("nav_orders")
-```
-
-### بناء الـ Sidebar (تفاصيلها الكاملة في `ui_main_window_helper.md` — هنا الترتيب فقط كما يبنيه `_sidebar.py`)
-```python
-nav_sections = [
-    (tr("nav_section_production"), [
-        (tr("nav_icon_costing"), tr("nav_costing"), "costing", ""),
-        (tr("nav_icon_pricing"), tr("nav_pricing"), "pricing", ""),
-    ]),
-    (tr("nav_section_finance"), [
-        (tr("nav_icon_accounting"), tr("nav_accounting"), "accounting", ""),
-        (tr("nav_icon_inventory"), tr("nav_inventory"), "inventory", ""),
-    ]),
-    (tr("nav_section_work"), [
-        (tr("nav_icon_design"), tr("nav_design"), "design", ""),
-        (tr("nav_icon_orders"), tr("nav_orders"), "orders", ""),
-    ]),
-]
-# Footer (بعد divider):
-shared_btn:  nav_key="shared_items"
-btn_settings: nav_key="settings"
-# + _ToggleButton
-```
-
-### إضافة Tab جديدة
-```python
-# 1. في MainWindow._build_tabs() — أضف builder function بلا أي conn_fn:
-def _build_my_section():
-    from ui.tabs.my_section import MySection
-    return MySection()
-_builders.append((_build_my_section, tr("nav_my_key")))
-
-# 2. أضف المفتاح في _INDEX_MAP (module-level):
-"my_key": N   # N = ترتيب الإضافة في _builders (بعد آخر index حالي)
-
-# 3. في _sidebar._build() — nav_sections (راجع ui_main_window_helper.md):
-(tr("nav_icon_my_key"), tr("nav_my_key"), "my_key", "")
-
-# 4. أضف مفاتيح الترجمة المطلوبة (nav_my_key, nav_icon_my_key) في ar/en data files.
-
-# _validate_index_map() يتحقق تلقائياً من التطابق عند كل _build_tabs()
-```
+**من يستدعي هذا الملف:** `ui/font.py` (عبر `get_font_size()`/`set_font_size()`)، `ui/main_window.py` (`_on_company_changed`) — راجع `ui_main_window.md`.
 
 ---
 
 ## علاقات الملفات
 
-- `ui/main_window.py` يستورد `_Sidebar` من `ui/main_window_helper/_sidebar.py` (راجع `ui_main_window_helper.md`).
-- `ui/main_window.py` يستورد `_C` من `ui/theme.py`، ويستورد ثوابت من `ui/constants.py` (المُجمِّع → مرجعه المستقل الكامل `ui_constants.md`).
-- `ui/theme.py` يستورد `_LIGHT_THEME` من `ui/theme_manager.py` (المُجمِّع → مرجعه المستقل الكامل `ui_theme_manager.md`) عند أول import فقط، لملء `_C` الافتراضي.
-- `ui/theme.py` لا يستورد من `ui/font.py` مباشرة في التعريف لكنه يستخدم `MIN_FONT_SIZE`/`MAX_FONT_SIZE` من `ui/constants.py` (→ `ui_constants.md`)، ويستدعي `_set_module_font_cache(None)` من `ui/font.py` داخل `invalidate_stylesheet_cache()`.
 - `ui/font.py` يستورد من `ui/app_state.py` (`AppState.font_size()`, `AppState.on_font_changed()`) — لا يتواصل مع DB أو `FontService` مباشرة.
-- `ui/app_state.py` يستورد من `services.shared.font_service.FontService` (خارج `ui/`) ومن `ui/theme.py` (`invalidate_stylesheet_cache`) ومن `ui/widgets/components/button.py` (`invalidate_stylesheet_cache`).
+- `ui/app_state.py` يستورد من `services.shared.font_service.FontService` (خارج `ui/`) ومن `ui/theme.py` (`invalidate_stylesheet_cache`، راجع `ui_theme_manager.md`) ومن `ui/widgets/components/button.py` (`invalidate_stylesheet_cache`).
 - **نمط الـ Layering المشترك بين `font.py` و`app_state.py`:** كل طبقة تعرف فقط الطبقة التي تحتها مباشرة (`font.py → AppState → FontService → settings_repo → DB`) — لا قفزات في السلسلة.
-- `ui/main_window.py` يعتمد على `services.companies.company_service.CompanyService` (خارج `ui/`) بدل `company_state` القديم — `is_company_ready()`, `get_current_company_name()`, `refresh_connections()`, `get_central_conn_and_init()`.
-- `ui/main_window.py` يستورد كل الـ sections بشكل lazy (داخل دوال builder) من `ui/tabs/*_section.py` — لا imports علوية لتفادي دورات الاستيراد وتسريع بدء التشغيل.
+- `ui/font.py` يُستهلَك من `ui/theme.py` (`_set_module_font_cache`) — راجع `ui_theme_manager.md` — ومن `ui/main_window.py` وحزمة `ui/main_window_helper/` — راجع `ui_main_window.md`.
+- `ui/app_state.py` يُستدعى من `ui/main_window.py` (`AppState.invalidate()` عند `_on_company_changed`) — راجع `ui_main_window.md`.
+- `ui/theme.py` (المصدر الوحيد لـ `_C` وبناء الـ stylesheet) و`ui/main_window.py` (النافذة الرئيسية) لم يعودا ضمن نطاق هذا الملف — راجع `ui_theme_manager.md` و`ui_main_window.md` على التوالي.

@@ -3,7 +3,11 @@
 > `ui/theme_manager.py` (الحزمة المُجمِّعة) + كل ملفات `ui/theme_manager_data/*.py` (5 ملفات).
 > المصدر الوحيد لتعريف ألوان الثيمات (Light/Dark) وإدارة تبديل الثيم الحالي في التطبيق.
 >
-> ⚠️ `ui/theme.py` (خارج نطاق هذا الملف — راجع `ui_root.md`) يستهلك هذه الحزمة فقط عبر `_LIGHT_THEME` لملء `_C` الافتراضي، ولا يعرّف أي لون بنفسه.
+> ⚠️ **[نُقل — استثناء لقاعدة "مسار واحد لكل مرجع"]** `ui/theme.py` (مساره الفعلي
+> `ui/theme.py` — **ليس** تحت `ui/theme_manager_data/`) أُضيف لهذا المرجع رغم اختلاف
+> مساره، بسبب التبعية المباشرة القوية والوحيدة بينه وبين هذه الحزمة: `theme.py` هو
+> المستهلك شبه الحصري لـ `_LIGHT_THEME`/`_DARK_THEME` (لملء `_C` وتطبيق `apply_theme`)،
+> ولا يعرّف أي لون بنفسه. راجع `ui_root.md` لبقية الملفات الجذرية في `ui/*.py`.
 
 ---
 
@@ -17,6 +21,7 @@
 | [_registry](#_registry) | `ui/theme_manager_data/_registry.py` |
 | [_card_palettes](#_card_palettes) | `ui/theme_manager_data/_card_palettes.py` |
 | [_manager](#_manager) | `ui/theme_manager_data/_manager.py` |
+| [theme](#theme) | `ui/theme.py` |
 
 ---
 
@@ -65,7 +70,7 @@ from ui.widgets.core.events import bus
 bus.theme_changed.connect(my_fn)
 ```
 
-**من يستدعي هذا الملف:** `ui/theme.py` (يستورد `_LIGHT_THEME` عند أول import فقط لملء `_C` الافتراضي — راجع `ui_root.md`)، `SettingsDialog` (لتبديل الثيم، خارج نطاق هذا المرجع)، `main.py` عند بدء التطبيق (`theme_manager.load_from_db()`).
+**من يستدعي هذا الملف:** `ui/theme.py` (يستورد `_LIGHT_THEME` عند أول import فقط لملء `_C` الافتراضي — راجع قسم `theme` في هذا الملف نفسه أدناه)، `SettingsDialog` (لتبديل الثيم، خارج نطاق هذا المرجع)، `main.py` عند بدء التطبيق (`theme_manager.load_from_db()`).
 
 ---
 
@@ -73,7 +78,7 @@ bus.theme_changed.connect(my_fn)
 
 ### `ui/theme_manager_data/_light_theme.py` — `_LIGHT_THEME: Dict[str, str]`
 
-**الغرض:** تعريف كل ألوان الثيم الفاتح (Light — Warm Neutral). **المصدر الوحيد** لهذه القيم — لا يُعاد تعريفها في أي مكان آخر بالمشروع؛ `ui/theme.py` يقرأها فقط عبر `_C.update()`.
+**الغرض:** تعريف كل ألوان الثيم الفاتح (Light — Warm Neutral). **المصدر الوحيد** لهذه القيم — لا يُعاد تعريفها في أي مكان آخر بالمشروع؛ `ui/theme.py` (راجع قسم `theme` أدناه في هذا الملف نفسه) يقرأها فقط عبر `_C.update()`.
 
 **لا imports خارجية** غير `from __future__ import annotations` و`typing.Dict`.
 
@@ -257,6 +262,83 @@ theme_manager._save_to_db(self)
 
 ---
 
+## theme
+
+### `ui/theme.py`
+
+> ⚠️ **[نُقل من `ui_root.md`]** مساره الفعلي `ui/theme.py` — مختلف عن `ui/theme_manager.py`/`ui/theme_manager_data/`، لكنه أُدرج هنا بسبب تبعيته المباشرة القوية على هذه الحزمة (راجع تنبيه أعلى الملف).
+
+**الغرض:** المسؤولية الوحيدة لهذا الملف: الاحتفاظ بالألوان النشطة حالياً (`_C`) وبناء الـ stylesheet الكامل للتطبيق. **لا ألوان hardcoded هنا إطلاقاً** — كل قيمة لونية تُقرأ من `_LIGHT_THEME`/`_DARK_THEME` (هذه الحزمة).
+
+```python
+_C: dict   # dict الألوان النشطة — يُملأ من _LIGHT_THEME عند الـ import الأول
+           # عبر _init_default_theme() التي تستورد من theme_manager
+
+_ss_cache: dict[tuple, str]   # cache key = (font_size, theme_hash)
+_current_theme_hash: str      # يُحسب lazy عند الحاجة
+
+_init_default_theme()
+# يُملّي _C بـ _LIGHT_THEME من theme_manager عند أول import
+# لا ألوان hardcoded في theme.py — كل الألوان من theme_manager.py
+
+apply_theme(theme_colors: dict, app: QApplication = None)
+# يُحدّث _C.update(theme_colors)
+# يستدعي invalidate_stylesheet_cache()
+# يستدعي invalidate_stylesheet_cache() من ui.widgets.components.button صراحةً (try/except)
+# يُطبّق stylesheet على app (أو QApplication.instance() لو app=None)
+# [إصلاح ثيم — مركزي] بعد setStyleSheet العام، يمر على كل topLevelWidgets()
+#   ويستدعي refresh_table_styles(win) من ui.widgets.tables.tables على كل واحدة
+#   لأن أي QTableWidget له stylesheet محلي مباشر (self.table.setStyleSheet(table_style()))
+#   لا يتحدث تلقائياً مع QApplication.setStyleSheet() — الحل المركزي يغطي كل الجداول
+#   دفعة واحدة بدل الاعتماد على كل widget يعمل refresh بنفسه
+# يُستدعى من ThemeManager.set_theme() — لا تستدعه مباشرة
+
+get_theme_color(key: str, fallback: str = "#000000") -> str
+# يرجع لون من _C بأمان مع fallback
+
+build_stylesheet(base: int) -> str
+# cache key = (font_size, theme_hash) عبر _ss_cache dict
+# يُقيّد base بـ [MIN_FONT_SIZE, MAX_FONT_SIZE] من ui.constants
+# يبني الـ stylesheet الكامل مقسّماً على دوال مساعدة
+# يُعيد النتيجة من الـ cache لو موجودة
+
+invalidate_stylesheet_cache()
+# يمسح _ss_cache.clear()
+# يُعيد ضبط _current_theme_hash = ""
+# يستدعي _set_module_font_cache(None) من ui.font
+```
+
+**`_compute_theme_hash()` / `_get_theme_hash()`:**
+```python
+# يحسب hash من tuple(sorted(_C.items()))
+# lazy — يُحسب فقط لو _current_theme_hash فارغ
+# يُستخدم كجزء من cache key في build_stylesheet
+```
+
+**أقسام الـ stylesheet (الدوال المساعدة):**
+```python
+_ss_base_reset      # QMainWindow، QWidget، * reset
+_ss_message_box     # QMessageBox كامل
+_ss_dialog          # QDialog كامل
+_ss_typography      # QLabel وكل roles (section, card-title, card-value, badge, mode)
+_ss_groupbox        # QGroupBox
+_ss_buttons         # QPushButton كل الحالات (hover, pressed, disabled, checked)
+_ss_inputs          # QLineEdit, QDoubleSpinBox, QSpinBox, QDateEdit, QTimeEdit
+_ss_combobox        # QComboBox + QAbstractItemView
+_ss_tables          # QTableWidget + QHeaderView
+_ss_tree            # QTreeWidget + QHeaderView
+_ss_tabs            # QTabWidget + QTabBar
+_ss_scrollbars      # QScrollBar vertical + horizontal (لا parameters غير c)
+_ss_misc            # QListWidget, QSplitter, QToolTip, QFrame, QScrollArea,
+                    # QProgressBar, QCheckBox, QRadioButton, Sidebar nav overrides
+```
+
+**مفاتيح `_C`:** العدد كبير جداً (أكثر من 130 مفتاح تغطي: خلفيات، حدود، نصوص، accent، sidebar، حالات success/danger/warning/info، محاسبة (journal/badge/t_account/acc_type)، مستثمرين، audit log، مخزون، تصميمات، BOM scenarios، إلخ). **القائمة الكاملة بقيمها لكل ثيم (light/dark) موجودة أعلاه في هذا المرجع نفسه (أقسام `_light_theme`/`_dark_theme`)** — `theme.py` نفسه لا يعرّف أي مفتاح لون؛ فقط يقرأها من `_LIGHT_THEME`/`_DARK_THEME` عبر `_C.update()` (راجع علاقات الملفات أدناه).
+
+**من يستدعي هذا الملف:** `ui/main_window.py` (`_C` مباشرة — راجع `ui_main_window.md`)، `ui/font.py` (`apply_font()` يستدعي `build_stylesheet()`، راجع `ui_root.md`)، `SettingsDialog` وكل الـ `WidgetMixin` عبر `_refresh_style()` (خارج نطاق هذا المرجع)، `ThemeManager.set_theme()`/`load_from_db()` (أعلى في هذا الملف نفسه، عبر `ui.theme.apply_theme` باستيراد محلي).
+
+---
+
 ## علاقات الملفات
 
 - `ui/theme_manager.py` (المُجمِّع) يستورد من كل الـ 5 ملفات الفرعية ويُعيد تصديرها عبر `__all__` — لا منطق أو ألوان مُعرَّفة مباشرة فيه.
@@ -264,7 +346,8 @@ theme_manager._save_to_db(self)
 - `_manager.py` (`ThemeManager`) يستورد من `_registry.py` (`THEMES`, `THEME_DISPLAY_NAME_KEYS`) و`_light_theme.py` (`_LIGHT_THEME` كـ fallback في `load_from_db`) — لا يستورد `_dark_theme.py` مباشرة (يصل له فقط عبر `THEMES` dict).
 - `_card_palettes.py` **مستقل تماماً** عن باقي الملفات الأربعة — لا يستورد ولا يُستورَد من أي منها داخلياً؛ فقط يُعاد تصديره من `theme_manager.py` (المُجمِّع) للاستهلاك الخارجي.
 - `_light_theme.py` و`_dark_theme.py` **مستقلان عن بعضهما تماماً** (لا استيراد متبادل) لكن **يجب أن يتطابقا في مجموعة المفاتيح بالكامل** — هذا عقد ضمني غير مُفروض بالكود (لا اختبار تلقائي داخل هذه الملفات نفسها) بل موثّق فقط بالتعليقات والانضباط اليدوي.
-- **تبعية خارجية حرجة:** `ui/theme.py` (راجع `ui_root.md`) يستورد `_LIGHT_THEME` من هذه الحزمة عند أول `import` لملء `_C` الافتراضي (`_init_default_theme()`)، ويستدعي `apply_theme()` بداخل `ThemeManager.set_theme()`/`load_from_db()` — العلاقة اتجاهية: `theme_manager_data` لا يستورد أي شيء من `ui/theme.py` (لتفادي دورة استيراد)؛ `_manager.py` يستورد `ui.theme.apply_theme` بشكل **محلي (lazy، داخل الدالة)** تحديداً لهذا السبب.
+- **`ui/theme.py` (مُدرَج في هذا المرجع رغم اختلاف مساره — راجع التنبيه أعلى الملف):** يستورد `_LIGHT_THEME` من `_light_theme.py` عند أول `import` لملء `_C` الافتراضي (`_init_default_theme()`)، وهو المُستدعى من `ThemeManager.set_theme()`/`load_from_db()` (في `_manager.py`) عبر `apply_theme()` — العلاقة اتجاهية: بقية ملفات `theme_manager_data/` (`_light_theme`, `_dark_theme`, `_registry`, `_card_palettes`) لا تستورد أي شيء من `theme.py` (لتفادي دورة استيراد)؛ `_manager.py` هو الوحيد الذي يستورد `ui.theme.apply_theme` وبشكل **محلي (lazy، داخل الدالة)** تحديداً لهذا السبب.
 - `_manager.py` يستورد أيضاً من خارج نطاق `ui/` بالكامل: `db.shared.connection.get_connection`, `db.shared.settings_repo.get_setting/set_setting` (طبقة الـ DB مباشرة — الاستثناء الوحيد الموثّق لقاعدة عدم الوصول المباشر لـ DB من طبقة الـ UI، وهو مُبرَّر هنا لأن `ThemeManager` هو تحديداً المسؤول عن حفظ/تحميل تفضيل الثيم).
 - `_manager.py` يستورد من `ui.widgets.core.events` (`bus`) و`ui.widgets.core.i18n` (`tr`) — كلاهما استيراد محلي داخل الدوال، وكلاهما خارج نطاق هذا المرجع.
-- **لا علاقة مباشرة** مع `ui/constants_data/*.py` (راجع `ui_constants.md`) — هذه الحزمة كلها ألوان hex فقط، بينما `constants_data` كلها قياسات/أبعاد رقمية. الملفان يُستهلَكان معاً فقط داخل `ui/theme.py` (`build_stylesheet()` يستخدم كلا المصدرين: `_C` من هنا للألوان، وثوابت مثل `MIN_FONT_SIZE`/`INPUT_HEIGHT_PAD`/`BTN_HEIGHT_PAD` من `ui.constants` للأبعاد).
+- `ui/theme.py` نفسه يستخدم `MIN_FONT_SIZE`/`MAX_FONT_SIZE`/`INPUT_HEIGHT_PAD`/`BTN_HEIGHT_PAD` من `ui.constants` (المُجمِّع — راجع `ui_constants.md` للأبعاد الرقمية، بينما هذا المرجع كله ألوان hex فقط) داخل `build_stylesheet()`، ويستدعي `_set_module_font_cache(None)` من `ui/font.py` (راجع `ui_root.md`) داخل `invalidate_stylesheet_cache()`.
+- `ui/theme.py` يُستهلَك مباشرة من `ui/main_window.py` (`_C`) وحزمة `ui/main_window_helper/` بالكامل (راجع `ui_main_window.md`)، ومن `ui/font.py` (`apply_font()` يستدعي `build_stylesheet()`، راجع `ui_root.md`).
