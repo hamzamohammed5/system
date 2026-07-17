@@ -1,7 +1,12 @@
 # دليل الكود — UI / Widgets (3): Components
 
 > `ui/widgets/components/` — كل مكونات الواجهة القابلة لإعادة الاستخدام.
-> يشمل: Button, Labels, Headers, Notification, Spinner, Stats, Badges, ActionToolbar, ColorPicker, ComponentRow.
+> يشمل: Button, Labels, Headers, Notification, Spinner, Stats, Badges, ActionToolbar, ComponentRow.
+>
+> ⚠️ **[تصحيح تسمية/تقسيم]** كان هذا المرجع يغطي سابقاً `ColorPickerWidget`
+> (`helpers/color_picker.py`) رغم أن مساره الفعلي `ui/widgets/helpers/` وليس
+> `ui/widgets/components/` — مخالفة لقاعدة "مرجع واحد = مسار واحد". تم فصله
+> إلى **`ui_widgets_helpers.md`** المستقل. هذا الملف يغطي `ui/widgets/components/` فقط.
 
 ---
 
@@ -22,13 +27,13 @@
 | [Status Chip](#status-chip) | `components/status_chip.py` |
 | [ActionToolbar](#actiontoolbar) | `components/action_toolbar.py` |
 | [Constants — General](#constants--general) | `components/constants_general.py` |
-| [ColorPicker](#colorpicker) | `helpers/color_picker.py` |
 | [ComponentRow — Widget](#componentrow--widget) | `components/component_row/widget.py` |
 | [ComponentRow — UI](#componentrow--ui) | `components/component_row/ui.py` |
 | [ComponentRow — OpRows](#componentrow--oprows) | `components/component_row/op_rows.py` |
 | [ComponentRow — Variants](#componentrow--variants) | `components/component_row/variants.py` |
 
 ---
+
 
 ## Button
 
@@ -624,19 +629,6 @@ SIDEBAR_SCROLL_RADIUS=1  SIDEBAR_BORDER_W=1
 
 ---
 
-## ColorPicker
-
-### `ui/widgets/helpers/color_picker.py`
-
-```python
-ColorPickerWidget(default="#607d8b", btn_text="اختر لون")
-# Signals: color_changed(str) — hex string
-  .current_color() -> str
-  .set_color(color: str)
-```
-
----
-
 ## ComponentRow — Widget
 
 ### `ui/widgets/components/component_row/widget.py`
@@ -891,4 +883,4 @@ return self._pinned_op_row_id
 - `component_row/op_rows.py` و `component_row/variants.py` يستوردان `blocked_signals` من `utils/signals.py` (مرجع: `ui_widgets_utils.md`).
 - `component_row/widget.py` يستورد `SearchableCombo` و `build_grouped_items` من `utils/searchable_combo.py` (مرجع: `ui_widgets_utils.md`).
 - `constants_general.py` هو مصدر كل ثوابت الأبعاد (`SPACING_*`, `*_MIN_H`, إلخ) المستخدمة عبر كل ملفات هذا المرجع تقريباً — علاقة استيراد شبه شاملة وليست ثنائية محددة.
-- `helpers/color_picker.py` (`ColorPickerWidget`) يستورد `make_btn` من `components/button.py` رغم أنه في مسار مختلف (`helpers/` وليس `components/`) — مذكور هنا فقط لأنه ظهر في نفس دفعة الملفات المرفقة تاريخياً؛ **مساره الفعلي `ui/widgets/helpers/color_picker.py` خارج نطاق مسار `components/` الذي يغطيه هذا المرجع اسماً**، لكنه أُبقي هنا لأن لا مرجع مستقل لـ `helpers/` حالياً.
+- `ui/widgets/helpers/color_picker.py` (مسار مختلف — مرجع منفصل: `ui_widgets_helpers.md`) يستورد `make_btn` من هذا المرجع (`components/button.py`) — تبعية خارجية واحدة فقط، لا علاقة عكسية.

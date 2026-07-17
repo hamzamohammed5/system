@@ -1,5 +1,5 @@
 File Tree Snapshot
-Generated : 2026-07-17 09:42:28
+Generated : 2026-07-17 10:31:26
 Source    : D:\My Workspace\Hg\Alhabaar\accountant\system
 Extensions: .md, .py
 ────────────────────────────────────────────────────────────
@@ -77,6 +77,8 @@ system/
 │   │   └── services_shared.md
 │   └── ui/
 │       ├── tabs/
+│       │   ├── ui_tabs_accounting.md
+│       │   └── ui_tabs_costing.md
 │       ├── widgets/
 │       │   ├── ui_widgets_base.md
 │       │   ├── ui_widgets_combo.md
@@ -84,9 +86,11 @@ system/
 │       │   ├── ui_widgets_core.md
 │       │   ├── ui_widgets_dialogs.md
 │       │   ├── ui_widgets_forms.md
+│       │   ├── ui_widgets_helpers.md
 │       │   ├── ui_widgets_managers.md
 │       │   ├── ui_widgets_mixins.md
 │       │   ├── ui_widgets_panels.md
+│       │   ├── ui_widgets_shared.md
 │       │   ├── ui_widgets_tables.md
 │       │   ├── ui_widgets_theme.md
 │       │   └── ui_widgets_utils.md
