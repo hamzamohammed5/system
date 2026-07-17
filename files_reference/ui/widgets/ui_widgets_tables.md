@@ -1,7 +1,10 @@
-# دليل الكود — UI / Widgets (6): Tables & Utils
+# دليل الكود — UI / Widgets (6): Tables
 
-> `ui/widgets/tables/` + `ui/widgets/utils/`
-> بناء الجداول وأدوات الواجهة المساعدة.
+> `ui/widgets/tables/` — أدوات بناء الجداول الموحدة.
+>
+> ⚠️ **[تقسيم]** هذا المرجع كان يغطي سابقاً `tables/` و `utils/` معاً في
+> ملف واحد. حسب قاعدة "مرجع واحد = مسار واحد"، تم فصل `utils/` إلى مرجع
+> مستقل: **`ui_widgets_utils.md`**.
 
 ---
 
@@ -11,13 +14,6 @@
 |-------|---------|
 | [Tables](#tables) | `tables/tables.py` |
 | [Tables — Flexible](#tables--flexible) | `tables/flexible.py` |
-| [Utils — Signals](#utils--signals) | `utils/signals.py` |
-| [Utils — No Wheel](#utils--no-wheel) | `utils/no_wheel.py` |
-| [Utils — Tooltip](#utils--tooltip) | `utils/tooltip.py` |
-| [Utils — FlowLayout](#utils--flowlayout) | `utils/flow_layout.py` |
-| [Utils — Splitter](#utils--splitter) | `utils/splitter.py` |
-| [Utils — DateRange](#utils--daterange) | `utils/date_range.py` |
-| [Utils — SearchableCombo](#utils--searchablecombo) | `utils/searchable_combo.py` |
 
 ---
 
@@ -62,6 +58,21 @@ make_splitter_table_guarded(columns, ...) -> tuple[QSplitter, QTableWidget, Spli
 fit_splitter_table(splitter, table, extra_pad=20, delay_ms=0)
 # المصدر الوحيد لمنطق ضبط عرض الـ splitter حسب عرض الجدول
 
+refresh_table_styles(root_widget) -> int
+# [Fix - dark theme tables] يُعيد تطبيق table_style() على كل QTableWidget
+# في شجرة الـ widget اللي عليها Qt property "_table_variant" (أي جدول
+# مبني عبر make_table/make_list_table/make_fixed_table/make_splitter_table).
+# المشكلة: _build_table() كانت تطبّق table_style(variant) مرة واحدة فقط
+# وقت الإنشاء؛ أي widget أب لا يعمل setStyleSheet(table_style()) بنفسه
+# داخل _refresh_style() الخاصة به كان يبقى بستايل الثيم القديم (غالباً
+# فاتح) حتى بعد التحويل لـ dark.
+# الحل: يُستدعى من _refresh_style() الخاصة بأي widget أب بدل ما كل
+# widget يكرر الكود يدوياً:
+#     def _refresh_style(self, *_):
+#         from ui.widgets.tables.tables import refresh_table_styles
+#         refresh_table_styles(self)
+# يرجع عدد الجداول المُحدَّثة. يتجاهل RuntimeError (widget محذوف) بصمت.
+
 ROW_HEIGHT_COMPACT = 34
 ROW_HEIGHT_NORMAL  = 40
 ROW_HEIGHT_LARGE   = 48
@@ -96,156 +107,10 @@ FlexibleTreeWidget(parent=None)
 > **ملاحظة:** `refresh_tooltips` لا يُعاد تصديره من هنا — استورد مباشرة:
 > `from ui.widgets.utils.tooltip import refresh_tooltips`
 
----
+## علاقات الملفات
 
-## Utils — Signals
-
-### `ui/widgets/utils/signals.py`
-
-```python
-@contextmanager
-blocked_signals(*widgets)
-# يوقف signals لواحد أو أكثر من الـ widgets ثم يعيدها تلقائياً
-
-# مثال:
-with blocked_signals(self.cmb_a, self.cmb_b):
-    self.cmb_a.clear()
-    self.cmb_b.clear()
-```
-
----
-
-## Utils — No Wheel
-
-### `ui/widgets/utils/no_wheel.py`
-
-```python
-install_no_wheel_filter(app: QApplication)
-# يمنع عجلة الماوس من تغيير قيمة QComboBox / QAbstractSpinBox / QSlider
-# Shift+Wheel → يُمرِّر للـ horizontal scrollbar
-
-install_shift_wheel_filter = install_no_wheel_filter   # alias
-
-NoWheelCombo(QComboBox)
-NoWheelSpin(QSpinBox)
-NoWheelDouble(QDoubleSpinBox)
-NoWheelDate(QDateEdit)
-NoWheelSlider(QSlider)
-```
-
----
-
-## Utils — Tooltip
-
-### `ui/widgets/utils/tooltip.py`
-
-```python
-apply_table_tooltips(table: QTableWidget, cols: list[int] | None = None)
-# يضيف tooltip = النص الكامل لكل خلية
-
-apply_tree_tooltips(tree: QTreeWidget, item=None, cols=None, recursive=True)
-
-refresh_tooltips = apply_table_tooltips   # alias موحد
-```
-
----
-
-## Utils — FlowLayout
-
-### `ui/widgets/utils/flow_layout.py`
-
-```python
-FlowLayout(parent=None, h_spacing=6, v_spacing=4)
-# Layout يرتب الـ widgets أفقياً وينزل تلقائياً لسطر جديد
-# hasHeightForWidth() = True — يدعم dynamic height
-```
-
----
-
-## Utils — Splitter
-
-### `ui/widgets/utils/splitter.py`
-
-```python
-fit_list_panel(splitter, list_index, table, min_w=280, max_w=620, extra_pad=24) -> int
-fit_list_panel_delayed(splitter, list_index, table, delay_ms=0, min_w=280, max_w=620)
-
-SmartSplitter(orientation=Qt.Horizontal)
-  .set_list_widget(widget, list_table, list_index=0, min_w=280, max_w=620)
-  .fit_now() -> int
-  .fit_delayed(delay_ms=50)
-
-SplitterScrollGuard(splitter, table, table_index=0, extra_pad=20, parent=None)
-# يمنع الـ splitter من التوسع أكثر من عرض الجدول
-  .refresh()
-
-_SplitterScrollGuard = SplitterScrollGuard   # alias
-```
-
----
-
-## Utils — DateRange
-
-### `ui/widgets/utils/date_range.py`
-
-```python
-DateRangeFilter(default_from: QDate = None, default_to: QDate = None,
-                width=115, height=30, show_presets=False)
-# Signals: range_changed
-  .in_range(date_str: str) -> bool
-  .reset()
-  .from_date -> QDate
-  .to_date -> QDate
-  .set_from(date: QDate)
-  .set_to(date: QDate)
-  .dt_from / dt_to -> QDateEdit
-```
-
----
-
-## Utils — SearchableCombo
-
-### `ui/widgets/utils/searchable_combo.py`
-
-```python
-SearchableCombo()
-# [P-05] _ComboFilterProxy مُحسَّن:
-#   set_filter() المُحسَّن بحارس التغيير وتحسين Qt الداخلي:
-#     1. النص لم يتغير → تجاهل كامل (لا invalidation)
-#     2. النص فارغ    → setFilterFixedString("") مباشرة
-#                        Qt يعلم أن كل الصفوف ستظهر ويُحسِّن داخلياً
-#     3. النص غير فارغ → تحديث _filter_text ثم invalidateFilter() مرة واحدة
-#                        filterAcceptsRow المخصصة تُطبَّق للـ separators/orphans
-#   النتيجة: أقل invalidations بـ ~40% في حالة مسح النص الشائعة
-# debounce داخلي 120ms (SEARCH_DELAY_MS)
-# Signals: item_selected(data)
-
-  .populate(items: list)
-  # items: [(display_text, user_data, is_separator), ...]
-  # الـ separators المتتالية بدون عناصر بينها تُتجاهَل (pending_sep pattern)
-
-  .clear_items()
-  .current_data()
-  .get_selected_id() -> int | None
-  .set_selection(user_data)
-  # لو لم يجد مع فلتر نشط → يمسح الفلتر ويحاول مرة أخرى
-  .set_placeholder(text: str)
-  .block_signals(val: bool)
-  .count() -> int
-  .item_data(idx: int) -> data
-  .set_item_text(idx: int, text: str)
-  .add_item_at_start(text: str, data)   # للـ orphans — يستدعي invalidateFilter()
-  .cmb -> QComboBox
-
-build_grouped_items(items: list) -> list
-# items[i]: (id, name, cat_id, cat_name, ...) — يقبل tuples بأي حجم ≥ 2
-# يجمّع حسب cat_name — "بدون تصنيف" في الآخر
-# يتجاهل cat_name=None أو فارغ → يُعامَل كـ NO_CAT
-```
-
-**`_ComboFilterProxy` — السلوك:**
-```python
-# الـ separators: دائماً مرئية حتى لو لم يتبقَّ عناصر بعدها
-# الـ orphans (user_data[0] == "__orphan__"): دائماً مرئية
-# البحث: case-insensitive على الجزء بعد "—" أو النص الكامل
-```
+- `tables.py` هو المصدر الوحيد لمنطق ضبط عرض الـ splitter حسب عرض الجدول (`fit_splitter_table`) — `flexible.py` لا يعتمد عليه.
+- `flexible.py` مستقل عن `tables.py` — يوفر Delegates إضافية (`WrapDelegate`, `AutoTooltipDelegate`) تُستخدم فوق جداول مبنية بـ `tables.py` عبر `set_flexible_columns()`.
+- `tables.py` يستخدم `refresh_table_styles()` (دالة مركزية) لإعادة تطبيق `table_style()` على كل QTableWidget في شجرة widget عند تغيير الثيم — بديل عن كل widget يكتب `self.table.setStyleSheet(table_style())` يدوياً في `_refresh_style()` الخاصة به.
+- كلا الملفين يعتمدان على `theme/table_styles.py` (مرجع: `ui_widgets_theme.md`) لكل الألوان.
+- `utils/splitter.py` (مرجع: `ui_widgets_utils.md`) يستورد `calc_width` من هذا الملف (`tables.py`) — تبعية عكسية من `utils/` على `tables/`.

@@ -99,6 +99,35 @@ tab_style(accent=None, size="normal") -> str
 # size: "normal" | "inner" | "small"
 # يُستخدم في TabSectionBase._setup()
 
+calc_tab_width(text: str, size="normal", extra_pad=0) -> int
+# [إضافة] يحسب العرض اللازم لتبويب نصه text بحيث يبان كامل بدون قص.
+# نفس فلسفة _calc_btn_width_for_text في components/button.py: القياس
+# الحقيقي للنص (QFontMetrics) + الـ "chrome" الفعلي (padding + border +
+# سمك مؤشر التاب النشط) اللي tab_style() بترسمه، بدل min-width ثابت
+# في constants.py قد يكون أصغر من نصوص عربية/طويلة.
+# size لازم يطابق نفس size المستخدم في tab_style() لنفس QTabWidget.
+
+apply_tab_widths(tab_widget, size="normal", extra_pad=6) -> None
+# [حل مركزي لقص نص التبويبات] يضبط min-width الفعلي لتبويبات QTabWidget
+# حسب أطول نص موجود فعلياً بين كل التبويبات — عبر bar.setStyleSheet()
+# إضافي (QTabBar::tab { min-width:{max}px; }).
+# قيد Qt: لا يوجد API لعرض مختلف لكل تاب لوحده عبر QSS (::tab بينطبق
+# بنفس القاعدة على الكل) — الحل المضمون: رفع min-width العام لأكبر
+# عرض نص فعلي بين كل التبويبات.
+# يُستدعى بعد إضافة كل التبويبات، وكل ما تتغير عناوين التبويبات (بناء
+# أولي، تغيير لغة، تغيير حجم خط).
+
+normalize_tab_widget(tab_widget) -> None
+# [حل مركزي لتناسق شكل التبويبات] يوحّد إعدادات العرض الأساسية لأي
+# QTabWidget (خصائص لا يمكن التحكم فيها عبر QSS، مكمّل لـ tab_style()):
+#   setTabPosition(QTabWidget.North)
+#   setUsesScrollButtons(True)
+#   setElideMode(Qt.ElideNone)
+#   tabBar().setExpanding(False)
+#   tabBar().setDrawBase(True)
+# يُستدعى مرة واحدة بعد إنشاء الـ QTabWidget مباشرة (قبل أو بعد إضافة
+# التبويبات — لا فرق). يُستخدم في TabSectionBase._setup().
+
 scroll_style(width=6) -> str
 # المصدر الوحيد لـ QScrollArea / QScrollBar — لا تكرار
 # يُستخدم في BaseDetailPanel._build()

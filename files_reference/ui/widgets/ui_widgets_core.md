@@ -59,8 +59,9 @@ waste_text_color() -> str  # _C["orange"] — لون نص الهادر
 
 ```python
 get_active_company_id() -> int | None
-# يرجع company_state.company_id لو is_ready وإلا None
-# يُعيد None عند أي exception — try/except شامل
+# يرجع CompanyService.get_current_company_id() — عبر
+#   from services.companies.company_service import CompanyService
+# يُعيد None عند أي exception — try/except شامل (يُسجَّل عبر logger.debug)
 
 emit_company_data_changed()
 # لو cid is not None → bus.company_data_changed.emit(cid)
@@ -124,7 +125,8 @@ _conn_null_error(class_name: str, method: str, db: str = "erp") -> RuntimeError
 # Hot path — لا SELECT 1:
 #   1. self.__dict__["_conn_cache"] لو موجود → يرجعه مباشرة
 #   2. self.{_conn_attr} لو سليم → يُخزّن في _conn_cache ويرجعه
-#   3. company_state.get_erp_conn() كـ fallback:
+#   3. CompanyService.get_active_erp_conn() كـ fallback (via
+#      from services.companies.company_service import CompanyService):
 #      → يُحدّث self.conn
 #      → يُحدّث _conn_cache
 #   4. RuntimeError واضحة عبر _conn_null_error لو كل شيء فشل
@@ -135,7 +137,7 @@ _conn_null_error(class_name: str, method: str, db: str = "erp") -> RuntimeError
 
 ._live_acc_conn() -> Connection
 # نفس منطق _live_conn() لكن لـ accounting connection
-# fallback عبر get_accounting_connection()
+# fallback عبر CompanyService.get_active_accounting_conn()
 # Raises: RuntimeError عبر _conn_null_error لو فشل
 ```
 
@@ -259,6 +261,21 @@ requires_company(method=None, *,
                  return_value_factory: "type | None" = None)
 ```
 
+**دوال داخلية:**
+```python
+_is_company_ready() -> bool
+# يستدعي CompanyService.is_company_ready()
+#   (from services.companies.company_service import CompanyService)
+# أي exception → False (الاختيار الآمن)
+
+_show_warning(widget, message: str)
+# يفحص الـ widget بالترتيب ويستخدم أول طريقة متاحة:
+#   1. widget.show_warning(message)   — BaseDetailPanel
+#   2. widget._warn(message)          — FormValidationMixin
+#   3. widget._notif.show(message, "warning")  — BaseCrudForm
+#   4. logger.debug(...) صامت — لو مفيش طريقة معروفة
+```
+
 **أولوية عرض التحذير (بالترتيب):**
 `show_warning()` → `_warn()` → `_notif.show()` → debug log صامت
 
@@ -290,7 +307,8 @@ i18n_manager.translate(key, lang=None, **kwargs) -> str
 # يُطبّق .format(**kwargs) بأمان (try/except)
 
 i18n_manager.load_from_db()
-# يحمّل اللغة المحفوظة + يُطبّق الاتجاه — يُستدعى عند بدء التطبيق
+# يحمّل اللغة المحفوظة عبر LanguageService.load() (services/shared/language_service.py)
+# + يُطبّق الاتجاه — يُستدعى عند بدء التطبيق
 
 i18n_manager.get_available_languages() -> list[{code, name, active, is_rtl}]
 
@@ -320,7 +338,8 @@ _LANGUAGE_DISPLAY_NAMES  = {"ar": "العربية", "en": "English"}
 # محاط بـ try/except — لا يرمي exception
 
 _save_to_db()
-# يحفظ "ui_language" في settings عبر get_connection() + set_setting()
+# يحفظ اللغة عبر LanguageService.save(self._language)
+#   (from services.shared.language_service import LanguageService)
 # محاط بـ try/except — لا يرمي exception
 ```
 
