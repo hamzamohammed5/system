@@ -1,5 +1,5 @@
 File Tree Snapshot
-Generated : 2026-07-16 16:50:43
+Generated : 2026-07-17 07:35:27
 Source    : D:\My Workspace\Hg\Alhabaar\accountant\system
 Extensions: .md, .py
 ────────────────────────────────────────────────────────────
@@ -69,8 +69,10 @@ system/
 │   ├── services/
 │   │   ├── services_1_shared.md
 │   │   ├── services_2_costing.md
-│   │   ├── services_3_orders_accounting.md
-│   │   └── services_4_inventory.md
+│   │   ├── services_accounting.md
+│   │   ├── services_companies.md
+│   │   ├── services_inventory.md
+│   │   └── services_orders.md
 │   └── ui/
 │       ├── i18n/
 │       │   └── i18n_reference.md
