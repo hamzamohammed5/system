@@ -89,6 +89,8 @@ _migrate_old_shared_items(conn)
 
 ## companies_repo.py
 
+**من يستدعي هذا الملف:** `services/companies/company_service.py` — المستهلك الوحيد المسموح به معمارياً. لا يجوز لأي ملف خارج `services/companies/` استدعاؤه مباشرة.
+
 ### CRUD — الشركات
 
 ```python
@@ -166,6 +168,12 @@ from db.companies.shared_items_repo import (
 ---
 
 ## company_state.py
+
+**من يستدعي هذا الملف:**
+- `services/companies/company_service.py` — المستهلك الرئيسي: `is_company_ready()`, `get_active_erp_conn()`, `get_central_conn_and_init()`
+- `models/costing_base.py` — عبر `_get_central_conn_cached()` [P-02]
+- `db/accounting/investors_repo.py` — `_get_db_path()` يستخدم `object.__getattribute__(conn, '_path')` على `ProtectedConnection`
+- `services/shared/unit_service.py` — غير مباشر عبر `CompanyService.get_active_erp_conn()`
 
 ### ProtectedConnection
 
@@ -294,6 +302,10 @@ _invalidate_pending: threading.Event
 
 ## shared_items_repo.py
 
+**من يستدعي هذا الملف:**
+- `services/companies/shared_items_service.py` — المستهلك الرئيسي (composition)
+- `db/companies/shared_items_bridge.py` — يستورده مباشرة لبناء `SharedItemsBridge`
+
 ### الـ Imports
 
 ```python
@@ -393,3 +405,14 @@ get_item_as_labor_op(conn, shared_item_id: int) -> dict | None
 - `refresh_connections()` تُغلق connections بدون مسح dict — تُعاد فتحها عند الطلب التالي.
 - `get_item_as_machine_op` **غير موجودة** في shared_items_repo.
 - `[إصلاح 33]` يستورد decode/encode JSON من `db.shared.json_utils` مباشرة.
+
+---
+
+## من يستخدم هذا المسار (db/companies/) من خارجه
+
+- `services/companies/company_service.py` — المستهلك الرئيسي لـ `companies_repo.py` و`company_state.py`
+- `services/companies/shared_items_service.py` — المستهلك الرئيسي لـ `shared_items_repo.py`
+- `services/costing/catalog_service.py` — يستخدم `company_state` عبر `CompanyService` (لا استيراد مباشر)
+- `db/accounting/investors_repo.py` — يستخدم `ProtectedConnection._path` من `company_state`
+- `ui/widgets/mixins/shared_ops.py` — يستورد `CompanyService` و`SharedItemsService` [إصلاح هيكلة]
+- `ui/widgets/dialogs/settings_dialog.py` — يستورد `CompanyService` مباشرة

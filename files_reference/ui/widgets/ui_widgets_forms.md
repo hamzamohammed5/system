@@ -36,8 +36,7 @@ from ..theme.input_styles import input_style as _input_style, spinbox_style as _
 from ui.widgets.panels.themed_inputs import ThemedLineEdit, ThemedComboBox, ThemedDateEdit
 ```
 
-**من يستدعي هذا الملف:** غير محدد بثقة من المرفقات الحالية (لا يوجد ملف آخر
-في نفس الدفعة يستورد من `forms/inputs.py` صراحةً ظاهراً في الكود المرفق).
+**من يستدعي هذا الملف:** غير محدد بثقة — لا يوجد ملف آخر في المرفقات يستورد من `forms/inputs.py` صراحةً. بالنظر لوظيفته (input helpers/validators)، المتوقع أنه يُستخدم من `BaseCrudForm` أو ملفات `forms/` في tabs/ — لكن كل الملفات المرفقة تستورد `ThemedLineEdit`/`ThemedComboBox` من `panels/themed_inputs.py` مباشرة. ربما مكوّن مساعد داخلي أو أُهمل استخدامه لصالح `themed_inputs.py` مباشرة.
 
 ---
 

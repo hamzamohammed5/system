@@ -542,3 +542,10 @@ _build_extra(root_layout: QVBoxLayout)
 - `section.py` (`BaseSection`) يستورد `splitter_style` من `theme/table_styles.py` فقط من بين ملفات `theme/` — لا يعتمد على `tables/` أو `panels/` مباشرة.
 - `tab_section.py` (`TabSectionBase`) يستورد `tab_style`, `apply_tab_widths`, `normalize_tab_widget` من `theme/layout_styles.py` (مرجع: `ui_widgets_theme.md`) حصراً.
 - لا يوجد استيراد متبادل بين الملفات الخمسة داخل هذا المرجع نفسه (كل واحد مستقل ويُستخدم كقاعدة من `tabs/` أو ملفات أخرى خارج `ui/widgets/` — خارج نطاق هذا المرجع).
+---
+
+## من يستدعي ملفات هذا المرجع من خارجه
+
+- كل ملفات `ui/tabs/*/` تقريباً ترث من `BaseListPanel` أو `BaseDetailPanel` أو `BaseSection` أو `TabSectionBase` أو `BaseCrudForm`
+- `ui/tabs/companies/*`, `ui/tabs/costing/*`, `ui/tabs/orders/*`, `ui/tabs/accounting/*`, `ui/tabs/inventory/*`, `ui/tabs/design/*`, `ui/tabs/pricing/*` — كلها تعتمد على واحدة أو أكثر من هذه الـ base classes
+- `BaseCrudForm` يُستخدم تحديداً في: `LaborOpForm`, `MachineOpForm` وكل forms/ في tabs/

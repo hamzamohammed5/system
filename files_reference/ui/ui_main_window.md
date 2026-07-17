@@ -491,3 +491,12 @@ from ui.widgets.core.widget_mixin import WidgetMixin
 - `MainWindow` يعتمد على `services.companies.company_service.CompanyService` (خارج `ui/`) — `is_company_ready()`, `get_current_company_name()`, `refresh_connections()`, `get_central_conn_and_init()`.
 - `MainWindow` يستورد كل الـ sections بشكل lazy (داخل دوال builder) من `ui/tabs/*_section.py` — لا imports علوية لتفادي دورات الاستيراد وتسريع بدء التشغيل.
 - `MainWindow` يستورد أيضاً `NoCompanyScreen` (من `.tabs.companies.no_company_screen`)، `SettingsDialog` (من `ui.widgets.dialogs.settings_dialog`، محلي داخل `_on_nav`)، و`SharedItemsManagerDialog`/`SharedItemsService` (محلي داخل `_open_shared_items`) — كلها خارج نطاق هذا المرجع.
+
+---
+
+## من يستدعي ملفات هذا المرجع من خارجه
+
+- `main.py` — ينشئ `MainWindow` مباشرة (نقطة الدخول الوحيدة)
+- `ui/root.py` / `ui/app_state.py` — يُستدعيان من `MainWindow._on_company_changed()` عبر `AppState.invalidate()`
+- `ui/theme.py` — يُستدعى من `MainWindow` عند `_refresh_style`
+- `ui/tabs/companies/company_selector.py` — يُستورد في `_sidebar.py` (خارج هذا المرجع)

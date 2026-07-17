@@ -416,3 +416,14 @@ class MyWidget(QLabel, WidgetMixin):
 - `i18n.py` (`tr`, `i18n_manager`) مستقل تماماً عن باقي ملفات `core/` — يعتمد فقط على `ui/i18n/ar.py` و `ui/i18n/en.py` (خارج `ui/widgets/`) و اختيارياً `services/shared/language_service.py`.
 - `guard.py` (`requires_company`) يستدعي `_show_warning()` التي تفحص وجود `show_warning`/`_warn`/`_notif` على الـ widget المستهدَف — علاقة استخدام مع `BaseDetailPanel` (`show_warning`, مرجع: `ui_widgets_base.md`) و `FormValidationMixin` (`_warn`, مرجع: `ui_widgets_mixins.md`) و `BaseCrudForm` (`_notif`, مرجع: `ui_widgets_base.md`) — بدون استيراد مباشر (فحص `hasattr` فقط، لا import).
 - كل ملفات هذا المرجع تُستخدم من كل مسارات `ui/widgets/*` الأخرى تقريباً؛ العلاقة هنا أحادية الاتجاه دائماً (`core/` لا يستورد من أي مسار آخر داخل `ui/widgets/`).
+---
+
+## من يستدعي ملفات هذا المرجع من خارجه
+
+- كل ملفات `ui/` بلا استثناء تقريباً تستورد من `core/`
+- `WidgetMixin` (`core/widget_mixin.py`): كل class في `ui/widgets/` و`ui/tabs/` ترث منه
+- `bus` (`core/events.py`): كل ملف يستجيب لتغيير الثيم/اللغة/البيانات يستخدمه
+- `tr()` (`core/i18n.py`): كل ملف يعرض نصاً للمستخدم يستورده
+- `LiveConnMixin` (`core/conn.py`): كل form/tab يحتاج اتصال ديناميكي بالشركة النشطة
+- `emit_company_data_changed` (`core/events.py`): كل عملية حفظ/حذف في tab تستدعيه
+- العلاقة أحادية الاتجاه تماماً: `core/` لا يستورد من أي مسار آخر داخل `ui/widgets/`

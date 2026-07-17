@@ -40,7 +40,12 @@ from db.companies.companies_repo import (
 from db.companies.company_state import company_state
 ```
 
-**من يستدعي هذا الملف:** `services/costing/catalog_service.py` (`_fetch_shared` — `is_company_ready`, `get_current_company_id`, `get_central_conn_and_init`)، `services/companies/shared_items_service.py` (مثال استخدام موثّق في الـ docstring، وليس استيراداً فعلياً)، `services/inventory/inventory_service.py` (`get_active_erp_conn`). متوقع أيضاً من `ui/tabs/companies/*` حسب `system_arch.txt`.
+**من يستدعي هذا الملف:**
+- `services/costing/catalog_service.py` — `is_company_ready()`, `get_current_company_id()`, `get_central_conn_and_init()` في `_fetch_shared`
+- `services/inventory/inventory_service.py` — `get_active_erp_conn()` (مؤكَّد)
+- `ui/widgets/mixins/shared_ops.py` — `get_central_conn_and_init()` [إصلاح هيكلة — مؤكَّد]
+- `ui/widgets/dialogs/settings_dialog.py` — يستورد `CompanyService` مباشرة (مؤكَّد)
+- `ui/tabs/companies/*` — متوقع حسب `system_arch.txt`
 
 **لماذا service وليس تواصل مباشر؟ (موثّق في الكود):** يحقق هذا الملف الهيكلة `ui/tabs/... → CompanyService → companies_repo → companies_schema → DB` — طبقة الـ UI لا تعرف شيئاً عن `db.companies` مباشرة. أي تغيير مستقبلي في طريقة التخزين (تحويل النظام لـ online) يحدث هنا فقط دون لمس أي ملف في `ui/`.
 
@@ -121,7 +126,10 @@ from db.companies.companies_repo import (
 )
 ```
 
-**من يستدعي هذا الملف:** `services/costing/catalog_service.py` (`_fetch_shared` — `list_for_company`). متوقع أيضاً من `ui/tabs/companies/shared_items_dialog.py`, `shared_items_manager.py`, `shared_items_mixin.py` حسب `system_arch.txt`.
+**من يستدعي هذا الملف:**
+- `services/costing/catalog_service.py` — `list_for_company()` في `_fetch_shared` (مؤكَّد)
+- `ui/widgets/mixins/shared_ops.py` — `SharedItemsService(central)` [إصلاح هيكلة — مؤكَّد]
+- `ui/tabs/companies/shared_items_dialog.py`, `shared_items_manager.py` — متوقع حسب `system_arch.txt`
 
 **لماذا service وليس تواصل مباشر؟ (موثّق في الكود):** يحقق هذا الملف الهيكلة `ui/tabs/... → SharedItemsService → shared_items_repo / companies_repo → companies_schema → DB`. طبقة الـ UI (`tabs/`, `widgets/`) لا تستدعي `db.companies` مباشرة أبداً.
 

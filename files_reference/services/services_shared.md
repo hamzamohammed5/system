@@ -275,7 +275,7 @@ import logging
 from db.shared.settings_repo import get_setting, set_setting
 ```
 
-**من يستدعي هذا الملف:** غير محدد بثقة أي ملف UI مباشرة من المرفقات الحالية (متوقع من `ui/widgets/combo/unit.py` حسب اسم الملف القديم الذي نُقل منه — لكن محتواها غير مرفق).
+**من يستدعي هذا الملف:** `ui/widgets/dialogs/settings_dialog.py` — يستورده مباشرة (مؤكَّد من `ui_widgets_dialogs.md`). متوقع أيضاً من `ui/widgets/combo/unit.py` (حسب التعليقات في الملف نفسه — محتواها غير مرفق).
 
 ### ثوابت module-level
 

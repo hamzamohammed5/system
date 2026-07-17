@@ -176,3 +176,10 @@ total_cost = abs(qty - old_qty) * old_avg  # فرق التسوية
 - `costing_item_id` اختياري — للربط مع `erp.db` عند الحاجة لحساب التكاليف.
 - **جدول الحركات الفعلي هو `inventory_moves`** في `inventory_repo.py`.
 - `InventoryService` يستخدم `inventory_movements` (اسم مختلف) — استخدم `inventory_repo.py` مباشرة للدقة.
+---
+
+## من يستخدم هذا المسار (db/inventory/) من خارجه
+
+- `services/inventory/inventory_service.py` — المستهلك الوحيد المسموح به (مبدأ عزل صريح موثّق)
+- `db/accounting/accounting_inventory_repo.py` — يستدعي `record_inventory_move()` من `inventory_repo` مباشرة كجزء من عملية الشراء المزدوجة (`acc_conn` + `inv_conn`)
+- لا يجوز لأي ملف آخر (tabs أو services أخرى) استدعاء `inventory_repo` مباشرة

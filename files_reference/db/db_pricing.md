@@ -217,3 +217,10 @@ else:
 - `calc_offer_summary` يستخدم `models.costing.calc_cost` داخلياً.
 - `offers` مخزَّن في `erp.db` (نفس قاعدة البيانات الرئيسية للشركة).
 - `offer_items.item_id` → REFERENCES `items.id` CASCADE — يحذف بنود العرض عند حذف المنتج.
+---
+
+## من يستخدم هذا المسار (db/pricing/) من خارجه
+
+- `services/pricing/pricing_service.py` — المستهلك الرئيسي لـ `pricing_repo.py` (القاعدة: `tabs/` ممنوعة من استدعاء `pricing_repo` مباشرة)
+- `services/pricing/offers_service.py` — يستورد `offers_repo.py` مباشرة، ويستورد أيضاً `fetch_pricing` من `pricing_repo` مباشرة (تجاوز جزئي موثّق)
+- لا يجوز لـ `ui/tabs/` استدعاء أي repo في هذا المسار مباشرة (قاعدة معمارية صارمة موثّقة في رأس كل service)

@@ -14,7 +14,7 @@
 - `ui.widgets.theme.layout_styles` (`tab_style`, `apply_tab_widths`, `normalize_tab_widget`) — ستايل وتوحيد شكل QTabWidget.
 - `ui.widgets.core.widget_mixin.WidgetMixin` — آلية الاشتراك المركزية في تغييرات الثيم/الخط/اللغة/الداتا.
 
-**من يستدعيه:** غير محدد من المرفقات الحالية (على الأغلب main_window أو ملف تجميع الأقسام الرئيسي، لكن غير مؤكد من المرفقات).
+**من يستدعيه:** `ui/main_window.py` — يبنيه كقسم تنقل رئيسي (مؤكَّد من بنية `main_window_helper/_sidebar.py`).
 
 ### Class: `OrdersSection(QWidget, WidgetMixin)`
 - **Attributes:** `self.conn` (اتصال orders.db)، `self._header` (QLabel)، `self._tabs` (QTabWidget)، `self._dashboard_tab`, `self._orders_tab`, `self._customers_tab`.

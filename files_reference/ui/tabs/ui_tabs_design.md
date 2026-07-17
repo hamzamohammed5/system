@@ -18,7 +18,7 @@
 - `.design.dimension_sets_tab.DimensionSetsTab`
 - `.design.designs_tab.DesignsTab`
 
-**من يستدعي هذا الملف:** غير محدد من المرفقات الحالية (يُفترض أنه يُستدعى من نظام التنقل الرئيسي `main_window`، لكن هذا غير مؤكد من الملفات المرفقة).
+**من يستدعي هذا الملف:** `ui/main_window.py` — يبنيه كقسم تنقل رئيسي (مؤكَّد من بنية `main_window_helper/_sidebar.py`).
 
 ### Class: `DesignSection(QWidget, WidgetMixin)`
 - **`__init__(self, parent=None)`**: يفتح اتصال قاعدة بيانات التصميمات عبر `get_designs_conn_and_init()`, يبني الواجهة، ويفعّل `WidgetMixin` بـ `theme=True, font=True, lang=True, data=False`.

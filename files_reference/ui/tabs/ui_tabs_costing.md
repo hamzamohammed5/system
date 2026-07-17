@@ -19,7 +19,7 @@
 - `ui.widgets.core.widget_mixin.WidgetMixin` — التسجيل التلقائي على تحديثات الثيم/الخط/اللغة.
 - `.costing.raw_tab.RawTab`, `.costing.product_tab.ProductTab`, `.costing.labor_tab.LaborTab`, `.costing.machine_tab.MachineTab` — التابات الفرعية الأربعة الفعلية المعروضة داخل `QTabWidget`.
 
-**من يستدعي هذا الملف:** غير محدد من المرفقات الحالية (من المتوقع أن يُستدعى من شاشة رئيسية/تنقّل أعلى مستوى، خارج نطاق هذا المرجع).
+**من يستدعي هذا الملف:** `ui/main_window.py` — يبنيه كقسم تنقل رئيسي (مؤكَّد من بنية `main_window_helper/_sidebar.py`).
 
 **Module-level:**
 - `_make_error_tab(msg: str) -> QLabel`: تُنشئ `QLabel` كتبويب بديل لعرض رسالة خطأ منسّقة (أيقونة تحذير + نص أحمر على خلفية حمراء فاتحة بحدود) عند فشل تحميل تبويب معيّن. **ملاحظة:** الدالة معرَّفة لكنها غير مُستخدمة فعليًا حاليًا داخل `_build` (منطق try/except حولها معلَّق/مُعطَّل بالكود — راجع ملاحظات [Fix #9] أدناه).
@@ -58,7 +58,7 @@
 - `ui.widgets.core.i18n.tr` — الترجمة.
 - `.raw.raw_section.RawSection` — القسم الفعلي لعرض/تعديل الخامات.
 
-**من يستدعي هذا الملف:** غير محدد من المرفقات الحالية (يُستدعى عادة من `costing_section.py` خارج هذا المسار).
+**من يستدعي هذا الملف:** `ui/tabs/costing/costing_section.py` — يبنيه كتاب ضمن التبويبات الرئيسية لقسم التكاليف.
 
 **Classes:**
 - **`RawTab(TabSectionBase)`**
@@ -82,7 +82,7 @@
 - `ui.constants` — ثوابت أحجام الـ splitter (`MACHINE_TAB_SPLITTER_HANDLE_W`, `MACHINE_TAB_MACHINES_SPLITTER_SIZES`, `MACHINE_TAB_OPS_SPLITTER_SIZES`).
 - `.machine.machine_form._MachineForm`, `.machine.machine_table._MachineTable`, `.machine.machine_op_form._MachineOpForm`, `.machine.machine_op_table._MachineOpTable`.
 
-**من يستدعي هذا الملف:** غير محدد من المرفقات الحالية.
+**من يستدعي هذا الملف:** `ui/tabs/costing/costing_section.py` — يبنيه كتاب ضمن التبويبات الرئيسية لقسم التكاليف.
 
 **Classes:**
 - **`_MachinesTab(QWidget, WidgetMixin)`**
@@ -117,7 +117,7 @@
 - `ui.constants` — `LABOR_TAB_SPLITTER_HANDLE_W`, `LABOR_TAB_SPLITTER_SIZES`.
 - `.labor.labor_settings._LaborSettingsPanel`, `.labor.labor_op_form.LaborOpForm`, `.labor.labor_op_table.LaborOpTable`.
 
-**من يستدعي هذا الملف:** غير محدد من المرفقات الحالية.
+**من يستدعي هذا الملف:** `ui/tabs/costing/costing_section.py` — يبنيه كتاب ضمن التبويبات الرئيسية لقسم التكاليف.
 
 **Classes:**
 - **`_LaborOpsTab(QWidget, WidgetMixin)`**
@@ -146,7 +146,7 @@
 - `ui.widgets.core.i18n.tr`.
 - `.product.product_main_panel._ProductMainPanel`.
 
-**من يستدعي هذا الملف:** غير محدد من المرفقات الحالية (لكن `costing_section.py` — خارج هذا المسار — يستدعيه بـ `ProductTab("semi")` و `ProductTab("final")` حسب التعليقات الظاهرة في ملفات أخرى مرفقة).
+**من يستدعي هذا الملف:** `ui/tabs/costing/costing_section.py` — يبنيه بـ `ProductTab("semi")` و `ProductTab("final")` كتابَين منفصلَين (مؤكَّد من التعليقات في ملفات أخرى).
 
 **Module-level:**
 - `_SCOPE_MAP = {"semi": "semi", "final": "final"}` — تعيين نوع المنتج إلى نطاق (scope) الفئات.

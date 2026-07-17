@@ -320,3 +320,11 @@ calc_unit_cost_with_variant(item_row, variant_id: int | None, conn) -> float
 - ترتيب إنشاء الجداول: categories أولاً [إصلاح 4].
 - `_insert_bom_row` يختار INSERT ديناميكياً — آمن لقواعد البيانات القديمة.
 - `insert_op_row/update_op_row/replace_op_rows` تُقيَّد count بـ max(count, 0.0001).
+---
+
+## من يستخدم هذا المسار (db/costing/) من خارجه
+
+- `services/costing/*` — كل الـ 9 services في هذا المسار تستورد من `db/costing/` (lazy import داخل كل method في معظمها، عدا `product_service` و `catalog_service`)
+- `models/costing_base.py` — يستورد من `db/costing/` مباشرة لحسابات BOM
+- `services/orders/order_catalog_service.py` — يستورد `db/costing/catalog_repo.py`
+- `db/companies/_init_company_databases()` — يستدعي `create_costing_tables()` عند إنشاء شركة جديدة

@@ -884,3 +884,15 @@ return self._pinned_op_row_id
 - `component_row/widget.py` يستورد `SearchableCombo` و `build_grouped_items` من `utils/searchable_combo.py` (مرجع: `ui_widgets_utils.md`).
 - `constants_general.py` هو مصدر كل ثوابت الأبعاد (`SPACING_*`, `*_MIN_H`, إلخ) المستخدمة عبر كل ملفات هذا المرجع تقريباً — علاقة استيراد شبه شاملة وليست ثنائية محددة.
 - `ui/widgets/helpers/color_picker.py` (مسار مختلف — مرجع منفصل: `ui_widgets_helpers.md`) يستورد `make_btn` من هذا المرجع (`components/button.py`) — تبعية خارجية واحدة فقط، لا علاقة عكسية.
+---
+
+## المستدعون الرئيسيون من خارج هذا المرجع
+
+- `button.py` (`StyledButton`): يُستخدم في كل `tabs/*` و`widgets/*` — `invalidate_stylesheet_cache` يُستدعى من `apply_font()` (`ui/root.md`)
+- `headers_page.py` (`DetailHeader`, `PageHeader`): يُستخدم من `BaseDetailPanel` (`ui_widgets_base.md`) وكل detail panels في tabs/
+- `headers_list.py` (`ListHeader`, `StatusBar`): يُستخدم من `BaseListPanel` (`ui_widgets_base.md`)
+- `notification.py` (`NotificationBar`): يُستخدم من `BaseDetailPanel` وأي form يحتاج إشعارات
+- `label.py` (`ModeLabel`): يُستخدم من `managers/category.py` (`ui_widgets_managers.md`) وforms/
+- `component_row/widget.py`: يُستدعى من `product_form` في `ui/tabs/costing/product/` (مؤكَّد من كود التعليقات)
+- `BomTree`: يُستخدم من `product_main_panel.py` و`_orphan_handler.py` (مؤكَّد من `ui_tabs_costing.md`)
+- `ScenarioEditor`: يُستدعى من `product_form` عند تحميل سيناريو من DB (مؤكَّد من التعليقات)

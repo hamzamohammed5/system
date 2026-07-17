@@ -16,7 +16,7 @@
 - `ui.constants` (`NO_COMPANY_BTN_H`, `NO_COMPANY_BTN_W`, `NO_COMPANY_BTN_RADIUS`, `NO_COMPANY_SPACING`) — ثوابت القياسات.
 
 ### من يستدعي هذا الملف
-غير محدد من المرفقات الحالية.
+- `ui/main_window.py` — يستورده ويعرضه في `_stack` عندما لا توجد شركة نشطة (`is_company_ready() == False`)، ويستمع لـ `open_manager` signal لفتح `CompaniesDialog` (مؤكَّد من بنية `MainWindow`)
 
 ### الـ Classes
 
@@ -152,7 +152,8 @@
 - `services.shared.item_service.ItemService` — لاستخراج `category_name` من erp.db المحلي كـ fallback (`get_category_name_by_item_name`).
 
 ### من يستدعي هذا الملف
-غير محدد من المرفقات الحالية (التعليقات التوضيحية بأعلى الملف تشير إلى أن الجداول تستخدم هذه الدوال، لكن أي ملف جدول فعلي يستدعيها غير مرفق).
+- جداول التكلفة في `ui/tabs/costing/`: `raw_table_panel.py`, `labor_op_table.py`, `machine_table.py` — تستورد `get_shared_raws`, `get_shared_labor_ops`, `get_shared_machines` وما يقابلها لعرض العناصر المشتركة إلى جانب المحلية (مؤكَّد من `ui_tabs_costing.md` الذي يذكر `to_dict`, `SHARED_COLOR`, `SHARED_BG`, `PUBLISHED_COLOR`, `PUBLISHED_BG`)
+- أي جدول في `tabs/` يعرض قوائم مدمجة (محلي + مشترك) يستخدم هذا الملف
 
 ### الدوال المستقلة (top-level functions)
 
@@ -190,7 +191,7 @@ docstring أعلى الملف يلخص 3 إصلاحات رئيسية: (1) fallba
 - (داخل `_open_manager`, lazy import) `ui.tabs.companies.companies_dialog.CompaniesDialog` — لفتح نافذة إدارة الشركات.
 
 ### من يستدعي هذا الملف
-غير محدد من المرفقات الحالية (يُفترض أنه يُدمَج في هيدر النافذة الرئيسية `ui/main_window.py`، لكن هذا الملف غير مرفق ضمن الدفعة الحالية).
+- `ui/main_window_helper/_sidebar.py` — يستورده مباشرة ويبني `CompanySelector` في رأس الشريط الجانبي (مؤكَّد من `ui_main_window.md`: "_sidebar.py يستورد أيضاً `CompanySelector` من `..tabs.companies.company_selector`")
 
 ### الـ Classes
 
@@ -235,7 +236,7 @@ docstring يوضح دور الملف والـ signal الرئيسي `company_cha
 - (داخل `_open_edit_dialog`, lazy) `ui.tabs.companies.shared_items_dialog.SharedItemsDialog`.
 
 ### من يستدعي هذا الملف
-غير محدد من المرفقات الحالية (docstring يذكر أنه يُفتح من زر "🔗 العناصر المشتركة" في الـ sidebar، لكن ملف الـ sidebar الفعلي غير مرفق).
+- `ui/main_window.py` — يفتحه عبر `_open_shared_items()` عند الضغط على زر "🔗 العناصر المشتركة" في الشريط الجانبي (مؤكَّد من `ui_main_window.md`: "يستورد `SharedItemsManagerDialog`/`SharedItemsService` محلياً داخل `_open_shared_items`")
 
 ### الدوال المستقلة (top-level functions)
 

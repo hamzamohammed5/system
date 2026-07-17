@@ -582,3 +582,12 @@ get_source_ref(conn, field_id: int, current_set_id: int) -> dict | None
 - `calc_instance_cross_auto` (من dimension_instances_repo) ← لـ `dimension_set_values` (الجديد).
 - `design_categories` ≠ `design_item_categories` — تمييز أساسي لا يجب الخلط بينهما.
 - `dimension_sets_repo` يُعيد تصدير دوال الـ Categories والـ Instances للتوافق القديم.
+---
+
+## من يستخدم هذا المسار (db/designs/) من خارجه
+
+- `services/design/design_service.py` — المستهلك الرئيسي لـ `designs_repo.py`
+- `services/design/design_size_service.py` — يستورد `designs_repo.py` و `dimension_sets_repo.py`
+- `services/design/dimension_set_service.py` — يستورد `dimension_sets_repo.py` و `dimension_instances_repo.py` و `design_categories_repo.py`
+- `services/design/__init__.py` — factory functions تستخدم الثلاثة services أعلاه
+- `services/orders/order_catalog_service.py` — يذكر نمط `get_designs_conn_and_init()` كمصدر إلهام (لا استيراد فعلي)

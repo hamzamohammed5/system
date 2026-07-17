@@ -390,7 +390,7 @@ AuditService(conn)
 
 **Imports (top-level):** `from dataclasses import dataclass` فقط — استيراد `db.accounting.accounting_inventory_repo.purchase_inventory` يتم بشكل **lazy** داخل `purchase`.
 
-**من يستدعي هذا الملف:** غير محدد بثقة من المرفقات الحالية (نقطة الدخول الموصى بها من `tabs/` حسب توثيق الملف نفسه، مقابل استدعاء `accounting_inventory_repo` مباشرة).
+**من يستدعي هذا الملف:** غير محدد بثقة من المرفقات الكاملة — موثّق في الكود أنه يُستدعى من `tabs/` حسب توثيق الملف نفسه، لكن لا استيراد فعلي ظاهر من `ui/tabs/accounting/` الموجودة. نقطة الدخول المنطقية: tab خاص بالشراء من المخزون لو وُجد، أو مباشرة عبر `db.accounting.accounting_inventory_repo.purchase_inventory()` التي تجمع العمليتين في دالة واحدة.
 
 **ملاحظة معمارية موثّقة — لماذا service منفصل عن `InventoryService`؟**
 `InventoryService` (في `services/inventory/`) هو الوحيد المسموح له استدعاء `db.inventory.inventory_repo` — مبدأ عزل صريح موثّق في رأس ذلك الملف. عمليات مثل الشراء (`purchase`) تُنشئ قيداً محاسبياً كاملاً (`accounting.db`) بالإضافة لحركة المخزون، عبر دالة واحدة في `db.accounting.accounting_inventory_repo` (وليس `db.inventory`) — فمكانها الطبيعي طبقة service محاسبية مستقلة، لا داخل `InventoryService` ولا مقحمة في `AccountsService`/`JournalService` (كلاهما لا يغطي منطقياً "شراء صنف مخزون + قيد" كوحدة واحدة).

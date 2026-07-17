@@ -453,3 +453,11 @@ fetch_offer_lines(conn, offer_id: int) -> list[dict]
 - كل الـ migrations يجب أن تكون idempotent [Q-02].
 - `customer_contacts.role` أُضيف عبر migration m005 — قد يكون NULL في قواعد بيانات قديمة.
 - `catalog_repo.py` مختلف عن باقي ملفات `db/orders/` — يقرأ من `erp.db` (كتالوج المنتجات) وليس `orders.db`، ولا يحتوي أي عمليات كتابة (قراءة فقط).
+---
+
+## من يستخدم هذا المسار (db/orders/) من خارجه
+
+- `services/orders/order_service.py` — يستورد `orders_repo.py` و `customers_repo.py` (المستهلك الرئيسي بعد إصلاح هيكلي: أُزيل كل SQL خام من الـ service)
+- `services/orders/customer_service.py` — يستورد `customers_repo.py`
+- `services/orders/order_catalog_service.py` — يستورد `db/costing/catalog_repo.py` (بالاسم `db.orders.catalog_repo` كما هو مستورد فعلياً — راجع ملاحظة الملف)
+- `ui/tabs/orders/orders_section.py` — كان يستورد `orders_schema.py` مباشرة (كسر هيكلي معالَج)، الآن عبر `order_service`

@@ -509,3 +509,15 @@ __all__ = ["SharedItemsBridge", "get_bridge", "is_shared_id", "extract_shared_id
 - `build_tree`: يستخدم `_row_to_dict()` الآمنة [إصلاح 5].
 - `apply_template_to_dimension_set` يحتاج connection-ين: `conn_erp` لـ erp.db و `conn_design` لـ designs.db.
 - `settings_repo.py` يُستخدم من `services/shared/settings_service.py` (خارج هذا المسار) — لا علاقة مباشرة مع باقي ملفات db/shared.
+
+---
+
+## من يستخدم هذا المسار (db/shared/) من خارجه
+
+- `db/companies/company_state.py` — يستورد `connection.py` (`ProtectedConnection`, `get_connection`)
+- `services/shared/font_service.py`, `language_service.py`, `settings_service.py` — تستوردن `settings_repo.py` عبر `get_connection()`
+- `services/shared/unit_service.py` — يستورد `connection.py` عبر `get_connection()`
+- `db/companies/shared_items_repo.py` — يستورد `json_utils.py` [إصلاح 33]
+- `db/companies/companies_repo.py` — يستورد `json_utils.py` [إصلاح 33]
+- `db/accounting/accounting_inventory_repo.py` — يستورد `connection.py` لفتح اتصالات منفصلة
+- كل ملفات `db/*` تقريباً تستورد `connection.py` بشكل مباشر أو غير مباشر

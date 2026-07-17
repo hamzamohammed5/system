@@ -16,7 +16,7 @@
 - `.inventory.inventory_outbound_tab._OutboundTab`.
 - `.inventory.inventory_report_tab` (`_ReportTab`, `_MovesPanel`).
 
-**من يستدعيه:** غير محدد من المرفقات الحالية.
+**من يستدعيه:** `ui/main_window.py` — يبنيه كقسم تنقل رئيسي (مؤكَّد من بنية `main_window_helper/_sidebar.py`).
 
 ### Class: `InventoryTab(QWidget, WidgetMixin)`
 - **Attributes:** `self.inv_conn` (اتصال مخزن نشط عبر `CompanyService.get_active_inventory_conn()`), `self.acc_conn` (اتصال محاسبة عبر `CompanyService.get_active_accounting_conn()`), `self._moves_panel`, `self._tabs`, `self._header`.

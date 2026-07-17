@@ -279,6 +279,14 @@ lbl.setText(tr("save"))
 - كل ملفات `ar_data/*.py` و `en_data/*.py` **مستقلة تماماً عن بعضها البعض** — لا استيراد متبادل بينها؛ كل ملف يُصدِّر `dict` واحد فقط بلا أي تبعية خارجية غير `dict` type hint.
 - أي كود UI في `ui/tabs/` أو `ui/widgets/` يستدعي `tr()` من `ui.widgets.core.i18n` فقط — لا يستورد أبداً من `ar.py`/`en.py`/`ar_data`/`en_data` مباشرة.
 
+## من يستدعي ملفات هذا المرجع من خارجه
+
+- `ui/widgets/core/i18n.py` (`I18nManager`) — يستورد `AR_STRINGS` و`EN_STRINGS` من `ar.py`/`en.py`؛ هو المستهلك الوحيد لهذا المسار
+- كل ملفات `ui/` التي تستخدم `tr()` تمر حصراً عبر `ui.widgets.core.i18n` — لا أحد يستورد من `ui/i18n/` مباشرة
+- `ui/app_state.py` — يستدعي `I18nManager` عند تغيير اللغة لإطلاق `bus.language_changed`
+- `ui/main_window.py` — يستدعي `I18nManager.load_from_db()` عند بدء التطبيق
+- `services/shared/language_service.py` — يتفاعل مع اللغة عبر `settings_repo` (لا يستورد من هذا المسار مباشرة)
+
 ---
 
 ## بانتظار ملفات ناقصة

@@ -355,7 +355,7 @@ from db.shared.items_repo import fetch_items_by_type
 from db.costing.operations_repo import fetch_all_labor_ops, fetch_all_machine_ops
 ```
 
-**من يستدعي هذا الملف:** `ui/tabs/costing/product/_catalog_provider.py` (حسب توثيق الملف نفسه).
+**من يستدعي هذا الملف:** `ui/tabs/costing/product/_catalog_provider.py` (مؤكَّد من توثيق الملف نفسه). `services/orders/order_catalog_service.py` يستخدم نفس `catalog_repo` (لا يستورد `catalog_service` مباشرة).
 
 **[قرار هيكلي 1] موثّق في الكود:** `db.shared` و`db.costing` يُستوردان مباشرة بدون `try/except` — طبقة بيانات مشتركة مصممة عمداً ليستخدمها كل domain، وليس كسراً هيكلياً (بعكس استيراد service من `ui/` مباشرة، وهو الخطأ الذي كان موجوداً في `bulk_replace_service` قبل إصلاحه). أي خطأ هنا يجب أن يظهر لا أن يُبلع بصمت.
 

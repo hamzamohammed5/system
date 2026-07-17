@@ -17,7 +17,7 @@
 - `.pricing.pricing_tab.PricingTab` — تبويب الأسعار الأساسية.
 - `.pricing.offers.offers_tab.OffersTab` — تبويب العروض.
 
-**من يستدعي هذا الملف:** غير محدد من المرفقات الحالية.
+**من يستدعي هذا الملف:** `ui/main_window.py` — يبنيه كقسم تنقل رئيسي (مؤكَّد من بنية `main_window_helper/_sidebar.py`).
 
 ### Class: `PricingSection(QWidget, WidgetMixin)`
 - `__init__(self, parent=None)`: يستدعي `_build()` ثم `_init_widget_mixin(theme=True, font=True, lang=True, data=False)`.
