@@ -1,13 +1,17 @@
-# دليل الكود — UI / Root: Constants, Font, State, Theme, Main Window
+# دليل الكود — UI / Root: Font, State, Theme, Main Window
 
-> الملفات الجذرية في `ui/` — ثوابت (مُجمِّع)، خط، حالة، ثيم، النافذة الرئيسية.
-> `ui/constants.py`, `ui/font.py`, `ui/app_state.py`, 
-> `ui/theme.py`, `ui/main_window.py`
+> الملفات الجذرية في `ui/` التي ليس لها مرجع مستقل خاص بها.
+> `ui/font.py`, `ui/app_state.py`, `ui/theme.py`, `ui/main_window.py`
 >
-> ⚠️ `ui/constants.py` و `ui/theme_manager.py` أصبحا **مُجمِّعات (aggregator packages)**
-> لا تحتوي منطقاً فعلياً — المحتوى التفصيلي مذكور في مرجعين منفصلين:
-> - ثوابت الدومينات الفعلية → **`ui_constants_data.md`** (`ui/constants_data/*.py`)
-> - ألوان الثيمات الفعلية → **`ui_theme_manager_data.md`** (`ui/theme_manager.py` + `ui/theme_manager_data/*.py`)
+> ⚠️ `ui/constants.py` و `ui/theme_manager.py` هما أيضاً ملفات جذرية في `ui/*.py`،
+> لكن كلاً منهما (بصفته مُجمِّعاً aggregator) له **مرجع مستقل خاص به** يغطيه هو
+> وكل الملفات التي يستدعيها من مجلد الـ `_data` الفرعي التابع له، حسب نفس مبدأ
+> هذا الملف تماماً:
+> - `ui/constants.py` + كل `ui/constants_data/*.py` → **`ui_constants.md`**
+> - `ui/theme_manager.py` + كل `ui/theme_manager_data/*.py` → **`ui_theme_manager.md`**
+>
+> لذلك لا يُكرَّر محتواهما هنا — هذا الملف يغطي فقط الملفات الجذرية الأربعة
+> المتبقية التي لا تتبع أي مجلد بيانات فرعي مخصص لها.
 
 ---
 
@@ -15,34 +19,10 @@
 
 | القسم | الملفات |
 |-------|---------|
-| [constants](#constants) | `ui/constants.py` (مُجمِّع فقط) |
 | [font](#font) | `ui/font.py` |
 | [app_state](#app_state) | `ui/app_state.py` |
 | [theme](#theme) | `ui/theme.py` |
-| [theme_manager](#theme_manager) | إشارة → `ui_theme_manager_data.md` |
 | [main_window](#main_window) | `ui/main_window.py` |
-
----
-
-## constants
-
-### `ui/constants.py`
-
-**[تحديث]** لم يعد يحتوي أي ثوابت مباشرة — أصبح **مُجمِّعاً فقط (aggregator)** يجمع كل ملفات `ui/constants_data/` بنفس واجهة الاستيراد القديمة (`from ui.constants import X` يستمر بالعمل).
-
-```python
-from ui.constants_data.constants_general import *
-from ui.constants_data.constants_accounting import *
-from ui.constants_data.constants_costing import *
-from ui.constants_data.constants_design import *
-from ui.constants_data.constants_inventory import *
-from ui.constants_data.constants_orders import *
-from ui.constants_data.constants_companies import *
-```
-
-**لا imports خارجية أخرى، ولا منطق.** كل الثوابت الفعلية (`DEFAULT_FONT_SIZE`, `MIN_FONT_SIZE`, `MAX_FONT_SIZE`, `SIDEBAR_EXPANDED_WIDTH`, `WINDOW_DEFAULT_W`, ...إلخ) موجودة الآن في `ui/constants_data/constants_general.py` وبقية ملفات الدومين — راجع **`ui_constants_data.md`** لتفاصيلها الكاملة (كل الثوابت مقسّمة حسب الدومين: general, accounting, costing, design, inventory, orders, companies).
-
-**من يستدعي هذا الملف:** كل ملفات `ui/` تقريباً (عبر `from ui.constants import CONST_NAME`) — الاستيراد لا يزال يعمل بنفس الشكل رغم إعادة الهيكلة الداخلية.
 
 ---
 
@@ -218,31 +198,7 @@ _ss_misc            # QListWidget, QSplitter, QToolTip, QFrame, QScrollArea,
                     # QProgressBar, QCheckBox, QRadioButton, Sidebar nav overrides
 ```
 
-**مفاتيح `_C`:** العدد كبير جداً (أكثر من 100 مفتاح تغطي: خلفيات، حدود، نصوص، accent، sidebar، حالات success/danger/warning/info، محاسبة (journal/badge/t_account/acc_type)، مستثمرين، audit log، مخزون، تصميمات، BOM scenarios، إلخ). **القائمة الكاملة بقيمها لكل ثيم (light/dark) موجودة في `ui_theme_manager_data.md`** — `theme.py` نفسه لا يعرّف أي مفتاح؛ فقط يقرأها من `_LIGHT_THEME`/`_DARK_THEME` عبر `_C.update()`.
-
----
-
-## theme_manager
-
-### `ui/theme_manager.py`
-
-**[تحديث]** لم يعد ملفاً واحداً بمنطق مباشر — أصبح **حزمة (package) مُقسَّمة** تحافظ على نفس واجهة الاستيراد القديمة (`from ui.theme_manager import theme_manager, THEMES, ...`).
-
-**للتفاصيل الكاملة (محتوى `_LIGHT_THEME`, `_DARK_THEME`, `CARD_PALETTES`, وكلاس `ThemeManager` بكل methods) راجع المرجع المنفصل: `ui_theme_manager_data.md`.**
-
-ملخص سريع للبنية (بدون تفصيل — التفصيل في المرجع الآخر):
-```python
-# ui/theme_manager.py يجمّع فقط:
-from ui.theme_manager_data._light_theme import _LIGHT_THEME
-from ui.theme_manager_data._dark_theme import _DARK_THEME
-from ui.theme_manager_data._registry import THEMES, THEME_DISPLAY_NAME_KEYS
-from ui.theme_manager_data._card_palettes import CARD_PALETTES
-from ui.theme_manager_data._manager import ThemeManager
-
-theme_manager = ThemeManager()   # Singleton — يُستخدم في كل التطبيق
-```
-
-**من يستدعي هذا الملف:** `ui/theme.py` (يستورد `_LIGHT_THEME` لملء `_C` الافتراضي)، `SettingsDialog` (لتبديل الثيم)، `main.py` عند بدء التطبيق (`theme_manager.load_from_db()`).
+**مفاتيح `_C`:** العدد كبير جداً (أكثر من 130 مفتاح تغطي: خلفيات، حدود، نصوص، accent، sidebar، حالات success/danger/warning/info، محاسبة (journal/badge/t_account/acc_type)، مستثمرين، audit log، مخزون، تصميمات، BOM scenarios، إلخ). **القائمة الكاملة بقيمها لكل ثيم (light/dark)، بالإضافة لـ `ThemeManager` وكل الحزمة المُجمِّعة `ui/theme_manager.py` موجودة بالكامل في المرجع المستقل: `ui_theme_manager.md`** — `theme.py` نفسه لا يعرّف أي مفتاح لون؛ فقط يقرأها من `_LIGHT_THEME`/`_DARK_THEME` عبر `_C.update()` (راجع علاقات الملفات أدناه).
 
 ---
 
@@ -422,9 +378,9 @@ _builders.append((_build_my_section, tr("nav_my_key")))
 ## علاقات الملفات
 
 - `ui/main_window.py` يستورد `_Sidebar` من `ui/main_window_helper/_sidebar.py` (راجع `ui_main_window_helper.md`).
-- `ui/main_window.py` يستورد `_C` من `ui/theme.py`، ويستورد ثوابت من `ui/constants.py` (المُجمِّع → `ui_constants_data.md`).
-- `ui/theme.py` يستورد `_LIGHT_THEME` من `ui/theme_manager.py` (المُجمِّع → `ui_theme_manager_data.md`) عند أول import فقط، لملء `_C` الافتراضي.
-- `ui/theme.py` لا يستورد من `ui/font.py` مباشرة في التعريف لكنه يستخدم `MIN_FONT_SIZE`/`MAX_FONT_SIZE` من `ui/constants.py`، ويستدعي `_set_module_font_cache(None)` من `ui/font.py` داخل `invalidate_stylesheet_cache()`.
+- `ui/main_window.py` يستورد `_C` من `ui/theme.py`، ويستورد ثوابت من `ui/constants.py` (المُجمِّع → مرجعه المستقل الكامل `ui_constants.md`).
+- `ui/theme.py` يستورد `_LIGHT_THEME` من `ui/theme_manager.py` (المُجمِّع → مرجعه المستقل الكامل `ui_theme_manager.md`) عند أول import فقط، لملء `_C` الافتراضي.
+- `ui/theme.py` لا يستورد من `ui/font.py` مباشرة في التعريف لكنه يستخدم `MIN_FONT_SIZE`/`MAX_FONT_SIZE` من `ui/constants.py` (→ `ui_constants.md`)، ويستدعي `_set_module_font_cache(None)` من `ui/font.py` داخل `invalidate_stylesheet_cache()`.
 - `ui/font.py` يستورد من `ui/app_state.py` (`AppState.font_size()`, `AppState.on_font_changed()`) — لا يتواصل مع DB أو `FontService` مباشرة.
 - `ui/app_state.py` يستورد من `services.shared.font_service.FontService` (خارج `ui/`) ومن `ui/theme.py` (`invalidate_stylesheet_cache`) ومن `ui/widgets/components/button.py` (`invalidate_stylesheet_cache`).
 - **نمط الـ Layering المشترك بين `font.py` و`app_state.py`:** كل طبقة تعرف فقط الطبقة التي تحتها مباشرة (`font.py → AppState → FontService → settings_repo → DB`) — لا قفزات في السلسلة.
