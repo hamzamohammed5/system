@@ -13,6 +13,7 @@
 | [Core — Conn](#core--conn) | `core/conn.py` |
 | [Core — Guard](#core--guard) | `core/guard.py` |
 | [Core — i18n](#core--i18n) | `core/i18n.py` |
+| [Core — WidgetMixin](#core--widgetmixin) | `core/widget_mixin.py` |
 
 ---
 
@@ -154,16 +155,19 @@ _conn_null_error(class_name: str, method: str, db: str = "erp") -> RuntimeError
 # يُهيّئ __safe_conn و __safe_db_name (name-mangled للأمان)
 
 ._get_safe_conn() -> Connection
-# إعادة اتصال تلقائية لو فشل الـ connection:
+# إعادة اتصال تلقائية لو فشل الـ connection (self.__safe_conn) — عبر CompanyService فقط،
+# لا استدعاء مباشر لـ company_state._get_conn (كان يُستخدم قديماً وأُزيل):
 #
-#   لو db_name == "erp":
-#     → company_state.get_erp_conn() مباشرة (public API)
+# _getters = {
+#     "erp":        CompanyService.get_active_erp_conn,
+#     "accounting": CompanyService.get_active_accounting_conn,
+#     "inventory":  CompanyService.get_active_inventory_conn,
+# }
+# _getter = _getters.get(self.__safe_db_name)
 #
-#   لو db_name != "erp":
-#     → يجرب company_state._get_conn(db_name) كـ fallback
-#       [ملاحظة: private API — يُستخدم بحذر مع warning]
-#     → لو لم يُعطِ نتيجة سليمة:
-#       → يجرب get_erp_conn() كـ last resort مع logger.warning
+#   لو _getter موجود → ينادى مباشرة (public API فقط)
+#   لو db_name غير معروف لدى CompanyService → logger.warning + fallback لـ get_active_erp_conn()
+#   لو النتيجة غير سليمة وdb_name != "erp" → محاولة أخيرة بـ get_active_erp_conn() مع logger.warning
 #
 # Raises: RuntimeError عبر _conn_null_error لو كل شيء فشل
 
@@ -172,6 +176,13 @@ _conn_null_error(class_name: str, method: str, db: str = "erp") -> RuntimeError
 # لو stored = None → يضبطه من company_id الواصل ويرجع True (أول إشعار)
 # لو stored = company_id → True (نفس الشركة)
 # لو stored != company_id → False (شركة مختلفة)
+
+._on_company_event_safe(company_id: int) -> bool
+# نقطة الدخول الموحدة التي تستدعيها الـ widgets (_SmartLine, _JournalFilterBar,
+# _JournalTreeTable, ...) عند bus.company_data_changed
+# يتحقق أولاً أن الـ widget لم يُحذف من Qt (self.isVisible() داخل try/except RuntimeError)
+# → لو محذوف: يرجع False فوراً
+# ثم يُفوّض لـ _should_respond_to_company(company_id)
 ```
 
 **[إصلاح شرط مستحيل في `_get_safe_conn`]:**
@@ -315,3 +326,63 @@ _save_to_db()
 
 > ⚠️ لا تمرر نصاً عربياً مباشرة لـ `tr()` — استخدم المفتاح المقابل دائماً.
 > للمزيد → راجع `i18n_reference.md`
+
+---
+
+## Core — WidgetMixin
+
+### `ui/widgets/core/widget_mixin.py`
+
+> **الغرض:** mixin عام يربط أي `QWidget` تلقائياً بأحداث الـ bus (`theme_changed`, `font_changed`, `language_changed`, `company_data_changed`) بدون الحاجة لكتابة كود `weakref` وربط يدوي في كل widget. هذا هو المصدر الوحيد لهذا النمط في كل مشروع الـ widgets — كل الـ widgets تقريباً في `ui/widgets/*` ترث منه وتستدعي `self._init_widget_mixin(...)`.
+
+```python
+class WidgetMixin:
+    _cached_company_id: int | None
+    _widget_mixin_init: bool
+    _widget_mixin_slots: list | None
+```
+
+#### `._init_widget_mixin(theme=True, font=True, lang=True, data=True) -> None`
+
+- يُستدعى مرة واحدة في `__init__` بعد `super().__init__()`.
+- **آمن للاستدعاء أكثر من مرة**: أول استدعاء يُهيّئ `_widget_mixin_slots` (list) و`_widget_mixin_bound` (set لتتبع الأحداث المرتبطة بالفعل). أي استدعاء تالٍ يربط فقط الأحداث الجديدة غير المربوطة سابقاً (فلترة عبر `_bound`) — يمنع الربط المضاعف عند استدعاء الأب والابن كليهما بمعاملات مختلفة.
+- كل الربط يتم عبر **`weakref.ref(self)`** — لا يمنع الـ widget من الـ garbage collection.
+- كل اتصال بـ signal يستخدم `Qt.UniqueConnection` لمنع التسجيل المضاعف.
+- **`theme=True`** → يربط `bus.theme_changed` بحيث يستدعي `self._refresh_style()` عند التغيير.
+- **`font=True`** → يربط `bus.font_changed` بنفس الطريقة (`_refresh_style()`) — slot منفصل عن theme لإمكانية التفريق مستقبلاً.
+- **`lang=True`** → يربط `bus.language_changed` لاستدعاء `self._refresh_lang()`.
+- **`data=True`** → يربط `bus.company_data_changed`:
+  - يقرأ `company_state.company_id` مبدئياً في `_cached_company_id` (lazy init، آمن لو فشل).
+  - عند وصول الإشعار: يتجاهله لو `company_id is None`، وإلا يُحدّث `_cached_company_id` ويستدعي `self._refresh_data(company_id)` — **بدون مقارنة بالشركة الحالية** (كل استقبال إشعار صالح يُنفَّذ)، مع `try/except` حول `_refresh_data` ويُسجّل الخطأ عبر `logger.error(..., exc_info=True)` دون إيقاف الـ UI.
+- **حماية من widget محذوف (`sip.isdeleted`)**: كل الـ slots الداخلية تستدعي `_safe_obj()` أولاً — دالة تتحقق من `weakref` + `_is_deleted()` (تستخدم `sip.isdeleted`, أو `False` دائماً لو `sip` غير متاح) قبل استدعاء أي method على الـ widget، وتلتقط `RuntimeError` بصمت. هذا يمنع خطأ `"Could not parse stylesheet of object ... (0x...)"` الذي يحدث عندما يحاول Qt تطبيق stylesheet على widget تم حذفه من C++.
+
+#### الدوال الافتراضية (Override في الـ subclass حسب الحاجة)
+
+```python
+._refresh_style(self, *_)
+# افتراضياً: pass — Override لإعادة بناء stylesheet عند theme/font change
+
+._refresh_lang(self, *_)
+# افتراضياً: pass — Override لتحديث النصوص عند تغيير اللغة
+
+._refresh_data(self, company_id: int | None = None)
+# افتراضياً: pass — Override لإعادة تحميل بيانات DB عند company_data_changed
+```
+
+**نمط الاستخدام القياسي المتكرر في كل المشروع:**
+```python
+class MyWidget(QLabel, WidgetMixin):
+    def __init__(self):
+        super().__init__()
+        self._build()
+        self._init_widget_mixin(theme=True, font=True, lang=True, data=False)
+        self._refresh_style()   # أول رسم يدوي — الـ mixin لا يستدعيه تلقائياً عند الإنشاء
+
+    def _refresh_style(self, *_):
+        self.setStyleSheet(f"color:{_C['text_primary']};")
+```
+
+**ملاحظات مهمة:**
+- الـ mixin **لا** يستدعي `_refresh_style()`/`_refresh_lang()` تلقائياً عند أول إنشاء — على كل widget استدعاءها يدوياً بعد `_init_widget_mixin(...)` في `__init__`.
+- `_cached_company_id` و `_widget_mixin_slots` و `_widget_mixin_init` هي **instance-level attributes** (تُضبط داخل `_init_widget_mixin` وليس على مستوى الـ class) لتفادي مشاركتها بين كل الـ instances.
+- استيراد `bus` يتم بشكل lazy (داخل `_init_widget_mixin`) لتفادي circular imports عند تحميل الموديول.
