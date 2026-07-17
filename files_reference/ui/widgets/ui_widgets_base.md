@@ -446,12 +446,15 @@ from ui.widgets.core.events import emit_company_data_changed
 
 **Signals:** `saved = pyqtSignal(int)`
 
-**إعدادات الـ subclass:**
+**إعدادات الـ subclass — [i18n] قيم افتراضية = مفاتيح tr():**
 ```python
-FORM_TITLE: str = "بيانات العنصر"
-ADD_TEXT:   str = "➕  إضافة"
-SAVE_TEXT:  str = "💾  حفظ التعديل"
+FORM_TITLE: str = "shared_item_data_section"   # tr(FORM_TITLE)
+ADD_TEXT:   str = "btn_add"                     # tr(ADD_TEXT)
+SAVE_TEXT:  str = "btn_save"                    # tr(SAVE_TEXT)
+# الـ subclass المفروض يعمل override بمفتاح tr() مناسب لسياقه؛ لو تُرك
+# كما هو يُترجم تلقائياً عبر المفاتيح العامة دي.
 ```
+`_init_widget_mixin(theme=True, font=False, lang=True)` — يُحدّث `lbl_mode` بالثيم فقط، والنصوص/العنوان عبر `_refresh_lang`.
 
 **Hooks المطلوبة (override إلزامي):**
 ```python
@@ -501,14 +504,41 @@ _build_extra(root_layout: QVBoxLayout)
 
 **`load_for_edit(item_id)`:**
 ```python
-# يستدعي _do_load(item_id) مع try/except
+# يستدعي _do_load(item_id) مع try/except — استثناء أو data فارغة → يرجع بصمت
 # يستدعي _fill_fields(data)
-# name = data.get("name", f"ID:{item_id}")
-# enter_edit_mode(item_id, f"─── تعديل: {name} ───")
+# name = data.get("name", f"ID:{item_id}")؛ يُحفظ في self._editing_name
+# enter_edit_mode(item_id, tr("edit_mode_fmt").format(name=name))
 ```
 
 **`_reset()`:**
 ```python
+# self._editing_name = None
 # يستدعي _reset_fields()
-# exit_edit_mode(f"─── {self.FORM_TITLE} ───")
+# exit_edit_mode(tr("form_title_wrapped_fmt").format(title=tr(self.FORM_TITLE)))
 ```
+
+**`_refresh_lang(*_)` — [i18n]:**
+```python
+# self._grp.setTitle(tr(self.FORM_TITLE))
+# btn_add/btn_save/btn_cancel.setText(...) من tr()
+# لو في وضع تعديل (self._editing_id و self._editing_name موجودان):
+#   enter_edit_mode(..., tr("edit_mode_fmt").format(name=self._editing_name))
+# وإلا: exit_edit_mode(tr("form_title_wrapped_fmt").format(title=tr(self.FORM_TITLE)))
+```
+
+**`_refresh_style(*_)`:**
+```python
+# self.lbl_mode.setStyleSheet(f"font-weight:bold; color:{_C['blue']};")
+```
+
+---
+
+## علاقات الملفات
+
+- كل الملفات الخمسة (`list_panel.py`, `detail_panel.py`, `section.py`, `tab_section.py`, `crud_form.py`) ترث `WidgetMixin` من `core/widget_mixin.py` (مرجع: `ui_widgets_core.md`) وتستدعي `_init_widget_mixin(...)` — الأسماء `_refresh_style`/`_refresh_lang`/`_refresh_data` موحّدة عبر الخمسة.
+- `crud_form.py` (`BaseCrudForm`) يستورد `EditModeMixin` من `mixins/form_mixins.py` (مرجع: `ui_widgets_mixins.md`)، `LiveConnMixin` من `core/conn.py`، `FormGroup` من `panels/form_group.py` (مرجع: `ui_widgets_panels.md`)، `wrap_in_scroll` من `theme/builders.py` (مرجع: `ui_widgets_theme.md`)، و `emit_company_data_changed` من `core/events.py`.
+- `list_panel.py` (`BaseListPanel`) يستورد `make_splitter_table_guarded`/`fit_splitter_table`/`auto_fit_columns` من `tables/tables.py` (مرجع: `ui_widgets_tables.md`)، `ListHeader`/`StatusBar` من `components/headers_list.py`، و `FilterToolbar` من `panels/filter.py` (كلاهما مرجع: `ui_widgets_components.md`/`ui_widgets_panels.md`).
+- `detail_panel.py` (`BaseDetailPanel`) يستورد `DetailHeader` من `components/headers_page.py`، `EmptyState` من `panels/state.py`، `NotificationBar` من `components/notification.py`، و `scroll_style` من `theme/layout_styles.py`.
+- `section.py` (`BaseSection`) يستورد `splitter_style` من `theme/table_styles.py` فقط من بين ملفات `theme/` — لا يعتمد على `tables/` أو `panels/` مباشرة.
+- `tab_section.py` (`TabSectionBase`) يستورد `tab_style`, `apply_tab_widths`, `normalize_tab_widget` من `theme/layout_styles.py` (مرجع: `ui_widgets_theme.md`) حصراً.
+- لا يوجد استيراد متبادل بين الملفات الخمسة داخل هذا المرجع نفسه (كل واحد مستقل ويُستخدم كقاعدة من `tabs/` أو ملفات أخرى خارج `ui/widgets/` — خارج نطاق هذا المرجع).

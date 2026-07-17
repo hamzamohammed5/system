@@ -405,3 +405,14 @@ class MyWidget(QLabel, WidgetMixin):
 - الـ mixin **لا** يستدعي `_refresh_style()`/`_refresh_lang()` تلقائياً عند أول إنشاء — على كل widget استدعاءها يدوياً بعد `_init_widget_mixin(...)` في `__init__`.
 - `_cached_company_id` و `_widget_mixin_slots` و `_widget_mixin_init` هي **instance-level attributes** (تُضبط داخل `_init_widget_mixin` وليس على مستوى الـ class) لتفادي مشاركتها بين كل الـ instances.
 - استيراد `bus` يتم بشكل lazy (داخل `_init_widget_mixin`) لتفادي circular imports عند تحميل الموديول.
+
+---
+
+## علاقات الملفات
+
+- `widget_mixin.py` (`WidgetMixin`) و `events.py` (`bus`) هما نواة هذا المرجع — `widget_mixin.py` يستورد `bus` من `events.py` بشكل lazy داخل `_init_widget_mixin()`، وهذا الثنائي مُستخدم من **كل** widget تقريباً في `ui/widgets/*` (كل المراجع الأخرى تعتمد عليه).
+- `conn.py` (`LiveConnMixin`, `SafeConnMixin`, `DualConnMixin`) و `guard.py` (`requires_company`) كلاهما يستورد `services.companies.company_service.CompanyService` بشكل lazy (خارج نطاق `ui/widgets/` — طبقة `services/`)، ولا يعتمدان على `widget_mixin.py` أو `events.py` مباشرة.
+- `colors.py` (`card_colors`, `status_colors`, `waste_*`) يعتمد فقط على `ui/theme.py` (`_C`) و `ui/theme_manager.py` (`theme_manager`, `CARD_PALETTES`) — كلاهما خارج `ui/widgets/`؛ لا علاقة مباشرة مع باقي ملفات `core/`.
+- `i18n.py` (`tr`, `i18n_manager`) مستقل تماماً عن باقي ملفات `core/` — يعتمد فقط على `ui/i18n/ar.py` و `ui/i18n/en.py` (خارج `ui/widgets/`) و اختيارياً `services/shared/language_service.py`.
+- `guard.py` (`requires_company`) يستدعي `_show_warning()` التي تفحص وجود `show_warning`/`_warn`/`_notif` على الـ widget المستهدَف — علاقة استخدام مع `BaseDetailPanel` (`show_warning`, مرجع: `ui_widgets_base.md`) و `FormValidationMixin` (`_warn`, مرجع: `ui_widgets_mixins.md`) و `BaseCrudForm` (`_notif`, مرجع: `ui_widgets_base.md`) — بدون استيراد مباشر (فحص `hasattr` فقط، لا import).
+- كل ملفات هذا المرجع تُستخدم من كل مسارات `ui/widgets/*` الأخرى تقريباً؛ العلاقة هنا أحادية الاتجاه دائماً (`core/` لا يستورد من أي مسار آخر داخل `ui/widgets/`).

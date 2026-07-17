@@ -168,3 +168,16 @@ wrap_in_scroll(widget: QWidget, min_height=0, horizontal=False) -> QScrollArea
 - عند تغيير الثيم: استدعِ `invalidate_stylesheet_cache()` من `components/button.py` لمسح الـ cache.
 - `input_style` و `spinbox_style` يُستوردان في `forms/inputs.py` بالمسار الصحيح: `from ..theme.input_styles import input_style, spinbox_style`.
 - `input_style(error=True)` و `spinbox_style(positive=True)` يستخدمان مفاتيح `_C` — لا ألوان hardcoded — لضمان التزامن مع الثيم الحالي.
+
+---
+
+## علاقات الملفات
+
+- كل الملفات الستة (`table_styles.py`, `input_styles.py`, `label_styles.py`, `card_styles.py`, `layout_styles.py`, `builders.py`) مستقلة عن بعضها البعض — لا استيراد متبادل بينها داخل `theme/` نفسها؛ كل واحد دالة/مجموعة دوال pure تقرأ من `_C`/`get_font_size()` فقط.
+- `label_styles.py` (`status_label_style`) و `card_styles.py` (`status_card_style`) كلاهما يستوردان `status_colors()` من `core/colors.py` (مرجع: `ui_widgets_core.md`).
+- `builders.py` (`h_divider`, `v_divider`, `wrap_in_scroll`) يستورد `ThemedFrame` من `panels/themed_inputs.py` (مرجع: `ui_widgets_panels.md`) و `scroll_style()` من `layout_styles.py` (نفس المرجع، ملف مختلف).
+- `table_styles.py` (`splitter_style`) يُستخدم في `base/section.py` (`BaseSection._build()`، مرجع: `ui_widgets_base.md`) وفي `tables/tables.py` (`make_splitter_table`، مرجع: `ui_widgets_tables.md`).
+- `layout_styles.py` (`scroll_style`) يُستخدم في `base/detail_panel.py` (`BaseDetailPanel._build()`) وفي `base/crud_form.py` عبر `builders.py`.
+- `layout_styles.py` (`tab_style`, `apply_tab_widths`, `normalize_tab_widget`) تُستخدم حصراً من `base/tab_section.py` (`TabSectionBase`).
+- `input_styles.py` (`input_style`, `spinbox_style`) تُستخدم من `panels/themed_inputs.py` (كل كلاسات `Themed*`)، `forms/inputs.py` (مرجع: `ui_widgets_forms.md`)، و `panels/form_fields.py` (مرجع: `ui_widgets_panels.md`).
+- هذا المرجع (`theme/`) هو طبقة أساسية (foundation layer) يعتمد عليها كل مسار آخر تقريباً في `ui/widgets/*` — لا يعتمد هو نفسه على أي مسار آخر داخل `ui/widgets/` سوى `panels/themed_inputs.py` (عبر `builders.py` فقط) و `core/colors.py`.

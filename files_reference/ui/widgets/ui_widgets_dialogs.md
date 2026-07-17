@@ -171,40 +171,82 @@ if confirm_action(self, "تأكيد الإرسال",
 ### `ui/widgets/dialogs/settings_dialog.py`
 
 ```python
-class SettingsDialog(QDialog):
-    def __init__(self, app: QApplication, parent=None)
+class SettingsDialog(QDialog, WidgetMixin):
+    def __init__(self, app, parent=None)
+# _init_widget_mixin(theme=True, font=True, lang=True) — بدون data (لا يستمع لتغيير الشركة)
+# [إصلاح ثيم] كانت كل الـ stylesheets تُبنى مرة واحدة وقت الإنشاء فقط —
+# بما أنها QDialog طويلة العمر نسبياً، الستايل كان يتجمد لو المستخدم غيّر
+# الثيم من نافذة أخرى والنافذة هذه لا تزال مفتوحة. الحل: WidgetMixin +
+# فصل بناء كل widget (مرة واحدة، _build_*_tab) عن تطبيق الستايل (_refresh_style مركزية)
 ```
 
-**التبويبات:**
+**التبويبات (QTabWidget):**
 
 | الفهرس | التبويب | المحتوى |
 |--------|---------|---------|
-| 0 | 🔤 الخط | QSlider لحجم الخط (8-20) + معاينة نصية |
-| 1 | 🎨 المظهر | Radio buttons: فاتح / داكن + معاينة ألوان |
-| 2 | 🌐 اللغة | Radio buttons: العربية / English |
-| 3 | 📏 الوحدات | QListWidget + إضافة/حذف/استعادة |
-| 4 | 🖼️ GIMP | QLineEdit + زر تصفح لمسار gimp.exe |
+| 0 | tr("settings_tab_font") | QSlider لحجم الخط (MIN_FONT_SIZE–MAX_FONT_SIZE) + معاينة نصية حيّة |
+| 1 | tr("settings_tab_theme") | بطاقات Radio buttons: فاتح/داكن + معاينة ألوان (6 swatches) |
+| 2 | tr("settings_tab_lang") | بطاقات Radio buttons: العربية/English |
+| 3 | tr("settings_tab_units") | QListWidget + إضافة/حذف/استعادة افتراضي |
+| 4 | tr("settings_tab_gimp") | ThemedLineEdit + زر تصفح (QFileDialog) لمسار gimp |
 
-**إجراءات الحفظ:**
+**`_refresh_style(*_)` — مركزية تستدعي كل تبويب:**
 ```python
-._save()
-# 1. set_font_size(size) + apply_font() + bus.font_changed.emit()
-# 2. theme_manager.set_theme() لو تغير الثيم
-# 3. i18n_manager.set_language() + bus.language_changed.emit() لو تغيرت اللغة
-# 4. set_setting(conn, "gimp_path", ...)
+# self._tabs.setStyleSheet(...) (QTabBar مخصص) + self._btn_bar.setStyleSheet(...)
+# ثم بالترتيب: _refresh_font_tab_style() + _refresh_theme_tab_style()
+#   + _refresh_lang_tab_style() + _refresh_units_tab_style()
+#   + _refresh_gimp_tab_style() + _refresh_notice_labels_style()
+# وأخيراً refresh_visible_buttons(self) — لأزرار الوحدات/GIMP (btn_add,
+#   btn_del, btn_reset, btn_browse, btn_clear) المبنية بـ make_btn()
 ```
 
-**إدارة الوحدات:**
+**إجراءات الحفظ `_save()`:**
 ```python
-# يستخدم unit_service مباشرة (لا unit.py widget)
-from ui.widgets.combo.unit_service import (
+# 1. size = self._slider.value(); set_font_size(size); apply_font(app, size)
+#    bus.font_changed.emit(size)
+# 2. لو selected_theme != theme_manager.current_theme → theme_manager.set_theme(selected_theme, save=True)
+# 3. لو selected_lang != i18n_manager.language → i18n_manager.set_language(selected_lang, save=True)
+#    + app.setLayoutDirection(...) + bus.language_changed.emit(selected_lang)
+# 4. لو CompanyService.is_company_ready() → SettingsService.set("gimp_path", ...)
+# 5. self.accept()
+```
+
+**إدارة الوحدات — [تصحيح مسار]:**
+```python
+# الاستيراد الفعلي من services/shared/unit_service.py (وليس combo/unit_service.py
+# الذي لا وجود له):
+from services.shared.unit_service import (
     load_units, add_unit, remove_unit,
-    reset_units_to_default, _DEFAULT_UNITS,
+    reset_units_to_default, _default_units, _DEFAULT_UNIT_KEYS,
 )
+from services.shared.settings_service import SettingsService
+from services.companies.company_service import CompanyService
 ```
 
-**[A-05]** `_get_settings_conn_and_status()` يرجع `(conn, has_active_company)` في استدعاء واحد بدل استدعاءين منفصلين.
+**دوال مساعدة على مستوى الموديول:**
+```python
+_get_settings_conn_and_status() -> tuple[Connection | None, bool]
+# [A-05] يرجع (conn, has_active_company) في استدعاء واحد
+# لو CompanyService.is_company_ready() == False → (None, False)
+# وإلا (CompanyService.get_active_erp_conn(), conn is not None)
+
+_get_settings_conn()          # للتوافق القديم — يرجع الـ conn فقط
+_has_active_company() -> bool # للتوافق القديم — يرجع has_company فقط
+```
 
 **ملاحظات:**
-- الوحدات الافتراضية (`_DEFAULT_UNITS`) معروضة بلون `_C['text_muted']` ولا يمكن حذفها.
-- لو لا توجد شركة نشطة، تظهر رسالة تنبيه في تبويبي الوحدات وGIMP.
+- الوحدات الافتراضية (`_DEFAULT_UNIT_KEYS`) معروضة بلون `_C['text_muted']` مع tooltip، ولا يمكن حذفها (`_del_unit` يرفض بـ msg_warning).
+- لو لا توجد شركة نشطة (`_load_settings`)، تظهر رسالة تنبيه (`_show_no_company_notice`) في تبويبي الوحدات وGIMP، محفوظة في `self._notice_labels` لإعادة تلوينها عند تغيير الثيم.
+- `_refresh_lang(*_)` يحدّث: عنوان النافذة، نصوص كل التبويبات، نصوص الأزرار، وكل التلميحات (hints) في التبويبات الخمسة.
+
+---
+
+## علاقات الملفات
+
+- `message.py` (`MessageDialog`) و `confirm.py` (`ConfirmDialog`) كلاهما يرث من `DialogShell` المعرّفة في `dialogs_base.py` — يستخدمان `body_layout`/`btn_layout` properties و `_refresh_style()` الأساسية عبر `super()._refresh_style()`.
+- `dialogs_base.py` (`DialogShell`, `BaseDialog`) يستورد `ThemedFrame` من `panels/themed_inputs.py` (مرجع: `ui_widgets_panels.md`) و `make_btn` من `components/button.py` (مرجع: `ui_widgets_components.md`).
+- `confirm.py` يستورد `make_btn` من `components/button.py` مباشرة (لبناء `_confirm_btn`) بالإضافة لوراثة `DialogShell`.
+- `settings_dialog.py` (`SettingsDialog`) يرث `QDialog + WidgetMixin` مباشرة (**لا** يرث من `DialogShell`/`BaseDialog` — الوحيد في هذا المرجع الذي يبني هيكله الخاص بالكامل). يستورد `ThemedLineEdit` من `panels/themed_inputs.py`، `make_btn` من `components/button.py`، `list_style` من `theme/layout_styles.py` (مرجع: `ui_widgets_theme.md`)، و `refresh_visible_buttons` من `components/button.py`.
+- `settings_dialog.py` هو الوحيد في هذا المرجع الذي يستورد من طبقة `services/` مباشرة (`services/shared/unit_service.py`, `services/shared/settings_service.py`, `services/companies/company_service.py`) — خارج نطاق `ui/widgets/`.
+- كل الملفات الأربعة تستخدم `tr()` من `core/i18n.py` ومفاتيح `_C` من `ui/theme.py` بشكل مكثف (مرجع: `ui_widgets_core.md`).
+- `message.py`/`confirm.py`/`dialogs_base.py` مترابطة بعلاقة وراثة مباشرة؛ `settings_dialog.py` مستقل تماماً عنها الثلاثة.

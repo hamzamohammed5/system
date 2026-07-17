@@ -1,6 +1,11 @@
-# دليل الكود — UI / Widgets (9): Managers & Shared
+# دليل الكود — UI / Widgets (9): Managers
 
-> `ui/widgets/managers/` و `ui/widgets/shared/` — مدير التصنيفات وقاعدة الجداول المشتركة.
+> `ui/widgets/managers/` — مدير التصنيفات الهرمية.
+>
+> ⚠️ **[تصحيح تسمية/تقسيم]** كان هذا المرجع يغطي سابقاً `managers/` و
+> `shared/` معاً في ملف واحد — مخالفة لقاعدة "مرجع واحد = مسار واحد". تم
+> فصل `shared/` إلى **`ui_widgets_shared.md`** المنفصل. هذا الملف يغطي
+> `ui/widgets/managers/` فقط.
 
 ---
 
@@ -9,7 +14,6 @@
 | القسم | الملفات |
 |-------|---------|
 | [CategoryManager + CategoryForm](#categorymanager--categoryform) | `managers/category.py` |
-| [SharedItemsListPanel](#shareditemslistpanel) | `shared/list_panel_with_shared.py` |
 
 ---
 
@@ -125,132 +129,8 @@ emit_company_data_changed()
 
 ---
 
-## SharedItemsListPanel
+## علاقات الملفات
 
-### `ui/widgets/shared/list_panel_with_shared.py`
-
-```python
-class SharedItemsListPanel(BaseListPanel, SharedOpsMixin, LiveConnMixin):
-    """
-    قاعدة مشتركة للجداول التي تدعم العناصر المشتركة/المنشورة.
-
-    الـ inheritance chain:
-        SharedItemsListPanel → BaseListPanel → BusConnectedMixin
-                             → SharedOpsMixin
-                             → LiveConnMixin
-
-    [إصلاح] لا override لـ _live_conn — LiveConnMixin تتولى الأمر.
-      القديم: كان يستدعي get_connection() مباشرة، متجاهلاً company_state.
-      الجديد: يعتمد على LiveConnMixin._live_conn() الموروثة التي تستخدم
-              self.conn أولاً ثم company_state كـ fallback.
-
-    [إصلاح FILTER_SCOPE] _build_filter() يستخدم SHARED_TYPE كـ scope
-    لو FILTER_SCOPE فارغ.
-    """
-```
-
-#### إعدادات الـ subclass
-
-```python
-SHARED_TYPE      : str  = "raw"     # "raw" | "machine" | "labor_op" | "machine_op"
-TABLE_COLS       : list = []        # → تُحوَّل لـ COLUMNS تلقائياً في __init__
-TABLE_TITLE      : str  = ""        # → يُسند لـ LIST_TITLE تلقائياً في __init__
-HAS_BULK_REPLACE : bool = False     # يُظهر زر "استبدال شامل"
-SHOW_CATEGORY    : bool = True
-CONNECT_BUS      : bool = True
-FILTER_SCOPE     : str  = ""        # فارغ = استخدم SHARED_TYPE تلقائياً
-# STRETCH_COL يُضبط على 1 تلقائياً في __init__
-# العمود 0 يُخفى تلقائياً (setColumnHidden) — يُستخدم لحمل الـ ID
-```
-
-#### [إصلاح FILTER_SCOPE] `_build_filter()` المحدّث
-
-```python
-# القديم: FILTER_SCOPE = "all" ثابت → يُظهر كل التصنيفات دائماً
-# الجديد: scope = SHARED_TYPE لو FILTER_SCOPE فارغ → تصنيفات نوع العنصر فقط
-# مثال: raw panel يُعرض تصنيفات "raw" فقط بدل كل التصنيفات
-
-scope = self.FILTER_SCOPE if self.FILTER_SCOPE else self.SHARED_TYPE
-```
-
-#### Hooks المطلوبة (override إلزامي)
-
-```python
-._fetch_local_rows() -> list[dict]
-._fill_table_row(r: int, item: dict)
-._edit_item(item_id: int)
-._delete_item(item_id: int, item_name: str)
-```
-
-#### Hooks الاختيارية
-
-```python
-._get_shared_rows(local_rows: list) -> list[dict]   # افتراضياً: []
-._get_item_data_for_publish(row: dict) -> dict       # افتراضياً: {}
-._bulk_replace_item(item_id: int, item_name: str)
-._setup_column_widths(table: QTableWidget)
-._on_edit_shared()
-# افتراضياً: يستدعي _edit_shared_item من SharedOpsMixin
-```
-
-#### أزرار الهيدر (تُضاف تلقائياً عبر `_build_extra_header_actions`)
-
-| الزر | الظهور | الاستدعاء |
-|------|--------|----------|
-| `"🔄 استبدال شامل"` | فقط لو `HAS_BULK_REPLACE=True` | `_bulk_replace_item` |
-| `"✏️ تعديل المحدد"` | دائماً | `_edit_item` |
-| `"🗑️ حذف المحدد"` | دائماً | `_delete_item` |
-| `"🔗 تعديل المشترك"` | دائماً | `_on_edit_shared` |
-| `"📤 نشر كمشترك"` | دائماً | `_publish_item` من SharedOpsMixin |
-
-#### التلوين التلقائي للصفوف
-
-```python
-# العناصر المشتركة (row["_is_shared"] = True):
-#   fg = SHARED_COLOR, bg = SHARED_BG
-# العناصر المنشورة (row["_is_published"] = True أو name في _published_names):
-#   fg = PUBLISHED_COLOR, bg = PUBLISHED_BG
-# من: ui/tabs/costing/shared/_utils.py
-```
-
-#### مساعدات
-
-```python
-._selected_row_data() -> tuple[int | None, str]
-# يرجع (item_id, item_name) للصف المختار
-# item_name: من row.get("name") أو f"ID:{item_id}" كـ fallback
-
-._get_current_row_dict() -> dict | None
-# يرجع dict بيانات الصف المختار من _all_rows
-# يقارن str(row["id"]) == str(item_id) لتجنب مشاكل نوع البيانات
-```
-
-**مثال:**
-```python
-from ui.widgets.shared.list_panel_with_shared import SharedItemsListPanel
-from ui.widgets.tables.tables import make_item
-from ui.widgets.core.i18n import tr
-
-class RawMaterialsPanel(SharedItemsListPanel):
-    SHARED_TYPE      = "raw"
-    TABLE_COLS       = ["#", tr("name"), tr("price"), tr("category")]
-    TABLE_TITLE      = tr("raw_materials")
-    HAS_BULK_REPLACE = True
-
-    def _fetch_local_rows(self):
-        return fetch_items_by_type(self.conn, "raw")
-
-    def _fill_table_row(self, r, item):
-        self.table.setItem(r, 0, make_item(str(item["id"]), item["id"]))
-        self.table.setItem(r, 1, make_item(item["name"]))
-        self.table.setItem(r, 2, make_item(f"{item['price']:,.2f}"))
-        self.table.setItem(r, 3, make_item(item.get("category_name", "─")))
-
-    def _setup_column_widths(self, table):
-        table.setColumnWidth(1, 200)
-        table.setColumnWidth(2, 100)
-        table.setColumnWidth(3, 140)
-
-    def _edit_item(self, item_id): ...
-    def _delete_item(self, item_id, item_name): ...
-```
+- `managers/category.py` (`CategoryForm`, `CategoryManager`) يستخدم `CategoryService` من `services/shared/category_service.py` (خارج نطاق هذا المرجع) لكل عمليات DB — لا استيراد مباشر من `db/`.
+- يستخدم `emit_company_data_changed` من `core/events.py` (مرجع: `ui_widgets_core.md`)، `LiveConnMixin` من `core/conn.py`، `ColorPickerWidget` من `helpers/color_picker.py` و `ModeLabel` من `components/label.py` (مرجع: `ui_widgets_components.md`)، و `tree_style()` من `theme/layout_styles.py` (مرجع: `ui_widgets_theme.md`).
+- `ui/widgets/shared/list_panel_with_shared.py` (مسار مختلف — مرجع منفصل: `ui_widgets_shared.md`) لا علاقة مباشرة له بـ `managers/category.py`، لكن كلاهما يعتمد على `CategoryService`/`FilterToolbar` بشكل مستقل.
