@@ -1,5 +1,5 @@
 File Tree Snapshot
-Generated : 2026-07-17 12:15:20
+Generated : 2026-07-17 15:20:04
 Source    : D:\My Workspace\Hg\Alhabaar\accountant\system
 Extensions: .md, .py
 ────────────────────────────────────────────────────────────
@@ -112,6 +112,7 @@ system/
 │   ├── code_reference_sync.md
 │   ├── ERP_Expert_System_Prompt.md
 │   ├── prompt_توحيد_الجداول.md
+│   ├── system_prompt.md
 │   └── widgit_mixin_tr_C_refactory.md
 ├── services/
 │   ├── accounting/
