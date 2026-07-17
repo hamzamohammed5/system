@@ -41,6 +41,10 @@ svc.calculate_cost(product_id, scenario_id=None) -> CostResult
 
 svc.get_orphan_components(product_id) -> list[OrphanComponent]
 svc.fix_orphans(product_id) -> int
+svc.cleanup_empty_products_after_orphan_fix(product_ids: list[int]) -> list[int]
+# [إضافة] غلاف service حول db.shared.items_repo.cleanup_empty_products_after_orphan_fix
+# — كان يُستدعى مباشرة من tabs/ (كسر هيكلي). يحذف المنتجات (semi/final) التي
+# أصبحت بدون أي مكون BOM بعد إصلاح الـ orphans، يرجع IDs المنتجات المحذوفة.
 svc.clone(product_id, new_name) -> int
 # Raises: ValueError لو new_name فارغ أو product غير موجود
 svc.delete(product_id)
@@ -77,12 +81,49 @@ svc.delete(product_id)
 from db.shared.items_repo import (
     insert_item, update_item, fetch_item, delete_item,
     fetch_bom, fetch_orphan_bom_rows, delete_orphan_bom_rows,
+    cleanup_empty_products_after_orphan_fix,
 )
 from db.costing.bom_scenarios_repo import (
     fetch_scenarios, fetch_default_scenario, insert_scenario,
     fetch_bom_for_scenario,       # [إصلاح] كان اسمه fetch_scenario_bom خطأ
     replace_bom_for_scenario,     # [C-02 / A-03]
 )
+```
+
+### Dataclasses كاملة
+
+```python
+@dataclass
+class BomComponent:
+    child_type        : str
+    child_id          : int
+    qty               : float
+    waste_pct         : float = 0.0
+    variant_id        : int | None = None
+    machine_op_row_id : int | None = None
+
+@dataclass
+class ProductSaveResult:
+    product_id  : int
+    scenario_id : int
+    is_new      : bool
+    bom_count   : int
+
+@dataclass
+class OrphanComponent:
+    child_type : str
+    child_id   : int
+    child_name : str | None
+    qty        : float
+    waste_pct  : float = 0.0
+
+@dataclass
+class CostResult:
+    product_id   : int
+    product_name : str
+    total_cost   : float
+    breakdown    : dict = field(default_factory=dict)
+    # breakdown: {"raw": float, "labor": float, "machine": float, "semi": float, "total": float}
 ```
 
 ---
@@ -301,44 +342,75 @@ get_item_price(conn, item_id) -> float
 
 ### `services/costing/catalog_service.py`
 
+**الغرض:** يبني الـ catalog الكامل المستخدم في `ComponentRow` — يدمج العناصر المحلية مع المشتركة بين الشركات لكل نوع (raw/semi/final/labor_op/machine_op).
+
+> ⚠️ **تحذير تسمية:** هذا الملف يحمل نفس اسم الـ class `CatalogService` الموجود في `services/orders/catalog_service.py` — لكنه ملف مختلف تماماً بمسؤولية مختلفة (كتالوج مكوّنات BOM كامل، وليس منتجات مسعّرة + عروض). راجع `services_orders.md` لتفاصيل النسخة الأخرى.
+
+**Imports (top-level):**
 ```python
-CatalogService(conn, central_conn=None)
-# central_conn اختياري — يُحسّن الأداء عند استدعاءات متعددة
+from __future__ import annotations
+from typing import Dict, List, Any
 
-svc.build() -> dict
-# يبني الـ catalog الكامل:
-# {
-#   "raw":        [(id, name, category_name, price, total_qty), ...],
-#   "semi":       [(id, name, category_name, price, None), ...],
-#   "final":      [(id, name, category_name, price, None), ...],
-#   "labor_op":   [(id, name, category_name, minutes), ...],
-#   "machine_op": [(id, name, category_name, mode, machine_name), ...],
-# }
-
-svc.build_raw() -> list         # خامات محلية + مشتركة
-svc.build_semi() -> list        # نصف مصنع محلي فقط (price=0.0, total_qty=None)
-svc.build_final() -> list       # منتج نهائي محلي فقط (price=0.0, total_qty=None)
-svc.build_labor_ops() -> list   # عمليات عمالة محلية + مشتركة
-svc.build_machine_ops() -> list # عمليات تشغيل محلية + مشتركة
+from db.shared.items_repo import fetch_items_by_type
+from db.costing.operations_repo import fetch_all_labor_ops, fetch_all_machine_ops
 ```
 
-**`_fetch_shared(shared_type)` — الشبكة الداخلية:**
+**من يستدعي هذا الملف:** `ui/tabs/costing/product/_catalog_provider.py` (حسب توثيق الملف نفسه).
+
+**[قرار هيكلي 1] موثّق في الكود:** `db.shared` و`db.costing` يُستوردان مباشرة بدون `try/except` — طبقة بيانات مشتركة مصممة عمداً ليستخدمها كل domain، وليس كسراً هيكلياً (بعكس استيراد service من `ui/` مباشرة، وهو الخطأ الذي كان موجوداً في `bulk_replace_service` قبل إصلاحه). أي خطأ هنا يجب أن يظهر لا أن يُبلع بصمت.
+
+**[قرار هيكلي 2] موثّق في الكود:** الاعتماد على `services.companies` (`CompanyService` + `SharedItemsService`) متعمد — العناصر المشتركة مصدرها `central db`، ومنطق الوصول له (company_id النشط، caching، إلخ) موجود بالفعل هناك؛ تكراره هنا يعني ازدواجية منطق خطيرة. البديل (استدعاء `db.companies` مباشرة من هنا) أسوأ لأنه يكسر عزل `company_state` عن باقي الدومينات. لذلك: `service → service` عبر حدود الدومين مقبول هنا بشرط أن يكون صريحاً (imports واضحة، لا SQL مباشر لـ db آخر).
+
+**[i18n] موثّق في الكود:** الملف لا يحتوي أي نص عرض مباشر. بدل النص، الـ service يرجع مفتاحاً رمزياً ثابتاً `SHARED_CATEGORY_KEY = "shared"` في مكان `category_name` للعناصر المشتركة — الـ UI (`_catalog_provider.py`) هو المسؤول عن ترجمته عبر `tr("shared")`؛ الـ service لا يعرف شيئاً عن نظام الترجمة.
+
+### ثابت module-level
+
 ```python
-# لو self._central_conn متاح → يستخدمه مباشرة (لا يُغلقه)
-# لو لا → يفتح get_central_connection() وهو مسؤول عن إغلاقه في finally
-# يستخدم json.loads مباشرة (ليس json_utils)
-# يطبع خطأ على stderr عند الفشل (لا يرمي exception)
-# يتحقق من company_state.is_ready قبل الاتصال
-# يرجع [] لو الشركة غير نشطة أو أي خطأ
+SHARED_CATEGORY_KEY = "shared"
+# مفتاح رمزي فقط — ليس نصاً معروضاً
 ```
 
-**ثابت:**
-```python
-SHARED_CATEGORY = "🔗 مشترك"   # اسم تصنيف العناصر المشتركة
-```
+### Class: `CatalogService`
+لا يرث من شيء.
 
-> **ملاحظة:** العناصر المشتركة تأتي بـ `id = "shared:{n}"` وتصنيف `"🔗 مشترك"`.
-> تعتمد على `company_state.is_ready` — تأكد من وجود شركة نشطة قبل استدعاء `build()`.
+```python
+CatalogService(conn)
+```
+- `self.conn = conn` فقط — **لا يوجد `central_conn` اختياري في التوقيع الحالي**.
+
+**Methods — API رئيسي:**
+- **`build(self) -> Dict[str, List]`**: يبني الـ catalog الكامل لكل الأنواع:
+```python
+{
+    "raw":        [(id, name, category_name, price, total_qty), ...],
+    "semi":       [(id, name, category_name, 0.0, None), ...],
+    "final":      [(id, name, category_name, 0.0, None), ...],
+    "labor_op":   [(id, name, category_name, minutes), ...],
+    "machine_op": [(id, name, category_name, mode, machine_name), ...],
+}
+```
+- **`_row(r)`** *(staticmethod)*: يحوّل `sqlite3.Row` أو `dict` لـ `dict` موحد.
+- **`build_raw(self) -> List`**: خامات محلية (عبر `fetch_items_by_type(conn, "raw")`) + مشتركة (عبر `_fetch_shared("raw")`) — tuples بصيغة `(id, name, category_name, price, total_qty)`.
+- **`build_semi(self) -> List`**: نصف مصنع **محلي فقط** — `(id, name, category_name, 0.0, None)`.
+- **`build_final(self) -> List`**: منتج نهائي **محلي فقط** — `(id, name, category_name, 0.0, None)`.
+- **`build_labor_ops(self) -> List`**: عمليات عمالة محلية (`fetch_all_labor_ops`) + مشتركة (`_fetch_shared("labor_op")`) — `(id, name, category_name, minutes)`.
+- **`build_machine_ops(self) -> List`**: عمليات تشغيل محلية (`fetch_all_machine_ops`) + مشتركة (`_fetch_shared("machine_op")`) — `(id, name, category_name, mode, machine_name)`.
+
+**Methods — مساعد جلب المشترك:**
+- **`_fetch_shared(self, shared_type) -> List[dict]`**: يجيب العناصر المشتركة للشركة النشطة عبر `CompanyService` و`SharedItemsService` (وليس عبر `db.companies` مباشرة). المنطق:
+  1. `from services.companies.company_service import CompanyService` — لو `not CompanyService.is_company_ready()` → يرجع `[]`.
+  2. يجلب `company_id = CompanyService.get_current_company_id()` — لو `None` → `[]`.
+  3. `from services.companies.shared_items_service import SharedItemsService` — يفتح `conn = CompanyService.get_central_conn_and_init()`، ينشئ `svc = SharedItemsService(conn)`.
+  4. يستدعي `svc.list_for_company(company_id, shared_type)`.
+  5. لكل عنصر: يبني `dict` بـ `id = f"shared:{it.id}"`، يدمج `it.data` بداخله، ثم يحدد `category_name` عبر `_resolve_shared_category_name`.
+  - كل الاستدعاء داخل `try/except Exception` — عند الفشل: يطبع الخطأ على `stderr` (`print(..., file=sys.stderr)`) ويرجع `[]`. **الـ try/except هنا مقصود ومختلف عن imports أعلى الملف** — هذه الدالة تعبر لدومين آخر (`companies`) قد لا يكون جاهزاً بعد (لا شركة نشطة، central db غير مهيأ) وهي حالة تشغيل طبيعية وليست خطأ برمجي.
+
+- **`_resolve_shared_category_name(self, item_name, shared_type, data) -> str`**: **[إصلاح] موثّق في الكود:** نفس الحل المطبَّق سابقاً في `shared_items_mixin._resolve_category_name_from_local`، منقول هنا:
+  1. لو `data.get("category_name")` محفوظ مباشرة وقت النشر → يُستخدم فوراً.
+  2. وإلا: fallback بحث بالاسم في `erp.db` المحلي عبر `db.shared.items_repo.get_category_name_by_item_name(conn, item_name, shared_type)`.
+  3. وإلا: `SHARED_CATEGORY_KEY` كحل أخير (لا تصنيف معروف إطلاقاً) — الـ UI تترجمه لاحقاً.
+
+> **ملاحظة:** العناصر المشتركة تأتي بـ `id = "shared:{n}"` وتصنيف `SHARED_CATEGORY_KEY` (`"shared"`) كحل أخير فقط — الأولوية دائماً لتصنيف حقيقي محفوظ أو محلول. تعتمد على `CompanyService.is_company_ready()` — تأكد من وجود شركة نشطة قبل استدعاء `build()`.
 
 ---
 
@@ -425,6 +497,17 @@ svc.get_sub_bom(item_id) -> list[BomComponentRow]
 
 svc.get_default_scenario_id(item_id) -> int | None
 # public method — يُعيد تصدير _get_default_scenario_id
+
+svc.get_node_data(child_type, child_id, machine_op_row_id=None) -> NodeData | None
+# [إصلاح هيكلي] منقولة من bom_tree.py (_fetch_node_data) — كانت tabs/
+# تستدعي db.shared.items_repo و db.costing.operations_repo و models/*
+# مباشرة، متجاوزةً services/. نفس التوقيعات نُقلت هنا بدون تغيير منطق.
+# child_type == "raw"        → fetch_item + models.costing_base.raw_unit_price
+# child_type == "semi"       → fetch_item + models.costing.calc_cost
+# child_type == "labor_op"   → fetch_labor_op + models.costing_ops.calc_labor_op_cost
+# child_type == "machine_op" → fetch_machine_op + models.costing_ops.calc_machine_op_cost(row_id=machine_op_row_id)
+#   + لو machine_op_row_id محدد: يجلب label من machine_op_rows (op_row_label)
+# يرجع None لو العنصر غير موجود أو child_type غير معروف أو حدث exception
 ```
 
 #### حذف
@@ -464,4 +547,20 @@ svc._fallback_bom(scenario_id) -> list[BomComponentRow]
 **`BomComponentRow`:** `child_type, child_id, qty, waste_pct, variant_id, machine_op_row_id`
 - `.from_dict(d) -> BomComponentRow`
 
+**`NodeData`:** `name: str, unit_cost: float, op_row_label: str | None = None`
+- بيانات مكوّن BOM اللازمة لبناء node في الشجرة — تُبنى داخل `get_node_data()`؛ الـ UI لا يستدعي `db/` أو `models/` مباشرة، فقط يستهلك هذا الـ dataclass.
+
 > **ملاحظة:** يخزّن نتيجة `PRAGMA table_info(bom)` في cache داخلي (`_bom_cols`) — استدعِ `invalidate_columns_cache()` بعد أي migration يضيف أعمدة لجدول bom، أو أنشئ instance جديد من الـ service.
+
+---
+
+## علاقات الملفات
+
+- لا يوجد استيراد مباشر بين الملفات التسعة في هذا المسار مع بعضها البعض — كل ملف مستقل ويُستدعى من `tabs/` بشكل منفصل حسب المهمة.
+- **نمط مشترك:** أغلب الملفات (`scenario_service`, `labor_op_service`, `machine_service`, `machine_op_rows_service`, `variant_service`, `bom_tree_service`) تؤجل استيراد دوال `db.costing.*` إلى داخل كل method (lazy import) بدل استيرادها أعلى الملف. الاستثناءات: `product_service.py` و`catalog_service.py` يستوردان أعلى الملف مباشرة (top-level)، و`bulk_replace_service.py` مختلط (بعض lazy وبعض top-level حسب method).
+- **نمط مشترك آخر:** كل ملف يعرّف dataclass نتيجة واحد أو أكثر بميثود `.from_row()`/`.from_dict()` يقبل `dict` أو `sqlite3.Row` — نمط تحويل موحّد عبر كل الملفات.
+- تبعية خارج هذا المسار:
+  - `catalog_service.py` هو الوحيد في هذا المسار الذي يعتمد على دومين آخر بالكامل — `services/companies/company_service.py` (`CompanyService`) و`services/companies/shared_items_service.py` (`SharedItemsService`)، راجع `services_companies.md`.
+  - باقي الملفات تعتمد فقط على `db/costing/*` و`db/shared/items_repo.py` و`models/costing*.py` (خارج نطاق مرجع `services/`).
+- **تحذير تسمية:** يوجد ملفان مختلفان باسم class `CatalogService` في المشروع: `services/costing/catalog_service.py` (هذا الملف — كتالوج مكوّنات BOM الكامل) و`services/orders/catalog_service.py` (منتجات مسعّرة + عروض للطلبات، راجع `services_orders.md`) — مسؤوليتان مختلفتان تماماً رغم الاسم المتطابق.
+- **يُستخدم هذا المسار من خارج نفسه:** لا يوجد ملف مرجعي آخر معروف من المرفقات الحالية يستورد من هذا المسار مباشرة (عدا التوقع المنطقي أن `ui/tabs/costing/*` يستدعي كل هذه الـ services — محتواها غير مرفق).
