@@ -1,6 +1,48 @@
 # ui_tabs_costing.md
 
-مرجع شامل لمسار `ui/tabs/costing/` وكل المسارات الفرعية تحته: `labor/`, `machine/`, `product/`, `product/form/`, `raw/`, `shared/`, `shared/bom_scenarios/`, `shared/bom_tree_helper/`, `shared/bulk_replace/`.
+مرجع شامل لمسار `ui/tabs/costing/` وكل المسارات الفرعية تحته: `labor/`, `machine/`, `product/`, `product/form/`, `raw/`, `shared/`, `shared/bom_scenarios/`, `shared/bom_tree_helper/`, `shared/bulk_replace/`. يشمل أيضاً `ui/tabs/costing_section.py` (نقطة الدخول الرئيسية للقسم، تقع في `ui/tabs/` مباشرة وليست داخل مجلد `costing/`، لكنها مُدرجة هنا لأنها المُستدعي الفعلي لكل التابات الموصوفة في هذا المرجع).
+
+---
+
+## القسم 0: `ui/tabs/costing_section.py`
+
+### `ui/tabs/costing_section.py`
+
+**الغرض:** الويدجت الرئيسي لقسم "حساب التكلفة" بالكامل — هيدر علوي + `QTabWidget` يجمع كل التابات الفرعية (الخامات، نصف مصنع، منتج نهائي، العمالة، التشغيل) في واجهة واحدة موحدة.
+
+**Imports داخلية مهمة:**
+- `ui.widgets.theme.layout_styles` — `tab_style()` (ستايل الـ QTabWidget)، `apply_tab_widths()` (يحسب min-width للتابات حسب أطول نص فعلي)، `normalize_tab_widget()`.
+- `ui.theme._C` — ألوان الثيم الحالي.
+- `ui.widgets.core.i18n.tr` — الترجمة.
+- `ui.font` — `FS_MD`, `FS_LG` (أحجام الخط).
+- `ui.constants` — `SECTION_HEADER_HEIGHT`, `SECTION_HEADER_BORDER_W`, `SECTION_HEADER_PAD_RIGHT`, `COSTING_ERR_TAB_BORDER_W`, `COSTING_ERR_TAB_RADIUS`, `COSTING_ERR_TAB_PAD`.
+- `ui.widgets.core.widget_mixin.WidgetMixin` — التسجيل التلقائي على تحديثات الثيم/الخط/اللغة.
+- `.costing.raw_tab.RawTab`, `.costing.product_tab.ProductTab`, `.costing.labor_tab.LaborTab`, `.costing.machine_tab.MachineTab` — التابات الفرعية الأربعة الفعلية المعروضة داخل `QTabWidget`.
+
+**من يستدعي هذا الملف:** غير محدد من المرفقات الحالية (من المتوقع أن يُستدعى من شاشة رئيسية/تنقّل أعلى مستوى، خارج نطاق هذا المرجع).
+
+**Module-level:**
+- `_make_error_tab(msg: str) -> QLabel`: تُنشئ `QLabel` كتبويب بديل لعرض رسالة خطأ منسّقة (أيقونة تحذير + نص أحمر على خلفية حمراء فاتحة بحدود) عند فشل تحميل تبويب معيّن. **ملاحظة:** الدالة معرَّفة لكنها غير مُستخدمة فعليًا حاليًا داخل `_build` (منطق try/except حولها معلَّق/مُعطَّل بالكود — راجع ملاحظات [Fix #9] أدناه).
+
+**Classes:**
+- **`CostingSection(QWidget, WidgetMixin)`**
+  - `__init__(self, parent=None)`: يبني الواجهة ثم يُفعّل `_init_widget_mixin(theme=True, font=True, lang=True, data=False)`.
+  - `_build(self)`: يبني `QVBoxLayout` بلا هوامش، يضيف:
+    1. هيدر (`QLabel` بارتفاع ثابت `SECTION_HEADER_HEIGHT`) يعرض أيقونة القسم + عنوانه.
+    2. `QTabWidget` (`self._tabs`) بعد `normalize_tab_widget()` وتطبيق `tab_style()`.
+    يبني قائمة `self._tab_label_keys` (أزواج مفاتيح أيقونة/نص لكل تاب) لدعم تحديث اللغة لاحقًا، ثم قائمة `_tab_defs` (دوال lambda منشئة لكل تبويب + نص عنوانه): `RawTab()`, `ProductTab("semi")`, `ProductTab("final")`, `LaborTab()`, `MachineTab()`. يُنشئ كل تبويب فعليًا عبر استدعاء الـ `factory()` مباشرة (بدون try/except فعّال حاليًا رغم وجود كود معلَّق لذلك) ويضيفه لـ `self._tabs`. أخيرًا يستدعي `apply_tab_widths(self._tabs)` لحساب عرض التابات من المحتوى الفعلي.
+  - `_refresh_style(self, *_)`: يعيد بناء stylesheet الهيدر (خلفية، حد سفلي، لون، حجم خط) من `_C` الحالية، ويعيد تطبيق `tab_style()` + `apply_tab_widths()` على `self._tabs` إن وُجد.
+  - `_refresh_lang(self, *_)`: عند تغيير اللغة، يعيد كتابة نص الهيدر، ويعيد كتابة نص كل تبويب من `self._tab_label_keys` عبر `self._tabs.setTabText(i, ...)`، ثم يعيد استدعاء `apply_tab_widths()` لأن طول النص العربي/الإنجليزي يختلف.
+
+**الثوابت على مستوى الملف:** لا يوجد متغيرات module-level بخلاف الدالة `_make_error_tab`.
+
+**ملاحظات من التعليقات:**
+- [Fix A1] استبدال `ui.app_settings._C` بـ `ui.theme._C`.
+- [Fix A3] استبدال `ui.widgets.theme.styles.tab_style` بـ `ui.widgets.theme.layout_styles.tab_style`.
+- [Fix C5] استخدام مفاتيح i18n صحيحة لكل التبويبات.
+- [Fix #9] كان المفروض إضافة try/except حول بناء كل تبويب لعزل الأخطاء وعرض `_make_error_tab` بدلاً من انهيار القسم بالكامل — الكود الفعلي لهذا الجزء **معلَّق حاليًا** (commented out)، والاستدعاء الفعلي `widget = factory()` بدون حماية.
+- [إصلاح lang] `CostingSection` مسجَّل الآن على `lang=True` (كان سابقًا `lang=False`) بحيث يتحدث الهيدر والتابات فورًا عند تبديل اللغة، مع إعادة حساب `apply_tab_widths` لأن العربي والإنجليزي مختلفان في الطول.
+- [حل مركزي لمشكلة قص نص التبويبات] استخدام `apply_tab_widths()` بدل الاعتماد على `TAB_MIN_W_NORMAL` الثابت في `constants.py`، بنفس منطق حساب عرض الأزرار في `make_btn`.
 
 ---
 
@@ -1202,6 +1244,7 @@
 
 ### علاقات الاستيراد الداخلية (ضمن هذا المرجع)
 
+- **`costing_section.py`** يستورد → `costing/raw_tab.py` (`RawTab`), `costing/product_tab.py` (`ProductTab`), `costing/labor_tab.py` (`LaborTab`), `costing/machine_tab.py` (`MachineTab`) — وهو المُستدعي الفعلي لجميع التابات الرئيسية الأربعة الموصوفة في القسم 1.
 - **`raw_tab.py`** يستورد → `raw/raw_section.py`.
 - **`raw/raw_section.py`** يستورد → `raw/raw_input_panel.py`, `raw/raw_table_panel.py` (يرث من `BaseSection` خارجي).
 - **`raw/raw_input_panel.py`** يستورد → `shared/raw_variants_panel.py`.
@@ -1235,6 +1278,7 @@
 
 ### تبعيات خارج هذا المسار (تُذكر بالاسم فقط)
 
+- `ui.widgets.theme.layout_styles` (`tab_style`, `apply_tab_widths`, `normalize_tab_widget`) — يستخدمها `costing_section.py` فقط ضمن هذا المرجع.
 - `ui.widgets.base.tab_section.TabSectionBase`, `ui.widgets.base.section.BaseSection`, `ui.widgets.base.crud_form.BaseCrudForm`, `ui.widgets.base.list_panel.BaseListPanel`.
 - `ui.widgets.shared.list_panel_with_shared.SharedItemsListPanel`.
 - `ui.widgets.mixins.shared_ops.SharedOpsMixin`, `ui.widgets.mixins.form_mixins.EditModeMixin`.
