@@ -1,5 +1,5 @@
 File Tree Snapshot
-Generated : 2026-07-17 11:16:07
+Generated : 2026-07-17 11:23:19
 Source    : D:\My Workspace\Hg\Alhabaar\accountant\system
 Extensions: .md, .py
 ────────────────────────────────────────────────────────────
@@ -82,7 +82,8 @@ system/
 │       │   ├── ui_tabs_costing.md
 │       │   ├── ui_tabs_design.md
 │       │   ├── ui_tabs_inventory.md
-│       │   └── ui_tabs_orders.md
+│       │   ├── ui_tabs_orders.md
+│       │   └── ui_tabs_pricing.md
 │       ├── widgets/
 │       │   ├── ui_widgets_base.md
 │       │   ├── ui_widgets_combo.md
